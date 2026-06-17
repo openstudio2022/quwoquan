@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
 
+from api.capacity import refresh_capacity_metrics
 from api.metrics import refresh_rec_model_loaded_gauges
 from api.score import router as score_router
 from runtime_contract import bootstrap_runtime_contract_or_die
@@ -17,6 +18,7 @@ bootstrap_runtime_contract_or_die()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     refresh_rec_model_loaded_gauges()
+    refresh_capacity_metrics()
     yield
 
 

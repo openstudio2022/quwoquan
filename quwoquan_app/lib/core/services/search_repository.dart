@@ -112,6 +112,10 @@ class SearchHit {
     required this.resolvedFrom,
     this.matchedField,
     this.payload = const SearchHitPayloadWireMap(),
+    this.rankReasons = const <String>[],
+    this.rankPosition,
+    this.coverWidth,
+    this.coverHeight,
   });
 
   final SearchObjectType objectType;
@@ -123,6 +127,19 @@ class SearchHit {
   final String? matchedField;
   final SearchHitPayload payload;
 
+  /// 云侧排序透明化（`_shared/search_contract.yaml` hit_fields.rankReasons）：
+  /// 命中已展开为人类可读的排序理由标签。本地扇出（mock/local）为空列表。
+  final List<String> rankReasons;
+
+  /// 云侧分页内 1-based 最终排序位（hit_fields.rankPosition）。本地扇出为 null，
+  /// 结果页据此决定是否消费云侧排序而非端侧 publishedAt 兜底排序（R-001）。
+  final int? rankPosition;
+
+  /// 云侧封面像素宽 / 高（hit_fields.coverWidth/coverHeight），用于结果页卡片真实宽高比；
+  /// 本地扇出为 null（R-003）。
+  final double? coverWidth;
+  final double? coverHeight;
+
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'objectType': objectType.wireValue,
@@ -133,6 +150,10 @@ class SearchHit {
       'resolvedFrom': resolvedFrom.wireValue,
       if (matchedField != null) 'matchedField': matchedField,
       'payload': payload.toWireMap(),
+      if (rankReasons.isNotEmpty) 'rankReasons': rankReasons,
+      if (rankPosition != null) 'rankPosition': rankPosition,
+      if (coverWidth != null) 'coverWidth': coverWidth,
+      if (coverHeight != null) 'coverHeight': coverHeight,
     };
   }
 }
@@ -175,11 +196,16 @@ class SearchResponse {
     required this.request,
     required this.sections,
     this.degradeSignals = const <SearchDegradeSignal>[],
+    this.relatedTerms = const <String>[],
   });
 
   final SearchRequest request;
   final List<SearchSection> sections;
   final List<SearchDegradeSignal> degradeSignals;
+
+  /// 云侧相关搜索词（`_shared/search_contract.yaml` responseFields.relatedTerms）；
+  /// 结果页「相关搜索」优先消费它，本地扇出（mock/local）为空（R-003）。
+  final List<String> relatedTerms;
 
   List<SearchHit> get hits =>
       sections.expand((section) => section.hits).toList(growable: false);
@@ -192,6 +218,7 @@ class SearchResponse {
       'degradeSignals': degradeSignals
           .map((item) => item.toMap())
           .toList(growable: false),
+      if (relatedTerms.isNotEmpty) 'relatedTerms': relatedTerms,
     };
   }
 }
@@ -348,6 +375,8 @@ class AppSearchRepository implements SearchRepository {
               ),
             if (effectiveObjectTypes.contains(SearchObjectType.userProfile))
               _buildUserProfileSection(normalized),
+            if (effectiveObjectTypes.contains(SearchObjectType.locationPlace))
+              _buildPlaceSection(normalized),
             if (effectiveObjectTypes.contains(
               SearchObjectType.integrationLocationPoi,
             ))
@@ -985,6 +1014,67 @@ class AppSearchRepository implements SearchRepository {
     }
   }
 
+  // location.place（R-S05e 一方地点）：被内容引用但未绑定实体主页的自由文本地点。
+  // 端云一体下云侧由 content `place_snapshots` 投影；mock/local 扇出复用 integration
+  // POI 作为本地近似种子（仅 mock 路径；beta/gamma/prod 走 RemoteSearchRepository 读
+  // 真实 place_snapshots，不读此处）。与 entity.homepage（已绑定实体）互为单一真相源。
+  Future<_SectionBuildResult?> _buildPlaceSection(
+    SearchRequest request,
+  ) async {
+    try {
+      final items = await _integrationRepository.searchLocations(
+        query: request.query,
+        limit: request.limit,
+      );
+      final hits = items
+          .map(
+            (item) => SearchHit(
+              objectType: SearchObjectType.locationPlace,
+              objectId: item.id,
+              title: item.name,
+              subtitle: _string(item.address),
+              snippet: _string(item.address),
+              resolvedFrom: SearchResolvedFrom.remote,
+              matchedField: _matchesText(request.query, <Object?>[item.address])
+                  ? 'address'
+                  : 'name',
+              payload: SearchHitPayloadWireMap(item.toMap()),
+            ),
+          )
+          .where((item) => item.objectId.isNotEmpty && item.title.isNotEmpty)
+          .toList(growable: false);
+      if (hits.isEmpty) {
+        return null;
+      }
+      return _SectionBuildResult(
+        section: SearchSection(
+          id: 'locations',
+          title: _sectionTitle('locations', '位置'),
+          objectTypes: const <SearchObjectType>[SearchObjectType.locationPlace],
+          hits: hits,
+          resolvedFrom: SearchResolvedFrom.remote,
+        ),
+      );
+    } catch (_) {
+      return _SectionBuildResult(
+        section: SearchSection(
+          id: 'locations',
+          title: _sectionTitle('locations', '位置'),
+          objectTypes: const <SearchObjectType>[SearchObjectType.locationPlace],
+          hits: const <SearchHit>[],
+          resolvedFrom: SearchResolvedFrom.remote,
+        ),
+        degradeSignals: const <SearchDegradeSignal>[
+          SearchDegradeSignal(
+            code: 'location_place_local_failed',
+            message: '一方地点本地检索失败，当前已 fail-closed。',
+            objectType: SearchObjectType.locationPlace,
+          ),
+        ],
+      );
+    }
+  }
+
   Future<_SectionBuildResult?> _buildUserProfileSection(
     SearchRequest request,
   ) async {
@@ -1002,7 +1092,7 @@ class AppSearchRepository implements SearchRepository {
               subtitle: item.headline,
               snippet: item.relationshipCapability.canOpenConversation
                   ? '已连接'
-                  : '共同兴趣相关',
+                  : '推荐关注',
               resolvedFrom: SearchResolvedFrom.remote,
               matchedField: 'displayName',
               payload: SearchHitPayloadWireMap(<String, dynamic>{

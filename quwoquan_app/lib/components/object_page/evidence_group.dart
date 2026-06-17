@@ -72,9 +72,9 @@ class EvidenceGroup {
         .where((g) => g.hasMeaning)
         .toList(growable: true);
     if (resolved.isEmpty) {
-      final fallbackLabel = reason.displayText.trim().isNotEmpty
-          ? reason.displayText.trim()
-          : reason.label.trim();
+      final fallbackLabel = reason.primaryText.trim().isNotEmpty
+          ? reason.primaryText.trim()
+          : reason.connectionSummary.trim();
       if (fallbackLabel.isEmpty) {
         return const <EvidenceGroup>[];
       }
@@ -82,7 +82,7 @@ class EvidenceGroup {
         EvidenceGroup._(
           kind: reason.dimension.trim(),
           label: fallbackLabel,
-          count: reason.sharedCount < 0 ? 0 : reason.sharedCount,
+          count: reason.totalPointCount < 0 ? 0 : reason.totalPointCount,
           sampleText: reason.secondaryText.trim(),
           sampleAvatarUrls: const <String>[],
           isRecommended: reason.intersectionClass == 'recommended',

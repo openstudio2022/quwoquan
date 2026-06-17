@@ -15,7 +15,12 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common.paths import ensure_batch_layout  # noqa: E402
 from task.store import load_spec  # noqa: E402
-from build.homepage import MIN_PAGE_CHARS, prepare_entity_pages, validate_entity_pages  # noqa: E402
+from build.homepage import (  # noqa: E402
+    MIN_PAGE_CHARS,
+    materialize_entity_pages,
+    prepare_entity_pages,
+    validate_entity_pages,
+)
 
 
 def handle_build(args: argparse.Namespace) -> None:
@@ -37,6 +42,15 @@ def handle_build(args: argparse.Namespace) -> None:
         if not refs:
             print("[build] WARN: coverageTargets 为空，无实体可下发")
 
+    if stage in ("materialize", "all"):
+        issues = materialize_entity_pages(task_id, batch_id, spec)
+        if issues:
+            print(f"[build] materialize FAILED ({len(issues)} 项):")
+            for issue in issues:
+                print(f"  - {issue}")
+            sys.exit(1)
+        print("[build] materialize PASSED: 实体主页三件套已确定性物化")
+
     if stage in ("validate", "all"):
         issues = validate_entity_pages(task_id, batch_id, spec)
         if issues:
@@ -53,8 +67,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--batch", default="build_1", help="Batch ID")
     p.add_argument(
         "--stage",
-        choices=["prepare", "validate", "all"],
+        choices=["prepare", "materialize", "validate", "all"],
         default="prepare",
-        help="prepare=下发产出契约; validate=采纳门校验; all=两者",
+        help="prepare=下发产出契约; materialize=确定性物化; validate=采纳门校验; all=全链路",
     )
     p.set_defaults(handler=handle_build)

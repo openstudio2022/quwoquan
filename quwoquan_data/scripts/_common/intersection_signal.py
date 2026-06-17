@@ -37,7 +37,7 @@ SOURCES = ("tagRef", "geoTagRef", "entityRef", "followEdge", "contact")
 ACTION_TYPES = ("follow", "join", "add_contact", "view_object")
 
 # produce 内容生产期可预生成的 hint 字段（契约字段子集，个性化字段留给 runtime 补全）。
-HINT_FIELDS = ("dimension", "source", "tagRefs", "actionType", "actionTargetId", "label")
+HINT_FIELDS = ("dimension", "source", "tagRefs", "actionType", "actionTargetId")
 
 # 每篇内容必须覆盖的可交集维度（content=内容实体，interest=兴趣标签）。
 REQUIRED_DIMENSIONS = ("content", "interest")
@@ -70,7 +70,6 @@ def build_intersection_hints(manifest: Mapping[str, Any]) -> list[dict[str, Any]
                 "tagRefs": [],
                 "actionType": "view_object",
                 "actionTargetId": ref,
-                "label": ref.split(":")[-1],
             }
         )
     interest_tags = [
@@ -86,19 +85,18 @@ def build_intersection_hints(manifest: Mapping[str, Any]) -> list[dict[str, Any]
                 "tagRefs": [tag],
                 "actionType": "join",
                 "actionTargetId": tag,
-                "label": tag.split("/")[-1],
             }
         )
     region = condition.get("region") if isinstance(condition, Mapping) else None
     if region:
+        target = str(region.get("name") or region.get("label") or "") if isinstance(region, Mapping) else str(region)
         hints.append(
             {
                 "dimension": "location",
                 "source": "geoTagRef",
                 "tagRefs": [],
                 "actionType": "view_object",
-                "actionTargetId": str(region),
-                "label": str(region),
+                "actionTargetId": target,
             }
         )
     return hints

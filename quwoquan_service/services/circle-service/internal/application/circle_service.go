@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	rterr "quwoquan_service/runtime/errors"
+	rtimpact "quwoquan_service/runtime/impact"
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/repository"
 	rtsearch "quwoquan_service/runtime/search"
@@ -328,35 +329,10 @@ func (s *CircleService) SearchCircles(
 	docs := make([]rtsearch.Document, 0, len(listResp.Items))
 	facetCounts := map[string]int{}
 	for _, circle := range listResp.Items {
-		categoryID := strings.TrimSpace(circle.Category)
-		if categoryID == "" {
-			categoryID = strings.TrimSpace(circle.DomainID)
-		}
-		if categoryID == "" {
-			categoryID = "all"
-		}
+		categoryID := circleSearchCategoryID(circle)
 		facetCounts[categoryID]++
 		index[circle.ID] = indexedCircle{circle: circle, categoryID: categoryID}
-		docs = append(docs, rtsearch.Document{
-			ObjectType:   rtsearch.ObjectTypeCircle,
-			ObjectID:     circle.ID,
-			Title:        circle.Name,
-			Summary:      circle.Description,
-			SourceDomain: "circle",
-			ContentType:  string(circle.Kind),
-			Visibility:   string(circle.Visibility),
-			BadgeLabel:   "圈子",
-			Tags:         asStringSlice(circle.Tags),
-			Popularity:   float64(circle.MemberCount + circle.PostCount),
-			Freshness:    circle.UpdatedAt,
-			Fields: map[string]string{
-				"categoryId":          categoryID,
-				"domainId":            circle.DomainID,
-				"displaySubjectType":  string(circle.DisplaySubjectType),
-				"linkedHomepageId":    circle.LinkedHomepageID,
-				"linkedHomepageTitle": circle.LinkedHomepageTitle,
-			},
-		})
+		docs = append(docs, ProjectCircleToSearchDocument(circle))
 	}
 	searchResp := rtsearch.Execute(rtsearch.Request{
 		Query:       query,
@@ -648,7 +624,7 @@ func (s *CircleService) GetCircleImpact(ctx context.Context, circleID string) (_
 			"tagRef":                "",
 			"source":                "circle_members",
 			"count":                 c.MemberCount,
-			"displayText":           fmt.Sprintf("%d人在这里建立了新连接", c.MemberCount),
+			"primaryText":           rtimpact.PrimaryText(rtimpact.HelpRelationship, "establish_connection", c.MemberCount, rtimpact.ActorTA),
 		})
 	}
 	if c.PostCount > 0 {
@@ -659,7 +635,7 @@ func (s *CircleService) GetCircleImpact(ctx context.Context, circleID string) (_
 			"tagRef":                "",
 			"source":                "circle_posts",
 			"count":                 c.PostCount,
-			"displayText":           fmt.Sprintf("%d个讨论正在这里发生", c.PostCount),
+			"primaryText":           rtimpact.PrimaryText(rtimpact.HelpCommunity, "start_discussion", c.PostCount, rtimpact.ActorTA),
 		})
 	}
 	if c.WeeklyActiveCount > 0 {
@@ -670,7 +646,7 @@ func (s *CircleService) GetCircleImpact(ctx context.Context, circleID string) (_
 			"tagRef":                "",
 			"source":                "circle_weekly_active",
 			"count":                 c.WeeklyActiveCount,
-			"displayText":           fmt.Sprintf("%d人最近参与了这里", c.WeeklyActiveCount),
+			"primaryText":           rtimpact.PrimaryText(rtimpact.HelpSpread, "active_participation", c.WeeklyActiveCount, rtimpact.ActorTA),
 		})
 	}
 	total := 0
@@ -712,6 +688,25 @@ func (s *CircleService) PinPost(ctx context.Context, circleID, postID string, pi
 		attribute.String("post.id", postID))
 	defer func() { rtobs.EndSpan(span, err) }()
 
+	if s.feedStore == nil {
+		return rterr.NewUnavailable(rterr.ModuleCircle, "圈子动态暂不可用", "circle feed store unavailable")
+	}
+	ok, updateErr := s.feedStore.UpdateCirclePostPinned(ctx, circleID, postID, pinned)
+	if updateErr != nil {
+		return rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleCircle, rterr.KindSystem, "feed_update_failed"),
+			"圈子动态更新失败", updateErr.Error(),
+		)
+	}
+	if !ok {
+		return rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
+			"帖子不存在", "circle post not found",
+		)
+	}
+	s.publishEvent(ctx, "CirclePostPinned", postID, map[string]any{
+		"circleId": circleID, "postId": postID, "pinned": pinned,
+	})
 	return nil
 }
 
@@ -721,6 +716,25 @@ func (s *CircleService) FeaturePost(ctx context.Context, circleID, postID string
 		attribute.String("post.id", postID))
 	defer func() { rtobs.EndSpan(span, err) }()
 
+	if s.feedStore == nil {
+		return rterr.NewUnavailable(rterr.ModuleCircle, "圈子动态暂不可用", "circle feed store unavailable")
+	}
+	ok, updateErr := s.feedStore.UpdateCirclePostFeatured(ctx, circleID, postID, featured)
+	if updateErr != nil {
+		return rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleCircle, rterr.KindSystem, "feed_update_failed"),
+			"圈子动态更新失败", updateErr.Error(),
+		)
+	}
+	if !ok {
+		return rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
+			"帖子不存在", "circle post not found",
+		)
+	}
+	s.publishEvent(ctx, "CirclePostFeatured", postID, map[string]any{
+		"circleId": circleID, "postId": postID, "featured": featured,
+	})
 	return nil
 }
 
@@ -747,27 +761,18 @@ func (s *CircleService) ReportBehavior(ctx context.Context, report map[string]an
 	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ReportBehavior")
 	defer func() { rtobs.EndSpan(span, err) }()
 
+	circleID := strings.TrimSpace(fmt.Sprint(report["circleId"]))
+	userID := strings.TrimSpace(fmt.Sprint(report["userId"]))
+	if circleID != "" && userID != "" && s.members.TouchActivity(ctx, circleID, userID) {
+		activeSince := time.Now().UTC().Add(-7 * 24 * time.Hour)
+		activeCount, countErr := s.members.CountActiveSince(ctx, circleID, activeSince)
+		if countErr != nil {
+			return fmt.Errorf("count weekly active members: %w", countErr)
+		}
+		if err := s.circles.UpdateWeeklyActiveCount(ctx, circleID, activeCount); err != nil {
+			return fmt.Errorf("update weekly active count: %w", err)
+		}
+	}
 	s.publishEvent(ctx, "CircleBehaviorReported", "", report)
 	return nil
-}
-
-func asStringSlice(value any) []string {
-	if value == nil {
-		return nil
-	}
-	switch typed := value.(type) {
-	case []string:
-		return typed
-	case []any:
-		items := make([]string, 0, len(typed))
-		for _, item := range typed {
-			text := strings.TrimSpace(fmt.Sprint(item))
-			if text != "" {
-				items = append(items, text)
-			}
-		}
-		return items
-	default:
-		return nil
-	}
 }

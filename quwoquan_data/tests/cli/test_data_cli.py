@@ -535,7 +535,7 @@ def test_task_scaled_e2e_verify_plan_aggregates_units():
         write_json(
             fanout_run_matrix_path("plan_verify"),
             {
-                "schemaVersion": "quwoquan_data.fanout_run_matrix/1",
+                "schemaVersion": "quwoquan_data.fanout_run_matrix",
                 "planId": "plan_verify",
                 "orchestrators": [{"worker": "part::四川省", "reached": True, "missing": [], "error": None}],
                 "workers": [],
@@ -812,7 +812,6 @@ def _seed_verified_post_for_audit(task_id: str, batch_id: str, *, ref: str, titl
                     "tagRefs": [],
                     "actionType": "view_object",
                     "actionTargetId": f"entity:景区:{name}",
-                    "label": name,
                 },
                 {
                     "dimension": "interest",
@@ -820,7 +819,6 @@ def _seed_verified_post_for_audit(task_id: str, batch_id: str, *, ref: str, titl
                     "tagRefs": ["Topic/旅行/景区攻略"],
                     "actionType": "join",
                     "actionTargetId": "Topic/旅行/景区攻略",
-                    "label": "景区攻略",
                 },
                 {
                     "dimension": "location",
@@ -828,7 +826,6 @@ def _seed_verified_post_for_audit(task_id: str, batch_id: str, *, ref: str, titl
                     "tagRefs": [],
                     "actionType": "view_object",
                     "actionTargetId": "四川",
-                    "label": "四川",
                 },
             ],
         },
@@ -1032,7 +1029,7 @@ def test_task_scaled_e2e_verify_plan_writes_partition_audit_summary():
         write_json(
             fanout_run_matrix_path("plan_audit"),
             {
-                "schemaVersion": "quwoquan_data.fanout_run_matrix/1",
+                "schemaVersion": "quwoquan_data.fanout_run_matrix",
                 "planId": "plan_audit",
                 "orchestrators": [{"worker": "part::成都平原", "reached": True, "missing": [], "error": None}],
                 "workers": [],

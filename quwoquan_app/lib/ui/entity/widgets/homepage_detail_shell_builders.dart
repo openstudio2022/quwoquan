@@ -1,25 +1,31 @@
 part of 'homepage_detail_shell.dart';
 
 extension _HomepageBuilders on _HomepageDetailShellState {
-  /// 交集卡「与你的连接」：对象对直打（当前用户 × 主页对象）。
-  /// 只读 bundle 直出；bundle 为空时直接收起，不再客户端补第二条交集链。
+  /// 「为什么推荐这里」交集卡：与圈子/用户主页同构，切 [ObjectIntersectionSection]
+  /// 单一真相源（provider 驱动 loading/data/error 三态 + §7.3 高亮 + 归因上报）。
+  /// 不再页面内自造交集渲染；无可解析交集则组件自行收起（G2 不占位）。
   Widget _buildIntersectionCard(bool isDark) {
-    final bundleReasons = widget.objectPageBundle?.intersectionReasons;
-    if (bundleReasons != null && bundleReasons.isNotEmpty) {
-      final card = ObjectIntersectionCard.fromReasons(
-        title: UITextConstants.objectConnectionWithYou,
-        reasons: bundleReasons,
-        isDark: isDark,
-        onReasonTap: widget.onIntersectionReasonTap,
-      );
-      if (card != null) {
-        return Padding(
-          padding: EdgeInsets.only(top: AppSpacing.containerSm),
-          child: card,
-        );
-      }
+    final objectId = (_reference?.id ?? '').trim();
+    if (objectId.isEmpty) {
+      return const SizedBox.shrink();
     }
-    return const SizedBox.shrink();
+    return Consumer(
+      builder: (context, ref, _) {
+        final query = ObjectIntersectionQuery(
+          objectAId: ref.watch(currentUserIdProvider),
+          objectAType: 'user',
+          objectBId: objectId,
+          objectBType: 'homepage',
+        );
+        return ObjectIntersectionSection(
+          query: query,
+          title: UITextConstants.entityWhyRecommendTitle,
+          isDark: isDark,
+          bottomPadding: AppSpacing.containerSm,
+          onReasonTap: widget.onIntersectionReasonTap,
+        );
+      },
+    );
   }
 
   Widget _buildIdentityMedia(BuildContext context, String? coverUrl) {
@@ -202,7 +208,23 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       if (typeLabel.trim().isNotEmpty) typeLabel.trim(),
       if (locationLine.trim().isNotEmpty) locationLine.trim(),
     ].join(' · ');
-    final identityMetaLine = (reference?.subtitle ?? '').trim();
+    final establishedYear = detail?.establishedYear;
+    final followerCount = detail?.followerCount ?? 0;
+    final statsLine = <String>[
+      if (establishedYear != null && establishedYear > 0)
+        UITextConstants.entityEstablishedYearLabel(establishedYear),
+      if (followerCount > 0)
+        UITextConstants.entityFollowerCountLabel(
+          formatCompactActionCount(followerCount),
+        ),
+    ].join(' · ');
+    final referenceSubtitle = (reference?.subtitle ?? '').trim();
+    final identityMetaLine = statsLine.isNotEmpty
+        ? statsLine
+        : referenceSubtitle;
+    final identityBadges = <String>[
+      if (detail?.verified == true) UITextConstants.entityVerifiedBadge,
+    ];
 
     return Container(
       decoration: BoxDecoration(
@@ -236,6 +258,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                   UITextConstants.objectHomepageDefaultTitle,
               subtitle: identitySubtitle,
               metaLine: identityMetaLine,
+              badges: identityBadges,
               media: _buildIdentityMedia(context, reference?.coverUrl),
               trailing: _hasMoreActions
                   ? ProfileIosIconButton(
@@ -266,8 +289,9 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     );
   }
 
+  /// 「关于这里」介绍卡：标题 + 2~4 行简介 + 右侧缩略图。
+  /// 去「认识XX」泛词，统一结论导向标题；缩略图来自封面，无封面则只排文字。
   Widget _buildEntityIntroCard(BuildContext context) {
-    final objectName = (_reference?.title ?? '').trim();
     final introductionSummary = (widget.introductionSummary ?? '').trim();
     final fallbackIntro = <String>[
       if ((_reference?.subtitle ?? '').trim().isNotEmpty)
@@ -281,9 +305,20 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         ? introductionSummary
         : fallbackIntro;
     final canOpenIntroduction = introductionSummary.isNotEmpty;
-    if (objectName.isEmpty || intro.isEmpty) {
+    if (intro.isEmpty) {
       return const SizedBox.shrink();
     }
+    final thumbnailUrl = (_reference?.coverUrl ?? '').trim();
+    final introText = Text(
+      intro,
+      maxLines: 4,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: AppTypography.iosFootnote,
+        color: AppColors.iosSecondaryLabel(context),
+        height: AppSpacing.textLineHeightBody,
+      ),
+    );
     return Padding(
       padding: EdgeInsets.only(top: AppSpacing.containerSm),
       child: CupertinoButton(
@@ -298,7 +333,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                 children: <Widget>[
                   Expanded(
                     child: Text(
-                      UITextConstants.objectIntroTitle(objectName),
+                      UITextConstants.entityAboutTitle,
                       style: TextStyle(
                         fontSize: AppTypography.iosSubheadline,
                         fontWeight: AppTypography.semiBold,
@@ -323,17 +358,32 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                   ],
                 ],
               ),
-              SizedBox(height: AppSpacing.intraGroupXs),
-              Text(
-                intro,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.iosFootnote,
-                  color: AppColors.iosSecondaryLabel(context),
-                  height: AppSpacing.textLineHeightDense,
+              SizedBox(height: AppSpacing.intraGroupSm),
+              if (thumbnailUrl.isEmpty)
+                introText
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(child: introText),
+                    SizedBox(width: AppSpacing.containerSm),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.radiusTen,
+                      ),
+                      child: SizedBox(
+                        width: AppSpacing.avatarUserXl,
+                        height: AppSpacing.avatarUserXl,
+                        child: CircleMediaImage(
+                          imageSource: thumbnailUrl,
+                          fit: BoxFit.cover,
+                          placeholder: const SizedBox.shrink(),
+                          errorWidget: const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
             ],
           ),
         ),

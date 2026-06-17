@@ -76,6 +76,8 @@ L3_story: <story>
 测试证据: T1 / T2 / T3 / T4
 ```
 
+起手式前先审视 `docs/outstanding_risks_backlog.md` 的未解决项；若本轮识别出新的长期遗留，需先向用户复述并在确认后登记。
+
 答不出来就先补文档，不准直接写业务代码。
 
 这些字段对应 `docs/agent_context_contract.md` 的 `Spec Entry`。进入实现前还必须完成 `Pre-work Reflection`；完成后必须输出 `Exit Review`。
@@ -326,6 +328,8 @@ make gate
 ```text
 先按 /verify 对账当前改动的 T1~T4、四环境、错误码链路、观测、推荐反馈和部署证据，再按 /plan-next 生成下一轮规划，不能用新规划掩盖未完成项。
 ```
+
+若本轮关闭了 backlog 中的遗留事项，收口前必须同步更新 `docs/outstanding_risks_backlog.md` 的 checkbox、状态与验证证据。
 
 ### 12.5 错误码/异常语义任务
 

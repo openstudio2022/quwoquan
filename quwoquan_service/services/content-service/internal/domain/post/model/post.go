@@ -207,23 +207,25 @@ type PostCircleReshare struct {
 
 // PostSearchItemView domain model.
 type PostSearchItemView struct {
-	PostId            string    `json:"postId" bson:"postId"`
-	ContentType       string    `json:"contentType" bson:"contentType"`
-	ContentIdentity   string    `json:"contentIdentity" bson:"contentIdentity"`
-	Title             string    `json:"title" bson:"title"`
-	Summary           string    `json:"summary" bson:"summary"`
-	CoverUrl          string    `json:"coverUrl" bson:"coverUrl"`
-	AuthorId          string    `json:"authorId" bson:"authorId"`
-	AuthorDisplayName string    `json:"authorDisplayName" bson:"authorDisplayName"`
-	AuthorAvatarUrl   string    `json:"authorAvatarUrl" bson:"authorAvatarUrl"`
-	CircleId          string    `json:"circleId" bson:"circleId"`
-	CircleName        string    `json:"circleName" bson:"circleName"`
-	CategoryId        string    `json:"categoryId" bson:"categoryId"`
-	SubCategory       string    `json:"subCategory" bson:"subCategory"`
-	LikeCount         int64     `json:"likeCount" bson:"likeCount"`
-	HighlightText     string    `json:"highlightText" bson:"highlightText"`
-	MatchedField      string    `json:"matchedField" bson:"matchedField"`
-	PublishedAt       time.Time `json:"publishedAt" bson:"publishedAt"`
+	PostId             string         `json:"postId" bson:"postId"`
+	ContentType        string         `json:"contentType" bson:"contentType"`
+	ContentIdentity    string         `json:"contentIdentity" bson:"contentIdentity"`
+	Title              string         `json:"title" bson:"title"`
+	Summary            string         `json:"summary" bson:"summary"`
+	CoverUrl           string         `json:"coverUrl" bson:"coverUrl"`
+	AuthorId           string         `json:"authorId" bson:"authorId"`
+	AuthorDisplayName  string         `json:"authorDisplayName" bson:"authorDisplayName"`
+	AuthorAvatarUrl    string         `json:"authorAvatarUrl" bson:"authorAvatarUrl"`
+	CircleId           string         `json:"circleId" bson:"circleId"`
+	CircleName         string         `json:"circleName" bson:"circleName"`
+	CategoryId         string         `json:"categoryId" bson:"categoryId"`
+	SubCategory        string         `json:"subCategory" bson:"subCategory"`
+	LikeCount          int64          `json:"likeCount" bson:"likeCount"`
+	HighlightText      string         `json:"highlightText" bson:"highlightText"`
+	MatchedField       string         `json:"matchedField" bson:"matchedField"`
+	PublishedAt        time.Time      `json:"publishedAt" bson:"publishedAt"`
+	ConnectionState    string         `json:"connectionState" bson:"connectionState"`
+	IntersectionReason map[string]any `json:"intersectionReason" bson:"intersectionReason"`
 }
 
 // ProfileInteractionActivityView domain model.

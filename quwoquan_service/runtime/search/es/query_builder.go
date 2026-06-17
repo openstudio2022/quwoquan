@@ -7,6 +7,7 @@
 package es
 
 import (
+	"strconv"
 	"strings"
 
 	rtsearch "quwoquan_service/runtime/search"
@@ -75,6 +76,19 @@ func (b *QueryBuilder) Build(plan rtsearch.RetrievePlan) map[string]any {
 		}
 	}
 
+	// filters.near -> geo_distance hard filter (附近). Scopes recall to candidates
+	// within RadiusKm of the pin. Proximity WEIGHTING is intentionally left to the
+	// shared CrossTypeRanker (rankAndMerge) so native and ES share one proximity
+	// scoring truth source (R24: no second ranking chain); this stays pure recall.
+	if plan.Near.Active() {
+		filter = append(filter, map[string]any{
+			"geo_distance": map[string]any{
+				"distance": strconv.FormatFloat(plan.Near.RadiusKm, 'f', -1, 64) + "km",
+				"geo":      map[string]any{"lat": plan.Near.Lat, "lon": plan.Near.Lng},
+			},
+		})
+	}
+
 	// Permission gate is pushed down as a filter (visibility is implicit).
 	if !plan.Viewer.IncludePrivate {
 		filter = append(filter, map[string]any{"terms": map[string]any{"visibility": []string{"public"}}})
@@ -122,6 +136,18 @@ func (b *QueryBuilder) Build(plan rtsearch.RetrievePlan) map[string]any {
 		"size":  plan.Limit,
 		"from":  plan.Offset,
 		"query": map[string]any{"bool": boolQuery},
+		// Stable sort tie-break: _score primary, then objectId (keyword) so the
+		// top-`size` cutoff is deterministic across replicas, segment merges and
+		// refreshes. Without this, equal-_score docs at the size boundary are
+		// selected in a non-deterministic internal order, so the candidate set
+		// (and thus the final re-ranked TopN) can jump between identical queries.
+		"sort": []map[string]any{
+			{"_score": map[string]any{"order": "desc"}},
+			{"objectId": map[string]any{"order": "asc"}},
+		},
+		// Cost guard: commercial recall only needs the top-`size` window, never an
+		// exact hit total, so skip exact total counting on every high-QPS query.
+		"track_total_hits": false,
 	}
 	return body
 }
@@ -137,6 +163,10 @@ func (b *QueryBuilder) BuildHybrid(plan rtsearch.RetrievePlan, queryVector []flo
 	if k <= 0 {
 		k = plan.Limit
 	}
+	// RRF rank governs ordering for the hybrid path; ES rejects a top-level sort
+	// alongside rank, so drop the lexical tie-break sort here (determinism for the
+	// hybrid path is a P2 concern handled by RRF + stable rank inputs).
+	delete(body, "sort")
 	body["knn"] = map[string]any{
 		"field":          "embedding",
 		"query_vector":   queryVector,

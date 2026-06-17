@@ -29,14 +29,24 @@ String _contentLabelForKey(String labelKey) {
       return UITextConstants.profileTabInteraction;
     case 'profile_tab_lifestyle':
       return UITextConstants.profileTabLifestyle;
-    case 'homepage_tab_content':
-      return UITextConstants.objectTabContent;
+    case 'homepage_tab_record':
+      return UITextConstants.objectTabRecord;
     case 'homepage_tab_discussion':
       return UITextConstants.objectTabDiscussion;
-    case 'homepage_tab_interest_circles':
-      return UITextConstants.objectTabInterestCircles;
-    case 'circle_tab_content':
-      return UITextConstants.objectTabContent;
+    case 'homepage_tab_related_circles':
+      return UITextConstants.objectTabRelatedCircles;
+    case 'homepage_sub_all':
+      return UITextConstants.creationSubAll;
+    case 'homepage_sub_image':
+      return UITextConstants.creationSubImage;
+    case 'homepage_sub_video':
+      return UITextConstants.creationSubVideo;
+    case 'homepage_sub_article':
+      return UITextConstants.creationSubArticle;
+    case 'homepage_sub_campus_life':
+      return UITextConstants.homepageSubCampusLife;
+    case 'circle_tab_record':
+      return UITextConstants.objectTabRecord;
     case 'circle_tab_discussion':
       return UITextConstants.objectTabDiscussion;
     case 'circle_tab_members':

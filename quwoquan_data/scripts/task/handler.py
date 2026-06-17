@@ -271,6 +271,49 @@ def handle_status(args: argparse.Namespace) -> None:
     ops.status(args.task_id)
 
 
+def handle_trial_review(args: argparse.Namespace) -> None:
+    from task.trial_review import build_trial_review, parse_run_ref, write_trial_review
+
+    compares = [
+        parse_run_ref(value, default_task_id=args.task)
+        for value in (getattr(args, "compare", None) or [])
+    ]
+    report = build_trial_review(args.task, args.batch, compare_runs=compares)
+    if args.write:
+        path = write_trial_review(report)
+        print(f"[task trial-review] wrote {path}")
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        gate = report.get("qualityAndScaleGate") or {}
+        convergence = report.get("convergence") or {}
+        efficiency = report.get("efficiency") or {}
+        decision = report.get("decision") or {}
+        print(f"[task trial-review] {args.task} / {args.batch}")
+        print(
+            "  convergence="
+            f"{convergence.get('trend')} score={convergence.get('score')} "
+            f"status={convergence.get('status')}"
+        )
+        print(
+            "  gate="
+            f"{'PASS' if gate.get('passed') else 'BLOCK'} "
+            f"blockers={len(gate.get('blockers') or [])} warnings={len(gate.get('warnings') or [])}"
+        )
+        print(
+            "  efficiency="
+            f"authorJobs={efficiency.get('estimatedAuthorJobs')} "
+            f"localWaves={efficiency.get('estimatedLocalWaves')}"
+        )
+        print(f"  decision={decision.get('nextGate')} canScale={decision.get('canScale')}")
+        for item in (gate.get("blockers") or [])[:8]:
+            print(f"  - {item}")
+        for item in (gate.get("warnings") or [])[:5]:
+            print(f"  ~ {item}")
+    if args.strict and not ((report.get("qualityAndScaleGate") or {}).get("passed")):
+        raise SystemExit(1)
+
+
 def handle_record_run(args: argparse.Namespace) -> None:
     reflections: list[dict] = []
     if any([args.reflect_query, args.reflect_attribution, args.reflect_decision]):
@@ -439,6 +482,48 @@ def handle_audit_batch(args: argparse.Namespace) -> None:
     _handle(args)
 
 
+def handle_abandon_targets(args: argparse.Namespace) -> None:
+    from task.run import mark_abandoned_content_refs, mark_abandoned_entities
+
+    entities = [item.strip() for item in str(args.entities or "").split(",") if item.strip()]
+    refs = [item.strip() for item in str(getattr(args, "content_refs", "") or "").split(",") if item.strip()]
+    if not entities and not refs:
+        raise SystemExit("--entities or --content-refs must not be empty")
+    report: dict[str, object] = {}
+    if entities:
+        report["entities"] = mark_abandoned_entities(
+            str(args.task),
+            str(args.batch),
+            entities,
+            stage=str(args.stage or ""),
+            reason=str(args.reason or "fast_fail"),
+        )
+    if refs:
+        report["contentRefs"] = mark_abandoned_content_refs(
+            str(args.task),
+            str(args.batch),
+            refs,
+            stage=str(args.stage or ""),
+            reason=str(args.reason or "fast_fail"),
+        )
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def handle_retry_stage(args: argparse.Namespace) -> None:
+    from task.run import reset_stage_retries
+
+    try:
+        report = reset_stage_retries(
+            str(args.task),
+            str(args.batch),
+            stage=str(args.stage or ""),
+            reason=str(args.reason or "operator confirmed infrastructure recovery"),
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
 def handle_scaled_e2e(args: argparse.Namespace) -> None:
     command = getattr(args, "scaled_e2e_command", "")
     if command == "prepare":
@@ -489,6 +574,7 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
                 reset_state=bool(getattr(args, "reset_state", False)),
                 baseline_packet=None,
                 until="produce_compose",
+                max_workers=int(getattr(args, "max_workers", 10) or 10),
             )
         )
         print(
@@ -773,6 +859,19 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pst.add_argument("task_id")
     pst.set_defaults(handler=handle_status)
 
+    ptr = sub.add_parser("trial-review", help="复盘 managed 试跑证据、收敛趋势与 Cursor SDK 效率瓶颈")
+    ptr.add_argument("--task", required=True)
+    ptr.add_argument("--batch", default="run_1")
+    ptr.add_argument(
+        "--compare",
+        action="append",
+        help="追加历史试跑用于趋势比较，格式 TASK::BATCH；同任务可只写 batchId",
+    )
+    ptr.add_argument("--json", action="store_true")
+    ptr.add_argument("--write", action="store_true", help="写入 batch/_shared/trial_review.json")
+    ptr.add_argument("--strict", action="store_true", help="质量/规模门未通过时返回非零退出码")
+    ptr.set_defaults(handler=handle_trial_review)
+
     prr = sub.add_parser("record-run", help="记录运行+刷新进度")
     prr.add_argument("task_id")
     prr.add_argument("--owner")
@@ -852,6 +951,12 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pstg.add_argument("--source-task", dest="source_task", default="旅行/地域/四川省/景区/景区精选")
     pstg.add_argument("--discovery", help="discovery JSON 路径；默认取 source task 的 discovery_sichuan_100e.json")
     pstg.add_argument("--limit", type=int, default=50)
+    pstg.add_argument(
+        "--reserve-ratio",
+        type=float,
+        default=0.2,
+        help="额外选择备用 coverageTargets 比例；默认 0.2，用于 partial replacement",
+    )
     pstg.add_argument("--mandatory", help="必须保留实体，逗号分隔；默认川西五景")
     pstg.add_argument("--exclude", help="显式排除实体，逗号分隔")
     pstg.add_argument("--exclude-from-task", dest="exclude_from_task", help="从历史 managed batch failedObjects 读取不可行实体")
@@ -876,7 +981,24 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pab.add_argument("--batch", required=True)
     pab.add_argument("--json", action="store_true")
     pab.add_argument("--write", action="store_true", help="写入 batch/_shared/managed_batch_audit.json")
+    pab.add_argument("--strict", action="store_true", help="failedLaneCount > 0 时返回非零退出码")
     pab.set_defaults(handler=handle_audit_batch)
+
+    pabn = sub.add_parser("abandon-targets", help="快速失败：标记实体 abandoned，后续 workflow/audit 跳过")
+    pabn.add_argument("--task", required=True)
+    pabn.add_argument("--batch", required=True)
+    pabn.add_argument("--entities", default="", help="逗号分隔实体名")
+    pabn.add_argument("--content-refs", default="", help="逗号分隔内容 ref（文章/图片对象）")
+    pabn.add_argument("--stage", default="unknown")
+    pabn.add_argument("--reason", default="fast_fail")
+    pabn.set_defaults(handler=handle_abandon_targets)
+
+    prst = sub.add_parser("retry-stage", help="恢复已确认的基础设施故障：清理指定 stage retry 计数后重试")
+    prst.add_argument("--task", required=True)
+    prst.add_argument("--batch", required=True)
+    prst.add_argument("--stage", required=True)
+    prst.add_argument("--reason", default="operator confirmed infrastructure recovery")
+    prst.set_defaults(handler=handle_retry_stage)
 
     pse = sub.add_parser("scaled-e2e", help="放大规模 E2E 薄壳：只编排现有 CLI/fanout 主线，不产正文")
     sesub = pse.add_subparsers(dest="scaled_e2e_command")
@@ -887,6 +1009,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     psep.add_argument("--plan", required=True, help="后续 fanout 使用的冻结计划 planId")
     psep.add_argument("--catalog", help="可选 baseline catalog path")
     psep.add_argument("--reset-state", dest="reset_state", action="store_true")
+    psep.add_argument("--max-workers", dest="max_workers", type=int, default=10)
     psep.set_defaults(handler=handle_scaled_e2e)
 
     psef = sesub.add_parser("fanout-author", help="复用 task run --mode fanout 调度 author 子任务")

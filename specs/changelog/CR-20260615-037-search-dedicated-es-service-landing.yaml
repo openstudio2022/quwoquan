@@ -1,0 +1,66 @@
+id: CR-20260615-037-search-dedicated-es-service-landing
+title: 搜索商用端云一体：独立可部署 search-service + 专用 ES/OpenSearch 集群落地
+slug: search-dedicated-es-service-landing
+revision: 1
+status: specified
+
+affected_nodes:
+  - specs/feature-tree/global-search-experience
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract
+
+entries:
+  - timestamp: "2026-06-15T00:00:00+08:00"
+    summary: |
+      将统一搜索读库从“分域只读路由 + App 端聚合 + 本期不落地统一读库”改为：本期落地专用
+      ES/OpenSearch 集群（索引 quwoquan_objects）作为派生搜索读库，并新建独立可部署
+      search-service（domain=search）承载 canonical search(request) 的云侧统一入口
+      POST /v1/search（mode=suggest|result）与 POST /v1/search/feedback，复用
+      runtime/search.Retrieve 单趟跨类型排序；召回后端 ES 主 + native 透明回退
+      （FallbackBackend），ES 故障整体降级 native 不阻塞主路径；各域
+      （content/entity/circle/user/integration）经统一 indexer 灌入同一 ES 索引，
+      原各域 /v1/.../search 只读路由收敛为 indexer 数据源/内部回退。
+    reason: |
+      旧冻结边界明确“本期不新增统一 /v1/search、不指定搜索引擎、统一读库不落地”，与
+      L2 商用化三引擎阻断登记（要求共享搜索核心、相关性排序、统一 envelope、单一 canonical
+      contract）相互矛盾，导致站内搜索长期停在 ListPublished/内存 strings.Contains 主路径、
+      App 端跨域 fan-out 第二真相源。用户已决定采用专用 ES 集群 + 复用 runtime/search/es 库 +
+      新建可部署 search-service。按“当前未上线、零历史兼容、单一真相源”收口为唯一架构。
+    change_type:
+      - refine
+      - arch
+      - contract
+    changed_documents:
+      - path: specs/feature-tree/global-search-experience/spec.md
+        sections:
+          - 2026-06-15 架构决定：独立 search-service + 专用 ES/OpenSearch 集群
+          - 能力边界
+          - 功能范围
+          - 角色分工
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md
+        sections:
+          - 2026-06-15 架构决定：独立 search-service + 专用 ES 集群
+          - 能力边界
+          - 角色分工
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md
+        sections:
+          - 2026-06-15 架构决定（取代下文阶段二边界）
+          - Out of Scope
+          - 本阶段交付边界
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: high
+      breaking_contract: false
+    notes:
+      - canonical search(request) 接口与 object taxonomy 不变；ES 仅替换读侧实现，业务写模型不迁移。
+      - 私有对象 chat.* 仍 local_only，绝不上云做跨用户召回。
+      - 部署：alpha/beta/gamma/prod 声明专用搜索 ES 集群与 search-service 进程，beta=gamma=prod 拓扑逐字一致。
+      - 服务目录经 /qwq-extend new-service 脚手架创建，禁止手动 mkdir。
+      - runtime/search/es 真实 HTTP 客户端 + 装配（ES 主 + native 回退）已落地并单测通过（T1/T2）。

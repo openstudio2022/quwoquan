@@ -1,0 +1,19 @@
+# prod overrides (container/k8s)
+# Recommend injecting APP_ENV=prod, CONFIG_VERSION, IMAGE_VERSION, CONFIG_ROOT via env.
+# ES endpoints/credentials are injected as deploy secrets via SEARCH_ES_ENDPOINTS / SEARCH_ES_*.
+service:
+  http:
+    addr: ":18095"
+
+es:
+  enabled: true
+  endpoints: []
+  index: "quwoquan_objects"
+  shards: 3
+  replicas: 1
+
+redis:
+  rec:
+    mode: cluster
+    addrs: []
+    tls: true

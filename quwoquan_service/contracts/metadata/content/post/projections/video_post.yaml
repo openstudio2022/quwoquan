@@ -43,6 +43,8 @@ client_projection:
   dart_class: VideoPostDto
   base_class: PostBaseDto
   output_path: cloud/runtime/generated/content/video_post_dto.g.dart
+  dart_imports:
+    - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
   computed_getters:
     - name: displayFormat
       dart_return_type: String
@@ -206,3 +208,12 @@ client_projection:
       aliases: [publishedAt, published_at]
       default: "null"
       description: "首次公开时间（仅首次发布置位）。"
+
+    - name: intersectionReasons
+      dart_type: List<IntersectionReason>
+      nullable: true
+      source: intersectionReasons
+      aliases: [intersectionReasons]
+      list_element_dart_class: IntersectionReason
+      default: "null"
+      description: "交集理由（云侧推荐管线预生成；端只读展示，无来源时为 null）"

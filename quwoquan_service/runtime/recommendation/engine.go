@@ -135,8 +135,10 @@ type Engine struct {
 	// to the codegen baseline. Hot-reloadable via recpolicy.StartSyncLoop.
 	policyStore *recpolicy.Store
 
-	logger   *slog.Logger
-	feedback *FeedbackRecorder
+	logger         *slog.Logger
+	feedback       *FeedbackRecorder
+	exposureFilter ExposureFilter
+	exposureMemory ExposureMemory
 }
 
 // EngineOption configures the Engine.
@@ -158,6 +160,13 @@ func WithLogger(l *slog.Logger) EngineOption {
 
 func WithFeedbackRecorder(f *FeedbackRecorder) EngineOption {
 	return func(e *Engine) { e.feedback = f }
+}
+
+func WithExposureGovernance(memory ExposureMemory, filter ExposureFilter) EngineOption {
+	return func(e *Engine) {
+		e.exposureMemory = memory
+		e.exposureFilter = filter
+	}
 }
 
 // WithRecallTimeout sets the per-source recall deadline.
@@ -252,19 +261,37 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	windowLimit := req.Limit*5 + pagingOffset + req.Limit
 	preranked := e.preRanker.PreRank(ctx, allCandidates, windowLimit)
 
-	// Stage 4: Filter exposed + negative + dedup
+	// Stage 4: Filter served + impressed + negative + dedup.
+	// Long-window exposure memory is resolved by candidate membership point
+	// lookups, not by loading per-user SMembers into SessionState.
 	exposedSet := toSet(session.ExposedIDs)
 	negativeSet := toSet(session.NegativeIDs)
+	hiddenAuthors := toSet(session.HiddenAuthorIDs)
+	hiddenTypes := toSet(session.HiddenContentTypes)
 	filteredBuf := acquireCandidates()
 	seen := make(map[string]bool, len(preranked))
 	for _, c := range preranked {
-		if exposedSet[c.ContentID] || negativeSet[c.ContentID] || seen[c.ContentID] {
+		if exposedSet[c.ContentID] ||
+			negativeSet[c.ContentID] ||
+			hiddenAuthors[c.AuthorID] ||
+			hiddenTypes[c.ContentType] ||
+			seen[c.ContentID] {
 			continue
 		}
 		seen[c.ContentID] = true
 		*filteredBuf = append(*filteredBuf, c)
 	}
 	filtered := *filteredBuf
+	if e.exposureFilter != nil {
+		exposureFiltered, filterErr := e.exposureFilter.FilterCandidates(ctx, req.UserID, filtered, pipelineStart)
+		if filterErr != nil {
+			if e.logger != nil {
+				e.logger.Warn("rec.exposure_filter.error", slog.String("err", filterErr.Error()))
+			}
+		} else {
+			filtered = exposureFiltered
+		}
+	}
 
 	// Stage 5: Feature assembly (user features from feature store, with timeout)
 	var userFeatures *UserFeatureVector
@@ -310,7 +337,11 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	if userFeatures != nil {
 		userSegments = userFeatures.Segments
 	}
-	scoringBucket := policy.ResolveBucketOr(recpolicy.ExpScoringWeights, req.UserID, userSegments, policy.DefaultPreset)
+	// Scenario routing: the feed scenario (FeedType) selects the base preset
+	// (e.g. homepage/similar → premium for deep consumption). Experiment buckets
+	// still win; segment overrides/deltas still apply inside ResolveWeights.
+	scenarioBasePreset := policy.PresetForScenario(string(req.FeedType))
+	scoringBucket := policy.ResolveBucketOr(recpolicy.ExpScoringWeights, req.UserID, userSegments, scenarioBasePreset)
 	resolved := policy.ResolveWeights(scoringBucket, userSegments)
 	modelBucket := policy.ResolveBucketOr(recpolicy.ExpModelVsRule, req.UserID, userSegments, "rule")
 	modelVersion := policy.ResolveBucketOr(recpolicy.ExpModelVersion, req.UserID, userSegments, "champion")
@@ -391,6 +422,8 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	// thresholds come from the resolved policy, not hand-coded constants.
 	rerankStart := time.Now()
 	reranked := e.rerank(scored, windowLimit, resolved.Scorer)
+	reranked = applyFrequencyAndNearDupCaps(reranked, windowLimit, policy.ExposureGovernance.FrequencyAndNearDup)
+	reranked = applyDynamicExposureBudget(reranked, windowLimit, policy.ExposureGovernance.DynamicBudget, modelBucket)
 	rerankLatency := time.Since(rerankStart)
 
 	topicEntropy := computeTopicEntropy(reranked)
@@ -493,6 +526,19 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	}
 
 	RecordPipelineResult(modelBucket, len(items) == 0)
+
+	if e.exposureMemory != nil && req.UserID != "" && len(items) > 0 {
+		servedItems := make([]FeedItem, len(items))
+		copy(servedItems, items)
+		RecordServedItems(len(servedItems))
+		go func() {
+			servedCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			if err := e.exposureMemory.RecordServed(servedCtx, req.UserID, servedItems, time.Now().UTC()); err != nil && e.logger != nil {
+				e.logger.Warn("rec.exposure.served_write_failed", slog.String("err", err.Error()))
+			}
+		}()
+	}
 
 	return resp, nil
 }
@@ -599,6 +645,9 @@ func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, ses
 // rerank applies diversity constraints: content type variety, author dedup, tag dedup,
 // explore injection, and cold-start minimum guarantee.
 func (e *Engine) rerank(scored []ScoredCandidate, limit int, scorer recpolicy.ScorerConfig) []ScoredCandidate {
+	if scorer.DiversityStrategy == "mmr" {
+		return e.rerankMMR(scored, limit, scorer)
+	}
 	if len(scored) == 0 {
 		return scored
 	}
@@ -751,6 +800,386 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int, scorer recpolicy.Sc
 	}
 
 	return final
+}
+
+func applyDynamicExposureBudget(
+	items []ScoredCandidate,
+	limit int,
+	cfg recpolicy.DynamicExposureBudgetConfig,
+	bucket string,
+) []ScoredCandidate {
+	if !cfg.Enabled || strings.EqualFold(strings.TrimSpace(bucket), "disable_exposure_dynamic_budget") {
+		return items
+	}
+	if len(items) == 0 {
+		return items
+	}
+	if limit <= 0 || limit > len(items) {
+		limit = len(items)
+	}
+	remaining := make([]ScoredCandidate, 0, len(items))
+	selected := make([]ScoredCandidate, 0, limit)
+	poolCounts := map[string]int{}
+
+	// Quotas are exposure-share constraints, not rank replacement. We preserve
+	// existing score order within every pool and only reserve small trial/rising
+	// lanes so young/high-feedback content can earn measured exposure.
+	quotas := dynamicBudgetQuotas(limit, cfg)
+	for _, s := range items {
+		pool := exposurePoolForCandidate(s.Candidate, cfg)
+		if quota := quotas[pool]; quota > 0 && poolCounts[pool] < quota && len(selected) < limit {
+			selected = append(selected, s)
+			poolCounts[pool]++
+			continue
+		}
+		remaining = append(remaining, s)
+	}
+	existing := make(map[string]struct{}, len(selected))
+	for _, s := range selected {
+		existing[s.Candidate.ContentID] = struct{}{}
+	}
+	for _, s := range remaining {
+		if len(selected) >= limit {
+			break
+		}
+		if _, ok := existing[s.Candidate.ContentID]; ok {
+			continue
+		}
+		selected = append(selected, s)
+		poolCounts[exposurePoolForCandidate(s.Candidate, cfg)]++
+	}
+	for pool, count := range poolCounts {
+		RecordDynamicBudgetSelection(pool, bucket, count)
+	}
+	if len(selected) == 0 {
+		return items
+	}
+	reordered := make([]ScoredCandidate, 0, len(items))
+	reordered = append(reordered, selected...)
+	for _, s := range items {
+		if _, ok := existing[s.Candidate.ContentID]; ok {
+			continue
+		}
+		reordered = append(reordered, s)
+	}
+	return reordered
+}
+
+func dynamicBudgetQuotas(limit int, cfg recpolicy.DynamicExposureBudgetConfig) map[string]int {
+	trial := int(math.Ceil(float64(limit) * 0.2))
+	rising := int(math.Ceil(float64(limit) * 0.3))
+	if trial < 1 {
+		trial = 1
+	}
+	if rising < 1 {
+		rising = 1
+	}
+	if cfg.TrialMinServed > 0 && trial > cfg.TrialMinServed {
+		trial = cfg.TrialMinServed
+	}
+	return map[string]int{
+		"trial":  trial,
+		"rising": rising,
+	}
+}
+
+func exposurePoolForCandidate(c ContentCandidate, cfg recpolicy.DynamicExposureBudgetConfig) string {
+	served := c.ViewCount
+	ctr := rate(c.LikeCount+c.CommentCount+c.ShareCount, served)
+	negativeRate := 0.0
+	if c.ViewCount > 0 {
+		// share/comment/like are the only available online aggregates in this
+		// candidate shape. Negative-rate storage lands in rm_exposure_state; until
+		// then, retired remains explicit future state and never inferred falsely.
+		negativeRate = 0
+	}
+	switch {
+	case cfg.RetirementNegativeRateThreshold > 0 && negativeRate >= cfg.RetirementNegativeRateThreshold:
+		return "retired"
+	case served < int64(cfg.TrialMinServed):
+		return "trial"
+	case ctr >= cfg.PromotionCTRThreshold:
+		return "rising"
+	case time.Since(c.PublishedAt) > 30*24*time.Hour && ctr > 0:
+		return "evergreen"
+	default:
+		return "mature"
+	}
+}
+
+func rate(numerator int64, denominator int64) float64 {
+	if denominator <= 0 {
+		return 0
+	}
+	return float64(numerator) / float64(denominator)
+}
+
+func applyFrequencyAndNearDupCaps(items []ScoredCandidate, limit int, cfg recpolicy.FrequencyAndNearDupConfig) []ScoredCandidate {
+	if !cfg.Enabled || len(items) == 0 {
+		return items
+	}
+	if limit <= 0 || limit > len(items) {
+		limit = len(items)
+	}
+	minFill := limit * cfg.SoftFallbackMinFillPct / 100
+	if minFill <= 0 {
+		minFill = limit
+	}
+	selected := make([]ScoredCandidate, 0, limit)
+	held := make([]ScoredCandidate, 0, len(items))
+	reasonCounts := map[string]int{}
+	authorCount := map[string]int{}
+	tagCount := map[string]int{}
+	topicCount := map[string]int{}
+	selectedFeatures := make([]map[string]struct{}, 0, limit)
+
+	for _, item := range items {
+		if len(selected) >= limit {
+			held = append(held, item)
+			continue
+		}
+		if reason := frequencyOrNearDupViolation(item, authorCount, tagCount, topicCount, selectedFeatures, cfg); reason != "" {
+			reasonCounts[reason]++
+			held = append(held, item)
+			continue
+		}
+		selected = append(selected, item)
+		observeFrequency(item.Candidate, authorCount, tagCount, topicCount)
+		selectedFeatures = append(selectedFeatures, candidateFeatureSet(item.Candidate))
+	}
+
+	// Soft fallback: caps must not empty or under-fill the feed. Refill by
+	// original score order when the constrained pass cannot satisfy minFill.
+	for _, item := range held {
+		if len(selected) >= limit || len(selected) >= minFill {
+			break
+		}
+		selected = append(selected, item)
+	}
+	if len(selected) == 0 {
+		return items
+	}
+	for reason, count := range reasonCounts {
+		if reason == "near_dup" {
+			RecordNearDupFilter(count)
+			continue
+		}
+		RecordFrequencyCapFilter(reason, count)
+	}
+	reordered := make([]ScoredCandidate, 0, len(items))
+	reordered = append(reordered, selected...)
+	seen := map[string]struct{}{}
+	for _, item := range selected {
+		seen[item.Candidate.ContentID] = struct{}{}
+	}
+	for _, item := range items {
+		if _, ok := seen[item.Candidate.ContentID]; ok {
+			continue
+		}
+		reordered = append(reordered, item)
+	}
+	return reordered
+}
+
+func frequencyOrNearDupViolation(
+	item ScoredCandidate,
+	authorCount map[string]int,
+	tagCount map[string]int,
+	topicCount map[string]int,
+	selectedFeatures []map[string]struct{},
+	cfg recpolicy.FrequencyAndNearDupConfig,
+) string {
+	c := item.Candidate
+	if cfg.MaxSameAuthorPerWindow > 0 && c.AuthorID != "" && authorCount[c.AuthorID] >= cfg.MaxSameAuthorPerWindow {
+		return "author"
+	}
+	if cfg.MaxSameTagPerWindow > 0 {
+		for _, tag := range c.Tags {
+			if tag != "" && tagCount[tag] >= cfg.MaxSameTagPerWindow {
+				return "tag"
+			}
+		}
+	}
+	if cfg.MaxSameTopicPerWindow > 0 {
+		for _, topic := range c.EntityRefs {
+			if topic != "" && topicCount[topic] >= cfg.MaxSameTopicPerWindow {
+				return "topic"
+			}
+		}
+	}
+	if cfg.NearDupJaccardMax > 0 {
+		features := candidateFeatureSet(c)
+		for _, existing := range selectedFeatures {
+			if jaccardSimilarity(features, existing) >= cfg.NearDupJaccardMax {
+				return "near_dup"
+			}
+		}
+	}
+	return ""
+}
+
+func observeFrequency(c ContentCandidate, authorCount map[string]int, tagCount map[string]int, topicCount map[string]int) {
+	if c.AuthorID != "" {
+		authorCount[c.AuthorID]++
+	}
+	for _, tag := range c.Tags {
+		if tag != "" {
+			tagCount[tag]++
+		}
+	}
+	for _, topic := range c.EntityRefs {
+		if topic != "" {
+			topicCount[topic]++
+		}
+	}
+}
+
+// rerankMMR implements Maximal Marginal Relevance reranking: it iteratively
+// selects the candidate maximizing λ·relevance − (1−λ)·maxSimilarityToSelected,
+// where similarity is the Jaccard overlap of {author, type, tags, entityRefs}.
+// This actively balances relevance against novelty (a DPP/MMR-class diversity
+// objective) instead of the greedy path's post-hoc dedup, and is activated only
+// when policy scorer.diversityStrategy == "mmr". Author/type caps from policy are
+// honored as hard constraints, with a fill fallback so the surface is never
+// under-filled. Relevance is min-max normalized over the candidate set.
+func (e *Engine) rerankMMR(scored []ScoredCandidate, limit int, scorer recpolicy.ScorerConfig) []ScoredCandidate {
+	if len(scored) == 0 {
+		return scored
+	}
+	if limit <= 0 || limit > len(scored) {
+		limit = len(scored)
+	}
+	lambda := scorer.DiversityLambda
+	if lambda <= 0 || lambda > 1 {
+		lambda = 0.7
+	}
+	maxPerAuthor := scorer.MaxAuthorPerFeed
+	maxPerType := (limit / 3) + 1
+
+	minS, maxS := scored[0].Score, scored[0].Score
+	for _, s := range scored {
+		if s.Score < minS {
+			minS = s.Score
+		}
+		if s.Score > maxS {
+			maxS = s.Score
+		}
+	}
+	span := maxS - minS
+	rel := func(s ScoredCandidate) float64 {
+		if span <= 0 {
+			return 1
+		}
+		return (s.Score - minS) / span
+	}
+
+	feats := make([]map[string]struct{}, len(scored))
+	for i, s := range scored {
+		feats[i] = candidateFeatureSet(s.Candidate)
+	}
+
+	selected := make([]ScoredCandidate, 0, limit)
+	selectedFeats := make([]map[string]struct{}, 0, limit)
+	used := make([]bool, len(scored))
+	typeCount := make(map[string]int)
+	authorCount := make(map[string]int)
+
+	for len(selected) < limit {
+		bestIdx := -1
+		bestMMR := math.Inf(-1)
+		for i, s := range scored {
+			if used[i] {
+				continue
+			}
+			ct := s.Candidate.ContentType
+			author := s.Candidate.AuthorID
+			if maxPerType > 0 && typeCount[ct] >= maxPerType {
+				continue
+			}
+			if author != "" && maxPerAuthor > 0 && authorCount[author] >= maxPerAuthor {
+				continue
+			}
+			maxSim := 0.0
+			for _, sf := range selectedFeats {
+				if sim := jaccardSimilarity(feats[i], sf); sim > maxSim {
+					maxSim = sim
+				}
+			}
+			mmr := lambda*rel(s) - (1-lambda)*maxSim
+			if mmr > bestMMR {
+				bestMMR = mmr
+				bestIdx = i
+			}
+		}
+		if bestIdx < 0 {
+			// All remaining candidates blocked by caps: relax to avoid under-fill,
+			// taking the highest-relevance unused candidate.
+			for i := range scored {
+				if !used[i] {
+					bestIdx = i
+					break
+				}
+			}
+		}
+		if bestIdx < 0 {
+			break
+		}
+		s := scored[bestIdx]
+		used[bestIdx] = true
+		selected = append(selected, s)
+		selectedFeats = append(selectedFeats, feats[bestIdx])
+		typeCount[s.Candidate.ContentType]++
+		if s.Candidate.AuthorID != "" {
+			authorCount[s.Candidate.AuthorID]++
+		}
+	}
+	return selected
+}
+
+// candidateFeatureSet is the diversity signature of a candidate: author, content
+// type, tags and entity refs. Two candidates sharing more of these are more
+// similar (used by the MMR novelty term).
+func candidateFeatureSet(c ContentCandidate) map[string]struct{} {
+	set := make(map[string]struct{}, 2+len(c.Tags)+len(c.EntityRefs))
+	if c.AuthorID != "" {
+		set["author:"+c.AuthorID] = struct{}{}
+	}
+	if c.ContentType != "" {
+		set["type:"+c.ContentType] = struct{}{}
+	}
+	for _, t := range c.Tags {
+		if t != "" {
+			set["tag:"+t] = struct{}{}
+		}
+	}
+	for _, ref := range c.EntityRefs {
+		if ref != "" {
+			set["entity:"+ref] = struct{}{}
+		}
+	}
+	return set
+}
+
+// jaccardSimilarity returns |A∩B| / |A∪B| ∈ [0,1].
+func jaccardSimilarity(a, b map[string]struct{}) float64 {
+	if len(a) == 0 || len(b) == 0 {
+		return 0
+	}
+	small, large := a, b
+	if len(b) < len(a) {
+		small, large = b, a
+	}
+	inter := 0
+	for k := range small {
+		if _, ok := large[k]; ok {
+			inter++
+		}
+	}
+	union := len(a) + len(b) - inter
+	if union == 0 {
+		return 0
+	}
+	return float64(inter) / float64(union)
 }
 
 // computeTopicEntropy calculates Shannon entropy of topic tag distribution.

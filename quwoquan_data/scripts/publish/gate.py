@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from _common.io import read_json
-from _common.paths import release_root
+from _common.paths import batch_root, release_root
 from _common.release_integrity import release_integrity_issues
 
 _ROOT_ALLOWED = {"release_manifest.json", "entities", "posts"}
@@ -49,6 +49,70 @@ def _payload(path: Path) -> dict:
     if isinstance(data, dict) and isinstance(data.get("payload"), dict):
         return data["payload"]
     return data if isinstance(data, dict) else {}
+
+
+def _source_runtime_root(release_root_path: Path) -> Path | None:
+    manifest = _payload(release_root_path / "release_manifest.json")
+    task_id = str(manifest.get("sourceTaskId") or "").strip()
+    batch_id = str(manifest.get("sourceBatchId") or "").strip()
+    if not task_id or not batch_id:
+        return None
+    root = batch_root(task_id, batch_id)
+    return root if root.is_dir() else None
+
+
+def _abandoned_content_refs(runtime_root: Path | None) -> set[str]:
+    if runtime_root is None:
+        return set()
+    state_path = runtime_root / "_shared" / "task_workflow_state.json"
+    if not state_path.is_file():
+        return set()
+    state = _payload(state_path)
+    refs: set[str] = set()
+    for item in state.get("abandonedContentObjects") or []:
+        if isinstance(item, dict):
+            if str(item.get("status") or "").strip() != "abandoned":
+                continue
+            ref = str(item.get("ref") or "").strip()
+            if ref:
+                refs.add(ref)
+    return refs
+
+
+def _planned_post_refs(runtime_root: Path | None) -> dict[str, str] | None:
+    if runtime_root is None:
+        return None
+    packet_path = runtime_root / "_shared" / "content_plan_packet.json"
+    if not packet_path.is_file():
+        return None
+    packet = _payload(packet_path)
+    items = packet.get("items")
+    if not isinstance(items, list):
+        return None
+    abandoned = _abandoned_content_refs(runtime_root)
+    expected: dict[str, str] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        ref = str(item.get("ref") or "").strip()
+        if not ref or ref in abandoned:
+            continue
+        carrier = str(item.get("carrier") or item.get("contentType") or "article")
+        expected[ref] = "image" if carrier in ("gallery", "image") else "article"
+    return expected
+
+
+def _post_refs_in_release(root: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    posts_root = root / "posts"
+    for path in posts_root.rglob("manifest.json") if posts_root.is_dir() else []:
+        data = _payload(path)
+        ref = str(data.get("topicId") or data.get("ref") or "").strip()
+        if not ref:
+            continue
+        carrier = str(data.get("carrier") or data.get("contentType") or "article")
+        out[ref] = "image" if carrier in ("gallery", "image") else "article"
+    return out
 
 
 def _source_fact(payload: dict, field: str):
@@ -200,6 +264,34 @@ def _quota_issues(root: Path) -> list[str]:
     task_id = str(manifest.get("sourceTaskId") or "")
     if not task_id:
         return []
+    runtime_root = _source_runtime_root(root)
+    planned = _planned_post_refs(runtime_root)
+    if planned is not None:
+        actual = _post_refs_in_release(root)
+        issues: list[str] = []
+        missing = sorted(set(planned) - set(actual))
+        extra = sorted(set(actual) - set(planned))
+        wrong_type = sorted(
+            ref for ref in set(planned) & set(actual)
+            if planned.get(ref) != actual.get(ref)
+        )
+        if missing:
+            issues.append(
+                "release missing planned post ref(s): "
+                + ", ".join(missing[:20])
+                + (" ..." if len(missing) > 20 else "")
+            )
+        if extra:
+            issues.append(
+                "release contains post ref(s) outside effective content_plan: "
+                + ", ".join(extra[:20])
+                + (" ..." if len(extra) > 20 else "")
+            )
+        for ref in wrong_type[:20]:
+            issues.append(
+                f"{ref}: release carrier {actual.get(ref)} != planned {planned.get(ref)}"
+            )
+        return issues
     try:
         from task import store
 

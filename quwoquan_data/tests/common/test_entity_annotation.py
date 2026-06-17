@@ -57,6 +57,7 @@ def test_build_dictionary_grounds_on_homepage():
     brief = {"entityRefs": ["地点/景区/九寨沟"], "subject": {"type": "地点/景区"}}
     draft_meta = {
         "extractedEntities": [
+            "字符串候选只进入治理线，不得直接进可点击词典",
             {"name": "海螺沟", "type": "景区"},
             {"name": "无主页实体", "type": "景区"},
         ]

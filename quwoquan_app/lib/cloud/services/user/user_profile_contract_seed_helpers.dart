@@ -139,6 +139,11 @@ Map<String, dynamic> _contractProfileWire(Map<String, dynamic> item) {
     'avatarUrl': item['avatarUrl']?.toString() ?? '',
     'backgroundUrl': item['backgroundUrl']?.toString() ?? '',
     'bio': item['bio']?.toString() ?? '',
+    'identityTags': (item['identityTags'] as List?)
+            ?.map((e) => e.toString())
+            .toList(growable: false) ??
+        const <String>[],
+    'verified': item['verified'] == true,
     'followerCount': (stats['followerCount'] as num?)?.toInt() ?? 0,
     'followingCount': (stats['followingCount'] as num?)?.toInt() ?? 0,
     'postCount': (stats['postCount'] as num?)?.toInt() ?? 0,

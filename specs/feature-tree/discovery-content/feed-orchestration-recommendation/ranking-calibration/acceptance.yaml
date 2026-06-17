@@ -1,0 +1,52 @@
+version: 2
+node:
+  id: ranking-calibration
+  level: L3_story
+  path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/ranking-calibration
+  title: ranking calibration
+  parent_domain_service: discovery-content
+  parent_business_capability: feed-orchestration-recommendation
+scope:
+  summary: 排序分与真实点击、完成、负反馈对齐的校准规格。
+  in_scope:
+    - 规则分、模型分、质量分、交集分的校准口径。
+    - scorer_variant/channel/segment 维度版本化。
+    - calibration error 指标。
+  out_of_scope:
+    - 本轮不实现校准训练或在线重打分。
+gwt_acceptance:
+  GWT1:
+    title: 排序校准 GWT
+    given:
+      - 推荐系统同时使用规则分、模型分、内容质量分和交集信号。
+    when:
+      - 系统进行混排、阈值判断或动态曝光预算分配。
+    then:
+      - 各分数可在同一校准口径下比较，校准误差可观测并可回滚。
+    done_when:
+      - 校准目标、参数版本、指标和回滚策略均规格化。
+    edge_cases:
+      - 校准样本不足时使用默认参数，不阻塞 feed。
+    contract_refs:
+      - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    performance_points:
+      - ranking_calibration_error <= 0.08
+    evidence:
+      primary:
+        - T1_contract
+        - T2_module_interaction
+      supporting:
+        - T3_app_api_integration
+    tests:
+      planned:
+        - quwoquan_service/runtime/recommendation/ranking_calibration_test.go
+        - quwoquan_service/scripts/ml/tests/test_calibration_report.py
+      recorded: []
+    status: specified
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+    - make gate

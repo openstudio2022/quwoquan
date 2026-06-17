@@ -194,7 +194,7 @@ python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service <svc>
 说明：
 
 - `deploy --target prod-hosted` 成功后会自动串联 `health --scope full`、`inspect --scope all`、`doctor`，每个 rollout stage 留下机器可读证据。
-- prod-hosted 为 backend SSH 托管，gray 与 full 因成本共享同一集群；这是有意保留的 legacy 拓扑，不抽象成 `prod-gray` 第二环境。
+- prod-hosted 为 backend SSH 托管，gray 与 full 因成本共享同一集群；这是有意保留的共享集群拓扑，不抽象成 `prod-gray` 第二环境。
 
 约束：
 

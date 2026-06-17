@@ -1,12 +1,21 @@
 schemaVersion: quwoquan.travel_license_policy.v1
 vertical: travel
 defaultAction: block
-blockedDiscoveryOnlyPlatforms:
-  - Pinterest
-  - pinterest
-  - 小红书
-  - 抖音
-  - 微博
+discoveryPlatformRoles:
+  - platform: Pinterest
+    defaultDiscoveryRole: discovery_only
+  - platform: pinterest
+    defaultDiscoveryRole: discovery_only
+  - platform: 小红书
+    defaultDiscoveryRole: reference_only
+  - platform: 抖音
+    defaultDiscoveryRole: reference_only
+  - platform: 微博
+    defaultDiscoveryRole: reference_only
+  - platform: B站
+    defaultDiscoveryRole: reference_only
+  - platform: 图虫
+    defaultDiscoveryRole: licensed_candidate
 requiredImageFields:
   - license
   - credit

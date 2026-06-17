@@ -37,6 +37,49 @@ def entity_homepage_exists(homepage_root: Path, ref: str, sidecar_homepages: set
     return (homepage_root / domain / etype / name / "page.md").is_file()
 
 
+def _normalized_runtime_entity_ref(ref: str) -> str:
+    domain, etype, name = _parse_entity_ref(ref)
+    if not (domain and etype and name):
+        return ""
+    etype_slug = etype.strip().replace(" ", "_")
+    name_slug = name.strip().replace(" ", "_")
+    if not etype_slug or not name_slug:
+        return ""
+    return f"entity:{etype_slug}:{name_slug}"
+
+
+def _normalized_runtime_entity_refs(entity_refs: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for ref in entity_refs:
+        normalized = _normalized_runtime_entity_ref(ref)
+        if not normalized or normalized in seen:
+            continue
+        out.append(normalized)
+        seen.add(normalized)
+    return out
+
+
+def _sync_publish_ref_projections(manifest: dict[str, Any]) -> None:
+    normalized = _normalized_runtime_entity_refs([str(ref) for ref in manifest.get("entityRefs") or []])
+    if "normalizedEntityRefs" in manifest:
+        manifest["normalizedEntityRefs"] = normalized
+    allowed = set(normalized)
+    hints = manifest.get("intersectionHints")
+    if isinstance(hints, list):
+        kept_hints: list[Any] = []
+        for hint in hints:
+            if not isinstance(hint, dict):
+                kept_hints.append(hint)
+                continue
+            if str(hint.get("source") or "") == "entityRef" and str(hint.get("actionTargetId") or "") not in allowed:
+                continue
+            kept_hints.append(hint)
+        manifest["intersectionHints"] = kept_hints
+    if manifest.get("semanticMentions") == []:
+        manifest.pop("semanticMentions", None)
+
+
 @dataclass
 class PublishFilterVerdict:
     publishable: bool
@@ -111,6 +154,7 @@ def apply_publish_filter(
         else:
             filtered_entities.append(ref)
     manifest["entityRefs"] = kept_refs
+    _sync_publish_ref_projections(manifest)
 
     # discard 图片：从顶层 assets 剔除并记录文件名
     discard_set = set(discard_targets)

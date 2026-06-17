@@ -38,6 +38,16 @@ func (m *MemoryRedis) Set(_ context.Context, key string, value string, _ time.Du
 	return nil
 }
 
+func (m *MemoryRedis) SetNX(_ context.Context, key string, value string, _ time.Duration) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.strings[key]; ok {
+		return false, nil
+	}
+	m.strings[key] = value
+	return true, nil
+}
+
 func (m *MemoryRedis) Del(_ context.Context, keys ...string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

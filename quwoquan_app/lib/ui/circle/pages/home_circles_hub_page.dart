@@ -20,6 +20,7 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/services/home_circles_hub_media_viewer_wiring.dart';
 import 'package:quwoquan_app/ui/circle/services/home_circles_hub_wire.dart';
+import 'package:quwoquan_app/ui/circle/widgets/circle_entity_bridge_strip_metrics.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
@@ -1324,14 +1325,8 @@ class _CirclesEntityBridgeStrip extends StatelessWidget {
     );
   }
 
-  double _stripHeight(BuildContext context) {
-    return AppSpacing.responsiveValue(
-      context,
-      compact: AppSpacing.bottomNavHeight * 2.25,
-      regular: AppSpacing.bottomNavHeight * 2.35,
-      expanded: AppSpacing.bottomNavHeight * 2.45,
-    );
-  }
+  double _stripHeight(BuildContext context) =>
+      resolveCirclesEntityBridgeStripHeight(context);
 
   @override
   Widget build(BuildContext context) {

@@ -1431,8 +1431,8 @@ void main() {
       intersectionReasons: <IntersectionReason>[
         IntersectionReason(
           dimension: 'identity',
-          displayText: '你和 TA 都来自同一校园',
-          sharedCount: 2,
+          primaryText: '你和 TA 都来自同一校园',
+          totalPointCount: 2,
           source: 'identity',
         ),
       ],

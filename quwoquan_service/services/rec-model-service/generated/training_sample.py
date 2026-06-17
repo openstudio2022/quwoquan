@@ -29,6 +29,8 @@ class ContentTrainingSample(BaseModel):
             ],
             "negative_signals": [
                 {"type": "dislike", "weight": 3},
+                {"type": "hide_author", "weight": 4},
+                {"type": "hide_content_type", "weight": 3},
                 {"type": "report", "weight": 5},
             ],
         },

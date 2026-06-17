@@ -38,7 +38,7 @@ class CircleUIConfig {
   static const String defaultTabId = "content";
 
   static const List<CircleTabConfig> tabs = <CircleTabConfig>[
-    CircleTabConfig(id: "content", labelKey: "circle_tab_content", bodySlot: "creations", sectionTypes: <String>['works'], isDefault: true),
+    CircleTabConfig(id: "content", labelKey: "circle_tab_record", bodySlot: "creations", sectionTypes: <String>['works'], isDefault: true),
     CircleTabConfig(id: "discussion", labelKey: "circle_tab_discussion", bodySlot: "discussion", sectionTypes: <String>['chat', 'storage'], isDefault: false),
     CircleTabConfig(id: "members", labelKey: "circle_tab_members", bodySlot: "members", sectionTypes: <String>['interaction'], isDefault: false),
   ];

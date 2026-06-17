@@ -1,4 +1,4 @@
-schemaVersion: quwoquan.travel_source_registry.v1
+schemaVersion: quwoquan.travel_source_registry
 vertical: travel
 defaultAction: block
 qualityTiers:
@@ -64,12 +64,21 @@ sites:
   - siteId: scenic_official
     platform: 景区官网
     category: official
-    domains: [ems517.com]
+    domains: [ems517.com, sxd.cn, jiuzhai.com, dujiangyan.com.cn, bipenggou.net, snzh.cn, bifengxia.com, djy517.com]
     urlPatterns:
       - http://www.ems517.com/new/*
       - https://www.ems517.com/new/*
       - http://www.ems517.com/new_api/*
       - https://www.ems517.com/new_api/*
+      - https://www.sxd.cn/*
+      - https://www.jiuzhai.com/*
+      - https://www.dujiangyan.com.cn/*
+      - http://www.bipenggou.net/*
+      - https://www.bipenggou.net/*
+      - https://www.snzh.cn/*
+      - http://www.bifengxia.com/*
+      - https://www.djy517.com/*
+      - http://www.djy517.com/*
     fetchable: true
     extractor: static_official_html
     licensePolicy: official_terms_required
@@ -87,6 +96,42 @@ sites:
     licensePolicy: official_terms_required
     qualityTier: A
     notes: 政务/文旅公告类正文源，若主页或 JS 门户无正文则应在 source_screen 判 Reject。
+  - siteId: authoritative_media_reference
+    platform: 权威媒体
+    category: authoritative_reference
+    domains:
+      - people.com.cn
+      - news.cn
+      - xinhuanet.com
+      - chinanews.com
+      - cctv.com
+      - gmw.cn
+      - scol.com.cn
+      - newssc.org
+      - whc.unesco.org
+    urlPatterns:
+      - http://*.people.com.cn/*
+      - https://*.people.com.cn/*
+      - http://*.news.cn/*
+      - https://*.news.cn/*
+      - http://*.xinhuanet.com/*
+      - https://*.xinhuanet.com/*
+      - http://*.chinanews.com/*
+      - https://*.chinanews.com/*
+      - http://*.cctv.com/*
+      - https://*.cctv.com/*
+      - http://*.gmw.cn/*
+      - https://*.gmw.cn/*
+      - http://*.scol.com.cn/*
+      - https://*.scol.com.cn/*
+      - http://*.newssc.org/*
+      - https://*.newssc.org/*
+      - https://whc.unesco.org/*
+    fetchable: true
+    extractor: static_official_html
+    licensePolicy: factual_citation_only
+    qualityTier: B
+    notes: 权威媒体/机构公开页面，仅用于事实参考、背景校验和交叉证据，不得按原文改编。
   - siteId: amap_geo
     platform: 高德地图
     category: map_geo
@@ -133,3 +178,44 @@ sites:
     licensePolicy: factual_citation_only
     qualityTier: B
     notes: 去哪儿攻略静态页可稳定抓取，用于路线/门票/避坑类社区攻略证据。
+knownOfficialSites:
+  - entity: 三星堆博物馆
+    url: https://www.sxd.cn/new_service/three-api/home/routeConfig
+    platform: 景区官网
+    category: official
+  - entity: 毕棚沟
+    url: http://www.bipenggou.net/
+    platform: 景区官网
+    category: official
+  - entity: 碧峰峡
+    url: http://www.bifengxia.com/info?crid=74&lan=cn&ckey=jqgk_dfbfx
+    platform: 景区官网
+    category: official
+  - entity: 蜀南竹海
+    url: https://www.snzh.cn/
+    platform: 景区官网
+    category: official
+  - entity: 海螺沟
+    url: https://www.hailuogou.com/
+    platform: 景区官网
+    category: official
+  - entity: 青城山
+    url: https://www.djy517.com/
+    platform: 都江堰旅游官网
+    category: official
+knownHomepageSupportSites:
+  - entity: 乐山大佛
+    sourceId: home_official_leshan_committee
+    url: https://www.leshan.gov.cn/lsswszf/bmdt/92337825/3e865b0e7eee473a94ee6972e.html
+    platform: 乐山大佛景区管委会
+    category: official
+  - entity: 碧峰峡
+    sourceId: home_official_ecology
+    url: http://www.bifengxia.com/info?crid=76&lan=cn&ckey=jqgk_stxg
+    platform: 景区官网
+    category: official
+  - entity: 碧峰峡
+    sourceId: home_official_panda_base
+    url: http://www.bifengxia.com/info?crid=77&lan=cn&ckey=jqgk_dxmjd
+    platform: 景区官网
+    category: official

@@ -2,7 +2,8 @@ version: 1
 read_model: ProfileSocialRelationRowWire
 
 description: |
-  listFollowing / listFollowers 列表元素 wire，与 ProfileSocialRelationRowViewData 对齐。
+  listFollowing（关注列表）/ listFollowers（粉丝列表）列表元素 wire，
+  与 ProfileSocialRelationRowViewData 对齐。
 
 source_entities:
   - FollowEdge

@@ -4,11 +4,11 @@ aggregate: Homepage
 description: |
   Homepage 对象页端侧 UI 配置。
   codegen 从本文件生成 Dart HomepageUIConfig（DO NOT EDIT），
-  端侧实体主页通过 HomepageUIConfig 消费一级 Tab 配置，消除页面内硬编码。
+  端侧实体主页通过 HomepageUIConfig 消费一级 Tab 与记录流二级过滤配置，消除页面内硬编码。
 
 homepage_tabs:
   - id: content
-    label_key: homepage_tab_content
+    label_key: homepage_tab_record
     body_slot: content
     order: 0
     default: true
@@ -19,6 +19,30 @@ homepage_tabs:
     order: 1
 
   - id: interest_circles
-    label_key: homepage_tab_interest_circles
+    label_key: homepage_tab_related_circles
     body_slot: interest_circles
     order: 2
+
+# 记录流二级过滤（右侧漏斗 + ActionSheet，非胶囊）。campus_life 仅 homepageType=school 出现。
+homepage_sub_tabs:
+  - id: all
+    label_key: homepage_sub_all
+    order: 0
+    default: true
+
+  - id: image
+    label_key: homepage_sub_image
+    order: 1
+
+  - id: video
+    label_key: homepage_sub_video
+    order: 2
+
+  - id: article
+    label_key: homepage_sub_article
+    order: 3
+
+  - id: campus_life
+    label_key: homepage_sub_campus_life
+    order: 4
+    homepage_types: [school]

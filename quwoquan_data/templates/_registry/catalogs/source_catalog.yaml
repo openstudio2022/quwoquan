@@ -87,6 +87,12 @@ categories:
     description: Lonely Planet / 国家地理等权威指南，提供专业视角与背景。
     evidenceFocus: [fact, mainline]
     examplePlatforms: [lonely planet, 孤独星球, 国家地理, national geographic, 走遍全球]
+  - id: authoritative_reference
+    label: 权威媒体/机构参考
+    verticals: [travel]
+    description: 央媒、地方权威媒体、国际组织或行业机构公开页面，仅作事实参考和背景校验，不作为可改编底稿。
+    evidenceFocus: [fact, background]
+    examplePlatforms: [权威媒体, 人民网, 新华网, 央视网, 中国新闻网, 四川在线, 光明网, UNESCO]
   - id: school_official
     label: 学校官方
     verticals: [campus]

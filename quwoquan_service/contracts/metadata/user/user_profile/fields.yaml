@@ -210,6 +210,7 @@ entities:
         api_exposure: read
         ops_exposure: read
         recommend_feature: true
+        description: 关注该用户主页的人数；人页统计前台展示为「粉丝」（字段名 followerCount 不变，禁止使用「关注者」）
 
       - name: followingCount
         type: int
@@ -1867,6 +1868,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        description: 关注该子账号主页的人数；人页统计前台展示为「粉丝」（字段名 followerCount 不变，禁止使用「关注者」）
 
       - name: followingCount
         type: int

@@ -89,5 +89,21 @@ oss:
   cdn_ttl_minutes: 60
   use_ssl: false          # MinIO 本地默认 false；生产设 true
 
+# 统一搜索索引 — 写侧（content.search_index_worker）。
+# content-service 是共享 ES/OpenSearch 索引的灌数生产者，search-service 读取同一集群+索引。
+# 端点/凭据通过共享的 SEARCH_ES_ENDPOINTS / SEARCH_ES_* 环境变量注入（部署密钥），
+# 提交的配置不硬编码集群地址或密钥。disabled 或 endpoints 为空时，写时投影器为 no-op，
+# 不影响发帖写路径。
+es:
+  enabled: false
+  endpoints: []
+  index: "quwoquan_objects"
+  requestTimeoutMs: 800
+  insecureTls: false
+  shards: 1
+  replicas: 1
+  embeddingDims: 0
+  synonyms: []
+
 metadata:
   dir: "../../../contracts/metadata"

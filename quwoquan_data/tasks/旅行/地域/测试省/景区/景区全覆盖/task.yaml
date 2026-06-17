@@ -16,5 +16,26 @@ scope:
   - entityType: 地点/景区
     name: 测试景区甲
 provenance:
-  createdAt: '2026-06-12T23:42:20.913529+00:00'
+  createdAt: '2026-06-16T16:58:22.284783+00:00'
   createdBy: test
+content:
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    - article
+    - image
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+      article: 3
+      image: 4
+    allowAiImages: false
+  carriers:
+  - article
+  - image
+  quotas:
+    entityArticlesPerTarget: 2
+    imageWorksPerTarget: 2
+    entityHomepagesPerTarget: 1
+    routeArticles: 0

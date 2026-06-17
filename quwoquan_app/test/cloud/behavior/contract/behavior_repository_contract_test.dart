@@ -10,13 +10,12 @@ void main() {
     });
 
     test('reportEvents 记录行为事件', () async {
-      await repo.reportEvents(events: [
-        BehaviorEvent(
-          contentId: 'post_1',
-          action: BehaviorAction.impression,
-        ),
-        BehaviorEvent(contentId: 'post_2', action: BehaviorAction.click),
-      ]);
+      await repo.reportEvents(
+        events: [
+          BehaviorEvent(contentId: 'post_1', action: BehaviorAction.impression),
+          BehaviorEvent(contentId: 'post_2', action: BehaviorAction.click),
+        ],
+      );
       expect(repo.recorded.length, 2);
     });
 
@@ -76,6 +75,8 @@ void main() {
         'like',
         'share',
         'dislike',
+        'hide_author',
+        'hide_content_type',
         'report',
         'skip',
         'comment',
@@ -89,8 +90,9 @@ void main() {
         'add_contact',
         'assistant_interest',
       ];
-      final actualWireValues =
-          BehaviorAction.values.map((a) => a.wireValue).toList();
+      final actualWireValues = BehaviorAction.values
+          .map((a) => a.wireValue)
+          .toList();
       expect(actualWireValues, containsAll(expectedWireValues));
       expect(actualWireValues.length, expectedWireValues.length);
     });
@@ -122,10 +124,34 @@ void main() {
       final event = BehaviorEvent(
         contentId: 'post_1',
         action: BehaviorAction.impression,
+        clientEventId: 'evt-1',
+        state: 'impressed',
         feedRequestId: 'req-uuid-123',
       );
       final json = event.toJson();
+      expect(json['clientEventId'], 'evt-1');
+      expect(json['state'], 'impressed');
       expect(json['feedRequestId'], 'req-uuid-123');
+    });
+
+    test('hide_author / hide_content_type 透传 authorId 与 contentType', () {
+      final hideAuthorJson = BehaviorEvent(
+        contentId: 'post_1',
+        action: BehaviorAction.hideAuthor,
+        authorId: 'author_1',
+        contentType: 'photo',
+      ).toJson();
+      expect(hideAuthorJson['action'], 'hide_author');
+      expect(hideAuthorJson['authorId'], 'author_1');
+      expect(hideAuthorJson['contentType'], 'photo');
+
+      final hideTypeJson = BehaviorEvent(
+        contentId: 'post_2',
+        action: BehaviorAction.hideContentType,
+        contentType: 'video',
+      ).toJson();
+      expect(hideTypeJson['action'], 'hide_content_type');
+      expect(hideTypeJson['contentType'], 'video');
     });
   });
 }

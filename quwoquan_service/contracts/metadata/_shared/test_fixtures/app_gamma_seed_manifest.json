@@ -77,8 +77,8 @@
       "resetScope": "fixture_user_*",
       "targetStore": "user-service:gamma_test_namespace",
       "verifiedEndpoints": [
-        "/v1/user/profile",
-        "/v1/user/following-subjects"
+        "/v1/user/profile/fixture_user_current",
+        "/v1/me"
       ]
     },
     {
@@ -165,7 +165,12 @@
         "port": 443
       },
       {
-        "prefix": "/v1/entity",
+        "prefix": "/v1/me",
+        "service": "user-service",
+        "port": 443
+      },
+      {
+        "prefix": "/v1/homepages",
         "service": "entity-service",
         "port": 443
       },

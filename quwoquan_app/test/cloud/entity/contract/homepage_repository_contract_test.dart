@@ -102,9 +102,8 @@ void main() {
       expect(bundle.objectPageTemplate, isNotEmpty);
       expect(bundle.tagRefs, isNotEmpty);
       expect(bundle.intersectionReasons, isNotEmpty);
-      expect(bundle.intersections, isNotEmpty);
-      expect(bundle.intersections.first.evidenceItems, isNotEmpty);
-      expect(bundle.intersections.first.confidenceLabel, isNotEmpty);
+      expect(bundle.intersectionReasons.first.intersectionPoints, isNotEmpty);
+      expect(bundle.intersectionReasons.first.primaryText, isNotEmpty);
       expect(bundle.highlightItems, isNotEmpty);
       expect(bundle.relatedObjects, isNotEmpty);
       expect(bundle.relationEdges, isNotEmpty);
@@ -435,29 +434,20 @@ void main() {
             'intersectionReasons': [
               {
                 'dimension': 'interest',
-                'displayText': '你们都关注校园摄影',
-                'tagRefs': ['publish/v1/tags/campus'],
-                'sharedCount': 1,
-              },
-            ],
-            'intersections': [
-              {
-                'intersectionId': 'i1',
-                'dimension': 'interest',
-                'objectKind': 'homepage',
-                'objectId': 'h-bundle',
-                'shortLabel': '共同关注',
-                'evidenceLabel': '校园摄影',
+                'primaryText': '你们都关注校园摄影',
                 'confidenceLabel': '公开资料',
                 'tagRefs': ['publish/v1/tags/campus'],
-                'evidenceItems': [
+                'totalPointCount': 1,
+                'intersectionPoints': [
                   {
-                    'evidenceId': 'ev1',
-                    'evidenceType': 'tag',
-                    'evidenceObjectId': 'publish/v1/tags/campus',
-                    'evidenceLabel': '校园摄影',
-                    'source': 'tagRef',
+                    'pointId': 'ev1',
+                    'pointClass': 'fact',
+                    'dimension': 'interest',
+                    'sourceRef': 'tag',
+                    'label': '校园摄影',
+                    'displayText': '校园摄影',
                     'visibility': 'public',
+                    'count': 1,
                   },
                 ],
               },
@@ -518,12 +508,12 @@ void main() {
       expect(capturedUri?.queryParameters['experimentBucket'], 'A');
       expect(capturedUri?.queryParameters['rolloutCohort'], 'cohort-a');
       expect(bundle.canonicalEntityId, 'entity:h-bundle');
-      expect(bundle.intersectionReasons.single.displayText, '你们都关注校园摄影');
+      expect(bundle.intersectionReasons.single.primaryText, '你们都关注校园摄影');
       expect(
-        bundle.intersections.single.evidenceItems.single.evidenceType,
+        bundle.intersectionReasons.single.intersectionPoints.single.sourceRef,
         'tag',
       );
-      expect(bundle.intersections.single.confidenceLabel, '公开资料');
+      expect(bundle.intersectionReasons.single.confidenceLabel, '公开资料');
       expect(bundle.relationEdges.single.edgeType, 'circle_under_entity');
       expect(bundle.assistantContext?.feedRequestId, 'feed-1');
       expect(bundle.rolloutContext?.relationEvidenceEnabled, isTrue);

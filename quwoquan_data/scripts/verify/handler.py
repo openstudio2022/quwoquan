@@ -67,6 +67,7 @@ def handle_verify(args: argparse.Namespace) -> None:
             daily_target=int(args.daily_target),
             release_id=getattr(args, "release", None),
             require_import=not bool(getattr(args, "allow_missing_import", False)),
+            mode=str(getattr(args, "mode", "commercial") or "commercial"),
         )
         if getattr(args, "report_out", None):
             write_scale_readiness_report(Path(args.report_out), report)
@@ -296,6 +297,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     psr.add_argument("--task", required=True, help="Task ID")
     psr.add_argument("--batch", required=True, help="Batch ID")
     psr.add_argument("--daily-target", type=int, default=10000, help="目标日产内容对象数，默认 10000")
+    psr.add_argument("--mode", choices=["trial", "commercial"], default="commercial", help="trial 允许已替补 abandoned；commercial 要求零未替补失败")
     psr.add_argument("--release", help="可选 isolated release ID，用于证明 release verify 入口存在")
     psr.add_argument("--allow-missing-import", action="store_true", help="仅本地试跑时允许缺少 staging/gamma import 证据")
     psr.add_argument("--report-out", help="可选：写出 readiness JSON 报告")

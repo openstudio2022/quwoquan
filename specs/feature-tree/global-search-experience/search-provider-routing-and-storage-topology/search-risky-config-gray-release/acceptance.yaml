@@ -1,0 +1,61 @@
+version: 2
+node:
+  id: search-risky-config-gray-release
+  level: L3_story
+  path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-risky-config-gray-release
+  title: search risky config gray release
+  parent_domain_service: global-search-experience
+  parent_business_capability: search-provider-routing-and-storage-topology
+scope:
+  summary: search-service 与写侧 ES/Redis 高风险配置的版本快照、灰度、回滚与门禁验收。
+  in_scope:
+  - search-service release config version snapshot。
+  - ES/OpenSearch endpoints/enabled/tls 与 Redis addrs/password/tls 高风险配置变更的灰度准出。
+  - stackctl gamma/prod-sim/prod rollout stage 的 SLO gate 与回滚证据。
+  out_of_scope:
+  - 真实 prod-hosted 放量执行。
+  - 业务主存储迁移。
+gwt_acceptance:
+  GWT1:
+    title: search-service release config 版本快照与配置门禁
+    given:
+    - search-service 新增 ES/Redis 高风险配置项，写侧服务新增 es 索引投影配置。
+    when:
+    - 修改 quwoquan_service/services/*/configs/*.yaml 或 search-service configs。
+    then:
+    - releases/config/search-service/v2026.06.16.0.yaml 存在，含 config.version/min_image_version/max_image_version。
+    - release config 不含真实 endpoints/password/token；端点凭据由环境 secret 注入。
+    - config release version mapping、image compatibility、config PR policy 全绿。
+    done_when:
+    - "`verify_config_release_version_mapping.sh`、`verify_config_image_compat.sh`、`verify_config_pr_policy.sh` 全部通过。"
+    edge_cases:
+    - 只改文档不改服务配置时不要求 release config。
+    - 高风险 key 变更但无本 story acceptance/spec 更新时必须 fail。
+    contract_refs:
+    - releases/config/search-service/v2026.06.16.0.yaml
+    - quwoquan_service/services/search-service/configs/default/config.yaml
+    - quwoquan_service/services/search-service/configs/gamma/config.yaml
+    performance_points:
+    - release config 只冻结配置合同，不代表真集群 measured 性能；性能准出仍归 R-S06-S-1。
+    evidence:
+      primary:
+      - T1_contract
+      supporting:
+      - T3_integration
+    tests:
+      planned:
+      - artifacts/stackctl/prod/search_config_gray_release_report.json
+      recorded:
+      - releases/config/search-service/v2026.06.16.0.yaml
+      - artifacts/stackctl/gamma/search_rollback_rehearsal.md
+    status: partial
+    notes:
+    - 本地 release config 与风险灰度文档已补齐；真实 prod-hosted rollout 需用户确认后执行。
+execution:
+  local_gate:
+  - bash quwoquan_service/scripts/deploy/verify_config_release_version_mapping.sh
+  - bash quwoquan_service/scripts/deploy/verify_config_image_compat.sh
+  - bash quwoquan_service/scripts/deploy/verify_config_pr_policy.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - bash agent_ops/gate/gate_repo.sh --scope service

@@ -3,6 +3,8 @@ read_model: UserProfileStatsWire
 
 description: |
   用户主页统计计数 wire（独立 stats 响应或与 profile 合并字段）。
+  followerCount 在人页统计前台展示为「粉丝」；followingCount 展示为「关注」。
+  术语规范见 specs/00_GLOBAL_TERMINOLOGY.md（前台禁止使用「关注者」）。
 
 source_entities:
   - UserProfile

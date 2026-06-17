@@ -4,6 +4,7 @@ read_model: ObjectPageBundle
 description: |
   对象页统一 Bundle。用户主页、圈子/群组主页和共享主页可消费同构字段，
   由具体领域服务填充身份与内容区，端侧用共享对象页组件渲染。
+  交集唯一下发通道为 intersectionReasons（List<IntersectionReason>）；禁止并行 intersections 第二通道。
 
 source_entities:
   - Homepage
@@ -21,7 +22,6 @@ client_projection:
     - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
     - homepage_content_preview.g.dart
     - homepage_related_group_summary.g.dart
-    - object_intersection.g.dart
     - object_relation_edge.g.dart
     - object_page_context.g.dart
     - object_page_rollout_context.g.dart
@@ -83,12 +83,6 @@ client_projection:
       source: intersectionReasons
       aliases: [intersectionReasons]
       list_element_dart_class: IntersectionReason
-    - name: intersections
-      dart_type: List<ObjectIntersection>
-      nullable: false
-      source: intersections
-      aliases: [intersections]
-      list_element_dart_class: ObjectIntersection
     - name: highlightItems
       dart_type: List<HomepageContentPreview>
       nullable: false

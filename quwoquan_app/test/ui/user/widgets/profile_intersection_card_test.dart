@@ -10,12 +10,12 @@ void main() {
   IntersectionReason reason({
     required String dimension,
     required List<String> tagRefs,
-    required String displayText,
+    required String primaryText,
   }) {
     return IntersectionReason(
       dimension: dimension,
       tagRefs: tagRefs,
-      displayText: displayText,
+      primaryText: primaryText,
     );
   }
 
@@ -32,7 +32,7 @@ void main() {
       ObjectIntersectionCard.fromReasons(
         title: '你们的交集',
         reasons: <IntersectionReason>[
-          reason(dimension: 'interest', tagRefs: const [], displayText: '   '),
+          reason(dimension: 'interest', tagRefs: const [], primaryText: '   '),
         ],
         isDark: false,
       ),
@@ -48,7 +48,7 @@ void main() {
         reason(
           dimension: 'interest',
           tagRefs: const <String>['Topic/摄影', 'Topic/旅行'],
-          displayText: '你们都喜欢 摄影',
+          primaryText: '你们都喜欢 摄影',
         ),
       ],
       isDark: false,

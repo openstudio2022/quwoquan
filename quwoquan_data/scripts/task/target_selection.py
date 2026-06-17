@@ -7,8 +7,8 @@ import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from _common.io import read_json, write_json
-from _common.paths import batch_root
+from _common.io import read_json, write_json, write_ndjson
+from _common.paths import batch_root, task_catalog
 from task import store
 
 
@@ -104,6 +104,29 @@ def ineligible_targets_from_batch(task_id: str, batch_id: str) -> set[str]:
                 name = str(item.get("entity") or "").strip()
                 if name:
                     out.add(name)
+    unavailable_path = shared / "source_unavailable_targets.json"
+    if unavailable_path.is_file():
+        try:
+            availability = read_json(unavailable_path)
+        except (OSError, ValueError, TypeError):
+            availability = {}
+        for item in availability.get("ineligibleTargets") or []:
+            if isinstance(item, Mapping):
+                name = str(item.get("entityId") or "").strip()
+                if name:
+                    out.add(name)
+    auto_research_path = shared / "auto_research_plan.json"
+    if auto_research_path.is_file():
+        try:
+            auto_research = read_json(auto_research_path)
+        except (OSError, ValueError, TypeError):
+            auto_research = {}
+        availability = auto_research.get("sourceAvailability") if isinstance(auto_research.get("sourceAvailability"), Mapping) else {}
+        for item in availability.get("ineligibleTargets") or []:
+            if isinstance(item, Mapping):
+                name = str(item.get("entityId") or "").strip()
+                if name:
+                    out.add(name)
     path = shared / "task_workflow_state.json"
     if not path.is_file():
         return out
@@ -111,6 +134,20 @@ def ineligible_targets_from_batch(task_id: str, batch_id: str) -> set[str]:
         state = read_json(path)
     except (OSError, ValueError, TypeError):
         return out
+    for item in state.get("abandonedObjects") or []:
+        if isinstance(item, Mapping):
+            name = str(item.get("entityId") or "").strip()
+            if name:
+                out.add(name)
+    for item in state.get("abandonedContentObjects") or []:
+        if not isinstance(item, Mapping):
+            continue
+        name = str(item.get("entityId") or "").strip()
+        ref = str(item.get("ref") or "").strip()
+        if not name and "_" in ref:
+            name = ref.split("_", 1)[0].strip()
+        if name:
+            out.add(name)
     for raw in state.get("failedObjects") or []:
         name = _failed_object_entity(raw)
         if name:
@@ -136,6 +173,7 @@ def select_targets(
     limit: int,
     mandatory: list[str],
     excluded: set[str],
+    reserve_ratio: float = 0.0,
 ) -> tuple[list[dict[str, str]], dict[str, Any]]:
     partitions = _load_partitions(discovery_path)
     by_name = _partition_targets(partitions)
@@ -150,6 +188,7 @@ def select_targets(
         )
 
     selected: list[dict[str, str]] = []
+    reserve: list[dict[str, str]] = []
     seen: set[str] = set()
 
     def add(name: str) -> None:
@@ -185,14 +224,34 @@ def select_targets(
             f"selected {len(selected)} targets, expected {limit}; "
             f"excluded={len(excluded)} may leave too few candidates"
         )
+    reserve_count = max(0, int(round(limit * max(0.0, float(reserve_ratio or 0.0)))))
+    if reserve_count:
+        for part in partitions:
+            for leaf in part.get("leaves") or []:
+                if not isinstance(leaf, Mapping):
+                    continue
+                name = str(leaf.get("name") or "").strip()
+                if not name or name in seen or name in excluded:
+                    continue
+                row = by_name.get(name)
+                if not row:
+                    continue
+                reserve.append(row)
+                seen.add(name)
+                if len(reserve) >= reserve_count:
+                    break
+            if len(reserve) >= reserve_count:
+                break
     report = {
         "schemaVersion": "quwoquan_data.target_selection",
         "strategy": "mandatory targets plus deterministic round-robin regional coverage",
         "discoveryPath": str(discovery_path),
         "limit": limit,
+        "reserveRatio": max(0.0, float(reserve_ratio or 0.0)),
         "mandatory": mandatory,
         "excluded": sorted(excluded),
         "targets": selected,
+        "reserveTargets": reserve,
     }
     return selected, report
 
@@ -205,6 +264,7 @@ def build_multimodal_spec(
     category: str,
     targets: list[dict[str, str]],
     created_by: str,
+    reserve_targets: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     spec = store.scaffold_spec(
         vertical="travel",
@@ -220,6 +280,10 @@ def build_multimodal_spec(
                 {"entityType": row["entityType"], "name": row["name"]}
                 for row in targets
             ],
+            "reserveCoverageTargets": [
+                {"entityType": row["entityType"], "name": row["name"]}
+                for row in (reserve_targets or [])
+            ],
         },
         content={
             "modalityContract": "separated_research",
@@ -232,19 +296,41 @@ def build_multimodal_spec(
             "carriers": ["article", "image"],
             "quotas": {
                 "entityArticlesPerTarget": 4,
-                "imageWorksPerTarget": 1,
+                "imageWorksPerTarget": 2,
                 "entityHomepagesPerTarget": 1,
                 "routeArticles": 0,
             },
         },
         acceptance={
             "minEntities": len(targets),
-            "minPostsPerEntity": 5,
-            "requiredAngles": ["planning_consultation", "decision_experience", "route_transport", "seasonal_timing", "image"],
+            "minPostsPerEntity": 6,
+            "requiredAngles": [
+                "planning_consultation",
+                "decision_experience",
+                "route_transport",
+                "seasonal_timing",
+                "image",
+            ],
         },
         created_by=created_by,
     )
     spec["status"] = "active"
+    spec["workflowPolicy"] = {
+        "allowPartialContent": True,
+        "deliveryMode": "partial_with_replacement_report",
+    }
+    spec["queuePolicy"] = {
+        "backend": "reliabletask",
+        "reliableTask": {
+            "taskType": "data.content_object.execute",
+            "queue": "reliabletask.data.content_supply",
+            "store": "MongoStore",
+            "readyIndex": "RedisReadyIndex",
+        },
+        "leaseSeconds": 900,
+        "heartbeatSeconds": 60,
+        "deadLetterAfterAttempts": 3,
+    }
     return spec
 
 
@@ -252,17 +338,89 @@ def write_selected_task(spec: dict[str, Any], report: dict[str, Any], *, force: 
     if store.spec_exists(spec["taskId"]) and not force:
         raise FileExistsError(f"task already exists: {spec['taskId']} (use --force)")
     spec_path = store.save_spec(spec)
-    remaining = [
-        f"{target['entityType']}/{target['name']}"
-        for target in (spec.get("scope") or {}).get("coverageTargets") or []
-    ]
+    targets = (spec.get("scope") or {}).get("coverageTargets") or []
+    remaining = [f"{target['entityType']}/{target['name']}" for target in targets]
     store.save_progress(store.init_progress(spec["taskId"], remaining=remaining))
+    rows = []
+    region = str((spec.get("scope") or {}).get("region") or "")
+    for target in targets:
+        entity_type = str(target.get("entityType") or "").strip()
+        name = str(target.get("name") or "").strip()
+        if not entity_type or not name:
+            continue
+        rows.append(
+            {
+                "topic_id": f"{entity_type}/{name}",
+                "domain": entity_type.split("/", 1)[0] if "/" in entity_type else "",
+                "entity_type": entity_type,
+                "canonical_name": name,
+                "region": region,
+                "source_count": 1,
+                "geo_tag_ref": f"/tag/地域/{region}" if region else "",
+                "source_kind": "coverageTarget",
+                "status": "candidate",
+                "taskId": spec["taskId"],
+            }
+        )
+    write_ndjson(task_catalog(spec["taskId"]), rows)
     report_path = store.committed_task_root(spec["taskId"]) / "_shared" / "target_selection.json"
     write_json(report_path, report)
     return spec_path
 
 
-def audit_managed_batch(task_id: str, batch_id: str) -> dict[str, Any]:
+def _batch_planned_entity_ids(task_id: str, batch_id: str) -> list[str]:
+    shared = batch_root(task_id, batch_id) / "_shared"
+    report = read_json(shared / "auto_research_plan.json") if (shared / "auto_research_plan.json").is_file() else {}
+    availability = report.get("sourceAvailability") if isinstance(report.get("sourceAvailability"), dict) else {}
+    ids: list[str] = []
+    seen: set[str] = set()
+    for entity_id in availability.get("readyTargets") or []:
+        text = str(entity_id or "").strip()
+        if text and text not in seen:
+            ids.append(text)
+            seen.add(text)
+    for item in availability.get("ineligibleTargets") or []:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("entityId") or "").strip()
+        if text and text not in seen:
+            ids.append(text)
+            seen.add(text)
+    if ids:
+        return ids
+    for item in report.get("updated") or []:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("entityId") or "").strip()
+        if text and text not in seen:
+            ids.append(text)
+            seen.add(text)
+    return ids
+
+
+def _replacement_target_rows(state: Mapping[str, Any]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in state.get("replacementObjects") or []:
+        if not isinstance(item, Mapping):
+            continue
+        if str(item.get("status") or "active") != "active":
+            continue
+        name = str(item.get("entityId") or "").strip()
+        if not name or name in seen:
+            continue
+        etype = str(item.get("entityType") or "地点/景区").strip()
+        rows.append({"name": name, "entityType": etype})
+        seen.add(name)
+    return rows
+
+
+def audit_managed_batch(
+    task_id: str,
+    batch_id: str,
+    *,
+    workflow_state_override: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """Summarize separated-current lane readiness and image-work capacity."""
     from download.source_inputs import curated_images_for_entity
     from task.run import (
@@ -273,10 +431,35 @@ def audit_managed_batch(task_id: str, batch_id: str) -> dict[str, Any]:
     )
 
     spec = store.load_spec(task_id)
+    state_path = batch_root(task_id, batch_id) / "_shared" / "task_workflow_state.json"
+    state = read_json(state_path) if state_path.is_file() else {}
+    if workflow_state_override is not None:
+        state = dict(workflow_state_override)
+    abandoned_rows = [
+        item for item in (state.get("abandonedObjects") or [])
+        if isinstance(item, Mapping) and str(item.get("entityId") or "").strip()
+    ]
+    abandoned_content_rows = [
+        item for item in (state.get("abandonedContentObjects") or [])
+        if isinstance(item, Mapping) and str(item.get("ref") or "").strip()
+    ]
+    abandoned = {str(item.get("entityId") or "").strip() for item in abandoned_rows}
+    coverage_entity_ids = _coverage_entity_ids(spec)
+    planned_entity_ids = _batch_planned_entity_ids(task_id, batch_id)
+    if len(planned_entity_ids) < len(coverage_entity_ids):
+        planned_entity_ids = []
+    entity_ids = [
+        entity for entity in (planned_entity_ids or coverage_entity_ids)
+        if entity not in abandoned
+    ]
+    for row in _replacement_target_rows(state):
+        name = str(row.get("name") or "").strip()
+        if name and name not in abandoned and name not in entity_ids:
+            entity_ids.append(name)
     ctx = PipelineContext(
         task_id=task_id,
         batch_id=batch_id,
-        entity_ids=_coverage_entity_ids(spec),
+        entity_ids=entity_ids,
         spec=spec,
     )
     etype = _coverage_entity_type(spec)
@@ -305,8 +488,6 @@ def audit_managed_batch(task_id: str, batch_id: str) -> dict[str, Any]:
             "collections": collections,
             "workCapacity": sum(min(count, 2) for count in collections.values()),
         }
-    state_path = batch_root(task_id, batch_id) / "_shared" / "task_workflow_state.json"
-    state = read_json(state_path) if state_path.is_file() else {}
     failed.extend(_workflow_failure_items(state))
     for item in failed:
         lane = str(item.get("lane") or "")
@@ -319,6 +500,13 @@ def audit_managed_batch(task_id: str, batch_id: str) -> dict[str, Any]:
         "taskId": task_id,
         "batchId": batch_id,
         "targetCount": len(ctx.entity_ids),
+        "targetScope": "batch_planned" if planned_entity_ids else "task_coverage",
+        "abandonedCount": len(abandoned_rows),
+        "abandonedObjects": abandoned_rows,
+        "replacementCount": len(_replacement_target_rows(state)),
+        "replacementObjects": state.get("replacementObjects") or [],
+        "abandonedContentCount": len(abandoned_content_rows),
+        "abandonedContentObjects": abandoned_content_rows,
         "lanePassed": passed,
         "failedLaneCount": len(failed),
         "failedLanes": failed,
@@ -361,12 +549,13 @@ def handle_select_targets(args: argparse.Namespace) -> None:
     for run_ref in getattr(args, "exclude_from_run", None) or []:
         task_id, batch_id = _parse_run_ref(run_ref)
         excluded |= ineligible_targets_from_batch(task_id, batch_id)
-    mandatory = _split_csv(args.mandatory) or list(DEFAULT_MANDATORY)
+    mandatory = _split_csv(args.mandatory) if args.mandatory is not None else list(DEFAULT_MANDATORY)
     targets, report = select_targets(
         discovery_path=discovery,
         limit=int(args.limit),
         mandatory=mandatory,
         excluded=excluded,
+        reserve_ratio=float(getattr(args, "reserve_ratio", 0.2) or 0.0),
     )
     spec = build_multimodal_spec(
         name=args.name,
@@ -374,6 +563,7 @@ def handle_select_targets(args: argparse.Namespace) -> None:
         region=args.region,
         category=args.category,
         targets=targets,
+        reserve_targets=report.get("reserveTargets") or [],
         created_by=args.owner or "task select-targets",
     )
     report["sourceTaskId"] = source_task
@@ -408,3 +598,5 @@ def handle_audit_batch(args: argparse.Namespace) -> None:
             f"  - {item['entity']} {item['lane']}: "
             + "; ".join(str(issue) for issue in item.get("issues") or [])[:240]
         )
+    if getattr(args, "strict", False) and int(report.get("failedLaneCount") or 0) > 0:
+        raise SystemExit(1)

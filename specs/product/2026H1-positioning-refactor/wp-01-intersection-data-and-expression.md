@@ -87,11 +87,11 @@
 - 以本文档附录 A 为正式交接物，WP3 在 `evidence_group.dart` 实现端侧图标/排序扩展时只消费该清单，不自造映射。
 - 验收：附录 A 与云侧 `evidenceKindRank` 一致（rank 数值同源）；WP3 实现后 contract 测试引用同一清单。
 
-## 3. 周边契约（冻结，不得变更）
+## 3. 周边契约（2026-06 交集统一收口后）
 
-- **不改** `intersection_reason.yaml` 字段形状与 5 维闭集；新 kind 只是证据组开放字符串的新值（可在 yaml description 补注记）。
-- **不改** 交集 6 条 API 路由（`/v1/content/intersections/*`、`/v1/content/feed/intersections*`）。
-- 端侧仅允许改 `quwoquan_app/lib/components/object_page/evidence_group.dart` 的 kind→排序/图标映射扩展——**注意该目录独占权在 WP3**：本包将所需映射（kind → rank/icon/维度短语）写成清单提交给 WP3 实现，或与 WP3 协调单文件例外（集成会话裁决，默认走清单交接）。
+- **允许** `intersection_reason.yaml` / `object_intersection*.yaml` / `object_page_bundle.yaml` / `search_contract.yaml` 字段形状一次性收敛（零兼容）；以 `specs/product/intersection-definition-and-application.md` §18 为准。
+- **不改** 交集 5 维闭集与 6 条 API 路由（`/v1/content/intersections/*`、`/v1/content/feed/intersections*`）。
+- 端侧 `evidence_group.dart` kind→排序/图标映射扩展仍归 WP3，消费 WP1·T6 附录 A 清单。
 
 ## 4. 改动范围
 
@@ -100,7 +100,7 @@
 - `quwoquan_service/services/content-service/internal/application/feed_intersection_mixer.go`（feed 理由混排消费新 kind）
 - favorite 退场触达面：`contracts/metadata/content/post/{service,fields,behaviors,events,storage,aggregate,ui_config}.yaml`、`_shared/{request_context,types,redis_keyspace}.yaml`、5 个投影 yaml、`recommendation/rec_model/projections/learning_events.yaml`、`assistant/assistant_run/fields.yaml`；content-service handler/application/推荐管线；rec-model-service 与 `scripts/ml/**`；端侧（详见 WP 各包与词典退场清单）
 - `contracts/metadata/content/test_fixtures/**`、`_shared/test_fixtures/app_{alpha,beta}_seed_manifest.json`
-- `contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml`（仅 description 注记词表）
+- `contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml`（字段收敛 + description 注记；见 §18 契约表）
 - 足迹只读契约登记（`content/post/service.yaml` 或独立分区 + `_shared/ui_surfaces.yaml` route `myFootprint`）
 - 新增 Go 单测 / contract 测试
 

@@ -8,3 +8,9 @@ redis:
     mode: standalone
     addr: "127.0.0.1:6379"
     db: 0
+
+# alpha keeps ES disabled: native in-memory search remains the source, the
+# write-time projector is a no-op.
+es:
+  enabled: false
+  endpoints: []

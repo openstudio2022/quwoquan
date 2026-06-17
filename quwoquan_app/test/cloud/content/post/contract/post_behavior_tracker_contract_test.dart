@@ -53,7 +53,7 @@ void main() {
     });
 
     test('trackDislike enqueues dislike event', () {
-      ContentBehaviorTracker.trackDislike('post1');
+      ContentBehaviorTracker.trackDislike('post1', 'author1');
       final queue = ContentBehaviorTracker.pendingQueue;
       expect(queue, hasLength(1));
       expect(queue.first['type'], equals('dislike'));
@@ -76,7 +76,7 @@ void main() {
       ContentBehaviorTracker.trackClick('x');
       ContentBehaviorTracker.trackDwell('x', 1000);
       ContentBehaviorTracker.trackShare('x');
-      ContentBehaviorTracker.trackDislike('x');
+      ContentBehaviorTracker.trackDislike('x', 'author1');
 
       final types = ContentBehaviorTracker.pendingQueue
           .map((e) => e['type'] as String)

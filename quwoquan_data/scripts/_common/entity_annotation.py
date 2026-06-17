@@ -74,6 +74,8 @@ def build_entity_dictionary(
     for ref in required:
         dictionary[ref.split("/")[-1]] = ref
     for ent in (draft_meta or {}).get("extractedEntities") or []:
+        if not isinstance(ent, Mapping):
+            continue
         name = str(ent.get("name") or "").strip()
         if not name or name in dictionary:
             continue

@@ -1,0 +1,48 @@
+version: 2
+node:
+  id: online-ab-significance
+  level: L3_story
+  path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/online-ab-significance
+  title: online ab significance
+  parent_domain_service: recommendation-platform
+  parent_business_capability: evaluation-and-flywheel
+scope:
+  summary: 推荐策略在线 AB 显著性、样本量与分桶稳定性规格。
+  in_scope:
+    - champion/challenger、分桶标签、样本量、显著性和护栏指标。
+  out_of_scope:
+    - 本轮不实现 AB 框架或线上流量切分。
+gwt_acceptance:
+  GWT1:
+    title: 在线 AB 显著性 GWT
+    given:
+      - 新推荐策略已通过离线 replay。
+    when:
+      - 策略进入线上 challenger。
+    then:
+      - 系统按稳定分桶收集北极星与护栏指标，样本量不足或显著性不足不得晋升。
+    done_when:
+      - 分桶标签、样本量口径、显著性判定和报告字段均规格化。
+    edge_cases:
+      - 实验污染或分桶漂移时标记 invalid。
+    contract_refs:
+      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    performance_points:
+      - ab_experiment_validity >= 0.95
+    evidence:
+      primary:
+        - T1_contract
+        - T2_module_interaction
+      supporting:
+        - T3_service_contract
+    tests:
+      planned:
+        - quwoquan_service/scripts/ml/tests/test_ab_significance.py
+      recorded: []
+    status: specified
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+    - make gate

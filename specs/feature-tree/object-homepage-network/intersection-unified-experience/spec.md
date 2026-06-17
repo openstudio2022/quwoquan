@@ -5,7 +5,19 @@
 - `L1_domain_service`: `object-homepage-network`
 - `L2_business_capability`: `intersection-unified-experience`
 
-本能力把"交集"从当前的 demo 占位（问小趣 dock + 端拼整句 + 大关注按钮 + 无头像/无名字）收口为一套端云一体、事实与概率分通道、带保鲜期与推荐冷却窗口、统一视觉的对象交集网络。它统一驱动：我的主页交集聚合入口、他人/实体/圈子主页交集卡、首页与各频道（含校园、旅行）交集推荐。
+本能力把"交集"从当前的 demo 占位（问小趣 dock + 端拼整句 + 大关注按钮 + 无头像/无名字）收口为一套端云一体、事实与概率分通道、带保鲜期与推荐冷却窗口、统一视觉的对象交集网络。它统一驱动六个应用场景 + 一个横切句型规范：
+
+| 场景 | L3 Story | 核心 surface |
+|---|---|---|
+| S1 首页推荐 | `home-recommend-intersection-redesign` | feed 卡 + spotlight |
+| S2 他人主页 | `user-profile-intersection-redesign`（他人） | 为什么推荐TA |
+| S2 我的主页 | `user-profile-intersection-redesign`（我的） | 我的连接 / 我的影响力 |
+| S3 实体主页 | `entity-homepage-intersection-redesign` | 为什么推荐这里 |
+| S4 圈子主页 | `circle-homepage-intersection-redesign` | 为什么推荐这个圈子 |
+| S5 全局搜索 | `search-intersection-consumption` | 交集 Tab + 发现区分组 |
+| 横切 | `intersection-sentence-unification` | primaryText 单句 + G2 |
+
+规格真相源：`specs/product/intersection-definition-and-application.md` §17–§18。
 
 前台不出现"交集网络""事实通道""概率通道"等工程术语；用户只感知"你们的交集""你和这里的交集""你认识的人在这""与你有交集的人和内容"。
 
@@ -51,6 +63,7 @@
 | 实体主页「你和这里的交集」 | 事实全维 | 同上，bundle 优先 | bundle `intersections` 后端填充 | 同上 |
 | 圈子主页「你认识的人有 N 个在这」 | relationship/identity 事实 | 新增交集卡 + 成员头像簇 | bundle/list 查询 | 圈子页出现交集卡；点头像进用户页 |
 | 首页推荐 tab + 频道（recommend/campus/travel/tech/car） | 事实 + 概率混排 | `IntersectionSpotlight`：去关注按钮、真实头像 + 名字、共同点安静 chip、模块头「N 位与你有交集」红数字；首页 ≤4 卡、频道 ≤3 卡 | 事实读模型 + 概率打分混排；过保鲜期/冷却不再出现；按 channel 下发对应交集 | campus/travel 出专属交集；曝光未转化窗口内不重复；视觉统一 |
+| 全局搜索「交集」Tab + 发现区分组 | 事实 + affinity（发现区） | 每张卡一条 `primaryText`；分组消费 `connectionState`；已连接区不展示交集句 | search hit 携带 `intersectionReason` 子集 + `connectionState` | 交集 Tab 非空（alpha mock）；G2 零端拼 |
 | 关注列表 strip | 关注对象动态 | 沿用已有未读红点机制（不改交集语义） | `following_subject` lastVisited/unread | 不回退现有能力 |
 | 小艺 | 消费 `ObjectPageContext` | 移除三处 demo dock；主动服务改"证据旁轻提示"（带 confidence/cooldown/dismiss） | 触发策略 + 冷却 | 0 demo 语言；不遮挡主操作 |
 

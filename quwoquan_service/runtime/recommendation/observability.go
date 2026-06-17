@@ -121,6 +121,76 @@ var (
 		Name:      "requests_by_policy_total",
 		Help:      "Requests attributed by resolved policy version, scoring preset, and segment.",
 	}, []string{"policy_version", "preset", "segment"})
+
+	feedStateTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_feed_state_total",
+		Help: "Recommendation feedback state events by closed-state semantics.",
+	}, []string{"state", "action"})
+
+	feedServedTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "recommendation_feed_served_total",
+		Help: "Total content items served by recommendation feed.",
+	})
+
+	feedImpressedTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "recommendation_feed_impressed_total",
+		Help: "Total content items reaching true client-side impression threshold.",
+	})
+
+	feedVisibleTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "recommendation_feed_visible_total",
+		Help: "Total content items reported visible by clients.",
+	})
+
+	feedDwellTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "recommendation_feed_dwell_total",
+		Help: "Total dwell feedback events reported by clients.",
+	})
+
+	feedInteractionTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "recommendation_feed_interaction_total",
+		Help: "Total positive interaction feedback events reported by clients.",
+	})
+
+	feedNegativeFeedbackTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "recommendation_feed_negative_feedback_total",
+		Help: "Total explicit negative feedback events reported by clients.",
+	})
+
+	behaviorIngestTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "recommendation_behavior_ingest_total",
+		Help: "Total behavior events accepted by FeedbackIngestor.",
+	})
+
+	behaviorIngestDroppedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_behavior_ingest_dropped_total",
+		Help: "Total behavior events dropped by FeedbackIngestor.",
+	}, []string{"reason"})
+
+	hotPathDroppedTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "rec_hotpath_dropped_total",
+		Help: "Total behavior signals dropped by BufferedHotPath due to backpressure.",
+	})
+
+	exposureFilterSMembersFallbackTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "recommendation_exposure_filter_smembers_fallback_total",
+		Help: "Total exposure filter fallbacks to SMembers. Should stay zero on commercial path.",
+	})
+
+	dynamicBudgetSelectedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_dynamic_budget_selected_total",
+		Help: "Total recommendation items selected after dynamic exposure budget by pool.",
+	}, []string{"pool", "bucket"})
+
+	frequencyCapFilterTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_frequency_cap_filter_total",
+		Help: "Total candidates delayed by dimension frequency caps.",
+	}, []string{"dimension"})
+
+	nearDupFilterTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "recommendation_near_dup_filter_total",
+		Help: "Total candidates delayed by near-duplicate filtering.",
+	})
 )
 
 // RecordMetrics observes Prometheus metrics from a single pipeline execution.
@@ -173,6 +243,85 @@ func RecordMetrics(m PipelineMetrics) {
 // RecordModelTimeout increments the model timeout counter.
 func RecordModelTimeout() {
 	pipelineModelTimeoutsTotal.Inc()
+}
+
+func RecordServedItems(count int) {
+	if count > 0 {
+		feedServedTotal.Add(float64(count))
+		feedStateTotal.WithLabelValues("served", "served").Add(float64(count))
+	}
+}
+
+func RecordBehaviorIngest(signal BehaviorSignal) {
+	state := normalizeFeedbackState(signal)
+	if state == "" {
+		state = "unknown"
+	}
+	action := strings.TrimSpace(signal.Action)
+	if action == "" {
+		action = "unknown"
+	}
+	behaviorIngestTotal.Inc()
+	feedStateTotal.WithLabelValues(state, action).Inc()
+	switch state {
+	case "visible":
+		feedVisibleTotal.Inc()
+	case "impressed":
+		feedImpressedTotal.Inc()
+	case "dwell":
+		feedDwellTotal.Inc()
+	case "interaction":
+		feedInteractionTotal.Inc()
+	case "negative":
+		feedNegativeFeedbackTotal.Inc()
+	}
+}
+
+func RecordBehaviorIngestDropped(reason string) {
+	if reason == "" {
+		reason = "unknown"
+	}
+	behaviorIngestDroppedTotal.WithLabelValues(reason).Inc()
+}
+
+func RecordHotPathDrop() {
+	hotPathDroppedTotal.Inc()
+}
+
+func RecordExposureSMembersFallback() {
+	exposureFilterSMembersFallbackTotal.Inc()
+}
+
+func RecordDynamicBudgetSelection(pool string, bucket string, count int) {
+	if count <= 0 {
+		return
+	}
+	pool = strings.TrimSpace(pool)
+	if pool == "" {
+		pool = "unknown"
+	}
+	bucket = strings.TrimSpace(bucket)
+	if bucket == "" {
+		bucket = "default"
+	}
+	dynamicBudgetSelectedTotal.WithLabelValues(pool, bucket).Add(float64(count))
+}
+
+func RecordFrequencyCapFilter(dimension string, count int) {
+	if count <= 0 {
+		return
+	}
+	dimension = strings.TrimSpace(dimension)
+	if dimension == "" {
+		dimension = "unknown"
+	}
+	frequencyCapFilterTotal.WithLabelValues(dimension).Add(float64(count))
+}
+
+func RecordNearDupFilter(count int) {
+	if count > 0 {
+		nearDupFilterTotal.Add(float64(count))
+	}
 }
 
 // LogMetrics emits structured observability data and updates Prometheus.

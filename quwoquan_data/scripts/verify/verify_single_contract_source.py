@@ -21,10 +21,12 @@ SCAN_PATHS = [
     DATA_ROOT / "scripts/task/content_supply.py",
     DATA_ROOT / "scripts/task/target_selection.py",
     DATA_ROOT / "scripts/task/run.py",
+    DATA_ROOT / "scripts/_common/batch_manifest.py",
     DATA_ROOT / "scripts/download/gate.py",
     DATA_ROOT / "scripts/download/handler.py",
     DATA_ROOT / "scripts/publish/gate.py",
     DATA_ROOT / "scripts/_common/content_plan.py",
+    DATA_ROOT / "scripts/_common/command_packet.py",
     DATA_ROOT / "scripts/verify/verify_content_supply_production.py",
     DATA_ROOT / "scripts/verify/handler.py",
     DATA_ROOT / "scripts/verify/verify_quwoquan_data.sh",
@@ -41,8 +43,12 @@ FORBIDDEN_PATTERNS = [
         r"quwoquan\.(?:content_supply\.task|content_supply\.prep_report|content_supply\.delta_plan|"
         r"object_job|agent_result_envelope|gate_verdict|token_ledger|download_repair)/\d+"
     ),
+    re.compile(r"quwoquan_data\.batch_manifest/\d+"),
+    re.compile(r"quwoquan\.batch\.manifest/\d+"),
     re.compile(r"quwoquan\.download_repair\.old"),
+    re.compile(r"quwoquan\.data\.packet\.v\d+"),
     re.compile(r"quwoquan_data\.content_plan_packet/\d+"),
+    re.compile(r"quwoquan_data\.fanout_run_matrix/\d+"),
     re.compile("payloadAllowlist" + "Version"),
     re.compile(r"\bcontent[-_ ]supply\b[^\n]*(?:\bv1\b|\bv2\b)", re.IGNORECASE),
 ]

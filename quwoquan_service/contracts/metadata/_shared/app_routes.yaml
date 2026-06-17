@@ -48,6 +48,9 @@ routes:
   - id: globalSearchNetworkResults
     path: /search/network
     query_params: [query, tab]
+  - id: locationPlaceLanding
+    path: /locations/{placeId}
+    query_params: [name, source]
   - id: homepagePicker
     path: /homepages/picker
     query_params: [query]

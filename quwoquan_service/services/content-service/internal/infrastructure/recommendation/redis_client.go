@@ -64,6 +64,10 @@ func (r *RedisClientAdapter) Set(ctx context.Context, key string, value string, 
 	return r.client.Set(ctx, key, value, ttl).Err()
 }
 
+func (r *RedisClientAdapter) SetNX(ctx context.Context, key string, value string, ttl time.Duration) (bool, error) {
+	return r.client.SetNX(ctx, key, value, ttl).Result()
+}
+
 func (r *RedisClientAdapter) Del(ctx context.Context, keys ...string) error {
 	return r.client.Del(ctx, keys...).Err()
 }
@@ -215,6 +219,10 @@ func (r *RedisClusterAdapter) Get(ctx context.Context, key string) (string, erro
 
 func (r *RedisClusterAdapter) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
 	return r.client.Set(ctx, key, value, ttl).Err()
+}
+
+func (r *RedisClusterAdapter) SetNX(ctx context.Context, key string, value string, ttl time.Duration) (bool, error) {
+	return r.client.SetNX(ctx, key, value, ttl).Result()
 }
 
 func (r *RedisClusterAdapter) Del(ctx context.Context, keys ...string) error {

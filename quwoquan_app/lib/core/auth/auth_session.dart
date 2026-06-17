@@ -203,7 +203,7 @@ class StoredAuthSession {
   /// 是否存在仍在有效期内的快速登录凭证（refreshToken 在且未过期）。
   ///
   /// `quickLoginExpiresAtEpochMs == 0` 表示旧数据/未显式写入过期戳，
-  /// 此时按 `lastRefreshAt + ttl` 兜底，避免历史用户回归即失效。
+  /// 此时按 `lastRefreshAt + ttl` 兜底，避免既往用户回归即失效。
   bool get hasValidQuickLoginCredential {
     if (refreshToken.trim().isEmpty) {
       return false;

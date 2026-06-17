@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/ui/user/widgets/intersection_statement_card.dart';
 
 /// 影响力摘要模块（他人主页 / 我的主页双视角，可解释）。
 ///
@@ -28,7 +29,7 @@ class AuthorImpactCard extends StatelessWidget {
 
   bool get _isEmpty =>
       summary.total <= 0 ||
-      summary.items.every((item) => item.displayText.trim().isEmpty);
+      summary.items.every((item) => item.primaryText.trim().isEmpty);
 
   @override
   Widget build(BuildContext context) {
@@ -36,188 +37,87 @@ class AuthorImpactCard extends StatelessWidget {
       // 用户主页无影响事实不占位（不造假、不放占位数字）。
       return const SizedBox.shrink();
     }
-    final fg = AppColors.iosLabel(context);
     final fgSecondary = AppColors.iosSecondaryLabel(context);
     final visible = summary.items
-        .where((item) => item.displayText.trim().isNotEmpty)
+        .where((item) => item.primaryText.trim().isNotEmpty)
         .take(maxItems)
         .toList(growable: false);
 
-    return Container(
+    return IntersectionStatementCard(
       key: AuthorImpactCard.cardKey,
-      width: double.infinity,
-      padding: EdgeInsets.all(AppSpacing.containerSm),
-      decoration: BoxDecoration(
-        color: AppColors.iosProfileSurface(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-        border: Border.all(
-          color: AppColors.iosSeparator(
-            context,
-          ).withValues(alpha: isDark ? 0.24 : 0.08),
-          width: AppSpacing.hairline,
+      title: isMine
+          ? UITextConstants.profileImpactTitleMine
+          : UITextConstants.profileImpactTitleOther,
+      items: _isEmpty
+          ? const <IntersectionStatementItem>[]
+          : <IntersectionStatementItem>[
+              for (final item in visible)
+                IntersectionStatementItem(
+                  primaryText: item.primaryText.trim(),
+                  subtitleText: _subtitleTextFor(
+                    item.subtitleText,
+                    item.source,
+                  ),
+                  highlight: _isStrongImpact(item.helpType)
+                      ? IntersectionStatementHighlight.blue
+                      : IntersectionStatementHighlight.gray,
+                  onTap: () => _showEvidence(
+                    context,
+                    count: item.count,
+                    displayText: item.primaryText.trim(),
+                    source: item.source,
+                    subtitleText: item.subtitleText,
+                    isMine: isMine,
+                  ),
+                ),
+            ],
+      emptyChild: Text(
+        key: AuthorImpactCard.emptyKey,
+        UITextConstants.profileImpactEmptyMine,
+        style: TextStyle(
+          fontSize: AppTypography.iosCaption1,
+          height: AppSpacing.textLineHeightBody,
+          color: fgSecondary,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: AppSpacing.buttonHeightSm,
-                height: AppSpacing.buttonHeightSm,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryColor.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  CupertinoIcons.waveform_path_ecg,
-                  size: AppSpacing.iconSmall,
-                  color: AppColors.primaryColor,
-                ),
-              ),
-              SizedBox(width: AppSpacing.intraGroupSm),
-              Expanded(
-                child: Text(
-                  isMine
-                      ? UITextConstants.profileImpactTitleMine
-                      : UITextConstants.profileImpactTitleOther,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    fontWeight: AppTypography.semiBold,
-                    color: fg,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: AppSpacing.intraGroupXs),
-          Text(
-            isMine
-                ? UITextConstants.profileImpactSubtitleMine
-                : UITextConstants.profileImpactSubtitleOther,
-            style: TextStyle(
-              fontSize: AppTypography.iosFootnote,
-              color: fgSecondary,
-            ),
-          ),
-          SizedBox(height: AppSpacing.containerSm),
-          if (_isEmpty)
-            Text(
-              key: AuthorImpactCard.emptyKey,
-              UITextConstants.profileImpactEmptyMine,
-              style: TextStyle(
-                fontSize: AppTypography.iosCallout,
-                height: AppSpacing.textLineHeightBody,
-                color: fgSecondary,
-              ),
-            )
-          else
-            for (var i = 0; i < visible.length; i++) ...<Widget>[
-              if (i > 0) _ImpactDivider(isDark: isDark),
-              _ImpactRow(
-                count: visible[i].count,
-                displayText: visible[i].displayText.trim(),
-                helpType: visible[i].helpType,
-                source: visible[i].source,
-                fg: fg,
-                isMine: isMine,
-              ),
-            ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ImpactRow extends StatelessWidget {
-  const _ImpactRow({
-    required this.count,
-    required this.displayText,
-    required this.helpType,
-    required this.source,
-    required this.fg,
-    required this.isMine,
-  });
-
-  final int count;
-  final String displayText;
-  final String helpType;
-  final String source;
-  final Color fg;
-  final bool isMine;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoButton(
-      key: ValueKey<String>('author-impact-fact-$helpType'),
-      padding: EdgeInsets.zero,
-      minimumSize: const Size(
-        AppSpacing.minInteractiveSize,
-        AppSpacing.minInteractiveSize,
-      ),
-      onPressed: () => _showEvidence(context),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: <Widget>[
-          Container(
-            width: AppSpacing.buttonHeightMd,
-            height: AppSpacing.buttonHeightMd,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
-            ),
-            child: Icon(
-              _icon,
-              size: AppSpacing.iconSmall,
-              color: AppColors.primaryColor,
-            ),
-          ),
-          SizedBox(width: AppSpacing.containerSm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  displayText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    color: fg,
-                  ),
-                ),
-                if (count > 0)
-                  Text(
-                    isMine
-                        ? UITextConstants.impactEnumerableHintMine
-                        : UITextConstants.impactEnumerableHintOther,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosCaption1,
-                      color: AppColors.iosSecondaryLabel(context),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Icon(
-            CupertinoIcons.chevron_forward,
-            size: AppSpacing.iconXSmall,
-            color: AppColors.iosTertiaryLabel(context),
-          ),
-        ],
-      ),
     );
   }
 
-  Future<void> _showEvidence(BuildContext context) {
+  static String _subtitleTextFor(String subtitleText, String source) {
+    final subtitle = subtitleText.trim();
+    if (subtitle.isNotEmpty) {
+      return subtitle;
+    }
+    return source.trim();
+  }
+
+  static bool _isStrongImpact(String helpType) {
+    switch (helpType) {
+      case 'circle':
+      case 'join_circle':
+      case 'community':
+      case 'entity':
+      case 'relationship':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  static Future<void> _showEvidence(
+    BuildContext context, {
+    required int count,
+    required String displayText,
+    required String source,
+    required String subtitleText,
+    required bool isMine,
+  }) {
     final sourceLabel = source.trim().isEmpty
-        ? (isMine
-              ? UITextConstants.profileImpactTitleMine
-              : UITextConstants.profileImpactTitleOther)
+        ? subtitleText.trim().isEmpty
+              ? (isMine
+                    ? UITextConstants.profileImpactTitleMine
+                    : UITextConstants.profileImpactTitleOther)
+              : subtitleText.trim()
         : source.trim();
     final hint = isMine
         ? UITextConstants.impactEnumerableHintMine
@@ -231,38 +131,6 @@ class _ImpactRow extends StatelessWidget {
       message: message,
       sections: const <AppActionSheetSection<void>>[],
       cancelLabel: UITextConstants.confirm,
-    );
-  }
-
-  IconData get _icon {
-    switch (helpType) {
-      case 'circle':
-      case 'join_circle':
-        return CupertinoIcons.person_2_fill;
-      case 'friend':
-      case 'connection':
-        return CupertinoIcons.person_add_solid;
-      default:
-        return CupertinoIcons.link;
-    }
-  }
-}
-
-class _ImpactDivider extends StatelessWidget {
-  const _ImpactDivider({required this.isDark});
-
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
-      child: Container(
-        height: AppSpacing.hairline,
-        color: AppColors.iosSeparator(
-          context,
-        ).withValues(alpha: isDark ? 0.18 : 0.12),
-      ),
     );
   }
 }

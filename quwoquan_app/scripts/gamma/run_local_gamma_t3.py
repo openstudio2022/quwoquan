@@ -32,7 +32,15 @@ def default_test_auth_token() -> str:
 
 def http_get(url: str, timeout: int = 5) -> Tuple[int, bytes]:
     ctx = ssl._create_unverified_context()
-    req = urllib.request.Request(url, headers={"X-Test-Local-Gamma": "true"})
+    # Carry the fixture viewer id so header-scoped reads (e.g. GET /v1/me,
+    # 我的主页) resolve the current user. Public reads simply ignore it.
+    req = urllib.request.Request(
+        url,
+        headers={
+            "X-Test-Local-Gamma": "true",
+            "X-Client-User-Id": "fixture_user_current",
+        },
+    )
     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
         return resp.status, resp.read()
 
@@ -141,19 +149,156 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
     return doc
 
 
-def gamma_content_fixture_spec() -> Tuple[Path, List[str]]:
+def gamma_domain_fixture_spec(domain: str) -> Tuple[str, List[str]]:
+    """Return the (metadata-relative fixturePath, refs) for a seed domain."""
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    content_item = next(
-        (item for item in manifest.get("seedRefs", []) if item.get("domain") == "content"),
+    item = next(
+        (item for item in manifest.get("seedRefs", []) if item.get("domain") == domain),
         None,
     )
-    if not isinstance(content_item, dict):
-        raise RuntimeError("app_gamma_seed_manifest.json missing content domain entry")
-    fixture_rel = str(content_item.get("fixturePath") or "").strip()
-    refs = [str(ref) for ref in content_item.get("refs", []) if str(ref).strip()]
+    if not isinstance(item, dict):
+        raise RuntimeError(f"app_gamma_seed_manifest.json missing {domain} domain entry")
+    fixture_rel = str(item.get("fixturePath") or "").strip()
+    refs = [str(ref) for ref in item.get("refs", []) if str(ref).strip()]
     if not fixture_rel or not refs:
-        raise RuntimeError("gamma content seed manifest entry must declare fixturePath and refs")
+        raise RuntimeError(f"gamma {domain} seed manifest entry must declare fixturePath and refs")
+    return fixture_rel, refs
+
+
+def gamma_content_fixture_spec() -> Tuple[Path, List[str]]:
+    fixture_rel, refs = gamma_domain_fixture_spec("content")
     return METADATA_ROOT / fixture_rel, refs
+
+
+def mongo_published_port() -> str:
+    return os.environ.get("LOCAL_GAMMA_MONGO_PORT", "19410")
+
+
+def postgres_published_dsn() -> str:
+    if os.environ.get("LOCAL_GAMMA_POSTGRES_DSN"):
+        return os.environ["LOCAL_GAMMA_POSTGRES_DSN"]
+    port = os.environ.get("LOCAL_GAMMA_POSTGRES_PORT", "19400")
+    return f"postgres://quwoquan:quwoquan@localhost:{port}/quwoquan?sslmode=disable"
+
+
+def seed_user() -> Dict[str, Any]:
+    """Seed user profile fixtures into the live user PostgreSQL store.
+
+    用户主页 (GET /v1/user/profile/{userId}) and 我的主页 (GET /v1/me) both read
+    the user_profiles table. The seed cmd reuses the shared contract fixture
+    loader + the generated user_profiles column set, so the persisted row stays
+    single-sourced with the service.
+    """
+    try:
+        fixture_rel, refs = gamma_domain_fixture_spec("user")
+    except RuntimeError as exc:
+        return {"status": "failed", "error": str(exc)}
+    # Only user_profile_core backs the homepage reads; relationship/persona/feed
+    # refs require backend features (e.g. following-subjects) not yet served.
+    profile_refs = [ref for ref in refs if ref == "user_profile_core"] or ["user_profile_core"]
+    cmd = [
+        "go",
+        "run",
+        "./services/user-service/cmd/seed",
+        "--pg-dsn",
+        postgres_published_dsn(),
+        "--fixture",
+        fixture_rel,
+        "--refs",
+        ",".join(profile_refs),
+    ]
+    result = subprocess.run(
+        cmd,
+        cwd=ROOT / "quwoquan_service",
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    return {
+        "status": "passed" if result.returncode == 0 else "failed",
+        "fixture": fixture_rel,
+        "refs": profile_refs,
+        "output": result.stdout[-2000:],
+    }
+
+
+def seed_circle() -> Dict[str, Any]:
+    """Seed circle fixtures into the live circle MongoDB via the circle seed cmd.
+
+    The seed command reuses the circle domain model + shared contract fixture
+    loader, so the persisted document shape stays single-sourced with the
+    service (no second hand-shaped representation, unlike a mongosh JSON blob).
+    """
+    try:
+        fixture_rel, refs = gamma_domain_fixture_spec("circle")
+    except RuntimeError as exc:
+        return {"status": "failed", "error": str(exc)}
+    cmd = [
+        "go",
+        "run",
+        "./services/circle-service/cmd/seed",
+        "--mongo-uri",
+        f"mongodb://localhost:{mongo_published_port()}/?directConnection=true",
+        "--database",
+        "quwoquan_circle",
+        "--fixture",
+        fixture_rel,
+        "--refs",
+        ",".join(refs),
+    ]
+    result = subprocess.run(
+        cmd,
+        cwd=ROOT / "quwoquan_service",
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    return {
+        "status": "passed" if result.returncode == 0 else "failed",
+        "fixture": fixture_rel,
+        "refs": refs,
+        "output": result.stdout[-2000:],
+    }
+
+
+def seed_entity(base_url: str) -> Dict[str, Any]:
+    """Publish an entity homepage through the runtime API and return its id.
+
+    Homepage detail/bundle reads come from the homepage-state snapshot, so we
+    seed through the real candidate -> publish flow (drift-proof) instead of
+    writing private snapshot state directly. The published id resolves the
+    `{homepageId}` template in the manifest verifiedEndpoints.
+    """
+    try:
+        status, body = http_request(
+            base_url.rstrip("/") + "/v1/homepages/candidates",
+            method="POST",
+            body={
+                "title": "契约主页验证",
+                "subtitle": "local-gamma T3 entity seed",
+                "homepageType": "sight",
+                "city": "杭州",
+            },
+            timeout=8,
+        )
+        resp = json.loads(body.decode("utf-8"))
+        homepage_id = str(resp.get("_id") or resp.get("homepageId") or "").strip()
+        if not homepage_id:
+            return {"status": "failed", "httpStatus": status, "error": "candidate create returned no homepage id"}
+        pub_status, _ = http_request(
+            base_url.rstrip("/") + f"/v1/homepages/candidates/{homepage_id}:publish",
+            method="POST",
+            timeout=8,
+        )
+        if not 200 <= pub_status < 300:
+            return {"status": "failed", "httpStatus": pub_status, "error": "publish did not return 2xx"}
+        return {"status": "passed", "homepageId": homepage_id}
+    except urllib.error.HTTPError as exc:
+        return {"status": "failed", "httpStatus": exc.code, "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "failed", "error": str(exc)}
 
 
 def seed_content() -> Dict[str, Any]:
@@ -344,7 +489,10 @@ def endpoint_checks(
                 check["status"] = "not_ready"
                 checks.append(check)
                 continue
-            resolved_path = resolve_probe_path(path, runtime_refs) if domain == "content" else path
+            # entity verifiedEndpoints carry a `{homepageId}` template resolved from
+            # the runtime publish seed; content carries comment-id refs. Both resolve
+            # via runtime_refs; circle/chat paths have no refs and pass through.
+            resolved_path = resolve_probe_path(path, runtime_refs)
             method = route_method_for_path(resolved_path, route_methods) if domain == "content" else "GET"
             check["method"] = method
             if resolved_path != path:
@@ -436,7 +584,11 @@ def main() -> int:
         default=os.environ.get("LOCAL_GAMMA_PRODUCT_OPS_BASE_URL", "http://127.0.0.1:19010"),
     )
     parser.add_argument("--report", default="artifacts/local-gamma/t3_report.json")
-    parser.add_argument("--enabled-domain", action="append", default=["content", "chat"])
+    parser.add_argument(
+        "--enabled-domain",
+        action="append",
+        default=["content", "chat", "circle", "entity", "user"],
+    )
     parser.add_argument("--skip-seed", action="store_true")
     parser.add_argument(
         "--seed-only",
@@ -458,6 +610,7 @@ def main() -> int:
         "health": {},
         "productOpsHealth": {},
         "seed": {},
+        "domainSeeds": {},
         "runtimeSetup": {},
         "endpoints": [],
         "apiContracts": [],
@@ -486,6 +639,16 @@ def main() -> int:
                     "fixture_comment_v2_parent_001": str(setup.get("parentCommentId") or ""),
                     "fixture_comment_v2_reply_001": str(setup.get("replyCommentId") or ""),
                 }
+                if not args.skip_seed and "circle" in enabled_domains:
+                    circle_seed = seed_circle()
+                    report["domainSeeds"]["circle"] = circle_seed
+                if not args.skip_seed and "user" in enabled_domains:
+                    report["domainSeeds"]["user"] = seed_user()
+                if not args.skip_seed and "entity" in enabled_domains:
+                    entity_seed = seed_entity(args.base_url)
+                    report["domainSeeds"]["entity"] = entity_seed
+                    if entity_seed.get("status") == "passed":
+                        runtime_refs["{homepageId}"] = str(entity_seed.get("homepageId") or "")
                 report["endpoints"] = endpoint_checks(args.base_url, enabled_domains, runtime_refs)
             report["apiContracts"] = (
                 [{"name": "flutter_contracts", "status": "skipped"}]
@@ -500,7 +663,16 @@ def main() -> int:
             contract_failed = any(item.get("status") == "failed" for item in report["apiContracts"])
             not_ready = any(item.get("status") == "not_ready" for item in report["endpoints"])
             runtime_setup_failed = report["runtimeSetup"].get("status") == "failed"
-            if report["seed"].get("status") == "failed" or runtime_setup_failed or failed or contract_failed:
+            domain_seed_failed = any(
+                seed.get("status") == "failed" for seed in report["domainSeeds"].values()
+            )
+            if (
+                report["seed"].get("status") == "failed"
+                or runtime_setup_failed
+                or domain_seed_failed
+                or failed
+                or contract_failed
+            ):
                 report["status"] = "failed"
             elif args.strict_all and not_ready:
                 report["status"] = "gate_block"

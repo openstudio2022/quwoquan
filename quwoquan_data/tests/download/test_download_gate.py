@@ -139,6 +139,53 @@ def test_gate_download_blocks_reject_only_units():
     assert any("retained sources" in issue for issue in issues), issues
 
 
+def test_gate_download_includes_failed_stage_gate_sidecars():
+    batch = "download_gate_stage_sidecar"
+    ensure_task_layout(TASK)
+    entity_dir = batch_entity_object_dir(TASK, batch, "地点", "景区", "三苏祠")
+    write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="overview_baike",
+        source_md="# 三苏祠\n\n概述",
+        quality={"sourceId": "overview_baike", "quality": "B-fact", "score": 5},
+        platform="baike",
+        source_category="overview_baike",
+        url="https://example.com/1",
+        title="三苏祠（百科）",
+        target_ref="/entity/地点/景区/三苏祠",
+    )
+    _attach_image(entity_dir / "1.download/sources/01.overview_baike", "sansuci_1")
+    write_source_unit(
+        entity_dir,
+        ordinal=2,
+        source_id="travel_notes",
+        source_md="# 三苏祠\n\n游记",
+        quality={"sourceId": "travel_notes", "quality": "A-story", "score": 8},
+        platform="travelogue",
+        source_category="travelogue",
+        url="https://example.com/2",
+        title="三苏祠（游记）",
+        target_ref="/entity/地点/景区/三苏祠",
+    )
+    _attach_image(entity_dir / "1.download/sources/02.travel_notes", "sansuci_2")
+    report_dir = batch_root(TASK, batch) / "task_download" / "results" / "image_fetch_gate"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    write_json(
+        report_dir / "三苏祠.json",
+        {
+            "payload": {
+                "ref": "三苏祠",
+                "passed": False,
+                "issues": ["imageCount: 三苏祠 仅下到 1 张合格图（要求 ≥2）"],
+            }
+        },
+    )
+
+    issues = gate_download(TASK, batch)
+    assert any("imageCount" in issue for issue in issues), issues
+
+
 if __name__ == "__main__":
     for fn in [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]:
         fn()

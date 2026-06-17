@@ -46,9 +46,9 @@ def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str
         return []
     policy = load_vertical_license_policy(vertical)
     issues: list[str] = []
-    platform = str(spec.get("platform") or spec.get("sourcePlatform") or "")
-    if platform in set(policy.get("blockedDiscoveryOnlyPlatforms") or []):
-        issues.append("imageRights: Pinterest/发现源只能作为灵感或参考，不得直接下载入库")
+    # Platforms are discovery signals only. Publishability is decided by the
+    # concrete asset rights below: license, credit, terms, authorization,
+    # usage scope, model release and safety gates.
     for field in policy.get("requiredImageFields") or []:
         if not str(spec.get(field) or "").strip():
             issues.append(f"imageRights: missing required field {field}")

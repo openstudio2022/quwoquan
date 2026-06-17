@@ -6,14 +6,19 @@ node:
   title: recommendation platform
   parent_domain_service: recommendation-platform
 scope:
-  summary: recommendation platform 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: recommendation platform 验收范围，覆盖训练、推理、评估飞轮与真实流量晋升边界。
+  in_scope:
+  - rec-model-training 训练管线与部署。
+  - rec-model-service 推理 API 与 Go 集成。
+  - evaluation-and-flywheel 离线 replay、在线 AB 与真实训练晋升规格。
+  out_of_scope:
+  - 深度排序模型平台轨不进入当前商用成熟度门槛。
 domain_acceptance:
   DA1:
     title: recommendation platform 领域边界验收
     done_when:
     - 领域边界、上下游依赖、工程映射和服务治理清晰。
+    - evaluation-and-flywheel 的离线 replay、在线 AB 与真实训练晋升规格已登记，且不与训练/推理服务职责混淆。
     boundary_points: []
     evidence:
       primary:
@@ -21,9 +26,12 @@ domain_acceptance:
       - T3_service_contract
       supporting: []
     tests:
-      planned: []
+      planned:
+      - quwoquan_service/scripts/ml/tests/test_replay_evaluation.py
+      - quwoquan_service/scripts/ml/tests/test_ab_significance.py
+      - quwoquan_service/scripts/ml/tests/test_training_promotion_gate.py
       recorded: []
-    status: pending
+    status: specified
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

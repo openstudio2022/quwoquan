@@ -19,6 +19,7 @@ from _common.content_object import register_content_object  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import batch_root, ensure_batch_layout, ensure_task_layout  # noqa: E402
 from _common.provenance import provenance_issues  # noqa: E402
+from _common.source_unit import object_image_candidates, write_source_unit  # noqa: E402
 from _common.stage_reports import write_stage_result  # noqa: E402
 from produce.materialize import _image_source_contract, materialize_posts  # noqa: E402
 from publish import assemble as publish_assemble  # noqa: E402
@@ -30,11 +31,52 @@ BATCH = "pilot"
 REF = "空标题图片作品"
 
 
-def _source_image(name: str, body: bytes) -> Path:
-    root = Path(tempfile.mkdtemp(prefix="image_contract_assets_"))
-    path = root / name
-    path.write_bytes(body)
-    return path
+def _seed_source_collection() -> list[dict]:
+    object_dir = batch_root(TASK, BATCH) / "download" / "objects" / "结构化组图"
+    write_source_unit(
+        object_dir,
+        ordinal=1,
+        source_id="alpine_collection",
+        source_md="# 结构化组图来源\n\n同一摄影师同一作品集的授权图片。",
+        platform="fixture",
+        source_category="image_collection",
+        source_use_mode="licensed_adaptation",
+        source_role="image_base",
+        image_evidence_mode="same_collection",
+        research_lane="image",
+        license_value="CC-BY-4.0",
+        url="https://example.com/collections/alpine",
+        title="结构化组图来源",
+        images=[
+            {
+                "bytes": b"first-image",
+                "slug": "alpine_01",
+                "caption": "",
+                "sourceCollectionId": "collection-alpine-001",
+                "creator": "摄影师甲",
+                "collectionPageUrl": "https://example.com/collections/alpine",
+                "license": "CC-BY-4.0",
+                "termsUrl": "https://example.com/licenses/alpine",
+                "authorizationProof": "https://example.com/licenses/alpine",
+                "usageScope": "commercial",
+            },
+            {
+                "bytes": b"second-image",
+                "slug": "alpine_02",
+                "caption": "晨光",
+                "sourceCollectionId": "collection-alpine-001",
+                "creator": "摄影师甲",
+                "collectionPageUrl": "https://example.com/collections/alpine",
+                "license": "CC-BY-4.0",
+                "termsUrl": "https://example.com/licenses/alpine",
+                "authorizationProof": "https://example.com/licenses/alpine",
+                "usageScope": "commercial",
+            },
+        ],
+        task_id=TASK,
+        batch_id=BATCH,
+    )
+    return object_image_candidates(object_dir, TASK, BATCH)
 
 
 def _seed_image_post() -> None:
@@ -49,8 +91,7 @@ def _seed_image_post() -> None:
         REF,
         {"decision": "approved", "checks": {"rights": {"passed": True, "issues": []}}},
     )
-    first = _source_image("first.jpg", b"first-image")
-    second = _source_image("second.jpg", b"second-image")
+    first, second = _seed_source_collection()
     write_stage_result(
         TASK,
         BATCH,
@@ -61,35 +102,41 @@ def _seed_image_post() -> None:
             "topicId": REF,
             "contentType": "image",
             "carrier": "image",
-            "generator": "agent",
+            "generator": "image_evidence_pack",
             "title": "",
             "caption": "",
             "entityRefs": [],
             "tagRefs": ["Topic/摄影", "Format/内容载体/图文/图集"],
             "sourceUrls": ["https://example.com/collections/alpine"],
-            "sourcePaths": [],
+            "sourcePaths": [first["sourceRef"]],
             "assets": [
                 {
                     "assetId": "alpine_01",
                     "fileName": "alpine_01.jpg",
                     "caption": "",
-                    "sourcePath": str(first),
+                    "sourcePath": str(first["path"]),
+                    "sourceRef": first["sourceRef"],
+                    "sourceAssetRef": first["sourceAssetRef"],
                     "sourceCollectionId": "collection-alpine-001",
                     "creator": {"name": "摄影师甲", "profileUrl": "https://example.com/creator/a"},
                     "collectionPageUrl": "https://example.com/collections/alpine",
                     "license": "CC-BY-4.0",
                     "termsUrl": "https://example.com/licenses/alpine",
+                    "authorizationProof": "https://example.com/licenses/alpine",
                 },
                 {
                     "assetId": "alpine_02",
                     "fileName": "alpine_02.jpg",
                     "caption": "晨光",
-                    "sourcePath": str(second),
+                    "sourcePath": str(second["path"]),
+                    "sourceRef": second["sourceRef"],
+                    "sourceAssetRef": second["sourceAssetRef"],
                     "sourceCollectionId": "collection-alpine-001",
                     "creator": {"name": "摄影师甲", "profileUrl": "https://example.com/creator/a"},
                     "collectionPageUrl": "https://example.com/collections/alpine",
                     "license": "CC-BY-4.0",
                     "termsUrl": "https://example.com/licenses/alpine",
+                    "authorizationProof": "https://example.com/licenses/alpine",
                 },
             ],
             "publishLayout": "gallery",

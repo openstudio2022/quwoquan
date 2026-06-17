@@ -1,0 +1,78 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/景区/四川source-ready10放量前修复试跑
+title: 四川 Source Ready 10 放量前修复试跑
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 四川省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 都江堰
+  - entityType: 地点/景区
+    name: 九寨沟
+  - entityType: 地点/景区
+    name: 稻城亚丁
+  - entityType: 地点/景区
+    name: 乐山大佛
+  - entityType: 地点/景区
+    name: 北川羌城
+  - entityType: 地点/景区
+    name: 巴山大峡谷
+  - entityType: 地点/景区
+    name: 邓小平故里
+  - entityType: 地点/景区
+    name: 泸州老窖景区
+  - entityType: 地点/景区
+    name: 三星堆博物馆
+  - entityType: 地点/景区
+    name: 三苏祠
+provenance:
+  createdAt: '2026-06-15T22:21:07.717108+00:00'
+  createdBy: task select-targets
+content:
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    - article
+    - image
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+      article: 3
+      image: 4
+    allowAiImages: false
+  carriers:
+  - article
+  - image
+  quotas:
+    entityArticlesPerTarget: 4
+    imageWorksPerTarget: 1
+    entityHomepagesPerTarget: 1
+    routeArticles: 0
+acceptance:
+  minEntities: 10
+  minPostsPerEntity: 5
+  requiredAngles:
+  - planning_consultation
+  - decision_experience
+  - route_transport
+  - seasonal_timing
+  - image
+queuePolicy:
+  backend: reliabletask
+  reliableTask:
+    taskType: data.content_object.execute
+    queue: reliabletask.data.content_supply
+    store: MongoStore
+    readyIndex: RedisReadyIndex
+  leaseSeconds: 900
+  heartbeatSeconds: 60
+  deadLetterAfterAttempts: 3

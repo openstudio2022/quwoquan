@@ -2,9 +2,10 @@
 
 ## 功能说明
 
-- **定位**：推荐与 ML 平台能力域，下辖**两个 L3 组件**，与 runtime 下的 Go 推荐引擎通过 HTTP 协作：
+- **定位**：推荐与 ML 平台能力域，下辖训练、推理与评估飞轮能力，与 runtime 下的 Go 推荐引擎通过 HTTP/离线产物协作：
   - **rec-model-training**（训练集部署工程服务）：对接不同训练场景，样本→数据集→训练→模型注册；部署形态为任务/训练镜像。
   - **rec-model-service**（模型服务）：装载不同模型，暴露 POST /v1/score，对接 Go 业务服务；部署形态为常驻推理服务。
+  - **evaluation-and-flywheel**（评估与飞轮）：离线 replay、在线 AB 显著性与真实流量训练晋升证据；不直接写业务库。
 - **服务清单**：计为**两个独立服务**（rec-model-training、rec-model-service），与 content-service、user-service 等并列，开发与运维边界清晰。
 - **分离依据**：训练与推理在实际部署上为两种形态（任务/作业 vs 常驻服务），职责、SLA 与契约不同；设计动因与结构见 [design.md](design.md)。
 
@@ -31,6 +32,7 @@
 |----|------|----------|
 | rec-model-training | 训练管线 + 训练部署 | 样本→数据集→训练→注册可跑通；feature_registry 与推理侧一致；见其下 L4/L5。 |
 | rec-model-service | 推理 API + Go 集成 + 推理部署 | POST /v1/score、延迟与兜底、契约与 metadata 一致；见 [rec-model-service/readiness.md](rec-model-service/readiness.md) 及其下 L4/L5。 |
+| evaluation-and-flywheel | replay 评估 + 在线 AB + 真实训练晋升 | NDCG/Recall@K/MAP/覆盖率/多样性、AB 显著性与 reload 证据；深度模型仍为长期上限。 |
 
 ## 进入开发前置条件
 
@@ -40,5 +42,6 @@
 
 - A1：两 L3 边界清晰，训练侧无推理 API 交付责任，推理侧无训练镜像交付责任。
 - A2：rec-model-service 推理延迟与可用性满足约定；超时/失败时 Go 侧可回退。
+- A3：evaluation-and-flywheel 冻结离线 replay、在线 AB 与真实训练晋升口径，证明“越用越准”。
 - A7：rec_model_service 契约与 metadata/OpenAPI/endpoint_catalog 一致。
 - A8：训练管线与推理 API 各有对应测试与就绪检查；见各 L4/L5 acceptance。

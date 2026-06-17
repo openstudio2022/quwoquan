@@ -30,7 +30,7 @@ flowchart LR
 
 ### D1：事实与概率严格分通道
 
-事实交集（`ObjectIntersection`）必须带证据、可回查、满足权限；概率交集（`RecommendationAffinity`）只承载排序分与模型理由桶，不生成事实文案。两者在 `IntersectionReason.intersectionClass`（`fact|affinity`）上区分，端侧据此选择"事实证据样式"或"推荐样式"。
+事实交集必须带证据、可回查、满足权限；概率交集（`RecommendationAffinity`）只承载排序分与模型理由桶，不生成事实文案。两者在 `IntersectionReason.intersectionClass`（`fact|affinity`）上区分。**已删除 `ObjectIntersection` 独立 projection**；对象页/feed/搜索统一 `List<IntersectionReason>` + `IntersectionPoint`。
 
 ### D2：请求期零打分，事实预物化
 
@@ -73,7 +73,7 @@ flowchart LR
 
 ### 接通已存契约
 
-- `object_page_bundle.yaml` 的 `intersections: List<ObjectIntersection>` 后端真实填充（替换 `defaultIntersectionReasons` 硬编码）。
+- `object_page_bundle.yaml` 仅 `intersectionReasons: List<IntersectionReason>` 单通道（删除并行 `intersections`）。
 - `object_membership.yaml` 增 `expiresAt`。
 
 ### 行为归因

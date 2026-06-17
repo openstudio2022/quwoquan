@@ -9,6 +9,18 @@
 - `publish/publish_meta.json` 记录 `lastPromote` / `lastShip` / `lastReleaseId`，无 `activeVersion`。
 - 门禁 `verify_no_legacy_hardcode.py` 禁止 `publish/v{N}`、objectKey `/v{N}/` 段、`chuanxi`/`*_v5` 等区域/任务硬编码回归。
 
+### 0.1 平台级 Agent 内容供给组织模型
+
+内容生产不按“单脚本生成正文”理解，而按公司治理式 Agent 组织运行：规划、检索、权利、创作、审校、修订、发布和反馈分权协作。总纲见 [`agent_content_supply_operating_model.md`](agent_content_supply_operating_model.md)。
+
+核心原则：
+
+- 上游锁定任务、事实、权利、载体、作者边界和验收标准。
+- 中游给 AI 创作自由，允许自主决定标题、结构、叙事节奏、表达风格和信息取舍。
+- 下游由独立 gate 审核事实、权利、图文一致、作者边界、非模板感、重复和消费价值。
+- Agent 口头成功不具备准出效力；只认结构化 packet、文件 hash、`GateVerdict` 和 `TokenLedger`。
+- 单个对象可快速失败并隔离复盘，不得阻塞同批其它可交付对象。
+
 ## 1. 入口：人定义生成任务
 
 `qwq-data plan` 把内容指令解析为 `compose_brief`（叙事契约 / imagePlan / imagePolicy / mustIncludeFacts）。
@@ -81,7 +93,7 @@ Cursor 只允许三类执行面：
 
 ```json
 {
-  "schemaVersion": "quwoquan_data.command_packet/1",
+  "schemaVersion": "quwoquan_data.command_packet",
   "taskId": "<vertical>/<dimension>/<region>/<category>/<topic>",
   "batchId": "<batch_id>",
   "command": "download",
@@ -117,6 +129,35 @@ Cursor 只允许三类执行面：
 - 正文只由会话模型创作（`generator=agent`），脚本不拼正文。
 - 草稿可声明 `extractedEntities`（如「洛绒牛场」）；review 据此生成实体 sidecar，无主页者**自动生成关联实体主页** `page.md`，使其可关联查看；发布时仍无主页的 entityRef 被过滤。
 - 质量门：三道真实性门（出处/模板指纹/事实可回溯）+ 游记感密度 + 载体一致性 + **图文混合编排门**（figure 跨小节穿插、禁空图块、禁大段无图空档；图多转 gallery 配小字）+ 图片精美门（人脸/水印/近重复/文字占比）。
+
+### 2.1 AI 自主创作边界与 Creative Workspace
+
+`ObjectEvidencePacket` 锁事实、权利、素材和载体；`CreativeBrief` 释放创作空间。AI 的自主性只发生在 evidence packet 内，不得越过来源、授权和载体边界。
+
+AI 可以自主决定：
+
+- 标题候选、开头方式、段落结构、叙事节奏和收束方式。
+- 读者视角与内容角度，例如规划咨询、体验决策、避坑、摄影审美、知识科普。
+- 在证据边界内的信息取舍与前后顺序。
+- 表达风格与作者语气，但必须遵守作者披露和可信边界。
+- 针对 review 失败点的修订策略。
+
+AI 不可以自主决定：
+
+- 使用未准入来源或无授权素材。
+- 混用不同 `sourceCollectionId`、作者、平台或授权凭证的图片。
+- 改变内容载体，例如把图片作品写成文章，或把文章降成图库。
+- 编造具体事实、亲历、资质、官方背书或商业合作。
+- 把待确认 mention 写入 active `entityRefs/tagRefs`。
+- 绕过 gate 或用口头完成替代文件与裁决。
+
+创作阶段必须按以下角色链路执行：
+
+1. `Creative Planner Agent`：基于 evidence packet 提出 2-3 个创作方案、`readerPromise`、结构和标题候选。
+2. `Creator Agent`：选择通过 creative plan gate 的方案写正文、标题、配文或主页介绍。
+3. `Self Critic Agent`：做低成本自检，写 `author_self_check.json`，但没有最终通过权。
+4. `Independent Review Agent`：独立审核事实、权利、图文一致、人格边界和消费价值。
+5. `Optimizer Agent`：只按 review 指定失败点修订，不重新选源、不扩大事实边界。
 
 ### post 最小发布契约（manifest.json）
 

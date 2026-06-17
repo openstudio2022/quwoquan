@@ -210,13 +210,27 @@ type StatusReportReviewInput struct {
 }
 
 type HomepageService struct {
-	mu            sync.RWMutex
-	store         HomepageStateStore
-	homepages     map[string]*Homepage
-	followers     map[string]map[string]bool
-	claimRequests map[string]*HomepageClaimRequest
-	statusReports map[string]*HomepageStatusReport
-	sequence      uint64
+	mu              sync.RWMutex
+	store           HomepageStateStore
+	homepages       map[string]*Homepage
+	followers       map[string]map[string]bool
+	claimRequests   map[string]*HomepageClaimRequest
+	statusReports   map[string]*HomepageStatusReport
+	sequence        uint64
+	searchProjector Projector
+}
+
+// HomepageServiceOption configures optional HomepageService collaborators.
+type HomepageServiceOption func(*HomepageService)
+
+// WithProjector wires the write-time search-index projector. When unset (ES
+// disabled) all search emits are no-ops and the write path is unaffected.
+func WithProjector(projector Projector) HomepageServiceOption {
+	return func(s *HomepageService) {
+		if projector != nil {
+			s.searchProjector = projector
+		}
+	}
 }
 
 type HomepageStateStore interface {
@@ -237,13 +251,16 @@ func NewHomepageService() *HomepageService {
 	return NewHomepageServiceWithStore(context.Background(), nil)
 }
 
-func NewHomepageServiceWithStore(ctx context.Context, store HomepageStateStore) *HomepageService {
+func NewHomepageServiceWithStore(ctx context.Context, store HomepageStateStore, opts ...HomepageServiceOption) *HomepageService {
 	svc := &HomepageService{
 		store:         store,
 		homepages:     map[string]*Homepage{},
 		followers:     map[string]map[string]bool{},
 		claimRequests: map[string]*HomepageClaimRequest{},
 		statusReports: map[string]*HomepageStatusReport{},
+	}
+	for _, opt := range opts {
+		opt(svc)
 	}
 	loaded := false
 	if store != nil {
@@ -298,26 +315,7 @@ func (s *HomepageService) SearchHomepages(
 			continue
 		}
 		index[homepage.ID] = homepage
-		docs = append(docs, rtsearch.Document{
-			ObjectType:   rtsearch.ObjectTypeEntityHomepage,
-			ObjectID:     homepage.ID,
-			Title:        homepage.Title,
-			Summary:      homepage.Subtitle,
-			SourceDomain: "entity",
-			ContentType:  homepage.HomepageType,
-			Visibility:   "public",
-			BadgeLabel:   "主页",
-			Tags:         homepage.CategoryTags,
-			Entities:     []string{homepage.CanonicalEntityID},
-			Popularity:   float64(homepage.RatingCount),
-			Freshness:    homepage.UpdatedAt,
-			Fields: map[string]string{
-				"address":      homepage.Address,
-				"city":         homepage.City,
-				"homepageType": homepage.HomepageType,
-				"categoryTags": strings.Join(homepage.CategoryTags, " "),
-			},
-		})
+		docs = append(docs, ProjectHomepageToSearchDocument(*homepage))
 	}
 	searchResp := rtsearch.Execute(rtsearch.Request{
 		Query:       query,
@@ -398,6 +396,15 @@ func (s *HomepageService) PublishHomepageCandidate(ctx context.Context, homepage
 	var err error
 	defer func() { rtobs.EndSpan(span, err) }()
 
+	// emit runs after s.mu is released (defer LIFO) so the ES round trip never
+	// holds the homepage write lock.
+	var emit *ProjectorEvent
+	defer func() {
+		if emit != nil {
+			s.emitSearchIndex(ctx, *emit)
+		}
+	}()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	homepage, ok := s.resolveHomepageLocked(homepageID)
@@ -421,6 +428,7 @@ func (s *HomepageService) PublishHomepageCandidate(ctx context.Context, homepage
 		return nil, err
 	}
 	out := cloneHomepage(homepage)
+	emit = &ProjectorEvent{Type: ProjectorEventHomepageUpserted, HomepageID: out.ID, Homepage: &out}
 	return &out, nil
 }
 
@@ -721,6 +729,13 @@ func (s *HomepageService) UpdateClaimedHomepageBasics(
 	var err error
 	defer func() { rtobs.EndSpan(span, err) }()
 
+	var emit *ProjectorEvent
+	defer func() {
+		if emit != nil {
+			s.emitSearchIndex(ctx, *emit)
+		}
+	}()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	homepage, ok := s.resolveHomepageLocked(homepageID)
@@ -758,6 +773,7 @@ func (s *HomepageService) UpdateClaimedHomepageBasics(
 		return nil, err
 	}
 	out := cloneHomepage(homepage)
+	emit = &ProjectorEvent{Type: ProjectorEventHomepageUpserted, HomepageID: out.ID, Homepage: &out}
 	return &out, nil
 }
 
@@ -808,6 +824,13 @@ func (s *HomepageService) ReviewHomepageStatusReport(
 	var err error
 	defer func() { rtobs.EndSpan(span, err) }()
 
+	var emit *ProjectorEvent
+	defer func() {
+		if emit != nil {
+			s.emitSearchIndex(ctx, *emit)
+		}
+	}()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	resolvedHomepage, ok := s.resolveHomepageLocked(homepageID)
@@ -838,6 +861,9 @@ func (s *HomepageService) ReviewHomepageStatusReport(
 	homepage.UpdatedAt = now
 	if err = s.persistLocked(ctx); err != nil {
 		return nil, err
+	}
+	if homepage.Status == "offline" {
+		emit = &ProjectorEvent{Type: ProjectorEventHomepageRemoved, HomepageID: homepage.ID}
 	}
 	out := *report
 	return &out, nil
@@ -1306,7 +1332,7 @@ func intersectionDimensionLabel(homepage *Homepage) (dimension string, shortLabe
 // 保鲜期：identity/location 取较长保鲜（30 天），interest 取较短（7 天）。
 // strength 由标签命中数与关系边数推导，避免硬编码单一分值。
 func defaultIntersectionReasons(homepage *Homepage, edges []map[string]any) []map[string]any {
-	dimension, shortLabel, evidenceLabel := intersectionDimensionLabel(homepage)
+	dimension, _, evidenceLabel := intersectionDimensionLabel(homepage)
 	tagShared := len(homepage.CategoryTags)
 	tagStrength := intersectionStrengthFromCount(tagShared, 6)
 	freshTTL := 7 * 24 * time.Hour
@@ -1322,12 +1348,11 @@ func defaultIntersectionReasons(homepage *Homepage, edges []map[string]any) []ma
 			"tagRefs":           cloneStrings(homepage.CategoryTags),
 			"relationKind":      "mutual",
 			"relationObjectId":  homepage.ID,
-			"label":             shortLabel,
 			"displayName":       homepage.Title,
 			"avatarUrl":         homepage.CoverURL,
-			"sharedCount":       tagShared,
+			"totalPointCount":   tagShared,
 			"strength":          tagStrength,
-			"displayText":       evidenceLabel,
+			"primaryText":       evidenceLabel,
 			"confidenceLabel":   "",
 			"actionType":        "view_object",
 			"actionTargetId":    homepage.ID,
@@ -1344,12 +1369,11 @@ func defaultIntersectionReasons(homepage *Homepage, edges []map[string]any) []ma
 			"tagRefs":           cloneStrings(homepage.CategoryTags),
 			"relationKind":      "mutual",
 			"relationObjectId":  relObj,
-			"label":             "相关圈子",
 			"displayName":       "相关圈子里有你的连接",
 			"avatarUrl":         "",
-			"sharedCount":       len(edges),
+			"totalPointCount":   len(edges),
 			"strength":          intersectionStrengthFromCount(len(edges), 4),
-			"displayText":       "这里有你可能想加入的相关圈子",
+			"primaryText":       "这里有你可能想加入的相关圈子",
 			"confidenceLabel":   "",
 			"actionType":        "join",
 			"actionTargetId":    relObj,

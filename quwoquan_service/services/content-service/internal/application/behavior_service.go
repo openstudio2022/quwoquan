@@ -25,6 +25,8 @@ var supportedBehaviorActions = func() map[string]struct{} {
 }()
 
 type BehaviorEventInput struct {
+	ClientEventID   string   `json:"clientEventId"`
+	State           string   `json:"state"`
 	UserID          string   `json:"userId"`
 	DeviceActorID   string   `json:"deviceActorId"`
 	SessionID       string   `json:"sessionId"`
@@ -50,18 +52,22 @@ type BehaviorEventInput struct {
 	// 交集转化归因（S6）：触发交集行动（follow/join_circle/add_contact）的维度与路径制 tagRef。
 	IntersectionDimension string   `json:"intersectionDimension"`
 	IntersectionTagRefs   []string `json:"intersectionTagRefs"`
+	// 交集来源 kind（§5.4 标准名）：驱动该曝光/点击/转化的事实交集 kind。
+	// 喂 rm_recommend_feature.socialFeatures.intersection 的 viewer 级揭示偏好直方图（WP-4 特征回流）。
+	IntersectionSourceRef string `json:"intersectionSourceRef"`
 }
 
 type BehaviorService struct {
-	hotPath        rtrec.SignalProcessor
-	store          persistence.PostRepository
-	publisher      repository.EventPublisher
-	projector      Projector
-	feedback       *rtrec.FeedbackRecorder
-	eventStore     persistence.BehaviorEventStore
-	metricsStore   *persistence.DailyMetricsStore
-	authorImpact   *persistence.AuthorImpactStore
-	sessionInvalid func(userID, sessionID string)
+	hotPath          rtrec.SignalProcessor
+	feedbackIngestor rtrec.FeedbackIngestor
+	store            persistence.PostRepository
+	publisher        repository.EventPublisher
+	projector        Projector
+	feedback         *rtrec.FeedbackRecorder
+	eventStore       persistence.BehaviorEventStore
+	metricsStore     *persistence.DailyMetricsStore
+	authorImpact     *persistence.AuthorImpactStore
+	sessionInvalid   func(userID, sessionID string)
 }
 
 type BehaviorServiceOption func(*BehaviorService)
@@ -99,6 +105,9 @@ func NewBehaviorService(hotPath rtrec.SignalProcessor, store persistence.PostRep
 		hotPath: hotPath,
 		store:   store,
 	}
+	if ingestor, ok := hotPath.(rtrec.FeedbackIngestor); ok {
+		svc.feedbackIngestor = ingestor
+	}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(svc)
@@ -131,27 +140,52 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			duration = eventInput.DwellMs / 1000
 		}
 		tags := eventInput.Tags
+		var post *postmodel.Post
 		if len(tags) == 0 {
-			if post, ok := s.store.FindByID(ctx, contentID); ok {
+			if foundPost, ok := s.store.FindByID(ctx, contentID); ok {
+				post = foundPost
 				tags = behaviorTagsFromAny(post.TagRefs)
 			}
+		}
+		contentType := strings.TrimSpace(eventInput.ContentType)
+		authorID := strings.TrimSpace(eventInput.AuthorID)
+		if post == nil && (contentType == "" || authorID == "") && contentID != "" {
+			if foundPost, ok := s.store.FindByID(ctx, contentID); ok {
+				post = foundPost
+			}
+		}
+		if post != nil {
+			if contentType == "" {
+				contentType = strings.TrimSpace(post.ContentType)
+			}
+			if authorID == "" {
+				authorID = strings.TrimSpace(post.AuthorId)
+			}
+		}
+		if action == "hide_author" && authorID == "" {
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "authorId 必填", "hide_author requires authorId")
+		}
+		if action == "hide_content_type" && contentType == "" {
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "contentType 必填", "hide_content_type requires contentType")
 		}
 		feedPos := eventInput.FeedPosition
 		if feedPos == 0 && eventInput.Position > 0 {
 			feedPos = eventInput.Position
 		}
 		signal := rtrec.BehaviorSignal{
+			ClientEventID:         strings.TrimSpace(eventInput.ClientEventID),
+			State:                 strings.TrimSpace(eventInput.State),
 			UserID:                userID,
 			DeviceActorID:         strings.TrimSpace(eventInput.DeviceActorID),
 			SessionID:             strings.TrimSpace(eventInput.SessionID),
 			FeedSessionID:         strings.TrimSpace(eventInput.FeedSessionID),
 			ContentID:             contentID,
 			Action:                action,
-			ContentType:           strings.TrimSpace(eventInput.ContentType),
+			ContentType:           contentType,
 			Tags:                  tags,
 			Duration:              duration,
 			Timestamp:             occurredAt,
-			AuthorID:              strings.TrimSpace(eventInput.AuthorID),
+			AuthorID:              authorID,
 			ReferralSource:        strings.TrimSpace(eventInput.ReferralSource),
 			EngagementDepth:       eventInput.EngagementDepth,
 			ConsumedRatio:         eventInput.ConsumedRatio,
@@ -163,8 +197,22 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			IntersectionDimension: strings.TrimSpace(eventInput.IntersectionDimension),
 			IntersectionTagRefs:   eventInput.IntersectionTagRefs,
 		}
+		if s.feedbackIngestor != nil {
+			accepted, err := s.feedbackIngestor.AcceptEvent(ctx, signal)
+			if err != nil {
+				rtrec.RecordBehaviorIngestDropped("dedup_error")
+				return err
+			}
+			if !accepted {
+				rtrec.RecordBehaviorIngestDropped("duplicate_client_event")
+				continue
+			}
+		}
+		rtrec.RecordBehaviorIngest(signal)
 		signals = append(signals, signal)
 		projectedEvents = append(projectedEvents, map[string]any{
+			"clientEventId":         signal.ClientEventID,
+			"state":                 signal.State,
 			"userId":                userID,
 			"deviceActorId":         signal.DeviceActorID,
 			"sessionId":             signal.SessionID,
@@ -185,6 +233,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			"commentLength":         eventInput.CommentLength,
 			"intersectionDimension": signal.IntersectionDimension,
 			"intersectionTagRefs":   signal.IntersectionTagRefs,
+			"intersectionSourceRef": strings.TrimSpace(eventInput.IntersectionSourceRef),
 		})
 		if batchUserID == "" {
 			batchUserID = userID
@@ -203,6 +252,8 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		rawEvents := make([]persistence.RawBehaviorEvent, len(signals))
 		for i, sig := range signals {
 			rawEvents[i] = persistence.RawBehaviorEvent{
+				ClientEventID:         sig.ClientEventID,
+				State:                 sig.State,
 				UserID:                sig.UserID,
 				DeviceActorID:         sig.DeviceActorID,
 				SessionID:             sig.SessionID,

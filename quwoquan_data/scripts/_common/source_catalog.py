@@ -97,7 +97,8 @@ def source_category_coverage(
     unknown: list[str] = []
     for src in sources or []:
         platform = str((src or {}).get("platform") or "")
-        cid = platform_category(platform)
+        explicit_category = str((src or {}).get("category") or "").strip()
+        cid = explicit_category if explicit_category in known_category_ids() else platform_category(platform)
         if cid:
             covered.add(cid)
         elif platform.strip().lower() not in _GENERIC_PLATFORMS:

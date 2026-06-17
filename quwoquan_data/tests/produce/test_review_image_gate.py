@@ -26,6 +26,7 @@ import cv2  # noqa: E402
 from produce.route_workflow import (  # noqa: E402
     _check_image_gate,
     _check_carrier_consistency,
+    _check_image_source_scope,
     _image_caption_from_article,
     _review_fallback_stage,
 )
@@ -193,6 +194,27 @@ def test_carrier_consistency_gallery_blocks_mixed_source_collections():
     )
     assert gate["passed"] is False
     assert any("one sourceCollectionId" in issue for issue in gate["issues"]), gate["issues"]
+
+
+def test_image_source_scope_blocks_article_sources_in_image_work():
+    gate = _check_image_source_scope(
+        {
+            "carrier": "image",
+            "assets": [
+                {
+                    "assetId": "a1",
+                    "sourcePath": "/batch/entities/地点/景区/九寨沟/1.download/sources/14.image_open/assets/001.jpg",
+                    "sourceCollectionId": "collection-a",
+                }
+            ],
+            "sourcePaths": [
+                "/batch/entities/地点/景区/九寨沟/1.download/sources/14.image_open/source.md",
+                "/batch/entities/地点/景区/九寨沟/1.download/sources/03.article_qunar_base_1/source.md",
+            ],
+        }
+    )
+    assert gate["passed"] is False
+    assert any("non-image source units" in issue for issue in gate["issues"]), gate["issues"]
 
 
 def _run_all() -> None:

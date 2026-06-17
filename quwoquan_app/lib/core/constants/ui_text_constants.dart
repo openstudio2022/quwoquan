@@ -598,7 +598,7 @@ class UITextConstants {
   static const String profileReportReasonOther = '其他';
   // 影响力摘要模块（他人 / 我的双视角）
   static const String profileImpactTitleMine = '我的影响力';
-  static const String profileImpactTitleOther = 'TA的影响力';
+  static const String profileImpactTitleOther = 'TA帮助了很多人';
   static const String profileImpactSubtitleMine = '我的内容真实帮到了谁';
   static const String profileImpactSubtitleOther = 'TA的内容真实帮到了谁';
   static const String profileImpactEmptyMine = '发布内容后，这里会显示我帮到了谁';
@@ -656,10 +656,28 @@ class UITextConstants {
   /// 评论平铺区：回复某人占位。
   static const String commentReplyToTemplate = '回复 %s';
 
-  static const String profileMutualIntersectionTitle = '你们的交集';
-  static const String homepageIntersectionTitle = objectConnectionWithYou;
-  static const String circleIntersectionTitle = objectConnectionWithYou;
-  static const String intersectionMoreLabel = '全部交集';
+  /// 他人主页交集卡标题（去「交集/连接」泛词，改结论导向「为什么推荐TA」）。
+  static const String profileWhyRecommendTitle = '为什么推荐TA';
+
+  /// 圈子主页交集卡标题（结论导向，去「交集」泛词）。
+  static const String circleWhyRecommendTitle = '为什么推荐这个圈子';
+
+  /// 实体主页交集卡标题（结论导向，去「交集/实体」泛词）。
+  static const String entityWhyRecommendTitle = '为什么推荐这里';
+
+  /// 实体主页介绍卡标题（去「实体/认识XX」泛词，统一「关于这里」）。
+  static const String entityAboutTitle = '关于这里';
+
+  /// 实体主页头部官方认证徽标（已通过官方核验）。
+  static const String entityVerifiedBadge = '已认证';
+
+  /// 实体主页头部成立年份（如「1982 年创立」）。
+  static String entityEstablishedYearLabel(int year) => '$year 年创立';
+
+  /// 实体主页头部关注计数（如「1.2万 关注」，数量由调用方格式化）。
+  static String entityFollowerCountLabel(String formattedCount) =>
+      '$formattedCount $follow';
+  static const String intersectionMoreLabel = '全部连接';
   // Work Browser 作者区交集入口与详情解释层（V1.0：N 个交集 › → 弹出推荐解释）
   static String intersectionEntrySummary(int count) => '$count 个交集';
   static const String intersectionDetailTitle = '为什么推荐给你';
@@ -669,23 +687,24 @@ class UITextConstants {
   // Work Browser 文章页码（正文下方、作者工具栏上方）
   static String workArticlePageProgress(int current, int total) =>
       '$current / $total';
-  static const String myIntersectionsTitle = '我的新交集';
+  static const String myIntersectionsTitle = '我的连接';
   static const String myIntersectionsSubtitle = '最近谁和你有了新的共同点';
+  static const String profileStatementFallbackSubtitle = '新的连接正在生成';
   static const String intersectionExpandMore = '展开更多';
   static const String intersectionCollapse = '收起';
   static const String objectIntersectionCtaFollowAuthor = '关注作者';
   static const String objectIntersectionCtaJoinCircle = '加入圈子';
   static const String objectIntersectionCtaAddContact = '加为联系人';
   static const String objectIntersectionCtaAskAssistant = '问问小趣';
-  static const String objectIntersectionCtaView = '查看这个交集';
-  static const String circleImpactTitle = '圈子影响力';
-  static const String objectConnectionWithYou = '与你的交集';
+  static const String objectIntersectionCtaView = '查看这个连接';
+  static const String circleImpactTitle = '这个圈子帮助了很多人';
+  static const String objectConnectionWithYou = '与你的连接';
   static const String impactEnumerableHintMine = '可查看与你内容相关的连接来源';
   static const String impactEnumerableHintOther = '可查看与TA内容相关的连接来源';
   static const String impactEnumerableHintCircle = '可查看这个影响的连接来源';
-  static const String objectIntersectionsTitle = '全部交集';
-  static const String objectIntersectionsEmpty = '暂时还没有可展示的交集';
-  static const String objectIntersectionsUnavailableTitle = '交集暂不可用';
+  static const String objectIntersectionsTitle = '全部连接';
+  static const String objectIntersectionsEmpty = '暂时还没有可展示的连接';
+  static const String objectIntersectionsUnavailableTitle = '连接暂不可用';
   static const String objectHomepageDefaultTitle = '这个主页';
   static const String homepageMaintainAction = '维护主页';
   static const String homepageClaimAction = '认领主页';
@@ -697,12 +716,12 @@ class UITextConstants {
   static const String homepageDiscussionSectionTitle = '大家在聊';
   static String homepageDiscussionSectionTitleFor(String objectName) =>
       '大家在聊$objectName';
-  static const String homepageInterestCircleSectionTitle = '兴趣圈';
+  static const String homepageInterestCircleSectionTitle = '相关圈子';
   static const String homepageContentEmptyTitle = '还没有相关内容';
   static const String homepageContentEmptyDescription = '后续围绕这个主页发布的内容会展示在这里。';
   static const String homepageDiscussionEmptyTitle = '还没有讨论';
   static const String homepageDiscussionEmptyDescription = '大家围绕这个主页的讨论会展示在这里。';
-  static const String homepageInterestCircleEmptyTitle = '还没有兴趣圈';
+  static const String homepageInterestCircleEmptyTitle = '还没有相关圈子';
   static const String homepageInterestCircleEmptyDescription =
       '围绕这个主页形成的圈子会展示在这里。';
   static const String homepageRelatedGroupSubtitle = '位成员也在这里';
@@ -720,12 +739,14 @@ class UITextConstants {
   static const String publishAssistantSuggestNoResult = '暂时没有新的推荐';
   static const String publishAssistantSuggestFailed = '小趣推荐失败，请稍后再试';
   static const String objectTabContent = '内容';
+  static const String objectTabRecord = '记录';
   static const String objectTabDiscussion = '讨论';
-  static const String objectTabInterestCircles = '兴趣圈';
+  static const String objectTabRelatedCircles = '相关圈子';
   static const String objectTabMembers = '成员';
+  static const String homepageSubCampusLife = '校园生活';
   static const String objectIntroMoreLabel = '查看更多';
   static String objectIntroTitle(String objectName) => '认识$objectName';
-  static const String myIntersectionsEmpty = '还没有新的交集，去发现更多同频的人和圈子';
+  static const String myIntersectionsEmpty = '还没有新的连接，去发现更多同频的人和圈子';
   static const String intersectionNewBadgeSuffix = '条新增';
   static const String intersectionAffinityLabel = '推荐';
   // 交集维度短标签（端展示用，真相源仍为服务端 dimension 枚举）
@@ -744,11 +765,18 @@ class UITextConstants {
   /// 共同点安静 chip：「N 共同点」。
   static String intersectionSharedChip(int count) => '$count 共同点';
 
+  /// 共同点计数安静 chip：「N 个共同点」（事实通道）。
+  static String intersectionPointCountChip(int count) => '$count 个共同点';
+
+  /// 推荐共同点计数安静 chip：「N 个推荐共同点」（affinity 通道，明示推荐）。
+  static String intersectionRecommendedPointCountChip(int count) =>
+      '$count 个推荐共同点';
+
   /// 首页/频道交集模块头：「N 位与你有交集」（N 为红色数字，文案不含数字）。
   static const String intersectionSpotlightHeaderPrefix = '个对象与你有关';
 
   /// 首页/频道交集模块安静轻提示（不含数量，等高封面卡上方一行）。
-  static const String intersectionSpotlightSubtitle = '这些人和地方与你有交集';
+  static const String intersectionSpotlightSubtitle = '这些人和地方与你有关';
 
   /// 首页/频道交集推荐「换一批」入口（候选窗内轮转，强调保鲜）。
   static const String intersectionShuffle = '换一批';
@@ -1341,7 +1369,15 @@ class UITextConstants {
   static const String profileEditLabel = '编辑资料';
   static const String profilePersonasLabel = '分身管理';
   static const String profileDirectMessage = '私信';
-  static const String profileTabCreations = '作品';
+  static const String profileTabCreations = '记录';
+
+  /// 主页统计行列名（记录 / 粉丝）。关注复用 [follow]，获赞复用 [circleLikes]。
+  static const String profileStatRecords = '记录';
+  static const String profileStatFollowers = '粉丝';
+
+  /// 主页「记录」二级过滤入口（右侧过滤图标弹层标题）。
+  static const String profileWorksFilterTitle = '筛选';
+  static String profileRecordsTotal(int count) => '共有 $count 条记录';
   static const String profileTabCircles = '圈子';
   static const String profileTabInteraction = '互动';
   static const String profileTabLifestyle = '生活';
@@ -1354,7 +1390,13 @@ class UITextConstants {
   static const String creationSubImage = '图片';
   static const String creationSubVideo = '视频';
   static const String creationSubArticle = '文章';
-  static const String creationSubText = '文字';
+  static const String creationSubText = '长文';
+  static String profileCompletenessPrompt(int percent) => '完善主页（$percent%）';
+  static const String profileCompletenessSubtitle = '补全头像、标签、圈子与实体，让连接更容易被看见';
+  static const String profileCompletenessAvatar = '头像';
+  static const String profileCompletenessTags = '标签';
+  static const String profileCompletenessCircles = '圈子';
+  static const String profileCompletenessEntities = '实体';
   static const String profileCreationEmptyAllMine = '还没有作品内容';
   static const String profileCreationEmptyAllOther = 'TA还没有作品内容';
   static const String profileCreationEmptyImageMine = '还没有图片内容';
@@ -1425,7 +1467,7 @@ class UITextConstants {
   static const String createActionWriteLong = '写长文';
   static const String createActionResumeDraft = '续草稿';
   static const String createActionAddContactShort = '加联系';
-  static const String createActionCreateGroupShort = '建群聊';
+  static const String createActionCreateGroupShort = '发起讨论';
   static const String createActionCreateCircleShort = '建圈子';
   static const String createActionPublishGroupTitle = publishAction;
   static const String createActionSocialGroupTitle = profileTabInteraction;
@@ -1484,6 +1526,12 @@ class UITextConstants {
   static const String addHomepageSubmitFailed = '提交失败，请稍后重试';
   static const String addHomepageNameRequired = '请先填写主页名称';
   static const String addHomepageVehicleRequired = '请补充厂商和车系 / 型号';
+  static const String locationPlaceLandingTitle = '地点';
+  static const String locationPlaceLandingTempBadge = '临时地点';
+  static const String locationPlaceLandingDescription =
+      '这个地点被内容提到过，但还没有建立实体主页。提升为主页后，可以聚合相关内容、关注与交集。';
+  static const String locationPlaceLandingPromoteCta = '提升为实体主页';
+  static const String locationPlaceLandingMissingAddress = '暂无地址信息';
   static const String homepageTypeSight = '景点';
   static const String homepageTypeSightHint = '景区、公园、展馆';
   static const String homepageTypeHotel = '酒店';

@@ -1,0 +1,272 @@
+version: 1
+aggregate: SearchQuery
+
+entities:
+  SearchQuery:
+    description: 一次搜索请求的查询日志，用于搜索词热力与 relevance 评测
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: searchRequestId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 单次搜索请求 ID，串联 impression/click/dwell 等反馈与排序观测
+
+      - name: query
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 归一化后的查询词串
+
+      - name: mode
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: suggest 或 result
+
+      - name: viewerId
+        type: string
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: deny
+        api_exposure: none
+        ops_exposure: read
+        description: 登录态用户 ID，仅用于会话级个性化与去偏，匿名态为空
+
+      - name: objectTypes
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: resultCount
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: rankingVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: experimentBucket
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  SearchFeedbackEvent:
+    description: 搜索结果交互反馈事件，驱动排序信号(CTR/停留)与去位置偏置
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: searchRequestId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: eventType
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: impression | click | dwell | refine | zero_result | degrade
+
+      - name: objectId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: target
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: rankPosition
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: referralSource
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: feedRequestId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: dwellMs
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  SearchRecommendationSignal:
+    description: 搜索会话信号流事件，供推荐 Feed 在线特征投影消费
+    fields:
+      - name: searchRequestId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+        description: 单次搜索请求 ID，用于幂等去重与观测串联
+
+      - name: sessionId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+        description: 端侧会话 ID，优先用于推荐 session 热路径回流
+
+      - name: userId
+        type: string
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: deny
+        api_exposure: none
+        ops_exposure: read
+        description: 登录态用户 ID，用于 rm_recommend_feature 用户级特征投影
+
+      - name: query
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+        description: 原始查询词
+
+      - name: normalizedQuery
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+        description: 与 query log / term-heat 同源的归一化查询词
+
+      - name: relatedTerms
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+        description: search term-heat 选出的相关热词，已按相关性排序
+
+      - name: topClickedObjectIds
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+        description: 相关 term-heat 中点击最高的对象 ID，供推荐对象相关性特征使用
+
+      - name: rankingVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+
+      - name: experimentBucket
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+
+      - name: resultCount
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read

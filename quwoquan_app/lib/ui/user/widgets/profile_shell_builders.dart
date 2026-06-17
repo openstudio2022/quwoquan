@@ -17,7 +17,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
     // 证据组点击归因（B3）由 ObjectIntersectionSection 内部统一上报（三主页一致）。
     return ObjectIntersectionSection(
       query: query,
-      title: UITextConstants.profileMutualIntersectionTitle,
+      title: UITextConstants.profileWhyRecommendTitle,
       isDark: isDark,
       bottomPadding: AppSpacing.md,
     );
@@ -173,23 +173,43 @@ extension _ProfileShellBuilders on _ProfileShellState {
               isDark: isDark,
               avatarUrl: avatarUrl,
               displayName: displayName,
-              bio: bio,
               identityTags: state.profile?.identityTags ?? const <String>[],
+              verified: state.profile?.verified ?? false,
+              showEdit: widget.mode == ProfileMode.mine,
+              onEdit: () => context.push(AppRoutePaths.profileEdit),
             ),
+            SizedBox(height: AppSpacing.intraGroupSm),
+            ProfileSloganCard(isDark: isDark, bio: bio),
+            if (widget.mode == ProfileMode.mine &&
+                (state.profile?.profileCompleteness ?? 100) < 100) ...[
+              SizedBox(height: AppSpacing.intraGroupSm),
+              ProfileCompletenessCard(
+                percent: state.profile?.profileCompleteness ?? 100,
+                missingItems:
+                    state.profile?.profileCompletenessMissingItems ??
+                    const <String>[],
+                onTap: () => context.push(AppRoutePaths.profileEdit),
+              ),
+            ],
             SizedBox(height: AppSpacing.md),
-            ProfileActionBar(
-              mode: widget.mode,
-              isDark: isDark,
-              isFollowing:
-                  displayCapability?.viewerFollowsTarget ?? state.isFollowing,
-              capability: displayCapability,
-              onEditProfile: () => context.push(AppRoutePaths.profileEdit),
-              onShareProfile: () =>
-                  AppToast.show(context, UITextConstants.shareComingSoon),
-              onFollow: () => _gatedToggleFollow(context, notifier),
-              onMessage: () => unawaited(_gatedOpenMessage(context, notifier)),
-            ),
+            ProfileStatsRow(isDark: isDark, profile: state.profile),
             SizedBox(height: AppSpacing.md),
+            if (widget.mode == ProfileMode.other) ...[
+              ProfileActionBar(
+                mode: widget.mode,
+                isDark: isDark,
+                isFollowing:
+                    displayCapability?.viewerFollowsTarget ?? state.isFollowing,
+                capability: displayCapability,
+                onEditProfile: () => context.push(AppRoutePaths.profileEdit),
+                onShareProfile: () =>
+                    AppToast.show(context, UITextConstants.shareComingSoon),
+                onFollow: () => _gatedToggleFollow(context, notifier),
+                onMessage: () =>
+                    unawaited(_gatedOpenMessage(context, notifier)),
+              ),
+              SizedBox(height: AppSpacing.md),
+            ],
             if (widget.mode == ProfileMode.mine) ...[
               MyIntersectionInboxCard(isDark: isDark),
               SizedBox(height: AppSpacing.md),
@@ -265,8 +285,8 @@ extension _ProfileShellBuilders on _ProfileShellState {
     final sideSlotWidth =
         AppSpacing.appChromeActionButtonSize + AppSpacing.containerXs;
     final trailingSlotWidth = widget.mode == ProfileMode.mine
-        ? AppSpacing.appChromeActionButtonSize * 3 +
-              AppSpacing.intraGroupXs * 2 +
+        ? AppSpacing.appChromeActionButtonSize * 4 +
+              AppSpacing.intraGroupXs * 3 +
               AppSpacing.containerXs
         : sideSlotWidth;
     final resolvedOpacity = backgroundOpacity.clamp(0.0, 1.0);
@@ -423,6 +443,16 @@ extension _ProfileShellBuilders on _ProfileShellState {
                                       ),
                                       SizedBox(width: AppSpacing.intraGroupXs),
                                       ProfileIosIconButton(
+                                        icon: CupertinoIcons.share,
+                                        onPressed: () => AppToast.show(
+                                          context,
+                                          UITextConstants.shareComingSoon,
+                                        ),
+                                        backgroundColor: actionBackground,
+                                        foregroundColor: compactForeground,
+                                      ),
+                                      SizedBox(width: AppSpacing.intraGroupXs),
+                                      ProfileIosIconButton(
                                         icon: AppNavigationSemanticConstants
                                             .settingsActionIcon,
                                         onPressed: () => context.push(
@@ -455,7 +485,6 @@ extension _ProfileShellBuilders on _ProfileShellState {
 
   Widget _buildPrimaryTabBarSurface({
     required Color bg,
-    required Color border,
     required bool pinned,
     double opacity = 1.0,
   }) {
@@ -469,10 +498,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
           ? const ValueKey<String>('profile-shell-primary-tabs-pinned')
           : const ValueKey<String>('profile-shell-primary-tabs-inline'),
       clipBehavior: pinned ? Clip.none : Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: bg,
-        border: Border(bottom: _profileSeparatorSide(border, alpha: 0.1)),
-      ),
+      decoration: BoxDecoration(color: bg),
       child: SizedBox(
         height: _primaryTabBarHeight(context),
         child: CenteredScrollableTabBar(
@@ -481,6 +507,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
           onTabChange: _onPrimaryTabChange,
           onHorizontalDragEnd: _handleTabSwipeDragEnd,
           transparentBackground: true,
+          excludeUnderlineTabIds: tabs.map((tab) => tab.id).toList(),
         ),
       ),
     );

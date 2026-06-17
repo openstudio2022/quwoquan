@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -185,6 +186,56 @@ func (rl *RateLimiter) Rate() int {
 	defer rl.mu.Unlock()
 	return rl.rate
 }
+
+// InflightLimiter bounds the number of concurrently in-flight operations. It is
+// the backpressure primitive distinct from RateLimiter: RateLimiter caps arrival
+// RPS, but under a slow downstream (e.g. ES) arrival RPS can stay low while
+// in-flight requests pile up and exhaust goroutines / connection pools / search
+// thread pools. A concurrency cap is what actually prevents that collapse. It is
+// non-blocking by design (Acquire returns false immediately when full) so the
+// caller sheds load (429/503) instead of queueing unboundedly.
+type InflightLimiter struct {
+	sem chan struct{}
+	max int
+	cur int64
+}
+
+// NewInflightLimiter builds a limiter allowing at most max concurrent holders.
+// A non-positive max is clamped to 1 (never an unbounded/zero-capacity limiter).
+func NewInflightLimiter(max int) *InflightLimiter {
+	if max <= 0 {
+		max = 1
+	}
+	return &InflightLimiter{sem: make(chan struct{}, max), max: max}
+}
+
+// Acquire reserves a slot without blocking. It returns false when the limiter is
+// already at capacity so the caller can shed load immediately.
+func (l *InflightLimiter) Acquire() bool {
+	select {
+	case l.sem <- struct{}{}:
+		atomic.AddInt64(&l.cur, 1)
+		return true
+	default:
+		return false
+	}
+}
+
+// Release frees a slot previously taken by a successful Acquire. It is safe to
+// call only after Acquire returned true (each Release pairs one Acquire).
+func (l *InflightLimiter) Release() {
+	select {
+	case <-l.sem:
+		atomic.AddInt64(&l.cur, -1)
+	default:
+	}
+}
+
+// Inflight reports the current number of held slots (observability gauge source).
+func (l *InflightLimiter) Inflight() int { return int(atomic.LoadInt64(&l.cur)) }
+
+// Max reports the configured concurrency ceiling.
+func (l *InflightLimiter) Max() int { return l.max }
 
 // Retry executes fn with retry logic based on policy.
 func Retry(ctx context.Context, policy ResiliencePolicy, fn func(ctx context.Context) error) error {

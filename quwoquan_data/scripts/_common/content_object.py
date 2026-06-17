@@ -32,7 +32,7 @@ from _common.paths import (
 )
 
 CONTENT_OBJECT_INDEX = "content_object_index.json"
-INDEX_SCHEMA = "quwoquan_data.content_object_index/1"
+INDEX_SCHEMA = "quwoquan_data.content_object_index"
 OBJECT_INDEX_SCHEMA = "quwoquan.object.index"
 BRIEF_FILE = "brief.json"
 

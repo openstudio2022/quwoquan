@@ -180,14 +180,17 @@ void main() {
       await tester.pumpWidget(app);
       await tester.pumpAndSettle(const Duration(seconds: 5));
 
-      expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
-      // 摘要区（连接/影响力卡）变高后按钮可能在首屏外或贴顶被工具栏遮挡，
-      // 先滚到可命中位置再点。
+      expect(
+        find.byKey(const ValueKey<String>('profile-header-edit')),
+        findsOneWidget,
+      );
       await revealProfileSummaryWidget(
         tester,
-        find.text(UITextConstants.profileEditLabel),
+        find.byKey(const ValueKey<String>('profile-header-edit')),
       );
-      await tester.tap(find.text(UITextConstants.profileEditLabel));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('profile-header-edit')),
+      );
       await _pumpFrames(tester, count: 10);
 
       expect(find.text(UITextConstants.editProfile), findsOneWidget);

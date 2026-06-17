@@ -95,6 +95,76 @@ func TestBuildAnchorOnlyRequiresShouldMatch(t *testing.T) {
 	}
 }
 
+func TestBuildNearAddsGeoDistanceFilter(t *testing.T) {
+	b := NewQueryBuilder()
+	plan, _ := rtsearch.PlanRequest(rtsearch.RetrieveRequest{
+		Targets: []rtsearch.Target{rtsearch.TargetEntity},
+		Terms:   []string{"露营"},
+		Filters: rtsearch.RetrieveFilters{
+			Near: &rtsearch.GeoNear{Lat: 30.25, Lng: 120.15, RadiusKm: 5},
+		},
+	}, rtsearch.Viewer{})
+
+	bq := boolOf(t, b.Build(plan))
+	filters, ok := bq["filter"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected filter clauses, got %#v", bq["filter"])
+	}
+	var found bool
+	for _, f := range filters {
+		gd, ok := f["geo_distance"].(map[string]any)
+		if !ok {
+			continue
+		}
+		found = true
+		if gd["distance"] != "5km" {
+			t.Fatalf("geo_distance distance=%v want 5km", gd["distance"])
+		}
+		pin, ok := gd["geo"].(map[string]any)
+		if !ok || pin["lat"] != 30.25 || pin["lon"] != 120.15 {
+			t.Fatalf("geo_distance pin wrong: %#v", gd["geo"])
+		}
+	}
+	if !found {
+		t.Fatalf("expected geo_distance filter, got %#v", filters)
+	}
+}
+
+func TestBuildNearFractionalRadius(t *testing.T) {
+	b := NewQueryBuilder()
+	plan, _ := rtsearch.PlanRequest(rtsearch.RetrieveRequest{
+		Targets: []rtsearch.Target{rtsearch.TargetEntity},
+		Filters: rtsearch.RetrieveFilters{Near: &rtsearch.GeoNear{Lat: 1, Lng: 2, RadiusKm: 2.5}},
+	}, rtsearch.Viewer{})
+	bq := boolOf(t, b.Build(plan))
+	filters, _ := bq["filter"].([]map[string]any)
+	var distance any
+	for _, f := range filters {
+		if gd, ok := f["geo_distance"].(map[string]any); ok {
+			distance = gd["distance"]
+		}
+	}
+	if distance != "2.5km" {
+		t.Fatalf("fractional radius distance=%v want 2.5km", distance)
+	}
+}
+
+func TestBuildNoNearOmitsGeoDistance(t *testing.T) {
+	b := NewQueryBuilder()
+	plan, _ := rtsearch.PlanRequest(rtsearch.RetrieveRequest{
+		Targets: []rtsearch.Target{rtsearch.TargetEntity},
+		Terms:   []string{"露营"},
+	}, rtsearch.Viewer{})
+	bq := boolOf(t, b.Build(plan))
+	if filters, ok := bq["filter"].([]map[string]any); ok {
+		for _, f := range filters {
+			if _, ok := f["geo_distance"]; ok {
+				t.Fatalf("no Near must omit geo_distance, got %#v", f)
+			}
+		}
+	}
+}
+
 func TestBuildHybridAddsKnnAndRRF(t *testing.T) {
 	b := NewQueryBuilder()
 	plan, _ := rtsearch.PlanRequest(rtsearch.RetrieveRequest{

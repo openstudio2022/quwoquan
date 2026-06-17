@@ -63,17 +63,30 @@ void main() {
     await tester.pumpWidget(_buildApp());
     await _pumpFrames(tester);
 
+    // 二级过滤收敛为最右单一漏斗入口：默认不再展示「筛选」文字或当前过滤名，
+    // 点开入口后在其下方暴露筛选菜单，默认选中「全部」。
+    expect(find.text('筛选'), findsNothing);
+    expect(find.text('全部'), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('profile-works-filter-button')),
+    );
+    await _pumpFrames(tester, count: 4);
+
     expect(find.text('全部'), findsOneWidget);
     expect(find.text('图片'), findsOneWidget);
     expect(find.text('视频'), findsOneWidget);
-    expect(find.text('文字'), findsOneWidget);
+    expect(find.text('长文'), findsOneWidget);
   });
 
-  testWidgets('切到文字后可筛到文字作品', (tester) async {
+  testWidgets('切到长文后可筛到长文作品', (tester) async {
     await tester.pumpWidget(_buildApp());
     await _pumpFrames(tester);
 
-    await tester.tap(find.text('文字'));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('profile-works-filter-button')),
+    );
+    await _pumpFrames(tester, count: 4);
+    await tester.tap(find.text('长文'));
     await _pumpFrames(tester, count: 4);
 
     expect(find.text('极简摄影的真谛'), findsOneWidget);

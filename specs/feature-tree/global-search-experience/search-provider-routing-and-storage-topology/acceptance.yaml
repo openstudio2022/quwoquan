@@ -7,15 +7,17 @@ node:
   parent_domain_service: global-search-experience
   parent_business_capability: search-provider-routing-and-storage-topology
 scope:
-  summary: search provider routing and storage topology 验收范围，覆盖站内搜索核心、小趣 LLM 按需检索 provider contract 与三引擎 GATE_BLOCK 消解。
+  summary: search provider routing and storage topology 验收范围，覆盖 canonical /v1/search、两阶段执行策略、ES/OpenSearch 派生读库、搜索准确性/可重复性、搜索词热力推荐闭环与发布准出。
   in_scope:
     - canonical search(request) tool-facing contract。
     - 站内业务对象 provider registry 与统一 hit/citation envelope。
-    - 搜索核心的分词/拼音/同义词/纠错、相关性排序、敏感 query 阻断。
+    - suggest 本地快速检索与 result 云侧最终结果的执行策略边界。
+    - 搜索核心的 query normalization、相关性排序、敏感 query 阻断、稳定 tie-break 与 rankReasons。
     - assistant web_search/search/app_search alias 到 canonical search 的一致性。
-    - tag/entity 信号进入召回、排序、解释与 zero-result fallback。
+    - tag/entity/term-heat 信号进入召回、排序、解释、相关搜索词与推荐 Feed 特征。
   out_of_scope:
-    - 全量外部搜索引擎集群选型与生产扩容。
+    - 业务主存储向 ES/OpenSearch 迁移。
+    - 向量/语义召回默认开启。
     - 未授权私有聊天内容跨用户检索。
 sit_acceptance:
   SIT1:
@@ -26,14 +28,17 @@ sit_acceptance:
     - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md
     - specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/spec.md
     done_when:
-    - content.post / circle.circle / entity.homepage / circle.group 至少走共享搜索核心并返回稳定 matchedField/highlight/reasons。
+    - content.post / entity.homepage / location.place 等云侧 result 对象走 search-service + ES/OpenSearch 派生读库并返回稳定 matchedTerms/evidence/rankReasons/rankPosition。
+    - suggest 阶段本地对象与 result 阶段云侧对象边界清晰：chat.* 不上云、不进入最终结果页；integration.location_poi 不作为 canonical result 对象。
     - web_search / app_search / search 工具不再输出 fake_* provider，而是 canonical_search envelope 或结构化 degrade signal。
     - LLM 检索响应含 hits/citations/degradeSignals/provenance，citation 可追溯 objectType/objectId/provider。
     - 敏感 query 被阻断，未实现或无权限 provider 不影响其他 provider 结果。
+    - 搜索词 queryheat/relatedTerms 与 searchTermAffinity 推荐闭环可证明被排序或 Feed scorer 消费。
     - acceptance 中声明的测试路径存在并可由本地门禁重复运行。
     performance_points:
-    - suggest/result 首屏检索路径必须可记录 latency 与 degrade rate。
+    - suggest 本地即时；result P95 ≤ 1.5s；P99/错误率/degrade/cache hit/Redis lag/index freshness 由 search_slo.yaml 读取。
     - provider 级限流/降级不得扩大为整页不可用。
+    - 同 query 稳定数据下 TopN 不无故跳变；真集群多副本需验证 ES preference。
     evidence:
       primary:
       - T2_module_interaction
@@ -42,27 +47,21 @@ sit_acceptance:
       - T1_static_contract
     tests:
       planned:
-      - quwoquan_service/runtime/search/core_test.go
-      - quwoquan_service/runtime/search/retrieve_test.go
-      - quwoquan_service/runtime/search/retrieve_contract_test.go
-      - quwoquan_service/runtime/search/backend_switch_test.go
-      - quwoquan_service/runtime/search/native_backend_test.go
-      - quwoquan_service/runtime/search/es/query_builder_test.go
-      - quwoquan_service/runtime/search/es/indexer_test.go
-      - quwoquan_service/services/content-service/tests/post_search_contract_test.go
-      - quwoquan_service/services/circle-service/tests/circle_search_contract_test.go
-      - quwoquan_service/services/entity-service/tests/homepage_search_contract_test.go
-      - quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
-      - quwoquan_service/services/assistant-service/tests/search_xiaoqu_contract_test.go
+      - artifacts/search-load/<prod-sim-or-real-cluster>/search_capacity_report.json
+      - artifacts/search-load/<prod-sim-or-real-cluster>/search_repeatability_multi_replica_report.json
+      - artifacts/stackctl/prod/<run-id>/search_release_verify_report.json
       recorded:
       - quwoquan_service/runtime/search/core_test.go
       - quwoquan_service/runtime/search/retrieve_test.go
       - quwoquan_service/runtime/search/retrieve_contract_test.go
       - quwoquan_service/runtime/search/backend_switch_test.go
       - quwoquan_service/runtime/search/native_backend_test.go
+      - quwoquan_service/runtime/search/sort_stable_test.go
       - quwoquan_service/runtime/search/es/query_builder_test.go
       - quwoquan_service/runtime/search/es/indexer_test.go
       - quwoquan_service/services/content-service/internal/application/post_retrieve_test.go
+      - quwoquan_service/services/content-service/internal/application/place_search_projection_test.go
+      - quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
       - quwoquan_service/services/entity-service/tests/homepage_search_contract_test.go
       - quwoquan_service/services/circle-service/tests/circle_search_contract_test.go
       - quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
@@ -70,7 +69,14 @@ sit_acceptance:
       - quwoquan_service/services/assistant-service/internal/application/service_test.go
       - quwoquan_app/test/ui/search/retrieve_request_mapper_test.dart
       - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
-    status: implemented
+      - quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
+      - artifacts/local-gamma/search_signal_t3_report.json
+      - artifacts/local-gamma/search_repeatability_golden_diff.json
+      - artifacts/stackctl/gamma/search_rollback_rehearsal.md
+    status: partial
+    notes:
+    - canonical provider routing、T1/T2/T3/T4 本地/gamma 证据已 recorded。
+    - partial 原因：商用发布仍阻断于 R-S06-S-1 真集群 measured 容量与多副本 repeatability、R-S06-S-3 发布版本落盘/config release gate；R-S06-S-2 写时增量长稳为长稳待办。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

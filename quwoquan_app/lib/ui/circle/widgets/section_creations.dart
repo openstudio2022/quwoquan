@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -15,6 +16,8 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
+import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
+import 'package:quwoquan_app/ui/content/widgets/record_post_card.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
@@ -119,61 +122,6 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         });
       }
     }
-  }
-
-  double _measureSingleLineTextHeight(BuildContext context, TextStyle style) {
-    final painter = TextPainter(
-      text: TextSpan(text: 'Hg', style: style),
-      textDirection: Directionality.of(context),
-      textScaler: MediaQuery.textScalerOf(context),
-      maxLines: 1,
-    )..layout();
-    return painter.height;
-  }
-
-  double _gridItemMainAxisExtent(BuildContext context, double itemWidth) {
-    final coverHeight = itemWidth / _creationGridCoverAspectRatio;
-    final titleHeight =
-        _measureSingleLineTextHeight(
-          context,
-          const TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            fontWeight: AppTypography.semiBold,
-          ),
-        ) *
-        2;
-    final summaryHeight =
-        _measureSingleLineTextHeight(
-          context,
-          const TextStyle(fontSize: AppTypography.iosCaption1),
-        ) *
-        3;
-    final metaTextHeight = _measureSingleLineTextHeight(
-      context,
-      const TextStyle(fontSize: AppTypography.iosCaption1),
-    );
-    final recommendationHeight =
-        _measureSingleLineTextHeight(
-          context,
-          const TextStyle(
-            fontSize: AppTypography.xs,
-            fontWeight: AppTypography.semiBold,
-          ),
-        ) *
-        2;
-    final metaRowHeight = metaTextHeight > AppSpacing.iconSmall
-        ? metaTextHeight
-        : AppSpacing.iconSmall;
-    return coverHeight +
-        (AppSpacing.postPreviewCardPadding * 2) +
-        AppSpacing.intraGroupSm +
-        titleHeight +
-        AppSpacing.xs +
-        summaryHeight +
-        AppSpacing.intraGroupXs +
-        recommendationHeight +
-        metaRowHeight +
-        AppSpacing.sm;
   }
 
   @override
@@ -318,38 +266,96 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
   }
 
+  static const Key creationFilterButtonKey = ValueKey<String>(
+    'circle-creations-filter-button',
+  );
+
+  /// 二级过滤（全部/图片/视频/文字）：与用户主页同范式，去胶囊横滑，
+  /// 收敛为最右侧单一过滤入口（当前过滤名 + 漏斗图标），点击弹层选择。
   Widget _buildCreationFilterRow(
     CircleState circleState,
     CircleStateNotifier circleCtrl,
     Color fg,
     Color fgSecondary,
   ) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
+    final activeFilter = _creationFilters.firstWhere(
+      (filter) => _creationSubTabForId(filter.id) == circleState.activeSubTab,
+      orElse: () => _creationFilters.first,
+    );
+    final activeLabel = UITextConstants.contentLabelForKey(
+      activeFilter.labelKey,
+    );
+    final accent = AppColors.iosAccent(context);
+    final isAll = circleState.activeSubTab == CreationSubTab.all;
+    return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
       child: Row(
-        children: _creationFilters
-            .map((filter) {
-              final tab = _creationSubTabForId(filter.id);
-              final selected = circleState.activeSubTab == tab;
-              return Padding(
-                padding: EdgeInsets.only(right: AppSpacing.sm),
-                child: _CupertinoFilterChip(
-                  label: UITextConstants.contentLabelForKey(filter.labelKey),
-                  selected: selected,
-                  fg: fg,
-                  fgSecondary: fgSecondary,
-                  onPressed: () {
-                    circleCtrl.setSubTab(tab);
-                    _loadFeed();
-                  },
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: <Widget>[
+          CupertinoButton(
+            key: creationFilterButtonKey,
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.containerSm,
+              vertical: AppSpacing.intraGroupXs,
+            ),
+            minimumSize: Size.zero,
+            onPressed: () => _openCreationFilterSheet(circleState, circleCtrl),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  activeLabel,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosSubheadline,
+                    fontWeight: AppTypography.medium,
+                    color: isAll ? fg : accent,
+                  ),
                 ),
-              );
-            })
-            .toList(growable: false),
+                SizedBox(width: AppSpacing.intraGroupXs),
+                Icon(
+                  CupertinoIcons.line_horizontal_3_decrease,
+                  size: AppSpacing.iconSmall,
+                  color: isAll ? fgSecondary : accent,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  Future<void> _openCreationFilterSheet(
+    CircleState circleState,
+    CircleStateNotifier circleCtrl,
+  ) async {
+    final selected = await showCupertinoModalPopup<CreationSubTab>(
+      context: context,
+      builder: (sheetContext) => CupertinoActionSheet(
+        title: Text(UITextConstants.profileWorksFilterTitle),
+        actions: <Widget>[
+          for (final filter in _creationFilters)
+            CupertinoActionSheetAction(
+              key: ValueKey<String>(
+                'circle-creations-filter-option-${filter.id}',
+              ),
+              onPressed: () => Navigator.of(
+                sheetContext,
+              ).pop(_creationSubTabForId(filter.id)),
+              child: Text(UITextConstants.contentLabelForKey(filter.labelKey)),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(sheetContext).pop(),
+          child: Text(UITextConstants.cancel),
+        ),
+      ),
+    );
+    if (selected != null && selected != circleState.activeSubTab) {
+      circleCtrl.setSubTab(selected);
+      _loadFeed();
+    }
   }
 
   CreationSubTab _creationSubTabForId(String id) {
@@ -690,27 +696,22 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
           context,
           availableWidth: constraints.maxWidth,
         );
-        final horizontalPadding = AppSpacing.postPreviewGridSpacing * 2;
-        final columnGaps = AppSpacing.postPreviewGridSpacing * (columns - 1);
-        final itemWidth =
-            (constraints.maxWidth - horizontalPadding - columnGaps) / columns;
-        return GridView.builder(
+        // 双列瀑布：与用户主页记录流同一范式，卡片高度随内容自适应。
+        return MasonryGridView.count(
           physics: widget.inlineScroll
               ? const NeverScrollableScrollPhysics()
               : const BouncingScrollPhysics(),
           shrinkWrap: widget.inlineScroll,
+          primary: false,
           padding: EdgeInsets.fromLTRB(
             AppSpacing.postPreviewGridSpacing,
             AppSpacing.postPreviewGridSpacing,
             AppSpacing.postPreviewGridSpacing,
             AppSpacing.postPreviewSectionPadding,
           ),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
-            crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
-            mainAxisExtent: _gridItemMainAxisExtent(context, itemWidth),
-          ),
+          crossAxisCount: columns,
+          mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+          crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
           itemCount: filtered.length,
           itemBuilder: (context, index) {
             final entry = filtered[index];
@@ -822,6 +823,16 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     if (_entryIsArticle(entry)) {
       return _buildArticleGridItem(entry, fgSecondary, onTap: onTap);
     }
+    // 统一记录卡范式：封面 + 唯一交集句 + 标题 + 作者 + 点赞。
+    final dto = entry.tryResolveDto();
+    if (dto != null) {
+      return RecordPostCard(
+        key: ValueKey<String>('circle-record-grid-${_entryId(entry)}'),
+        post: dto,
+        isDark: widget.isDark,
+        onTap: onTap,
+      );
+    }
     final typeLabel = _entryTypeLabel(entry);
     return PostPreviewCard(
       isDark: widget.isDark,
@@ -922,6 +933,10 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       coverUrl: _entryCoverUrl(entry),
       mediaAspectRatio: _creationGridCoverAspectRatio,
       mediaOverlay: _entryArticleTemplateBadge(entry),
+      header: IntersectionReasonChip.fromReasons(
+        entry.dto?.intersectionReasons,
+        isDark: widget.isDark,
+      ),
       onTap: onTap,
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1335,54 +1350,3 @@ class _ViewModeButton extends StatelessWidget {
   }
 }
 
-class _CupertinoFilterChip extends StatelessWidget {
-  const _CupertinoFilterChip({
-    required this.label,
-    required this.selected,
-    required this.fg,
-    required this.fgSecondary,
-    required this.onPressed,
-  });
-
-  final String label;
-  final bool selected;
-  final Color fg;
-  final Color fgSecondary;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: onPressed,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.primaryColor.withValues(alpha: 0.12)
-              : null,
-          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-          border: Border.all(
-            color: selected
-                ? AppColors.primaryColor.withValues(alpha: 0.45)
-                : fgSecondary.withValues(alpha: 0.2),
-          ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.containerSm,
-            vertical: AppSpacing.intraGroupSm,
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? fg : fgSecondary,
-              fontWeight: AppTypography.semiBold,
-              fontSize: AppTypography.sm,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

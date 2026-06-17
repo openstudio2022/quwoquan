@@ -18,8 +18,8 @@ void main() {
           {
             'dimension': 'identity',
             'tagRefs': ['identity/campus/xdf'],
-            'displayText': '你和 TA 都来自新东方校友圈',
-            'sharedCount': 3,
+            'primaryText': '你和 TA 都来自新东方校友圈',
+            'totalPointCount': 3,
             'source': 'identity',
           },
         ],
@@ -29,7 +29,7 @@ void main() {
       expect(dto.intersectionReasons!.length, 1);
       final reason = dto.intersectionReasons!.first;
       expect(reason.dimension, 'identity');
-      expect(reason.displayText, '你和 TA 都来自新东方校友圈');
+      expect(reason.primaryText, '你和 TA 都来自新东方校友圈');
       expect(reason.tagRefs, contains('identity/campus/xdf'));
     });
 
@@ -54,8 +54,8 @@ void main() {
           {
             'dimension': 'content',
             'tagRefs': ['Topic/旅行'],
-            'displayText': '你和 TA 都在聊 旅行',
-            'sharedCount': 12,
+            'primaryText': '你和 TA 都在聊 旅行',
+            'totalPointCount': 12,
             'source': 'tagRef',
           },
         ],
@@ -64,7 +64,7 @@ void main() {
       final reason = dto.intersectionReasons!.single;
       expect(reason.dimension, 'content');
       expect(reason.tagRefs, contains('Topic/旅行'));
-      expect(reason.displayText, '你和 TA 都在聊 旅行');
+      expect(reason.primaryText, '你和 TA 都在聊 旅行');
     });
 
     test('FeedItemDto → 发现 wire → MicroPostDto 往返保留交集理由', () {
@@ -77,8 +77,8 @@ void main() {
           {
             'dimension': 'location',
             'tagRefs': ['location/geo/west-lake'],
-            'displayText': '你和 TA 都去过 西湖',
-            'sharedCount': 5,
+            'primaryText': '你和 TA 都去过 西湖',
+            'totalPointCount': 5,
             'source': 'location',
           },
         ],
@@ -88,7 +88,7 @@ void main() {
       final dto = MicroPostDto.fromMap(wire);
 
       expect(dto.intersectionReasons, isNotNull);
-      expect(dto.intersectionReasons!.single.displayText, '你和 TA 都去过 西湖');
+      expect(dto.intersectionReasons!.single.primaryText, '你和 TA 都去过 西湖');
       expect(dto.intersectionReasons!.single.dimension, 'location');
     });
   });

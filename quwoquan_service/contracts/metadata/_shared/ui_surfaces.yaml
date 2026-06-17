@@ -205,6 +205,13 @@ surfaces:
       - SearchXiaoquResults
       - UpsertRecentSearch
 
+  - id: locationPlaceLanding
+    owner: search
+    route_id: locationPlaceLanding
+    path_template: /locations/{placeId}
+    description: 一方地点（location.place）落地页：被内容引用但未绑定主页的临时地点卡 + 提升为实体主页引导（R-S05e-1）
+    operation_ids: []
+
   - id: homepagePicker
     owner: entity
     route_id: homepagePicker

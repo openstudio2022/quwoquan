@@ -3,6 +3,8 @@ package recommendation
 import (
 	"context"
 	"log/slog"
+	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -54,7 +56,7 @@ func (p *RecommendFeatureProjector) Name() string { return "RecommendFeatureProj
 func (p *RecommendFeatureProjector) EventTypes() []string {
 	return []string{
 		"PostCreated", "ContentReacted", "BehaviorBatchReported",
-		"UserFollowed", "CircleMemberJoined",
+		"UserFollowed", "CircleMemberJoined", "SearchRecommendationSignalPublished",
 	}
 }
 
@@ -70,9 +72,69 @@ func (p *RecommendFeatureProjector) Project(ctx context.Context, event Projector
 		return p.onUserFollowed(ctx, event)
 	case "CircleMemberJoined":
 		return p.onCircleMemberJoined(ctx, event)
+	case "SearchRecommendationSignalPublished":
+		return p.onSearchRecommendationSignal(ctx, event)
 	default:
 		return nil
 	}
+}
+
+const SearchIntentTTL = 24 * time.Hour
+
+func (p *RecommendFeatureProjector) onSearchRecommendationSignal(ctx context.Context, event ProjectorEvent) error {
+	userID := strVal(event.Payload, "userId")
+	if userID == "" {
+		return nil
+	}
+	normalizedQuery := strVal(event.Payload, "normalizedQuery")
+	if normalizedQuery == "" {
+		normalizedQuery = strVal(event.Payload, "query")
+	}
+	terms := append([]string{}, normalizedQuery)
+	terms = append(terms, anySlice(event.Payload, "relatedTerms")...)
+	objects := anySlice(event.Payload, "topClickedObjectIds")
+
+	inc := bson.M{}
+	for i, term := range uniqueNonEmpty(terms) {
+		weight := 1.0
+		if i > 0 {
+			weight = 0.6 / float64(i+1)
+		}
+		inc["userFeatures.searchTermAffinity."+term] = weight
+	}
+	for i, objectID := range uniqueNonEmpty(objects) {
+		inc["userFeatures.searchTopObjectAffinity."+objectID] = 1.0 / float64(i+1)
+	}
+	heat := math.Log1p(float64(intVal(event.Payload, "resultCount") + len(objects) + len(terms)))
+	if heat > 0 {
+		inc["userFeatures.searchTermHeat"] = heat
+	}
+	if len(inc) == 0 {
+		return nil
+	}
+
+	now := time.Now().UTC()
+	if !event.OccurredAt.IsZero() {
+		now = event.OccurredAt.UTC()
+	}
+	update := bson.M{
+		"$inc": inc,
+		"$set": bson.M{
+			"userId":                           userID,
+			"userFeatures.searchTermUpdatedAt": now,
+			"updatedAt":                        now,
+		},
+	}
+	_, err := p.coll.UpdateOne(ctx, bson.M{"userId": userID}, update, options.UpdateOne().SetUpsert(true))
+	if err != nil {
+		return err
+	}
+	if p.interestAgg != nil {
+		if rerr := p.interestAgg.Recompute(ctx, userID); rerr != nil {
+			slog.Warn("interest profile recompute failed after search signal", "userId", userID, "err", rerr)
+		}
+	}
+	return nil
 }
 
 func (p *RecommendFeatureProjector) onPostCreated(ctx context.Context, event ProjectorEvent) error {
@@ -148,6 +210,11 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 	typeImpressions := map[string]int{}
 	typeEngagements := map[string]int{}
 
+	// intersectionKindCounts 是 viewer 对各交集 kind（§5.4 标准名）的揭示偏好直方图：
+	// 仅在「真正参与」（点击/互动/转化或深度≥2）的事件上累计，曝光本身不计入，
+	// 使该特征反映「哪些交集 kind 驱动了用户行动」而非单纯被推送。WP-4 交集特征回流。
+	intersectionKindCounts := map[string]int{}
+
 	for _, ev := range events {
 		tags := anySlice(ev, "tagRefs")
 		for _, t := range tags {
@@ -161,6 +228,10 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 		source := strVal(ev, "referralSource")
 		action := strVal(ev, "action")
 		contentType := strVal(ev, "contentType")
+
+		if kind := strVal(ev, "intersectionSourceRef"); kind != "" && isIntersectionEngagementAction(action, depth) {
+			intersectionKindCounts[kind]++
+		}
 
 		if contentType != "" {
 			if action == "impression" || action == "dwell" {
@@ -248,6 +319,9 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 	for ct, cnt := range typeEngagements {
 		inc["userFeatures.typeEngagements."+ct] = cnt
 	}
+	for kind, cnt := range intersectionKindCounts {
+		inc["socialFeatures.intersection.kindCounts."+kind] = cnt
+	}
 
 	setFields := bson.M{
 		"userId":    userID,
@@ -276,6 +350,65 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 	return nil
 }
 
+// intersectionEngagementActions are actions that signal the viewer actively
+// engaged with intersection-driven content (vs mere exposure). They build the
+// revealed intersection-kind preference histogram (WP-4 交集特征回流).
+var intersectionEngagementActions = map[string]struct{}{
+	"click": {}, "like": {}, "share": {}, "comment": {}, "favorite": {},
+	"follow": {}, "join_circle": {}, "add_contact": {}, "open_object": {},
+}
+
+func isIntersectionEngagementAction(action string, depth int) bool {
+	if _, ok := intersectionEngagementActions[action]; ok {
+		return true
+	}
+	return depth >= 2
+}
+
+// IntersectionFeatureValues is the viewer-level derived intersection feature set
+// (mirrors rtrec.UserFeatureVector intersection fact fields). Kept pure for tests.
+type IntersectionFeatureValues struct {
+	SharedFolloweesCount   int
+	SharedCircleCount      int
+	CoCommentedCount       int
+	CoVisitedEntityCount   int
+	FolloweeInObjectActive int
+	FolloweeViewingActive  int
+	SourceRefTop           string
+}
+
+// deriveIntersectionFeatures maps the revealed intersection-kind histogram
+// (§5.4 standard kinds) to the viewer-level ranking fact features. SourceRefTop is
+// the most-engaged kind (deterministic lexicographic tie-break).
+func deriveIntersectionFeatures(kindCounts map[string]int) IntersectionFeatureValues {
+	out := IntersectionFeatureValues{}
+	bestKind, bestCount := "", 0
+	for kind, count := range kindCounts {
+		if count <= 0 {
+			continue
+		}
+		switch kind {
+		case "sharedFollowees":
+			out.SharedFolloweesCount += count
+		case "sharedCircle":
+			out.SharedCircleCount += count
+		case "coCommented":
+			out.CoCommentedCount += count
+		case "coVisitedEntity":
+			out.CoVisitedEntityCount += count
+		case "followeeInObject":
+			out.FolloweeInObjectActive = 1
+		case "followeeViewing":
+			out.FolloweeViewingActive = 1
+		}
+		if count > bestCount || (count == bestCount && (bestKind == "" || kind < bestKind)) {
+			bestKind, bestCount = kind, count
+		}
+	}
+	out.SourceRefTop = bestKind
+	return out
+}
+
 func behaviorPayloadEvents(raw any) []map[string]any {
 	switch items := raw.(type) {
 	case []map[string]any:
@@ -291,6 +424,23 @@ func behaviorPayloadEvents(raw any) []map[string]any {
 	default:
 		return nil
 	}
+}
+
+func uniqueNonEmpty(values []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 func depthLevelKey(level int) string {
@@ -450,11 +600,18 @@ type UserFeatures struct {
 	AvgEngagementDepth       float64            `bson:"avgEngagementDepth"`
 	DepthDistribution        map[string]int     `bson:"depthDistribution"`
 	SourceDistribution       map[string]int     `bson:"sourceDistribution"`
+	SearchTermAffinities     map[string]float64 `bson:"searchTermAffinity"`
+	SearchTopObjectAffinity  map[string]float64 `bson:"searchTopObjectAffinity"`
+	SearchTermHeat           float64            `bson:"searchTermHeat"`
+	SearchTermUpdatedAt      time.Time          `bson:"searchTermUpdatedAt"`
 	CircleTagAffinities      map[string]float64 `bson:"circleTagAffinities"`
 	SocialInterestScore      float64            `bson:"socialInterestScore"`
 	EntityInstanceAffinities map[string]float64 `bson:"entityInstanceAffinities"`
 	TypeImpressions          map[string]int     `bson:"typeImpressions"`
 	TypeEngagements          map[string]int     `bson:"typeEngagements"`
+	// IntersectionKindCounts is the viewer's revealed engagement histogram per
+	// intersection kind (§5.4), sourced from socialFeatures.intersection.kindCounts.
+	IntersectionKindCounts map[string]int `bson:"-"`
 	// Segments is the rule-based population membership (top-level field), set by
 	// InterestProfileAggregator.Recompute. Drives policy segment targeting.
 	Segments []string `bson:"segments"`
@@ -462,8 +619,13 @@ type UserFeatures struct {
 
 func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*UserFeatures, error) {
 	var doc struct {
-		UserID       string   `bson:"userId"`
-		Segments     []string `bson:"segments"`
+		UserID         string   `bson:"userId"`
+		Segments       []string `bson:"segments"`
+		SocialFeatures struct {
+			Intersection struct {
+				KindCounts map[string]int `bson:"kindCounts"`
+			} `bson:"intersection"`
+		} `bson:"socialFeatures"`
 		UserFeatures struct {
 			TagInteraction           map[string]int     `bson:"tagInteraction"`
 			AuthorInteraction        map[string]int     `bson:"authorInteraction"`
@@ -477,6 +639,10 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 			AvgEngagementDepth       float64            `bson:"avgEngagementDepth"`
 			DepthDistribution        map[string]int     `bson:"depthDistribution"`
 			SourceDistribution       map[string]int     `bson:"sourceDistribution"`
+			SearchTermAffinities     map[string]float64 `bson:"searchTermAffinity"`
+			SearchTopObjectAffinity  map[string]float64 `bson:"searchTopObjectAffinity"`
+			SearchTermHeat           float64            `bson:"searchTermHeat"`
+			SearchTermUpdatedAt      time.Time          `bson:"searchTermUpdatedAt"`
 			CircleTagAffinities      map[string]float64 `bson:"circleTagAffinities"`
 			SocialInterestScore      float64            `bson:"socialInterestScore"`
 			EntityInstanceAffinities map[string]float64 `bson:"entityInstanceAffinities"`
@@ -496,6 +662,7 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 	return &UserFeatures{
 		UserID:                   doc.UserID,
 		Segments:                 doc.Segments,
+		IntersectionKindCounts:   doc.SocialFeatures.Intersection.KindCounts,
 		TagInteraction:           doc.UserFeatures.TagInteraction,
 		AuthorInteraction:        doc.UserFeatures.AuthorInteraction,
 		TotalEvents:              doc.UserFeatures.TotalEvents,
@@ -508,6 +675,10 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 		AvgEngagementDepth:       doc.UserFeatures.AvgEngagementDepth,
 		DepthDistribution:        doc.UserFeatures.DepthDistribution,
 		SourceDistribution:       doc.UserFeatures.SourceDistribution,
+		SearchTermAffinities:     doc.UserFeatures.SearchTermAffinities,
+		SearchTopObjectAffinity:  doc.UserFeatures.SearchTopObjectAffinity,
+		SearchTermHeat:           doc.UserFeatures.SearchTermHeat,
+		SearchTermUpdatedAt:      doc.UserFeatures.SearchTermUpdatedAt,
 		CircleTagAffinities:      doc.UserFeatures.CircleTagAffinities,
 		SocialInterestScore:      doc.UserFeatures.SocialInterestScore,
 		EntityInstanceAffinities: doc.UserFeatures.EntityInstanceAffinities,
@@ -553,32 +724,59 @@ func (s *FeatureStore) GetFeatures(ctx context.Context, userID string) (*rtrec.U
 			typeENER[ct] = float64(eng) / float64(imp)
 		}
 	}
+	searchTermAffinities := map[string]float64(nil)
+	searchTopObjectAffinities := map[string]float64(nil)
+	searchTermHeat := 0.0
+	if searchFeaturesFresh(raw) {
+		searchTermAffinities = raw.SearchTermAffinities
+		searchTopObjectAffinities = raw.SearchTopObjectAffinity
+		searchTermHeat = raw.SearchTermHeat
+	}
 
 	vec := &rtrec.UserFeatureVector{
-		TagAffinities:            tagAffinities,
-		AuthorAffinities:         authorAffinities,
-		TotalLikes:               raw.TotalLikes,
-		TotalShares:              raw.TotalShares,
-		TotalEvents:              raw.TotalEvents,
-		EngagementRate:           engagementRate,
-		LikeLevel:                rtrec.MapCountToLevel(raw.TotalLikes),
-		ShareLevel:               rtrec.MapCountToLevel(raw.TotalShares),
-		EventLevel:               rtrec.MapCountToLevel(raw.TotalEvents),
-		TopicAffinities:          raw.TopicAffinities,
-		AudienceAffinities:       raw.AudienceAffinities,
-		FormatAffinities:         raw.FormatAffinities,
-		EntityAffinities:         raw.EntityAffinities,
-		EntityInstanceAffinities: raw.EntityInstanceAffinities,
-		TypeENER:                 typeENER,
-		AvgEngagementDepth:       raw.AvgEngagementDepth,
-		DepthDistribution:        depthDist,
-		SourceDistribution:       raw.SourceDistribution,
-		CircleTagAffinities:      raw.CircleTagAffinities,
-		SocialInterestScore:      raw.SocialInterestScore,
-		Segments:                 raw.Segments,
+		TagAffinities:             tagAffinities,
+		AuthorAffinities:          authorAffinities,
+		TotalLikes:                raw.TotalLikes,
+		TotalShares:               raw.TotalShares,
+		TotalEvents:               raw.TotalEvents,
+		EngagementRate:            engagementRate,
+		LikeLevel:                 rtrec.MapCountToLevel(raw.TotalLikes),
+		ShareLevel:                rtrec.MapCountToLevel(raw.TotalShares),
+		EventLevel:                rtrec.MapCountToLevel(raw.TotalEvents),
+		TopicAffinities:           raw.TopicAffinities,
+		AudienceAffinities:        raw.AudienceAffinities,
+		FormatAffinities:          raw.FormatAffinities,
+		EntityAffinities:          raw.EntityAffinities,
+		EntityInstanceAffinities:  raw.EntityInstanceAffinities,
+		TypeENER:                  typeENER,
+		AvgEngagementDepth:        raw.AvgEngagementDepth,
+		DepthDistribution:         depthDist,
+		SourceDistribution:        raw.SourceDistribution,
+		SearchTermAffinities:      searchTermAffinities,
+		SearchTopObjectAffinities: searchTopObjectAffinities,
+		SearchTermHeat:            searchTermHeat,
+		CircleTagAffinities:       raw.CircleTagAffinities,
+		SocialInterestScore:       raw.SocialInterestScore,
+		Segments:                  raw.Segments,
+	}
+	// 交集事实通道特征回流：由揭示偏好直方图派生 viewer 级事实交集特征，
+	// 经 ModelPredictRequest.UserFeatures 单点注入精排模型（ranking-signal-fusion）。
+	if len(raw.IntersectionKindCounts) > 0 {
+		ix := deriveIntersectionFeatures(raw.IntersectionKindCounts)
+		vec.SharedFolloweesCount = ix.SharedFolloweesCount
+		vec.SharedCircleCount = ix.SharedCircleCount
+		vec.CoCommentedCount = ix.CoCommentedCount
+		vec.CoVisitedEntityCount = ix.CoVisitedEntityCount
+		vec.FolloweeInObjectActive = ix.FolloweeInObjectActive
+		vec.FolloweeViewingActive = ix.FolloweeViewingActive
+		vec.IntersectionSourceRefTop = ix.SourceRefTop
 	}
 	s.cache.put(userID, vec)
 	return vec, nil
+}
+
+func searchFeaturesFresh(raw *UserFeatures) bool {
+	return raw != nil && !raw.SearchTermUpdatedAt.IsZero() && time.Since(raw.SearchTermUpdatedAt) <= SearchIntentTTL
 }
 
 // featureLRU is a simple TTL-based cache for UserFeatureVector.

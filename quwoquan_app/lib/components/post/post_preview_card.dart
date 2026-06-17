@@ -19,6 +19,7 @@ class PostPreviewCard extends StatelessWidget {
     this.showVideoBadge = false,
     this.mediaContent,
     this.mediaOverlay,
+    this.header,
     this.onHorizontalDragEnd,
     this.supportingTextMaxLines = 2,
   });
@@ -31,6 +32,9 @@ class PostPreviewCard extends StatelessWidget {
   final bool showVideoBadge;
   final Widget? mediaContent;
   final Widget? mediaOverlay;
+
+  /// 卡内顶部插槽（封面下、标题上）：统一记录卡范式的「唯一交集句」位。
+  final Widget? header;
   final Widget footer;
   final VoidCallback onTap;
   final GestureDragEndCallback? onHorizontalDragEnd;
@@ -132,6 +136,10 @@ class PostPreviewCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (header case final header?) ...[
+                      header,
+                      SizedBox(height: AppSpacing.intraGroupXs),
+                    ],
                     Text(
                       title,
                       maxLines: 2,

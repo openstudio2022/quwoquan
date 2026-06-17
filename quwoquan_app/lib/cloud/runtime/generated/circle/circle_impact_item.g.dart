@@ -8,7 +8,7 @@ class CircleImpactItem {
   final String tagRef;
   final String source;
   final int count;
-  final String displayText;
+  final String primaryText;
 
   CircleImpactItem({
     this.helpType = '',
@@ -17,7 +17,7 @@ class CircleImpactItem {
     this.tagRef = '',
     this.source = '',
     this.count = 0,
-    this.displayText = '',
+    this.primaryText = '',
   });
 
   factory CircleImpactItem.fromMap(Map<String, dynamic> m) {
@@ -28,7 +28,7 @@ class CircleImpactItem {
       tagRef: m['tagRef']?.toString() ?? '',
       source: m['source']?.toString() ?? '',
       count: (m['count'] as num?)?.toInt() ?? 0,
-      displayText: m['displayText']?.toString() ?? '',
+      primaryText: m['primaryText']?.toString() ?? '',
     );
   }
 
@@ -40,7 +40,7 @@ class CircleImpactItem {
       'tagRef': tagRef,
       'source': source,
       'count': count,
-      'displayText': displayText,
+      'primaryText': primaryText,
     };
   }
 
@@ -51,7 +51,7 @@ class CircleImpactItem {
     String? tagRef,
     String? source,
     int? count,
-    String? displayText,
+    String? primaryText,
   }) {
     return CircleImpactItem(
       helpType: helpType ?? this.helpType,
@@ -60,7 +60,7 @@ class CircleImpactItem {
       tagRef: tagRef ?? this.tagRef,
       source: source ?? this.source,
       count: count ?? this.count,
-      displayText: displayText ?? this.displayText,
+      primaryText: primaryText ?? this.primaryText,
     );
   }
 }

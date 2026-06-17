@@ -10,6 +10,7 @@ import re
 from typing import Any, Mapping, Sequence
 
 from _common.content_evidence import gate_route_evidence_bundle, public_byline_label
+from _common.creative_brief import creative_brief_contract_issues, creative_governance_issues
 from _common.content_object import require_title_hint
 from _common.entity_extract import normalize_entity_refs
 from _common.entity_annotation import merge_entity_refs
@@ -30,6 +31,7 @@ from _common.stage_reports import write_gate_report, write_repair_report, write_
 from _common.template_fingerprints import template_fingerprint_issues
 from _common.writing_pack import build_writing_pack, render_prompt_md
 from produce.route_workflow import (
+    IMAGE_EVIDENCE_GENERATOR,
     aggregate_checks,
     analyze_route_ref,
     is_route_brief,
@@ -45,6 +47,8 @@ from produce.route_workflow import (
     _check_provenance_rewrite,
     _check_travelogue_density,
     _image_caption_from_article,
+    _image_caption_from_brief,
+    _compact_public_text,
     _jaccard,
     _load_source_texts,
     _persisted_review_payload,
@@ -162,6 +166,7 @@ def build_entity_writing_pack(
         write_placeholder_draft(task_id, batch_id, ref)
 
     issues = list(gate_route_evidence_bundle(brief, evidence_bundle))
+    issues.extend(creative_brief_contract_issues(pack))
     if not assets:
         issues.append("writing pack has no verifiable image assets")
     write_stage_result(task_id, batch_id, "produce", "compose_brief", ref, pack)
@@ -210,32 +215,43 @@ def _compose_payload_from_pack(
     carrier = str(pack.get("carrier") or "article")
     template = (brief.get("render") or {}).get("articleTemplate") or "journal"
     meta = draft_meta or {}
+    is_image = carrier in ("image", "gallery")
+    title_hint = require_title_hint(brief, ref=ref)
+    assets = list(pack.get("assets") or [])
+    image_source_paths = _image_source_paths_from_assets(assets) if is_image else []
+    image_source_urls = _image_source_urls_from_assets(assets) if is_image else []
+    if is_image:
+        story_spine = _image_story_spine(brief, pack, assets)
     payload = {
         "topicId": ref,
-        "title": require_title_hint(brief, ref=ref),
+        "title": title_hint,
         "summary": _build_summary(article),
         "articleMarkdown": article,
         "carrier": carrier,
         "entityRefs": merge_entity_refs(brief, draft_meta),
         "tagRefs": resolved_content_tag_refs(brief, carrier),
-        "sourceUrls": list(quality_payload.get("sourceUrls") or []),
-        "sourcePaths": list(quality_payload.get("sourcePaths") or []),
+        "sourceUrls": image_source_urls if is_image else list(quality_payload.get("sourceUrls") or []),
+        "sourcePaths": image_source_paths if is_image else list(quality_payload.get("sourcePaths") or []),
         "template": template,
-        "assets": list(pack.get("assets") or []),
+        "assets": assets,
         "publishLayout": "image" if carrier in ("image", "gallery") else "entity",
         "publishAngle": _publish_angle(brief),
         "publishTitle": (
-            str(brief.get("titleHint") or "")
+            _compact_public_text(title_hint, 80)
             if carrier in ("image", "gallery")
-            else require_title_hint(brief, ref=ref)
+            else title_hint
         ),
         "publishSeq": 1,
         "conditionContext": brief.get("conditionContext"),
         "composeBriefRef": ref,
         "storySpine": story_spine,
-        "generator": str(meta.get("generator") or "pending"),
-        "generatorModel": meta.get("model"),
-        "citedSourceRefs": list(meta.get("citedSourcePaths") or []),
+        "generator": IMAGE_EVIDENCE_GENERATOR if is_image else str(meta.get("generator") or "pending"),
+        "generatorModel": None if is_image else meta.get("model"),
+        "citedSourceRefs": (
+            image_source_paths
+            if is_image
+            else list(meta.get("citedSourcePaths") or [])
+        ),
         "createdAt": meta.get("createdAt"),
         "updatedAt": meta.get("updatedAt"),
         "articleRenderProfile": {
@@ -244,9 +260,112 @@ def _compose_payload_from_pack(
         },
     }
     if carrier in ("image", "gallery"):
-        payload["title"] = str(brief.get("titleHint") or "")
-        payload["caption"] = _image_caption_from_article(article)
+        caption = _image_caption_from_brief(brief, pack, article)
+        payload["title"] = _compact_public_text(title_hint, 80)
+        payload["summary"] = caption
+        payload["articleMarkdown"] = ""
+        payload["caption"] = caption
     return payload
+
+
+def _source_ref_from_asset_path(value: Any) -> str:
+    raw = str(value or "").replace("\\", "/").strip()
+    if not raw:
+        return ""
+    if "/assets/" in raw:
+        return raw.split("/assets/", 1)[0].rstrip("/") + "/source.md"
+    if raw.endswith("/source.md") or raw.endswith("/source.clean.md"):
+        return raw.rsplit("/", 1)[0].rstrip("/") + "/source.md"
+    return ""
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def _image_source_paths_from_assets(assets: list[Mapping[str, Any]]) -> list[str]:
+    return _unique_strings(
+        [
+            _source_ref_from_asset_path(asset.get("sourceRef") or asset.get("sourceAssetRef") or asset.get("sourcePath"))
+            for asset in assets
+        ]
+    )
+
+
+def _image_source_urls_from_assets(assets: list[Mapping[str, Any]]) -> list[str]:
+    return _unique_strings(
+        [
+            str(
+                asset.get("collectionPageUrl")
+                or asset.get("authorizationProof")
+                or asset.get("sourceUrl")
+                or asset.get("url")
+                or ""
+            )
+            for asset in assets
+        ]
+    )
+
+
+def _image_story_spine(
+    brief: Mapping[str, Any],
+    pack: Mapping[str, Any],
+    assets: list[Mapping[str, Any]],
+) -> dict[str, Any]:
+    entity_refs = [str(ref) for ref in (brief.get("entityRefs") or []) if str(ref).strip()]
+    primary = entity_refs[0].rstrip("/").rsplit("/", 1)[-1] if entity_refs else ""
+    captions = _unique_strings([str(asset.get("caption") or "") for asset in assets])
+    collection_id = str(
+        pack.get("sourceCollectionId")
+        or next((asset.get("sourceCollectionId") for asset in assets if asset.get("sourceCollectionId")), "")
+        or ""
+    )
+    return {
+        "primaryEntity": primary,
+        "routeEntities": [primary] if primary else [],
+        "beats": captions[:3],
+        "sourceCollectionId": collection_id,
+        "mustIncludeFacts": [str(item) for item in (brief.get("mustIncludeFacts") or [])[:3]],
+    }
+
+
+def _check_image_source_scope(compose_payload: Mapping[str, Any]) -> dict[str, Any]:
+    carrier = str(compose_payload.get("carrier") or "article")
+    if carrier not in ("image", "gallery"):
+        return {"passed": True, "issues": [], "suggestions": []}
+    assets = [asset for asset in (compose_payload.get("assets") or []) if isinstance(asset, Mapping)]
+    allowed = set(_image_source_paths_from_assets(assets))
+    cited = set(
+        _unique_strings(
+            [
+                _source_ref_from_asset_path(item)
+                for item in [
+                    *(compose_payload.get("sourcePaths") or []),
+                    *(compose_payload.get("citedSourceRefs") or []),
+                ]
+            ]
+        )
+    )
+    cited.discard("")
+    issues: list[str] = []
+    if not allowed:
+        issues.append("image source scope missing asset sourceRef/sourcePath")
+    extra = sorted(cited - allowed)
+    if extra:
+        issues.append(f"image carrier cites non-image source units: {extra[:5]}")
+    return {
+        "passed": not issues,
+        "issues": issues,
+        "suggestions": ["图片作品只保留所选图片集合的 source unit，不得混入 homepage/article 来源。"] if issues else [],
+    }
 
 
 def review_entity_draft(
@@ -260,16 +379,20 @@ def review_entity_draft(
     pack = read_writing_pack(task_id, batch_id, ref) or {}
     article = read_draft_article(task_id, batch_id, ref)
     draft_meta = read_draft_meta(task_id, batch_id, ref)
+    carrier_hint = str(pack.get("carrier") or brief.get("carrier") or "article")
+    is_image_carrier = carrier_hint in ("image", "gallery")
 
     authenticity_issues: list[str] = []
-    if is_placeholder(article):
+    if not is_image_carrier and is_placeholder(article):
         authenticity_issues.append("draft not composed yet (placeholder); awaiting agent article")
-    authenticity_issues.extend(generator_provenance_issues(draft_meta))
-    body = "" if is_placeholder(article) else str(article)
-    authenticity_issues.extend(template_fingerprint_issues(body))
-    authenticity_issues.extend(draft_asset_reference_issues(body, pack))
+    if not is_image_carrier:
+        authenticity_issues.extend(generator_provenance_issues(draft_meta))
+    body = "" if is_image_carrier or is_placeholder(article) else str(article)
+    if not is_image_carrier:
+        authenticity_issues.extend(template_fingerprint_issues(body))
+        authenticity_issues.extend(draft_asset_reference_issues(body, pack))
     source_texts = _load_source_texts(quality_payload.get("sourcePaths") or [])
-    traceability = fact_traceability_issues(body, dict(brief), source_texts)
+    traceability = [] if is_image_carrier else fact_traceability_issues(body, dict(brief), source_texts)
 
     compose_payload = _compose_payload_from_pack(ref, brief, quality_payload, pack, body, draft_meta)
     carrier = str(compose_payload.get("carrier") or brief.get("carrier") or "article")
@@ -350,6 +473,15 @@ def review_entity_draft(
         "issues": heading_issues,
         "suggestions": ["把纯清单式小标题改写得自然、有视角；优先沿用底稿已有小标题，不要套统一模板。"] if heading_issues else [],
     }
+    creative_issues = [] if carrier in ("image", "gallery") else creative_governance_issues(body, pack, draft_meta)
+    checks["creativeGovernance"] = {
+        "passed": not creative_issues,
+        "issues": creative_issues,
+        "suggestions": [
+            "按 creativeBrief 先形成 2-3 个构思，选择最能兑现 readerPromise 的结构；"
+            "修正文案时只在 evidence 边界内发挥，不伪装真实亲历，并把 creativePlan/selfCritique 写入 draft_meta。"
+        ] if creative_issues else [],
+    }
 
     blocking, suggestions, soft_failed = aggregate_checks(checks)
     human_review_required = bool(checks.get("imageGate", {}).get("humanReview"))
@@ -416,6 +548,7 @@ def _entity_review_checks(
         return {
             "carrierConsistency": _check_carrier_consistency(compose_payload),
             "imageGate": _check_image_gate(compose_payload),
+            "imageSourceScope": _check_image_source_scope(compose_payload),
         }
     checks = {
         "entityCoverage": _check_entity_coverage(article, brief, evidence_bundle),
@@ -483,6 +616,8 @@ def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks.get("travelogueDensity", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("crossArticleSimilarity", {"passed": True})["passed"]:
+        return "agent_compose"
+    if not checks.get("creativeGovernance", {"passed": True})["passed"]:
         return "agent_compose"
     image_gate = checks.get("imageGate", {"passed": True})
     if not image_gate["passed"]:

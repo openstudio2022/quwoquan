@@ -144,7 +144,7 @@
 - `agent_ops/deploy/prod/deploy_to_prod.sh` 按平面账号 `prod-<plane>-svc` 自登录，`podman compose` 拉起本平面 governedWorkloads + rollout 等待 + 失败回滚；**不再允许**凭据缺失时以 warning 形式跳过并返回成功。
 - `PROD_KUBECONFIG` 已退役：一旦检测到该变量被注入，`deploy_to_prod.sh` 与凭据校验脚本都会直接硬失败，禁止 kube 路径复活。
 - 账号一次性创建见 `agent_ops/deploy/prod/bootstrap_prod_plane_accounts.sh`（去 root、rootless podman、独立 home/compose 根/credentials）。
-- 灰度（`gray-initial`）取同集群一个实例验证（承接原远端 gamma 验证职责），通过后放量 `full`；二者共享同一物理 ECS 为成本驱动遗留。
+- 灰度（`gray-initial`）取同集群一个实例验证（承接原远端 gamma 验证职责），通过后放量 `full`；二者共享同一物理 ECS 为成本驱动保留项。
 
 ---
 

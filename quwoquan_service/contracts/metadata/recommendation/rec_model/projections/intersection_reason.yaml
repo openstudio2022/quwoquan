@@ -16,7 +16,7 @@ description: |
     weightTier: light | heavy（内容卡交集轻/重等级，云侧离散产出；无 reason 即无交集，承载 70/20/10 频率契约）
 
   展示字段（统一视觉系统消费）：
-    avatarUrl / displayName 用于头像 + 名字卡（端不再用整句 displayText 占位）。
+    avatarUrl / displayName 用于头像 + 名字卡（端只读，禁止本地拼装）。
     confidenceLabel 仅对 affinity 展示"推荐认识/可能合得来"等克制文案。
     freshAt / expiresAt 为保鲜期锚点（ISO8601 字符串，过期由后端重算，端只读）。
     modelReasonBucket 为 affinity 模型理由桶（埋点与灰度用，端不直接展示原文）。
@@ -24,9 +24,16 @@ description: |
     不得成为第二套事实来源。
     connectionSummary 是云侧实例化的「连接说明」一句话（由具体实例构成，如"北京大学、摄影把你们连在一起"），
     对象页交集卡顶部展示；缺省时端不展示该行，禁止端本地用维度词空说。
-    primaryText 是主交集结论句（蓝色，云侧产出，端只读直出，如"4位共同关注的人"）；
-    secondaryText 是副交集辅助说明（灰色；缺省端不展示）。
+    primaryText 是主交集结论句（蓝色，云侧产出，端只读直出），统一采用「主谓宾一句话」格式：
+      主语[N位 + 关系限定] + 谓语[行为动词] + 宾语[对象]，如"你的8位校友关注了Claude Code"、
+      "4位共同关注的人讨论了这篇内容"、"你和8人共同关注了Claude Code"；表达规范见
+      specs/product/intersection-definition-and-application.md §17（事实通道禁止朋友/好友/收藏/同趣词，affinity 明确标注推荐）。
+    secondaryText 是副交集辅助说明（灰色）；仅列表入口（我的连接 / 为什么推荐TA / 我的影响力）可作辅助说明，
+      紧凑 surface（首页内容卡 / spotlight）严格单句、不展示副句（§17.2）。
     端禁止再用 intersectionPoints/EvidenceGroup 本地拼装主/副交集文案（G2）。
+    本契约已零兼容删除 displayText / label / sharedCount（§18.1 一次性收口）：紧凑结论句唯一来源为 primaryText，
+    证据组结构化字段（count / sampleText / sampleAvatarUrls / 证据名词）一律由 IntersectionPoint 承载，
+    禁止在 reason 级恢复任何第二文案/计数通道。
 
 consumers:
   - app
@@ -68,30 +75,12 @@ client_projection:
       source: relationObjectId
       aliases: [relationObjectId]
       default: "''"
-    - name: label
-      dart_type: String
-      nullable: false
-      source: label
-      aliases: [label]
-      default: "''"
-    - name: sharedCount
-      dart_type: int
-      nullable: false
-      source: sharedCount
-      aliases: [sharedCount]
-      default: "0"
     - name: strength
       dart_type: double
       nullable: false
       source: strength
       aliases: [strength]
       default: "0.0"
-    - name: displayText
-      dart_type: String
-      nullable: false
-      source: displayText
-      aliases: [displayText]
-      default: "''"
     - name: primaryText
       dart_type: String
       nullable: false

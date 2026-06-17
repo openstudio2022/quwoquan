@@ -21,7 +21,8 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
 
 from _common.io import write_json  # noqa: E402
 from _common.paths import batch_root, release_root  # noqa: E402
-from _common.release_integrity import scan_release_integrity  # noqa: E402
+from _common.release_integrity import scan_release_integrity, scan_runtime_batch_integrity  # noqa: E402
+from build.homepage import _entity_base_draft  # noqa: E402
 from task.cleanup_generated import build_cleanup_manifest, execute_cleanup  # noqa: E402
 
 
@@ -37,6 +38,8 @@ def _write(path: Path, text: str = "x") -> None:
 
 def _reset() -> None:
     shutil.rmtree(_TMP, ignore_errors=True)
+    shutil.rmtree(batch_root(TASK, BATCH), ignore_errors=True)
+    shutil.rmtree(release_root(RELEASE), ignore_errors=True)
     _TMP.mkdir(parents=True, exist_ok=True)
 
 
@@ -149,6 +152,26 @@ def test_release_integrity_flags_cross_post_asset_reuse_and_empty_source_ref():
     assert "base draft ledger does not map" in text
 
 
+def test_runtime_integrity_flags_same_asset_contract_before_release():
+    _reset()
+    _seed_release_root()
+    base = _seed_source("毕棚沟", "01.base", kind="维基百科")
+    _seed_release_post("毕棚沟A", "a", base_source=base, asset_source=base, asset_sha="sha256:abc")
+    _seed_release_post("毕棚沟B", "b", base_source=base, asset_source="", asset_sha="sha256:abc")
+    write_json(
+        batch_root(TASK, BATCH) / "_shared" / "base_draft_ledger.json",
+        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {base: "a"}},
+    )
+
+    report = scan_runtime_batch_integrity(TASK, BATCH)
+    text = "\n".join(report["issues"])
+
+    assert not report["passed"]
+    assert "missing manifest.assets[].sourceRef" in text
+    assert "asset sha reused across posts" in text
+    assert "base draft ledger does not map" in text
+
+
 def test_release_integrity_flags_article_asset_outside_base_source_unit():
     _reset()
     _seed_release_root()
@@ -178,6 +201,18 @@ def test_release_integrity_flags_entity_homepage_using_guide_base():
     text = "\n".join(report["issues"])
     assert "entity homepage base draft must be encyclopedia/wiki/official/government source" in text
     assert "must not be author travelogue/guide/comment source" in text
+
+
+def test_homepage_base_draft_never_falls_back_to_guide_source():
+    _reset()
+    _seed_source("毕棚沟", "01.guide", kind="去哪儿攻略", source_use_mode="factual_reference_only")
+    wiki = _seed_source("毕棚沟", "02.wiki", kind="维基百科", source_use_mode="factual_reference_only")
+    chosen = _entity_base_draft(TASK, BATCH, "地点", "景区", "毕棚沟")
+    assert chosen["sourceRef"] == wiki
+
+    _reset()
+    _seed_source("毕棚沟", "01.guide", kind="去哪儿攻略", source_use_mode="factual_reference_only")
+    assert _entity_base_draft(TASK, BATCH, "地点", "景区", "毕棚沟") == {}
 
 
 def test_cleanup_generated_is_confirm_required_and_preserves_truth_roots():

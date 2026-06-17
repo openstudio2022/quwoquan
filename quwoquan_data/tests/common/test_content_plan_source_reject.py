@@ -115,12 +115,20 @@ def test_content_plan_enforces_per_target_2_plus_2_distribution():
         )
         source_dir.mkdir(parents=True, exist_ok=True)
         source_path = source_dir / "source.md"
-        source_path.write_text(f"四姑娘山来源证据 {index}", encoding="utf-8")
+        source_path.write_text(
+            (f"四姑娘山来源证据 {index}，这是一段包含交通、季节、游览动线和体验判断的图文底稿。" * 45),
+            encoding="utf-8",
+        )
         if carrier != "image":
             _write_article_source_asset(source_dir, label=f"article_{index}")
         write_json(
             source_dir / "meta.json",
-            {"sourceUseMode": "factual_reference_only", "researchLane": "article"},
+            {
+                "sourceUseMode": "factual_reference_only",
+                "researchLane": "article",
+                "sourceRole": "base",
+                "category": "travelogue",
+            },
         )
         content_object.register_content_object(
             TASK,
@@ -161,6 +169,10 @@ def test_content_plan_enforces_per_target_2_plus_2_distribution():
                         }
                     ]
                 },
+            )
+            write_json(
+                asset_dir.parent / "meta.json",
+                {"researchLane": "image", "sourceCollectionId": f"collection_{index}"},
             )
             item.update(
                 {
@@ -216,7 +228,7 @@ def test_content_plan_enforces_required_angles_for_4_plus_1_distribution():
     ]
     items = []
     for index, intent in enumerate(article_intents, start=1):
-        ref = f"jiuzhaigou_{intent}"
+        ref = f"{entity}_{intent}"
         title = f"九寨沟{intent}"
         source_dir = (
             batch_root(TASK, batch)
@@ -225,11 +237,19 @@ def test_content_plan_enforces_required_angles_for_4_plus_1_distribution():
         )
         source_dir.mkdir(parents=True, exist_ok=True)
         source_path = source_dir / "source.md"
-        source_path.write_text(f"九寨沟 {intent} 来源证据，含图文混合底稿 {index}", encoding="utf-8")
+        source_path.write_text(
+            (f"九寨沟 {intent} 来源证据，含图文混合底稿 {index}，补充路线、季节、停留时长和风险提示。" * 45),
+            encoding="utf-8",
+        )
         _write_article_source_asset(source_dir, label=f"jiuzhaigou_{index}")
         write_json(
             source_dir / "meta.json",
-            {"sourceUseMode": "factual_reference_only", "researchLane": "article"},
+            {
+                "sourceUseMode": "factual_reference_only",
+                "researchLane": "article",
+                "sourceRole": "base",
+                "category": "travelogue",
+            },
         )
         content_object.register_content_object(
             TASK,
@@ -272,7 +292,11 @@ def test_content_plan_enforces_required_angles_for_4_plus_1_distribution():
         asset_dir / "index.json",
         {"assets": [{"fileName": asset_file.name, "sourceCollectionId": "jiuzhaigou:image:one"}]},
     )
-    ref = "jiuzhaigou_image"
+    write_json(
+        image_source / "meta.json",
+        {"researchLane": "image", "sourceCollectionId": "jiuzhaigou:image:one"},
+    )
+    ref = f"{entity}_image"
     content_object.register_content_object(
         TASK,
         batch,
@@ -318,11 +342,42 @@ def test_content_plan_enforces_required_angles_for_4_plus_1_distribution():
     )
     assert cp.validate_content_plan(TASK, batch, spec) == []
     write_json(
+        image_source / "meta.json",
+        {"researchLane": "article", "sourceCollectionId": "jiuzhaigou:image:one"},
+    )
+    lane_issues = cp.validate_content_plan(TASK, batch, spec)
+    assert any("image asset must come from researchLane=image" in issue for issue in lane_issues), lane_issues
+    write_json(
+        image_source / "meta.json",
+        {"researchLane": "image", "sourceCollectionId": "jiuzhaigou:image:one"},
+    )
+    write_json(
         batch_content_plan_packet_path(TASK, batch),
         {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items[:2] + [items[-1]]},
     )
+    state_dir = batch_root(TASK, batch) / "_shared"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    write_json(
+        state_dir / "task_workflow_state.json",
+        {
+            "abandonedContentObjects": [
+                {
+                    "ref": f"{entity}_route_transport",
+                    "status": "abandoned",
+                    "reason": "fixture partial article source unavailable",
+                },
+                {
+                    "ref": f"{entity}_seasonal_timing",
+                    "status": "abandoned",
+                    "reason": "fixture partial article source unavailable",
+                },
+            ]
+        },
+    )
     issues = cp.validate_content_plan(TASK, batch, spec)
     assert any("acceptance.requiredAngles" in issue for issue in issues), issues
+    partial_spec = {**spec, "workflowPolicy": {"allowContentQuotaShortfall": True}}
+    assert cp.validate_content_plan(TASK, batch, partial_spec) == []
 
 
 def test_base_draft_candidates_exclude_reject_sources():

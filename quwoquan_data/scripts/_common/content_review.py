@@ -14,7 +14,7 @@ from _common.template_fingerprints import template_fingerprint_issues
 
 
 PLATFORM_TERMS = ("马蜂窝", "携程", "小红书", "知乎", "大众点评", "来源平台", "游记里还提到")
-NOISE_TERMS = ("这篇主要围绕", "补充：", "contract_fixture", "cold-start.local", "实体引用：")
+NOISE_TERMS = ("这篇主要围绕", "补充：", "contract_fixture", "cold-start.local", "实体引用：", "批次")
 PUBLISHER_BANNED_FIELDS = ("authorId", "creatorProfileId", "isSystemBuiltin", "routingReason", "coldStartBoost")
 
 

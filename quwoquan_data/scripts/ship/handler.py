@@ -37,7 +37,7 @@ from pathlib import Path
 
 from _common.io import read_json, write_json
 from _common.media_asset_url import materialize_release_media
-from _common.paths import PUBLISH_ROOT, now_iso, publish_meta_path
+from _common.paths import PUBLISH_ROOT, batch_shared_dir, now_iso, publish_meta_path, release_manifest
 from ship.sampler import (
     build_sample_bundle,
     load_publish_records,
@@ -99,9 +99,10 @@ def _run_importer(
     delete_policy: str,
     source_owner: str,
     dry_run: bool,
-) -> None:
+) -> list[Path]:
     """调用服务侧 content/entity importer 把 sample bundle 灌进运行库。"""
     service_root = PUBLISH_ROOT.parent.parent / "quwoquan_service"
+    reports: list[Path] = []
     for bundle in bundles:
         env = bundle.stem
         report_path = PUBLISH_ROOT / "env_releases" / release_id / f"import-{env}.json"
@@ -121,6 +122,95 @@ def _run_importer(
             cmd.append("--dry-run")
         print(f"[ship] importing {env}: {' '.join(cmd)}")
         subprocess.run(cmd, cwd=str(service_root), check=True)
+        reports.append(report_path)
+    return reports
+
+
+def _source_batch_for_ship(args: argparse.Namespace) -> tuple[str, str] | None:
+    if args.task and args.batch:
+        return str(args.task), str(args.batch)
+    release_id = str(getattr(args, "release_id", "") or "").strip()
+    if not release_id:
+        return None
+    manifest_path = release_manifest(release_id)
+    if not manifest_path.is_file():
+        return None
+    manifest = read_json(manifest_path)
+    task_id = str(manifest.get("sourceTaskId") or "").strip()
+    batch_id = str(manifest.get("sourceBatchId") or "").strip()
+    if task_id and batch_id:
+        return task_id, batch_id
+    return None
+
+
+def _write_batch_ship_report(
+    args: argparse.Namespace,
+    *,
+    data_release_id: str,
+    envs: list[str],
+    summary: list[dict],
+    import_reports: list[Path],
+) -> None:
+    source = _source_batch_for_ship(args)
+    if source is None:
+        return
+    task_id, batch_id = source
+    shared = batch_shared_dir(task_id, batch_id)
+    payload = {
+        "schemaVersion": "quwoquan_data.ship_report/1",
+        "taskId": task_id,
+        "batchId": batch_id,
+        "dataReleaseId": data_release_id,
+        "sourceReleaseId": str(getattr(args, "release_id", "") or ""),
+        "envs": envs,
+        "importRequested": bool(getattr(args, "import_to_db", False)),
+        "dryRun": bool(getattr(args, "dry_run", False)),
+        "summary": summary,
+        "importReports": [str(path) for path in import_reports],
+        "writtenAt": now_iso(),
+    }
+    write_json(shared / "ship_report.json", payload)
+    for report_path in import_reports:
+        if not report_path.is_file():
+            continue
+        env = report_path.stem.replace("import-", "", 1)
+        report = read_json(report_path)
+        report["sourceReportPath"] = str(report_path)
+        write_json(shared / f"{env}_import_report.json", report)
+
+
+def write_release_only_ship_report(
+    *,
+    task_id: str,
+    batch_id: str,
+    release_id: str,
+    summary: dict,
+) -> Path:
+    """Record release-only closure without claiming an environment import.
+
+    Managed trial runs intentionally stop at an isolated release package.  The
+    scale gate still needs durable evidence that release assembly completed and
+    that no importer was requested, otherwise each review has to pass the
+    release id manually.
+    """
+    shared = batch_shared_dir(task_id, batch_id)
+    payload = {
+        "schemaVersion": "quwoquan_data.ship_report/1",
+        "closureType": "release_only",
+        "taskId": task_id,
+        "batchId": batch_id,
+        "dataReleaseId": release_id,
+        "sourceReleaseId": release_id,
+        "envs": [],
+        "importRequested": False,
+        "dryRun": False,
+        "summary": [dict(summary)],
+        "importReports": [],
+        "writtenAt": now_iso(),
+    }
+    path = shared / "ship_report.json"
+    write_json(path, payload)
+    return path
 
 
 def handle_ship(args: argparse.Namespace) -> None:
@@ -199,6 +289,7 @@ def handle_ship(args: argparse.Namespace) -> None:
     meta["shipSummary"] = summary
     write_json(publish_meta_path(), meta)
 
+    import_reports: list[Path] = []
     if args.import_to_db:
         if not args.mongo_uri:
             print("[ship] ERROR: --import 需要 --mongo-uri", file=sys.stderr)
@@ -206,7 +297,7 @@ def handle_ship(args: argparse.Namespace) -> None:
         if "prod" in envs and not bool(getattr(args, "dry_run", False)) and not bool(getattr(args, "confirm_prod_apply", False)):
             print("[ship] ERROR: prod apply 需要 --confirm-prod-apply；请先执行 --dry-run 并归档一致性报告", file=sys.stderr)
             raise SystemExit(2)
-        _run_importer(
+        import_reports = _run_importer(
             args.mongo_uri,
             bundles,
             release_id=release_id,
@@ -220,6 +311,13 @@ def handle_ship(args: argparse.Namespace) -> None:
         print("       go run ./services/content-service/cmd/import \\")
         print(f"         --publish-root {PUBLISH_ROOT} --sample-bundle <bundle> --mongo-uri <uri> --env <env> \\")
         print(f"         --release-id {release_id} --mode {mode} --delete-policy {delete_policy}")
+    _write_batch_ship_report(
+        args,
+        data_release_id=release_id,
+        envs=envs,
+        summary=summary,
+        import_reports=import_reports,
+    )
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:

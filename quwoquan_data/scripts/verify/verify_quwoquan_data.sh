@@ -86,6 +86,8 @@ python3 quwoquan_data/tests/template/test_source_catalog.py
 python3 quwoquan_data/tests/template/test_style_catalog.py
 # 文风门：开篇钩子语义化（按所选 styleFamily/openingStrategy）+ 跨篇相似度门（破量产千篇一律）
 python3 quwoquan_data/tests/produce/test_style_gates.py
+# 创作自治：creativeBrief 下发 + creativePlan/selfCritique 回写 + persona 边界门
+python3 quwoquan_data/tests/produce/test_creative_autonomy_gate.py
 # 文章目录：posts/<type>/<发布标题>/<seq>/（标题在 article 之下、序号默认 1、标题重复递增、与 promote 对齐）
 python3 quwoquan_data/tests/produce/test_post_dir_layout.py
 # 对象同构目录：entities/posts 与 publish 同构 + 过程阶段编号 + 来源单元 + 相对路径 helper

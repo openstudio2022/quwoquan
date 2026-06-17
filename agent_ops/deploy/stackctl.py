@@ -2680,9 +2680,11 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT": str(ports["product-ops-service"]),
         "LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT": str(ports["platform-ops-service"]),
         "LOCAL_GAMMA_TAG_PORT": str(ports["tag-service"]),
+        "LOCAL_GAMMA_SEARCH_PORT": str(ports["search-service"]),
         "LOCAL_GAMMA_MONGO_PORT": str(ports["mongodb"]),
         "LOCAL_GAMMA_REDIS_PORT": str(ports["redis"]),
         "LOCAL_GAMMA_POSTGRES_PORT": str(ports["postgres"]),
+        "LOCAL_GAMMA_ES_PORT": str(ports["elasticsearch"]),
     }
 
 
@@ -2904,6 +2906,7 @@ def _expected_local_roles(target_name: str) -> list[str]:
             "rec-model-service",
             "product-ops-service",
             "tag-service",
+            "search-service",
         ],
         "prod-sim": [
             "api-edge",

@@ -57,6 +57,9 @@ class HomepageMockData {
     address: '浙江省杭州市西湖区',
     city: '杭州',
     location: HomepageGeoPoint(latitude: 30.2431, longitude: 120.1500),
+    verified: true,
+    establishedYear: 1982,
+    followerCount: 1286,
     averageRating: 4.7,
     ratingCount: 328,
     reviewSummary: HomepageReviewSummaryData(

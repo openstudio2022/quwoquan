@@ -2,9 +2,10 @@ version: 1
 read_model: CircleImpactItem
 description: |
   圈子影响单条事实（「圈子影响」模块行真相源）。
-  云侧按真实下游动作聚合连接型结果，并产出 displayText 结论句
+  云侧按真实下游动作聚合连接型结果，并产出 primaryText 结论句
   （如「328人在这里建立了新连接」「189人加入相关圈子」）。
-  端只读直出，禁止本地拼装文案；禁止下发收藏、关注内容、稍后看等内容长期动作。
+  端只读直出，禁止本地拼装文案（全局验收 G2）；禁止下发收藏、关注内容、稍后看等内容长期动作。
+  与 AuthorImpactItem / IntersectionReason 单通道对齐，禁止保留 displayText 第二文案字段。
 
 consumers:
   - app
@@ -50,9 +51,9 @@ client_projection:
       source: count
       aliases: [count]
       default: "0"
-    - name: displayText
+    - name: primaryText
       dart_type: String
       nullable: false
-      source: displayText
-      aliases: [displayText]
+      source: primaryText
+      aliases: [primaryText]
       default: "''"

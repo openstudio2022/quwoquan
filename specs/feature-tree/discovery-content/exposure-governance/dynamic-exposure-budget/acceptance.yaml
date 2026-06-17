@@ -1,0 +1,53 @@
+version: 2
+node:
+  id: dynamic-exposure-budget
+  level: L3_story
+  path: specs/feature-tree/discovery-content/exposure-governance/dynamic-exposure-budget
+  title: dynamic exposure budget
+  parent_domain_service: discovery-content
+  parent_business_capability: exposure-governance
+scope:
+  summary: 分级流量池赛马与 bandit 动态曝光预算，让优质内容随反馈获得更多曝光。
+  in_scope:
+    - 流量池状态、bandit 先验、reward 与晋级/淘汰阈值。
+    - 动态预算指标、AB 分桶和回滚层。
+  out_of_scope:
+    - P1 先实现基于 recpolicy 的分级流量池曝光份额约束；真实 Thompson Sampling 与预算存储留给后续 `rm_exposure_state` 物化增强。
+    - 深度排序模型和 IPS 训练不进入本 Story。
+gwt_acceptance:
+  GWT1:
+    title: 动态曝光预算 GWT
+    given:
+      - 新内容进入 trial 池，已有内容处于 rising/mature/evergreen 池。
+    when:
+      - 内容获得点击、完成、停留、正向互动或负反馈。
+    then:
+      - 内容曝光预算按 reward 与不确定性晋级、保持或淘汰，预算分配可观测且可回滚。
+    done_when:
+      - 流量池状态机、reward、先验、阈值、AB 标签和回滚层均冻结。
+    edge_cases:
+      - 小样本内容不得因早期少量负反馈永久淘汰；需要最小样本量或置信度保护。
+    contract_refs:
+      - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    performance_points:
+      - dynamic_budget_share observe_only
+      - ab_experiment_validity >= 0.95
+    evidence:
+      primary:
+        - T1_contract
+        - T2_module_interaction
+      supporting:
+        - T3_app_api_integration
+    tests:
+      planned:
+        - quwoquan_service/services/content-service/tests/post_feed_exposure_governance_contract_test.go
+      recorded:
+        - quwoquan_service/runtime/recommendation/engine_test.go
+    status: implemented
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+    - make gate

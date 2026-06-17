@@ -36,10 +36,9 @@ MicroPostDto _post() {
         dimension: 'interest',
         tagRefs: <String>['Topic/旅行'],
         relationKind: 'place',
-        displayText: '都在看川西攻略',
+        primaryText: '都在看川西攻略',
         actionType: 'follow',
         actionTargetId: 'entity_chuanxi',
-        sharedCount: 8,
         intersectionPoints: <IntersectionPoint>[
           IntersectionPoint(
             pointId: 'post_ix_1',
@@ -351,7 +350,9 @@ void main() {
     expect(clicks.single.feedRequestId, isNotEmpty);
   });
 
-  testWidgets('交集 spotlight 只展示可行动对象（高保横滑头像卡：名字+主副交集）', (tester) async {
+  testWidgets('交集 spotlight 只展示可行动对象（高保横滑头像卡：名字 + 一条主谓宾交集句，无副句）', (
+    tester,
+  ) async {
     var opened = false;
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -368,13 +369,11 @@ void main() {
               relationKind: 'circle',
               objectKind: 'circle',
               displayName: '摄影圈',
-              displayText: '共同关注摄影内容',
               primaryText: '共同关注摄影内容',
               secondaryText: '12 位摄影同好在这里',
               confidenceLabel: '推荐',
               actionType: 'join_circle',
               actionTargetId: 'circle_photo',
-              sharedCount: 0,
               intersectionPoints: <IntersectionPoint>[
                 IntersectionPoint(
                   pointId: 'ix_photo_point',
@@ -394,12 +393,17 @@ void main() {
       ),
     );
 
-    // 高保头像卡：对象名 + 云侧主交集结论句（蓝）+ 副交集说明（灰）；
-    // 对象角标以语义 label 暴露，推荐状态只显示新鲜小蓝点，不新增文字事实。
-    // 零内部词、零空数字（count=0 不显示「0」）。
+    // 高保头像卡（紧凑 surface 强约束）：对象名 + 有且仅一条主谓宾交集句（蓝）；
+    // 禁止副交集句堆叠（secondaryText 不渲染）；对象角标以语义 label 暴露，
+    // 推荐状态只显示新鲜小蓝点，不新增文字事实。零内部词、零空数字。
     expect(find.text('摄影圈'), findsOneWidget);
     expect(find.text('共同关注摄影内容'), findsOneWidget);
-    expect(find.text('12 位摄影同好在这里'), findsOneWidget);
+    // 紧凑 surface 强约束：副句不得渲染。
+    expect(find.text('12 位摄影同好在这里'), findsNothing);
+    expect(
+      find.byKey(IntersectionSpotlightModule.primaryTextKey),
+      findsOneWidget,
+    );
     expect(
       find.byWidgetPredicate(
         (widget) => widget is Semantics && widget.properties.label == '圈',
@@ -417,22 +421,11 @@ void main() {
     final primary = tester.widget<Text>(
       find.byKey(IntersectionSpotlightModule.primaryTextKey),
     );
-    final secondary = tester.widget<Text>(
-      find.byKey(IntersectionSpotlightModule.secondaryTextKey),
-    );
     final primaryContext = tester.element(
       find.byKey(IntersectionSpotlightModule.primaryTextKey),
     );
-    final secondaryContext = tester.element(
-      find.byKey(IntersectionSpotlightModule.secondaryTextKey),
-    );
     expect(primary.maxLines, 1);
-    expect(secondary.maxLines, 1);
     expect(primary.style?.color, AppColors.iosAccent(primaryContext));
-    expect(
-      secondary.style?.color,
-      AppColors.iosSecondaryLabel(secondaryContext),
-    );
     await tester.tap(find.text('摄影圈'), warnIfMissed: false);
     await tester.pump();
     expect(opened, isTrue);
@@ -465,7 +458,6 @@ void main() {
                 relationKind: 'circle',
                 objectKind: 'circle',
                 displayName: '摄影圈摄影圈摄影圈',
-                displayText: '共同关注摄影内容',
                 primaryText: '共同关注特别多并且最近一起活跃',
                 secondaryText: '老同学 李航和周屿都在这里',
                 actionType: 'join_circle',

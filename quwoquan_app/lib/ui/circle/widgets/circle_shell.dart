@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';

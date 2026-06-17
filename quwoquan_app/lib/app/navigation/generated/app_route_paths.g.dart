@@ -120,6 +120,17 @@ class AppRoutePaths {
   }
   static const String globalSearchNetworkResultsSegment = 'network';
 
+  static const String locationPlaceLandingPathTemplate = '/locations/{placeId}';
+  static String locationPlaceLanding({required String placeId, String? name, String? source}) {
+    return _buildPath(locationPlaceLandingPathTemplate, <String, String>{
+      'placeId': placeId,
+    }, <String, String?>{
+      'name': name,
+      'source': source,
+    });
+  }
+  static const String locationPlaceLandingSegment = '{placeId}';
+
   static const String homepagePickerPathTemplate = '/homepages/picker';
   static String homepagePicker({String? query}) {
     return _buildPath(homepagePickerPathTemplate, <String, String>{

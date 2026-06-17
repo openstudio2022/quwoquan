@@ -599,7 +599,7 @@ class RemoteCircleRepository implements CircleRepository {
   //
   // 所有请求经 CloudHttpClient 的 *Json 方法：非 2xx 由 CloudErrorMapper.fromStatusCode
   // 抛出结构化 CloudException（携带 runtimeFailure/recovery），不再有裸 Exception 旁路。
-  // 解码沿用 circle 历史 data/items 语义（cursor-page 列表落在 data 或 items），
+  // 解码沿用 circle 既往 data/items 语义（cursor-page 列表落在 data 或 items），
   // 类型不符经 CloudResponseDecoder.asObject 统一抛 invalidResponse。
 
   Future<Map<String, dynamic>> _getObject(

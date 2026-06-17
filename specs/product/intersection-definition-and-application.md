@@ -309,7 +309,8 @@ flowchart LR
 >
 > - `展示入口`：spotlight（首页频道交集模块 `intersection_spotlight_module.dart`，消费 `GET /v1/content/feed/intersections`）/ feed 理由位（`feed_intersection_mixer.go` 70/20/10 附着 → `intersection_reason_chip.dart`）/ 收件箱（我的交集 `my_intersection_inbox_page.dart`，summary+list API）/ 对象页交集卡（`object_intersection_card.dart` + entity bundle 预附着）。
 > - `契约承载`：`IntersectionPoint.sourceRef` 取标准 kind；reason 级 `dimension/objectKind/relationKind/actionType` 按条目注明。
-> - `数据源`：Mongo 读模型边表（`follow_edges` / `circle_members` / `rec_learning_events` 行为边 / `rm_entity_tags` 对象标签 / 通讯录映射）。
+> - `数据源`：Mongo 读模型边表（`follow_edges` / `circle_members` / `rm_behavior_events` 行为边真相源 / `rec_learning_events` 推荐学习投影 / `rm_entity_tags` 对象标签 / 通讯录映射）。
+>   - **分层口径**：用户行为写入 `rm_behavior_events`（content-service 行为边唯一写侧）；推荐管线消费后投影到 `rec_learning_events` 供排序/特征；交集事实计算优先读 `rm_behavior_events` 与关系边，禁止把两集合混称为同一真相源。
 > - `计算策略`：三选一——`请求期边表查询`（现状默认，`intersection_source.go`）/ `投影预计算`（高频聚合，需新增 projector）/ `推荐通道复用`（affinity）。
 > - `性能口径`：单请求边表查询次数与索引、集合上限、聚合缓存 `cache:viewer_intersections`（TTL 900s）、曝光冷却 `rec:icool`（14d，仅推荐位，收件箱/对象页不冷却）。
 
@@ -493,7 +494,7 @@ flowchart LR
 - 工程五栏：
   - 展示入口：spotlight、feed 理由位、收件箱（content 维度）、他人主页交集卡。
   - 契约承载：`sourceRef=coCommented`；`dimension=content`、`actionType=view_object`（回内容）。
-  - 数据源：`rec_learning_events` comment 行为边（按 postId 聚合）。
+  - 数据源：`rm_behavior_events` comment 行为边（按 postId 聚合）；`rec_learning_events` 仅作推荐特征投影，非交集事实唯一源。
   - 计算策略：请求期边表查询（双方评论过的 postId 集合交集，窗口 90 天）。
   - 性能口径：索引 `(userId, action=comment, ts)`；单边集合上限（最近 500 条评论）；结果进 `viewer_intersections` 缓存 900s；feed 理由位经 `rec:icool` 冷却。
 - 优先级：`P0`
@@ -567,7 +568,7 @@ flowchart LR
 - 创作者价值：帮助围绕对象建立稳定内容网络。
 - 证据真相源：entity follow 边（对象级关注，持续连接动作）。
 - 适用 contract：`IntersectionReason + IntersectionPoint`
-- 动作闭环：进入对象页 / 查看共同关注者 / 参与讨论
+- 动作闭环：进入对象页 / 查看共同关注的对象 / 参与讨论
 - 工程五栏：
   - 展示入口：spotlight、feed 理由位（「与你关注的对象相关」）、对象页交集卡。
   - 契约承载：`sourceRef=sharedEntityAttention`；`dimension=interest`、`objectKind=place|enterprise|school`、`actionType=follow|view_object`。
@@ -795,40 +796,22 @@ flowchart LR
 - 交集点枚举
 - UI 里的证据微缩
 
-### 9.3 `ObjectIntersection`
-
-负责：
-
-- 对象页深层事实交集
-- 不承担 feed 首句文案的职责
-
-主要适用：
-
-- 他人主页
-- 实体主页
-- 圈子主页
-
-### 9.4 `ObjectIntersectionEvidence`
-
-负责：
-
-- 对象页某个交集项的可回查证据单元
-
-### 9.5 `AuthorImpactItem / AuthorImpactSummary`
+### 9.3 `AuthorImpactItem / AuthorImpactSummary`
 
 负责：
 
 - “因为我发生了什么”的影响事实
 - 帮助结果，而不是运营漏斗
+- 结论句字段 `primaryText`（与 IntersectionReason G2 单通道对齐）
 
-### 9.6 职责边界
+> **已删除**独立 `ObjectIntersection` / `ObjectIntersectionEvidence` projection。对象页深层事实与 evidence 统一由 `IntersectionReason` + `IntersectionPoint`（含 `sourceRef`）承载。
+
+### 9.4 职责边界
 
 | contract | 主要用途 | 不负责什么 |
 |---|---|---|
-| `IntersectionReason` | 首页、理由位、spotlight、摘要交集 | 不负责对象页深挖 evidence 列表 |
-| `IntersectionPoint` | reason 的点位真相源 | 不直接承担对象页完整卡结构 |
-| `ObjectIntersection` | 对象页深层事实 | 不直接承担 feed 文案 |
-| `ObjectIntersectionEvidence` | 对象页证据项 | 不承担推荐样式 |
+| `IntersectionReason` | 首页、理由位、spotlight、摘要、**对象页交集卡** | 不承担运营漏斗数字 |
+| `IntersectionPoint` | reason 的点位真相源（含对象页 evidence 微缩） | 不单独承担完整卡 UI 结构 |
 | `AuthorImpact*` | 下游影响 | 不承担“共同事实” |
 
 ---
@@ -919,8 +902,10 @@ flowchart LR
 |---|---|---|
 | 我的交集 | 共同事实 + 桥接事实 | 聚合入口与按维度分组列表 |
 | 他人主页 | 共同事实 + 桥接事实 | 强调“你们的连接” |
+| 我的主页 | 共同事实 + 桥接事实 + 影响 | 「我的连接」列表入口 +「我的影响力」 |
 | 实体主页 | 共同事实 + 桥接事实 | 强调“与你的连接” |
 | 圈子主页 | 共同事实 + 桥接事实 | 强调“你关注的人在这里”等 |
+| 全局搜索 | 共同事实 + affinity（发现区） | 「交集」Tab / 激发搜索 / 发现区分组；已连接区不展示交集句 |
 | 首页 spotlight | 共同事实 + affinity | 事实优先，推荐明确标注 |
 | 内容卡理由位 | 共同事实 + 轻桥接 | 文案必须短、可理解 |
 | 影响力卡 | 影响事实 | 不展示共同事实本身 |
@@ -1071,3 +1056,222 @@ flowchart LR
 - 主定义简洁
 - 词典集中维护
 - metadata / 实现 / seed / UI 都有统一的解释桥梁
+
+---
+
+## 17. 主谓宾交集句表达规范（2026 端侧优化）
+
+> 本章是「交集句」在所有紧凑/列表 surfaces 的**统一表达真相源**，是 §6 母表达在「一句话」层面的具体收敛。六场景落地范围见 §17.4；G2 裁决见 §18.1。
+
+### 17.1 统一句式（主谓宾，一句话）
+
+交集句统一格式：
+
+```text
+主语[数量 N 位 + 关系限定] + 谓语[行为动词] + 宾语[对象]
+```
+
+- 端只读云侧 `IntersectionReason.primaryText`，**禁止本地拼装事实**（§14.4 / G2）。`primaryText` 即主谓宾整句；`source` / `IntersectionPoint.sourceRef` 取 §5.4 注册表标准 kind。
+- 句子必须可被一行容纳（超出省略），不依赖图标列表/标签堆叠传达语义。
+
+示例（均为合规口径，关系语言遵循 §5.1）：
+
+- `你的8位校友关注了 Claude Code`（identity + 对象关注）
+- `你关注的3人讨论了这篇内容`（content / 桥接）
+- `你和8人共同关注了 Claude Code`（`sharedEntityAttention`，事实）
+- `4位校友正在讨论 AI产品`（`alumniHere` / `followeeDiscussedThis`）
+- `你们共同加入了3个圈子`（`sharedCircle`）
+
+### 17.2 两类 surface 的句式层次（避免误判约束）
+
+| surface 类别 | 典型位置 | 允许句式 |
+|---|---|---|
+| 紧凑 surface | 首页内容卡、spotlight 卡 | **严格一条主谓宾句，无副句** |
+| 列表入口 | 我的连接 / 为什么推荐TA / 我的影响力 | 每行 = **一条主谓宾结论句 + 至多一条灰色辅助说明**（≤2 行/项）+「查看更多」 |
+
+`secondaryText` / `connectionSummary` **只允许**作为列表入口的灰色辅助说明出现，禁止进入紧凑 surface 与结论句同屏堆叠。
+
+### 17.3 UX 强约束（强制门禁项）
+
+```text
+✔ 只允许一条交集句（结论句）
+❌ 多交集并列展示
+❌ 标签列表
+❌ 浮层交集
+❌ 三行解释
+```
+
+### 17.4 六场景应用矩阵（主谓宾落地）
+
+| 场景 | 页面 / 模块 | 句式 surface | P0/P1 | 本期 |
+|---|---|---|---|---|
+| S1 首页推荐 | 内容卡交集句 / spotlight | 紧凑 | P0 | ✅ |
+| S2 他人主页 | 「为什么推荐TA」/「TA帮助了很多人」 | 列表入口 | P0 | ✅ |
+| S3 我的主页 | 「我的连接」/「我的影响力」 | 列表入口 | P0 | ✅ |
+| S4 圈子主页 | 「为什么推荐这个圈子」/ 记录流卡内交集句 | 列表入口 + 紧凑 | P0 | ✅ |
+| S5 实体主页 | 「为什么推荐这里」/ 记录流卡内交集句 | 列表入口 + 紧凑 | P0 | ✅ |
+| S6 全局搜索 | 搜索首页「今日交集」/ 结果页「交集」Tab / 发现区分组 | 紧凑 + 列表入口 | P0 | ✅ |
+
+> 圈子/实体/用户主页记录流（瀑布卡）属紧凑 surface，卡内严格一条主谓宾句（同首页内容卡）；「为什么推荐X」属列表入口（结论句 + 灰色辅助说明 + 查看更多）。全局搜索「交集」Tab 每张卡必须携带 `intersectionReason.primaryText`；搜索分组编排消费 `connectionState`，不得端侧推断交集文案。
+
+### 17.5 高保图文案冲突裁决（2026-06，用户已确认）
+
+高保图为视觉示意，下列示意文案落地必须收敛到合规口径：
+
+| 高保示意（不合规） | 合规收敛 | 依据 |
+|---|---|---|
+| `3位朋友收藏了这篇内容` | 删除（收藏已退场）或 `你关注的3人讨论了这篇内容` | §5.1 去好友化 + §14A 收藏退场 |
+| `8人通过他认识了新朋友` | `8人通过TA建立了新连接` | §5.1 / §8.1 |
+| `你和8位同趣都关注了 Claude Code` | `你和8人共同关注了 Claude Code` | §3.4 同趣=affinity 概率，「都关注同一对象」才是事实 |
+| `4位同趣喜爱双冲浪` | `你关注的4人去过这片浪点` 或标注「推荐」 | §3.4 / §7.D1 |
+
+裁决原则：**事实交集通道禁止出现「朋友/好友/收藏/同趣」**；affinity（概率）必须分通道、明确标注「推荐」，不得伪装成共同事实。
+
+### 17.6 关系/概念冻结再确认
+
+- 「朋友 / 密友 / 挚友 / 新朋友」叫法废除，统一「关注 / 互相关注」（§5.1/§5.2）。
+- 「收藏」能力已退场（§14A），不存在「N 人收藏」交集或影响。
+- 「同趣 / 兴趣相似」是 affinity 概率推荐（§2.4/§3.4），非事实交集。
+
+### 17.7 圈子主页 / 实体主页落地口径（2026 端侧优化）
+
+> 五页面统一结构：`身份 → 为什么推荐 → 价值说明 → 记录`。圈子/实体主页沿用他人主页同壳同口径，本期端侧 + alpha mock，云侧契约预留。
+
+**统一语言体系（用户可见，禁用产品术语）**：
+
+| 页面 | 「为什么推荐」标题 | 价值说明 / 介绍标题 | 一级 tab |
+|---|---|---|---|
+| 他人主页 | 为什么推荐TA | TA帮助了很多人 | 记录 · 圈子 · 互动 |
+| 我的主页 | 我的连接 | 我的影响力 | 记录 · 圈子 · 互动 |
+| 圈子主页 | 为什么推荐这个圈子 | 这个圈子帮助了很多人 | 记录 · 讨论 · 成员 |
+| 实体主页 | 为什么推荐这里 | 关于这里 | 记录 · 讨论 · 相关圈子 |
+
+**用户可见禁词**（产品术语不外露，对齐圈子/实体规格 §8）：
+
+```text
+交集 / 实体 / Entity / Circle / 影响力 / 兴趣圈
+```
+
+用户语言只出现：`为什么推荐 / 这里 / 学校 / 景区 / 地点 / 公司 / 产品 / 圈子 / 记录 / 讨论 / 成员 / 相关圈子 / 帮助了很多人`。
+
+**圈子主页结构**：封面 → 圈子头像 → 名称 + 认证标识 → 一句简介 → 头像簇 +「N 成员」单计数 → 加入圈子 / 私信 →「为什么推荐这个圈子」列表入口 →「这个圈子帮助了很多人」价值卡 → 记录 | 讨论 | 成员 → 记录流（双列瀑布，卡内唯一交集句）。
+
+**实体主页结构**：封面 → 实体头像 → 名称 + 认证标识 → 基础信息（地点 · 类型 · 年份）→ 头像簇 +「N 关注」单计数 → 关注 / 私信 →「为什么推荐这里」列表入口 →「关于这里」摘要卡（2~4 行 + 缩略图 + 查看更多介绍进详情页）→ 记录 | 讨论 | 相关圈子 → 记录流（双列瀑布，卡内唯一交集句）。
+
+**头部统计形态**：人页用「粉丝」、实体页用「关注」、圈子页用「成员」的头像簇 + 单一计数行（可点进列表），不挂 4 列统计行（规格 §4.3「不要成员数/帖子数作主信息」）。
+
+**统一记录卡范式**（圈子/实体/用户主页一致）：`封面 + 唯一交集句 + 标题 + 作者 + 点赞`；禁止交集覆盖封面、多条交集、复杂标签。
+
+**圈子/实体高保图冲突裁决（补 §17.5）**：
+
+| 高保示意（不合规） | 合规收敛 | 依据 |
+|---|---|---|
+| `42个实体正在被讨论` | `42个话题正在被讨论` | §8 禁用「实体」 |
+| `N位同趣关注了这里`（作事实计数） | 头部计数用「N 关注」（事实）；affinity 句须标注「推荐」 | §3.4 同趣=affinity |
+| `兴趣圈` tab | `相关圈子` | §8 禁用「兴趣圈」 |
+| 影响项「N人认识新朋友」 | `N人建立了新连接` | §5.1 去好友化 |
+
+---
+
+## 18. 六场景优先级、G2 裁决与契约收口（2026 交集统一规格）
+
+> 本章是六场景并行实现会话的**优先级与门禁真相源**。云侧 Explain/Ranking 全链路愿景见 §19。
+
+### 18.1 G2 全局裁决（GATE_BLOCK）
+
+```text
+端侧禁止本地拼装任何事实交集结论句。
+唯一用户可见结论句来源：`IntersectionReason.primaryText`（含对象页、搜索 hit、影响句 `AuthorImpactItem.primaryText`）。
+禁止 displayText / label / shortLabel / evidenceLabel 等第二文案通道。
+禁止保留 `ObjectIntersection` 独立 projection；对象页/搜索/feed 统一 `List<IntersectionReason>` + `IntersectionPoint`。
+禁止用 intersectionPoints / EvidenceGroup 本地拼接主/副句。
+affinity 必须分通道（intersectionClass=affinity + confidenceLabel），不得伪装 fact。
+无 primaryText → 不展示（不占位、不造假）。
+```
+
+契约收口（零兼容，一次性迁移）：
+
+| 契约 | 保留 | 删除 |
+|---|---|---|
+| `intersection_reason.yaml` | `primaryText`, `secondaryText`, `connectionSummary`, points 枚举 | `displayText`, `label`, `sharedCount` |
+| `author_impact_item.yaml` | `primaryText` | `displayText` |
+| `circle_impact_item.yaml` | `primaryText` | `displayText`（与 author_impact_item 对称，影响结论句单通道） |
+| `object_page_bundle.yaml` | `intersectionReasons` 单通道 | `intersections` 并行通道；`object_intersection.yaml` 独立 projection 已删除 |
+| `search_contract.yaml` + hits | `connectionState`, `intersectionReason` 子集 | UI 推断 connectionState / 文案 |
+
+> **IntersectionPoint 边界澄清（防误删，本轮收口确认）**：`IntersectionPoint` **保留** `count` / `sampleText` /
+> `sampleAvatarUrls` / `displayText` / `label`（云侧下发的单个证据组名词，≤6 汉字，端只读直出证据明细）。
+> 这**不属于** G2 禁止的「reason 级结论句第二文案通道」——reason 级用户可见结论句唯一来源仍是 `primaryText`。
+> 端禁止用多个 IntersectionPoint 在本地拼接 reason 结论句，但可逐条直出单个证据组的名词 + count + 头像簇。
+> 收口表只删 `intersection_reason.yaml` 的 reason 级 `displayText` / `label` / `sharedCount`，不动 `intersection_point.yaml`。
+
+### 18.2 六场景 P0/P1 矩阵
+
+| 场景 ID | L3 Story | P0 交付 | P1 增强 |
+|---|---|---|---|
+| S1 | `home-recommend-intersection-redesign` | feed 卡 + spotlight 单句 primaryText；去 displayText 回退 | 频道专属 spotlight 数据质量 |
+| S2a | `user-profile-intersection-redesign`（他人） | 「为什么推荐TA」列表入口 + AuthorImpact 去好友化 | 深层 evidence 下钻 |
+| S2b | `user-profile-intersection-redesign`（我的） | 「我的连接」红点 + 「我的影响力」isMine | viewer_object_intersections 读模型 |
+| S3 | `entity-homepage-intersection-redesign` | ObjectIntersectionSection + 记录流单句 | bundle 云侧真实填充 |
+| S4 | `circle-homepage-intersection-redesign` | 圈子交集列表入口 + 记录流单句 | 成员头像簇桥接 |
+| S5 | `search-intersection-consumption` | 搜索交集 Tab + connectionState 分组 + primaryText | 已连接区稳定读模型 |
+| 横切 | `intersection-sentence-unification` | IntersectionReasonChip 单句组件 + G2 门禁 | secondaryText 仅列表入口 |
+
+### 18.3 并行会话分工索引
+
+完整 dispatch 清单与 acceptance checklist 见 `specs/product/intersection-unification-dispatch-index.md`。
+
+---
+
+## 19. 端到端算法闭环（Feature / Ranking / Explain / Event）
+
+> 用户决策（2026-06-15）：**本会话规格与契约必须完备算法闭环**，与 `discovery-content/feed-orchestration-recommendation/personalized-ranking--ranking-signal-fusion` 对齐，**禁止第二套排序真相源**。
+
+### 19.1 北极星与差异化 KPI
+
+| 指标 | 定义 | 对标 |
+|---|---|---|
+| 交集解释点击率 | 含 primaryText 的交集曝光 → 点击对象/内容 | vs 小红书「推荐理由」点击率 |
+| 交集驱动连接转化率 | 点击后 7 日内 follow/join/message | vs 微信关系链转化 |
+| connection-formed-via-intersection | 归因链上带 intersectionId/sourceRef 的新连接 | 趣我圈独有 |
+
+### 19.2 Event Layer（metadata 真相源）
+
+行为管道必须携带 `intersectionId` + `intersectionDimension` + `intersectionClass` + **`intersectionSourceRef`**（§5.4 标准 kind）：
+
+- `impression` / `click`（content behaviors，已登记）
+- `intersection_expand`（列表入口「查看更多」展开，新增 behavior event）
+- `follow` / `join_circle` 转化（已有 intersectionDimension/tagRefs，补 sourceRef）
+
+### 19.3 Feature Layer
+
+`recommend_feature.yaml` → `socialFeatures.intersection`：
+
+- `sharedFolloweesCount` / `sharedCircleCount` / `coCommentedCount` / `coVisitedEntityCount`（事实计数）
+- `followeeInObjectActive` / `followeeViewingActive`（桥接 freshness）
+- `affinityIntersectionScore`（概率，与 fact 分字段）
+
+`scripts/ml/feature_registry.yaml` 同步登记，供 rec-model-service 训练与在线推理。
+
+### 19.4 Ranking Layer
+
+交集信号经 **ranking-signal-fusion** 注入既有 feed 排序，权重与 `policy.yaml` 可配：
+
+- 事实交集 strength + freshness → boost
+- affinity intersectionClass → 独立通道，权重低于 fact
+- 冷却 `rec:icool` 在排序后附着层（feed_intersection_mixer）仍生效
+
+### 19.5 Explain Layer
+
+`primaryText` **唯一产出归属**：content-service `IntersectionService` Explain 管线（模板 + kind 注册表 + 实例样本），禁止 `hydrateDisplayLanguage` 回退旧 displayText/label。
+
+输入：`IntersectionReason` + `IntersectionPoint.sourceRef` + 枚举样本；输出：`primaryText` / `secondaryText` / `connectionSummary`。
+
+### 19.6 职责边界（D7）
+
+| 能力 | 负责 | 不负责 |
+|---|---|---|
+| `intersection-unified-experience` | 事实计算、Explain 文案、交集展示契约、冷却/保鲜 | 独立 feed 召回模型 |
+| `feed-orchestration-recommendation` | 召回、ranking-signal-fusion、feed 混排 | 交集 kind 注册表、primaryText 文案 |
+
+最终定位：交集系统是「关系解释系统（Relational Intelligence System）」——解释「为什么连接发生」，排序只是让解释在正确时刻出现。

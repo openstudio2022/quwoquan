@@ -10,6 +10,11 @@ import yaml
 
 _VERTICALS_ROOT = Path(__file__).resolve().parents[2] / "verticals"
 from _common.source_catalog import known_category_ids, platform_category
+from _common.content_source_registry import (
+    build_content_source_guidance,
+    load_content_source_registry,
+    verify_content_source_registry,
+)
 
 TRAVEL_SOURCE_REGISTRY_PATH = _VERTICALS_ROOT / "travel" / "sources" / "source_registry.yaml"
 
@@ -18,7 +23,7 @@ def load_travel_source_registry() -> dict[str, Any]:
     if not TRAVEL_SOURCE_REGISTRY_PATH.is_file():
         raise FileNotFoundError(f"missing travel source registry: {TRAVEL_SOURCE_REGISTRY_PATH}")
     data = yaml.safe_load(TRAVEL_SOURCE_REGISTRY_PATH.read_text(encoding="utf-8")) or {}
-    if data.get("schemaVersion") != "quwoquan.travel_source_registry.v1":
+    if data.get("schemaVersion") != "quwoquan.travel_source_registry":
         raise ValueError(f"{TRAVEL_SOURCE_REGISTRY_PATH}: invalid schemaVersion")
     if data.get("vertical") != "travel":
         raise ValueError(f"{TRAVEL_SOURCE_REGISTRY_PATH}: vertical mismatch")
@@ -26,7 +31,7 @@ def load_travel_source_registry() -> dict[str, Any]:
 
 
 def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None) -> list[str]:
-    issues: list[str] = []
+    issues: list[str] = verify_content_source_registry()
     try:
         data = load_travel_source_registry()
     except Exception as exc:  # noqa: BLE001
@@ -103,6 +108,14 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
         if not domains and category in {"encyclopedia", "travelogue", "map_geo"}:
             issues.append(f"{prefix}: domains should not be empty for {category} source")
     return issues
+
+
+def load_unified_content_source_registry() -> dict[str, Any]:
+    return load_content_source_registry()
+
+
+def build_unified_content_source_guidance(vertical: str = "travel") -> dict[str, Any]:
+    return build_content_source_guidance(vertical)
 
 
 def iter_travel_registry_sites() -> list[dict[str, Any]]:

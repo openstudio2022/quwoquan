@@ -534,10 +534,23 @@ class HomeMultiFormFeed extends ConsumerWidget {
           ),
         ),
         onNotInterested: () {
-          ref.read(contentBehaviorTrackerProvider).trackDislike(post.id);
+          ref
+              .read(contentBehaviorTrackerProvider)
+              .trackDislike(
+                post.id,
+                contentType: post.type,
+                authorId: post.authorId,
+              );
         },
         onBlockUser: () {
           ref.read(blockRepositoryProvider).blockUser(post.authorId);
+          ref
+              .read(contentBehaviorTrackerProvider)
+              .trackHideAuthor(
+                post.id,
+                authorId: post.authorId,
+                contentType: post.type,
+              );
         },
         onBlockWords: () async {
           final keyword = _extractKeyword(post.normalizedBody);
@@ -545,6 +558,13 @@ class HomeMultiFormFeed extends ConsumerWidget {
           await ref
               .read(keywordBlockRepositoryProvider)
               .addBlockedKeyword(keyword);
+          ref
+              .read(contentBehaviorTrackerProvider)
+              .trackHideContentType(
+                post.id,
+                contentType: post.type,
+                authorId: post.authorId,
+              );
         },
         onReport: () {
           runWhenLoggedIn(ref, context, AuthGateReason.report, () {

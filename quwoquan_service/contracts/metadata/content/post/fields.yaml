@@ -1708,3 +1708,25 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: connectionState
+        type: enum
+        enum_values: [connected, unconnected, intersection_lead]
+        constraints: [NOT_NULL, DEFAULT_unconnected]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 搜索分组编排用连接状态；真相源 search_objects.connection_states
+
+      - name: intersectionReason
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: |
+          IntersectionReason 子集（primaryText/sourceRef/dimension/intersectionClass/objectKind/
+          avatarUrl/displayName/confidenceLabel）；仅 connectionState=intersection_lead 或
+          discovery 区展示交集句时下发；端只读 primaryText（G2）。

@@ -21,7 +21,8 @@ _USER_AGENT = (
     "quwoquan-data/1.0 (+https://github.com/quwoquan; contact: data-ops@quwoquan.example)"
 )
 DOWNLOAD_TEXT_TIMEOUT_SECONDS = max(5, int(os.environ.get("QWQ_DOWNLOAD_TEXT_TIMEOUT_SECONDS", "20")))
-DOWNLOAD_BYTES_TIMEOUT_SECONDS = max(5, int(os.environ.get("QWQ_DOWNLOAD_BYTES_TIMEOUT_SECONDS", "20")))
+DOWNLOAD_BYTES_TIMEOUT_SECONDS = max(3, int(os.environ.get("QWQ_DOWNLOAD_BYTES_TIMEOUT_SECONDS", "8")))
+DOWNLOAD_CURL_RETRIES = max(0, int(os.environ.get("QWQ_DOWNLOAD_CURL_RETRIES", "1")))
 
 # 图片魔数 → 扩展名（仅放行真实图片二进制，拒绝 HTML 错误页伪装）。
 _IMAGE_MAGIC: tuple[tuple[bytes, str], ...] = (
@@ -45,7 +46,12 @@ SUPPORTED_TEXT_EXTRACTORS: frozenset[str] = frozenset(
 
 def _curl_get_text(url: str, *, timeout: int = DOWNLOAD_TEXT_TIMEOUT_SECONDS) -> str:
     proc = subprocess.run(
-        ["curl", "-sS", "-A", _USER_AGENT, "--max-time", str(timeout), url],
+        [
+            "curl", "-sS", "-L", "-A", _USER_AGENT,
+            "--retry", "2", "--retry-delay", "1", "--retry-all-errors",
+            "--max-time", str(timeout),
+            url,
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -229,6 +235,70 @@ def _qunar_html_plaintext(html_bytes: bytes, url: str = "") -> str:
     return _html_to_plain_text(raw)[:50000]
 
 
+def _flatten_json_strings(value: object) -> list[str]:
+    if isinstance(value, str):
+        text = value.strip()
+        if (
+            len(text) >= 4
+            and re.search(r"[\u4e00-\u9fff]", text)
+            and not re.search(r"[\u3040-\u30ff\uac00-\ud7af]", text)
+        ):
+            return [text]
+        return []
+    if isinstance(value, dict):
+        chunks: list[str] = []
+        for item in value.values():
+            chunks.extend(_flatten_json_strings(item))
+        return chunks
+    if isinstance(value, list):
+        chunks: list[str] = []
+        for item in value:
+            chunks.extend(_flatten_json_strings(item))
+        return chunks
+    return []
+
+
+def _spa_bundle_plaintext(url: str, html: str) -> str:
+    """Extract public copy embedded in SPA bundles for official scenic sites."""
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.hostname or ""
+    script_srcs = re.findall(r'(?is)<script[^>]+src=["\']?([^"\' >]+)', html)
+    chunks: list[str] = []
+    for src in script_srcs:
+        if not src:
+            continue
+        src_host = urllib.parse.urlparse(src).hostname
+        if src_host and src_host != host:
+            continue
+        if not src.endswith(".js") and ".js" not in src:
+            continue
+        try:
+            js = _curl_get_text(urllib.parse.urljoin(url, src), timeout=DOWNLOAD_TEXT_TIMEOUT_SECONDS)
+        except Exception:
+            continue
+        for match in re.finditer(r"JSON\.parse\('((?:\\.|[^'])*)'\)", js):
+            raw = match.group(1).replace("\\'", "'")
+            try:
+                payload = json.loads(raw)
+            except Exception:
+                continue
+            chunks.extend(_flatten_json_strings(payload))
+        if chunks:
+            break
+    positive = ("景区", "旅游", "游客", "开放", "门票", "竹海", "风景", "度假", "交通", "服务")
+    negative = ("観光", "発車", "検索", "詳細", "閉館", "推奨", "敷地", "総建築", "物語", "連絡")
+
+    def _locale_score(text: str) -> int:
+        return sum(token in text for token in positive) - sum(token in text for token in negative)
+
+    chunks = [
+        chunk for chunk in chunks
+        if not (any(token in chunk for token in negative) and not any(token in chunk for token in positive))
+    ]
+    chunks = sorted(chunks, key=_locale_score, reverse=True)
+    return _join_unique_text_chunks(chunks)[:50000]
+
+
 def _static_official_plaintext(url: str) -> str:
     try:
         html = _curl_get_text(url)
@@ -245,7 +315,12 @@ def _static_official_plaintext(url: str) -> str:
             text = _ems517_shell_plaintext(url, html)
             if text:
                 return text[:50000]
-    return _html_to_plain_text(html)[:50000]
+    text = _html_to_plain_text(html)
+    if len(text) < 200 or "加载中" in text:
+        bundle_text = _spa_bundle_plaintext(url, html)
+        if bundle_text:
+            return bundle_text[:50000]
+    return text[:50000]
 
 
 def _extract_text_by_extractor(extractor: str, html_bytes: bytes, url: str = "") -> str:
@@ -417,6 +492,7 @@ def _curl_get_bytes(url: str, *, timeout: int = DOWNLOAD_BYTES_TIMEOUT_SECONDS) 
         proc = subprocess.run(
             [
                 "curl", "-sS", "-L", "-A", _USER_AGENT,
+                "--retry", str(DOWNLOAD_CURL_RETRIES), "--retry-delay", "1", "--retry-all-errors",
                 "--max-time", str(timeout),
                 "-o", body_file.name,
                 "-w", "%{http_code}",
@@ -439,7 +515,7 @@ def _curl_get_bytes(url: str, *, timeout: int = DOWNLOAD_BYTES_TIMEOUT_SECONDS) 
 def _http_get_bytes(
     url: str,
     *,
-    timeout: int = 20,
+    timeout: int = DOWNLOAD_BYTES_TIMEOUT_SECONDS,
     max_redirects: int = 4,
     max_retries: int = 4,
 ) -> tuple[int, bytes, str]:

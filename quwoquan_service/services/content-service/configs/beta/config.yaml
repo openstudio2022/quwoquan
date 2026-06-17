@@ -17,6 +17,12 @@ rec_model_service:
   enabled: true
   timeout_ms: 200
 
+# beta runs against local mock data (no mongo): the search-index projector stays a
+# no-op. Flip to enabled once a beta ES cluster is provisioned (endpoints via env).
+es:
+  enabled: false
+  endpoints: []
+
 experiments:
   rec_model_vs_rule:
     enabled: true

@@ -18,6 +18,8 @@ environments:
   dev:
     content-service:
       domains: [content]
+    search-service:
+      domains: [search]
     entity-service:
       domains: [entity]
     tag-service:
@@ -50,6 +52,8 @@ environments:
   alpha:
     content-service:
       domains: [content]
+    search-service:
+      domains: [search]
     entity-service:
       domains: [entity]
     tag-service:
@@ -80,6 +84,8 @@ environments:
       domains: [turn]
 
   beta:
+    search-service:
+      domains: [search]
     entity-service:
       domains: [entity]
     tag-service:
@@ -102,6 +108,8 @@ environments:
       domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
 
   gamma:
+    search-service:
+      domains: [search]
     entity-service:
       domains: [entity]
     tag-service:
@@ -124,6 +132,8 @@ environments:
       domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
 
   prod:
+    search-service:
+      domains: [search]
     entity-service:
       domains: [entity]
     tag-service:

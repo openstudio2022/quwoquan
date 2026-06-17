@@ -40,6 +40,23 @@ void main() {
           .map((e) => e.contentId)
           .toList();
       expect(impressions, equals(['post_1', 'post_2']));
+      expect(repo.recorded.first.state, equals('impressed'));
+      expect(repo.recorded.first.clientEventId, isNotEmpty);
+    });
+
+    test('未达可见阈值只上报 visible，不进入 impressed 去重集合', () async {
+      tracker.trackQualifiedImpression(
+        'post_1',
+        visibleFraction: 0.2,
+        visibleDuration: const Duration(milliseconds: 500),
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.impression);
+      expect(event.state, equals('visible'));
+      expect(event.toJson()['state'], equals('visible'));
+      expect(event.clientEventId, isNotEmpty);
     });
 
     test('dwell < 1s 不上报', () async {
@@ -54,6 +71,7 @@ void main() {
 
       expect(repo.recorded.length, equals(1));
       expect(repo.recorded.first.action, BehaviorAction.dwell);
+      expect(repo.recorded.first.state, equals('dwell'));
       expect(repo.recorded.first.duration, equals(3.5));
     });
 
@@ -76,10 +94,51 @@ void main() {
     });
 
     test('dislike 事件正确上报', () async {
-      tracker.trackDislike('post_1');
+      tracker.trackDislike(
+        'post_1',
+        contentType: 'photo',
+        authorId: 'author_1',
+      );
       await tracker.flush();
       expect(repo.recorded.first.action, BehaviorAction.dislike);
+      expect(repo.recorded.first.state, equals('negative'));
       expect(repo.recorded.first.contentId, equals('post_1'));
+      expect(repo.recorded.first.contentType, equals('photo'));
+      expect(repo.recorded.first.authorId, equals('author_1'));
+    });
+
+    test('hide_author 事件上报 contentId + authorId + contentType', () async {
+      tracker.trackHideAuthor(
+        'post_1',
+        authorId: 'author_1',
+        contentType: 'photo',
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.hideAuthor);
+      expect(event.state, equals('negative'));
+      expect(event.contentId, equals('post_1'));
+      expect(event.authorId, equals('author_1'));
+      expect(event.contentType, equals('photo'));
+      expect(event.toJson()['action'], equals('hide_author'));
+    });
+
+    test('hide_content_type 事件上报 contentType，可带 authorId', () async {
+      tracker.trackHideContentType(
+        'post_2',
+        contentType: 'video',
+        authorId: 'author_2',
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.hideContentType);
+      expect(event.state, equals('negative'));
+      expect(event.contentId, equals('post_2'));
+      expect(event.contentType, equals('video'));
+      expect(event.authorId, equals('author_2'));
+      expect(event.toJson()['action'], equals('hide_content_type'));
     });
 
     test('share 事件正确上报', () async {

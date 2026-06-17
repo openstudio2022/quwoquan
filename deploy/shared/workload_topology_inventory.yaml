@@ -74,6 +74,20 @@ workloads:
     required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
     notes: 进程映射已在 process_domain_mapping prod；K8s prod overlay 待补（planned，不进 prod rollout）。
 
+  - name: search-service
+    plane: application
+    deploy_kind: standalone-workload
+    workload_resource: Deployment
+    primary_container: search-service
+    domains: [search]
+    kustomize_overlay: null
+    prod_root_kustomizations: []
+    wired_to_prod_root: false
+    required_primitives: [Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget]
+    notes: >
+      专用 ES/OpenSearch 读模型 + 独立可部署 search-service（FallbackBackend Primary=ES Fallback=native）。
+      进程映射已在 process_domain_mapping prod；K8s prod overlay 待补（planned，不进 prod rollout）。
+
   - name: tag-service
     plane: application
     deploy_kind: standalone-workload

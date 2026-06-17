@@ -55,11 +55,11 @@ void main() {
       );
     });
 
-    test('无可展示证据组（无点 + 空 label） → 返回 null', () {
+    test('无可展示证据组（无点 + 空 primaryText） → 返回 null', () {
       expect(
         ObjectIntersectionCard.fromReasons(
           title: '你们的交集',
-          reasons: [IntersectionReason(label: '   ')],
+          reasons: [IntersectionReason(primaryText: '   ')],
           isDark: false,
         ),
         isNull,

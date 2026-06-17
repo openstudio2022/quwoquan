@@ -138,16 +138,22 @@ class RetrieveRequest {
         case SearchObjectType.chatConversation:
         case SearchObjectType.chatMessage:
           targets.add(RetrieveTarget.chat);
+        case SearchObjectType.locationPlace:
+          // First-party place object (R-S05e): a free-text place referenced by
+          // content but not yet bound to an entity homepage.
+          targets.add(RetrieveTarget.location);
         case SearchObjectType.webDocument:
         case SearchObjectType.tag:
         case SearchObjectType.integrationLocationPoi:
-          // Not retrieve business targets (web is a citation supplement; tag is
-          // a filter; location is handled by integration).
+          // Not retrieve business targets (web is a citation supplement; tag is a
+          // filter; integration.location_poi is the live 3rd-party POI handled by
+          // integration, distinct from the first-party location.place above).
           break;
       }
     }
     if (targets.isEmpty) {
-      // Default broad fan-out matching the result-mode object set.
+      // Default broad fan-out matching the result-mode object set
+      // (search-service DefaultResultTargets, single-sourced with the cloud).
       targets.addAll(<RetrieveTarget>[
         RetrieveTarget.article,
         RetrieveTarget.photo,
@@ -156,6 +162,7 @@ class RetrieveRequest {
         RetrieveTarget.entity,
         RetrieveTarget.circle,
         RetrieveTarget.group,
+        RetrieveTarget.location,
       ]);
     }
     return targets.toList(growable: false);

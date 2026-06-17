@@ -1,0 +1,83 @@
+version: 1
+# 交集统一体验 SLI/SLO 声明（单一真相源：本文件 + 两类真实指标）。
+#   1) HTTP 边界（延迟/错误/可用性）：runtime/observability http_server_* 中间件按
+#      route 自动产出，无需服务自埋；分位数取自 histogram（禁止算术平均代替分位数）。
+#   2) 业务漏斗（重复曝光/冷却/保鲜/清零/展示完备）：content-service
+#      infrastructure/intersectionmetrics 产出的 intersection_* 计数器。
+# 告警规则落在单一源 deploy/monitoring/alerts/quwoquan_alerts.yaml 的
+# quwoquan_intersection 组，expr 直接消费下列指标，阈值与本文件 objective 对齐。
+service: content-service
+domain: content
+capability: intersection-unified-experience
+
+# 路由集合（HTTP SLI 的 route label 过滤；与 generated_routes.go 一致）。
+routes:
+  object_intersections: /v1/content/intersections/object
+  my_intersections_list: /v1/content/intersections
+  my_intersection_summary: /v1/content/intersections/summary
+  mark_visited: /v1/content/intersections/visit
+  report_exposure: /v1/content/intersections/exposure
+  feed_intersections: /v1/content/feed/intersections
+
+# 指标真相源（Prometheus，promauto 默认注册表，/metrics 暴露）
+metrics:
+  http_requests_total: http_server_requests_total            # labels: service, route, method, status
+  http_duration_seconds: http_server_duration_seconds        # labels: service, route, method
+  http_error_codes_total: http_server_error_codes_total      # labels: service, error_code, module, kind
+  feed_candidates_total: intersection_feed_candidates_total  # labels: channel, class(fact|affinity), rank_state(fresh|seen)
+  feed_filtered_total: intersection_feed_filtered_total      # labels: channel, reason(stale|display_incomplete)
+  cooldown_exposure_total: intersection_cooldown_exposure_reported_total
+  inbox_visit_total: intersection_inbox_visit_total          # labels: dimension
+  inbox_filtered_total: intersection_inbox_filtered_total    # labels: reason(stale)
+
+slis:
+  # ---- HTTP 边界（用户感知延迟与可用性）----
+  - id: intersection_api_latency
+    description: 交集相关读路由的用户感知延迟，分位数取自 http_server histogram
+    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route=~"/v1/content/intersections.*|/v1/content/feed/intersections"}[5m])) by (le))
+    objectives:
+      p50_ms: 60
+      p95_ms: 300
+  - id: intersection_api_availability
+    description: 交集读路由可用性 = 1 - 5xx 错误率（status 以 5 开头）
+    sli: 1 - sum(rate(http_server_requests_total{service="content-service", route=~"/v1/content/intersections.*|/v1/content/feed/intersections", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="content-service", route=~"/v1/content/intersections.*|/v1/content/feed/intersections"}[5m]))
+    objective: 0.995
+
+  # ---- 业务漏斗（推荐质量与新鲜度）----
+  - id: repeat_exposure_rate
+    description: spotlight 候选窗中命中跨会话冷却记忆窗（rank_state=seen）的占比；过高说明换新不足
+    sli: sum(rate(intersection_feed_candidates_total{rank_state="seen"}[30m])) / sum(rate(intersection_feed_candidates_total[30m]))
+    objective_max: 0.20
+  - id: freshness_filter_rate
+    description: Feed 候选因过保鲜（stale）被过滤的占比；过高说明读模型 freshness TTL 或重算滞后
+    sli: sum(rate(intersection_feed_filtered_total{reason="stale"}[30m])) / (sum(rate(intersection_feed_candidates_total[30m])) + sum(rate(intersection_feed_filtered_total[30m])))
+    objective_max: 0.30
+  - id: display_incomplete_rate
+    description: Feed 候选因展示语言不完备（缺 primaryText/头像）被过滤的占比；空窗治理负向 SLI
+    sli: sum(rate(intersection_feed_filtered_total{reason="display_incomplete"}[30m])) / (sum(rate(intersection_feed_candidates_total[30m])) + sum(rate(intersection_feed_filtered_total[30m])))
+    objective_max: 0.10
+  - id: fact_channel_share
+    description: 候选窗中事实交集（class=fact）占比，用于监控事实/概率混排是否退化为纯概率
+    sli: sum(rate(intersection_feed_candidates_total{class="fact"}[30m])) / sum(rate(intersection_feed_candidates_total[30m]))
+    objective_min: 0.30
+  - id: inbox_clear_volume
+    description: 我的交集清零（水位推进）速率，按维度可切分；用于验证红点闭环活跃度
+    sli: sum(rate(intersection_inbox_visit_total[1h])) by (dimension)
+    objective_observe_only: true
+
+# 灰度/回滚分层（与 acceptance §回滚一致）：
+#   1) 关闭 affinity 通道（仅保留 fact 候选）-> fact_channel_share 升至 1.0
+#   2) 关闭频道交集 rail（停 Feed spotlight）-> feed_candidates_total 归零，事实交集卡保留
+#   3) 关闭 premium pool（rec-differentiation 落地后）
+# 上述开关由 runtime/recpolicy Intersection policy + feature flag 控制（读路径零同步 RPC）。
+rollback_layers:
+  - disable_affinity_channel
+  - disable_channel_intersection_rail
+  - disable_premium_pool
+
+# AB：channel 作为 Feed 业务 SLI 的可切分维度；首页 vs 校园/旅行频道的
+# repeat_exposure_rate / fact_channel_share / display_incomplete_rate 可分渠道归因。
+ab:
+  segmentation_label: channel
+
+alerts_source: deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_intersection

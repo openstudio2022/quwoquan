@@ -1,0 +1,70 @@
+package recommendation
+
+import (
+	"context"
+	"testing"
+)
+
+type stubCollaborativeStore struct {
+	i2i []ContentCandidate
+	u2i []ContentCandidate
+}
+
+func (s *stubCollaborativeStore) GetI2ICandidates(_ context.Context, _ []string, limit int) ([]ContentCandidate, error) {
+	if limit > len(s.i2i) {
+		limit = len(s.i2i)
+	}
+	return s.i2i[:limit], nil
+}
+
+func (s *stubCollaborativeStore) GetU2ICandidates(_ context.Context, _ string, limit int) ([]ContentCandidate, error) {
+	if limit > len(s.u2i) {
+		limit = len(s.u2i)
+	}
+	return s.u2i[:limit], nil
+}
+
+func TestCollaborativeRecallSource_ReadsMaterializedI2IAndU2IWithQuota(t *testing.T) {
+	src := NewCollaborativeRecallSource(&stubCollaborativeStore{
+		i2i: []ContentCandidate{
+			{ContentID: "shared", ContentType: "article"},
+		},
+		u2i: []ContentCandidate{
+			{ContentID: "shared", ContentType: "article"},
+			{ContentID: "u2i-1", ContentType: "video"},
+		},
+	}, CollaborativeRecallConfig{
+		Enabled:          true,
+		MaxI2ICandidates: 2,
+		MaxU2ICandidates: 2,
+		QuotaPct:         50,
+	})
+
+	candidates, err := src.Recall(context.Background(), RecallRequest{UserID: "u1", Limit: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 2 {
+		t.Fatalf("quota should cap collaborative candidates to 2, got %d", len(candidates))
+	}
+	if candidates[0].RecallPath != RecallPathCollaborativeI2I {
+		t.Fatalf("first path = %s, want i2i", candidates[0].RecallPath)
+	}
+	if candidates[1].ContentID != "u2i-1" || candidates[1].RecallPath != RecallPathCollaborativeU2I {
+		t.Fatalf("u2i duplicate should be skipped and next materialized candidate used, got %+v", candidates)
+	}
+}
+
+func TestCollaborativeRecallSource_DisabledReturnsEmpty(t *testing.T) {
+	src := NewCollaborativeRecallSource(&stubCollaborativeStore{
+		i2i: []ContentCandidate{{ContentID: "i2i-1"}},
+	}, CollaborativeRecallConfig{Enabled: false, QuotaPct: 50})
+
+	candidates, err := src.Recall(context.Background(), RecallRequest{UserID: "u1", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 0 {
+		t.Fatalf("disabled collaborative source should return empty, got %d", len(candidates))
+	}
+}

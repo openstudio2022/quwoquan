@@ -8,3 +8,11 @@ redis:
     mode: standalone
     addr: ""
     db: 0
+
+# gamma enables the write-time index; endpoints/credentials come from SEARCH_ES_*.
+es:
+  enabled: true
+  endpoints: []
+  index: "quwoquan_objects"
+  shards: 1
+  replicas: 1

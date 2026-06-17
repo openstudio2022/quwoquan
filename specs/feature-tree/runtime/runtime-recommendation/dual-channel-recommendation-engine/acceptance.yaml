@@ -7,32 +7,53 @@ node:
   parent_domain_service: runtime
   parent_business_capability: runtime-recommendation
 scope:
-  summary: dual channel recommendation engine 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: HotPath + ColdPath + Engine 7 阶段管线的双通道推荐引擎验收。
+  in_scope:
+  - HotPath session 信号写入与读取。
+  - 多源召回、预排、过滤、特征组装、Rule/Remote/CascadeScorer、重排。
+  - 模型降级、召回源超时、负反馈过滤、多样性与冷启动。
+  out_of_scope:
+  - 首页 feed 页面体验和频道 IA。
+  - 深度排序模型平台轨、双塔 ANN、广告竞价。
 gwt_acceptance:
   GWT1:
-    title: dual channel recommendation engine GWT
+    title: 双通道推荐引擎 GWT
     given:
-    - 前置条件明确。
+    - 系统配置 HotPath、候选源、FeatureProvider 与 Rule/CascadeScorer，内容候选含多作者、多标签、多类型。
     when:
-    - 用户或系统动作发生。
+    - 用户曝光、点击、停留、点赞或 dislike 内容后，请求推荐 feed。
     then:
-    - 可观察结果符合预期。
+    - SessionState 更新；已曝光与 negative 内容被过滤；正向兴趣影响排序；模型失败时 fallback 到 RuleScorer；重排保持多样性。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - Engine 端到端、HotPath、CascadeScorer、FeatureProvider、PreRanker、MMR/UCB、并发与可观测测试均有 recorded 证据。
+    edge_cases:
+    - 召回源超时不阻塞整体结果。
+    - 模型 scorer 超时或错误时回退规则分。
+    - 冷启动用户仍有探索候选。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/recommendation/rec_model/service.yaml
+    - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+    performance_points:
+    - HotPath 行为生效延迟 < 100ms。
+    - Feed P95 <= 200ms，P99 <= 400ms。
     evidence:
       primary:
       - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T3_app_api_integration
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_service/runtime/recommendation/engine_test.go
+      - quwoquan_service/runtime/recommendation/bench_test.go
+      - quwoquan_service/runtime/recommendation/feed_type_contract_test.go
+      - quwoquan_service/runtime/recommendation/engagement_depth_test.go
+      - quwoquan_service/runtime/recommendation/intersection_fusion_test.go
+      - quwoquan_service/runtime/recommendation/rerank_mmr_test.go
+      - quwoquan_service/runtime/recommendation/social_recall_test.go
+      - quwoquan_service/runtime/recommendation/ucb_explore_test.go
+    status: implemented
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

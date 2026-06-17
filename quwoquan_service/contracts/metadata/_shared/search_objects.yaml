@@ -1,5 +1,27 @@
 version: 1
 
+# connectionState 闭集：搜索 hit 与分组编排的唯一连接状态真相源。
+# 已连接/已互动结果进入「已连接区」；未连接结果进入「发现区」。
+# intersectionReason 为 IntersectionReason 子集（primaryText + sourceRef + dimension +
+# intersectionClass + objectKind + avatarUrl + displayName）；端只读 primaryText（G2）。
+connection_states:
+  - id: connected
+    label: 已连接
+    description: 用户已加入圈子、已关注对象、已有联系人/会话，或对内容赞/评/转过
+    search_zones:
+      - connected
+  - id: unconnected
+    label: 未连接
+    description: 与 query 匹配但用户尚未建立持续连接或内容互动
+    search_zones:
+      - discovery
+  - id: intersection_lead
+    label: 交集线索
+    description: 未连接对象但存在可展示的事实/affinity 交集句，用于发现区交集 Tab 与激发搜索
+    search_zones:
+      - discovery
+      - intersection_tab
+
 object_types:
   - id: web.document
     label: 网页
@@ -33,6 +55,13 @@ object_types:
     provider: circle_remote
   - id: content.post
     label: 内容
+    domain: content
+    execution_strategy: remote_only
+    provider: content_remote
+  # 第一方地点对象（R-S05e）：被内容引用、尚未绑定 canonicalEntity 的自由文本地点聚合
+  # 去重后的快照对象。由 content 域灌入统一索引，复用跨对象 geo 维度承载坐标/地名。
+  - id: location.place
+    label: 地点
     domain: content
     execution_strategy: remote_only
     provider: content_remote
@@ -83,6 +112,10 @@ ai_targets:
     label: 实体主页
     object_type: entity.homepage
     description: 景点、地点、品牌、学校等实体主页
+  - id: location
+    label: 地点
+    object_type: location.place
+    description: 被内容引用但尚未绑定实体主页的第一方自由文本地点（去重快照；提升为实体后由 entity 承载）
   - id: circle
     label: 圈子
     object_type: circle.circle
@@ -95,6 +128,47 @@ ai_targets:
     label: 聊天
     object_type: chat.message
     description: 聊天会话与消息片段（按权限返回）
+
+# 跨对象 geo/地点维度（R-S05e）。geo 是挂在统一检索文档上的可选结构化维度：任意对象
+# 类型用同一组字段附加地点，并支持「附近(geo 半径)」检索/排序。这是该维度的单一描述
+# 真相源，runtime/search.Document.Geo + Fields(placeId/placeName)、es index mapping
+# (geo/placeId/placeName)、search_contract.filter(near)/hit(geo/distanceKm/placeName)
+# 均与此对齐。
+#
+# location 既是该跨对象维度，也有一类复用该维度的第一方对象 target：location.place
+# （见 object_types/ai_targets 的 location）。location.place 仅覆盖「被内容引用、但尚未
+# 绑定 canonicalEntityId/primaryHomepageId 的自由文本地点」，由 content 域聚合去重为第一方
+# 快照对象；一旦该地点绑定为 canonicalEntity（成为 entity.homepage），其 location.place
+# 对象即被删除——同一地点只出现一次（未提升=location.place、已提升=entity.homepage），
+# geo 机制只有一套，二者互斥不重复。
+location_dimension:
+  description: 跨对象 geo 维度 + 第一方 location.place 对象；未绑定 canonicalEntity 的自由文本地点由 location.place 承载，已绑定者由 entity.homepage 承载，二者互斥不重复（单一真相源）。
+  fields:
+    - id: geo
+      type: geo_point
+      description: 结构化经纬度(lat/lng)；仅在对象有真实坐标时填充，禁止编造。
+    - id: placeId
+      type: keyword
+      description: 关联地点(通常是 entity.homepage)的稳定 id；对象本身即地点时可省略。
+    - id: placeName
+      type: text
+      description: 人类可读地点名(城市/地名/发布地)。
+  near_filter:
+    description: filters.near(lat/lng/radiusKm) 表达"附近"，对带 geo 的候选做硬半径过滤 + 邻近加权。
+  # 各对象类型 location 接入状态：populated=已落地真实字段；extension=零契约改动即可接入。
+  object_population:
+    - object_type: entity.homepage
+      status: populated
+      source: Homepage.location(GeoPoint) -> geo；Homepage.city -> placeName
+    - object_type: content.post
+      status: populated
+      source: Post.location(GeoPoint) -> geo(非零时)；Post.locationName -> placeName
+    - object_type: user.profile
+      status: extension
+      source: 用户模型暴露常驻地/活动坐标时，在 ProjectUserProfileToSearchDocument 填 Geo/placeName
+    - object_type: circle.circle
+      status: extension
+      source: 圈子模型暴露地点/坐标时，在 ProjectCircleToSearchDocument 填 Geo/placeName
 
 section_kinds:
   - id: contacts
@@ -122,6 +196,7 @@ section_kinds:
   - id: locations
     title: 位置
     default_object_types:
+      - location.place
       - integration.location_poi
   - id: web
     title: 网页

@@ -14,9 +14,9 @@
   "retentionPolicyVersion": 1,
   "topologySchemaVersion": "environment-topology/v1",
   "artifactPolicy": {
-    "allowFixtureRefs": false,
+    "allowFixtureRefs": true,
     "allowReleaseSnapshot": true,
     "secretScope": "gamma",
-    "distribution": "pre-release"
+    "distribution": "internal-only"
   }
 }

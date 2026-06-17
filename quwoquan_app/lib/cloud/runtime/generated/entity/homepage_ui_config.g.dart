@@ -15,6 +15,20 @@ class HomepageTabConfig {
   });
 }
 
+class HomepageSubTabConfig {
+  final String id;
+  final String labelKey;
+  final bool isDefault;
+  final List<String> homepageTypes;
+
+  const HomepageSubTabConfig({
+    required this.id,
+    required this.labelKey,
+    required this.isDefault,
+    required this.homepageTypes,
+  });
+}
+
 // ignore: avoid_classes_with_only_static_members
 class HomepageUIConfig {
   const HomepageUIConfig._();
@@ -22,8 +36,16 @@ class HomepageUIConfig {
   static const String defaultTabId = "content";
 
   static const List<HomepageTabConfig> tabs = <HomepageTabConfig>[
-    HomepageTabConfig(id: "content", labelKey: "homepage_tab_content", bodySlot: "content", isDefault: true),
+    HomepageTabConfig(id: "content", labelKey: "homepage_tab_record", bodySlot: "content", isDefault: true),
     HomepageTabConfig(id: "discussion", labelKey: "homepage_tab_discussion", bodySlot: "discussion", isDefault: false),
-    HomepageTabConfig(id: "interest_circles", labelKey: "homepage_tab_interest_circles", bodySlot: "interest_circles", isDefault: false),
+    HomepageTabConfig(id: "interest_circles", labelKey: "homepage_tab_related_circles", bodySlot: "interest_circles", isDefault: false),
+  ];
+
+  static const List<HomepageSubTabConfig> subTabs = <HomepageSubTabConfig>[
+    HomepageSubTabConfig(id: "all", labelKey: "homepage_sub_all", isDefault: true, homepageTypes: const <String>[]),
+    HomepageSubTabConfig(id: "image", labelKey: "homepage_sub_image", isDefault: false, homepageTypes: const <String>[]),
+    HomepageSubTabConfig(id: "video", labelKey: "homepage_sub_video", isDefault: false, homepageTypes: const <String>[]),
+    HomepageSubTabConfig(id: "article", labelKey: "homepage_sub_article", isDefault: false, homepageTypes: const <String>[]),
+    HomepageSubTabConfig(id: "campus_life", labelKey: "homepage_sub_campus_life", isDefault: false, homepageTypes: <String>['school']),
   ];
 }

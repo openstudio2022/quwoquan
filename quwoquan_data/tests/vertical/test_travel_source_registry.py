@@ -23,6 +23,7 @@ from vertical.source_registry import (  # noqa: E402
 
 def test_repository_travel_source_registry_is_valid():
     data = load_travel_source_registry()
+    assert data["schemaVersion"] == "quwoquan.travel_source_registry"
     assert data["vertical"] == "travel"
     assert verify_travel_source_registry(
         allowed_extractors={
@@ -37,7 +38,7 @@ def test_repository_travel_source_registry_is_valid():
 
 
 def test_registry_rejects_unknown_extractor():
-    text = """schemaVersion: quwoquan.travel_source_registry.v1
+    text = """schemaVersion: quwoquan.travel_source_registry
 vertical: travel
 qualityTiers: [A]
 licensePolicies: [factual_citation_only]
@@ -81,6 +82,12 @@ def test_registry_matches_runtime_sites_and_extractors():
     ems = resolve_travel_source_runtime("http://www.ems517.com/new/visitor?preferential=1")
     assert ems["siteId"] == "scenic_official", ems
     assert ems["extractor"] == "static_official_html", ems
+    bipenggou = resolve_travel_source_runtime("http://www.bipenggou.net/")
+    assert bipenggou["siteId"] == "scenic_official", bipenggou
+    bifengxia = resolve_travel_source_runtime("http://www.bifengxia.com/info?crid=74&lan=cn&ckey=jqgk_dfbfx")
+    assert bifengxia["siteId"] == "scenic_official", bifengxia
+    snzh = resolve_travel_source_runtime("https://www.snzh.cn/")
+    assert snzh["siteId"] == "scenic_official", snzh
     qunar = resolve_travel_source_runtime("https://travel.qunar.com/p-oi123456-jingdian")
     assert qunar["siteId"] == "qunar_guide", qunar
     assert qunar["extractor"] == "qunar_html", qunar

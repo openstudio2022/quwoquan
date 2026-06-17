@@ -42,6 +42,23 @@ void main() {
       expect(rows.single.isGroup, isFalse);
     });
 
+    test('未读角标数汇总 unread filter 的 unreadCount', () async {
+      final repo = _FakeChatRepository();
+      final container = ProviderContainer(
+        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+      );
+      addTearDown(container.dispose);
+
+      final count = container.read(messageHomeUnreadBadgeCountProvider);
+      expect(count, isNull);
+
+      final resolved = await container.read(
+        messageHomeRowsProvider('unread').future,
+      );
+      expect(totalUnreadMessages(resolved), 2);
+      expect(container.read(messageHomeUnreadBadgeCountProvider), 2);
+    });
+
     test('会话已读刷新会失效所有 MessageHome filter', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(

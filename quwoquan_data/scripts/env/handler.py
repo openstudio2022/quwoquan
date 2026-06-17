@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -90,16 +92,72 @@ def handle_preflight(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
+    """Run final preflight in the prepared data runtime.
+
+    `env ready` is often launched by `/usr/bin/python3`, while managed workflow
+    re-execs into `quwoquan_data/.venv`.  Running the final preflight in the
+    same interpreter removes the recurring false diagnosis that the active
+    production runtime lacks `cursor_sdk`.
+    """
+    if Path(sys.executable).absolute() == python.absolute():
+        return environment_preflight(
+            require_cursor_key=not bool(getattr(args, "no_cursor_key", False)),
+            check_network=not bool(getattr(args, "no_network", False)),
+            endpoints=getattr(args, "endpoint", None),
+            timeout_seconds=float(getattr(args, "timeout_seconds", 5.0)),
+        )
+    cmd = [
+        str(python),
+        str(Path(__file__).resolve().parents[1] / "cli.py"),
+        "env",
+        "preflight",
+        "--json",
+        "--timeout-seconds",
+        str(float(getattr(args, "timeout_seconds", 5.0))),
+    ]
+    if bool(getattr(args, "no_cursor_key", False)):
+        cmd.append("--no-cursor-key")
+    if bool(getattr(args, "no_network", False)):
+        cmd.append("--no-network")
+    for endpoint in getattr(args, "endpoint", None) or []:
+        cmd.extend(["--endpoint", str(endpoint)])
+    proc = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=os.environ.copy(),
+    )
+    try:
+        report = json.loads((proc.stdout or "{}").strip() or "{}")
+    except json.JSONDecodeError:
+        report = {
+            "schemaVersion": "quwoquan_data.environment_preflight",
+            "ready": False,
+            "issues": [proc.stderr.strip() or "env preflight subprocess did not return JSON"],
+        }
+    if proc.returncode != 0 and report.get("ready"):
+        report["ready"] = False
+        report.setdefault("issues", []).append(f"preflight subprocess exited {proc.returncode}")
+    return report if isinstance(report, dict) else {"ready": False, "issues": ["invalid preflight report"]}
+
+
 def handle_ready(args: argparse.Namespace) -> None:
     prepare = prepare_data_runtime(
         python=Path(args.python).expanduser() if getattr(args, "python", None) else None,
         requirements=Path(args.requirements).expanduser() if getattr(args, "requirements", None) else None,
     )
-    preflight = environment_preflight(
-        require_cursor_key=not bool(getattr(args, "no_cursor_key", False)),
-        check_network=not bool(getattr(args, "no_network", False)),
-        endpoints=getattr(args, "endpoint", None),
-        timeout_seconds=float(getattr(args, "timeout_seconds", 5.0)),
+    preflight_python = Path(str(prepare.get("python") or "")).expanduser()
+    preflight = (
+        _preflight_in_python(args, preflight_python)
+        if prepare.get("ready") and preflight_python.is_file()
+        else environment_preflight(
+            require_cursor_key=not bool(getattr(args, "no_cursor_key", False)),
+            check_network=not bool(getattr(args, "no_network", False)),
+            endpoints=getattr(args, "endpoint", None),
+            timeout_seconds=float(getattr(args, "timeout_seconds", 5.0)),
+        )
     )
     report = {
         "schemaVersion": "quwoquan_data.env_ready",

@@ -57,7 +57,7 @@ void main() {
       final repo = MockIntersectionRepository();
       final items = await repo.listMyIntersections();
       expect(items, isNotEmpty);
-      expect(items.every((r) => r.displayText.trim().isNotEmpty), isTrue);
+      expect(items.every((r) => r.primaryText.trim().isNotEmpty), isTrue);
       expect(items.every((r) => r.intersectionPoints.isNotEmpty), isTrue);
       expect(
         items.every((r) => r.totalPointCount == r.intersectionPoints.length),
@@ -110,7 +110,7 @@ void main() {
       final repo = MockIntersectionRepository();
       final items = await repo.getFeedIntersections(channel: 'travel');
       expect(items, isNotEmpty);
-      expect(items.every((r) => r.displayText.trim().isNotEmpty), isTrue);
+      expect(items.every((r) => r.primaryText.trim().isNotEmpty), isTrue);
       expect(items.every((r) => r.intersectionPoints.isNotEmpty), isTrue);
       final affinity = items.firstWhere(
         (r) => r.intersectionClass == 'affinity',

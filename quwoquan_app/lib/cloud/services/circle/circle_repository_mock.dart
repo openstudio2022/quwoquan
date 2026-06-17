@@ -806,7 +806,7 @@ class MockCircleRepository implements CircleRepository {
             intersectionDimension: 'relationship',
             source: 'circle_members',
             count: memberCount,
-            displayText: '$memberCount人在这里建立了新连接',
+            primaryText: '$memberCount人在这里建立了新连接',
           ),
         if (postCount > 0)
           CircleImpactItem(
@@ -815,7 +815,7 @@ class MockCircleRepository implements CircleRepository {
             intersectionDimension: 'content',
             source: 'circle_posts',
             count: postCount,
-            displayText: '$postCount个讨论正在这里发生',
+            primaryText: '$postCount个讨论正在这里发生',
           ),
         if (weeklyActive > 0)
           CircleImpactItem(
@@ -824,7 +824,7 @@ class MockCircleRepository implements CircleRepository {
             intersectionDimension: 'interest',
             source: 'circle_weekly_active',
             count: weeklyActive,
-            displayText: '$weeklyActive人最近参与了这里',
+            primaryText: '$weeklyActive人最近参与了这里',
           ),
       ],
     );

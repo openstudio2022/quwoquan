@@ -39,7 +39,7 @@ os.environ["QWQ_COMMITTED_TASKS_ROOT"] = str(_TMP / "tasks")
 
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from _common.draft_io import draft_article_path, write_placeholder_draft  # noqa: E402
+from _common.draft_io import draft_article_path, write_placeholder_draft, write_writing_pack  # noqa: E402
 from _common.command_packet import build_packet, write_packet  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.stage_reports import write_gate_report  # noqa: E402
@@ -84,7 +84,7 @@ def _real_jpeg(seed: int) -> bytes:
     return buf.getvalue()
 
 
-def _make_task() -> str:
+def _make_task(*, workflow_policy: dict | None = None) -> str:
     spec = store.scaffold_spec(
         vertical="travel",
         organize_by="地域",
@@ -114,6 +114,8 @@ def _make_task() -> str:
         },
         created_by="test",
     )
+    if workflow_policy is not None:
+        spec["workflowPolicy"] = workflow_policy
     store.save_spec(spec)
     store.save_progress(store.init_progress(spec["taskId"], remaining=[f"地点/景区/{_EID}"]))
     _seed_baseline(spec["taskId"])
@@ -204,6 +206,13 @@ def test_cursor_bridge_startup_errors_are_retryable_infra():
     assert not run_mod._cursor_bridge_error_is_retryable("CURSOR_API_KEY missing")
 
 
+def test_cursor_callback_token_factory_never_starts_with_dash():
+    calls = iter(["-bad-token", "ok-token"])
+    factory = run_mod._cursor_safe_auth_token_factory(lambda: next(calls))
+    assert factory() == "qwq_bad-token"
+    assert factory() == "ok-token"
+
+
 def _seed_source_plan(task_id: str, batch_id: str) -> None:
     # separated_research：Agent 必须分别写 homepage/article/image 三路计划。
     ensure_batch_layout(task_id, batch_id, "download")
@@ -253,10 +262,11 @@ def _seed_source_plan(task_id: str, batch_id: str) -> None:
         }
     })
     article_sources = [
-        ("article_baike", "百度百科", "https://x.invalid/a"),
-        ("article_wiki", "维基百科", "https://x.invalid/b"),
-        ("article_official", "景区官网", "https://x.invalid/c"),
-        ("article_guide", "马蜂窝", "https://x.invalid/d"),
+        ("article_baike", "百度百科", "https://x.invalid/a", "supporting"),
+        ("article_wiki", "维基百科", "https://x.invalid/b", "supporting"),
+        ("article_official", "景区官网", "https://x.invalid/c", "supporting"),
+        ("article_guide", "马蜂窝", "https://x.invalid/d", "base"),
+        ("article_qunar", "去哪儿攻略", "https://x.invalid/e", "base"),
     ]
     write_json(dl / "article_source_plan.json", {
         "payload": {
@@ -267,6 +277,8 @@ def _seed_source_plan(task_id: str, batch_id: str) -> None:
                     "url": url,
                     "sourceUseMode": "factual_reference_only",
                     "body": source_body,
+                    "sourceRole": role,
+                    "imageEvidenceMode": "same_authorized_collection",
                     "imageUrls": [
                         {
                             "url": f"https://img.invalid/{sid}.jpg",
@@ -285,7 +297,7 @@ def _seed_source_plan(task_id: str, batch_id: str) -> None:
                         }
                     ],
                 }
-                for sid, platform, url in article_sources
+                for sid, platform, url, role in article_sources
             ],
         }
     })
@@ -780,15 +792,114 @@ def test_author_checkpoint_only_reads_packaged_drafts():
     legacy.write_text("# 旧平铺正文\n\n这不应被新 checkpoint 识别。", encoding="utf-8")
     ok, pending = run_mod._drafts_authored(ctx)
     assert ok is False
-    assert pending == ["(no article drafts; run compose-brief first)"]
+    assert pending == ["(no content objects; run compose-brief first)"]
 
     content_object.register_content_object(task_id, batch_id, "新", content_type="article", angle="体验", title="新")
     write_placeholder_draft(task_id, batch_id, "新")
     ok, pending = run_mod._drafts_authored(ctx)
     assert ok is False and pending == ["新"]
+    report = run_mod.mark_abandoned_content_refs(
+        task_id,
+        batch_id,
+        ["新"],
+        stage="produce_author",
+        reason="agent_unrecoverable: fixture object skipped",
+    )
+    assert report["added"] == ["新"]
+    ok, pending = run_mod._drafts_authored(ctx)
+    assert ok is True and pending == []
     draft_article_path(task_id, batch_id, "新").write_text("# 新正文\n\n这是 Agent 完成的正文。", encoding="utf-8")
     ok, pending = run_mod._drafts_authored(ctx)
     assert ok is True and pending == []
+
+
+def test_content_object_index_schema_has_single_contract_name():
+    task_id = _make_task()
+    batch_id = "content_index_schema"
+    content_object.write_brief_object(
+        task_id,
+        batch_id,
+        "schema_ref",
+        {
+            "titleHint": f"{_EID}·行前建议",
+            "templateId": "travel.entity.guide",
+            "carrier": "article",
+            "writingIntent": "planning_consultation",
+            "mustIncludeFacts": ["fixture"],
+        },
+        content_type="article",
+    )
+    index = read_json(batch_root(task_id, batch_id) / "_shared" / "content_object_index.json")
+    assert index["schemaVersion"] == "quwoquan_data.content_object_index"
+    assert "/1" not in index["schemaVersion"]
+
+
+def test_content_plan_prunes_briefs_outside_packet_index():
+    from _common.content_plan import CONTENT_PLAN_SCHEMA, validate_content_plan
+
+    task_id = _make_task()
+    batch_id = "content_plan_prune_extra_brief"
+    root = batch_root(task_id, batch_id)
+    ensure_batch_layout(task_id, batch_id, "produce")
+    evidence = (
+        root
+        / "entities"
+        / "地点"
+        / "景区"
+        / _EID
+        / "1.download"
+        / "sources"
+        / "01.article_fixture"
+        / "source.md"
+    )
+    evidence.parent.mkdir(parents=True, exist_ok=True)
+    evidence.write_text("fixture source", encoding="utf-8")
+    evidence_ref = evidence.relative_to(root).as_posix()
+    item = {
+        "ref": f"{_EID}_planning_consultation",
+        "kind": "entity",
+        "carrier": "article",
+        "researchLane": "article",
+        "title": f"{_EID}·行前建议",
+        "entityRefs": [f"/entity/地点/景区/{_EID}"],
+        "evidenceRefs": [evidence_ref],
+        "rationale": "fixture evidence plan",
+    }
+    write_json(
+        root / "_shared" / "content_plan_packet.json",
+        {"schemaVersion": CONTENT_PLAN_SCHEMA, "items": [item]},
+    )
+    content_object.write_brief_object(
+        task_id,
+        batch_id,
+        item["ref"],
+        {
+            "titleHint": item["title"],
+            "templateId": "travel.entity.guide",
+            "carrier": "article",
+            "entityRefs": item["entityRefs"],
+            "mustIncludeFacts": ["fixture"],
+        },
+        content_type="article",
+    )
+    stale_brief = root / "posts" / "image" / "攻略" / f"{_EID}·旧图集" / "1" / "3.compose" / "brief.json"
+    stale_brief.parent.mkdir(parents=True, exist_ok=True)
+    write_json(stale_brief, {"titleHint": f"{_EID}·旧图集", "carrier": "image"})
+
+    spec = {
+        "scope": {"coverageTargets": [{"name": _EID}]},
+        "content": {"modalityContract": "separated_research", "quotas": {}},
+        "acceptance": {},
+    }
+    issues = validate_content_plan(task_id, batch_id, spec)
+    assert any("posts contains brief(s) outside content_plan_packet/index" in issue for issue in issues), issues
+
+    ctx = _ctx(task_id, batch_id)
+    removed = run_mod._prune_content_plan_extra_briefs(ctx)
+    assert any(f"{_EID}·旧图集" in item for item in removed), removed
+    assert not stale_brief.exists()
+    issues = validate_content_plan(task_id, batch_id, spec)
+    assert not any("posts contains brief(s) outside content_plan_packet/index" in issue for issue in issues), issues
 
 
 def test_produce_review_rewind_invalidates_failed_ref_outputs():
@@ -971,13 +1082,215 @@ def test_managed_loop_consumes_checkpoint_instead_of_returning_10():
     assert calls == {"pipeline": 2, "checkpoint": 1}
 
 
-def test_real_local_cursor_runner_defaults_to_serial_bridge_workers():
+def test_managed_loop_continues_when_infra_fails_but_checkpoint_gate_passes(monkeypatch):
+    task_id = _make_task()
+    batch_id = "managed_infra_gate_passes"
+    ctx = _ctx(task_id, batch_id)
+    ctx.managed = True
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["infrastructureRetryCounts"] = {
+        "download_plan": run_mod.MAX_MANAGED_INFRA_RETRIES - 1
+    }
+    run_mod.save_workflow_state(state)
+    calls = {"pipeline": 0, "checkpoint": 0}
+
+    def _fake_pipeline(_ctx):
+        calls["pipeline"] += 1
+        if calls["pipeline"] == 1:
+            state = run_mod.load_workflow_state(task_id, batch_id)
+            state["waitingCheckpoint"] = "download_plan"
+            run_mod.save_workflow_state(state)
+            return 10
+        return 0
+
+    def _fake_checkpoint(_ctx, stage):
+        calls["checkpoint"] += 1
+        assert stage == "download_plan"
+        state = run_mod.load_workflow_state(task_id, batch_id)
+        state["lastAgentRun"] = {
+            "stage": stage,
+            "infrastructureFailures": 1,
+            "outcomes": [
+                {
+                    "started": False,
+                    "status": "error",
+                    "error": "agent subprocess timed out after 240s",
+                }
+            ],
+        }
+        state["failedObjects"] = ["agent subprocess timed out after 240s"]
+        run_mod.save_workflow_state(state)
+        return False
+
+    monkeypatch.setattr("task.run.run_pipeline", _fake_pipeline)
+    monkeypatch.setattr("task.run._run_managed_checkpoint", _fake_checkpoint)
+    monkeypatch.setattr("task.run._checkpoint_is_done", lambda _ctx, stage: (True, []))
+
+    assert run_mod.run_managed_pipeline(ctx) == 0
+    assert calls == {"pipeline": 2, "checkpoint": 1}
+    final_state = run_mod.load_workflow_state(task_id, batch_id)
+    assert final_state["failedObjects"] == []
+    assert "checkpoint gate passed" in final_state["nextAction"]
+
+
+def test_managed_download_infra_failure_cannot_abandon_strict_task(monkeypatch):
+    task_id = _make_task()
+    batch_id = "managed_strict_infra_no_abandon"
+    ctx = _ctx(task_id, batch_id)
+    ctx.managed = True
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["infrastructureRetryCounts"] = {
+        "download_plan": run_mod.MAX_MANAGED_INFRA_RETRIES - 1
+    }
+    run_mod.save_workflow_state(state)
+
+    def _fake_pipeline(_ctx):
+        state = run_mod.load_workflow_state(task_id, batch_id)
+        state["waitingCheckpoint"] = "download_plan"
+        run_mod.save_workflow_state(state)
+        return 10
+
+    def _fake_checkpoint(_ctx, stage):
+        state = run_mod.load_workflow_state(task_id, batch_id)
+        state["lastAgentRun"] = {
+            "stage": stage,
+            "infrastructureFailures": 1,
+            "outcomes": [{"started": False, "status": "error", "error": "internal error"}],
+        }
+        run_mod.save_workflow_state(state)
+        return False
+
+    unresolved = {_EID: {"article": ["article research needs >=3 source categories"]}}
+    monkeypatch.setattr("task.run.run_pipeline", _fake_pipeline)
+    monkeypatch.setattr("task.run._run_managed_checkpoint", _fake_checkpoint)
+    monkeypatch.setattr("task.run._checkpoint_is_done", lambda _ctx, stage: (False, []))
+    monkeypatch.setattr("task.run._download_plan_unresolved_entities", lambda _ctx: unresolved)
+
+    assert run_mod.run_managed_pipeline(ctx) == 1
+    final_state = run_mod.load_workflow_state(task_id, batch_id)
+    assert final_state["status"] == "manual_required"
+    assert final_state.get("abandonedObjects") == []
+    assert "allowPartialContent is not true" in final_state["failedObjects"][0]
+
+
+def test_managed_download_infra_failure_can_fast_fail_partial_task(monkeypatch):
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    spec = store.load_spec(task_id)
+    spec["scope"]["coverageTargets"].append({"entityType": "地点/景区", "name": "测试景区乙"})
+    store.save_spec(spec)
+    batch_id = "managed_partial_infra_abandon"
+    ctx = _ctx(task_id, batch_id)
+    ctx.managed = True
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["infrastructureRetryCounts"] = {
+        "download_plan": run_mod.MAX_MANAGED_INFRA_RETRIES - 1
+    }
+    run_mod.save_workflow_state(state)
+    calls = {"pipeline": 0}
+
+    def _fake_pipeline(_ctx):
+        calls["pipeline"] += 1
+        if calls["pipeline"] == 1:
+            state = run_mod.load_workflow_state(task_id, batch_id)
+            state["waitingCheckpoint"] = "download_plan"
+            run_mod.save_workflow_state(state)
+            return 10
+        return 0
+
+    def _fake_checkpoint(_ctx, stage):
+        state = run_mod.load_workflow_state(task_id, batch_id)
+        state["lastAgentRun"] = {
+            "stage": stage,
+            "infrastructureFailures": 1,
+            "outcomes": [{"started": False, "status": "error", "error": "internal error"}],
+        }
+        run_mod.save_workflow_state(state)
+        return False
+
+    unresolved = {_EID: {"article": ["article research needs >=3 source categories"]}}
+    monkeypatch.setattr("task.run.run_pipeline", _fake_pipeline)
+    monkeypatch.setattr("task.run._run_managed_checkpoint", _fake_checkpoint)
+    monkeypatch.setattr("task.run._checkpoint_is_done", lambda _ctx, stage: (False, []))
+    monkeypatch.setattr("task.run._download_plan_unresolved_entities", lambda _ctx: unresolved)
+
+    assert run_mod.run_managed_pipeline(ctx) == 0
+    final_state = run_mod.load_workflow_state(task_id, batch_id)
+    assert [item["entityId"] for item in final_state["abandonedObjects"]] == [_EID]
+    assert "fast-failing source-unavailable" in final_state["nextAction"]
+
+
+def test_download_plan_deterministic_license_failure_fast_fails_strict_task(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_plan_deterministic_strict"
+    ctx = _ctx(task_id, batch_id)
+    monkeypatch.setenv("QWQ_DOWNLOAD_AUTO_RESEARCH", "0")
+    monkeypatch.setattr(
+        "download.prepare.prepare_source_plan",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "task.run._source_plan_filled",
+        lambda _ctx: (False, ["九寨沟 article source has unsupported license"]),
+    )
+    monkeypatch.setattr(
+        "task.run._download_plan_unresolved_entities",
+        lambda _ctx: {_EID: {"article": ["imageRights: unsupported license CC BY-SA 1.0"]}},
+    )
+
+    result = run_mod._checkpoint_download_plan(ctx)
+
+    assert result.status == "failed"
+    assert "deterministic_source_unavailable" in result.issues[0]
+    assert "allowPartialContent is not true" in result.issues[0]
+
+
+def test_download_plan_deterministic_license_failure_activates_reserve(monkeypatch):
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    spec = store.load_spec(task_id)
+    spec["scope"]["reserveCoverageTargets"] = [{"entityType": "地点/景区", "name": "替补景区乙"}]
+    store.save_spec(spec)
+    batch_id = "download_plan_deterministic_reserve"
+    ctx = _ctx(task_id, batch_id)
+    monkeypatch.setenv("QWQ_DOWNLOAD_AUTO_RESEARCH", "0")
+    monkeypatch.setattr(
+        "download.prepare.prepare_source_plan",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def _filled(current_ctx):
+        if _EID not in current_ctx.entity_ids:
+            return True, []
+        return False, ["测试景区甲 article source has unsupported license"]
+
+    monkeypatch.setattr("task.run._source_plan_filled", _filled)
+    monkeypatch.setattr(
+        "task.run._download_plan_unresolved_entities",
+        lambda current_ctx: (
+            {_EID: {"article": ["imageRights: unsupported license CC BY-SA 1.0"]}}
+            if _EID in current_ctx.entity_ids
+            else {}
+        ),
+    )
+
+    result = run_mod._checkpoint_download_plan(ctx)
+
+    assert result.status == "done"
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert [item["entityId"] for item in state["abandonedObjects"]] == [_EID]
+    assert [item["entityId"] for item in state["replacementObjects"]] == ["替补景区乙"]
+    availability = read_json(batch_root(task_id, batch_id) / "_shared" / "source_unavailable_targets.json")
+    assert availability["readyTargets"] == ["替补景区乙"]
+
+
+def test_real_local_cursor_runner_defaults_to_serial_bridge_workers(monkeypatch):
     task_id = _make_task()
     ctx = _ctx(task_id, "managed_cursor_workers")
     ctx.runtime = "local"
     ctx.max_workers = 10
     ctx.agent_runner = None
     assert run_mod._managed_checkpoint_worker_count(ctx, 5) == 1
+    monkeypatch.setattr("task.run.MANAGED_LOCAL_CURSOR_MAX_WORKERS", 2)
+    assert run_mod._managed_checkpoint_worker_count(ctx, 5) == 2
 
     ctx.agent_runner = lambda _prompt: {"started": True, "status": "finished"}
     assert run_mod._managed_checkpoint_worker_count(ctx, 5) == 5
@@ -999,14 +1312,487 @@ def test_managed_download_job_must_satisfy_lane_gate():
     ctx.max_workers = 1
     ok = run_mod._run_managed_checkpoint(ctx, "download_plan")
     assert ok is False
-    assert len(calls) == 1
+    assert len(calls) == 3
     state = run_mod.load_workflow_state(task_id, batch_id)
     assert state["status"] == "repairing"
-    outcome = state["lastAgentRun"]["outcomes"][0]
-    assert outcome["started"] is True
-    assert outcome["status"] == "error"
-    assert "checkpoint lane gate still fails" in outcome["error"]
-    assert outcome["gateIssues"]
+    assert state["lastAgentRun"]["plannedJobCount"] == 3
+    assert state["lastAgentRun"]["jobCount"] == 3
+    for outcome in state["lastAgentRun"]["outcomes"]:
+        assert outcome["started"] is True
+        assert outcome["status"] == "error"
+        assert "checkpoint lane gate still fails" in outcome["error"]
+        assert outcome["gateIssues"]
+
+
+def test_managed_checkpoint_continues_after_one_job_failure(monkeypatch):
+    task_id = _make_task()
+    batch_id = "managed_partial_failure_continues"
+    ctx = _ctx(task_id, batch_id)
+    prompts = ["job-a", "job-b", "job-c"]
+    calls: list[str] = []
+
+    monkeypatch.setattr("task.run._checkpoint_prompts", lambda _ctx, stage: prompts if stage == "content_plan" else [])
+    monkeypatch.setattr("task.run._checkpoint_is_done", lambda _ctx, stage: (False, ["content_plan still incomplete"]))
+
+    def _runner(prompt: str) -> dict:
+        calls.append(prompt)
+        if prompt == "job-a":
+            return {"started": True, "status": "error", "error": "deterministic bad object"}
+        return {"started": True, "status": "finished", "result": "ok"}
+
+    ctx.agent_runner = _runner
+    ctx.max_workers = 3
+    ok = run_mod._run_managed_checkpoint(ctx, "content_plan")
+    assert ok is False
+    assert sorted(calls) == sorted(prompts)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["status"] == "repairing"
+    assert state["lastAgentRun"]["plannedJobCount"] == 3
+    assert state["lastAgentRun"]["jobCount"] == 3
+    assert state["lastAgentRun"]["finishedCount"] == 2
+    assert state["lastAgentRun"]["scheduler"]["requestedMaxWorkers"] == 3
+    assert state["lastAgentRun"]["scheduler"]["effectiveWorkerCount"] == 3
+    assert state["lastAgentRun"]["scheduler"]["estimatedMinWaves"] == 1
+    assert state["agentRunHistory"][-1]["scheduler"]["effectiveWorkerCount"] == 3
+    assert all("timing" in outcome for outcome in state["lastAgentRun"]["outcomes"])
+    assert state["failedObjects"] == ["deterministic bad object"]
+
+
+def test_mark_abandoned_entities_records_fast_fail_state():
+    task_id = _make_task()
+    batch_id = "abandon_entity"
+    report = run_mod.mark_abandoned_entities(
+        task_id,
+        batch_id,
+        [_EID],
+        stage="download_plan",
+        reason="source_unavailable",
+    )
+    assert report["added"] == [_EID]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["abandonedObjects"][0]["entityId"] == _EID
+    assert state["abandonedObjects"][0]["reason"] == "source_unavailable"
+
+
+def test_run_pipeline_preserves_stage_state_deltas(monkeypatch):
+    task_id = _make_task()
+    batch_id = "preserve_state_deltas"
+    ctx = _ctx(task_id, batch_id)
+
+    def _runner(_ctx: run_mod.PipelineContext) -> run_mod.StageResult:
+        run_mod.mark_abandoned_content_refs(
+            task_id,
+            batch_id,
+            [f"{_EID}_planning_consultation"],
+            stage="content_plan",
+            reason="source_unavailable: fixture lacks usable base source",
+        )
+        return run_mod.StageResult(
+            "content_plan",
+            run_mod.CHECKPOINT,
+            "failed",
+            "content_plan incomplete",
+            issues=["fixture missing article source"],
+        )
+
+    monkeypatch.setattr("task.run.DAG", [("content_plan", run_mod.CHECKPOINT, _runner)])
+    monkeypatch.setattr("task.run.STAGE_NAMES", ["content_plan"])
+
+    assert run_mod.run_pipeline(ctx) == 1
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["status"] == "manual_required"
+    assert state["abandonedContentObjects"][0]["ref"] == f"{_EID}_planning_consultation"
+    assert state["abandonedContentObjects"][0]["reason"].startswith("source_unavailable:")
+
+
+def test_content_plan_strict_source_unavailable_fails_before_agent(monkeypatch):
+    task_id = _make_task()
+    batch_id = "content_plan_strict_source_unavailable"
+    ctx = _ctx(task_id, batch_id)
+    issue = (
+        f"{_EID}_route_transport: source_unavailable: usable article base sources "
+        "1 < 2; missing writingIntent=route_transport; "
+        "workflowPolicy.allowContentQuotaShortfall is not true"
+    )
+
+    monkeypatch.setattr("task.run._content_plan_done", lambda _ctx: (False, ["missing packet"]))
+    monkeypatch.setattr("task.run._auto_content_plan", lambda _ctx, _spec: [issue])
+
+    result = run_mod._checkpoint_content_plan(ctx)
+
+    assert result.status == "failed"
+    assert "严格任务禁止继续消耗 Agent" in result.message
+    assert result.issues == [issue]
+    assert result.fallback_stage == "download_plan"
+
+
+def test_source_availability_fast_fails_unrecoverable_subset():
+    names = ["可用景区甲", "缺图景区乙"]
+    spec = store.scaffold_spec(
+        vertical="travel",
+        organize_by="地域",
+        key="测试省",
+        name="source availability subset",
+        category="景区",
+        scope={
+            "region": "测试省",
+            "entityTypes": ["地点/景区"],
+            "coverageTargets": [
+                {"entityType": "地点/景区", "name": name}
+                for name in names
+            ],
+        },
+        content={
+            "modalityContract": "separated_research",
+            "research": {"lanes": ["homepage", "article", "image"]},
+            "carriers": ["article", "image"],
+            "quotas": {
+                "entityArticlesPerTarget": 1,
+                "imageWorksPerTarget": 1,
+                "entityHomepagesPerTarget": 1,
+                "routeArticles": 0,
+            },
+        },
+        created_by="test",
+    )
+    ctx = run_mod.PipelineContext(
+        task_id=spec["taskId"],
+        batch_id="source_availability_fast_fail",
+        entity_ids=names,
+        spec=spec,
+        baseline_packet={},
+        baseline_packet_path=Path("/tmp/nonexistent-baseline.json"),
+    )
+    report = {
+        "sourceAvailability": {
+            "readyTargets": ["可用景区甲"],
+            "ineligibleTargets": [
+                {
+                    "entityId": "缺图景区乙",
+                    "issues": ["缺图景区乙: no rights-compatible open-license images discovered"],
+                    "blockers": [
+                        {
+                            "lane": "image",
+                            "reason": "no single-author/single-file rights-cleared image collection",
+                            "nextAction": "manual_authorized_gallery_or_target_replacement",
+                        }
+                    ],
+                    "nextActions": ["manual_authorized_gallery_or_target_replacement"],
+                }
+            ],
+        }
+    }
+
+    added = run_mod._abandon_source_unavailable_entities(
+        ctx,
+        report,
+        reason_prefix="source_unavailable_after_auto_research",
+    )
+
+    assert added == ["缺图景区乙"]
+    state = run_mod.load_workflow_state(ctx.task_id, ctx.batch_id)
+    assert run_mod._abandoned_entity_ids(state) == {"缺图景区乙"}
+    assert "source_unavailable_after_auto_research" in state["abandonedObjects"][0]["reason"]
+
+
+def test_reset_stage_retries_records_infra_recovery():
+    task_id = _make_task()
+    batch_id = "retry_stage"
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["waitingCheckpoint"] = "build_homepage"
+    state["status"] = "manual_required"
+    state["completed"] = ["download_plan", "download_fetch", "build_prepare", "build_homepage", "build_validate", "content_plan"]
+    state["retryCounts"] = {"build_homepage": 2, "content_plan": 1}
+    state["infrastructureRetryCounts"] = {"build_homepage": 3, "content_plan": 1}
+    state["reactRewinds"] = {"build_validate": 1, "content_plan": 2}
+    state["failedObjects"] = ["Bridge request failed", "internal error"]
+    run_mod.save_workflow_state(state)
+
+    report = run_mod.reset_stage_retries(
+        task_id,
+        batch_id,
+        stage="build_homepage",
+        reason="cursor bridge recovered",
+    )
+
+    assert report["status"] == "waiting_agent"
+    assert report["completed"] == ["download_plan", "download_fetch", "build_prepare"]
+    assert report["retryCounts"] == {}
+    assert report["infrastructureRetryCounts"] == {}
+    assert report["reactRewinds"] == {}
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["failedObjects"] == []
+    assert state["completed"] == ["download_plan", "download_fetch", "build_prepare"]
+    assert state["recoveryActions"][-1]["stage"] == "build_homepage"
+    assert state["recoveryActions"][-1]["previous"]["infrastructureRetryCount"] == 3
+    assert "content_plan" in state["recoveryActions"][-1]["previous"]["completed"]
+
+
+def test_approved_review_refs_exclude_failed_objects_from_batch_reducer():
+    task_id = _make_task()
+    batch_id = "approved_review_refs"
+    ctx = _ctx(task_id, batch_id)
+    content_object.register_content_object(
+        task_id, batch_id, "ref_ok", content_type="article", angle="攻略", title="OK"
+    )
+    content_object.register_content_object(
+        task_id, batch_id, "ref_bad", content_type="article", angle="攻略", title="BAD"
+    )
+    ok_dir = content_object.content_object_dir(task_id, batch_id, "ref_ok") / "5.review"
+    bad_dir = content_object.content_object_dir(task_id, batch_id, "ref_bad") / "5.review"
+    ok_dir.mkdir(parents=True, exist_ok=True)
+    bad_dir.mkdir(parents=True, exist_ok=True)
+    write_json(ok_dir / "review_gate.json", {"passed": True})
+    write_json(bad_dir / "review_gate.json", {"passed": False, "issues": ["skeletonSimilarity"]})
+
+    assert run_mod._approved_review_refs(ctx) == ["ref_ok"]
+
+
+def test_batch_reducer_payload_excludes_image_refs():
+    task_id = _make_task()
+    batch_id = "batch_reducer_payload_image_refs"
+    ctx = _ctx(task_id, batch_id)
+    content_object.register_content_object(
+        task_id, batch_id, "article_ref", content_type="article", angle="攻略", title="Article"
+    )
+    content_object.register_content_object(
+        task_id, batch_id, "image_ref", content_type="image", angle="攻略", title="Image"
+    )
+    for ref in ("article_ref", "image_ref"):
+        review_dir = content_object.content_object_dir(task_id, batch_id, ref) / "5.review"
+        review_dir.mkdir(parents=True, exist_ok=True)
+        write_json(review_dir / "review_gate.json", {"passed": True})
+        draft = draft_article_path(task_id, batch_id, ref)
+        draft.parent.mkdir(parents=True, exist_ok=True)
+        draft.write_text(f"{ref} draft body with enough words to be visible.", encoding="utf-8")
+        write_writing_pack(
+            task_id,
+            batch_id,
+            ref,
+            {
+                "writingIntent": "planning_consultation",
+                "baseSourceRef": f"sources/{ref}.md",
+            },
+        )
+
+    payload = run_mod._batch_reducer_payload(ctx, refs={"article_ref", "image_ref"})
+
+    assert [row["ref"] for row in payload] == ["article_ref"]
+
+
+def test_post_verify_scope_excludes_unrelated_green_refs():
+    from verify.verify_content_quality import verify_posts
+
+    root = _TMP / "scoped_post_verify" / "posts"
+    good = root / "article" / "攻略" / "Good" / "1"
+    bad = root / "article" / "攻略" / "Bad" / "1"
+    for post_dir, title, body in (
+        (good, "Good", "这是一个正常正文。" * 220),
+        (bad, "Bad", "这个正文含有批次边界词。" * 220),
+    ):
+        post_dir.mkdir(parents=True, exist_ok=True)
+        (post_dir / "article.md").write_text(body, encoding="utf-8")
+        write_json(
+            post_dir / "manifest.json",
+            {
+                "topicId": title,
+                "carrier": "article",
+                "sourceTaskId": "task",
+                "tagRefs": ["tag/a", "tag/b"],
+                "entityRefs": ["地点/景区/测试"],
+                "normalizedEntityRefs": ["entity:地点:景区:测试"],
+                "assets": [],
+                "sourceUrls": ["https://example.com/source"],
+                "intersectionHints": [],
+            },
+        )
+
+    scoped_good = verify_posts(root, post_rels={"posts/article/攻略/Good/1"})
+    assert not any("forbidden phrase found: 批次" in issue for issue in scoped_good)
+
+    scoped_bad = verify_posts(root, post_rels={"posts/article/攻略/Bad/1"})
+    assert any("forbidden phrase found: 批次" in issue for issue in scoped_bad)
+
+
+def test_gate_produce_passes_ref_scope_to_post_verify(monkeypatch):
+    from produce.gate import gate_produce
+
+    task_id = _make_task()
+    batch_id = "gate_produce_ref_scope"
+    content_object.register_content_object(
+        task_id, batch_id, "ref_ok", content_type="article", angle="攻略", title="OK"
+    )
+    content_object.register_content_object(
+        task_id, batch_id, "ref_bad", content_type="article", angle="攻略", title="BAD"
+    )
+    ok_dir = content_object.content_object_dir(task_id, batch_id, "ref_ok")
+    ok_dir.mkdir(parents=True, exist_ok=True)
+    write_json(
+        ok_dir / "manifest.json",
+        {
+            "entityRefs": ["地点/景区/测试"],
+            "tagRefs": ["tag/a", "tag/b"],
+            "reviewDecision": "approved",
+            "storySpine": {"readerPromise": "ok"},
+            "sourceUrls": ["https://example.com/source"],
+        },
+    )
+    (ok_dir / "article.md").write_text("正文" * 400, encoding="utf-8")
+
+    captured: list[set[str] | None] = []
+
+    monkeypatch.setattr("produce.gate.gate_media_check", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("produce.gate.scan_runtime_batch_integrity", lambda *_args, **_kwargs: {"issues": []})
+    monkeypatch.setattr(
+        "produce.gate.iter_stage_envelopes",
+        lambda *_args, **_kwargs: iter([("ref_ok", {"payload": {"passed": True}})]),
+    )
+
+    def _fake_verify_posts_root(_root, **kwargs):
+        captured.append(kwargs.get("post_rels"))
+        return []
+
+    monkeypatch.setattr("produce.gate.verify_posts_root", _fake_verify_posts_root)
+
+    gate_produce(task_id, batch_id, "article", refs=["ref_ok"])
+
+    assert captured == [{"posts/article/攻略/OK/1"}]
+
+
+def test_review_retry_maps_release_gate_issue_after_object_gates_are_green():
+    task_id = _make_task()
+    batch_id = "review_retry_release_issue"
+    ctx = _ctx(task_id, batch_id)
+    content_object.register_content_object(
+        task_id, batch_id, "ref_ok", content_type="article", angle="攻略", title="OK"
+    )
+    content_object.register_content_object(
+        task_id, batch_id, "ref_bad", content_type="article", angle="攻略", title="BAD"
+    )
+    for ref in ("ref_ok", "ref_bad"):
+        review_dir = content_object.content_object_dir(task_id, batch_id, ref) / "5.review"
+        review_dir.mkdir(parents=True, exist_ok=True)
+        write_json(review_dir / "review_gate.json", {"passed": True})
+
+    bad_rel = content_object.content_object_rel(task_id, batch_id, "ref_bad")
+    refs, issue_map = run_mod._produce_review_retry_refs(
+        ctx,
+        [f"{bad_rel}/article.md: forbidden phrase found: 批次"],
+    )
+
+    assert refs == ["ref_bad"]
+    assert "批次" in issue_map["ref_bad"][0]
+
+
+def test_release_only_ship_report_records_no_import_claim():
+    from ship.handler import write_release_only_ship_report
+
+    task_id = _make_task()
+    batch_id = "release_only_ship_report"
+    path = write_release_only_ship_report(
+        task_id=task_id,
+        batch_id=batch_id,
+        release_id="release_1",
+        summary={"entityCount": 1, "postCount": 2},
+    )
+
+    payload = read_json(path)
+    assert payload["closureType"] == "release_only"
+    assert payload["sourceReleaseId"] == "release_1"
+    assert payload["importRequested"] is False
+    assert payload["importReports"] == []
+
+
+def test_agent_active_throughput_is_diagnostic_not_wall_clock_replacement():
+    metrics = run_mod._agent_active_throughput(
+        {
+            "agentRunHistory": [
+                {
+                    "stage": "produce_author",
+                    "plannedJobCount": 4,
+                    "finishedCount": 3,
+                    "infrastructureFailures": 1,
+                    "scheduler": {"elapsedSeconds": 120, "startedAt": "s1"},
+                    "finishedAt": "t1",
+                },
+                {
+                    "stage": "produce_author",
+                    "plannedJobCount": 4,
+                    "finishedCount": 3,
+                    "infrastructureFailures": 1,
+                    "scheduler": {"elapsedSeconds": 120, "startedAt": "s1"},
+                    "finishedAt": "t1",
+                }
+            ],
+            "lastAgentRun": {
+                "stage": "produce_author",
+                "plannedJobCount": 2,
+                "finishedCount": 2,
+                "infrastructureFailures": 0,
+                "scheduler": {"elapsedSeconds": 60, "startedAt": "s2"},
+                "finishedAt": "t2",
+            },
+        }
+    )
+
+    assert metrics["authorRunCount"] == 2
+    assert metrics["finishedAuthorJobs"] == 5
+    assert metrics["infrastructureFailures"] == 1
+    assert metrics["finishedAuthorJobsPerHour"] == 100.0
+
+
+def test_completion_gate_ignores_stale_agent_run_for_abandoned_refs():
+    task_id = _make_task()
+    batch_id = "completion_ignores_abandoned_agent"
+    ctx = _ctx(task_id, batch_id)
+    state = {
+        "waitingCheckpoint": None,
+        "failedObjects": [],
+        "abandonedContentObjects": [
+            {
+                "ref": "ref_dead",
+                "stage": "produce_author",
+                "reason": "agent failed",
+                "status": "abandoned",
+            }
+        ],
+        "lastAgentRun": {
+            "stage": "produce_author",
+            "jobCount": 1,
+            "plannedJobCount": 1,
+            "refs": ["ref_dead"],
+            "startedCount": 0,
+            "finishedCount": 0,
+            "infrastructureFailures": 1,
+            "outcomes": [{"ref": "ref_dead", "started": False, "status": "error"}],
+        },
+    }
+
+    assert run_mod._workflow_completion_issues(ctx, state) == []
+
+
+def test_completion_gate_blocks_active_failed_agent_run():
+    task_id = _make_task()
+    batch_id = "completion_blocks_active_agent"
+    ctx = _ctx(task_id, batch_id)
+    state = {
+        "waitingCheckpoint": None,
+        "failedObjects": [],
+        "abandonedContentObjects": [],
+        "lastAgentRun": {
+            "stage": "produce_author",
+            "jobCount": 1,
+            "plannedJobCount": 1,
+            "refs": ["ref_active"],
+            "startedCount": 0,
+            "finishedCount": 0,
+            "infrastructureFailures": 1,
+            "outcomes": [{"ref": "ref_active", "started": False, "status": "error"}],
+        },
+    }
+
+    issues = run_mod._workflow_completion_issues(ctx, state)
+    assert "lastAgentRun.infrastructureFailures=1" in issues
 
 
 def test_download_plan_rejects_low_resolution_article_source_image():
@@ -1055,6 +1841,33 @@ def test_download_plan_allows_recoverable_compressed_article_source_image():
     assert run_mod._source_plan_filled(ctx)[0] is True
 
 
+def test_download_plan_blocks_travelogue_as_homepage_source():
+    task_id = _make_task()
+    batch_id = "download_plan_homepage_travelogue"
+    _seed_source_plan(task_id, batch_id)
+    ctx = _ctx(task_id, batch_id)
+    plan_path = (
+        resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+        / STAGE_DOWNLOAD
+        / "homepage_source_plan.json"
+    )
+    plan = read_json(plan_path)
+    plan["payload"]["sources"].append(
+        {
+            "source_id": "home_qunar_guide",
+            "platform": "去哪儿攻略",
+            "url": "https://touch.travel.qunar.com/youji/fixture",
+            "category": "travelogue",
+            "sourceUseMode": "factual_reference_only",
+        }
+    )
+    write_json(plan_path, plan)
+
+    ok, issues = run_mod._source_plan_filled(ctx)
+    assert ok is False
+    assert any("entity homepage cannot use author/guide/review source category travelogue" in i for i in issues), issues
+
+
 def test_download_repair_requires_source_plan_update_before_resume():
     task_id = _make_task()
     batch_id = "download_repair1"
@@ -1087,6 +1900,117 @@ def test_download_repair_requires_source_plan_update_before_resume():
     assert run_mod._source_plan_filled(ctx)[0] is True
     assert repair_path.exists()
     assert run_mod._download_retry_entity_ids(ctx) == [_EID]
+
+
+def test_download_repair_fetch_only_image_failure_retries_fetch_before_agent():
+    task_id = _make_task()
+    batch_id = "download_repair_fetch_only_image_retry"
+    _seed_source_plan(task_id, batch_id)
+    ctx = _ctx(task_id, batch_id)
+    assert run_mod._source_plan_filled(ctx)[0] is True
+
+    plan_dir = (
+        resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+        / STAGE_DOWNLOAD
+    )
+    plan_paths = [
+        plan_dir / "homepage_source_plan.json",
+        plan_dir / "article_source_plan.json",
+        plan_dir / "image_source_plan.json",
+    ]
+    repair_path = run_mod._download_repair_path(ctx)
+    repair_entity = {
+        "entityId": _EID,
+        "issues": [
+            f"{_EID}: imageCount: {_EID} 仅下到 0 张合格去重图（规模化任务要求 ≥3）",
+            f"{_EID}: imageFetch: 未下到真实图片，请在 source_plan 提供可用 imageUrls(CC/PD/授权)",
+        ],
+        "sourcePlanPath": str(plan_paths[0]),
+        "sourcePlanPaths": [str(path) for path in plan_paths],
+        "sourcePlanMtimeNs": max(path.stat().st_mtime_ns for path in plan_paths),
+        "fetchRetryCount": 1,
+        "downloadDiagnostics": {
+            "entityId": _EID,
+            "plannedImages": 5,
+            "downloadedImages": 0,
+            "rejectedByCategory": {
+                "fetch_or_non_image": 5,
+                "rights": 0,
+                "safety_or_watermark": 0,
+                "duplicate": 0,
+            },
+        },
+        "researchLaneIssues": {},
+        "imageRepairHints": [
+            {
+                "lane": "image",
+                "issue": "imageFetch failed/non-image/too small",
+                "action": "replace_unfetchable_or_low_quality_image",
+            }
+        ],
+    }
+    write_json(
+        repair_path,
+        {
+            "schemaVersion": "quwoquan.download_repair",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "entities": [repair_entity],
+        },
+    )
+
+    assert run_mod._source_plan_filled(ctx)[0] is True
+    assert run_mod._checkpoint_prompts(ctx, "download_plan") == []
+    assert run_mod._download_retry_entity_ids(ctx) == [_EID]
+
+    repair_entity["fetchRetryCount"] = 2
+    write_json(
+        repair_path,
+        {
+            "schemaVersion": "quwoquan.download_repair",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "entities": [repair_entity],
+        },
+    )
+    ok, issues = run_mod._source_plan_filled(ctx)
+    assert ok is False
+    assert any("download_repair required" in issue for issue in issues), issues
+    prompts = run_mod._checkpoint_prompts(ctx, "download_plan")
+    assert any("[AGENT_LANE:image]" in prompt for prompt in prompts)
+
+
+def test_download_fetch_preserves_nonzero_handler_stage_gate_failure(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_stage_gate_failure"
+    ctx = _ctx(task_id, batch_id)
+    ensure_batch_layout(task_id, batch_id, "download")
+    write_gate_report(
+        task_id=task_id,
+        batch_id=batch_id,
+        command="download",
+        step="image_fetch",
+        ref=_EID,
+        passed=False,
+        issues=["imageCount: only 1 publishable image"],
+        evidence_summary={},
+        fallback_stage="source_plan",
+    )
+
+    monkeypatch.setattr("task.run._download_retry_entity_ids", lambda _ctx: [_EID])
+    monkeypatch.setattr("download.gate.gate_download", lambda _task, _batch: [])
+
+    def _raise_nonzero(_args):
+        raise SystemExit(1)
+
+    monkeypatch.setattr("download.handler.handle_download", _raise_nonzero)
+
+    result = run_mod._run_download_fetch(ctx)
+    assert result.status == "failed"
+    assert "imageCount: only 1 publishable image" in result.message
+    repair = read_json(run_mod._download_repair_path(ctx))
+    assert repair["entities"][0]["entityId"] == _EID
+    assert "imageCount: only 1 publishable image" in repair["entities"][0]["issues"][0]
 
 
 def test_legacy_non_actionable_download_repair_does_not_block_static_valid_plan():
@@ -1412,6 +2336,23 @@ def test_download_repair_includes_diagnostic_rejected_source_image_hint():
     assert hints[0]["url"] == "https://x.invalid/bad.jpg"
 
 
+def test_download_repair_classifies_independent_image_fetch_hint_as_image_lane():
+    hints = run_mod._download_diagnostic_image_repair_hints(
+        {
+            "sampleRejected": [
+                "imageFetch: 测试景区甲#1 下载失败/非图片/过小 "
+                "(https://x.invalid/gallery-bad.jpg)"
+            ]
+        },
+        entity_id=_EID,
+    )
+
+    assert hints
+    assert hints[0]["lane"] == "image"
+    assert hints[0]["sourceId"] == ""
+    assert hints[0]["action"] == "replace_unfetchable_or_low_quality_image"
+
+
 def test_download_repair_lanes_are_driven_by_failure_summary_not_extra_hints():
     repair = {
         "issues": [
@@ -1425,6 +2366,20 @@ def test_download_repair_lanes_are_driven_by_failure_summary_not_extra_hints():
     }
 
     assert run_mod._download_repair_lanes(repair) == {"article"}
+
+
+def test_download_repair_lanes_recognize_image_fetch_summary():
+    repair = {
+        "issues": [
+            "测试景区甲: imageFetch: 未下到真实图片，请在 source_plan 提供可用 imageUrls(CC/PD/授权)"
+        ],
+        "researchLaneIssues": {},
+        "imageRepairHints": [
+            {"lane": "homepage", "issue": "legacy diagnostic fallback"},
+        ],
+    }
+
+    assert run_mod._download_repair_lanes(repair) == {"image"}
 
 
 def test_download_issue_repair_hints_classify_image_gate_failure():
@@ -1535,6 +2490,76 @@ def test_download_plan_prompt_ignores_stale_repair_when_static_issue_remains():
     assert "这是 download_repair" not in article_prompts[0]
 
 
+def test_download_plan_checkpoint_forces_auto_research_for_stale_source_rules():
+    import download.prepare as prepare_mod
+    import download.research_plan as research_mod
+
+    task_id = _make_task()
+    batch_id = "download_plan_stale_source_rules"
+    _seed_source_plan(task_id, batch_id)
+    ctx = _ctx(task_id, batch_id)
+    assert run_mod._source_plan_filled(ctx)[0] is True
+
+    plan_dir = (
+        resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+        / STAGE_DOWNLOAD
+    )
+    plan_paths = [
+        plan_dir / "homepage_source_plan.json",
+        plan_dir / "article_source_plan.json",
+        plan_dir / "image_source_plan.json",
+    ]
+    rule_mtime = max(path.stat().st_mtime_ns for path in plan_paths) + 1_000_000_000
+    calls: list[dict[str, object]] = []
+    original_rule_mtime = run_mod._source_plan_rule_mtime_ns
+    original_prepare = prepare_mod.prepare_source_plan
+    original_auto = research_mod.write_auto_research_plans
+
+    def fake_prepare_source_plan(*_args, **_kwargs):
+        return None
+
+    def fake_write_auto_research_plans(_task_id, _batch_id, entity_ids, **kwargs):
+        calls.append({
+            "entity_ids": list(entity_ids),
+            "force": kwargs.get("force"),
+            "has_progress_callback": callable(kwargs.get("progress_callback")),
+        })
+        progress_callback = kwargs.get("progress_callback")
+        if callable(progress_callback):
+            progress_callback({
+                "status": "running",
+                "entityId": _EID,
+                "entityCount": len(entity_ids),
+                "completedCount": 1,
+                "remainingCount": 0,
+                "workers": kwargs.get("max_workers"),
+                "entitiesPerMinute": 60.0,
+                "updatedAt": "2026-06-17T00:00:00+00:00",
+                "message": "auto research completed 1/1",
+            })
+        fresh_mtime = rule_mtime + 1_000_000_000
+        for path in plan_paths:
+            os.utime(path, ns=(fresh_mtime, fresh_mtime))
+        return {"issues": [], "sourceUnavailable": []}
+
+    run_mod._source_plan_rule_mtime_ns = lambda _ctx: rule_mtime
+    prepare_mod.prepare_source_plan = fake_prepare_source_plan
+    research_mod.write_auto_research_plans = fake_write_auto_research_plans
+    try:
+        result = run_mod._checkpoint_download_plan(ctx)
+    finally:
+        run_mod._source_plan_rule_mtime_ns = original_rule_mtime
+        prepare_mod.prepare_source_plan = original_prepare
+        research_mod.write_auto_research_plans = original_auto
+
+    assert result.status == "done"
+    assert calls == [{"entity_ids": [_EID], "force": True, "has_progress_callback": True}]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["activeAutoResearch"]["completedCount"] == 1
+    assert "download_plan auto_research 1/1" in state["nextAction"]
+    assert "过期 source_plan" in result.message
+
+
 def test_managed_preflight_rejects_missing_key_without_creating_batch():
     task_id = _make_task()
     spec = store.load_spec(task_id)
@@ -1563,6 +2588,7 @@ def test_managed_preflight_rejects_missing_key_without_creating_batch():
 class _MiniMonkeyPatch:
     def __init__(self) -> None:
         self._restore: list[tuple[object, str, object]] = []
+        self._env_restore: list[tuple[str, str | None]] = []
 
     def setattr(self, target: str, value) -> None:
         module_name, attr = target.rsplit(".", 1)
@@ -1571,10 +2597,20 @@ class _MiniMonkeyPatch:
         self._restore.append((module, attr, old))
         setattr(module, attr, value)
 
+    def setenv(self, key: str, value: str) -> None:
+        self._env_restore.append((key, os.environ.get(key)))
+        os.environ[key] = value
+
     def undo(self) -> None:
         while self._restore:
             module, attr, old = self._restore.pop()
             setattr(module, attr, old)
+        while self._env_restore:
+            key, old = self._env_restore.pop()
+            if old is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = old
 
 
 def _run_all() -> None:

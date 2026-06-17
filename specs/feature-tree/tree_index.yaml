@@ -1031,6 +1031,27 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: feedback-ingestion-sampling
+              name: feedback-ingestion-sampling
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling
+              domain: ""
+              status: specified
+              tags: []
+            - id: collaborative-recall
+              name: collaborative-recall
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/collaborative-recall
+              domain: ""
+              status: specified
+              tags: []
+            - id: interest-onboarding-prior
+              name: interest-onboarding-prior
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/interest-onboarding-prior
+              domain: ""
+              status: specified
+              tags: []
             - id: personalized-ranking
               name: personalized-ranking
               level: L3_story
@@ -1045,10 +1066,31 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: quality-score-cold-start
+              name: quality-score-cold-start
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/quality-score-cold-start
+              domain: ""
+              status: specified
+              tags: []
+            - id: ranking-calibration
+              name: ranking-calibration
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/ranking-calibration
+              domain: ""
+              status: specified
+              tags: []
             - id: realtime-feed-baseline
               name: realtime-feed-baseline
               level: L3_story
               path: discovery-content/feed-orchestration-recommendation/realtime-feed-baseline
+              domain: ""
+              status: specified
+              tags: []
+            - id: time-decay-contextual-ranking
+              name: time-decay-contextual-ranking
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/time-decay-contextual-ranking
               domain: ""
               status: specified
               tags: []
@@ -1063,6 +1105,70 @@ features:
               name: unified-items-cursor--feed-dto-cursor-contract
               level: L3_story
               path: discovery-content/feed-orchestration-recommendation/unified-items-cursor--feed-dto-cursor-contract
+              domain: ""
+              status: specified
+              tags: []
+        - id: exposure-governance
+          name: exposure-governance
+          level: L2_business_capability
+          path: discovery-content/exposure-governance
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: activity-adaptive-exposure
+              name: activity-adaptive-exposure
+              level: L3_story
+              path: discovery-content/exposure-governance/activity-adaptive-exposure
+              domain: ""
+              status: specified
+              tags: []
+            - id: content-lifecycle-resurfacing
+              name: content-lifecycle-resurfacing
+              level: L3_story
+              path: discovery-content/exposure-governance/content-lifecycle-resurfacing
+              domain: ""
+              status: specified
+              tags: []
+            - id: cross-session-fatigue-memory
+              name: cross-session-fatigue-memory
+              level: L3_story
+              path: discovery-content/exposure-governance/cross-session-fatigue-memory
+              domain: ""
+              status: specified
+              tags: []
+            - id: dimension-frequency-and-neardup
+              name: dimension-frequency-and-neardup
+              level: L3_story
+              path: discovery-content/exposure-governance/dimension-frequency-and-neardup
+              domain: ""
+              status: specified
+              tags: []
+            - id: dynamic-exposure-budget
+              name: dynamic-exposure-budget
+              level: L3_story
+              path: discovery-content/exposure-governance/dynamic-exposure-budget
+              domain: ""
+              status: specified
+              tags: []
+            - id: exposure-observability-capacity
+              name: exposure-observability-capacity
+              level: L3_story
+              path: discovery-content/exposure-governance/exposure-observability-capacity
+              domain: ""
+              status: specified
+              tags: []
+            - id: ops-intervention-and-policy-ejection
+              name: ops-intervention-and-policy-ejection
+              level: L3_story
+              path: discovery-content/exposure-governance/ops-intervention-and-policy-ejection
+              domain: ""
+              status: specified
+              tags: []
+            - id: served-dedup-write-behind
+              name: served-dedup-write-behind
+              level: L3_story
+              path: discovery-content/exposure-governance/served-dedup-write-behind
               domain: ""
               status: specified
               tags: []
@@ -1389,6 +1495,13 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: search-intersection-consumption
+              name: search-intersection-consumption
+              level: L3_story
+              path: global-search-experience/cross-domain-search-journey/search-intersection-consumption
+              domain: ""
+              status: specified
+              tags: []
             - id: xiaoqu-entry-handoff
               name: xiaoqu-entry-handoff
               level: L3_story
@@ -1446,6 +1559,13 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: search-risky-config-gray-release
+              name: search-risky-config-gray-release
+              level: L3_story
+              path: global-search-experience/search-provider-routing-and-storage-topology/search-risky-config-gray-release
+              domain: ""
+              status: specified
+              tags: []
     - id: object-homepage-network
       name: object-homepage-network
       level: L1_domain_service
@@ -1461,6 +1581,49 @@ features:
           domain: ""
           status: specified
           tags: []
+          children:
+            - id: intersection-sentence-unification
+              name: intersection-sentence-unification
+              level: L3_story
+              path: object-homepage-network/intersection-unified-experience/intersection-sentence-unification
+              domain: ""
+              status: specified
+              tags: []
+            - id: home-recommend-intersection-redesign
+              name: home-recommend-intersection-redesign
+              level: L3_story
+              path: object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign
+              domain: ""
+              status: specified
+              tags: []
+            - id: user-profile-intersection-redesign
+              name: user-profile-intersection-redesign
+              level: L3_story
+              path: object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign
+              domain: ""
+              status: specified
+              tags: []
+            - id: circle-homepage-intersection-redesign
+              name: circle-homepage-intersection-redesign
+              level: L3_story
+              path: object-homepage-network/intersection-unified-experience/circle-homepage-intersection-redesign
+              domain: ""
+              status: specified
+              tags: []
+            - id: entity-homepage-intersection-redesign
+              name: entity-homepage-intersection-redesign
+              level: L3_story
+              path: object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign
+              domain: ""
+              status: specified
+              tags: []
+            - id: intersection-algorithm-closure
+              name: intersection-algorithm-closure
+              level: L3_story
+              path: object-homepage-network/intersection-unified-experience/intersection-algorithm-closure
+              domain: ""
+              status: specified
+              tags: []
     - id: platform-ops-governance
       name: platform-ops-governance
       level: L1_domain_service
@@ -1787,6 +1950,13 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: inference-capacity-elasticity
+              name: inference-capacity-elasticity
+              level: L3_story
+              path: recommendation-platform/rec-model-service/inference-capacity-elasticity
+              domain: ""
+              status: specified
+              tags: []
         - id: rec-model-training
           name: rec-model-training
           level: L2_business_capability
@@ -1813,6 +1983,35 @@ features:
               name: training-pipeline--sample-feature-train-registry
               level: L3_story
               path: recommendation-platform/rec-model-training/training-pipeline--sample-feature-train-registry
+              domain: ""
+              status: specified
+              tags: []
+        - id: evaluation-and-flywheel
+          name: evaluation-and-flywheel
+          level: L2_business_capability
+          path: recommendation-platform/evaluation-and-flywheel
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: offline-replay-evaluation
+              name: offline-replay-evaluation
+              level: L3_story
+              path: recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation
+              domain: ""
+              status: specified
+              tags: []
+            - id: online-ab-significance
+              name: online-ab-significance
+              level: L3_story
+              path: recommendation-platform/evaluation-and-flywheel/online-ab-significance
+              domain: ""
+              status: specified
+              tags: []
+            - id: real-traffic-training-promotion
+              name: real-traffic-training-promotion
+              level: L3_story
+              path: recommendation-platform/evaluation-and-flywheel/real-traffic-training-promotion
               domain: ""
               status: specified
               tags: []

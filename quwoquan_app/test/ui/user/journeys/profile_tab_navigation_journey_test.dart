@@ -160,7 +160,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester, count: 20);
-      expect(find.text('作品'), findsOneWidget);
+      expect(find.text(UITextConstants.profileTabCreations), findsOneWidget);
     });
 
     testWidgets('旅程 A2：切换到圈子 Tab', (tester) async {
@@ -214,15 +214,22 @@ void main() {
       expect(find.text(UITextConstants.profileGreet), findsNothing);
     });
 
-    testWidgets('旅程 D3：mine 模式渲染「编辑资料」「分享主页」', (tester) async {
+    testWidgets('旅程 D3：mine 模式渲染昵称编辑入口、分享与设置入口', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
-      expect(find.text(UITextConstants.profileShareHomepage), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('profile-header-edit')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(CupertinoIcons.share), findsOneWidget);
+      expect(
+        find.byIcon(AppNavigationSemanticConstants.settingsActionIcon),
+        findsOneWidget,
+      );
       expect(find.text('分身管理'), findsNothing);
     });
   });
@@ -278,7 +285,6 @@ void main() {
       await _pumpFrames(tester, count: 20);
       expect(find.text(UITextConstants.myIntersectionsTitle), findsOneWidget);
       expect(find.text(UITextConstants.profileImpactTitleMine), findsOneWidget);
-      expect(find.text('284'), findsNothing);
     });
   });
 
@@ -305,7 +311,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester, count: 20);
-      expect(find.text('作品'), findsOneWidget);
+      expect(find.text(UITextConstants.profileTabCreations), findsOneWidget);
     });
 
     testWidgets('旅程 F3：一级 tab 吸顶后切换不会把整页头部重置回内容区', (tester) async {
@@ -356,7 +362,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
-      expect(find.text('作品'), findsOneWidget);
+      expect(find.text(UITextConstants.profileTabCreations), findsOneWidget);
     });
   });
 

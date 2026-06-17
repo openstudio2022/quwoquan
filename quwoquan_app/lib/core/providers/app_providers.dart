@@ -71,6 +71,7 @@ import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart
 import 'package:quwoquan_app/core/di/cloud_repository_binding.dart';
 import 'package:quwoquan_app/core/services/app_remote_config_store.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/services/remote_search_repository.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
@@ -2043,7 +2044,10 @@ final localChatSearchSyncProvider = Provider<LocalChatSearchSyncService>((ref) {
 });
 
 final searchRepositoryProvider = Provider<SearchRepository>((ref) {
-  return buildAppSearchRepository(
+  // 本地扇出 composite：内部子仓库（content/circle/user/entity/integration）在 remote
+  // 模式下本身即 Remote 实现，叠加 chat/circle.group 本地命名空间检索。suggest 模式与
+  // mock 模式都复用它；remote 结果模式由 RemoteSearchRepository 接管云侧 /v1/search。
+  final localFanout = buildAppSearchRepository(
     circleRepository: ref.watch(circleRepositoryProvider),
     contentRepository: ref.watch(contentRepositoryProvider),
     homepageRepository: ref.watch(homepageRepositoryProvider),
@@ -2055,6 +2059,15 @@ final searchRepositoryProvider = Provider<SearchRepository>((ref) {
       localCircleGroupSnapshotStoreProvider,
     ),
     personaContextLoader: ref.watch(activePersonaContextLoaderProvider),
+  );
+  final mode = ref.watch(appDataSourceModeProvider);
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: () => RemoteSearchRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+      localFanout: localFanout,
+    ),
+    mock: () => localFanout,
   );
 });
 

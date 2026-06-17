@@ -374,6 +374,7 @@ type uiConfigFile struct {
 	ScrollMotion                   profileScrollMotionDef             `yaml:"scroll_motion"`
 	ProfileTabs                    []profileTabDef                    `yaml:"profile_tabs"`
 	HomepageTabs                   []homepageTabDef                   `yaml:"homepage_tabs"`
+	HomepageSubTabs                []homepageSubTabDef                `yaml:"homepage_sub_tabs"`
 	CircleTabs                     []circleTabDef                     `yaml:"circle_tabs"`
 	CircleSections                 []circleSectionDef                 `yaml:"circle_sections"`
 	ShareTemplateProfiles          []shareTemplateProfileDef          `yaml:"share_template_profiles"`
@@ -3662,13 +3663,24 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 				named = append(named, "String intersectionId = ''")
 			case "intersectionClass":
 				named = append(named, "String intersectionClass = ''")
+			case "intersectionSourceRef":
+				named = append(named, "String intersectionSourceRef = ''")
 			case "intersectionEvidenceId":
 				named = append(named, "String intersectionEvidenceId = ''")
+			case "surfaceId":
+				named = append(named, "String surfaceId = ''")
+			default:
+				// Fail loudly so a newly-added payload_field in behaviors.yaml can never
+				// silently emit an undefined variable reference in the generated tracker.
+				panic(fmt.Sprintf("content_behaviors codegen: unmapped payload field %q on event %q; add an explicit case in the track-method generator", pf, ev.Type))
 			}
 		}
 		sig := strings.Join(positional, ", ")
 		if len(named) > 0 {
-			sig += ", {" + strings.Join(named, ", ") + "}"
+			if sig != "" {
+				sig += ", "
+			}
+			sig += "{" + strings.Join(named, ", ") + "}"
 		}
 		b.WriteString(fmt.Sprintf("  static void %s(%s) {\n", ev.DartMethod, sig))
 		b.WriteString("    _enqueue(<String, dynamic>{\n")

@@ -5,9 +5,11 @@
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Mapping
 
+from _common.base_draft import load_base_draft_text
 from _common.content_object import BRIEF_FILE, content_object_stage_dir, load_index
 from _common.io import read_json
 from _common.paths import (
@@ -15,10 +17,24 @@ from _common.paths import (
     batch_content_plan_packet_path,
     batch_results_dir,
     batch_root,
+    relative_batch_ref,
 )
 from _common.quality_gates import WRITING_INTENTS, writing_intent_issues
 
 CONTENT_PLAN_SCHEMA = "quwoquan_data.content_plan_packet"
+ARTICLE_MIN_BASE_DRAFT_CHARS = 600
+ARTICLE_BASE_SOURCE_ROLES = {"base"}
+ARTICLE_BASE_SOURCE_CATEGORIES = {"travelogue", "guidebook", "travel_guide", "wikivoyage"}
+ARTICLE_SUPPORTING_ONLY_CATEGORIES = {
+    "authoritative_reference",
+    "official",
+    "government",
+    "media",
+    "open_license",
+    "image_collection",
+    "overview_baike",
+    "encyclopedia",
+}
 
 
 def reject_source_ids(task_id: str, batch_id: str) -> set[str]:
@@ -47,9 +63,73 @@ def load_content_plan_packet(task_id: str, batch_id: str) -> dict[str, Any] | No
     return data if isinstance(data, dict) else None
 
 
+def _abandoned_content_refs(task_id: str, batch_id: str) -> set[str]:
+    path = batch_root(task_id, batch_id) / "_shared" / "task_workflow_state.json"
+    if not path.is_file():
+        return set()
+    try:
+        state = read_json(path)
+    except (OSError, ValueError, TypeError):
+        return set()
+    refs: set[str] = set()
+    for item in state.get("abandonedContentObjects") or []:
+        if isinstance(item, dict):
+            status = str(item.get("status") or "").strip()
+            if status and status != "abandoned":
+                continue
+            ref = str(item.get("ref") or "").strip()
+            if ref:
+                refs.add(ref)
+    return refs
+
+
+def _is_image_ref(ref: str) -> bool:
+    return ref.endswith("_image") or "_image_" in ref
+
+
+def _abandoned_refs_for_target(
+    abandoned_refs: set[str], target: str, *, carrier: str
+) -> set[str]:
+    prefix = f"{target}_"
+    out: set[str] = set()
+    for ref in abandoned_refs:
+        if not ref.startswith(prefix):
+            continue
+        if carrier == "image" and _is_image_ref(ref):
+            out.add(ref)
+        elif carrier == "article" and not _is_image_ref(ref):
+            out.add(ref)
+    return out
+
+
+def _abandoned_intents_for_target(abandoned_refs: set[str], target: str) -> set[str]:
+    prefix = f"{target}_"
+    return {
+        ref[len(prefix):]
+        for ref in _abandoned_refs_for_target(abandoned_refs, target, carrier="article")
+    }
+
+
 def _items(packet: Mapping[str, Any]) -> list[dict[str, Any]]:
     raw = packet.get("items") or []
     return [i for i in raw if isinstance(i, dict)]
+
+
+def allow_partial_content(spec: Mapping[str, Any]) -> bool:
+    """Whether entity-level source gaps may be handled by target replacement.
+
+    Default is strict. Scale workflows may opt in explicitly so fast-fail
+    objects do not block unrelated production, but this does not allow shrinking
+    per-entity article/image quotas.
+    """
+    policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
+    return bool(policy.get("allowPartialContent") is True)
+
+
+def allow_content_quota_shortfall(spec: Mapping[str, Any]) -> bool:
+    """Explicit opt-in for publishing fewer objects than the declared quotas."""
+    policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
+    return bool(policy.get("allowContentQuotaShortfall") is True)
 
 
 def _source_asset_rows(root: Path, source_ref: str) -> list[dict[str, Any]]:
@@ -64,6 +144,41 @@ def _source_asset_rows(root: Path, source_ref: str) -> list[dict[str, Any]]:
     except (OSError, ValueError, TypeError):
         return []
     return [row for row in rows if isinstance(row, dict)]
+
+
+def _compact_len(text: str) -> int:
+    return len(re.sub(r"\s+", "", text or ""))
+
+
+def _source_meta(root: Path, source_ref: str) -> dict[str, Any]:
+    if not source_ref:
+        return {}
+    meta_path = (root / source_ref).parent / "meta.json"
+    if not meta_path.is_file():
+        return {}
+    try:
+        data = read_json(meta_path)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _article_source_category(meta: Mapping[str, Any]) -> str:
+    return str(
+        meta.get("category")
+        or meta.get("sourceCategory")
+        or meta.get("sourceKind")
+        or ""
+    ).strip()
+
+
+def _source_asset_ref(
+    task_id: str, batch_id: str, root: Path, source_ref: str, row: Mapping[str, Any]
+) -> str:
+    file_name = str(row.get("fileName") or "").strip()
+    if not source_ref or not file_name:
+        return ""
+    return relative_batch_ref((root / source_ref).parent / "assets" / file_name, task_id, batch_id)
 
 
 def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) -> list[str]:
@@ -144,6 +259,12 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
         carrier = str(item.get("carrier") or item.get("contentType") or "article")
         return "image" if carrier == "gallery" else carrier
 
+    abandoned_refs = (
+        _abandoned_content_refs(task_id, batch_id)
+        if allow_content_quota_shortfall(spec)
+        else set()
+    )
+
     if want_entity or want_route or want_gallery:
         entity_article_n = sum(
             1 for i in items
@@ -151,21 +272,102 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
         )
         gallery_n = sum(1 for i in items if _item_carrier(i) == "image")
         route_n = sum(1 for i in items if str(i.get("kind") or "") == "route")
-        if want_entity and entity_article_n != want_entity:
-            issues.append(f"entityArticles quota {want_entity} but packet has {entity_article_n}")
-        if want_gallery and gallery_n != want_gallery:
-            issues.append(f"imageWorks quota {want_gallery} but packet has {gallery_n}")
+        abandoned_article_n = sum(1 for ref in abandoned_refs if not _is_image_ref(ref))
+        abandoned_image_n = sum(1 for ref in abandoned_refs if _is_image_ref(ref))
+        effective_want_entity = max(0, want_entity - abandoned_article_n)
+        effective_want_gallery = max(0, want_gallery - abandoned_image_n)
+        if want_entity and entity_article_n != effective_want_entity:
+            issues.append(
+                f"entityArticles quota {want_entity} "
+                f"(minus abandoned {abandoned_article_n} => {effective_want_entity}) "
+                f"but packet has {entity_article_n}"
+            )
+        if want_gallery and gallery_n != effective_want_gallery:
+            issues.append(
+                f"imageWorks quota {want_gallery} "
+                f"(minus abandoned {abandoned_image_n} => {effective_want_gallery}) "
+                f"but packet has {gallery_n}"
+            )
         if want_route and route_n != want_route:
             issues.append(f"routeArticles quota {want_route} but packet has {route_n}")
 
     root = batch_root(task_id, batch_id)
     index = load_index(task_id, batch_id)
+    item_refs = {str(item.get("ref") or "").strip() for item in items if str(item.get("ref") or "").strip()}
+    extra_index_refs = sorted(set(index) - item_refs - abandoned_refs)
+    if extra_index_refs:
+        issues.append(
+            "content_object_index contains ref(s) outside content_plan_packet: "
+            + ", ".join(extra_index_refs[:20])
+            + (" ..." if len(extra_index_refs) > 20 else "")
+        )
+    expected_briefs: set[Path] = set()
+    for ref in item_refs:
+        if ref not in index:
+            continue
+        try:
+            expected_briefs.add((content_object_stage_dir(task_id, batch_id, ref, STAGE_COMPOSE) / BRIEF_FILE).resolve())
+        except (KeyError, OSError, ValueError):
+            continue
+    actual_briefs = {
+        path.resolve()
+        for path in (root / "posts").glob(f"*/*/*/*/{STAGE_COMPOSE}/{BRIEF_FILE}")
+        if path.is_file()
+    }
+    extra_briefs = sorted(actual_briefs - expected_briefs)
+    if extra_briefs:
+        rels = [
+            path.relative_to(root).as_posix() if path.is_relative_to(root) else path.as_posix()
+            for path in extra_briefs[:20]
+        ]
+        issues.append(
+            "posts contains brief(s) outside content_plan_packet/index: "
+            + ", ".join(rels)
+            + (" ..." if len(extra_briefs) > 20 else "")
+        )
     rejected_sources = reject_source_ids(task_id, batch_id)
     seen_refs: set[str] = set()
     per_entity: dict[str, dict[str, list[Mapping[str, Any]]]] = {
         target: {"article": [], "image": []} for target in targets
     }
     base_source_owners: dict[str, str] = {}
+    source_asset_owners: dict[str, str] = {}
+    source_asset_sha_owners: dict[str, str] = {}
+    source_collection_owners: dict[str, str] = {}
+
+    def _claim_asset(owner_ref: str, asset_ref: str) -> None:
+        if not asset_ref:
+            return
+        previous = source_asset_owners.get(asset_ref)
+        if previous and previous != owner_ref:
+            issues.append(
+                f"item[{owner_ref}]: sourceAssetRef {asset_ref!r} reused by {previous}; "
+                "same batch requires one source image asset per work"
+            )
+        source_asset_owners.setdefault(asset_ref, owner_ref)
+
+    def _claim_asset_sha(owner_ref: str, asset_sha: str) -> None:
+        asset_sha = asset_sha.removeprefix("sha256:").strip().lower()
+        if not asset_sha:
+            return
+        previous = source_asset_sha_owners.get(asset_sha)
+        if previous and previous != owner_ref:
+            issues.append(
+                f"item[{owner_ref}]: image sha256 {asset_sha[:16]!r} reused by {previous}; "
+                "same batch requires one physical source image per work"
+            )
+        source_asset_sha_owners.setdefault(asset_sha, owner_ref)
+
+    def _claim_collection(owner_ref: str, collection_id: str) -> None:
+        if not collection_id:
+            return
+        previous = source_collection_owners.get(collection_id)
+        if previous and previous != owner_ref:
+            issues.append(
+                f"item[{owner_ref}]: sourceCollectionId {collection_id!r} reused by {previous}; "
+                "same batch requires one image collection per work"
+            )
+        source_collection_owners.setdefault(collection_id, owner_ref)
 
     for idx, item in enumerate(items, start=1):
         ref = str(item.get("ref") or "").strip()
@@ -181,10 +383,10 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             issues.append(f"item[{ref}]: kind must be entity|route, got {kind!r}")
         carrier = _item_carrier(item)
         raw_carrier = str(item.get("carrier") or item.get("contentType") or "article")
-        image_v2 = carrier == "image" and (raw_carrier == "image" or separated_research)
-        if not image_v2 and not title:
+        image_work_mode = carrier == "image" and (raw_carrier == "image" or separated_research)
+        if not image_work_mode and not title:
             issues.append(f"item[{ref}]: missing title")
-        if image_v2:
+        if image_work_mode:
             if len(title) > 80:
                 issues.append(f"item[{ref}]: image title exceeds 80 characters")
             if len(str(item.get("caption") or "")) > 300:
@@ -194,6 +396,8 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             collection_id = str(item.get("sourceCollectionId") or "").strip()
             if not collection_id:
                 issues.append(f"item[{ref}]: image work missing sourceCollectionId")
+            else:
+                _claim_collection(ref, collection_id)
             asset_refs = item.get("assetRefs") or []
             if not isinstance(asset_refs, list) or not (1 <= len(asset_refs) <= 20):
                 issues.append(f"item[{ref}]: image work assetRefs must contain 1..20 items")
@@ -227,6 +431,22 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                         issues.append(
                             f"item[{ref}]: asset {asset_ref} crosses sourceCollectionId"
                         )
+                    source_meta_path = asset_path.parent.parent / "meta.json"
+                    if not source_meta_path.is_file():
+                        issues.append(f"item[{ref}]: image asset source meta missing: {asset_ref}")
+                    else:
+                        try:
+                            source_meta = read_json(source_meta_path)
+                        except (OSError, ValueError, TypeError):
+                            source_meta = {}
+                        if str(source_meta.get("researchLane") or "") != "image":
+                            issues.append(
+                                f"item[{ref}]: image asset must come from researchLane=image: "
+                                f"{asset_ref}"
+                            )
+                    if entry:
+                        _claim_asset_sha(ref, str(entry.get("sha256") or ""))
+                    _claim_asset(ref, str(asset_ref))
         elif str(item.get("researchLane") or "article") != "article":
             issues.append(f"item[{ref}]: article must use researchLane=article")
         entity_refs = item.get("entityRefs") or []
@@ -276,27 +496,55 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             "factual_reference_only",
         ):
             issues.append(f"item[{ref}]: sourceUseMode required for scaled task")
+        if carrier != "image" and strict_rights_mode and not base_source_ref:
+            issues.append(f"item[{ref}]: article baseSourceRef required for scaled task")
         if carrier != "image" and base_source_ref:
-            meta_path = (root / base_source_ref).parent / "meta.json"
-            if meta_path.is_file():
-                try:
-                    source_meta = read_json(meta_path)
-                    actual_mode = str(source_meta.get("sourceUseMode") or "").strip()
-                except (OSError, ValueError):
-                    source_meta = {}
-                    actual_mode = ""
-                if actual_mode == "blocked":
-                    issues.append(f"item[{ref}]: baseSourceRef points to blocked source")
-                if source_use_mode and actual_mode and source_use_mode != actual_mode:
+            source_meta = _source_meta(root, base_source_ref)
+            actual_mode = str(source_meta.get("sourceUseMode") or "").strip()
+            if actual_mode == "blocked":
+                issues.append(f"item[{ref}]: baseSourceRef points to blocked source")
+            if source_use_mode and actual_mode and source_use_mode != actual_mode:
+                issues.append(
+                    f"item[{ref}]: sourceUseMode {source_use_mode!r} "
+                    f"does not match source meta {actual_mode!r}"
+                )
+            research_lane = str(source_meta.get("researchLane") or "")
+            if research_lane not in ("", "legacy", "article"):
+                issues.append(
+                    f"item[{ref}]: article baseSourceRef must come from article research, got {research_lane!r}"
+                )
+            source_role = str(source_meta.get("sourceRole") or "").strip()
+            source_id = str(source_meta.get("sourceId") or "").strip()
+            if strict_rights_mode and source_role not in ARTICLE_BASE_SOURCE_ROLES:
+                issues.append(
+                    f"item[{ref}]: article baseSourceRef must point to sourceRole=base, "
+                    f"got {source_role or '<missing>'} ({source_id or base_source_ref})"
+                )
+            unit_name = (root / base_source_ref).parent.name
+            if strict_rights_mode and source_role == "supporting":
+                issues.append(
+                    f"item[{ref}]: supporting source {source_id or unit_name!r} "
+                    "cannot be used as article baseSourceRef"
+                )
+            category = _article_source_category(source_meta)
+            if strict_rights_mode and category:
+                category_norm = category.lower().replace("-", "_").replace(" ", "_")
+                if category_norm in ARTICLE_SUPPORTING_ONLY_CATEGORIES:
                     issues.append(
-                        f"item[{ref}]: sourceUseMode {source_use_mode!r} "
-                        f"does not match source meta {actual_mode!r}"
+                        f"item[{ref}]: article baseSourceRef category {category!r} "
+                        "is supporting-only and cannot be used as article base"
                     )
-                research_lane = str(source_meta.get("researchLane") or "")
-                if research_lane not in ("", "legacy", "article"):
+                elif category_norm not in ARTICLE_BASE_SOURCE_CATEGORIES and "攻略" not in category and "游记" not in category:
                     issues.append(
-                        f"item[{ref}]: article baseSourceRef must come from article research, got {research_lane!r}"
+                        f"item[{ref}]: article baseSourceRef category {category!r} "
+                        "is not an approved article base category"
                     )
+            base_text_len = _compact_len(load_base_draft_text(task_id, batch_id, base_source_ref))
+            if strict_rights_mode and base_text_len < ARTICLE_MIN_BASE_DRAFT_CHARS:
+                issues.append(
+                    f"item[{ref}]: baseSourceRef usable text too short "
+                    f"({base_text_len} < {ARTICLE_MIN_BASE_DRAFT_CHARS})"
+                )
             previous = base_source_owners.get(base_source_ref)
             if previous and previous != ref:
                 issues.append(
@@ -320,6 +568,10 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                         f"item[{ref}]: baseSourceRef asset {asset.get('fileName') or '?'} "
                         f"missing rights fields {missing_asset_fields}"
                     )
+                asset_ref = _source_asset_ref(task_id, batch_id, root, base_source_ref, asset)
+                _claim_asset(ref, asset_ref)
+                _claim_asset_sha(ref, str(asset.get("sha256") or ""))
+                _claim_collection(ref, str(asset.get("sourceCollectionId") or ""))
         if carrier != "image":
             for msg in writing_intent_issues(item.get("writingIntent")):
                 issues.append(f"item[{ref}]: {msg}")
@@ -333,13 +585,25 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
     for target, buckets in per_entity.items():
         articles = buckets["article"]
         galleries = buckets["image"]
-        if per_target_articles and len(articles) != per_target_articles:
+        target_abandoned_articles = _abandoned_refs_for_target(
+            abandoned_refs, target, carrier="article"
+        )
+        target_abandoned_galleries = _abandoned_refs_for_target(
+            abandoned_refs, target, carrier="image"
+        )
+        effective_target_articles = max(0, per_target_articles - len(target_abandoned_articles))
+        effective_target_galleries = max(0, per_target_galleries - len(target_abandoned_galleries))
+        if per_target_articles and len(articles) != effective_target_articles:
             issues.append(
-                f"{target}: entityArticlesPerTarget quota {per_target_articles} but packet has {len(articles)}"
+                f"{target}: entityArticlesPerTarget quota {per_target_articles} "
+                f"(minus abandoned {len(target_abandoned_articles)} => {effective_target_articles}) "
+                f"but packet has {len(articles)}"
             )
-        if per_target_galleries and len(galleries) != per_target_galleries:
+        if per_target_galleries and len(galleries) != effective_target_galleries:
             issues.append(
-                f"{target}: imageWorksPerTarget quota {per_target_galleries} but packet has {len(galleries)}"
+                f"{target}: imageWorksPerTarget quota {per_target_galleries} "
+                f"(minus abandoned {len(target_abandoned_galleries)} => {effective_target_galleries}) "
+                f"but packet has {len(galleries)}"
             )
         if per_target_articles == 2:
             intents = sorted(str(item.get("writingIntent") or "") for item in articles)
@@ -351,7 +615,10 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                 )
         if required_article_intents and per_target_articles == len(required_article_intents):
             intents = sorted(str(item.get("writingIntent") or "") for item in articles)
-            expected = sorted(required_article_intents)
+            abandoned_intents = _abandoned_intents_for_target(abandoned_refs, target)
+            expected = sorted(
+                intent for intent in required_article_intents if intent not in abandoned_intents
+            )
             if intents != expected:
                 issues.append(
                     f"{target}: entity articles must match acceptance.requiredAngles "

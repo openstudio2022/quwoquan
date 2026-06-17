@@ -1,0 +1,136 @@
+version: 2
+node:
+  id: entity-homepage-intersection-redesign
+  level: L3_story
+  path: specs/feature-tree/object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign
+  title: entity homepage intersection redesign
+  parent_domain_service: object-homepage-network
+  parent_business_capability: intersection-unified-experience
+scope:
+  summary: 实体主页沿用他人主页同壳同口径重做交集卡、关于这里卡、记录流与头部。
+  in_scope:
+    - 交集卡切 ObjectIntersectionSection（objectBType=homepage）单一真相源，标题「为什么推荐这里」。
+    - 关于这里卡标题「关于这里」，2~4 行 + 缩略图 + 查看更多介绍。
+    - 一级 tab 改记录/讨论/相关圈子；记录流单列改双列瀑布 + PostBaseDto 流 + 卡内交集句。
+    - 二级过滤新建（右侧漏斗 + ActionSheet，非胶囊），过滤项进 homepage_sub_tabs。
+    - 头部头像簇 + N 关注单计数 + verified + 成立年份（契约预留 + alpha mock）。
+    - 用户语言禁词清理（实体/Entity/兴趣圈/影响力/同趣事实化）。
+  out_of_scope:
+    - 云侧 Homepage/Entity 服务、排序、图谱实现。
+    - AB / 特征 / 召回系统。
+gwt_acceptance:
+  GWT1:
+    title: 为什么推荐这里单一真相源 GWT
+    given:
+      - alpha mock homepage fixtures 含主谓宾 primaryText。
+    when:
+      - 渲染实体主页交集卡。
+    then:
+      - 交集卡走 ObjectIntersectionSection（objectBType=homepage），标题「为什么推荐这里」，列表入口每行单结论句 + 至多一条辅助说明 + 查看更多。
+    done_when:
+      - 弃 bundle 直出，统一走 objectSharedReasons provider。
+    edge_cases:
+      - 无交集事实时三态降级不占位。
+    contract_refs:
+      - recommendation/rec_model/projections/intersection_reason.yaml
+    performance_points: []
+    evidence:
+      primary:
+        - T2_module_interaction
+      supporting:
+        - T1_contract
+    tests:
+      planned:
+        - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      recorded:
+        - "T2 quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（交集卡走 ObjectIntersectionSection/objectBType=homepage，标题「为什么推荐这里」单结论句，无交集三态降级，2026-06-16 green）"
+        - "PENDING T3：gamma /v1/content/intersections/object（homepage）真实链路待 WP-D。"
+    status: pending
+  GWT2:
+    title: 关于这里卡 GWT
+    given:
+      - alpha mock homepage fixtures 含介绍文案与缩略图。
+    when:
+      - 渲染实体主页「关于这里」卡。
+    then:
+      - 标题为「关于这里」，正文 2~4 行 + 缩略图，「查看更多介绍」进介绍详情页。
+    done_when:
+      - 无禁用术语外露。
+    edge_cases:
+      - 介绍缺省时不展示卡片。
+    contract_refs:
+      - entity/homepage/fields.yaml
+    performance_points: []
+    evidence:
+      primary:
+        - T2_module_interaction
+      supporting:
+        - T1_contract
+    tests:
+      planned:
+        - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      recorded:
+        - "T2 quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（「关于这里」卡：2~4 行正文 + 缩略图 + 查看更多介绍，介绍缺省不展示，2026-06-16 green）"
+        - "PENDING T3：gamma entity homepage fields 介绍真实链路待 WP-D。"
+    status: pending
+  GWT3:
+    title: 记录流双列瀑布与二级过滤 GWT
+    given:
+      - alpha mock 提供实体记录流 PostBaseDto 与 intersectionReasons。
+    when:
+      - 查看一级 tab、二级过滤与记录流卡片。
+    then:
+      - 一级 tab 显示「记录/讨论/相关圈子」；记录流双列瀑布；二级过滤在最右侧、非胶囊；每卡有且仅一条交集句。
+    done_when:
+      - 二级过滤与用户主页同一实现模式。
+    edge_cases:
+      - 记录流为空时展示空态。
+    contract_refs:
+      - entity/homepage/ui_config.yaml
+    performance_points: []
+    evidence:
+      primary:
+        - T2_module_interaction
+      supporting:
+        - T1_contract
+    tests:
+      planned:
+        - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      recorded:
+        - "T2 quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（一级 tab 记录/讨论/相关圈子、记录流双列瀑布、二级过滤右侧非胶囊、每卡至多一条交集句，2026-06-16 green）"
+        - "PENDING T3：gamma entity 记录流真实 PostBaseDto + intersectionReasons 待 WP-D。"
+    status: pending
+  GWT4:
+    title: 头部关注单计数与认证年份 GWT
+    given:
+      - alpha mock homepage fixtures 含关注头像簇、verified、成立年份。
+    when:
+      - 渲染实体主页头部。
+    then:
+      - 头部展示头像簇 +「N 关注」单计数 + 认证标识 + 成立年份；无「实体/同趣事实化」外露。
+    done_when:
+      - 头部不挂 4 列统计行。
+    edge_cases:
+      - verified 缺省不展示认证标识；年份缺省不展示年份行。
+    contract_refs:
+      - entity/homepage/fields.yaml
+    performance_points: []
+    evidence:
+      primary:
+        - T2_module_interaction
+      supporting:
+        - T1_contract
+    tests:
+      planned:
+        - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      recorded:
+        - "T2 quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（头部头像簇 +「N 关注」单计数 + 认证标识 + 成立年份，verified/年份缺省优雅降级，2026-06-16 green）"
+        - "PENDING T3：gamma entity homepage fields 关注计数/认证/年份真实链路待 WP-D。"
+    status: pending
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+    - make verify-app-page-horizontal-quality
+  full_gate:
+    - make gate

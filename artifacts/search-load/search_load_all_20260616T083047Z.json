@@ -1,0 +1,394 @@
+{
+  "tool": "search_load_benchmark.py",
+  "generated_at": "2026-06-16T08:30:09.047802+00:00",
+  "base_url": "http://127.0.0.1:19280",
+  "live": true,
+  "config": {
+    "duration_sec": 6.0,
+    "concurrency": 40,
+    "timeout_sec": 5.0
+  },
+  "slo_load_model_present": true,
+  "scenarios": [
+    {
+      "summary": {
+        "scenario": "result_warm",
+        "duration_sec": 6.0,
+        "concurrency": 40,
+        "total_requests": 358,
+        "achieved_rps": 59.7,
+        "error_count": 246,
+        "error_rate": 0.68715,
+        "upstream_unavailable_count": 246,
+        "rate_limited_count": 0,
+        "backpressure_shed_count": 0,
+        "shed_count": 0,
+        "shed_rate": 0.0,
+        "degrade_count": 0,
+        "degrade_rate": 0.0,
+        "status_counts": {
+          "503": 246,
+          "200": 112
+        },
+        "kind_counts": {
+          "upstream_unavailable": 246,
+          "ok": 112
+        },
+        "ok_count": 112,
+        "ok_latency_ms": {
+          "p50": 480.0,
+          "p95": 770.7,
+          "p99": 798.7
+        },
+        "latency_ms": {
+          "p50": 803.7,
+          "p90": 814.9,
+          "p95": 828.2,
+          "p99": 833.3,
+          "max": 839.5,
+          "mean": 706.0
+        }
+      },
+      "verdict": {
+        "traffic_class": "result",
+        "checks": [
+          {
+            "metric": "ok_p95_ms",
+            "actual": 770.7,
+            "target_max": 400,
+            "pass": false
+          },
+          {
+            "metric": "error_rate",
+            "actual": 0.68715,
+            "target_max": 0.005,
+            "pass": false
+          },
+          {
+            "metric": "degrade_rate",
+            "actual": 0.0,
+            "target_max": 0.05,
+            "pass": true
+          }
+        ],
+        "verdict": "NO-GO"
+      }
+    },
+    {
+      "summary": {
+        "scenario": "result_cold",
+        "duration_sec": 6.0,
+        "concurrency": 40,
+        "total_requests": 414,
+        "achieved_rps": 69.0,
+        "error_count": 109,
+        "error_rate": 0.26329,
+        "upstream_unavailable_count": 109,
+        "rate_limited_count": 0,
+        "backpressure_shed_count": 0,
+        "shed_count": 0,
+        "shed_rate": 0.0,
+        "degrade_count": 0,
+        "degrade_rate": 0.0,
+        "status_counts": {
+          "200": 305,
+          "503": 109
+        },
+        "kind_counts": {
+          "ok": 305,
+          "upstream_unavailable": 109
+        },
+        "ok_count": 305,
+        "ok_latency_ms": {
+          "p50": 530.8,
+          "p95": 795.6,
+          "p99": 823.5
+        },
+        "latency_ms": {
+          "p50": 602.6,
+          "p90": 804.5,
+          "p95": 809.9,
+          "p99": 823.3,
+          "max": 866.9,
+          "mean": 599.9
+        }
+      },
+      "verdict": {
+        "traffic_class": "result",
+        "checks": [
+          {
+            "metric": "ok_p95_ms",
+            "actual": 795.6,
+            "target_max": 400,
+            "pass": false
+          },
+          {
+            "metric": "error_rate",
+            "actual": 0.26329,
+            "target_max": 0.005,
+            "pass": false
+          },
+          {
+            "metric": "degrade_rate",
+            "actual": 0.0,
+            "target_max": 0.05,
+            "pass": true
+          }
+        ],
+        "verdict": "NO-GO"
+      }
+    },
+    {
+      "summary": {
+        "scenario": "suggest_warm",
+        "duration_sec": 6.0,
+        "concurrency": 40,
+        "total_requests": 464,
+        "achieved_rps": 77.3,
+        "error_count": 141,
+        "error_rate": 0.30388,
+        "upstream_unavailable_count": 141,
+        "rate_limited_count": 0,
+        "backpressure_shed_count": 0,
+        "shed_count": 0,
+        "shed_rate": 0.0,
+        "degrade_count": 0,
+        "degrade_rate": 0.0,
+        "status_counts": {
+          "503": 141,
+          "200": 323
+        },
+        "kind_counts": {
+          "upstream_unavailable": 141,
+          "ok": 323
+        },
+        "ok_count": 323,
+        "ok_latency_ms": {
+          "p50": 427.7,
+          "p95": 759.3,
+          "p99": 791.4
+        },
+        "latency_ms": {
+          "p50": 563.6,
+          "p90": 807.3,
+          "p95": 808.4,
+          "p99": 811.7,
+          "max": 833.4,
+          "mean": 534.8
+        }
+      },
+      "verdict": {
+        "traffic_class": "suggest",
+        "checks": [
+          {
+            "metric": "ok_p95_ms",
+            "actual": 759.3,
+            "target_max": 120,
+            "pass": false
+          },
+          {
+            "metric": "error_rate",
+            "actual": 0.30388,
+            "target_max": 0.005,
+            "pass": false
+          },
+          {
+            "metric": "degrade_rate",
+            "actual": 0.0,
+            "target_max": 0.05,
+            "pass": true
+          }
+        ],
+        "verdict": "NO-GO"
+      }
+    },
+    {
+      "summary": {
+        "scenario": "suggest_cold",
+        "duration_sec": 6.0,
+        "concurrency": 40,
+        "total_requests": 337,
+        "achieved_rps": 56.2,
+        "error_count": 250,
+        "error_rate": 0.74184,
+        "upstream_unavailable_count": 250,
+        "rate_limited_count": 0,
+        "backpressure_shed_count": 0,
+        "shed_count": 0,
+        "shed_rate": 0.0,
+        "degrade_count": 0,
+        "degrade_rate": 0.0,
+        "status_counts": {
+          "200": 87,
+          "503": 250
+        },
+        "kind_counts": {
+          "ok": 87,
+          "upstream_unavailable": 250
+        },
+        "ok_count": 87,
+        "ok_latency_ms": {
+          "p50": 570.8,
+          "p95": 755.7,
+          "p99": 785.9
+        },
+        "latency_ms": {
+          "p50": 802.4,
+          "p90": 804.2,
+          "p95": 805.3,
+          "p99": 806.8,
+          "max": 810.3,
+          "mean": 735.4
+        }
+      },
+      "verdict": {
+        "traffic_class": "suggest",
+        "checks": [
+          {
+            "metric": "ok_p95_ms",
+            "actual": 755.7,
+            "target_max": 120,
+            "pass": false
+          },
+          {
+            "metric": "error_rate",
+            "actual": 0.74184,
+            "target_max": 0.005,
+            "pass": false
+          },
+          {
+            "metric": "degrade_rate",
+            "actual": 0.0,
+            "target_max": 0.05,
+            "pass": true
+          }
+        ],
+        "verdict": "NO-GO"
+      }
+    },
+    {
+      "summary": {
+        "scenario": "feedback",
+        "duration_sec": 6.0,
+        "concurrency": 40,
+        "total_requests": 17518,
+        "achieved_rps": 2919.7,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "upstream_unavailable_count": 0,
+        "rate_limited_count": 11518,
+        "backpressure_shed_count": 0,
+        "shed_count": 11518,
+        "shed_rate": 0.6575,
+        "degrade_count": 11518,
+        "degrade_rate": 0.6575,
+        "status_counts": {
+          "202": 6000,
+          "429": 11518
+        },
+        "kind_counts": {
+          "ok": 6000,
+          "rate_limited": 11518
+        },
+        "ok_count": 6000,
+        "ok_latency_ms": {
+          "p50": 17.3,
+          "p95": 29.4,
+          "p99": 36.7
+        },
+        "latency_ms": {
+          "p50": 12.3,
+          "p90": 21.8,
+          "p95": 25.2,
+          "p99": 34.2,
+          "max": 104.4,
+          "mean": 13.4
+        }
+      },
+      "verdict": {
+        "traffic_class": "feedback",
+        "checks": [
+          {
+            "metric": "ok_p95_ms",
+            "actual": 29.4,
+            "target_max": 80,
+            "pass": true
+          },
+          {
+            "metric": "error_rate",
+            "actual": 0.0,
+            "target_max": 0.01,
+            "pass": true
+          }
+        ],
+        "verdict": "GO"
+      }
+    },
+    {
+      "summary": {
+        "scenario": "mixed",
+        "duration_sec": 6.0,
+        "concurrency": 40,
+        "total_requests": 525,
+        "achieved_rps": 87.5,
+        "error_count": 60,
+        "error_rate": 0.11429,
+        "upstream_unavailable_count": 60,
+        "rate_limited_count": 0,
+        "backpressure_shed_count": 0,
+        "shed_count": 0,
+        "shed_rate": 0.0,
+        "degrade_count": 0,
+        "degrade_rate": 0.0,
+        "status_counts": {
+          "200": 416,
+          "202": 49,
+          "503": 60
+        },
+        "kind_counts": {
+          "ok": 465,
+          "upstream_unavailable": 60
+        },
+        "ok_count": 465,
+        "ok_latency_ms": {
+          "p50": 459.1,
+          "p95": 787.6,
+          "p99": 938.1
+        },
+        "latency_ms": {
+          "p50": 501.8,
+          "p90": 802.3,
+          "p95": 804.7,
+          "p99": 919.8,
+          "max": 1028.4,
+          "mean": 492.9
+        }
+      },
+      "verdict": {
+        "traffic_class": "result",
+        "checks": [
+          {
+            "metric": "ok_p95_ms",
+            "actual": 787.6,
+            "target_max": 400,
+            "pass": false
+          },
+          {
+            "metric": "error_rate",
+            "actual": 0.11429,
+            "target_max": 0.005,
+            "pass": false
+          },
+          {
+            "metric": "degrade_rate",
+            "actual": 0.0,
+            "target_max": 0.05,
+            "pass": true
+          }
+        ],
+        "verdict": "NO-GO"
+      }
+    }
+  ],
+  "overall_verdict": "NO-GO"
+}

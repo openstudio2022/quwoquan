@@ -114,7 +114,7 @@ void main() {
     });
 
     testWidgets('旅程 A2：圈子详情页包含 Tab 导航', (tester) async {
-      // 壳层内容较长，放大视口保证一级 Tab（内容/讨论/成员）完整内联展示。
+      // 壳层内容较长，放大视口保证一级 Tab（记录/讨论/成员）完整内联展示。
       tester.view.physicalSize = const Size(1080, 3600);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -126,7 +126,7 @@ void main() {
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleShell), findsOneWidget);
-      expect(find.text('内容'), findsWidgets);
+      expect(find.text(UITextConstants.objectTabRecord), findsWidgets);
     });
 
     testWidgets('旅程 A3：从详情页返回到列表页', (tester) async {
@@ -235,7 +235,7 @@ void main() {
       await _settleIgnoringTabPaintErrors(tester);
 
       expect(find.byType(CircleShell), findsOneWidget);
-      expect(find.text('内容'), findsWidgets);
+      expect(find.text(UITextConstants.objectTabRecord), findsWidgets);
 
       await _settleIgnoringTabPaintErrors(tester);
 

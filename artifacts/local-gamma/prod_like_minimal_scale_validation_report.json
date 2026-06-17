@@ -1,0 +1,122 @@
+{
+  "kind": "local_gamma_prod_like_minimal_scale_validation",
+  "env": "local-gamma",
+  "generated_at": "2026-06-16T16:40:00Z",
+  "principle": {
+    "production_mirror": "Mirror production contracts, topology mapping, package layout, API/media edge routes, service health, ES/Redis-backed search behavior, and readonly integration probes.",
+    "minimal_knowledge_scale": "Use the smallest local-gamma knowledge/data scale sufficient to prove production-like behavior: single local stack, one ES data node, one search index, contract/gamma seed fixtures, minimal media slice registry, and short local load/repeatability probes.",
+    "not_a_capacity_substitute": "local-gamma does not close real-cluster measured capacity requirements such as multi-data-node sizing, multi-replica preference validation, production heap/page-cache/threadpool saturation, or production RPS/P95/P99 thresholds."
+  },
+  "evidence": {
+    "gamma_prod_consistency": {
+      "command": "python3 quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py",
+      "status": "passed",
+      "summary": "gamma-local and prod consistency passed: rec DNS unified, edge-media roster profile-aligned, main stack clean."
+    },
+    "topology_and_mapping": {
+      "commands": [
+        "python3 agent_ops/gate/verify_environment_topology_manifest.py",
+        "python3 quwoquan_service/scripts/deploy/verify_workload_topology_inventory.py",
+        "python3 quwoquan_app/scripts/runtime/verify_module_package_mapping.py"
+      ],
+      "status": "passed",
+      "summary": "Environment topology manifest, workload topology inventory, and module package mapping passed."
+    },
+    "gamma_package": {
+      "command": "python3 agent_ops/deploy/stackctl.py package --env gamma --include-services",
+      "status": "passed",
+      "report_dir": "artifacts/stackctl/gamma/20260616T163359Z-package-gamma-local",
+      "service_packages_include": [
+        "assistant-service/gamma",
+        "chat-service/gamma",
+        "circle-service/gamma",
+        "content-service/gamma",
+        "entity-service/gamma",
+        "integration-service/gamma",
+        "notification-service/gamma",
+        "platform-ops-service/gamma",
+        "product-ops-service/gamma",
+        "rec-model-service/gamma",
+        "rtc-service/gamma",
+        "search-service/gamma",
+        "tag-service/gamma",
+        "user-service/gamma"
+      ]
+    },
+    "gamma_full_health": {
+      "command": "python3 agent_ops/deploy/stackctl.py health --target gamma-local --scope full",
+      "status": "passed",
+      "healthy": "17/17",
+      "report_dir": "artifacts/stackctl/gamma/20260616T163709Z-health-gamma-local",
+      "covered": [
+        "api edge",
+        "product ops edge",
+        "media edge",
+        "media public sample",
+        "media origin sample",
+        "chat-service",
+        "user-service",
+        "content-service",
+        "assistant-service",
+        "rec-model-service",
+        "product-ops-service",
+        "tag-service",
+        "search-service",
+        "app config",
+        "gamma route smoke",
+        "tag shared-tags smoke",
+        "readonly integration probe"
+      ]
+    },
+    "gamma_verify": {
+      "command": "python3 agent_ops/deploy/stackctl.py verify --env gamma --kind all --tier all",
+      "status": "passed",
+      "checks": 15,
+      "report_dir": "artifacts/stackctl/gamma/20260616T163409Z-verify-gamma-local"
+    },
+    "search_local_gamma_capacity": {
+      "command": "python3 quwoquan_service/scripts/search/verify_search_local_gamma_capacity.py --duration 5 --concurrency 10 --repeat 25",
+      "status": "passed",
+      "report_path": "artifacts/local-gamma/search_r_s06_s1_local_gamma_report.json",
+      "r_s06_s1_closed_by_local_gamma": false,
+      "checks": {
+        "stackctl_verify_ok": true,
+        "search_health_ok": true,
+        "baseline_search_ok": true,
+        "load_script_ok": true,
+        "repeatability_zero_mismatch": true,
+        "rollback_evidence_present": true
+      },
+      "latest_load_report": "artifacts/search-load/local-gamma/search_load_all_20260616T163632Z.json"
+    }
+  },
+  "production_mirror_scope": {
+    "mirrored": [
+      "gamma/prod environment consistency contract",
+      "production-style edge route and port manifest",
+      "production package layout for app and services",
+      "remote/gamma data-source posture",
+      "API edge, media edge, media origin, service health, config and readonly integration probes",
+      "search-service backed by Elasticsearch and Redis in local-gamma",
+      "search baseline query, local short load probe, and single-node repeatability"
+    ],
+    "minimalized_by_design": [
+      "single host docker compose stack",
+      "single Elasticsearch data node with one primary shard and one unassigned replica, hence yellow health",
+      "minimal contract/gamma seed knowledge scale rather than production-scale corpus",
+      "short local load duration and bounded concurrency for smoke-level methodology proof"
+    ],
+    "not_verified_locally": [
+      "multi-data-node shard and replica sizing",
+      "multi-replica Elasticsearch preference effectiveness",
+      "real production or prod-sim RPS/P95/P99 capacity curve",
+      "production filesystem cache, heap, GC, search threadpool and circuit-breaker saturation point",
+      "cloud ingress/load-balancer/secret/managed observability behavior"
+    ]
+  },
+  "decision": {
+    "local_gamma_validation": "passed",
+    "commercial_capacity_blocker_r_s06_s1": "still_open_for_real_cluster",
+    "summary": "local-gamma now passes the production-like minimal-scale validation. It proves mirror methodology and functional stability, but intentionally does not close true cluster capacity."
+  }
+}

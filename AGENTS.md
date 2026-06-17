@@ -27,6 +27,13 @@
 
 如果以上任一项无法明确，先刷新规格或特性树文档，不要直接写实现。
 
+## 遗留事项与风险待办
+
+- 所有非纯查询任务开始前，先审视 `docs/outstanding_risks_backlog.md` 的未解决项，判断是否与当前任务直接相关、是否需要一并收口。
+- 发现新的长期遗留或风险时，先向用户复述事项、原因和影响；只有用户确认后，才能把它登记到 backlog。
+- 解决 backlog 中已有事项时，必须同步回写状态、日期与验证证据；禁止只在会话里口头说明“已修复”而不打勾。
+- 禁止维护第二套遗留事项清单；正式遗留与风险只记录在 `docs/outstanding_risks_backlog.md`。
+
 ## 必读真相源
 
 1. `specs/00_MASTER_DEVELOPMENT_FLOW.md`
@@ -76,6 +83,8 @@ Codex 在本仓库做任何增量，都必须同时用这些视角审视，不�
 - 调整特性树节点后：重建 `specs/feature-tree/tree_index.yaml` 并跑对应校验。
 - 触及错误码、权限/异常语义、用户提示、恢复策略或服务 HTTP 边界：同步刷新 metadata `errors.yaml`、codegen、端侧 mapper/UI、服务响应、观测指标与测试证据。
 - 触及推荐、观测、环境部署或内容生产闭环：同步刷新对应能力/Story 的 `acceptance.yaml` 证据、CR 与必要的 `design.md`，不得只改实现。
+- 发现新的长期遗留/风险且用户确认后：追加 `docs/outstanding_risks_backlog.md`。
+- 关闭已有遗留/风险事项：同步更新 `docs/outstanding_risks_backlog.md` 的状态、日期与验证证据。
 
 ## 编码总约束
 

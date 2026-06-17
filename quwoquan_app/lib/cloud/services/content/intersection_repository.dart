@@ -85,6 +85,7 @@ class MockIntersectionRepository implements IntersectionRepository {
           count: items.length,
           newCount: newCount,
           briefText: _briefTextFor(dimension, items, newCount),
+          subtitleText: _subtitleTextFor(items),
         ),
       );
     });
@@ -405,7 +406,10 @@ class MockIntersectionRepository implements IntersectionRepository {
     if (items.isEmpty) return '';
     final sample = items.first;
     final name = sample.displayName.trim();
-    final n = newCount > 0 ? newCount : sample.sharedCount;
+    final firstPointCount = sample.intersectionPoints.isNotEmpty
+        ? sample.intersectionPoints.first.count
+        : sample.totalPointCount;
+    final n = newCount > 0 ? newCount : firstPointCount;
     final who = name.isEmpty ? '有人' : name;
     switch (dimension) {
       case 'relationship':
@@ -421,6 +425,23 @@ class MockIntersectionRepository implements IntersectionRepository {
       default:
         return name.isEmpty ? '' : '$who 等 $n 项与你有关';
     }
+  }
+
+  static String _subtitleTextFor(List<IntersectionReason> items) {
+    final names = <String>[];
+    for (final item in items) {
+      final secondary = item.secondaryText.trim();
+      final displayName = item.displayName.trim();
+      if (secondary.isNotEmpty) {
+        names.add(secondary);
+      } else if (displayName.isNotEmpty) {
+        names.add(displayName);
+      }
+      if (names.length >= 4) {
+        break;
+      }
+    }
+    return names.join('、');
   }
 
   static IntersectionPoint _point({
@@ -491,11 +512,11 @@ class MockIntersectionRepository implements IntersectionRepository {
     final pointClass = reason.intersectionClass == 'affinity'
         ? 'recommended'
         : 'fact';
-    // 证据组短句名词优先 label（如「共同关注」），displayText 仅作回落；
-    // count=sharedCount、sampleText=displayName、头像簇=[avatarUrl] 让交集可感知。
-    final shortLabel = reason.label.trim().isNotEmpty
-        ? reason.label.trim()
-        : reason.displayText.trim();
+    // 证据组短句名词来自云侧 primaryText（结论句），connectionSummary 仅作回落；
+    // count 经 totalPointCount 中转原始共同实例数、sampleText=displayName、头像簇=[avatarUrl]。
+    final shortLabel = reason.primaryText.trim().isNotEmpty
+        ? reason.primaryText.trim()
+        : reason.connectionSummary.trim();
     return _withPoints(reason, <IntersectionPoint>[
       _point(
         id: '${reason.intersectionId}_point',
@@ -504,7 +525,7 @@ class MockIntersectionRepository implements IntersectionRepository {
         label: shortLabel,
         displayText: shortLabel,
         sourceRef: reason.source,
-        count: reason.sharedCount,
+        count: reason.totalPointCount,
         sampleText: reason.displayName,
         sampleAvatarUrls: reason.avatarUrl.trim().isNotEmpty
             ? <String>[reason.avatarUrl.trim()]
@@ -565,16 +586,14 @@ class MockIntersectionRepository implements IntersectionRepository {
       dimension: 'relationship',
       intersectionId: 'ix_rel_1',
       intersectionClass: 'fact',
-      label: '共同关注',
       displayName: '林清越',
       objectKind: 'person',
-      primaryText: '4位共同好友',
+      primaryText: '4位关注对象正在讨论黄金投资',
       secondaryText: '都在黄金投资圈',
       weightTier: 'heavy',
-      displayText: '4 位共同关注',
       avatarUrl:
           'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
-      sharedCount: 4,
+      totalPointCount: 4,
       strength: 0.9,
       relationKind: 'person',
       actionType: 'view',
@@ -586,15 +605,13 @@ class MockIntersectionRepository implements IntersectionRepository {
       dimension: 'relationship',
       intersectionId: 'ix_rel_2',
       intersectionClass: 'fact',
-      label: '互相关注',
       displayName: '周屿',
       objectKind: 'person',
       primaryText: '你们互相关注',
       weightTier: 'light',
-      displayText: '你们互相关注',
       avatarUrl:
           'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
-      sharedCount: 2,
+      totalPointCount: 2,
       strength: 0.7,
       relationKind: 'person',
       actionType: 'view',
@@ -606,16 +623,14 @@ class MockIntersectionRepository implements IntersectionRepository {
       dimension: 'identity',
       intersectionId: 'ix_id_1',
       intersectionClass: 'fact',
-      label: '同校',
       displayName: '新东方校友会',
       objectKind: 'school',
       primaryText: '同校校友',
       secondaryText: '3位校友最近活跃',
       weightTier: 'light',
-      displayText: '同校校友',
       avatarUrl:
           'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=100',
-      sharedCount: 3,
+      totalPointCount: 3,
       strength: 0.82,
       relationKind: 'org',
       actionType: 'view',
@@ -627,15 +642,13 @@ class MockIntersectionRepository implements IntersectionRepository {
       dimension: 'content',
       intersectionId: 'ix_ct_1',
       intersectionClass: 'fact',
-      label: '共看内容',
       displayName: '黄金投资圈',
       objectKind: 'circle',
       primaryText: '8人和你共看黄金内容',
       weightTier: 'heavy',
-      displayText: '共看黄金内容',
       avatarUrl:
           'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=100',
-      sharedCount: 8,
+      totalPointCount: 8,
       strength: 0.88,
       relationKind: 'circle',
       actionType: 'join',
@@ -647,15 +660,13 @@ class MockIntersectionRepository implements IntersectionRepository {
       dimension: 'location',
       intersectionId: 'ix_loc_1',
       intersectionClass: 'fact',
-      label: '同游',
       displayName: '西湖',
       objectKind: 'place',
       primaryText: '5人有相同旅行足迹',
       weightTier: 'light',
-      displayText: '有相同旅行足迹',
       avatarUrl:
           'https://images.unsplash.com/photo-1606767341197-3d8e6f0a2a9b?w=100',
-      sharedCount: 5,
+      totalPointCount: 5,
       strength: 0.76,
       relationKind: 'place',
       actionType: 'view',
@@ -667,16 +678,14 @@ class MockIntersectionRepository implements IntersectionRepository {
       dimension: 'interest',
       intersectionId: 'ix_int_1',
       intersectionClass: 'affinity',
-      label: '可能合得来',
       displayName: '陆衡',
       objectKind: 'person',
       primaryText: '可能合得来',
       secondaryText: '兴趣相似',
       weightTier: 'light',
-      displayText: '可能合得来',
       avatarUrl:
           'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      sharedCount: 0,
+      totalPointCount: 0,
       strength: 0.61,
       confidenceLabel: '推荐',
       modelReasonBucket: 'friend_suggestion',
@@ -701,15 +710,13 @@ class MockIntersectionRepository implements IntersectionRepository {
         dimension: 'identity',
         intersectionId: 'ix_campus_1',
         intersectionClass: 'fact',
-        label: '同专业',
         displayName: '苏黎',
         objectKind: 'person',
         primaryText: '同专业同校',
         weightTier: 'light',
-        displayText: '同专业同校',
         avatarUrl:
             'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
-        sharedCount: 6,
+        totalPointCount: 6,
         strength: 0.84,
         relationKind: 'person',
         actionType: 'view',
@@ -721,15 +728,13 @@ class MockIntersectionRepository implements IntersectionRepository {
         dimension: 'interest',
         intersectionId: 'ix_campus_2',
         intersectionClass: 'affinity',
-        label: '同社团可能',
         displayName: '吉他社',
         objectKind: 'circle',
         primaryText: '推荐加入社团',
         weightTier: 'light',
-        displayText: '推荐加入社团',
         avatarUrl:
             'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100',
-        sharedCount: 0,
+        totalPointCount: 0,
         strength: 0.58,
         confidenceLabel: '推荐',
         modelReasonBucket: 'circle_discovery',
@@ -745,15 +750,13 @@ class MockIntersectionRepository implements IntersectionRepository {
         dimension: 'location',
         intersectionId: 'ix_travel_1',
         intersectionClass: 'fact',
-        label: '同目的地',
         displayName: '大理',
         objectKind: 'place',
         primaryText: '7人有相同目的地',
         weightTier: 'light',
-        displayText: '有相同目的地',
         avatarUrl:
             'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=100',
-        sharedCount: 7,
+        totalPointCount: 7,
         strength: 0.81,
         relationKind: 'place',
         actionType: 'view',
@@ -765,15 +768,13 @@ class MockIntersectionRepository implements IntersectionRepository {
         dimension: 'interest',
         intersectionId: 'ix_travel_2',
         intersectionClass: 'affinity',
-        label: '兴趣相近',
         displayName: '徒步旅人',
         objectKind: 'person',
         primaryText: '可能喜欢相同路线',
         weightTier: 'light',
-        displayText: '可能喜欢相同路线',
         avatarUrl:
             'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=100',
-        sharedCount: 0,
+        totalPointCount: 0,
         strength: 0.55,
         confidenceLabel: '推荐',
         modelReasonBucket: 'travel_affinity',

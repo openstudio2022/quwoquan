@@ -7,32 +7,59 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: feed-orchestration-recommendation
 scope:
-  summary: personalized ranking 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: sort=recommend 与 cursor 共存的个性化排序基线，强反馈只影响未来窗口。
+  in_scope:
+  - sort=recommend 首屏与翻页路径。
+  - cursor 透传、不解析、连续推进。
+  - 强反馈过滤未来窗口，弱反馈影响未来重排。
+  - 端侧已看窗口回滚稳定。
+  - 协同召回、排序校准、时间衰减与上下文化排序的商用成熟度规格。
+  out_of_scope:
+  - 深度排序模型平台轨。
+  - 协同过滤召回真实实现。
+  - 长周期用户级曝光记忆实现。
+  - 曝光记忆、动态曝光预算与生命周期复活实现；归属 exposure-governance。
 gwt_acceptance:
   GWT1:
-    title: personalized ranking GWT
+    title: 个性化排序与未来窗口 GWT
     given:
-    - 前置条件明确。
+    - 用户以 sort=recommend 请求内容 feed，服务端返回 opaque cursor，端侧保留已看窗口。
     when:
-    - 用户或系统动作发生。
+    - 用户翻页、回滚、产生强负反馈或弱正反馈后继续请求未来窗口。
     then:
-    - 可观察结果符合预期。
+    - cursor 连续推进；已看窗口不因未来排序变化而抖动；强负反馈候选不再出现在未来窗口；弱反馈只调整未来排序。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - App provider/widget 与 runtime engine 测试覆盖 cursor、强反馈过滤、排序稳定性与异常降级。
+    - collaborative-recall、ranking-calibration、time-decay-contextual-ranking 的 spec/acceptance 已冻结，且均标注本轮不实现。
+    edge_cases:
+    - cursor 过期或不合法时返回结构化降级/首屏恢复策略，不由端侧解析 token。
+    - 候选集变化时避免跨页重复或跳跃扩大。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/service.yaml
+    - quwoquan_service/contracts/metadata/_shared/search_contract.yaml
+    performance_points:
+    - 同 session 跨页重复率 < 1%。
+    - Feed P95 <= 200ms。
     evidence:
       primary:
       - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T3_app_api_integration
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - quwoquan_app/test/patrol/discovery/feed_load_test.dart
+      - quwoquan_service/runtime/recommendation/collaborative_recall_test.go
+      - quwoquan_service/runtime/recommendation/ranking_calibration_test.go
+      - quwoquan_service/runtime/recommendation/time_decay_contextual_ranking_test.go
+      recorded:
+      - quwoquan_app/test/ui/discovery/post/contract/discovery_feed_query_contract_test.dart
+      - quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
+      - quwoquan_app/test/ui/discovery/post/journeys/discovery_post_interaction_journey_test.dart
+      - quwoquan_service/runtime/recommendation/engine_test.go
+      - quwoquan_service/runtime/recommendation/rerank_mmr_test.go
+      - quwoquan_service/runtime/recommendation/ucb_explore_test.go
+    status: implemented
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

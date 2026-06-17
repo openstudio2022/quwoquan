@@ -121,7 +121,7 @@ void main() {
       );
     });
 
-    test('keeps gamma hosted https media base candidates', () {
+    test('keeps prod-hosted remote https media base candidates', () {
       expect(
         resolveContentMediaUrlCandidates(
           'media/image/s/archived-image/post/demo/v1/cover.png',

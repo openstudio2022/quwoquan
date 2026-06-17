@@ -8,6 +8,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
+import 'package:quwoquan_app/ui/user/widgets/intersection_statement_card.dart';
 
 /// 我的主页「我的交集」聚合入口卡（V4 · 动态简报）。
 ///
@@ -29,9 +30,6 @@ class MyIntersectionInboxCard extends ConsumerStatefulWidget {
 
 class _MyIntersectionInboxCardState
     extends ConsumerState<MyIntersectionInboxCard> {
-  static const int _collapsedMax = 3;
-  bool _expanded = false;
-
   @override
   void initState() {
     super.initState();
@@ -55,286 +53,59 @@ class _MyIntersectionInboxCardState
       return const SizedBox.shrink();
     }
     if (summary.totalCount == 0) {
-      return _shell(context, child: _buildEmpty(context));
+      return IntersectionStatementCard(
+        title: UITextConstants.myIntersectionsTitle,
+        items: const <IntersectionStatementItem>[],
+        emptyChild: _buildEmpty(context),
+      );
     }
     final dimensions = summary.dimensions;
-    final visible = _expanded
-        ? dimensions
-        : dimensions.take(_collapsedMax).toList(growable: false);
-    final hasMore = dimensions.length > _collapsedMax;
-    return _shell(
-      context,
-      onTap: () => _openList(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          _buildSummaryHeader(context, totalNew: summary.totalNewCount),
-          SizedBox(height: AppSpacing.intraGroupSm),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                for (var i = 0; i < visible.length; i++) ...<Widget>[
-                  if (i > 0)
-                    Container(
-                      height: AppSpacing.hairline,
-                      margin: EdgeInsets.symmetric(
-                        vertical: AppSpacing.intraGroupXs,
-                      ),
-                      color: AppColors.iosSeparator(
-                        context,
-                      ).withValues(alpha: widget.isDark ? 0.18 : 0.06),
-                    ),
-                  _BriefRow(
-                    tally: visible[i],
-                    isPrimary: i == 0,
-                    onTap: () => _openList(dimension: visible[i].dimension),
-                  ),
-                ],
-              ],
-            ),
+    return IntersectionStatementCard(
+      title: UITextConstants.myIntersectionsTitle,
+      titleBadge: summary.totalNewCount > 0
+          ? _RedCountBadge(count: summary.totalNewCount)
+          : null,
+      items: <IntersectionStatementItem>[
+        for (var i = 0; i < dimensions.length; i += 1)
+          IntersectionStatementItem(
+            primaryText: _primaryTextFor(dimensions[i]),
+            subtitleText: _subtitleTextFor(dimensions[i]),
+            highlight: i == 0
+                ? IntersectionStatementHighlight.blue
+                : IntersectionStatementHighlight.gray,
+            onTap: () => _openList(dimension: dimensions[i].dimension),
           ),
-          if (hasMore)
-            Padding(
-              padding: EdgeInsets.only(top: AppSpacing.intraGroupSm),
-              child: _MorePill(
-                expanded: _expanded,
-                onTap: () => setState(() => _expanded = !_expanded),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _shell(
-    BuildContext context, {
-    required Widget child,
-    VoidCallback? onTap,
-  }) {
-    final surface = AppColors.iosProfileSurface(context);
-    final border = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: widget.isDark ? 0.24 : 0.08);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(AppSpacing.containerMd),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyFour),
-          border: Border.all(color: border, width: AppSpacing.hairline),
-        ),
-        child: child,
-      ),
-    );
-  }
-
-  Widget _buildSummaryHeader(BuildContext context, {required int totalNew}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Container(
-          width: AppSpacing.largeButtonSize,
-          height: AppSpacing.largeButtonSize,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.iosAccent(context).withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-          ),
-          child: Icon(
-            CupertinoIcons.circle_grid_hex,
-            size: AppSpacing.iconMedium,
-            color: AppColors.iosAccent(context),
-          ),
-        ),
-        SizedBox(width: AppSpacing.intraGroupSm),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      UITextConstants.myIntersectionsTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.semiBold,
-                        color: AppColors.iosLabel(context),
-                        height: AppSpacing.textLineHeightSingle,
-                      ),
-                    ),
-                  ),
-                  if (totalNew > 0) ...<Widget>[
-                    SizedBox(width: AppSpacing.intraGroupXs),
-                    _RedCountBadge(count: totalNew),
-                  ],
-                ],
-              ),
-              SizedBox(height: AppSpacing.intraGroupXs),
-              Text(
-                UITextConstants.myIntersectionsSubtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.iosCaption1,
-                  color: AppColors.iosSecondaryLabel(context),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(width: AppSpacing.intraGroupSm),
-        Padding(
-          padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
-          child: Icon(
-            CupertinoIcons.chevron_forward,
-            size: AppSpacing.iconSmall,
-            color: AppColors.iosTertiaryLabel(context),
-          ),
-        ),
       ],
     );
   }
 
   Widget _buildEmpty(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Icon(
-          CupertinoIcons.circle_grid_hex,
-          size: AppSpacing.iconSmall,
-          color: AppColors.iosTertiaryLabel(context),
-        ),
-        SizedBox(width: AppSpacing.intraGroupSm),
-        Expanded(
-          child: Text(
-            UITextConstants.myIntersectionsEmpty,
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-          ),
-        ),
-      ],
+    return Text(
+      UITextConstants.myIntersectionsEmpty,
+      style: TextStyle(
+        fontSize: AppTypography.iosCaption1,
+        color: AppColors.iosSecondaryLabel(context),
+      ),
     );
   }
-}
 
-/// 动态简报行：云侧实例化一句话（briefText）优先；缺省回落 label + 新增数。
-class _BriefRow extends StatelessWidget {
-  const _BriefRow({
-    required this.tally,
-    required this.isPrimary,
-    required this.onTap,
-  });
-
-  final IntersectionDimensionTally tally;
-  final bool isPrimary;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasNew = tally.newCount > 0;
+  String _primaryTextFor(IntersectionDimensionTally tally) {
     final brief = tally.briefText.trim();
-    final text = brief.isNotEmpty
-        ? brief
-        : (hasNew
-              ? '${tally.label} ${tally.newCount} ${UITextConstants.intersectionNewBadgeSuffix}'
-              : '${tally.label} ${tally.count}');
-    final accent = AppColors.iosAccent(context);
-    final primaryColor = isPrimary ? accent : AppColors.iosLabel(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: AppSpacing.minInteractiveSize),
-        child: Row(
-          children: <Widget>[
-            Container(
-              width: AppSpacing.avatarUserSm,
-              height: AppSpacing.avatarUserSm,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isPrimary
-                    ? accent.withValues(alpha: 0.12)
-                    : AppColors.iosFill(context),
-              ),
-              child: Icon(
-                CupertinoIcons.person_2_fill,
-                size: AppSpacing.iconSmall,
-                color: isPrimary
-                    ? accent
-                    : AppColors.iosSecondaryLabel(context),
-              ),
-            ),
-            SizedBox(width: AppSpacing.intraGroupSm),
-            Expanded(
-              child: Text(
-                text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.iosSubheadline,
-                  fontWeight: isPrimary || hasNew
-                      ? AppTypography.medium
-                      : AppTypography.regular,
-                  color: primaryColor,
-                ),
-              ),
-            ),
-            SizedBox(width: AppSpacing.intraGroupXs),
-            Icon(
-              CupertinoIcons.chevron_forward,
-              size: AppSpacing.fourteen,
-              color: AppColors.iosTertiaryLabel(context),
-            ),
-          ],
-        ),
-      ),
-    );
+    if (brief.isNotEmpty) {
+      return brief;
+    }
+    if (tally.newCount > 0) {
+      return '${tally.label} ${tally.newCount} ${UITextConstants.intersectionNewBadgeSuffix}';
+    }
+    return '${tally.label} ${tally.count}';
   }
-}
 
-class _MorePill extends StatelessWidget {
-  const _MorePill({required this.expanded, required this.onTap});
-
-  final bool expanded;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.intraGroupSm,
-        ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
-        ),
-        child: Text(
-          expanded
-              ? UITextConstants.intersectionCollapse
-              : UITextConstants.intersectionExpandMore,
-          style: TextStyle(
-            fontSize: AppTypography.iosCaption1,
-            fontWeight: AppTypography.medium,
-            color: AppColors.iosAccent(context),
-          ),
-        ),
-      ),
-    );
+  String _subtitleTextFor(IntersectionDimensionTally tally) {
+    final subtitle = tally.subtitleText.trim();
+    if (subtitle.isNotEmpty) {
+      return subtitle;
+    }
+    return UITextConstants.myIntersectionsSubtitle;
   }
 }
 

@@ -115,6 +115,10 @@ func (h *ContentHandler) handleGetFeedIntersections(w http.ResponseWriter, r *ht
 
 // handleGetObjectIntersections 对象页「我与该对象」关系类交集（§2 证据组闭集）。
 func (h *ContentHandler) handleGetObjectIntersections(w http.ResponseWriter, r *http.Request) {
+	if h.intersectionService == nil {
+		h.handleNotImplemented(w, r, "GetObjectIntersections")
+		return
+	}
 	userID := resolveUserID(r)
 	if strings.TrimSpace(userID) == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "需要登录", "missing user"))

@@ -12,6 +12,7 @@ from typing import Any, Mapping
 from _common.download_diagnostics import download_diagnostics
 from _common.io import read_json, write_json
 from _common.paths import batch_root, release_root
+from _common.release_integrity import scan_runtime_batch_integrity
 
 
 SCHEMA = "quwoquan_data.scale_readiness"
@@ -101,13 +102,39 @@ def _import_evidence_paths(root: Path) -> list[str]:
     candidates = []
     for path in [
         root / "_shared" / "import_report.json",
-        root / "_shared" / "ship_report.json",
         root / "_shared" / "staging_import_report.json",
         root / "_shared" / "gamma_import_report.json",
     ]:
         if path.is_file():
             candidates.append(str(path))
     return candidates
+
+
+def _ship_evidence_paths(root: Path) -> list[str]:
+    path = root / "_shared" / "ship_report.json"
+    return [str(path)] if path.is_file() else []
+
+
+def _infer_release_id(
+    provided: str | None,
+    *,
+    state: Mapping[str, Any],
+    root: Path,
+) -> str:
+    for candidate in (
+        provided,
+        state.get("releaseId") if isinstance(state, Mapping) else None,
+        state.get("lastReleaseId") if isinstance(state, Mapping) else None,
+    ):
+        text = str(candidate or "").strip()
+        if text:
+            return text
+    ship = _load_json_if_exists(root / "_shared" / "ship_report.json")
+    for key in ("dataReleaseId", "sourceReleaseId", "releaseId"):
+        text = str(ship.get(key) or "").strip()
+        if text:
+            return text
+    return ""
 
 
 def build_scale_readiness_report(
@@ -117,6 +144,7 @@ def build_scale_readiness_report(
     daily_target: int = DEFAULT_DAILY_TARGET,
     release_id: str | None = None,
     require_import: bool = True,
+    mode: str = "commercial",
 ) -> dict[str, Any]:
     from task import store
     from task.target_selection import audit_managed_batch
@@ -125,11 +153,27 @@ def build_scale_readiness_report(
     root = batch_root(task_id, batch_id)
     audit = audit_managed_batch(task_id, batch_id)
     state = _load_json_if_exists(root / "_shared" / "task_workflow_state.json")
+    env_report = _load_json_if_exists(root / "_shared" / "env_ready_report.json")
+    release_id = _infer_release_id(release_id, state=state, root=root)
+    mode = "trial" if str(mode or "").strip() == "trial" else "commercial"
     expected = _expected_objects(spec, audit)
     targets = _target_count(spec, audit)
+    scope = spec.get("scope") or {}
+    base_targets = scope.get("coverageTargets") if isinstance(scope.get("coverageTargets"), list) else []
+    base_target_count = len(base_targets)
     lanes = _lane_rates(audit, targets)
+    abandoned_count = _safe_int(audit.get("abandonedCount"))
+    abandoned_content_count = _safe_int(audit.get("abandonedContentCount"))
+    replacement_count = _safe_int(audit.get("replacementCount"))
+    replacement_closed = (
+        targets >= base_target_count
+        and (not abandoned_count or replacement_count >= abandoned_count)
+    )
+    runtime_integrity = scan_runtime_batch_integrity(task_id, batch_id)
+    runtime_stats = runtime_integrity.get("stats") if isinstance(runtime_integrity, Mapping) else {}
     token_ledgers = _token_ledger_paths(root)
     import_paths = _import_evidence_paths(root)
+    ship_paths = _ship_evidence_paths(root)
     download_report = download_diagnostics(root)
     content = spec.get("content") or {}
     research = content.get("research") or {}
@@ -144,6 +188,8 @@ def build_scale_readiness_report(
     blockers: list[str] = []
     warnings: list[str] = []
 
+    if not bool(env_report.get("ready")):
+        blockers.append("env ready evidence missing or failed")
     status = str(state.get("status") or "")
     if status != "succeeded":
         blockers.append(f"workflow status must be succeeded for scale; got {status or 'missing'}")
@@ -153,10 +199,25 @@ def build_scale_readiness_report(
     failed_count = _safe_int(audit.get("failedLaneCount"))
     if failed_count:
         blockers.append(f"managed batch audit has failedLaneCount={failed_count}")
+    if abandoned_count and mode == "commercial":
+        blockers.append(f"scale readiness requires zero abandoned entities; got {abandoned_count}")
+    elif abandoned_count and not replacement_closed:
+        blockers.append(
+            f"abandoned entities require replacement closure; abandoned={abandoned_count} "
+            f"replacement={replacement_count} activeTargets={targets} baseTargets={base_target_count}"
+        )
+    if abandoned_content_count and mode == "commercial":
+        blockers.append(f"scale readiness requires zero abandoned content objects; got {abandoned_content_count}")
     for lane, row in lanes.items():
         rate = float(row["rate"])
         if targets and rate < MIN_SOURCE_SUFFICIENCY:
             blockers.append(f"{lane} lane source sufficiency {rate:.2%} < {MIN_SOURCE_SUFFICIENCY:.0%}")
+    actual_articles = _safe_int((runtime_stats or {}).get("articleCount"))
+    actual_images = _safe_int((runtime_stats or {}).get("imageCount"))
+    if expected["article"] and actual_articles < expected["article"]:
+        blockers.append(f"materialized article count {actual_articles} < expected {expected['article']}")
+    if expected["image"] and actual_images < expected["image"]:
+        blockers.append(f"materialized image count {actual_images} < expected {expected['image']}")
     if daily_target >= 10_000 and queue_backend != "reliabletask":
         blockers.append("daily target >=10000 requires queueBackend=reliabletask")
     if daily_target >= 10_000 and max_concurrency < 10:
@@ -165,10 +226,24 @@ def build_scale_readiness_report(
         blockers.append("TokenLedger evidence missing; cannot project unit token/cost or cache hit rate")
     if not release_id or not _release_exists(release_id):
         blockers.append("isolated release evidence missing; release verify cannot be proven")
+    if not ship_paths:
+        warnings.append("ship evidence missing; release/import closure should be captured by ship_report.json")
     if require_import and not import_paths:
-        blockers.append("staging/gamma import or ship evidence missing")
-    if not state.get("throughput"):
+        blockers.append("staging/gamma import evidence missing")
+    required_throughput_per_hour = int(daily_target) / 24
+    measured_throughput = state.get("throughput") if isinstance(state.get("throughput"), Mapping) else None
+    if not measured_throughput:
         blockers.append("measured throughput evidence missing; cannot project daily capacity")
+    else:
+        try:
+            objects_per_hour = float(measured_throughput.get("objectsPerHour") or 0)
+        except (TypeError, ValueError):
+            objects_per_hour = 0.0
+        if objects_per_hour < required_throughput_per_hour:
+            blockers.append(
+                f"measured throughput {objects_per_hour:.4f} objects/hour "
+                f"< required {required_throughput_per_hour:.4f} objects/hour"
+            )
     if expected["total"] <= 0:
         blockers.append("expected content object count is zero")
     if expected["total"] and daily_target / max(expected["total"], 1) > 1000:
@@ -193,10 +268,26 @@ def build_scale_readiness_report(
         "schemaVersion": SCHEMA,
         "taskId": task_id,
         "batchId": batch_id,
+        "mode": mode,
         "dailyTarget": int(daily_target),
         "passed": not blockers,
         "decision": "go" if not blockers else "no_go",
         "expectedObjects": expected,
+        "abandonment": {
+            "entityCount": abandoned_count,
+            "contentObjectCount": abandoned_content_count,
+        },
+        "replacementClosure": {
+            "baseTargetCount": base_target_count,
+            "activeTargetCount": targets,
+            "replacementCount": replacement_count,
+            "closed": bool(replacement_closed),
+            "objects": audit.get("replacementObjects") or [],
+        },
+        "runtimeIntegrity": {
+            "passed": bool(runtime_integrity.get("passed")),
+            "stats": runtime_stats or {},
+        },
         "sourceSufficiency": lanes,
         "workflowState": {
             key: state.get(key)
@@ -209,11 +300,21 @@ def build_scale_readiness_report(
             "tokenLedgerPaths": token_ledgers[:20],
             "releaseId": release_id or "",
             "releaseManifestExists": _release_exists(release_id),
+            "shipEvidencePaths": ship_paths,
             "importEvidencePaths": import_paths,
-            "requiredThroughputPerHour": round(int(daily_target) / 24, 4),
+            "requiredThroughputPerHour": round(required_throughput_per_hour, 4),
             "requiredThroughputPerMinute": round(int(daily_target) / 1440, 4),
-            "measuredThroughput": state.get("throughput") or None,
+            "measuredThroughput": measured_throughput,
             "firstPassRate": first_pass_rate,
+        },
+        "envReady": {
+            "ready": bool(env_report.get("ready")),
+            "reportPath": str(root / "_shared" / "env_ready_report.json") if env_report else "",
+            "issues": (
+                ((env_report.get("preflight") or {}).get("issues") or env_report.get("issues") or [])[:20]
+                if isinstance(env_report, Mapping)
+                else []
+            ),
         },
         "downloadDiagnostics": download_report,
         "blockers": blockers,

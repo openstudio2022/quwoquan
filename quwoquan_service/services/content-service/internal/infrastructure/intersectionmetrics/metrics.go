@@ -1,0 +1,116 @@
+// Package intersectionmetrics holds the content-service intersection business
+// SLI metrics. They are the measurement source for the intersection SLOs (see
+// configs/observability/intersection_slo.yaml): repeat-exposure rate, cooldown
+// write volume, freshness filter rate, display completeness and inbox visit
+// (清零) volume. HTTP latency P95 / error rate / availability for the
+// /v1/content/intersections* routes are produced separately by the
+// runtime/observability http_server_* middleware; this package only adds the
+// business funnel signals so every SLI has a real metric source (no second
+// truth, no documentation-only SLI).
+package intersectionmetrics
+
+import (
+	"strings"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"quwoquan_service/services/content-service/internal/application"
+)
+
+const (
+	namespace = "intersection"
+)
+
+var (
+	// feedCandidates counts intersections that entered the spotlight candidate
+	// window, split by class (fact|affinity) and rank_state (fresh|seen). The
+	// repeat-exposure rate SLI = seen / total.
+	feedCandidates = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "feed",
+		Name:      "candidates_total",
+		Help:      "Intersection feed candidates entering the spotlight window by channel, class(fact|affinity) and rank_state(fresh|seen).",
+	}, []string{"channel", "class", "rank_state"})
+
+	// feedFiltered counts intersections dropped before the candidate window.
+	// reason: stale (past freshness, triggers recompute) | display_incomplete
+	// (missing primaryText/avatar, blank-window governance).
+	feedFiltered = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "feed",
+		Name:      "filtered_total",
+		Help:      "Intersection feed candidates filtered before the window by channel and reason(stale|display_incomplete).",
+	}, []string{"channel", "reason"})
+
+	// exposureReported counts objects written into the cross-session cooldown
+	// memory window (cooldown write volume / dedup pressure source).
+	exposureReported = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "cooldown",
+		Name:      "exposure_reported_total",
+		Help:      "Objects written into the cross-session intersection cooldown window.",
+	})
+
+	// inboxVisit counts My-Intersection clears (read watermark advance) per
+	// dimension (清零 volume).
+	inboxVisit = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "inbox",
+		Name:      "visit_total",
+		Help:      "My-intersection inbox clears (watermark advance) by dimension.",
+	}, []string{"dimension"})
+
+	// inboxFiltered counts inbox summary/list intersections filtered by
+	// freshness (recompute trigger source).
+	inboxFiltered = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "inbox",
+		Name:      "filtered_total",
+		Help:      "My-intersection inbox intersections filtered by reason(stale).",
+	}, []string{"reason"})
+)
+
+// Recorder is the Prometheus-backed implementation of
+// application.IntersectionMetricsRecorder.
+type Recorder struct{}
+
+// New returns a Prometheus intersection metrics recorder.
+func New() *Recorder { return &Recorder{} }
+
+var _ application.IntersectionMetricsRecorder = (*Recorder)(nil)
+
+func norm(v, fallback string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return fallback
+	}
+	return v
+}
+
+// ObserveFeedCandidate implements application.IntersectionMetricsRecorder.
+func (*Recorder) ObserveFeedCandidate(channel, class, rankState string) {
+	feedCandidates.WithLabelValues(norm(channel, "default"), norm(class, "fact"), norm(rankState, "fresh")).Inc()
+}
+
+// ObserveFeedFiltered implements application.IntersectionMetricsRecorder.
+func (*Recorder) ObserveFeedFiltered(channel, reason string) {
+	feedFiltered.WithLabelValues(norm(channel, "default"), norm(reason, "unknown")).Inc()
+}
+
+// ObserveExposureReported implements application.IntersectionMetricsRecorder.
+func (*Recorder) ObserveExposureReported(count int) {
+	if count > 0 {
+		exposureReported.Add(float64(count))
+	}
+}
+
+// ObserveInboxVisit implements application.IntersectionMetricsRecorder.
+func (*Recorder) ObserveInboxVisit(dimension string) {
+	inboxVisit.WithLabelValues(norm(dimension, "all")).Inc()
+}
+
+// ObserveInboxFiltered implements application.IntersectionMetricsRecorder.
+func (*Recorder) ObserveInboxFiltered(reason string) {
+	inboxFiltered.WithLabelValues(norm(reason, "unknown")).Inc()
+}

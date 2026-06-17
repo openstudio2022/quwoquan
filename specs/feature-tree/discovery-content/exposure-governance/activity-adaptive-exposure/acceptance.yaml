@@ -1,0 +1,50 @@
+version: 2
+node:
+  id: activity-adaptive-exposure
+  level: L3_story
+  path: specs/feature-tree/discovery-content/exposure-governance/activity-adaptive-exposure
+  title: activity adaptive exposure
+  parent_domain_service: discovery-content
+  parent_business_capability: exposure-governance
+scope:
+  summary: 按用户活跃度分群自适应曝光窗口、探索比、复活比和频控强度。
+  in_scope:
+    - cold_start / active / returning / low_confidence 分群策略。
+    - 分群驱动窗口、探索比、复活比和保底来源。
+  out_of_scope:
+    - 本轮不实现分群计算、画像写入或 UI 分叉。
+gwt_acceptance:
+  GWT1:
+    title: 活跃度自适应曝光 GWT
+    given:
+      - 用户分别处于 cold_start、active、returning 或 low_confidence 分群。
+    when:
+      - 用户请求推荐 feed。
+    then:
+      - 系统按分群选择窗口长度、探索比、复活比和频控强度；分群缺失时回退默认策略。
+    done_when:
+      - 分群来源、recpolicy 参数、AB 标签和 fallback 均有规格。
+    edge_cases:
+      - 分群信号冲突时进入 low_confidence 或默认策略，不导致空 feed。
+    contract_refs:
+      - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    performance_points:
+      - activity_segment 进入 SLO/AB 切分标签。
+    evidence:
+      primary:
+        - T1_contract
+        - T2_module_interaction
+      supporting:
+        - T3_app_api_integration
+    tests:
+      planned:
+        - quwoquan_service/runtime/recommendation/exposure_activity_segment_test.go
+      recorded: []
+    status: specified
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+    - make gate

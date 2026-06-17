@@ -6,18 +6,16 @@ class _HomepagePreviewCell extends StatelessWidget {
     required this.subtitle,
     required this.label,
     required this.icon,
-    this.coverUrl,
   });
 
   final String title;
   final String subtitle;
   final String label;
   final IconData icon;
-  final String? coverUrl;
 
   @override
   Widget build(BuildContext context) {
-    final leading = _HomepagePreviewCover(coverUrl: coverUrl, icon: icon);
+    final leading = _HomepagePreviewCover(coverUrl: null, icon: icon);
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerMd,
@@ -299,19 +297,6 @@ String _contentTypeLabel(String contentType) {
       return UITextConstants.homepageContentTypeImage;
     default:
       return UITextConstants.homepageContentTypeDefault;
-  }
-}
-
-IconData _contentTypeIcon(String contentType) {
-  switch (contentType.trim()) {
-    case 'article':
-      return CupertinoIcons.doc_text;
-    case 'video':
-      return CupertinoIcons.play_rectangle;
-    case 'image':
-      return CupertinoIcons.photo;
-    default:
-      return CupertinoIcons.square_stack_3d_up;
   }
 }
 

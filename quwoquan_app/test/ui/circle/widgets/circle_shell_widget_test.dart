@@ -128,13 +128,13 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(CircleActionBar), findsOneWidget);
-      // 圈子壳层一级 Tab 收敛为 内容 / 讨论 / 成员（与 §18「讨论」命名一致）。
+      // 圈子壳层一级 Tab 收敛为 记录 / 讨论 / 成员（统一「记录」载体口径，§18「讨论」命名一致）。
       expect(
         find.descendant(
           of: find.byKey(
             const ValueKey<String>('circle-shell-primary-tabs-inline'),
           ),
-          matching: find.text('内容'),
+          matching: find.text(UITextConstants.objectTabRecord),
         ),
         findsOneWidget,
       );
@@ -351,7 +351,7 @@ class _ImpactCircleRepository extends MockCircleRepository {
           intersectionDimension: 'relationship',
           source: 'test',
           count: 12,
-          displayText: '12人在这里建立了新连接',
+          primaryText: '12人在这里建立了新连接',
         ),
         CircleImpactItem(
           helpType: 'community',
@@ -359,7 +359,7 @@ class _ImpactCircleRepository extends MockCircleRepository {
           intersectionDimension: 'content',
           source: 'test',
           count: 5,
-          displayText: '5个讨论正在这里发生',
+          primaryText: '5个讨论正在这里发生',
         ),
         CircleImpactItem(
           helpType: 'spread',
@@ -367,7 +367,7 @@ class _ImpactCircleRepository extends MockCircleRepository {
           intersectionDimension: 'interest',
           source: 'test',
           count: 3,
-          displayText: '3人最近参与了这里',
+          primaryText: '3人最近参与了这里',
         ),
         CircleImpactItem(
           helpType: 'spread',
@@ -375,7 +375,7 @@ class _ImpactCircleRepository extends MockCircleRepository {
           intersectionDimension: 'interest',
           source: 'test',
           count: 1,
-          displayText: '第4条不应显示',
+          primaryText: '第4条不应显示',
         ),
       ],
     );

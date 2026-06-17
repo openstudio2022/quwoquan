@@ -63,7 +63,7 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/chat/pages/chat_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 消息体系商用重构入口；消息/联系为消息模块内两个独立一级页面状态，均无内联搜索框并统一走顶部工具栏搜索入口；消息筛选收口为 `全部/未读/群聊/私聊/通知`，联系筛选收口为 `全部/互关/圈子/群聊`；P2 以 `MessageHomeRowDto`、`ContactHomeRowDto`、`AppMessage`/notification inbox 和交集摘要 read model 为真相源，App 不拼来源/交集/成员数；打开会话后统一刷新全部消息筛选引用的已读状态；群头像只消费服务端预合成 `avatarUrl`，禁止端侧群成员九宫格 fallback；P3 生产 Remote-only，Mock 仅作 contract fixture |
+| `lib/ui/chat/pages/chat_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 消息体系商用重构入口；消息/联系为消息模块内两个独立一级页面状态，均无内联搜索框并统一走顶部工具栏搜索入口；消息筛选收口为 `全部/未读/群聊/私聊/通知`，联系筛选收口为 `全部/互关/圈子/群聊`；P2 以 `MessageHomeRowDto`、`ContactHomeRowDto`、`AppMessage`/notification inbox 和交集摘要 read model 为真相源，App 不拼来源/交集/成员数；`未读` 胶囊数统一汇总 `ListMessageHome(unread)` 返回的 `unreadCount`，与列表未读行同源，单数字 badge 收口为圆形；打开会话后统一刷新全部消息筛选引用的已读状态；群头像只消费服务端预合成 `avatarUrl`，禁止端侧群成员九宫格 fallback；P3 生产 Remote-only，Mock 仅作 contract fixture |
 | `lib/ui/chat/pages/chat_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 委托 `ChatConversationPage`；P2 消息链 `ChatMessageDto` + Repository 强类型 |
 | `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`；P2 消息列表 `ChatMessageDto` + `ChatMessageDisplayItem` 强类型展示链；2026-05-19 三点入口、选择态文字操作与默认单行输入栏统一到 appChrome/chatInput token；2026-05-30 语音消息接入 `VoiceRecorder`/`voiceSendProvider`，compact 输入栏收敛 `@小趣` 防挤压，语音发送沿 metadata `audio` 契约；2026-06-06 body 外包统一 `WebPageMaxWidthFrame`（宽屏内容区限宽居中、左右用 page background 区分阅读区，移动端透传），时间分隔按 `sentAtIso` 间隔（≥5min）降噪 |
 | `lib/ui/chat/pages/chat_settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `GroupHomeDto` + `ChatGroupSettingsDto`；聊天信息/群主页入口消费 `GetGroupHome` 的来源、公告、成员数和能力；`AppScaffold`；P7 成员网格按头像与文字高度计算；2026-05-19 登记为三点入口链路设置 Inset chrome |
@@ -149,6 +149,7 @@
 |------|------|----|----|----|----|----|----|----|----|------|
 | `lib/ui/search/pages/global_search_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：本页无帖子卡；帖子 `searchCard` 在 `search_network_results_page`；记录 `RecentSearchReadPresentation`；2026-05-19 返回按钮热区与图标尺寸接入 appChrome token |
 | `lib/ui/search/pages/search_network_results_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`_openPost` `PostReadSurfaceId.searchCard`+wire；payload fromMap 仅解析边界；2026-05-21 业务垂类后缀与圈子首页同源五项且过滤旧推荐/遇见/人文等垂类 |
+| `lib/ui/search/pages/location_place_landing_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：`location.place` 临时地点卡，命中详情来自搜索 payload（route extra），无独立后端 operation（surface `locationPlaceLanding` operation_ids=[]）；提升 CTA 复用 `suggestHomepage`；2026-06-16 R-S05e-1 落地，JourneyEventTracker enter/exit 曝光停留 + promote_click |
 
 ---
 
@@ -165,7 +166,7 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：2026-06-14 我的主页首屏固定为身份区、编辑资料/分享主页、我的新交集、我的影响力、作品/圈子/互动、双列内容流；作品二级筛选仅全部/图片/视频/文字；进入曝光 + dispose 停留（`contentBehaviorTracker`） |
+| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：2026-06-17 我的主页首屏固定为封面→身份(✎)→Slogan→单行统计→我的连接→我的影响力→记录/圈子/互动；连接/影响力共用主谓宾交集卡，记录筛选为全部/图片/视频/长文；进入曝光 + dispose 停留（`contentBehaviorTracker`） |
 | `lib/ui/user/pages/login_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AuthRepository.loginOneTap/loginWechat/loginApple/loginPasskey` + `AuthLoginResultDto`；P3 Mock/Remote 由 `authRepositoryProvider` 切换；微信 / Apple / Credential Manager / passkey 入口由 `PlatformCapabilities + NativeAuthBridge` 预留并降级，协议勾选前不调用原生登录 SDK |
 | `lib/ui/user/pages/legal_document_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 远端 WebView 展示用户协议/隐私政策；P2/P3 —，内容来自配置 URL；禁用 JS，保留返回与失败重试 |
 | `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：2026-06-14 用户主页首屏固定为身份区、关注/私信、你们的交集、TA的影响力、作品/圈子/互动、双列内容流；交集卡 `onReasonTap` → `BehaviorEvent.intersectionDimension/intersectionTagRefs` 归因 |

@@ -101,6 +101,32 @@ def test_static_official_plaintext_reads_ems517_spa_shell_via_api():
     assert "观日出需注意保暖" in text
 
 
+def test_static_official_plaintext_reads_public_spa_bundle_copy():
+    shell = "<html><head><title>加载中...</title></head><body><script src=js/app.abc.js></script></body></html>"
+    bundle = (
+        "window.x=JSON.parse('{\"jp\":\"観光地概況\","
+        "\"cn\":\"蜀南竹海景区全年开放\","
+        "\"intro\":\"蜀南竹海旅游度假区竭诚为您服务，竹文化和山水游憩是核心特色。\"}')"
+    )
+
+    def fake_curl(url: str, timeout: int = 90) -> str:
+        if url == "https://www.snzh.cn/":
+            return shell
+        if url == "https://www.snzh.cn/js/app.abc.js":
+            return bundle
+        raise AssertionError(f"unexpected url {url}")
+
+    orig_curl = fetch_mod._curl_get_text
+    try:
+        fetch_mod._curl_get_text = fake_curl
+        text = fetch_mod._static_official_plaintext("https://www.snzh.cn/")
+    finally:
+        fetch_mod._curl_get_text = orig_curl
+    assert "蜀南竹海景区全年开放" in text
+    assert "竹文化和山水游憩" in text
+    assert "観光地概況" not in text
+
+
 def _run_all() -> None:
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

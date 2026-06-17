@@ -144,6 +144,13 @@ groups:
           summary: "EventStore publish 失败: {{ $labels.aggregate_type }}"
 
   - name: quwoquan_rec_model
+    # SLI/SLO 真相源：quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml。
+    # emitter 状态：
+    # - P0 已激活：recommendation_feed_served/impressed/visible/dwell/interaction/negative、
+    #   recommendation_behavior_ingest(_dropped)、rec_hotpath_dropped、
+    #   recommendation_exposure_filter_smembers_fallback。
+    # - 仍为预置告警：ExposureGini / ContentCoverage / PolicyTakedownEjection / ABValidity
+    #   等 P1/P2 指标，真实 emitter 落地前不代表已具备触发数据。
     rules:
       - alert: RecModelFallbackRateHigh
         expr: |
@@ -207,6 +214,235 @@ groups:
         annotations:
           summary: "推荐分数分布异常（中位数偏移 > 0.15）"
           description: "rec-model-service 打分分布发生显著变化，可能存在特征漂移、模型退化或切流异常"
+
+      - alert: RecommendationRepeatExposureRateHigh
+        expr: |
+          sum(rate(recommendation_feed_duplicate_exposure_total[30m]))
+          / (sum(rate(recommendation_feed_served_total[30m])) + 0.001) > 0.01
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐重复曝光率 > 1%"
+          description: "served/impressed 窗口内重复曝光占比 {{ $value | humanizePercentage }}，超出商用成熟度 SLO（repeat_exposure_rate<=0.01）。"
+
+      - alert: RecommendationExposureGiniHigh
+        expr: recommendation_feed_exposure_gini > 0.65
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐曝光基尼 > 0.65"
+          description: "内容曝光分布过度集中，动态曝光预算或覆盖率约束可能失效。"
+
+      - alert: RecommendationContentCoverageLow
+        expr: |
+          count(count_over_time(recommendation_feed_served_total[1h])) / (eligible_feed_item_count + 0.001) < 0.30
+        for: 1h
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐内容覆盖率 < 30%"
+          description: "推荐窗口覆盖的可推荐内容比例过低，可能存在赢家通吃或召回过窄。"
+
+      - alert: RecommendationPolicyTakedownEjectionSlow
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(recommendation_feed_policy_takedown_ejection_seconds_bucket[5m])) by (le)
+          ) > 60
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "推荐违规/下架剔除 P95 > 60s"
+          description: "内容被下架或判违规后仍滞留推荐池，违反商用治理 SLO。"
+
+      - alert: RecommendationABValidityLow
+        expr: |
+          sum(rate(recommendation_feed_ab_valid_experiments_total[1h]))
+          / (sum(rate(recommendation_feed_ab_valid_experiments_total[1h])) + sum(rate(recommendation_feed_ab_invalid_experiments_total[1h])) + 0.001) < 0.95
+        for: 1h
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐 AB 实验有效性 < 95%"
+          description: "AB 实验存在样本量不足、分桶漂移或显著性口径无效风险。"
+
+      - alert: RecommendationBehaviorIngestDropHigh
+        expr: |
+          sum(rate(recommendation_behavior_ingest_dropped_total[5m]))
+          / (sum(rate(recommendation_behavior_ingest_total[5m])) + 0.001) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐行为入口丢弃率 > 1%"
+          description: "FeedbackIngestor 去重/限流/背压丢弃行为事件占比过高，可能丢失曝光/反馈信号。"
+
+      - alert: RecommendationHotPathBufferDropHigh
+        expr: sum(rate(rec_hotpath_dropped_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐 HotPath 缓冲丢弃 > 0"
+          description: "BufferedHotPath 缓冲溢出丢弃行为信号，需扩容缓冲或限流上游。"
+
+      - alert: RecommendationExposureSMembersFallback
+        expr: |
+          sum(rate(recommendation_exposure_filter_smembers_fallback_total[5m]))
+          / (sum(rate(rec_pipeline_requests_total[5m])) + 0.001) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐曝光过滤 SMembers 回退率 > 1%"
+          description: "曝光过滤应使用候选 membership 点查或等价批量点查；SMembers 回退说明容量路径退化。"
+
+  - name: quwoquan_search
+    # 搜索 SLO 告警（SLI/SLO 真相源：quwoquan_service/services/search-service/
+    # configs/observability/search_slo.yaml）。延迟用 histogram 取分位数，按 AB
+    # bucket label 可切分；通用 HighErrorRate/HighP95Latency 已按 service 覆盖可用性，
+    # 这里补搜索特有的检索延迟、零结果率与降级率。
+    rules:
+      - alert: SearchRetrieveLatencyHigh
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(search_retrieve_duration_seconds_bucket[5m])) by (le)
+          ) > 0.4
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "搜索检索 P99 延迟 > 400ms"
+          description: "search-service /v1/search P99 = {{ $value | humanizeDuration }}，超出 SLO（p99_ms=400）。"
+
+      - alert: SearchZeroResultRateHigh
+        expr: |
+          sum(rate(search_retrieve_zero_results_total[10m]))
+          / (sum(rate(search_retrieve_requests_total{status="ok"}[10m])) + 0.001) > 0.15
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "搜索零结果率 > 15%"
+          description: "成功检索中零结果占比 {{ $value | humanizePercentage }}，超出 SLO（zero_result_rate<=0.15），可能召回或归一化退化。"
+
+      - alert: SearchDegradeRateHigh
+        expr: |
+          sum(rate(search_retrieve_degraded_total[5m]))
+          / (sum(rate(search_retrieve_requests_total{status="ok"}[5m])) + 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "搜索降级率 > 5%"
+          description: "携带降级信号（如 ES 失败回退 native）的检索占比 {{ $value | humanizePercentage }}，超出 SLO（degrade_rate<=0.05）。"
+
+      - alert: SearchAvailabilityLow
+        expr: |
+          sum(rate(search_retrieve_requests_total{status="error"}[5m]))
+          / (sum(rate(search_retrieve_requests_total[5m])) + 0.001) > 0.005
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "搜索检索错误率 > 0.5%（可用性 < 99.5%）"
+          description: "search-service 检索错误率 {{ $value | humanizePercentage }}，跌破可用性 SLO（0.995）。"
+
+      - alert: SearchLoadShedRateHigh
+        # 背压边界主动 shed（in-flight 满）占比。受控 503 退化，超阈值=实例饱和需扩容。
+        # SLI load_shed_rate（search_slo.yaml，objective_max=0.01）。
+        expr: |
+          sum(rate(search_retrieve_load_shed_total[5m]))
+          / (sum(rate(search_retrieve_requests_total[5m]))
+             + sum(rate(search_retrieve_load_shed_total[5m])) + 0.001) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "搜索背压 shed 率 > 1%（实例饱和）"
+          description: "search-service in-flight 背压 shed 占比 {{ $value | humanizePercentage }}，超出 SLO（load_shed_rate<=0.01）；需水平扩实例或排查下游变慢。"
+
+      - alert: SearchInflightSaturationHigh
+        # 在途并发饱和度（current inflight 接近 SEARCH_MAX_INFLIGHT=256）。持续高位即扩容触发，
+        # 早于 load-shed 出现。SLI inflight_saturation（search_slo.yaml，objective_max=256）。
+        expr: max(search_retrieve_inflight) > 230
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "搜索在途并发持续逼近上限（>230/256）"
+          description: "search-service 在途并发 {{ $value }} 持续 > 230（上限 256，≈90%），即将触发 load-shed，应提前扩容。"
+
+  - name: quwoquan_intersection
+    # 交集统一体验 SLO 告警（SLI/SLO 真相源：quwoquan_service/services/content-service/
+    # configs/observability/intersection_slo.yaml）。HTTP 延迟/可用性走 http_server_*
+    # 中间件按 route 过滤；业务漏斗走 content-service intersection_* 计数器。延迟用
+    # histogram 取分位数（禁止算术平均），阈值与 SLO objective 对齐。
+    rules:
+      - alert: IntersectionApiLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="content-service", route=~"/v1/content/intersections.*|/v1/content/feed/intersections"}[5m])) by (le)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "交集读路由 P95 延迟 > 300ms"
+          description: "content-service 交集相关路由 P95 = {{ $value | humanizeDuration }}，超出 SLO（p95_ms=300）。"
+
+      - alert: IntersectionRepeatExposureRateHigh
+        expr: |
+          sum(rate(intersection_feed_candidates_total{rank_state="seen"}[30m]))
+          / (sum(rate(intersection_feed_candidates_total[30m])) + 0.001) > 0.20
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "交集重复曝光率 > 20%"
+          description: "spotlight 候选窗中命中跨会话冷却记忆窗（seen）占比 {{ $value | humanizePercentage }}，超出 SLO（repeat_exposure_rate<=0.20），换新不足或冷却窗失效。"
+
+      - alert: IntersectionFreshnessFilterRateHigh
+        expr: |
+          sum(rate(intersection_feed_filtered_total{reason="stale"}[30m]))
+          / (sum(rate(intersection_feed_candidates_total[30m])) + sum(rate(intersection_feed_filtered_total[30m])) + 0.001) > 0.30
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "交集保鲜过滤率 > 30%"
+          description: "Feed 候选因过保鲜被过滤占比 {{ $value | humanizePercentage }}，超出 SLO（freshness_filter_rate<=0.30），读模型 freshness TTL 或重算滞后。"
+
+      - alert: IntersectionDisplayIncompleteRateHigh
+        expr: |
+          sum(rate(intersection_feed_filtered_total{reason="display_incomplete"}[30m]))
+          / (sum(rate(intersection_feed_candidates_total[30m])) + sum(rate(intersection_feed_filtered_total[30m])) + 0.001) > 0.10
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "交集展示不完备率 > 10%"
+          description: "Feed 候选因缺 primaryText/头像被空窗治理过滤占比 {{ $value | humanizePercentage }}，超出 SLO（display_incomplete_rate<=0.10），Explain 管线或读模型数据缺口。"
 
   - name: quwoquan_l4_infrastructure
     rules:

@@ -21,6 +21,12 @@ const (
 	ObjectTypeCircleGroup      = "circle.group"
 	ObjectTypeCircle           = "circle.circle"
 	ObjectTypeTag              = "tag"
+	// ObjectTypeLocation is the first-party "place" object (R-S05e): a free-text
+	// location referenced by content but not yet bound to a canonical entity. It
+	// REUSES the cross-object geo dimension (Document.Geo + Fields[placeName]); a
+	// place that becomes a canonical entity is carried by entity.homepage instead,
+	// so a given place appears exactly once across the unified index.
+	ObjectTypeLocation = "location.place"
 )
 
 type SearchMode string
@@ -30,6 +36,20 @@ const (
 	ModeResult    SearchMode = "result"
 	ModeRetrieval SearchMode = "retrieval"
 )
+
+// GeoPoint is the structured geo coordinate of a Document's optional location
+// dimension. The geo dimension is CROSS-OBJECT: entity.homepage and content.post
+// carry it today; user (附近的人) and circle (附近的圈子) attach the same Geo + place
+// fields next, with zero retrieve-contract change. location is ALSO a first-party
+// object target (ObjectTypeLocation / TargetLocation) that REUSES this same
+// dimension — a location.place stores its place in Geo + Fields[placeName].
+// Places bound to a canonical entity are carried by entity.homepage instead, so
+// a place appears exactly once (single source) and the geo dimension stays one
+// mechanism, not two.
+type GeoPoint struct {
+	Lat float64 `json:"lat"`
+	Lng float64 `json:"lng"`
+}
 
 type Document struct {
 	ObjectType   string
@@ -48,6 +68,10 @@ type Document struct {
 	Fields       map[string]string
 	Popularity   float64
 	Freshness    time.Time
+	// Geo is the optional structured location dimension. It is nil when the
+	// object has no real coordinates; the place reference (placeId/placeName)
+	// lives in Fields so the dimension stays single-sourced per Document.
+	Geo *GeoPoint
 }
 
 type Request struct {
@@ -281,11 +305,20 @@ func Execute(req Request, docs []Document) Response {
 		hits = append(hits, hit)
 		facetCounts[doc.ObjectType]++
 	}
+	// Repeatable total order (mirror of SortHitsStable for the core Hit type):
+	// Score desc -> Title asc -> ObjectType asc -> ObjectID asc, so equal-score
+	// equal-title ties resolve by stable external ids, never internal doc order.
 	sort.SliceStable(hits, func(i, j int) bool {
-		if hits[i].Score == hits[j].Score {
+		if hits[i].Score != hits[j].Score {
+			return hits[i].Score > hits[j].Score
+		}
+		if hits[i].Title != hits[j].Title {
 			return hits[i].Title < hits[j].Title
 		}
-		return hits[i].Score > hits[j].Score
+		if hits[i].ObjectType != hits[j].ObjectType {
+			return hits[i].ObjectType < hits[j].ObjectType
+		}
+		return hits[i].ObjectID < hits[j].ObjectID
 	})
 	if len(hits) > limit {
 		hits = hits[:limit]

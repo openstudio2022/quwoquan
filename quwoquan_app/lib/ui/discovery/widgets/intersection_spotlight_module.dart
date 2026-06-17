@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -13,8 +14,10 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 ///
 /// 设计（专业设计师视角：精致 / 美观 / 事实清晰 / 简洁）：
 /// - iPhone 宽度展示 3~3.5 张卡，留出半张暗示横滑；
-/// - 头像/对象图标是视觉主角，头像下仅三行：名称、主交集、副交集；
-/// - 文案、计数、实例来自云侧证据组，端不本地拼装事实（G2）。
+/// - 头像/对象图标是视觉主角，头像下仅两行：名称 + 一条主谓宾交集句；
+/// - 交集句强约束（紧凑 surface）：有且仅一条、单行省略、无主/副双句堆叠、无标签列表、无浮层；
+/// - 文案、计数、实例来自云侧证据组，端不本地拼装事实（G2），与四口径同源
+///   （复用 [IntersectionReasonChip.primaryText]）。
 class IntersectionSpotlightModule extends StatefulWidget {
   const IntersectionSpotlightModule({
     super.key,
@@ -31,9 +34,6 @@ class IntersectionSpotlightModule extends StatefulWidget {
   );
   static const Key primaryTextKey = ValueKey<String>(
     'home-intersection-spotlight-primary-text',
-  );
-  static const Key secondaryTextKey = ValueKey<String>(
-    'home-intersection-spotlight-secondary-text',
   );
 
   /// 体验规格：单屏可见 3~3.5 张卡（半露暗示横滑）。
@@ -58,10 +58,16 @@ class _IntersectionSpotlightModuleState
   // 用于「换一批」时强制重建卡列表，触发 stagger 入场。
   int _batchSeed = 0;
 
-  // 主交集结论句由云侧产出（G2 端不本地拼装）；缺 primaryText 的对象不进展示窗。
+  // 主谓宾交集结论句由云侧产出（G2 端不本地拼装），口径与四口径同源
+  // （[IntersectionReasonChip.primaryText]：primaryText→displayText 回退）；
+  // 无可展示结论句的对象不进展示窗。
   List<IntersectionReason> get _candidates => widget.reasons
       .where((reason) => reason.actionTargetId.trim().isNotEmpty)
-      .where((reason) => reason.primaryText.trim().isNotEmpty)
+      .where(
+        (reason) =>
+            IntersectionReasonChip.primaryText(<IntersectionReason>[reason]) !=
+            null,
+      )
       .toList(growable: false);
 
   void _shuffle() {
@@ -413,9 +419,11 @@ class _RelationCoverCard extends StatelessWidget {
 
   Widget _buildInfo(BuildContext context) {
     final name = reason.displayName.trim();
-    // 主交集结论句（蓝）与副交集辅助说明（灰）均为云侧产出，端只读直出（G2）。
-    final primaryText = reason.primaryText.trim();
-    final secondaryText = reason.secondaryText.trim();
+    // 紧凑 surface 强约束：有且仅一条主谓宾交集句（蓝），无副句堆叠。
+    // 口径与四口径同源（primaryText→displayText 回退），云侧产出端只读（G2）。
+    final primaryText = IntersectionReasonChip.primaryText(
+      <IntersectionReason>[reason],
+    );
     return FittedBox(
       fit: BoxFit.scaleDown,
       child: ConstrainedBox(
@@ -427,7 +435,7 @@ class _RelationCoverCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Text(
-              name.isEmpty ? reason.label.trim() : name,
+              name.isEmpty ? reason.primaryText.trim() : name,
               maxLines: 1,
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
@@ -438,7 +446,7 @@ class _RelationCoverCard extends StatelessWidget {
                 height: AppTypography.lineHeightTight,
               ),
             ),
-            if (primaryText.isNotEmpty)
+            if (primaryText != null)
               Padding(
                 padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
                 child: Text(
@@ -452,23 +460,6 @@ class _RelationCoverCard extends StatelessWidget {
                     color: AppColors.iosAccent(context),
                     height: AppTypography.lineHeightTight,
                     letterSpacing: -0.04,
-                  ),
-                ),
-              ),
-            if (secondaryText.isNotEmpty)
-              Padding(
-                padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
-                child: Text(
-                  key: IntersectionSpotlightModule.secondaryTextKey,
-                  secondaryText,
-                  maxLines: 1,
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosCaption2,
-                    color: AppColors.iosSecondaryLabel(context),
-                    height: AppTypography.lineHeightTight,
-                    letterSpacing: -0.02,
                   ),
                 ),
               ),

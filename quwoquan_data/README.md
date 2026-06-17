@@ -432,6 +432,8 @@ python3 verticals/campus/verify/verify_campus_taxonomy.py
 
 通过 Tag Service API 支持，详见 `contracts/metadata/tag/service.yaml`。
 
+平台级内容供给的 Agent 组织模型、AI 自主创作边界、角色职责、交接契约和质量门，见 `docs/agent_content_supply_operating_model.md`。
+
 ## 快速验证
 
 ```bash

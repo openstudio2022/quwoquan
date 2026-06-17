@@ -24,6 +24,7 @@ const (
 	ModuleRTC         Module = "RTC"
 	ModuleOps         Module = "OPS"
 	ModuleAssistant   Module = "ASSISTANT"
+	ModuleSearch      Module = "SEARCH"
 	ModuleDB          Module = "DB"
 	ModuleMQ          Module = "MQ"
 	ModuleCache       Module = "CACHE"
@@ -201,6 +202,7 @@ var allowedModules = map[Module]struct{}{
 	ModuleRTC:         {},
 	ModuleOps:         {},
 	ModuleAssistant:   {},
+	ModuleSearch:      {},
 	ModuleDB:          {},
 	ModuleMQ:          {},
 	ModuleCache:       {},

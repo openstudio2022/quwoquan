@@ -16,6 +16,7 @@ source_entities:
   - Circle
   - CircleMember
   - VisitRecord
+  - SearchQuery
 
 source_events:
   - UserProfileUpdated
@@ -24,6 +25,7 @@ source_events:
   - BehaviorBatchReported
   - CircleMemberJoined
   - UserFollowed
+  - SearchRecommendationSignalPublished
 
 consumers:
   - recommendation-engine
@@ -35,12 +37,25 @@ fields:
     description: |
       用户侧特征(原始累加，BehaviorBatchReported 等事件 $inc)：tagInteraction / authorInteraction /
       topicAffinities / audienceAffinities / formatAffinities / entityAffinities /
-      entityInstanceAffinities / typeImpressions / typeEngagements / depthDistribution / ...
+      entityInstanceAffinities / typeImpressions / typeEngagements / depthDistribution /
+      searchTermAffinity / searchTopObjectAffinity / searchTermHeat / searchTermUpdatedAt / ...
       InterestDecayJob 按半衰期衰减四维 affinities，解原始 $inc 单调增长。
+      SearchRecommendationSignalPublished 以 24h 新鲜度窗口写入 search* 在线意图特征；
+      FeatureStore 读时按 searchTermUpdatedAt 过期剔除，避免 stale search intent 长期污染 Feed。
       注：对外兴趣画像 interestProfile(T4-1) 由 content 派生后经 UserInterestRecomputed 事件
       投影到 user 域 rm_user_profile_view.interestProfile，不在本宽表持久化(单一真相源)。
   - { name: contentFeatures, type: "[]object", description: 候选内容特征 }
-  - { name: socialFeatures, type: object, description: 社交图谱特征 }
+  - name: socialFeatures
+    type: object
+    description: |
+      社交图谱特征。intersection 子对象（事实 + 概率分通道，与 IntersectionReason 对齐）：
+        sharedFolloweesCount / sharedCircleCount / coCommentedCount / coVisitedEntityCount /
+        followeeInObjectActive / followeeViewingActive / affinityIntersectionScore /
+        intersectionSourceRefTop（viewer 与 object 间最强 fact kind，§5.4 标准名）
+      其中 intersection.kindCounts.<kind> 是按 BehaviorBatchReported 中 intersectionSourceRef
+      在「真正参与」事件上 $inc 的揭示偏好直方图（曝光不计入）；FeatureStore 由该直方图派生上述
+      6 个事实计数字段 + intersectionSourceRefTop，经 ModelPredictRequest.UserFeatures 单点注入精排
+      （ranking-signal-fusion）。affinityIntersectionScore 属概率分通道，由 affinity 模型旁路填充。
   - { name: contextFeatures, type: object, description: 上下文特征（时间/设备/位置） }
   - name: segments
     type: "[]string"

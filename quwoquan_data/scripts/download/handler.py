@@ -3,7 +3,11 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+from datetime import datetime, timezone
+import hashlib
+import os
 from pathlib import Path
+import shutil
 import sys
 from typing import Any, Mapping
 
@@ -11,7 +15,7 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common.paths import ensure_batch_layout, batch_root, source_unit_dir  # noqa: E402
-from _common.io import read_json  # noqa: E402
+from _common.io import read_json, write_json  # noqa: E402
 from _common.batch_manifest import write_batch_manifest, write_source_catalog  # noqa: E402
 from _common.content_evidence import anonymize_source_markdown, score_source_markdown  # noqa: E402
 from _common.entity_extract import entity_ref as build_entity_ref, require_domain_etype  # noqa: E402
@@ -43,6 +47,240 @@ from download.source_inputs import (
 from download.fetch import fetch_image_payload, fetch_source_payload  # noqa: E402
 from download.prepare import prepare_source_plan, prepare_source_screen  # noqa: E402
 from vertical.license import normalize_rights_payload, validate_image_rights  # noqa: E402
+
+SOURCE_UNIT_MAX_IMAGES_PER_SOURCE = max(1, int(os.environ.get("QWQ_SOURCE_UNIT_MAX_IMAGES_PER_SOURCE", "1")))
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _write_download_progress(
+    task_id: str,
+    batch_id: str,
+    *,
+    status: str,
+    entity_id: str = "",
+    entity_index: int = 0,
+    entity_count: int = 0,
+    sources: int = 0,
+    images: int = 0,
+    message: str = "",
+) -> None:
+    shared = batch_root(task_id, batch_id) / "_shared"
+    shared.mkdir(parents=True, exist_ok=True)
+    write_json(
+        shared / "download_progress.json",
+        {
+            "schemaVersion": "quwoquan.download.progress",
+            "updatedAt": _now_iso(),
+            "status": status,
+            "entityId": entity_id,
+            "entityIndex": entity_index,
+            "entityCount": entity_count,
+            "sources": sources,
+            "images": images,
+            "message": message,
+        },
+    )
+
+
+def _stable_source_image_collection_id(
+    *,
+    entity_id: str,
+    source_id: str,
+    spec: Mapping[str, Any],
+) -> str:
+    """Current-contract collection id for an article/homepage source image.
+
+    Source-unit images are not independent gallery collections, but they still
+    need a globally stable identity for cross-work reuse gates. Local ids such
+    as ``article_qunar_base_1`` collide across entities, so derive the identity
+    from the actual image landing/proof URL and the target entity.
+    """
+
+    existing = str(spec.get("sourceCollectionId") or "").strip()
+    local_default = f"article:{source_id}"
+    if existing and existing != local_default:
+        return existing
+    key = str(
+        spec.get("authorizationProof")
+        or spec.get("sourceUrl")
+        or spec.get("url")
+        or spec.get("collectionPageUrl")
+        or source_id
+    ).strip()
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+    entity_key = slugify(entity_id)[:48]
+    return f"source_image:{entity_key}:{digest}"
+
+
+def _source_image_requires_ocr(spec: Mapping[str, Any]) -> bool:
+    platform = str(spec.get("platform") or "").casefold()
+    proof = str(spec.get("authorizationProof") or spec.get("sourceUrl") or spec.get("url") or "").casefold()
+    license_value = str(spec.get("license") or "").casefold()
+    trusted_open_license = (
+        "wikimedia commons" in platform
+        or "openverse" in platform
+        or "commons.wikimedia.org" in proof
+    )
+    has_open_license = any(token in license_value for token in ("cc by", "cc-by", "cc0", "public domain"))
+    return not (trusted_open_license and has_open_license and proof)
+
+
+def _assess_source_image(path: Path, spec: Mapping[str, Any]):
+    try:
+        return assess_image(path, require_ocr=_source_image_requires_ocr(spec))
+    except TypeError:
+        return assess_image(path)
+
+
+def _cached_source_image_payload(
+    object_dir: Path,
+    *,
+    ordinal: int,
+    source_id: str,
+    spec: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    unit = source_unit_dir(object_dir, ordinal, source_id)
+    index_path = unit / "assets" / "index.json"
+    if not index_path.is_file():
+        return None
+    try:
+        rows = read_json(index_path).get("assets") or []
+    except (OSError, ValueError, TypeError):
+        return None
+    wanted = {
+        str(spec.get("url") or "").strip(),
+        str(spec.get("sourceUrl") or "").strip(),
+        str(spec.get("authorizationProof") or "").strip(),
+    }
+    wanted.discard("")
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        row_keys = {
+            str(row.get("url") or "").strip(),
+            str(row.get("requestedUrl") or "").strip(),
+            str(row.get("sourceUrl") or "").strip(),
+            str(row.get("authorizationProof") or "").strip(),
+        }
+        row_keys.discard("")
+        if wanted and not (wanted & row_keys):
+            continue
+        file_name = str(row.get("fileName") or "").strip()
+        if not file_name:
+            continue
+        path = unit / "assets" / file_name
+        if not path.is_file():
+            continue
+        try:
+            body = path.read_bytes()
+        except OSError:
+            continue
+        if not body:
+            continue
+        return {
+            "url": str(row.get("url") or spec.get("url") or ""),
+            "requestedUrl": str(row.get("requestedUrl") or spec.get("url") or ""),
+            "normalizedFromUrl": str(row.get("normalizedFromUrl") or ""),
+            "sourceUrl": str(row.get("sourceUrl") or spec.get("sourceUrl") or ""),
+            "contentType": str(row.get("contentType") or ""),
+            "sha256": str(row.get("sha256") or "").removeprefix("sha256:") or hashlib.sha256(body).hexdigest(),
+            "ext": Path(file_name).suffix or ".jpg",
+            "bytes": body,
+            "fromCache": True,
+        }
+    return None
+
+
+def _image_lane_source_unit_dirs(object_dir: Path) -> set[Path]:
+    """Return existing image/homepage-image source units for monotonic repair.
+
+    Download retries should be allowed to fail without deleting the last
+    usable visual evidence. Successful retries still prune through the normal
+    source-plan commit path.
+    """
+
+    sources_root = object_dir / "1.download" / "sources"
+    if not sources_root.is_dir():
+        return set()
+    out: set[Path] = set()
+    for child in sources_root.iterdir():
+        if not child.is_dir():
+            continue
+        try:
+            meta = read_json(child / "meta.json")
+        except (OSError, ValueError, TypeError):
+            meta = {}
+        lane = str(meta.get("researchLane") or "")
+        if lane in {"image", "homepage_image"}:
+            out.add(child)
+    return out
+
+
+def _cached_image_lane_payload(object_dir: Path, spec: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Reuse a previously retained image-lane asset before hitting the network.
+
+    Independent image works are written as image/homepage_image source units.
+    Repeated repair runs often ask for the same URL/proof again; using the
+    already audited bytes avoids transient CDN/network failures turning into
+    destructive evidence churn.
+    """
+
+    wanted = {
+        str(spec.get("url") or "").strip(),
+        str(spec.get("sourceUrl") or "").strip(),
+        str(spec.get("authorizationProof") or "").strip(),
+    }
+    wanted.discard("")
+    if not wanted:
+        return None
+    for unit in sorted(_image_lane_source_unit_dirs(object_dir), key=lambda path: path.name):
+        index_path = unit / "assets" / "index.json"
+        if not index_path.is_file():
+            continue
+        try:
+            rows = read_json(index_path).get("assets") or []
+        except (OSError, ValueError, TypeError):
+            continue
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            row_keys = {
+                str(row.get("url") or "").strip(),
+                str(row.get("requestedUrl") or "").strip(),
+                str(row.get("normalizedFromUrl") or "").strip(),
+                str(row.get("sourceUrl") or "").strip(),
+                str(row.get("authorizationProof") or "").strip(),
+            }
+            row_keys.discard("")
+            if not (wanted & row_keys):
+                continue
+            file_name = str(row.get("fileName") or "").strip()
+            if not file_name:
+                continue
+            path = unit / "assets" / file_name
+            if not path.is_file():
+                continue
+            try:
+                body = path.read_bytes()
+            except OSError:
+                continue
+            if not body:
+                continue
+            return {
+                "url": str(row.get("url") or spec.get("url") or ""),
+                "requestedUrl": str(row.get("requestedUrl") or spec.get("url") or ""),
+                "normalizedFromUrl": str(row.get("normalizedFromUrl") or ""),
+                "sourceUrl": str(row.get("sourceUrl") or spec.get("sourceUrl") or ""),
+                "contentType": str(row.get("contentType") or ""),
+                "sha256": str(row.get("sha256") or "").removeprefix("sha256:") or hashlib.sha256(body).hexdigest(),
+                "ext": Path(file_name).suffix or ".jpg",
+                "bytes": body,
+                "fromCache": True,
+            }
+    return None
 
 
 def _cached_source_quality_if_better(
@@ -81,12 +319,66 @@ def _cached_source_quality_if_better(
     return cached if cached_key > candidate_key else None
 
 
+def _prune_stale_source_units(object_dir: Path, written_dirs: set[Path]) -> list[str]:
+    """Remove source units that are no longer present in the current plan.
+
+    A repair run may replace an image collection or text source. Keeping old
+    source-unit directories makes later gates see evidence that the current
+    source plan did not authorize, so each entity fetch commits exactly the
+    source units written in this run.
+    """
+
+    sources_root = object_dir / "1.download" / "sources"
+    if not sources_root.is_dir():
+        return []
+    keep = {path.resolve() for path in written_dirs}
+    pruned: list[str] = []
+    for child in sorted(sources_root.iterdir(), key=lambda path: path.name):
+        if not child.is_dir():
+            continue
+        if child.resolve() in keep:
+            continue
+        shutil.rmtree(child)
+        pruned.append(child.name)
+    return pruned
+
+
+def _move_rejected_source_unit(object_dir: Path, unit_dir: Path) -> Path:
+    """Keep rejected fetches for audit, outside the consumable source bundle."""
+
+    rejected_root = object_dir / "1.download" / "rejected_sources"
+    rejected_root.mkdir(parents=True, exist_ok=True)
+    dest = rejected_root / unit_dir.name
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.move(str(unit_dir), str(dest))
+    return dest
+
+
+def _prune_stale_rejected_source_units(object_dir: Path, written_dirs: set[Path]) -> list[str]:
+    rejected_root = object_dir / "1.download" / "rejected_sources"
+    if not rejected_root.is_dir():
+        return []
+    keep = {path.resolve() for path in written_dirs}
+    pruned: list[str] = []
+    for child in sorted(rejected_root.iterdir(), key=lambda path: path.name):
+        if not child.is_dir():
+            continue
+        if child.resolve() in keep:
+            continue
+        shutil.rmtree(child)
+        pruned.append(child.name)
+    return pruned
+
+
 def _download_source_unit_images(
     source: Mapping[str, Any],
     *,
     task_id: str,
     batch_id: str,
     entity_id: str,
+    object_dir: Path,
+    ordinal: int,
     vertical: str,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Download and gate images that belong to the same text source unit.
@@ -102,6 +394,8 @@ def _download_source_unit_images(
         return images, [f"{source.get('source_id') or '?'} imageUrls must be a list"]
     source_id = str(source.get("source_id") or "")
     for idx_img, raw in enumerate(raw_images, start=1):
+        if len(images) >= SOURCE_UNIT_MAX_IMAGES_PER_SOURCE:
+            break
         if not isinstance(raw, Mapping):
             issues.append(f"{source_id} image[{idx_img}] invalid payload")
             continue
@@ -115,18 +409,30 @@ def _download_source_unit_images(
                 "usageScope": source.get("usageScope") or "",
                 "sourceUrl": source.get("url") or "",
                 "platform": source.get("platform") or "",
-                "sourceCollectionId": f"article:{source_id}",
+                "sourceCollectionId": "",
                 "creator": source.get("credit") or "",
                 "collectionPageUrl": source.get("url") or "",
             },
             **{k: v for k, v in raw.items() if v not in ("", None)},
         }
+        spec["sourceCollectionId"] = _stable_source_image_collection_id(
+            entity_id=entity_id,
+            source_id=source_id,
+            spec=spec,
+        )
         label = f"{entity_id}/{source_id}#{idx_img}"
         rights_issues = validate_image_rights(spec, vertical=vertical)
         if rights_issues:
             issues.extend(f"{label}: {issue}" for issue in rights_issues)
             continue
-        payload = fetch_image_payload(str(spec.get("url") or ""))
+        payload = _cached_source_image_payload(
+            object_dir,
+            ordinal=ordinal,
+            source_id=source_id,
+            spec=spec,
+        )
+        if payload is None:
+            payload = fetch_image_payload(str(spec.get("url") or ""))
         if payload is None:
             issues.append(f"{label}: imageFetch failed/non-image/too small ({spec.get('url')})")
             continue
@@ -143,7 +449,7 @@ def _download_source_unit_images(
         safe_slug = slugify(f"{entity_id}_{source_id}_{idx_img}")
         temp_file = temp_dir / f"{safe_slug}{payload['ext']}"
         temp_file.write_bytes(payload["bytes"])
-        verdict = assess_image(temp_file)
+        verdict = _assess_source_image(temp_file, spec)
         if verdict.blocks_image_publish:
             issues.append(f"{label}: imageSafety blocked ({verdict.status}) reasons={list(verdict.reasons)}")
             continue
@@ -173,7 +479,7 @@ def _download_source_unit_images(
                 "generationPromptHash": rights.get("generationPromptHash") or "",
                 "generatedAt": rights.get("generatedAt") or "",
                 "syntheticDisclosure": rights.get("syntheticDisclosure") or "",
-                "sourceCollectionId": spec.get("sourceCollectionId") or f"article:{source_id}",
+                "sourceCollectionId": spec.get("sourceCollectionId") or "",
                 "creator": spec.get("creator") or spec.get("credit") or "",
                 "collectionPageUrl": spec.get("collectionPageUrl") or spec.get("sourceUrl") or "",
                 "authorizationProof": spec.get("authorizationProof") or "",
@@ -185,6 +491,8 @@ def _download_source_unit_images(
     images, duplicates = dedupe_image_payloads(images)
     if duplicates:
         issues.append(f"{source_id}: source image dedupe removed {len(duplicates)} near-duplicate image(s)")
+    if images:
+        return images, []
     return images, issues
 
 
@@ -208,10 +516,10 @@ def handle_download(args: argparse.Namespace) -> None:
     write_batch_manifest(task_id, batch_id, command="download")
     write_source_catalog(task_id, batch_id)
 
-    print(f"[download] Task: {task_id}, Batch: {batch_id}")
-    print(f"[download] Target entities: {entity_ids}")
-    print(f"[download] Work dir: {dl_root}")
-    print(f"[download] Steps: source_plan → fetch → source_screen")
+    print(f"[download] Task: {task_id}, Batch: {batch_id}", flush=True)
+    print(f"[download] Target entities: {entity_ids}", flush=True)
+    print(f"[download] Work dir: {dl_root}", flush=True)
+    print(f"[download] Steps: source_plan → fetch → source_screen", flush=True)
 
     entity_type = getattr(args, "entity_type", "") or ""
     vertical = vertical_from_task_id(task_id)
@@ -220,8 +528,12 @@ def handle_download(args: argparse.Namespace) -> None:
     for entity in entities:
         planned_sources = [
             {
+                "source_id": source.get("source_id") or "",
                 "platform": source["platform"],
                 "url": source["url"],
+                "category": source.get("category") or "",
+                "sourceRole": source.get("sourceRole") or "",
+                "researchLane": source.get("researchLane") or "",
                 "expectedContentType": "article",
                 "priority": index + 1,
             }
@@ -280,25 +592,62 @@ def handle_download(args: argparse.Namespace) -> None:
     fetched_sources: list[dict] = []
     quality_by_entity: dict[str, list[dict]] = defaultdict(list)
     failed_image_entities: list[str] = []
+    _write_download_progress(
+        task_id,
+        batch_id,
+        status="running",
+        entity_count=len(entity_ids),
+        message="download_fetch started",
+    )
     for entity_index, entity_id in enumerate(entity_ids, start=1):
         print(f"[download] Fetch entity {entity_index}/{len(entity_ids)}: {entity_id}", flush=True)
+        _write_download_progress(
+            task_id,
+            batch_id,
+            status="running",
+            entity_id=entity_id,
+            entity_index=entity_index,
+            entity_count=len(entity_ids),
+            message="entity fetch started",
+        )
         # 对象同构目录：来源写成来源单元（编号 + 类目 + assets/），禁对象级散 images/。
         object_dir = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
         target_ref = build_entity_ref(domain, etype, entity_id)
         sources = curated_sources_for_entity(task_id, batch_id, entity_id, entity_type)
+        existing_image_source_dirs = _image_lane_source_unit_dirs(object_dir)
+        written_source_dirs: set[Path] = set()
+        written_rejected_source_dirs: set[Path] = set()
         # 实体级 imageUrls 全部归属首个（概览类）来源单元，并标注相关性，避免无归属散图。
         image_specs = curated_images_for_entity(task_id, batch_id, entity_id, entity_type)
         image_manifest: list[dict] = []
         image_rights_issues: list[str] = []
         image_quality_issues: list[str] = []
         pending_images: list[dict] = []
+        required_images = download_requirements(task_id)["minImages"]
+        image_fetch_target = max(
+            required_images,
+            int(os.environ.get("QWQ_DOWNLOAD_IMAGE_FETCH_TARGET_PER_ENTITY", str(required_images + 2))),
+        )
+        image_candidate_limit = max(
+            image_fetch_target,
+            int(os.environ.get("QWQ_DOWNLOAD_IMAGE_CANDIDATE_LIMIT_PER_ENTITY", str(image_fetch_target + 4))),
+        )
         for idx_img, spec in enumerate(image_specs, start=1):
+            if len(pending_images) >= image_fetch_target:
+                break
+            if idx_img > image_candidate_limit:
+                image_quality_issues.append(
+                    f"imageFetch: {entity_id} stopped after {image_candidate_limit} image candidate(s)"
+                )
+                break
             asset_label = f"{entity_id}#{idx_img}"
             issues = validate_image_rights(spec, vertical=vertical)
             if issues:
                 image_rights_issues.extend([f"{idx_img}: {issue}" for issue in issues])
                 continue
-            payload = fetch_image_payload(spec["url"])
+            payload = _cached_image_lane_payload(object_dir, spec)
+            if payload is None:
+                payload = fetch_image_payload(spec["url"])
             if payload is None:
                 image_quality_issues.append(
                     f"imageFetch: {asset_label} 下载失败/非图片/过小 ({spec.get('url')})"
@@ -314,7 +663,7 @@ def handle_download(args: argparse.Namespace) -> None:
             temp_path = batch_root(task_id, batch_id) / "_shared" / "tmp_image_checks" / f"{entity_id}_{idx_img}{payload['ext']}"
             temp_path.parent.mkdir(parents=True, exist_ok=True)
             temp_path.write_bytes(payload["bytes"])
-            verdict = assess_image(temp_path)
+            verdict = _assess_source_image(temp_path, spec)
             if verdict.blocks_image_publish:
                 image_quality_issues.append(
                     f"imageSafety: {asset_label} blocked ({verdict.status}) reasons={list(verdict.reasons)}"
@@ -413,7 +762,8 @@ def handle_download(args: argparse.Namespace) -> None:
                     "[download] Preserve better cached source "
                     f"{entity_id}/{source['source_id']}: "
                     f"{cached_quality.get('quality')}({cached_quality.get('score')}) > "
-                    f"{quality.get('quality')}({quality.get('score')})"
+                    f"{quality.get('quality')}({quality.get('score')})",
+                    flush=True,
                 )
                 unit = source_unit_dir(object_dir, ordinal, source["source_id"])
                 source_md = (unit / "source.md").read_text(encoding="utf-8")
@@ -427,6 +777,8 @@ def handle_download(args: argparse.Namespace) -> None:
                 task_id=task_id,
                 batch_id=batch_id,
                 entity_id=entity_id,
+                object_dir=object_dir,
+                ordinal=ordinal,
                 vertical=vertical,
             )
             if source_image_issues:
@@ -443,8 +795,10 @@ def handle_download(args: argparse.Namespace) -> None:
                 html_bytes=html_bytes,
                 quality=quality,
                 platform=source.get("platform") or "web",
-                source_category=source.get("platform") or "web",
+                source_category=source.get("category") or source.get("platform") or "web",
                 source_use_mode=source.get("sourceUseMode") or "",
+                source_role=source.get("sourceRole") or "",
+                image_evidence_mode=source.get("imageEvidenceMode") or "",
                 research_lane=source.get("researchLane") or "",
                 license_value=source.get("license") or "",
                 url=source["url"],
@@ -455,6 +809,16 @@ def handle_download(args: argparse.Namespace) -> None:
                 task_id=task_id,
                 batch_id=batch_id,
             )
+            unit_dir = source_unit_dir(object_dir, ordinal, source["source_id"])
+            if str(quality.get("quality") or "") == "Reject":
+                rejected_dir = _move_rejected_source_unit(object_dir, unit_dir)
+                written_rejected_source_dirs.add(rejected_dir)
+                print(
+                    f"[download] Rejected source isolated {entity_id}/{source['source_id']}",
+                    flush=True,
+                )
+                continue
+            written_source_dirs.add(unit_dir)
             quality_by_entity[entity_id].append(
                 {
                     "sourceId": source["source_id"],
@@ -533,20 +897,8 @@ def handle_download(args: argparse.Namespace) -> None:
                 task_id=task_id,
                 batch_id=batch_id,
             )
-        write_gate_report(
-            task_id=task_id,
-            batch_id=batch_id,
-            command="download",
-            step="image_rights",
-            ref=entity_id,
-            passed=not image_rights_issues,
-            issues=image_rights_issues,
-            evidence_summary={"plannedImages": len(image_specs), "blockedImages": len(image_rights_issues)},
-            next_step="image_fetch",
-            fallback_stage="source_plan" if image_rights_issues else None,
-        )
+            written_source_dirs.add(source_unit_dir(object_dir, len(sources) + offset, source_id))
         kept_images = len(pending_images)
-        required_images = download_requirements(task_id)["minImages"]
         count_issue = (
             min_count_issue(kept_images, entity_id=entity_id)
             if required_images <= MIN_ENTITY_IMAGES
@@ -564,6 +916,45 @@ def handle_download(args: argparse.Namespace) -> None:
             fetch_issues.append(
                 "imageFetch: 未下到真实图片，请在 source_plan 提供可用 imageUrls(CC/PD/授权)"
             )
+        preserved_image_dirs: set[Path] = set()
+        if fetch_issues:
+            preserved_image_dirs = existing_image_source_dirs - written_source_dirs
+            written_source_dirs.update(preserved_image_dirs)
+        pruned_units = _prune_stale_source_units(object_dir, written_source_dirs)
+        pruned_rejected_units = _prune_stale_rejected_source_units(
+            object_dir,
+            written_rejected_source_dirs,
+        )
+        if preserved_image_dirs:
+            print(
+                f"[download] Preserved {len(preserved_image_dirs)} previous image source unit(s) "
+                f"for failed repair of {entity_id}",
+                flush=True,
+            )
+        if pruned_units:
+            print(
+                f"[download] Pruned {len(pruned_units)} stale source unit(s) for {entity_id}: "
+                + ", ".join(pruned_units),
+                flush=True,
+            )
+        if pruned_rejected_units:
+            print(
+                f"[download] Pruned {len(pruned_rejected_units)} stale rejected source unit(s) for {entity_id}: "
+                + ", ".join(pruned_rejected_units),
+                flush=True,
+            )
+        write_gate_report(
+            task_id=task_id,
+            batch_id=batch_id,
+            command="download",
+            step="image_rights",
+            ref=entity_id,
+            passed=not image_rights_issues,
+            issues=image_rights_issues,
+            evidence_summary={"plannedImages": len(image_specs), "blockedImages": len(image_rights_issues)},
+            next_step="image_fetch",
+            fallback_stage="source_plan" if image_rights_issues else None,
+        )
         write_gate_report(
             task_id=task_id,
             batch_id=batch_id,
@@ -587,6 +978,17 @@ def handle_download(args: argparse.Namespace) -> None:
             f"[download] Entity done {entity_index}/{len(entity_ids)}: {entity_id} "
             f"sources={len(sources)} images={kept_images}",
             flush=True,
+        )
+        _write_download_progress(
+            task_id,
+            batch_id,
+            status="running",
+            entity_id=entity_id,
+            entity_index=entity_index,
+            entity_count=len(entity_ids),
+            sources=len(sources),
+            images=kept_images,
+            message="entity fetch done",
         )
 
     prepare_source_screen(task_id, batch_id, fetched_sources)
@@ -631,8 +1033,6 @@ def handle_download(args: argparse.Namespace) -> None:
         issues: list[str] = []
         if len(retained) < 1:
             issues.append("sourceScreen: no retained source for entity")
-        if any(row["quality"] == "Reject" for row in rows):
-            issues.append("sourceScreen: reject source present in entity bundle; must re-plan/fetch before produce")
         # 受控类目门：阻断无类别的 weather_* 散来源（天气应作为百科/官方/攻略来源内事实）。
         for source in curated_sources_for_entity(task_id, batch_id, entity_id, entity_type):
             issues.extend(source_unit_category_issues(source["source_id"], source.get("platform") or ""))
@@ -652,18 +1052,37 @@ def handle_download(args: argparse.Namespace) -> None:
             next_step="quality_analysis",
             fallback_stage="source_plan" if issues else None,
         )
-    print(f"[download] Planned {len(entities)} entity/entities and fetched {len(fetched_sources)} source bundle(s)")
+    print(
+        f"[download] Planned {len(entities)} entity/entities and fetched {len(fetched_sources)} source bundle(s)",
+        flush=True,
+    )
     gate_issues = gate_download(task_id, batch_id)
     gate_issues.extend(
         f"{entity_id}: image gates failed (rights/fetch/safety/min-count); unsafe or unauthorized images must not enter assets"
         for entity_id in failed_image_entities
     )
     if gate_issues:
-        print(f"[download] Gate FAILED ({len(gate_issues)} issue(s)):", file=sys.stderr)
+        print(f"[download] Gate FAILED ({len(gate_issues)} issue(s)):", file=sys.stderr, flush=True)
         for issue in gate_issues:
-            print(f"  - {issue}", file=sys.stderr)
+            print(f"  - {issue}", file=sys.stderr, flush=True)
+        _write_download_progress(
+            task_id,
+            batch_id,
+            status="failed",
+            entity_count=len(entity_ids),
+            sources=len(fetched_sources),
+            message="; ".join(gate_issues[:5]),
+        )
         raise SystemExit(1)
-    print("[download] Gate PASSED")
+    _write_download_progress(
+        task_id,
+        batch_id,
+        status="done",
+        entity_count=len(entity_ids),
+        sources=len(fetched_sources),
+        message="download gate passed",
+    )
+    print("[download] Gate PASSED", flush=True)
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:

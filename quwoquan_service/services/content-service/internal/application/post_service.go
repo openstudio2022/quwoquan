@@ -827,9 +827,11 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 			"author mismatch",
 		)
 	}
+	previousCircleIDs := asStringSlice(post.CircleIds)
 	if err := applyPostSettingsPayload(post, payload); err != nil {
 		return nil, err
 	}
+	addedCircleIDs, removedCircleIDs := diffCircleIDs(previousCircleIDs, asStringSlice(post.CircleIds))
 	now := time.Now().UTC()
 	post.UpdatedAt = now
 	if !s.store.Update(ctx, post.ID, post) {
@@ -848,6 +850,8 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 		"status":             post.Status,
 		"visibility":         post.Visibility,
 		"circleIds":          asStringSlice(post.CircleIds),
+		"addedCircleIds":     addedCircleIDs,
+		"removedCircleIds":   removedCircleIDs,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
@@ -862,6 +866,8 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 		"status":             post.Status,
 		"visibility":         post.Visibility,
 		"circleIds":          asStringSlice(post.CircleIds),
+		"addedCircleIds":     addedCircleIDs,
+		"removedCircleIds":   removedCircleIDs,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
@@ -994,6 +1000,7 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 			"author mismatch",
 		)
 	}
+	statusBeforeDelete := post.Status
 	now := time.Now().UTC()
 	post.Status = "deleted"
 	post.DeletedAt = now
@@ -1015,12 +1022,16 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 		"authorId":        post.AuthorId,
 		"contentType":     post.ContentType,
 		"contentIdentity": post.ContentIdentity,
+		"status":          statusBeforeDelete,
+		"circleIds":       asStringSlice(post.CircleIds),
 		"deletedAt":       post.DeletedAt.Format(time.RFC3339),
 	}, now)
 	s.projectPostEvent(ctx, "PostDeleted", post, map[string]any{
 		"_id":             post.ID,
 		"contentType":     post.ContentType,
 		"contentIdentity": post.ContentIdentity,
+		"status":          statusBeforeDelete,
+		"circleIds":       asStringSlice(post.CircleIds),
 		"deletedAt":       post.DeletedAt.Format(time.RFC3339),
 	}, now)
 	return nil
@@ -1051,6 +1062,7 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	previousCircleIDs := asStringSlice(post.CircleIds)
 	byPost, ok := s.distributions[post.ID]
 	if !ok {
 		byPost = map[string]bool{}
@@ -1071,6 +1083,7 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 		}
 	}
 	post.CircleIds = active
+	addedCircleIDs, removedCircleIDs := diffCircleIDs(previousCircleIDs, active)
 	now := time.Now().UTC()
 	post.UpdatedAt = now
 	_ = s.store.Update(ctx, post.ID, post)
@@ -1083,6 +1096,8 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 		"status":             post.Status,
 		"visibility":         post.Visibility,
 		"circleIds":          asStringSlice(post.CircleIds),
+		"addedCircleIds":     addedCircleIDs,
+		"removedCircleIds":   removedCircleIDs,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
@@ -1097,6 +1112,8 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 		"status":             post.Status,
 		"visibility":         post.Visibility,
 		"circleIds":          asStringSlice(post.CircleIds),
+		"addedCircleIds":     addedCircleIDs,
+		"removedCircleIds":   removedCircleIDs,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
@@ -3338,6 +3355,36 @@ func asStringSlice(v any) []string {
 	default:
 		return nil
 	}
+}
+
+func diffCircleIDs(before []string, after []string) ([]string, []string) {
+	beforeSet := normalizedStringSet(before)
+	afterSet := normalizedStringSet(after)
+	added := make([]string, 0)
+	removed := make([]string, 0)
+	for id := range afterSet {
+		if !beforeSet[id] {
+			added = append(added, id)
+		}
+	}
+	for id := range beforeSet {
+		if !afterSet[id] {
+			removed = append(removed, id)
+		}
+	}
+	sort.Strings(added)
+	sort.Strings(removed)
+	return added, removed
+}
+
+func normalizedStringSet(values []string) map[string]bool {
+	out := make(map[string]bool, len(values))
+	for _, value := range values {
+		if id := strings.TrimSpace(value); id != "" {
+			out[id] = true
+		}
+	}
+	return out
 }
 
 func asMap(v any) map[string]any {

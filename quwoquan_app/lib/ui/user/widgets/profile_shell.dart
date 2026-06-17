@@ -26,9 +26,12 @@ import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_card.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_completeness_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_header.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_stats_row.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_slogan_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
 
 part 'profile_shell_builders.dart';
@@ -339,7 +342,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         ),
         tabBarBuilder: (c, pinned, opacity) => _buildPrimaryTabBarSurface(
           bg: profileSurface,
-          border: border,
           pinned: pinned,
           opacity: opacity,
         ),

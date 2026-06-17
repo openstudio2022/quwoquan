@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "quwoquan_data.generated_cleanup_manifest",
+  "mode": "confirm-required",
+  "preserved": {
+    "publish": "publish tree is not generated cleanup scope",
+    "committedTasks": "committed task specs are not generated cleanup scope",
+    "schema": "schema truth source is not generated cleanup scope",
+    "sop": "SOP truth source is not generated cleanup scope"
+  },
+  "entries": [
+    {
+      "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_data/runtime",
+      "exists": false,
+      "kind": "missing",
+      "reason": "all generated runtime artifacts"
+    }
+  ],
+  "issues": [],
+  "wouldDeleteCount": 0
+}

@@ -219,7 +219,7 @@ def _stage_review(task_id: str, batch_id: str, refs, *, materialize: bool, allow
 
     check_refs = [ref for ref, _ in [*routes, *entities]]
     media_statuses = check_images(task_id, batch_id, check_refs, allow_needs_review=True)
-    media_issues = gate_media_check(task_id, batch_id, allow_needs_review=True)
+    media_issues = gate_media_check(task_id, batch_id, allow_needs_review=True, refs=check_refs)
     if media_statuses:
         passed = sum(1 for row in media_statuses if row["passed"])
         failed = len(media_statuses) - passed
@@ -244,8 +244,8 @@ def _stage_review(task_id: str, batch_id: str, refs, *, materialize: bool, allow
     approved = len(statuses) - len(failed)
     print(f"[produce] review handled {len(statuses)} ref(s); approved={approved} failed={len(failed)}")
     if materialize and approved:
-        paths = materialize_posts(task_id, batch_id, "article")
-        paths += materialize_posts(task_id, batch_id, "image")
+        paths = materialize_posts(task_id, batch_id, "article", refs=check_refs)
+        paths += materialize_posts(task_id, batch_id, "image", refs=check_refs)
         print(f"[produce] Materialized {len(paths)} approved post package(s).")
     if failed:
         for row in failed[:10]:

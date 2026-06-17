@@ -89,6 +89,22 @@ func (s *CachedCircleStore) IncrementMemberCount(ctx context.Context, id string,
 	return err
 }
 
+func (s *CachedCircleStore) IncrementPostCount(ctx context.Context, id string, delta int64) error {
+	err := s.inner.IncrementPostCount(ctx, id, delta)
+	if err == nil {
+		s.invalidate(ctx, id)
+	}
+	return err
+}
+
+func (s *CachedCircleStore) UpdateWeeklyActiveCount(ctx context.Context, id string, count int64) error {
+	err := s.inner.UpdateWeeklyActiveCount(ctx, id, count)
+	if err == nil {
+		s.invalidate(ctx, id)
+	}
+	return err
+}
+
 func (s *CachedCircleStore) UpdateStorageUsed(ctx context.Context, id string, deltaBytes int64) error {
 	err := s.inner.UpdateStorageUsed(ctx, id, deltaBytes)
 	if err == nil {

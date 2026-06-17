@@ -26,7 +26,9 @@ import (
 	httpadapter "quwoquan_service/services/circle-service/internal/adapters/http"
 	"quwoquan_service/services/circle-service/internal/application"
 	"quwoquan_service/services/circle-service/internal/infrastructure/cache"
+	"quwoquan_service/services/circle-service/internal/infrastructure/messaging"
 	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
+	"quwoquan_service/services/circle-service/internal/infrastructure/searchindex"
 )
 
 type redisSceneCfg struct {
@@ -63,6 +65,8 @@ type config struct {
 	Redis struct {
 		General redisSceneCfg `yaml:"general"`
 	} `yaml:"redis"`
+
+	ES searchindex.ESConfig `yaml:"es"`
 }
 
 func main() {
@@ -122,12 +126,33 @@ func main() {
 
 	feedStore := persistence.NewMongoFeedStore(db.Collection("posts"))
 
+	// Assemble the write-time search index. ES endpoints/credentials come from the
+	// shared SEARCH_ES_* env (same cluster/index as search-service); when ES is
+	// disabled Build returns a no-op Built and the circle service runs without a
+	// search publisher, so the primary write path is unaffected. The projector
+	// reads circles back through the same (cached) store the service writes
+	// through, so reconciles see the just-written state.
+	searchindex.ApplyESEnvOverrides(&cfg.ES)
+	searchBuilt, err := searchindex.Build(cfg.ES, store)
+	if err != nil {
+		log.Fatalf("circle-service search index build failed: %v", err)
+	}
+	if err := searchBuilt.EnsureIndex(ctx); err != nil {
+		log.Fatalf("circle-service search index ensure failed: %v", err)
+	}
+
 	// Application services
-	circleService := application.NewCircleService(store, memberStore, fileStore,
+	circleOpts := []application.CircleServiceOption{
 		application.WithFeedStore(feedStore),
 		application.WithGroupStore(groupStore),
-	)
+	}
+	if searchBuilt.Projector != nil {
+		circleOpts = append(circleOpts, application.WithEventPublisher(searchBuilt.Projector))
+	}
+	circleService := application.NewCircleService(store, memberStore, fileStore, circleOpts...)
 	fileService := application.NewFileService(fileStore, store)
+	contentPostConsumer := messaging.NewContentPostConsumer(redisClient, store, nil)
+	go contentPostConsumer.Run(ctx)
 
 	handler := httpadapter.NewCircleHandler(circleService, fileService).Routes()
 
@@ -138,6 +163,9 @@ func main() {
 	healthChecker.Register("redis", func(hctx context.Context) error {
 		return router.PingAll(hctx)
 	})
+	if ping := searchBuilt.HealthPing(); ping != nil {
+		healthChecker.Register("search-es", ping)
+	}
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
 	outerMux.Handle("/metrics", rtmetrics.Handler())

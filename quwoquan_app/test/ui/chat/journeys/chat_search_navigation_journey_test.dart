@@ -136,7 +136,7 @@ void main() {
     await Hive.deleteFromDisk();
   });
 
-  testWidgets('消息页经更多聊天记录进入会话并返回后可再进入另一会话', (tester) async {
+  testWidgets('消息页经聊天记录联想直达会话并返回后可再进入另一会话', (tester) async {
     _suppressNonCriticalFlutterErrors();
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
@@ -155,17 +155,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 220));
     await tester.pumpAndSettle();
 
-    expect(find.text('更多聊天记录'), findsOneWidget);
-
-    final moreChatRecordsButton = find.ancestor(
-      of: find.text('更多聊天记录'),
-      matching: find.byType(CupertinoButton),
-    );
-    await tester.ensureVisible(moreChatRecordsButton);
-    await tester.pumpAndSettle();
-    await tester.tap(moreChatRecordsButton);
-    await tester.pumpAndSettle();
-
+    // 联想区聊天记录已收敛为直达 tile（去除「更多聊天记录」see-more 按钮），
+    // 命中的会话直接点击即可进入对应会话。
     final firstConversation = find.text('周末登山群').first;
     await tester.ensureVisible(firstConversation);
     await tester.pumpAndSettle();
@@ -281,45 +272,6 @@ class _FakeSearchRepository implements SearchRepository {
                 'title': '周末登山群',
                 'memberCount': 15,
                 'lastMessagePreview': '周六早上8点出发',
-              }),
-            ),
-            SearchHit(
-              objectType: SearchObjectType.chatConversation,
-              objectId: 'conv_grid_3',
-              title: '3人测试群',
-              resolvedFrom: SearchResolvedFrom.local,
-              payload: SearchHitPayloadWireMap(<String, dynamic>{
-                'conversationId': 'conv_grid_3',
-                'type': 'group',
-                'title': '3人测试群',
-                'memberCount': 3,
-                'lastMessagePreview': '测试群聊',
-              }),
-            ),
-            SearchHit(
-              objectType: SearchObjectType.chatConversation,
-              objectId: 'conv_grid_4',
-              title: '4人测试群',
-              resolvedFrom: SearchResolvedFrom.local,
-              payload: SearchHitPayloadWireMap(<String, dynamic>{
-                'conversationId': 'conv_grid_4',
-                'type': 'group',
-                'title': '4人测试群',
-                'memberCount': 4,
-                'lastMessagePreview': '测试群聊',
-              }),
-            ),
-            SearchHit(
-              objectType: SearchObjectType.chatConversation,
-              objectId: 'conv_grid_5',
-              title: '5人测试群',
-              resolvedFrom: SearchResolvedFrom.local,
-              payload: SearchHitPayloadWireMap(<String, dynamic>{
-                'conversationId': 'conv_grid_5',
-                'type': 'group',
-                'title': '5人测试群',
-                'memberCount': 5,
-                'lastMessagePreview': '测试群聊',
               }),
             ),
           ],

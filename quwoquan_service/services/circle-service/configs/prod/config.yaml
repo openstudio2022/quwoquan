@@ -8,3 +8,11 @@ service:
 
 mongo:
   database: "quwoquan_circle"
+
+# prod enables the write-time index; endpoints/credentials come from SEARCH_ES_*.
+es:
+  enabled: true
+  endpoints: []
+  index: "quwoquan_objects"
+  shards: 3
+  replicas: 1

@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -143,6 +144,7 @@ type IntersectionService struct {
 	cooldownDays       int
 	maxCandidateWindow int
 	now                func() time.Time
+	metrics            IntersectionMetricsRecorder
 }
 
 // IntersectionServiceOption 配置项。
@@ -175,6 +177,15 @@ func WithIntersectionMaxCandidateWindow(limit int) IntersectionServiceOption {
 	}
 }
 
+// WithIntersectionMetrics 注入业务 SLI 观测 recorder（漏斗/冷却/保鲜/清零）。
+func WithIntersectionMetrics(m IntersectionMetricsRecorder) IntersectionServiceOption {
+	return func(svc *IntersectionService) {
+		if m != nil {
+			svc.metrics = m
+		}
+	}
+}
+
 // NewIntersectionService 构造交集服务。router 为 nil 时退化为无冷却/无水位（仅排序）。
 func NewIntersectionService(router intersectionRedis, opts ...IntersectionServiceOption) *IntersectionService {
 	svc := &IntersectionService{
@@ -183,6 +194,7 @@ func NewIntersectionService(router intersectionRedis, opts ...IntersectionServic
 		cooldownDays:       defaultIntersectionCooldownDays,
 		maxCandidateWindow: defaultIntersectionMaxCandidateWindow,
 		now:                time.Now,
+		metrics:            noopIntersectionMetrics{},
 	}
 	for _, opt := range opts {
 		opt(svc)
@@ -201,6 +213,7 @@ func (s *IntersectionService) ReportExposure(ctx context.Context, userID string,
 	key := cooldownKey(userID)
 	client := s.redis.ForKey(key)
 	expireScore := float64(s.now().Add(time.Duration(s.cooldownDays) * 24 * time.Hour).Unix())
+	written := 0
 	for _, id := range objectIDs {
 		id = strings.TrimSpace(id)
 		if id == "" {
@@ -209,6 +222,10 @@ func (s *IntersectionService) ReportExposure(ctx context.Context, userID string,
 		if err := client.ZAdd(ctx, key, expireScore, id); err != nil {
 			return err
 		}
+		written++
+	}
+	if written > 0 {
+		s.metrics.ObserveExposureReported(written)
 	}
 	return client.Expire(ctx, key, intersectionCooldownTTL)
 }
@@ -247,6 +264,7 @@ func (s *IntersectionService) MarkVisited(ctx context.Context, userID, dimension
 		if err := client.HSet(ctx, key, "wm:"+d, nowUnix); err != nil {
 			return err
 		}
+		s.metrics.ObserveInboxVisit(d)
 	}
 	return client.Expire(ctx, key, watermarkCacheTTL)
 }
@@ -402,17 +420,34 @@ func hydratePointSummary(r IntersectionReasonView) IntersectionReasonView {
 	if r.RankState == "" {
 		r.RankState = "fresh"
 	}
-	return hydrateDisplayLanguage(r)
+	return hydrateExplain(r)
 }
 
-// hydrateDisplayLanguage 云侧统一产出主/副交集结论句与轻重等级（G2：端禁止本地拼装文案）。
-// primaryText 缺省时回退 displayText/label；weightTier 缺省时按 strength + intersectionClass 离散化。
-func hydrateDisplayLanguage(r IntersectionReasonView) IntersectionReasonView {
-	if strings.TrimSpace(r.PrimaryText) == "" {
-		if text := strings.TrimSpace(r.DisplayText); text != "" {
-			r.PrimaryText = text
-		} else if label := strings.TrimSpace(r.Label); label != "" {
-			r.PrimaryText = label
+// hydrateExplain 是云侧交集 Explain 管线（§17.1 主谓宾模板 + §5.4 kind 注册表 + 实例样本）：
+// 由结构化证据点（kind + count + 维度 + 关系态）实例化 primaryText / secondaryText /
+// connectionSummary；affinity 分通道补 confidenceLabel / modelReasonBucket；并按
+// strength + intersectionClass 离散化 weightTier。
+//
+// G2：primaryText 唯一产出归属在此，禁止回退旧 displayText/label 作结论句来源；已预置
+// primaryText（如未来读模型预物化）则尊重不覆盖。kind 未登记且无预置 primaryText 时按
+// §18.1「无 primaryText → 不展示」留空，由候选窗完备性过滤优雅降级（不写死闭集、不造假）。
+func hydrateExplain(r IntersectionReasonView) IntersectionReasonView {
+	anchor, hasAnchor := explainAnchorPoint(r)
+	if strings.TrimSpace(r.PrimaryText) == "" && hasAnchor {
+		r.PrimaryText = explainPrimaryText(r, anchor)
+	}
+	if strings.TrimSpace(r.SecondaryText) == "" {
+		r.SecondaryText = explainSecondaryText(r, anchor)
+	}
+	if strings.TrimSpace(r.ConnectionSummary) == "" {
+		r.ConnectionSummary = explainConnectionSummary(r)
+	}
+	if r.IntersectionClass == "affinity" {
+		if strings.TrimSpace(r.ConfidenceLabel) == "" {
+			r.ConfidenceLabel = affinityConfidenceLabel(r)
+		}
+		if strings.TrimSpace(r.ModelReasonBucket) == "" {
+			r.ModelReasonBucket = affinityModelReasonBucket(r)
 		}
 	}
 	if strings.TrimSpace(r.WeightTier) == "" {
@@ -423,6 +458,171 @@ func hydrateDisplayLanguage(r IntersectionReasonView) IntersectionReasonView {
 		}
 	}
 	return r
+}
+
+// explainAnchorPoint 取结论句锚点：可见点中挖掘强度最高者（§9.8 evidenceKindRank）。
+// hydratePointSummary 已先把 r.IntersectionPoints 收敛为可见点，这里直接择强。
+func explainAnchorPoint(r IntersectionReasonView) (IntersectionPointView, bool) {
+	best := IntersectionPointView{}
+	bestRank := 1 << 30
+	found := false
+	for _, p := range r.IntersectionPoints {
+		if p.Visibility == "hidden" {
+			continue
+		}
+		rank := evidenceKindRank(p.SourceRef, p.PointClass)
+		if !found || rank < bestRank {
+			best = p
+			bestRank = rank
+			found = true
+		}
+	}
+	return best, found
+}
+
+// anchorAggregateCount 取锚点对应的可枚举计数：逐条桥接型（一点一人）用 reason 级
+// SharedCount，聚合型（单点携带计数）用 point.Count。
+func anchorAggregateCount(r IntersectionReasonView, anchor IntersectionPointView) int {
+	switch anchor.SourceRef {
+	case "followeeVisited", "followeeInObject", "followeeViewing":
+		if r.SharedCount > 0 {
+			return r.SharedCount
+		}
+		c := 0
+		for _, p := range r.IntersectionPoints {
+			if p.SourceRef == anchor.SourceRef {
+				c++
+			}
+		}
+		if c > 0 {
+			return c
+		}
+		return 1
+	default:
+		if anchor.Count > 0 {
+			return anchor.Count
+		}
+		return 1
+	}
+}
+
+// explainPrimaryText 按 §17.1「主语[数量+关系限定] + 谓语 + 宾语」实例化事实结论句；
+// affinity 走概率通道分支。kind 取 §5.4 注册表标准名；未登记 kind 返回空（不造假）。
+func explainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) string {
+	if r.IntersectionClass == "affinity" {
+		return affinityPrimaryText(r, anchor)
+	}
+	n := anchorAggregateCount(r, anchor)
+	switch anchor.SourceRef {
+	case "sharedFollowees", "commonFollower":
+		return fmt.Sprintf("你们有%d位共同关注的人", n)
+	case "commonContact":
+		return fmt.Sprintf("你们有%d位共同联系人", n)
+	case "sharedCircle", "coMemberCircle":
+		return fmt.Sprintf("你们共同加入了%d个圈子", n)
+	case "coCommented", "sharedDiscussion":
+		return fmt.Sprintf("你们都讨论过%d篇相同内容", n)
+	case "coSharedContent":
+		return fmt.Sprintf("你们都分享过%d篇相同内容", n)
+	case "coCreatedContent":
+		return "你们都创作过相关内容"
+	case "coVisitedEntity":
+		return fmt.Sprintf("你们都去过%d个相同的地方", n)
+	case "coWishlistedEntity":
+		return fmt.Sprintf("你们都想去%d个相同的地方", n)
+	case "sharedEntityAttention":
+		return fmt.Sprintf("你和%d人共同关注了这里", n)
+	case "followeeVisited":
+		return fmt.Sprintf("%d位你关注的人来过这里", n)
+	case "followeeInObject":
+		return fmt.Sprintf("%d位你关注的人在这里", n)
+	case "followeeViewing":
+		return "你关注的人最近看过这些内容"
+	case "followeeDiscussedThis":
+		return "你关注的人也在讨论这些主题"
+	case "sharedTagSample":
+		if r.Source == "circleTag" {
+			return "你在圈子里常看这些主题"
+		}
+		return "你们都关注这些主题"
+	default:
+		return ""
+	}
+}
+
+// affinityPrimaryText 概率通道结论句（必须配 confidenceLabel 标注「推荐」，§17.5/§3.4）。
+func affinityPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) string {
+	src := strings.ToLower(r.Source)
+	switch {
+	case anchor.SourceRef == "sharedCircle" || strings.Contains(src, "circle"):
+		return "你的圈子里最近在看这些"
+	case anchor.SourceRef == "followeeViewing" || strings.Contains(src, "friend") || strings.Contains(src, "follow"):
+		return "你关注的人最近在看这些"
+	default:
+		return "为你推荐的相关内容"
+	}
+}
+
+// affinityConfidenceLabel 概率通道置信标注（端只对 affinity 展示「推荐」语义）。
+func affinityConfidenceLabel(r IntersectionReasonView) string {
+	switch r.Dimension {
+	case "relationship", "identity":
+		return "推荐认识"
+	default:
+		return "可能感兴趣"
+	}
+}
+
+// affinityModelReasonBucket 概率通道模型理由桶（埋点/灰度用，端不展示原文）。
+func affinityModelReasonBucket(r IntersectionReasonView) string {
+	src := strings.TrimSpace(r.Source)
+	if src == "" {
+		src = strings.TrimSpace(r.Dimension)
+	}
+	if src == "" {
+		src = "general"
+	}
+	return "affinity:" + src
+}
+
+// explainSecondaryText 列表入口灰色辅助说明（§17.2，≤2 项）：罗列锚点之外的其它
+// 维度证据组名词，跨 kind 取样（同 kind 兄弟点不重复罗列）。紧凑 surface 不展示。
+func explainSecondaryText(r IntersectionReasonView, anchor IntersectionPointView) string {
+	parts := make([]string, 0, 2)
+	for _, p := range r.IntersectionPoints {
+		if p.PointID == anchor.PointID || p.SourceRef == anchor.SourceRef {
+			continue
+		}
+		label := strings.TrimSpace(p.Label)
+		if label == "" {
+			label = strings.TrimSpace(p.DisplayText)
+		}
+		if label == "" {
+			continue
+		}
+		if p.Count > 1 {
+			parts = append(parts, fmt.Sprintf("%s %d", label, p.Count))
+		} else {
+			parts = append(parts, label)
+		}
+		if len(parts) >= 2 {
+			break
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
+// explainConnectionSummary 对象页「连接说明」（仅 viewer↔对象关系类 reason、且共同点≥2 时产出）。
+func explainConnectionSummary(r IntersectionReasonView) string {
+	switch r.RelationKind {
+	case "mutual", "following", "followed_by", "none":
+	default:
+		return ""
+	}
+	if r.TotalPointCount < 2 {
+		return ""
+	}
+	return fmt.Sprintf("你们已有%d个共同点", r.TotalPointCount)
 }
 
 // Summary 我的主页聚合摘要：各维度计数 + 自上次查看未读数。
@@ -443,6 +643,7 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 	for _, raw := range reasons {
 		r := hydratePointSummary(raw)
 		if !s.isFresh(r) {
+			s.metrics.ObserveInboxFiltered("stale")
 			continue
 		}
 		for _, point := range r.IntersectionPoints {
@@ -502,6 +703,7 @@ func (s *IntersectionService) List(ctx context.Context, userID, dimension string
 			continue
 		}
 		if !s.isFresh(r) {
+			s.metrics.ObserveInboxFiltered("stale")
 			continue
 		}
 		filtered = append(filtered, r)
@@ -532,15 +734,21 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 	}
 	seen := s.seenKeys(ctx, userID)
 	now := s.now().UTC().Format(time.RFC3339)
+	metricChannel := channel
+	if strings.TrimSpace(metricChannel) == "" {
+		metricChannel = "default"
+	}
 	merged := make([]IntersectionReasonView, 0, len(facts)+len(affinities))
 	for _, r := range append(facts, affinities...) {
 		if !s.isFresh(r) {
+			s.metrics.ObserveFeedFiltered(metricChannel, "stale")
 			continue
 		}
 		r = hydratePointSummary(r)
 		// T3 空窗治理：展示语言不完备的 reason 不进 spotlight 候选窗
 		// （primaryText 必备；人级 reason 必须有头像，物级由对象头图承载）。
 		if !isSpotlightDisplayComplete(r) {
+			s.metrics.ObserveFeedFiltered(metricChannel, "display_incomplete")
 			continue
 		}
 		r.LastRecommendedAt = now
@@ -548,6 +756,11 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 			r.RankState = "seen"
 			r.SeenAt = now
 		}
+		class := "fact"
+		if r.IntersectionClass == "affinity" {
+			class = "affinity"
+		}
+		s.metrics.ObserveFeedCandidate(metricChannel, class, r.RankState)
 		merged = append(merged, r)
 	}
 	sort.SliceStable(merged, func(i, j int) bool {

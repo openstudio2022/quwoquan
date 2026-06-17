@@ -8,7 +8,8 @@ class AuthorImpactItem {
   final String tagRef;
   final String source;
   final int count;
-  final String displayText;
+  final String primaryText;
+  final String subtitleText;
 
   AuthorImpactItem({
     this.helpType = '',
@@ -17,7 +18,8 @@ class AuthorImpactItem {
     this.tagRef = '',
     this.source = '',
     this.count = 0,
-    this.displayText = '',
+    this.primaryText = '',
+    this.subtitleText = '',
   });
 
   factory AuthorImpactItem.fromMap(Map<String, dynamic> m) {
@@ -28,7 +30,8 @@ class AuthorImpactItem {
       tagRef: m['tagRef']?.toString() ?? '',
       source: m['source']?.toString() ?? '',
       count: (m['count'] as num?)?.toInt() ?? 0,
-      displayText: m['displayText']?.toString() ?? '',
+      primaryText: m['primaryText']?.toString() ?? '',
+      subtitleText: m['subtitleText']?.toString() ?? '',
     );
   }
 
@@ -40,7 +43,8 @@ class AuthorImpactItem {
       'tagRef': tagRef,
       'source': source,
       'count': count,
-      'displayText': displayText,
+      'primaryText': primaryText,
+      'subtitleText': subtitleText,
     };
   }
 
@@ -51,7 +55,8 @@ class AuthorImpactItem {
     String? tagRef,
     String? source,
     int? count,
-    String? displayText,
+    String? primaryText,
+    String? subtitleText,
   }) {
     return AuthorImpactItem(
       helpType: helpType ?? this.helpType,
@@ -60,7 +65,8 @@ class AuthorImpactItem {
       tagRef: tagRef ?? this.tagRef,
       source: source ?? this.source,
       count: count ?? this.count,
-      displayText: displayText ?? this.displayText,
+      primaryText: primaryText ?? this.primaryText,
+      subtitleText: subtitleText ?? this.subtitleText,
     );
   }
 }

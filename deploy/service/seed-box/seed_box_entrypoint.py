@@ -24,6 +24,16 @@ CHAT_MEDIA_ROOT = Path(
     os.getenv("CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT", "/tmp/chat-media")
 ).resolve()
 USER_CIRCLE_PATH = re.compile(r"^/v1/users/[^/]+/circles(?:/|$)")
+# search domain 在 process_domain_mapping 中始终是独立部署进程（search-service），
+# seed-box 不在本进程内运行 search domain，只按 service.yaml 的 proxy_search 能力把
+# /v1/search* 透传到外部 search-service 上游。上游地址可经环境变量覆盖以适配不同拓扑。
+SEARCH_UPSTREAM_HOST = (
+    os.getenv("SEED_BOX_SEARCH_UPSTREAM_HOST", "search-service").strip()
+    or "search-service"
+)
+SEARCH_UPSTREAM_PORT = int(
+    os.getenv("SEED_BOX_SEARCH_UPSTREAM_PORT", "18095").strip() or "18095"
+)
 HOP_BY_HOP_HEADERS = {
     "connection",
     "keep-alive",
@@ -435,6 +445,9 @@ class SeedBoxHandler(BaseHTTPRequestHandler):
         if parsed.path in {"/healthz", "/livez", "/startupz"}:
             self._write_health()
             return
+        if parsed.path.startswith("/v1/search"):
+            self._proxy(SEARCH_UPSTREAM_HOST, SEARCH_UPSTREAM_PORT)
+            return
         target_name = REGISTRY.service_for_path(parsed.path)
         if target_name is None:
             self._write_json(404, {"error": "route_not_found", "path": parsed.path})
@@ -451,13 +464,13 @@ class SeedBoxHandler(BaseHTTPRequestHandler):
                 },
             )
             return
-        self._proxy(service.spec.port)
+        self._proxy("127.0.0.1", service.spec.port)
 
     def _write_health(self) -> None:
         status_code, payload = REGISTRY.health_payload()
         self._write_json(status_code, payload)
 
-    def _proxy(self, port: int) -> None:
+    def _proxy(self, host: str, port: int) -> None:
         content_length = int(self.headers.get("Content-Length", "0") or "0")
         body = self.rfile.read(content_length) if content_length > 0 else None
         headers = {
@@ -465,9 +478,9 @@ class SeedBoxHandler(BaseHTTPRequestHandler):
             for key, value in self.headers.items()
             if key.lower() not in HOP_BY_HOP_HEADERS and key.lower() != "host"
         }
-        headers["Host"] = f"127.0.0.1:{port}"
+        headers["Host"] = f"{host}:{port}"
         path = self.path
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+        conn = http.client.HTTPConnection(host, port, timeout=30)
         try:
             conn.request(self.command, path, body=body, headers=headers)
             response = conn.getresponse()
@@ -478,6 +491,7 @@ class SeedBoxHandler(BaseHTTPRequestHandler):
                 {
                     "error": "proxy_failed",
                     "detail": str(exc),
+                    "upstreamHost": host,
                     "upstreamPort": port,
                 },
             )

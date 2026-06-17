@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -12,6 +13,7 @@ import (
 type RedisClient interface {
 	Get(ctx context.Context, key string) (string, error)
 	Set(ctx context.Context, key string, value string, ttl time.Duration) error
+	SetNX(ctx context.Context, key string, value string, ttl time.Duration) (bool, error)
 	Del(ctx context.Context, keys ...string) error
 	SAdd(ctx context.Context, key string, members ...string) error
 	SMembers(ctx context.Context, key string) ([]string, error)
@@ -23,8 +25,8 @@ type RedisClient interface {
 
 // RedisPipeliner is optionally implemented by RedisClient adapters that
 // support pipelining multiple reads into a single RTT.
-// When HotPath detects this interface, GetSessionState sends all 3 reads
-// (HGetAll + 2× SMembers) in one pipeline instead of 3 parallel goroutines.
+// When HotPath detects this interface, GetSessionState sends all session and
+// cross-session reads in one pipeline instead of parallel goroutines.
 type RedisPipeliner interface {
 	PipelineRead(ctx context.Context, ops []PipelineOp) error
 }
@@ -59,6 +61,26 @@ type SignalProcessor interface {
 	ProcessSignalBatch(ctx context.Context, signals []BehaviorSignal) error
 }
 
+// ExposureMemory writes authoritative exposure states.
+// served is cloud authoritative and write-behind; impressed/negative come from
+// client feedback ingestion. Implementations must use per-candidate point
+// membership for reads, never long-window SMembers on request path.
+type ExposureMemory interface {
+	RecordServed(ctx context.Context, userID string, items []FeedItem, at time.Time) error
+	RecordImpressed(ctx context.Context, userID, contentID string, at time.Time) error
+	RecordNegative(ctx context.Context, userID, contentID string) error
+}
+
+// ExposureFilter filters candidates by served/impressed/negative memory.
+type ExposureFilter interface {
+	FilterCandidates(ctx context.Context, userID string, candidates []ContentCandidate, at time.Time) ([]ContentCandidate, error)
+}
+
+// FeedbackIngestor provides cloud-side idempotency for client behavior events.
+type FeedbackIngestor interface {
+	AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error)
+}
+
 // Key patterns aligned with contracts/metadata/_shared/redis_keyspace.yaml.
 //
 // Redis Cluster hash-tag convention: {userId} is wrapped in braces so that all
@@ -67,24 +89,38 @@ type SignalProcessor interface {
 //
 // Actual key format (cluster-safe):
 //
-//	rec:session_signals:{<userId>}:<sessionId>  → hash   TTL 1800s
-//	rec:exposed:{<userId>}:<sessionId>          → set    TTL 1800s
-//	rec:negative:{<userId>}:<sessionId>         → set    TTL 86400s
-//	rec:realtime_interest:{<userId>}:<sessionId>→ string TTL 1800s
+//	rec:session_signals:{<userId>}:<sessionId>   → hash   TTL 1800s
+//	rec:served:{<userId>}:<yyyyMMdd>             → set    TTL 172800s
+//	rec:impressed:{<userId>}:<yyyyMMdd>          → set    TTL 604800s
+//	rec:negative:{<userId>}                      → set    TTL 604800s
+//	rec:hidden_authors:{<userId>}                → set    TTL 604800s
+//	rec:hidden_types:{<userId>}                  → set    TTL 604800s
+//	rec:event_dedup:{<userId>}:<clientEventId>   → string TTL 86400s
+//	rec:realtime_interest:{<userId>}:<sessionId> → string TTL 1800s
 //
 // In standalone mode Redis ignores the braces and treats the key verbatim.
 const (
-	sessionTTL  = 30 * time.Minute
-	negativeTTL = 24 * time.Hour
+	sessionTTL       = 30 * time.Minute
+	servedTTL        = 48 * time.Hour
+	impressedTTL     = 7 * 24 * time.Hour
+	negativeTTL      = 7 * 24 * time.Hour
+	hiddenTTL        = 7 * 24 * time.Hour
+	clientEventIDTTL = 24 * time.Hour
 
-	signalKeyPrefix   = "rec:session_signals:"
-	exposedKeyPrefix  = "rec:exposed:"
-	negativeKeyPrefix = "rec:negative:"
-	interestKeyPrefix = "rec:realtime_interest:"
+	signalKeyPrefix        = "rec:session_signals:"
+	servedKeyPrefix        = "rec:served:"
+	impressedKeyPrefix     = "rec:impressed:"
+	negativeKeyPrefix      = "rec:negative:"
+	hiddenAuthorsKeyPrefix = "rec:hidden_authors:"
+	hiddenTypesKeyPrefix   = "rec:hidden_types:"
+	eventDedupKeyPrefix    = "rec:event_dedup:"
+	interestKeyPrefix      = "rec:realtime_interest:"
 )
 
 // BehaviorSignal represents a user behavior event for hot path processing.
 type BehaviorSignal struct {
+	ClientEventID   string    `json:"clientEventId,omitempty"`
+	State           string    `json:"state,omitempty"`
 	UserID          string    `json:"userId"`
 	DeviceActorID   string    `json:"deviceActorId,omitempty"`
 	SessionID       string    `json:"sessionId"`
@@ -123,21 +159,23 @@ func (s BehaviorSignal) EffectiveSessionID() string {
 // base tag-weight contribution, aligned with behaviors.yaml signal_weight.
 // An action absent from this map is rejected by BehaviorService.ProcessBatch.
 var SignalWeights = map[string]float64{
-	"impression":       0.1,
-	"click":            0.5,
-	"dwell":            1.0,
-	"like":             2.0,
-	"share":            3.0,
-	"dislike":          -5.0,
-	"report":           -10.0,
-	"skip":             -0.3,
-	"comment":          2.5,
-	"follow":           4.0,
-	"author_view":      1.5,
-	"entity_page_view": 1.2,
-	"tag_click":        1.8,
-	"play_progress":    1.0,
-	"content_depth":    1.0,
+	"impression":        0.1,
+	"click":             0.5,
+	"dwell":             1.0,
+	"like":              2.0,
+	"share":             3.0,
+	"dislike":           -5.0,
+	"hide_author":       -5.0,
+	"hide_content_type": -4.0,
+	"report":            -10.0,
+	"skip":              -0.3,
+	"comment":           2.5,
+	"follow":            4.0,
+	"author_view":       1.5,
+	"entity_page_view":  1.2,
+	"tag_click":         1.8,
+	"play_progress":     1.0,
+	"content_depth":     1.0,
 	// 交集转化三类行动（S6）：关注人 follow / 进圈子 join_circle / 加联系人 add_contact。
 	"join_circle": 4.0,
 	"add_contact": 4.5,
@@ -173,8 +211,8 @@ func NewHotPath(redis RedisClient) *HotPath {
 // sessionKey builds a Redis key suffix with a cluster hash tag on userId.
 // Format: {<userId>}:<sessionId>
 //
-// The hash tag {userId} ensures that rec:session_signals, rec:exposed, and
-// rec:negative keys for the same user always map to the same Redis Cluster slot,
+// The hash tag {userId} ensures rec session/exposure keys for the same user
+// always map to the same Redis Cluster slot,
 // making pipeline reads and multi-key operations safe in cluster mode.
 // Standalone Redis ignores the braces — behaviour is identical.
 func sessionKey(userID, sessionID string) string {
@@ -184,18 +222,50 @@ func sessionKey(userID, sessionID string) string {
 	return "{" + userID + "}:" + sessionID
 }
 
+func userDayKey(userID string, at time.Time) string {
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	return userHashKey(userID) + ":" + at.UTC().Format("20060102")
+}
+
+func userScopedKey(userID string) string {
+	return userHashKey(userID)
+}
+
+func eventDedupKey(userID, clientEventID string) string {
+	return eventDedupKeyPrefix + userHashKey(userID) + ":" + clientEventID
+}
+
 // ProcessSignal updates session-level state from a behavior signal.
 // Tag weight is computed as: baseWeight × depthCoefficient × referralMultiplier
 func (h *HotPath) ProcessSignal(ctx context.Context, signal BehaviorSignal) error {
 	sk := sessionKey(signal.UserID, signal.EffectiveSessionID())
 
-	if err := h.addExposed(ctx, sk, signal.ContentID); err != nil {
-		return err
+	switch normalizeFeedbackState(signal) {
+	case "impressed":
+		if err := h.RecordImpressed(ctx, signal.UserID, signal.ContentID, signal.Timestamp); err != nil {
+			return err
+		}
+	case "negative":
+		if err := h.RecordNegative(ctx, signal.UserID, signal.ContentID); err != nil {
+			return err
+		}
 	}
 
 	baseWeight := SignalWeights[signal.Action]
 	if baseWeight < 0 {
-		if err := h.addNegative(ctx, sk, signal.ContentID); err != nil {
+		if err := h.RecordNegative(ctx, signal.UserID, signal.ContentID); err != nil {
+			return err
+		}
+	}
+	if signal.Action == "hide_author" && signal.AuthorID != "" {
+		if err := h.addHiddenAuthor(ctx, signal.UserID, signal.AuthorID); err != nil {
+			return err
+		}
+	}
+	if signal.Action == "hide_content_type" && signal.ContentType != "" {
+		if err := h.addHiddenType(ctx, signal.UserID, signal.ContentType); err != nil {
 			return err
 		}
 	}
@@ -209,6 +279,24 @@ func (h *HotPath) ProcessSignal(ctx context.Context, signal BehaviorSignal) erro
 	}
 
 	return h.updateInterest(ctx, sk, signal)
+}
+
+func normalizeFeedbackState(signal BehaviorSignal) string {
+	if state := strings.TrimSpace(strings.ToLower(signal.State)); state != "" {
+		return state
+	}
+	switch strings.TrimSpace(strings.ToLower(signal.Action)) {
+	case "impression":
+		return "impressed"
+	case "dwell":
+		return "dwell"
+	case "dislike", "hide_author", "hide_content_type", "report":
+		return "negative"
+	case "click", "like", "share", "comment", "follow", "join_circle", "add_contact", "author_view", "entity_page_view", "tag_click", "play_progress", "content_depth":
+		return "interaction"
+	default:
+		return ""
+	}
 }
 
 // computeEffectiveTagWeight applies depth and referral source multipliers.
@@ -292,12 +380,15 @@ func (h *HotPath) GetSessionState(ctx context.Context, userID, sessionID string)
 	return h.getSessionStateParallel(ctx, sk, userID, sessionID)
 }
 
-// getSessionStatePipeline sends HGetAll + 2× SMembers in a single RTT.
+// getSessionStatePipeline sends HGetAll + small user-level SMembers in a single RTT.
+// served/impressed/negative are intentionally not returned here: filtering uses
+// candidate membership point lookups through ExposureFilter to avoid long-window
+// SMembers payloads on the feed request path.
 func (h *HotPath) getSessionStatePipeline(ctx context.Context, p RedisPipeliner, sk, userID, sessionID string) (*SessionState, error) {
 	ops := []PipelineOp{
 		{Type: PipelineHGetAll, Key: signalKeyPrefix + sk},
-		{Type: PipelineSMembers, Key: exposedKeyPrefix + sk},
-		{Type: PipelineSMembers, Key: negativeKeyPrefix + sk},
+		{Type: PipelineSMembers, Key: hiddenAuthorsKeyPrefix + userHashKey(userID)},
+		{Type: PipelineSMembers, Key: hiddenTypesKeyPrefix + userHashKey(userID)},
 	}
 	if err := p.PipelineRead(ctx, ops); err != nil {
 		return nil, err
@@ -311,23 +402,25 @@ func (h *HotPath) getSessionStatePipeline(ctx context.Context, p RedisPipeliner,
 	}
 
 	return &SessionState{
-		UserID:      userID,
-		SessionID:   sessionID,
-		TagWeights:  tagWeights,
-		ExposedIDs:  ops[1].Set,
-		NegativeIDs: ops[2].Set,
+		UserID:             userID,
+		SessionID:          sessionID,
+		TagWeights:         tagWeights,
+		ExposedIDs:         nil,
+		NegativeIDs:        nil,
+		HiddenAuthorIDs:    ops[1].Set,
+		HiddenContentTypes: ops[2].Set,
 	}, nil
 }
 
-// getSessionStateParallel reads 3 Redis keys via parallel goroutines (fallback).
+// getSessionStateParallel reads tag weights and small user-level hidden sets.
 func (h *HotPath) getSessionStateParallel(ctx context.Context, sk, userID, sessionID string) (*SessionState, error) {
 	var (
-		tagWeights  map[string]float64
-		exposed     []string
-		negative    []string
-		tagErr      error
-		exposedErr  error
-		negativeErr error
+		tagWeights       map[string]float64
+		hiddenAuthors    []string
+		hiddenTypes      []string
+		tagErr           error
+		hiddenAuthorsErr error
+		hiddenTypesErr   error
 	)
 
 	var wg sync.WaitGroup
@@ -339,11 +432,11 @@ func (h *HotPath) getSessionStateParallel(ctx context.Context, sk, userID, sessi
 	}()
 	go func() {
 		defer wg.Done()
-		exposed, exposedErr = h.getExposedSet(ctx, sk)
+		hiddenAuthors, hiddenAuthorsErr = h.getHiddenAuthors(ctx, userID)
 	}()
 	go func() {
 		defer wg.Done()
-		negative, negativeErr = h.getNegativeSet(ctx, sk)
+		hiddenTypes, hiddenTypesErr = h.getHiddenTypes(ctx, userID)
 	}()
 
 	wg.Wait()
@@ -351,51 +444,174 @@ func (h *HotPath) getSessionStateParallel(ctx context.Context, sk, userID, sessi
 	if tagErr != nil {
 		return nil, tagErr
 	}
-	if exposedErr != nil {
-		return nil, exposedErr
+	if hiddenAuthorsErr != nil {
+		return nil, hiddenAuthorsErr
 	}
-	if negativeErr != nil {
-		return nil, negativeErr
+	if hiddenTypesErr != nil {
+		return nil, hiddenTypesErr
 	}
 
 	return &SessionState{
-		UserID:      userID,
-		SessionID:   sessionID,
-		TagWeights:  tagWeights,
-		ExposedIDs:  exposed,
-		NegativeIDs: negative,
+		UserID:             userID,
+		SessionID:          sessionID,
+		TagWeights:         tagWeights,
+		ExposedIDs:         nil,
+		NegativeIDs:        nil,
+		HiddenAuthorIDs:    hiddenAuthors,
+		HiddenContentTypes: hiddenTypes,
 	}, nil
 }
 
-// IsExposed checks if a content ID has already been shown in this session.
+// IsExposed checks if a content ID was served in the current day bucket.
 func (h *HotPath) IsExposed(ctx context.Context, userID, sessionID, contentID string) (bool, error) {
-	sk := sessionKey(userID, sessionID)
-	return h.redis.SIsMember(ctx, exposedKeyPrefix+sk, contentID)
+	return h.redis.SIsMember(ctx, servedKeyPrefix+userDayKey(userID, time.Now().UTC()), contentID)
 }
 
 // SessionState holds the real-time session context for recommendations.
 type SessionState struct {
-	UserID      string             `json:"userId"`
-	SessionID   string             `json:"sessionId"`
-	TagWeights  map[string]float64 `json:"tagWeights"`
-	ExposedIDs  []string           `json:"exposedIds"`
-	NegativeIDs []string           `json:"negativeIds"`
+	UserID             string             `json:"userId"`
+	SessionID          string             `json:"sessionId"`
+	TagWeights         map[string]float64 `json:"tagWeights"`
+	ExposedIDs         []string           `json:"exposedIds"`
+	NegativeIDs        []string           `json:"negativeIds"`
+	HiddenAuthorIDs    []string           `json:"hiddenAuthorIds"`
+	HiddenContentTypes []string           `json:"hiddenContentTypes"`
 }
 
-func (h *HotPath) addExposed(ctx context.Context, sk, contentID string) error {
-	key := exposedKeyPrefix + sk
+func (h *HotPath) RecordServed(ctx context.Context, userID string, items []FeedItem, at time.Time) error {
+	if len(items) == 0 || strings.TrimSpace(userID) == "" {
+		return nil
+	}
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		if id := strings.TrimSpace(item.ContentID); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	key := servedKeyPrefix + userDayKey(userID, at)
+	if err := h.redis.SAdd(ctx, key, ids...); err != nil {
+		return err
+	}
+	return h.redis.Expire(ctx, key, servedTTL)
+}
+
+func (h *HotPath) RecordImpressed(ctx context.Context, userID, contentID string, at time.Time) error {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(contentID) == "" {
+		return nil
+	}
+	key := impressedKeyPrefix + userDayKey(userID, at)
 	if err := h.redis.SAdd(ctx, key, contentID); err != nil {
 		return err
 	}
-	return h.redis.Expire(ctx, key, sessionTTL)
+	return h.redis.Expire(ctx, key, impressedTTL)
 }
 
-func (h *HotPath) addNegative(ctx context.Context, sk, contentID string) error {
-	key := negativeKeyPrefix + sk
+func (h *HotPath) RecordNegative(ctx context.Context, userID, contentID string) error {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(contentID) == "" {
+		return nil
+	}
+	key := negativeKeyPrefix + userScopedKey(userID)
 	if err := h.redis.SAdd(ctx, key, contentID); err != nil {
 		return err
 	}
 	return h.redis.Expire(ctx, key, negativeTTL)
+}
+
+func (h *HotPath) AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error) {
+	clientEventID := strings.TrimSpace(signal.ClientEventID)
+	if clientEventID == "" {
+		return true, nil
+	}
+	userID := strings.TrimSpace(signal.UserID)
+	if userID == "" {
+		userID = "anonymous"
+	}
+	return h.redis.SetNX(ctx, eventDedupKey(userID, clientEventID), "1", clientEventIDTTL)
+}
+
+func (h *HotPath) FilterCandidates(ctx context.Context, userID string, candidates []ContentCandidate, at time.Time) ([]ContentCandidate, error) {
+	if len(candidates) == 0 || strings.TrimSpace(userID) == "" {
+		return candidates, nil
+	}
+	filtered := make([]ContentCandidate, 0, len(candidates))
+	servedDays := dayKeys(userID, at, int(servedTTL/(24*time.Hour)))
+	impressedDays := dayKeys(userID, at, int(impressedTTL/(24*time.Hour)))
+	negativeKey := negativeKeyPrefix + userScopedKey(userID)
+	for _, c := range candidates {
+		contentID := strings.TrimSpace(c.ContentID)
+		if contentID == "" {
+			continue
+		}
+		blocked, err := h.redis.SIsMember(ctx, negativeKey, contentID)
+		if err != nil {
+			return nil, err
+		}
+		if blocked {
+			continue
+		}
+		if served, err := h.memberOfAny(ctx, servedKeyPrefix, servedDays, contentID); err != nil {
+			return nil, err
+		} else if served {
+			continue
+		}
+		if impressed, err := h.memberOfAny(ctx, impressedKeyPrefix, impressedDays, contentID); err != nil {
+			return nil, err
+		} else if impressed {
+			continue
+		}
+		filtered = append(filtered, c)
+	}
+	return filtered, nil
+}
+
+func (h *HotPath) memberOfAny(ctx context.Context, prefix string, dayKeys []string, contentID string) (bool, error) {
+	for _, keySuffix := range dayKeys {
+		ok, err := h.redis.SIsMember(ctx, prefix+keySuffix, contentID)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func dayKeys(userID string, at time.Time, days int) []string {
+	if days <= 0 {
+		days = 1
+	}
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	out := make([]string, 0, days)
+	for i := 0; i < days; i++ {
+		out = append(out, userDayKey(userID, at.AddDate(0, 0, -i)))
+	}
+	return out
+}
+
+func userHashKey(userID string) string {
+	return "{" + userID + "}"
+}
+
+func (h *HotPath) addHiddenAuthor(ctx context.Context, userID, authorID string) error {
+	key := hiddenAuthorsKeyPrefix + userHashKey(userID)
+	if err := h.redis.SAdd(ctx, key, authorID); err != nil {
+		return err
+	}
+	return h.redis.Expire(ctx, key, hiddenTTL)
+}
+
+func (h *HotPath) addHiddenType(ctx context.Context, userID, contentType string) error {
+	key := hiddenTypesKeyPrefix + userHashKey(userID)
+	if err := h.redis.SAdd(ctx, key, contentType); err != nil {
+		return err
+	}
+	return h.redis.Expire(ctx, key, hiddenTTL)
 }
 
 func (h *HotPath) updateTagWeights(ctx context.Context, sk string, tags []string, weight float64) error {
@@ -429,10 +645,10 @@ func (h *HotPath) getTagWeights(ctx context.Context, sk string) (map[string]floa
 	return weights, nil
 }
 
-func (h *HotPath) getExposedSet(ctx context.Context, sk string) ([]string, error) {
-	return h.redis.SMembers(ctx, exposedKeyPrefix+sk)
+func (h *HotPath) getHiddenAuthors(ctx context.Context, userID string) ([]string, error) {
+	return h.redis.SMembers(ctx, hiddenAuthorsKeyPrefix+userHashKey(userID))
 }
 
-func (h *HotPath) getNegativeSet(ctx context.Context, sk string) ([]string, error) {
-	return h.redis.SMembers(ctx, negativeKeyPrefix+sk)
+func (h *HotPath) getHiddenTypes(ctx context.Context, userID string) ([]string, error) {
+	return h.redis.SMembers(ctx, hiddenTypesKeyPrefix+userHashKey(userID))
 }

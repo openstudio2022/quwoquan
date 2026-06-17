@@ -32,7 +32,6 @@ ObjectPageBundle _objectPageBundleFromHomepage(
       'highlightCount': highlights.length,
     },
     intersectionReasons: _mockIntersectionReasons(homepage, relationEdges),
-    intersections: _mockObjectIntersections(homepage, relationEdges),
     highlightItems: highlights,
     contentSections: <String, dynamic>{
       'home': highlights.map((item) => item.toMap()).toList(growable: false),
@@ -129,10 +128,9 @@ List<IntersectionReason> _mockIntersectionReasons(
         tagRefs: homepage.categoryTags,
         relationKind: 'mutual',
         relationObjectId: homepage.id,
-        label: interestLabel,
-        sharedCount: homepage.categoryTags.length,
+        totalPointCount: homepage.categoryTags.length,
         strength: 0.86,
-        displayText: interestLabel,
+        primaryText: interestLabel,
         actionType: 'view_object',
         actionTargetId: homepage.id,
         source: 'tagRef',
@@ -145,10 +143,9 @@ List<IntersectionReason> _mockIntersectionReasons(
         tagRefs: homepage.categoryTags,
         relationKind: 'mutual',
         relationObjectId: firstEdge?.sourceObjectId ?? '',
-        label: '相关圈子',
-        sharedCount: relationEdges.length,
+        totalPointCount: relationEdges.length,
         strength: 0.78,
-        displayText: '相关圈子',
+        primaryText: '相关圈子',
         actionType: 'join',
         actionTargetId: firstEdge?.sourceObjectId ?? '',
         source: 'followEdge',
@@ -166,10 +163,10 @@ IntersectionReason _mockReasonWithPoint(
     pointId: '${reason.actionTargetId}_${reason.dimension}',
     pointClass: pointClass,
     dimension: reason.dimension,
-    label: reason.label,
-    displayText: reason.displayText,
+    label: reason.primaryText,
+    displayText: reason.primaryText,
     sourceRef: reason.source,
-    count: reason.sharedCount,
+    count: reason.totalPointCount,
     sampleText: reason.displayName,
     sampleAvatarUrls: reason.avatarUrl.trim().isNotEmpty
         ? <String>[reason.avatarUrl.trim()]
@@ -186,7 +183,7 @@ IntersectionReason _mockReasonWithPoint(
     dimensionPointSummary: <IntersectionDimensionTally>[
       IntersectionDimensionTally(
         dimension: reason.dimension,
-        label: reason.label,
+        label: reason.primaryText,
         count: 1,
       ),
     ],
@@ -194,75 +191,6 @@ IntersectionReason _mockReasonWithPoint(
     recommendationTraceId: reason.actionTargetId,
     rankState: 'fresh',
   );
-}
-
-List<ObjectIntersection> _mockObjectIntersections(
-  HomepageDetail homepage,
-  List<ObjectRelationEdge> relationEdges,
-) {
-  final firstEdge = relationEdges.isNotEmpty ? relationEdges.first : null;
-  final tagLabel = homepage.categoryTags.isNotEmpty
-      ? homepage.categoryTags.first
-      : homepage.title;
-  return <ObjectIntersection>[
-    ObjectIntersection(
-      intersectionId: '${homepage.id}_fact_interest',
-      dimension: 'interest',
-      objectKind: 'homepage',
-      objectId: homepage.id,
-      shortLabel: '共同关注',
-      evidenceLabel: tagLabel,
-      actionType: 'view_object',
-      actionLabel: '查看',
-      strength: 0.86,
-      confidenceLabel: '公开资料',
-      surfaceScope: 'objectPage',
-      privacyLevel: 'public',
-      tagRefs: homepage.categoryTags,
-      relationEdgeIds: firstEdge == null
-          ? const <String>[]
-          : <String>[firstEdge.edgeId],
-      evidenceItems: <ObjectIntersectionEvidence>[
-        ObjectIntersectionEvidence(
-          evidenceId: '${homepage.id}_tag_evidence',
-          evidenceType: 'tag',
-          evidenceObjectId: tagLabel,
-          evidenceLabel: tagLabel,
-          source: 'tagRef',
-          referralTarget: homepage.id,
-          visibility: 'public',
-        ),
-      ],
-    ),
-    if (firstEdge != null)
-      ObjectIntersection(
-        intersectionId: '${homepage.id}_fact_circle',
-        dimension: 'relationship',
-        objectKind: 'circle',
-        objectId: firstEdge.sourceObjectId,
-        shortLabel: '相关圈子',
-        evidenceLabel: firstEdge.sourceObjectId,
-        actionType: 'join',
-        actionLabel: '加入',
-        strength: firstEdge.confidence,
-        confidenceLabel: '公开关系',
-        surfaceScope: 'objectPage',
-        privacyLevel: 'public',
-        tagRefs: firstEdge.tagRefs,
-        relationEdgeIds: <String>[firstEdge.edgeId],
-        evidenceItems: <ObjectIntersectionEvidence>[
-          ObjectIntersectionEvidence(
-            evidenceId: '${firstEdge.edgeId}_evidence',
-            evidenceType: 'relationEdge',
-            evidenceObjectId: firstEdge.sourceObjectId,
-            evidenceLabel: '圈子关联到该对象',
-            source: 'relationEdge',
-            referralTarget: firstEdge.sourceObjectId,
-            visibility: 'public',
-          ),
-        ],
-      ),
-  ];
 }
 
 String _canonicalEntityId(HomepageDetail homepage) {

@@ -16,6 +16,14 @@ type homepageTabDef struct {
 	Default  bool   `yaml:"default"`
 }
 
+type homepageSubTabDef struct {
+	ID            string   `yaml:"id"`
+	LabelKey      string   `yaml:"label_key"`
+	Order         int      `yaml:"order"`
+	Default       bool     `yaml:"default"`
+	HomepageTypes []string `yaml:"homepage_types"`
+}
+
 type circleTabDef struct {
 	ID           string   `yaml:"id"`
 	LabelKey     string   `yaml:"label_key"`
@@ -70,6 +78,18 @@ func renderHomepageUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("    required this.isDefault,\n")
 	b.WriteString("  });\n")
 	b.WriteString("}\n\n")
+	b.WriteString("class HomepageSubTabConfig {\n")
+	b.WriteString("  final String id;\n")
+	b.WriteString("  final String labelKey;\n")
+	b.WriteString("  final bool isDefault;\n")
+	b.WriteString("  final List<String> homepageTypes;\n\n")
+	b.WriteString("  const HomepageSubTabConfig({\n")
+	b.WriteString("    required this.id,\n")
+	b.WriteString("    required this.labelKey,\n")
+	b.WriteString("    required this.isDefault,\n")
+	b.WriteString("    required this.homepageTypes,\n")
+	b.WriteString("  });\n")
+	b.WriteString("}\n\n")
 	tabs := append([]homepageTabDef(nil), uc.HomepageTabs...)
 	sort.Slice(tabs, func(i, j int) bool { return tabs[i].Order < tabs[j].Order })
 	defaultTabID := "content"
@@ -93,6 +113,17 @@ func renderHomepageUIConfigDart(uc *uiConfigFile) string {
 			dartStringLiteral(tab.LabelKey),
 			dartStringLiteral(tab.BodySlot),
 			tab.Default))
+	}
+	b.WriteString("  ];\n")
+	subTabs := append([]homepageSubTabDef(nil), uc.HomepageSubTabs...)
+	sort.Slice(subTabs, func(i, j int) bool { return subTabs[i].Order < subTabs[j].Order })
+	b.WriteString("\n  static const List<HomepageSubTabConfig> subTabs = <HomepageSubTabConfig>[\n")
+	for _, sub := range subTabs {
+		b.WriteString(fmt.Sprintf("    HomepageSubTabConfig(id: %s, labelKey: %s, isDefault: %v, homepageTypes: %s),\n",
+			dartStringLiteral(sub.ID),
+			dartStringLiteral(sub.LabelKey),
+			sub.Default,
+			renderStringListLiteral(sub.HomepageTypes)))
 	}
 	b.WriteString("  ];\n")
 	b.WriteString("}\n")

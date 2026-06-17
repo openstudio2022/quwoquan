@@ -49,7 +49,7 @@ type AuthorImpactItem struct {
 	TagRef                string    `json:"tagRef" bson:"tagRef"`
 	Source                string    `json:"source" bson:"source"`
 	Count                 int64     `json:"count" bson:"count"`
-	DisplayText           string    `json:"displayText" bson:"-"` // 云侧按 viewer 视角产出的影响结论句（端只读直出）
+	PrimaryText           string    `json:"primaryText" bson:"-"` // 云侧按 viewer 视角产出的影响结论句（端只读直出）
 	UpdatedAt             time.Time `json:"updatedAt" bson:"updatedAt"`
 }
 

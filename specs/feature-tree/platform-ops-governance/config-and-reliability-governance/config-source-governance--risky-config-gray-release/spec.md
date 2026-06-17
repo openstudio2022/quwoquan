@@ -9,6 +9,9 @@
 - redis.addrs / addr
 - redis.password / tls
 - 服务关键路由开关
+- es.enabled / es.endpoints / es.insecureTls（统一搜索索引写侧：内容/圈子/实体/用户
+  服务作为灌数生产者写入共享 ES/OpenSearch 集群，端点与凭据经部署密钥注入，
+  开启/端点/TLS 校验属基础设施敏感项，必须经灰度发布而非全量直发）
 
 ## 发布策略
 

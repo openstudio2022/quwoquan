@@ -16,9 +16,13 @@ if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
    || -z "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-}" \
    || -z "${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-}" \
    || -z "${LOCAL_GAMMA_TAG_PORT:-}" \
+   || -z "${LOCAL_GAMMA_SEARCH_PORT:-}" \
+   || -z "${LOCAL_GAMMA_ENTITY_PORT:-}" \
+   || -z "${LOCAL_GAMMA_CIRCLE_PORT:-}" \
    || -z "${LOCAL_GAMMA_POSTGRES_PORT:-}" \
    || -z "${LOCAL_GAMMA_MONGO_PORT:-}" \
-   || -z "${LOCAL_GAMMA_REDIS_PORT:-}" ]]; then
+   || -z "${LOCAL_GAMMA_REDIS_PORT:-}" \
+   || -z "${LOCAL_GAMMA_ES_PORT:-}" ]]; then
   eval "$(python3 "$ROOT/agent_ops/deploy/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
 fi
 # docker compose 只读取导出的环境变量；这里把 canonical local-gamma 端口全部导出，
@@ -37,9 +41,13 @@ export \
   LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT \
   LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT \
   LOCAL_GAMMA_TAG_PORT \
+  LOCAL_GAMMA_SEARCH_PORT \
+  LOCAL_GAMMA_ENTITY_PORT \
+  LOCAL_GAMMA_CIRCLE_PORT \
   LOCAL_GAMMA_POSTGRES_PORT \
   LOCAL_GAMMA_MONGO_PORT \
-  LOCAL_GAMMA_REDIS_PORT
+  LOCAL_GAMMA_REDIS_PORT \
+  LOCAL_GAMMA_ES_PORT
 CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
 IMAGE_VERSION="${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
 GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-http://127.0.0.1:${LOCAL_GAMMA_HTTP_PORT}}"
@@ -121,6 +129,8 @@ export LOCAL_GAMMA_MONGO_IMAGE="${LOCAL_GAMMA_MONGO_IMAGE:-$(library_image mongo
 export LOCAL_GAMMA_REDIS_IMAGE="${LOCAL_GAMMA_REDIS_IMAGE:-$(library_image redis:7.2-alpine)}"
 export LOCAL_GAMMA_GO_BOOKWORM_IMAGE="${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-$(library_image golang:1.24-bookworm)}"
 export LOCAL_GAMMA_CADDY_IMAGE="${LOCAL_GAMMA_CADDY_IMAGE:-$(library_image caddy:2.8.4-alpine)}"
+# ES 镜像来自 elastic 官方 registry（非 docker.io/library），不经 library_image 前缀。
+export LOCAL_GAMMA_ELASTICSEARCH_IMAGE="${LOCAL_GAMMA_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:8.13.4}"
 export LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-$(library_image golang:1.24-bookworm)}"
 export LOCAL_GAMMA_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-$(library_image alpine:3.19)}"
 export LOCAL_GAMMA_PYTHON_BASE_IMAGE="${LOCAL_GAMMA_PYTHON_BASE_IMAGE:-$(library_image python:3.11-slim)}"
@@ -134,6 +144,9 @@ local_gamma_service_default_image_ref() {
     assistant-service) echo "localhost/quwoquan_service_assistant-service:latest" ;;
     product-ops-service) echo "localhost/quwoquan_service_product-ops-service:latest" ;;
     tag-service) echo "localhost/quwoquan_service_tag-service:latest" ;;
+    search-service) echo "localhost/quwoquan_service_search-service:latest" ;;
+    entity-service) echo "localhost/quwoquan_service_entity-service:latest" ;;
+    circle-service) echo "localhost/quwoquan_service_circle-service:latest" ;;
     rtc-service) echo "localhost/quwoquan_service_rtc-service:latest" ;;
     *) return 1 ;;
   esac
@@ -142,7 +155,7 @@ local_gamma_service_default_image_ref() {
 local_gamma_service_repository_name() {
   case "$1" in
     rec-model-service) echo "recommendation-service" ;;
-    content-service|chat-service|user-service|assistant-service|product-ops-service|tag-service|rtc-service) echo "$1" ;;
+    content-service|chat-service|user-service|assistant-service|product-ops-service|tag-service|search-service|entity-service|circle-service|rtc-service) echo "$1" ;;
     *) return 1 ;;
   esac
 }
@@ -170,6 +183,9 @@ export LOCAL_GAMMA_USER_SERVICE_IMAGE="${LOCAL_GAMMA_USER_SERVICE_IMAGE:-$(resol
 export LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE="${LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref assistant-service)}"
 export LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE="${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref product-ops-service)}"
 export LOCAL_GAMMA_TAG_SERVICE_IMAGE="${LOCAL_GAMMA_TAG_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref tag-service)}"
+export LOCAL_GAMMA_SEARCH_SERVICE_IMAGE="${LOCAL_GAMMA_SEARCH_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref search-service)}"
+export LOCAL_GAMMA_ENTITY_SERVICE_IMAGE="${LOCAL_GAMMA_ENTITY_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref entity-service)}"
+export LOCAL_GAMMA_CIRCLE_SERVICE_IMAGE="${LOCAL_GAMMA_CIRCLE_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref circle-service)}"
 export LOCAL_GAMMA_RTC_SERVICE_IMAGE="${LOCAL_GAMMA_RTC_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref rtc-service)}"
 
 skip_build=0
@@ -193,7 +209,7 @@ local_gamma_has_existing_stack() {
     return 0
   fi
   if command -v podman >/dev/null 2>&1 && \
-    podman ps -a --format '{{.Names}}' 2>/dev/null | awk '/^quwoquan_service_(gamma-proxy|assistant-service|user-service|chat-service|content-service|product-ops-service|tag-service|rec-model-service|redis|mongodb|postgres)_1$/ {found=1} END {exit found ? 0 : 1}'; then
+    podman ps -a --format '{{.Names}}' 2>/dev/null | awk '/^quwoquan_service_(gamma-proxy|assistant-service|user-service|chat-service|content-service|product-ops-service|tag-service|search-service|entity-service|circle-service|rec-model-service|elasticsearch|redis|mongodb|postgres)_1$/ {found=1} END {exit found ? 0 : 1}'; then
     return 0
   fi
   return 1
@@ -278,8 +294,12 @@ cleanup_existing_gamma_runtime() {
     content-service
     product-ops-service
     tag-service
+    search-service
+    entity-service
+    circle-service
     mongo-init
     rec-model-service
+    elasticsearch
     redis
     mongodb
     postgres
@@ -305,6 +325,7 @@ cleanup_existing_gamma_runtime() {
       quwoquan_service_assistant-service \
       quwoquan_service_product-ops-service \
       quwoquan_service_tag-service \
+      quwoquan_service_search-service \
       quwoquan_service_rec-model-service \
       quwoquan_service_rtc-service; do
       podman rmi -f "$image_name" >/dev/null 2>&1 || true
@@ -468,7 +489,16 @@ prepare_config_root() {
     "$out/releases/config/recommendation-service" \
     "$out/configs/tag-service/default" \
     "$out/configs/tag-service/${CONFIG_SOURCE_ENV}" \
-    "$out/releases/config/tag-service"
+    "$out/releases/config/tag-service" \
+    "$out/configs/search-service/default" \
+    "$out/configs/search-service/${CONFIG_SOURCE_ENV}" \
+    "$out/releases/config/search-service" \
+    "$out/configs/entity-service/default" \
+    "$out/configs/entity-service/${CONFIG_SOURCE_ENV}" \
+    "$out/releases/config/entity-service" \
+    "$out/configs/circle-service/default" \
+    "$out/configs/circle-service/${CONFIG_SOURCE_ENV}" \
+    "$out/releases/config/circle-service"
   cp "$ROOT/quwoquan_service/services/content-service/configs/default/config.yaml" "$out/configs/content-service/default/config.yaml"
   cp "$ROOT/quwoquan_service/services/content-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/content-service/${CONFIG_SOURCE_ENV}/config.yaml"
   cp "$ROOT/quwoquan_service/services/chat-service/configs/default/config.yaml" "$out/configs/chat-service/default/config.yaml"
@@ -485,6 +515,12 @@ prepare_config_root() {
   cp "$ROOT/quwoquan_service/services/rec-model-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/recommendation-service/${CONFIG_SOURCE_ENV}/config.yaml"
   cp "$ROOT/quwoquan_service/services/tag-service/configs/default/config.yaml" "$out/configs/tag-service/default/config.yaml"
   cp "$ROOT/quwoquan_service/services/tag-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/tag-service/${CONFIG_SOURCE_ENV}/config.yaml"
+  cp "$ROOT/quwoquan_service/services/search-service/configs/default/config.yaml" "$out/configs/search-service/default/config.yaml"
+  cp "$ROOT/quwoquan_service/services/search-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/search-service/${CONFIG_SOURCE_ENV}/config.yaml"
+  cp "$ROOT/quwoquan_service/services/entity-service/configs/default/config.yaml" "$out/configs/entity-service/default/config.yaml"
+  cp "$ROOT/quwoquan_service/services/entity-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/entity-service/${CONFIG_SOURCE_ENV}/config.yaml"
+  cp "$ROOT/quwoquan_service/services/circle-service/configs/default/config.yaml" "$out/configs/circle-service/default/config.yaml"
+  cp "$ROOT/quwoquan_service/services/circle-service/configs/${CONFIG_SOURCE_ENV}/config.yaml" "$out/configs/circle-service/${CONFIG_SOURCE_ENV}/config.yaml"
   cat > "$out/releases/config/content-service/${CONFIG_VERSION}.yaml" <<YAML
 config:
   version: "${CONFIG_VERSION}"
@@ -646,6 +682,73 @@ mongo:
   uri: "mongodb://mongodb:27017"
   database: "quwoquan_tag"
 YAML
+  # search-service：gamma 下 CONFIG_VERSION 必填且 release 版本文件必须存在（缺失即启动失败）。
+  # es.endpoints / mongo.uri 经 SEARCH_ES_ENDPOINTS / SEARCH_MONGO_URI 注入并在配置加载后覆盖，
+  # 这里 es.enabled 固定 true（与 gamma 主链路一致），endpoints 留空交由 env 注入。
+  cat > "$out/releases/config/search-service/${CONFIG_VERSION}.yaml" <<YAML
+config:
+  version: "${CONFIG_VERSION}"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+service:
+  http:
+    addr: ":18095"
+es:
+  enabled: true
+  endpoints: []
+  index: "quwoquan_objects"
+  shards: 1
+  replicas: 1
+mongo:
+  uri: "mongodb://mongodb:27017"
+  database: "quwoquan_search"
+YAML
+  # entity-service：gamma 下 CONFIG_VERSION 必填且 release 版本文件必须存在（缺失即启动失败）。
+  # mongo/ES endpoints 经 ENTITY_MONGO_* / SEARCH_ES_* 注入；这里固定 addr 与共享检索索引名。
+  cat > "$out/releases/config/entity-service/${CONFIG_VERSION}.yaml" <<YAML
+config:
+  version: "${CONFIG_VERSION}"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+service:
+  http:
+    addr: ":18084"
+mongo:
+  uri: "mongodb://mongodb:27017"
+  database: "quwoquan_entity"
+es:
+  enabled: true
+  endpoints: []
+  index: "quwoquan_objects"
+  shards: 1
+  replicas: 1
+YAML
+  # circle-service：启动时强校验 config.version == CONFIG_VERSION，故 release 版本文件必须声明同一版本。
+  # mongo/redis/ES endpoints 经 CIRCLE_MONGO_* / CIRCLE_REDIS_* / SEARCH_ES_* 注入。
+  cat > "$out/releases/config/circle-service/${CONFIG_VERSION}.yaml" <<YAML
+config:
+  version: "${CONFIG_VERSION}"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+service:
+  http:
+    addr: ":18082"
+mongo:
+  uri: "mongodb://mongodb:27017"
+  database: "quwoquan_circle"
+redis:
+  general:
+    mode: standalone
+    addr: "redis:6379"
+    db: 0
+    tls: false
+es:
+  enabled: true
+  endpoints: []
+  index: "quwoquan_objects"
+  shards: 1
+  replicas: 1
+YAML
 }
 
 prepare_media_root() {
@@ -789,7 +892,7 @@ gamma-api.quwoquan-env.test {{
 \thandle @api_chat {{
 \t\treverse_proxy chat-service:18081
 \t}}
-\t@api_user path /v1/user*
+\t@api_user path /v1/user* /v1/me /v1/me/*
 \thandle @api_user {{
 \t\treverse_proxy user-service:18082
 \t}}
@@ -800,6 +903,18 @@ gamma-api.quwoquan-env.test {{
 \t@api_tag path /v1/tag*
 \thandle @api_tag {{
 \t\treverse_proxy tag-service:18092
+\t}}
+\t@api_search path /v1/search*
+\thandle @api_search {{
+\t\treverse_proxy search-service:18095
+\t}}
+\t@api_entity path /v1/homepages*
+\thandle @api_entity {{
+\t\treverse_proxy entity-service:18084
+\t}}
+\t@api_circle path /v1/circles*
+\thandle @api_circle {{
+\t\treverse_proxy circle-service:18082
 \t}}
 \thandle /v1/ops/* {{
 \t\treverse_proxy product-ops-service:18086
@@ -840,7 +955,7 @@ gamma-product-ops.quwoquan-env.test {{
 \thandle @pub_chat {{
 \t\treverse_proxy chat-service:18081
 \t}}
-\t@pub_user path /v1/user*
+\t@pub_user path /v1/user* /v1/me /v1/me/*
 \thandle @pub_user {{
 \t\treverse_proxy user-service:18082
 \t}}
@@ -851,6 +966,18 @@ gamma-product-ops.quwoquan-env.test {{
 \t@pub_tag path /v1/tag*
 \thandle @pub_tag {{
 \t\treverse_proxy tag-service:18092
+\t}}
+\t@pub_search path /v1/search*
+\thandle @pub_search {{
+\t\treverse_proxy search-service:18095
+\t}}
+\t@pub_entity path /v1/homepages*
+\thandle @pub_entity {{
+\t\treverse_proxy entity-service:18084
+\t}}
+\t@pub_circle path /v1/circles*
+\thandle @pub_circle {{
+\t\treverse_proxy circle-service:18082
 \t}}
 \thandle /v1/ops/* {{
 \t\treverse_proxy product-ops-service:18086
@@ -935,6 +1062,7 @@ ensure_local_gamma_base_images() {
     "$LOCAL_GAMMA_MONGO_IMAGE"
     "$LOCAL_GAMMA_REDIS_IMAGE"
     "$LOCAL_GAMMA_CADDY_IMAGE"
+    "$LOCAL_GAMMA_ELASTICSEARCH_IMAGE"
   )
   for image in "${required_images[@]}"; do
     [[ -n "$image" ]] || continue
@@ -1070,6 +1198,9 @@ compose_build_services=(
   assistant-service
   product-ops-service
   tag-service
+  search-service
+  entity-service
+  circle-service
 )
 if [[ ",${COMPOSE_PROFILES:-}," == *,edge-media,* ]]; then
   compose_build_services+=(rtc-service)
@@ -1147,8 +1278,12 @@ if [[ "$podman_compose" == "1" ]]; then
     quwoquan_service_content-service_1 \
     quwoquan_service_product-ops-service_1 \
     quwoquan_service_tag-service_1 \
+    quwoquan_service_search-service_1 \
+    quwoquan_service_entity-service_1 \
+    quwoquan_service_circle-service_1 \
     quwoquan_service_mongo-init_1 \
     quwoquan_service_rec-model-service_1 \
+    quwoquan_service_elasticsearch_1 \
     quwoquan_service_redis_1 \
     quwoquan_service_mongodb_1 \
     quwoquan_service_postgres_1; do
@@ -1166,6 +1301,7 @@ if [[ "$podman_compose" == "1" ]]; then
   podman volume inspect quwoquan_service_local-gamma-go-cache >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-go-cache >/dev/null
   podman volume inspect quwoquan_service_local-gamma-caddy-data >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-caddy-data >/dev/null
   podman volume inspect quwoquan_service_local-gamma-caddy-config >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-caddy-config >/dev/null
+  podman volume inspect quwoquan_service_local-gamma-es >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-es >/dev/null
 
   podman run --pull=never --name quwoquan_service_postgres_1 -d \
     --net "$network_name" --network-alias postgres \
@@ -1190,10 +1326,24 @@ if [[ "$podman_compose" == "1" ]]; then
     --healthcheck-interval 5s --healthcheck-timeout 3s --healthcheck-retries 20 \
     "$LOCAL_GAMMA_REDIS_IMAGE" redis-server --appendonly yes >/dev/null
 
+  podman run --pull=never --name quwoquan_service_elasticsearch_1 -d \
+    --platform=linux/amd64 \
+    --net "$network_name" --network-alias elasticsearch \
+    -e discovery.type=single-node \
+    -e xpack.security.enabled=false \
+    -e xpack.security.http.ssl.enabled=false \
+    -e ES_JAVA_OPTS='-Xms512m -Xmx512m' \
+    -v quwoquan_service_local-gamma-es:/usr/share/elasticsearch/data \
+    -p "${LOCAL_GAMMA_ES_PORT:-19430}:9200" \
+    --healthcheck-command "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s' || exit 1" \
+    --healthcheck-interval 10s --healthcheck-timeout 5s --healthcheck-start-period 120s --healthcheck-retries 30 \
+    "$LOCAL_GAMMA_ELASTICSEARCH_IMAGE" >/dev/null
+
   wait_healthy quwoquan_service_postgres_1
   wait_running quwoquan_service_mongodb_1
   sleep 5
   wait_healthy quwoquan_service_redis_1
+  wait_healthy quwoquan_service_elasticsearch_1
 
   podman run --pull=never --rm --name quwoquan_service_mongo-init_1 \
     --net "$network_name" --network-alias mongo-init \
@@ -1320,6 +1470,50 @@ if [[ "$podman_compose" == "1" ]]; then
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
     "$LOCAL_GAMMA_TAG_SERVICE_IMAGE" >/dev/null
   wait_healthy quwoquan_service_tag-service_1
+
+  podman run --pull=never --name quwoquan_service_search-service_1 -d \
+    --net "$network_name" --network-alias search-service \
+    -e SERVICE_NAME=search-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
+    -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
+    -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" \
+    -e SEARCH_ES_ENABLED=true -e SEARCH_ES_ENDPOINTS=http://elasticsearch:9200 \
+    -e SEARCH_MONGO_URI=mongodb://mongodb:27017 -e SEARCH_MONGO_DATABASE=quwoquan_search \
+    -e SEARCH_REDIS_GENERAL_MODE=standalone -e SEARCH_REDIS_GENERAL_ADDR=redis:6379 \
+    -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
+    -p "${LOCAL_GAMMA_SEARCH_PORT:-19280}:18095" \
+    --healthcheck-command "wget -qO- http://127.0.0.1:18095/healthz >/dev/null 2>&1" \
+    --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
+    "$LOCAL_GAMMA_SEARCH_SERVICE_IMAGE" >/dev/null
+  wait_healthy quwoquan_service_search-service_1
+
+  podman run --pull=never --name quwoquan_service_entity-service_1 -d \
+    --net "$network_name" --network-alias entity-service \
+    -e SERVICE_NAME=entity-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
+    -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
+    -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" \
+    -e ENTITY_MONGO_URI=mongodb://mongodb:27017 -e ENTITY_MONGO_DATABASE=quwoquan_entity \
+    -e SEARCH_ES_ENABLED=true -e SEARCH_ES_ENDPOINTS=http://elasticsearch:9200 \
+    -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
+    -p "${LOCAL_GAMMA_ENTITY_PORT:-19290}:18084" \
+    --healthcheck-command "wget -qO- http://127.0.0.1:18084/healthz >/dev/null 2>&1" \
+    --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
+    "$LOCAL_GAMMA_ENTITY_SERVICE_IMAGE" >/dev/null
+  wait_healthy quwoquan_service_entity-service_1
+
+  podman run --pull=never --name quwoquan_service_circle-service_1 -d \
+    --net "$network_name" --network-alias circle-service \
+    -e SERVICE_NAME=circle-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
+    -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
+    -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e CIRCLE_SERVICE_ADDR=:18082 \
+    -e CIRCLE_MONGO_URI=mongodb://mongodb:27017 -e CIRCLE_MONGO_DATABASE=quwoquan_circle \
+    -e CIRCLE_REDIS_ADDR=redis:6379 \
+    -e SEARCH_ES_ENABLED=true -e SEARCH_ES_ENDPOINTS=http://elasticsearch:9200 \
+    -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
+    -p "${LOCAL_GAMMA_CIRCLE_PORT:-19300}:18082" \
+    --healthcheck-command "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1" \
+    --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
+    "$LOCAL_GAMMA_CIRCLE_SERVICE_IMAGE" >/dev/null
+  wait_healthy quwoquan_service_circle-service_1
 
   podman run --pull=never --name quwoquan_service_gamma-proxy_1 -d \
     --net "$network_name" --network-alias gamma-proxy \
@@ -1524,6 +1718,66 @@ if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
   seed_gamma_content_data
 else
   echo "[local-gamma] skip content seed because STAGE=${STAGE} uses persisted/host data"
+fi
+
+# search-service 的 ES 召回读模型 cold-start：把已 seed 的内容（quwoquan_content.posts）
+# 经统一投影回填进共享 ES 索引 quwoquan_objects（与 search-service 查询同一索引）。
+# 这是检索读模型的环境 seed，与 tag/content seed 同级，保证 /v1/search 返回真实 hit。
+seed_search_index() {
+  local es_port="${LOCAL_GAMMA_ES_PORT:-}"
+  local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
+  if [[ -z "$es_port" || -z "$mongo_port" ]]; then
+    echo "[local-gamma] WARN: skip search backfill; LOCAL_GAMMA_ES_PORT/MONGO_PORT unset" >&2
+    return 0
+  fi
+  echo "[local-gamma] waiting for ES host port ${es_port} (yellow) before search backfill ..."
+  if ! python3 - "$es_port" <<'PY'
+import sys
+import time
+import urllib.request
+
+port = sys.argv[1]
+deadline = time.time() + 120
+last = None
+ok = False
+while time.time() < deadline:
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/_cluster/health?wait_for_status=yellow&timeout=2s",
+            timeout=4,
+        ) as resp:
+            if 200 <= int(resp.status) < 300:
+                ok = True
+                break
+            last = f"http {resp.status}"
+    except Exception as exc:  # noqa: BLE001
+        last = str(exc)
+    time.sleep(2)
+raise SystemExit(0 if ok else (last or "es not ready"))
+PY
+  then
+    echo "[local-gamma] WARN: ES host port ${es_port} not ready; search index left empty" >&2
+    return 0
+  fi
+  echo "[local-gamma] backfilling search index (quwoquan_content.posts -> ES quwoquan_objects) ..."
+  # batch-size 100：本地 ES 跑在 linux/amd64 模拟（Apple Silicon 无原生 8.x JDK），
+  # 单节点写入吞吐受限；ES client RequestTimeout 默认 5s，500-doc 默认批的单次 _bulk
+  # 会超时（服务端仍写入但 client 报 context deadline exceeded）。按 100/批切分后每个
+  # _bulk 都在 5s 内返回，回填稳定干净成功（这是 backfill 暴露 --batch-size 的用途，
+  # 非 shim：换原生 ES 集群时该值不影响正确性，只影响往返次数）。
+  if ! ( cd "$ROOT/quwoquan_service" && SEARCH_ES_ENDPOINTS="http://127.0.0.1:${es_port}" \
+      go run ./services/content-service/cmd/search-backfill \
+      --mongo-uri "mongodb://127.0.0.1:${mongo_port}/?directConnection=true" \
+      --posts-db quwoquan_content --env gamma --batch-size 100 ); then
+    echo "[local-gamma] WARN: search backfill failed; /v1/search will return empty hits until indexed" >&2
+    return 0
+  fi
+  echo "[local-gamma] search index backfill completed"
+}
+if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
+  seed_search_index
+else
+  echo "[local-gamma] skip search backfill because STAGE=${STAGE} uses persisted/host data"
 fi
 
 python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$PREVIOUS_IMAGE_VERSION" "$STAGE" "$LOCAL_GAMMA_APP_ENV" "$CONFIG_SOURCE_ENV" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$LOCAL_MEDIA_ORIGIN_URL" "$restarted_from_previous" <<'PY'

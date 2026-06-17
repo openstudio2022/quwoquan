@@ -67,7 +67,37 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(SectionCreations), findsOneWidget);
+      // 二级过滤去胶囊横滑，收敛为最右单一漏斗入口（默认「全部」）。
+      expect(
+        find.byKey(
+          const ValueKey<String>('circle-creations-filter-button'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('全部'), findsAtLeastNWidgets(1));
+      // 图片/视频/文字 仅在打开过滤弹层后呈现。
+      await tester.tap(
+        find.byKey(const ValueKey<String>('circle-creations-filter-button')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey<String>('circle-creations-filter-option-image'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('circle-creations-filter-option-video'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('circle-creations-filter-option-article'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('图片'), findsWidgets);
       expect(find.text('视频'), findsWidgets);
       expect(find.text('文字'), findsWidgets);
@@ -204,7 +234,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('文字').first);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('circle-creations-filter-button')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('circle-creations-filter-option-article'),
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(
@@ -215,7 +253,10 @@ void main() {
         ),
         findsOneWidget,
       );
-      await tester.drag(find.byType(GridView), const Offset(0, -320));
+      await tester.drag(
+        find.byType(Scrollable).first,
+        const Offset(0, -320),
+      );
       await tester.pumpAndSettle();
       expect(
         find.byKey(

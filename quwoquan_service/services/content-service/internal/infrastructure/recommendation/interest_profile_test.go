@@ -143,6 +143,27 @@ func TestDecayFactor(t *testing.T) {
 	}
 }
 
+func TestSearchFeatureFreshnessGate(t *testing.T) {
+	fresh := &UserFeatures{
+		SearchTermAffinities:    map[string]float64{"火锅": 1},
+		SearchTopObjectAffinity: map[string]float64{"post-1": 1},
+		SearchTermHeat:          3,
+		SearchTermUpdatedAt:     time.Now().Add(-SearchIntentTTL / 2),
+	}
+	stale := &UserFeatures{
+		SearchTermAffinities:    map[string]float64{"火锅": 1},
+		SearchTopObjectAffinity: map[string]float64{"post-1": 1},
+		SearchTermHeat:          3,
+		SearchTermUpdatedAt:     time.Now().Add(-SearchIntentTTL - time.Second),
+	}
+	if !searchFeaturesFresh(fresh) {
+		t.Fatal("fresh search features should be consumable")
+	}
+	if searchFeaturesFresh(stale) {
+		t.Fatal("stale search features must be ignored")
+	}
+}
+
 func TestScoreToLevel(t *testing.T) {
 	cases := []struct {
 		score float64

@@ -44,7 +44,7 @@ from _common.paths import (  # noqa: E402
     ensure_task_layout,
 )
 from _common.stage_reports import write_stage_result  # noqa: E402
-from produce.materialize import materialize_posts  # noqa: E402
+from produce.materialize import _materialized_asset_refs, materialize_posts  # noqa: E402
 from publish_ops.promote_to_publish import promote_task_batch, promote_task_entities  # noqa: E402
 
 TASK = "目录布局_gwt"
@@ -116,6 +116,29 @@ def test_post_dir_is_type_angle_title_seq():
     assert dup1.is_dir() and (dup1 / "manifest.json").exists(), posts
     assert dup2.is_dir() and (dup2 / "manifest.json").exists(), posts
     assert solo.is_dir() and (solo / "manifest.json").exists(), posts
+
+
+def test_materialized_manifest_has_required_times():
+    posts, _ = _materialize()
+    for manifest_path in posts.rglob("manifest.json"):
+        manifest = read_json(manifest_path)
+        assert manifest.get("createdAt"), manifest_path
+        assert manifest.get("updatedAt"), manifest_path
+
+
+def test_materialized_asset_refs_infer_source_ref_from_source_path():
+    source_path = (
+        batch_root(TASK, BATCH)
+        / "entities/地点/景区/毕棚沟/1.download/sources/03.article_base/assets/001.jpg"
+    )
+    source_ref, source_asset_ref = _materialized_asset_refs(
+        {"sourcePath": str(source_path)},
+        task_id=TASK,
+        batch_id=BATCH,
+    )
+
+    assert source_asset_ref == "entities/地点/景区/毕棚沟/1.download/sources/03.article_base/assets/001.jpg"
+    assert source_ref == "entities/地点/景区/毕棚沟/1.download/sources/03.article_base/source.md"
 
 
 def test_seq_increments_for_duplicate_title():

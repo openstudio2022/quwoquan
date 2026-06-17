@@ -12,6 +12,7 @@
       "profiles": [
         {
           "userId": "fixture_user_current",
+          "verified": true,
           "displayName": "契约当前用户",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
@@ -177,6 +178,7 @@
         },
         {
           "userId": "fixture_user_photo",
+          "verified": true,
           "displayName": "契约摄影师",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
           "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",

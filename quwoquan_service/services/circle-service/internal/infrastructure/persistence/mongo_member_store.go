@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -50,6 +51,24 @@ func (s *MongoMemberStore) UpdateRole(ctx context.Context, circleID, userID stri
 		return false
 	}
 	return result.MatchedCount > 0
+}
+
+func (s *MongoMemberStore) TouchActivity(ctx context.Context, circleID, userID string) bool {
+	result, err := s.coll.UpdateOne(ctx,
+		bson.M{"circleId": circleID, "userId": userID},
+		bson.M{"$set": bson.M{"lastActiveAt": time.Now().UTC()}},
+	)
+	if err != nil {
+		return false
+	}
+	return result.MatchedCount > 0
+}
+
+func (s *MongoMemberStore) CountActiveSince(ctx context.Context, circleID string, since time.Time) (int64, error) {
+	return s.coll.CountDocuments(ctx, bson.M{
+		"circleId":     circleID,
+		"lastActiveAt": bson.M{"$gte": since},
+	})
 }
 
 func (s *MongoMemberStore) ListByCircle(ctx context.Context, circleID string, limit int, cursor string) ([]model.CircleMember, string) {

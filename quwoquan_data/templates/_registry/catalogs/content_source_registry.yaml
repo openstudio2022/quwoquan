@@ -1,0 +1,567 @@
+schemaVersion: quwoquan.content_source_registry.v1
+version: 1
+
+allowedValues:
+  lanes: [homepage, article, image, video]
+  defaultRoles:
+    - primary
+    - supporting
+    - discovery_only
+    - reference_only
+    - licensed_candidate
+    - publish_candidate
+    - publishable
+  fetchModes:
+    - api
+    - html
+    - search
+    - manual_authorization
+    - licensed_api
+    - platform_reference
+  rightsPolicies:
+    - factual_reference_only
+    - official_terms_required
+    - asset_level_required
+    - open_license_required
+    - commercial_license_required
+    - creator_authorization_required
+    - reference_only
+
+lanePolicies:
+  homepage:
+    maxCoreSources: 5
+    primarySourceClasses: [encyclopedia, knowledge_graph, official_site]
+    supportingOnlySourceClasses: [government_tourism, authoritative_media]
+    rankingSignals:
+      - authority
+      - entity_match
+      - fact_density
+      - image_text_completeness
+      - freshness
+    promptFacts:
+      - 实体主页主源只从百科、知识图谱或实体/品牌/景区官网中选择。
+      - 政务、文旅、媒体和 UGC 只能补事实或交叉验证，不得作为主页 primaryEvidenceRef。
+      - 核心主页来源最多 5 个，优先图文并茂、事实字段丰富、可抓取和可追溯的页面。
+  article:
+    sourceSelectionMode: quality_driven
+    noIntrinsicPriorityBySourceClass: true
+    rankingSignals:
+      - content_quality
+      - entity_relevance
+      - information_density
+      - image_text_completeness
+      - traceability
+      - rights_safety
+      - originality
+      - dedupe_value
+      - freshness
+    promptFacts:
+      - 文章来源不按 UGC、社区、媒体、官方或垂类专业站天然升降级。
+      - 所有文章型来源按内容质量、图文完整、事实可追溯、去重价值和文字/图片权利风险判断。
+      - 文章底稿必须来自 article lane，源图是底稿证据链的一部分，一稿一用。
+  image:
+    discoveryAllowed: true
+    publishRequiresAssetRights: true
+    rankingSignals:
+      - visual_relevance
+      - asset_rights_clarity
+      - source_traceability
+      - image_quality
+      - creator_identity
+      - dedupe_value
+    promptFacts:
+      - 图片广泛检索通用视觉平台、摄影社区、图库、官方图库和垂类平台。
+      - Pinterest、小红书、微博、抖音、B站等可做发现或参考，但发布必须逐图具备明确授权或开放许可。
+      - 有水印、版权声明、转载痕迹、作者不明或 terms 不清的图片不得进入发布候选；去水印只允许用于自有或明确授权素材。
+  video:
+    discoveryAllowed: true
+    publishRequiresAssetRights: true
+    rankingSignals:
+      - visual_relevance
+      - officiality
+      - audio_rights_clarity
+      - asset_rights_clarity
+      - source_traceability
+    promptFacts:
+      - 视频广泛检索通用视频平台、素材库、官方账号和垂类视频源。
+      - 视频能否发布由标题、描述、字幕、账号身份、音乐版权、画面水印、转载痕迹和授权声明逐条判断。
+
+common:
+  entity:
+    - sourceId: wikipedia
+      platform: Wikipedia
+      sourceClass: encyclopedia
+      lanes: [homepage]
+      defaultRole: primary
+      fetchMode: api
+      rightsPolicy: factual_reference_only
+      rateLimit: conservative
+      promptFacts: [多语言百科主事实源, 不整段搬运, 适合作为实体主页核心证据]
+    - sourceId: wikidata
+      platform: Wikidata
+      sourceClass: knowledge_graph
+      lanes: [homepage]
+      defaultRole: primary
+      fetchMode: api
+      rightsPolicy: factual_reference_only
+      rateLimit: conservative
+      promptFacts: [结构化别名、坐标、官网、媒体属性和知识图谱补证]
+    - sourceId: baidu_baike
+      platform: 百度百科
+      sourceClass: encyclopedia
+      lanes: [homepage]
+      defaultRole: primary
+      fetchMode: html
+      rightsPolicy: factual_reference_only
+      rateLimit: conservative
+      promptFacts: [中文百科补充事实源, 只抽取可核验事实]
+    - sourceId: sogou_baike
+      platform: 搜狗百科
+      sourceClass: encyclopedia
+      lanes: [homepage]
+      defaultRole: primary
+      fetchMode: html
+      rightsPolicy: factual_reference_only
+      rateLimit: conservative
+      promptFacts: [中文百科补充事实源, 抓取成功才使用]
+    - sourceId: toutiao_baike
+      platform: 头条百科
+      sourceClass: encyclopedia
+      lanes: [homepage]
+      defaultRole: primary
+      fetchMode: search
+      rightsPolicy: factual_reference_only
+      rateLimit: conservative
+      promptFacts: [中文百科补充源, 必须验证实体匹配和正文可读]
+    - sourceId: britannica
+      platform: Britannica
+      sourceClass: encyclopedia
+      lanes: [homepage]
+      defaultRole: primary
+      fetchMode: html
+      rightsPolicy: factual_reference_only
+      rateLimit: conservative
+      promptFacts: [英文权威百科补证, 适合国际实体]
+    - sourceId: google_knowledge_graph
+      platform: Google Knowledge Graph
+      sourceClass: knowledge_graph
+      lanes: [homepage]
+      defaultRole: primary
+      fetchMode: api
+      rightsPolicy: factual_reference_only
+      rateLimit: conservative
+      promptFacts: [知识图谱补证, 不作为正文改编来源]
+    - sourceId: official_site
+      platform: 官方网站
+      sourceClass: official_site
+      lanes: [homepage]
+      defaultRole: primary
+      fetchMode: html
+      rightsPolicy: official_terms_required
+      rateLimit: conservative
+      promptFacts: [实体官网或品牌官网, 用于开放时间、服务、公告、介绍等一手信息]
+  article:
+    - sourceId: official_article
+      platform: 官方文章
+      sourceClass: official_article
+      lanes: [article]
+      defaultRole: licensed_candidate
+      fetchMode: html
+      rightsPolicy: factual_reference_only
+      rateLimit: conservative
+      promptFacts: [官方图文、公告、专题或攻略文章, 质量和权利逐篇判断]
+    - sourceId: vertical_professional
+      platform: 垂类专业站
+      sourceClass: vertical_professional
+      lanes: [article]
+      defaultRole: licensed_candidate
+      fetchMode: html
+      rightsPolicy: factual_reference_only
+      rateLimit: conservative
+      promptFacts: [垂类攻略、评测、指南或专业内容, 不天然优先于 UGC]
+    - sourceId: ugc_longform
+      platform: UGC长文
+      sourceClass: ugc_longform
+      lanes: [article]
+      defaultRole: licensed_candidate
+      fetchMode: html
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [游记、笔记、经验帖、长评, 按内容质量和权利风险判断]
+    - sourceId: community_post
+      platform: 社区帖子
+      sourceClass: community_post
+      lanes: [article]
+      defaultRole: licensed_candidate
+      fetchMode: html
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [社区经验、讨论帖、论坛帖, 只使用可核验事实和可发布图片]
+    - sourceId: media_article
+      platform: 媒体文章
+      sourceClass: media_article
+      lanes: [article]
+      defaultRole: licensed_candidate
+      fetchMode: html
+      rightsPolicy: factual_reference_only
+      rateLimit: conservative
+      promptFacts: [新闻、深度、测评和专题, 避免长句复现]
+    - sourceId: platform_article
+      platform: 内容平台文章
+      sourceClass: platform_article
+      lanes: [article]
+      defaultRole: licensed_candidate
+      fetchMode: html
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [今日头条、网易、搜狐、微信、知乎等平台文章, 平台不决定优先级]
+  image:
+    - sourceId: wikimedia_commons
+      platform: Wikimedia Commons
+      sourceClass: open_license_media
+      lanes: [image]
+      defaultRole: publish_candidate
+      fetchMode: api
+      rightsPolicy: open_license_required
+      rateLimit: conservative
+      promptFacts: [自由媒体库, 逐图记录许可、署名和文件页]
+    - sourceId: openverse
+      platform: Openverse
+      sourceClass: open_license_media
+      lanes: [image]
+      defaultRole: publish_candidate
+      fetchMode: api
+      rightsPolicy: open_license_required
+      rateLimit: conservative
+      promptFacts: [开放许可媒体搜索索引, 以原始落地页和 license URL 为授权证据]
+    - sourceId: flickr
+      platform: Flickr
+      sourceClass: photography_community
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: search
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [摄影社区和 CC 图片来源, 必须逐图判断许可]
+    - sourceId: pinterest
+      platform: Pinterest
+      sourceClass: visual_discovery_platform
+      lanes: [image]
+      defaultRole: discovery_only
+      fetchMode: platform_reference
+      rightsPolicy: reference_only
+      rateLimit: conservative
+      promptFacts: [视觉发现和构图参考, 不因平台名直接排除检索, 发布需回到原图授权链]
+    - sourceId: five_hundred_px
+      platform: 500px
+      sourceClass: photography_community
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: search
+      rightsPolicy: creator_authorization_required
+      rateLimit: conservative
+      promptFacts: [摄影社区, 适合作品发现和授权洽谈]
+    - sourceId: unsplash
+      platform: Unsplash
+      sourceClass: free_stock
+      lanes: [image]
+      defaultRole: publish_candidate
+      fetchMode: api
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [免费图库, 逐图校验许可和使用范围]
+    - sourceId: pexels
+      platform: Pexels
+      sourceClass: free_stock
+      lanes: [image]
+      defaultRole: publish_candidate
+      fetchMode: api
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [免费图库, 逐图校验许可和使用范围]
+    - sourceId: pixabay
+      platform: Pixabay
+      sourceClass: free_stock
+      lanes: [image]
+      defaultRole: publish_candidate
+      fetchMode: api
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [免费图库, 逐图校验许可和使用范围]
+    - sourceId: getty_images
+      platform: Getty Images
+      sourceClass: commercial_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [商业图库, 必须有购买或授权凭证]
+    - sourceId: shutterstock
+      platform: Shutterstock
+      sourceClass: commercial_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [商业图库, 必须有购买或授权凭证]
+    - sourceId: adobe_stock
+      platform: Adobe Stock
+      sourceClass: commercial_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [商业图库, 必须有购买或授权凭证]
+    - sourceId: alamy
+      platform: Alamy
+      sourceClass: commercial_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [商业图库, 必须有购买或授权凭证]
+    - sourceId: istock
+      platform: iStock
+      sourceClass: commercial_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [商业图库, 必须有购买或授权凭证]
+    - sourceId: tuchong
+      platform: 图虫
+      sourceClass: photography_community
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: search
+      rightsPolicy: creator_authorization_required
+      rateLimit: conservative
+      promptFacts: [图虫社区用于发现和授权洽谈, 图虫创意需授权后发布]
+    - sourceId: vcg
+      platform: VCG
+      sourceClass: domestic_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [国内正版图库, 必须记录授权凭证]
+    - sourceId: ic_photo
+      platform: IC photo
+      sourceClass: domestic_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [国内正版图库, 必须记录授权凭证]
+    - sourceId: zcool_hello
+      platform: 站酷海洛
+      sourceClass: domestic_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [国内正版图库, 必须记录授权凭证]
+  video:
+    - sourceId: youtube
+      platform: YouTube
+      sourceClass: video_platform
+      lanes: [video]
+      defaultRole: reference_only
+      fetchMode: platform_reference
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [通用视频发现和官方频道参考, 发布需明确授权]
+    - sourceId: vimeo
+      platform: Vimeo
+      sourceClass: video_platform
+      lanes: [video]
+      defaultRole: reference_only
+      fetchMode: platform_reference
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [通用视频发现和创作者作品参考, 发布需明确授权]
+    - sourceId: bilibili
+      platform: B站
+      sourceClass: video_platform
+      lanes: [video]
+      defaultRole: reference_only
+      fetchMode: platform_reference
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [中视频和垂类评测发现, 发布需明确授权]
+    - sourceId: douyin
+      platform: 抖音
+      sourceClass: video_platform
+      lanes: [video]
+      defaultRole: discovery_only
+      fetchMode: platform_reference
+      rightsPolicy: reference_only
+      rateLimit: conservative
+      promptFacts: [短视频发现和视觉参考, 不直接发布未授权素材]
+    - sourceId: tiktok
+      platform: TikTok
+      sourceClass: video_platform
+      lanes: [video]
+      defaultRole: discovery_only
+      fetchMode: platform_reference
+      rightsPolicy: reference_only
+      rateLimit: conservative
+      promptFacts: [短视频发现和视觉参考, 不直接发布未授权素材]
+    - sourceId: pexels_videos
+      platform: Pexels Videos
+      sourceClass: stock_video
+      lanes: [video]
+      defaultRole: publish_candidate
+      fetchMode: api
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [免费视频素材, 逐条校验许可]
+    - sourceId: pixabay_videos
+      platform: Pixabay Videos
+      sourceClass: stock_video
+      lanes: [video]
+      defaultRole: publish_candidate
+      fetchMode: api
+      rightsPolicy: asset_level_required
+      rateLimit: conservative
+      promptFacts: [免费视频素材, 逐条校验许可]
+    - sourceId: pond5
+      platform: Pond5
+      sourceClass: stock_video
+      lanes: [video]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [商业视频素材库, 必须有授权凭证]
+    - sourceId: storyblocks
+      platform: Storyblocks
+      sourceClass: stock_video
+      lanes: [video]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [商业视频素材库, 必须有授权凭证]
+
+verticals:
+  travel:
+    article:
+      - sourceId: ctrip_travel
+        platform: 携程攻略
+        sourceClass: vertical_professional
+        lanes: [article]
+        defaultRole: licensed_candidate
+        fetchMode: html
+        rightsPolicy: asset_level_required
+        rateLimit: conservative
+        promptFacts: [旅行攻略、游记、景点页和住宿交通信息, 按质量与权利判断]
+      - sourceId: mafengwo
+        platform: 马蜂窝
+        sourceClass: ugc_longform
+        lanes: [article]
+        defaultRole: licensed_candidate
+        fetchMode: html
+        rightsPolicy: asset_level_required
+        rateLimit: conservative
+        promptFacts: [旅行游记和攻略, 反爬或探针页必须拒绝]
+      - sourceId: qunar
+        platform: 去哪儿攻略
+        sourceClass: ugc_longform
+        lanes: [article]
+        defaultRole: licensed_candidate
+        fetchMode: html
+        rightsPolicy: asset_level_required
+        rateLimit: conservative
+        promptFacts: [旅行攻略和游记, 当前已有稳定抓取器但不享有天然排序优先级]
+      - sourceId: tripadvisor
+        platform: Tripadvisor
+        sourceClass: review_note
+        lanes: [article]
+        defaultRole: licensed_candidate
+        fetchMode: html
+        rightsPolicy: asset_level_required
+        rateLimit: conservative
+        promptFacts: [点评、评分、旅行者照片和目的地建议, 按质量与权利判断]
+      - sourceId: trip_com
+        platform: Trip.com
+        sourceClass: vertical_professional
+        lanes: [article]
+        defaultRole: licensed_candidate
+        fetchMode: html
+        rightsPolicy: asset_level_required
+        rateLimit: conservative
+        promptFacts: [旅行目的地、机酒和攻略信息, 按质量与权利判断]
+      - sourceId: lonely_planet
+        platform: Lonely Planet
+        sourceClass: guidebook
+        lanes: [article]
+        defaultRole: licensed_candidate
+        fetchMode: html
+        rightsPolicy: factual_reference_only
+        rateLimit: conservative
+        promptFacts: [权威旅行指南, 只抽取可核验事实和观点边界]
+      - sourceId: alltrails
+        platform: AllTrails
+        sourceClass: route_platform
+        lanes: [article]
+        defaultRole: licensed_candidate
+        fetchMode: html
+        rightsPolicy: asset_level_required
+        rateLimit: conservative
+        promptFacts: [徒步路线、轨迹和户外体验, 按质量与权利判断]
+      - sourceId: komoot
+        platform: Komoot
+        sourceClass: route_platform
+        lanes: [article]
+        defaultRole: licensed_candidate
+        fetchMode: html
+        rightsPolicy: asset_level_required
+        rateLimit: conservative
+        promptFacts: [骑行和徒步路线, 按质量与权利判断]
+    image:
+      - sourceId: scenic_official_gallery
+        platform: 景区官网图库
+        sourceClass: official_gallery
+        lanes: [image]
+        defaultRole: licensed_candidate
+        fetchMode: html
+        rightsPolicy: official_terms_required
+        rateLimit: conservative
+        promptFacts: [景区官方图库, 按页面条款和授权范围判断]
+      - sourceId: hotel_official_gallery
+        platform: 酒店官网图库
+        sourceClass: official_gallery
+        lanes: [image]
+        defaultRole: licensed_candidate
+        fetchMode: html
+        rightsPolicy: official_terms_required
+        rateLimit: conservative
+        promptFacts: [酒店官方图库, 按页面条款和授权范围判断]
+      - sourceId: tripadvisor_photos
+        platform: Tripadvisor Photos
+        sourceClass: vertical_image_platform
+        lanes: [image]
+        defaultRole: reference_only
+        fetchMode: platform_reference
+        rightsPolicy: asset_level_required
+        rateLimit: conservative
+        promptFacts: [旅行者照片发现和参考, 发布需回到资产级授权]
+    video:
+      - sourceId: travel_vlog
+        platform: 旅行Vlog
+        sourceClass: vertical_video
+        lanes: [video]
+        defaultRole: reference_only
+        fetchMode: platform_reference
+        rightsPolicy: asset_level_required
+        rateLimit: conservative
+        promptFacts: [旅行实况和路线节奏参考, 发布需明确授权]

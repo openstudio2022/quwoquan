@@ -21,8 +21,8 @@ from _common.paths import batch_manifest_path, batch_source_catalog_path, task_m
 from _common.global_batch_seq import allocate_global_batch_seq
 from _common.source_catalog import load_source_catalog
 
-BATCH_MANIFEST_SCHEMA = "quwoquan_data.batch_manifest/2"
-SOURCE_CATALOG_SCHEMA = "quwoquan_data.batch_source_catalog/1"
+BATCH_MANIFEST_SCHEMA = "quwoquan_data.batch_manifest"
+SOURCE_CATALOG_SCHEMA = "quwoquan_data.batch_source_catalog"
 TASK_MANIFEST_SCHEMA = "quwoquan.task.manifest"
 
 

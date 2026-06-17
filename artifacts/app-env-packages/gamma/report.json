@@ -3,12 +3,12 @@
   "env": "gamma",
   "runtimeEnv": "gamma",
   "dataSource": "remote",
-  "gatewayBaseUrl": "http://118.31.239.122:19000",
-  "realtimeBaseUrl": "ws://118.31.239.122:19000",
-  "avatarCdnBaseUrl": "http://118.31.239.122:19100",
-  "imageCdnBaseUrl": "http://118.31.239.122:19100",
-  "videoCdnBaseUrl": "http://118.31.239.122:19100",
-  "uploadBaseUrl": "http://118.31.239.122:19100",
+  "gatewayBaseUrl": "http://127.0.0.1:19000",
+  "realtimeBaseUrl": "ws://127.0.0.1:19000",
+  "avatarCdnBaseUrl": "http://127.0.0.1:19100",
+  "imageCdnBaseUrl": "http://127.0.0.1:19100",
+  "videoCdnBaseUrl": "http://127.0.0.1:19100",
+  "uploadBaseUrl": "http://127.0.0.1:19100",
   "currentUserId": "fixture_user_current",
   "seedManifest": "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json",
   "topologySchemaVersion": "environment-topology/v1",
@@ -16,16 +16,16 @@
     "runtimeEnv": "gamma",
     "dataSource": "remote",
     "allowSeeds": false,
-    "allowLocalHosts": false,
+    "allowLocalHosts": true,
     "allowProdHosts": false,
-    "distribution": "pre-release"
+    "distribution": "internal-only"
   },
   "publicBases": {
-    "gatewayBaseUrl": "http://118.31.239.122:19000",
-    "realtimeBaseUrl": "ws://118.31.239.122:19000",
-    "mediaAvatarCdnBaseUrl": "http://118.31.239.122:19100",
-    "mediaImageCdnBaseUrl": "http://118.31.239.122:19100",
-    "mediaVideoCdnBaseUrl": "http://118.31.239.122:19100",
-    "mediaUploadBaseUrl": "http://118.31.239.122:19100"
+    "gatewayBaseUrl": "http://127.0.0.1:19000",
+    "realtimeBaseUrl": "ws://127.0.0.1:19000",
+    "mediaAvatarCdnBaseUrl": "http://127.0.0.1:19100",
+    "mediaImageCdnBaseUrl": "http://127.0.0.1:19100",
+    "mediaVideoCdnBaseUrl": "http://127.0.0.1:19100",
+    "mediaUploadBaseUrl": "http://127.0.0.1:19100"
   }
 }

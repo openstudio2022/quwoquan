@@ -24,11 +24,14 @@ class SubAccountProfileViewData {
     required this.backgroundUrl,
     required this.bio,
     this.identityTags = const <String>[],
+    this.verified = false,
     required this.followerCount,
     required this.followingCount,
     required this.postCount,
     required this.circleCount,
     required this.likeCount,
+    this.profileCompleteness = 100,
+    this.profileCompletenessMissingItems = const <String>[],
     required this.isolationLevel,
     required this.profileVisibility,
     required this.inheritsFromOwner,
@@ -48,11 +51,21 @@ class SubAccountProfileViewData {
 
   /// 主页单行身份标签（云侧 identityTags，端以 · 分隔单行展示）。
   final List<String> identityTags;
+
+  /// 认证标识（蓝勾）。云侧 verified 直出，端只读展示，缺省 false。
+  final bool verified;
   final int followerCount;
   final int followingCount;
   final int postCount;
   final int circleCount;
   final int likeCount;
+
+  /// 主页完善度（0-100），用于「完善主页」提示。默认 100 表示不展示提示。
+  final int profileCompleteness;
+
+  /// 主页待补全项（avatar / tags / circles / entities 等开放字符串）。
+  final List<String> profileCompletenessMissingItems;
+
   final String isolationLevel;
   final String profileVisibility;
   final bool inheritsFromOwner;
@@ -84,11 +97,14 @@ class SubAccountProfileViewData {
       backgroundUrl: w.backgroundUrl,
       bio: w.bio,
       identityTags: w.identityTags,
+      verified: w.verified,
       followerCount: w.followerCount,
       followingCount: w.followingCount,
       postCount: w.postCount,
       circleCount: w.circleCount,
       likeCount: w.likeCount,
+      profileCompleteness: w.profileCompleteness,
+      profileCompletenessMissingItems: w.profileCompletenessMissingItems,
       isolationLevel: w.isolationLevel,
       profileVisibility: w.profileVisibility,
       inheritsFromOwner: w.inheritsFromOwner,
@@ -117,11 +133,14 @@ class SubAccountProfileViewData {
       backgroundUrl: backgroundUrl,
       bio: bio,
       identityTags: identityTags,
+      verified: verified,
       followerCount: stats.followerCount,
       followingCount: stats.followingCount,
       postCount: stats.postCount,
       circleCount: stats.circleCount,
       likeCount: stats.likeCount,
+      profileCompleteness: profileCompleteness,
+      profileCompletenessMissingItems: profileCompletenessMissingItems,
       isolationLevel: isolationLevel,
       profileVisibility: profileVisibility,
       inheritsFromOwner: inheritsFromOwner,

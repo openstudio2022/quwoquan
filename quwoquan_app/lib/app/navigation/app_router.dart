@@ -40,6 +40,7 @@ import 'package:quwoquan_app/ui/chat/pages/group_admins_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_member_search_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
+import 'package:quwoquan_app/ui/search/pages/location_place_landing_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
@@ -289,6 +290,35 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return appRoutePage<void>(
             state: state,
             child: SearchNetworkResultsPage(launchContext: launchContext),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutePaths.locationPlaceLandingPathTemplate.replaceAll(
+          '{placeId}',
+          ':placeId',
+        ),
+        pageBuilder: (context, state) {
+          final placeId = state.pathParameters['placeId'] ?? '';
+          final extra = state.extra is LocationPlaceLandingPageRouteExtra
+              ? state.extra! as LocationPlaceLandingPageRouteExtra
+              : null;
+          final name =
+              extra?.placeName ?? state.uri.queryParameters['name'] ?? '';
+          final referralSource =
+              extra?.referralSource ??
+              _referralSourceFromRoute(
+                state.uri.queryParameters['source'] ?? '',
+              );
+          return appRoutePage<void>(
+            state: state,
+            child: LocationPlaceLandingPage(
+              placeId: placeId,
+              placeName: name,
+              address: extra?.address ?? '',
+              snippet: extra?.snippet ?? '',
+              referralSource: referralSource,
+            ),
           );
         },
       ),

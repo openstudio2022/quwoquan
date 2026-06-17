@@ -14,8 +14,8 @@ import (
 	"errors"
 	"fmt"
 
-	runtimeexperiments "quwoquan_service/runtime/experiments"
 	"gopkg.in/yaml.v3"
+	runtimeexperiments "quwoquan_service/runtime/experiments"
 )
 
 // Experiment IDs (single source; consumed by the engine and the policy resolver).
@@ -44,6 +44,7 @@ type WeightPreset struct {
 	TopicMatch      float64 `yaml:"topicMatch" json:"topicMatch"`
 	AudienceMatch   float64 `yaml:"audienceMatch" json:"audienceMatch"`
 	FormatMatch     float64 `yaml:"formatMatch" json:"formatMatch"`
+	SearchIntent    float64 `yaml:"searchIntent" json:"searchIntent"`
 }
 
 // addDelta applies a signed delta to one named dimension. Returns false when the
@@ -75,6 +76,8 @@ func (w *WeightPreset) addDelta(dim string, delta float64) bool {
 		w.AudienceMatch += delta
 	case "formatMatch":
 		w.FormatMatch += delta
+	case "searchIntent":
+		w.SearchIntent += delta
 	default:
 		return false
 	}
@@ -98,19 +101,31 @@ type PopularityCoeffs struct {
 // ScorerConfig holds every secondary coefficient previously hand-coded in
 // scorer.go / engine.go, so they are all metadata-driven.
 type ScorerConfig struct {
-	Popularity             PopularityCoeffs `yaml:"popularity" json:"popularity"`
-	FreshnessHalfLifeHours float64          `yaml:"freshnessHalfLifeHours" json:"freshnessHalfLifeHours"`
-	ExploreFraction        float64          `yaml:"exploreFraction" json:"exploreFraction"`
-	LongTermTagBoostFactor float64          `yaml:"longTermTagBoostFactor" json:"longTermTagBoostFactor"`
-	CircleTagAffinityFactor float64         `yaml:"circleTagAffinityFactor" json:"circleTagAffinityFactor"`
-	SocialInterestFactor   float64          `yaml:"socialInterestFactor" json:"socialInterestFactor"`
-	EngagementBonusFactor  float64          `yaml:"engagementBonusFactor" json:"engagementBonusFactor"`
-	ENERBonusFactor        float64          `yaml:"enerBonusFactor" json:"enerBonusFactor"`
-	EntityCategoryFactor   float64          `yaml:"entityCategoryFactor" json:"entityCategoryFactor"`
-	NegativePenaltyFactor  float64          `yaml:"negativePenaltyFactor" json:"negativePenaltyFactor"`
-	MaxAuthorPerFeed       int              `yaml:"maxAuthorPerFeed" json:"maxAuthorPerFeed"`
-	ColdStartAgeHours      float64          `yaml:"coldStartAgeHours" json:"coldStartAgeHours"`
-	ColdStartViewThreshold int64            `yaml:"coldStartViewThreshold" json:"coldStartViewThreshold"`
+	Popularity              PopularityCoeffs `yaml:"popularity" json:"popularity"`
+	FreshnessHalfLifeHours  float64          `yaml:"freshnessHalfLifeHours" json:"freshnessHalfLifeHours"`
+	ExploreFraction         float64          `yaml:"exploreFraction" json:"exploreFraction"`
+	LongTermTagBoostFactor  float64          `yaml:"longTermTagBoostFactor" json:"longTermTagBoostFactor"`
+	CircleTagAffinityFactor float64          `yaml:"circleTagAffinityFactor" json:"circleTagAffinityFactor"`
+	SocialInterestFactor    float64          `yaml:"socialInterestFactor" json:"socialInterestFactor"`
+	EngagementBonusFactor   float64          `yaml:"engagementBonusFactor" json:"engagementBonusFactor"`
+	ENERBonusFactor         float64          `yaml:"enerBonusFactor" json:"enerBonusFactor"`
+	EntityCategoryFactor    float64          `yaml:"entityCategoryFactor" json:"entityCategoryFactor"`
+	SearchIntentFactor      float64          `yaml:"searchIntentFactor" json:"searchIntentFactor"`
+	NegativePenaltyFactor   float64          `yaml:"negativePenaltyFactor" json:"negativePenaltyFactor"`
+	// IntersectionSignalFactor scales the single-point intersection fusion in the
+	// rule scorer: social/intersection-origin candidates earn a bounded socialPrior
+	// lift proportional to the viewer's revealed engagement with the matching kind.
+	IntersectionSignalFactor float64 `yaml:"intersectionSignalFactor" json:"intersectionSignalFactor"`
+	MaxAuthorPerFeed         int     `yaml:"maxAuthorPerFeed" json:"maxAuthorPerFeed"`
+	ColdStartAgeHours        float64 `yaml:"coldStartAgeHours" json:"coldStartAgeHours"`
+	ColdStartViewThreshold   int64   `yaml:"coldStartViewThreshold" json:"coldStartViewThreshold"`
+	// DiversityStrategy selects the rerank diversity algorithm: "greedy" (default
+	// type/author/top-tag dedup + explore/cold-start injection) or "mmr" (Maximal
+	// Marginal Relevance balancing relevance vs novelty by DiversityLambda).
+	DiversityStrategy string `yaml:"diversityStrategy" json:"diversityStrategy"`
+	// DiversityLambda ∈ [0,1] is the MMR relevance weight (1-λ is the novelty
+	// weight). Only consulted when DiversityStrategy == "mmr".
+	DiversityLambda float64 `yaml:"diversityLambda" json:"diversityLambda"`
 }
 
 // ExperimentBucket is one bucket of an AB experiment.
@@ -136,6 +151,104 @@ type SegmentTargeting struct {
 	WeightDeltas   map[string]float64 `yaml:"weightDeltas" json:"weightDeltas"`
 }
 
+// IntersectionMixing controls how the fact channel and the affinity (probability)
+// channel are blended when assembling intersection-driven surfaces. Fact signals
+// always outrank affinity; affinityWeight is advisory only and maxAffinityPerSurface
+// caps how many affinity-only reasons can appear on one surface.
+type IntersectionMixing struct {
+	FactWeight            float64 `yaml:"factWeight" json:"factWeight"`
+	AffinityWeight        float64 `yaml:"affinityWeight" json:"affinityWeight"`
+	MaxAffinityPerSurface int     `yaml:"maxAffinityPerSurface" json:"maxAffinityPerSurface"`
+}
+
+// IntersectionConfig is the metadata-driven policy for the intersection module:
+// cross-session cooldown, per-request candidate window, per-dimension freshness
+// TTL, and fact/affinity mixing. It replaces the previously hand-coded constants
+// in content-service IntersectionService. The cooldown TTL is co-registered in
+// _shared/redis_keyspace.yaml: rec:icool.
+type IntersectionConfig struct {
+	CooldownDays                int                `yaml:"cooldownDays" json:"cooldownDays"`
+	MaxCandidateWindow          int                `yaml:"maxCandidateWindow" json:"maxCandidateWindow"`
+	FreshnessTTLDaysByDimension map[string]int     `yaml:"freshnessTtlDaysByDimension" json:"freshnessTtlDaysByDimension"`
+	Mixing                      IntersectionMixing `yaml:"mixing" json:"mixing"`
+}
+
+// ExposureVisibilityConfig controls client-side visible/impressed/dwell thresholds.
+// It is consumed by App reporters and server-side validators; values are
+// metadata-first to avoid hidden UI/runtime constants.
+type ExposureVisibilityConfig struct {
+	ImpressionAreaThreshold float64 `yaml:"impressionAreaThreshold" json:"impressionAreaThreshold"`
+	ImpressionMinDwellMs    int     `yaml:"impressionMinDwellMs" json:"impressionMinDwellMs"`
+	DwellMinReportMs        int     `yaml:"dwellMinReportMs" json:"dwellMinReportMs"`
+}
+
+// ExposureSamplingConfig controls weak-signal sampling before events hit cloud.
+type ExposureSamplingConfig struct {
+	VisibleSampleRate    float64 `yaml:"visibleSampleRate" json:"visibleSampleRate"`
+	ImpressionSampleRate float64 `yaml:"impressionSampleRate" json:"impressionSampleRate"`
+	DwellSampleRate      float64 `yaml:"dwellSampleRate" json:"dwellSampleRate"`
+}
+
+// ExposureReportingConfig bounds client batching and server ingestion pressure.
+type ExposureReportingConfig struct {
+	BehaviorBatchMaxSize         int `yaml:"behaviorBatchMaxSize" json:"behaviorBatchMaxSize"`
+	BehaviorFlushIntervalMs      int `yaml:"behaviorFlushIntervalMs" json:"behaviorFlushIntervalMs"`
+	IngestRateLimitPerUserPerMin int `yaml:"ingestRateLimitPerUserPerMinute" json:"ingestRateLimitPerUserPerMinute"`
+	IngestGlobalRateLimitPerSec  int `yaml:"ingestGlobalRateLimitPerSecond" json:"ingestGlobalRateLimitPerSecond"`
+	IngestInflightLimit          int `yaml:"ingestInflightLimit" json:"ingestInflightLimit"`
+	ClientEventIDWindowMs        int `yaml:"clientEventIdWindowMs" json:"clientEventIdWindowMs"`
+}
+
+// ExposureMemoryConfig controls Redis day-bucket windows and cardinality budget.
+type ExposureMemoryConfig struct {
+	ServedTTLHours             int  `yaml:"servedTtlHours" json:"servedTtlHours"`
+	ImpressedTTLHours          int  `yaml:"impressedTtlHours" json:"impressedTtlHours"`
+	NegativeTTLHours           int  `yaml:"negativeTtlHours" json:"negativeTtlHours"`
+	FatigueHalfLifeHours       int  `yaml:"fatigueHalfLifeHours" json:"fatigueHalfLifeHours"`
+	DayBucketCardinalityBudget int  `yaml:"dayBucketCardinalityBudget" json:"dayBucketCardinalityBudget"`
+	SMembersFallbackAllowed    bool `yaml:"smembersFallbackAllowed" json:"smembersFallbackAllowed"`
+}
+
+// DynamicExposureBudgetConfig is the P1 traffic-pool control surface.
+type DynamicExposureBudgetConfig struct {
+	Enabled                         bool    `yaml:"enabled" json:"enabled"`
+	TrialMinServed                  int     `yaml:"trialMinServed" json:"trialMinServed"`
+	PromotionCTRThreshold           float64 `yaml:"promotionCtrThreshold" json:"promotionCtrThreshold"`
+	PromotionCompletionThreshold    float64 `yaml:"promotionCompletionThreshold" json:"promotionCompletionThreshold"`
+	RetirementNegativeRateThreshold float64 `yaml:"retirementNegativeRateThreshold" json:"retirementNegativeRateThreshold"`
+}
+
+// FrequencyAndNearDupConfig controls soft frequency caps and near-duplicate
+// diversity after scoring. The runtime relaxes these caps when needed to avoid
+// empty feeds.
+type FrequencyAndNearDupConfig struct {
+	Enabled                bool    `yaml:"enabled" json:"enabled"`
+	MaxSameAuthorPerWindow int     `yaml:"maxSameAuthorPerWindow" json:"maxSameAuthorPerWindow"`
+	MaxSameTagPerWindow    int     `yaml:"maxSameTagPerWindow" json:"maxSameTagPerWindow"`
+	MaxSameTopicPerWindow  int     `yaml:"maxSameTopicPerWindow" json:"maxSameTopicPerWindow"`
+	NearDupJaccardMax      float64 `yaml:"nearDupJaccardMax" json:"nearDupJaccardMax"`
+	SoftFallbackMinFillPct int     `yaml:"softFallbackMinFillPct" json:"softFallbackMinFillPct"`
+}
+
+// CollaborativeRecallConfig is the P1 non-deep collaborative recall control surface.
+type CollaborativeRecallConfig struct {
+	Enabled          bool `yaml:"enabled" json:"enabled"`
+	MaxI2ICandidates int  `yaml:"maxI2ICandidates" json:"maxI2ICandidates"`
+	MaxU2ICandidates int  `yaml:"maxU2ICandidates" json:"maxU2ICandidates"`
+	QuotaPct         int  `yaml:"quotaPct" json:"quotaPct"`
+}
+
+// ExposureGovernanceConfig groups all exposure-governance policy knobs.
+type ExposureGovernanceConfig struct {
+	Visibility          ExposureVisibilityConfig    `yaml:"visibility" json:"visibility"`
+	Sampling            ExposureSamplingConfig      `yaml:"sampling" json:"sampling"`
+	Reporting           ExposureReportingConfig     `yaml:"reporting" json:"reporting"`
+	Memory              ExposureMemoryConfig        `yaml:"memory" json:"memory"`
+	DynamicBudget       DynamicExposureBudgetConfig `yaml:"dynamicBudget" json:"dynamicBudget"`
+	FrequencyAndNearDup FrequencyAndNearDupConfig   `yaml:"frequencyAndNearDup" json:"frequencyAndNearDup"`
+	CollaborativeRecall CollaborativeRecallConfig   `yaml:"collaborativeRecall" json:"collaborativeRecall"`
+}
+
 // Guardrail is a KPI floor for a policy change relative to a baseline preset.
 // action is always suggest_only: advisors emit findings, humans approve.
 type Guardrail struct {
@@ -149,14 +262,21 @@ type Guardrail struct {
 
 // RecPolicy is the full recommendation scoring policy.
 type RecPolicy struct {
-	Version          int                     `yaml:"version" json:"version"`
-	PolicyVersion    string                  `yaml:"policyVersion" json:"policyVersion"`
-	DefaultPreset    string                  `yaml:"defaultPreset" json:"defaultPreset"`
-	WeightPresets    map[string]WeightPreset `yaml:"weightPresets" json:"weightPresets"`
-	Scorer           ScorerConfig            `yaml:"scorer" json:"scorer"`
-	Experiments      []ExperimentDef         `yaml:"experiments" json:"experiments"`
-	SegmentTargeting []SegmentTargeting      `yaml:"segmentTargeting" json:"segmentTargeting"`
-	Guardrails       []Guardrail             `yaml:"guardrails" json:"guardrails"`
+	Version       int                     `yaml:"version" json:"version"`
+	PolicyVersion string                  `yaml:"policyVersion" json:"policyVersion"`
+	DefaultPreset string                  `yaml:"defaultPreset" json:"defaultPreset"`
+	WeightPresets map[string]WeightPreset `yaml:"weightPresets" json:"weightPresets"`
+	// ScenarioRouting maps a feed scenario (FeedType, e.g. homepage/circle/search)
+	// to its base weight preset, so one ranking pipeline serves every surface with
+	// scenario-appropriate objectives. Experiment buckets still win over the
+	// scenario base; segment overrides/deltas still apply on top. Unmapped → default.
+	ScenarioRouting    map[string]string        `yaml:"scenarioRouting" json:"scenarioRouting"`
+	Scorer             ScorerConfig             `yaml:"scorer" json:"scorer"`
+	Experiments        []ExperimentDef          `yaml:"experiments" json:"experiments"`
+	SegmentTargeting   []SegmentTargeting       `yaml:"segmentTargeting" json:"segmentTargeting"`
+	Guardrails         []Guardrail              `yaml:"guardrails" json:"guardrails"`
+	Intersection       IntersectionConfig       `yaml:"intersection" json:"intersection"`
+	ExposureGovernance ExposureGovernanceConfig `yaml:"exposureGovernance" json:"exposureGovernance"`
 }
 
 // ResolvedPolicy is the per-request resolved scoring configuration for a user
@@ -196,6 +316,11 @@ func (p *RecPolicy) Validate() error {
 	if _, ok := p.WeightPresets[p.DefaultPreset]; !ok {
 		return fmt.Errorf("recpolicy: defaultPreset %q not in weightPresets", p.DefaultPreset)
 	}
+	for scenario, preset := range p.ScenarioRouting {
+		if _, ok := p.WeightPresets[preset]; !ok {
+			return fmt.Errorf("recpolicy: scenarioRouting[%s] preset %q not in weightPresets", scenario, preset)
+		}
+	}
 	if p.Scorer.FreshnessHalfLifeHours <= 0 {
 		return errors.New("recpolicy: scorer.freshnessHalfLifeHours must be > 0")
 	}
@@ -207,6 +332,20 @@ func (p *RecPolicy) Validate() error {
 	}
 	if p.Scorer.ColdStartAgeHours < 0 || p.Scorer.ColdStartViewThreshold < 0 {
 		return errors.New("recpolicy: scorer cold-start thresholds must be >= 0")
+	}
+	switch p.Scorer.DiversityStrategy {
+	case "", "greedy", "mmr":
+	default:
+		return fmt.Errorf("recpolicy: scorer.diversityStrategy %q invalid (greedy|mmr)", p.Scorer.DiversityStrategy)
+	}
+	if p.Scorer.DiversityLambda < 0 || p.Scorer.DiversityLambda > 1 {
+		return errors.New("recpolicy: scorer.diversityLambda must be in [0,1]")
+	}
+	if p.Scorer.IntersectionSignalFactor < 0 {
+		return errors.New("recpolicy: scorer.intersectionSignalFactor must be >= 0")
+	}
+	if p.Scorer.SearchIntentFactor < 0 {
+		return errors.New("recpolicy: scorer.searchIntentFactor must be >= 0")
 	}
 	for _, exp := range p.Experiments {
 		if exp.ID == "" {
@@ -251,6 +390,81 @@ func (p *RecPolicy) Validate() error {
 		if g.MinRatio <= 0 {
 			return fmt.Errorf("recpolicy: guardrail %s minRatio must be > 0", g.Metric)
 		}
+	}
+	if p.Intersection.CooldownDays < 0 {
+		return errors.New("recpolicy: intersection.cooldownDays must be >= 0")
+	}
+	if p.Intersection.MaxCandidateWindow < 0 {
+		return errors.New("recpolicy: intersection.maxCandidateWindow must be >= 0")
+	}
+	for dim, ttl := range p.Intersection.FreshnessTTLDaysByDimension {
+		if ttl < 0 {
+			return fmt.Errorf("recpolicy: intersection.freshnessTtlDaysByDimension[%s] must be >= 0", dim)
+		}
+	}
+	if p.Intersection.Mixing.FactWeight < 0 || p.Intersection.Mixing.AffinityWeight < 0 {
+		return errors.New("recpolicy: intersection.mixing weights must be >= 0")
+	}
+	if p.Intersection.Mixing.MaxAffinityPerSurface < 0 {
+		return errors.New("recpolicy: intersection.mixing.maxAffinityPerSurface must be >= 0")
+	}
+	if err := validateExposureGovernance(p.ExposureGovernance); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateExposureGovernance(cfg ExposureGovernanceConfig) error {
+	if cfg.Visibility.ImpressionAreaThreshold < 0 || cfg.Visibility.ImpressionAreaThreshold > 1 {
+		return errors.New("recpolicy: exposureGovernance.visibility.impressionAreaThreshold must be in [0,1]")
+	}
+	if cfg.Visibility.ImpressionMinDwellMs < 0 || cfg.Visibility.DwellMinReportMs < 0 {
+		return errors.New("recpolicy: exposureGovernance.visibility dwell thresholds must be >= 0")
+	}
+	for name, rate := range map[string]float64{
+		"visibleSampleRate":    cfg.Sampling.VisibleSampleRate,
+		"impressionSampleRate": cfg.Sampling.ImpressionSampleRate,
+		"dwellSampleRate":      cfg.Sampling.DwellSampleRate,
+	} {
+		if rate < 0 || rate > 1 {
+			return fmt.Errorf("recpolicy: exposureGovernance.sampling.%s must be in [0,1]", name)
+		}
+	}
+	if cfg.Reporting.BehaviorBatchMaxSize < 0 ||
+		cfg.Reporting.BehaviorFlushIntervalMs < 0 ||
+		cfg.Reporting.IngestRateLimitPerUserPerMin < 0 ||
+		cfg.Reporting.IngestGlobalRateLimitPerSec < 0 ||
+		cfg.Reporting.IngestInflightLimit < 0 ||
+		cfg.Reporting.ClientEventIDWindowMs < 0 {
+		return errors.New("recpolicy: exposureGovernance.reporting values must be >= 0")
+	}
+	if cfg.Memory.ServedTTLHours < 0 ||
+		cfg.Memory.ImpressedTTLHours < 0 ||
+		cfg.Memory.NegativeTTLHours < 0 ||
+		cfg.Memory.FatigueHalfLifeHours < 0 ||
+		cfg.Memory.DayBucketCardinalityBudget < 0 {
+		return errors.New("recpolicy: exposureGovernance.memory values must be >= 0")
+	}
+	if cfg.DynamicBudget.TrialMinServed < 0 ||
+		cfg.DynamicBudget.PromotionCTRThreshold < 0 ||
+		cfg.DynamicBudget.PromotionCompletionThreshold < 0 ||
+		cfg.DynamicBudget.RetirementNegativeRateThreshold < 0 {
+		return errors.New("recpolicy: exposureGovernance.dynamicBudget values must be >= 0")
+	}
+	if cfg.FrequencyAndNearDup.MaxSameAuthorPerWindow < 0 ||
+		cfg.FrequencyAndNearDup.MaxSameTagPerWindow < 0 ||
+		cfg.FrequencyAndNearDup.MaxSameTopicPerWindow < 0 ||
+		cfg.FrequencyAndNearDup.NearDupJaccardMax < 0 ||
+		cfg.FrequencyAndNearDup.NearDupJaccardMax > 1 ||
+		cfg.FrequencyAndNearDup.SoftFallbackMinFillPct < 0 ||
+		cfg.FrequencyAndNearDup.SoftFallbackMinFillPct > 100 {
+		return errors.New("recpolicy: exposureGovernance.frequencyAndNearDup values invalid")
+	}
+	if cfg.CollaborativeRecall.MaxI2ICandidates < 0 ||
+		cfg.CollaborativeRecall.MaxU2ICandidates < 0 ||
+		cfg.CollaborativeRecall.QuotaPct < 0 ||
+		cfg.CollaborativeRecall.QuotaPct > 100 {
+		return errors.New("recpolicy: exposureGovernance.collaborativeRecall quota/candidate values invalid")
 	}
 	return nil
 }
@@ -298,6 +512,21 @@ func (p *RecPolicy) ResolveBucketOr(expID, subjectKey string, segments []string,
 		return b
 	}
 	return fallback
+}
+
+// PresetForScenario maps a feed scenario (FeedType string) to its base weight
+// preset. Falls back to DefaultPreset when the scenario is unmapped or the mapped
+// preset is unknown. Use this as the ResolveBucketOr fallback so experiment
+// buckets still win and segment overrides/deltas still apply in ResolveWeights.
+func (p *RecPolicy) PresetForScenario(scenario string) string {
+	if scenario != "" {
+		if preset, ok := p.ScenarioRouting[scenario]; ok {
+			if _, valid := p.WeightPresets[preset]; valid {
+				return preset
+			}
+		}
+	}
+	return p.DefaultPreset
 }
 
 // ResolveWeights produces the per-request weights for a (bucket, segments) pair:

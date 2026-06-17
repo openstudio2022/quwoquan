@@ -76,12 +76,13 @@ extension _CircleShellBuilders on _CircleShellState {
           children: [
             CircleHeader(
               isDark: isDark,
-              avatarUrl: coverUrl,
+              avatarUrl: circle?.iconUrl ?? coverUrl,
               name: circleName,
               description: circle?.description,
               tags: circle?.tags ?? const [],
               badgeLabel: _badgeLabel(state),
               metaLine: _metaLine(state),
+              memberAvatarUrls: _circleMemberClusterAvatars(),
               onTagTap: (tag) {
                 ref
                     .read(contentEngagementTrackerProvider)
@@ -134,6 +135,36 @@ extension _CircleShellBuilders on _CircleShellState {
     );
   }
 
+  /// 头部成员头像簇：取「你 × 圈子」交集证据里的真实样本头像（圈子里你认识的人）。
+  /// 异步未就绪 / 无样本则返回空，头部不展示头像簇（G2 不造假、不占位）。
+  List<String> _circleMemberClusterAvatars() {
+    final query = ObjectIntersectionQuery(
+      objectAId: ref.watch(currentUserIdProvider),
+      objectAType: 'user',
+      objectBId: widget.circleId,
+      objectBType: 'circle',
+    );
+    final reasons = ref.watch(objectSharedReasonsProvider(query)).maybeWhen(
+          data: (data) => data,
+          orElse: () => const <IntersectionReason>[],
+        );
+    final urls = <String>[];
+    for (final reason in reasons) {
+      for (final point in reason.intersectionPoints) {
+        for (final url in point.sampleAvatarUrls) {
+          final trimmed = url.trim();
+          if (trimmed.isNotEmpty && !urls.contains(trimmed)) {
+            urls.add(trimmed);
+          }
+          if (urls.length >= 4) {
+            return urls;
+          }
+        }
+      }
+    }
+    return urls;
+  }
+
   /// 圈子连接卡：当前用户 × 圈子的事实交集（relationship/identity 优先）。
   /// 无可解析交集（空/异步未就绪）则不占位（G2 不造假）。
   Widget _buildIntersectionCard(bool isDark) {
@@ -145,7 +176,7 @@ extension _CircleShellBuilders on _CircleShellState {
     );
     return ObjectIntersectionSection(
       query: query,
-      title: UITextConstants.circleIntersectionTitle,
+      title: UITextConstants.circleWhyRecommendTitle,
       isDark: isDark,
       bottomPadding: AppSpacing.sm,
     );
@@ -159,12 +190,12 @@ extension _CircleShellBuilders on _CircleShellState {
     final asyncImpact = ref.watch(circleImpactProvider(widget.circleId));
     final rows = asyncImpact.maybeWhen(
       data: (summary) => summary.items
-          .where((item) => item.displayText.trim().isNotEmpty)
+          .where((item) => item.primaryText.trim().isNotEmpty)
           .take(3)
           .map(
             (item) => _CircleImpactRowData(
               icon: _circleImpactIcon(item.helpType),
-              text: item.displayText.trim(),
+              text: item.primaryText.trim(),
               source: item.source.trim(),
               count: item.count,
             ),

@@ -14,14 +14,14 @@ Widget _wrap(Widget child) {
 
 IntersectionReason _reason({
   String primaryText = '',
-  String displayText = '',
+  String connectionSummary = '',
   String weightTier = '',
 }) {
   return IntersectionReason(
     dimension: 'relationship',
     source: 'relationship',
     primaryText: primaryText,
-    displayText: displayText,
+    connectionSummary: connectionSummary,
     weightTier: weightTier,
   );
 }
@@ -37,10 +37,10 @@ void main() {
       );
     });
 
-    test('primaryText 缺省 → 回退整句 displayText，不在端侧拼接计数', () {
+    test('primaryText 缺省 → 回退云侧连接说明 connectionSummary，不在端侧拼接计数', () {
       expect(
         IntersectionReasonChip.primaryText(<IntersectionReason>[
-          _reason(displayText: '你和 TA 都来自同一校园'),
+          _reason(connectionSummary: '你和 TA 都来自同一校园'),
         ]),
         '你和 TA 都来自同一校园',
       );

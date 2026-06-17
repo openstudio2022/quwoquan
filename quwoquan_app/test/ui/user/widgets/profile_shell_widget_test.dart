@@ -143,8 +143,8 @@ void main() {
 
       expect(find.text(UITextConstants.profilePersonasLabel), findsNothing);
       expect(
-        find.text(UITextConstants.profileEditLabel),
-        findsAtLeastNWidgets(1),
+        find.byKey(const ValueKey<String>('profile-header-edit')),
+        findsOneWidget,
       );
     });
 
@@ -193,8 +193,11 @@ void main() {
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
       await revealProfilePrimaryTabs(tester);
-      // 统计行也有「作品」标签，主 Tab 断言一律限定在 inline tabs 容器内。
-      expect(_inlinePrimaryTab('作品'), findsOneWidget);
+      // 统计行也有「记录」标签，主 Tab 断言一律限定在 inline tabs 容器内。
+      expect(
+        _inlinePrimaryTab(UITextConstants.profileTabCreations),
+        findsOneWidget,
+      );
       expect(_inlinePrimaryTab('圈子'), findsOneWidget);
       expect(_inlinePrimaryTab('互动'), findsOneWidget);
       expect(_inlinePrimaryTab('生活'), findsNothing);
@@ -210,10 +213,7 @@ void main() {
 
       expect(find.text(UITextConstants.myIntersectionsTitle), findsWidgets);
       expect(find.text(UITextConstants.profileImpactTitleMine), findsOneWidget);
-      expect(
-        find.text(UITextConstants.profileMutualIntersectionTitle),
-        findsNothing,
-      );
+      expect(find.text(UITextConstants.profileWhyRecommendTitle), findsNothing);
       expect(find.text(UITextConstants.profileImpactTitleOther), findsNothing);
     });
 
@@ -256,7 +256,7 @@ void main() {
                     action: 'join',
                     intersectionDimension: 'interest',
                     count: 2,
-                    displayText: '2人加入相关圈子',
+                    primaryText: '2人加入相关圈子',
                   ),
                 ],
               );
@@ -296,12 +296,7 @@ void main() {
         tabsDecoration.color,
         SettingsSemanticConstants.conversationSheetCardSurface(isDark),
       );
-      expect(
-        (tabsDecoration.border! as Border).bottom.color,
-        SettingsSemanticConstants.conversationSheetDividerColor(
-          isDark,
-        ).withValues(alpha: 0.1),
-      );
+      expect(tabsDecoration.border, isNull);
     });
 
     testWidgets('窄屏大字号下保持自适应不溢出', (tester) async {
@@ -617,7 +612,11 @@ void main() {
         _scopedApp(mode: ProfileMode.mine, themeMode: ThemeMode.dark),
       );
       await _pumpFrames(tester);
-      expect(find.text('作品'), findsOneWidget);
+      await revealProfilePrimaryTabs(tester);
+      expect(
+        _inlinePrimaryTab(UITextConstants.profileTabCreations),
+        findsOneWidget,
+      );
       expect(
         find.byIcon(AppNavigationSemanticConstants.settingsActionIcon),
         findsOneWidget,
@@ -665,7 +664,11 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine, userId: ''));
       await _pumpFrames(tester);
-      expect(find.text('作品'), findsOneWidget);
+      await revealProfilePrimaryTabs(tester);
+      expect(
+        _inlinePrimaryTab(UITextConstants.profileTabCreations),
+        findsOneWidget,
+      );
     });
   });
 }

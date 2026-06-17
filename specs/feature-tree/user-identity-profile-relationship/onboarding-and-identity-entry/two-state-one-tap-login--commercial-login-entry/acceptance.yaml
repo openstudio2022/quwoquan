@@ -280,7 +280,7 @@ contract_acceptance:
       recorded:
         - make verify-app-auth-policy
         - cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart
-        - cd quwoquan_service && go test ./services/user-service/tests -run 'TestAuth_OneTapLogin_UsesServerResolvedPhone|TestAuth_LegacyGenericLoginRoute_Removed'
+        - cd quwoquan_service && go test ./services/user-service/tests -run 'TestAuth_OneTapLogin_UsesServerResolvedPhone|TestAuth_RetiredGenericLoginRoute_Removed'
     status: completed
   CONTRACT2:
     title: 手机号 OTP 服务商与错误语义契约

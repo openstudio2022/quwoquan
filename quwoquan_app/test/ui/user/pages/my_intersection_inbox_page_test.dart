@@ -114,7 +114,7 @@ class _RecordingIntersectionRepository implements IntersectionRepository {
         intersectionId: 'ix_test_rel',
         relationKind: 'person',
         displayName: '林清越',
-        displayText: '4 位共同关注',
+        primaryText: '4 位共同关注',
         actionTargetId: 'u_lin',
         tagRefs: const <String>['tag/relationship/shared_follow'],
         freshAt: DateTime.now().toUtc().toIso8601String(),

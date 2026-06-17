@@ -28,6 +28,8 @@ enum BehaviorAction {
   like('like'),
   share('share'),
   dislike('dislike'),
+  hideAuthor('hide_author'),
+  hideContentType('hide_content_type'),
   report('report'),
   skip('skip'),
   comment('comment'),
@@ -100,6 +102,8 @@ class BehaviorEvent {
   const BehaviorEvent({
     required this.contentId,
     required this.action,
+    this.clientEventId,
+    this.state,
     this.contentType,
     this.tags,
     this.duration,
@@ -114,6 +118,7 @@ class BehaviorEvent {
     this.entityRefs,
     this.pageVisitId,
     this.intersectionDimension,
+    this.intersectionSourceRef,
     this.intersectionTagRefs,
     this.intersectionId,
     this.intersectionClass,
@@ -122,6 +127,12 @@ class BehaviorEvent {
 
   final String contentId;
   final BehaviorAction action;
+
+  /// Client-generated idempotency key. Remote service de-duplicates by this id.
+  final String? clientEventId;
+
+  /// Closed feedback state: visible/impressed/dwell/interaction/negative.
+  final String? state;
 
   /// Content format: photo, video, article, moment (for ENER type stats)
   final String? contentType;
@@ -165,6 +176,10 @@ class BehaviorEvent {
   /// 替代旧 reasonType 闭集枚举，回流到推荐管线用于交集解释与归因。
   final String? intersectionDimension;
 
+  /// 交集漏斗归因（§5.4 标准 kind）：触发该行为的最强事实交集 sourceRef。
+  /// 与曝光/点击/展开同名字段一致，使「交集曝光 → 点击 → 转化」可按同一 kind 下钻。
+  final String? intersectionSourceRef;
+
   /// 交集行动归因（B3）：触发该行为的路径制 tagRef 锚点（来自统一 taxonomy）。
   final List<String>? intersectionTagRefs;
 
@@ -180,6 +195,9 @@ class BehaviorEvent {
   Map<String, dynamic> toJson() => <String, dynamic>{
     'contentId': contentId,
     'action': action.wireValue,
+    if (clientEventId != null && clientEventId!.isNotEmpty)
+      'clientEventId': clientEventId,
+    if (state != null && state!.isNotEmpty) 'state': state,
     if (contentType != null && contentType!.isNotEmpty)
       'contentType': contentType,
     if (tags != null && tags!.isNotEmpty) 'tagRefs': tags,
@@ -197,6 +215,8 @@ class BehaviorEvent {
       'pageVisitId': pageVisitId,
     if (intersectionDimension != null && intersectionDimension!.isNotEmpty)
       'intersectionDimension': intersectionDimension,
+    if (intersectionSourceRef != null && intersectionSourceRef!.isNotEmpty)
+      'intersectionSourceRef': intersectionSourceRef,
     if (intersectionTagRefs != null && intersectionTagRefs!.isNotEmpty)
       'intersectionTagRefs': intersectionTagRefs,
     if (intersectionId != null && intersectionId!.isNotEmpty)
@@ -220,6 +240,7 @@ abstract class BehaviorRepository {
     required BehaviorAction action,
     List<String>? tags,
     double? duration,
+    String? contentType,
     String? authorId,
     ReferralSource? referralSource,
     int? position,
@@ -230,6 +251,7 @@ abstract class BehaviorRepository {
         BehaviorEvent(
           contentId: contentId,
           action: action,
+          contentType: contentType,
           tags: tags,
           duration: duration,
           authorId: authorId,
@@ -533,7 +555,8 @@ class RemoteBehaviorRepository extends BehaviorRepository
         final cloudError = e is CloudException
             ? e
             : CloudErrorMapper.fromException(e, requestPath: uri.path);
-        if (!_shouldRetryBehaviorFailure(cloudError) || attempt == _maxRetries) {
+        if (!_shouldRetryBehaviorFailure(cloudError) ||
+            attempt == _maxRetries) {
           throw cloudError;
         }
       }
@@ -558,6 +581,8 @@ class RemoteBehaviorRepository extends BehaviorRepository
     return BehaviorEvent(
       contentId: (json['contentId'] ?? '').toString(),
       action: action,
+      clientEventId: json['clientEventId'] as String?,
+      state: json['state'] as String?,
       contentType: json['contentType'] as String?,
       tags: (json['tagRefs'] as List?)?.map((item) => item.toString()).toList(),
       duration: (json['duration'] as num?)?.toDouble(),
@@ -574,6 +599,7 @@ class RemoteBehaviorRepository extends BehaviorRepository
           .toList(),
       pageVisitId: json['pageVisitId'] as String?,
       intersectionDimension: json['intersectionDimension'] as String?,
+      intersectionSourceRef: json['intersectionSourceRef'] as String?,
       intersectionTagRefs: (json['intersectionTagRefs'] as List?)
           ?.map((item) => item.toString())
           .toList(),

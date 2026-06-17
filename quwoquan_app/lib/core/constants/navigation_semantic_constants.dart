@@ -38,8 +38,8 @@ class AppNavigationSemanticConstants {
     AppChromeSurface surface = AppChromeSurface.standard,
   }) => AppColors.transparent;
 
-  /// 设置入口统一使用更疏朗的 iOS 滑杆语义，替代密集齿轮。
-  static const IconData settingsActionIcon = CupertinoIcons.slider_horizontal_3;
+  /// 设置入口使用业界通用齿轮图标语义。
+  static const IconData settingsActionIcon = CupertinoIcons.gear;
 
   /// 顶栏标题字色。
   static Color barTitleColor(bool isDark) =>

@@ -16,3 +16,10 @@ rec_model_service:
   url: "http://localhost:18090"
   enabled: true
   timeout_ms: 200
+
+# alpha has no dedicated ES infra: the search-index projector stays a no-op so the
+# content write path is exercisable without an ES cluster (search degrades to the
+# native backend in search-service).
+es:
+  enabled: false
+  endpoints: []

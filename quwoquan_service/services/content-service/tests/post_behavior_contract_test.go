@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -158,6 +159,49 @@ func TestBehaviorBatchWireAliases(t *testing.T) {
 
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBehaviorBatchDeduplicatesClientEventID(t *testing.T) {
+	ctx := context.Background()
+	behaviorService := application.NewBehaviorService(
+		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
+		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
+	)
+
+	err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
+		{
+			ClientEventID: "evt-dedup-001",
+			UserID:        "user_dedup_001",
+			SessionID:     "sess_dedup_001",
+			ContentID:     "post_dedup_001",
+			Action:        "impression",
+			State:         "impressed",
+		},
+		{
+			ClientEventID: "evt-dedup-001",
+			UserID:        "user_dedup_001",
+			SessionID:     "sess_dedup_001",
+			ContentID:     "post_dedup_001",
+			Action:        "impression",
+			State:         "impressed",
+		},
+	})
+	if err != nil {
+		t.Fatalf("process duplicate clientEventId: %v", err)
+	}
+
+	filtered, err := rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))).FilterCandidates(
+		ctx,
+		"user_dedup_001",
+		[]rtrec.ContentCandidate{{ContentID: "post_dedup_001"}, {ContentID: "post_fresh_001"}},
+		time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("filter candidates: %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].ContentID != "post_fresh_001" {
+		t.Fatalf("impressed event should filter only deduped content once, got %+v", filtered)
 	}
 }
 

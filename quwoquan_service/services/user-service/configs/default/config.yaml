@@ -18,6 +18,22 @@ mongodb:
   uri: ""
   database: quwoquan
 
+# 统一搜索索引 — 写侧（user.search_index_worker）。
+# user-service 是共享 ES/OpenSearch 索引中 user.profile 对象的灌数生产者，
+# search-service 读取同一集群+索引。端点/凭据通过共享的 SEARCH_ES_ENDPOINTS /
+# SEARCH_ES_* 环境变量注入（部署密钥），提交的配置不硬编码集群地址或密钥。
+# disabled 或 endpoints 为空时，写时投影器为 no-op，不影响用户资料写路径。
+es:
+  enabled: false
+  endpoints: []
+  index: "quwoquan_objects"
+  requestTimeoutMs: 800
+  insecureTls: false
+  shards: 1
+  replicas: 1
+  embeddingDims: 0
+  synonyms: []
+
 redis:
   general:
     mode: standalone

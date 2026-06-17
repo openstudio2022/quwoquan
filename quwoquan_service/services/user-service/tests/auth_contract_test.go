@@ -340,7 +340,7 @@ func TestAuth_OneTapLogin_UsesServerResolvedPhone(t *testing.T) {
 	}
 }
 
-func TestAuth_LegacyGenericLoginRoute_Removed(t *testing.T) {
+func TestAuth_RetiredGenericLoginRoute_Removed(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	rec := doRequest(
@@ -351,7 +351,7 @@ func TestAuth_LegacyGenericLoginRoute_Removed(t *testing.T) {
 		nil,
 	)
 	if rec.Code == http.StatusOK {
-		t.Fatalf("legacy generic login route should not be available")
+		t.Fatalf("retired generic login route should not be available")
 	}
 }
 

@@ -3,6 +3,14 @@ service:
   http:
     addr: ":18081"
 
+# prod：搜索索引写侧开启，端点/凭据经共享 SEARCH_ES_* 环境变量（部署密钥）注入。
+es:
+  enabled: true
+  endpoints: []
+  index: "quwoquan_objects"
+  shards: 3
+  replicas: 1
+
 redis:
   general:
     mode: cluster

@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -64,6 +65,58 @@ func TestPostCandidateSourceMapsContentTargets(t *testing.T) {
 	}
 	if !sawArticle || !sawPhoto {
 		t.Fatalf("target mapping incomplete article=%v photo=%v", sawArticle, sawPhoto)
+	}
+}
+
+// TestPostCandidateSourceSharesProjection guarantees PostCandidateSource and the
+// ES search-index projector consume the very same projection function, so the
+// native and ES recall surfaces can never diverge on the post→Document mapping.
+func TestPostCandidateSourceSharesProjection(t *testing.T) {
+	posts := retrieveFixturePosts()
+	src := PostCandidateSource{reader: fakePublishedReader{posts: posts}}
+	plan, _ := rtsearch.PlanRequest(rtsearch.RetrieveRequest{
+		Targets: []rtsearch.Target{rtsearch.TargetArticle, rtsearch.TargetPhoto, rtsearch.TargetVideo},
+	}, rtsearch.Viewer{})
+	docs, err := src.Candidates(context.Background(), plan)
+	if err != nil {
+		t.Fatalf("candidates err=%v", err)
+	}
+	if len(docs) != len(posts) {
+		t.Fatalf("expected %d docs, got %d", len(posts), len(docs))
+	}
+	for i, doc := range docs {
+		want := ProjectPostToSearchDocument(posts[i])
+		if !reflect.DeepEqual(doc, want) {
+			t.Fatalf("candidate doc %d diverged from shared projection:\n got=%#v\nwant=%#v", i, doc, want)
+		}
+	}
+}
+
+func TestProjectPostFillsLocationDimension(t *testing.T) {
+	post := postmodel.Post{
+		ID: "post_geo", Title: "西湖露营", ContentType: "article", Visibility: "public",
+		Location:     postmodel.GeoPoint{Latitude: 30.2431, Longitude: 120.1505},
+		LocationName: "杭州西湖",
+		PublishedAt:  time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+	}
+	doc := ProjectPostToSearchDocument(post)
+	if doc.Geo == nil || doc.Geo.Lat != 30.2431 || doc.Geo.Lng != 120.1505 {
+		t.Fatalf("geo must come from real post location: %#v", doc.Geo)
+	}
+	if doc.Fields["placeName"] != "杭州西湖" {
+		t.Fatalf("placeName=%q want 杭州西湖", doc.Fields["placeName"])
+	}
+}
+
+func TestProjectPostWithoutCoordsLeavesGeoNil(t *testing.T) {
+	post := postmodel.Post{
+		ID: "post_nogeo", Title: "随手记", ContentType: "article", Visibility: "public",
+		// zero-value Location => no real coordinates captured.
+		LocationName: "",
+	}
+	doc := ProjectPostToSearchDocument(post)
+	if doc.Geo != nil {
+		t.Fatalf("zero location must leave Geo nil (no fabricated 0,0), got %#v", doc.Geo)
 	}
 }
 

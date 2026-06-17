@@ -631,9 +631,9 @@ class _ReturnLinksCard extends StatelessWidget {
             spacing: AppSpacing.intraGroupSm,
             runSpacing: AppSpacing.intraGroupSm,
             children: <Widget>[
-              _ReturnChip(label: '看内容', onTap: () => onTap('content')),
+              _ReturnChip(label: '看记录', onTap: () => onTap('content')),
               _ReturnChip(label: '看讨论', onTap: () => onTap('discussion')),
-              _ReturnChip(label: '找兴趣圈', onTap: () => onTap('circle')),
+              _ReturnChip(label: '找相关圈子', onTap: () => onTap('circle')),
             ],
           ),
         ],

@@ -28,10 +28,7 @@ void main() {
 
       expect(find.text(UITextConstants.profileImpactTitleMine), findsOneWidget);
       expect(find.byKey(AuthorImpactCard.emptyKey), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey<String>('author-impact-fact-community')),
-        findsNothing,
-      );
+      expect(find.text('23人加入相关圈子'), findsNothing);
     });
 
     testWidgets('other 空摘要整卡收起（不造假、不占位）', (tester) async {
@@ -42,7 +39,9 @@ void main() {
       expect(find.byKey(AuthorImpactCard.cardKey), findsNothing);
     });
 
-    testWidgets('other 非空摘要展示「TA的影响」，逐条直出云侧 displayText', (tester) async {
+    testWidgets('other 非空摘要展示「TA的影响」，逐条直出云侧 primaryText 与 subtitleText', (
+      tester,
+    ) async {
       final summary = AuthorImpactSummary(
         authorId: 'u2',
         total: 35,
@@ -53,14 +52,16 @@ void main() {
             intersectionDimension: 'interest',
             source: 'source:circle_join',
             count: 23,
-            displayText: '23人加入相关圈子',
+            primaryText: '23人加入相关圈子',
+            subtitleText: '来自 AI 产品圈',
           ),
           AuthorImpactItem(
             helpType: 'decision',
             action: 'share',
             intersectionDimension: 'content',
             count: 12,
-            displayText: '12人转发了TA的内容',
+            primaryText: '12人转发了TA的内容',
+            subtitleText: '来自内容转发',
           ),
         ],
       );
@@ -72,16 +73,10 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(AuthorImpactCard.emptyKey), findsNothing);
-      expect(
-        find.byKey(const ValueKey<String>('author-impact-fact-community')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('author-impact-fact-decision')),
-        findsOneWidget,
-      );
       expect(find.text('23人加入相关圈子'), findsOneWidget);
+      expect(find.text('来自 AI 产品圈'), findsOneWidget);
       expect(find.text('12人转发了TA的内容'), findsOneWidget);
+      expect(find.text('来自内容转发'), findsOneWidget);
     });
 
     testWidgets('影响事实行可点开查看可枚举来源说明', (tester) async {
@@ -95,15 +90,14 @@ void main() {
             intersectionDimension: 'interest',
             source: 'source:circle_join',
             count: 23,
-            displayText: '23人加入相关圈子',
+            primaryText: '23人加入相关圈子',
+            subtitleText: '来自 AI 产品圈',
           ),
         ],
       );
 
       await tester.pumpWidget(_host(summary, isMine: false));
-      await tester.tap(
-        find.byKey(const ValueKey<String>('author-impact-fact-community')),
-      );
+      await tester.tap(find.text('23人加入相关圈子'));
       await tester.pumpAndSettle();
 
       expect(find.text('23人加入相关圈子'), findsWidgets);
@@ -125,7 +119,7 @@ void main() {
               action: 'a',
               intersectionDimension: 'content',
               count: 10 - i,
-              displayText: '事实行 $i',
+              primaryText: '事实行 $i',
             ),
         ],
       );

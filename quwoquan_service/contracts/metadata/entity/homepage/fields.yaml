@@ -160,7 +160,25 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 关注该实体主页的人数，用于主页 CTA 状态与轻量说明，不作为数据面板主视觉
+        description: 关注该实体主页的人数；实体页统计前台展示为「关注」，不作为数据面板主视觉（禁止使用「关注者」）
+
+      - name: verified
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 实体主页是否官方认证（端侧头部认证标识），缺省 false 不展示
+
+      - name: establishedYear
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 成立年份（基础信息行展示），缺省不展示
 
       - name: averageRating
         type: float64

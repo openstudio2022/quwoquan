@@ -1,0 +1,100 @@
+version: 2
+node:
+  id: intersection-algorithm-closure
+  level: L3_story
+  path: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure
+  title: intersection algorithm closure
+  parent_domain_service: object-homepage-network
+  parent_business_capability: intersection-unified-experience
+scope:
+  summary: 交集 Event→Feature→Ranking→Explain 闭环契约与验收。
+  in_scope:
+    - behaviors intersectionSourceRef + intersection_expand
+    - recommend_feature socialFeatures.intersection
+    - feature_registry intersection 特征
+    - ranking-signal-fusion 交集信号对齐
+    - Explain primaryText 产出归属
+  out_of_scope:
+    - Graph 多跳传播 P2
+gwt_acceptance:
+  GWT_ALG1:
+    title: Feature 层交集特征登记 GWT
+    given:
+      - recommend_feature 投影与 feature_registry 已声明 intersection 特征。
+    when:
+      - 重算 recommend_feature 特征向量并校验注册表。
+    then:
+      - recommend_feature.yaml 含 socialFeatures.intersection 子对象字段。
+      - feature_registry.yaml 含 ≥4 intersection 特征且 source 指向 rm_recommend_feature。
+    done_when:
+      - recommend_feature.yaml 含 socialFeatures.intersection 子对象字段。
+      - feature_registry.yaml 含 ≥4 intersection 特征且 source 指向 rm_recommend_feature。
+    contract_refs:
+      - recommendation/rec_model/projections/recommend_feature.yaml
+    performance_points:
+      - 交集特征在离线特征流水化，读路径零额外同步打分。
+    evidence:
+      primary:
+        - T1_contract
+    tests:
+      planned:
+        - quwoquan_service/runtime/recommendation/intersection_fusion_test.go
+      recorded:
+        - "T1 quwoquan_service/runtime/recommendation/intersection_fusion_test.go（socialFeatures.intersection 特征向量与注册表对齐，go test ./runtime/recommendation green 2026-06-16）"
+    status: pending
+  GWT_ALG2:
+    title: Ranking 信号融合无第二真相源 GWT
+    given:
+      - ranking-signal-fusion 已登记交集 fact/affinity 权重入口。
+    when:
+      - 校验排序融合权重来源与文档/service 清单。
+    then:
+      - ranking-signal-fusion spec 登记 intersection fact/affinity 权重入口。
+      - 无独立 intersection-only ranker 文档或 service.yaml。
+    done_when:
+      - ranking-signal-fusion spec 登记 intersection fact/affinity 权重入口。
+      - 无独立 intersection-only ranker 文档或 service.yaml。
+    contract_refs:
+      - recommendation/rec_model/projections/recommend_feature.yaml
+    performance_points:
+      - 交集信号经统一融合权重入口，无并行排序通道造成重复打分。
+    evidence:
+      primary:
+        - T1_contract
+    tests:
+      planned:
+        - quwoquan_service/runtime/recommendation/intersection_fusion_test.go
+      recorded:
+        - "T1 quwoquan_service/runtime/recommendation/intersection_fusion_test.go（交集 fact/affinity 经统一融合权重入口，无独立 ranker，go test ./runtime/recommendation green 2026-06-16）"
+    status: pending
+  GWT_ALG3:
+    title: Explain primaryText 产出 GWT
+    given:
+      - Explain 管线消费 intersection 证据生成主谓宾句。
+    when:
+      - 校验 primaryText 产出路径与标准 kind 句子覆盖。
+    then:
+      - primaryText 由 Explain 管线产出，禁止 displayText/label hydrate 回退。
+      - contract 测试覆盖 ≥3 个 §5.4 标准 kind 的主谓宾句。
+    done_when:
+      - primaryText 由 Explain 管线产出，禁止 displayText/label hydrate 回退。
+      - contract 测试覆盖 ≥3 个 §5.4 标准 kind 的主谓宾句。
+    contract_refs:
+      - recommendation/rec_model/projections/intersection_reason.yaml
+    performance_points:
+      - primaryText 在服务端 Explain 管线一次产出，端零句子拼装。
+    evidence:
+      primary:
+        - T3_cross_service_integration
+      supporting:
+        - T1_contract
+    tests:
+      planned:
+        - quwoquan_service/services/content-service/internal/application/intersection_service_test.go
+      recorded:
+        - "T3 quwoquan_service/services/content-service/internal/application/intersection_service_test.go（primaryText 经 Explain 管线产出 ≥3 个标准 kind 主谓宾句，无 displayText/label 回退，go test ./services/content-service/internal/application green 2026-06-16）"
+    status: pending
+execution:
+  local_gate:
+    - make verify-metadata
+    - make codegen

@@ -279,7 +279,7 @@ domains:
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/my_profile_page.dart
         status: compliant
-        note: 2026-06-14 首屏固定为编辑资料/分享主页、我的新交集、我的影响力、作品/圈子/互动；未登录态登录 CTA 消费 AuthSessionState
+        note: 2026-06-17 首屏固定为封面→身份(✎)→Slogan→单行统计→我的连接→我的影响力→记录/圈子/互动；连接/影响力消费 metadata/codegen 的 primaryText/subtitleText，记录筛选为全部/图片/视频/长文；未登录态登录 CTA 消费 AuthSessionState
         target_dto: UserProfileDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
@@ -407,6 +407,12 @@ domains:
         note: _openPost 等帖子分支 PostSummaryView.fromDto(..., PostReadSurfaceId.searchCard, wire)；媒体查看器 raw 由 ui/search/services/search_network_results_media_wiring.dart 收口；页内通过门禁 C（无 Map<String,dynamic>/dynamic 字面量）
         target_dto: SearchHit
         target_read_projection: PostReadPresentation
+        target_edit_draft: N/A
+      - path: quwoquan_app/lib/ui/search/pages/location_place_landing_page.dart
+        status: compliant
+        note: 一方地点 location.place 临时地点卡（R-S05e-1）；surface locationPlaceLanding（route_id 同名，operation_ids=[]）；命中详情来自搜索结果 payload 经 LocationPlaceLandingPageRouteExtra 透传，无独立后端 operation；提升为实体主页 CTA 复用 suggestHomepage surface
+        target_dto: SearchHit
+        target_read_projection: N/A
         target_edit_draft: N/A
 
   - id: settings

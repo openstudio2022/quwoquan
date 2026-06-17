@@ -6,7 +6,7 @@ from typing import Any, Mapping, Sequence
 
 from _common.io import write_json
 
-PACKET_SCHEMA = "quwoquan.data.packet.v1"
+PACKET_SCHEMA = "quwoquan.data.packet"
 
 
 def build_packet(

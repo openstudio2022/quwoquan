@@ -228,7 +228,7 @@ void main() {
     expect(
       shouldRevealOtpDebugCode(
         runtimeEnv: 'alpha',
-        dataSourceMode: AppDataSourceMode.mock,
+        mockDataSourceActive: true,
         result: debugResult,
       ),
       isTrue,
@@ -236,7 +236,7 @@ void main() {
     expect(
       shouldRevealOtpDebugCode(
         runtimeEnv: 'alpha',
-        dataSourceMode: AppDataSourceMode.remote,
+        mockDataSourceActive: false,
         result: debugResult,
       ),
       isFalse,
@@ -244,7 +244,7 @@ void main() {
     expect(
       shouldRevealOtpDebugCode(
         runtimeEnv: 'beta',
-        dataSourceMode: AppDataSourceMode.remote,
+        mockDataSourceActive: false,
         result: passThroughResult,
       ),
       isTrue,
@@ -253,7 +253,7 @@ void main() {
       expect(
         shouldRevealOtpDebugCode(
           runtimeEnv: env,
-          dataSourceMode: AppDataSourceMode.remote,
+          mockDataSourceActive: false,
           result: passThroughResult,
         ),
         isFalse,
@@ -269,7 +269,7 @@ void main() {
     expect(
       shouldRevealOtpDebugCode(
         runtimeEnv: 'gamma',
-        dataSourceMode: AppDataSourceMode.remote,
+        mockDataSourceActive: false,
         result: sandboxResult,
       ),
       isTrue,
@@ -278,7 +278,7 @@ void main() {
     expect(
       shouldRevealOtpDebugCode(
         runtimeEnv: 'prod',
-        dataSourceMode: AppDataSourceMode.remote,
+        mockDataSourceActive: false,
         result: sandboxResult,
       ),
       isFalse,
@@ -286,7 +286,7 @@ void main() {
     expect(
       shouldRevealOtpDebugCode(
         runtimeEnv: 'beta',
-        dataSourceMode: AppDataSourceMode.remote,
+        mockDataSourceActive: false,
         result: realResult,
       ),
       isFalse,

@@ -41,6 +41,15 @@ entities:
         api_exposure: read_write
         ops_exposure: read
 
+      - name: iconUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 圈子独立头像（主页头部头像簇主体），缺省时端侧回退 coverUrl
+
       - name: ownerId
         type: string
         constraints: [NOT_NULL]
@@ -87,6 +96,7 @@ entities:
         api_exposure: read
         ops_exposure: read
         recommend_feature: true
+        description: 圈子成员数；圈子页统计前台展示为「成员」
 
       - name: postCount
         type: int

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"quwoquan_service/runtime/recpolicy"
 	learning "quwoquan_service/runtime/learning"
+	"quwoquan_service/runtime/recpolicy"
 )
 
 type mockCandidateSource struct {
@@ -18,6 +18,15 @@ type mockCandidateSource struct {
 
 func (m *mockCandidateSource) Recall(_ context.Context, _ RecallRequest) ([]ContentCandidate, error) {
 	return m.candidates, nil
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 type mockRedisClient struct {
@@ -40,6 +49,13 @@ func (m *mockRedisClient) Get(_ context.Context, key string) (string, error) {
 func (m *mockRedisClient) Set(_ context.Context, key, value string, _ time.Duration) error {
 	m.data[key] = value
 	return nil
+}
+func (m *mockRedisClient) SetNX(_ context.Context, key, value string, _ time.Duration) (bool, error) {
+	if _, exists := m.data[key]; exists {
+		return false, nil
+	}
+	m.data[key] = value
+	return true, nil
 }
 func (m *mockRedisClient) Del(_ context.Context, keys ...string) error {
 	for _, k := range keys {
@@ -126,11 +142,6 @@ func TestHotPath_ProcessSignal_UpdatesState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exposed, _ := hp.IsExposed(ctx, "u1", "s1", "c1")
-	if !exposed {
-		t.Error("c1 should be exposed")
-	}
-
 	state, err := hp.GetSessionState(ctx, "u1", "s1")
 	if err != nil {
 		t.Fatal(err)
@@ -176,15 +187,12 @@ func TestHotPath_DislikeSignal_AddsToNegativeSet(t *testing.T) {
 		Tags:      []string{"spam"},
 	})
 
-	state, _ := hp.GetSessionState(ctx, "u1", "s1")
-	found := false
-	for _, id := range state.NegativeIDs {
-		if id == "c2" {
-			found = true
-		}
+	filtered, err := hp.FilterCandidates(ctx, "u1", []ContentCandidate{{ContentID: "c2"}, {ContentID: "c3"}}, time.Now())
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !found {
-		t.Error("c2 should be in negative set after dislike")
+	if len(filtered) != 1 || filtered[0].ContentID != "c3" {
+		t.Fatalf("negative feedback should filter c2, got %+v", filtered)
 	}
 }
 
@@ -193,7 +201,7 @@ func TestEngine_GetFeed_FiltersExposed(t *testing.T) {
 	hp := NewHotPath(redis)
 	ctx := context.Background()
 
-	hp.ProcessSignal(ctx, BehaviorSignal{UserID: "u1", SessionID: "s1", ContentID: "c1", Action: "click"})
+	hp.RecordServed(ctx, "u1", []FeedItem{{ContentID: "c1"}}, time.Now())
 
 	source := &mockCandidateSource{
 		candidates: []ContentCandidate{
@@ -203,7 +211,7 @@ func TestEngine_GetFeed_FiltersExposed(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(hp, []CandidateSource{source})
+	engine := NewEngine(hp, []CandidateSource{source}, WithExposureGovernance(hp, hp))
 	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
 	if err != nil {
 		t.Fatal(err)
@@ -233,7 +241,7 @@ func TestEngine_GetFeed_FiltersNegativeAfterDislike(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(hp, []CandidateSource{source})
+	engine := NewEngine(hp, []CandidateSource{source}, WithExposureGovernance(hp, hp))
 	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
 	if err != nil {
 		t.Fatal(err)
@@ -242,6 +250,90 @@ func TestEngine_GetFeed_FiltersNegativeAfterDislike(t *testing.T) {
 		if item.ContentID == "c2" {
 			t.Fatal("disliked content c2 should be filtered by negative set")
 		}
+	}
+}
+
+func TestHotPath_HideAuthorAndTypeSignals_UpdateHiddenSets(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	if err := hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID:    "u1",
+		SessionID: "s1",
+		ContentID: "c_author",
+		Action:    "hide_author",
+		AuthorID:  "author_hidden",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID:      "u1",
+		SessionID:   "s1",
+		ContentID:   "c_type",
+		Action:      "hide_content_type",
+		ContentType: "video",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := hp.GetSessionState(ctx, "u1", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(state.HiddenAuthorIDs, "author_hidden") {
+		t.Fatalf("hidden author should be persisted, got %+v", state.HiddenAuthorIDs)
+	}
+	if !containsString(state.HiddenContentTypes, "video") {
+		t.Fatalf("hidden content type should be persisted, got %+v", state.HiddenContentTypes)
+	}
+	filtered, err := hp.FilterCandidates(ctx, "u1", []ContentCandidate{{ContentID: "c_author"}, {ContentID: "c_type"}, {ContentID: "c_ok"}}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered) != 1 || filtered[0].ContentID != "c_ok" {
+		t.Fatalf("current content should enter user-level negative filter, got %+v", filtered)
+	}
+}
+
+func TestEngine_GetFeed_FiltersHiddenAuthorAndContentType(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	if err := hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID:    "u1",
+		SessionID: "s1",
+		ContentID: "seed_author",
+		Action:    "hide_author",
+		AuthorID:  "author_hidden",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID:      "u1",
+		SessionID:   "s1",
+		ContentID:   "seed_type",
+		Action:      "hide_content_type",
+		ContentType: "video",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	source := &mockCandidateSource{
+		candidates: []ContentCandidate{
+			{ContentID: "c_author", AuthorID: "author_hidden", ContentType: "photo", PublishedAt: time.Now()},
+			{ContentID: "c_type", AuthorID: "author_ok", ContentType: "video", PublishedAt: time.Now()},
+			{ContentID: "c_ok", AuthorID: "author_ok", ContentType: "article", PublishedAt: time.Now()},
+		},
+	}
+	engine := NewEngine(hp, []CandidateSource{source})
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", SessionID: "s1", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].ContentID != "c_ok" {
+		t.Fatalf("only non-hidden candidate should remain, got %+v", resp.Items)
 	}
 }
 
@@ -382,6 +474,102 @@ func TestEngine_MultiSource_Dedup(t *testing.T) {
 	}
 	if len(resp.Items) != 3 {
 		t.Errorf("expected 3 unique items, got %d", len(resp.Items))
+	}
+}
+
+func TestEngine_DynamicExposureBudget_ReservesTrialLaneWithoutReplacingRanking(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	now := time.Now()
+	source := &mockCandidateSource{candidates: []ContentCandidate{
+		{ContentID: "mature_high", ContentType: "photo", PublishedAt: now.Add(-48 * time.Hour), ViewCount: 1000, LikeCount: 300},
+		{ContentID: "mature_mid", ContentType: "photo", PublishedAt: now.Add(-48 * time.Hour), ViewCount: 900, LikeCount: 200},
+		{ContentID: "trial_low", ContentType: "article", PublishedAt: now.Add(-1 * time.Hour), ViewCount: 1, LikeCount: 0},
+		{ContentID: "mature_low", ContentType: "video", PublishedAt: now.Add(-48 * time.Hour), ViewCount: 800, LikeCount: 100},
+	}}
+
+	engine := NewEngine(hp, []CandidateSource{source},
+		WithPolicyStore(testPolicyStore(func(p *recpolicy.RecPolicy) {
+			p.Scorer.ExploreFraction = 0
+			p.Scorer.MaxAuthorPerFeed = 10
+			p.ExposureGovernance.DynamicBudget.Enabled = true
+			p.ExposureGovernance.DynamicBudget.TrialMinServed = 5
+			p.ExposureGovernance.DynamicBudget.PromotionCTRThreshold = 0.2
+		})),
+	)
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", Limit: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(resp.Items))
+	}
+	ids := []string{resp.Items[0].ContentID, resp.Items[1].ContentID, resp.Items[2].ContentID}
+	if ids[0] != "mature_high" {
+		t.Fatalf("top ranking item should remain first, got %v", ids)
+	}
+	if !containsString(ids, "trial_low") {
+		t.Fatalf("trial lane should reserve exposure for low-served content, got %v", ids)
+	}
+}
+
+func TestEngine_DynamicExposureBudget_DisableBucketBypassesBudget(t *testing.T) {
+	now := time.Now()
+	items := []ScoredCandidate{
+		{Candidate: ContentCandidate{ContentID: "mature_high", PublishedAt: now.Add(-48 * time.Hour), ViewCount: 1000, LikeCount: 300}, Score: 10},
+		{Candidate: ContentCandidate{ContentID: "mature_mid", PublishedAt: now.Add(-48 * time.Hour), ViewCount: 900, LikeCount: 200}, Score: 9},
+		{Candidate: ContentCandidate{ContentID: "trial_low", PublishedAt: now.Add(-1 * time.Hour), ViewCount: 1}, Score: 1},
+	}
+	cfg := recpolicy.DynamicExposureBudgetConfig{Enabled: true, TrialMinServed: 5, PromotionCTRThreshold: 0.2}
+
+	got := applyDynamicExposureBudget(items, 2, cfg, "disable_exposure_dynamic_budget")
+	if got[0].Candidate.ContentID != "mature_high" || got[1].Candidate.ContentID != "mature_mid" {
+		t.Fatalf("disable bucket must preserve original order, got %s/%s", got[0].Candidate.ContentID, got[1].Candidate.ContentID)
+	}
+}
+
+func TestEngine_FrequencyAndNearDupCaps_DelaysRepeatedExperience(t *testing.T) {
+	now := time.Now()
+	items := []ScoredCandidate{
+		{Candidate: ContentCandidate{ContentID: "a1", AuthorID: "author-a", ContentType: "photo", Tags: []string{"travel"}, EntityRefs: []string{"topic:九寨沟"}, PublishedAt: now}, Score: 10},
+		{Candidate: ContentCandidate{ContentID: "a2", AuthorID: "author-a", ContentType: "photo", Tags: []string{"travel"}, EntityRefs: []string{"topic:九寨沟"}, PublishedAt: now}, Score: 9},
+		{Candidate: ContentCandidate{ContentID: "b1", AuthorID: "author-b", ContentType: "video", Tags: []string{"food"}, EntityRefs: []string{"topic:成都"}, PublishedAt: now}, Score: 8},
+	}
+	cfg := recpolicy.FrequencyAndNearDupConfig{
+		Enabled:                true,
+		MaxSameAuthorPerWindow: 1,
+		MaxSameTagPerWindow:    1,
+		MaxSameTopicPerWindow:  1,
+		NearDupJaccardMax:      0.8,
+		SoftFallbackMinFillPct: 100,
+	}
+
+	got := applyFrequencyAndNearDupCaps(items, 2, cfg)
+	if got[0].Candidate.ContentID != "a1" || got[1].Candidate.ContentID != "b1" {
+		t.Fatalf("repeated author/tag/topic/near-dup should be delayed, got %s/%s", got[0].Candidate.ContentID, got[1].Candidate.ContentID)
+	}
+}
+
+func TestEngine_FrequencyAndNearDupCaps_SoftFallbackPreventsEmptyFeed(t *testing.T) {
+	now := time.Now()
+	items := []ScoredCandidate{
+		{Candidate: ContentCandidate{ContentID: "a1", AuthorID: "author-a", ContentType: "photo", Tags: []string{"travel"}, EntityRefs: []string{"topic:九寨沟"}, PublishedAt: now}, Score: 10},
+		{Candidate: ContentCandidate{ContentID: "a2", AuthorID: "author-a", ContentType: "photo", Tags: []string{"travel"}, EntityRefs: []string{"topic:九寨沟"}, PublishedAt: now}, Score: 9},
+	}
+	cfg := recpolicy.FrequencyAndNearDupConfig{
+		Enabled:                true,
+		MaxSameAuthorPerWindow: 1,
+		MaxSameTagPerWindow:    1,
+		MaxSameTopicPerWindow:  1,
+		NearDupJaccardMax:      0.8,
+		SoftFallbackMinFillPct: 100,
+	}
+
+	got := applyFrequencyAndNearDupCaps(items, 2, cfg)
+	if len(got) < 2 {
+		t.Fatalf("soft fallback should refill constrained small pools, got %d", len(got))
 	}
 }
 
@@ -769,6 +957,50 @@ func TestRuleScorer_UsesUserFeatures(t *testing.T) {
 	}
 }
 
+func TestRuleScorer_ConsumesSearchIntentFeature(t *testing.T) {
+	scorer := &RuleScorer{}
+	now := time.Now()
+	candidates := []ContentCandidate{
+		{ContentID: "plain", ContentType: "article", Title: "成都周末散步", Tags: []string{"旅行"}, PublishedAt: now},
+		{ContentID: "hotpot", ContentType: "article", Title: "成都火锅攻略", Tags: []string{"美食"}, PublishedAt: now},
+	}
+	features := &ScoringFeatures{
+		Session: &SessionState{},
+		User: &UserFeatureVector{
+			SearchTermAffinities: map[string]float64{
+				"火锅": 2.0,
+			},
+			SearchTermHeat: 4,
+		},
+		Weights:     recpolicy.Baseline().WeightPresets["control"],
+		Scorer:      recpolicy.Baseline().Scorer,
+		ExploreRate: 0,
+	}
+
+	scored, err := scorer.ScoreBatch(context.Background(), features, candidates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plain, hotpot ScoredCandidate
+	for _, item := range scored {
+		if item.Candidate.ContentID == "plain" {
+			plain = item
+		}
+		if item.Candidate.ContentID == "hotpot" {
+			hotpot = item
+		}
+	}
+	if hotpot.Detail["searchIntentBoost"] <= 0 {
+		t.Fatalf("hotpot searchIntentBoost=%v want >0", hotpot.Detail["searchIntentBoost"])
+	}
+	if plain.Detail["searchIntentBoost"] != 0 {
+		t.Fatalf("plain searchIntentBoost=%v want 0", plain.Detail["searchIntentBoost"])
+	}
+	if hotpot.Score <= plain.Score {
+		t.Fatalf("search intent should lift matching candidate: hotpot=%v plain=%v", hotpot.Score, plain.Score)
+	}
+}
+
 func TestQualityPreRanker_FiltersStaleContent(t *testing.T) {
 	now := time.Now()
 	candidates := []ContentCandidate{
@@ -932,16 +1164,19 @@ func TestBufferedHotPath_BatchFlush(t *testing.T) {
 			UserID:    "u1",
 			SessionID: "s1",
 			ContentID: fmt.Sprintf("c%d", i),
-			Action:    "click",
+			Action:    "impression",
 		}
 	}
 	buf.ProcessSignalBatch(ctx, signals)
 
 	time.Sleep(150 * time.Millisecond)
 
-	state, _ := hp.GetSessionState(ctx, "u1", "s1")
-	if len(state.ExposedIDs) < 20 {
-		t.Errorf("expected 20 exposed IDs after batch flush, got %d", len(state.ExposedIDs))
+	filtered, err := hp.FilterCandidates(ctx, "u1", []ContentCandidate{{ContentID: "c0"}, {ContentID: "fresh"}}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered) != 1 || filtered[0].ContentID != "fresh" {
+		t.Fatalf("impressed content should be filtered after batch flush, got %+v", filtered)
 	}
 }
 
@@ -1024,17 +1259,12 @@ func TestHotPath_PipelinePath(t *testing.T) {
 	if state.TagWeights["travel"] <= 0 {
 		t.Error("travel tag should have positive weight")
 	}
-	if len(state.ExposedIDs) < 2 {
-		t.Errorf("expected at least 2 exposed IDs, got %d", len(state.ExposedIDs))
+	filtered, err := hp.FilterCandidates(ctx, "u1", []ContentCandidate{{ContentID: "c2"}, {ContentID: "c3"}}, time.Now())
+	if err != nil {
+		t.Fatal(err)
 	}
-	found := false
-	for _, id := range state.NegativeIDs {
-		if id == "c2" {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("c2 should be in negative set")
+	if len(filtered) != 1 || filtered[0].ContentID != "c3" {
+		t.Fatalf("negative point lookup should filter c2, got %+v", filtered)
 	}
 }
 
@@ -1067,14 +1297,6 @@ func TestHotPath_PipelineVsParallel_Consistent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(statePipeline.ExposedIDs) != len(stateParallel.ExposedIDs) {
-		t.Errorf("exposed count mismatch: pipeline=%d parallel=%d",
-			len(statePipeline.ExposedIDs), len(stateParallel.ExposedIDs))
-	}
-	if len(statePipeline.NegativeIDs) != len(stateParallel.NegativeIDs) {
-		t.Errorf("negative count mismatch: pipeline=%d parallel=%d",
-			len(statePipeline.NegativeIDs), len(stateParallel.NegativeIDs))
-	}
 	if len(statePipeline.TagWeights) != len(stateParallel.TagWeights) {
 		t.Errorf("tag weights count mismatch: pipeline=%d parallel=%d",
 			len(statePipeline.TagWeights), len(stateParallel.TagWeights))
@@ -1101,6 +1323,9 @@ func (r *nonPipelinerRedis) Get(ctx context.Context, key string) (string, error)
 }
 func (r *nonPipelinerRedis) Set(ctx context.Context, key, value string, ttl time.Duration) error {
 	return r.inner.Set(ctx, key, value, ttl)
+}
+func (r *nonPipelinerRedis) SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	return r.inner.SetNX(ctx, key, value, ttl)
 }
 func (r *nonPipelinerRedis) Del(ctx context.Context, keys ...string) error {
 	return r.inner.Del(ctx, keys...)

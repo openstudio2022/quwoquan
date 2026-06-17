@@ -300,6 +300,12 @@ class TestKeys {
   static const suggestHomepageSubmitButton = ValueKey<String>(
     'suggest_homepage_submit_button',
   );
+  static const locationPlaceLandingPage = ValueKey<String>(
+    'location_place_landing_page',
+  );
+  static const locationPlaceLandingPromoteButton = ValueKey<String>(
+    'location_place_landing_promote_button',
+  );
   static const publishCircleSelectPage = ValueKey<String>(
     'publish_circle_select_page',
   );

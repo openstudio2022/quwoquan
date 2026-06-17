@@ -1,0 +1,22 @@
+# gamma overrides (cloud integration env)
+# gamma runs the dedicated ES cluster; endpoints are injected via SEARCH_ES_ENDPOINTS.
+service:
+  http:
+    addr: ":18095"
+
+es:
+  enabled: true
+  endpoints: []
+  index: "quwoquan_objects"
+  shards: 1
+  replicas: 1
+
+redis:
+  general:
+    mode: standalone
+    addr: ""
+    db: 0
+  rec:
+    mode: standalone
+    addr: ""
+    db: 0

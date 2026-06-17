@@ -3,7 +3,7 @@ read_model: AuthorImpactSummary
 description: |
   创作者影响力摘要（GetAuthorImpact 响应真相源，对应云侧读模型 rm_author_impact）。
   回答「我帮助了谁 / TA带来了什么」：items 为按 count 降序的影响事实行，
-  端侧「TA的影响 / 我的影响力」摘要模块取前 3 条 displayText 渲染；
+  端侧「TA的影响 / 我的影响力」摘要模块取前 3 条 primaryText 渲染；
   强调帮助结果，不下发任何运营指标（转化率/漏斗/增长率）。
 
 consumers:

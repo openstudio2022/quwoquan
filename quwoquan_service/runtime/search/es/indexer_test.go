@@ -47,6 +47,53 @@ func TestIndexerUpsertMapsTargetAndAnchors(t *testing.T) {
 	}
 }
 
+func TestDocumentToIndexProjectsLocationDimension(t *testing.T) {
+	doc := rtsearch.Document{
+		ObjectType: rtsearch.ObjectTypeEntityHomepage, ObjectID: "hp_1",
+		Title: "西湖主页", Visibility: "public",
+		Geo:    &rtsearch.GeoPoint{Lat: 30.2431, Lng: 120.1505},
+		Fields: map[string]string{"placeId": "entity:sight:xihu", "placeName": "杭州"},
+	}
+	idx := DocumentToIndex(doc)
+	geo, ok := idx["geo"].(map[string]any)
+	if !ok || geo["lat"] != 30.2431 || geo["lon"] != 120.1505 {
+		t.Fatalf("geo projected wrong (ES expects lat/lon): %#v", idx["geo"])
+	}
+	if idx["placeId"] != "entity:sight:xihu" || idx["placeName"] != "杭州" {
+		t.Fatalf("place reference missing: %#v", idx)
+	}
+}
+
+func TestLocationDimensionRoundTrip(t *testing.T) {
+	orig := rtsearch.Document{
+		ObjectType: rtsearch.ObjectTypeContentPost, ObjectID: "post_1",
+		Title: "西湖露营", ContentType: "article", Visibility: "public",
+		Geo:    &rtsearch.GeoPoint{Lat: 30.2431, Lng: 120.1505},
+		Fields: map[string]string{"placeId": "entity:sight:xihu", "placeName": "杭州"},
+	}
+	// DocumentToIndex -> IndexToDocument must be lossless on the location dimension.
+	back := IndexToDocument(DocumentToIndex(orig))
+	if back.Geo == nil || back.Geo.Lat != orig.Geo.Lat || back.Geo.Lng != orig.Geo.Lng {
+		t.Fatalf("geo round trip lost coords: got=%#v want=%#v", back.Geo, orig.Geo)
+	}
+	if back.Fields["placeId"] != "entity:sight:xihu" || back.Fields["placeName"] != "杭州" {
+		t.Fatalf("place reference round trip lost: %#v", back.Fields)
+	}
+}
+
+func TestDocumentToIndexOmitsGeoWhenAbsent(t *testing.T) {
+	doc := rtsearch.Document{
+		ObjectType: rtsearch.ObjectTypeUserProfile, ObjectID: "user_1", Title: "alice",
+	}
+	idx := DocumentToIndex(doc)
+	if _, ok := idx["geo"]; ok {
+		t.Fatalf("nil geo must not be indexed: %#v", idx)
+	}
+	if back := IndexToDocument(idx); back.Geo != nil {
+		t.Fatalf("absent geo must round-trip to nil, got %#v", back.Geo)
+	}
+}
+
 func TestIndexerDeleteIsIdempotent(t *testing.T) {
 	w := newFakeWriter()
 	ix := NewIndexer(w, "")

@@ -9,6 +9,35 @@ description: |
     - Python: ContentFeatures + ContentTrainingSample（Pydantic BaseModel）
 
 # ── 一、用户行为事件 ────────────────────────────────────────────────────
+wire_schema:
+  common_fields:
+    - name: clientEventId
+      type: string
+      required: true
+      description: |
+        端侧生成的事件幂等 ID。云侧以 rec:event_dedup:{<userId>}:<clientEventId>
+        做 SET NX 去重；重复事件不得再次进入 HotPath、训练样本或运营指标。
+    - name: feedRequestId
+      type: string
+      required: false
+      description: |
+        Feed 下发时返回的请求归因 ID。端侧曝光、停留、点击、互动和负反馈必须回传
+        同一个 feedRequestId，禁止点击时重生，确保召回 → 下发 → 曝光 → 互动漏斗可对齐。
+    - name: state
+      type: enum
+      enum: [served, visible, impressed, dwell, interaction, negative]
+      required: false
+      description: |
+        反馈状态闭集。served 由云侧下发写入；visible/impressed/dwell/interaction/negative
+        由端侧上报。training_sample 只能由云侧派生，不允许端侧上报。
+  state_derivation:
+    served: 云侧 feed 返回即 write-behind 写入 rec:served day-bucket，不作为训练正样本。
+    visible: 端侧进入视窗的弱信号，按 recpolicy 采样或仅本地聚合。
+    impressed: 端侧达到可见面积 + 停留阈值后的真实曝光，写入 rec:impressed day-bucket。
+    dwell: 离开/切走/翻页时聚合停留时长，弱停留可按 recpolicy 丢弃。
+    interaction: 点击、点赞、评论、分享、关注、进圈、加联系人等强正向行为。
+    negative: dislike、report、hide_author、hide_content_type 等显式负反馈，用户级即时过滤。
+
 behavior_events:
   - type: impression
     description: 内容进入可视区域曝光
@@ -16,13 +45,13 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackImpression
-    payload_fields: [postId, contentType, feedPosition, intersectionId, intersectionDimension, intersectionClass, intersectionEvidenceId]
+    payload_fields: [postId, contentType, feedPosition, intersectionId, intersectionDimension, intersectionClass, intersectionSourceRef, intersectionEvidenceId]
     ml_signal: weak_positive
     signal_weight: 0.1
     notes: |
       交集曝光归因（交集统一体验）：当帖/卡承载交集理由时，随曝光带
       intersectionId / intersectionDimension / intersectionClass(fact|affinity) /
-      intersectionEvidenceId，闭合「交集曝光 → 点击 → 转化」漏斗，并供推荐冷却窗口判定。
+      intersectionSourceRef(§5.4 标准 kind) / intersectionEvidenceId，闭合「交集曝光 → 点击 → 转化」漏斗，并供推荐冷却窗口判定。
       非交集曝光时这些字段为空，不影响普通内容曝光归因。
 
   - type: dwell
@@ -41,12 +70,24 @@ behavior_events:
     batch: false
     batch_route: POST /v1/content/behaviors
     dart_method: trackClick
-    payload_fields: [postId, contentType, feedPosition, intersectionId, intersectionDimension, intersectionClass, intersectionEvidenceId]
+    payload_fields: [postId, contentType, feedPosition, intersectionId, intersectionDimension, intersectionClass, intersectionSourceRef, intersectionEvidenceId]
     ml_signal: strong_positive
     signal_weight: 0.5
     notes: |
-      交集点击归因：交集卡点击进入对象页时，随点击带 intersectionId/dimension/class/evidenceId，
-      使曝光→点击→转化漏斗可按维度与事实/概率类别下钻。
+      交集点击归因：交集卡点击进入对象页时，随点击带 intersectionId/dimension/class/sourceRef(§5.4 kind)/evidenceId，
+      使曝光→点击→转化漏斗可按维度、标准 kind 与事实/概率类别下钻。
+
+  - type: intersection_expand
+    description: 列表入口「查看更多」展开交集列表（我的连接 / 为什么推荐TA 等）
+    trigger: tap_intersection_list_expand
+    batch: false
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackIntersectionExpand
+    payload_fields: [intersectionId, intersectionDimension, intersectionClass, intersectionSourceRef, surfaceId]
+    ml_signal: weak_positive
+    signal_weight: 0.2
+    notes: |
+      六场景列表入口展开归因；surfaceId 来自 ui_config codegen 常量。
 
   - type: dislike
     description: 用户明确标记"不感兴趣"
@@ -54,9 +95,29 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackDislike
-    payload_fields: [postId, contentType]
+    payload_fields: [postId, contentType, authorId]
     ml_signal: explicit_negative
     signal_weight: -5.0
+
+  - type: hide_author
+    description: 用户明确表示减少/不想看该作者内容；推荐侧即时过滤同作者未来窗口
+    trigger: user_action_more_menu_hide_author
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackHideAuthor
+    payload_fields: [postId, authorId, contentType]
+    ml_signal: explicit_negative
+    signal_weight: -5.0
+
+  - type: hide_content_type
+    description: 用户明确表示减少此类内容；推荐侧即时过滤同内容类型未来窗口
+    trigger: user_action_more_menu_hide_content_type
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackHideContentType
+    payload_fields: [postId, contentType]
+    ml_signal: explicit_negative
+    signal_weight: -4.0
 
   - type: share
     description: 分享到外部/圈子
@@ -113,13 +174,14 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackFollow
-    payload_fields: [postId, authorId, intersectionDimension, intersectionTagRefs]
+    payload_fields: [postId, authorId, intersectionDimension, intersectionSourceRef, intersectionTagRefs]
     ml_signal: very_strong_positive
     signal_weight: 4.0
     notes: |
       交集转化归因（S6）：intersectionDimension（identity/location/content/interest/relationship
-      五维之一）+ intersectionTagRefs（路径制 tagRef，唯一真相源 publish/v1/tags）随关注上报，
-      供推荐回流与「交集转化率」北极星指标按维度/tagRef 下钻。
+      五维之一）+ intersectionSourceRef（§5.4 标准 kind，与曝光/点击/展开同名）+ intersectionTagRefs
+      （路径制 tagRef，唯一真相源 publish/v1/tags）随关注上报，使「交集曝光 → 点击 → 转化」整条漏斗
+      可按同一 sourceRef 下钻，供推荐回流与「交集转化率」北极星指标按维度/kind/tagRef 切分。
 
   - type: join_circle
     description: 加入圈子（交集转化第二类：进圈子）。与 follow 区分以拆分转化漏斗。
@@ -127,7 +189,7 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackJoinCircle
-    payload_fields: [postId, circleId, intersectionDimension, intersectionTagRefs]
+    payload_fields: [postId, circleId, intersectionDimension, intersectionSourceRef, intersectionTagRefs]
     ml_signal: very_strong_positive
     signal_weight: 4.0
     notes: |
@@ -140,7 +202,7 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackAddContact
-    payload_fields: [postId, authorId, intersectionDimension, intersectionTagRefs]
+    payload_fields: [postId, authorId, intersectionDimension, intersectionSourceRef, intersectionTagRefs]
     ml_signal: very_strong_positive
     signal_weight: 4.5
 
@@ -282,6 +344,10 @@ training_sample:
 
   negative_signals:
     - type: dislike
+      weight: 3
+    - type: hide_author
+      weight: 4
+    - type: hide_content_type
       weight: 3
     - type: report
       weight: 5

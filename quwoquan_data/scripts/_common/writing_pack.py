@@ -9,6 +9,7 @@ from typing import Any, Mapping, Sequence
 
 from _common.base_draft import FIDELITY_MAX, FIDELITY_MIN
 from _common.content_object import require_title_hint
+from _common.creative_brief import build_creative_brief
 from _common.quality_gates import WRITING_INTENTS
 from _common.style_catalog import opening_guidance
 
@@ -134,6 +135,14 @@ def build_writing_pack(
         "forbidStandaloneTips": bool((brief.get("tipsEmbeddingPolicy") or {}).get("forbidStandaloneBlock", True)),
     }
     style_family = str(brief.get("styleFamily") or "")
+    creative_brief = build_creative_brief(
+        brief,
+        title=title,
+        carrier=carrier,
+        byline=byline,
+        writing_intent=brief.get("writingIntent"),
+        style_family=style_family,
+    )
     return {
         "schemaVersion": "quwoquan_data.writing_pack",
         "ref": ref,
@@ -150,6 +159,7 @@ def build_writing_pack(
         "sectionIntents": list(section_intents),
         "narrativeContract": narrative,
         "styleFamily": style_family,
+        "creativeBrief": creative_brief,
         "evidencePoints": _evidence_points(evidence_bundle),
         "assets": _compact_assets(assets),
         "sourceUrls": [str(x) for x in source_urls if x],
@@ -170,6 +180,42 @@ def _base_fidelity_range_label() -> str:
     return f"{int(FIDELITY_MIN * 100)}%~{int(FIDELITY_MAX * 100)}%"
 
 
+_FACTUAL_FEWSHOT_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    ("以百科底稿为基础适度加工（轻改）", "以事实证据为基础独立组织"),
+    ("以百科底稿为基础适度加工", "以事实证据为基础独立组织"),
+    ("授权底稿来源", "事实参考来源"),
+    ("可在许可范围内改编", "仅可抽取可核验事实"),
+    ("以下方授权底稿为基底", "以下方事实参考材料核验信息"),
+    ("贴合度控制", "事实覆盖要求"),
+    ("轻改", "独立表达"),
+    ("结构以上方底稿为准", "结构由事实参考与写作主线共同决定"),
+    ("结构跟随底稿", "结构按事实参考与写作主线独立组织"),
+)
+
+
+def _sanitize_factual_fewshot(text: str) -> str:
+    """事实参考来源只允许做事实抽取；SOP/few-shot 里的改编口径必须降噪。"""
+    sanitized = str(text or "")
+    for old, new in _FACTUAL_FEWSHOT_REPLACEMENTS:
+        sanitized = sanitized.replace(old, new)
+    return sanitized
+
+
+def _sop_for_source_mode(raw: Mapping[str, Any], *, has_authorized_base: bool) -> dict[str, str]:
+    sop = {key: str(raw.get(key) or "") for key in ("ref", "example", "guide")}
+    if has_authorized_base:
+        return sop
+    sop["example"] = _sanitize_factual_fewshot(sop.get("example") or "")
+    sop["guide"] = _sanitize_factual_fewshot(sop.get("guide") or "")
+    return sop
+
+
+def _text_for_source_mode(text: str, *, has_authorized_base: bool) -> str:
+    if has_authorized_base:
+        return str(text or "")
+    return _sanitize_factual_fewshot(str(text or ""))
+
+
 def render_prompt_md(pack: Mapping[str, Any]) -> str:
     """渲染给会话模型的人类可读写作指令。"""
     nc = pack.get("narrativeContract") or {}
@@ -184,6 +230,29 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     lines.append("")
     lines.append("## 创作要求（必须由你——会话模型——基于下方真实素材创作，禁止套用固定句式/槽位拼接）")
     lines.append("")
+    creative = pack.get("creativeBrief") if isinstance(pack.get("creativeBrief"), Mapping) else {}
+    if creative:
+        lines.append("### 创作自治边界（creativeBrief）")
+        lines.append("")
+        lines.append(f"- **readerPromise**：{creative.get('readerPromise')}")
+        lines.append(f"- **contentAngle**：{creative.get('contentAngle')}")
+        lines.append(f"- **voiceStyle**：{creative.get('voiceStyle')}")
+        allowed_moves = [str(x) for x in (creative.get("allowedMoves") or []) if x]
+        if allowed_moves:
+            lines.append(f"- **你可以自主选择的表达动作**：{(' / '.join(allowed_moves))}")
+        quality_targets = [str(x) for x in (creative.get("qualityTargets") or []) if x]
+        if quality_targets:
+            lines.append(f"- **创作质量目标**：{(' / '.join(quality_targets))}")
+        must_not_do = [str(x) for x in (creative.get("mustNotDo") or []) if x]
+        if must_not_do:
+            lines.append("- **不可越界**：")
+            for item in must_not_do:
+                lines.append(f"  - {item}")
+        lines.append(
+            "- 写正文前先在心里形成 2-3 个内容构思，选择最能兑现 readerPromise 的结构；"
+            "正文写完后自检标题兑现、信息密度、图文节奏、证据边界与作者可信边界。"
+        )
+        lines.append("")
     intent = pack.get("writingIntent")
     if intent and intent in WRITING_INTENTS:
         spec = WRITING_INTENTS[intent]
@@ -213,7 +282,8 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     if carrier in ("image", "gallery"):
         lines.append(
             "- 载体=image：只提交同一来源集合的 1..20 张图片。标题可空且不超过 80 字；"
-            "整组配文可空且不超过 300 字。配文独立显示在图片浏览器底部，不得写成长文或与图片混排。"
+            "整组配文可空且不超过 300 字。配文独立显示在图片浏览器底部，不得写成长文或与图片混排；"
+            "建议正文配文控制在 260 个中文字符以内，不写二级标题、不写长段落、不输出自检表格。"
         )
     else:
         og = pack.get("openingGuidance") or opening_guidance(str(pack.get("styleFamily") or ""))
@@ -231,12 +301,16 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         elif nc.get("requireMotivation"):
             lines.append("- 开篇写出**出发动机/心情铺垫**（为什么想去、出发前的犹豫或期待），不要一上来就罗列行程。")
         if nc.get("requireLike"):
-            lines.append("- 正文写出**具体喜欢/打动你的点**（来自素材，有画面感）。")
+            lines.append("- 正文写出**具体喜欢/打动你的点**（来自素材，有画面感），并显式出现“喜欢/打动/值得/治愈/松弛/心动”等可识别表达。")
         if nc.get("requireDislike"):
-            lines.append("- 也要诚实写出**不足/劝退点**（来自素材）。")
+            lines.append("- 也要诚实写出**不足/劝退点**（来自素材），并显式出现“不足/遗憾/劝退/不建议/失望/踩雷”等可识别表达。")
         lines.append(f"- 给出至少 {nc.get('minDecisionPoints', 2)} 处**取舍判断**（如「如果你…我会建议…」「宁可…也别…」）。")
         if nc.get("forbidStandaloneTips"):
             lines.append("- 注意事项**就地融入**叙述，禁止另起「实用信息/来源平台」清单块。")
+        lines.append(
+            "- 取舍判断必须自然融入正文收尾或段内判断，禁止使用「它到底适合谁 / 这条线适合谁 / "
+            "这趟适合谁 / 到底适合谁 / 适合谁」作为固定小标题。"
+        )
         if base_text:
             if has_authorized_base:
                 lines.append("- 以下方授权底稿为基底，在许可范围内改编并用其它证据补全事实。")
@@ -282,12 +356,18 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
             mark = "（默认）" if c.get("styleFamily") == og.get("styleFamily") else ""
             lines.append(f"- `{c.get('styleFamily')}`{mark}：{c.get('writingGenre')}")
         lines.append("")
-    sop = pack.get("sopFewshot") or _load_sop_fewshot(str(pack.get("sopExampleRef") or "")) or {}
+    sop = _sop_for_source_mode(
+        pack.get("sopFewshot") or _load_sop_fewshot(str(pack.get("sopExampleRef") or "")) or {},
+        has_authorized_base=has_authorized_base,
+    )
     if sop.get("example") or sop.get("guide"):
         if base_text:
-            lines.append("## 写作范例与规范（few-shot：仅供参考其**口吻与信息颗粒度**；**结构以上方底稿为准**，禁止照搬范例结构、事实、实体与数字）")
+            if has_authorized_base:
+                lines.append("## 写作范例与规范（few-shot：仅供参考其**口吻与信息颗粒度**；**结构以上方底稿为准**，禁止照搬范例结构、事实、实体与数字）")
+            else:
+                lines.append("## 写作范例与规范（few-shot：仅供参考其**口吻与信息颗粒度**；结构按事实参考与写作主线独立组织，禁止照搬范例结构、事实、实体与数字）")
         else:
-            lines.append("## 写作范例与规范（few-shot：模仿其口吻与信息颗粒度，结构跟随底稿，禁止照搬其事实、实体与数字）")
+            lines.append("## 写作范例与规范（few-shot：模仿其口吻与信息颗粒度，结构按写作主线独立组织，禁止照搬其事实、实体与数字）")
         lines.append("")
         if sop.get("example"):
             lines.append(sop["example"])
@@ -307,9 +387,16 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         lines.append("")
         lines.append(_fmt_list(source_paths))
         lines.append("")
-    lines.append("## 章节意图（仅参考；结构以底稿为准，可自然调整，不要照抄为标题）")
+    if has_authorized_base:
+        lines.append("## 章节意图（仅参考；结构以底稿为准，可自然调整，不要照抄为标题）")
+    else:
+        lines.append("## 章节意图（仅参考；结构按事实参考与写作主线独立组织，不要照抄为标题）")
     lines.append("")
-    lines.append(_fmt_list(pack.get("sectionIntents") or []))
+    section_intents = [
+        _text_for_source_mode(str(item), has_authorized_base=has_authorized_base)
+        for item in (pack.get("sectionIntents") or [])
+    ]
+    lines.append(_fmt_list(section_intents))
     lines.append("")
     cc = pack.get("conditionContext") or {}
     region = cc.get("region") if isinstance(cc, Mapping) else None
@@ -356,6 +443,14 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     lines.append("## 产出方式")
     lines.append("")
     lines.append("- 把创作的正文写回同目录 `draft.article.md`（覆盖占位）。")
-    lines.append("- 在同目录 `draft_meta.json` 标注 generator=agent、model、styleFamily、openingStrategy（所选开篇策略 id）、引用了哪些 sourcePath、覆盖了哪些 fact。")
+    lines.append(
+        "- 在同目录 `draft_meta.json` 标注 generator=agent、model、styleFamily、openingStrategy（所选开篇策略 id）、"
+        "引用了哪些 sourcePath、覆盖了哪些 fact。"
+    )
+    lines.append(
+        "- `draft_meta.creativePlan` 必须包含至少 2 个候选构思 concepts、selectedPlanId、selectionReason、"
+        "readerPromise、unusedFacts；`draft_meta.selfCritique` 必须说明 readerPromise、titlePromise、"
+        "informationDensity、evidenceBoundary、personaBoundary。"
+    )
     lines.append("- 之后运行 `produce --stage review` 过门禁；**失败按 repair report 修改正文重跑（Ralph 自纠环），直到 ref_review_gate 全绿（approved）或超墙钟上限**；不得在未过门时宣称完成。")
     return "\n".join(lines) + "\n"

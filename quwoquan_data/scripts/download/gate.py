@@ -65,6 +65,67 @@ def _source_roots(task_id: str, batch_id: str) -> tuple[Path, list[Path]]:
     return object_root, []
 
 
+def _abandoned_entities(task_id: str, batch_id: str) -> set[str]:
+    state_path = batch_root(task_id, batch_id) / "_shared" / "task_workflow_state.json"
+    if not state_path.is_file():
+        return set()
+    try:
+        state = read_json(state_path)
+    except Exception:  # noqa: BLE001
+        return set()
+    out: set[str] = set()
+    for item in state.get("abandonedObjects") or []:
+        if isinstance(item, dict):
+            entity = str(item.get("entityId") or "").strip()
+            if entity:
+                out.add(entity)
+    return out
+
+
+def _entity_from_sources_dir(root: Path, sources_dir: Path) -> str:
+    try:
+        rel = sources_dir.relative_to(root)
+    except ValueError:
+        return ""
+    parts = rel.parts
+    if "1.download" in parts:
+        index = parts.index("1.download")
+        if index > 0:
+            return parts[index - 1]
+    return ""
+
+
+def _stage_gate_report_issues(task_id: str, batch_id: str, abandoned: set[str]) -> list[str]:
+    result_root = batch_root(task_id, batch_id) / "task_download" / "results"
+    issues: list[str] = []
+    for step in (
+        "source_plan_gate",
+        "image_rights_gate",
+        "image_fetch_gate",
+        "entity_source_bundle_gate",
+    ):
+        step_dir = result_root / step
+        if not step_dir.is_dir():
+            continue
+        for path in sorted(step_dir.glob("*.json")):
+            try:
+                data = read_json(path)
+            except Exception:  # noqa: BLE001
+                continue
+            payload = data.get("payload") if isinstance(data.get("payload"), dict) else data
+            if not isinstance(payload, dict) or payload.get("passed") is not False:
+                continue
+            ref = str(payload.get("ref") or path.stem)
+            if ref in abandoned:
+                continue
+            raw_issues = payload.get("issues") if isinstance(payload.get("issues"), list) else []
+            if raw_issues:
+                issues.extend(f"{ref}: {issue}" for issue in raw_issues)
+            else:
+                issues.append(f"{ref}: {step} failed")
+    return issues
+
+
 def gate_download(task_id: str, batch_id: str) -> list[str]:
     """Check download exit criteria.
 
@@ -77,7 +138,11 @@ def gate_download(task_id: str, batch_id: str) -> list[str]:
         return issues
 
     requirements = download_requirements(task_id)
+    abandoned = _abandoned_entities(task_id, batch_id)
     for sources_dir in sources_dirs:
+        entity = _entity_from_sources_dir(root, sources_dir)
+        if entity in abandoned:
+            continue
         source_units = [d for d in sources_dir.iterdir() if d.is_dir()]
         md_count = 0
         retained_count = 0
@@ -149,4 +214,9 @@ def gate_download(task_id: str, batch_id: str) -> list[str]:
             )
         issues.extend(f"{rel}: {issue}" for issue in image_rights_issues)
 
+    seen = set(str(issue) for issue in issues)
+    for issue in _stage_gate_report_issues(task_id, batch_id, abandoned):
+        if str(issue) not in seen:
+            issues.append(str(issue))
+            seen.add(str(issue))
     return issues

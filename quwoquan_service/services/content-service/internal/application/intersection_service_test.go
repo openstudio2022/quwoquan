@@ -75,8 +75,8 @@ func TestIntersectionService_SummaryNewCountAndVisitClears(t *testing.T) {
 func TestIntersectionService_ExposureRetainsButDemotesSeen(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{facts: []IntersectionReasonView{
-		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1", DisplayText: "同校校友"},
-		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "p1", DisplayText: "共同讨论"},
+		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1", PrimaryText: "你的8位校友关注了这里"},
+		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "p1", PrimaryText: "你们都讨论过2篇相同内容"},
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
@@ -116,7 +116,7 @@ func TestIntersectionService_PointSummaryDerivedFromVisiblePoints(t *testing.T) 
 			IntersectionID: "multi",
 			Dimension:      "relationship",
 			Strength:       0.8,
-			DisplayText:    "共同关注的人",
+			PrimaryText:    "你们有2位共同关注的人",
 			FreshAt:        now.Add(-time.Hour).Format(time.RFC3339),
 			ActionTargetID: "u1",
 			IntersectionPoints: []IntersectionPointView{
@@ -156,11 +156,11 @@ func TestIntersectionService_FeedFactBeforeAffinityAndFreshness(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{
 		facts: []IntersectionReasonView{
-			{IntersectionID: "f1", IntersectionClass: "fact", Dimension: "identity", Strength: 0.5, ActionTargetID: "u1", DisplayText: "同校校友"},
-			{IntersectionID: "stale", IntersectionClass: "fact", Dimension: "content", Strength: 0.99, ActionTargetID: "u9", DisplayText: "过期交集", ExpiresAt: now.Add(-time.Hour).Format(time.RFC3339)},
+			{IntersectionID: "f1", IntersectionClass: "fact", Dimension: "identity", Strength: 0.5, ActionTargetID: "u1", PrimaryText: "你的8位校友关注了这里"},
+			{IntersectionID: "stale", IntersectionClass: "fact", Dimension: "content", Strength: 0.99, ActionTargetID: "u9", PrimaryText: "你们都讨论过3篇相同内容", ExpiresAt: now.Add(-time.Hour).Format(time.RFC3339)},
 		},
 		affinities: []IntersectionReasonView{
-			{IntersectionID: "p1", IntersectionClass: "affinity", Dimension: "interest", Strength: 0.95, ActionTargetID: "u2", DisplayText: "可能合得来"},
+			{IntersectionID: "p1", IntersectionClass: "affinity", Dimension: "interest", Strength: 0.95, ActionTargetID: "u2", PrimaryText: "为你推荐的相关内容"},
 		},
 	}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
@@ -184,9 +184,9 @@ func TestIntersectionService_FeedFactBeforeAffinityAndFreshness(t *testing.T) {
 func TestIntersectionService_MaxCandidateWindowCapsBeforeLimit(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{facts: []IntersectionReasonView{
-		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1", DisplayText: "同校校友"},
-		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "u2", DisplayText: "共同讨论"},
-		{IntersectionID: "c", Dimension: "relationship", Strength: 0.7, ActionTargetID: "u3", DisplayText: "共同关注的人"},
+		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1", PrimaryText: "你的8位校友关注了这里"},
+		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "u2", PrimaryText: "你们都讨论过2篇相同内容"},
+		{IntersectionID: "c", Dimension: "relationship", Strength: 0.7, ActionTargetID: "u3", PrimaryText: "你们有4位共同关注的人"},
 	}}
 	svc := NewIntersectionService(
 		newTestRouter(t),
@@ -261,14 +261,14 @@ func TestIntersectionService_SpotlightFiltersIncompleteDisplay(t *testing.T) {
 		{IntersectionID: "no_text", Dimension: "content", Strength: 0.9, ActionTargetID: "p0"},
 		// 人级但缺头像 → 不得进候选窗。
 		{IntersectionID: "person_no_avatar", Dimension: "relationship", Strength: 0.8,
-			ActionTargetID: "u1", ObjectKind: "person", DisplayText: "3位共同关注的人"},
+			ActionTargetID: "u1", ObjectKind: "person", PrimaryText: "你们有3位共同关注的人"},
 		// 人级且头像完备 → 进候选窗。
 		{IntersectionID: "person_ok", Dimension: "relationship", Strength: 0.7,
-			ActionTargetID: "u2", ObjectKind: "person", DisplayText: "2位共同关注的人",
+			ActionTargetID: "u2", ObjectKind: "person", PrimaryText: "你们有2位共同关注的人",
 			DisplayName: "林清越", AvatarURL: "https://static.quwoquan.test/a.png"},
 		// 非人对象无需头像，但要有结论句 → 进候选窗。
 		{IntersectionID: "place_ok", Dimension: "location", Strength: 0.6,
-			ActionTargetID: "e1", ObjectKind: "place", DisplayText: "1位你关注的人来过这里"},
+			ActionTargetID: "e1", ObjectKind: "place", PrimaryText: "1位你关注的人来过这里"},
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
@@ -338,5 +338,101 @@ func TestEvidenceKindRank_MatchesWP1AppendixA(t *testing.T) {
 	// recommended 点恒为 rank 900，与 kind 无关。
 	if got := evidenceKindRank("sharedFollowees", "recommended"); got != 900 {
 		t.Fatalf("recommended rank = %d, want 900", got)
+	}
+}
+
+// TestIntersectionService_ExplainPipelineInstantiatesPrimaryText（WP1·T2）：
+// 云侧 Explain 管线按 §17.1 主谓宾模板由结构化 kind+count 实例化 primaryText，
+// 禁止回退旧 displayText；secondaryText 罗列跨 kind 辅助说明；连接说明按共同点产出。
+func TestIntersectionService_ExplainPipelineInstantiatesPrimaryText(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	src := stubSource{facts: []IntersectionReasonView{
+		{
+			IntersectionID: "rel", IntersectionClass: "fact", Dimension: "relationship",
+			Strength: 0.9, ActionTargetID: "u1", RelationKind: "none",
+			// 旧 displayText 不应成为结论句来源：primaryText 必须由 kind+count 模板化。
+			DisplayText: "共同关注的人",
+			IntersectionPoints: []IntersectionPointView{
+				{PointID: "p1", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", Count: 3, Visibility: "public"},
+				{PointID: "p2", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedCircle", Label: "共同圈子", Count: 2, Visibility: "public"},
+			},
+		},
+	}}
+	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
+	fixedNow(svc, now)
+
+	feed, err := svc.Feed(context.Background(), "viewer1", "recommend", 10)
+	if err != nil {
+		t.Fatalf("feed: %v", err)
+	}
+	if len(feed) != 1 {
+		t.Fatalf("want 1 reason, got %d", len(feed))
+	}
+	got := feed[0]
+	if got.PrimaryText != "你们有3位共同关注的人" {
+		t.Fatalf("primaryText must instantiate sharedFollowees template, got %q", got.PrimaryText)
+	}
+	if !strings.Contains(got.SecondaryText, "共同圈子") {
+		t.Fatalf("secondaryText should enumerate other-kind evidence, got %q", got.SecondaryText)
+	}
+	if got.ConnectionSummary != "你们已有2个共同点" {
+		t.Fatalf("connectionSummary mismatch, got %q", got.ConnectionSummary)
+	}
+}
+
+// TestIntersectionService_AffinityChannelLabeled（WP1·T2）：概率通道必须分通道——
+// affinity reason 带 confidenceLabel 与 modelReasonBucket，fact 不得带 confidenceLabel。
+func TestIntersectionService_AffinityChannelLabeled(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	src := stubSource{
+		facts: []IntersectionReasonView{
+			{
+				IntersectionID: "fact1", IntersectionClass: "fact", Dimension: "relationship",
+				Strength: 0.9, ActionTargetID: "u1", RelationKind: "none",
+				IntersectionPoints: []IntersectionPointView{
+					{PointID: "f1", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", Count: 2, Visibility: "public"},
+				},
+			},
+		},
+		affinities: []IntersectionReasonView{
+			{
+				IntersectionID: "aff", IntersectionClass: "affinity", Dimension: "content",
+				Strength: 0.8, ActionTargetID: "c1", Source: "social_circle",
+				IntersectionPoints: []IntersectionPointView{
+					{PointID: "a1", PointClass: "recommended", Dimension: "content", SourceRef: "sharedCircle", Label: "圈子热看", Visibility: "public"},
+				},
+			},
+		},
+	}
+	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
+	fixedNow(svc, now)
+
+	feed, err := svc.Feed(context.Background(), "viewer1", "recommend", 10)
+	if err != nil {
+		t.Fatalf("feed: %v", err)
+	}
+	byID := map[string]IntersectionReasonView{}
+	for _, r := range feed {
+		byID[r.IntersectionID] = r
+	}
+	fact, ok := byID["fact1"]
+	if !ok {
+		t.Fatalf("fact reason missing, got %v", feed)
+	}
+	if strings.TrimSpace(fact.ConfidenceLabel) != "" {
+		t.Fatalf("fact reason must not carry confidenceLabel, got %q", fact.ConfidenceLabel)
+	}
+	aff, ok := byID["aff"]
+	if !ok {
+		t.Fatalf("affinity reason missing, got %v", feed)
+	}
+	if strings.TrimSpace(aff.PrimaryText) == "" {
+		t.Fatalf("affinity primaryText must be produced")
+	}
+	if strings.TrimSpace(aff.ConfidenceLabel) == "" {
+		t.Fatalf("affinity must carry confidenceLabel (channel separation)")
+	}
+	if !strings.HasPrefix(aff.ModelReasonBucket, "affinity:") {
+		t.Fatalf("affinity must carry modelReasonBucket, got %q", aff.ModelReasonBucket)
 	}
 }

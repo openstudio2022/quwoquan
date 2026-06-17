@@ -730,13 +730,21 @@ class ImmersiveEngagementBar extends StatelessWidget {
             children: [
               icon,
               SizedBox(height: AppSpacing.intraGroupXs / 2),
-              Text(
-                label,
-                style: TextStyle(
-                  color: AppColors.worksBodyText,
-                  fontSize: AppSpacing.immersiveEngagementActionLabelSize,
-                  fontWeight: AppTypography.medium,
-                  height: AppTypography.lineHeightTight,
+              // 计数单行不换行：窄档（如 320）下四位数 "1200" 自身宽度可能比
+              // 紧凑动作格宽 1px，FittedBox.scaleDown 让其等比缩到单行内，
+              // 既保护数字可读、又避免竖向换行撑破安全区高度。
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    color: AppColors.worksBodyText,
+                    fontSize: AppSpacing.immersiveEngagementActionLabelSize,
+                    fontWeight: AppTypography.medium,
+                    height: AppTypography.lineHeightTight,
+                  ),
                 ),
               ),
             ],

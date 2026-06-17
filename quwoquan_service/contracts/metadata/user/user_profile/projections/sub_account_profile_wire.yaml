@@ -94,12 +94,21 @@ client_projection:
       source: identityTags
       aliases: [identityTags]
 
+    # 认证标识（蓝勾）。本期云侧未实现，契约预留，alpha mock 提供；端只读展示。
+    - name: verified
+      dart_type: bool
+      nullable: false
+      source: verified
+      aliases: [verified, isVerified]
+      default: "false"
+
     - name: followerCount
       dart_type: int
       nullable: false
       source: followerCount
       aliases: [followerCount]
       default: "0"
+      # 人页统计前台展示为「粉丝」；见 specs/00_GLOBAL_TERMINOLOGY.md
 
     - name: followingCount
       dart_type: int
@@ -128,6 +137,21 @@ client_projection:
       source: likeCount
       aliases: [likeCount]
       default: "0"
+
+    # 主页完善度（0-100）。本期 alpha seed 驱动，端只读展示「完善主页」提示。
+    - name: profileCompleteness
+      dart_type: int
+      nullable: false
+      source: profileCompleteness
+      aliases: [profileCompleteness]
+      default: "100"
+
+    # 主页待补全项（avatar / tags / circles / entities 等开放字符串），端用于引导补全。
+    - name: profileCompletenessMissingItems
+      dart_type: List<String>
+      nullable: false
+      source: profileCompletenessMissingItems
+      aliases: [profileCompletenessMissingItems]
 
     - name: profileVisibility
       dart_type: String

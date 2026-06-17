@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -53,6 +54,47 @@ func (s *MongoFeedStore) ListCirclePosts(ctx context.Context, circleID string, o
 		}
 	}
 	return items, nextCursor
+}
+
+func (s *MongoFeedStore) UpdateCirclePostPinned(ctx context.Context, circleID, postID string, pinned bool) (bool, error) {
+	update := bson.M{
+		"$set": bson.M{
+			"pinned":    pinned,
+			"updatedAt": time.Now(),
+		},
+	}
+	if pinned {
+		update["$set"].(bson.M)["pinnedAt"] = time.Now()
+	} else {
+		update["$unset"] = bson.M{"pinnedAt": ""}
+	}
+	return s.updateCirclePost(ctx, circleID, postID, update)
+}
+
+func (s *MongoFeedStore) UpdateCirclePostFeatured(ctx context.Context, circleID, postID string, featured bool) (bool, error) {
+	update := bson.M{
+		"$set": bson.M{
+			"featured":  featured,
+			"updatedAt": time.Now(),
+		},
+	}
+	if featured {
+		update["$set"].(bson.M)["featuredAt"] = time.Now()
+	} else {
+		update["$unset"] = bson.M{"featuredAt": ""}
+	}
+	return s.updateCirclePost(ctx, circleID, postID, update)
+}
+
+func (s *MongoFeedStore) updateCirclePost(ctx context.Context, circleID, postID string, update bson.M) (bool, error) {
+	result, err := s.coll.UpdateOne(ctx, bson.M{
+		"_id":       postID,
+		"circleIds": circleID,
+	}, update)
+	if err != nil {
+		return false, err
+	}
+	return result.MatchedCount > 0, nil
 }
 
 func feedSortOrder(sort string) bson.D {

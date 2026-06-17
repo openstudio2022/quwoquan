@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import shutil
 import re
 from pathlib import Path
 from typing import Any
@@ -62,11 +63,34 @@ _HOMEPAGE_PRIMARY_KIND_BONUS = (
     ("景区官网", 90),
     ("官网", 85),
     ("官方", 85),
-    ("政府", 80),
-    ("文旅", 80),
-    ("政务", 80),
 )
+_HOMEPAGE_SUPPORT_ONLY_MARKERS = ("政府", "文旅", "政务", "gov.cn")
 _HOMEPAGE_GUIDE_PENALTY = ("攻略", "游记", "评论", "点评", "小红书", "图虫", "摄影")
+_HOMEPAGE_ALLOWED_LANES = ("homepage", "legacy", "")
+_HOMEPAGE_FACT_NOISE_MARKERS = (
+    "欢迎访问",
+    "为您提供景区美食大全",
+    "请提前查看",
+    "打开微信扫一扫",
+    "扫码",
+    "关注",
+    "暂停服务",
+    "暂无",
+)
+_HOMEPAGE_HISTORY_MARKERS = (
+    "历史",
+    "沿革",
+    "始建",
+    "建成",
+    "设立",
+    "成立",
+    "发现",
+    "修建",
+    "开凿",
+    "遗址",
+    "朝",
+    "世纪",
+)
 
 
 def _safe_ref(domain: str, etype: str, name: str) -> str:
@@ -85,6 +109,49 @@ def _coverage_targets(spec: dict[str, Any]) -> list[dict[str, str]]:
         )
         out.append({"name": name, "domain": domain, "etype": etype})
     return out
+
+
+def _homepage_source_text(meta: dict[str, Any]) -> str:
+    fields = (
+        "sourceKind",
+        "platform",
+        "category",
+        "source_id",
+        "discoveryProvider",
+        "sourceRole",
+        "researchLane",
+        "url",
+    )
+    return " ".join(str(meta.get(field) or "") for field in fields).strip()
+
+
+def _homepage_source_priority(meta: dict[str, Any]) -> int:
+    lane = str(meta.get("researchLane") or "")
+    if lane not in _HOMEPAGE_ALLOWED_LANES:
+        return -1000
+    source_text = _homepage_source_text(meta)
+    lowered = source_text.casefold()
+    if any(marker.casefold() in lowered for marker in _HOMEPAGE_GUIDE_PENALTY):
+        return -1000
+    if any(marker.casefold() in lowered for marker in _HOMEPAGE_SUPPORT_ONLY_MARKERS):
+        return 0
+    priority = 0
+    for marker, score in _HOMEPAGE_PRIMARY_KIND_BONUS:
+        if marker.casefold() in lowered:
+            priority = max(priority, score)
+    category = str(meta.get("category") or "").casefold()
+    if category in {"encyclopedia", "official_site"}:
+        priority = max(priority, 85)
+    return priority
+
+
+def _homepage_base_source_issue_text(meta: dict[str, Any]) -> tuple[str, bool, bool]:
+    source_kind = str(meta.get("sourceKind") or meta.get("platform") or meta.get("category") or "").strip()
+    source_text = _homepage_source_text(meta)
+    lowered = source_text.casefold()
+    is_primary = _homepage_source_priority(meta) > 0
+    is_author_experience = any(marker.casefold() in lowered for marker in _HOMEPAGE_GUIDE_PENALTY)
+    return source_kind, is_primary, is_author_experience
 
 
 def _catalog_keys(filename: str, top_key: str) -> list[str]:
@@ -115,30 +182,35 @@ def _entity_base_draft(task_id: str, batch_id: str, domain: str, etype: str, nam
     for candidate in candidates:
         meta_path = Path(candidate["unitDir"]) / "meta.json"
         meta = read_json(meta_path) if meta_path.is_file() else {}
-        if str(meta.get("researchLane") or "") in ("homepage", "legacy", ""):
-            source_kind = str(meta.get("sourceKind") or meta.get("platform") or "")
-            lowered = source_kind.casefold()
-            bonus = 0
-            for marker, score in _HOMEPAGE_PRIMARY_KIND_BONUS:
-                if marker.casefold() in lowered:
-                    bonus = max(bonus, score)
-            if any(marker in source_kind for marker in _HOMEPAGE_GUIDE_PENALTY):
-                bonus -= 120
-            homepage_candidates.append({**candidate, "_homepagePriority": bonus, "_sourceKind": source_kind})
-    if homepage_candidates:
-        homepage_candidates.sort(
-            key=lambda row: (
-                int(row.get("_homepagePriority") or 0),
-                float(row.get("score") or 0),
-                int(row.get("length") or 0),
-            ),
-            reverse=True,
-        )
-        candidates = homepage_candidates
-        if int(candidates[0].get("_homepagePriority") or 0) <= 0:
-            return {}
+        priority = _homepage_source_priority(meta)
+        if priority > 0:
+            candidate_text = load_base_draft_text(task_id, batch_id, candidate["sourceRef"]).strip()
+            fact_count = len(_split_fact_sentences(candidate_text[:4000], entity_name=name))
+            homepage_candidates.append(
+                {
+                    **candidate,
+                    "_homepagePriority": priority,
+                    "_sourceKind": _homepage_source_text(meta),
+                    "_factCount": fact_count,
+                    "_factReady": fact_count >= 4,
+                    "_baseText": candidate_text,
+                }
+            )
+    if not homepage_candidates:
+        return {}
+    homepage_candidates.sort(
+        key=lambda row: (
+            bool(row.get("_factReady")),
+            int(row.get("_homepagePriority") or 0),
+            int(row.get("_factCount") or 0),
+            float(row.get("score") or 0),
+            int(row.get("length") or 0),
+        ),
+        reverse=True,
+    )
+    candidates = homepage_candidates
     best = candidates[0]
-    text = load_base_draft_text(task_id, batch_id, best["sourceRef"]).strip()
+    text = str(best.get("_baseText") or "").strip()
     if not text:
         return {}
     meta_path = Path(best["unitDir"]) / "meta.json"
@@ -149,6 +221,40 @@ def _entity_base_draft(task_id: str, batch_id: str, domain: str, etype: str, nam
         "sourceUseMode": str(meta.get("sourceUseMode") or "factual_reference_only"),
         "text": text[:4000],
     }
+
+
+def _homepage_base_source_issues(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> list[str]:
+    label = f"{domain}/{etype}/{name}"
+    quality_path = batch_entity_stage_dir(task_id, batch_id, domain, etype, name, STAGE_QUALITY) / "quality_analysis.json"
+    if not quality_path.is_file():
+        return [f"{label}: 2.quality/quality_analysis.json 缺失"]
+    quality = read_json(quality_path)
+    compose_path = batch_entity_stage_dir(task_id, batch_id, domain, etype, name, STAGE_COMPOSE) / "entity_page_input.json"
+    compose_payload = read_json(compose_path) if compose_path.is_file() else {}
+    if isinstance(compose_payload.get("payload"), dict):
+        compose_payload = compose_payload["payload"]
+    base = quality.get("baseDraft") if isinstance(quality.get("baseDraft"), dict) else {}
+    compose_base = compose_payload.get("baseDraft") if isinstance(compose_payload.get("baseDraft"), dict) else {}
+    base_source = str(base.get("sourceRef") or "").strip()
+    compose_source = str(compose_base.get("sourceRef") or "").strip()
+    issues: list[str] = []
+    if not base_source:
+        issues.append(f"{label}: entity homepage baseDraft.sourceRef is empty")
+        return issues
+    if compose_source and compose_source != base_source:
+        issues.append(f"{label}: entity homepage quality base draft differs from compose base draft")
+    meta_path = batch_root(task_id, batch_id) / base_source
+    meta = read_json(meta_path.parent / "meta.json") if (meta_path.parent / "meta.json").is_file() else {}
+    source_kind, is_primary, is_author_experience = _homepage_base_source_issue_text(meta)
+    if not is_primary:
+        issues.append(
+            f"{label}: entity homepage base draft must be encyclopedia/wiki/official-site source, got {source_kind or '<empty>'}"
+        )
+    if is_author_experience:
+        issues.append(
+            f"{label}: entity homepage base draft must not be author travelogue/guide/comment source, got {source_kind or '<empty>'}"
+        )
+    return issues
 
 
 def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> tuple[Path, list[str]]:
@@ -196,7 +302,9 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
                 ),
                 "imageRequirement": (
                     "实体主页须配 ≥1 张真实 CC 图片：在 page.md 用 asset:// 引用并在 manifest.json 登记，"
-                    "图片来自 source_plan 的结构化 imageUrls（含 license/credit/relevance）。"
+                    "图片来自 source_plan 的结构化 imageUrls（含 license/credit/relevance），"
+                    "manifest.assets[] 必须同时写 sourceRef=来源单元 source.md、sourceAssetRef=来源单元 assets/原图、"
+                    "termsUrl 或 authorizationProof，禁止把 sourceRef 写成图片文件路径。"
                 ),
                 "conditionEvidenceContract": {
                     "requiredWhen": "conditionProfile.regions 或 conditionProfile.seasons 非空",
@@ -280,6 +388,326 @@ def _page_asset_refs(page: Path) -> set[str]:
     for ref in _ASSET_REF_RE.findall(page.read_text(encoding="utf-8")):
         refs.add(ref.split("/")[-1])
     return refs
+
+
+def _strip_frontmatter(text: str) -> str:
+    raw = str(text or "").strip()
+    if raw.startswith("---"):
+        parts = raw.split("---", 2)
+        if len(parts) == 3:
+            raw = parts[2].strip()
+    raw = re.sub(r"^=+\s*(.*?)\s*=+$", r"## \1", raw, flags=re.MULTILINE)
+    raw = re.sub(r"^#{1,6}\s*", "", raw, flags=re.MULTILINE)
+    raw = re.sub(r"\[[^\]]+\]\([^)]+\)", "", raw)
+    raw = re.sub(r"https?://\S+", "", raw)
+    raw = re.sub(r"\s+", " ", raw)
+    return raw.strip()
+
+
+def _split_fact_sentences(text: str, *, entity_name: str) -> list[str]:
+    body = _strip_frontmatter(text)
+    chunks = re.split(r"(?<=[。！？；;])\s*|\n+", body)
+    out: list[str] = []
+    seen: set[str] = set()
+    for chunk in chunks:
+        sentence = re.sub(r"\s+", "", str(chunk or "")).strip()
+        if len(sentence) < 12:
+            continue
+        if any(marker in sentence for marker in _HOMEPAGE_FACT_NOISE_MARKERS):
+            continue
+        if not any(token in sentence for token in (entity_name, "位于", "海拔", "面积", "景区", "遗产", "博物馆", "历史", "开放", "交通", "气候", "保护")):
+            continue
+        sentence = sentence[:120]
+        key = sentence[:48]
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(sentence)
+        if len(out) >= 18:
+            break
+    return out
+
+
+def _homepage_summary(name: str, facts: list[str]) -> str:
+    for fact in facts:
+        if name in fact and ("位于" in fact or "遗产" in fact or "博物馆" in fact or "景区" in fact):
+            return fact.rstrip("。") + "。"
+    return f"{name} 是本任务覆盖的实体主页对象，本页基于百科、官方或文旅来源整理基础事实。"
+
+
+def _infer_condition_profile(name: str, facts: list[str]) -> dict[str, Any]:
+    text = " ".join(facts)
+    regions: list[str] = []
+    seasons: list[str] = []
+    if any(token in text for token in ("高原", "海拔", "藏", "雪山", "冰川")):
+        regions.append("高原")
+    if any(token in text for token in ("雪山", "冰川")):
+        regions.append("雪山")
+    if any(token in text for token in ("森林", "山地", "峡谷", "沟谷", "瀑布")):
+        regions.append("山地森林")
+    if any(token in text for token in ("成都平原", "城市", "市区", "博物馆", "都江堰", "三星堆")):
+        regions.append("平原都市")
+    if not regions:
+        regions.append("山地森林")
+    if any(token in text for token in ("春", "花", "灌溉")):
+        seasons.append("春")
+    if any(token in text for token in ("夏", "避暑", "雨季")):
+        seasons.append("夏")
+    if any(token in text for token in ("秋", "彩林", "红叶")):
+        seasons.append("秋")
+    if any(token in text for token in ("冬", "冰雪", "结冰")):
+        seasons.append("冬")
+    if not seasons:
+        seasons.extend(["春", "秋"])
+    regions = list(dict.fromkeys(regions))[:3]
+    seasons = list(dict.fromkeys(seasons))[:4]
+    evidence_refs = [
+        {
+            "field": "regions",
+            "value": value,
+            "source": "page.md",
+            "path": "page.md",
+            "note": f"{name} 主页正文概况与空间特征归纳",
+        }
+        for value in regions
+    ] + [
+        {
+            "field": "seasons",
+            "value": value,
+            "source": "page.md",
+            "path": "page.md",
+            "note": f"{name} 主页正文季节与游览信息归纳",
+        }
+        for value in seasons
+    ]
+    return {"regions": regions, "seasons": seasons, "evidenceRefs": evidence_refs}
+
+
+def _pick_homepage_asset(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> dict[str, Any]:
+    from _common.source_unit import object_image_candidates
+
+    obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
+    candidates = []
+    for image in object_image_candidates(obj, task_id, batch_id):
+        lane = str(image.get("researchLane") or "")
+        if lane not in {"homepage", "homepage_image"}:
+            continue
+        if not str(image.get("sourceRef") or "").endswith("/source.md"):
+            continue
+        if not str(image.get("sourceAssetRef") or ""):
+            continue
+        if not (str(image.get("authorizationProof") or "").strip() or str(image.get("termsUrl") or "").strip()):
+            continue
+        candidates.append(image)
+    if not candidates:
+        return {}
+    candidates.sort(
+        key=lambda item: (
+            0 if str(item.get("researchLane") or "") == "homepage" else 1,
+            str(item.get("sourceKind") or ""),
+            str(item.get("sourceAssetRef") or ""),
+        )
+    )
+    return candidates[0]
+
+
+def _copy_homepage_asset(entity_dir: Path, image: dict[str, Any]) -> dict[str, Any]:
+    src = Path(str(image.get("path") or ""))
+    if not src.is_file():
+        return {}
+    assets_dir = entity_dir / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    file_name = src.name
+    shutil.copyfile(src, assets_dir / file_name)
+    asset_id = file_name
+    return {
+        "assetId": asset_id,
+        "fileName": file_name,
+        "caption": str(image.get("caption") or image.get("relevance") or "实体主页图片").strip(),
+        "license": str(image.get("license") or "").strip(),
+        "credit": str(image.get("creator") or "").strip(),
+        "relevance": str(image.get("relevance") or "").strip(),
+        "sourceRef": str(image.get("sourceRef") or "").strip(),
+        "sourceAssetRef": str(image.get("sourceAssetRef") or "").strip(),
+        "termsUrl": str(image.get("termsUrl") or "").strip(),
+        "authorizationProof": str(image.get("authorizationProof") or "").strip(),
+    }
+
+
+def _render_homepage_markdown(name: str, facts: list[str], asset_id: str, caption: str) -> str:
+    deduped_facts: list[str] = []
+    seen_facts: set[str] = set()
+    for fact in facts or [f"{name} 的基础事实来自已下载的百科、官方或文旅来源。"]:
+        normalized = " ".join(str(fact).strip().split())
+        if not normalized or normalized in seen_facts:
+            continue
+        seen_facts.add(normalized)
+        deduped_facts.append(normalized)
+    facts = deduped_facts or [f"{name} 的基础事实来自已下载的百科、官方或文旅来源。"]
+    summary = _homepage_summary(name, facts)
+    overview = "。".join(f.rstrip("。") for f in facts[:4]).rstrip("。") + "。"
+    spatial = "。".join(f.rstrip("。") for f in facts[4:8]).rstrip("。") + "。"
+    history_facts = [f for f in facts if any(token in f for token in _HOMEPAGE_HISTORY_MARKERS)]
+    has_history = bool(history_facts)
+    history_title = "历史沿革" if has_history else "背景信息"
+    history = (
+        "。".join(f.rstrip("。") for f in history_facts[:5]).rstrip("。") + "。"
+        if has_history
+        else (
+            f"{name} 的背景信息来自已下载的百科、官方或文旅资料；"
+            "当前来源未提供足够清晰的年代沿革，因此本页不强行编写历史章节。"
+        )
+    )
+    practical = (
+        f"浏览 {name} 时，建议先确认官方公告中的开放时间、预约方式、票务规则和交通接驳。"
+        "如果正文涉及季节、海拔、水文或馆藏等条件信息，应以现场公告和当日天气为准；"
+        "本页只保留实体介绍所需的稳定事实，不写个人游记式体验。"
+    )
+    culture = (
+        "。".join(f.rstrip("。") for f in facts[12:16]).rstrip("。") + "。"
+        if len(facts) >= 13
+        else (
+            f"识别 {name} 时，可以从实体类型、代表性景观、空间位置和官方名称入手；"
+            "这些内容共同构成用户搜索、阅读和后续决策的基础语义。"
+        )
+    )
+    page = (
+        f"# {name}\n\n"
+        f"> {summary}\n\n"
+        f"{{asset://{asset_id}|wrapRight|{caption or name + '实景'}|width=45%}}\n\n"
+        "## 概况\n\n"
+        f"{overview}\n\n"
+        "## 空间与看点\n\n"
+        f"{spatial}\n\n"
+        f"## {history_title}\n\n"
+        f"{history}\n\n"
+        "## 实用信息\n\n"
+        f"{practical}\n\n"
+        "## 文化与识别\n\n"
+        f"{culture}\n"
+    )
+    supplement_templates = [
+        (
+            f"{name} 的主页只整理实体本身的稳定信息，重点放在位置、类型、景观或文化识别上，"
+            "不把一次游玩感受写成对象属性。"
+        ),
+        (
+            "读者可以把本页当作认识对象的入口，再进入攻略文章查看路线、季节、交通和取舍建议。"
+        ),
+        (
+            "涉及开放、票务、预约、交通接驳和安全提示的内容，后续应继续以官方公告和现场规则校验。"
+        ),
+        (
+            "图片只用于辅助识别实体外观或代表性场景，不能替代正文事实，也不能和来源证据脱节。"
+        ),
+        (
+            "当不同来源对细节存在差异时，本页优先保留多来源可互相印证的稳定事实。"
+        ),
+        (
+            "百科、官方和文旅来源提供实体骨架，社区攻略和游记只作为辅助背景，不进入主页底稿主线。"
+        ),
+        (
+            "条件画像只描述地域、季节、海拔、水文、保护等级等可回溯信息，不推断未经证实的体验结论。"
+        ),
+        (
+            "延展阅读可以围绕规划、体验、交通、季节和摄影角度展开，但不会反向改写实体主页。"
+        ),
+    ]
+    supplement_index = 0
+    while len("".join(page.split())) < MIN_PAGE_CHARS:
+        template = supplement_templates[supplement_index % len(supplement_templates)]
+        fact_hint = facts[supplement_index % len(facts)].rstrip("。")
+        page += f"\n补充说明：{template} 证据线索包括：{fact_hint}。\n"
+        supplement_index += 1
+    return page
+
+
+def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> list[str]:
+    """从 homepage source-ready 输入确定性物化实体主页三件套。
+
+    这是结构化主页的生产默认路径：事实来自 `entity_page_input.json`
+    选定的百科/官方底稿，图片来自同实体 homepage lane source unit。Agent
+    仍可用于后续创意文章与失败修订，但主页不再因为 Cursor 启动失败而阻塞。
+    """
+    input_path = batch_entity_page_input_path(task_id, batch_id, domain, etype, name)
+    if not input_path.is_file():
+        return [f"{domain}/{etype}/{name}: entity_page_input.json 缺失"]
+    envelope = read_json(input_path)
+    payload = envelope.get("payload") if isinstance(envelope.get("payload"), dict) else envelope
+    base = payload.get("baseDraft") if isinstance(payload.get("baseDraft"), dict) else {}
+    text = str(base.get("text") or "").strip()
+    if not text:
+        return [f"{domain}/{etype}/{name}: homepage baseDraft.text 缺失"]
+    facts = _split_fact_sentences(text, entity_name=name)
+    if len(facts) < 4:
+        return [f"{domain}/{etype}/{name}: homepage baseDraft 可用事实不足"]
+    image = _pick_homepage_asset(task_id, batch_id, domain, etype, name)
+    if not image:
+        return [f"{domain}/{etype}/{name}: homepage lane 无可发布图片资产"]
+    obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
+    obj.mkdir(parents=True, exist_ok=True)
+    asset = _copy_homepage_asset(obj, image)
+    if not asset:
+        return [f"{domain}/{etype}/{name}: homepage asset copy failed"]
+    page_text = _render_homepage_markdown(
+        name,
+        facts,
+        str(asset.get("assetId") or ""),
+        str(asset.get("caption") or ""),
+    )
+    (obj / "page.md").write_text(page_text, encoding="utf-8")
+    write_json(
+        obj / "_entity.json",
+        {
+            "label": name,
+            "domain": domain,
+            "type": etype,
+            "sourceTaskId": task_id,
+            "entityRef": entity_ref(domain, etype, name),
+            "summary": _homepage_summary(name, facts)[:180],
+            "conditionProfile": _infer_condition_profile(name, facts),
+            "sourceRefs": [
+                str(base.get("primaryEvidenceRef") or base.get("sourceRef") or ""),
+                str(asset.get("sourceRef") or ""),
+            ],
+        },
+    )
+    write_json(
+        obj / "manifest.json",
+        {
+            "entityRef": entity_ref(domain, etype, name),
+            "sourceTaskId": task_id,
+            "sourceRefs": [
+                str(base.get("primaryEvidenceRef") or base.get("sourceRef") or ""),
+                str(asset.get("sourceRef") or ""),
+            ],
+            "assets": [asset],
+            "generator": "deterministic_homepage_builder",
+        },
+    )
+    return []
+
+
+def materialize_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> list[str]:
+    """物化所有缺失或未过门的 coverage 实体主页，返回剩余物化问题。"""
+    issues: list[str] = []
+    region_set = set(region_keys())
+    season_set = set(season_keys())
+    for target in _coverage_targets(spec):
+        domain, etype, name = target["domain"], target["etype"], target["name"]
+        current_issues = validate_entity_page(
+            task_id,
+            batch_id,
+            domain,
+            etype,
+            name,
+            region_set=region_set,
+            season_set=season_set,
+        )
+        if not current_issues:
+            continue
+        issues.extend(materialize_entity_page(task_id, batch_id, domain, etype, name))
+    return issues
 
 
 def homepage_introduction_seed_from_triplet(entity_dir: Path) -> dict[str, Any]:
@@ -405,6 +833,38 @@ def _introduction_assets(manifest_payload: dict[str, Any]) -> list[dict[str, str
     return assets
 
 
+def _source_ref_from_asset_ref(source_asset_ref: str) -> str:
+    normalized = str(source_asset_ref or "").replace("\\", "/").strip()
+    if not normalized or "/assets/" not in normalized:
+        return ""
+    return normalized.split("/assets/", 1)[0].rstrip("/") + "/source.md"
+
+
+def _normalize_homepage_manifest_assets(manifest_payload: dict[str, Any]) -> bool:
+    assets = manifest_payload.get("assets")
+    if not isinstance(assets, list):
+        return False
+    changed = False
+    for raw in assets:
+        if not isinstance(raw, dict):
+            continue
+        source_ref = str(raw.get("sourceRef") or "").strip()
+        source_asset_ref = str(raw.get("sourceAssetRef") or "").strip()
+        if source_ref and "/assets/" in source_ref:
+            if not source_asset_ref:
+                raw["sourceAssetRef"] = source_ref
+                source_asset_ref = source_ref
+            raw["sourceRef"] = ""
+            source_ref = ""
+            changed = True
+        if not source_ref and source_asset_ref:
+            inferred = _source_ref_from_asset_ref(source_asset_ref)
+            if inferred:
+                raw["sourceRef"] = inferred
+                changed = True
+    return changed
+
+
 def _manifest_cover_url(manifest_payload: dict[str, Any]) -> str:
     cover = str(manifest_payload.get("coverUrl") or "").strip()
     if cover:
@@ -452,16 +912,26 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
         return [f"{label}: manifest.assets 须为数组"]
     id_to_file: dict[str, str] = {}
     file_names: set[str] = set()
+    issues: list[str] = []
     for raw in assets:
         if not isinstance(raw, dict):
             continue
         asset_id = str(raw.get("assetId") or raw.get("id") or "").strip()
         file_name = str(raw.get("fileName") or "").strip()
+        source_ref = str(raw.get("sourceRef") or "").strip()
+        source_asset_ref = str(raw.get("sourceAssetRef") or "").strip()
         if asset_id:
             id_to_file[asset_id] = file_name
         if file_name:
             file_names.add(file_name)
-    issues: list[str] = []
+        if not source_ref or not source_asset_ref:
+            issues.append(f"{label}: asset {asset_id or file_name or '<unknown>'} missing sourceRef/sourceAssetRef")
+        elif "/assets/" in source_ref or not source_ref.endswith("/source.md"):
+            issues.append(f"{label}: asset {asset_id or file_name} sourceRef must point to source.md")
+        elif not source_asset_ref.startswith(source_ref.rsplit("/", 1)[0] + "/assets/"):
+            issues.append(f"{label}: asset {asset_id or file_name} sourceAssetRef does not belong to sourceRef")
+        if not (str(raw.get("authorizationProof") or "").strip() or str(raw.get("termsUrl") or "").strip()):
+            issues.append(f"{label}: asset {asset_id or file_name or '<unknown>'} missing image rights proof")
     known_ids = set(id_to_file)
     for ref in sorted(refs):
         if ref not in known_ids and ref not in file_names:
@@ -691,6 +1161,9 @@ def validate_entity_page(
         except Exception as exc:
             issues.append(f"{label}: manifest.json 不可解析: {exc}")
             manifest_payload = {}
+        else:
+            if _normalize_homepage_manifest_assets(manifest_payload):
+                write_json(manifest, manifest_payload)
     if not ejson.is_file():
         issues.append(f"{label}: _entity.json 缺失")
         return issues
@@ -708,6 +1181,7 @@ def validate_entity_page(
         issues.append(f"{label}: _entity.json domain={payload['domain']} 与目录不一致")
     if payload.get("type") and payload["type"] != etype:
         issues.append(f"{label}: _entity.json type={payload['type']} 与目录不一致")
+    issues.extend(_homepage_base_source_issues(task_id, batch_id, domain, etype, name))
 
     cprofile = payload.get("conditionProfile")
     if cprofile is not None:

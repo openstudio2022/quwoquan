@@ -60,6 +60,14 @@ guardrails:
     minSamples: 1000
     window: 24h
     action: suggest_only
+exposureGovernance:
+  frequencyAndNearDup:
+    enabled: true
+    maxSameAuthorPerWindow: 2
+    maxSameTagPerWindow: 3
+    maxSameTopicPerWindow: 3
+    nearDupJaccardMax: 0.8
+    softFallbackMinFillPct: 80
 `
 
 func mustParse(t *testing.T, raw string) *RecPolicy {
@@ -100,6 +108,7 @@ func TestValidate_Errors(t *testing.T) {
 		{"bad weight dim", func(p *RecPolicy) { p.SegmentTargeting[1].WeightDeltas = map[string]float64{"nope": 1} }, "unknown weight dim"},
 		{"guardrail action", func(p *RecPolicy) { p.Guardrails[0].Action = "auto_rollback" }, "only \"suggest_only\""},
 		{"guardrail baseline", func(p *RecPolicy) { p.Guardrails[0].BaselinePreset = "ghost" }, "baselinePreset"},
+		{"bad near dup threshold", func(p *RecPolicy) { p.ExposureGovernance.FrequencyAndNearDup.NearDupJaccardMax = 2 }, "frequencyAndNearDup"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
