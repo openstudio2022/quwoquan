@@ -17,7 +17,14 @@ services:
 
   mongodb:
     image: "${LOCAL_GAMMA_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
-    command: ["--replSet", "rs0", "--bind_ip_all"]
+    command:
+      [
+        "--replSet",
+        "rs0",
+        "--bind_ip_all",
+        "--wiredTigerCacheSizeGB",
+        "${LOCAL_GAMMA_MONGO_CACHE_SIZE_GB:-0.25}",
+      ]
     ports:
       - "${LOCAL_GAMMA_MONGO_PORT:-19410}:27017"
     volumes:

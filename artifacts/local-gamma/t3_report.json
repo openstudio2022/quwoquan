@@ -30,7 +30,7 @@
         "circle_core",
         "circle_group_chat_link_core"
       ],
-      "output": "2026/06/17 00:39:50 circle seed done: {\"database\":\"quwoquan_circle\",\"insertedCount\":81}\n"
+      "output": "2026/06/18 01:34:27 circle seed done: {\"database\":\"quwoquan_circle\",\"insertedCount\":81}\n"
     },
     "user": {
       "status": "passed",
@@ -38,17 +38,17 @@
       "refs": [
         "user_profile_core"
       ],
-      "output": "2026/06/17 00:39:50 user seed done: {\"dsn\":\"postgres\",\"insertedCount\":15}\n"
+      "output": "2026/06/18 01:34:28 user seed done: {\"dsn\":\"postgres\",\"insertedCount\":15}\n"
     },
     "entity": {
       "status": "passed",
-      "homepageId": "homepage_6"
+      "homepageId": "homepage_11"
     }
   },
   "runtimeSetup": {
     "status": "passed",
-    "parentCommentId": "comment_1781627990350309833",
-    "replyCommentId": "comment_1781627990358274545"
+    "parentCommentId": "comment_1781717667717192082",
+    "replyCommentId": "comment_1781717667722589714"
   },
   "endpoints": [
     {
@@ -74,7 +74,7 @@
       "path": "/v1/content/posts/fixture_photo_001",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 2043,
+      "bytes": 2044,
       "status": "passed"
     },
     {
@@ -82,7 +82,7 @@
       "path": "/v1/content/posts/fixture_photo_001/comments",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 8957,
+      "bytes": 7172,
       "status": "passed"
     },
     {
@@ -90,32 +90,32 @@
       "path": "/v1/content/posts/fixture_photo_001/comments?sort=recommended",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 8963,
+      "bytes": 7172,
       "status": "passed"
     },
     {
       "domain": "content",
       "path": "/v1/content/posts/fixture_photo_001/comments/fixture_comment_v2_parent_001/replies",
       "method": "GET",
-      "resolvedPath": "/v1/content/posts/fixture_photo_001/comments/comment_1781627990350309833/replies",
+      "resolvedPath": "/v1/content/posts/fixture_photo_001/comments/comment_1781717667717192082/replies",
       "httpStatus": 200,
-      "bytes": 944,
+      "bytes": 945,
       "status": "passed"
     },
     {
       "domain": "content",
       "path": "/v1/content/comments/fixture_comment_v2_parent_001/reaction",
       "method": "POST",
-      "resolvedPath": "/v1/content/comments/comment_1781627990350309833/reaction",
+      "resolvedPath": "/v1/content/comments/comment_1781717667717192082/reaction",
       "httpStatus": 200,
-      "bytes": 870,
+      "bytes": 871,
       "status": "passed"
     },
     {
       "domain": "content",
       "path": "/v1/content/comments/fixture_comment_v2_parent_001/media:bind",
       "method": "POST",
-      "resolvedPath": "/v1/content/comments/comment_1781627990350309833/media:bind",
+      "resolvedPath": "/v1/content/comments/comment_1781717667717192082/media:bind",
       "httpStatus": 200,
       "bytes": 95,
       "status": "passed"
@@ -173,25 +173,25 @@
       "path": "/v1/homepages/search",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 4999,
+      "bytes": 5455,
       "status": "passed"
     },
     {
       "domain": "entity",
       "path": "/v1/homepages/{homepageId}/object-page-bundle",
       "method": "GET",
-      "resolvedPath": "/v1/homepages/homepage_6/object-page-bundle",
+      "resolvedPath": "/v1/homepages/homepage_11/object-page-bundle",
       "httpStatus": 200,
-      "bytes": 4245,
+      "bytes": 4277,
       "status": "passed"
     },
     {
       "domain": "entity",
       "path": "/v1/homepages/{homepageId}/introduction",
       "method": "GET",
-      "resolvedPath": "/v1/homepages/homepage_6/introduction",
+      "resolvedPath": "/v1/homepages/homepage_11/introduction",
       "httpStatus": 200,
-      "bytes": 3598,
+      "bytes": 3603,
       "status": "passed"
     },
     {

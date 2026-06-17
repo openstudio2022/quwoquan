@@ -37,6 +37,8 @@ planes:
     runtimeContainer: rootless-podman
     workloadDeployPlane: edge-media
     governedWorkloads: [realtime-gateway, rtc-service]
+    rootlessGovernedComposeServices: []
+    rootlessSupportComposeServices: []
     appliesToStages: [gray-initial, carry-on, full]
     summary: 实时长连接/信令面（WebSocket、信令），各自独立 compose 项目，仅操作本平面工作负载。
 
@@ -50,6 +52,8 @@ planes:
     runtimeContainer: rootless-podman
     workloadDeployPlane: edge-media
     governedWorkloads: [livekit-sfu, coturn]
+    rootlessGovernedComposeServices: []
+    rootlessSupportComposeServices: []
     appliesToStages: [gray-initial, carry-on, full]
     summary: 媒体转发面（SFU/TURN，UDP），独立 compose 项目，仅操作本平面工作负载。
 
@@ -69,8 +73,38 @@ planes:
       - tag-service
       - product-ops-service
       - assistant-service
+    rootlessComposeTemplate: quwoquan_service/docker-compose.gamma-local.yaml
+    rootlessGovernedComposeServices:
+      - rec-model-service
+      - content-service
+      - chat-service
+      - user-service
+      - assistant-service
+      - product-ops-service
+      - tag-service
+    rootlessSupportComposeServices:
+      - gamma-proxy
+    rootlessConfigServices:
+      - recommendation-service
+      - content-service
+      - chat-service
+      - user-service
+      - assistant-service
+      - product-ops-service
+      - tag-service
+    rootlessRuntimeLayout:
+      composeFile: docker-compose.prod-hosted.yaml
+      envFile: stack.env
+      configRoot: runtime/config-root
+      caddyfile: runtime/Caddyfile
+      mediaRoot: /opt/quwoquan/gamma/state/local/gamma/media
+      modelCacheRoot: runtime/model-cache
     appliesToStages: [gray-initial, carry-on, full]
-    summary: 无状态 HTTP/后台 worker 面（含 Modular-Monolith seed-box 与同集群独立 workload），仅操作本平面工作负载。
+    summary: >
+      当前 prod-hosted 首波 rootless 接管按 onebox split-services 真实运行面落地：
+      governed compose services = rec-model/content/chat/user/assistant/product-ops/tag，
+      support compose services = gamma-proxy；数据面继续复用现有 host 上的 19400/19410/19420 服务，不在 service plane 内复制一套空 DB。
+      媒体面复用现有 host `/opt/quwoquan/gamma/state/local/gamma/media`，避免切换到空 runtime/media。
 
   - plane: data
     account: prod-data-svc

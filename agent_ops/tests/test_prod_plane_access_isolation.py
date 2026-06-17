@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -19,15 +20,37 @@ def _run(argv: list[str], **env_overrides: str) -> subprocess.CompletedProcess[s
     env = os.environ.copy()
     for key in (
         "PROD_KUBECONFIG",
-        "PROD_EDGE_SSH_KEY",
-        "PROD_MEDIA_SSH_KEY",
-        "PROD_SERVICE_SSH_KEY",
-        "PROD_DATA_SSH_KEY",
-        "PROD_OPS_SSH_KEY",
+        "PROD_SSH_KEY_DIR",
+        "PROD_EDGE_SSH_KEY_FILE",
+        "PROD_MEDIA_SSH_KEY_FILE",
+        "PROD_SERVICE_SSH_KEY_FILE",
+        "PROD_DATA_SSH_KEY_FILE",
+        "PROD_OPS_SSH_KEY_FILE",
+        "PROD_EDGE_SSH_KEY_PATH",
+        "PROD_MEDIA_SSH_KEY_PATH",
+        "PROD_SERVICE_SSH_KEY_PATH",
+        "PROD_DATA_SSH_KEY_PATH",
+        "PROD_OPS_SSH_KEY_PATH",
     ):
         env.pop(key, None)
     env.update(env_overrides)
     return subprocess.run(argv, cwd=str(ROOT), text=True, capture_output=True, env=env, check=False)
+
+
+def _write_fake_keypair(key_dir: Path, account: str) -> None:
+    key_dir.mkdir(parents=True, exist_ok=True)
+    private_key = key_dir / account
+    public_key = key_dir / f"{account}.pub"
+    private_key.write_text(
+        "-----BEGIN OPENSSH PRIVATE KEY-----\n"
+        "fake\n"
+        "-----END OPENSSH PRIVATE KEY-----\n",
+        encoding="utf-8",
+    )
+    public_key.write_text(
+        f"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI{account} {account}@prod\n",
+        encoding="utf-8",
+    )
 
 
 class ProdPlaneAccessIsolationTest(unittest.TestCase):
@@ -52,33 +75,54 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
 
     # --- T1/T2：按平面凭据硬校验（禁止失败放通） ---
     def test_credentials_hard_fail_when_missing(self) -> None:
-        result = _run(
-            [
-                "python3",
-                "agent_ops/deploy/prod/validate_prod_plane_credentials.py",
-                "--stage",
-                "gray-initial",
-            ]
-        )
-        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-        self.assertIn("PROD_EDGE_SSH_KEY", result.stderr)
+        with tempfile.TemporaryDirectory() as tmp:
+            result = _run(
+                [
+                    "python3",
+                    "agent_ops/deploy/prod/validate_prod_plane_credentials.py",
+                    "--stage",
+                    "gray-initial",
+                ],
+                PROD_SSH_KEY_DIR=tmp,
+            )
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("PROD_SERVICE_SSH_KEY", result.stderr)
 
     def test_credentials_reject_kubeconfig_reintroduction(self) -> None:
-        key = "-----BEGIN OPENSSH PRIVATE KEY-----\nx\n-----END OPENSSH PRIVATE KEY-----"
-        result = _run(
-            [
-                "python3",
-                "agent_ops/deploy/prod/validate_prod_plane_credentials.py",
-                "--stage",
-                "gray-initial",
-            ],
-            PROD_KUBECONFIG="injected",
-            PROD_EDGE_SSH_KEY=key,
-            PROD_MEDIA_SSH_KEY=key,
-            PROD_SERVICE_SSH_KEY=key,
-        )
-        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-        self.assertIn("PROD_KUBECONFIG", result.stderr)
+        with tempfile.TemporaryDirectory() as tmp:
+            key_dir = Path(tmp)
+            for account in ("prod-edge-svc", "prod-media-svc", "prod-service-svc"):
+                _write_fake_keypair(key_dir, account)
+            result = _run(
+                [
+                    "python3",
+                    "agent_ops/deploy/prod/validate_prod_plane_credentials.py",
+                    "--stage",
+                    "gray-initial",
+                ],
+                PROD_KUBECONFIG="injected",
+                PROD_SSH_KEY_DIR=str(key_dir),
+            )
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("PROD_KUBECONFIG", result.stderr)
+
+    def test_credentials_can_require_relay_secret(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            key_dir = Path(tmp)
+            for account in ("prod-edge-svc", "prod-media-svc", "prod-service-svc", "prod-ops"):
+                _write_fake_keypair(key_dir, account)
+            result = _run(
+                [
+                    "python3",
+                    "agent_ops/deploy/prod/validate_prod_plane_credentials.py",
+                    "--stage",
+                    "gray-initial",
+                    "--require-relay",
+                ],
+                PROD_SSH_KEY_DIR=str(key_dir),
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("relay:PROD_OPS_SSH_KEY", result.stdout)
 
     # --- T2：bootstrap dry-run 渲染去 root 账号 ---
     def test_bootstrap_dry_run_renders_nonroot_accounts(self) -> None:
@@ -95,6 +139,7 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
             "prod-data-svc",
         ):
             self.assertIn(account, result.stdout)
+        self.assertIn("--shell /bin/bash", result.stdout)
         # 读写平面启用 rootless podman linger；data 平面不建 stack。
         self.assertIn("enable-linger \"prod-service-svc\"", result.stdout)
 
@@ -109,8 +154,9 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
             PROD_SSH_HOST="203.0.113.10",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("prod-edge-svc@203.0.113.10", result.stdout)
-        self.assertIn("quwoquan-edge-gray", result.stdout)
+        self.assertIn("prod-service-svc@203.0.113.10", result.stdout)
+        self.assertIn("service-gray", result.stdout)
+        self.assertNotIn("prod-edge-svc", result.stdout)
         self.assertNotIn("prod-data-svc", result.stdout)
 
 

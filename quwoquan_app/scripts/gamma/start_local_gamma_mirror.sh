@@ -46,6 +46,7 @@ export \
   LOCAL_GAMMA_CIRCLE_PORT \
   LOCAL_GAMMA_POSTGRES_PORT \
   LOCAL_GAMMA_MONGO_PORT \
+  LOCAL_GAMMA_MONGO_CACHE_SIZE_GB \
   LOCAL_GAMMA_REDIS_PORT \
   LOCAL_GAMMA_ES_PORT
 CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
@@ -58,6 +59,8 @@ LOCAL_MEDIA_ORIGIN_URL="http://127.0.0.1:${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}"
 LOCAL_GAMMA_TAGS_DIR="${LOCAL_GAMMA_TAGS_DIR:-$ROOT/quwoquan_data/publish/tags}"
 LOCAL_GAMMA_TAG_OBJECTS_FILE="${LOCAL_GAMMA_TAG_OBJECTS_FILE:-$ROOT/quwoquan_service/contracts/metadata/tag/test_fixtures/scenarios/tag_scenarios.json}"
 LOCAL_GAMMA_TAG_DB="${LOCAL_GAMMA_TAG_DB:-quwoquan_tag}"
+# 2G onebox 在 gray/prod 切换窗口会短时双栈并存；显式压低 Mongo cache，避免数据面被 OOM kill。
+LOCAL_GAMMA_MONGO_CACHE_SIZE_GB="${LOCAL_GAMMA_MONGO_CACHE_SIZE_GB:-0.25}"
 # daocloud 镜像代理在部分网络下会 EOF；默认直连 Docker Hub，可通过环境变量覆盖。
 DOCKER_LIBRARY_PREFIX="${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}"
 HOST_READY_TIMEOUT_SECONDS="${LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS:-360}"
@@ -1316,7 +1319,10 @@ if [[ "$podman_compose" == "1" ]]; then
     --net "$network_name" --network-alias mongodb \
     -v quwoquan_service_local-gamma-mongo:/data/db \
     -p "${LOCAL_GAMMA_MONGO_PORT:-19410}:27017" \
-    "$LOCAL_GAMMA_MONGO_IMAGE" --replSet rs0 --bind_ip_all >/dev/null
+    "$LOCAL_GAMMA_MONGO_IMAGE" \
+    --replSet rs0 \
+    --bind_ip_all \
+    --wiredTigerCacheSizeGB "${LOCAL_GAMMA_MONGO_CACHE_SIZE_GB}" >/dev/null
 
   podman run --pull=never --name quwoquan_service_redis_1 -d \
     --net "$network_name" --network-alias redis \

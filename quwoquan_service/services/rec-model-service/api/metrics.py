@@ -1,7 +1,7 @@
 """
 Prometheus metrics for rec-model-service (custom business metrics).
 
-HTTP 指标由 prometheus_fastapi_instrumentator 注册；本模块仅包含推荐业务相关指标。
+HTTP 指标由服务内 middleware 维护；本模块仅包含推荐业务相关指标。
 """
 from __future__ import annotations
 

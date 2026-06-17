@@ -26,6 +26,15 @@ def test_health() -> None:
     assert r.json() == {"status": "ok"}
 
 
+def test_metrics_exposes_http_series() -> None:
+    client.get("/health")
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    body = r.text
+    assert 'http_requests_total{handler="/health",method="GET",status="2xx"}' in body
+    assert "http_request_duration_highr_seconds_bucket" in body
+
+
 def test_score_content_feed_returns_scores() -> None:
     body = {
         "scenario": "content_feed",

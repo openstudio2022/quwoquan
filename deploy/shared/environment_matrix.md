@@ -118,6 +118,8 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(local-gamma mirror
 - `alpha` 与 `beta` 可在自有阶段内尽量并行；`gamma` 仅本地左移，不在远端阻断链上，远端只有 `prod` 各 rollout stage 必须严格串行。
 - `prod gray-initial` 后必须完成 `health + inspect + doctor + integration probes + SLO gate`（含承接自旧 gamma-hosted 的远端集成与 curated 媒体路由复验），才允许自动进入 `prod full`。
 - `prod full` 失败时必须自动回滚到上一稳定 `image/config`。
+- 当前 rootless `prod-hosted` service plane 的对外 host 端口固定为：`gray-initial=29000/29010/29100/29110`（TLS/Admin=`28443/22019`），`full=19000/19010/19100/19110`（TLS/Admin=`18443/12019`）；必须通过 `render_prod_plane_stack.py` 与 `prod_plane_access_isolation.yaml` 渲染，禁止手写 compose / Caddy 端口。
+- 当前共享 ECS 仅 `2G` 内存，`gray-initial` 是短驻验证命名空间，不是长期并存形态；拿到 `health + inspect + doctor + SLO` 证据并完成 `full` 切换后，应及时回收 gray 命名空间。需要与旧 root 数据面短时共存时，Mongo 必须显式使用 `wiredTigerCacheSizeGB=0.25`，避免 OOM 杀进程。
 
 ### 2.1 local-gamma mirror（提交前本地预测试）
 
@@ -136,15 +138,14 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(local-gamma mirror
 
 ## 3. GitHub Actions Secrets / Variables（按工作流）
 
-> 远端/hosted 目标只有 `prod-hosted`，远端凭证统一为专用 PROD/OPS secret（`PROD_KUBECONFIG`、prod kubeconfig 同步所需的 ops SSH 凭据），不再使用任何 `GAMMA_ECS_*` secret/var。`gamma` 仅本地（local-gamma），本地 mirror 不需要远端 secret。
+> 远端/hosted 目标只有 `prod-hosted`；prod 发布统一走按平面 SSH 私钥（`PROD_EDGE_SSH_KEY` / `PROD_MEDIA_SSH_KEY` / `PROD_SERVICE_SSH_KEY`），不再使用任何 `GAMMA_ECS_*` secret/var，也不再接受 `PROD_KUBECONFIG`。`gamma` 仅本地（local-gamma），默认 URL 从 topology 解析，不需要远端 secret。
 
 | Secret / Variable | 04 Pre-Release | 05 App Env Matrix | 07 Deploy Prod Auto | 说明 |
 |-------------------|:---:|:---:|:---:|------|
 | `GAMMA_TEST_AUTH_TOKEN` | 建议 | 建议 | — | local-gamma / self-hosted 链路鉴权（04 pr_light 非强制） |
-| `vars.GAMMA_BASE_URL` / `vars.GAMMA_PRODUCT_OPS_BASE_URL` | 可选 | 可选 | — | local-gamma mirror 网关 / product ops 覆盖 |
+| `gamma_base_url` workflow input / 本地环境变量覆盖 | 可选 | 可选 | — | 仅在需要覆盖 topology `gamma-local.publicBases.api` 时使用 |
 | `vars.MEDIA_AVATAR_CDN_BASE_URL` | 可选 | 可选 | — | chat-avatar 对外媒体基址 |
-| `secrets.PROD_KUBECONFIG` | — | — | **必** | prod-hosted 部署唯一远端凭证（base64 kubeconfig） |
-| prod kubeconfig 同步 ops SSH 凭据 | — | — | **必** | 专用 PROD/OPS secret（非 `GAMMA_ECS_*`），用于从 ops 同步 prod kubeconfig |
+| `secrets.PROD_EDGE_SSH_KEY` / `PROD_MEDIA_SSH_KEY` / `PROD_SERVICE_SSH_KEY` | — | — | **必** | prod-hosted 发布三平面读写 SSH 私钥 |
 | `flutter devices --machine` 可见 Android 设备 | `04/05` **必** | **必** | — | 主干 required checks 要求 Android 可见且全部通过 |
 | `flutter devices --machine` 可见 iOS 设备 | `04/05` **必** | **必** | — | 主干 required checks 要求 iOS 可见且全部通过 |
 | Self-hosted Runner (`self-hosted` + `macOS`) | **必** | **必** | — | 统一运行在当前开发 Mac |
@@ -195,6 +196,7 @@ python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service <svc>
 
 - `deploy --target prod-hosted` 成功后会自动串联 `health --scope full`、`inspect --scope all`、`doctor`，每个 rollout stage 留下机器可读证据。
 - prod-hosted 为 backend SSH 托管，gray 与 full 因成本共享同一集群；这是有意保留的共享集群拓扑，不抽象成 `prod-gray` 第二环境。
+- 本轮已验证的 gray/full 证据分别见 `artifacts/stackctl/prod/20260617T164119Z-deploy-prod-hosted`（`gray-initial` 成功，`4/4 healthy`）与 `artifacts/stackctl/prod/20260617T172537Z-deploy-prod-hosted`（`full` 成功，`4/4 healthy`，doctor 无问题）。
 
 约束：
 
