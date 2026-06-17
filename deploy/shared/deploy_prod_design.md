@@ -1,8 +1,8 @@
 # 生产部署设计：半自动与全自动
 
-> 目标：在现有 G5a（ECS gamma hosted pre）、G5b（self-hosted gamma 旅程）基础上，明确 G5c 灰度到 prod 的半自动与全自动方案。
+> 目标：在现有 local-gamma 左移验证与 `prod-hosted(gray-initial -> carry-on -> full)` 真实发布链路基础上，明确 G5c 灰度到 prod 的半自动与全自动方案。
 > 约束：生产只有 `prod` 一个环境；`gray-initial / carry-on / full` 是 rollout stage，不是 `prod-gray` 第二环境。
-> 前置：`03/04/05` required checks 已通过，其中 `04` 已完成 ECS gamma hosted pre + gamma self-hosted 旅程。
+> 前置：`03/04/05` required checks 已通过；远端 gamma 已退役，真实远端集成与 curated 媒体路由复验统一由 `prod gray-initial` 承接。
 
 ---
 
@@ -22,7 +22,7 @@
 
 - 须在仓库 **Settings → Environments** 下创建名为 **`production`** 的 Environment，否则该 job 会失败。
 - 若启用 **Required reviewers**，合并 `main` 且 04 全绿后，需在 GitHub Actions UI **手动批准** Stage 2；未批准则 workflow 处于 waiting，不等同于通过。
-- Stage 1（`gray-initial`）当前为占位 dry-run，不依赖该 Environment。
+- Stage 1（`gray-initial`）现已是真实 rootless rollout，不依赖 `production` Environment，但必须先通过 `validate_prod_plane_credentials.py`、post-deploy `health/inspect/doctor` 与 SLO gate。
 
 详见 **[environment_matrix.md §3.1](environment_matrix.md)** 工作流对照表。
 
@@ -30,10 +30,10 @@
 
 | 项目 | 说明 |
 |------|------|
-| **背景** | 首次发布，用户尚少，当前 2 副本；随用户增长将增加副本与滚动阶段 |
+| **背景** | 现网为单机共享 ECS 的 rootless 四平面发布；gray/full 共享同一台 host，随用户增长才扩展副本与滚动阶段 |
 | **阶段划分** | **初始灰度**（Stage 1）+ **Carry-on 滚动**（Stage 2+） |
-| **Stage 1 初始灰度** | 全自动；部署到 **N 个 pod**（可配置，当前 N=1）；deploy → SLO → continue/pause/rollback |
-| **Stage 2 Carry-on** | 当前直接到 100%；需人工审批后执行 deploy → SLO |
+| **Stage 1 初始灰度** | 全自动；当前映射到 `gray-initial` 命名空间（`STEP=5`），deploy → `health/inspect/doctor` → SLO → continue/pause/rollback |
+| **Stage 2 Carry-on** | 视策略推进更大放量；当前最终落到 `full`（`STEP=100`），需人工审批后执行 deploy → `health/inspect/doctor` → SLO |
 | **扩展** | 副本增加后（如 4、8 pod），可增加中间阶段（如 1→2→4），每阶段是否审批可配置 |
 
 ### 1.2 阶段配置模型（可扩展）
@@ -119,10 +119,12 @@ stages:
 
 **Secrets**（按平面 SSH，去 root；已退役单一 `PROD_KUBECONFIG`）：
 
-- `PROD_SSH_HOST`：prod ECS SSH 主机（缺省可由 topology `prod-hosted.publicBases.api` 解析）。
 - `PROD_EDGE_SSH_KEY` / `PROD_MEDIA_SSH_KEY` / `PROD_SERVICE_SSH_KEY`：四平面读写账号 `prod-<plane>-svc` 的 SSH 私钥。
-- `PROD_DATA_SSH_KEY`（只读审计） / `PROD_OPS_SSH_KEY`（一次性 bootstrap 中转）。
+- prod SSH host 缺省由 topology `prod-hosted.publicBases.api` 自动解析，不再要求单独 GitHub secret。
+- `PROD_DATA_SSH_KEY`（只读审计） / `PROD_OPS_SSH_KEY`（一次性 bootstrap 中转）仅在本地 bootstrap / 审计场景按需生成，不属于当前 GitHub Actions 发布最小 secret 集。
 - 访问隔离映射唯一真相源：`deploy/shared/prod_plane_access_isolation.yaml`。
+- 当前 service plane host 端口固定为：`gray-initial=29000/29010/29100/29110`（TLS/Admin=`28443/22019`），`full=19000/19010/19100/19110`（TLS/Admin=`18443/12019`）；端口由 `render_prod_plane_stack.py` 渲染，禁止在 compose/Caddyfile 手写覆盖。
+- 当前 host 仅 `2G` 内存，gray 命名空间只允许短驻验证；需要与旧 root 数据面并存时，Mongo 必须使用 `wiredTigerCacheSizeGB=0.25`。
 
 **Job 顺序**（单步）：
 

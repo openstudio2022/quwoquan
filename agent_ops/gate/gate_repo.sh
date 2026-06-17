@@ -26,6 +26,7 @@ run_service() {
   python3 agent_ops/gate/verify_local_env_port_manifest.py
   python3 agent_ops/gate/verify_prod_rollout_stackctl_contract.py
   python3 agent_ops/gate/verify_prod_plane_access_isolation.py
+  python3 agent_ops/gate/verify_prod_legacy_access_retired.py
   bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
   python3 quwoquan_service/scripts/contract/verify_tag_ref_source_of_truth.py
   bash agent_ops/scaffold/verify_acceptance_standard.sh
@@ -92,6 +93,7 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_cloud_services_semantic.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_route_and_context_semantic.py || exit 1
+    python3 quwoquan_app/scripts/env/verify_runtime_host_literals.py || exit 1
     python3 agent_ops/assistant/verify_no_personal_assistant_imports.py || exit 1
     python3 agent_ops/assistant/verify_assistant_old_stack_retired.py || exit 1
     # L0 PA 降级响应契约静态分析（阻断）：

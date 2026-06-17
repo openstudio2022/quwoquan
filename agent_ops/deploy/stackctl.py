@@ -410,6 +410,31 @@ def _tail_file_for_startup(
     }
 
 
+def _prod_plane_runtime_report(plane: str, report_path: Path | None = None) -> dict[str, Any]:
+    argv = ["python3", "agent_ops/deploy/prod/inspect_prod_plane_runtime.py", "--plane", plane]
+    if report_path is not None:
+        argv.extend(["--output", str(report_path)])
+    result = run(argv)
+    if result.returncode != 0:
+        return {
+            "plane": plane,
+            "error": "inspect command failed",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "exitCode": result.returncode,
+        }
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {
+            "plane": plane,
+            "error": "inspect output is not valid json",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "exitCode": result.returncode,
+        }
+
+
 def _app_launch_failure_detail(
     tail_result: dict[str, Any],
     *,
@@ -2098,6 +2123,11 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
                 else {}
             ),
         }
+        if args.target == "prod-hosted":
+            inspection["config"]["rootlessRuntime"] = _prod_plane_runtime_report(
+                "service",
+                report_dir / "prod_rootless_service_runtime.json",
+            )
     if "logs" in scopes:
         inspection["logs"] = _local_log_report(args.target)
     if "data" in scopes:
@@ -2167,6 +2197,19 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
                 )
             elif not state.get("to_image") or not state.get("to_config"):
                 findings.append("prod release-state missing image/config target")
+            runtime = _prod_plane_runtime_report(
+                "service",
+                report_dir / "prod_rootless_service_runtime.json",
+            )
+            if runtime.get("error"):
+                findings.append("prod service plane rootless runtime inspect failed")
+            else:
+                if not runtime.get("composeFileExists"):
+                    findings.append("prod service plane rootless compose file is missing")
+                if not runtime.get("envFileExists"):
+                    findings.append("prod service plane rootless env file is missing")
+                if int(runtime.get("containerCount", 0) or 0) == 0:
+                    findings.append("prod service plane rootless runtime has no running containers")
     packages = [
         ROOT / "artifacts" / "app-env-packages" / env_name / "report.json",
     ]
@@ -2358,6 +2401,7 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
             ["bash", "agent_ops/deploy/prod/deploy_to_prod.sh"],
             env={
                 "CLOUD_PROVIDER": args.cloud_provider,
+                "SERVICE": args.service,
                 "IMAGE_VERSION": args.to_image,
                 "CONFIG_VERSION": args.to_config,
                 "ROLLOUT_STAGE": rollout_stage,
@@ -2485,6 +2529,7 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
         if rollback_reason and not dry_run_requested:
             rollback_env = {
                 "CLOUD_PROVIDER": args.cloud_provider,
+                "SERVICE": args.service,
                 "IMAGE_VERSION": args.from_image,
                 "CONFIG_VERSION": args.from_config,
                 "PREVIOUS_IMAGE_VERSION": args.to_image,

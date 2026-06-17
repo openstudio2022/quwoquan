@@ -31,7 +31,7 @@ on:
         default: ''
         type: string
       gamma_base_url:
-        description: 可选覆盖 gamma 网关（默认 secrets.GAMMA_BASE_URL）
+        description: 可选覆盖 gamma 网关（默认从 topology 的 gamma-local.publicBases.api 解析）
         required: false
         default: ''
       media_base_url:
@@ -65,7 +65,7 @@ on:
         type: string
         default: ''
       gamma_base_url:
-        description: '可选覆盖 gamma 网关（默认走 secrets.GAMMA_BASE_URL）'
+        description: '可选覆盖 gamma 网关（默认走 topology 的 gamma-local.publicBases.api）'
         required: false
         type: string
         default: ''
@@ -188,6 +188,14 @@ jobs:
           print(json.dumps(payload.get('matrix_kinds') or ['assistant'], ensure_ascii=False))
           PY
           )"
+          DEFAULT_GAMMA_BASE_URL="$(python3 - <<'PY'
+          from agent_ops.deploy.lib.environment_topology import get_target, load_environment_topology
+
+          topology = load_environment_topology()
+          public_bases = get_target(topology, 'gamma-local').get('publicBases') or {}
+          print(str(public_bases.get('api', '')).rstrip('/'))
+          PY
+          )"
           ENV_JSON="${INPUT_ENV_JSON:-${DEFAULT_ENV_JSON}}"
           ALLOW_MISSING="${INPUT_ALLOW_MISSING_PLATFORMS:-${DEFAULT_ALLOW_MISSING}}"
           MATRIX_KIND="${INPUT_MATRIX_KIND:-${DEFAULT_MATRIX_KINDS_JSON}}"
@@ -215,7 +223,7 @@ jobs:
           echo "allow_missing_platforms=${ALLOW_MISSING}" >> "$GITHUB_OUTPUT"
           echo "matrix_kind=${MATRIX_KIND}" >> "$GITHUB_OUTPUT"
           echo "artifact_key=${ARTIFACT_KEY}" >> "$GITHUB_OUTPUT"
-          echo "gamma_base_url=${INPUT_GAMMA_BASE_URL}" >> "$GITHUB_OUTPUT"
+          echo "gamma_base_url=${INPUT_GAMMA_BASE_URL:-${DEFAULT_GAMMA_BASE_URL}}" >> "$GITHUB_OUTPUT"
           echo "media_base_url=${INPUT_MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
       - name: 校验 self-hosted macOS runner
         run: |
@@ -359,7 +367,7 @@ jobs:
       android_result: ${{ steps.run_matrix.outputs.android_result }}
       ios_result: ${{ steps.run_matrix.outputs.ios_result }}
     env:
-      GAMMA_BASE_URL: ${{ needs.discover_devices.outputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
+      GAMMA_BASE_URL: ${{ needs.discover_devices.outputs.gamma_base_url }}
       MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.discover_devices.outputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       ASSISTANT_MODEL_PROVIDER: deterministic

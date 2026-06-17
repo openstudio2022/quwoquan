@@ -70,15 +70,12 @@
 
 | Secret | 用途 |
 |--------|------|
-| **GAMMA_BASE_URL** | gamma API 地址（L3/L4 使用） |
-| **GAMMA_PRODUCT_OPS_BASE_URL** | gamma Product Ops API 地址（L3 使用） |
 | **GAMMA_TEST_AUTH_TOKEN** | L3/L4 鉴权 Token |
-| **GAMMA_KUBECONFIG** | gamma 集群 kubeconfig，**base64 编码** |
 
 ### 说明
 
-- `GAMMA_KUBECONFIG` 未配置时，deploy-integration 仅 skip，不 fail。
-- L3/L4/gamma smoke 依赖 deploy-integration 完成，需 gamma 已部署且 `GAMMA_BASE_URL` 可访问。
+- 远端 gamma 已退役；L3/L4 验证统一跑 `gamma-local`，默认 URL 从 `deploy/shared/environment_topology_manifest.yaml` 的 `gamma-local.publicBases.*` 解析。
+- 如需手动覆盖 local-gamma 入口，可在命令行或 workflow input 传 `gamma_base_url`，而不是维护第二套 GitHub secret。
 - L4 Patrol 已统一迁到 **本机 macOS self-hosted runner**，通过 `flutter devices --machine` 动态发现当前可见的 Android/iOS 模拟器或真机，并逐台执行；总设备数至少为 1。
 - `main` 的 pull request 合入规则中，`03` / `04` / `05` 需同时配置为 required checks。
 
@@ -90,12 +87,12 @@
 
 | Secret | 用途 |
 |--------|------|
-| **GAMMA_BASE_URL** | gamma 场景或手动覆盖时使用；PR 规则下的 `05` 当前固定跑 `alpha/beta`，通常不需要 |
 | **GAMMA_TEST_AUTH_TOKEN** | beta/gamma 远端链路鉴权 |
 
 ### 说明
 
 - `app-env-device-matrix-self-hosted.yml` 已成为唯一的 **05. App Env Device Matrix** 入口；同时支持 `pull_request(main)`、被其他 workflow 调用以及手动调试。
+- gamma 网关默认从 topology `gamma-local.publicBases.api` 解析，不再依赖 `GAMMA_BASE_URL` GitHub secret。
 - `05` 已统一固定到 **本机 macOS self-hosted runner**；不再依赖自定义 runner label，也不再依赖固定 `ANDROID_DEVICE_ID` / `IOS_DEVICE_ID`。
 - `alpha` 使用 `APP_DATA_SOURCE=mock`，不需要云侧 Secret。
 - `beta` 在 runner 内启动本地 beta assistant-service + gateway；设备列表通过 `flutter devices --machine` 动态发现，当前可见的每台 Android/iOS 模拟器或真机都会执行。
@@ -130,19 +127,18 @@
 
 | Secret | 用途 |
 |--------|------|
-| **PROD_SSH_HOST** | prod ECS 的 SSH 主机（缺省可由 `environment_topology_manifest.yaml` 的 `prod-hosted.publicBases.api` 解析） |
 | **PROD_EDGE_SSH_KEY** | `edge` 平面账号 `prod-edge-svc` 的 SSH 私钥（realtime-gateway / rtc-service） |
 | **PROD_MEDIA_SSH_KEY** | `media` 平面账号 `prod-media-svc` 的 SSH 私钥（livekit-sfu / coturn） |
 | **PROD_SERVICE_SSH_KEY** | `service` 平面账号 `prod-service-svc` 的 SSH 私钥（seed-box 及同集群独立 workload） |
-| **PROD_DATA_SSH_KEY** | `data` 平面账号 `prod-data-svc`（只读审计，不参与 deploy） |
-| **PROD_OPS_SSH_KEY** | 非 root 中转账号 `prod-ops`（仅一次性 bootstrap / 凭据分发使用） |
 
 ### 说明
 
 - 每个平面 SSH 私钥都是 **OpenSSH/PEM 私钥原文**（含 `BEGIN ... PRIVATE KEY`），不是文件路径。
+- prod SSH host 默认直接从 `environment_topology_manifest.yaml` 的 `prod-hosted.publicBases.api` 解析，不再需要单独维护 `PROD_SSH_HOST` secret。
 - `deploy-prod-gray.yml` 与 `deploy-prod-auto.yml` 在真实发布（`dry_run != true`）前会调用 `agent_ops/deploy/prod/validate_prod_plane_credentials.py` 按 rollout stage 硬校验对应平面凭据；缺失/非法即硬失败。
 - `agent_ops/deploy/prod/deploy_to_prod.sh` 按平面账号 `prod-<plane>-svc` 自登录，`podman compose` 拉起本平面 governedWorkloads + rollout 等待 + 失败回滚；**不再允许**凭据缺失时以 warning 形式跳过并返回成功。
 - `PROD_KUBECONFIG` 已退役：一旦检测到该变量被注入，`deploy_to_prod.sh` 与凭据校验脚本都会直接硬失败，禁止 kube 路径复活。
+- `PROD_OPS_SSH_KEY`（relay）与 `PROD_DATA_SSH_KEY`（readonly audit）只在本地 bootstrap / 审计场景下按需生成，不属于当前 GitHub Actions 发布最小 secret 集。
 - 账号一次性创建见 `agent_ops/deploy/prod/bootstrap_prod_plane_accounts.sh`（去 root、rootless podman、独立 home/compose 根/credentials）。
 - 灰度（`gray-initial`）取同集群一个实例验证（承接原远端 gamma 验证职责），通过后放量 `full`；二者因当前成本约束共享同一物理 ECS。
 
@@ -171,5 +167,6 @@
 2. 点击 **New repository secret**。
 3. 按上述各 Workflow 表格添加所需 Secrets。
 4. 保存后，对应 push/PR/tag 或手动触发时将使用新 Secrets。
+5. 若已在本机生成 prod 平面私钥，可直接自动同步并清理退役项：`bash agent_ops/deploy/prod/setup_prod_plane_ssh_access.sh --mode all --include-relay --include-readonly --github-sync --github-prune-obsolete-secrets`
 
 **参考**：`deploy/shared/ci_cd_end_to_end_design.md`、`deploy/shared/deliver_to_production_runbook.md`。
