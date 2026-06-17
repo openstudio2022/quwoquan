@@ -26,7 +26,7 @@ run_service() {
   python3 agent_ops/gate/verify_local_env_port_manifest.py
   python3 agent_ops/gate/verify_prod_rollout_stackctl_contract.py
   python3 agent_ops/gate/verify_prod_plane_access_isolation.py
-  python3 agent_ops/gate/verify_prod_legacy_access_retired.py
+  python3 agent_ops/gate/verify_prod_access_guard.py
   bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
   python3 quwoquan_service/scripts/contract/verify_tag_ref_source_of_truth.py
   bash agent_ops/scaffold/verify_acceptance_standard.sh
