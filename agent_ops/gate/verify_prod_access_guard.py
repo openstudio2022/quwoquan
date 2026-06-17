@@ -23,7 +23,7 @@ ACTIVE_AUTH_PATTERNS = {
     r"root@118\.31\.239\.122": "禁止在执行面硬编码 root prod SSH 入口",
 }
 
-WORKFLOW_LEGACY_ENV_PATTERNS = {
+WORKFLOW_PROHIBITED_ENV_PATTERNS = {
     r"\bGAMMA_ECS_[A-Z0-9_]+\b": "workflow 不得重新注入已退役的 GAMMA_ECS_* 变量",
     r"\bPROD_KUBECONFIG\b": "workflow 不得重新注入已退役的 PROD_KUBECONFIG",
 }
@@ -59,15 +59,15 @@ def main() -> int:
                 if re.search(pattern, raw_line) and not line_is_retired_comment(raw_line):
                     issues.append(f"{rel}:{line_no}: {message}")
             if path.is_relative_to(workflow_root):
-                for pattern, message in WORKFLOW_LEGACY_ENV_PATTERNS.items():
+                for pattern, message in WORKFLOW_PROHIBITED_ENV_PATTERNS.items():
                     if re.search(pattern, raw_line) and not line_is_retired_comment(raw_line):
                         issues.append(f"{rel}:{line_no}: {message}")
     if issues:
-        print("[verify_prod_legacy_access_retired] FAIL", file=sys.stderr)
+        print("[verify_prod_access_guard] FAIL", file=sys.stderr)
         for issue in issues:
             print(f"  - {issue}", file=sys.stderr)
         return 1
-    print("[verify_prod_legacy_access_retired] OK")
+    print("[verify_prod_access_guard] OK")
     return 0
 
 
