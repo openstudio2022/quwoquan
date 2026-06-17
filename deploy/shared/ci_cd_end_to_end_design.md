@@ -103,10 +103,9 @@ Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`），全部针对 
 
 | 名称 | 用途 |
 |------|------|
-| `secrets.PROD_KUBECONFIG` | prod-hosted 部署唯一远端凭证（base64 kubeconfig，`07` 使用） |
-| prod kubeconfig 同步 ops SSH 凭据 | 专用 PROD/OPS secret（非 `GAMMA_ECS_*`），用于从 ops 同步 prod kubeconfig |
+| `secrets.PROD_EDGE_SSH_KEY` / `PROD_MEDIA_SSH_KEY` / `PROD_SERVICE_SSH_KEY` | prod-hosted 发布三平面读写 SSH 私钥（`07` 使用） |
 | `GAMMA_TEST_AUTH_TOKEN` | local-gamma / self-hosted 链路鉴权 |
-| `vars.GAMMA_BASE_URL` / `vars.GAMMA_PRODUCT_OPS_BASE_URL` | local-gamma mirror URL 覆盖 |
+| `gamma_base_url` workflow input / 本地环境变量覆盖 | 仅在需要覆盖 topology `gamma-local.publicBases.api` 时使用 |
 | `vars.MEDIA_AVATAR_CDN_BASE_URL` | chat-avatar 媒体基址 |
 | `vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX` | 控制 PR 是否启用 self-hosted 设备矩阵 |
 

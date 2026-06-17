@@ -19,7 +19,19 @@ RUN go mod download && \
     go build ${GO_BUILD_FLAGS} -o /assistant-service ./cmd/api
 
 FROM ${ALPINE_BASE_IMAGE}
-RUN apk add --no-cache ca-certificates tzdata
+RUN if command -v apk >/dev/null 2>&1; then \
+      apk add --no-cache ca-certificates tzdata; \
+    else \
+      if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i 's|http://deb.debian.org/debian|http://mirrors.aliyun.com/debian|g; s|http://deb.debian.org/debian-security|http://mirrors.aliyun.com/debian-security|g' /etc/apt/sources.list.d/debian.sources; \
+      fi; \
+      if [ -f /etc/apt/sources.list ]; then \
+        sed -i 's|http://deb.debian.org/debian|http://mirrors.aliyun.com/debian|g; s|http://deb.debian.org/debian-security|http://mirrors.aliyun.com/debian-security|g' /etc/apt/sources.list; \
+      fi; \
+      apt-get update \
+      && apt-get install -y --no-install-recommends ca-certificates tzdata \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
 WORKDIR /app
 COPY --from=builder /assistant-service /usr/local/bin/assistant-service
 COPY contracts/metadata/assistant/ /app/contracts/metadata/assistant/

@@ -142,14 +142,8 @@ jobs:
   stackctl-deploy:
     name: Stackctl deploy prod gray
     needs: [validate, resolve-versions]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS]
     # 去 root · 按平面 SSH 凭据（退役单一全权 PROD_KUBECONFIG）。
-    env:
-      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
-      PROD_EDGE_SSH_KEY: ${{ secrets.PROD_EDGE_SSH_KEY }}
-      PROD_MEDIA_SSH_KEY: ${{ secrets.PROD_MEDIA_SSH_KEY }}
-      PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}
-      PROD_DATA_SSH_KEY: ${{ secrets.PROD_DATA_SSH_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate prod plane SSH credentials

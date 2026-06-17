@@ -340,16 +340,11 @@ jobs:
   prod_initial:
     name: Prod initial rollout
     needs: [prepare, beta_device_matrix]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS]
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     # 去 root · 按平面 SSH 凭据（退役单一全权 PROD_KUBECONFIG）。
     env:
-      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
-      PROD_EDGE_SSH_KEY: ${{ secrets.PROD_EDGE_SSH_KEY }}
-      PROD_MEDIA_SSH_KEY: ${{ secrets.PROD_MEDIA_SSH_KEY }}
-      PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}
-      PROD_DATA_SSH_KEY: ${{ secrets.PROD_DATA_SSH_KEY }}
       SEED_BOX_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/seed-box
       RECOMMENDATION_SERVICE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/recommendation-service
     steps:
@@ -431,16 +426,11 @@ jobs:
   prod_full:
     name: Prod full rollout
     needs: [prepare, prod_initial]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS]
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     # 去 root · 按平面 SSH 凭据（退役单一全权 PROD_KUBECONFIG）。
     env:
-      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
-      PROD_EDGE_SSH_KEY: ${{ secrets.PROD_EDGE_SSH_KEY }}
-      PROD_MEDIA_SSH_KEY: ${{ secrets.PROD_MEDIA_SSH_KEY }}
-      PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}
-      PROD_DATA_SSH_KEY: ${{ secrets.PROD_DATA_SSH_KEY }}
       SEED_BOX_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/seed-box
       RECOMMENDATION_SERVICE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/recommendation-service
     steps:
@@ -450,7 +440,7 @@ jobs:
       - name: Validate prod plane SSH credentials
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         run: |
-          python3 agent_ops/deploy/prod/validate_prod_plane_credentials.py --stage gray-initial
+          python3 agent_ops/deploy/prod/validate_prod_plane_credentials.py --stage full
       - name: Download resolved release artifact
         if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
         continue-on-error: true

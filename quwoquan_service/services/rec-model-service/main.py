@@ -3,11 +3,11 @@ rec-model-service: recommendation model inference API.
 POST /v1/score (multi-scenario), GET /health, GET /metrics (Prometheus).
 """
 from contextlib import asynccontextmanager
+import time
 
 from fastapi import FastAPI
-from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_fastapi_instrumentator import routing as instrumentator_routing
-from starlette.routing import Match
+from fastapi import Request
+from prometheus_client import Counter, Histogram, make_asgi_app
 
 from api.metrics import refresh_rec_model_loaded_gauges
 from api.score import router as score_router
@@ -16,43 +16,24 @@ from runtime_contract import bootstrap_runtime_contract_or_die
 bootstrap_runtime_contract_or_die()
 
 
+http_requests_total = Counter(
+    "http_requests_total",
+    "Total HTTP requests served by rec-model-service.",
+    ["handler", "method", "status"],
+)
+
+http_request_duration_highr_seconds = Histogram(
+    "http_request_duration_highr_seconds",
+    "HTTP request latency with high-resolution buckets.",
+    ["handler", "method", "status"],
+    buckets=[0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
+)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     refresh_rec_model_loaded_gauges()
     yield
-
-
-def _patch_instrumentator_route_name() -> None:
-    """兼容 FastAPI 新路由包装对象，避免 metrics 中间件在测试时崩溃。"""
-
-    def _safe_get_route_name(scope, routes, route_name=None):
-        for route in routes:
-            match, child_scope = route.matches(scope)
-            if match == Match.FULL:
-                current_name = getattr(route, "path", route_name)
-                child_routes = getattr(route, "routes", None)
-                if child_routes:
-                    nested_name = _safe_get_route_name(child_scope, child_routes, current_name)
-                    if nested_name is not None:
-                        return nested_name
-                if current_name is not None:
-                    return current_name
-            elif match == Match.PARTIAL and route_name is None:
-                current_name = getattr(route, "path", None)
-                child_routes = getattr(route, "routes", None)
-                if child_routes:
-                    nested_name = _safe_get_route_name(child_scope, child_routes, current_name)
-                    if nested_name is not None:
-                        return nested_name
-                if current_name is not None:
-                    return current_name
-        return route_name
-
-    instrumentator_routing._get_route_name = _safe_get_route_name
-
-
-_patch_instrumentator_route_name()
-
 
 app = FastAPI(
     title="quwoquan recommendation-service",
@@ -60,6 +41,43 @@ app = FastAPI(
     lifespan=lifespan,
     description="Recommendation model scoring (content_feed / circle_discovery / friend_suggestion).",
 )
-app.include_router(score_router)
 
-Instrumentator().instrument(app).expose(app)
+
+def _handler_label(request: Request) -> str:
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", None)
+    if route_path:
+        return str(route_path)
+    return request.url.path or "unknown"
+
+
+@app.middleware("http")
+async def observe_http(request: Request, call_next):
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        handler = _handler_label(request)
+        elapsed = time.perf_counter() - started
+        http_requests_total.labels(handler=handler, method=request.method, status="5xx").inc()
+        http_request_duration_highr_seconds.labels(
+            handler=handler,
+            method=request.method,
+            status="5xx",
+        ).observe(elapsed)
+        raise
+
+    handler = _handler_label(request)
+    status_group = f"{response.status_code // 100}xx"
+    elapsed = time.perf_counter() - started
+    http_requests_total.labels(handler=handler, method=request.method, status=status_group).inc()
+    http_request_duration_highr_seconds.labels(
+        handler=handler,
+        method=request.method,
+        status=status_group,
+    ).observe(elapsed)
+    return response
+
+
+app.include_router(score_router)
+app.mount("/metrics", make_asgi_app())

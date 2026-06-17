@@ -63,8 +63,8 @@ python3 agent_ops/deploy/stackctl.py up --env gamma
 
 ### 3.2 部署环境
 
-- **gamma（仅本地）**：local-gamma mirror 可访问，`GAMMA_BASE_URL`、`GAMMA_PRODUCT_OPS_BASE_URL`、`GAMMA_TEST_AUTH_TOKEN` 指向本地 mirror endpoint（无远端 gamma）
-- **prod（唯一远端目标）**：K8s 集群就绪（阿里云 ACK / 火山引擎 VKE / 华为云 CCE），`CONFIG_VERSION`、`IMAGE_VERSION` 已确定；backend SSH 托管，gray 与 full 共享同一集群
+- **gamma（仅本地）**：local-gamma mirror 可访问；默认 URL 从 topology `gamma-local.publicBases.*` 解析，仅 `GAMMA_TEST_AUTH_TOKEN` 作为可选鉴权 secret（无远端 gamma）
+- **prod（唯一远端目标）**：`CONFIG_VERSION`、`IMAGE_VERSION` 已确定；backend 为 `ssh-hosted + rootless podman compose`，gray 与 full 共享同一物理 ECS
 - **多云切换**：通过 `CLOUD_PROVIDER=aliyun|volcengine|huaweicloud` 选择 overlay，见 `deploy/cloud-providers/`
 
 ### 3.2.1 Package Purity / Host Allowlist
@@ -133,10 +133,15 @@ python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service seed-
 
 ```bash
 API_CONTRACT_ENV=gamma \
-GAMMA_BASE_URL=<gamma-api-url> \
-GAMMA_PRODUCT_OPS_BASE_URL=<gamma-product-ops-url> \
 GAMMA_TEST_AUTH_TOKEN=<token> \
 make test-api-contract
+```
+
+如需覆盖默认 local-gamma 入口，再额外传：
+
+```bash
+GAMMA_BASE_URL=<gamma-api-url> \
+GAMMA_PRODUCT_OPS_BASE_URL=<gamma-product-ops-url>
 ```
 
 失败 → 不得进入 G5c。
@@ -180,6 +185,8 @@ scripts/start_app_instance.sh --env gamma --device-id <gamma-device>
 在 **integration / prod** 只有一个发布单元：**seed-box**，内有两个容器（Go seed-box + Python recommendation-service），**一起发布、同一镜像/配置版本**。灰度就是整颗 seed-box 一起滚，不按“服务”拆开。配置与状态统一用 seed-box：`releases/config/seed-box/`、`state/release/seed-box.state`。
 
 > **远端底座（prod-hosted）现状**：成本约束下 prod 与原 gamma 同台 ECS，远端发布为 **ssh-hosted + rootless podman compose**（非独立 ACK 集群），按 `edge/media/service/data` 四平面去 root 隔离（账号 `prod-<plane>-svc`，见 `deploy/shared/prod_plane_access_isolation.yaml`），seed-box 归属 `service` 平面、由 `prod-service-svc` 发布。`deploy/service/seed-box/kustomize/**` 与 `deploy/kustomization/<cloud>-prod` 保留为面向未来 ACK 的脚手架（仅静态门禁校验），当前不参与远端 apply。
+>
+> **当前端口与内存约束（2026-06-18 复核）**：`gray-initial` 命名空间固定暴露 `29000/29010/29100/29110`（TLS/Admin=`28443/22019`），`full` 命名空间固定暴露 `19000/19010/19100/19110`（TLS/Admin=`18443/12019`）。现网 ECS 仅 `2G`，gray 只作为短驻验证面保留；完成 `health + inspect + doctor + SLO` 并切 full 后应及时回收 gray。若发布窗口需要与旧 root 数据面短时共存，Mongo 必须带 `wiredTigerCacheSizeGB=0.25`，否则容易被 OOM killer 回收。
 
 ### 6.1 灰度步进
 
@@ -190,7 +197,7 @@ make config-gray-rollout \
   SERVICE=seed-box \
   FROM_IMAGE=<old> TO_IMAGE=<new> \
   FROM_CONFIG=<old> TO_CONFIG=<new> \
-  STEP=50  # 初始灰度（1 pod，全自动）；100 为 Carry-on 全量（需审批）
+  STEP=5  # 当前 gray-initial；100 为 full。最终以 rollout stage policy/stackctl 映射为准。
 
 # 或统一入口
 python3 agent_ops/deploy/stackctl.py deploy \
@@ -198,7 +205,7 @@ python3 agent_ops/deploy/stackctl.py deploy \
   --service seed-box \
   --from-image <old> --to-image <new> \
   --from-config <old> --to-config <new> \
-  --step 50 \
+  --step 5 \
   --error-rate <rate> \
   --p95-ms <ms> \
   --redis-error-rate <rate>
@@ -218,6 +225,12 @@ python3 agent_ops/deploy/stackctl.py health --target prod-hosted
 python3 agent_ops/deploy/stackctl.py inspect --target prod-hosted --scope all
 python3 agent_ops/deploy/stackctl.py doctor --target prod-hosted
 ```
+
+本轮通过的真实证据：
+
+- `gray-initial`: `artifacts/stackctl/prod/20260617T164119Z-deploy-prod-hosted`（`OK: stage=5 decision=continue`，post-deploy `4/4 healthy`，doctor 无问题）。
+- `full`: `artifacts/stackctl/prod/20260617T172537Z-deploy-prod-hosted`（`OK: stage=100 decision=continue`，post-deploy `4/4 healthy`，doctor 无问题）。
+- 当前稳态复核：`artifacts/stackctl/prod/20260617T173159Z-verify-prod-hosted`、`artifacts/stackctl/prod/20260617T173201Z-doctor-prod-hosted`。
 
 阈值见 `deploy/service/config-release/slo_thresholds.yaml`。
 
