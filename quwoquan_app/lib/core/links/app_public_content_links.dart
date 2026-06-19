@@ -15,9 +15,24 @@ class AppPublicContentLinks {
   );
 
   /// 公网站点根 URL（无尾斜杠；与 [publicWebUrlForPath] / [postWebUrl] 组合规则一致）。
+  ///
+  /// 站外分享/PC Web 链接面向公网浏览器，必须是 HTTPS：override 通常已是
+  /// `https://quwoquan.com`；过渡期回退当前环境 gateway 时，把开发态的
+  /// `http://` origin 升级为 `https://`，避免对外暴露明文 http 公链。
   static String get publicWebBaseUrl {
     final override = _publicWebBaseUrlOverride.trim();
-    return override.isNotEmpty ? override : CloudRuntimeConfig.gatewayBaseUrl;
+    if (override.isNotEmpty) {
+      return override;
+    }
+    return _forceHttpsOrigin(CloudRuntimeConfig.gatewayBaseUrl);
+  }
+
+  static String _forceHttpsOrigin(String base) {
+    final value = base.trim();
+    if (value.toLowerCase().startsWith('http://')) {
+      return 'https://${value.substring('http://'.length)}';
+    }
+    return value;
   }
 
   static String _normalizedBase() {

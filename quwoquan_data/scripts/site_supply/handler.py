@@ -10,6 +10,8 @@ import datetime as dt
 import fnmatch
 import hashlib
 import json
+import re
+import time
 import urllib.parse
 from pathlib import Path
 from typing import Any, Mapping
@@ -18,9 +20,11 @@ import yaml
 
 from _common.io import read_json, write_json
 from _common.paths import DATA_ROOT, RUNTIME_ROOT, now_iso
+from download.fetch import fetch_source_payload
 
 
 FRONTIER_SCHEMA = "quwoquan.site_supply.site_frontier_packet/1"
+FETCH_SCHEMA = "quwoquan.site_supply.site_fetch_packet/1"
 CANDIDATE_SCHEMA = "quwoquan.site_supply.site_candidate_packet/1"
 SCORE_SCHEMA = "quwoquan.site_supply.site_score_packet/1"
 MAP_SCHEMA = "quwoquan.site_supply.site_map_packet/1"
@@ -33,6 +37,7 @@ DEFAULT_TIME_WINDOW_DAYS = 730
 DEFAULT_DAILY_TARGET = 100_000
 MIN_ARTICLE_TEXT_CHARS = 80
 MIN_PRODUCTION_SCORE = 0.45
+DEFAULT_FETCH_MIN_TEXT_CHARS = 120
 ADMISSION_BATCH_CRAWL = "batch_crawl"
 ADMISSION_CONTROLLED_TRIAL = "controlled_trial"
 ADMISSION_MODES = (ADMISSION_BATCH_CRAWL, ADMISSION_CONTROLLED_TRIAL)
@@ -347,6 +352,189 @@ def _url_allowed(frontier: Mapping[str, Any], url: str) -> bool:
     return False
 
 
+def _probe_text_reason(text: str, title: str = "") -> str:
+    haystack = f"{title}\n{text}".strip()
+    if not haystack:
+        return "empty fetch text"
+    probe_tokens = (
+        "非常抱歉，您访问的页面不存在",
+        "访问的页面不存在",
+        "访问异常",
+        "安全验证",
+        "请完成验证",
+        "登录后查看",
+        "captcha",
+        "robot check",
+    )
+    for token in probe_tokens:
+        if token.lower() in haystack.lower():
+            return f"probe/error page detected: {token}"
+    return ""
+
+
+def _first_text_line(text: str, fallback: str = "") -> str:
+    for line in str(text or "").splitlines():
+        stripped = line.strip()
+        if len(stripped) >= 4:
+            return stripped[:120]
+    return str(fallback or "").strip()[:120]
+
+
+def _timestamp_ms_to_date(value: Any) -> str:
+    try:
+        raw = int(value)
+    except (TypeError, ValueError):
+        return ""
+    if raw <= 0:
+        return ""
+    return dt.datetime.fromtimestamp(raw / 1000, tz=dt.timezone.utc).date().isoformat()
+
+
+def _fetch_candidate_ref(url: str) -> str:
+    return _stable_ref("candidate", url)
+
+
+def build_site_fetch_packet(
+    *,
+    vertical: str,
+    site_id: str,
+    batch_id: str,
+    url: str,
+    lane: str = "article",
+    title: str = "",
+    author: str = "",
+    published_at: str | None = None,
+    entity_mentions: list[str] | None = None,
+    tag_mentions: list[str] | None = None,
+    min_text_chars: int = DEFAULT_FETCH_MIN_TEXT_CHARS,
+    payload: Mapping[str, Any] | None = None,
+    error: str = "",
+    attempts: int = 0,
+) -> dict[str, Any]:
+    frontier = _frontier_packet(vertical, site_id, batch_id)
+    profile = frontier.get("profile") if isinstance(frontier.get("profile"), Mapping) else {}
+    blockers: list[str] = []
+    warnings: list[str] = []
+    if str(frontier.get("admissionMode") or ADMISSION_BATCH_CRAWL) != ADMISSION_BATCH_CRAWL:
+        blockers.append("site_fetch is only allowed for batch_crawl admission")
+    if not ((frontier.get("gate") or {}).get("passed")):
+        blockers.append("site_frontier gate did not pass; repair at site_frontier")
+    if lane not in set(profile.get("contentLanes") or []):
+        blockers.append(f"lane {lane!r} is not allowed by site frontier")
+    if not _url_allowed(frontier, url):
+        blockers.append("fetch url is outside site frontier domains/allowedPaths")
+
+    status_code = int((payload or {}).get("statusCode") or 0)
+    text = str((payload or {}).get("text") or "")
+    sha256 = str((payload or {}).get("sha256") or "")
+    html_bytes = (payload or {}).get("htmlBytes")
+    content_length = len(html_bytes) if isinstance(html_bytes, (bytes, bytearray)) else 0
+    runtime = (payload or {}).get("runtime") if isinstance((payload or {}).get("runtime"), Mapping) else {}
+    if error:
+        blockers.append(f"fetch failed: {error}")
+    if payload is not None:
+        if status_code != 200:
+            blockers.append(f"fetch statusCode must be 200; got {status_code}")
+        if content_length <= 0:
+            blockers.append("fetch body is empty")
+        if len(text.strip()) < int(min_text_chars):
+            blockers.append(f"fetch extracted text is too short (<{int(min_text_chars)} chars)")
+        probe_reason = _probe_text_reason(text, title)
+        if probe_reason:
+            blockers.append(probe_reason)
+    elif not error and not blockers:
+        warnings.append("fetch payload missing; packet is preflight-only")
+
+    extracted_title = title.strip() or _first_text_line(text, fallback=url)
+    packet = {
+        "schemaVersion": FETCH_SCHEMA,
+        "vertical": vertical,
+        "siteId": site_id,
+        "batchId": batch_id,
+        "candidateRef": _fetch_candidate_ref(url),
+        "lane": lane,
+        "canonicalUrl": url,
+        "source": {
+            "platform": profile.get("platform") or site_id,
+            "extractor": profile.get("extractor") or "",
+            "rightsPolicy": profile.get("rightsPolicy") or "",
+            "termsUrl": profile.get("termsUrl") or "",
+            "admissionMode": frontier.get("admissionMode") or ADMISSION_BATCH_CRAWL,
+            "validationOnly": False,
+        },
+        "fetch": {
+            "attempted": payload is not None or bool(error),
+            "attempts": int(attempts or (1 if (payload is not None or error) else 0)),
+            "statusCode": status_code,
+            "contentLength": content_length,
+            "sha256": sha256,
+            "error": error,
+            "runtime": dict(runtime),
+        },
+        "extraction": {
+            "title": extracted_title,
+            "author": author.strip(),
+            "publishedAt": published_at or "",
+            "textChars": len(text.strip()),
+            "text": text.strip(),
+        },
+        "semanticMentions": {
+            "entities": entity_mentions or [],
+            "tags": tag_mentions or [],
+            "state": "mention_only",
+        },
+        "gate": _gate_report("site_fetch", blockers, warnings),
+        "createdAt": now_iso(),
+    }
+    return packet
+
+
+def write_site_fetch_packet(
+    packet: Mapping[str, Any],
+    *,
+    html_bytes: bytes | None = None,
+) -> Path:
+    root = site_supply_root(str(packet["vertical"]), str(packet["siteId"]), str(packet["batchId"]))
+    ref = str(packet["candidateRef"])
+    object_dir = root / "fetches" / ref
+    path = object_dir / "site_fetch_packet.json"
+    payload = dict(packet)
+    if html_bytes:
+        raw_dir = object_dir / "raw"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        (raw_dir / "page.html").write_bytes(html_bytes)
+        text = str(((payload.get("extraction") or {}).get("text")) or "")
+        (raw_dir / "source.md").write_text(text, encoding="utf-8")
+        payload["fetch"] = {
+            **dict(payload.get("fetch") or {}),
+            "htmlPath": str(raw_dir / "page.html"),
+            "sourceMdPath": str(raw_dir / "source.md"),
+        }
+    write_json(path, payload)
+    _write_object_triplet(object_dir, "site_fetch", [str(path)], payload["gate"])
+    _write_stage_triplet(root, "site_fetch", [str(path)], payload["gate"])
+    return path
+
+
+def build_site_candidate_from_fetch(fetch_packet: Mapping[str, Any]) -> dict[str, Any]:
+    extraction = fetch_packet.get("extraction") if isinstance(fetch_packet.get("extraction"), Mapping) else {}
+    mentions = fetch_packet.get("semanticMentions") if isinstance(fetch_packet.get("semanticMentions"), Mapping) else {}
+    return build_site_candidate_packet(
+        vertical=str(fetch_packet["vertical"]),
+        site_id=str(fetch_packet["siteId"]),
+        batch_id=str(fetch_packet["batchId"]),
+        url=str(fetch_packet["canonicalUrl"]),
+        lane=str(fetch_packet.get("lane") or "article"),
+        title=str(extraction.get("title") or ""),
+        text=str(extraction.get("text") or ""),
+        published_at=str(extraction.get("publishedAt") or "") or None,
+        author=str(extraction.get("author") or ""),
+        assets=[],
+        entity_mentions=[str(x) for x in (mentions.get("entities") or [])],
+        tag_mentions=[str(x) for x in (mentions.get("tags") or [])],
+    )
+
+
 def _parse_assets(raw: str | None, *, source_url: str) -> list[dict[str, Any]]:
     if not raw:
         return []
@@ -648,9 +836,11 @@ def build_site_rollup_report(
 ) -> dict[str, Any]:
     root = site_supply_root(vertical, site_id, batch_id)
     frontier = _frontier_packet(vertical, site_id, batch_id)
+    fetch_paths = sorted((root / "fetches").glob("*/site_fetch_packet.json"))
     candidate_paths = sorted((root / "candidates").glob("*/site_candidate_packet.json"))
     score_paths = sorted((root / "scores").glob("*/site_score_packet.json"))
     map_paths = sorted((root / "map").glob("*/site_map_packet.json"))
+    fetches = [read_json(path) for path in fetch_paths]
     candidates = [read_json(path) for path in candidate_paths]
     scores = [read_json(path) for path in score_paths]
     maps = [read_json(path) for path in map_paths]
@@ -683,9 +873,11 @@ def build_site_rollup_report(
     if total <= 0:
         blockers.append("site rollup requires at least one candidate")
     stage_failures = {
+        "site_fetch": 0,
         "site_extract": 0,
         "site_score": 0,
         "site_map": 0,
+        "missing_candidate_after_fetch": 0,
         "missing_score": 0,
         "missing_map": 0,
         "orphan_score": 0,
@@ -693,6 +885,20 @@ def build_site_rollup_report(
         "missing_object_evidence": 0,
     }
     candidate_refs = {str(c.get("candidateRef") or "") for c in candidates if str(c.get("candidateRef") or "")}
+    fetch_pass_refs: set[str] = set()
+    for fetched in fetches:
+        ref = str(fetched.get("candidateRef") or "<missing>")
+        missing_fetch = _object_triplet_missing(root / "fetches" / ref)
+        if missing_fetch:
+            stage_failures["missing_object_evidence"] += 1
+            blockers.append(f"{ref}: missing site_fetch object evidence {missing_fetch}")
+        if _packet_gate_passed(fetched):
+            fetch_pass_refs.add(ref)
+        else:
+            stage_failures["site_fetch"] += 1
+    for ref in sorted(fetch_pass_refs - candidate_refs):
+        stage_failures["missing_candidate_after_fetch"] += 1
+        blockers.append(f"{ref}: site_fetch passed but site_candidate_packet is missing")
     for candidate in candidates:
         ref = str(candidate.get("candidateRef") or "<missing>")
         missing = _object_triplet_missing(root / "candidates" / ref)
@@ -745,14 +951,15 @@ def build_site_rollup_report(
             blockers.append(f"{ref}: site_map handoff is eligible without productionEligible score")
     if dead_letter_count:
         blockers.append(f"deadLetterCount must be zero before scale; got {dead_letter_count}")
-    if total:
-        if (http_429_count + http_403_count) / total > 0.05:
+    stability_denominator = len(fetches) or total
+    if stability_denominator:
+        if (http_429_count + http_403_count) / stability_denominator > 0.05:
             blockers.append("site throttle/forbidden rate exceeds 5%")
-        if probe_page_count / total > 0.02:
+        if probe_page_count / stability_denominator > 0.02:
             blockers.append("probe page rate exceeds 2%")
-        if empty_extract_count / total > 0.05:
+        if empty_extract_count / stability_denominator > 0.05:
             blockers.append("empty extract rate exceeds 5%")
-        if duplicate_count / total > 0.40:
+        if duplicate_count / stability_denominator > 0.40:
             warnings.append("duplicate rate exceeds 40%; keep dedupe budget visible before expansion")
     if production_eligible and handoff_count < production_eligible:
         blockers.append("all productionEligible candidates must have site_map handoff packets")
@@ -772,6 +979,8 @@ def build_site_rollup_report(
         },
         "siteFunnel": {
             "frontierReady": bool(frontier.get("gate", {}).get("passed")),
+            "fetchCount": len(fetches),
+            "fetchGatePassedCount": len(fetch_pass_refs),
             "candidateCount": total,
             "laneCounts": lane_counts,
             "scoreCount": len(scores),
@@ -1033,6 +1242,303 @@ def handle_trial(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def _read_seed_file(path: str | None) -> list[str]:
+    if not path:
+        return []
+    seed_path = Path(path)
+    if not seed_path.is_file():
+        raise SystemExit(f"seed file not found: {seed_path}")
+    urls: list[str] = []
+    for line in seed_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            urls.append(stripped)
+    return urls
+
+
+def _qunar_search_candidates(
+    *,
+    queries: list[str],
+    max_pages: int,
+    limit: int,
+    window: Mapping[str, Any],
+    request_budget: int,
+) -> list[dict[str, Any]]:
+    if not queries or limit <= 0:
+        return []
+    from download.research_plan import _curl_json  # Reuse existing entity-line discovery IO.
+
+    candidates: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    requests_used = 0
+    start = _date(str(window.get("from")))
+    end = _date(str(window.get("to")))
+    for query in queries:
+        encoded = urllib.parse.quote(query)
+        for page in range(1, max(1, int(max_pages)) + 1):
+            if requests_used >= int(request_budget):
+                return candidates
+            requests_used += 1
+            data = _curl_json(f"https://touch.travel.qunar.com/search?_json&q={encoded}&page={page}", timeout=20)
+            if data.get("ret") is not True:
+                if requests_used >= int(request_budget):
+                    return candidates
+                requests_used += 1
+                data = _curl_json(f"https://touch.travel.qunar.com/search?_json=&q={encoded}&page={page}", timeout=20)
+            payload = data.get("data") if isinstance(data.get("data"), Mapping) else {}
+            rows = payload.get("bookList") if isinstance(payload.get("bookList"), list) else []
+            if not rows:
+                break
+            for row in rows:
+                if not isinstance(row, Mapping):
+                    continue
+                raw_id = str(row.get("id") or "").strip()
+                if not raw_id:
+                    continue
+                published_at = _timestamp_ms_to_date(row.get("startTime") or row.get("cTime") or row.get("uTime"))
+                if published_at:
+                    published = _date(published_at)
+                    if published < start or published > end:
+                        continue
+                url = f"https://touch.travel.qunar.com/youji/{raw_id}"
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                route = [str(item).strip() for item in (row.get("travelRoute") or []) if str(item).strip()]
+                dests = [str(item).strip() for item in (row.get("destCities") or []) if str(item).strip()]
+                city = str(row.get("cityName") or "").strip()
+                entity_mentions = [x for x in [city, *dests, *route[:8]] if x]
+                candidates.append(
+                    {
+                        "url": url,
+                        "lane": "article",
+                        "title": re.sub(r"<[^>]+>", "", str(row.get("title") or "")).strip(),
+                        "author": re.sub(r"<[^>]+>", "", str(row.get("userName") or "")).strip(),
+                        "publishedAt": published_at,
+                        "entityMentions": entity_mentions[:12],
+                        "tagMentions": ["Topic/旅行/玩法/自然风光", "Source/去哪儿攻略/游记"],
+                        "discovery": {
+                            "provider": "qunar_touch_search_json",
+                            "query": query,
+                            "page": page,
+                            "sourceId": raw_id,
+                            "viewCount": row.get("viewCount") or 0,
+                        },
+                    }
+                )
+                if len(candidates) >= limit:
+                    return candidates
+    return candidates
+
+
+def _crawl_input_candidates(args: argparse.Namespace, frontier: Mapping[str, Any]) -> list[dict[str, Any]]:
+    target_count = max(0, int(args.target_count or 0))
+    explicit_urls = _split_csv(args.seed_urls) + _read_seed_file(args.seed_file)
+    candidates: list[dict[str, Any]] = [
+        {
+            "url": url,
+            "lane": args.lane,
+            "title": "",
+            "author": "",
+            "publishedAt": args.end_date,
+            "entityMentions": _split_csv(args.entity_mentions),
+            "tagMentions": _split_csv(args.tag_mentions),
+            "discovery": {"provider": "explicit_seed"},
+        }
+        for url in explicit_urls
+    ]
+    seen = {row["url"] for row in candidates}
+    remaining = target_count - len(candidates) if target_count else 0
+    if remaining > 0 and args.site_id == "qunar_guide":
+        for row in _qunar_search_candidates(
+            queries=_split_csv(args.queries),
+            max_pages=args.max_search_pages,
+            limit=remaining,
+            window=frontier.get("timeWindow") or {},
+            request_budget=args.max_discovery_requests,
+        ):
+            if row["url"] in seen:
+                continue
+            seen.add(row["url"])
+            candidates.append(row)
+            if target_count and len(candidates) >= target_count:
+                break
+    if target_count:
+        return candidates[:target_count]
+    return candidates
+
+
+def _rate_limit_seconds(profile: Mapping[str, Any]) -> float:
+    rate = profile.get("rateLimit") if isinstance(profile.get("rateLimit"), Mapping) else {}
+    rps = rate.get("maxRequestsPerSecond")
+    try:
+        value = float(rps)
+    except (TypeError, ValueError):
+        return 0.0
+    if value <= 0:
+        return 0.0
+    return 1.0 / value
+
+
+def _classify_fetch_packet(packet: Mapping[str, Any]) -> tuple[int, int, int, int]:
+    fetch = packet.get("fetch") if isinstance(packet.get("fetch"), Mapping) else {}
+    status = int(fetch.get("statusCode") or 0)
+    blockers = "\n".join(str(x) for x in ((packet.get("gate") or {}).get("blockers") or []))
+    http_429 = 1 if status == 429 or "status=429" in blockers else 0
+    http_403 = 1 if status == 403 or "status=403" in blockers else 0
+    probe = 1 if "probe/error page detected" in blockers else 0
+    empty = 1 if "empty" in blockers or "too short" in blockers else 0
+    return http_429, http_403, probe, empty
+
+
+def _fetch_with_retry(url: str, *, retry_budget: int, retry_delay_seconds: float) -> tuple[Mapping[str, Any] | None, str, int]:
+    attempts = 0
+    last_error = ""
+    for attempt in range(0, max(0, int(retry_budget)) + 1):
+        attempts += 1
+        try:
+            return fetch_source_payload(url), "", attempts
+        except Exception as exc:
+            last_error = str(exc)
+            if attempt >= int(retry_budget):
+                break
+            delay = max(float(retry_delay_seconds), float(attempt + 1))
+            time.sleep(min(delay, 10.0))
+    return None, last_error, attempts
+
+
+def handle_crawl(args: argparse.Namespace) -> None:
+    started = time.monotonic()
+    frontier = build_site_frontier_packet(
+        vertical=args.vertical,
+        site_id=args.site_id,
+        batch_id=args.batch,
+        daily_target=args.daily_target,
+        queue_backend=args.queue_backend,
+        lanes=[args.lane],
+        end_date=args.end_date,
+        admission_mode=ADMISSION_BATCH_CRAWL,
+    )
+    write_site_frontier_packet(frontier)
+    if not frontier["gate"]["passed"]:
+        _print(frontier)
+        raise SystemExit(1)
+
+    discovered = _crawl_input_candidates(args, frontier)
+    if not discovered:
+        raise SystemExit("no real crawl input URLs discovered; repair at site_frontier discovery")
+    frontier["frontier"] = {
+        **dict(frontier.get("frontier") or {}),
+        "targetCount": int(args.target_count),
+        "discoveredCount": len(discovered),
+        "maxDiscoveryRequests": int(args.max_discovery_requests),
+    }
+    if len(discovered) < int(args.target_count):
+        frontier["gate"] = _gate_report(
+            "site_frontier",
+            [f"frontier discovery produced {len(discovered)} URLs < targetCount {int(args.target_count)}"],
+            [],
+        )
+        write_site_frontier_packet(frontier)
+        _print(frontier)
+        raise SystemExit(1)
+    write_site_frontier_packet(frontier)
+
+    profile = frontier.get("profile") if isinstance(frontier.get("profile"), Mapping) else {}
+    throttle_seconds = _rate_limit_seconds(profile)
+    if args.throttle_seconds is not None:
+        throttle_seconds = max(throttle_seconds, float(args.throttle_seconds))
+
+    http_429 = http_403 = probe_pages = empty_extract = dead_letters = 0
+    success_count = 0
+    attempted = 0
+    last_fetch_at = 0.0
+    for row in discovered:
+        url = str(row.get("url") or "").strip()
+        if not url:
+            continue
+        if attempted and throttle_seconds > 0:
+            elapsed_since_fetch = time.monotonic() - last_fetch_at
+            if elapsed_since_fetch < throttle_seconds:
+                time.sleep(throttle_seconds - elapsed_since_fetch)
+        attempted += 1
+        payload, error, attempts_for_url = _fetch_with_retry(
+            url,
+            retry_budget=args.fetch_retry_budget,
+            retry_delay_seconds=args.fetch_retry_delay,
+        )
+        last_fetch_at = time.monotonic()
+        fetch_packet = build_site_fetch_packet(
+            vertical=args.vertical,
+            site_id=args.site_id,
+            batch_id=args.batch,
+            url=url,
+            lane=str(row.get("lane") or args.lane),
+            title=str(row.get("title") or ""),
+            author=str(row.get("author") or ""),
+            published_at=str(row.get("publishedAt") or "") or args.end_date,
+            entity_mentions=[str(x) for x in (row.get("entityMentions") or [])],
+            tag_mentions=[str(x) for x in (row.get("tagMentions") or [])],
+            min_text_chars=args.min_text_chars,
+            payload=payload,
+            error=error,
+            attempts=attempts_for_url,
+        )
+        write_site_fetch_packet(
+            fetch_packet,
+            html_bytes=(payload or {}).get("htmlBytes") if isinstance((payload or {}).get("htmlBytes"), bytes) else None,
+        )
+        c429, c403, cprobe, cempty = _classify_fetch_packet(fetch_packet)
+        http_429 += c429
+        http_403 += c403
+        probe_pages += cprobe
+        empty_extract += cempty
+        if not fetch_packet["gate"]["passed"]:
+            if error:
+                dead_letters += 1
+            if args.stop_on_first_failure:
+                break
+            continue
+
+        candidate = build_site_candidate_from_fetch(fetch_packet)
+        write_site_candidate_packet(candidate)
+        if not candidate["gate"]["passed"]:
+            continue
+        score = build_site_score_packet(candidate)
+        write_site_score_packet(score)
+        if not score["gate"]["passed"]:
+            continue
+        mapped = build_site_map_packet(candidate, score)
+        write_site_map_packet(mapped)
+        if mapped["gate"]["passed"]:
+            success_count += 1
+
+    elapsed_hours = max((time.monotonic() - started) / 3600.0, 0.000001)
+    objects_per_hour = success_count / elapsed_hours if args.objects_per_hour is None else args.objects_per_hour
+    first_pass_rate = (success_count / attempted) if attempted else 0.0
+    rollup = build_site_rollup_report(
+        vertical=args.vertical,
+        site_id=args.site_id,
+        batch_id=args.batch,
+        objects_per_hour=objects_per_hour,
+        first_pass_rate=first_pass_rate,
+        token_ledger_count=args.token_ledger_count if args.token_ledger_count is not None else success_count,
+        release_verified=args.release_verified,
+        import_verified=args.import_verified,
+        search_visible=args.search_visible,
+        recommendation_feedback_ready=args.recommendation_feedback_ready,
+        http_429_count=http_429,
+        http_403_count=http_403,
+        probe_page_count=probe_pages,
+        empty_extract_count=empty_extract,
+        dead_letter_count=dead_letters,
+    )
+    write_site_rollup_report(rollup)
+    _print(rollup)
+    if not rollup["passed"]:
+        raise SystemExit(1)
+
+
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("site-supply", help="网站维度内容供给线 packet/gate/rollup")
     sub = p.add_subparsers(dest="site_supply_command", required=True)
@@ -1130,3 +1636,32 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pt.add_argument("--search-visible", action="store_true")
     pt.add_argument("--recommendation-feedback-ready", action="store_true")
     pt.set_defaults(handler=handle_trial)
+
+    pcrawl = sub.add_parser("crawl", help="真实抓取：frontier→fetch→candidate→score→map→rollup")
+    pcrawl.add_argument("--vertical", default="travel")
+    pcrawl.add_argument("--site-id", required=True)
+    pcrawl.add_argument("--batch", required=True)
+    pcrawl.add_argument("--target-count", type=int, required=True)
+    pcrawl.add_argument("--lane", choices=["article"], default="article")
+    pcrawl.add_argument("--queries", default="", help="逗号分隔站内发现 query；qunar_guide 复用去哪儿搜索发现")
+    pcrawl.add_argument("--max-search-pages", type=int, default=3)
+    pcrawl.add_argument("--max-discovery-requests", type=int, default=500)
+    pcrawl.add_argument("--seed-urls", default="", help="逗号分隔显式 URL，仍需通过 registry/frontier/fetch 门")
+    pcrawl.add_argument("--seed-file", help="每行一个显式 URL，仍需通过 registry/frontier/fetch 门")
+    pcrawl.add_argument("--entity-mentions", default="")
+    pcrawl.add_argument("--tag-mentions", default="")
+    pcrawl.add_argument("--daily-target", type=int, default=10_000)
+    pcrawl.add_argument("--queue-backend", choices=["local_file", "reliabletask"], default="reliabletask")
+    pcrawl.add_argument("--end-date", default=dt.date.today().isoformat())
+    pcrawl.add_argument("--min-text-chars", type=int, default=DEFAULT_FETCH_MIN_TEXT_CHARS)
+    pcrawl.add_argument("--objects-per-hour", type=float)
+    pcrawl.add_argument("--token-ledger-count", type=int)
+    pcrawl.add_argument("--fetch-retry-budget", type=int, default=2)
+    pcrawl.add_argument("--fetch-retry-delay", type=float, default=1.0)
+    pcrawl.add_argument("--throttle-seconds", type=float)
+    pcrawl.add_argument("--stop-on-first-failure", action="store_true")
+    pcrawl.add_argument("--release-verified", action="store_true")
+    pcrawl.add_argument("--import-verified", action="store_true")
+    pcrawl.add_argument("--search-visible", action="store_true")
+    pcrawl.add_argument("--recommendation-feedback-ready", action="store_true")
+    pcrawl.set_defaults(handler=handle_crawl)

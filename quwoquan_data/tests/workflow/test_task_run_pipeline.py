@@ -1602,6 +1602,97 @@ def test_auto_research_replacement_wave_stops_without_new_target(monkeypatch):
     assert calls == []
 
 
+def test_replacement_source_plan_check_skips_batch_download_repair_gate(monkeypatch):
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    batch_id = "replacement_source_plan_check_skips_download_repair"
+    ctx = _ctx(task_id, batch_id)
+    write_json(batch_root(task_id, batch_id) / "_shared" / "download_repair.json", {"issues": ["stale"]})
+
+    def _unexpected_gate(*_args, **_kwargs):
+        raise AssertionError("scoped replacement screening must not run batch download gate")
+
+    monkeypatch.setattr("download.gate.gate_download", _unexpected_gate)
+
+    ok, missing = run_mod._source_plan_filled_for_entities(ctx, [_EID])
+
+    assert ok is False
+    assert missing
+
+
+def test_source_plan_filled_ignores_stale_download_repair_without_batch_gate(monkeypatch):
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    batch_id = "source_plan_filled_clears_stale_download_repair"
+    ctx = _ctx(task_id, batch_id)
+    repair_path = batch_root(task_id, batch_id) / "_shared" / "download_repair.json"
+    write_json(
+        repair_path,
+        {
+            "entities": [
+                {
+                    "entityId": "不在当前作用域",
+                    "status": "pending",
+                    "issues": ["stale repair"],
+                }
+            ]
+        },
+    )
+
+    def _unexpected_gate(*_args, **_kwargs):
+        raise AssertionError("stale repair cleanup must not run batch download gate")
+
+    monkeypatch.setattr("download.gate.gate_download", _unexpected_gate)
+
+    ok, missing = run_mod._source_plan_filled(ctx)
+
+    assert ok is False
+    assert missing
+    assert repair_path.exists()
+
+
+def test_replacement_screening_stops_at_policy_total_limit(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "maxReplacementScreenedPerRun": 1,
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec["scope"]["reserveCoverageTargets"] = [
+        {"entityType": "地点/景区", "name": "替补景区乙"},
+    ]
+    store.save_spec(spec)
+    batch_id = "replacement_screening_total_limit"
+    ctx = _ctx(task_id, batch_id)
+    run_mod._append_replacement_row(
+        ctx,
+        entity_id="已筛选景区",
+        entity_type="地点/景区",
+        status="rejected",
+        reason="test previous screening",
+        source_gate_status="failed",
+        issues=["previous failure"],
+    )
+
+    monkeypatch.setattr(
+        "download.prepare.prepare_source_plan",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("replacement limit should stop before prepare")),
+    )
+
+    activated, rejected, report = run_mod._screen_replacement_targets(
+        ctx,
+        entity_type="地点/景区",
+        reason="keep target count after abandoned source-unavailable entity",
+        needed=1,
+        scope="replacement_wave_limit",
+    )
+
+    assert activated == []
+    assert rejected == []
+    assert report["sourceAvailability"]["screeningStoppedReason"] == "replacement_screening_limit"
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["replacementPolicy"]["screeningStoppedReason"] == "replacement_screening_limit"
+
+
 def test_download_plan_repairable_source_gap_does_not_screen_replacements(monkeypatch):
     task_id = _make_task(workflow_policy={"allowPartialContent": True})
     spec = store.load_spec(task_id)

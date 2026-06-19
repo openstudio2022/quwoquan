@@ -15,9 +15,12 @@ void main() {
         'identity': 'work',
         'authorId': 'a1',
         'displayName': '作者甲',
-        'authorAvatarUrl': 'https://example.com/a1.png',
-        'imageUrls': <String>['https://img/1.jpg', 'https://img/2.jpg'],
-        'coverUrl': 'https://img/cover.jpg',
+        'authorAvatarUrl': 'media/avatar/s/fixture/a1/v1/avatar.png',
+        'imageUrls': <String>[
+          'media/image/s/fixture/photo1/v1/1.jpg',
+          'media/image/s/fixture/photo1/v1/2.jpg',
+        ],
+        'coverUrl': 'media/image/s/fixture/photo1/v1/cover.jpg',
         'likeCount': 10,
         'commentCount': 2,
         'shareCount': 3,
@@ -31,8 +34,11 @@ void main() {
       expect(view.contentType, dto.type);
       expect(view.author.id, 'a1');
       expect(view.author.displayName, '作者甲');
-      expect(view.images.map((e) => e.url).toList(),
-          <String>['https://img/1.jpg', 'https://img/2.jpg']);
+      // 媒体 object key 经 content_media_url 解析为可加载 CDN URL（仍保留 object key 路径）。
+      final imageUrls = view.images.map((e) => e.url).toList();
+      expect(imageUrls, hasLength(2));
+      expect(imageUrls[0], contains('media/image/s/fixture/photo1/v1/1.jpg'));
+      expect(imageUrls[1], contains('media/image/s/fixture/photo1/v1/2.jpg'));
       expect(view.video, isNull);
       expect(view.stats.like, 10);
       expect(view.stats.comment, 2);
@@ -49,8 +55,8 @@ void main() {
         'authorId': 'a2',
         'displayName': '作者乙',
         'authorAvatarUrl': '',
-        'videoUrl': 'https://v/1.mp4',
-        'thumbnailUrl': 'https://v/thumb.jpg',
+        'videoUrl': 'media/video/s/fixture/video1/v1/clip.mp4',
+        'thumbnailUrl': 'media/image/s/fixture/video1/v1/thumb.jpg',
         'durationMs': 12000,
         'likeCount': 0,
         'commentCount': 0,
@@ -62,8 +68,11 @@ void main() {
 
       expect(view.kind, ContentSurfaceKind.video);
       expect(view.hasVideo, isTrue);
-      expect(view.video!.url, 'https://v/1.mp4');
-      expect(view.video!.thumbnailUrl, 'https://v/thumb.jpg');
+      expect(view.video!.url, contains('media/video/s/fixture/video1/v1/clip.mp4'));
+      expect(
+        view.video!.thumbnailUrl,
+        contains('media/image/s/fixture/video1/v1/thumb.jpg'),
+      );
       expect(view.video!.durationMs, 12000);
       expect(view.hasImages, isFalse);
     });
@@ -80,7 +89,7 @@ void main() {
         'authorAvatarUrl': '',
         'title': '统一展示标题',
         'body': '正文摘要',
-        'coverUrl': 'https://img/article-cover.jpg',
+        'coverUrl': 'media/image/s/fixture/article1/v1/cover.jpg',
         'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
@@ -100,7 +109,7 @@ void main() {
       expect(view.title, '统一展示标题');
       expect(view.body, '正文摘要');
       expect(view.cover, isNotNull);
-      expect(view.cover!.url, 'https://img/article-cover.jpg');
+      expect(view.cover!.url, contains('media/image/s/fixture/article1/v1/cover.jpg'));
       expect(view.articleTemplate, 'modern');
       expect(view.articleFontPreset, 'serif');
       expect(view.tags, <String>['校园', '摄影']);

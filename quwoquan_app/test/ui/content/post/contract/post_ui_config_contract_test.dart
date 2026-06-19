@@ -58,8 +58,7 @@ void main() {
       // 端只实现有限频道模板类型，运营选模板+配参数，不做无限动态布局。
       const allowedTemplates = <String>{
         'single_column_relations',
-        'masonry_recommend',
-        'intersection_rail_masonry',
+        'single_column_multiform',
       };
       for (final channel in ContentUIConfig.homeChannels) {
         expect(
@@ -71,11 +70,11 @@ void main() {
     });
 
     test(
-      'home_channels layout policies support phone dual-column discovery',
+      'home_channels layout policies use single-column multiform discovery',
       () {
         const allowedLayoutTemplates = <String>{
           'singleColumnRelations',
-          'dualColumnDiscovery',
+          'singleColumnMultiForm',
         };
         const allowedIntersectionPolicies = <String>{
           'none',
@@ -88,6 +87,7 @@ void main() {
           'richRelation',
           'compactVisual',
           'articleFullSpan',
+          'richMultiForm',
         };
 
         for (final channel in ContentUIConfig.homeChannels) {
@@ -132,8 +132,8 @@ void main() {
           final channel = ContentUIConfig.homeChannels.firstWhere(
             (c) => c.id == id,
           );
-          expect(channel.phoneColumns, equals(2), reason: '$id 手机端应为双列发现流');
-          expect(channel.contentCardPolicy, equals('compactVisual'));
+          expect(channel.phoneColumns, equals(1), reason: '$id 手机端为单列多形态流');
+          expect(channel.contentCardPolicy, equals('richMultiForm'));
         }
       },
     );

@@ -707,9 +707,16 @@ void main() {
   });
 
   test('沉浸媒体滑动顺滑性静态契约', () {
-    final viewerSource = File(
-      'lib/ui/discovery/widgets/works_immersive_viewer.dart',
-    ).readAsStringSync();
+    // 沉浸 viewer 重构后，横滑分页/吸附/预热/保活逻辑迁移到
+    // works_immersive_viewer_canvas.dart（viewer 主体只做装配）。静态契约读取
+    // viewer + canvas 合并源，保证这些顺滑性优化仍存在于真实绘制链路。
+    final viewerSource =
+        File(
+          'lib/ui/discovery/widgets/works_immersive_viewer.dart',
+        ).readAsStringSync() +
+        File(
+          'lib/ui/discovery/widgets/works_immersive_viewer_canvas.dart',
+        ).readAsStringSync();
     final videoPlayerSource = File(
       'lib/components/media/video/player/video_player_widget.dart',
     ).readAsStringSync();

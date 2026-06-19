@@ -531,7 +531,12 @@ void main() {
       final avatar = tester.widget<RoundedSquareAvatar>(
         find.byType(RoundedSquareAvatar).first,
       );
-      expect(avatar.imageUrl, 'https://example.com/group-rendered.jpg');
+      expect(
+        avatar.imageUrl,
+        contains(
+          'media/avatar/s/archived-avatar/conversation/conv_rendered_group',
+        ),
+      );
     });
 
     testWidgets('群会话 version 为 0 时仍使用会话 avatarUrl 单图', (tester) async {
@@ -544,7 +549,12 @@ void main() {
       final avatar = tester.widget<RoundedSquareAvatar>(
         find.byType(RoundedSquareAvatar).first,
       );
-      expect(avatar.imageUrl, 'https://example.com/wrong-single.jpg');
+      expect(
+        avatar.imageUrl,
+        contains(
+          'media/avatar/s/archived-avatar/conversation/conv_wrong_group_avatar',
+        ),
+      );
       expect(repo.memberRequestCount, 0);
     });
 
@@ -889,7 +899,8 @@ class _RenderedGroupAvatarChatRepository extends MockChatRepository {
         id: 'conv_rendered_group',
         type: 'group',
         title: '预渲染群头像',
-        avatarUrl: 'https://example.com/group-rendered.jpg',
+        avatarUrl:
+            'media/avatar/s/archived-avatar/conversation/conv_rendered_group/v2/mock.png',
         groupAvatarVersion: 2,
       ),
     ];
@@ -914,7 +925,8 @@ class _NonAuthoritativeGroupAvatarChatRepository extends MockChatRepository {
         id: 'conv_wrong_group_avatar',
         type: 'group',
         title: '非权威群头像',
-        avatarUrl: 'https://example.com/wrong-single.jpg',
+        avatarUrl:
+            'media/avatar/s/archived-avatar/conversation/conv_wrong_group_avatar/v1/mock.png',
         groupAvatarVersion: 0,
       ),
     ];

@@ -45,6 +45,25 @@ def _make_site_batch(
     )
     assert frontier["gate"]["passed"], frontier["gate"]
     ss.write_site_frontier_packet(frontier)
+    fetch = ss.build_site_fetch_packet(
+        vertical="travel",
+        site_id="qunar_guide",
+        batch_id=batch,
+        url=f"https://touch.travel.qunar.com/travelbook/note/{batch}",
+        lane="article",
+        title=f"{batch} 候选",
+        published_at="2026-06-01",
+        min_text_chars=60,
+        payload={
+            "statusCode": 200,
+            "htmlBytes": ARTICLE_TEXT.encode("utf-8"),
+            "text": ARTICLE_TEXT,
+            "sha256": batch,
+            "runtime": {"siteId": "qunar_guide", "fetchable": True},
+        },
+    )
+    assert fetch["gate"]["passed"], fetch["gate"]
+    ss.write_site_fetch_packet(fetch, html_bytes=ARTICLE_TEXT.encode("utf-8"))
     candidate = ss.build_site_candidate_packet(
         vertical="travel",
         site_id="qunar_guide",

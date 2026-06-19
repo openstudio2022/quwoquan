@@ -6,6 +6,8 @@ import os
 import subprocess
 import sys
 import tempfile
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
@@ -248,6 +250,129 @@ def test_candidate_outside_frontier_domain_is_blocked():
     score = ss.build_site_score_packet(packet)
     assert not score["productionEligible"]
     assert "candidate gate did not pass" in "\n".join(score["gate"]["blockers"])
+
+
+def test_site_fetch_packet_materializes_real_fetch_evidence_before_candidate():
+    _write_frontier("fetch_ok")
+    fetch = ss.build_site_fetch_packet(
+        vertical="travel",
+        site_id="qunar_guide",
+        batch_id="fetch_ok",
+        url="https://touch.travel.qunar.com/youji/123456",
+        lane="article",
+        title="九寨沟真实抓取候选",
+        published_at="2026-06-01",
+        min_text_chars=60,
+        payload={
+            "statusCode": 200,
+            "htmlBytes": ARTICLE_TEXT.encode("utf-8"),
+            "text": ARTICLE_TEXT,
+            "sha256": "sha",
+            "runtime": {"siteId": "qunar_guide", "fetchable": True},
+        },
+    )
+    assert fetch["gate"]["passed"], fetch["gate"]
+    path = ss.write_site_fetch_packet(fetch, html_bytes=ARTICLE_TEXT.encode("utf-8"))
+    assert (path.parent / "raw" / "page.html").is_file()
+    candidate = ss.build_site_candidate_from_fetch(fetch)
+    assert candidate["gate"]["passed"], candidate["gate"]
+    assert candidate["candidateRef"] == fetch["candidateRef"]
+
+
+def test_site_fetch_stops_when_frontier_is_not_batch_crawl_allowed():
+    frontier = ss.build_site_frontier_packet(
+        vertical="travel",
+        site_id="ctrip_travelogue",
+        batch_id="fetch_blocked_ctrip",
+        daily_target=10_000,
+        queue_backend="reliabletask",
+        end_date="2026-06-19",
+    )
+    assert not frontier["gate"]["passed"], frontier["gate"]
+    ss.write_site_frontier_packet(frontier)
+    fetch = ss.build_site_fetch_packet(
+        vertical="travel",
+        site_id="ctrip_travelogue",
+        batch_id="fetch_blocked_ctrip",
+        url="https://you.ctrip.com/travels/example.html",
+        lane="article",
+        title="不应进入抓取",
+        payload={
+            "statusCode": 200,
+            "htmlBytes": ARTICLE_TEXT.encode("utf-8"),
+            "text": ARTICLE_TEXT,
+            "sha256": "sha",
+        },
+    )
+    assert not fetch["gate"]["passed"]
+    text = "\n".join(fetch["gate"]["blockers"])
+    assert "site_frontier gate did not pass" in text
+
+
+def test_fetch_retry_budget_recovers_transient_empty_body():
+    calls = {"count": 0}
+    original = ss.fetch_source_payload
+
+    def fake_fetch(url: str):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError(f"fetch failed for {url} (status=200)")
+        return {
+            "statusCode": 200,
+            "htmlBytes": ARTICLE_TEXT.encode("utf-8"),
+            "text": ARTICLE_TEXT,
+            "sha256": "sha",
+            "runtime": {"siteId": "qunar_guide", "fetchable": True},
+        }
+
+    try:
+        ss.fetch_source_payload = fake_fetch
+        payload, error, attempts = ss._fetch_with_retry(
+            "https://touch.travel.qunar.com/youji/123456",
+            retry_budget=2,
+            retry_delay_seconds=0,
+        )
+    finally:
+        ss.fetch_source_payload = original
+    assert error == ""
+    assert attempts == 2
+    assert payload and payload["statusCode"] == 200
+
+
+def test_crawl_blocks_at_frontier_when_discovery_underfills_target():
+    original = ss._crawl_input_candidates
+    args = type(
+        "Args",
+        (),
+        {
+            "vertical": "travel",
+            "site_id": "qunar_guide",
+            "batch": "underfill_frontier",
+            "target_count": 2,
+            "daily_target": 1000,
+            "queue_backend": "reliabletask",
+            "lane": "article",
+            "end_date": "2026-06-19",
+            "max_discovery_requests": 1,
+        },
+    )()
+
+    try:
+        ss._crawl_input_candidates = lambda _args, _frontier: [
+            {"url": "https://touch.travel.qunar.com/youji/1", "lane": "article"}
+        ]
+        with redirect_stdout(StringIO()):
+            try:
+                ss.handle_crawl(args)
+            except SystemExit as exc:
+                assert exc.code == 1
+            else:
+                raise AssertionError("handle_crawl should block underfilled discovery")
+    finally:
+        ss._crawl_input_candidates = original
+    frontier = ss._frontier_packet("travel", "qunar_guide", "underfill_frontier")
+    assert frontier["gate"]["passed"] is False
+    assert "discovery produced 1 URLs" in "\n".join(frontier["gate"]["blockers"])
 
 
 def test_trial_command_materializes_hundred_level_structural_batch():

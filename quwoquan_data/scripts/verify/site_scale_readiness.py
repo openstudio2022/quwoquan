@@ -78,7 +78,13 @@ def _site_report(root: Path) -> dict[str, Any]:
     batch_id = str((frontier.get("batchId") or rollup.get("batchId") or root.name))
     vertical = str((frontier.get("vertical") or rollup.get("vertical") or root.parent.parent.name))
     frontier_passed = bool((frontier.get("gate") or {}).get("passed"))
-    stages_to_check = ("site_frontier", "site_extract", "site_score", "site_map", "site_rollup") if frontier_passed else ("site_frontier",)
+    admission_mode = str(((rollup.get("frontier") or {}).get("admissionMode") or frontier.get("admissionMode") or "batch_crawl"))
+    if frontier_passed and admission_mode == ADMISSION_CONTROLLED_TRIAL:
+        stages_to_check = ("site_frontier", "site_extract", "site_score", "site_map", "site_rollup")
+    elif frontier_passed:
+        stages_to_check = ("site_frontier", "site_fetch", "site_extract", "site_score", "site_map", "site_rollup")
+    else:
+        stages_to_check = ("site_frontier",)
     missing = []
     for stage in stages_to_check:
         missing.extend(_stage_triplet_missing(root, stage))
@@ -86,7 +92,6 @@ def _site_report(root: Path) -> dict[str, Any]:
     execution = rollup.get("executionReadiness") if isinstance(rollup.get("executionReadiness"), Mapping) else {}
     profile = ((rollup.get("frontier") or {}).get("profile") or frontier.get("profile") or {})
     queue = ((rollup.get("frontier") or {}).get("queuePolicy") or frontier.get("queuePolicy") or {})
-    admission_mode = str(((rollup.get("frontier") or {}).get("admissionMode") or frontier.get("admissionMode") or "batch_crawl"))
     first_pass = execution.get("firstPassRate")
     first_pass_rate = None if first_pass in (None, "") else _safe_float(first_pass)
     return {
