@@ -60,7 +60,8 @@ void main() {
             conversationId: 'conv_rendered',
             conversationType: 'group',
             title: '预渲染群',
-            avatarUrl: 'https://example.com/group-rendered.jpg',
+            avatarUrl:
+                'media/avatar/s/archived-avatar/conversation/conv_rendered/v3/mock.png',
             groupAvatarVersion: 3,
             size: 48,
           ),
@@ -71,7 +72,11 @@ void main() {
       final avatar = tester.widget<RoundedSquareAvatar>(
         find.byType(RoundedSquareAvatar),
       );
-      expect(avatar.imageUrl, 'https://example.com/group-rendered.jpg');
+      // 群会话 object key 经头像解析为可加载 CDN URL（保留 object key 路径）。
+      expect(
+        avatar.imageUrl,
+        contains('media/avatar/s/archived-avatar/conversation/conv_rendered'),
+      );
       expect(repo.memberRequestCount, 0);
     });
 
@@ -103,7 +108,8 @@ void main() {
             conversationId: 'conv_non_authoritative',
             conversationType: 'group',
             title: '非权威群头像',
-            avatarUrl: 'https://example.com/wrong-single.jpg',
+            avatarUrl:
+                'media/avatar/s/archived-avatar/conversation/conv_non_authoritative/v1/mock.png',
             groupAvatarVersion: 0,
             size: 48,
           ),
@@ -114,7 +120,12 @@ void main() {
       final avatar = tester.widget<RoundedSquareAvatar>(
         find.byType(RoundedSquareAvatar),
       );
-      expect(avatar.imageUrl, 'https://example.com/wrong-single.jpg');
+      expect(
+        avatar.imageUrl,
+        contains(
+          'media/avatar/s/archived-avatar/conversation/conv_non_authoritative',
+        ),
+      );
       expect(repo.memberRequestCount, 0);
     });
 

@@ -137,6 +137,15 @@ _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS = max(
 MANAGED_LOCAL_CURSOR_MAX_WORKERS = max(
     1, int(os.environ.get("QWQ_MANAGED_LOCAL_CURSOR_MAX_WORKERS", "1"))
 )
+REPLACEMENT_MAX_WAVES = max(
+    1, int(os.environ.get("QWQ_REPLACEMENT_MAX_WAVES", "3"))
+)
+REPLACEMENT_MAX_CANDIDATES_PER_WAVE = max(
+    1, int(os.environ.get("QWQ_REPLACEMENT_MAX_CANDIDATES_PER_WAVE", "8"))
+)
+REPLACEMENT_MAX_SCREENED_PER_RUN = max(
+    1, int(os.environ.get("QWQ_REPLACEMENT_MAX_SCREENED_PER_RUN", "64"))
+)
 
 
 @dataclass
@@ -1214,7 +1223,11 @@ def _download_repair_lanes(repair: dict[str, Any]) -> set[str]:
     return lanes
 
 
-def _source_plan_filled(ctx: PipelineContext) -> tuple[bool, list[str]]:
+def _source_plan_filled(
+    ctx: PipelineContext,
+    *,
+    include_download_repair: bool = True,
+) -> tuple[bool, list[str]]:
     """Research checkpoint: validate three isolated modality plans."""
     from download.gate import download_requirements
     from download.source_inputs import (
@@ -1424,14 +1437,11 @@ def _source_plan_filled(ctx: PipelineContext) -> tuple[bool, list[str]]:
         if issues:
             missing.append(f"{eid}: " + "; ".join(issues[:8]))
     repair_path = batch_root(ctx.task_id, ctx.batch_id) / "_shared" / "download_repair.json"
-    if repair_path.is_file():
-        from download.gate import gate_download
-
-        if not gate_download(ctx.task_id, ctx.batch_id, target_entities=set(ctx.entity_ids)):
-            repair_path.unlink()
-        else:
+    if include_download_repair and repair_path.is_file():
+        pending_unresolved = _pending_download_repair_unresolved(ctx)
+        if pending_unresolved:
             pending_repairs: list[str] = []
-            for eid, lanes in _pending_download_repair_unresolved(ctx).items():
+            for eid, lanes in pending_unresolved.items():
                 if eid in abandoned:
                     continue
                 details = "; ".join(
@@ -3131,7 +3141,31 @@ def _source_plan_filled_for_entities(
 ) -> tuple[bool, list[str]]:
     scoped = copy.copy(ctx)
     scoped.entity_ids = list(entity_ids)
-    return _source_plan_filled(scoped)
+    try:
+        return _source_plan_filled(scoped, include_download_repair=False)
+    except TypeError:
+        # Tests may monkeypatch _source_plan_filled with the historical one-arg
+        # callable. Keep that seam compatible while production skips batch-wide
+        # download repair scans for scoped replacement screening.
+        return _source_plan_filled(scoped)
+
+
+def _workflow_policy_int(ctx: PipelineContext, key: str, default: int, *, minimum: int = 1) -> int:
+    policy = ctx.spec.get("workflowPolicy") if isinstance(ctx.spec.get("workflowPolicy"), Mapping) else {}
+    raw = policy.get(key, default)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, value)
+
+
+def _replacement_screening_limits(ctx: PipelineContext) -> tuple[int, int, int]:
+    return (
+        _workflow_policy_int(ctx, "maxReplacementWaves", REPLACEMENT_MAX_WAVES),
+        _workflow_policy_int(ctx, "maxReplacementCandidatesPerWave", REPLACEMENT_MAX_CANDIDATES_PER_WAVE),
+        _workflow_policy_int(ctx, "maxReplacementScreenedPerRun", REPLACEMENT_MAX_SCREENED_PER_RUN),
+    )
 
 
 def _screen_replacement_targets(
@@ -3145,7 +3179,36 @@ def _screen_replacement_targets(
     """Prepare and gate replacement candidates before making them active."""
     from download.prepare import prepare_source_plan
 
-    candidates = _next_replacement_candidates(ctx, needed=needed)
+    _max_waves, max_per_wave, max_total = _replacement_screening_limits(ctx)
+    state = load_workflow_state(ctx.task_id, ctx.batch_id)
+    screened_count = len(_replacement_entity_ids(state))
+    remaining_budget = max_total - screened_count
+    if remaining_budget <= 0:
+        existing_policy = (
+            state.get("replacementPolicy")
+            if isinstance(state.get("replacementPolicy"), Mapping)
+            else {}
+        )
+        state["replacementPolicy"] = {
+            **existing_policy,
+            "screenedReplacementCount": screened_count,
+            "maxReplacementScreenedPerRun": max_total,
+            "screeningStoppedReason": "replacement_screening_limit",
+        }
+        state["nextAction"] = (
+            f"replacement screening stopped: screenedReplacementCount={screened_count} "
+            f">= maxReplacementScreenedPerRun={max_total}"
+        )
+        save_workflow_state(state)
+        return [], [], {
+            "sourceAvailability": {
+                "readyTargets": [],
+                "ineligibleTargets": [],
+                "screeningStoppedReason": "replacement_screening_limit",
+            }
+        }
+    capped_needed = max(1, min(int(needed or 1), max_per_wave, remaining_budget))
+    candidates = _next_replacement_candidates(ctx, needed=capped_needed)
     if not candidates:
         return [], [], {}
     candidate_ids = [item["entityId"] for item in candidates]
@@ -3233,7 +3296,8 @@ def _rerun_auto_research_with_replacements(
             if isinstance(target, Mapping) and str(target.get("name") or "").strip()
         ]
     )
-    max_waves = max(1, min(reserve_count + 1, 10))
+    configured_max_waves, _max_per_wave, _max_total = _replacement_screening_limits(ctx)
+    max_waves = max(1, min(reserve_count + 1, configured_max_waves))
     abandoned_all: list[str] = []
     current_report: dict[str, Any] = dict(auto_report)
     missing: list[str] = []

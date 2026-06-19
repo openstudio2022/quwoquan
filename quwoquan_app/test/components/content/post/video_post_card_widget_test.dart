@@ -27,7 +27,7 @@ const _videoFixture = <String, dynamic>{
   'authorBackgroundUrl': '',
   'coverUrl': '',
   'thumbnailUrl': '',
-  'videoUrl': 'https://example.com/video.mp4',
+  'videoUrl': 'media/video/s/fixture/test_video_001/v1/clip.mp4',
   'durationMs': 93000,
   'width': 1080,
   'height': 1920,
