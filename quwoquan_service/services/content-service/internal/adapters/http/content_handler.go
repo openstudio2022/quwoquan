@@ -15,19 +15,21 @@ import (
 	rthealth "quwoquan_service/runtime/health"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/services/content-service/internal/application"
+	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
 type ContentHandler struct {
-	feedService         *application.FeedService
-	postService         *application.PostService
-	reportService       *application.ReportService
-	behaviorService     *application.BehaviorService
-	importService       *application.BulkImportService
-	intersectionService *application.IntersectionService
-	authorImpactStore   *persistence.AuthorImpactStore
-	healthChecker       *rthealth.Checker
+	feedService               *application.FeedService
+	postService               *application.PostService
+	reportService             *application.ReportService
+	behaviorService           *application.BehaviorService
+	importService             *application.BulkImportService
+	intersectionService       *application.IntersectionService
+	authorImpactStore         *persistence.AuthorImpactStore
+	authorImpactEvidenceStore *persistence.AuthorImpactEvidenceStore
+	healthChecker             *rthealth.Checker
 }
 
 func NewContentHandler(
@@ -51,6 +53,27 @@ func NewContentHandler(
 
 // ContentHandlerOption configures the ContentHandler.
 type ContentHandlerOption func(*ContentHandler)
+
+func WithBulkImportService(svc *application.BulkImportService) ContentHandlerOption {
+	return func(h *ContentHandler) { h.importService = svc }
+}
+
+func WithHealthChecker(c *rthealth.Checker) ContentHandlerOption {
+	return func(h *ContentHandler) { h.healthChecker = c }
+}
+
+// WithIntersectionService 注入交集统一体验服务（事实/概率合并、冷却窗口、已读水位）。
+func WithIntersectionService(svc *application.IntersectionService) ContentHandlerOption {
+	return func(h *ContentHandler) { h.intersectionService = svc }
+}
+
+func WithAuthorImpactStore(store *persistence.AuthorImpactStore) ContentHandlerOption {
+	return func(h *ContentHandler) { h.authorImpactStore = store }
+}
+
+func WithAuthorImpactEvidenceStore(store *persistence.AuthorImpactEvidenceStore) ContentHandlerOption {
+	return func(h *ContentHandler) { h.authorImpactEvidenceStore = store }
+}
 
 func (h *ContentHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
@@ -182,6 +205,7 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		SubCategory:     params.SubCategory,
 		Cursor:          params.Cursor,
 		Limit:           params.Limit,
+		FeedRequestID:   params.FeedRequestId,
 		BlockedUserIDs:  resolveBlockedUserIDs(r),
 		BlockedKeywords: resolveBlockedKeywords(r),
 	})
@@ -261,6 +285,80 @@ func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Re
 func authorImpactPathSubAccountID(path string) string {
 	const prefix = "/v1/content/sub-accounts/"
 	const suffix = "/author-impact"
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix))
+}
+
+// handleListAuthorImpactEvidence pages the underlying facts behind one author
+// impact count (drill-down; R-ID03). Content-anchored, privacy-safe (no actor
+// identity surfaced), read-path hydrates content title/cover for the view.
+func (h *ContentHandler) handleListAuthorImpactEvidence(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
+		return
+	}
+	authorID := authorImpactEvidencePathSubAccountID(r.URL.Path)
+	if authorID == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid author id", "missing subAccountId path segment"))
+		return
+	}
+	q := r.URL.Query()
+	impactID := strings.TrimSpace(q.Get("impactId"))
+	if impactID == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "缺少 impactId", "impactId query param is required"))
+		return
+	}
+	snapshotID := strings.TrimSpace(q.Get("evidenceSnapshotId"))
+	cursor := strings.TrimSpace(q.Get("cursor"))
+	limit := int64(20)
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		if parsed, err := strconv.ParseInt(raw, 10, 64); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	viewerID := strings.TrimSpace(resolveUserID(r))
+	viewerIsAuthor := viewerID != "" && viewerID == authorID
+	if h.authorImpactEvidenceStore == nil {
+		writeJSON(w, http.StatusOK, application.BuildAuthorImpactEvidencePage(nil, nil, nil, impactID, snapshotID, "", 0, false, viewerIsAuthor))
+		return
+	}
+	raws, nextCursor, hasMore, err := h.authorImpactEvidenceStore.ListPage(r.Context(), authorID, impactID, cursor, limit)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	total, err := h.authorImpactEvidenceStore.CountByImpact(r.Context(), authorID, impactID)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	posts := make(map[string]*postmodel.Post, len(raws))
+	if h.postService != nil {
+		for _, raw := range raws {
+			cid := strings.TrimSpace(raw.ContentID)
+			if cid == "" {
+				continue
+			}
+			if _, exists := posts[cid]; exists {
+				continue
+			}
+			if post, ok, _ := h.postService.GetPostOrTombstone(r.Context(), cid); ok {
+				posts[cid] = post
+			}
+		}
+	}
+	page := application.BuildAuthorImpactEvidencePage(
+		raws, posts, nil,
+		impactID, snapshotID, nextCursor, total, hasMore, viewerIsAuthor,
+	)
+	writeJSON(w, http.StatusOK, page)
+}
+
+func authorImpactEvidencePathSubAccountID(path string) string {
+	const prefix = "/v1/content/sub-accounts/"
+	const suffix = "/author-impact/evidence"
 	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
 		return ""
 	}
@@ -832,30 +930,6 @@ func (h *ContentHandler) handleGetMyFootprint(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (h *ContentHandler) handleGetRecommendation(w http.ResponseWriter, r *http.Request) {
-	var req application.RecommendRequest
-	if r.Body != nil {
-		defer r.Body.Close()
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
-			return
-		}
-	}
-	// Fallback from headers if body didn't include userId/sessionId
-	if strings.TrimSpace(req.UserID) == "" {
-		req.UserID = resolveUserID(r)
-	}
-	if strings.TrimSpace(req.SessionID) == "" {
-		req.SessionID = resolveSessionID(r)
-	}
-	resp, err := h.feedService.Recommend(r.Context(), req)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
 func (h *ContentHandler) handleLikePost(w http.ResponseWriter, r *http.Request, postID string) {
 	likeCount, changed, err := h.postService.LikePost(r.Context(), postID, resolveUserID(r), resolveDeviceActorID(r))
 	if err != nil {
@@ -1382,97 +1456,4 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 		"接口暂未开放",
 		"operation not implemented: "+operation+" "+r.Method+" "+r.URL.Path,
 	))
-}
-
-func pathParamAfter(path, prefix, suffix string) string {
-	v := strings.TrimSpace(strings.TrimPrefix(path, prefix))
-	if suffix != "" {
-		v = strings.TrimSuffix(v, suffix)
-	}
-	return strings.Trim(strings.TrimSpace(v), "/")
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
-	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
-}
-
-// resolveSessionID extracts sessionId from query param → body → X-Client-Session-Id header.
-func resolveSessionID(r *http.Request) string {
-	if v := strings.TrimSpace(r.URL.Query().Get("sessionId")); v != "" {
-		return v
-	}
-	return strings.TrimSpace(r.Header.Get("X-Client-Session-Id"))
-}
-
-// resolveUserID extracts userId from query param → X-Client-User-Id header.
-func resolveUserID(r *http.Request) string {
-	if v := strings.TrimSpace(r.URL.Query().Get("userId")); v != "" {
-		return v
-	}
-	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
-}
-
-// resolveDeviceActorID extracts the privacy-safe derived device actor id from
-// query param deviceActorId → X-Client-Device-Actor-Id header. Used for guest
-// device-dimension like/share counting (separate from account dimension).
-func resolveDeviceActorID(r *http.Request) string {
-	if v := strings.TrimSpace(r.URL.Query().Get("deviceActorId")); v != "" {
-		return v
-	}
-	return strings.TrimSpace(r.Header.Get("X-Client-Device-Actor-Id"))
-}
-
-func resolveViewerCircleIDs(r *http.Request) []string {
-	if v := strings.TrimSpace(r.URL.Query().Get("viewerCircleIds")); v != "" {
-		return splitCSV(v)
-	}
-	return splitCSV(r.Header.Get("X-Client-Circle-Ids"))
-}
-
-func resolveViewerUserID(r *http.Request) string {
-	if v := strings.TrimSpace(r.URL.Query().Get("viewerId")); v != "" {
-		return v
-	}
-	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
-}
-
-// resolveBlockedUserIDs extracts blocked author IDs from:
-//  1. query: blockedUserIds=a,b
-//  2. header: X-Blocked-User-Ids: a,b
-func resolveBlockedUserIDs(r *http.Request) []string {
-	if v := strings.TrimSpace(r.URL.Query().Get("blockedUserIds")); v != "" {
-		return splitCSV(v)
-	}
-	return splitCSV(r.Header.Get("X-Blocked-User-Ids"))
-}
-
-// resolveBlockedKeywords extracts blocked keywords from:
-//  1. query: blockedKeywords=k1,k2
-//  2. header: X-Blocked-Keywords: k1,k2
-func resolveBlockedKeywords(r *http.Request) []string {
-	if v := strings.TrimSpace(r.URL.Query().Get("blockedKeywords")); v != "" {
-		return splitCSV(v)
-	}
-	return splitCSV(r.Header.Get("X-Blocked-Keywords"))
-}
-
-func splitCSV(raw string) []string {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		v := strings.TrimSpace(p)
-		if v != "" {
-			out = append(out, v)
-		}
-	}
-	return out
 }

@@ -124,6 +124,7 @@ func scanUserProfileRow(rows pgx.Rows) (*model.UserProfile, error) {
 		&e.AvatarAssetID,
 		&e.AvatarVersion,
 		&e.Bio,
+		&e.IdentityTags,
 		&e.Gender,
 		&e.BirthDate,
 		&e.Region,
@@ -143,6 +144,51 @@ func scanUserProfileRow(rows pgx.Rows) (*model.UserProfile, error) {
 		return nil, err
 	}
 	return e, nil
+}
+
+// ListProfilesForIndex enumerates profiles in stable user_id order for cold-start
+// search backfill via keyset pagination (user_id > afterUserID). It scans every
+// column in userProfileCols (including identity_tags) so the search projection
+// sees the full profile; eligibility filtering is applied by the backfill caller
+// so the reader stays a plain enumeration.
+func (s *PgProfileStore) ListProfilesForIndex(ctx context.Context, afterUserID string, limit int) ([]model.UserProfile, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	rows, err := s.pool.Query(
+		ctx,
+		`SELECT `+userProfileCols+`
+		FROM user_profiles
+		WHERE user_id > $1
+		ORDER BY user_id ASC
+		LIMIT $2`,
+		afterUserID,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]model.UserProfile, 0, limit)
+	for rows.Next() {
+		e := model.UserProfile{}
+		if err := rows.Scan(
+			&e.UserID, &e.AccountState, &e.IdentityOrigin, &e.LogicalShard,
+			&e.AnonymousRetentionPolicy, &e.Phone, &e.Nickname, &e.AvatarURL,
+			&e.AvatarAssetID, &e.AvatarVersion, &e.Bio, &e.IdentityTags, &e.Gender,
+			&e.BirthDate, &e.Region, &e.Status, &e.ProfileVersion, &e.FollowerCount,
+			&e.FollowingCount, &e.PostCount, &e.CircleCount, &e.LikeCount,
+			&e.OwnerDisplayName, &e.SubAccountCount, &e.CreatedAt, &e.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 func (s *PgProfileStore) IncrementCounter(ctx context.Context, userID, field string, delta int64) error {

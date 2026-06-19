@@ -7,16 +7,36 @@ node:
   parent_domain_service: global-search-experience
   parent_business_capability: cross-domain-search-journey
 scope:
-  summary: cross domain search journey 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: cross domain search journey SIT 验收范围；suggest 本地快速检索 + result 云侧最终结果两阶段、最近搜索、降级横幅、埋点归因链。
+  in_scope:
+  - suggest 阶段本地快速检索（chat/contact/circleGroup 本地命名空间）。
+  - result 阶段云侧最终结果（content.post/entity.homepage/location.place/相关词/小趣）与固定 Tab。
+  - 最近搜索本地+云同步与记录管理态。
+  - 降级横幅、空态/错误态、权限态与单域降级不阻塞整页。
+  - 搜索默认页/结果页曝光、停留、referralSource、feedRequestId 埋点归因链。
+  out_of_scope:
+  - 各域底层召回与排序实现。
+  - 交集 Tab 端侧单源收口（归 search-intersection-consumption / 并发 intersection 会话）。
 sit_acceptance:
   SIT1:
-    title: cross domain search journey 能力 SIT
-    story_refs: []
+    title: 两阶段跨域搜索旅程 SIT（suggest 本地 + result 云侧）
+    story_refs:
+    - specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry/spec.md
+    - specs/feature-tree/global-search-experience/cross-domain-search-journey/multi-domain-result-composition/spec.md
+    - specs/feature-tree/global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr/spec.md
+    - specs/feature-tree/global-search-experience/cross-domain-search-journey/local-chat-search-contract/spec.md
     done_when:
-    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
-    performance_points: []
+    - suggest 阶段本地快速检索按 联系人/聊天记录/已加入圈子/已关注地点/已关注的人/推荐搜索词 组织，无命中分组隐藏；本地对象不进 result。
+    - result 阶段固定 Tab 小趣/全部/交集/图片/视频/长文，最终结果只来自云侧；全部 Tab 已连接区每类一组、发现区按比例混排无查看更多。
+    - 最近搜索记录 query+launch_context+category_context+timestamp，本地+云同步，支持管理态删除/清空。
+    - 远端降级/能力受限时由 degradeSignals 驱动降级横幅；单域失败只显该域降级，不阻塞整页。
+    - 搜索默认页/结果页曝光、停留、referralSource、feedRequestId 归因链可观测。
+    - 加载/空态/错误/降级/权限/最近搜索管理四态齐全；错误态可重试恢复且不丢 query。
+    - 点击本地 suggest hit、点击搜索网络结果、点击云侧 result hit 与相关搜索词均保留 query/session/request 归因。
+    performance_points:
+    - suggest 本地检索即时返回且不等待云侧；连续输入只保留最新 query，旧响应不得覆盖新 query。
+    - result 首批分组 P95 ≤ 1.5s；P99/错误率/degrade 由 search_slo.yaml#load_model 约束。
+    - 各 Tab 分域加载互不阻塞；单域超时按 objectType 降级。
     evidence:
       primary:
       - T2_module_interaction
@@ -25,8 +45,20 @@ sit_acceptance:
       - T1_static_contract
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
+      - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+      - quwoquan_app/test/ui/search/retrieve_request_mapper_test.dart
+      - quwoquan_app/test/ui/search/search_repository_test.dart
+      - quwoquan_service/runtime/search/retrieve_test.go
+      - quwoquan_service/services/search-service/tests/search_contract_test.go
+    status: passed
+    notes:
+    - WP-B 已闭合：降级横幅（R-002）、inspiration 清债（R-005）、mock 术语（R-006）、埋点归因链（R-007）、demo 回退删除（R-008）；widget T2 已 recorded。
+    - 交集 Tab 端侧单源收口归 WP-C / R-IX06。
+    - T4 journey 已 recorded：cross_domain_search_journey_test.dart 覆盖 suggest 本地两阶段、result 云侧固定 Tab、本地对象不进 result、最近搜索水合、单域降级不阻塞整页、整页错误态可重试、默认页/结果页 referralSource=search + feedRequestId 归因链。
+    - T3 远端集成：local-gamma `/v1/search` 冒烟 + search-service contract test + runtime retrieve test 已 recorded；故障/回滚演练已 recorded（`artifacts/stackctl/gamma/search_rollback_rehearsal.md`）。真集群容量/性能为 WP-G/SLO 与 R-S06-S-1 发布前阻断，不阻塞本能力 SIT。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

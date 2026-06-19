@@ -36,7 +36,7 @@ scene_routing:
   fallback: general
   scenes:
     rec:
-      description: 推荐热路径（session signals / exposed / negative / realtime_interest）
+      description: 推荐热路径（session signals / served / impressed / negative / realtime_interest）
       requirements: 高 QPS、低延迟（< 100ms）、可独立水平扩容
       key_prefixes: ["rec:"]
     general:
@@ -44,6 +44,8 @@ scene_routing:
       requirements: 读多写少、TTL 较长、延迟容忍度更高
       key_prefixes:
         - "cache:"
+        - "ix:"
+        - "events.search."
         - "page_ctx:"
         - "content_analysis:"
         - "comment_summary:"
@@ -76,22 +78,66 @@ key_patterns:
     hash_tag: userId
     description: |
       Session 内实时兴趣标签权重（HIncrByFloat）。
-      哈希标签 {userId} 与 rec:exposed / rec:negative 共享同一 slot，
+      哈希标签 {userId} 与 rec:served / rec:impressed / rec:negative 共享同一 slot，
       使 GetSessionState pipeline 读在单个 RTT 内完成。
 
-  - pattern: "rec:exposed:{<userId>}:<sessionId>"
+  - pattern: "rec:served:{<userId>}:<yyyyMMdd>"
     redis_scene: rec
-    ttl_seconds: 1800
+    ttl_seconds: 172800
     type: set
     hash_tag: userId
-    description: Session 内已曝光内容 ID，防止重复推送
+    description: |
+      服务端已下发内容 ID（served）。按 user+day 分桶，只用于短窗口翻页 /
+      刷新去重，不代表用户真实看见，也不得直接作为训练正样本。
+      Feed 过滤路径必须对候选集做 SISMEMBER 点查或等价批量点查，禁止长窗口
+      SMEMBERS 全量回读。
 
-  - pattern: "rec:negative:{<userId>}:<sessionId>"
+  - pattern: "rec:impressed:{<userId>}:<yyyyMMdd>"
+    redis_scene: rec
+    ttl_seconds: 604800
+    type: set
+    hash_tag: userId
+    description: |
+      端侧达到可见面积 + 停留阈值后的真实曝光内容 ID（impressed）。
+      按 user+day 分桶，供跨会话疲劳、训练样本派生与曝光健康统计消费。
+      过滤路径必须做候选 membership 点查，不得按用户全量拉取。
+
+  - pattern: "rec:negative:{<userId>}"
+    redis_scene: rec
+    ttl_seconds: 604800
+    type: set
+    hash_tag: userId
+    description: |
+      用户级负反馈过滤集（dislike / report / hide_author / hide_content_type 等）。
+      不绑定 session，供未来窗口跨会话即时过滤；TTL 7 天，优先级高于
+      served/impressed/dwell/动态预算。
+
+  - pattern: "rec:event_dedup:{<userId>}:<clientEventId>"
     redis_scene: rec
     ttl_seconds: 86400
+    type: string
+    hash_tag: userId
+    description: |
+      行为上报幂等键。端侧每个事件生成 clientEventId，云侧 SET NX 写入本 key；
+      已存在则跳过行为写入和特征投影，避免弱网重试或双通道重复计数。
+
+  - pattern: "rec:hidden_authors:{<userId>}"
+    redis_scene: rec
+    ttl_seconds: 604800
     type: set
     hash_tag: userId
-    description: 负反馈过滤集（dislike / report），TTL 24h 跨 session 保持
+    description: |
+      用户明确选择减少/不想看该作者后的作者级过滤集（hide_author）。
+      不绑定 session，供推荐未来窗口跨会话即时过滤；TTL 7 天，后续可由曝光治理策略动态调整。
+
+  - pattern: "rec:hidden_types:{<userId>}"
+    redis_scene: rec
+    ttl_seconds: 604800
+    type: set
+    hash_tag: userId
+    description: |
+      用户明确选择减少此类内容后的内容类型过滤集（hide_content_type）。
+      不绑定 session，供推荐未来窗口跨会话即时过滤；TTL 7 天，后续可由曝光治理策略动态调整。
 
   - pattern: "rec:realtime_interest:{<userId>}:<sessionId>"
     redis_scene: rec
@@ -125,13 +171,17 @@ key_patterns:
     type: hash
     description: 助手当前页面上下文（多模态理解输入）
 
-  - pattern: "cache:viewer_intersections:{userId}"
+  - pattern: "ix:watermark:{<userId>}"
     redis_scene: general
-    ttl_seconds: 900
-    type: string
+    ttl_seconds: 7776000
+    type: hash
+    hash_tag: userId
     description: |
-      「我的交集」事实读模型聚合缓存（viewer_object_intersections 物化结果的 summary/list 快照）。
-      请求期命中缓存即返回，避免重复聚合；事实更新或保鲜重算时主动失效。
+      「我的交集」收件箱 per-dimension 已读水位（HSet field=dimension, value=已读 unix 秒）。
+      MarkVisited 写入对应维度水位，Summary/List 读路径据此把 ≤ 水位的事实判为已读。
+      D1 修复：原 cache:viewer_intersections（string 快照语义）被误作 hash 使用，造成类型/语义
+      冲突；水位迁出到独立 hash key（ix: 前缀走 general scene），与读模型聚合快照彻底分离。
+      hash_tag {userId} 保证同用户水位落同一 slot；TTL 90 天覆盖长周期已读状态。
 
   - pattern: "content_analysis:{postId}"
     redis_scene: general
@@ -186,6 +236,15 @@ key_patterns:
     ttl_seconds: 86400
     type: string
     description: 群组合成头像 CDN URL 缓存（24h TTL，头像变更时主动失效）
+
+  - pattern: "events.search.recommendation_signals"
+    redis_scene: general
+    ttl_seconds: 86400
+    type: stream
+    description: |
+      搜索 → 推荐在线特征流。search-service 在查询响应后 best-effort XADD，
+      content-service 消费组 content-service 投影到 rm_recommend_feature.userFeatures.search*。
+      消费失败进入 events.search.recommendation_signals.dlq；主搜索路径不被阻塞。
 
   - pattern: "cache:rtask_ready:{taskType}"
     redis_scene: general

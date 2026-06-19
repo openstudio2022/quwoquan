@@ -107,6 +107,21 @@ func (s *MongoCircleStore) IncrementMemberCount(ctx context.Context, id string, 
 	return err
 }
 
+func (s *MongoCircleStore) IncrementPostCount(ctx context.Context, id string, delta int64) error {
+	_, err := s.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
+		"$inc": bson.M{"postCount": delta},
+		"$set": bson.M{"updatedAt": time.Now()},
+	})
+	return err
+}
+
+func (s *MongoCircleStore) UpdateWeeklyActiveCount(ctx context.Context, id string, count int64) error {
+	_, err := s.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
+		"$set": bson.M{"weeklyActiveCount": count, "updatedAt": time.Now()},
+	})
+	return err
+}
+
 func (s *MongoCircleStore) UpdateStorageUsed(ctx context.Context, id string, deltaBytes int64) error {
 	_, err := s.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
 		"$inc": bson.M{"storageUsedBytes": deltaBytes},

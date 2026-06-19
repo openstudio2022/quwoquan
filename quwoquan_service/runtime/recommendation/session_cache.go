@@ -17,7 +17,7 @@ type SessionCache struct {
 	maxSize int
 
 	// singleflight: deduplicate concurrent reads to the same session
-	sfMu    sync.Mutex
+	sfMu     sync.Mutex
 	inflight map[string]*sfCall
 }
 
@@ -103,6 +103,41 @@ func (sc *SessionCache) Invalidate(userID, sessionID string) {
 	sc.mu.Lock()
 	delete(sc.cache, key)
 	sc.mu.Unlock()
+}
+
+func (sc *SessionCache) RecordServed(ctx context.Context, userID string, items []FeedItem, at time.Time) error {
+	if m, ok := sc.inner.(ExposureMemory); ok {
+		return m.RecordServed(ctx, userID, items, at)
+	}
+	return nil
+}
+
+func (sc *SessionCache) RecordImpressed(ctx context.Context, userID, contentID string, at time.Time) error {
+	if m, ok := sc.inner.(ExposureMemory); ok {
+		return m.RecordImpressed(ctx, userID, contentID, at)
+	}
+	return nil
+}
+
+func (sc *SessionCache) RecordNegative(ctx context.Context, userID, contentID string) error {
+	if m, ok := sc.inner.(ExposureMemory); ok {
+		return m.RecordNegative(ctx, userID, contentID)
+	}
+	return nil
+}
+
+func (sc *SessionCache) AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error) {
+	if i, ok := sc.inner.(FeedbackIngestor); ok {
+		return i.AcceptEvent(ctx, signal)
+	}
+	return true, nil
+}
+
+func (sc *SessionCache) FilterCandidates(ctx context.Context, userID string, candidates []ContentCandidate, at time.Time) ([]ContentCandidate, error) {
+	if f, ok := sc.inner.(ExposureFilter); ok {
+		return f.FilterCandidates(ctx, userID, candidates, at)
+	}
+	return candidates, nil
 }
 
 func (sc *SessionCache) evictOldest() {

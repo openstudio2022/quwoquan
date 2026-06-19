@@ -304,7 +304,7 @@ components:
         contentId: { type: string }
         eventType:
           type: string
-          enum: [impression, click, dwell, like, dislike, report, share]
+          enum: [impression, click, dwell, like, dislike, hide_author, hide_content_type, report, share]
         timestamp: { type: string }
         durationMs: { type: integer }
         metadata:

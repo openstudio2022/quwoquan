@@ -9,6 +9,9 @@ class CircleDto {
   final String name;
   final String? description;
   final String? coverUrl;
+
+  /// 圈子独立头像（头部头像簇主体）；缺省由 UI 回退 coverUrl。
+  final String? iconUrl;
   final String ownerId;
   final String? category;
   final List<String> tags;
@@ -37,6 +40,7 @@ class CircleDto {
     required this.name,
     this.description,
     this.coverUrl,
+    this.iconUrl,
     required this.ownerId,
     this.category,
     this.tags = const [],
@@ -67,6 +71,7 @@ class CircleDto {
       name: (m['name'] ?? '').toString(),
       description: m['description'] as String?,
       coverUrl: (m['coverUrl'] ?? m['cover']) as String?,
+      iconUrl: (m['iconUrl'] ?? m['icon'] ?? m['avatarUrl']) as String?,
       ownerId: (m['ownerId'] ?? '').toString(),
       category: m['category'] ?? m['categoryId'] as String?,
       tags:
@@ -105,6 +110,7 @@ class CircleDto {
     'name': name,
     if (description != null) 'description': description,
     if (coverUrl != null) 'coverUrl': coverUrl,
+    if (iconUrl != null) 'iconUrl': iconUrl,
     'ownerId': ownerId,
     if (category != null) 'category': category,
     'tags': tags,
@@ -141,6 +147,7 @@ class CircleDto {
     String? name,
     String? description,
     String? coverUrl,
+    String? iconUrl,
     String? ownerId,
     String? category,
     List<String>? tags,
@@ -169,6 +176,7 @@ class CircleDto {
       name: name ?? this.name,
       description: description ?? this.description,
       coverUrl: coverUrl ?? this.coverUrl,
+      iconUrl: iconUrl ?? this.iconUrl,
       ownerId: ownerId ?? this.ownerId,
       category: category ?? this.category,
       tags: tags ?? this.tags,

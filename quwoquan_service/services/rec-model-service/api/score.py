@@ -11,6 +11,11 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
+from api.capacity import (
+    clear_score_cache,
+    refresh_capacity_metrics,
+    score_with_capacity_controls,
+)
 from api.metrics import (
     observe_score_duration,
     record_rec_request,
@@ -62,6 +67,7 @@ def _reload_scorers():
     with _scorers_lock:
         _scorers = new_scorers
         _last_reload = datetime.utcnow()
+    clear_score_cache()
 
 
 def _background_reload():
@@ -71,8 +77,9 @@ def _background_reload():
         try:
             _reload_scorers()
             refresh_rec_model_loaded_gauges()
-        except Exception:
-            pass
+            refresh_capacity_metrics()
+        except Exception as exc:
+            print(f"[rec-model-service] background reload failed: {exc}", flush=True)
 
 
 _reload_thread = threading.Thread(target=_background_reload, daemon=True)
@@ -104,12 +111,16 @@ def score(body: ModelScoreRequest) -> ModelScoreResponse:
         )
     t0 = time.perf_counter()
     try:
-        result = scorer.score(body)
+        mv = getattr(scorer, "model_version", getattr(scorer, "_model_version", "unknown"))
+        result = score_with_capacity_controls(
+            body,
+            model_version=str(mv),
+            compute=lambda: scorer.score(body),
+        )
     except Exception:
         record_rec_request(score_path, "500")
         raise
     elapsed = time.perf_counter() - t0
-    mv = getattr(scorer, "model_version", getattr(scorer, "_model_version", "unknown"))
     observe_score_duration(str(mv), elapsed)
     record_rec_request(score_path, "200")
     return result
@@ -120,6 +131,7 @@ def reload_models() -> dict[str, Any]:
     """Trigger immediate model reload from registry."""
     _reload_scorers()
     refresh_rec_model_loaded_gauges()
+    refresh_capacity_metrics()
     scorers = _get_scorers()
     versions = {}
     for key, s in scorers.items():

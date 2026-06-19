@@ -268,10 +268,13 @@ class ArticleAdaptiveImage extends StatelessWidget {
         label: resolvedImageUrl.substring(diagnosticSchemePrefix.length),
       );
     }
-    if (resolvedImageUrl.startsWith('http://') ||
-        resolvedImageUrl.startsWith('https://')) {
+    final primaryImageUrl = imageCandidates.isEmpty
+        ? resolvedImageUrl
+        : imageCandidates.first;
+    if (primaryImageUrl.startsWith('http://') ||
+        primaryImageUrl.startsWith('https://')) {
       return AppCachedNetworkImage(
-        imageUrl: resolvedImageUrl,
+        imageUrl: primaryImageUrl,
         imageUrlCandidates: imageCandidates,
         fit: BoxFit.cover,
         placeholder: Container(
@@ -282,8 +285,17 @@ class ArticleAdaptiveImage extends StatelessWidget {
         ),
       );
     }
+    if (primaryImageUrl.startsWith('file://')) {
+      return Image.file(
+        File.fromUri(Uri.parse(primaryImageUrl)),
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (context, error, stackTrace) =>
+            Container(color: CupertinoColors.systemGrey5.resolveFrom(context)),
+      );
+    }
     return Image.file(
-      File(resolvedImageUrl),
+      File(primaryImageUrl),
       fit: BoxFit.cover,
       filterQuality: FilterQuality.high,
       errorBuilder: (context, error, stackTrace) =>

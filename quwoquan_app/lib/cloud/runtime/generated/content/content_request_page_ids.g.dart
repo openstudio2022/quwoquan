@@ -19,7 +19,6 @@ class ContentRequestPageIds {
     'GetAuthorImpact': 'content.get.author.impact',
     'GetCounters': 'content.post.counters',
     'GetFeed': 'content.feed.list',
-    'GetFeedIntersections': 'content.get.feed.intersections',
     'GetHelperRead': 'content.get.helper.read',
     'GetMediaAsset': 'content.media.get',
     'GetMyFootprint': 'content.footprint.list',
@@ -27,10 +26,10 @@ class ContentRequestPageIds {
     'GetObjectIntersections': 'content.get.object.intersections',
     'GetPost': 'content.post.get',
     'GetReactionState': 'content.post.reactions',
-    'GetRecommendation': 'content.recommend',
     'GetReport': 'content.get.report',
     'InitMediaUpload': 'content.media.init',
     'LikePost': 'content.post.like',
+    'ListAuthorImpactEvidence': 'content.list.author.impact.evidence',
     'ListCommentReplies': 'content.list.comment.replies',
     'ListComments': 'content.comment.list',
     'ListCommentsByAuthor': 'content.list.comments.by.author',
@@ -45,7 +44,6 @@ class ContentRequestPageIds {
     'QuoteToCircle': 'content.post.quote',
     'ReactToComment': 'content.react.to.comment',
     'ReportBehaviors': 'content.behaviors.report',
-    'ReportIntersectionExposure': 'content.report.intersection.exposure',
     'RepostToCircle': 'content.post.repost',
     'RequestOriginalImageAccess': 'content.request.original.image.access',
     'ResolveReport': 'content.resolve.report',
@@ -74,7 +72,6 @@ class ContentRequestPageIds {
   static const String getAuthorImpact = 'content.get.author.impact';
   static const String getCounters = 'content.post.counters';
   static const String getFeed = 'content.feed.list';
-  static const String getFeedIntersections = 'content.get.feed.intersections';
   static const String getHelperRead = 'content.get.helper.read';
   static const String getMediaAsset = 'content.media.get';
   static const String getMyFootprint = 'content.footprint.list';
@@ -82,10 +79,10 @@ class ContentRequestPageIds {
   static const String getObjectIntersections = 'content.get.object.intersections';
   static const String getPost = 'content.post.get';
   static const String getReactionState = 'content.post.reactions';
-  static const String getRecommendation = 'content.recommend';
   static const String getReport = 'content.get.report';
   static const String initMediaUpload = 'content.media.init';
   static const String likePost = 'content.post.like';
+  static const String listAuthorImpactEvidence = 'content.list.author.impact.evidence';
   static const String listCommentReplies = 'content.list.comment.replies';
   static const String listComments = 'content.comment.list';
   static const String listCommentsByAuthor = 'content.list.comments.by.author';
@@ -100,7 +97,6 @@ class ContentRequestPageIds {
   static const String quoteToCircle = 'content.post.quote';
   static const String reactToComment = 'content.react.to.comment';
   static const String reportBehaviors = 'content.behaviors.report';
-  static const String reportIntersectionExposure = 'content.report.intersection.exposure';
   static const String repostToCircle = 'content.post.repost';
   static const String requestOriginalImageAccess = 'content.request.original.image.access';
   static const String resolveReport = 'content.resolve.report';

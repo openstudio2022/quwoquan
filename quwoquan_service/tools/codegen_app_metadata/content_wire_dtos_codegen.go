@@ -246,6 +246,7 @@ func renderPostSearchItemViewDtoDart() string {
 // Regenerate: make codegen-app
 
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 
 class PostSearchItemView {
   const PostSearchItemView({
@@ -266,6 +267,8 @@ class PostSearchItemView {
     this.highlightText,
     this.matchedField,
     this.publishedAt,
+    this.connectionState = 'unconnected',
+    this.intersectionReason,
   });
 
   final String postId;
@@ -285,8 +288,17 @@ class PostSearchItemView {
   final String? highlightText;
   final String? matchedField;
   final DateTime? publishedAt;
+  final String connectionState;
+  final IntersectionReason? intersectionReason;
 
   factory PostSearchItemView.fromMap(CloudJsonMap map) {
+    final rawReason = map['intersectionReason'];
+    IntersectionReason? parsedReason;
+    if (rawReason is Map) {
+      parsedReason = IntersectionReason.fromMap(
+        Map<String, dynamic>.from(rawReason),
+      );
+    }
     return PostSearchItemView(
       postId: (map['postId'] ?? map['id'] ?? map['_id'] ?? '')
           .toString()
@@ -318,6 +330,9 @@ class PostSearchItemView {
       highlightText: map['highlightText']?.toString(),
       matchedField: map['matchedField']?.toString(),
       publishedAt: _postSearchWireParseDateTime(map['publishedAt']),
+      connectionState:
+          (map['connectionState'] ?? 'unconnected').toString().trim(),
+      intersectionReason: parsedReason,
     );
   }
 }

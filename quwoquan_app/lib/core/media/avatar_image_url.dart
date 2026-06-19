@@ -1,5 +1,13 @@
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 
+const List<String> _archivedSeedAvatarFallbackPool = <String>[
+  'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+  'media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png',
+  'media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png',
+  'media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png',
+  'media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png',
+];
+
 /// 将服务端头像引用解析为可被 Flutter 图片组件加载的 URL。
 ///
 /// beta/local-gamma 中头像字段可能是 `/media/avatar/...` 或
@@ -43,10 +51,18 @@ List<String> resolveAvatarImageUrlCandidates(
     );
   }
   if (source.startsWith('//')) {
-    return <String>['https:$source'];
+    return _resolveAbsoluteAvatarUrlCandidates(
+      'https:$source',
+      gatewayBaseUrl: gateway,
+      avatarCdnBaseUrl: cdn,
+    );
   }
   if (_looksLikeBareHostUrl(source)) {
-    return <String>['https://$source'];
+    return _resolveAbsoluteAvatarUrlCandidates(
+      'https://$source',
+      gatewayBaseUrl: gateway,
+      avatarCdnBaseUrl: cdn,
+    );
   }
 
   final paths = <String>[];
@@ -59,8 +75,9 @@ List<String> resolveAvatarImageUrlCandidates(
     return const <String>[];
   }
 
+  final normalizedPath = _rewriteArchivedSeedAvatarPath(paths.first);
   return _mediaUrlCandidates(
-    paths.first,
+    normalizedPath,
     gatewayBaseUrl: gateway,
     avatarCdnBaseUrl: cdn,
   );
@@ -77,20 +94,41 @@ List<String> _resolveAbsoluteAvatarUrlCandidates(
   }
   final objectKey = uri.path.replaceFirst(RegExp(r'^/+'), '');
   if (!_looksLikeMediaObjectKey(objectKey)) {
-    return <String>[source];
+    return _isTrustedRuntimeHost(
+          uri,
+          gatewayBaseUrl: gatewayBaseUrl,
+          avatarCdnBaseUrl: avatarCdnBaseUrl,
+        )
+        ? <String>[source]
+        : const <String>[];
   }
   final path = _uriPathWithQuery(uri);
+  final normalizedPath = _rewriteArchivedSeedAvatarPath(path);
+  if (normalizedPath != path) {
+    return _mediaUrlCandidates(
+      normalizedPath,
+      gatewayBaseUrl: gatewayBaseUrl,
+      avatarCdnBaseUrl: avatarCdnBaseUrl,
+    );
+  }
   final shouldRewriteHttpToHttps =
       uri.scheme.toLowerCase() == 'http' &&
       _normalizeBase(avatarCdnBaseUrl).startsWith('https://');
 
   final candidates = _mediaUrlCandidates(
-    path,
+    normalizedPath,
     gatewayBaseUrl: gatewayBaseUrl,
     avatarCdnBaseUrl: avatarCdnBaseUrl,
   );
   if (_isLoopbackHost(uri.host) || shouldRewriteHttpToHttps) {
     return candidates.isEmpty ? <String>[source] : candidates;
+  }
+  if (!_isTrustedRuntimeHost(
+    uri,
+    gatewayBaseUrl: gatewayBaseUrl,
+    avatarCdnBaseUrl: avatarCdnBaseUrl,
+  )) {
+    return candidates;
   }
   return _uniqueNonEmpty(<String>[source, ...candidates]);
 }
@@ -100,8 +138,10 @@ String _normalizeBase(String raw) {
   if (value.isEmpty) {
     return '';
   }
-  final lower = value.toLowerCase();
-  if (!lower.startsWith('https://')) {
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      uri.host.isEmpty ||
+      (uri.scheme != 'https' && uri.scheme != 'http')) {
     return '';
   }
   return value.replaceFirst(RegExp(r'/+$'), '');
@@ -146,6 +186,33 @@ bool _looksLikeMediaObjectKey(String source) {
       lower.startsWith('media/');
 }
 
+String _rewriteArchivedSeedAvatarPath(String path) {
+  final objectKey = path.replaceFirst(RegExp(r'^/+'), '');
+  if (!_isArchivedSeedAvatarObjectKey(objectKey)) {
+    return path;
+  }
+  final fallbackObjectKey =
+      _archivedSeedAvatarFallbackPool[_stableMockAvatarIndex(objectKey)];
+  return '/$fallbackObjectKey';
+}
+
+bool _isArchivedSeedAvatarObjectKey(String objectKey) {
+  final lower = objectKey.toLowerCase();
+  // 仅 mock 种子（s/mock/**）与畸形归档种子（archived-avatar/seed/**）需要回退到
+  // 固定 fixture 头像；archived-avatar/user/** 是真实归档用户头像，必须原样保留
+  // （仅换 CDN base），否则会把真实 user_<id> 头像错误替换成 fixture 头像。
+  return lower.startsWith('media/avatar/s/mock/') ||
+      lower.startsWith('media/avatar/s/archived-avatar/seed/');
+}
+
+int _stableMockAvatarIndex(String objectKey) {
+  var hash = 0;
+  for (final codeUnit in objectKey.codeUnits) {
+    hash = (hash * 31 + codeUnit) & 0x7fffffff;
+  }
+  return hash % _archivedSeedAvatarFallbackPool.length;
+}
+
 bool _looksLikeBareHostUrl(String source) {
   if (source.contains(' ') || source.contains('/media/')) {
     return false;
@@ -156,6 +223,23 @@ bool _looksLikeBareHostUrl(String source) {
 
 bool _isLoopbackHost(String host) {
   return host == 'localhost' || host == '127.0.0.1' || host == '::1';
+}
+
+bool _isTrustedRuntimeHost(
+  Uri uri, {
+  required String gatewayBaseUrl,
+  required String avatarCdnBaseUrl,
+}) {
+  final hosts = <String>{
+    _hostFromBase(gatewayBaseUrl),
+    _hostFromBase(avatarCdnBaseUrl),
+  }..remove('');
+  return hosts.contains(uri.host.toLowerCase());
+}
+
+String _hostFromBase(String raw) {
+  final uri = Uri.tryParse(raw.trim());
+  return uri?.host.toLowerCase() ?? '';
 }
 
 String _uriPathWithQuery(Uri uri) {

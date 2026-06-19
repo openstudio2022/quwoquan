@@ -21,11 +21,11 @@ class CircleMockData {
     'joinStatus': 'joined',
     'isFollowed': true,
     'avatar':
-        'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400',
+        'media/image/s/mock/seed/p_1516035069371-29a1b244cc32/v1/image.jpg',
     'cover':
-        'https://images.unsplash.com/photo-1493125594441-2da1f5c644f5?q=80&w=1440',
+        'media/image/s/mock/seed/p_1493125594441-2da1f5c644f5/v1/image.jpg',
     'coverUrl':
-        'https://images.unsplash.com/photo-1493125594441-2da1f5c644f5?q=80&w=1440',
+        'media/image/s/mock/seed/p_1493125594441-2da1f5c644f5/v1/image.jpg',
     'desc': '汇聚全球摄影爱好者，分享快门背后的故事。无论你是专业摄影师还是手机摄影爱好者，这里都有你的位置。',
     'description': '汇聚全球摄影爱好者，分享快门背后的故事。无论你是专业摄影师还是手机摄影爱好者，这里都有你的位置。',
     'tags': ['城市漫步', '胶片', '人像', '风光'],
@@ -79,11 +79,11 @@ class CircleMockData {
       'id': 'c1',
       'name': '极简摄影俱乐部',
       'coverUrl':
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
+          'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       'cover':
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
+          'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
+          'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       'desc': '少即是多，用减法看世界',
       'memberCount': 2340,
       'postCount': 128,
@@ -95,11 +95,11 @@ class CircleMockData {
       'id': 'c2',
       'name': '旅行手账',
       'coverUrl':
-          'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
+          'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
       'cover':
-          'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
+          'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=600',
+          'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
       'desc': '记录脚下的每一寸土地',
       'memberCount': 1280,
       'postCount': 56,
@@ -111,11 +111,11 @@ class CircleMockData {
       'id': 'c3',
       'name': '咖啡品鉴',
       'coverUrl':
-          'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
+          'media/image/s/mock/seed/p_1495474472287-4d71bcdd2085/v1/image.jpg',
       'cover':
-          'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
+          'media/image/s/mock/seed/p_1495474472287-4d71bcdd2085/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
+          'media/image/s/mock/seed/p_1495474472287-4d71bcdd2085/v1/image.jpg',
       'desc': '从豆子到杯子的风味之旅',
       'memberCount': 890,
       'postCount': 34,
@@ -127,11 +127,10 @@ class CircleMockData {
       'id': 'c-cam-1',
       'name': '上海交大·2020级校友',
       'coverUrl':
-          'https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=400',
-      'cover':
-          'https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=400',
+          'media/image/s/mock/seed/p_1562774053-701939374585/v1/image.jpg',
+      'cover': 'media/image/s/mock/seed/p_1562774053-701939374585/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=400',
+          'media/image/s/mock/seed/p_1562774053-701939374585/v1/image.jpg',
       'desc': '思源致远，爱国荣校',
       'memberCount': 1287,
       'categoryId': 'campus',
@@ -142,11 +141,11 @@ class CircleMockData {
       'id': 'c-cam-2',
       'name': '互联网校友内推圈',
       'coverUrl':
-          'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=400',
+          'media/image/s/mock/seed/p_1522202176988-66273c2fd55f/v1/image.jpg',
       'cover':
-          'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=400',
+          'media/image/s/mock/seed/p_1522202176988-66273c2fd55f/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=400',
+          'media/image/s/mock/seed/p_1522202176988-66273c2fd55f/v1/image.jpg',
       'desc': '大厂Offer直通车',
       'memberCount': 6543,
       'categoryId': 'campus',
@@ -157,11 +156,10 @@ class CircleMockData {
       'id': 'c-car-1',
       'name': 'Model 3 焕新版·上海车友会',
       'coverUrl':
-          'https://images.unsplash.com/photo-1560958089-b8a1929cea89?q=80&w=400',
-      'cover':
-          'https://images.unsplash.com/photo-1560958089-b8a1929cea89?q=80&w=400',
+          'media/image/s/mock/seed/p_1560958089-b8a1929cea89/v1/image.jpg',
+      'cover': 'media/image/s/mock/seed/p_1560958089-b8a1929cea89/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1560958089-b8a1929cea89?q=80&w=400',
+          'media/image/s/mock/seed/p_1560958089-b8a1929cea89/v1/image.jpg',
       'desc': '电车生活，不止于行',
       'memberCount': 2100,
       'categoryId': 'car',
@@ -172,11 +170,11 @@ class CircleMockData {
       'id': 'c-car-2',
       'name': '周末自驾发现上海',
       'coverUrl':
-          'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=400',
+          'media/image/s/mock/seed/p_1469854523086-cc02fe5d8800/v1/image.jpg',
       'cover':
-          'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=400',
+          'media/image/s/mock/seed/p_1469854523086-cc02fe5d8800/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=400',
+          'media/image/s/mock/seed/p_1469854523086-cc02fe5d8800/v1/image.jpg',
       'desc': '逃离城市喧嚣，探索隐秘角落',
       'memberCount': 890,
       'categoryId': 'car',
@@ -187,11 +185,11 @@ class CircleMockData {
       'id': 'c-meet-1',
       'name': '魔都搭子集合',
       'coverUrl':
-          'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=400',
+          'media/image/s/mock/seed/p_1529156069898-49953e39b3ac/v1/image.jpg',
       'cover':
-          'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=400',
+          'media/image/s/mock/seed/p_1529156069898-49953e39b3ac/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=400',
+          'media/image/s/mock/seed/p_1529156069898-49953e39b3ac/v1/image.jpg',
       'desc': '吃饭、看展、运动，万事皆可搭',
       'memberCount': 12345,
       'categoryId': 'campus',
@@ -202,11 +200,11 @@ class CircleMockData {
       'id': 'c-meet-2',
       'name': '摄影师线下约拍',
       'coverUrl':
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=400',
+          'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       'cover':
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=400',
+          'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=400',
+          'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       'desc': '用镜头定格美好瞬间',
       'memberCount': 3456,
       'categoryId': 'photography',
@@ -217,11 +215,11 @@ class CircleMockData {
       'id': 'c-human-1',
       'name': '电影放映室',
       'coverUrl':
-          'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=400',
+          'media/image/s/mock/seed/p_1536440136628-849c177e76a1/v1/image.jpg',
       'cover':
-          'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=400',
+          'media/image/s/mock/seed/p_1536440136628-849c177e76a1/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=400',
+          'media/image/s/mock/seed/p_1536440136628-849c177e76a1/v1/image.jpg',
       'desc': '每周末一部经典老电影',
       'memberCount': 5678,
       'categoryId': 'photography',
@@ -232,11 +230,11 @@ class CircleMockData {
       'id': 'c-photo-owner',
       'name': '光影摄影社',
       'coverUrl':
-          'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400',
+          'media/image/s/mock/seed/p_1516035069371-29a1b244cc32/v1/image.jpg',
       'cover':
-          'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400',
+          'media/image/s/mock/seed/p_1516035069371-29a1b244cc32/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400',
+          'media/image/s/mock/seed/p_1516035069371-29a1b244cc32/v1/image.jpg',
       'desc': '光影之间，皆是故事',
       'memberCount': 128,
       'categoryId': 'photography',
@@ -247,11 +245,11 @@ class CircleMockData {
       'id': 'c-tech-admin',
       'name': 'AI 前沿探索者',
       'coverUrl':
-          'https://images.unsplash.com/photo-1677442135136-760c813028c4?q=80&w=400',
+          'media/image/s/mock/seed/p_1677442135136-760c813028c4/v1/image.jpg',
       'cover':
-          'https://images.unsplash.com/photo-1677442135136-760c813028c4?q=80&w=400',
+          'media/image/s/mock/seed/p_1677442135136-760c813028c4/v1/image.jpg',
       'avatar':
-          'https://images.unsplash.com/photo-1677442135136-760c813028c4?q=80&w=400',
+          'media/image/s/mock/seed/p_1677442135136-760c813028c4/v1/image.jpg',
       'desc': '拥抱 AGI 时代',
       'memberCount': 9999,
       'categoryId': 'tech',
@@ -315,8 +313,7 @@ class CircleMockData {
       'status': 'active',
       'circleId': 'c-cam-2',
       'circleName': '互联网校友内推圈',
-      'image':
-          'https://images.unsplash.com/photo-1543269865-cbf427effbad?q=80&w=800',
+      'image': 'media/image/s/mock/seed/p_1543269865-cbf427effbad/v1/image.jpg',
     },
     {
       'id': 'a2',
@@ -326,7 +323,7 @@ class CircleMockData {
       'circleId': 'c-car-1',
       'circleName': 'Model 3 焕新版·上海车友会',
       'image':
-          'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=800',
+          'media/image/s/mock/seed/p_1469854523086-cc02fe5d8800/v1/image.jpg',
     },
   ];
 
@@ -340,7 +337,7 @@ class CircleMockData {
       joinedAt: DateTime(2024, 1, 15),
       displayName: '陈一发',
       avatarUrl:
-          'https://images.unsplash.com/photo-1630939687530-241d630735df?q=80&w=100',
+          'media/avatar/s/mock/seed/u_1630939687530-241d630735df/v1/avatar.jpg',
     ),
     CircleMemberRosterItemDto(
       membershipId: 'u2',
@@ -350,7 +347,7 @@ class CircleMockData {
       joinedAt: DateTime(2024, 1, 1),
       displayName: '周杰伦',
       avatarUrl:
-          'https://images.unsplash.com/photo-1603987248955-9c142c5ae89b?q=80&w=100',
+          'media/avatar/s/mock/seed/u_1603987248955-9c142c5ae89b/v1/avatar.jpg',
     ),
     CircleMemberRosterItemDto(
       membershipId: 'u3',
@@ -360,7 +357,7 @@ class CircleMockData {
       joinedAt: DateTime(2023, 12, 1),
       displayName: '李青云',
       avatarUrl:
-          'https://images.unsplash.com/photo-1603110502322-93cd2173d19a?q=80&w=100',
+          'media/avatar/s/mock/seed/u_1603110502322-93cd2173d19a/v1/avatar.jpg',
     ),
   ];
 
@@ -445,7 +442,7 @@ class CircleMockData {
       'authorId': 'u1',
       'authorNickname': '旅行摄影师',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+          'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
       'title': '清晨光影练习',
       'body': '第一次踩点就遇到很通透的晨雾，记录下圈友活动前的安静片刻。',
       'circleIds': ['circle_photo_01', 'c1'],
@@ -456,9 +453,9 @@ class CircleMockData {
       ],
       'circleName': '光影摄影社',
       'coverUrl':
-          'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900',
+          'media/image/s/mock/seed/p_1516035069371-29a1b244cc32/v1/image.jpg',
       'imageUrls': [
-        'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900',
+        'media/image/s/mock/seed/p_1516035069371-29a1b244cc32/v1/image.jpg',
       ],
       'likeCount': 342,
       'shareCount': 12,
@@ -473,7 +470,7 @@ class CircleMockData {
       'authorId': 'u2',
       'authorNickname': '城市观察员',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+          'media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg',
       'title': '夜色车流延时',
       'body': '圈子活动结束后补了一段桥面延时，准备回去剪一个一分钟短片。',
       'circleIds': ['circle_photo_01', 'c-car-2'],
@@ -484,9 +481,8 @@ class CircleMockData {
       ],
       'circleName': '光影摄影社',
       'thumbnailUrl':
-          'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=900',
-      'videoUrl':
-          'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
+          'media/image/s/mock/seed/p_1492691527719-9d1e07e534b4/v1/image.jpg',
+      'videoUrl': 'media/video/s/mock/external/flutter/bee/v1/video.mp4',
       'likeCount': 211,
       'shareCount': 18,
     },
@@ -500,7 +496,7 @@ class CircleMockData {
       'authorId': 'u3',
       'authorNickname': '阿秋',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
+          'media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg',
       'title': '临时改地点提醒',
       'body': '今天风有点大，傍晚拍摄集合点改到南门咖啡车旁，先到的圈友可以在群里报个到。',
       'circleIds': ['circle_photo_01', 'c-meet-1'],
@@ -511,7 +507,7 @@ class CircleMockData {
       ],
       'circleName': '光影摄影社',
       'coverUrl':
-          'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=900',
+          'media/image/s/mock/seed/p_1455390582262-044cdead277a/v1/image.jpg',
       'likeCount': 128,
       'shareCount': 6,
     },
@@ -525,7 +521,7 @@ class CircleMockData {
       'authorId': 'u4',
       'authorNickname': '构图实验室',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200',
+          'media/avatar/s/mock/seed/u_1534528741775-53994a69daeb/v1/avatar.jpg',
       'title': '雨夜街拍的三种取景思路',
       'body': '把高光控制、路面反射和人物停顿拆开看，文章里整理了这次活动最有用的 3 个构图模板。',
       'circleIds': ['circle_photo_01', 'c-human-1'],
@@ -536,7 +532,7 @@ class CircleMockData {
       ],
       'circleName': '光影摄影社',
       'coverUrl':
-          'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=900',
+          'media/image/s/mock/seed/p_1455390582262-044cdead277a/v1/image.jpg',
       'likeCount': 89,
       'shareCount': 4,
     },
@@ -550,7 +546,7 @@ class CircleMockData {
       'authorId': 'u5',
       'authorNickname': '山川手账',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+          'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
       'title': '山路晨雾手账：把徒步笔记做成可翻页的旅途册',
       'body': '把路标、票据和雾气里的第一束光整理成一张真正适合在圈子里分发的手账扉页。',
       'summary': '把路标、票据和雾气里的第一束光整理成一张真正适合在圈子里分发的手账扉页。',
@@ -565,9 +561,9 @@ class CircleMockData {
       ],
       'circleName': '光影摄影社',
       'coverUrl':
-          'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900',
+          'media/image/s/mock/seed/p_1500530855697-b586d89ba3ee/v1/image.jpg',
       'thumbnailUrl':
-          'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900',
+          'media/image/s/mock/seed/p_1500530855697-b586d89ba3ee/v1/image.jpg',
       'articleMarkdown':
           '---\ntitle: 山路晨雾手账：把徒步笔记做成可翻页的旅途册\ntemplate: journal\nfontPreset: handwritten\n---\n\n# 山路晨雾手账：把徒步笔记做成可翻页的旅途册\n\n凌晨出发时，山路像一张还没晒干的纸。\n\n## 边走边贴\n\n:::figure id="circle_journal_cover_img" layout="wrapRight" caption="晨雾扉页"\nasset://circle_journal_cover_img\n:::\n\n把海拔、气温和一句突然冒出的心情都贴进同一页，旅行就有了温度。\n\n### 收束\n\n真正值得留下来的，是那些会在很久之后再次把人带回去的瞬间。\n',
       'articleAssetManifest': const <String, dynamic>{
@@ -575,7 +571,7 @@ class CircleMockData {
           {
             'assetId': 'circle_journal_cover_img',
             'objectKey':
-                'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900',
+                'media/image/s/mock/seed/p_1500530855697-b586d89ba3ee/v1/image.jpg',
           },
         ],
       },
@@ -596,7 +592,7 @@ class CircleMockData {
       'authorId': 'u6',
       'authorNickname': '纸上居',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=200',
+          'media/avatar/s/mock/seed/u_1455390582262-044cdead277a/v1/avatar.jpg',
       'title': '雨夜读帖：为什么东方卷页总能让人慢下来',
       'body': '纸张纹理、行距与墨色密度一起把阅读的呼吸感带了回来，没有封面也能成立为一张完整文字卡。',
       'summary': '纸张纹理、行距与墨色密度一起把阅读的呼吸感带了回来，没有封面也能成立为一张完整文字卡。',
@@ -629,7 +625,7 @@ class CircleMockData {
       'authorId': 'u7',
       'authorNickname': '夜色便签',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
+          'media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg',
       'title': '',
       'body': '把路线、风向和最后一班地铁时间都塞进一段正文里，封面负责气氛，正文负责把人带回活动现场。',
       'summary': '把路线、风向和最后一班地铁时间都塞进一段正文里，封面负责气氛，正文负责把人带回活动现场。',
@@ -644,9 +640,9 @@ class CircleMockData {
       ],
       'circleName': '光影摄影社',
       'coverUrl':
-          'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=900',
+          'media/image/s/mock/seed/p_1497366754035-f200968a6e72/v1/image.jpg',
       'thumbnailUrl':
-          'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=900',
+          'media/image/s/mock/seed/p_1497366754035-f200968a6e72/v1/image.jpg',
       'articleMarkdown':
           '---\ntitle: \ntemplate: diffuse\nfontPreset: clean\n---\n\n散场前，站台的风比人群更早一步安静下来。\n\n## 把信息写进气氛\n\n:::figure id="circle_diffuse_cover_body_only_img" layout="wrapRight" caption="夜色出站口"\nasset://circle_diffuse_cover_body_only_img\n:::\n\n把路线、风向和末班车时间并排写下，这张卡片就有了真正能回看的信息。\n\n### 收束\n\n封面先定住情绪，正文再把那一晚重新讲清楚。\n',
       'articleAssetManifest': const <String, dynamic>{
@@ -654,7 +650,7 @@ class CircleMockData {
           {
             'assetId': 'circle_diffuse_cover_body_only_img',
             'objectKey':
-                'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=900',
+                'media/image/s/mock/seed/p_1497366754035-f200968a6e72/v1/image.jpg',
           },
         ],
       },
@@ -675,7 +671,7 @@ class CircleMockData {
       'authorId': 'u8',
       'authorNickname': '慢速纪要',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+          'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
       'title': '',
       'body': '没有标题也没封面，只保留一段真正想被圈友读到的正文，作为最轻的一张文字卡。',
       'summary': '没有标题也没封面，只保留一段真正想被圈友读到的正文，作为最轻的一张文字卡。',

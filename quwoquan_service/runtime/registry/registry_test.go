@@ -180,7 +180,7 @@ func TestGetEnum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetEnum(ContentType): %v", err)
 	}
-	want := map[string]bool{"image": true, "video": true, "micro": true, "article": true}
+	want := map[string]bool{"image": true, "video": true, "micro": true, "article": true, "review": true}
 	for _, v := range vals {
 		if !want[v] {
 			t.Errorf("unexpected ContentType value: %q", v)

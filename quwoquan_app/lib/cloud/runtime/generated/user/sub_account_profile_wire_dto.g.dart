@@ -13,11 +13,14 @@ class SubAccountProfileWireDto {
   final String backgroundUrl;
   final String bio;
   final List<String> identityTags;
+  final bool verified;
   final int followerCount;
   final int followingCount;
   final int postCount;
   final int circleCount;
   final int likeCount;
+  final int profileCompleteness;
+  final List<String> profileCompletenessMissingItems;
   final String profileVisibility;
   final String isolationLevel;
   final bool inheritsFromOwner;
@@ -36,11 +39,14 @@ class SubAccountProfileWireDto {
     this.backgroundUrl = '',
     this.bio = '',
     this.identityTags = const <String>[],
+    this.verified = false,
     this.followerCount = 0,
     this.followingCount = 0,
     this.postCount = 0,
     this.circleCount = 0,
     this.likeCount = 0,
+    this.profileCompleteness = 100,
+    this.profileCompletenessMissingItems = const <String>[],
     this.profileVisibility = 'public',
     this.isolationLevel = 'open',
     this.inheritsFromOwner = false,
@@ -61,11 +67,14 @@ class SubAccountProfileWireDto {
       backgroundUrl: m['backgroundUrl']?.toString() ?? m['backgroundImage']?.toString() ?? '',
       bio: m['bio']?.toString() ?? '',
       identityTags: _parseStringList(m['identityTags']) ?? <String>[],
+      verified: m['verified'] as bool? ?? m['isVerified'] as bool? ?? false,
       followerCount: (m['followerCount'] as num?)?.toInt() ?? 0,
       followingCount: (m['followingCount'] as num?)?.toInt() ?? 0,
       postCount: (m['postCount'] as num?)?.toInt() ?? 0,
       circleCount: (m['circleCount'] as num?)?.toInt() ?? 0,
       likeCount: (m['likeCount'] as num?)?.toInt() ?? 0,
+      profileCompleteness: (m['profileCompleteness'] as num?)?.toInt() ?? 100,
+      profileCompletenessMissingItems: _parseStringList(m['profileCompletenessMissingItems']) ?? <String>[],
       profileVisibility: m['profileVisibility']?.toString() ?? 'public',
       isolationLevel: m['isolationLevel']?.toString() ?? 'open',
       inheritsFromOwner: m['inheritsFromOwner'] as bool? ?? false,
@@ -87,11 +96,14 @@ class SubAccountProfileWireDto {
       'backgroundUrl': backgroundUrl,
       'bio': bio,
       'identityTags': identityTags,
+      'verified': verified,
       'followerCount': followerCount,
       'followingCount': followingCount,
       'postCount': postCount,
       'circleCount': circleCount,
       'likeCount': likeCount,
+      'profileCompleteness': profileCompleteness,
+      'profileCompletenessMissingItems': profileCompletenessMissingItems,
       'profileVisibility': profileVisibility,
       'isolationLevel': isolationLevel,
       'inheritsFromOwner': inheritsFromOwner,
@@ -112,11 +124,14 @@ class SubAccountProfileWireDto {
     String? backgroundUrl,
     String? bio,
     List<String>? identityTags,
+    bool? verified,
     int? followerCount,
     int? followingCount,
     int? postCount,
     int? circleCount,
     int? likeCount,
+    int? profileCompleteness,
+    List<String>? profileCompletenessMissingItems,
     String? profileVisibility,
     String? isolationLevel,
     bool? inheritsFromOwner,
@@ -135,11 +150,14 @@ class SubAccountProfileWireDto {
       backgroundUrl: backgroundUrl ?? this.backgroundUrl,
       bio: bio ?? this.bio,
       identityTags: identityTags ?? this.identityTags,
+      verified: verified ?? this.verified,
       followerCount: followerCount ?? this.followerCount,
       followingCount: followingCount ?? this.followingCount,
       postCount: postCount ?? this.postCount,
       circleCount: circleCount ?? this.circleCount,
       likeCount: likeCount ?? this.likeCount,
+      profileCompleteness: profileCompleteness ?? this.profileCompleteness,
+      profileCompletenessMissingItems: profileCompletenessMissingItems ?? this.profileCompletenessMissingItems,
       profileVisibility: profileVisibility ?? this.profileVisibility,
       isolationLevel: isolationLevel ?? this.isolationLevel,
       inheritsFromOwner: inheritsFromOwner ?? this.inheritsFromOwner,

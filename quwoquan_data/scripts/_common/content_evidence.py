@@ -113,6 +113,17 @@ _TRANSITION_MARKERS = (
 )
 _FORBIDDEN_EXCERPT_MARKERS = ("来源平台：", "url:", "platform:", "title:", "entity:", "retained:")
 _MANUAL_SOURCE_PLAN_RE = re.compile(r"(?mi)^manual_source_plan_note:\s.*$")
+_ENTITY_SUFFIXES = (
+    "风景名胜旅游区",
+    "风景名胜区",
+    "文化旅游区",
+    "旅游度假区",
+    "风景旅游区",
+    "旅游景区",
+    "风景区",
+    "旅游区",
+    "景区",
+)
 
 
 def entity_names_from_refs(entity_refs: Sequence[str] | None) -> list[str]:
@@ -144,6 +155,26 @@ def _frontmatter_map(text: str) -> dict[str, str]:
         key, value = line.split(":", 1)
         data[key.strip()] = value.strip()
     return data
+
+
+def _entity_match_terms(entity_name: str | None) -> tuple[str, ...]:
+    raw = str(entity_name or "").strip()
+    if not raw:
+        return ()
+    terms: list[str] = [raw]
+    for suffix in _ENTITY_SUFFIXES:
+        if raw.endswith(suffix) and len(raw) > len(suffix) + 1:
+            terms.append(raw[: -len(suffix)])
+            break
+    for part in re.split(r"[·•—－/（）()，,、\s\-]+", raw):
+        part = part.strip()
+        if len(part) >= 2:
+            terms.append(part)
+            for suffix in _ENTITY_SUFFIXES:
+                if part.endswith(suffix) and len(part) > len(suffix) + 1:
+                    terms.append(part[: -len(suffix)])
+                    break
+    return tuple(dict.fromkeys(term for term in terms if len(term) >= 2))
 
 
 def anonymize_source_markdown(text: str) -> str:
@@ -197,13 +228,20 @@ def score_source_markdown(source_id: str, text: str, *, entity_name: str | None 
     if fact_hits >= 3:
         score += 2
         reasons.append("fact_dense")
-    if entity_name and entity_name in compact:
+    entity_grounded = bool(entity_name and any(term in compact for term in _entity_match_terms(entity_name)))
+    if entity_grounded:
         score += 1
         reasons.append("entity_grounded")
 
     penalties = 0
-    if any(marker in body for marker in _PLATFORM_MARKERS):
-        penalties += 2
+    platform_hits = sum(body.count(marker) for marker in _PLATFORM_MARKERS)
+    if platform_hits:
+        # UGC/攻略页面经常带导航、页脚或站内推荐。平台痕迹要留下
+        # 诊断信号，但不能覆盖长篇实体相关正文的内容质量。
+        if platform_hits >= 4 and not (len(compact) > 500 and entity_grounded):
+            penalties += 2
+        else:
+            penalties += 1
         reasons.append("platform_visible")
     if any(marker in body for marker in _META_MARKERS):
         penalties += 2

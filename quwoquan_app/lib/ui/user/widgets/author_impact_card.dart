@@ -1,13 +1,28 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
+import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/ui/user/widgets/intersection_statement_card.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
 /// 影响力摘要模块（他人主页 / 我的主页双视角，可解释）。
 ///
-/// 只读直出 [AuthorImpactSummary] 的前 [maxItems] 条云侧 displayText 结论句
-/// （如「23人加入相关圈子」），端不本地拼装文案（G2）；
+/// 统一交互子契约落地（Phase 0 §20.7）：逐条只读 [AuthorImpactSummary]：
+/// - 结论句走 [AuthorImpactItem.primarySpans] + 统一渲染器（[IntersectionStatementRow]），
+///   端不本地拼装文案（G2），spans 缺省回落 [AuthorImpactItem.primaryText]；
+/// - 样本视觉走 [AuthorImpactItem.sampleVisuals] + [IntersectionVisualCluster]；
+/// - 名字 / 对象片段经 [IntersectionTargetNavigator] 进对应主页；
+/// - 数字片段 / 整行进「影响明细」iOS 底部 sheet，展示来源摘要 + 云侧样本视觉；
+///   完整名单（[AuthorImpactItem.evidenceSnapshotId] / 分页）未就绪时只展示样本、不编造全量。
 /// other 模式无数据不占位，mine 模式空态展示鼓励发布文案。
-class AuthorImpactCard extends StatelessWidget {
+class AuthorImpactCard extends ConsumerWidget {
   const AuthorImpactCard({
     super.key,
     required this.summary,
@@ -28,241 +43,293 @@ class AuthorImpactCard extends StatelessWidget {
 
   bool get _isEmpty =>
       summary.total <= 0 ||
-      summary.items.every((item) => item.displayText.trim().isEmpty);
+      summary.items.every((item) => item.primaryText.trim().isEmpty);
+
+  IntersectionTargetNavigator _navigator(WidgetRef ref) =>
+      IntersectionTargetNavigator(
+        onTrack: (target, attribution) {
+          final id = target.objectId.trim();
+          if (id.isEmpty) {
+            return;
+          }
+          ref
+              .read(contentBehaviorTrackerProvider)
+              .trackClick(
+                id,
+                referralSource: ReferralSource.organicFeed,
+                intersectionDimension: attribution.dimension,
+                intersectionSourceRef: attribution.sourceRef,
+                intersectionTagRefs: attribution.tagRefs,
+                intersectionEvidenceId: attribution.evidenceId,
+              );
+        },
+      );
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (_isEmpty && !isMine) {
       // 用户主页无影响事实不占位（不造假、不放占位数字）。
       return const SizedBox.shrink();
     }
-    final fg = AppColors.iosLabel(context);
     final fgSecondary = AppColors.iosSecondaryLabel(context);
     final visible = summary.items
-        .where((item) => item.displayText.trim().isNotEmpty)
+        .where((item) => item.primaryText.trim().isNotEmpty)
         .take(maxItems)
         .toList(growable: false);
+    final navigator = _navigator(ref);
 
-    return Container(
+    return IntersectionStatementCard(
       key: AuthorImpactCard.cardKey,
-      width: double.infinity,
-      padding: EdgeInsets.all(AppSpacing.containerSm),
-      decoration: BoxDecoration(
-        color: AppColors.iosProfileSurface(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-        border: Border.all(
-          color: AppColors.iosSeparator(
-            context,
-          ).withValues(alpha: isDark ? 0.24 : 0.08),
-          width: AppSpacing.hairline,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: AppSpacing.buttonHeightSm,
-                height: AppSpacing.buttonHeightSm,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryColor.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  CupertinoIcons.waveform_path_ecg,
-                  size: AppSpacing.iconSmall,
-                  color: AppColors.primaryColor,
-                ),
-              ),
-              SizedBox(width: AppSpacing.intraGroupSm),
-              Expanded(
-                child: Text(
-                  isMine
-                      ? UITextConstants.profileImpactTitleMine
-                      : UITextConstants.profileImpactTitleOther,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    fontWeight: AppTypography.semiBold,
-                    color: fg,
+      topDivider: true,
+      title: isMine
+          ? UITextConstants.profileImpactTitleMine
+          : UITextConstants.profileImpactTitleOther,
+      items: _isEmpty
+          ? const <IntersectionStatementItem>[]
+          : <IntersectionStatementItem>[
+              for (final item in visible)
+                IntersectionStatementItem(
+                  primaryText: item.primaryText.trim(),
+                  subtitleText: '',
+                  highlight: IntersectionStatementHighlight.gray,
+                  spans: item.primarySpans,
+                  visuals: const <IntersectionVisual>[],
+                  // 四槽：① 类型图标（iconKey 回退 helpType/dimension）+ ④ 传播视图。
+                  iconKey: item.iconKey,
+                  sourceRef: item.source,
+                  dimension: item.intersectionDimension,
+                  showAuxiliaryLine: false,
+                  onSpanTap: (span) =>
+                      _onSpanTap(context, navigator, item, span),
+                  onVisualTap: (visual) => navigator.open(
+                    context,
+                    visual.target,
+                    attribution: _attributionFor(item),
+                  ),
+                  onPropagationTap: () => _showEvidence(
+                    context,
+                    navigator: navigator,
+                    item: item,
+                    isMine: isMine,
+                  ),
+                  onTap: () => _showEvidence(
+                    context,
+                    navigator: navigator,
+                    item: item,
+                    isMine: isMine,
                   ),
                 ),
-              ),
             ],
-          ),
-          SizedBox(height: AppSpacing.intraGroupXs),
-          Text(
-            isMine
-                ? UITextConstants.profileImpactSubtitleMine
-                : UITextConstants.profileImpactSubtitleOther,
-            style: TextStyle(
-              fontSize: AppTypography.iosFootnote,
-              color: fgSecondary,
-            ),
-          ),
-          SizedBox(height: AppSpacing.containerSm),
-          if (_isEmpty)
-            Text(
-              key: AuthorImpactCard.emptyKey,
-              UITextConstants.profileImpactEmptyMine,
-              style: TextStyle(
-                fontSize: AppTypography.iosCallout,
-                height: AppSpacing.textLineHeightBody,
-                color: fgSecondary,
-              ),
-            )
-          else
-            for (var i = 0; i < visible.length; i++) ...<Widget>[
-              if (i > 0) _ImpactDivider(isDark: isDark),
-              _ImpactRow(
-                count: visible[i].count,
-                displayText: visible[i].displayText.trim(),
-                helpType: visible[i].helpType,
-                source: visible[i].source,
-                fg: fg,
-                isMine: isMine,
-              ),
-            ],
-        ],
+      emptyChild: Text(
+        key: AuthorImpactCard.emptyKey,
+        UITextConstants.profileImpactEmptyMine,
+        style: TextStyle(
+          fontSize: AppTypography.iosCaption1,
+          height: AppSpacing.textLineHeightBody,
+          color: fgSecondary,
+        ),
+      ),
+    );
+  }
+
+  void _onSpanTap(
+    BuildContext context,
+    IntersectionTargetNavigator navigator,
+    AuthorImpactItem item,
+    IntersectionTextSpan span,
+  ) {
+    // 数字片段进影响明细（展示云侧样本）；名字 / 对象片段进对应主页。
+    if (span.role == 'count') {
+      _showEvidence(context, navigator: navigator, item: item, isMine: isMine);
+      return;
+    }
+    navigator.open(context, span.target, attribution: _attributionFor(item));
+  }
+
+  static IntersectionNavAttribution _attributionFor(AuthorImpactItem item) {
+    final tagRef = item.tagRef.trim();
+    return IntersectionNavAttribution(
+      dimension: item.intersectionDimension,
+      sourceRef: item.source,
+      evidenceId: item.evidenceSnapshotId,
+      tagRefs: tagRef.isEmpty ? const <String>[] : <String>[tagRef],
+    );
+  }
+
+  static Future<void> _showEvidence(
+    BuildContext context, {
+    required IntersectionTargetNavigator navigator,
+    required AuthorImpactItem item,
+    required bool isMine,
+  }) {
+    return showCupertinoModalPopup<void>(
+      context: context,
+      barrierColor: AppColors.black.withValues(alpha: 0.32),
+      builder: (sheetContext) => _AuthorImpactEvidenceSheet(
+        item: item,
+        isMine: isMine,
+        onVisualTap: (visual) {
+          Navigator.of(sheetContext).pop();
+          navigator.open(
+            context,
+            visual.target,
+            attribution: _attributionFor(item),
+          );
+        },
       ),
     );
   }
 }
 
-class _ImpactRow extends StatelessWidget {
-  const _ImpactRow({
-    required this.count,
-    required this.displayText,
-    required this.helpType,
-    required this.source,
-    required this.fg,
+/// 影响明细底部 sheet：来源摘要 + 云侧样本视觉，不编造完整名单。
+class _AuthorImpactEvidenceSheet extends StatelessWidget {
+  const _AuthorImpactEvidenceSheet({
+    required this.item,
     required this.isMine,
+    required this.onVisualTap,
   });
 
-  final int count;
-  final String displayText;
-  final String helpType;
-  final String source;
-  final Color fg;
+  final AuthorImpactItem item;
   final bool isMine;
+  final void Function(IntersectionVisual visual) onVisualTap;
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoButton(
-      key: ValueKey<String>('author-impact-fact-$helpType'),
-      padding: EdgeInsets.zero,
-      minimumSize: const Size(
-        AppSpacing.minInteractiveSize,
-        AppSpacing.minInteractiveSize,
-      ),
-      onPressed: () => _showEvidence(context),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: <Widget>[
-          Container(
-            width: AppSpacing.buttonHeightMd,
-            height: AppSpacing.buttonHeightMd,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
-            ),
-            child: Icon(
-              _icon,
-              size: AppSpacing.iconSmall,
-              color: AppColors.primaryColor,
-            ),
-          ),
-          SizedBox(width: AppSpacing.containerSm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  displayText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    color: fg,
-                  ),
-                ),
-                if (count > 0)
-                  Text(
-                    isMine
-                        ? UITextConstants.impactEnumerableHintMine
-                        : UITextConstants.impactEnumerableHintOther,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosCaption1,
-                      color: AppColors.iosSecondaryLabel(context),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Icon(
-            CupertinoIcons.chevron_forward,
-            size: AppSpacing.iconXSmall,
-            color: AppColors.iosTertiaryLabel(context),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showEvidence(BuildContext context) {
-    final sourceLabel = source.trim().isEmpty
-        ? (isMine
-              ? UITextConstants.profileImpactTitleMine
-              : UITextConstants.profileImpactTitleOther)
-        : source.trim();
+    final surface = AppColors.iosProfileSurface(context);
+    final sourceLabel = _sourceLabel();
     final hint = isMine
         ? UITextConstants.impactEnumerableHintMine
         : UITextConstants.impactEnumerableHintOther;
-    final message = count > 0
-        ? '$hint\n$sourceLabel · $count'
-        : '$hint\n$sourceLabel';
-    return showAppActionSheet<void>(
-      context,
-      title: displayText,
-      message: message,
-      sections: const <AppActionSheetSection<void>>[],
-      cancelLabel: UITextConstants.confirm,
+    final hasVisuals = item.sampleVisuals.isNotEmpty;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: EdgeInsets.all(AppSpacing.md),
+        padding: EdgeInsets.all(AppSpacing.containerMd),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            // 结论句（单通道真相源，纯文本直出，不在 sheet 内拆字拼装）。
+            Text(
+              item.primaryText.trim(),
+              style: TextStyle(
+                fontSize: AppTypography.iosBody,
+                fontWeight: AppTypography.semiBold,
+                color: AppColors.iosLabel(context),
+              ),
+            ),
+            SizedBox(height: AppSpacing.intraGroupSm),
+            Text(
+              hint,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: AppColors.iosSecondaryLabel(context),
+              ),
+            ),
+            SizedBox(height: AppSpacing.containerSm),
+            _MetaRow(
+              label: DiscoveryFeedText.impactEvidenceSheetSourceLabel,
+              value: item.count > 0
+                  ? '$sourceLabel · ${item.count}'
+                  : sourceLabel,
+            ),
+            SizedBox(height: AppSpacing.containerSm),
+            Text(
+              DiscoveryFeedText.impactEvidenceSheetSampleLabel,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                fontWeight: AppTypography.semiBold,
+                color: AppColors.iosSecondaryLabel(context),
+              ),
+            ),
+            SizedBox(height: AppSpacing.intraGroupSm),
+            if (hasVisuals) ...<Widget>[
+              IntersectionVisualCluster(
+                visuals: item.sampleVisuals,
+                maxVisuals: 5,
+                size: AppSpacing.avatarUserMd,
+                onVisualTap: onVisualTap,
+              ),
+              SizedBox(height: AppSpacing.intraGroupSm),
+              Text(
+                DiscoveryFeedText.impactEvidenceSheetFullPendingNote,
+                style: TextStyle(
+                  fontSize: AppTypography.iosCaption2,
+                  color: AppColors.iosTertiaryLabel(context),
+                ),
+              ),
+            ] else
+              Text(
+                DiscoveryFeedText.impactEvidenceSheetNoSampleNote,
+                style: TextStyle(
+                  fontSize: AppTypography.iosCaption2,
+                  color: AppColors.iosTertiaryLabel(context),
+                ),
+              ),
+            SizedBox(height: AppSpacing.containerMd),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton.filled(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text(UITextConstants.confirm),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  IconData get _icon {
-    switch (helpType) {
-      case 'circle':
-      case 'join_circle':
-        return CupertinoIcons.person_2_fill;
-      case 'friend':
-      case 'connection':
-        return CupertinoIcons.person_add_solid;
-      default:
-        return CupertinoIcons.link;
+  String _sourceLabel() {
+    final source = item.source.trim();
+    if (source.isNotEmpty) {
+      return source;
     }
+    final subtitle = item.subtitleText.trim();
+    if (subtitle.isNotEmpty) {
+      return subtitle;
+    }
+    return isMine
+        ? UITextConstants.profileImpactTitleMine
+        : UITextConstants.profileImpactTitleOther;
   }
 }
 
-class _ImpactDivider extends StatelessWidget {
-  const _ImpactDivider({required this.isDark});
+class _MetaRow extends StatelessWidget {
+  const _MetaRow({required this.label, required this.value});
 
-  final bool isDark;
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
-      child: Container(
-        height: AppSpacing.hairline,
-        color: AppColors.iosSeparator(
-          context,
-        ).withValues(alpha: isDark ? 0.18 : 0.12),
-      ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: AppTypography.iosSubheadline,
+            color: AppColors.iosSecondaryLabel(context),
+          ),
+        ),
+        SizedBox(width: AppSpacing.intraGroupSm),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: AppTypography.iosSubheadline,
+              color: AppColors.iosLabel(context),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

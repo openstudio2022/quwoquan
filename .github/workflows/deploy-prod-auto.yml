@@ -394,6 +394,8 @@ jobs:
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Deploy prod initial via stackctl
+        env:
+          PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
         run: |
           python3 agent_ops/deploy/stackctl.py deploy \
             --target prod-hosted \
@@ -480,6 +482,8 @@ jobs:
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Deploy prod full via stackctl
+        env:
+          PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
         run: |
           python3 agent_ops/deploy/stackctl.py deploy \
             --target prod-hosted \

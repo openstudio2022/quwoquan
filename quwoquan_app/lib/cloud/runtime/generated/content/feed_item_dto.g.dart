@@ -11,6 +11,9 @@ class FeedItemDto {
   final String authorId;
   final String displayName;
   final String avatarUrl;
+  final String authorRoleLabel;
+  final List<String> authorIdentityTags;
+  final bool authorVerified;
   final String? title;
   final String? body;
   final String coverUrl;
@@ -56,6 +59,9 @@ class FeedItemDto {
     required this.authorId,
     required this.displayName,
     required this.avatarUrl,
+    required this.authorRoleLabel,
+    required this.authorIdentityTags,
+    required this.authorVerified,
     this.title,
     this.body,
     required this.coverUrl,
@@ -103,6 +109,9 @@ class FeedItemDto {
       authorId: m['authorId']?.toString() ?? m['userId']?.toString() ?? m['author_id']?.toString() ?? '',
       displayName: m['authorNickname']?.toString() ?? m['nickname']?.toString() ?? m['username']?.toString() ?? m['displayName']?.toString() ?? '',
       avatarUrl: m['authorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
+      authorRoleLabel: m['authorRoleLabel']?.toString() ?? m['roleLabel']?.toString() ?? m['authorRole']?.toString() ?? '',
+      authorIdentityTags: _parseStringList(m['authorIdentityTags']) ?? _parseStringList(m['identityTags']) ?? _parseStringList(m['authorTags']) ?? <String>[],
+      authorVerified: m['authorVerified'] as bool? ?? m['verified'] as bool? ?? m['isVerified'] as bool? ?? false,
       title: m['title']?.toString() ?? null,
       body: m['body']?.toString() ?? m['description']?.toString() ?? m['content']?.toString() ?? null,
       coverUrl: m['coverUrl']?.toString() ?? m['cover']?.toString() ?? m['thumbnail']?.toString() ?? m['thumbnailUrl']?.toString() ?? '',
@@ -151,6 +160,9 @@ class FeedItemDto {
       'authorId': authorId,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
+      'authorRoleLabel': authorRoleLabel,
+      'authorIdentityTags': authorIdentityTags,
+      'authorVerified': authorVerified,
       'title': title,
       'body': body,
       'coverUrl': coverUrl,
@@ -198,6 +210,9 @@ class FeedItemDto {
     String? authorId,
     String? displayName,
     String? avatarUrl,
+    String? authorRoleLabel,
+    List<String>? authorIdentityTags,
+    bool? authorVerified,
     String? title,
     String? body,
     String? coverUrl,
@@ -243,6 +258,9 @@ class FeedItemDto {
       authorId: authorId ?? this.authorId,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      authorRoleLabel: authorRoleLabel ?? this.authorRoleLabel,
+      authorIdentityTags: authorIdentityTags ?? this.authorIdentityTags,
+      authorVerified: authorVerified ?? this.authorVerified,
       title: title ?? this.title,
       body: body ?? this.body,
       coverUrl: coverUrl ?? this.coverUrl,

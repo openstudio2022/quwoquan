@@ -16,6 +16,10 @@ environments:
       package: content-service
       domains: [content]
       modules: [content.api, content.task_outbox_dispatcher, content.search_index_worker, content.feed_projection_worker]
+    search-service:
+      package: search-service
+      domains: [search]
+      modules: [search.api]
     entity-service:
       package: entity-service
       domains: [entity]
@@ -70,6 +74,10 @@ environments:
       modules: [turn.relay]
 
   beta:
+    search-service:
+      package: search-service
+      domains: [search]
+      modules: [search.api]
     entity-service:
       package: entity-service
       domains: [entity]
@@ -133,6 +141,10 @@ environments:
         - orchestrator.workflow_worker
 
   gamma:
+    search-service:
+      package: search-service
+      domains: [search]
+      modules: [search.api]
     entity-service:
       package: entity-service
       domains: [entity]
@@ -196,6 +208,10 @@ environments:
         - orchestrator.workflow_worker
 
   prod:
+    search-service:
+      package: search-service
+      domains: [search]
+      modules: [search.api]
     entity-service:
       package: entity-service
       domains: [entity]

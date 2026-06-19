@@ -18,7 +18,7 @@ from typing import Any
 
 from _common.io import write_json
 from homepage_assets.repair import scan_homepages
-from verify.verify_content_quality import FORBIDDEN, asset_closure_issues
+from verify.verify_content_quality import asset_closure_issues, forbidden_phrase_hits
 
 
 _DIRTY_ENTITY_TOKENS = (
@@ -101,9 +101,8 @@ def scan_dirty_data() -> list[dict[str, Any]]:
             article_path = post_dir / "article.md"
             if article_path.is_file():
                 article = article_path.read_text(encoding="utf-8", errors="ignore")
-                for word in FORBIDDEN:
-                    if word in article:
-                        found.append(f"{article_path}: forbidden phrase found: {word}")
+                for word in forbidden_phrase_hits(article):
+                    found.append(f"{article_path}: forbidden phrase found: {word}")
             if found:
                 rows.append(
                     {

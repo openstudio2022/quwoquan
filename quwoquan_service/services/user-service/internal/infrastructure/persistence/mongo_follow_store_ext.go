@@ -59,12 +59,33 @@ func (s *MongoFollowStore) listEdges(ctx context.Context, field, value string, c
 			"followerId": cursorFollowerID(cursor),
 			"followeeId": cursorFolloweeID(cursor),
 		}).Decode(&cursorDoc); err == nil {
-			filter["createdAt"] = bson.M{"$lt": cursorDoc.CreatedAt}
+			// Keyset pagination over a deterministic compound key
+			// (createdAt, followerId, followeeId). createdAt alone is NOT unique:
+			// bulk follows land in the same millisecond, so a plain
+			// `$lt createdAt` would exclude every same-timestamp edge after the
+			// first page and silently truncate the list. The compound tiebreaker
+			// keeps the page exact even under duplicate timestamps.
+			filter["$or"] = bson.A{
+				bson.M{"createdAt": bson.M{"$lt": cursorDoc.CreatedAt}},
+				bson.M{
+					"createdAt":  cursorDoc.CreatedAt,
+					"followerId": bson.M{"$lt": cursorDoc.FollowerID},
+				},
+				bson.M{
+					"createdAt":  cursorDoc.CreatedAt,
+					"followerId": cursorDoc.FollowerID,
+					"followeeId": bson.M{"$lt": cursorDoc.FolloweeID},
+				},
+			}
 		}
 	}
 
 	opts := options.Find().
-		SetSort(bson.D{{Key: "createdAt", Value: -1}}).
+		SetSort(bson.D{
+			{Key: "createdAt", Value: -1},
+			{Key: "followerId", Value: -1},
+			{Key: "followeeId", Value: -1},
+		}).
 		SetLimit(int64(limit + 1))
 
 	cur, err := s.coll.Find(ctx, filter, opts)
@@ -80,9 +101,14 @@ func (s *MongoFollowStore) listEdges(ctx context.Context, field, value string, c
 
 	var nextCursor string
 	if len(edges) > limit {
-		last := edges[limit]
-		nextCursor = last.FollowerID + ":" + last.FolloweeID
 		edges = edges[:limit]
+		// Cursor is the LAST RETURNED edge; the next page filters strictly
+		// "before" it (keyset exclusive), so it is not re-emitted. Using the
+		// overfetched limit+1-th edge as the cursor would skip it entirely (it
+		// becomes the cursor yet is excluded by the next `$lt`), silently
+		// dropping one edge per page boundary.
+		last := edges[len(edges)-1]
+		nextCursor = last.FollowerID + ":" + last.FolloweeID
 	}
 	return edges, nextCursor, nil
 }

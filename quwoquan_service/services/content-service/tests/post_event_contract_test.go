@@ -95,7 +95,7 @@ func TestPostSettingsUpdatedEvent(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPatch,
 		"/v1/content/posts/"+postID+"/settings",
-		strings.NewReader(`{"visibility":"public","assistantUsePolicy":"exclude"}`),
+		strings.NewReader(`{"visibility":"public","assistantUsePolicy":"exclude","circleIds":["settings_circle_a"]}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "settings_event_author")
@@ -115,6 +115,10 @@ func TestPostSettingsUpdatedEvent(t *testing.T) {
 	}
 	if ev.Payload["visibility"] != "public" {
 		t.Errorf("payload.visibility: %v", ev.Payload["visibility"])
+	}
+	added, ok := ev.Payload["addedCircleIds"].([]string)
+	if !ok || len(added) != 1 || added[0] != "settings_circle_a" {
+		t.Fatalf("payload.addedCircleIds = %#v", ev.Payload["addedCircleIds"])
 	}
 }
 
@@ -158,6 +162,8 @@ func TestPostDeletedEvent(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	created := createPostWithAuthor(t, "delete_event_author", `{
 		"contentType":"image",
+		"circleIds":["circle_delete_event"],
+		"visibility":"circle_visible",
 		"mediaUrls":["https://example.com/img.jpg"]
 	}`)
 	postID, _ := created["_id"].(string)
@@ -182,6 +188,13 @@ func TestPostDeletedEvent(t *testing.T) {
 	}
 	if ev.Payload["deletedAt"] == "" {
 		t.Error("payload.deletedAt must not be empty")
+	}
+	if ev.Payload["status"] != "published" {
+		t.Fatalf("payload.status should keep pre-delete status, got %#v", ev.Payload["status"])
+	}
+	circleIDs, ok := ev.Payload["circleIds"].([]string)
+	if !ok || len(circleIDs) != 1 || circleIDs[0] != "circle_delete_event" {
+		t.Fatalf("payload.circleIds = %#v", ev.Payload["circleIds"])
 	}
 }
 

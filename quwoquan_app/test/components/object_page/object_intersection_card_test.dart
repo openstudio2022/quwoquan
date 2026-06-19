@@ -4,6 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/object_page/evidence_group.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
 /// T2：对象页统一交集卡口径（V4 · 纵向交集列表 / 全局验收 G2）。
 /// - 无来源 / 无可展示证据组 → 不展示；
@@ -55,11 +56,11 @@ void main() {
       );
     });
 
-    test('无可展示证据组（无点 + 空 label） → 返回 null', () {
+    test('无可展示证据组（无点 + 空 primaryText） → 返回 null', () {
       expect(
         ObjectIntersectionCard.fromReasons(
           title: '你们的交集',
-          reasons: [IntersectionReason(label: '   ')],
+          reasons: [IntersectionReason(primaryText: '   ')],
           isDark: false,
         ),
         isNull,
@@ -340,7 +341,7 @@ void main() {
       expect(find.text('共同关注扩展 6'), findsOneWidget);
       expect(find.text('都赞过 3'), findsNothing);
       // 点击「展开更多」就地展开。
-      await tester.tap(find.textContaining('展开更多'));
+      await tester.tap(find.text(DiscoveryFeedText.intersectionExpandMore));
       await tester.pumpAndSettle();
       expect(find.text('都赞过 3'), findsOneWidget);
     });
@@ -409,9 +410,9 @@ void main() {
       expect(find.text('你和这里的交集'), findsOneWidget);
       expect(find.text('共同关注 8'), findsOneWidget);
       expect(find.text('川西攻略'), findsNothing);
-      expect(find.textContaining('展开更多'), findsOneWidget);
+      expect(find.text(DiscoveryFeedText.intersectionExpandMore), findsOneWidget);
 
-      await tester.tap(find.textContaining('展开更多'));
+      await tester.tap(find.text(DiscoveryFeedText.intersectionExpandMore));
       await tester.pumpAndSettle();
 
       expect(find.text('川西攻略'), findsOneWidget);

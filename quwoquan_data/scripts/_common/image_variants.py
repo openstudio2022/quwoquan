@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 from typing import Any
 
 from _common.media_asset_url import IMAGE_VARIANT_PROFILES
@@ -29,6 +30,7 @@ except Exception:  # pragma: no cover
 
 # 仅这些 profile 在 download 阶段物理落地（original 单列；video 的 adaptive 不在此）。
 LOCAL_VARIANT_PROFILES = ("thumbnail", "display", "cover", "full")
+WEBP_METHOD = max(0, min(6, int(os.environ.get("QWQ_IMAGE_WEBP_METHOD", "4"))))
 
 
 def pil_available() -> bool:
@@ -73,7 +75,7 @@ def build_local_variants(data: bytes, *, base_name: str) -> list[dict[str, Any]]
                     target_w, target_h = src_w, src_h
                     resized = im
                 buf = io.BytesIO()
-                resized.save(buf, format="WEBP", quality=int(cfg["quality"]), method=6)
+                resized.save(buf, format="WEBP", quality=int(cfg["quality"]), method=WEBP_METHOD)
                 body = buf.getvalue()
                 out.append(
                     {

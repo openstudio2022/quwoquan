@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -56,16 +57,15 @@ func parseJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 
 func createTestProfile(t *testing.T, userID, nickname string) {
 	t.Helper()
-	// Phone stays unique in tests; truncate to keep fixture data compact.
-	phone := userID
-	if len(phone) > 16 {
-		phone = phone[:16]
-	}
-	phone = "t_" + phone
+	// Phone must stay unique per fixture. A naive 16-char prefix truncation
+	// collides whenever userIDs share a prefix (e.g. filtered_target_a/b/c/d/e
+	// all truncate to "filtered_target_"). Derive a compact, collision-resistant
+	// token from the full userID so the unique constraint never spuriously trips.
+	phone := fmt.Sprintf("t_%016x", xxhash.Sum64String(userID))
 	logicalShard := fixtureLogicalShard(userID)
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO user_profiles (user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy, phone, nickname, avatar_url, avatar_asset_id, avatar_version, bio, gender, region, owner_display_name, status, profile_version, created_at, updated_at)
-		VALUES ($1, 'active', 'migrated_seed', $2, 'preserve', $3, $4, '', '', 0, '', '', '', '', 'active', 1, NOW(), NOW())
+		INSERT INTO user_profiles (user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy, phone, nickname, avatar_url, avatar_asset_id, avatar_version, bio, identity_tags, gender, region, owner_display_name, status, profile_version, created_at, updated_at)
+		VALUES ($1, 'active', 'migrated_seed', $2, 'preserve', $3, $4, '', '', 0, '', '', '', '', '', 'active', 1, NOW(), NOW())
 		ON CONFLICT (user_id) DO NOTHING`,
 		userID, logicalShard, phone, nickname)
 	if err != nil {
@@ -105,9 +105,12 @@ func cleanAll(t *testing.T) {
 		greeting_requests, user_works, user_life_items, credential_bindings, anonymous_device_bindings,
 		contact_discovery_records, invite_records CASCADE`)
 	if mongoDB != nil {
+		// Clear documents but DO NOT Drop the collections: dropping a collection
+		// also drops its indexes (e.g. follow_edges' unique idx_follow_unique,
+		// created once at suite startup), which silently breaks insert-based
+		// idempotency for every later test in the same run. DeleteMany preserves
+		// indexes and is a no-op on a missing collection.
 		for _, name := range []string{"follow_edges", "posts", "comments", "messages", "notifications"} {
-			_ = mongoDB.Collection(name).Drop(ctx)
-			_, _ = mongoDB.Collection(name).InsertOne(ctx, bson.M{"_cleanup": true})
 			_, _ = mongoDB.Collection(name).DeleteMany(ctx, bson.M{})
 		}
 	}

@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/core/services/cache/cache_read_result.dart';
 import 'package:quwoquan_app/core/services/cache/object_cache_store.dart';
 
@@ -89,6 +90,9 @@ class ContentQuerySnapshot {
     required this.items,
     required this.fetchedAt,
     this.nextCursor,
+    this.feedRequestId,
+    this.rankingVersion,
+    this.reasonVersion,
   });
 
   final String key;
@@ -96,8 +100,23 @@ class ContentQuerySnapshot {
   final String? nextCursor;
   final DateTime fetchedAt;
 
+  /// 服务端权威下发的归因上下文（随 feed envelope 缓存，命中缓存时一并回放）。
+  final String? feedRequestId;
+  final String? rankingVersion;
+  final String? reasonVersion;
+
   CursorPage<PostBaseDto> toCursorPage() {
     return CursorPage<PostBaseDto>(items: items, nextCursor: nextCursor);
+  }
+
+  DiscoveryFeedPage toDiscoveryFeedPage() {
+    return DiscoveryFeedPage(
+      items: items,
+      nextCursor: nextCursor,
+      feedRequestId: feedRequestId,
+      rankingVersion: rankingVersion,
+      reasonVersion: reasonVersion,
+    );
   }
 }
 
@@ -142,6 +161,9 @@ class ContentQuerySnapshotStore {
     required String key,
     required List<PostBaseDto> items,
     String? nextCursor,
+    String? feedRequestId,
+    String? rankingVersion,
+    String? reasonVersion,
   }) {
     final normalized = key.trim();
     if (normalized.isEmpty) {
@@ -152,6 +174,9 @@ class ContentQuerySnapshotStore {
       key: normalized,
       items: List<PostBaseDto>.unmodifiable(items),
       nextCursor: nextCursor,
+      feedRequestId: feedRequestId,
+      rankingVersion: rankingVersion,
+      reasonVersion: reasonVersion,
       fetchedAt: DateTime.now(),
     );
     while (_snapshots.length > maxEntries) {

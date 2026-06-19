@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,12 +22,15 @@ const (
 	TargetCircle  Target = "circle"
 	TargetGroup   Target = "group"
 	TargetChat    Target = "chat"
+	// TargetLocation is the first-party place object (R-S05e). It reuses the
+	// cross-object geo dimension; see ObjectTypeLocation.
+	TargetLocation Target = "location"
 )
 
-// AllTargets is the frozen allowlist of AI-facing targets.
+// AllTargets is the allowlist of AI-facing targets.
 var AllTargets = []Target{
 	TargetArticle, TargetPhoto, TargetVideo, TargetUser,
-	TargetEntity, TargetCircle, TargetGroup, TargetChat,
+	TargetEntity, TargetCircle, TargetGroup, TargetChat, TargetLocation,
 }
 
 func targetAllowed(t Target) bool {
@@ -44,11 +48,30 @@ type TimeRange struct {
 	To   time.Time `json:"to,omitempty"`
 }
 
+// GeoNear expresses an "附近" (nearby) constraint: candidates within RadiusKm of
+// the (Lat,Lng) pin. It is a CROSS-OBJECT filter — any Document that carries a
+// Geo dimension participates regardless of its target (entity/content today,
+// user/circle next). Semantics are a HARD radius filter: when Near is set with
+// RadiusKm > 0, candidates without Geo are excluded and candidates outside the
+// radius are dropped; survivors are proximity-weighted (closer ranks higher).
+type GeoNear struct {
+	Lat      float64 `json:"lat"`
+	Lng      float64 `json:"lng"`
+	RadiusKm float64 `json:"radiusKm"`
+}
+
+// Active reports whether the near filter should be applied. A zero/negative
+// radius is treated as "no nearby constraint" so callers can pass an empty pin.
+func (g *GeoNear) Active() bool { return g != nil && g.RadiusKm > 0 }
+
 // RetrieveFilters is a fixed, named filter group. It is intentionally NOT a
 // free-form where clause.
 type RetrieveFilters struct {
 	Tags      []string   `json:"tags,omitempty"`
 	TimeRange *TimeRange `json:"timeRange,omitempty"`
+	// Near is the optional geo radius ("附近") filter; it spans all targets with
+	// a Geo dimension and is the single entry point for proximity retrieval.
+	Near *GeoNear `json:"near,omitempty"`
 }
 
 // PageRequest controls pagination.
@@ -88,6 +111,7 @@ type RetrievePlan struct {
 	Interpreted InterpretedQuery
 	Tags        []string
 	TimeRange   *TimeRange
+	Near        *GeoNear
 	Limit       int
 	Offset      int
 	Viewer      Viewer
@@ -125,6 +149,39 @@ type RetrieveHit struct {
 	MatchedTags  []string       `json:"matchedTags,omitempty"`
 	Evidence     []Evidence     `json:"evidence,omitempty"`
 	Payload      map[string]any `json:"payload,omitempty"`
+	// Location dimension (cross-object): Geo/PlaceName surface the candidate's
+	// structured place when present; DistanceKm is populated only under a Near
+	// (附近) query as the haversine distance from the pin. All are zero/nil for
+	// candidates without a location dimension and never synthesized client-side.
+	Geo        *GeoPoint `json:"geo,omitempty"`
+	DistanceKm float64   `json:"distanceKm,omitempty"`
+	PlaceName  string    `json:"placeName,omitempty"`
+	// ConnectionState / IntersectionReason are attached after recall by the
+	// search-service from the unified intersection truth source (never inferred
+	// on the client). They are nil/empty until the intersection-attach stage
+	// populates them; the App must not synthesize them.
+	ConnectionState    string                 `json:"connectionState,omitempty"`
+	IntersectionReason *HitIntersectionReason `json:"intersectionReason,omitempty"`
+	// RankReasons / RankPosition are the ranking-transparency fields declared in
+	// the unified retrieve contract (_shared/search_contract.yaml hit_fields).
+	// They are the single source of ranking explanation: the shared CrossTypeRanker
+	// populates the base reasons (term/anchor/tag/freshness/popularity/geo) and the
+	// 1-based RankPosition, so every backend and every caller sees the same truth.
+	// The search-service may append additional reasons (e.g. search-term heat under
+	// an AB treatment) and re-number RankPosition after a re-rank.
+	RankReasons  []Reason `json:"rankReasons,omitempty"`
+	RankPosition int      `json:"rankPosition,omitempty"`
+}
+
+// HitIntersectionReason mirrors the unified intersection contract's read-only
+// shape consumed by search (primaryText + attribution). The search domain never
+// generates primaryText; it only carries what the intersection service emits.
+type HitIntersectionReason struct {
+	PrimaryText    string `json:"primaryText,omitempty"`
+	IntersectionID string `json:"intersectionId,omitempty"`
+	Dimension      string `json:"dimension,omitempty"`
+	Class          string `json:"class,omitempty"`
+	SourceRef      string `json:"sourceRef,omitempty"`
 }
 
 // RetrieveResponse is the unified response envelope.
@@ -166,6 +223,8 @@ func TargetForDocument(doc Document) Target {
 		return TargetGroup
 	case ObjectTypeChatMessage, ObjectTypeChatConversation, ObjectTypeChatContact:
 		return TargetChat
+	case ObjectTypeLocation:
+		return TargetLocation
 	default:
 		return ""
 	}
@@ -199,6 +258,8 @@ func ObjectTypesForTargets(targets []Target) []string {
 			add(ObjectTypeChatMessage)
 			add(ObjectTypeChatConversation)
 			add(ObjectTypeChatContact)
+		case TargetLocation:
+			add(ObjectTypeLocation)
 		}
 	}
 	return out
@@ -250,6 +311,7 @@ func PlanRequest(req RetrieveRequest, viewer Viewer) (RetrievePlan, []DegradeSig
 		Interpreted: interpreted,
 		Tags:        compactStrings(req.Filters.Tags),
 		TimeRange:   req.Filters.TimeRange,
+		Near:        req.Filters.Near,
 		Limit:       limit,
 		Offset:      offset,
 		Viewer:      viewer,
@@ -340,14 +402,21 @@ func rankAndMerge(plan RetrievePlan, candidates []RecallCandidate) ([]RetrieveHi
 		if !timeRangePass(plan.TimeRange, doc) {
 			continue
 		}
+		// Geo radius ("附近") hard filter: under a Near query, only candidates
+		// with a Geo dimension inside the radius survive; survivors carry their
+		// distance + a proximity weight (closer ranks higher).
+		nearPass, distanceKm, nearBoost := nearMatch(plan.Near, doc)
+		if !nearPass {
+			continue
+		}
 
 		base := cand.BaseScore
 		var matchedField, snippet string
-		var reasons []Reason
+		var termReasons []Reason
 		var matchedTerms []string
+		var termScore float64
 		if len(plan.Terms) > 0 {
-			var termScore float64
-			termScore, matchedField, snippet, reasons = scoreDocument(plan.Interpreted, doc)
+			termScore, matchedField, snippet, termReasons = scoreDocument(plan.Interpreted, doc)
 			matchedTerms = matchedTermsFor(plan, doc)
 			if base <= 0 {
 				base = termScore
@@ -365,19 +434,41 @@ func rankAndMerge(plan RetrievePlan, candidates []RecallCandidate) ([]RetrieveHi
 			}
 		}
 
+		// rankReasons accumulates the transparent ranking explanation in the same
+		// order the score is composed, so the published reasons and the final
+		// score stay a single, consistent truth (no second derivation).
+		rankReasons := make([]Reason, 0, 6)
+		rankReasons = append(rankReasons, termReasons...)
+
 		score := base + anchorBoost
+		if anchorBoost > 0 {
+			rankReasons = append(rankReasons, Reason{Code: "anchor_match", Label: "ID/名称锚定命中", Weight: anchorBoost})
+		}
 		if score <= 0 {
 			// Discovery / anchor-only / no-condition path.
 			score = 0.1 + popularityScore(doc.Popularity)
+			rankReasons = append(rankReasons, Reason{Code: "default_discovery", Label: "默认发现", Weight: score})
 		}
 		matchedTagList := matchedTagsFor(plan.Tags, doc)
 		if len(matchedTagList) > 0 {
-			score += 0.5 * float64(len(matchedTagList))
+			tagBoost := 0.5 * float64(len(matchedTagList))
+			score += tagBoost
+			rankReasons = append(rankReasons, Reason{Code: "tag_match", Label: "标签匹配：" + strings.Join(matchedTagList, "、"), Weight: tagBoost})
 		}
 		if !doc.Freshness.IsZero() {
-			score += freshnessScore(doc.Freshness)
+			if fresh := freshnessScore(doc.Freshness); fresh > 0 {
+				score += fresh
+				rankReasons = append(rankReasons, Reason{Code: "freshness", Label: "内容较新", Weight: fresh})
+			}
 		}
-		score += popularityScore(doc.Popularity)
+		if pop := popularityScore(doc.Popularity); pop > 0 {
+			score += pop
+			rankReasons = append(rankReasons, Reason{Code: "popularity", Label: "热门度加权", Weight: pop})
+		}
+		if nearBoost > 0 {
+			score += nearBoost
+			rankReasons = append(rankReasons, Reason{Code: "geo_proximity", Label: "附近优先", Weight: nearBoost})
+		}
 
 		if snippet == "" {
 			snippet = firstNonEmpty(doc.Summary, doc.Body, doc.Title)
@@ -385,7 +476,6 @@ func rankAndMerge(plan RetrievePlan, candidates []RecallCandidate) ([]RetrieveHi
 		if matchedField == "" {
 			matchedField = "default"
 		}
-		_ = reasons
 
 		key := doc.ObjectType + ":" + doc.ObjectID
 		if _, dup := seen[key]; dup {
@@ -403,16 +493,15 @@ func rankAndMerge(plan RetrievePlan, candidates []RecallCandidate) ([]RetrieveHi
 			MatchedTags:  matchedTagList,
 			Evidence:     []Evidence{{Field: matchedField, Snippet: truncate(snippet, 180)}},
 			Payload:      fieldsToPayload(doc.Fields),
+			Geo:          doc.Geo,
+			DistanceKm:   distanceKm,
+			PlaceName:    strings.TrimSpace(doc.Fields["placeName"]),
+			RankReasons:  rankReasons,
 		})
 		facetCounts[string(target)]++
 	}
 
-	sort.SliceStable(hits, func(i, j int) bool {
-		if hits[i].Score == hits[j].Score {
-			return hits[i].Title < hits[j].Title
-		}
-		return hits[i].Score > hits[j].Score
-	})
+	SortHitsStable(hits)
 
 	if plan.Offset > 0 {
 		if plan.Offset >= len(hits) {
@@ -424,7 +513,42 @@ func rankAndMerge(plan RetrievePlan, candidates []RecallCandidate) ([]RetrieveHi
 	if len(hits) > plan.Limit {
 		hits = hits[:plan.Limit]
 	}
+	// RankPosition is the 1-based final order within this page, assigned after the
+	// page slice so the published position matches what the caller renders.
+	for i := range hits {
+		hits[i].RankPosition = plan.Offset + i + 1
+	}
 	return hits, facetsFromCounts(facetCounts)
+}
+
+// LessHitStable is the total-order comparator that makes ranking repeatable:
+// identical inputs always produce the identical order, independent of recall /
+// candidate arrival order (ES `_score` ties, segment merges, replica differences,
+// multi-threaded indexing). Order:
+//
+//	Score desc -> Title asc -> Target(objectType) asc -> ObjectID asc.
+//
+// The last two keys are stable external identifiers, so equal-score equal-title
+// ties never fall back to a non-deterministic internal/doc order (the classic
+// Lucene "same query jumps between refreshes/replicas" pitfall).
+func LessHitStable(a, b RetrieveHit) bool {
+	if a.Score != b.Score {
+		return a.Score > b.Score
+	}
+	if a.Title != b.Title {
+		return a.Title < b.Title
+	}
+	if a.Target != b.Target {
+		return a.Target < b.Target
+	}
+	return a.ObjectID < b.ObjectID
+}
+
+// SortHitsStable sorts hits in place using the repeatable total order. It is the
+// single ranking-order truth source shared by the recall merge and the
+// search-service re-rank decorator, so both produce the same deterministic page.
+func SortHitsStable(hits []RetrieveHit) {
+	sort.SliceStable(hits, func(i, j int) bool { return LessHitStable(hits[i], hits[j]) })
 }
 
 func fieldsToPayload(fields map[string]string) map[string]any {
@@ -489,6 +613,45 @@ func timeRangePass(tr *TimeRange, doc Document) bool {
 	return true
 }
 
+// nearMatch applies the cross-object 附近 radius filter. When Near is inactive
+// every candidate passes with no distance/boost. When active it is a HARD filter:
+// candidates without Geo are excluded (a nearby query is inherently spatial), and
+// candidates beyond RadiusKm are dropped. Survivors return their haversine
+// distance and a proximity boost that scales linearly from +nearMaxBoost at the
+// pin down to 0 at the radius edge, so closer objects rank higher.
+func nearMatch(near *GeoNear, doc Document) (pass bool, distanceKm float64, boost float64) {
+	if !near.Active() {
+		return true, 0, 0
+	}
+	if doc.Geo == nil {
+		return false, 0, 0
+	}
+	d := haversineKm(near.Lat, near.Lng, doc.Geo.Lat, doc.Geo.Lng)
+	if d > near.RadiusKm {
+		return false, d, 0
+	}
+	return true, d, nearMaxBoost * (1 - d/near.RadiusKm)
+}
+
+// nearMaxBoost caps the proximity weight added at the pin. It is comparable to a
+// strong term hit so "附近" meaningfully reorders without drowning text relevance.
+const nearMaxBoost = 3.0
+
+// earthRadiusKm is the mean Earth radius used by the haversine distance.
+const earthRadiusKm = 6371.0
+
+// haversineKm returns the great-circle distance in kilometers between two
+// lat/lng points. It is the native-path counterpart to the ES geo_distance
+// filter so proximity scoring stays identical across backends (single ranker).
+func haversineKm(lat1, lng1, lat2, lng2 float64) float64 {
+	rad := func(deg float64) float64 { return deg * math.Pi / 180 }
+	dLat := rad(lat2 - lat1)
+	dLng := rad(lng2 - lng1)
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(rad(lat1))*math.Cos(rad(lat2))*math.Sin(dLng/2)*math.Sin(dLng/2)
+	return earthRadiusKm * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+}
+
 // anchorMatch resolves flat ids/names against the document (id hit on the
 // object itself, or anchor hit on a related object id/name) and returns a
 // boost. This is where relationships are inferred without any caller-supplied
@@ -525,7 +688,7 @@ func anchorMatch(plan RetrievePlan, doc Document) (bool, float64) {
 			normalize(doc.Fields["authorName"]),
 			normalize(doc.Fields["groupName"]),
 			normalize(doc.Fields["entityName"]),
-			normalize(doc.Fields["locationName"]),
+			normalize(doc.Fields["placeName"]),
 		}
 		for _, name := range plan.NormNames {
 			if name == "" {
@@ -593,7 +756,7 @@ func retrieveCitations(hits []RetrieveHit) []Citation {
 
 // HitMap renders a RetrieveHit to a JSON-ish map for tool/provider consumers.
 func RetrieveHitMap(hit RetrieveHit) map[string]any {
-	return map[string]any{
+	m := map[string]any{
 		"target":       string(hit.Target),
 		"objectId":     hit.ObjectID,
 		"title":        hit.Title,
@@ -604,4 +767,23 @@ func RetrieveHitMap(hit RetrieveHit) map[string]any {
 		"evidence":     evidenceToMaps(hit.Evidence),
 		"payload":      hit.Payload,
 	}
+	// Location dimension is included only when present so non-geo hits stay clean.
+	if hit.Geo != nil {
+		m["geo"] = map[string]any{"lat": hit.Geo.Lat, "lng": hit.Geo.Lng}
+	}
+	if hit.DistanceKm > 0 {
+		m["distanceKm"] = hit.DistanceKm
+	}
+	if strings.TrimSpace(hit.PlaceName) != "" {
+		m["placeName"] = hit.PlaceName
+	}
+	// Ranking transparency (contract hit_fields): present only when computed so
+	// tool/provider consumers see the same ranking truth as the HTTP envelope.
+	if len(hit.RankReasons) > 0 {
+		m["rankReasons"] = reasonsToMaps(hit.RankReasons)
+	}
+	if hit.RankPosition > 0 {
+		m["rankPosition"] = hit.RankPosition
+	}
+	return m
 }

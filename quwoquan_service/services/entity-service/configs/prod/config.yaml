@@ -9,3 +9,11 @@ redis:
     mode: cluster
     addrs: []
     tls: true
+
+# prod enables the write-time index; endpoints/credentials come from SEARCH_ES_*.
+es:
+  enabled: true
+  endpoints: []
+  index: "quwoquan_objects"
+  shards: 3
+  replicas: 1

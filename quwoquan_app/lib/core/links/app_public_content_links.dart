@@ -1,23 +1,30 @@
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
 
-/// 面向用户/站外分享的 **公网 HTTPS 链接**（与 API [CloudRuntimeConfig.gatewayBaseUrl] 分离）。
+/// 面向用户/站外分享的公网链接。
 ///
 /// - **路径形态** 由 metadata `link_templates.yaml` codegen（[AppLinkTemplates]）提供；本类只读 **运行时 origin**。
-/// - 过渡期通过 `--dart-define=PUBLIC_WEB_BASE_URL=https://…` 覆盖（与 [AppLinkTemplates.publicWebDartDefineKey] 一致）。
+/// - `quwoquan.com` 申请完成前默认复用当前环境 IP gateway；正式域名通过
+///   `--dart-define=PUBLIC_WEB_BASE_URL=https://quwoquan.com` 单点覆盖。
 class AppPublicContentLinks {
   AppPublicContentLinks._();
 
-  /// 公网站点根 URL（无尾斜杠；与 [publicWebUrlForPath] / [postWebUrl] 组合规则一致）。
-  static const String publicWebBaseUrl = String.fromEnvironment(
+  static const String _publicWebBaseUrlOverride = String.fromEnvironment(
     AppLinkTemplates.publicWebDartDefineKey,
-    defaultValue: 'https://quwoquan.app',
+    defaultValue: '',
   );
+
+  /// 公网站点根 URL（无尾斜杠；与 [publicWebUrlForPath] / [postWebUrl] 组合规则一致）。
+  static String get publicWebBaseUrl {
+    final override = _publicWebBaseUrlOverride.trim();
+    return override.isNotEmpty ? override : CloudRuntimeConfig.gatewayBaseUrl;
+  }
 
   static String _normalizedBase() {
     return publicWebBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
   }
 
-  /// 将 metadata 生成的 **相对 origin** 路径（无首 `/`）拼成完整 HTTPS URL。
+  /// 将 metadata 生成的 **相对 origin** 路径（无首 `/`）拼成完整 URL。
   static String publicWebUrlForPath(String relativePath) {
     final path = relativePath.trim();
     if (path.isEmpty) return _normalizedBase();

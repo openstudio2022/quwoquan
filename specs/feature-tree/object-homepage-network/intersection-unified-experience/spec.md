@@ -5,7 +5,19 @@
 - `L1_domain_service`: `object-homepage-network`
 - `L2_business_capability`: `intersection-unified-experience`
 
-本能力把"交集"从当前的 demo 占位（问小趣 dock + 端拼整句 + 大关注按钮 + 无头像/无名字）收口为一套端云一体、事实与概率分通道、带保鲜期与推荐冷却窗口、统一视觉的对象交集网络。它统一驱动：我的主页交集聚合入口、他人/实体/圈子主页交集卡、首页与各频道（含校园、旅行）交集推荐。
+本能力把"交集"从当前的 demo 占位（问小趣 dock + 端拼整句 + 大关注按钮 + 无头像/无名字）收口为一套端云一体、事实与概率分通道、带保鲜期与推荐冷却窗口、统一视觉的对象交集网络。它统一驱动六个应用场景 + 一个横切句型规范：
+
+| 场景 | L3 Story | 核心 surface |
+|---|---|---|
+| S1 首页推荐 | `home-recommend-intersection-redesign` | feed 卡 + spotlight |
+| S2 他人主页 | `user-profile-intersection-redesign`（他人） | 为什么推荐TA |
+| S2 我的主页 | `user-profile-intersection-redesign`（我的） | 我的连接 / 我的影响力 |
+| S3 实体主页 | `entity-homepage-intersection-redesign` | 为什么推荐这里 |
+| S4 圈子主页 | `circle-homepage-intersection-redesign` | 为什么推荐这个圈子 |
+| S5 全局搜索 | `search-intersection-consumption` | 交集 Tab + 发现区分组 |
+| 横切 | `intersection-sentence-unification` | primaryText 单句 + G2 |
+
+规格真相源：`specs/product/intersection-definition-and-application.md` §17–§18。
 
 前台不出现"交集网络""事实通道""概率通道"等工程术语；用户只感知"你们的交集""你和这里的交集""你认识的人在这""与你有交集的人和内容"。
 
@@ -51,6 +63,7 @@
 | 实体主页「你和这里的交集」 | 事实全维 | 同上，bundle 优先 | bundle `intersections` 后端填充 | 同上 |
 | 圈子主页「你认识的人有 N 个在这」 | relationship/identity 事实 | 新增交集卡 + 成员头像簇 | bundle/list 查询 | 圈子页出现交集卡；点头像进用户页 |
 | 首页推荐 tab + 频道（recommend/campus/travel/tech/car） | 事实 + 概率混排 | `IntersectionSpotlight`：去关注按钮、真实头像 + 名字、共同点安静 chip、模块头「N 位与你有交集」红数字；首页 ≤4 卡、频道 ≤3 卡 | 事实读模型 + 概率打分混排；过保鲜期/冷却不再出现；按 channel 下发对应交集 | campus/travel 出专属交集；曝光未转化窗口内不重复；视觉统一 |
+| 全局搜索「交集」Tab + 发现区分组 | 事实 + affinity（发现区） | 每张卡一条 `primaryText`；分组消费 `connectionState`；已连接区不展示交集句 | search hit 携带 `intersectionReason` 子集 + `connectionState` | 交集 Tab 非空（alpha mock）；G2 零端拼 |
 | 关注列表 strip | 关注对象动态 | 沿用已有未读红点机制（不改交集语义） | `following_subject` lastVisited/unread | 不回退现有能力 |
 | 小艺 | 消费 `ObjectPageContext` | 移除三处 demo dock；主动服务改"证据旁轻提示"（带 confidence/cooldown/dismiss） | 触发策略 + 冷却 | 0 demo 语言；不遮挡主操作 |
 
@@ -74,3 +87,43 @@
 5. 事实/概率分通道，事实每条可追溯，概率明确标注推荐。
 6. 保鲜期/冷却窗口生效；曝光→点击→转化全链路埋点。
 7. 页面横向质量 P1-P8、Mock 隔离、语义 token、弱类型预算、T1-T4 全部满足。
+
+## 架构基线 v2 对齐（§21 收口，A–E 五会话开工基线）
+
+> 真相源：`specs/product/intersection-definition-and-application.md` §21。本节是 L2 能力对该基线的承接，不另起真相源。
+
+### 三层统一模型（采集 → 算法 → 投影）
+
+交集是一条「加权社交图谱边」在管线上被赋予四层属性：
+
+- **Graph 结构**：节点=`person|circle|content|place|enterprise|school|tag`；边=27 个 kind 升级为加权有向边，`edgeWeight = relationStrength × interactionFrequency × recencyDecay`。映射既有 SharedFact/BridgeFact（可证边）+ Affinity（概率边）。
+- **Lifecycle 变化**：边状态机 `new → strengthened → stable → weakened → reactivated`；仅作弱标/红点，不进 `primaryText`。既有 `fresh/seen + newCount` 仅覆盖 `new`，其余四态分期真算。
+- **Propagation 扩散**：影响从单跳计数升级为可证路径（人→人 / 人→圈子 / 人→内容→人）；端只展示可证绝对计数 + 路径节点，禁 reach/conversion 比率。
+- **Projection 表达**：iconKey + primaryText/spans + visuals + target + lifecycle 弱标。
+
+### 端侧展示统一（具象化四槽，本期重点）
+
+单行交集卡 = `[① 类型图标 iconKey] + [② 句内 inline 头像簇] + [③ 尾部对象封面] + [④ lifecycle 弱标]`。
+
+- iconKey 语义闭集（§21.5.2）：`place|circle|people|alumni|work|discussion|share|like|interest`（交集）/ `connect|circle|discussion|compass|read|share`（影响）；端 `IntersectionIconResolver` 解析，禁端硬编码 switch。
+- 密度上限：紧凑 surface 1 句、lifecycle 仅「新」；列表入口 1 结论句 + ≤1 灰色辅助；对象页证据组一屏 ≤5。
+- 降级链：具名样本+头像 → 纯计数 → 维度母表达 → 隐藏。
+
+### 五面展示统一矩阵（A–E）
+
+| 面 | 主表达 | 具象化要点 |
+|---|---|---|
+| A 我的主页 | 我的连接（lifecycle 分桶弱标）+ 我的影响力（传播视图） | 四槽样板首落；author_impact 路径节点 + secondarySpread 计数 |
+| B 用户主页(他人) | 为什么推荐TA + TA帮助了很多人 | 证据组叠 lifecycle 弱标 + 句内头像 |
+| C 实体主页 | 为什么推荐这里 + 记录流单句 | 复用 ObjectIntersectionSection；对象封面缩略图 |
+| D 圈子主页 | 为什么推荐这个圈子 + 这个圈子帮助了很多人 | circle_impact 接统一三件套（解决 G4）+「你认识的人在这」 |
+| E 首页 post | post 卡内单句 chip | 紧凑：1 句 + lifecycle 仅「新」，不堆叠 |
+
+### 赞红线翻转（§21.9）
+
+`coLiked`（赞）恢复为 T4 最低权重轻量交集事实；只翻赞、不恢复收藏（§14A favorite 退场不变）；性能上禁请求期全量求交，走预投影/采样/上限。
+
+### 分期边界
+
+- 本期（契约草案 + 端原型）：metadata 草案字段 + `codegen-app` 端 DTO + 端共享组件/Mock/A–E UI 原型 + 端测试。契约标「草案/未冻结」。
+- 后置（云侧）：数据源采集、Graph 加权真算、Lifecycle 状态机、多跳 Propagation、coLiked 预投影、Selection 数值化、Remote 填充。

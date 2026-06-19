@@ -245,6 +245,72 @@ def test_repeated_fetch_preserves_better_same_url_source_unit():
     ) is None
 
 
+def test_prune_stale_source_units_removes_dirs_absent_from_current_plan():
+    from _common.paths import source_unit_dir
+
+    object_dir = resolve_entity_object_dir(
+        _TASK, "b_prune_stale_source_units", _EID, etype_hint="景区"
+    )
+    keep = source_unit_dir(object_dir, 1, "current_source")
+    stale = source_unit_dir(object_dir, 2, "old_image_collection")
+    keep.mkdir(parents=True, exist_ok=True)
+    stale.mkdir(parents=True, exist_ok=True)
+    (keep / "source.md").write_text("current", encoding="utf-8")
+    (stale / "source.md").write_text("stale", encoding="utf-8")
+
+    pruned = handler_mod._prune_stale_source_units(object_dir, {keep})
+
+    assert pruned == ["02.old_image_collection"]
+    assert keep.is_dir()
+    assert not stale.exists()
+
+
+def test_prune_stale_rejected_units_preserves_homepage_baike_memory():
+    from _common.paths import source_unit_dir
+
+    object_dir = resolve_entity_object_dir(
+        _TASK, "b_prune_stale_rejected_memory", _EID, etype_hint="景区"
+    )
+    rejected_root = object_dir / STAGE_DOWNLOAD / "rejected_sources"
+    baike = source_unit_dir(object_dir, 1, "home_baidu_baike")
+    article = source_unit_dir(object_dir, 2, "article_qunar_base")
+    baike = rejected_root / baike.name
+    article = rejected_root / article.name
+    baike.mkdir(parents=True, exist_ok=True)
+    article.mkdir(parents=True, exist_ok=True)
+    write_json(
+        baike / "meta.json",
+        {
+            "researchLane": "homepage",
+            "platform": "百度百科",
+            "sourceKind": "encyclopedia",
+            "url": "https://baike.baidu.com/item/foo",
+        },
+    )
+    write_json(
+        baike / "source.quality.json",
+        {"quality": "Reject", "fetchSucceeded": False, "statusCode": 0},
+    )
+    write_json(
+        article / "meta.json",
+        {"researchLane": "article", "platform": "去哪儿攻略", "url": "https://touch.travel.qunar.com/foo"},
+    )
+    write_json(
+        article / "source.quality.json",
+        {"quality": "Reject", "fetchSucceeded": False, "statusCode": 0},
+    )
+
+    pruned = handler_mod._prune_stale_rejected_source_units(
+        object_dir,
+        set(),
+        selected_lanes={"homepage", "article"},
+    )
+
+    assert pruned == ["02.article_qunar_base"]
+    assert baike.is_dir()
+    assert not article.exists()
+
+
 def test_handle_download_fetches_images_into_source_unit():
     """新布局：图片落到首个来源单元 assets/，写 assets/index.json，无对象级散 images/。"""
     from _common.source_unit import iter_source_units, resolve_entity_object_dir
@@ -302,7 +368,7 @@ def test_handle_download_fetches_images_into_source_unit():
             "sha256": _h.sha256(body).hexdigest(),
         }
 
-    def _fake_source_fetch(url: str):
+    def _fake_source_fetch(url: str, **_kwargs):
         return {
             "url": url,
             "statusCode": 200,
@@ -353,6 +419,307 @@ def test_handle_download_fetches_images_into_source_unit():
     assert all_assets[1][1]["credit"] == "Bob"
     # 不再有对象级散落 images/
     assert not (obj / "images").exists()
+
+
+def test_repeated_image_lane_fetch_reuses_cached_assets_when_network_fails():
+    """同一批次重复修复时，已审计图片字节应先走本地 source-unit 缓存。"""
+    from _common.source_unit import iter_source_units, resolve_entity_object_dir
+
+    batch = "b_img_lane_cache_reuse"
+    ensure_batch_layout(_TASK, batch, "download")
+    img_a = _real_jpeg(41)
+    img_b = _real_jpeg(42)
+    sources = [
+        {"source_id": "s1", "platform": "baike", "url": "https://x.invalid/g", "body": "正文兜底"},
+        {"source_id": "s2", "platform": "mafengwo", "url": "https://x.invalid/h", "body": "游记兜底"},
+        {"source_id": "s3", "platform": "官网", "url": "https://x.invalid/i", "body": "官方兜底"},
+    ]
+    images = [
+        {
+            "url": "https://img.invalid/cache-a.jpg",
+            "platform": "Wikimedia Commons",
+            "license": "CC-BY-SA 4.0",
+            "credit": "Ann",
+            "sourceUrl": "https://img.invalid/cache-a.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "authorizationProof": "https://img.invalid/cache-a.jpg#rights",
+            "usageScope": "app_publish",
+            "caption": "稻城亚丁仙乃日雪山",
+            "relevance": "直接呈现稻城亚丁仙乃日雪山实景",
+        },
+        {
+            "url": "https://img.invalid/cache-b.jpg",
+            "platform": "Wikimedia Commons",
+            "license": "CC-BY-SA 4.0",
+            "credit": "Bob",
+            "sourceUrl": "https://img.invalid/cache-b.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "authorizationProof": "https://img.invalid/cache-b.jpg#rights",
+            "usageScope": "app_publish",
+            "caption": "稻城亚丁牛奶海",
+            "relevance": "直接呈现稻城亚丁牛奶海高山湖泊",
+        },
+    ]
+    _write_lane_plans(batch, sources, images)
+
+    _by_url = {"https://img.invalid/cache-a.jpg": img_a, "https://img.invalid/cache-b.jpg": img_b}
+
+    def _fake_payload(url, *, min_bytes=3000):
+        body = _by_url[url]
+        import hashlib as _h
+
+        return {
+            "url": url,
+            "ext": ".jpg",
+            "bytes": body,
+            "contentType": "image/jpeg",
+            "sha256": _h.sha256(body).hexdigest(),
+        }
+
+    def _fake_source_fetch(url: str, **_kwargs):
+        return {
+            "url": url,
+            "statusCode": 200,
+            "htmlBytes": b"<html></html>",
+            "text": (
+                f"{_EID} 景区预约、观光车、徒步动线、天气和返程时间都需要提前确认。"
+                f"核心景观集中在雪山、草甸和海子段落，上午进入更利于避开拥堵。"
+                f"高海拔区域温差明显，雨具、防晒和补给都要按长线徒步准备。"
+            ),
+            "sha256": "sha-source",
+        }
+
+    orig_fetch = handler_mod.fetch_image_payload
+    orig_source = handler_mod.fetch_source_payload
+    try:
+        handler_mod.fetch_image_payload = _fake_payload
+        handler_mod.fetch_source_payload = _fake_source_fetch
+        handle_download(argparse.Namespace(task=_TASK, batch=batch, entity_ids=_EID, entity_type="景区"))
+
+        network_calls: list[str] = []
+
+        def _network_down(url, *, min_bytes=3000):
+            network_calls.append(url)
+            return None
+
+        handler_mod.fetch_image_payload = _network_down
+        handle_download(argparse.Namespace(task=_TASK, batch=batch, entity_ids=_EID, entity_type="景区"))
+    finally:
+        handler_mod.fetch_image_payload = orig_fetch
+        handler_mod.fetch_source_payload = orig_source
+
+    assert network_calls == []
+    obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
+    asset_units = [unit for unit in iter_source_units(obj) if (unit / "assets" / "index.json").is_file()]
+    assert len(asset_units) == 2
+
+
+def test_failed_image_lane_repair_preserves_previous_image_source_units():
+    """新图片源全失败时，失败修复不能剪掉上一轮已存在的图片证据。"""
+    from _common.source_unit import iter_source_units, resolve_entity_object_dir
+
+    batch = "b_img_lane_failed_repair_preserves_cache"
+    ensure_batch_layout(_TASK, batch, "download")
+    img_a = _real_jpeg(51)
+    img_b = _real_jpeg(52)
+    sources = [
+        {"source_id": "s1", "platform": "baike", "url": "https://x.invalid/g", "body": "正文兜底"},
+        {"source_id": "s2", "platform": "mafengwo", "url": "https://x.invalid/h", "body": "游记兜底"},
+        {"source_id": "s3", "platform": "官网", "url": "https://x.invalid/i", "body": "官方兜底"},
+    ]
+    old_images = [
+        {
+            "url": "https://img.invalid/old-a.jpg",
+            "platform": "Wikimedia Commons",
+            "license": "CC-BY-SA 4.0",
+            "credit": "Ann",
+            "sourceUrl": "https://img.invalid/old-a.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "authorizationProof": "https://img.invalid/old-a.jpg#rights",
+            "usageScope": "app_publish",
+            "caption": "稻城亚丁仙乃日雪山",
+            "relevance": "直接呈现稻城亚丁仙乃日雪山实景",
+        },
+        {
+            "url": "https://img.invalid/old-b.jpg",
+            "platform": "Wikimedia Commons",
+            "license": "CC-BY-SA 4.0",
+            "credit": "Bob",
+            "sourceUrl": "https://img.invalid/old-b.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "authorizationProof": "https://img.invalid/old-b.jpg#rights",
+            "usageScope": "app_publish",
+            "caption": "稻城亚丁牛奶海",
+            "relevance": "直接呈现稻城亚丁牛奶海高山湖泊",
+        },
+    ]
+    _write_lane_plans(batch, sources, old_images)
+
+    def _fake_payload(url, *, min_bytes=3000):
+        body = img_a if url.endswith("old-a.jpg") else img_b
+        import hashlib as _h
+
+        return {
+            "url": url,
+            "ext": ".jpg",
+            "bytes": body,
+            "contentType": "image/jpeg",
+            "sha256": _h.sha256(body).hexdigest(),
+        }
+
+    def _fake_source_fetch(url: str, **_kwargs):
+        return {
+            "url": url,
+            "statusCode": 200,
+            "htmlBytes": b"<html></html>",
+            "text": (
+                f"{_EID} 景区预约、观光车、徒步动线、天气和返程时间都需要提前确认。"
+                f"核心景观集中在雪山、草甸和海子段落，上午进入更利于避开拥堵。"
+                f"高海拔区域温差明显，雨具、防晒和补给都要按长线徒步准备。"
+            ),
+            "sha256": "sha-source",
+        }
+
+    orig_fetch = handler_mod.fetch_image_payload
+    orig_source = handler_mod.fetch_source_payload
+    try:
+        handler_mod.fetch_image_payload = _fake_payload
+        handler_mod.fetch_source_payload = _fake_source_fetch
+        handle_download(argparse.Namespace(task=_TASK, batch=batch, entity_ids=_EID, entity_type="景区"))
+
+        obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
+        previous_image_units = {
+            unit.name
+            for unit in iter_source_units(obj)
+            if read_json(unit / "meta.json").get("researchLane") == "image"
+        }
+        assert previous_image_units
+
+        new_images = [
+            {
+                **old_images[0],
+                "url": "https://img.invalid/new-a.jpg",
+                "sourceUrl": "https://img.invalid/new-a.jpg",
+                "authorizationProof": "https://img.invalid/new-a.jpg#rights",
+            },
+            {
+                **old_images[1],
+                "url": "https://img.invalid/new-b.jpg",
+                "sourceUrl": "https://img.invalid/new-b.jpg",
+                "authorizationProof": "https://img.invalid/new-b.jpg#rights",
+            },
+        ]
+        _write_lane_plans(batch, sources, new_images)
+        handler_mod.fetch_image_payload = lambda url, *, min_bytes=3000: None
+        try:
+            handle_download(argparse.Namespace(task=_TASK, batch=batch, entity_ids=_EID, entity_type="景区"))
+        except SystemExit as exc:
+            assert exc.code == 1
+        else:
+            raise AssertionError("expected failed image repair to fail the download gate")
+    finally:
+        handler_mod.fetch_image_payload = orig_fetch
+        handler_mod.fetch_source_payload = orig_source
+
+    obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
+    current_image_units = {
+        unit.name
+        for unit in iter_source_units(obj)
+        if read_json(unit / "meta.json").get("researchLane") == "image"
+    }
+    assert previous_image_units.issubset(current_image_units)
+
+
+def test_handle_download_isolates_rejected_sources_when_retained_bundle_is_sufficient():
+    from _common.source_unit import iter_source_units, resolve_entity_object_dir
+
+    batch = "b_reject_isolation"
+    ensure_batch_layout(_TASK, batch, "download")
+    img_a = _real_jpeg(31)
+    img_b = _real_jpeg(32)
+    _write_lane_plans(
+        batch,
+        [
+            {"source_id": "s1", "platform": "baike", "url": "https://x.invalid/good1", "body": "正文兜底"},
+            {"source_id": "s2", "platform": "mafengwo", "url": "https://x.invalid/good2", "body": "游记兜底"},
+            {"source_id": "s3", "platform": "官网", "url": "https://x.invalid/good3", "body": "官方兜底"},
+            {"source_id": "s_bad", "platform": "sogou", "url": "https://x.invalid/bad", "body": ""},
+        ],
+        [
+            {
+                "url": "https://img.invalid/a.jpg",
+                "platform": "Wikimedia Commons",
+                "license": "CC-BY-SA 4.0",
+                "credit": "Ann",
+                "sourceUrl": "https://img.invalid/a.jpg",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "usageScope": "app_publish",
+                "caption": "稻城亚丁仙乃日雪山",
+                "relevance": "直接呈现稻城亚丁仙乃日雪山实景",
+            },
+            {
+                "url": "https://img.invalid/b.jpg",
+                "platform": "Wikimedia Commons",
+                "license": "CC-BY-SA 4.0",
+                "credit": "Bob",
+                "sourceUrl": "https://img.invalid/b.jpg",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "usageScope": "app_publish",
+                "caption": "稻城亚丁牛奶海",
+                "relevance": "直接呈现稻城亚丁牛奶海高山湖泊",
+            },
+        ],
+    )
+
+    def _fake_payload(url, *, min_bytes=3000):
+        body = img_a if url.endswith("a.jpg") else img_b
+        import hashlib as _h
+
+        return {
+            "url": url,
+            "ext": ".jpg",
+            "bytes": body,
+            "contentType": "image/jpeg",
+            "sha256": _h.sha256(body).hexdigest(),
+        }
+
+    def _fake_source_fetch(url: str, **_kwargs):
+        if url.endswith("/bad"):
+            return {
+                "url": url,
+                "statusCode": 200,
+                "htmlBytes": b"<html></html>",
+                "text": "验证码",
+                "sha256": "sha-bad",
+            }
+        return {
+            "url": url,
+            "statusCode": 200,
+            "htmlBytes": b"<html></html>",
+            "text": (
+                f"{_EID} 景区开放时间、门票预约、观光车和徒步路线都需要提前确认。"
+                f"上午进入景区适合先看雪山和湖泊，下午留出返程时间。"
+                f"高海拔区域风大，补给、雨具和保暖衣物都要提前准备。"
+            ),
+            "sha256": "sha-good",
+        }
+
+    orig_fetch = handler_mod.fetch_image_payload
+    orig_source = handler_mod.fetch_source_payload
+    try:
+        handler_mod.fetch_image_payload = _fake_payload
+        handler_mod.fetch_source_payload = _fake_source_fetch
+        handle_download(argparse.Namespace(task=_TASK, batch=batch, entity_ids=_EID, entity_type="景区"))
+    finally:
+        handler_mod.fetch_image_payload = orig_fetch
+        handler_mod.fetch_source_payload = orig_source
+
+    obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
+    source_names = [unit.name for unit in iter_source_units(obj)]
+    assert "04.s_bad" not in source_names
+    rejected = obj / "1.download" / "rejected_sources" / "04.s_bad"
+    assert rejected.is_dir()
+    assert (rejected / "source.quality.json").is_file()
 
 
 def test_handle_download_blocks_unsafe_images_before_persist():
@@ -416,7 +783,7 @@ def test_handle_download_blocks_unsafe_images_before_persist():
         def blocks_image_publish(self):
             return True
 
-    def _fake_source_fetch(url: str):
+    def _fake_source_fetch(url: str, **_kwargs):
         return {
             "url": url,
             "statusCode": 200,

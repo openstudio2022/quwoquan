@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,10 +20,12 @@ import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/search/models/search_result_tab_spec.dart';
+import 'package:quwoquan_app/ui/search/pages/location_place_landing_page.dart';
 import 'package:quwoquan_app/ui/search/services/search_network_results_media_wiring.dart';
 
 class _SearchResultTokens {
@@ -67,15 +71,26 @@ class _SearchNetworkResultsPageState
   AssistantSearchResultView? _xiaoquResult;
   List<PostSearchItemView> _contentResults = const <PostSearchItemView>[];
   List<SearchHit> _groupResults = const <SearchHit>[];
-  List<SearchHit> _messageResults = const <SearchHit>[];
-  List<SearchHit> _contactResults = const <SearchHit>[];
   List<SearchHit> _locationResults = const <SearchHit>[];
-  List<SearchHit> _userResults = const <SearchHit>[];
+  // 云侧内容命中的排序/封面/理由元信息（按 postId 索引），由 [_contentItemsFromResponse]
+  // 解析云侧 SearchHit 时填充；结果页据此消费 rankPosition/coverWidth/coverHeight/rankReasons
+  // （R-001/R-003）。本地/mock 命中无云信号时为空，回退既有端侧渲染。
+  Map<String, _ContentCloudMeta> _contentCloudMetaById =
+      const <String, _ContentCloudMeta>{};
+  // 云侧相关搜索词（relatedTerms）；非空时「相关搜索」卡优先消费，空则回退既有派生词。
+  List<String> _relatedTerms = const <String>[];
   List<SearchDegradeSignal> _degradeSignals = const <SearchDegradeSignal>[];
+  bool _showAllConnections = false;
+  static const int _connectionCollapsedCap = 4;
+  late final DateTime _pageEnteredAt;
+  bool _didTrackPageImpression = false;
+  ContentBehaviorTracker? _behaviorTracker;
+  String? _feedRequestIdAtEnter;
 
   @override
   void initState() {
     super.initState();
+    _pageEnteredAt = DateTime.now();
     _query = widget.launchContext.prefilledQuery.trim();
     _controller = TextEditingController(text: _query);
     _focusNode = FocusNode();
@@ -92,15 +107,59 @@ class _SearchNetworkResultsPageState
         return;
       }
       _focusNode.requestFocus();
+      _trackPageImpressionIfNeeded();
     });
   }
 
   @override
   void dispose() {
+    _trackPageDwell();
     _debounceTimer?.cancel();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _trackPageImpressionIfNeeded() {
+    if (_didTrackPageImpression) {
+      return;
+    }
+    _didTrackPageImpression = true;
+    _behaviorTracker = ref.read(contentBehaviorTrackerProvider);
+    _feedRequestIdAtEnter =
+        ref.read(feedSessionProvider.notifier).currentFeedRequestId;
+    _behaviorTracker!.trackImpression(
+      'search_network_results',
+      contentType: 'search_page',
+      referralSource: ReferralSource.search,
+      feedRequestId: _feedRequestIdAtEnter,
+      tags: <String>[
+        widget.launchContext.entrySurfaceId,
+        _activeTabId,
+        if (_query.trim().isNotEmpty) _query.trim(),
+      ],
+    );
+  }
+
+  void _trackPageDwell() {
+    final tracker = _behaviorTracker;
+    if (tracker == null) {
+      return;
+    }
+    final elapsedSeconds =
+        DateTime.now().difference(_pageEnteredAt).inMilliseconds / 1000.0;
+    tracker.trackDwell(
+      'search_network_results',
+      durationSeconds: elapsedSeconds,
+      contentType: 'search_page',
+      referralSource: ReferralSource.search,
+      feedRequestId: _feedRequestIdAtEnter,
+      tags: <String>[
+        widget.launchContext.entrySurfaceId,
+        _activeTabId,
+        if (_query.trim().isNotEmpty) _query.trim(),
+      ],
+    );
   }
 
   @override
@@ -295,7 +354,7 @@ class _SearchNetworkResultsPageState
     required _SearchNetworkTab activeTab,
   }) {
     List<Widget> withDegradeBanner(List<Widget> children) {
-      final banner = _buildDegradeBanner(isDark: isDark);
+      final banner = _buildDegradeBanner();
       if (banner == null) {
         return children;
       }
@@ -355,27 +414,67 @@ class _SearchNetworkResultsPageState
         )
       else if (contentItems.isEmpty)
         _StatusMessage(text: '没有找到相关${activeTab.label}结果', isDark: isDark)
-      else if (_activeTabId == _tabArticle)
-        ..._buildContentResultTiles(
-          isDark: isDark,
-          fgSecondary: fgSecondary,
-          items: contentItems,
-        )
       else
         ..._buildContentMasonryTiles(
           isDark: isDark,
           fgSecondary: fgSecondary,
           items: contentItems,
+          relatedSearchCard: _buildRelatedSearchCard(isDark: isDark),
         ),
     ]);
   }
 
-  Widget? _buildDegradeBanner({required bool isDark}) {
-    if (_degradeSignals.isEmpty) {
+  bool get _hasRenderableResultsForActiveTab {
+    if (_activeTabId == _tabIntersection) {
+      return _groupResults.isNotEmpty ||
+          _connectedGroupHits.isNotEmpty ||
+          _discoveryGroupHits.isNotEmpty ||
+          _contentResults.isNotEmpty ||
+          _intersectionEntityHit != null ||
+          _connectedLocations.isNotEmpty;
+    }
+    if (_activeTabId == _tabAll) {
+      return _contentResults.isNotEmpty || _entityTopResult() != null;
+    }
+    return _contentResults.isNotEmpty;
+  }
+
+  List<SearchDegradeSignal> _mergeDegradeSignals(
+    Iterable<SearchResponse> responses,
+  ) {
+    final seen = <String>{};
+    final merged = <SearchDegradeSignal>[];
+    for (final response in responses) {
+      for (final signal in response.degradeSignals) {
+        final key = '${signal.code}|${signal.objectType?.wireValue ?? ''}';
+        if (seen.add(key)) {
+          merged.add(signal);
+        }
+      }
+    }
+    return merged;
+  }
+
+  Widget? _buildDegradeBanner() {
+    if (_degradeSignals.isEmpty || _hasRenderableResultsForActiveTab) {
       return null;
     }
-    final first = _degradeSignals.first;
-    return _StatusMessage(text: '部分结果已降级：${first.message}', isDark: isDark);
+    final message = _degradeSignals
+        .map((signal) => signal.message.trim())
+        .firstWhere(
+          (value) => value.isNotEmpty,
+          orElse: () => '部分结果暂时不可用，请稍后重试。',
+        );
+    return AppTransientErrorNotice(
+      semantic: UiErrorSemantic(
+        category: UiErrorCategory.sectionLoad,
+        scope: UiErrorScope.section,
+        title: message,
+        message: message,
+        presentation: UiErrorPresentation.transientNotice,
+        tone: UiErrorTone.caution,
+      ),
+    );
   }
 
   List<Widget> _buildAllResultChildren({
@@ -390,109 +489,28 @@ class _SearchNetworkResultsPageState
     }
 
     final sections = <Widget>[];
-    void addSection({
-      required String title,
-      required String description,
-      required int count,
-      required List<Widget> tiles,
-    }) {
-      if (count == 0 || tiles.isEmpty) {
-        return;
-      }
+    final entity = _entityTopResult();
+    if (entity != null) {
+      sections.add(
+        _EntityTopResultCard(
+          entity: entity,
+          isDark: isDark,
+          onTap: () => _openHomepage(entity.homepageId),
+        ),
+      );
+    }
+    final relatedSearchCard = _buildRelatedSearchCard(isDark: isDark);
+    final mixedTiles = _buildContentMasonryTiles(
+      isDark: isDark,
+      fgSecondary: fgSecondary,
+      items: _contentResults,
+      relatedSearchCard: relatedSearchCard,
+    );
+    if (mixedTiles.isNotEmpty) {
       if (sections.isNotEmpty) {
         sections.add(SizedBox(height: AppSpacing.containerLg));
       }
-      sections.add(
-        _CategorySummaryCard(
-          title: title,
-          description: description,
-          count: count,
-          isDark: isDark,
-        ),
-      );
-      sections.addAll(tiles);
-    }
-
-    addSection(
-      title: '聊天记录',
-      description: '已连接',
-      count: _messageResults.length,
-      tiles: _buildGenericHitTiles(
-        hits: _messageResults.take(3).toList(growable: false),
-        emptyEyebrow: '聊天记录',
-        isDark: isDark,
-        fgSecondary: fgSecondary,
-      ),
-    );
-    addSection(
-      title: '联系人',
-      description: '已连接',
-      count: _contactResults.length,
-      tiles: _buildGenericHitTiles(
-        hits: _contactResults.take(4).toList(growable: false),
-        emptyEyebrow: '联系人',
-        isDark: isDark,
-        fgSecondary: fgSecondary,
-      ),
-    );
-    addSection(
-      title: '已加入圈子',
-      description: '已连接',
-      count: _connectedGroupHits.length,
-      tiles: _buildCompactHitGrid(
-        hits: _connectedGroupHits.take(3).toList(growable: false),
-        isDark: isDark,
-        fallbackIcon: CupertinoIcons.person_3_fill,
-      ),
-    );
-    addSection(
-      title: '已关注地点',
-      description: '已连接',
-      count: _connectedLocationHits.length,
-      tiles: _buildCompactHitGrid(
-        hits: _connectedLocationHits.take(3).toList(growable: false),
-        isDark: isDark,
-        fallbackIcon: CupertinoIcons.location_solid,
-      ),
-    );
-    addSection(
-      title: '已关注的人',
-      description: '已连接',
-      count: _connectedUserHits.length,
-      tiles: _buildCompactHitGrid(
-        hits: _connectedUserHits.take(4).toList(growable: false),
-        isDark: isDark,
-        fallbackIcon: CupertinoIcons.person_crop_circle_fill,
-      ),
-    );
-    addSection(
-      title: '已互动内容',
-      description: '赞评转过的内容优先',
-      count: _connectedContentItems.length,
-      tiles: _buildContentResultTiles(
-        isDark: isDark,
-        fgSecondary: fgSecondary,
-        items: _connectedContentItems.take(2).toList(growable: false),
-      ),
-    );
-
-    final discoverySections = _buildDiscoverySections(
-      isDark: isDark,
-      fgSecondary: fgSecondary,
-    );
-    if (discoverySections.isNotEmpty) {
-      if (sections.isNotEmpty) {
-        sections.add(SizedBox(height: AppSpacing.containerXl));
-      }
-      sections.add(
-        _CategorySummaryCard(
-          title: '发现区',
-          description: '未连接结果按类别比例混排',
-          count: _discoveryResultCount,
-          isDark: isDark,
-        ),
-      );
-      sections.addAll(discoverySections);
+      sections.addAll(mixedTiles);
     }
 
     if (sections.isEmpty) {
@@ -551,486 +569,418 @@ class _SearchNetworkResultsPageState
   }) {
     if (_isLoading) {
       return <Widget>[
-        _StatusMessage(text: '正在加载交集结果', isDark: isDark, loading: true),
+        _StatusMessage(text: '正在整理与你的交集', isDark: isDark, loading: true),
       ];
     }
-    final connectedCount =
-        _messageResults.length +
-        _contactResults.length +
-        _connectedGroupHits.length +
-        _connectedUserHits.length;
-    final sections = <Widget>[
-      _IntersectionOverviewCard(
-        isDark: isDark,
-        sharedInterestCount:
-            _discoveryContentItems.length + _discoveryGroupHits.length,
-        sharedCircleCount: _groupResults.length,
-        sharedFollowingCount: _userResults.length,
-        sharedDiscussionCount: _messageResults.length,
-      ),
-      SizedBox(height: AppSpacing.containerLg),
-    ];
-    void addIntersectionSection({
-      required String title,
-      required String description,
-      required int count,
-      required List<Widget> tiles,
-    }) {
-      if (count == 0 || tiles.isEmpty) {
-        return;
-      }
-      if (sections.length > 2) {
-        sections.add(SizedBox(height: AppSpacing.containerLg));
-      }
+
+    final sections = <Widget>[];
+
+    final connections = _connectionCardModels();
+    if (connections.isNotEmpty) {
+      final hasMore = connections.length > _connectionCollapsedCap;
+      final visible = _showAllConnections
+          ? connections
+          : connections.take(_connectionCollapsedCap).toList(growable: false);
       sections.add(
-        _CategorySummaryCard(
-          title: title,
-          description: description,
-          count: count,
-          isDark: isDark,
+        _SearchResultSectionHeader(
+          title: '已形成的连接',
+          subtitle: '基于你的互动、关注和加入',
+          actionLabel: hasMore ? (_showAllConnections ? '收起' : '查看全部') : null,
+          onAction: hasMore
+              ? () => setState(() => _showAllConnections = !_showAllConnections)
+              : null,
         ),
       );
-      sections.addAll(tiles);
-    }
-
-    addIntersectionSection(
-      title: '感兴趣圈子',
-      description: '按共同兴趣排序',
-      count: _groupResults.length,
-      tiles: _buildCompactHitGrid(
-        hits: _groupResults.take(3).toList(growable: false),
-        isDark: isDark,
-        fallbackIcon: CupertinoIcons.person_3_fill,
-        reasonLabel: '共同兴趣：摄影',
-      ),
-    );
-    addIntersectionSection(
-      title: '感兴趣地点',
-      description: '按共同地点排序',
-      count: _locationResults.length,
-      tiles: _buildCompactHitGrid(
-        hits: _locationResults.take(3).toList(growable: false),
-        isDark: isDark,
-        fallbackIcon: CupertinoIcons.location_solid,
-        reasonLabel: '12个交集',
-      ),
-    );
-    addIntersectionSection(
-      title: '同趣的人',
-      description: '按共同兴趣排序',
-      count: _userResults.length,
-      tiles: _buildCompactHitGrid(
-        hits: _userResults.take(4).toList(growable: false),
-        isDark: isDark,
-        fallbackIcon: CupertinoIcons.person_crop_circle_fill,
-        reasonLabel: '共同兴趣 3 个',
-      ),
-    );
-    addIntersectionSection(
-      title: '已互动内容',
-      description: '赞评转过的内容',
-      count: _connectedContentItems.length,
-      tiles: _buildContentResultTiles(
-        isDark: isDark,
-        fgSecondary: fgSecondary,
-        items: _connectedContentItems,
-      ),
-    );
-
-    final flow = _buildDiscoverySections(
-      isDark: isDark,
-      fgSecondary: fgSecondary,
-      intersectionMode: true,
-    );
-    if (flow.isNotEmpty) {
-      sections.add(SizedBox(height: AppSpacing.containerXl));
-      sections.add(
-        _CategorySummaryCard(
-          title: '交集发现流',
-          description: connectedCount > 0 ? '按交集强度继续发现' : '按共同兴趣继续发现',
-          count: _discoveryResultCount,
-          isDark: isDark,
+      sections.add(SizedBox(height: AppSpacing.intraGroupMd));
+      sections.addAll(
+        _buildIntersectionGrid(
+          cells: visible
+              .map(
+                (model) => _IntersectionCard(
+                  model: model,
+                  isDark: isDark,
+                  onTap: () => _openIntersectionTarget(model),
+                ),
+              )
+              .toList(growable: false),
         ),
       );
-      sections.addAll(flow);
     }
-    if (sections.length <= 2) {
-      return <Widget>[_StatusMessage(text: '没有找到相关交集结果', isDark: isDark)];
+
+    final entity = _intersectionEntityResult();
+    final discoverCells = _discoverCells(isDark: isDark);
+    if (entity != null || discoverCells.isNotEmpty) {
+      if (sections.isNotEmpty) {
+        sections.add(SizedBox(height: AppSpacing.containerXl));
+      }
+      sections.add(
+        _SearchResultSectionHeader(
+          title: '发现更多交集',
+          subtitle: _query.trim().isEmpty
+              ? '为你推荐更多相关内容'
+              : '为你推荐更多与“${_query.trim()}”相关的内容',
+        ),
+      );
+      sections.add(SizedBox(height: AppSpacing.intraGroupMd));
+      if (entity != null) {
+        sections.add(
+          _EntityTopResultCard(
+            entity: entity,
+            isDark: isDark,
+            onTap: () => _openHomepage(entity.homepageId),
+          ),
+        );
+        if (discoverCells.isNotEmpty) {
+          sections.add(SizedBox(height: AppSpacing.intraGroupMd));
+        }
+      }
+      sections.addAll(_buildIntersectionGrid(cells: discoverCells));
+    }
+
+    if (sections.isEmpty) {
+      return <Widget>[_StatusMessage(text: '还没有找到和你相关的交集', isDark: isDark)];
     }
     return sections;
   }
 
-  List<Widget> _buildDiscoverySections({
-    required bool isDark,
-    required Color fgSecondary,
-    bool intersectionMode = false,
-  }) {
-    final imageItems = _discoveryContentItems
-        .where(
-          (item) => item.contentType == 'image' || item.contentType == 'photo',
-        )
-        .toList(growable: false);
-    final videoItems = _discoveryContentItems
-        .where((item) => item.contentType == 'video')
-        .toList(growable: false);
-    final articleItems = _discoveryContentItems
-        .where((item) => item.contentType == 'article')
-        .toList(growable: false);
-    final buckets = <_DiscoverySectionBucket>[
-      _discoveryBucketForHits(
-        title: intersectionMode ? '交集圈子' : '圈子',
-        description: intersectionMode ? '共同圈子与兴趣' : '未加入圈子',
-        hits: _discoveryGroupHits,
-        chunkSize: 3,
-        isDark: isDark,
-        fallbackIcon: CupertinoIcons.person_3_fill,
-        reasonLabel: intersectionMode ? '共同圈子：旅行圈' : null,
-      ),
-      _discoveryBucketForHits(
-        title: intersectionMode ? '交集地点' : '地点',
-        description: intersectionMode ? '共同关注与讨论地点' : '未关注地点',
-        hits: _discoveryLocationHits,
-        chunkSize: 3,
-        isDark: isDark,
-        fallbackIcon: CupertinoIcons.location_solid,
-        reasonLabel: intersectionMode ? '12个交集' : null,
-      ),
-      _discoveryBucketForHits(
-        title: intersectionMode ? '同趣的人' : '人',
-        description: intersectionMode ? '共同兴趣更强的人' : '尚未连接的人',
-        hits: _discoveryUserHits,
-        chunkSize: 4,
-        isDark: isDark,
-        fallbackIcon: CupertinoIcons.person_crop_circle_fill,
-        reasonLabel: intersectionMode ? '共同兴趣：摄影' : null,
-      ),
-      _discoveryBucketForContent(
-        title: '图片',
-        description: intersectionMode ? '带交集理由的图片' : '未互动图片',
-        items: imageItems,
-        chunkSize: 4,
-        isDark: isDark,
-        fgSecondary: fgSecondary,
-        masonry: true,
-      ),
-      _discoveryBucketForContent(
-        title: '视频',
-        description: intersectionMode ? '带交集理由的视频' : '未互动视频',
-        items: videoItems,
-        chunkSize: 4,
-        isDark: isDark,
-        fgSecondary: fgSecondary,
-        masonry: true,
-      ),
-      _discoveryBucketForContent(
-        title: '长文',
-        description: intersectionMode ? '带交集理由的长文' : '未互动长文',
-        items: articleItems,
-        chunkSize: 2,
-        isDark: isDark,
-        fgSecondary: fgSecondary,
-        masonry: false,
-      ),
-    ].where((bucket) => bucket.sections.isNotEmpty).toList(growable: false);
+  List<Widget> _buildIntersectionGrid({required List<Widget> cells}) =>
+      _buildAdaptiveMasonry(cells: cells);
 
-    final mixed = <Widget>[];
-    final working = buckets
-        .map((bucket) => bucket.copy())
-        .toList(growable: false);
-    while (working.any((bucket) => bucket.sections.isNotEmpty)) {
-      working.sort(
-        (left, right) => right.sections.length.compareTo(left.sections.length),
-      );
-      final next = working.firstWhere((bucket) => bucket.sections.isNotEmpty);
-      if (mixed.isNotEmpty) {
-        mixed.add(SizedBox(height: AppSpacing.containerLg));
-      }
-      mixed.add(next.sections.removeAt(0));
+  // 双列瀑布流：每个 cell 按自身内容高度排布，避免固定宽高比造成的卡片底部留白。
+  List<Widget> _buildAdaptiveMasonry({required List<Widget> cells}) {
+    if (cells.isEmpty) {
+      return const <Widget>[];
     }
-    return mixed;
-  }
-
-  _DiscoverySectionBucket _discoveryBucketForHits({
-    required String title,
-    required String description,
-    required List<SearchHit> hits,
-    required int chunkSize,
-    required bool isDark,
-    required IconData fallbackIcon,
-    String? reasonLabel,
-  }) {
-    final sections = <Widget>[];
-    for (var start = 0; start < hits.length; start += chunkSize) {
-      final chunk = hits.skip(start).take(chunkSize).toList(growable: false);
-      sections.add(
-        _DiscoveryGroupBlock(
-          title: title,
-          description: description,
-          count: chunk.length,
-          isDark: isDark,
-          child: Column(
-            children: _buildCompactHitGrid(
-              hits: chunk,
-              isDark: isDark,
-              fallbackIcon: fallbackIcon,
-              reasonLabel: reasonLabel,
-            ),
-          ),
-        ),
-      );
-    }
-    return _DiscoverySectionBucket(sections);
-  }
-
-  _DiscoverySectionBucket _discoveryBucketForContent({
-    required String title,
-    required String description,
-    required List<PostSearchItemView> items,
-    required int chunkSize,
-    required bool isDark,
-    required Color fgSecondary,
-    required bool masonry,
-  }) {
-    final sections = <Widget>[];
-    for (var start = 0; start < items.length; start += chunkSize) {
-      final chunk = items.skip(start).take(chunkSize).toList(growable: false);
-      sections.add(
-        _DiscoveryGroupBlock(
-          title: title,
-          description: description,
-          count: chunk.length,
-          isDark: isDark,
-          child: Column(
-            children: masonry
-                ? _buildContentMasonryTiles(
-                    isDark: isDark,
-                    fgSecondary: fgSecondary,
-                    items: chunk,
-                  )
-                : _buildContentResultTiles(
-                    isDark: isDark,
-                    fgSecondary: fgSecondary,
-                    items: chunk,
-                  ),
-          ),
-        ),
-      );
-    }
-    return _DiscoverySectionBucket(sections);
-  }
-
-  List<Widget> _buildContentResultTiles({
-    required bool isDark,
-    required Color fgSecondary,
-    List<PostSearchItemView>? items,
-  }) {
-    final cards = (items ?? _contentResults)
-        .map(_NetworkResultCardModel.fromSearchItem)
-        .toList(growable: false);
     return <Widget>[
-      for (var i = 0; i < cards.length; i++) ...[
-        PostPreviewListTile(
-          isDark: isDark,
-          title: cards[i].title,
-          supportingText: cards[i].supportingText,
-          coverUrl: cards[i].coverUrl,
-          eyebrowText: cards[i].eyebrowText,
-          showVideoBadge: cards[i].showVideoBadge,
-          footer: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  cards[i].footerLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosCaption1,
-                    color: fgSecondary,
-                  ),
-                ),
-              ),
-              SizedBox(width: AppSpacing.intraGroupXs),
-              PostCardMetric(
-                icon: CupertinoIcons.heart,
-                label: '${cards[i].likeCount}',
-                color: fgSecondary,
-              ),
-            ],
-          ),
-          onTap: () {
-            unawaited(_openPost(cards[i].postId));
-          },
-        ),
-        if (i != cards.length - 1) SizedBox(height: AppSpacing.containerSm),
-      ],
+      MasonryGridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        crossAxisCount: 2,
+        crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
+        mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+        itemCount: cells.length,
+        itemBuilder: (context, index) => cells[index],
+      ),
     ];
+  }
+
+  // 已形成的连接：展示用户与搜索词之间已经存在的真实连接（connectionState=connected）。
+  // 仅展示连接态本身（你已加入 / 你关注过 / 你互动过），footer 用云侧真实计数，
+  // 不拼装交集句、不伪造好友数、不编造互动数。
+  List<_IntersectionCardModel> _connectionCardModels() {
+    final models = <_IntersectionCardModel>[];
+    for (final hit in _connectedGroupHits) {
+      final card = _GroupResultCardModel.fromHit(hit);
+      models.add(
+        _IntersectionCardModel(
+          targetType: _IntersectionTargetType.circle,
+          targetId: card.circleId,
+          coverUrl: card.coverUrl,
+          categoryLabel: '圈子',
+          categoryIcon: CupertinoIcons.person_3_fill,
+          title: hit.title,
+          reasonIcon: CupertinoIcons.person_2_fill,
+          reasonText: '你已加入',
+          footerText: card.footerLabel,
+        ),
+      );
+    }
+    for (final hit in _connectedLocations) {
+      // 一方地点 location.place：未绑定实体主页，落地到临时地点卡（WP-D / R-S05e-1），
+      // 不再误导向 homepage 详情。
+      models.add(
+        _IntersectionCardModel(
+          targetType: _IntersectionTargetType.locationPlace,
+          targetId: hit.objectId,
+          coverUrl: '',
+          categoryLabel: '地点',
+          categoryIcon: CupertinoIcons.location_solid,
+          title: hit.title,
+          reasonIcon: CupertinoIcons.location_solid,
+          reasonText: '你关注过',
+          footerText: hit.subtitle?.trim() ?? '',
+        ),
+      );
+    }
+    for (final item in _connectedContentItems) {
+      final isVideo = item.contentType == 'video';
+      final card = _NetworkResultCardModel.fromSearchItem(item);
+      models.add(
+        _IntersectionCardModel(
+          targetType: _IntersectionTargetType.post,
+          targetId: item.postId,
+          coverUrl: item.coverUrl ?? '',
+          categoryLabel: isVideo ? '视频' : '图片',
+          categoryIcon: isVideo
+              ? CupertinoIcons.play_rectangle_fill
+              : CupertinoIcons.photo_fill,
+          title: card.title,
+          reasonIcon: isVideo
+              ? CupertinoIcons.chat_bubble_fill
+              : CupertinoIcons.heart_fill,
+          reasonText: isVideo ? '你互动过' : '你点赞过',
+          footerText: card.footerLabel,
+          metricLabel: item.likeCount > 0 ? '${item.likeCount}' : null,
+          metricIcon: CupertinoIcons.heart,
+          showVideoBadge: isVideo,
+        ),
+      );
+    }
+    return models;
+  }
+
+  // 发现更多交集：基于已有连接继续延展的结果，混入相关搜索卡。
+  List<Widget> _discoverCells({required bool isDark}) {
+    final models = _discoverCardModels();
+    final cells = <Widget>[
+      for (final model in models)
+        _IntersectionCard(
+          model: model,
+          isDark: isDark,
+          onTap: () => _openIntersectionTarget(model),
+        ),
+    ];
+    final related = _buildRelatedSearchCard(isDark: isDark);
+    if (related != null) {
+      final insertAt = (cells.length / 2).floor();
+      cells.insert(insertAt, related);
+    }
+    return cells;
+  }
+
+  List<_IntersectionCardModel> _discoverCardModels() {
+    final models = <_IntersectionCardModel>[];
+    for (final item in _discoveryContentItems) {
+      final card = _NetworkResultCardModel.fromSearchItem(item);
+      final isVideo = item.contentType == 'video';
+      final isArticle = item.contentType == 'article';
+      // §3：发现/交集线索区的交集句只来自云侧 primaryText；无 primaryText 不拼装。
+      final intersectionSentence = item.intersectionReason?.primaryText.trim() ?? '';
+      models.add(
+        _IntersectionCardModel(
+          targetType: _IntersectionTargetType.post,
+          targetId: item.postId,
+          coverUrl: item.coverUrl ?? '',
+          categoryLabel: isVideo ? '视频' : (isArticle ? '长文' : '图片'),
+          categoryIcon: isVideo
+              ? CupertinoIcons.play_rectangle_fill
+              : (isArticle
+                    ? CupertinoIcons.doc_text_fill
+                    : CupertinoIcons.photo_fill),
+          title: card.title,
+          reasonIcon: CupertinoIcons.sparkles,
+          reasonText: intersectionSentence,
+          footerText: card.footerLabel,
+          metricLabel: item.likeCount > 0 ? '${item.likeCount}' : null,
+          metricIcon: CupertinoIcons.heart,
+          showVideoBadge: isVideo,
+        ),
+      );
+    }
+    for (final hit in _discoveryGroupHits) {
+      final card = _GroupResultCardModel.fromHit(hit);
+      models.add(
+        _IntersectionCardModel(
+          targetType: _IntersectionTargetType.circle,
+          targetId: card.circleId,
+          coverUrl: card.coverUrl,
+          categoryLabel: '圈子',
+          categoryIcon: CupertinoIcons.person_3_fill,
+          title: hit.title,
+          reasonIcon: CupertinoIcons.person_2_fill,
+          reasonText: _hitIntersectionPrimaryText(hit),
+          footerText: card.footerLabel,
+        ),
+      );
+    }
+    return models;
+  }
+
+  // 交集 Tab 顶部实体卡：只消费命中实体真实字段；连接说明只来自云侧 primaryText，
+  // 无 primaryText 不展示句子，关注/内容计数不在端侧编造。
+  _EntityTopResultModel? _intersectionEntityResult() {
+    final hit = _intersectionEntityHit;
+    if (hit == null) {
+      return null;
+    }
+    final primaryText = _hitIntersectionPrimaryText(hit);
+    return _EntityTopResultModel(
+      homepageId: hit.objectId,
+      title: hit.title,
+      badge: '地点',
+      subtitle: hit.subtitle ?? '地点主页',
+      connectionReason: primaryText.isNotEmpty ? primaryText : null,
+      description: hit.snippet ?? '',
+      meta: '',
+      actionLabel: '访问主页',
+    );
+  }
+
+  void _openIntersectionTarget(_IntersectionCardModel model) {
+    final id = model.targetId.trim();
+    switch (model.targetType) {
+      case _IntersectionTargetType.circle:
+        if (id.isNotEmpty) {
+          context.push(
+            AppRoutePaths.circleDetail(id: id),
+            extra: const CircleDetailPageRouteExtra(
+              referralSource: ReferralSource.search,
+            ),
+          );
+        }
+      case _IntersectionTargetType.homepage:
+        _openHomepage(id);
+      case _IntersectionTargetType.locationPlace:
+        _openLocationPlace(
+          placeId: id,
+          placeName: model.title,
+          address: model.footerText,
+        );
+      case _IntersectionTargetType.post:
+        unawaited(_openPost(id));
+      case _IntersectionTargetType.user:
+        if (id.isNotEmpty) {
+          context.push(AppRoutePaths.userProfile(username: id));
+        }
+    }
+  }
+
+  void _openLocationPlace({
+    required String placeId,
+    required String placeName,
+    required String address,
+  }) {
+    if (placeId.trim().isEmpty) {
+      return;
+    }
+    context.push(
+      AppRoutePaths.locationPlaceLanding(placeId: placeId),
+      extra: LocationPlaceLandingPageRouteExtra(
+        placeName: placeName,
+        address: address,
+        referralSource: ReferralSource.search,
+      ),
+    );
+  }
+
+  Widget? _buildRelatedSearchCard({required bool isDark}) {
+    final terms = _relatedSearchTerms();
+    if (terms.isEmpty) {
+      return null;
+    }
+    return _RelatedSearchCard(
+      card: RelatedSearchTermCardView(terms: terms).limited(),
+      isDark: isDark,
+      onTap: _submitRelatedSearch,
+    );
+  }
+
+  List<NetworkSearchSuggestion> _relatedSearchTerms() {
+    final query = _query.trim();
+    if (query.isEmpty) {
+      return const <NetworkSearchSuggestion>[];
+    }
+    // R-003：云侧 relatedTerms 非空时优先消费，缺失（本地/mock）才回退端侧派生词。
+    if (_relatedTerms.isNotEmpty) {
+      final seen = <String>{};
+      final cloud = <NetworkSearchSuggestion>[];
+      for (final term in _relatedTerms) {
+        final trimmed = term.trim();
+        if (trimmed.isEmpty || !seen.add(trimmed.toLowerCase())) {
+          continue;
+        }
+        cloud.add(NetworkSearchSuggestion(query: trimmed, title: trimmed));
+      }
+      if (cloud.isNotEmpty) {
+        return cloud;
+      }
+    }
+    final seeds = <String>[
+      '$query 攻略',
+      '$query 拍照机位',
+      '$query 交集',
+      '$query 圈子',
+      '$query 长文',
+    ];
+    final seen = <String>{};
+    return seeds
+        .where((item) => seen.add(item.toLowerCase()))
+        .map((item) => NetworkSearchSuggestion(query: item, title: item))
+        .toList(growable: false);
+  }
+
+  void _submitRelatedSearch(NetworkSearchSuggestion term) {
+    final nextQuery = term.query.trim();
+    if (nextQuery.isEmpty) {
+      return;
+    }
+    setState(() {
+      _query = nextQuery;
+      _controller.text = nextQuery;
+      _activeTabId = _tabAll;
+    });
+    _scheduleRefresh(immediate: true);
   }
 
   List<Widget> _buildContentMasonryTiles({
     required bool isDark,
     required Color fgSecondary,
     required List<PostSearchItemView> items,
+    Widget? relatedSearchCard,
   }) {
     final cards = items
         .map(_NetworkResultCardModel.fromSearchItem)
         .toList(growable: false);
-    if (cards.isEmpty) {
+    if (cards.isEmpty && relatedSearchCard == null) {
       return const <Widget>[];
     }
-    return <Widget>[
-      GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: cards.length,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: AppSpacing.intraGroupSm,
-          mainAxisSpacing: AppSpacing.intraGroupSm,
-          childAspectRatio: 0.72,
-        ),
-        itemBuilder: (context, index) {
-          final card = cards[index];
-          return PostPreviewCard(
-            isDark: isDark,
-            title: card.title,
-            supportingText: card.supportingText,
-            coverUrl: card.coverUrl,
-            showVideoBadge: card.showVideoBadge,
-            mediaAspectRatio: card.showVideoBadge ? 16 / 9 : 1,
-            footer: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    card.footerLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosCaption1,
-                      color: fgSecondary,
+    final cells = <Widget>[
+      ?relatedSearchCard,
+      for (final card in cards)
+        Builder(
+          builder: (context) {
+            final meta = _contentCloudMetaById[card.postId];
+            // R-003：优先用云侧封面真实宽高比 / 排序理由；缺失时回退既有端侧渲染。
+            final aspectRatio =
+                meta?.aspectRatio ?? (card.showVideoBadge ? 16 / 9 : 1);
+            final supportingText = meta?.topRankReason ?? card.supportingText;
+            return PostPreviewCard(
+              isDark: isDark,
+              title: card.title,
+              supportingText: supportingText,
+              coverUrl: card.coverUrl,
+              showVideoBadge: card.showVideoBadge,
+              mediaAspectRatio: aspectRatio,
+              footer: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      card.footerLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosCaption1,
+                        color: fgSecondary,
+                      ),
                     ),
                   ),
-                ),
-                SizedBox(width: AppSpacing.intraGroupXs),
-                PostCardMetric(
-                  icon: CupertinoIcons.heart,
-                  label: '${card.likeCount}',
-                  color: fgSecondary,
-                ),
-              ],
-            ),
-            onTap: () {
-              unawaited(_openPost(card.postId));
-            },
-          );
-        },
-      ),
-    ];
-  }
-
-  List<Widget> _buildGenericHitTiles({
-    required List<SearchHit> hits,
-    required String emptyEyebrow,
-    required bool isDark,
-    required Color fgSecondary,
-  }) {
-    return <Widget>[
-      for (var i = 0; i < hits.length; i++) ...[
-        PostPreviewListTile(
-          isDark: isDark,
-          title: hits[i].title,
-          supportingText: hits[i].snippet ?? hits[i].subtitle ?? '打开相关搜索结果',
-          coverUrl: '',
-          eyebrowText:
-              SearchRegistry.entryFor(hits[i].objectType)?.label ??
-              emptyEyebrow,
-          footer: Text(
-            hits[i].subtitle ?? emptyEyebrow,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: fgSecondary,
-            ),
-          ),
-          onTap: () {},
+                  SizedBox(width: AppSpacing.intraGroupXs),
+                  PostCardMetric(
+                    icon: CupertinoIcons.heart,
+                    label: '${card.likeCount}',
+                    color: fgSecondary,
+                  ),
+                ],
+              ),
+              onTap: () {
+                unawaited(_openPost(card.postId));
+              },
+            );
+          },
         ),
-        if (i != hits.length - 1) SizedBox(height: AppSpacing.containerSm),
-      ],
     ];
-  }
-
-  List<Widget> _buildCompactHitGrid({
-    required List<SearchHit> hits,
-    required bool isDark,
-    required IconData fallbackIcon,
-    String? reasonLabel,
-  }) {
-    if (hits.isEmpty) {
-      return const <Widget>[];
-    }
-    return <Widget>[
-      GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: hits.length,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: fallbackIcon == CupertinoIcons.person_crop_circle_fill
-              ? 4
-              : 3,
-          mainAxisSpacing: AppSpacing.intraGroupSm,
-          crossAxisSpacing: AppSpacing.intraGroupSm,
-          childAspectRatio:
-              fallbackIcon == CupertinoIcons.person_crop_circle_fill
-              ? 0.72
-              : 0.86,
-        ),
-        itemBuilder: (context, index) {
-          final hit = hits[index];
-          return _CompactHitCard(
-            hit: hit,
-            isDark: isDark,
-            fallbackIcon: fallbackIcon,
-            reasonLabel: reasonLabel,
-            onTap: () => _openSearchHit(hit),
-          );
-        },
-      ),
-    ];
-  }
-
-  void _openSearchHit(SearchHit hit) {
-    switch (hit.objectType) {
-      case SearchObjectType.chatContact:
-      case SearchObjectType.chatConversation:
-      case SearchObjectType.chatMessage:
-        final payload = hit.payload.toWireMap();
-        final conversationId = (payload['conversationId'] ?? hit.objectId)
-            .toString()
-            .trim();
-        if (conversationId.isNotEmpty) {
-          context.push(AppRoutePaths.chatDetail(id: conversationId));
-        }
-        return;
-      case SearchObjectType.circleGroup:
-      case SearchObjectType.circleCircle:
-        _openGroup(_GroupResultCardModel.fromHit(hit));
-        return;
-      case SearchObjectType.entityHomepage:
-        _openHomepage(hit.objectId);
-        return;
-      case SearchObjectType.userProfile:
-        if (hit.objectId.trim().isNotEmpty) {
-          context.push(AppRoutePaths.userProfile(username: hit.objectId));
-        }
-        return;
-      case SearchObjectType.contentPost:
-        unawaited(_openPost(hit.objectId));
-        return;
-      case SearchObjectType.integrationLocationPoi:
-      case SearchObjectType.tag:
-      case SearchObjectType.webDocument:
-        return;
-    }
+    return _buildAdaptiveMasonry(cells: cells);
   }
 
   void _scheduleRefresh({bool immediate = false}) {
@@ -1048,16 +998,15 @@ class _SearchNetworkResultsPageState
     setState(() {
       _isLoading = true;
       _errorSemantic = null;
+      _degradeSignals = const <SearchDegradeSignal>[];
       if (_activeTabId == _tabXiaoqu) {
         _xiaoquResult = null;
       } else {
         _groupResults = const <SearchHit>[];
-        _messageResults = const <SearchHit>[];
-        _contactResults = const <SearchHit>[];
         _locationResults = const <SearchHit>[];
-        _userResults = const <SearchHit>[];
         _contentResults = const <PostSearchItemView>[];
-        _degradeSignals = const <SearchDegradeSignal>[];
+        _contentCloudMetaById = const <String, _ContentCloudMeta>{};
+        _relatedTerms = const <String>[];
       }
     });
     try {
@@ -1085,20 +1034,33 @@ class _SearchNetworkResultsPageState
           });
           return;
         }
+        if (_activeTabId == _tabAll) {
+          final locationResponse = await _guardedSearchResponse(
+            _loadLocationResponse(trimmedQuery),
+          );
+          final contentResponse = await _guardedSearchResponse(
+            _loadContentResponse(trimmedQuery),
+          );
+          if (!mounted || token != _requestToken) {
+            return;
+          }
+          setState(() {
+            _locationResults = _locationHitsFromResponse(locationResponse);
+            _contentResults = _contentItemsFromResponse(contentResponse);
+            _relatedTerms = contentResponse.relatedTerms;
+            _degradeSignals = _mergeDegradeSignals(<SearchResponse>[
+              locationResponse,
+              contentResponse,
+            ]);
+            _isLoading = false;
+          });
+          return;
+        }
         final groupResponse = await _guardedSearchResponse(
           _loadGroupResponse(trimmedQuery),
         );
-        final messageResponse = await _guardedSearchResponse(
-          _loadMessageResponse(trimmedQuery),
-        );
-        final contactResponse = await _guardedSearchResponse(
-          _loadContactResponse(trimmedQuery),
-        );
         final locationResponse = await _guardedSearchResponse(
           _loadLocationResponse(trimmedQuery),
-        );
-        final userResponse = await _guardedSearchResponse(
-          _loadUserResponse(trimmedQuery),
         );
         final contentResponse = await _guardedSearchResponse(
           _loadContentResponse(trimmedQuery),
@@ -1108,19 +1070,13 @@ class _SearchNetworkResultsPageState
         }
         setState(() {
           _groupResults = _groupHitsFromResponse(groupResponse);
-          _messageResults = _messageHitsFromResponse(messageResponse);
-          _contactResults = _contactHitsFromResponse(contactResponse);
           _locationResults = _locationHitsFromResponse(locationResponse);
-          _userResults = _userHitsFromResponse(userResponse);
           _contentResults = _contentItemsFromResponse(contentResponse);
-          _degradeSignals = <SearchDegradeSignal>[
-            ...groupResponse.degradeSignals,
-            ...messageResponse.degradeSignals,
-            ...contactResponse.degradeSignals,
-            ...locationResponse.degradeSignals,
-            ...userResponse.degradeSignals,
-            ...contentResponse.degradeSignals,
-          ];
+          _degradeSignals = _mergeDegradeSignals(<SearchResponse>[
+            groupResponse,
+            locationResponse,
+            contentResponse,
+          ]);
           _isLoading = false;
         });
         return;
@@ -1137,8 +1093,8 @@ class _SearchNetworkResultsPageState
       }
       setState(() {
         _contentResults = items;
-        _degradeSignals =
-            response?.degradeSignals ?? const <SearchDegradeSignal>[];
+        _relatedTerms = response?.relatedTerms ?? const <String>[];
+        _degradeSignals = response?.degradeSignals ?? const <SearchDegradeSignal>[];
         _isLoading = false;
       });
     } catch (error) {
@@ -1204,29 +1160,64 @@ class _SearchNetworkResultsPageState
   }
 
   List<PostSearchItemView> _contentItemsFromResponse(SearchResponse response) {
-    final results = _hitsFromResponse(response)
-        .where((hit) => hit.objectType == SearchObjectType.contentPost)
-        .map(
-          (hit) =>
-              hit.asContentPostItem ??
-              PostSearchItemView.fromMap(hit.payload.toWireMap()),
-        )
-        .toList(growable: false);
-    results.sort((left, right) {
-      final leftTime = left.publishedAt;
-      final rightTime = right.publishedAt;
-      if (leftTime == null && rightTime == null) {
-        return 0;
+    final cloudMeta = <String, _ContentCloudMeta>{};
+    final results = <PostSearchItemView>[];
+    for (final hit in _hitsFromResponse(response)) {
+      if (hit.objectType != SearchObjectType.contentPost) {
+        continue;
       }
-      if (leftTime == null) {
-        return 1;
+      final item =
+          hit.asContentPostItem ??
+          PostSearchItemView.fromMap(hit.payload.toWireMap());
+      results.add(item);
+      final meta = _ContentCloudMeta(
+        rankPosition: hit.rankPosition,
+        coverWidth: hit.coverWidth,
+        coverHeight: hit.coverHeight,
+        rankReasons: hit.rankReasons,
+      );
+      if (item.postId.isNotEmpty && meta.hasCloudSignal) {
+        cloudMeta[item.postId] = meta;
       }
-      if (rightTime == null) {
-        return -1;
-      }
-      return rightTime.compareTo(leftTime);
-    });
-    return results.take(12).toList(growable: false);
+    }
+    // R-001：命中携带云侧 rankPosition 时，按云侧排序而非端侧 publishedAt 兜底排序。
+    final hasCloudRank = results.any(
+      (item) => cloudMeta[item.postId]?.rankPosition != null,
+    );
+    if (hasCloudRank) {
+      results.sort((left, right) {
+        final leftRank = cloudMeta[left.postId]?.rankPosition;
+        final rightRank = cloudMeta[right.postId]?.rankPosition;
+        if (leftRank == null && rightRank == null) {
+          return 0;
+        }
+        if (leftRank == null) {
+          return 1;
+        }
+        if (rightRank == null) {
+          return -1;
+        }
+        return leftRank.compareTo(rightRank);
+      });
+    } else {
+      results.sort((left, right) {
+        final leftTime = left.publishedAt;
+        final rightTime = right.publishedAt;
+        if (leftTime == null && rightTime == null) {
+          return 0;
+        }
+        if (leftTime == null) {
+          return 1;
+        }
+        if (rightTime == null) {
+          return -1;
+        }
+        return rightTime.compareTo(leftTime);
+      });
+    }
+    final sorted = results.take(12).toList(growable: false);
+    _contentCloudMetaById = cloudMeta;
+    return sorted;
   }
 
   Iterable<SearchHit> _hitsFromResponse(SearchResponse response) {
@@ -1237,43 +1228,116 @@ class _SearchNetworkResultsPageState
   }
 
   List<SearchHit> get _connectedGroupHits => _groupResults
-      .where((hit) => hit.objectType == SearchObjectType.circleGroup)
+      .where((hit) => _hitConnectionState(hit) == 'connected')
       .toList(growable: false);
 
   List<SearchHit> get _discoveryGroupHits => _groupResults
-      .where((hit) => hit.objectType == SearchObjectType.circleCircle)
+      .where((hit) => _hitConnectionState(hit) != 'connected')
       .toList(growable: false);
 
-  List<SearchHit> get _connectedLocationHits => const <SearchHit>[];
+  // 命中实体置顶卡：只取云侧 entity.homepage（绑定实体主页），按搜索词标题匹配；
+  // 一方地点 location.place 不进顶卡（落地体验见 _connectedLocations 与 location 落地页）。
+  SearchHit? get _intersectionEntityHit {
+    final query = _query.trim();
+    for (final hit in _locationResults) {
+      if (hit.objectType == SearchObjectType.entityHomepage &&
+          _entityTitleMatchesQuery(hit.title, query)) {
+        return hit;
+      }
+    }
+    return null;
+  }
 
-  List<SearchHit> get _discoveryLocationHits => _locationResults;
+  // 已连接的一方地点（location.place 且 connectionState=connected）。实体顶卡走
+  // entity.homepage（见 _intersectionEntityHit），与此处 location.place 互不重叠。
+  List<SearchHit> get _connectedLocations {
+    return _locationResults
+        .where(
+          (hit) =>
+              hit.objectType == SearchObjectType.locationPlace &&
+              _hitConnectionState(hit) == 'connected',
+        )
+        .toList(growable: false);
+  }
 
-  List<SearchHit> get _connectedUserHits => _userResults
-      .where((hit) {
-        final view = SocialRelationSearchItemView.fromMap(
-          hit.payload.toWireMap(),
-        );
-        return view.relationshipCapability.canOpenConversation ||
-            view.relationshipCapability.canUnfollow;
-      })
+  // 连接态分组（§3）：唯一真相源是云侧 connectionState 闭集（connected /
+  // unconnected / intersection_lead）。已连接进「已形成的连接」，未连接 + 交集线索
+  // 进「发现更多交集」；端不再用 take/skip 位置启发式伪造分组。
+  List<PostSearchItemView> get _connectedContentItems => _contentResults
+      .where((item) => item.connectionState == 'connected')
       .toList(growable: false);
-
-  List<SearchHit> get _discoveryUserHits => _userResults
-      .where((hit) => !_connectedUserHits.contains(hit))
-      .toList(growable: false);
-
-  List<PostSearchItemView> get _connectedContentItems =>
-      _contentResults.take(2).toList(growable: false);
 
   List<PostSearchItemView> get _discoveryContentItems => _contentResults
-      .skip(_connectedContentItems.length)
+      .where((item) => item.connectionState != 'connected')
       .toList(growable: false);
 
-  int get _discoveryResultCount =>
-      _discoveryGroupHits.length +
-      _discoveryLocationHits.length +
-      _discoveryUserHits.length +
-      _discoveryContentItems.length;
+  // 任意对象 hit 的连接态（content 走 PostSearchItemView，其余对象走 payload 透传）。
+  static String _hitConnectionState(SearchHit hit) {
+    final raw = hit.payload.toWireMap()['connectionState'];
+    final state = raw?.toString().trim() ?? '';
+    return state.isEmpty ? 'unconnected' : state;
+  }
+
+  // 云侧交集结论句（G2 端只读 primaryText，不回退 displayText/label，不本地拼装）。
+  static String _hitIntersectionPrimaryText(SearchHit hit) {
+    final reason = hit.payload.toWireMap()['intersectionReason'];
+    if (reason is Map) {
+      return reason['primaryText']?.toString().trim() ?? '';
+    }
+    return '';
+  }
+
+  _EntityTopResultModel? _entityTopResult() {
+    final query = _query.trim();
+    for (final hit in _locationResults) {
+      if (hit.objectType != SearchObjectType.entityHomepage) {
+        continue;
+      }
+      if (!_entityTitleMatchesQuery(hit.title, query)) {
+        continue;
+      }
+      return _EntityTopResultModel(
+        homepageId: hit.objectId,
+        title: hit.title,
+        badge: '实体主页',
+        subtitle: hit.subtitle ?? '地点',
+        description: hit.snippet ?? '打开主页查看介绍',
+        meta: _entityMetaFromHit(hit),
+      );
+    }
+    return null;
+  }
+
+  static String _entityMetaFromHit(SearchHit hit) {
+    final payload = hit.payload.toWireMap();
+    final followerCount = payload['followerCount'] ?? payload['followCount'];
+    final contentCount = payload['contentCount'] ?? payload['postCount'];
+    final parts = <String>[];
+    if (followerCount is num && followerCount > 0) {
+      parts.add('${_formatCompactCount(followerCount)}关注');
+    }
+    if (contentCount is num && contentCount > 0) {
+      parts.add('${_formatCompactCount(contentCount)}内容');
+    }
+    return parts.join(' · ');
+  }
+
+  static String _formatCompactCount(num value) {
+    if (value >= 10000) {
+      return '${(value / 10000).toStringAsFixed(1)}万';
+    }
+    return value.toInt().toString();
+  }
+
+  bool _entityTitleMatchesQuery(String title, String query) {
+    final normalizedTitle = title.trim().toLowerCase();
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedTitle.isEmpty || normalizedQuery.isEmpty) {
+      return false;
+    }
+    return normalizedTitle.contains(normalizedQuery) ||
+        normalizedQuery.contains(normalizedTitle);
+  }
 
   List<PostSearchItemView> _contentItemsForActiveTab() {
     return switch (_activeTabId) {
@@ -1322,51 +1386,9 @@ class _SearchNetworkResultsPageState
         .toList(growable: false);
   }
 
-  Future<SearchResponse> _loadMessageResponse(String query) {
-    return ref
-        .read(searchRepositoryProvider)
-        .search(
-          SearchRequest(
-            query: query,
-            mode: SearchMode.result,
-            objectTypes: const <SearchObjectType>{
-              SearchObjectType.chatConversation,
-              SearchObjectType.chatMessage,
-            },
-            limit: 12,
-          ),
-        );
-  }
-
-  List<SearchHit> _messageHitsFromResponse(SearchResponse response) {
-    return _hitsFromResponse(response)
-        .where(
-          (hit) =>
-              hit.objectType == SearchObjectType.chatConversation ||
-              hit.objectType == SearchObjectType.chatMessage,
-        )
-        .toList(growable: false);
-  }
-
-  Future<SearchResponse> _loadContactResponse(String query) {
-    return ref
-        .read(searchRepositoryProvider)
-        .search(
-          SearchRequest(
-            query: query,
-            mode: SearchMode.result,
-            objectTypes: const <SearchObjectType>{SearchObjectType.chatContact},
-            limit: 12,
-          ),
-        );
-  }
-
-  List<SearchHit> _contactHitsFromResponse(SearchResponse response) {
-    return _hitsFromResponse(response)
-        .where((hit) => hit.objectType == SearchObjectType.chatContact)
-        .toList(growable: false);
-  }
-
+  // 实体顶卡 + 一方地点单源：消费云侧第一方对象 entity.homepage（已绑定实体主页）与
+  // location.place（被内容引用但未绑定主页的自由文本地点，R-S05e）。不再走
+  // integration.location_poi —— 后者是发布选点用的三方实时 POI，由默认搜索页 suggest 承接。
   Future<SearchResponse> _loadLocationResponse(String query) {
     return ref
         .read(searchRepositoryProvider)
@@ -1375,7 +1397,8 @@ class _SearchNetworkResultsPageState
             query: query,
             mode: SearchMode.result,
             objectTypes: const <SearchObjectType>{
-              SearchObjectType.integrationLocationPoi,
+              SearchObjectType.entityHomepage,
+              SearchObjectType.locationPlace,
             },
             limit: 12,
           ),
@@ -1385,27 +1408,10 @@ class _SearchNetworkResultsPageState
   List<SearchHit> _locationHitsFromResponse(SearchResponse response) {
     return _hitsFromResponse(response)
         .where(
-          (hit) => hit.objectType == SearchObjectType.integrationLocationPoi,
+          (hit) =>
+              hit.objectType == SearchObjectType.entityHomepage ||
+              hit.objectType == SearchObjectType.locationPlace,
         )
-        .toList(growable: false);
-  }
-
-  Future<SearchResponse> _loadUserResponse(String query) {
-    return ref
-        .read(searchRepositoryProvider)
-        .search(
-          SearchRequest(
-            query: query,
-            mode: SearchMode.result,
-            objectTypes: const <SearchObjectType>{SearchObjectType.userProfile},
-            limit: 12,
-          ),
-        );
-  }
-
-  List<SearchHit> _userHitsFromResponse(SearchResponse response) {
-    return _hitsFromResponse(response)
-        .where((hit) => hit.objectType == SearchObjectType.userProfile)
         .toList(growable: false);
   }
 
@@ -1506,18 +1512,6 @@ class _SearchNetworkResultsPageState
     context.push(
       AppRoutePaths.homepageDetail(id: homepageId),
       extra: const HomepageDetailPageRouteExtra(
-        referralSource: ReferralSource.search,
-      ),
-    );
-  }
-
-  void _openGroup(_GroupResultCardModel group) {
-    if (group.circleId.trim().isEmpty) {
-      return;
-    }
-    context.push(
-      AppRoutePaths.circleDetail(id: group.circleId),
-      extra: const CircleDetailPageRouteExtra(
         referralSource: ReferralSource.search,
       ),
     );
@@ -1725,125 +1719,18 @@ class _CategorySummaryCard extends StatelessWidget {
   }
 }
 
-class _DiscoveryGroupBlock extends StatelessWidget {
-  const _DiscoveryGroupBlock({
+class _SearchResultSectionHeader extends StatelessWidget {
+  const _SearchResultSectionHeader({
     required this.title,
-    required this.description,
-    required this.count,
-    required this.isDark,
-    required this.child,
+    this.subtitle,
+    this.actionLabel,
+    this.onAction,
   });
 
   final String title;
-  final String description;
-  final int count;
-  final bool isDark;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: _SearchResultTokens.sectionTitleSize,
-                  fontWeight: _SearchResultTokens.sectionTitleWeight,
-                  color: fgPrimary,
-                ),
-              ),
-            ),
-            Text(
-              '$count',
-              style: TextStyle(
-                fontSize: AppTypography.iosCaption1,
-                color: fgSecondary,
-              ),
-            ),
-          ],
-        ),
-        if (description.trim().isNotEmpty) ...[
-          SizedBox(height: AppSpacing.intraGroupXs),
-          Text(
-            description,
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: fgSecondary,
-            ),
-          ),
-        ],
-        SizedBox(height: AppSpacing.intraGroupSm),
-        child,
-      ],
-    );
-  }
-}
-
-class _IntersectionOverviewCard extends StatelessWidget {
-  const _IntersectionOverviewCard({
-    required this.isDark,
-    required this.sharedInterestCount,
-    required this.sharedCircleCount,
-    required this.sharedFollowingCount,
-    required this.sharedDiscussionCount,
-  });
-
-  final bool isDark;
-  final int sharedInterestCount;
-  final int sharedCircleCount;
-  final int sharedFollowingCount;
-  final int sharedDiscussionCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final surface = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.surfaceElevated,
-    );
-    final border = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.separatorSubtle,
-    );
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(
-          AppSpacing.contentPreviewCornerRadius,
-        ),
-        border: Border.all(color: border),
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerMd),
-        child: Row(
-          children: [
-            _IntersectionMetric(label: '共同兴趣', value: sharedInterestCount),
-            _IntersectionMetric(label: '共同圈子', value: sharedCircleCount),
-            _IntersectionMetric(label: '共同关注', value: sharedFollowingCount),
-            _IntersectionMetric(label: '共同讨论', value: sharedDiscussionCount),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _IntersectionMetric extends StatelessWidget {
-  const _IntersectionMetric({required this.label, required this.value});
-
-  final String label;
-  final int value;
+  final String? subtitle;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -1856,47 +1743,124 @@ class _IntersectionMetric extends StatelessWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            '$value',
-            style: TextStyle(
-              fontSize: _SearchResultTokens.sectionTitleSize,
-              fontWeight: _SearchResultTokens.sectionTitleWeight,
-              color: fgPrimary,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: _SearchResultTokens.sectionTitleSize,
+                  fontWeight: _SearchResultTokens.sectionTitleWeight,
+                  color: fgPrimary,
+                ),
+              ),
+              if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                SizedBox(height: AppSpacing.intraGroupXs / 2),
+                Text(
+                  subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosCaption1,
+                    color: fgSecondary,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (actionLabel != null && onAction != null)
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            onPressed: onAction,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  actionLabel!,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosFootnote,
+                    color: fgSecondary,
+                  ),
+                ),
+                SizedBox(width: AppSpacing.intraGroupXs / 2),
+                Icon(
+                  CupertinoIcons.chevron_forward,
+                  size: AppSpacing.iconSmall,
+                  color: fgSecondary,
+                ),
+              ],
             ),
           ),
-          SizedBox(height: AppSpacing.intraGroupXs),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: fgSecondary,
-            ),
+      ],
+    );
+  }
+}
+
+class _MediaCategoryBadge extends StatelessWidget {
+  const _MediaCategoryBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.intraGroupSm,
+          vertical: AppSpacing.intraGroupXs / 2,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: AppTypography.iosCaption2,
+            color: AppColors.white,
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _CompactHitCard extends StatelessWidget {
-  const _CompactHitCard({
-    required this.hit,
+class _IntersectionCardPlaceholder extends StatelessWidget {
+  const _IntersectionCardPlaceholder({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: AppColors.primaryColor.withValues(alpha: 0.08),
+      child: Center(
+        child: Icon(
+          icon,
+          color: AppColors.primaryColor,
+          size: AppSpacing.iconLarge,
+        ),
+      ),
+    );
+  }
+}
+
+class _IntersectionCard extends StatelessWidget {
+  const _IntersectionCard({
+    required this.model,
     required this.isDark,
-    required this.fallbackIcon,
     required this.onTap,
-    this.reasonLabel,
   });
 
-  final SearchHit hit;
+  final _IntersectionCardModel model;
   final bool isDark;
-  final IconData fallbackIcon;
   final VoidCallback onTap;
-  final String? reasonLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1916,7 +1880,7 @@ class _CompactHitCard extends StatelessWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final isPerson = fallbackIcon == CupertinoIcons.person_crop_circle_fill;
+    final hasCover = model.coverUrl.trim().isNotEmpty;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: surface,
@@ -1926,53 +1890,120 @@ class _CompactHitCard extends StatelessWidget {
         border: Border.all(color: border),
       ),
       child: CupertinoButton(
-        padding: EdgeInsets.all(AppSpacing.intraGroupSm),
+        padding: EdgeInsets.zero,
         minimumSize: Size.zero,
         onPressed: onTap,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: isPerson
-                  ? AppSpacing.avatarUserMd
-                  : AppSpacing.avatarUserLg,
-              height: isPerson
-                  ? AppSpacing.avatarUserMd
-                  : AppSpacing.avatarUserLg,
-              decoration: BoxDecoration(
-                color: AppColors.primaryColor.withValues(alpha: 0.1),
-                shape: isPerson ? BoxShape.circle : BoxShape.rectangle,
-                borderRadius: isPerson
-                    ? null
-                    : BorderRadius.circular(AppSpacing.borderRadius),
-              ),
-              child: Icon(
-                fallbackIcon,
-                color: AppColors.primaryColor,
-                size: AppSpacing.iconMedium,
+            AspectRatio(
+              aspectRatio: 16 / 10,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(AppSpacing.contentPreviewCornerRadius),
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (hasCover)
+                      CachedNetworkImage(
+                        imageUrl: model.coverUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) =>
+                            _IntersectionCardPlaceholder(
+                              icon: model.categoryIcon,
+                            ),
+                        errorWidget: (context, url, error) =>
+                            _IntersectionCardPlaceholder(
+                              icon: model.categoryIcon,
+                            ),
+                      )
+                    else
+                      _IntersectionCardPlaceholder(icon: model.categoryIcon),
+                    Positioned(
+                      top: AppSpacing.postPreviewCardPadding,
+                      left: AppSpacing.postPreviewCardPadding,
+                      child: _MediaCategoryBadge(label: model.categoryLabel),
+                    ),
+                    if (model.showVideoBadge)
+                      Positioned(
+                        top: AppSpacing.postPreviewCardPadding,
+                        right: AppSpacing.postPreviewCardPadding,
+                        child: Icon(
+                          CupertinoIcons.play_circle_fill,
+                          color: AppColors.white,
+                          size: AppSpacing.iconLarge - AppSpacing.xs,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-            SizedBox(height: AppSpacing.intraGroupXs),
-            Text(
-              hit.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: _SearchResultTokens.cardTitleSize,
-                fontWeight: _SearchResultTokens.bodyWeight,
-                color: fgPrimary,
-              ),
-            ),
-            SizedBox(height: AppSpacing.intraGroupXs / 2),
-            Text(
-              reasonLabel ?? hit.subtitle ?? hit.snippet ?? '相关结果',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.iosCaption2,
-                color: fgSecondary,
+            Padding(
+              padding: EdgeInsets.all(AppSpacing.postPreviewCardPadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    model.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      fontWeight: AppTypography.medium,
+                      color: fgPrimary,
+                    ),
+                  ),
+                  // §3：交集句只在有云侧文案时展示；无 primaryText 不渲染句行、不占位。
+                  if (model.reasonText.trim().isNotEmpty) ...[
+                    SizedBox(height: AppSpacing.intraGroupXs),
+                    Row(
+                      children: [
+                        Icon(
+                          model.reasonIcon,
+                          size: AppSpacing.iconSmall,
+                          color: AppColors.primaryColor,
+                        ),
+                        SizedBox(width: AppSpacing.intraGroupXs / 2),
+                        Expanded(
+                          child: Text(
+                            model.reasonText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppTypography.iosCaption1,
+                              color: AppColors.primaryColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  SizedBox(height: AppSpacing.intraGroupXs / 2),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          model.footerText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosCaption1,
+                            color: fgSecondary,
+                          ),
+                        ),
+                      ),
+                      if (model.metricLabel != null) ...[
+                        SizedBox(width: AppSpacing.intraGroupXs),
+                        PostCardMetric(
+                          icon: model.metricIcon ?? CupertinoIcons.heart,
+                          label: model.metricLabel!,
+                          color: fgSecondary,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
@@ -1982,14 +2013,297 @@ class _CompactHitCard extends StatelessWidget {
   }
 }
 
-class _DiscoverySectionBucket {
-  _DiscoverySectionBucket(this.sections);
+class _EntityTopResultCard extends StatelessWidget {
+  const _EntityTopResultCard({
+    required this.entity,
+    required this.isDark,
+    required this.onTap,
+  });
 
-  final List<Widget> sections;
+  final _EntityTopResultModel entity;
+  final bool isDark;
+  final VoidCallback onTap;
 
-  _DiscoverySectionBucket copy() {
-    return _DiscoverySectionBucket(List<Widget>.of(sections));
+  @override
+  Widget build(BuildContext context) {
+    final surface = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceElevated,
+    );
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
+    );
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(
+          AppSpacing.contentPreviewCornerRadius,
+        ),
+        border: Border.all(color: border),
+      ),
+      child: CupertinoButton(
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        minimumSize: Size.zero,
+        onPressed: onTap,
+        child: Row(
+          children: [
+            Container(
+              width: AppSpacing.avatarUserLg,
+              height: AppSpacing.avatarUserLg,
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                CupertinoIcons.building_2_fill,
+                size: AppSpacing.iconMedium,
+                color: AppColors.primaryColor,
+              ),
+            ),
+            SizedBox(width: AppSpacing.containerSm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          entity.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: _SearchResultTokens.sectionTitleSize,
+                            fontWeight: _SearchResultTokens.sectionTitleWeight,
+                            color: fgPrimary,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: AppSpacing.intraGroupSm),
+                      Text(
+                        entity.badge,
+                        style: TextStyle(
+                          fontSize: _SearchResultTokens.captionSize,
+                          color: AppColors.primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupXs / 2),
+                  Text(
+                    entity.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: _SearchResultTokens.captionSize,
+                      color: fgSecondary,
+                    ),
+                  ),
+                  if (entity.connectionReason != null &&
+                      entity.connectionReason!.trim().isNotEmpty) ...[
+                    SizedBox(height: AppSpacing.intraGroupXs / 2),
+                    Text(
+                      entity.connectionReason!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: _SearchResultTokens.captionSize,
+                        color: AppColors.primaryColor,
+                      ),
+                    ),
+                  ],
+                  if (entity.description.trim().isNotEmpty) ...[
+                    SizedBox(height: AppSpacing.intraGroupXs / 2),
+                    Text(
+                      entity.description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: _SearchResultTokens.captionSize,
+                        color: fgSecondary,
+                      ),
+                    ),
+                  ],
+                  if (entity.meta.trim().isNotEmpty) ...[
+                    SizedBox(height: AppSpacing.intraGroupXs / 2),
+                    Text(
+                      entity.meta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: _SearchResultTokens.captionSize,
+                        color: fgSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(width: AppSpacing.containerSm),
+            if (entity.actionLabel != null) ...[
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                  border: Border.all(color: AppColors.primaryColor),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.containerSm,
+                    vertical: AppSpacing.intraGroupXs,
+                  ),
+                  child: Text(
+                    entity.actionLabel!,
+                    style: TextStyle(
+                      fontSize: _SearchResultTokens.captionSize,
+                      color: AppColors.primaryColor,
+                    ),
+                  ),
+                ),
+              ),
+            ] else
+              Icon(
+                CupertinoIcons.chevron_forward,
+                size: AppSpacing.iconSmall,
+                color: fgSecondary,
+              ),
+          ],
+        ),
+      ),
+    );
   }
+}
+
+class _RelatedSearchCard extends StatelessWidget {
+  const _RelatedSearchCard({
+    required this.card,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final RelatedSearchTermCardView card;
+  final bool isDark;
+  final ValueChanged<NetworkSearchSuggestion> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceElevated,
+    );
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
+    );
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(
+          AppSpacing.contentPreviewCornerRadius,
+        ),
+        border: Border.all(color: border),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '相关搜索',
+              style: TextStyle(
+                fontSize: _SearchResultTokens.cardTitleSize,
+                fontWeight: _SearchResultTokens.sectionTitleWeight,
+                color: fgPrimary,
+              ),
+            ),
+            SizedBox(height: AppSpacing.intraGroupSm),
+            for (var i = 0; i < card.terms.length; i++)
+              Padding(
+                padding: EdgeInsets.only(
+                  bottom: i == card.terms.length - 1
+                      ? 0
+                      : AppSpacing.intraGroupSm,
+                ),
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: () => onTap(card.terms[i]),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      card.terms[i].displayTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: _SearchResultTokens.bodySize,
+                        fontWeight: _SearchResultTokens.bodyWeight,
+                        color: fgPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (card.terms.isEmpty)
+              Text(
+                '暂无相关搜索词',
+                style: TextStyle(
+                  fontSize: _SearchResultTokens.captionSize,
+                  color: fgSecondary,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _IntersectionTargetType { circle, homepage, post, user, locationPlace }
+
+class _IntersectionCardModel {
+  const _IntersectionCardModel({
+    required this.targetType,
+    required this.targetId,
+    required this.coverUrl,
+    required this.categoryLabel,
+    required this.categoryIcon,
+    required this.title,
+    required this.reasonIcon,
+    required this.reasonText,
+    required this.footerText,
+    this.metricLabel,
+    this.metricIcon,
+    this.showVideoBadge = false,
+  });
+
+  final _IntersectionTargetType targetType;
+  final String targetId;
+  final String coverUrl;
+  final String categoryLabel;
+  final IconData categoryIcon;
+  final String title;
+  final IconData reasonIcon;
+  final String reasonText;
+  final String footerText;
+  final String? metricLabel;
+  final IconData? metricIcon;
+  final bool showVideoBadge;
 }
 
 class _SearchNetworkTab {
@@ -2002,6 +2316,44 @@ class _SearchNetworkTab {
   final String id;
   final String label;
   final String description;
+}
+
+/// 云侧内容命中的排序 / 封面 / 理由元信息（R-001/R-003）。
+///
+/// 与 [PostSearchItemView] 解耦：仅承载云侧透传字段，按 postId 旁挂到结果页状态，
+/// 避免改动跨 tab 共享的 [PostSearchItemView] 字段表（其被交集 tab 等多处消费）。
+class _ContentCloudMeta {
+  const _ContentCloudMeta({
+    this.rankPosition,
+    this.coverWidth,
+    this.coverHeight,
+    this.rankReasons = const <String>[],
+  });
+
+  final int? rankPosition;
+  final double? coverWidth;
+  final double? coverHeight;
+  final List<String> rankReasons;
+
+  /// 是否携带任一云侧信号；无信号的命中（本地/mock）不入元信息表。
+  bool get hasCloudSignal =>
+      rankPosition != null ||
+      coverWidth != null ||
+      coverHeight != null ||
+      rankReasons.isNotEmpty;
+
+  /// 云侧封面真实宽高比；缺失任一维度则返回 null，由调用方回退默认比例。
+  double? get aspectRatio {
+    final width = coverWidth;
+    final height = coverHeight;
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
+    }
+    return width / height;
+  }
+
+  /// 首条排序理由（人类可读标签），用于卡片排序透明化文案。
+  String? get topRankReason => rankReasons.isEmpty ? null : rankReasons.first;
 }
 
 class _NetworkResultCardModel {
@@ -2058,6 +2410,28 @@ class _NetworkResultCardModel {
       showVideoBadge: item.contentType == 'video',
     );
   }
+}
+
+class _EntityTopResultModel {
+  const _EntityTopResultModel({
+    required this.homepageId,
+    required this.title,
+    required this.badge,
+    required this.subtitle,
+    required this.description,
+    required this.meta,
+    this.connectionReason,
+    this.actionLabel,
+  });
+
+  final String homepageId;
+  final String title;
+  final String badge;
+  final String subtitle;
+  final String description;
+  final String meta;
+  final String? connectionReason;
+  final String? actionLabel;
 }
 
 class _GroupResultCardModel {

@@ -49,7 +49,8 @@ class HomepageMockData {
     homepageType: 'sight',
     title: '西湖景区',
     subtitle: '杭州西湖核心游览区',
-    coverUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
+    coverUrl:
+        'media/image/s/mock/seed/p_1506744038136-46273834b3fb/v1/image.jpg',
     status: 'published',
     sourceType: 'official_seed',
     claimStatus: 'unclaimed',
@@ -57,6 +58,9 @@ class HomepageMockData {
     address: '浙江省杭州市西湖区',
     city: '杭州',
     location: HomepageGeoPoint(latitude: 30.2431, longitude: 120.1500),
+    verified: true,
+    establishedYear: 1982,
+    followerCount: 1286,
     averageRating: 4.7,
     ratingCount: 328,
     reviewSummary: HomepageReviewSummaryData(
@@ -76,7 +80,7 @@ class HomepageMockData {
         summary: '一条适合黄昏慢走的完整打卡笔记。',
         contentType: 'article',
         coverUrl:
-            'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
+            'media/image/s/mock/seed/p_1506744038136-46273834b3fb/v1/image.jpg',
       ),
       HomepageContentPreview(
         postId: 'west_lake_post_2',
@@ -84,7 +88,7 @@ class HomepageMockData {
         summary: '把作品、笔记、提问统一沉淀到同一个主页。',
         contentType: 'image',
         coverUrl:
-            'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
+            'media/image/s/mock/seed/p_1506744038136-46273834b3fb/v1/image.jpg',
       ),
     ],
     questionPreview: <HomepageQuestionPreview>[
@@ -113,7 +117,8 @@ class HomepageMockData {
     homepageType: 'restaurant',
     title: '夜巷小馆',
     subtitle: '本地人常去的深夜小馆',
-    coverUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4',
+    coverUrl:
+        'media/image/s/mock/seed/p_1517248135467-4c7edcad34c4/v1/image.jpg',
     status: 'published',
     sourceType: 'imported',
     claimStatus: 'unclaimed',
@@ -140,7 +145,7 @@ class HomepageMockData {
         summary: '一份完整的深夜小馆推荐笔记。',
         contentType: 'article',
         coverUrl:
-            'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4',
+            'media/image/s/mock/seed/p_1517248135467-4c7edcad34c4/v1/image.jpg',
       ),
     ],
     questionPreview: <HomepageQuestionPreview>[
@@ -246,7 +251,8 @@ HomepageDetail _sightHomepage(
     homepageType: 'sight',
     title: title,
     subtitle: subtitle,
-    coverUrl: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
+    coverUrl:
+        'media/image/s/mock/seed/p_1500530855697-b586d89ba3ee/v1/image.jpg',
     status: 'published',
     sourceType: 'data_pipeline_seed',
     claimStatus: 'unclaimed',
@@ -271,7 +277,7 @@ HomepageDetail _sightHomepage(
         summary: '承接数据工程生产的实体主页、内容攻略和关联讨论。',
         contentType: 'article',
         coverUrl:
-            'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
+            'media/image/s/mock/seed/p_1500530855697-b586d89ba3ee/v1/image.jpg',
       ),
     ],
     questionPreview: <HomepageQuestionPreview>[

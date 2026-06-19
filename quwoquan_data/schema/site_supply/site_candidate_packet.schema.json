@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "quwoquan_data/schema/site_supply/site_candidate_packet.schema.json",
+  "title": "Site Candidate Packet",
+  "type": "object",
+  "required": ["schemaVersion", "vertical", "siteId", "batchId", "candidateRef", "lane", "canonicalUrl", "source", "title", "assets", "semanticMentions", "gate"],
+  "properties": {
+    "schemaVersion": {"const": "quwoquan.site_supply.site_candidate_packet/1"},
+    "vertical": {"type": "string", "minLength": 1},
+    "siteId": {"type": "string", "minLength": 1},
+    "batchId": {"type": "string", "minLength": 1},
+    "candidateRef": {"type": "string", "minLength": 1},
+    "lane": {"enum": ["homepage", "article", "image", "video", "knowledgeCard"]},
+    "canonicalUrl": {"type": "string", "minLength": 1},
+    "source": {
+      "type": "object",
+      "required": ["sourceRef", "sourceKind", "rightsPolicy", "extractor"],
+      "properties": {
+        "sourceRef": {"type": "string"},
+        "platform": {"type": "string"},
+        "sourceKind": {"type": "string"},
+        "rightsPolicy": {"type": "string"},
+        "extractor": {"type": "string"},
+        "admissionMode": {"enum": ["batch_crawl", "controlled_trial"]},
+        "validationOnly": {"type": "boolean"},
+        "termsUrl": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "title": {"type": "string", "minLength": 1},
+    "author": {"type": "string"},
+    "publishedAt": {"type": "string"},
+    "text": {"type": "string"},
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["assetId", "url", "sourceUrl"],
+        "properties": {
+          "assetId": {"type": "string"},
+          "url": {"type": "string"},
+          "license": {"type": "string"},
+          "credit": {"type": "string"},
+          "sourceUrl": {"type": "string"},
+          "termsUrl": {"type": "string"},
+          "usageScope": {"type": "string"},
+          "modelReleaseStatus": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "semanticMentions": {
+      "type": "object",
+      "required": ["entities", "tags", "state"],
+      "properties": {
+        "entities": {"type": "array", "items": {"type": "string"}},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "state": {"const": "mention_only"}
+      },
+      "additionalProperties": false
+    },
+    "dedupe": {"type": "object"},
+    "gate": {"type": "object"}
+  },
+  "additionalProperties": true
+}

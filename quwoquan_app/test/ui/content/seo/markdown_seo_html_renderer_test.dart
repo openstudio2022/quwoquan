@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/ui/content/seo/markdown_seo_html_renderer.dart';
 
@@ -18,7 +19,7 @@ void main() {
           authorName: '阿宁',
           createdAtIso: '2026-06-02T00:00:00.000Z',
           articleMarkdownDigest: 'sha256:abc',
-          coverUrl: 'https://cdn.example.com/cover.jpg',
+          coverUrl: 'https://cdn.example.com/ignored-cover.jpg',
           articleMarkdown: '''
 ---
 title: 川西自驾笔记
@@ -46,15 +47,15 @@ asset://cover
             'assets': <Object?>[
               <String, Object?>{
                 'assetId': 'cover',
-                'cdnUrl': 'https://cdn.example.com/cover.jpg',
+                'objectKey': 'media/image/s/seo/post_seo_1/v1/cover.jpg',
               },
               <String, Object?>{
                 'assetId': 'bridge',
-                'cdnUrl': 'https://cdn.example.com/bridge.jpg',
+                'objectKey': 'media/image/s/seo/post_seo_1/v1/bridge.jpg',
               },
               <String, Object?>{
                 'assetId': 'street',
-                'cdnUrl': 'https://cdn.example.com/street.jpg',
+                'objectKey': 'media/image/s/seo/post_seo_1/v1/street.jpg',
               },
             ],
           },
@@ -67,7 +68,12 @@ asset://cover
       expect(doc.html, contains('<p>第一段正文，包含'));
       expect(doc.html, contains('<blockquote>适合第一次去川西的朋友。</blockquote>'));
       expect(doc.html, contains('<figure>'));
-      expect(doc.html, contains('https://cdn.example.com/cover.jpg'));
+      expect(
+        doc.html,
+        contains(
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/seo/post_seo_1/v1/cover.jpg',
+        ),
+      );
       expect(doc.html, contains('data-asset-id="cover"'));
       expect(doc.html, contains('class="qwq-gallery"'));
       expect(doc.html, contains('class="qwq-callout"'));
@@ -77,7 +83,9 @@ asset://cover
       expect(doc.jsonLd['identifier'], 'sha256:abc');
       expect(
         doc.referencedAssetUrls,
-        contains('https://cdn.example.com/bridge.jpg'),
+        contains(
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/seo/post_seo_1/v1/bridge.jpg',
+        ),
       );
     });
 
@@ -127,7 +135,7 @@ asset://cover
       expect(
         doc.html,
         contains(
-          'https://media.quwoquan.invalid/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
         ),
       );
       expect(doc.html, contains('data-asset-id="cover"'));
@@ -149,10 +157,12 @@ asset://cover
                 'assetId': 'cover',
                 'variants': <String, Object?>{
                   'display': <String, Object?>{
-                    'cdnUrl': 'https://cdn.example.com/cover-display.webp',
+                    'objectKey':
+                        'media/image/s/seo/post_variants/v1/cover-display.webp',
                   },
                   'full': <String, Object?>{
-                    'cdnUrl': 'https://cdn.example.com/cover-full.webp',
+                    'objectKey':
+                        'media/image/s/seo/post_variants/v1/cover-full.webp',
                   },
                   'original': <String, Object?>{
                     'objectKey':
@@ -166,14 +176,26 @@ asset://cover
         ),
       );
 
-      expect(doc.html, contains('src="https://cdn.example.com/cover-display.webp"'));
+      expect(
+        doc.html,
+        contains(
+          'src="${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/seo/post_variants/v1/cover-display.webp"',
+        ),
+      );
       expect(doc.html, contains('data-asset-id="cover"'));
       expect(doc.html, isNot(contains('cover-full.webp')));
-      expect(doc.referencedAssetUrls, contains('https://cdn.example.com/cover-display.webp'));
+      expect(
+        doc.referencedAssetUrls,
+        contains(
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/seo/post_variants/v1/cover-display.webp',
+        ),
+      );
     });
 
     test('renders materialized pilot markdown with asset manifest closure', () {
-      final root = Directory.systemTemp.createTempSync('markdown_seo_html_renderer_pilot_');
+      final root = Directory.systemTemp.createTempSync(
+        'markdown_seo_html_renderer_pilot_',
+      );
       addTearDown(() => root.deleteSync(recursive: true));
       final postDir = Directory(
         '${root.path}/posts/article/环线攻略/稻城亚丁·亚丁三神山徒步体验/1',
@@ -190,7 +212,9 @@ coverImage: asset://cover
 
 ![封面](asset://cover)
 ''';
-      File('${postDir.path}/article.md').writeAsStringSync(article, encoding: utf8);
+      File(
+        '${postDir.path}/article.md',
+      ).writeAsStringSync(article, encoding: utf8);
       File('${postDir.path}/assets/cover.jpg')
         ..createSync(recursive: true)
         ..writeAsStringSync('fake-cover', encoding: utf8);
@@ -200,7 +224,7 @@ coverImage: asset://cover
             'assetId': 'cover',
             'fileName': 'cover.jpg',
             'sourceAssetRef': 'source/cover.jpg',
-            'cdnUrl': 'https://media.quwoquan.invalid/runtime-preview/cover.jpg',
+            'objectKey': 'media/image/s/runtime-preview/cover.jpg',
           },
         ],
       };
@@ -226,7 +250,10 @@ coverImage: asset://cover
 
       expect(doc.indexable, isTrue);
       expect(doc.html, contains('data-asset-id="cover"'));
-      expect(doc.html, contains('src="https://media.quwoquan.invalid/'));
+      expect(
+        doc.html,
+        contains('src="${CloudRuntimeConfig.mediaImageCdnBaseUrl}/'),
+      );
       expect(doc.referencedAssetUrls, isNotEmpty);
       expect(doc.jsonLd['identifier'], 'sha256:pilot-daocheng');
     });
@@ -235,7 +262,9 @@ coverImage: asset://cover
       // T4：新同构目录（entities/posts + 编号阶段 + 来源单元）下，
       // article.md + articleAssetManifest 渲染出带 data-asset-id 的图片，
       // 且每个 asset 的 sourceAssetRef 可相对 batch 根回查到来源单元里的原图。
-      final batchDir = Directory.systemTemp.createTempSync('markdown_seo_html_renderer_layout_');
+      final batchDir = Directory.systemTemp.createTempSync(
+        'markdown_seo_html_renderer_layout_',
+      );
       addTearDown(() => batchDir.deleteSync(recursive: true));
       final postDir = Directory(
         '${batchDir.path}/posts/article/环线攻略/在海螺沟看冰川泡温泉/1',
@@ -253,19 +282,21 @@ coverImage: asset://海螺沟_cover_01
 ![封面](asset://海螺沟_cover_01)
 ![细节](asset://海螺沟_detail_02)
 ''';
-      File('${postDir.path}/article.md').writeAsStringSync(article, encoding: utf8);
+      File(
+        '${postDir.path}/article.md',
+      ).writeAsStringSync(article, encoding: utf8);
       final declaredAssets = <Map<String, Object?>>[
         <String, Object?>{
           'assetId': '海螺沟_cover_01',
           'fileName': '海螺沟_cover_01.jpg',
           'sourceAssetRef': 'source/海螺沟_cover_01.jpg',
-          'cdnUrl': 'https://media.quwoquan.invalid/runtime-preview/海螺沟_cover_01.jpg',
+          'objectKey': 'media/image/s/runtime-preview/海螺沟_cover_01.jpg',
         },
         <String, Object?>{
           'assetId': '海螺沟_detail_02',
           'fileName': '海螺沟_detail_02.jpg',
           'sourceAssetRef': 'source/海螺沟_detail_02.jpg',
-          'cdnUrl': 'https://media.quwoquan.invalid/runtime-preview/海螺沟_detail_02.jpg',
+          'objectKey': 'media/image/s/runtime-preview/海螺沟_detail_02.jpg',
         },
       ];
       for (final asset in declaredAssets) {
@@ -279,7 +310,8 @@ coverImage: asset://海螺沟_cover_01
             .map(
               (asset) => <String, Object?>{
                 ...asset,
-                'cdnUrl': 'https://media.quwoquan.invalid/runtime-preview/${asset['assetId']}.jpg',
+                'objectKey':
+                    'media/image/s/runtime-preview/${asset['assetId']}.jpg',
               },
             )
             .toList(),
@@ -315,9 +347,17 @@ coverImage: asset://海螺沟_cover_01
         final assetId = asset['assetId'] as String;
         final sourceAssetRef = asset['sourceAssetRef'] as String;
         expect(doc.html, contains('data-asset-id="$assetId"'));
-        expect(sourceAssetRef.startsWith('/'), isFalse, reason: '禁止绝对路径: $sourceAssetRef');
+        expect(
+          sourceAssetRef.startsWith('/'),
+          isFalse,
+          reason: '禁止绝对路径: $sourceAssetRef',
+        );
         final sourceFile = File('${batchDir.path}/$sourceAssetRef');
-        expect(sourceFile.existsSync(), isTrue, reason: '回查源图不存在: ${sourceFile.path}');
+        expect(
+          sourceFile.existsSync(),
+          isTrue,
+          reason: '回查源图不存在: ${sourceFile.path}',
+        );
       }
       expect(doc.referencedAssetUrls, isNotEmpty);
     });

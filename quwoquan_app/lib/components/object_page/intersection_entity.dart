@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -17,8 +17,8 @@ enum IntersectionEntityDensity { spotlight, objectSummary, inboxList }
 /// 交集统一原子：人/地点事物/圈子/组织共用同一视觉语言。
 ///
 /// 只读消费 [IntersectionReason]：真实头像（[IntersectionReason.avatarUrl]）+
-/// 名字（[IntersectionReason.displayName]）+ 云侧证据短句（[IntersectionReason.displayText]
-/// 或 [IntersectionReason.label]）+ 维度短标签；概率（affinity）交集额外标注「推荐」，
+/// 名字（[IntersectionReason.displayName]）+ 云侧证据短句（[IntersectionReason.primaryText]
+/// 或 [IntersectionReason.connectionSummary]）+ 维度短标签；概率（affinity）交集额外标注「推荐」，
 /// 不伪装事实、不显示大行动按钮。
 /// 导航由父层经 [onTap] 提供，本原子不直接路由 / 埋点。
 class IntersectionEntity extends StatelessWidget {
@@ -40,17 +40,15 @@ class IntersectionEntity extends StatelessWidget {
   String get _name {
     final name = reason.displayName.trim();
     if (name.isNotEmpty) return name;
-    final label = reason.label.trim();
-    if (label.isNotEmpty) return label;
-    // 兜底：对象页旧事实理由可能仅带 displayText（短证据句），用作名字占位。
-    return reason.displayText.trim();
+    // 兜底：对象页事实理由可能仅带 primaryText（结论句），用作名字占位。
+    return reason.primaryText.trim();
   }
 
   String get _evidenceText {
-    final text = reason.displayText.trim();
+    final text = reason.primaryText.trim();
     if (text.isNotEmpty && text != _name) return text;
-    final label = reason.label.trim();
-    if (label.isNotEmpty && label != _name) return label;
+    final summary = reason.connectionSummary.trim();
+    if (summary.isNotEmpty && summary != _name) return summary;
     return '';
   }
 
@@ -61,7 +59,7 @@ class IntersectionEntity extends StatelessWidget {
       final confidence = reason.confidenceLabel.trim();
       return confidence.isNotEmpty
           ? confidence
-          : UITextConstants.intersectionAffinityLabel;
+          : DiscoveryFeedText.intersectionAffinityLabel;
     }
     return '';
   }
@@ -73,6 +71,15 @@ class IntersectionEntity extends StatelessWidget {
     if (age.isNegative || age.inHours < 24) return '新';
     if (age.inDays < 7) return '本周';
     return '';
+  }
+
+  /// §21.3 生命周期弱标（真相源 = 服务端 lifecycleState）：new/strengthened/reactivated
+  /// 才出标；stable/weakened/未知返回空。缺省时由 [_freshLabel] 时间派生回退（向后兼容）。
+  String get _lifecycleLabel {
+    const visible = <String>{'new', 'strengthened', 'reactivated'};
+    final state = reason.lifecycleState.trim();
+    if (!visible.contains(state)) return '';
+    return DiscoveryFeedText.intersectionLifecycleLabel(state);
   }
 
   @override
@@ -263,7 +270,7 @@ class IntersectionEntity extends StatelessWidget {
   List<Widget> _chips(BuildContext context) {
     final chips = <Widget>[
       _Chip(
-        label: UITextConstants.intersectionDimensionShortLabel(
+        label: DiscoveryFeedText.intersectionDimensionShortLabel(
           reason.dimension,
         ),
         tone: _ChipTone.dimension,
@@ -279,13 +286,6 @@ class IntersectionEntity extends StatelessWidget {
     }
     if (_isAffinity) {
       chips.add(_Chip(label: _classLabel, tone: _ChipTone.affinity));
-    } else if (reason.sharedCount > 0) {
-      chips.add(
-        _Chip(
-          label: UITextConstants.intersectionSharedChip(reason.sharedCount),
-          tone: _ChipTone.quiet,
-        ),
-      );
     }
     return chips;
   }
@@ -294,15 +294,21 @@ class IntersectionEntity extends StatelessWidget {
     final total = reason.totalPointCount;
     if (total <= 0) return '';
     if (reason.recommendedPointCount > 0 && reason.factPointCount == 0) {
-      return '$total 个推荐交集点';
+      return DiscoveryFeedText.intersectionRecommendedPointCountChip(total);
     }
-    return '$total 个交集点';
+    return DiscoveryFeedText.intersectionPointCountChip(total);
   }
 
   List<String> _statusLabels() {
     final labels = <String>[];
-    final fresh = _freshLabel;
-    if (fresh.isNotEmpty) labels.add(fresh);
+    // 生命周期弱标优先（服务端真相源）；缺省回退时间派生 freshness。
+    final lifecycle = _lifecycleLabel;
+    if (lifecycle.isNotEmpty) {
+      labels.add(lifecycle);
+    } else {
+      final fresh = _freshLabel;
+      if (fresh.isNotEmpty) labels.add(fresh);
+    }
     if (_isAffinity) labels.add(_classLabel);
     return labels;
   }

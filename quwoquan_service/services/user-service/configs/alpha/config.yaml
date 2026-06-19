@@ -9,6 +9,11 @@ postgres:
 mongodb:
   uri: "mongodb://127.0.0.1:27017"
 
+# alpha：搜索索引写侧关闭，主路径不依赖 ES。
+es:
+  enabled: false
+  endpoints: []
+
 redis:
   general:
     mode: standalone

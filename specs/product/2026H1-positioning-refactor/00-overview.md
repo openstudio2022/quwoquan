@@ -60,7 +60,7 @@ WP1 内部子序列（详见 wp-01 §2.5，可并行）：
 2. **文件独占权**（防并行冲突，越权改动=集成验收 BLOCK）：
    - `quwoquan_app/lib/components/object_page/**` → 仅 WP3 可改。
    - `lib/core/constants/ui_text_constants.dart` / `app_concept_constants.dart` 的**批量改名** → 仅 WP5；其他包只允许**追加**新 key（不改既有 key 值），并在本包简报「新增文案 key」清单登记。
-   - `contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml` → 词表已由 WP0 冻结（见概念文档 §20.3）；WP1 可补注记，禁改字段形状。
+   - `contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml` → 交集统一规格收口（2026-06）允许字段形状一次性收敛（删除 displayText/label/sharedCount）；词表与 G2 以概念文档 §18 为准。
    - `lib/ui/chat/**` 与 `messages/conversation` metadata → 仅 WP5。
    - `lib/ui/discovery/**` → 仅 WP2（WP7 例外：`works_immersive_viewer.dart` 归 WP7）。
    - `lib/ui/content/entry/**` 与 `markdown/**` → 仅 WP6。

@@ -30,10 +30,10 @@ _TRANS = ["先", "再", "随后", "最后", "一路"]
 
 
 def route_article(title: str, byline: str, nodes: Sequence[str], must_facts: Sequence[str]) -> str:
-    paras: list[str] = [f"# {title}", f"> {byline} · 真实走过之后想说的"]
+    paras: list[str] = [f"# {title}", f"> {byline} · 资料整理后的编辑判断"]
     paras.append(
-        "出发前我犹豫了很久，既期待这条线能让人松弛下来，又怕一路赶路把状态拖垮。"
-        "如果你也在纠结要不要走，我想先把我真实的喜欢和担心讲清楚，再决定值不值得。"
+        "做行前判断时，最需要先看清的是这条线能不能让人松弛下来，以及一路赶路会不会把状态拖垮。"
+        "如果你也在纠结要不要走，可以先把资料里反复出现的喜欢点和担心点看清楚，再决定值不值得。"
     )
     for i, name in enumerate(nodes):
         paras.append(f"## 走到{name}")
@@ -59,10 +59,10 @@ def route_article(title: str, byline: str, nodes: Sequence[str], must_facts: Seq
 
 
 def entity_article(title: str, byline: str, name: str, must_facts: Sequence[str]) -> str:
-    paras: list[str] = [f"# {title}", f"> {byline} · 去过{name}之后想说的"]
+    paras: list[str] = [f"# {title}", f"> {byline} · 资料整理后的编辑判断"]
     paras.append(
-        f"出发前我其实有点犹豫，怕{name}只是被过度宣传的打卡点，又期待它能让人安静下来。"
-        "如果你也在纠结值不值得专门跑一趟，我想先把真实的体验讲给你听。"
+        f"判断{name}值不值得专门去，最怕只看到被放大的打卡名气，也容易忽略它是否真的适合自己的节奏。"
+        "如果你也在纠结值不值得专门跑一趟，可以先看清资料里能支撑的体验价值和劝退点。"
     )
     paras.append(f"## 初见{name}")
     paras.append(

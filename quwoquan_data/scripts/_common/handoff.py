@@ -192,6 +192,13 @@ def build_batch_reducer_gate(refs_payload: list[Mapping[str, Any]]) -> dict[str,
             source_users.setdefault(base, []).append(str(p.get("ref")))
     source_reuse = {k: v for k, v in source_users.items() if len(v) > 1}
     for base, users in source_reuse.items():
+        policies = {
+            str(p.get("baseSourceReusePolicy") or "")
+            for p in refs_payload
+            if str(p.get("baseSourceRef") or "") == base
+        }
+        if policies == {"multi_intent_source_bundle"}:
+            continue
         issues.append(f"source_reuse_risk: baseSourceRef {base} reused by {users} (需人工确认或重选底稿)")
         affected.update(users)
 

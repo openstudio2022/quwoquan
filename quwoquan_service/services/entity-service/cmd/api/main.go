@@ -22,6 +22,7 @@ import (
 	httpadapter "quwoquan_service/services/entity-service/internal/adapters/http"
 	"quwoquan_service/services/entity-service/internal/application"
 	"quwoquan_service/services/entity-service/internal/infrastructure/persistence"
+	"quwoquan_service/services/entity-service/internal/infrastructure/searchindex"
 )
 
 type config struct {
@@ -36,6 +37,8 @@ type config struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
 	} `yaml:"mongo"`
+
+	ES searchindex.ESConfig `yaml:"es"`
 }
 
 func main() {
@@ -78,12 +81,32 @@ func main() {
 		log.Fatalf("entity-service exception logger init failed: %v", err)
 	}
 
-	homepageService := application.NewHomepageServiceWithStore(ctx, stateStore)
+	// Assemble the write-time search index. ES endpoints/credentials come from the
+	// shared SEARCH_ES_* env (same cluster/index as search-service); when ES is
+	// disabled Build returns a no-op Built and the homepage service runs without a
+	// projector, so the primary write path is unaffected.
+	searchindex.ApplyESEnvOverrides(&cfg.ES)
+	searchBuilt, err := searchindex.Build(cfg.ES)
+	if err != nil {
+		log.Fatalf("entity-service search index build failed: %v", err)
+	}
+	if err := searchBuilt.EnsureIndex(ctx); err != nil {
+		log.Fatalf("entity-service search index ensure failed: %v", err)
+	}
+
+	var serviceOpts []application.HomepageServiceOption
+	if searchBuilt.Projector != nil {
+		serviceOpts = append(serviceOpts, application.WithProjector(searchBuilt.Projector))
+	}
+	homepageService := application.NewHomepageServiceWithStore(ctx, stateStore, serviceOpts...)
 	handler := httpadapter.NewHandler(homepageService).Routes()
 	rootMux := http.NewServeMux()
 	healthChecker := rthealth.NewChecker()
 	if mongoPing != nil {
 		healthChecker.Register("mongodb", mongoPing)
+	}
+	if ping := searchBuilt.HealthPing(); ping != nil {
+		healthChecker.Register("search-es", ping)
 	}
 	rootMux.HandleFunc("/healthz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())

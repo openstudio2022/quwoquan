@@ -16,8 +16,14 @@ func TestBlockCascade_ClearsFollowAndPendingGreeting(t *testing.T) {
 	createTestPersonaFull(t, "bc_blocker_p", "bc_blocker", "sa_bc_blocker", "blocker", "default", true)
 	createTestPersonaFull(t, "bc_blocked_p", "bc_blocked", "sa_bc_blocked", "blocked", "default", true)
 
-	doRequest(t, http.MethodPost, "/v1/user/sub-accounts/sa_bc_blocked/follow", "", authHeadersForPersona("bc_blocker", "sa_bc_blocker"))
-	doRequest(t, http.MethodPost, "/v1/user/sub-accounts/sa_bc_blocker/follow", "", authHeadersForPersona("bc_blocked", "sa_bc_blocked"))
+	// One-directional follow only. A pending greeting requires the pair NOT be
+	// mutual followers — mutual followers are already contacts, so a greeting is
+	// (correctly) rejected as already_contact. Blocking must still cascade-clear
+	// this remaining follow edge.
+	followRec := doRequest(t, http.MethodPost, "/v1/user/sub-accounts/sa_bc_blocked/follow", "", authHeadersForPersona("bc_blocker", "sa_bc_blocker"))
+	if followRec.Code != http.StatusOK {
+		t.Fatalf("seed follow edge: expected 200, got %d: %s", followRec.Code, followRec.Body.String())
+	}
 
 	sendRec := doRequest(
 		t,
@@ -54,6 +60,19 @@ func TestBlockCascade_ClearsFollowAndPendingGreeting(t *testing.T) {
 	}
 	if cap["canGreet"] == true || cap["canSendMessage"] == true {
 		t.Fatalf("blocked capability should disable greet/message: %#v", cap)
+	}
+
+	// Follow edge must be cascade-cleared by the block.
+	relRec := doRequest(
+		t,
+		http.MethodGet,
+		"/v1/user/sub-accounts/sa_bc_blocked/relationship",
+		"",
+		authHeadersForPersona("bc_blocker", "sa_bc_blocker"),
+	)
+	rel := parseJSON(t, relRec)
+	if rel["isFollowing"] == true {
+		t.Fatalf("block should cascade-clear the follow edge, got %#v", rel)
 	}
 
 	var greetingStatus string

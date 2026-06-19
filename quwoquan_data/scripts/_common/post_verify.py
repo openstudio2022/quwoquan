@@ -75,14 +75,35 @@ def resolve_posts_roots(*, task: str | None = None, batch: str | None = None, re
     return release_roots
 
 
-def verify_posts_root(posts_root: Path, *, task_id: str | None = None, batch_id: str | None = None) -> list[str]:
-    verify_posts, verify_semantics = _import_verifiers()
-    issues: list[str] = [str(i) for i in verify_posts(posts_root)]
+def _post_rel(posts_root: Path, post_dir: Path) -> str:
     try:
-        issues.extend(str(i) for i in verify_semantics(posts_root, task_id, batch_id))
+        return post_dir.relative_to(posts_root.parent).as_posix()
+    except ValueError:
+        return post_dir.as_posix()
+
+
+def _post_allowed(posts_root: Path, post_dir: Path, post_rels: set[str] | None) -> bool:
+    if post_rels is None:
+        return True
+    return _post_rel(posts_root, post_dir) in post_rels
+
+
+def verify_posts_root(
+    posts_root: Path,
+    *,
+    task_id: str | None = None,
+    batch_id: str | None = None,
+    post_rels: set[str] | None = None,
+) -> list[str]:
+    verify_posts, verify_semantics = _import_verifiers()
+    issues: list[str] = [str(i) for i in verify_posts(posts_root, post_rels=post_rels)]
+    try:
+        issues.extend(str(i) for i in verify_semantics(posts_root, task_id, batch_id, post_rels=post_rels))
     except TypeError:
         issues.extend(str(i) for i in verify_semantics(posts_root))
     for manifest_path in sorted(posts_root.rglob("manifest.json")):
+        if not _post_allowed(posts_root, manifest_path.parent, post_rels):
+            continue
         payload = read_json(manifest_path)
         for error in validate_result(payload, "produce", "post_manifest"):
             issues.append(f"{manifest_path}: {error}")

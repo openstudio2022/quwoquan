@@ -277,6 +277,16 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface locationPlaceLanding = AppUiSurface(
+    id: 'locationPlaceLanding',
+    owner: 'search',
+    routeId: 'locationPlaceLanding',
+    pathTemplate: '/locations/{placeId}',
+    description: '一方地点（location.place）落地页：被内容引用但未绑定主页的临时地点卡 + 提升为实体主页引导（R-S05e-1）',
+    operationIds: <String>[
+    ],
+  );
+
   static const AppUiSurface homepagePicker = AppUiSurface(
     id: 'homepagePicker',
     owner: 'entity',
@@ -425,6 +435,7 @@ class AppUiSurfaces {
     globalSearchLanding,
     globalSearchSuggestions,
     globalSearchNetworkResults,
+    locationPlaceLanding,
     homepagePicker,
     suggestHomepage,
     homepageDetail,
@@ -455,6 +466,7 @@ class AppUiSurfaces {
     'globalSearchLanding': globalSearchLanding,
     'globalSearchSuggestions': globalSearchSuggestions,
     'globalSearchNetworkResults': globalSearchNetworkResults,
+    'locationPlaceLanding': locationPlaceLanding,
     'homepagePicker': homepagePicker,
     'suggestHomepage': suggestHomepage,
     'homepageDetail': homepageDetail,

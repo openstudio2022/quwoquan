@@ -46,8 +46,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
   }
 
   static const Duration _searchDebounce = Duration(milliseconds: 180);
-  static const int _collapsedContactsCount = 4;
-  static const int _collapsedChatRecordsCount = 3;
+  static const int _localMatchLimit = 3;
   static const int _conversationSearchLimit = 12;
   static const int _maxNetworkSuggestions = 6;
 
@@ -246,34 +245,35 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
           limit: 9,
         );
       }
-      final currentUserId = ref.read(currentUserIdProvider).trim();
-      final effectiveUserId = currentUserId.isNotEmpty
-          ? currentUserId
-          : 'current_user';
-      final people = await ref
-          .read(userProfileRepositoryProvider)
-          .listFollowing(effectiveUserId, limit: 4);
-      final todaySeeds = <SearchInspirationChipView>[
-        ...circles
-            .take(2)
-            .map(
-              (item) => SearchInspirationChipView(
-                title: item.name,
-                subtitle:
-                    '${_positiveCount(item.weeklyActiveCount, item.memberCount)}个交集',
-                query: item.name,
-              ),
+      final guessKeywords = _defaultGuessKeywords(batchIndex: 0);
+      final hotLocations = locations
+          .where((item) => item.title.trim().isNotEmpty)
+          .take(6)
+          .map(
+            (item) => SearchInspirationCardView(
+              id: item.id,
+              title: item.title,
+              subtitle:
+                  '${(item.city ?? item.address ?? item.homepageType).trim()} · ${item.ratingCount > 0 ? '${item.ratingCount}条热度' : '热度上升'}',
+              coverUrl: item.coverUrl,
+              query: item.title,
             ),
-        ...locations
-            .take(2)
-            .map(
-              (item) => SearchInspirationChipView(
-                title: item.title,
-                subtitle: '地点交集',
-                query: item.title,
-              ),
+          )
+          .toList(growable: false);
+      final hotCircles = circles
+          .where((item) => item.name.trim().isNotEmpty)
+          .take(6)
+          .map(
+            (item) => SearchInspirationCardView(
+              id: item.id,
+              title: item.name,
+              subtitle:
+                  '${_positiveCount(item.memberCount, item.weeklyActiveCount)}人 · ${item.description?.trim().isNotEmpty == true ? item.description!.trim() : '热门圈子'}',
+              coverUrl: item.coverUrl,
+              query: item.name,
             ),
-      ].where((item) => item.title.trim().isNotEmpty).take(4).toList(growable: false);
+          )
+          .toList(growable: false);
 
       if (!ref.mounted) {
         return;
@@ -281,47 +281,12 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
       _setState(
         state.copyWith(
           inspiration: SearchInspirationState(
-            todayIntersections: todaySeeds,
-            hotCircles: circles
-                .where((item) => item.name.trim().isNotEmpty)
-                .take(6)
-                .map(
-                  (item) => SearchInspirationCardView(
-                    id: item.id,
-                    title: item.name,
-                    subtitle:
-                        '${_positiveCount(item.memberCount, item.weeklyActiveCount)}人',
-                    coverUrl: item.coverUrl,
-                    query: item.name,
-                  ),
-                )
-                .toList(growable: false),
-            hotLocations: locations
-                .where((item) => item.title.trim().isNotEmpty)
-                .take(6)
-                .map(
-                  (item) => SearchInspirationCardView(
-                    id: item.id,
-                    title: item.title,
-                    subtitle: (item.city ?? item.address ?? '地点').trim(),
-                    coverUrl: item.coverUrl,
-                    query: item.title,
-                  ),
-                )
-                .toList(growable: false),
-            people: people
-                .where((item) => item.displayName.trim().isNotEmpty)
-                .take(4)
-                .map(
-                  (item) => SearchInspirationPersonView(
-                    id: item.subAccountId,
-                    displayName: item.displayName,
-                    avatarUrl: item.avatarUrl,
-                    headline: item.isFollowing ? '已关注' : '摄影圈活跃',
-                    reason: '共同兴趣 3 个',
-                  ),
-                )
-                .toList(growable: false),
+            guessKeywords: guessKeywords,
+            guessBatchIndex: 0,
+            hotCircles: hotCircles.isEmpty ? _defaultHotCircles() : hotCircles,
+            hotLocations: hotLocations.isEmpty
+                ? _defaultHotLocations()
+                : hotLocations,
           ),
         ),
       );
@@ -331,7 +296,13 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
       }
       _setState(
         state.copyWith(
-          inspiration: state.inspiration.copyWith(isLoading: false),
+          inspiration: state.inspiration.copyWith(
+            guessKeywords: _defaultGuessKeywords(batchIndex: 0),
+            guessBatchIndex: 0,
+            hotCircles: _defaultHotCircles(),
+            hotLocations: _defaultHotLocations(),
+            isLoading: false,
+          ),
         ),
       );
     }
@@ -345,6 +316,106 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
       return secondary;
     }
     return 1;
+  }
+
+  void refreshGuessKeywords() {
+    final nextIndex =
+        (state.inspiration.guessBatchIndex + 1) % _guessKeywordBatches.length;
+    _setState(
+      state.copyWith(
+        inspiration: state.inspiration.copyWith(
+          guessKeywords: _defaultGuessKeywords(batchIndex: nextIndex),
+          guessBatchIndex: nextIndex,
+        ),
+      ),
+    );
+  }
+
+  List<NetworkSearchSuggestion> _defaultGuessKeywords({
+    required int batchIndex,
+  }) {
+    final seeds =
+        _guessKeywordBatches[batchIndex % _guessKeywordBatches.length];
+    return seeds
+        .map((query) => NetworkSearchSuggestion(query: query, title: query))
+        .toList(growable: false);
+  }
+
+  static const List<List<String>> _guessKeywordBatches = <List<String>>[
+    <String>[
+      '摄影',
+      '厦门大学',
+      '川西自驾',
+      '鼓浪屿',
+      '旅行',
+      '富士X100V',
+      '环岛路',
+      '九寨沟',
+      '武夷山',
+      '大理',
+    ],
+    <String>[
+      '毕业旅行',
+      '环岛骑行',
+      '富士相机',
+      '大理旅行',
+      '露营',
+      '旅行攻略',
+      '城市漫步',
+      '咖啡地图',
+      '日落机位',
+      '周末徒步',
+      '海边拍照',
+      '小众博物馆',
+    ],
+  ];
+
+  List<SearchInspirationCardView> _defaultHotCircles() {
+    const seeds = <SearchInspirationCardView>[
+      SearchInspirationCardView(
+        id: 'circle_light_photo',
+        title: '光影摄影社',
+        subtitle: '128人 · 分享快门背后的故事',
+        query: '光影摄影社',
+      ),
+      SearchInspirationCardView(
+        id: 'circle_travel_notes',
+        title: '旅行手账',
+        subtitle: '1280人 · 热门圈子',
+        query: '旅行手账',
+      ),
+      SearchInspirationCardView(
+        id: 'circle_extreme_photo',
+        title: '极简摄影俱乐部',
+        subtitle: '2340人 · 热门圈子',
+        query: '极简摄影俱乐部',
+      ),
+    ];
+    return seeds;
+  }
+
+  List<SearchInspirationCardView> _defaultHotLocations() {
+    const seeds = <SearchInspirationCardView>[
+      SearchInspirationCardView(
+        id: 'poi_xiamen_university',
+        title: '厦门大学',
+        subtitle: '高校 · 热度上升',
+        query: '厦门大学',
+      ),
+      SearchInspirationCardView(
+        id: 'poi_gulangyu',
+        title: '鼓浪屿',
+        subtitle: '景点 · 热度上升',
+        query: '鼓浪屿',
+      ),
+      SearchInspirationCardView(
+        id: 'poi_west_lake',
+        title: '西湖',
+        subtitle: '景点 · 热度上升',
+        query: '西湖',
+      ),
+    ];
+    return seeds;
   }
 
   Future<void> useRecentSearch(RecentSearchEntryView entry) async {
@@ -548,25 +619,17 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
         SearchSuggestionSection(
           kind: SearchSuggestionSectionKind.contacts,
           items: contactSuggestions
+              .take(_localMatchLimit)
               .map<SearchSuggestionEntry>(SearchSuggestionEntry.contact)
               .toList(growable: false),
-          expanded: state.areContactsExpanded,
-          collapsedItemCount: _collapsedContactsCount,
-          moreLabel: '更多联系人',
         ),
       if (includesChatRecords && filteredChatRecordSuggestions.isNotEmpty)
         SearchSuggestionSection(
           kind: SearchSuggestionSectionKind.chatRecords,
           items: filteredChatRecordSuggestions
+              .take(_localMatchLimit)
               .map<SearchSuggestionEntry>(SearchSuggestionEntry.chatRecord)
               .toList(growable: false),
-          expanded: state.areChatRecordsExpanded,
-          collapsedItemCount: _collapsedChatRecordsCount,
-          moreLabel: switch (objectTarget) {
-            SearchObjectTarget.directChats => '更多单聊',
-            SearchObjectTarget.groupChats => '更多讨论',
-            _ => '更多聊天记录',
-          },
           titleOverride: switch (objectTarget) {
             SearchObjectTarget.directChats => '单聊',
             SearchObjectTarget.groupChats => '讨论',
@@ -577,6 +640,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
         SearchSuggestionSection(
           kind: SearchSuggestionSectionKind.circles,
           items: circleSuggestions
+              .take(_localMatchLimit)
               .map<SearchSuggestionEntry>(SearchSuggestionEntry.circle)
               .toList(growable: false),
         ),
@@ -584,6 +648,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
         SearchSuggestionSection(
           kind: SearchSuggestionSectionKind.locations,
           items: locationSuggestions
+              .take(_localMatchLimit)
               .map<SearchSuggestionEntry>(SearchSuggestionEntry.location)
               .toList(growable: false),
         ),
@@ -591,6 +656,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
         SearchSuggestionSection(
           kind: SearchSuggestionSectionKind.followedPeople,
           items: followedPeopleSuggestions
+              .take(_localMatchLimit)
               .map<SearchSuggestionEntry>(SearchSuggestionEntry.followedPerson)
               .toList(growable: false),
         ),

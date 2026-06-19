@@ -34,7 +34,7 @@ os.environ["QWQ_PUBLISH_ROOT"] = str(_TMP / "publish")
 
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from _common.io import write_json  # noqa: E402
+from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
     STAGE_DOWNLOAD,
     batch_entity_object_dir,
@@ -116,6 +116,15 @@ def _doc(top_level: bool, source_count: int = 1) -> dict:
     }
 
 
+def test_source_screen_report_ref_is_entity_scoped():
+    a = handler_mod._source_screen_report_ref("景区甲", "article_qunar_base_1")
+    b = handler_mod._source_screen_report_ref("景区乙", "article_qunar_base_1")
+    assert a != b
+    assert "/" not in a and "/" not in b
+    assert "景区甲" in a
+    assert "article_qunar_base_1" in a
+
+
 def _seed_object_plan(top_level: bool, source_count: int = 1) -> None:
     """对象优先：source_plan 落实体对象 1.download/source_plan.json。"""
     ensure_batch_layout(_TASK, _BATCH, "download")
@@ -182,6 +191,107 @@ def test_download_requirements_follow_separated_image_and_homepage_quota():
 
     assert download_requirements(one_work["taskId"])["minImages"] == 2
     assert download_requirements(two_works["taskId"])["minImages"] == 3
+    assert download_requirements(one_work["taskId"])["minArticleBaseSources"] == 4
+    assert download_requirements(two_works["taskId"])["minArticleBaseSources"] == 2
+
+
+def test_article_scoped_source_plan_gate_does_not_require_homepage_core_category():
+    task = store.scaffold_spec(
+        vertical="travel",
+        organize_by="地域",
+        key="四川省",
+        name="文章lane门",
+        category="景区",
+        scope={"region": "四川省", "entityTypes": ["地点/景区"], "coverageTargets": []},
+        content={
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityArticlesPerTarget": 2,
+                "imageWorksPerTarget": 1,
+                "entityHomepagesPerTarget": 1,
+            },
+        },
+        created_by="test",
+    )
+    store.save_spec(task)
+    article_sources = [
+        {
+            "source_id": "article_a",
+            "platform": "携程攻略",
+            "category": "travelogue",
+            "sourceRole": "base",
+            "url": "https://you.ctrip.com/travels/example/1.html",
+        },
+        {
+            "source_id": "article_b",
+            "platform": "去哪儿攻略",
+            "category": "travelogue",
+            "sourceRole": "base",
+            "url": "https://touch.travel.qunar.com/youji/1",
+        },
+    ]
+
+    article_issues = handler_mod._source_plan_gate_issues(
+        task_id=task["taskId"],
+        batch_id="article_lane_gate",
+        entity_id=_EID,
+        entity_type="景区",
+        planned_sources=article_sources,
+        selected_lanes={"article"},
+        vertical="travel",
+    )
+    assert not any("missing core source categories" in issue for issue in article_issues)
+    assert not any("encyclopedia" in issue or "official" in issue for issue in article_issues)
+
+    homepage_issues = handler_mod._source_plan_gate_issues(
+        task_id=task["taskId"],
+        batch_id="homepage_lane_gate",
+        entity_id=_EID,
+        entity_type="景区",
+        planned_sources=article_sources,
+        selected_lanes={"homepage"},
+        vertical="travel",
+    )
+    assert any("homepage research needs encyclopedia or official evidence" in issue for issue in homepage_issues)
+
+    official_homepage_issues = handler_mod._source_plan_gate_issues(
+        task_id=task["taskId"],
+        batch_id="homepage_lane_single_official_gate",
+        entity_id=_EID,
+        entity_type="景区",
+        planned_sources=[
+            {
+                "source_id": "home_official",
+                "platform": "景区官网",
+                "category": "official",
+                "sourceRole": "primary",
+                "url": "https://example.com/scenic/about",
+            }
+        ],
+        selected_lanes={"homepage"},
+        vertical="travel",
+    )
+    assert not any("fewer than 2" in issue for issue in official_homepage_issues)
+    assert official_homepage_issues == []
+
+    official_site_issues = handler_mod._source_plan_gate_issues(
+        task_id=task["taskId"],
+        batch_id="homepage_lane_single_official_site_gate",
+        entity_id=_EID,
+        entity_type="景区",
+        planned_sources=[
+            {
+                "source_id": "home_tourism_site",
+                "platform": "旅游官网",
+                "category": "official_site",
+                "sourceRole": "primary",
+                "url": "https://example.com/scenic",
+            }
+        ],
+        selected_lanes={"homepage"},
+        vertical="travel",
+    )
+    assert official_site_issues == []
 
 
 def test_handle_download_produces_source_unit_from_preset_plan():
@@ -194,7 +304,7 @@ def test_handle_download_produces_source_unit_from_preset_plan():
         img_a = _real_jpeg(31)
         img_b = _real_jpeg(32)
 
-        def _fake_fetch(url: str):
+        def _fake_fetch(url: str, **_kwargs):
             return {
                 "url": url,
                 "statusCode": 200,
@@ -246,6 +356,204 @@ def test_handle_download_produces_source_unit_from_preset_plan():
     assert "开放时间" in clean_text and "门票" in clean_text and "返程排队" in clean_text
     # 不再产生对象级散落 images/
     assert not (obj / "images").exists()
+
+
+def _write_separated_lane_plans(
+    batch: str,
+    *,
+    homepage_sources: list[dict],
+    article_sources: list[dict],
+    images: list[dict],
+) -> None:
+    obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区") / STAGE_DOWNLOAD
+    obj.mkdir(parents=True, exist_ok=True)
+    write_json(obj / "homepage_source_plan.json", {"payload": {"sources": homepage_sources}})
+    write_json(obj / "article_source_plan.json", {"payload": {"sources": article_sources}})
+    write_json(
+        obj / "image_source_plan.json",
+        {
+            "payload": {
+                "collections": [
+                    {
+                        "sourceCollectionId": image.get("sourceCollectionId") or f"fixture:{index}",
+                        "creator": image.get("credit") or f"Fixture {index}",
+                        "credit": image.get("credit") or f"Fixture {index}",
+                        "collectionPageUrl": image.get("sourceUrl") or image["url"],
+                        "platform": image.get("platform") or "Wikimedia Commons",
+                        "license": image.get("license") or "CC-BY-SA 4.0",
+                        "termsUrl": image.get("termsUrl") or "https://creativecommons.org/licenses/by-sa/4.0/",
+                        "licenseSnapshot": image.get("licenseSnapshot") or "test fixture",
+                        "authorizationProof": image.get("authorizationProof") or "test fixture authorization",
+                        "usageScope": image.get("usageScope") or "app_publish",
+                        "images": [image],
+                    }
+                    for index, image in enumerate(images, start=1)
+                ]
+            }
+        },
+    )
+
+
+def test_lane_scoped_homepage_download_preserves_other_lanes():
+    batch = "lane_scoped_homepage_preserve"
+    images = [
+        {
+            "url": "https://img.invalid/lane-a.jpg",
+            "platform": "Wikimedia Commons",
+            "license": "CC-BY-SA 4.0",
+            "credit": "Ann",
+            "sourceUrl": "https://img.invalid/lane-a.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "authorizationProof": "https://img.invalid/lane-a.jpg#rights",
+            "usageScope": "app_publish",
+            "caption": "稻城亚丁雪山",
+            "relevance": "直接呈现稻城亚丁雪山景观",
+        },
+        {
+            "url": "https://img.invalid/lane-b.jpg",
+            "platform": "Wikimedia Commons",
+            "license": "CC-BY-SA 4.0",
+            "credit": "Bob",
+            "sourceUrl": "https://img.invalid/lane-b.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "authorizationProof": "https://img.invalid/lane-b.jpg#rights",
+            "usageScope": "app_publish",
+            "caption": "稻城亚丁牛奶海",
+            "relevance": "直接呈现稻城亚丁牛奶海湖泊",
+        },
+    ]
+    article_sources = [
+        {
+            "source_id": "article_guide",
+            "platform": "马蜂窝",
+            "category": "travelogue",
+            "url": "https://daocheng.invalid/article-guide",
+            "sourceUseMode": "factual_reference_only",
+        },
+        {
+            "source_id": "article_official",
+            "platform": "景区官网",
+            "category": "official_article",
+            "url": "https://daocheng.invalid/article-official",
+            "sourceUseMode": "factual_reference_only",
+        },
+    ]
+    _write_separated_lane_plans(
+        batch,
+        homepage_sources=[
+            {
+                "source_id": "home_old",
+                "platform": "维基百科",
+                "category": "encyclopedia",
+                "url": "https://daocheng.invalid/home-old",
+                "sourceUseMode": "factual_reference_only",
+            }
+        ],
+        article_sources=article_sources,
+        images=images,
+    )
+
+    img_a = _real_jpeg(41)
+    img_b = _real_jpeg(42)
+    image_calls: list[str] = []
+
+    def _fake_fetch(url: str, **_kwargs):
+        return {
+            "url": url,
+            "statusCode": 200,
+            "htmlBytes": b"<html></html>",
+            "text": (
+                f"{_EID} 景区由雪山、海子、草甸和游客中心组成，游览前需要确认门票预约。"
+                f"核心线路通常围绕冲古寺、洛绒牛场、牛奶海和五色海展开。"
+                f"景区海拔变化明显，徒步时要注意补给、保暖、防晒和返程时间。"
+            ),
+            "sha256": "sha-source",
+        }
+
+    def _fake_image_fetch(url, *, min_bytes=3000):
+        image_calls.append(url)
+        import hashlib as _h
+
+        body = img_a if url.endswith("lane-a.jpg") else img_b
+        return {
+            "url": url,
+            "ext": ".jpg",
+            "bytes": body,
+            "contentType": "image/jpeg",
+            "sha256": _h.sha256(body).hexdigest(),
+        }
+
+    original_fetch = handler_mod.fetch_source_payload
+    original_image_fetch = handler_mod.fetch_image_payload
+    try:
+        handler_mod.fetch_source_payload = _fake_fetch
+        handler_mod.fetch_image_payload = _fake_image_fetch
+        handle_download(
+            argparse.Namespace(
+                task=_TASK,
+                batch=batch,
+                entity_ids=_EID,
+                entity_type="景区",
+                lane="all",
+                max_workers=1,
+            )
+        )
+
+        obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
+        previous_other_lane_units = {
+            unit.name
+            for unit in iter_source_units(obj)
+            if read_json(unit / "meta.json").get("researchLane") in {"article", "image"}
+        }
+        assert previous_other_lane_units
+
+        _write_separated_lane_plans(
+            batch,
+            homepage_sources=[
+                {
+                    "source_id": "home_new",
+                    "platform": "景区官网",
+                    "category": "official",
+                    "url": "https://daocheng.invalid/home-new",
+                    "sourceUseMode": "factual_reference_only",
+                },
+                {
+                    "source_id": "home_new_support",
+                    "platform": "百度百科",
+                    "category": "encyclopedia",
+                    "url": "https://daocheng.invalid/home-new-support",
+                    "sourceUseMode": "factual_reference_only",
+                }
+            ],
+            article_sources=article_sources,
+            images=images,
+        )
+        image_calls.clear()
+        handle_download(
+            argparse.Namespace(
+                task=_TASK,
+                batch=batch,
+                entity_ids=_EID,
+                entity_type="景区",
+                lane="homepage",
+                max_workers=1,
+            )
+        )
+    finally:
+        handler_mod.fetch_source_payload = original_fetch
+        handler_mod.fetch_image_payload = original_image_fetch
+
+    obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
+    current_units = {unit.name for unit in iter_source_units(obj)}
+    current_other_lane_units = {
+        unit.name
+        for unit in iter_source_units(obj)
+        if read_json(unit / "meta.json").get("researchLane") in {"article", "image"}
+    }
+    assert previous_other_lane_units.issubset(current_other_lane_units)
+    assert any(name.endswith(".home_new") for name in current_units)
+    assert not any(name.endswith(".home_old") for name in current_units)
+    assert image_calls == []
 
 
 def test_curated_blocks_dual_scenic_location_tree_conflict():

@@ -223,7 +223,7 @@ entities:
         ops_exposure: read
 
   FollowerListItemView:
-    description: followers 列表项；以 subAccountId 为展示主键
+    description: 粉丝列表项（ListFollowers API）；以 subAccountId 为展示主键
     fields:
       - name: subAccountId
         type: string

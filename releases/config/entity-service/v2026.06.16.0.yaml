@@ -1,0 +1,25 @@
+config:
+  version: "v2026.06.16.0"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+
+service:
+  name: entity-service
+
+# Unified search index — WRITE side contract snapshot.
+# entity-service is an indexing producer for the shared ES/OpenSearch index that
+# search-service reads. Endpoints/credentials are injected per-env via the shared
+# SEARCH_ES_ENDPOINTS / SEARCH_ES_* deploy secrets; committed config never hardcodes
+# cluster URLs or secrets. enabled=false / empty endpoints => write-time projector is
+# a no-op and the homepage write path is unaffected. Enabling/endpoints/insecureTls are
+# infra-sensitive and roll out via risky-config gray release.
+es:
+  enabled: false
+  endpoints: []
+  index: "quwoquan_objects"
+  requestTimeoutMs: 800
+  insecureTls: false
+  shards: 1
+  replicas: 1
+  embeddingDims: 0
+  synonyms: []

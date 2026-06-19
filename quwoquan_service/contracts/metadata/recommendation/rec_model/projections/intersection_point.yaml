@@ -26,6 +26,8 @@ client_projection:
   dart_class: IntersectionPoint
   base_class: ""
   output_path: cloud/runtime/generated/recommendation/intersection_point.g.dart
+  dart_imports:
+    - intersection_visual.g.dart
   fields:
     - name: pointId
       dart_type: String
@@ -86,3 +88,11 @@ client_projection:
       nullable: false
       source: sampleAvatarUrls
       aliases: [sampleAvatarUrls]
+    # 统一交互子契约（§20.7，只附加）：sampleVisuals 升级裸 sampleAvatarUrls，
+    # 携带 objectKind/assetKind/displayName/target，禁用户头像冒充非用户对象；旧字段保留过渡。
+    - name: sampleVisuals
+      dart_type: List<IntersectionVisual>
+      nullable: false
+      source: sampleVisuals
+      aliases: [sampleVisuals]
+      list_element_dart_class: IntersectionVisual

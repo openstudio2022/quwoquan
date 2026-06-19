@@ -9,6 +9,11 @@ postgres:
 mongodb:
   uri: "mongodb://127.0.0.1:27017"
 
+# beta：搜索索引写侧默认关闭，按需经 SEARCH_ES_* 注入开启。
+es:
+  enabled: false
+  endpoints: []
+
 redis:
   general:
     mode: standalone

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:riverpod/misc.dart' show ProviderListenable;
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
@@ -153,6 +154,11 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     final conversationId = _activeConversationId;
     if (conversationId != null) {
       topics.add('conversation/$conversationId');
+    }
+    // 登录用户额外订阅个人推荐实时 patch 通道（游客 resolver 返回空 → 不订阅）。
+    final feedPatchUserId = currentUserIdResolver().trim();
+    if (feedPatchUserId.isNotEmpty) {
+      topics.add(feedRealtimePatchChannelFor(feedPatchUserId));
     }
 
     _ws = _webSocketFactory(

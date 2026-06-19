@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "quwoquan_data.target_selection",
+  "strategy": "mandatory targets plus deterministic round-robin regional coverage",
+  "discoveryPath": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_data/tasks/旅行/地域/四川省/景区/景区精选/discovery_sichuan_100e.json",
+  "limit": 10,
+  "mandatory": [],
+  "excluded": [
+    "光雾山",
+    "剑门关",
+    "华蓥山",
+    "峨眉山",
+    "毕棚沟",
+    "碧峰峡",
+    "蜀南竹海",
+    "邛海",
+    "阆中古城",
+    "青城山"
+  ],
+  "targets": [
+    {
+      "name": "都江堰",
+      "entityType": "地点/景区",
+      "region": "成都市"
+    },
+    {
+      "name": "九寨沟",
+      "entityType": "地点/景区",
+      "region": "阿坝藏族羌族自治州"
+    },
+    {
+      "name": "稻城亚丁",
+      "entityType": "地点/景区",
+      "region": "甘孜藏族自治州"
+    },
+    {
+      "name": "乐山大佛",
+      "entityType": "地点/景区",
+      "region": "乐山市"
+    },
+    {
+      "name": "北川羌城",
+      "entityType": "地点/景区",
+      "region": "绵阳市"
+    },
+    {
+      "name": "巴山大峡谷",
+      "entityType": "地点/景区",
+      "region": "达州市"
+    },
+    {
+      "name": "邓小平故里",
+      "entityType": "地点/景区",
+      "region": "广安市"
+    },
+    {
+      "name": "泸州老窖景区",
+      "entityType": "地点/景区",
+      "region": "泸州市"
+    },
+    {
+      "name": "三星堆博物馆",
+      "entityType": "地点/景区",
+      "region": "德阳市"
+    },
+    {
+      "name": "三苏祠",
+      "entityType": "地点/景区",
+      "region": "眉山市"
+    }
+  ],
+  "sourceTaskId": "旅行/地域/四川省/景区/景区精选",
+  "taskId": "旅行/地域/四川省/景区/四川source-ready10放量前修复试跑"
+}

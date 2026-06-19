@@ -182,7 +182,7 @@ python3 agent_ops/deploy/stackctl.py up --env <alpha|beta|gamma|prod-sim|prod> [
 
 统一约束：
 
-- `gray-initial`：初始灰度，全自动 deploy → 健康/只读集成探针 → SLO gate；同时承接旧 gamma-hosted 的真实远端集成与 curated 媒体路由复验。
+- `gray-initial`：初始灰度，全自动 deploy → 健康/只读集成探针 → 页面级 smoke → SLO gate；同时承接旧 gamma-hosted 的真实远端集成、curated 媒体路由和基本 App 可用性复验。
 - `carry-on`：在 `gray-initial` 通过后按审批推进到更大放量（含 checks）。
 - `full`：全量放量；失败自动回滚到上一稳定 `image/config`。
 
@@ -194,8 +194,8 @@ python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service <svc>
 
 说明：
 
-- `deploy --target prod-hosted` 成功后会自动串联 `health --scope full`、`inspect --scope all`、`doctor`，每个 rollout stage 留下机器可读证据。
-- prod-hosted 为 backend SSH 托管，gray 与 full 因成本共享同一集群；这是当前成本约束下的共享拓扑，不抽象成 `prod-gray` 第二环境。
+- `deploy --target prod-hosted` 成功后会自动串联 `health --scope full`、`inspect --scope all`、`doctor`；`gray-initial` 还会阻断执行 `stackctl verify --target prod-hosted --tier t4` 页面级 smoke，每个 rollout stage 留下机器可读证据。
+- prod-hosted 为 backend SSH 托管，gray 与 full 因成本共享同一集群；这是有意保留的共享集群拓扑，不抽象成 `prod-gray` 第二环境。
 - 本轮已验证的 gray/full 证据分别见 `artifacts/stackctl/prod/20260617T164119Z-deploy-prod-hosted`（`gray-initial` 成功，`4/4 healthy`）与 `artifacts/stackctl/prod/20260617T172537Z-deploy-prod-hosted`（`full` 成功，`4/4 healthy`，doctor 无问题）。
 
 约束：
@@ -209,7 +209,9 @@ python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service <svc>
 
 | 范围 | 命令 / 条件 | 通过判据 |
 |------|-------------|----------|
-| `local-gamma mirror` | `make gate-local-gamma` / `python3 agent_ops/deploy/stackctl.py up --env gamma` | `T1/T2` 本地门禁、`T3` 本地真实 API/存储、`T4` 共享 gamma patrol/chat-avatar 旅程通过并生成 `artifacts/local-gamma/report.json` |
+| `local-gamma mirror` | `make gate-local-gamma` / `python3 agent_ops/deploy/stackctl.py up --env gamma` | `T1/T2` 本地门禁、`T3` 本地真实 API/存储、`T4` 共享 gamma patrol/chat-avatar/environment-smoke 旅程通过并生成 `artifacts/local-gamma/report.json` 或 `artifacts/stackctl/gamma/**` |
+| `prod-sim` | `python3 agent_ops/deploy/stackctl.py up --env prod-sim` → `python3 agent_ops/deploy/stackctl.py verify --target prod-sim --kind topology --tier t4` | 本地 `api-edge/product-ops-edge/media-edge/media-origin` 可探测，页面 smoke 覆盖首页、我的、他人主页、记录列表、视频流，产物归档到 `artifacts/stackctl/prod/**/environment-page-smoke/report.json` |
+| `prod-hosted gray-initial` | `python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted ... --step <initial>` | 部署后 `health/inspect/doctor` 与 hosted 页面 smoke 均为 blocking；通过前不得推进 `carry-on/full` |
 
 ## 5. 相关文件索引
 

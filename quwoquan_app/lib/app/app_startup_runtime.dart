@@ -5,7 +5,6 @@ import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/core/emoji/emoji_analytics.dart';
 import 'package:quwoquan_app/core/emoji/emoji_repository.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 typedef ProviderReader = Object? Function(dynamic provider);
@@ -79,7 +78,6 @@ final class AppStartupRuntime {
     unawaited(
       AppExceptionTelemetryService.instance.flushPending().catchError((_) {}),
     );
-    unawaited(_warmupHomeFeed(read));
     await _warmupAnalytics(read);
   }
 
@@ -103,17 +101,6 @@ final class AppStartupRuntime {
       unawaited(EmojiAnalytics.tryReportDaily(emojiRepo, analytics));
     } catch (_) {
       // 冷启动统计链路必须 best effort，不能影响首屏。
-    }
-  }
-
-  Future<void> _warmupHomeFeed(ProviderReader read) async {
-    try {
-      final notifier =
-          read(discoveryFeedMapProvider.notifier) as DiscoveryFeedMapNotifier;
-      await notifier.load('moment');
-      markHomeFeedWarm();
-    } catch (_) {
-      // 预热失败时保留首页正常回退逻辑。
     }
   }
 

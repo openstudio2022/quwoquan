@@ -60,7 +60,45 @@ guardrails:
     minSamples: 1000
     window: 24h
     action: suggest_only
+exposureGovernance:
+  frequencyAndNearDup:
+    enabled: true
+    maxSameAuthorPerWindow: 2
+    maxSameTagPerWindow: 3
+    maxSameTopicPerWindow: 3
+    nearDupJaccardMax: 0.8
+    softFallbackMinFillPct: 80
 `
+
+func TestValidateOpsIntervention(t *testing.T) {
+	base := mustParse(t, testPolicyYAML)
+	base.OpsIntervention = OpsInterventionConfig{Enabled: true, Interventions: []OpsIntervention{
+		{ID: "1", Action: OpsActionDemote, TargetType: OpsTargetAuthor, Target: "auth1", Weight: 0.5},
+		{ID: "2", Action: OpsActionPin, TargetType: OpsTargetContent, Target: "c1", Weight: 3},
+		{ID: "3", Action: OpsActionBlock, TargetType: OpsTargetTag, Target: "Topic/x"},
+	}}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid ops intervention config rejected: %v", err)
+	}
+
+	invalid := map[string]OpsInterventionConfig{
+		"empty id":        {Enabled: true, Interventions: []OpsIntervention{{ID: "", Action: "block", TargetType: "content", Target: "a"}}},
+		"bad action":      {Enabled: true, Interventions: []OpsIntervention{{ID: "1", Action: "boost", TargetType: "content", Target: "a"}}},
+		"bad target type": {Enabled: true, Interventions: []OpsIntervention{{ID: "1", Action: "block", TargetType: "foo", Target: "a"}}},
+		"empty target":    {Enabled: true, Interventions: []OpsIntervention{{ID: "1", Action: "block", TargetType: "content", Target: ""}}},
+		"demote oob":      {Enabled: true, Interventions: []OpsIntervention{{ID: "1", Action: "demote", TargetType: "content", Target: "a", Weight: 1.5}}},
+		"pin negative":    {Enabled: true, Interventions: []OpsIntervention{{ID: "1", Action: "pin", TargetType: "content", Target: "a", Weight: -1}}},
+		"duplicate id": {Enabled: true, Interventions: []OpsIntervention{
+			{ID: "d", Action: "block", TargetType: "content", Target: "a"},
+			{ID: "d", Action: "pin", TargetType: "content", Target: "b"},
+		}},
+	}
+	for name, cfg := range invalid {
+		if err := validateOpsIntervention(cfg); err == nil {
+			t.Errorf("case %q: expected validation error, got nil", name)
+		}
+	}
+}
 
 func mustParse(t *testing.T, raw string) *RecPolicy {
 	t.Helper()
@@ -100,6 +138,7 @@ func TestValidate_Errors(t *testing.T) {
 		{"bad weight dim", func(p *RecPolicy) { p.SegmentTargeting[1].WeightDeltas = map[string]float64{"nope": 1} }, "unknown weight dim"},
 		{"guardrail action", func(p *RecPolicy) { p.Guardrails[0].Action = "auto_rollback" }, "only \"suggest_only\""},
 		{"guardrail baseline", func(p *RecPolicy) { p.Guardrails[0].BaselinePreset = "ghost" }, "baselinePreset"},
+		{"bad near dup threshold", func(p *RecPolicy) { p.ExposureGovernance.FrequencyAndNearDup.NearDupJaccardMax = 2 }, "frequencyAndNearDup"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/四川省/景区/四川source-ready10端到端试跑",
+  "updatedAt": "2026-06-15T07:11:46.155106+00:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/毕棚沟",
+        "地点/景区/碧峰峡",
+        "地点/景区/蜀南竹海",
+        "地点/景区/阆中古城",
+        "地点/景区/剑门关",
+        "地点/景区/光雾山",
+        "地点/景区/邛海",
+        "地点/景区/青城山",
+        "地点/景区/峨眉山",
+        "地点/景区/华蓥山"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

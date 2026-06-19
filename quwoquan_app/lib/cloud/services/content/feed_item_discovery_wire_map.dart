@@ -1,4 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 
 /// 将 [FeedItemDto] 还原为发现区 / postBaseDtoFromMap 兼容的 wire 形状（含别名键）。
 extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
@@ -18,6 +21,10 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
       'displayName': displayName,
       'authorAvatarUrl': avatarUrl,
       'avatarUrl': avatarUrl,
+      if (authorRoleLabel.trim().isNotEmpty) 'authorRoleLabel': authorRoleLabel,
+      if (authorIdentityTags.isNotEmpty)
+        'authorIdentityTags': authorIdentityTags,
+      'authorVerified': authorVerified,
       if (title != null && title!.isNotEmpty) 'title': title,
       if (body != null && body!.isNotEmpty) 'body': body,
       if (summary != null && summary!.isNotEmpty) 'summary': summary,
@@ -33,8 +40,12 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
       'commentCount': commentCount,
       'shareCount': shareCount,
       'createdAt': createdIso,
-      if (updatedIso != null) 'updatedAt': updatedIso,
-      if (publishedIso != null) 'publishedAt': publishedIso,
+      ...(updatedIso == null
+          ? const <String, dynamic>{}
+          : {'updatedAt': updatedIso}),
+      ...(publishedIso == null
+          ? const <String, dynamic>{}
+          : {'publishedAt': publishedIso}),
       if (authorBackgroundUrl != null && authorBackgroundUrl!.trim().isNotEmpty)
         'authorBackgroundUrl': authorBackgroundUrl,
       if (articleTemplate != null && articleTemplate!.trim().isNotEmpty)
@@ -56,8 +67,37 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
         'visibility': visibility,
       if (intersectionReasons != null && intersectionReasons!.isNotEmpty)
         'intersectionReasons': intersectionReasons!
-            .map((reason) => reason.toMap())
+            .map(_intersectionReasonToWireMap)
             .toList(growable: false),
     };
   }
+}
+
+Map<String, dynamic> _intersectionReasonToWireMap(IntersectionReason reason) {
+  return <String, dynamic>{
+    ...reason.toMap(),
+    'primarySpans': reason.primarySpans
+        .map(_intersectionTextSpanToWireMap)
+        .toList(growable: false),
+    'sampleVisuals': reason.sampleVisuals
+        .map(_intersectionVisualToWireMap)
+        .toList(growable: false),
+  };
+}
+
+Map<String, dynamic> _intersectionTextSpanToWireMap(IntersectionTextSpan span) {
+  return <String, dynamic>{
+    'text': span.text,
+    'role': span.role,
+    if (span.target != null) 'target': span.target!.toMap(),
+  };
+}
+
+Map<String, dynamic> _intersectionVisualToWireMap(IntersectionVisual visual) {
+  return <String, dynamic>{
+    'assetKind': visual.assetKind,
+    'imageUrl': visual.imageUrl,
+    'displayName': visual.displayName,
+    if (visual.target != null) 'target': visual.target!.toMap(),
+  };
 }

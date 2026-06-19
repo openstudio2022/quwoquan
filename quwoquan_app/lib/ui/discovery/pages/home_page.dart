@@ -13,15 +13,11 @@ import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show ReferralSource;
-import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_post_open_action.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
@@ -41,6 +37,13 @@ class _HomePageState extends ConsumerState<HomePage>
   static const String _defaultChannelId = 'recommend';
   late String _activeChannelId;
 
+  /// R20 · 页面级停留起点（进入首页时铸造），dispose 时上报停留时长。
+  final DateTime _enteredAt = DateTime.now();
+
+  /// R20 · 在 initState 捕获 tracker 实例，dispose 时复用，避免在 dispose 中
+  /// 触碰 `ref`（Riverpod 在 widget 卸载阶段使用 ref 不安全）。
+  late final JourneyEventTracker _journeyTracker;
+
   /// 频道顺序真相源 = homeChannelsProvider（端默认 + 远程覆盖），用于左右滑动切频道。
   List<String> _channelOrder() =>
       ref.read(homeChannelsProvider).map((channel) => channel.id).toList();
@@ -52,6 +55,33 @@ class _HomePageState extends ConsumerState<HomePage>
   void initState() {
     super.initState();
     _activeChannelId = _initialTabForRoute(widget.routeLocation);
+    _journeyTracker = ref.read(journeyEventTrackerProvider);
+    // R20 · 页面级曝光：首页进入即上报一次 enter（页面级停留漏斗起点）。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _journeyTracker.trackAction(
+        journey: 'home',
+        action: 'enter',
+        pageName: 'HomePage',
+        payload: <String, dynamic>{'channelId': _activeChannelId},
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    // R20 · 页面级停留：离开首页时上报停留时长（含异常退出路径）。
+    // 使用 initState 捕获的 tracker 实例，禁止在 dispose 中读取 `ref`。
+    _journeyTracker.trackAction(
+      journey: 'home',
+      action: 'exit',
+      pageName: 'HomePage',
+      payload: <String, dynamic>{
+        'channelId': _activeChannelId,
+        'durationMs': DateTime.now().difference(_enteredAt).inMilliseconds,
+      },
+    );
+    super.dispose();
   }
 
   @override
@@ -309,49 +339,7 @@ class _HomePageState extends ConsumerState<HomePage>
       onPostTap: (post, index, {feedPosts}) {
         _openFeedPost(post, index, feedPosts: feedPosts);
       },
-      onIntersectionObjectOpen: _openIntersectionObject,
     );
-  }
-
-  /// 发现交集对象卡跳转：按对象类型路由到对应对象/聚合页。
-  /// 路由全部来自 metadata codegen（[AppRoutePaths]），不在此硬编码 path。
-  void _openIntersectionObject(IntersectionReason reason) {
-    final actionTargetId = reason.actionTargetId.trim();
-    final entityTargetId = reason.relationObjectId.trim().isNotEmpty
-        ? reason.relationObjectId.trim()
-        : actionTargetId;
-    if (actionTargetId.isEmpty && entityTargetId.isEmpty) return;
-    // 交集漏斗归因（点击）：携带 intersectionId/dimension/class，闭合曝光→点击→转化。
-    if (reason.intersectionId.isNotEmpty) {
-      ref
-          .read(contentBehaviorTrackerProvider)
-          .trackClick(
-            actionTargetId.isEmpty ? entityTargetId : actionTargetId,
-            referralSource: ReferralSource.organicFeed,
-            intersectionId: reason.intersectionId,
-            intersectionDimension: reason.dimension,
-            intersectionClass: reason.intersectionClass,
-            intersectionTagRefs: reason.tagRefs,
-          );
-    }
-    final kind = UnifiedObjectKind.resolve(
-      objectKind: reason.objectKind,
-      relationKind: reason.relationKind,
-    );
-    switch (kind) {
-      case UnifiedObjectKind.person:
-        if (actionTargetId.isNotEmpty) {
-          context.push(AppRoutePaths.userProfile(username: actionTargetId));
-        }
-      case UnifiedObjectKind.circle:
-        if (actionTargetId.isNotEmpty) {
-          context.push(AppRoutePaths.circleDetail(id: actionTargetId));
-        }
-      case UnifiedObjectKind.place:
-      case UnifiedObjectKind.school:
-      case UnifiedObjectKind.enterprise:
-        context.push(AppRoutePaths.homepageDetail(id: entityTargetId));
-    }
   }
 
   void _openUserProfile(

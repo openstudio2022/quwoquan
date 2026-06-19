@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// 圈子互动板块：点赞/评论流（含独立 loading/error 状态）
 class SectionInteraction extends ConsumerStatefulWidget {
@@ -100,7 +100,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
       _InteractionRow(
         userName: '陈一发',
         avatar:
-            'https://images.unsplash.com/photo-1630939687530-241d630735df?q=80&w=100',
+            'media/avatar/s/mock/seed/u_1630939687530-241d630735df/v1/avatar.jpg',
         action: '赞了',
         target: '《川西秘境摄影集》',
         time: '14:20',
@@ -108,7 +108,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
       _InteractionRow(
         userName: '王小明',
         avatar:
-            'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?q=80&w=100',
+            'media/avatar/s/mock/seed/u_1643816831234-e7cb32194e92/v1/avatar.jpg',
         action: '评论了',
         target: '器材交流帖',
         time: '10:05',
@@ -116,7 +116,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
       _InteractionRow(
         userName: '李青云',
         avatar:
-            'https://images.unsplash.com/photo-1603110502322-93cd2173d19a?q=80&w=100',
+            'media/avatar/s/mock/seed/u_1603110502322-93cd2173d19a/v1/avatar.jpg',
         action: '赞了',
         target: '周末外拍活动照片',
         time: '昨天',
@@ -174,6 +174,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
     Color fgPrimary,
     Color fgSecondary,
   ) {
+    final avatarUrl = resolveAvatarImageUrl(item.avatar);
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.md),
       child: Row(
@@ -181,7 +182,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
         children: [
           CircleAvatar(
             radius: AppSpacing.md,
-            backgroundImage: NetworkImage(item.avatar),
+            backgroundImage: avatarUrl.isEmpty ? null : NetworkImage(avatarUrl),
             onBackgroundImageError: (_, _) {},
           ),
           SizedBox(width: AppSpacing.sm),

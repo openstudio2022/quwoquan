@@ -1,0 +1,53 @@
+config:
+  version: "v2026.06.16.0"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+
+service:
+  name: search-service
+
+# Unified search read side — RELEASE CONFIG SNAPSHOT.
+# search-service reads the shared ES/OpenSearch derived index and publishes
+# best-effort recommendation signals to Redis. Endpoints and credentials are
+# injected per environment via SEARCH_ES_* / SEARCH_REDIS_* deploy secrets;
+# committed release config never hardcodes cluster URLs or secrets.
+# Changing enabled/endpoints/addrs/password/tls is infra-sensitive and must go
+# through risky-config gray release validation before prod rollout.
+es:
+  enabled: false
+  endpoints: []
+  index: "quwoquan_objects"
+  requestTimeoutMs: 800
+  insecureTls: false
+  shards: 1
+  replicas: 1
+  embeddingDims: 0
+  synonyms: []
+
+redis:
+  rec:
+    mode: standalone
+    addr: ""
+    addrs: []
+    password: ""
+    db: 0
+    tls: false
+    pool:
+      size: 0
+      min_idle: 0
+      read_timeout_ms: 100
+      write_timeout_ms: 100
+      dial_timeout_ms: 500
+  general:
+    mode: standalone
+    addr: ""
+    addrs: []
+    password: ""
+    db: 1
+    tls: false
+    pool:
+      size: 0
+      min_idle: 0
+      read_timeout_ms: 200
+      write_timeout_ms: 200
+      dial_timeout_ms: 500

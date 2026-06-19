@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -40,6 +39,7 @@ import 'package:quwoquan_app/ui/chat/pages/group_admins_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_member_search_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
+import 'package:quwoquan_app/ui/search/pages/location_place_landing_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
@@ -174,7 +174,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.legalUserAgreement,
         pageBuilder: (context, state) => CupertinoPage<void>(
           key: state.pageKey,
-          child: const LegalDocumentPage(
+          child: LegalDocumentPage(
             title: UITextConstants.userAgreement,
             url: AuthLegalConfig.userAgreementUrl,
           ),
@@ -184,7 +184,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.legalPrivacyPolicy,
         pageBuilder: (context, state) => CupertinoPage<void>(
           key: state.pageKey,
-          child: const LegalDocumentPage(
+          child: LegalDocumentPage(
             title: UITextConstants.privacyPolicy,
             url: AuthLegalConfig.privacyPolicyUrl,
           ),
@@ -289,6 +289,35 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return appRoutePage<void>(
             state: state,
             child: SearchNetworkResultsPage(launchContext: launchContext),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutePaths.locationPlaceLandingPathTemplate.replaceAll(
+          '{placeId}',
+          ':placeId',
+        ),
+        pageBuilder: (context, state) {
+          final placeId = state.pathParameters['placeId'] ?? '';
+          final extra = state.extra is LocationPlaceLandingPageRouteExtra
+              ? state.extra! as LocationPlaceLandingPageRouteExtra
+              : null;
+          final name =
+              extra?.placeName ?? state.uri.queryParameters['name'] ?? '';
+          final referralSource =
+              extra?.referralSource ??
+              _referralSourceFromRoute(
+                state.uri.queryParameters['source'] ?? '',
+              );
+          return appRoutePage<void>(
+            state: state,
+            child: LocationPlaceLandingPage(
+              placeId: placeId,
+              placeName: name,
+              address: extra?.address ?? '',
+              snippet: extra?.snippet ?? '',
+              referralSource: referralSource,
+            ),
           );
         },
       ),
@@ -750,9 +779,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.myIntersectionsPathTemplate,
         pageBuilder: (context, state) => appRoutePage<void>(
           state: state,
-          child: MyIntersectionInboxPage(
-            dimension: state.uri.queryParameters['dimension'] ?? '',
-          ),
+          child: MyIntersectionInboxPage.fromQuery(state.uri.queryParameters),
         ),
       ),
       GoRoute(

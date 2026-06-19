@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	defaultBufferSize      = 4096
-	defaultFlushInterval   = 50 * time.Millisecond
-	defaultFlushBatch      = 64
-	flushTimeout           = 5 * time.Second
-	defaultEnqueueTimeout  = 100 * time.Millisecond
+	defaultBufferSize     = 4096
+	defaultFlushInterval  = 50 * time.Millisecond
+	defaultFlushBatch     = 64
+	flushTimeout          = 5 * time.Second
+	defaultEnqueueTimeout = 100 * time.Millisecond
 )
 
 // BufferedHotPath wraps HotPath with an async write channel.
@@ -26,11 +26,11 @@ type BufferedHotPath struct {
 	wg     sync.WaitGroup
 	stopCh chan struct{}
 
-	bufferSize      int
-	flushInterval   time.Duration
-	flushBatch      int
-	enqueueTimeout  time.Duration
-	droppedCount    int64
+	bufferSize     int
+	flushInterval  time.Duration
+	flushBatch     int
+	enqueueTimeout time.Duration
+	droppedCount   int64
 }
 
 // BufferedOption configures BufferedHotPath.
@@ -89,6 +89,7 @@ func (b *BufferedHotPath) ProcessSignal(_ context.Context, signal BehaviorSignal
 		return nil
 	case <-timer.C:
 		atomic.AddInt64(&b.droppedCount, 1)
+		RecordHotPathDrop()
 		if b.logger != nil {
 			b.logger.Warn("rec.hotpath.buffer_full",
 				slog.String("userId", signal.UserID),
@@ -114,6 +115,7 @@ func (b *BufferedHotPath) ProcessSignalBatch(_ context.Context, signals []Behavi
 			timer.Stop()
 		case <-timer.C:
 			atomic.AddInt64(&b.droppedCount, 1)
+			RecordHotPathDrop()
 			if b.logger != nil {
 				b.logger.Warn("rec.hotpath.buffer_full",
 					slog.String("userId", s.UserID),
@@ -137,6 +139,26 @@ func (b *BufferedHotPath) GetSessionState(ctx context.Context, userID, sessionID
 // IsExposed delegates to the inner HotPath.
 func (b *BufferedHotPath) IsExposed(ctx context.Context, userID, sessionID, contentID string) (bool, error) {
 	return b.inner.IsExposed(ctx, userID, sessionID, contentID)
+}
+
+func (b *BufferedHotPath) RecordServed(ctx context.Context, userID string, items []FeedItem, at time.Time) error {
+	return b.inner.RecordServed(ctx, userID, items, at)
+}
+
+func (b *BufferedHotPath) RecordImpressed(ctx context.Context, userID, contentID string, at time.Time) error {
+	return b.inner.RecordImpressed(ctx, userID, contentID, at)
+}
+
+func (b *BufferedHotPath) RecordNegative(ctx context.Context, userID, contentID string) error {
+	return b.inner.RecordNegative(ctx, userID, contentID)
+}
+
+func (b *BufferedHotPath) AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error) {
+	return b.inner.AcceptEvent(ctx, signal)
+}
+
+func (b *BufferedHotPath) FilterCandidates(ctx context.Context, userID string, candidates []ContentCandidate, at time.Time) ([]ContentCandidate, error) {
+	return b.inner.FilterCandidates(ctx, userID, candidates, at)
 }
 
 // Stop drains the buffer and waits for the flush loop to finish.

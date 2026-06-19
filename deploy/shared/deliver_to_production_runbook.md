@@ -118,12 +118,21 @@ python3 agent_ops/deploy/stackctl.py up --env gamma
 - assistant gamma smoke
 - gamma API contract
 - chat-avatar API probe
+- environment page smoke：`首页 / 我的 / 他人主页 / 记录列表 / 视频流`
 
 3) 真实远端可达性在 prod `gray-initial` rollout stage 校验（统一入口 `stackctl deploy --target prod-hosted ...`）：
 
 ```bash
 python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service seed-box --from-image <old> --to-image <new> --from-config <old> --to-config <new> --step 50 --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>
 ```
+
+`gray-initial` 成功条件包含 hosted 页面级 smoke。`stackctl deploy` 会在 deploy 后自动执行：
+
+```bash
+python3 agent_ops/deploy/stackctl.py verify --target prod-hosted --kind topology --tier t4
+```
+
+页面 smoke 报告与设备证据归档在 `artifacts/stackctl/prod/<run-id>-deploy-prod-hosted/environment-page-smoke/`，其中 `report.json` 是阻断判据，`runs/*/command.json`、`patrol.log`、截图用于回放。
 
 ---
 
@@ -153,9 +162,11 @@ python3 scripts/run_assistant_device_matrix_ci.py --platform android
 python3 scripts/run_assistant_device_matrix_ci.py --platform ios
 python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --platform android
 python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --platform ios
+python3 agent_ops/deploy/smoke/run_environment_patrol_smoke.py --env-name gamma-local --runtime-env gamma --api-contract-env gamma --data-source remote --gateway-base-url <gamma-api> --product-ops-base-url <gamma-product-ops> --media-base-url <gamma-media> --test-auth-token <token> --platform android
+python3 agent_ops/deploy/smoke/run_environment_patrol_smoke.py --env-name gamma-local --runtime-env gamma --api-contract-env gamma --data-source remote --gateway-base-url <gamma-api> --product-ops-base-url <gamma-product-ops> --media-base-url <gamma-media> --test-auth-token <token> --platform ios
 ```
 
-CI 使用 `.github/workflows/pre-release-gate.yml` 与 `.github/workflows/app-env-device-matrix-self-hosted.yml` 在本机 macOS self-hosted runner 上动态发现当前可见的 Android/iOS 设备，并要求两个平台都通过。artifact 必须包含设备清单、原始日志、命令清单与截图证据。
+CI 使用 `.github/workflows/pre-release-gate.yml` 与 `.github/workflows/app-env-device-matrix-self-hosted.yml` 在本机 macOS self-hosted runner 上动态发现当前可见的 Android/iOS 设备，并要求 profile 中启用的 blocking matrix kind 通过。artifact 必须包含设备清单、原始日志、命令清单、页面 smoke JSON 报告与截图证据。
 
 失败 → 不得进入 G5c。
 

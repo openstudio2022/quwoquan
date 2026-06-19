@@ -156,7 +156,7 @@ void main() {
             'label': '校友圈',
             'sharedCount': 12,
             'strength': 0.8,
-            'displayText': '你和 TA 都来自新东方校友圈',
+            'primaryText': '你和 TA 都来自新东方校友圈',
             'actionType': 'open',
             'actionTargetId': 'circle1',
             'source': 'rec',
@@ -168,7 +168,7 @@ void main() {
 
       expect(view.hasIntersectionReasons, isTrue);
       expect(view.intersectionReasons, isA<List<IntersectionReason>>());
-      expect(view.intersectionReasons.first.displayText,
+      expect(view.intersectionReasons.first.primaryText,
           '你和 TA 都来自新东方校友圈');
     });
 

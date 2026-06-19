@@ -344,7 +344,7 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 `{ schemaVersion:"quwoquan.task.manifest", taskId, vertical, organizeBy, scope{region?, entityTypes[], coverageTargets[]}, content{angles[]}, createdAt }`
 
 ### 14.2 `batches/{batch}/batch_manifest.json`
-`{ schemaVersion:"quwoquan.batch.manifest/2", taskId, batchId, layout:"object-first", env, salt, params{}, coverageTargets[], commandChain[], globalBatchSeq, createdAt, updatedAt }`
+`{ schemaVersion:"quwoquan_data.batch_manifest", taskId, batchId, layout:"object-first", env, salt, params{}, coverageTargets[], commandChain[], globalBatchSeq, createdAt, updatedAt }`
 （`layout` 与 `schemaVersion` 是新旧布局判定依据；§10 去豁免门与 §13 旧布局历史说明据此区分新旧批次。）
 
 ### 14.3 对象 `_object.json`（实体过程根 / 内容对象根各一份）

@@ -171,9 +171,9 @@ class RetrieveToolContract {
   static const String name = 'retrieve';
   static const String description = '统一对象检索接口；targets 指定检索的业务对象，ids/names/terms 为主匹配条件，filters(tags,timeRange) 为收窄条件，关系由后端反查推断。';
   static const List<String> matchConditions = <String>['ids', 'names', 'terms'];
-  static const List<String> filterFields = <String>['tags', 'timeRange'];
+  static const List<String> filterFields = <String>['tags', 'timeRange', 'near'];
   static const List<String> pageFields = <String>['limit', 'cursor'];
-  static const List<String> responseFields = <String>['hits', 'citations', 'facets', 'degradeSignals', 'provenance'];
-  static const List<String> hitFields = <String>['target', 'objectId', 'title', 'snippet', 'score', 'matchedTerms', 'matchedTags', 'evidence', 'payload'];
+  static const List<String> responseFields = <String>['hits', 'citations', 'facets', 'degradeSignals', 'provenance', 'relatedTerms', 'rankingVersion', 'experimentBucket', 'requestId'];
+  static const List<String> hitFields = <String>['target', 'objectId', 'title', 'snippet', 'score', 'matchedTerms', 'matchedTags', 'evidence', 'payload', 'connectionState', 'intersectionReason', 'rankReasons', 'rankPosition', 'coverWidth', 'coverHeight', 'geo', 'distanceKm', 'placeName'];
   static const List<String> forbiddenFields = <String>['type', 'relation', 'anchors', 'kind', 'mode', 'strategy', 'purpose', 'visibility', 'fields', 'where', 'query', 'objectTypes', 'contentTypes', 'tags', 'timeRange'];
 }

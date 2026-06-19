@@ -240,17 +240,14 @@ class LoginPhoneOtpState {
 
 bool shouldRevealOtpDebugCode({
   required String runtimeEnv,
-  bool? isMockDataSource,
-  AppDataSourceMode? dataSourceMode,
+  required bool mockDataSourceActive,
   required OtpSendResultData result,
 }) {
-  final effectiveIsMockDataSource =
-      isMockDataSource ?? dataSourceMode?.name == 'mock';
   if (!result.isDebugCodeVisible) {
     return false;
   }
   if (runtimeEnv == 'alpha') {
-    return effectiveIsMockDataSource;
+    return mockDataSourceActive;
   }
   if (runtimeEnv == 'beta') {
     return true;
@@ -664,7 +661,7 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost> {
   ///
   /// - 有完整号 + 已勾协议：预填 + 自动发码，直接进入验证码态。
   /// - 有完整号 + 未勾协议：预填到可发码态并提示勾选协议，用户勾选后点一次即可。
-  /// - 无完整号（三方登录 / 历史数据缺失）：回退到空号手动输入态。
+  /// - 无完整号（三方登录 / 既往数据缺失）：回退到空号手动输入态。
   Future<void> _enterReturningSmsLogin(String quickLoginPhone) async {
     final fullPhone = _validFullPhoneOrEmpty(quickLoginPhone);
     if (fullPhone.isEmpty) {
@@ -886,7 +883,7 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost> {
           );
       final revealDebugCode = shouldRevealOtpDebugCode(
         runtimeEnv: CloudRuntimeConfig.appRuntimeEnv,
-        isMockDataSource: isMockAppDataSource(ref),
+        mockDataSourceActive: ref.read(mockDataSourceActiveProvider),
         result: result,
       );
       final seconds = result.retryAfterSeconds > 0
@@ -1103,7 +1100,7 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost> {
     }
   }
 
-  /// 顶层登录失败（一键/历史会话/三方）统一恢复：绝不停在不可操作空面板。
+  /// 顶层登录失败（一键/既往会话/三方）统一恢复：绝不停在不可操作空面板。
   /// 规则：
   /// - 运营商系列错误 -> 降级到手机号验证码输入态，并解释原因（用户改走短信）。
   /// - 其它错误 -> 回到失败前的有效操作态（returning/carrier/phoneOtp），

@@ -1,16 +1,54 @@
 # L2 特性：feed-orchestration-recommendation
 
 ## 功能说明
-- 细化 feed-orchestration-recommendation 特性的功能边界与端云协同行为。
-- **端侧反馈 + 实时推荐链路**：发现流/详情由端上报行为（曝光、点击、停留、点赞等）→ 云侧 HotPath/FeedbackRecorder 落库 → 下次 GetFeed 时推荐引擎按 session 做实时排序与去重。本节点覆盖「端云行为上报契约 + feed 请求带 session + 发现流曝光/互动上报」的打通与验收。
 
-## 约束
-- 契约与字段策略必须与 OpenAPI 与 metadata 保持一致。
+`feed-orchestration-recommendation` 是发现内容域的推荐编排主能力，负责把内容供给、用户反馈、时间衰减与交集解释统一编排为首页 feed 体验。运行时引擎能力归属 `runtime/runtime-recommendation`；本节点只定义业务编排、端云契约、体验和验收。
+
+核心目标：
+
+- 内容：四类内容（article/moment/photo/video）与数据工程冷启动内容进入同一 feed 契约，禁止 UI 或 mock 复制第二套业务列表。
+- 用户：曝光、点击、停留、点赞、收藏、评论、关注、不感兴趣、举报等行为经 BehaviorRepository 上报，并回流 HotPath/FeedbackRecorder。
+- 时间：首屏、翻页、刷新、续接、曝光窗口、疲劳窗口与内容新鲜度按统一 cursor/session 语义解释。
+- 交集：feed 卡片、交集 spotlight、对象主页和我的交集收件箱都只消费服务端 `IntersectionReason.primaryText` 与同源交集字段，禁止本地拼装第二套交集理由。
+
+## 本轮基线范围（2026-06-16）
+
+本轮只冻结需求基线与开发准入，不实现长期算法能力。
+
+### In Scope
+
+- 四维规格：内容 × 用户 × 时间 × 交集在召回、排序、去重、反馈、评估中的落点。
+- 流式 feed 体验：下拉刷新 vs 续接、触底加载、没有更多、新内容提示、已读位点、空/错/降级/加载四态、推荐理由展示。
+- 负反馈即时抑制：不感兴趣、减少此类、屏蔽作者进入 behavior → HotPath negative/hidden 语义，并只影响未来窗口。
+- 曝光治理集成规格：served/impressed 双轨、跨页/跨会话去重、疲劳时间衰减、动态曝光预算与复活通道的业务所有权已迁出到平级 L2 `discovery-content/exposure-governance`；本节点只定义 feed 如何消费该能力边界。
+- 北极星与业务 KPI：人均有效消费时长、次日留存、内容完成率、互动率、负反馈率、重复曝光率、内容覆盖率。
+- SIT / GWT / contract 验收与 T1~T4 证据矩阵。
+
+### Out of Scope
+
+- 深度排序模型平台轨（MMoE/PLE/ESMM、双塔 ANN、IPS 反事实训练）。
+- 协同过滤召回真实实现（itemCF/swing/u2i）和离线物化作业；本轮只冻结规格与验收。
+- Thompson Sampling、内容生命周期复活、Bloom/Cuckoo/Count-Min 等海量阶段曝光基础设施实现。
+- UGC 媒体上传、审核准入、质量分离线投影、发布事件驱动导入等 Phase 1 业务实现。
+
+## 端云边界
+
+- `GET /v1/content/feed` 是内容 feed 读取入口；`sort=recommend`、cursor、sessionId、feedRequestId 必须保持端云一致。
+- `POST /v1/content/behaviors` 是行为回流入口；新增行为字段与 action 必须 metadata-first；端侧统一上报通道、分级采样、clientEventId 幂等与 feedRequestId 归因见 L3 `feedback-ingestion-sampling`。
+- 推荐排序运行时只通过 `runtime/recommendation` 引擎与 `recommendation/rec_model/policy.yaml`（或其 codegen 产物）消费策略，禁止在 UI、Repository 或 intersection 另起 ranker。
+- 曝光记忆、动态曝光预算、生命周期复活、活跃度自适应和曝光健康指标的唯一业务能力归属为 `discovery-content/exposure-governance`。
+- 页面、route、surface 与 operation 均来自 metadata/codegen；新增流式 feed 页面能力需同步 page-horizontal-quality 与 metadata-driven UI 清单。
 
 ## 验收标准
-- A1：功能路径可执行且输出稳定。
-- A7：契约一致性校验通过。
-- A8：对应自动化测试映射完整。
+
+- A1：首屏、翻页、刷新、续接路径可执行，cursor 连续推进，用户回滚已看内容时 feed 不抖动。
+- A2：同 session 跨页不重复；served/impressed 语义分离，端侧真实曝光继续作为训练与疲劳信号。
+- A3：强负反馈只影响未来窗口，下一批推荐中同内容/作者/类型/标签明显下降或被过滤。
+- A4：无行为新用户有非空冷启动内容，首刷可由兴趣 onboarding 或默认探索保底支撑。
+- A5：交集理由只读服务端 `IntersectionReason.primaryText`，行动回流带 `intersectionDimension` / `intersectionTagRefs`。
+- A6：推荐 SLO/KPI 可观测：延迟、空 feed、fallback、重复曝光率、CTR、停留、完成率、负反馈率。
+- A7：metadata/OpenAPI/codegen/Redis key/recpolicy 与端云实现一致。
+- A8：T1~T4 证据矩阵可形成，已存在测试登记到 `acceptance.yaml`，长期能力只登记为 planned 或 out_of_scope。
 
 ## 首页交集与多形态信息流改版（V8）
 

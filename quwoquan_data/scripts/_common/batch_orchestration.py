@@ -54,6 +54,7 @@ def build_batch_pack(task_id: str, batch_id: str, seq: int, group_refs: Sequence
                 "ref": ref,
                 "title": pack.get("title"),
                 "styleFamily": pack.get("styleFamily"),
+                "creativeBrief": pack.get("creativeBrief") or {},
                 "mustIncludeFacts": list(pack.get("mustIncludeFacts") or [])[:6],
                 "writingPack": _ref_rel(task_id, batch_id, ref, writing_pack_path(task_id, batch_id, ref)),
                 "prompt": _ref_rel(task_id, batch_id, ref, prompt_path(task_id, batch_id, ref)),
@@ -76,8 +77,9 @@ def render_batch_prompt(pack: Mapping[str, Any]) -> str:
         "",
         "在**同一个会话**内逐篇创作以下文章；每篇都要：",
         "- 严格遵循该篇 `writingPack` / `prompt` 的事实、证据与约束；",
+        "- 逐篇先形成 2-3 个内容构思，选择最能兑现该篇 `creativeBrief.readerPromise` 的结构；",
         "- 按该篇 `styleFamily` 自选合适开篇策略，**跨篇之间开篇与章节结构必须显著不同**（避免千篇一律，会过跨篇相似度门）；",
-        "- 创作完成后把正文**覆盖写回**该篇 `articleOut`（generator=agent），并在 `draft_meta` 记录 styleFamily / openingStrategy / extractedEntities。",
+        "- 创作完成后把正文**覆盖写回**该篇 `articleOut`（generator=agent），并在 `draft_meta` 记录 styleFamily / openingStrategy / extractedEntities / creativePlan / selfCritique。",
         "",
         "完成全部后运行：`qwq-data data produce --stage annotate-entities` 再 `--stage review --materialize`。",
         "",
@@ -92,6 +94,12 @@ def render_batch_prompt(pack: Mapping[str, Any]) -> str:
         facts = item.get("mustIncludeFacts") or []
         if facts:
             lines.append(f"   - 必含事实（节选）：{('；'.join(map(str, facts)))}")
+        creative = item.get("creativeBrief") or {}
+        if creative.get("readerPromise"):
+            lines.append(f"   - readerPromise：{creative.get('readerPromise')}")
+        moves = creative.get("allowedMoves") or []
+        if moves:
+            lines.append(f"   - 可自主选择的表达动作：{(' / '.join(map(str, moves[:5])))}")
     return "\n".join(lines) + "\n"
 
 

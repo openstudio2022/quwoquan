@@ -16,7 +16,7 @@ type UserFeatureVector struct {
 	// Level-mapped features (0-5 scale, derived from raw counts)
 	LikeLevel  int `json:"likeLevel"`
 	ShareLevel int `json:"shareLevel"`
-	EventLevel    int `json:"eventLevel"`
+	EventLevel int `json:"eventLevel"`
 
 	// Four-dimension tag affinities (Phase 2.1)
 	TopicAffinities    map[string]float64 `json:"topicAffinities,omitempty"`
@@ -34,12 +34,32 @@ type UserFeatureVector struct {
 	AvgEngagementDepth float64        `json:"avgEngagementDepth"`
 	DepthDistribution  map[string]int `json:"depthDistribution,omitempty"`
 
+	// Recent search intent features (24h freshness-gated by FeatureStore).
+	SearchTermAffinities      map[string]float64 `json:"searchTermAffinities,omitempty"`
+	SearchTopObjectAffinities map[string]float64 `json:"searchTopObjectAffinities,omitempty"`
+	SearchTermHeat            float64            `json:"searchTermHeat,omitempty"`
+
 	// Source distribution
 	SourceDistribution map[string]int `json:"sourceDistribution,omitempty"`
 
 	// Social features
 	CircleTagAffinities map[string]float64 `json:"circleTagAffinities,omitempty"`
 	SocialInterestScore float64            `json:"socialInterestScore"`
+
+	// Intersection features (fact channel + affinity probability channel),
+	// aligned with IntersectionReason (§5.4 kind registry). Fact signals must
+	// outrank the affinity channel in ranking fusion; AffinityIntersectionScore
+	// is advisory only and never overrides a confirmed fact intersection.
+	// Sourced from rm_recommend_feature.socialFeatures.intersection.* and kept
+	// in lockstep with scripts/ml/feature_registry.yaml content_feed.user_features.
+	SharedFolloweesCount      int     `json:"sharedFolloweesCount"`
+	SharedCircleCount         int     `json:"sharedCircleCount"`
+	CoCommentedCount          int     `json:"coCommentedCount"`
+	CoVisitedEntityCount      int     `json:"coVisitedEntityCount"`
+	FolloweeInObjectActive    int     `json:"followeeInObjectActive"`
+	FolloweeViewingActive     int     `json:"followeeViewingActive"`
+	AffinityIntersectionScore float64 `json:"affinityIntersectionScore"`
+	IntersectionSourceRefTop  string  `json:"intersectionSourceRefTop,omitempty"`
 
 	// Population segments (rule-based, from segments.yaml), computed by the
 	// content-service InterestProfileAggregator and $set into rm_recommend_feature.

@@ -389,6 +389,189 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 	}
 }
 
+func TestGetFeedFutureWindowFiltersHiddenAuthorAndContentType(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	for i := range 16 {
+		authorID := fmt.Sprintf("user_hide_%d", i%4)
+		contentType := "image"
+		if i%3 == 0 {
+			contentType = "video"
+		}
+		payload := fmt.Sprintf(
+			`{"contentType":%q,"title":"Hide Window %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"],"videoUrl":"https://example.com/vid%d.mp4"}`,
+			contentType, i, i, i, i,
+		)
+		createPostWithAuthor(t, authorID, payload)
+	}
+
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?sort=recommend&limit=5", nil)
+	req1.Header.Set("X-Client-User-Id", "user_hide_01")
+	req1.Header.Set("X-Client-Session-Id", "session_hide_01")
+	rec1 := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("page1 expected 200, got %d: %s", rec1.Code, rec1.Body.String())
+	}
+	var page1 struct {
+		Items      []map[string]any `json:"items"`
+		NextCursor string           `json:"nextCursor"`
+	}
+	if err := json.Unmarshal(rec1.Body.Bytes(), &page1); err != nil {
+		t.Fatalf("page1 decode: %v", err)
+	}
+	if page1.NextCursor == "" {
+		t.Fatal("page1 should include cursor")
+	}
+
+	req2 := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/content/feed?sort=recommend&limit=8&cursor="+url.QueryEscape(page1.NextCursor),
+		nil,
+	)
+	req2.Header.Set("X-Client-User-Id", "user_hide_01")
+	req2.Header.Set("X-Client-Session-Id", "session_hide_01")
+	rec2 := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("page2 expected 200, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+	var page2 struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec2.Body.Bytes(), &page2); err != nil {
+		t.Fatalf("page2 decode: %v", err)
+	}
+	if len(page2.Items) < 2 {
+		t.Fatalf("page2 should contain enough items, got %d", len(page2.Items))
+	}
+
+	hideAuthorItem := page2.Items[0]
+	hideAuthorID, _ := hideAuthorItem["id"].(string)
+	hiddenAuthor, _ := hideAuthorItem["authorId"].(string)
+	if hideAuthorID == "" || hiddenAuthor == "" {
+		t.Fatalf("page2 first item should include id/authorId: %+v", hideAuthorItem)
+	}
+	hideTypeItem := page2.Items[1]
+	hideTypeID, _ := hideTypeItem["id"].(string)
+	hiddenType, _ := hideTypeItem["contentType"].(string)
+	if hiddenType == "" {
+		hiddenType, _ = hideTypeItem["type"].(string)
+	}
+	if hideTypeID == "" || hiddenType == "" {
+		t.Fatalf("page2 second item should include id/contentType: %+v", hideTypeItem)
+	}
+
+	behaviorReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/content/behaviors",
+		strings.NewReader(fmt.Sprintf(
+			`{"events":[{"contentId":%q,"action":"hide_author","authorId":%q},{"contentId":%q,"action":"hide_content_type","contentType":%q}]}`,
+			hideAuthorID,
+			hiddenAuthor,
+			hideTypeID,
+			hiddenType,
+		)),
+	)
+	behaviorReq.Header.Set("Content-Type", "application/json")
+	behaviorReq.Header.Set("X-Client-User-Id", "user_hide_01")
+	behaviorReq.Header.Set("X-Client-Session-Id", "session_hide_01")
+	behaviorRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(behaviorRec, behaviorReq)
+	if behaviorRec.Code != http.StatusNoContent {
+		t.Fatalf("behavior expected 204, got %d: %s", behaviorRec.Code, behaviorRec.Body.String())
+	}
+
+	reqAfter := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/content/feed?sort=recommend&limit=8&cursor="+url.QueryEscape(page1.NextCursor),
+		nil,
+	)
+	reqAfter.Header.Set("X-Client-User-Id", "user_hide_01")
+	reqAfter.Header.Set("X-Client-Session-Id", "session_hide_01")
+	recAfter := httptest.NewRecorder()
+	testHandler.ServeHTTP(recAfter, reqAfter)
+	if recAfter.Code != http.StatusOK {
+		t.Fatalf("page2 after feedback expected 200, got %d: %s", recAfter.Code, recAfter.Body.String())
+	}
+	var pageAfter struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(recAfter.Body.Bytes(), &pageAfter); err != nil {
+		t.Fatalf("page2 after decode: %v", err)
+	}
+	for _, item := range pageAfter.Items {
+		if item["authorId"] == hiddenAuthor {
+			t.Fatalf("hidden author %s should be filtered from future window: %+v", hiddenAuthor, item)
+		}
+		if item["contentType"] == hiddenType || item["type"] == hiddenType {
+			t.Fatalf("hidden contentType %s should be filtered from future window: %+v", hiddenType, item)
+		}
+	}
+}
+
+// TestFeedIssuesServerFeedRequestID verifies the feed envelope carries a
+// server-authoritative feedRequestId (frq_ prefix) plus ranking/reason pipeline
+// versions on first load, and that echoing the id on the next page keeps the
+// same attribution id (a single feed session keeps one feedRequestId).
+// contract.yaml: get_feed_issues_server_feed_request_id / go_func: TestFeedIssuesServerFeedRequestID
+func TestFeedIssuesServerFeedRequestID(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	for i := range 10 {
+		createPost(t, fmt.Sprintf(
+			`{"contentType":"image","title":"FRQ post %d","body":"content %d","mediaUrls":["https://example.com/frq%d.jpg"]}`, i, i, i,
+		))
+	}
+
+	type feedEnvelope struct {
+		Items          []map[string]any `json:"items"`
+		NextCursor     string           `json:"nextCursor"`
+		FeedRequestID  string           `json:"feedRequestId"`
+		RankingVersion string           `json:"rankingVersion"`
+		ReasonVersion  string           `json:"reasonVersion"`
+	}
+
+	// First load: no echoed id — server must mint a fresh frq_ id and attach versions.
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?sort=recommend&limit=5", nil)
+	rec1 := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("first page: expected 200, got %d: %s", rec1.Code, rec1.Body.String())
+	}
+	var page1 feedEnvelope
+	if err := json.Unmarshal(rec1.Body.Bytes(), &page1); err != nil {
+		t.Fatalf("first page decode: %v", err)
+	}
+	if !strings.HasPrefix(page1.FeedRequestID, "frq_") {
+		t.Fatalf("feedRequestId must be server-issued with frq_ prefix, got %q", page1.FeedRequestID)
+	}
+	if page1.RankingVersion == "" || page1.ReasonVersion == "" {
+		t.Fatalf("feed envelope must carry rankingVersion + reasonVersion, got ranking=%q reason=%q",
+			page1.RankingVersion, page1.ReasonVersion)
+	}
+
+	// Next page: echo the feedRequestId — server must keep the same attribution id.
+	nextURL := fmt.Sprintf("/v1/content/feed?sort=recommend&limit=5&feedRequestId=%s", url.QueryEscape(page1.FeedRequestID))
+	if page1.NextCursor != "" {
+		nextURL += "&cursor=" + url.QueryEscape(page1.NextCursor)
+	}
+	req2 := httptest.NewRequest(http.MethodGet, nextURL, nil)
+	rec2 := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("second page: expected 200, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+	var page2 feedEnvelope
+	if err := json.Unmarshal(rec2.Body.Bytes(), &page2); err != nil {
+		t.Fatalf("second page decode: %v", err)
+	}
+	if page2.FeedRequestID != page1.FeedRequestID {
+		t.Fatalf("echoing feedRequestId must keep the same attribution id: page1=%q page2=%q",
+			page1.FeedRequestID, page2.FeedRequestID)
+	}
+}
+
 // TestListFeedWithPagination creates image posts then verifies GET /v1/content/feed
 // returns 200 with items array, and that a second page call also succeeds.
 func TestListFeedWithPagination(t *testing.T) {

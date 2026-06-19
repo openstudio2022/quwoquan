@@ -12,6 +12,20 @@ class ProfileInteractionActivityWireDto {
   final String targetContentId;
   final String targetContentType;
   final String targetContentSummary;
+  final String displaySubAccountId;
+  final String displayName;
+  final String displayAvatarUrl;
+  final String displayUserRouteId;
+  final String primaryText;
+  final String contextText;
+  final String previewMediaKind;
+  final String previewImageUrl;
+  final String previewText;
+  final bool previewUnavailable;
+  final String previewObjectId;
+  final String previewRouteId;
+  final List<String> filterKeys;
+  final String commentKind;
   final DateTime? createdAt;
 
   ProfileInteractionActivityWireDto({
@@ -25,6 +39,20 @@ class ProfileInteractionActivityWireDto {
     this.targetContentId = '',
     this.targetContentType = '',
     this.targetContentSummary = '',
+    this.displaySubAccountId = '',
+    this.displayName = '',
+    this.displayAvatarUrl = '',
+    this.displayUserRouteId = '',
+    this.primaryText = '',
+    this.contextText = '',
+    this.previewMediaKind = 'none',
+    this.previewImageUrl = '',
+    this.previewText = '',
+    this.previewUnavailable = false,
+    this.previewObjectId = '',
+    this.previewRouteId = '',
+    this.filterKeys = const <String>[],
+    this.commentKind = 'none',
     this.createdAt,
   });
 
@@ -40,6 +68,20 @@ class ProfileInteractionActivityWireDto {
       targetContentId: m['targetContentId']?.toString() ?? m['postId']?.toString() ?? '',
       targetContentType: m['targetContentType']?.toString() ?? m['contentType']?.toString() ?? '',
       targetContentSummary: m['targetContentSummary']?.toString() ?? m['targetTitle']?.toString() ?? '',
+      displaySubAccountId: m['displaySubAccountId']?.toString() ?? m['actorSubAccountId']?.toString() ?? m['userId']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? m['actorDisplayName']?.toString() ?? m['nickname']?.toString() ?? '',
+      displayAvatarUrl: m['displayAvatarUrl']?.toString() ?? m['actorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? '',
+      displayUserRouteId: m['displayUserRouteId']?.toString() ?? '',
+      primaryText: m['primaryText']?.toString() ?? '',
+      contextText: m['contextText']?.toString() ?? '',
+      previewMediaKind: m['previewMediaKind']?.toString() ?? 'none',
+      previewImageUrl: m['previewImageUrl']?.toString() ?? '',
+      previewText: m['previewText']?.toString() ?? '',
+      previewUnavailable: m['previewUnavailable'] as bool? ?? false,
+      previewObjectId: m['previewObjectId']?.toString() ?? m['targetContentId']?.toString() ?? m['postId']?.toString() ?? '',
+      previewRouteId: m['previewRouteId']?.toString() ?? '',
+      filterKeys: _parseStringList(m['filterKeys']) ?? const <String>['all'],
+      commentKind: m['commentKind']?.toString() ?? 'none',
       createdAt: _parseDateTime(m['createdAt']) ?? null,
     );
   }
@@ -56,6 +98,20 @@ class ProfileInteractionActivityWireDto {
       'targetContentId': targetContentId,
       'targetContentType': targetContentType,
       'targetContentSummary': targetContentSummary,
+      'displaySubAccountId': displaySubAccountId,
+      'displayName': displayName,
+      'displayAvatarUrl': displayAvatarUrl,
+      'displayUserRouteId': displayUserRouteId,
+      'primaryText': primaryText,
+      'contextText': contextText,
+      'previewMediaKind': previewMediaKind,
+      'previewImageUrl': previewImageUrl,
+      'previewText': previewText,
+      'previewUnavailable': previewUnavailable,
+      'previewObjectId': previewObjectId,
+      'previewRouteId': previewRouteId,
+      'filterKeys': filterKeys,
+      'commentKind': commentKind,
       'createdAt': createdAt,
     };
   }
@@ -71,6 +127,20 @@ class ProfileInteractionActivityWireDto {
     String? targetContentId,
     String? targetContentType,
     String? targetContentSummary,
+    String? displaySubAccountId,
+    String? displayName,
+    String? displayAvatarUrl,
+    String? displayUserRouteId,
+    String? primaryText,
+    String? contextText,
+    String? previewMediaKind,
+    String? previewImageUrl,
+    String? previewText,
+    bool? previewUnavailable,
+    String? previewObjectId,
+    String? previewRouteId,
+    List<String>? filterKeys,
+    String? commentKind,
     DateTime? createdAt,
   }) {
     return ProfileInteractionActivityWireDto(
@@ -84,6 +154,20 @@ class ProfileInteractionActivityWireDto {
       targetContentId: targetContentId ?? this.targetContentId,
       targetContentType: targetContentType ?? this.targetContentType,
       targetContentSummary: targetContentSummary ?? this.targetContentSummary,
+      displaySubAccountId: displaySubAccountId ?? this.displaySubAccountId,
+      displayName: displayName ?? this.displayName,
+      displayAvatarUrl: displayAvatarUrl ?? this.displayAvatarUrl,
+      displayUserRouteId: displayUserRouteId ?? this.displayUserRouteId,
+      primaryText: primaryText ?? this.primaryText,
+      contextText: contextText ?? this.contextText,
+      previewMediaKind: previewMediaKind ?? this.previewMediaKind,
+      previewImageUrl: previewImageUrl ?? this.previewImageUrl,
+      previewText: previewText ?? this.previewText,
+      previewUnavailable: previewUnavailable ?? this.previewUnavailable,
+      previewObjectId: previewObjectId ?? this.previewObjectId,
+      previewRouteId: previewRouteId ?? this.previewRouteId,
+      filterKeys: filterKeys ?? this.filterKeys,
+      commentKind: commentKind ?? this.commentKind,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -96,3 +180,8 @@ DateTime? _parseDateTime(dynamic v) {
   return null;
 }
 
+List<String>? _parseStringList(dynamic v) {
+  if (v == null) return null;
+  if (v is List) return v.map((e) => e?.toString() ?? '').toList();
+  return null;
+}

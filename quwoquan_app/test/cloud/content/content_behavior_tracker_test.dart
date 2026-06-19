@@ -12,7 +12,50 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 
+/// 任务 B 测试用：可控失败的行为仓储，验证 flush 失败路径的结构化兜底。
+class _FlakyBehaviorRepository extends BehaviorRepository {
+  final List<BehaviorEvent> recorded = <BehaviorEvent>[];
+  bool shouldThrow = false;
+
+  @override
+  Future<void> reportEvents({required List<BehaviorEvent> events}) async {
+    if (shouldThrow) {
+      throw StateError('simulated behavior upload failure');
+    }
+    recorded.addAll(events);
+  }
+}
+
 void main() {
+  group('ContentBehaviorTracker flush 失败兜底', () {
+    test('上报失败时不抛异常、事件回灌缓冲，恢复后可重发不丢失', () async {
+      final repo = _FlakyBehaviorRepository();
+      final tracker = ContentBehaviorTracker(
+        repository: repo,
+        flushInterval: const Duration(hours: 1),
+        maxBatchSize: 5,
+        enablePeriodicFlush: false,
+      );
+      addTearDown(tracker.dispose);
+
+      tracker.trackClick('post_a');
+      tracker.trackShare('post_b');
+
+      // 上报失败：flush 不得向调用方抛出异常，事件不得被静默丢弃。
+      repo.shouldThrow = true;
+      await expectLater(tracker.flush(), completes);
+      expect(repo.recorded, isEmpty);
+
+      // 恢复后再次 flush：先前失败的事件被回灌并重新上报。
+      repo.shouldThrow = false;
+      await tracker.flush();
+      expect(
+        repo.recorded.map((e) => e.contentId).toList(),
+        containsAll(<String>['post_a', 'post_b']),
+      );
+    });
+  });
+
   group('ContentBehaviorTracker', () {
     late MockBehaviorRepository repo;
     late ContentBehaviorTracker tracker;
@@ -40,6 +83,23 @@ void main() {
           .map((e) => e.contentId)
           .toList();
       expect(impressions, equals(['post_1', 'post_2']));
+      expect(repo.recorded.first.state, equals('impressed'));
+      expect(repo.recorded.first.clientEventId, isNotEmpty);
+    });
+
+    test('未达可见阈值只上报 visible，不进入 impressed 去重集合', () async {
+      tracker.trackQualifiedImpression(
+        'post_1',
+        visibleFraction: 0.2,
+        visibleDuration: const Duration(milliseconds: 500),
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.impression);
+      expect(event.state, equals('visible'));
+      expect(event.toJson()['state'], equals('visible'));
+      expect(event.clientEventId, isNotEmpty);
     });
 
     test('dwell < 1s 不上报', () async {
@@ -54,6 +114,7 @@ void main() {
 
       expect(repo.recorded.length, equals(1));
       expect(repo.recorded.first.action, BehaviorAction.dwell);
+      expect(repo.recorded.first.state, equals('dwell'));
       expect(repo.recorded.first.duration, equals(3.5));
     });
 
@@ -76,10 +137,51 @@ void main() {
     });
 
     test('dislike 事件正确上报', () async {
-      tracker.trackDislike('post_1');
+      tracker.trackDislike(
+        'post_1',
+        contentType: 'photo',
+        authorId: 'author_1',
+      );
       await tracker.flush();
       expect(repo.recorded.first.action, BehaviorAction.dislike);
+      expect(repo.recorded.first.state, equals('negative'));
       expect(repo.recorded.first.contentId, equals('post_1'));
+      expect(repo.recorded.first.contentType, equals('photo'));
+      expect(repo.recorded.first.authorId, equals('author_1'));
+    });
+
+    test('hide_author 事件上报 contentId + authorId + contentType', () async {
+      tracker.trackHideAuthor(
+        'post_1',
+        authorId: 'author_1',
+        contentType: 'photo',
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.hideAuthor);
+      expect(event.state, equals('negative'));
+      expect(event.contentId, equals('post_1'));
+      expect(event.authorId, equals('author_1'));
+      expect(event.contentType, equals('photo'));
+      expect(event.toJson()['action'], equals('hide_author'));
+    });
+
+    test('hide_content_type 事件上报 contentType，可带 authorId', () async {
+      tracker.trackHideContentType(
+        'post_2',
+        contentType: 'video',
+        authorId: 'author_2',
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.hideContentType);
+      expect(event.state, equals('negative'));
+      expect(event.contentId, equals('post_2'));
+      expect(event.contentType, equals('video'));
+      expect(event.authorId, equals('author_2'));
+      expect(event.toJson()['action'], equals('hide_content_type'));
     });
 
     test('share 事件正确上报', () async {
@@ -117,6 +219,77 @@ void main() {
       expect(event.action, BehaviorAction.click);
       expect(event.position, equals(3));
       expect(event.referralSource, equals(ReferralSource.organicFeed));
+    });
+
+    // ── 阶段五归因：channelId / rankingVersion 全事件透传（common_fields）──
+    test('impression 透传 channelId/rankingVersion 回流', () async {
+      tracker.trackImpression(
+        'post_ch',
+        feedRequestId: 'frq_01H',
+        position: 2,
+        referralSource: ReferralSource.organicFeed,
+        channelId: 'following',
+        rankingVersion: 'rank-v3',
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.state, equals('impressed'));
+      expect(event.channelId, equals('following'));
+      expect(event.rankingVersion, equals('rank-v3'));
+      expect(event.feedRequestId, equals('frq_01H'));
+    });
+
+    test('click 透传 channelId/rankingVersion 回流', () async {
+      tracker.trackClick(
+        'post_ch2',
+        feedRequestId: 'frq_02H',
+        position: 5,
+        referralSource: ReferralSource.organicFeed,
+        channelId: 'video',
+        rankingVersion: 'rank-v9',
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.click);
+      expect(event.channelId, equals('video'));
+      expect(event.rankingVersion, equals('rank-v9'));
+    });
+
+    // ── 七态漏斗：visible（弱可见）与 impressed（达阈值）状态严格区分，归因字段全透传 ──
+    test('七态漏斗：visible 未达阈值 vs impressed 达阈值，状态区分且 channelId/rankingVersion 透传', () async {
+      tracker.trackQualifiedImpression(
+        'post_visible',
+        visibleFraction: 0.3,
+        visibleDuration: const Duration(milliseconds: 400),
+        feedRequestId: 'frq_07',
+        channelId: 'recommend',
+        rankingVersion: 'rank-v7',
+      );
+      tracker.trackQualifiedImpression(
+        'post_impressed',
+        visibleFraction: 0.8,
+        visibleDuration: const Duration(milliseconds: 1500),
+        feedRequestId: 'frq_07',
+        channelId: 'recommend',
+        rankingVersion: 'rank-v7',
+      );
+      await tracker.flush();
+
+      final visible = repo.recorded.firstWhere(
+        (e) => e.contentId == 'post_visible',
+      );
+      final impressed = repo.recorded.firstWhere(
+        (e) => e.contentId == 'post_impressed',
+      );
+      expect(visible.state, equals('visible'));
+      expect(impressed.state, equals('impressed'));
+      for (final event in <BehaviorEvent>[visible, impressed]) {
+        expect(event.feedRequestId, equals('frq_07'));
+        expect(event.channelId, equals('recommend'));
+        expect(event.rankingVersion, equals('rank-v7'));
+      }
     });
 
     test('follow 交集行动回流 dimension + tagRefs（B3 归因）', () async {

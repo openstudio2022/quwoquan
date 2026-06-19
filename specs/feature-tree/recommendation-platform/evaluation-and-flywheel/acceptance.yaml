@@ -1,0 +1,51 @@
+version: 2
+node:
+  id: evaluation-and-flywheel
+  level: L2_business_capability
+  path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel
+  title: evaluation and flywheel
+  parent_domain_service: recommendation-platform
+  parent_business_capability: evaluation-and-flywheel
+scope:
+  summary: 推荐准确性评估、在线 AB 和真实流量训练晋升闭环。
+  in_scope:
+    - offline replay evaluation。
+    - online AB significance。
+    - real traffic training promotion。
+  out_of_scope:
+    - 本轮不实现评估脚本、训练作业或模型发布逻辑。
+    - 深度排序模型平台轨。
+sit_acceptance:
+  SIT1:
+    title: 推荐评估飞轮 SIT
+    story_refs:
+      - recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation
+      - recommendation-platform/evaluation-and-flywheel/online-ab-significance
+      - recommendation-platform/evaluation-and-flywheel/real-traffic-training-promotion
+    done_when:
+      - 离线 replay 指标、在线 AB 显著性和真实流量训练晋升均有规格与验收。
+      - 所有指标命名与 recommendation_slo.yaml 对齐。
+      - 深度排序模型平台轨仍作为长期上限，不进入本轮商用门槛。
+    performance_points:
+      - offline_ndcg_at_k >= 0.20
+      - offline_recall_at_k >= 0.25
+      - ab_experiment_validity >= 0.95
+    evidence:
+      primary:
+        - T1_static_contract
+        - T2_module_interaction
+      supporting:
+        - T3_service_contract
+    tests:
+      planned:
+        - quwoquan_service/scripts/ml/tests/test_replay_evaluation.py
+        - quwoquan_service/scripts/ml/tests/test_ab_significance.py
+        - quwoquan_service/scripts/ml/tests/test_training_promotion_gate.py
+      recorded: []
+    status: specified
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+    - make gate

@@ -146,14 +146,24 @@ scenarios:
       - discovery-content
     business_capabilities:
       - discovery-content/feed-orchestration-recommendation
+      - discovery-content/exposure-governance
       - discovery-content/content-display-journey-consistency
     stories:
       - discovery-content/feed-orchestration-recommendation/unified-items-cursor
+      - discovery-content/feed-orchestration-recommendation/collaborative-recall
+      - discovery-content/feed-orchestration-recommendation/quality-score-cold-start
+      - discovery-content/feed-orchestration-recommendation/interest-onboarding-prior
+      - discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling
+      - discovery-content/exposure-governance/served-dedup-write-behind
+      - discovery-content/exposure-governance/cross-session-fatigue-memory
+      - discovery-content/exposure-governance/dynamic-exposure-budget
+      - discovery-content/exposure-governance/content-lifecycle-resurfacing
       - discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
     acceptance_refs:
       - specs/feature-tree/acceptance.yaml#UAT1
     boundary_notes:
       - 发现流排序归 discovery-content；作者关系与画像归 user-identity-profile-relationship。
+      - 曝光记忆、动态曝光预算、生命周期复活与曝光健康归 exposure-governance；feed-orchestration-recommendation 只消费其业务边界，不维护第二套曝光真相源。
     status: draft
 
   - id: content-detail-profile-handoff
@@ -190,6 +200,7 @@ scenarios:
       - global-search-experience/search-provider-routing-and-storage-topology
     stories:
       - global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
+      - global-search-experience/cross-domain-search-journey/search-intersection-consumption
       - global-search-experience/search-provider-routing-and-storage-topology/search-execution-routing-policy
     acceptance_refs:
       - specs/feature-tree/acceptance.yaml#UAT1

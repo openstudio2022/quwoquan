@@ -1,0 +1,27 @@
+config:
+  version: v2026.06.17.999001
+  min_image_version: 1.0.0
+  max_image_version: 2.0.0
+service:
+  name: user-service
+  http:
+    addr: :18082
+postgres:
+  dsn: ''
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime_minutes: 30
+mongodb:
+  uri: ''
+  database: quwoquan_user
+redis:
+  general:
+    mode: standalone
+    addr: ''
+    addrs: []
+    tls: false
+  realtime:
+    mode: standalone
+    addr: ''
+    addrs: []
+    tls: false

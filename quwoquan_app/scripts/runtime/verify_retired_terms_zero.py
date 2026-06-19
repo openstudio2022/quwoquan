@@ -84,6 +84,9 @@ ALLOWLIST_PREFIXES = {
     "quwoquan_data/scripts/",
     # 变更日志为只追加的过往记录，天然描述既往清理过程。
     "specs/changelog/",
+    # 生成的环境包与 stackctl 运行报告：内容派生自被扫描的 deploy/shared 源，
+    # 退场词治理在源头 + 重新打包，不在产物逐份改写（与 build/ 等生成目录同理）。
+    "artifacts/",
 }
 
 ALLOWLIST_PATHS = {
@@ -134,6 +137,30 @@ ALLOWLIST_PATHS = {
     "specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer--article-magazine-cover/spec.md",
     "specs/product/2026H1-positioning-refactor/wp-04-entity-introduction-page.md",
     "specs/product/2026H1-positioning-refactor/90-integration-acceptance.md",
+    # 部署域 prod 共享集群拓扑 rationale（sharedClusterLegacy 键）：键名退场需 deploy 域
+    # 重命名 + 重新打包 + 包契约重校验，属独立 deploy 域任务；散文 legacy 已去除。
+    "deploy/shared/environment_topology_manifest.yaml",
+    # 强制治理：「遗留事项」backlog 系统由 AGENTS.md 与 .cursor/rules/16-outstanding-risk-backlog.mdc
+    # 强制要求使用该用语，是项目治理唯一真相源，不可改名（否则违反 always-applied 规则）。
+    "AGENTS.md",
+    "docs/agent_context_contract.md",
+    "docs/codex_workflow.md",
+    "docs/outstanding_risks_backlog.md",
+    ".cursor/rules/16-outstanding-risk-backlog.mdc",
+    # 环境维度迁移说明：「历史 dev 口径映射到 alpha」描述真实迁移语义，非退役命名。
+    ".cursor/commands/infra.md",
+    # 规格冻结语言「零历史兼容」= 零向后兼容 + 单一真相源，是约束表述而非退役命名。
+    "specs/feature-tree/global-search-experience/spec.md",
+    # 用户可见登录功能「历史账号一键登录 / 历史会话」为冻结产品概念（two-state-one-tap-login）。
+    "specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry/spec.md",
+    "specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry/acceptance.yaml",
+    # 用户可见登录功能字段说明「登录页历史账号」（user_profile 契约描述）。
+    "quwoquan_service/contracts/metadata/user/user_profile/fields.yaml",
+    # 用户可见产品功能「搜索历史」（清空/记录/区块标题）为标准产品用语，不改 UI 文案。
+    "quwoquan_app/lib/ui/search/pages/global_search_page.dart",
+    "quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart",
+    # 跨域搜索旅程测试断言同一「搜索历史」产品区块标题，属冻结产品用语。
+    "quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart",
 }
 
 

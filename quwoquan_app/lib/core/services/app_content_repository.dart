@@ -59,9 +59,13 @@ final appDataSourceModeProvider =
       AppDataSourceModeNotifier.new,
     );
 
-bool isMockAppDataSource(WidgetRef ref) {
-  return ref.read(appDataSourceModeProvider) == AppDataSourceMode.mock;
-}
+/// UI 层透明判断「当前是否 Mock 数据源」的派生开关。
+///
+/// UI / 页面只读这个布尔值决定降级/调试可见性，禁止直接消费 [AppDataSourceMode]
+/// 枚举或 [appDataSourceModeProvider]（见 08-mock-data-isolation R15：由 Provider 透明切换）。
+final mockDataSourceActiveProvider = Provider<bool>((ref) {
+  return ref.watch(appDataSourceModeProvider) == AppDataSourceMode.mock;
+});
 
 /// 应用级内容相关 mock / 过渡数据入口（含发现区 wire 切片）。
 ///

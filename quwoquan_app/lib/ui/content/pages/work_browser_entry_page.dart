@@ -122,8 +122,11 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
     if (extra != null) {
       return UnifiedMediaViewerPage(extra: extra);
     }
+    final showError = !_loading && _error != null;
     return CupertinoPageScaffold(
-      backgroundColor: AppColors.black,
+      backgroundColor: showError
+          ? AppColors.iosSystemBackground(context)
+          : AppColors.black,
       child: SafeArea(
         child: _loading
             ? const Center(

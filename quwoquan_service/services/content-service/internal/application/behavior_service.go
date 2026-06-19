@@ -25,6 +25,8 @@ var supportedBehaviorActions = func() map[string]struct{} {
 }()
 
 type BehaviorEventInput struct {
+	ClientEventID   string   `json:"clientEventId"`
+	State           string   `json:"state"`
 	UserID          string   `json:"userId"`
 	DeviceActorID   string   `json:"deviceActorId"`
 	SessionID       string   `json:"sessionId"`
@@ -47,21 +49,36 @@ type BehaviorEventInput struct {
 	EntityRefs      []string `json:"entityRefs"`
 	FeedRequestID   string   `json:"feedRequestId"`
 	CommentLength   int      `json:"commentLength"`
+	// 阶段五归因：feed 下发频道与精排版本，全事件携带（behaviors.yaml common_fields），贯穿 HotPath / 事件存储 / 特征投影。
+	ChannelID      string `json:"channelId"`
+	RankingVersion string `json:"rankingVersion"`
 	// 交集转化归因（S6）：触发交集行动（follow/join_circle/add_contact）的维度与路径制 tagRef。
 	IntersectionDimension string   `json:"intersectionDimension"`
 	IntersectionTagRefs   []string `json:"intersectionTagRefs"`
+	// 交集来源 kind（§5.4 标准名）：驱动该曝光/点击/转化的事实交集 kind。
+	// 喂 rm_recommend_feature.socialFeatures.intersection 的 viewer 级揭示偏好直方图（WP-4 特征回流）。
+	IntersectionSourceRef string `json:"intersectionSourceRef"`
+	// 交集漏斗归因（R08 端云对齐）：与 App BehaviorEvent.intersectionId/intersectionClass/
+	// intersectionEvidenceId 对齐。此前服务端未声明这些字段，端侧上报被静默丢弃；现接收并贯穿
+	// HotPath/事件存储，使「交集曝光 → 点击 → 转化」可按同一 intersectionId 与类别(fact|affinity)归因。
+	IntersectionID         string `json:"intersectionId"`
+	IntersectionClass      string `json:"intersectionClass"`
+	IntersectionEvidenceID string `json:"intersectionEvidenceId"`
 }
 
 type BehaviorService struct {
-	hotPath        rtrec.SignalProcessor
-	store          persistence.PostRepository
-	publisher      repository.EventPublisher
-	projector      Projector
-	feedback       *rtrec.FeedbackRecorder
-	eventStore     persistence.BehaviorEventStore
-	metricsStore   *persistence.DailyMetricsStore
-	authorImpact   *persistence.AuthorImpactStore
-	sessionInvalid func(userID, sessionID string)
+	hotPath              rtrec.SignalProcessor
+	feedbackIngestor     rtrec.FeedbackIngestor
+	store                persistence.PostRepository
+	publisher            repository.EventPublisher
+	projector            Projector
+	feedback             *rtrec.FeedbackRecorder
+	eventStore           persistence.BehaviorEventStore
+	metricsStore         *persistence.DailyMetricsStore
+	authorImpact         *persistence.AuthorImpactStore
+	authorImpactEvidence *persistence.AuthorImpactEvidenceStore
+	sessionInvalid       func(userID, sessionID string)
+	patchEmitter         *rtrec.FeedPatchEmitter
 }
 
 type BehaviorServiceOption func(*BehaviorService)
@@ -94,10 +111,23 @@ func WithAuthorImpactStore(store *persistence.AuthorImpactStore) BehaviorService
 	return func(s *BehaviorService) { s.authorImpact = store }
 }
 
+func WithAuthorImpactEvidenceStore(store *persistence.AuthorImpactEvidenceStore) BehaviorServiceOption {
+	return func(s *BehaviorService) { s.authorImpactEvidence = store }
+}
+
+// WithFeedPatchEmitter 注入低风险实时推荐 patch 发射器（阶段七 §G）。
+// 未注入时行为处理不发任何 patch（emitter nil 即安全 no-op）。
+func WithFeedPatchEmitter(emitter *rtrec.FeedPatchEmitter) BehaviorServiceOption {
+	return func(s *BehaviorService) { s.patchEmitter = emitter }
+}
+
 func NewBehaviorService(hotPath rtrec.SignalProcessor, store persistence.PostRepository, opts ...BehaviorServiceOption) *BehaviorService {
 	svc := &BehaviorService{
 		hotPath: hotPath,
 		store:   store,
+	}
+	if ingestor, ok := hotPath.(rtrec.FeedbackIngestor); ok {
+		svc.feedbackIngestor = ingestor
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -131,27 +161,52 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			duration = eventInput.DwellMs / 1000
 		}
 		tags := eventInput.Tags
+		var post *postmodel.Post
 		if len(tags) == 0 {
-			if post, ok := s.store.FindByID(ctx, contentID); ok {
+			if foundPost, ok := s.store.FindByID(ctx, contentID); ok {
+				post = foundPost
 				tags = behaviorTagsFromAny(post.TagRefs)
 			}
+		}
+		contentType := strings.TrimSpace(eventInput.ContentType)
+		authorID := strings.TrimSpace(eventInput.AuthorID)
+		if post == nil && (contentType == "" || authorID == "") && contentID != "" {
+			if foundPost, ok := s.store.FindByID(ctx, contentID); ok {
+				post = foundPost
+			}
+		}
+		if post != nil {
+			if contentType == "" {
+				contentType = strings.TrimSpace(post.ContentType)
+			}
+			if authorID == "" {
+				authorID = strings.TrimSpace(post.AuthorId)
+			}
+		}
+		if action == "hide_author" && authorID == "" {
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "authorId 必填", "hide_author requires authorId")
+		}
+		if action == "hide_content_type" && contentType == "" {
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "contentType 必填", "hide_content_type requires contentType")
 		}
 		feedPos := eventInput.FeedPosition
 		if feedPos == 0 && eventInput.Position > 0 {
 			feedPos = eventInput.Position
 		}
 		signal := rtrec.BehaviorSignal{
+			ClientEventID:         strings.TrimSpace(eventInput.ClientEventID),
+			State:                 strings.TrimSpace(eventInput.State),
 			UserID:                userID,
 			DeviceActorID:         strings.TrimSpace(eventInput.DeviceActorID),
 			SessionID:             strings.TrimSpace(eventInput.SessionID),
 			FeedSessionID:         strings.TrimSpace(eventInput.FeedSessionID),
 			ContentID:             contentID,
 			Action:                action,
-			ContentType:           strings.TrimSpace(eventInput.ContentType),
+			ContentType:           contentType,
 			Tags:                  tags,
 			Duration:              duration,
 			Timestamp:             occurredAt,
-			AuthorID:              strings.TrimSpace(eventInput.AuthorID),
+			AuthorID:              authorID,
 			ReferralSource:        strings.TrimSpace(eventInput.ReferralSource),
 			EngagementDepth:       eventInput.EngagementDepth,
 			ConsumedRatio:         eventInput.ConsumedRatio,
@@ -160,31 +215,55 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			FeedRequestID:         strings.TrimSpace(eventInput.FeedRequestID),
 			Position:              feedPos,
 			CommentLength:         eventInput.CommentLength,
+			ChannelID:             strings.TrimSpace(eventInput.ChannelID),
+			RankingVersion:        strings.TrimSpace(eventInput.RankingVersion),
 			IntersectionDimension: strings.TrimSpace(eventInput.IntersectionDimension),
 			IntersectionTagRefs:   eventInput.IntersectionTagRefs,
+			IntersectionID:        strings.TrimSpace(eventInput.IntersectionID),
+			IntersectionClass:     strings.TrimSpace(eventInput.IntersectionClass),
 		}
+		if s.feedbackIngestor != nil {
+			accepted, err := s.feedbackIngestor.AcceptEvent(ctx, signal)
+			if err != nil {
+				rtrec.RecordBehaviorIngestDropped("dedup_error")
+				return err
+			}
+			if !accepted {
+				rtrec.RecordBehaviorIngestDropped("duplicate_client_event")
+				continue
+			}
+		}
+		rtrec.RecordBehaviorIngest(signal)
 		signals = append(signals, signal)
 		projectedEvents = append(projectedEvents, map[string]any{
-			"userId":                userID,
-			"deviceActorId":         signal.DeviceActorID,
-			"sessionId":             signal.SessionID,
-			"contentId":             contentID,
-			"action":                action,
-			"contentType":           signal.ContentType,
-			"tagRefs":               append([]string(nil), tags...),
-			"duration":              duration,
-			"timestamp":             occurredAt.Format(time.RFC3339),
-			"authorId":              signal.AuthorID,
-			"referralSource":        signal.ReferralSource,
-			"engagementDepth":       signal.EngagementDepth,
-			"consumedRatio":         signal.ConsumedRatio,
-			"totalUnits":            signal.TotalUnits,
-			"entityRefs":            signal.EntityRefs,
-			"feedRequestId":         strings.TrimSpace(eventInput.FeedRequestID),
-			"feedPosition":          feedPos,
-			"commentLength":         eventInput.CommentLength,
-			"intersectionDimension": signal.IntersectionDimension,
-			"intersectionTagRefs":   signal.IntersectionTagRefs,
+			"clientEventId":          signal.ClientEventID,
+			"state":                  signal.State,
+			"userId":                 userID,
+			"deviceActorId":          signal.DeviceActorID,
+			"sessionId":              signal.SessionID,
+			"contentId":              contentID,
+			"action":                 action,
+			"contentType":            signal.ContentType,
+			"tagRefs":                append([]string(nil), tags...),
+			"duration":               duration,
+			"timestamp":              occurredAt.Format(time.RFC3339),
+			"authorId":               signal.AuthorID,
+			"referralSource":         signal.ReferralSource,
+			"engagementDepth":        signal.EngagementDepth,
+			"consumedRatio":          signal.ConsumedRatio,
+			"totalUnits":             signal.TotalUnits,
+			"entityRefs":             signal.EntityRefs,
+			"feedRequestId":          strings.TrimSpace(eventInput.FeedRequestID),
+			"feedPosition":           feedPos,
+			"commentLength":          eventInput.CommentLength,
+			"channelId":              strings.TrimSpace(eventInput.ChannelID),
+			"rankingVersion":         strings.TrimSpace(eventInput.RankingVersion),
+			"intersectionDimension":  signal.IntersectionDimension,
+			"intersectionTagRefs":    signal.IntersectionTagRefs,
+			"intersectionSourceRef":  strings.TrimSpace(eventInput.IntersectionSourceRef),
+			"intersectionId":         signal.IntersectionID,
+			"intersectionClass":      signal.IntersectionClass,
+			"intersectionEvidenceId": strings.TrimSpace(eventInput.IntersectionEvidenceID),
 		})
 		if batchUserID == "" {
 			batchUserID = userID
@@ -203,24 +282,34 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		rawEvents := make([]persistence.RawBehaviorEvent, len(signals))
 		for i, sig := range signals {
 			rawEvents[i] = persistence.RawBehaviorEvent{
-				UserID:                sig.UserID,
-				DeviceActorID:         sig.DeviceActorID,
-				SessionID:             sig.SessionID,
-				ContentID:             sig.ContentID,
-				Action:                sig.Action,
-				Tags:                  sig.Tags,
-				Duration:              sig.Duration,
-				AuthorID:              sig.AuthorID,
-				ReferralSource:        sig.ReferralSource,
-				EngagementDepth:       sig.EngagementDepth,
-				ConsumedRatio:         sig.ConsumedRatio,
-				TotalUnits:            sig.TotalUnits,
-				EntityRefs:            sig.EntityRefs,
-				FeedRequestID:         strings.TrimSpace(events[i].FeedRequestID),
-				IntersectionDimension: sig.IntersectionDimension,
-				IntersectionTagRefs:   sig.IntersectionTagRefs,
-				OccurredAt:            occurredAt.Format(time.RFC3339),
-				CreatedAt:             occurredAt,
+				ClientEventID:          sig.ClientEventID,
+				State:                  sig.State,
+				UserID:                 sig.UserID,
+				DeviceActorID:          sig.DeviceActorID,
+				SessionID:              sig.SessionID,
+				ContentID:              sig.ContentID,
+				Action:                 sig.Action,
+				Tags:                   sig.Tags,
+				Duration:               sig.Duration,
+				AuthorID:               sig.AuthorID,
+				ReferralSource:         sig.ReferralSource,
+				EngagementDepth:        sig.EngagementDepth,
+				ConsumedRatio:          sig.ConsumedRatio,
+				TotalUnits:             sig.TotalUnits,
+				EntityRefs:             sig.EntityRefs,
+				FeedRequestID:          strings.TrimSpace(events[i].FeedRequestID),
+				Position:               sig.Position,
+				CommentLength:          sig.CommentLength,
+				ChannelID:              sig.ChannelID,
+				RankingVersion:         sig.RankingVersion,
+				IntersectionDimension:  sig.IntersectionDimension,
+				IntersectionTagRefs:    sig.IntersectionTagRefs,
+				IntersectionID:         sig.IntersectionID,
+				IntersectionClass:      sig.IntersectionClass,
+				IntersectionSourceRef:  strings.TrimSpace(events[i].IntersectionSourceRef),
+				IntersectionEvidenceID: strings.TrimSpace(events[i].IntersectionEvidenceID),
+				OccurredAt:             occurredAt.Format(time.RFC3339),
+				CreatedAt:              occurredAt,
 			}
 		}
 		_ = s.eventStore.InsertBatch(ctx, rawEvents)
@@ -247,6 +336,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		for _, sig := range signals {
 			if event := authorImpactEventFromSignal(sig, occurredAt); event.AuthorID != "" {
 				_ = s.authorImpact.Record(ctx, event)
+				s.recordAuthorImpactEvidence(ctx, sig, event, occurredAt)
 			}
 		}
 	}
@@ -288,6 +378,9 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 	if s.sessionInvalid != nil && batchUserID != "" && batchSessionID != "" {
 		s.sessionInvalid(batchUserID, batchSessionID)
 	}
+	// 低风险实时推荐 patch（阶段七 §G）：在行为主链路全部成功后于安全边界发射。
+	// best-effort，不影响行为写入结果；emitter 为 nil 时安全 no-op。
+	s.patchEmitter.EmitForBehaviorBatch(ctx, signals)
 	return nil
 }
 
@@ -405,6 +498,64 @@ func authorImpactEventFromSignal(signal rtrec.BehaviorSignal, occurredAt time.Ti
 		Source:                "behavior",
 		OccurredAt:            occurredAt,
 	}
+}
+
+// authorImpactEvidenceSource is the canonical source tag for behavior-driven
+// impact facts; it must match rm_author_impact's stored source so the per-tag
+// impactId drill-down anchor stays identical across summary and evidence.
+const authorImpactEvidenceSource = "behavior"
+
+// recordAuthorImpactEvidence materializes one paginated evidence fact per
+// (tagRef) for an impact-bearing behavior. impactId is derived identically to
+// the rm_author_impact summary row so the app can drill from a count to its
+// underlying facts. actorId is stored for dedupe only and never surfaced.
+func (s *BehaviorService) recordAuthorImpactEvidence(ctx context.Context, sig rtrec.BehaviorSignal, event persistence.AuthorImpactEvent, occurredAt time.Time) {
+	if s.authorImpactEvidence == nil {
+		return
+	}
+	authorID := strings.TrimSpace(event.AuthorID)
+	if authorID == "" {
+		return
+	}
+	tagRefs := persistence.NormalizeImpactTags(event.IntersectionTagRefs)
+	if len(tagRefs) == 0 {
+		tagRefs = []string{""}
+	}
+	occur := occurredAt
+	if !sig.Timestamp.IsZero() {
+		occur = sig.Timestamp
+	}
+	for _, tagRef := range tagRefs {
+		impactID := persistence.StableImpactID(authorID, event.HelpType, event.Action, event.IntersectionDimension, tagRef, authorImpactEvidenceSource)
+		_ = s.authorImpactEvidence.Record(ctx, persistence.AuthorImpactEvidenceRecord{
+			AuthorID:              authorID,
+			ImpactID:              impactID,
+			SourceEventID:         evidenceSourceEventID(sig, tagRef),
+			ActorID:               strings.TrimSpace(sig.UserID),
+			ContentID:             strings.TrimSpace(sig.ContentID),
+			ContentType:           strings.TrimSpace(sig.ContentType),
+			HelpType:              event.HelpType,
+			Action:                event.Action,
+			IntersectionDimension: event.IntersectionDimension,
+			TagRef:                tagRef,
+			Source:                authorImpactEvidenceSource,
+			OccurredAt:            occur,
+		})
+	}
+}
+
+// evidenceSourceEventID makes the idempotency key unique per (clientEventId,
+// tagRef). An empty client event id lets the store fall back to a deterministic
+// synthetic key so replays still dedupe.
+func evidenceSourceEventID(sig rtrec.BehaviorSignal, tagRef string) string {
+	base := strings.TrimSpace(sig.ClientEventID)
+	if base == "" {
+		return ""
+	}
+	if strings.TrimSpace(tagRef) == "" {
+		return base
+	}
+	return base + "|" + tagRef
 }
 
 func behaviorTagsFromAny(v any) []string {

@@ -1,0 +1,875 @@
+// ignore_for_file: unnecessary_non_null_assertion
+part of 'home_multi_form_feed.dart';
+
+class _HomeImagePostCard extends StatelessWidget {
+  const _HomeImagePostCard({
+    required this.item,
+    required this.isDark,
+    required this.reason,
+    required this.expanded,
+    required this.onToggleExpanded,
+    required this.onTap,
+    required this.onSpanTap,
+    required this.onFallbackTap,
+  });
+
+  final PostBaseDto item;
+  final bool isDark;
+  final IntersectionReason? reason;
+  final bool expanded;
+  final VoidCallback onToggleExpanded;
+  final void Function(int index) onTap;
+  final void Function(IntersectionTextSpan span)? onSpanTap;
+  final VoidCallback? onFallbackTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = item.normalizedTitle;
+    final body = item.normalizedBody;
+    final media = _buildMedia(context);
+    final isMomentGrid = _isMomentGridPost(item);
+    final intersectionRow = _buildPostIntersectionRow(
+      reason: reason,
+      onSpanTap: onSpanTap,
+      onFallbackTap: onFallbackTap,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isMomentGrid) ...[
+          if (body.isNotEmpty)
+            KeyedSubtree(
+              key: const ValueKey('home-relation-card-body'),
+              child: _ExpandableText(
+                text: body,
+                maxLines: _HomeRelationPostCardState._maxLines,
+                isDark: isDark,
+                expanded: expanded,
+                onToggle: onToggleExpanded,
+              ),
+            ),
+          if (media != null) ...[
+            if (body.isNotEmpty)
+              const SizedBox(height: AppSpacing.intraGroupSm),
+            KeyedSubtree(
+              key: const ValueKey('home-relation-card-media'),
+              child: media,
+            ),
+          ],
+          if (intersectionRow != null) ...[
+            if (body.isNotEmpty || media != null)
+              const SizedBox(height: AppSpacing.intraGroupSm),
+            intersectionRow,
+          ],
+        ] else ...[
+          if (title.isNotEmpty) _PostTitle(title: title),
+          if (title.isNotEmpty && media != null)
+            const SizedBox(height: AppSpacing.intraGroupSm),
+          if (media != null)
+            KeyedSubtree(
+              key: const ValueKey('home-relation-card-media'),
+              child: media,
+            ),
+          if (body.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.intraGroupSm),
+            KeyedSubtree(
+              key: const ValueKey('home-relation-card-body'),
+              child: _ExpandableText(
+                text: body,
+                maxLines: _HomeRelationPostCardState._maxLines,
+                isDark: isDark,
+                expanded: expanded,
+                onToggle: onToggleExpanded,
+              ),
+            ),
+          ],
+          if (intersectionRow != null) ...[
+            if (title.isNotEmpty || media != null || body.isNotEmpty)
+              const SizedBox(height: AppSpacing.intraGroupSm),
+            intersectionRow,
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget? _buildMedia(BuildContext context) {
+    final urls = item.mediaImageUrls;
+    if (_isMomentGridPost(item)) {
+      final visibleCount = _momentGridVisibleCount(urls.length);
+      final sparseWidthFactor = urls.length <= 2
+          ? _momentGridColumns(visibleCount) *
+                DiscoveryFeedSpacing.homeFeedMomentSparseGridWidthFactor
+          : null;
+      return _ConstrainedMediaBox(
+        aspectRatio: _momentGridAspectRatio(urls.length),
+        fullWidth: sparseWidthFactor == null,
+        widthFactor: sparseWidthFactor,
+        child: _HomeMomentGridCard(urls: urls, isDark: isDark, onTap: onTap),
+      );
+    }
+    if (urls.length > 1) {
+      return _ConstrainedMediaBox(
+        aspectRatio: _mediaAspectRatio(item),
+        fullWidth: true,
+        child: _HomeFeedImageCarousel(
+          urls: urls,
+          isDark: isDark,
+          onTap: onTap,
+          aspectRatio: _mediaAspectRatio(item),
+        ),
+      );
+    }
+    final url = item.primaryVisualUrl;
+    if (url.isEmpty) return null;
+    return _ConstrainedMediaBox(
+      aspectRatio: _mediaAspectRatio(item),
+      fullWidth: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onTap(0),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(
+            DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
+          ),
+          child: AppCachedNetworkImage(
+            imageUrl: url,
+            imageUrlCandidates: resolveContentMediaUrlCandidates(url),
+            fit: BoxFit.cover,
+            placeholder: _mediaPlaceholder(isDark),
+            errorWidget: _mediaPlaceholder(isDark),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeFeedVideoPlaybackState {
+  const _HomeFeedVideoPlaybackState({
+    required this.initialize,
+    required this.autoPlay,
+  });
+
+  const _HomeFeedVideoPlaybackState.idle()
+    : initialize = false,
+      autoPlay = false;
+
+  final bool initialize;
+  final bool autoPlay;
+}
+
+class _HomeFeedVideoAutoPlayGate extends StatefulWidget {
+  const _HomeFeedVideoAutoPlayGate({
+    required this.scrollSignal,
+    required this.hasPlayableSource,
+    required this.builder,
+  });
+
+  final ValueListenable<_HomeFeedVideoScrollSignal> scrollSignal;
+  final bool hasPlayableSource;
+  final Widget Function(_HomeFeedVideoPlaybackState playback) builder;
+
+  @override
+  State<_HomeFeedVideoAutoPlayGate> createState() =>
+      _HomeFeedVideoAutoPlayGateState();
+}
+
+class _HomeFeedVideoAutoPlayGateState
+    extends State<_HomeFeedVideoAutoPlayGate> {
+  final GlobalKey _measureKey = GlobalKey();
+  Timer? _recheckTimer;
+  DateTime? _prewarmVisibleSince;
+  DateTime? _visibleSince;
+  _HomeFeedVideoPlaybackState _playback =
+      const _HomeFeedVideoPlaybackState.idle();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.scrollSignal.addListener(_handleSignalChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _evaluate());
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeFeedVideoAutoPlayGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(widget.scrollSignal, oldWidget.scrollSignal)) {
+      oldWidget.scrollSignal.removeListener(_handleSignalChanged);
+      widget.scrollSignal.addListener(_handleSignalChanged);
+    }
+    if (widget.hasPlayableSource != oldWidget.hasPlayableSource) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _evaluate());
+    }
+  }
+
+  @override
+  void dispose() {
+    _recheckTimer?.cancel();
+    widget.scrollSignal.removeListener(_handleSignalChanged);
+    super.dispose();
+  }
+
+  void _handleSignalChanged() {
+    _evaluate();
+  }
+
+  void _evaluate() {
+    if (!mounted) return;
+    _recheckTimer?.cancel();
+    final now = DateTime.now();
+    final visibleFraction = _visibleFraction();
+    final isPrewarmVisible =
+        visibleFraction >= homeFeedVideoPrewarmMinVisibleFraction;
+    final isVisibleEnough =
+        visibleFraction >= homeFeedVideoAutoPlayMinVisibleFraction;
+    if (!isPrewarmVisible) {
+      _prewarmVisibleSince = null;
+    } else {
+      _prewarmVisibleSince ??= now;
+    }
+    if (!isVisibleEnough) {
+      _visibleSince = null;
+    } else {
+      _visibleSince ??= now;
+    }
+    final prewarmStableDuration = _prewarmVisibleSince == null
+        ? Duration.zero
+        : now.difference(_prewarmVisibleSince!);
+    final stableDuration = _visibleSince == null
+        ? Duration.zero
+        : now.difference(_visibleSince!);
+    final signal = widget.scrollSignal.value;
+    final timeSinceScrollEnd = signal.lastScrollEndAt == null
+        ? homeFeedVideoAutoPlayScrollEndDebounce
+        : now.difference(signal.lastScrollEndAt!);
+    final timeSinceHighVelocity = signal.lastHighVelocityAt == null
+        ? homeFeedVideoFastScrollCooldown
+        : now.difference(signal.lastHighVelocityAt!);
+    final nextAutoPlay = shouldAutoPlayHomeFeedVideo(
+      HomeFeedVideoAutoPlayInput(
+        hasPlayableSource: widget.hasPlayableSource,
+        visibleFraction: visibleFraction,
+        stableVisibleDuration: stableDuration,
+        scrollVelocityPxPerSecond: signal.velocityPxPerSecond,
+        isUserDragging: signal.isDragging,
+        isScrolling: signal.isScrolling,
+        timeSinceScrollEnd: timeSinceScrollEnd,
+        timeSinceHighVelocity: timeSinceHighVelocity,
+      ),
+    );
+    final canStartInitialize =
+        widget.hasPlayableSource &&
+        isPrewarmVisible &&
+        prewarmStableDuration >=
+            homeFeedVideoAutoPlayMinStableVisibleDuration &&
+        !signal.isDragging &&
+        !signal.isScrolling &&
+        timeSinceScrollEnd >= homeFeedVideoAutoPlayScrollEndDebounce &&
+        timeSinceHighVelocity >= homeFeedVideoFastScrollCooldown &&
+        signal.velocityPxPerSecond.abs() <=
+            homeFeedVideoFastScrollVelocityPxPerSecond;
+    final shouldRetainInitialized =
+        _playback.initialize &&
+        widget.hasPlayableSource &&
+        visibleFraction >= homeFeedVideoRetainInitializedMinVisibleFraction;
+    final nextPlayback = _HomeFeedVideoPlaybackState(
+      initialize: nextAutoPlay || canStartInitialize || shouldRetainInitialized,
+      autoPlay: nextAutoPlay,
+    );
+    if (nextPlayback.initialize != _playback.initialize ||
+        nextPlayback.autoPlay != _playback.autoPlay) {
+      setState(() => _playback = nextPlayback);
+    }
+    if (!nextAutoPlay && isPrewarmVisible && widget.hasPlayableSource) {
+      final stableRemaining =
+          homeFeedVideoAutoPlayMinStableVisibleDuration - stableDuration;
+      final prewarmStableRemaining =
+          homeFeedVideoAutoPlayMinStableVisibleDuration - prewarmStableDuration;
+      final scrollRemaining =
+          homeFeedVideoAutoPlayScrollEndDebounce - timeSinceScrollEnd;
+      final fastScrollRemaining =
+          homeFeedVideoFastScrollCooldown - timeSinceHighVelocity;
+      final wait = _positiveMaxDuration(
+        stableRemaining,
+        prewarmStableRemaining,
+        scrollRemaining,
+        fastScrollRemaining,
+      );
+      if (wait > Duration.zero) {
+        _recheckTimer = Timer(wait, _evaluate);
+      }
+    }
+  }
+
+  Duration _positiveMaxDuration(
+    Duration a,
+    Duration b,
+    Duration c,
+    Duration d,
+  ) {
+    final candidates = <Duration>[
+      if (a > Duration.zero) a,
+      if (b > Duration.zero) b,
+      if (c > Duration.zero) c,
+      if (d > Duration.zero) d,
+    ];
+    if (candidates.isEmpty) return Duration.zero;
+    return candidates.reduce(
+      (value, element) => value > element ? value : element,
+    );
+  }
+
+  double _visibleFraction() {
+    final context = _measureKey.currentContext;
+    if (context == null) return AppSpacing.zero;
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return AppSpacing.zero;
+    }
+    final height = renderObject.size.height;
+    if (height <= AppSpacing.zero) return AppSpacing.zero;
+    final top = renderObject.localToGlobal(Offset.zero).dy;
+    final bottom = top + height;
+    final viewportHeight = MediaQuery.sizeOf(context).height;
+    final visibleHeight =
+        (min(bottom, viewportHeight) - max(top, AppSpacing.zero)).clamp(
+          AppSpacing.zero,
+          height,
+        );
+    return visibleHeight / height;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyedSubtree(key: _measureKey, child: widget.builder(_playback));
+  }
+}
+
+class _HomeVideoPostCard extends StatelessWidget {
+  const _HomeVideoPostCard({
+    required this.item,
+    required this.isDark,
+    required this.reason,
+    required this.initialize,
+    required this.autoPlay,
+    required this.onTap,
+    required this.onSpanTap,
+    required this.onFallbackTap,
+  });
+
+  final PostBaseDto item;
+  final bool isDark;
+  final IntersectionReason? reason;
+  final bool initialize;
+  final bool autoPlay;
+  final VoidCallback onTap;
+  final void Function(IntersectionTextSpan span)? onSpanTap;
+  final VoidCallback? onFallbackTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = item.normalizedTitle;
+    final body = item.normalizedBody;
+    final intersectionRow = _buildPostIntersectionRow(
+      reason: reason,
+      onSpanTap: onSpanTap,
+      onFallbackTap: onFallbackTap,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (title.isNotEmpty) _PostTitle(title: title),
+        if (title.isNotEmpty) const SizedBox(height: AppSpacing.intraGroupSm),
+        KeyedSubtree(
+          key: const ValueKey('home-relation-card-media'),
+          child: _ConstrainedMediaBox(
+            aspectRatio: _mediaAspectRatio(item),
+            maxPortraitWidth: DiscoveryFeedSpacing.homeFeedVideoPortraitMaxWidth,
+            child: _HomeFeedVideoCard(
+              dto: item,
+              isDark: isDark,
+              initialize: initialize,
+              autoPlay: autoPlay,
+              onTap: onTap,
+            ),
+          ),
+        ),
+        if (body.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.intraGroupSm),
+          KeyedSubtree(
+            key: const ValueKey('home-relation-card-body'),
+            child: _PostBodyText(text: body, maxLines: 3),
+          ),
+        ],
+        if (intersectionRow != null) ...[
+          const SizedBox(height: AppSpacing.intraGroupSm),
+          intersectionRow,
+        ],
+      ],
+    );
+  }
+}
+
+class _HomeArticlePostCard extends StatelessWidget {
+  const _HomeArticlePostCard({
+    required this.item,
+    required this.isDark,
+    required this.reason,
+    required this.onTap,
+    required this.onSpanTap,
+    required this.onFallbackTap,
+  });
+
+  final PostBaseDto item;
+  final bool isDark;
+  final IntersectionReason? reason;
+  final VoidCallback onTap;
+  final void Function(IntersectionTextSpan span)? onSpanTap;
+  final VoidCallback? onFallbackTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final coverUrl = item.mediaCoverUrl;
+    final hasCover = coverUrl.isNotEmpty;
+    final useTopImage = hasCover && _articlePrefersTopImage(item);
+    final layoutKey = !hasCover
+        ? 'home-article-layout-text-only'
+        : (useTopImage
+              ? 'home-article-layout-top-image'
+              : 'home-article-layout-side-image');
+    return CupertinoButton(
+      key: const ValueKey('home-article-card'),
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: KeyedSubtree(
+        key: ValueKey<String>(layoutKey),
+        child: !hasCover
+            ? _buildTextOnlyLayout()
+            : (useTopImage
+                  ? _buildTopImageLayout(coverUrl)
+                  : _buildSideImageLayout(context, coverUrl)),
+      ),
+    );
+  }
+
+  Widget _buildTextOnlyLayout() {
+    return _ArticleTextBlock(
+      item: item,
+      reason: reason,
+      onSpanTap: onSpanTap,
+      onFallbackTap: onFallbackTap,
+    );
+  }
+
+  Widget _buildTopImageLayout(String coverUrl) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ArticleTextBlock(
+          item: item,
+          reason: reason,
+          onSpanTap: onSpanTap,
+          onFallbackTap: onFallbackTap,
+        ),
+        const SizedBox(height: AppSpacing.intraGroupMd),
+        _ArticleThumb(
+          url: coverUrl,
+          isDark: isDark,
+          aspectRatio: DiscoveryFeedSpacing.homeFeedMediaMaxAspectRatio,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSideImageLayout(BuildContext context, String coverUrl) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final thumbWidth = min(
+          constraints.maxWidth * DiscoveryFeedSpacing.homeFeedArticleThumbWidthFactor,
+          DiscoveryFeedSpacing.homeFeedArticleSideThumbMaxWidth,
+        );
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _ArticleTextBlock(
+                item: item,
+                reason: reason,
+                onSpanTap: onSpanTap,
+                onFallbackTap: onFallbackTap,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.containerSm),
+            SizedBox(
+              width: thumbWidth,
+              child: _ArticleThumb(url: coverUrl, isDark: isDark),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  bool _articlePrefersTopImage(PostBaseDto item) {
+    return item.normalizedBody.length >=
+        DiscoveryFeedSpacing.homeFeedArticleTopImageTextLength;
+  }
+}
+
+class _ArticleTextBlock extends StatelessWidget {
+  const _ArticleTextBlock({
+    required this.item,
+    required this.reason,
+    required this.onSpanTap,
+    required this.onFallbackTap,
+  });
+
+  final PostBaseDto item;
+  final IntersectionReason? reason;
+  final void Function(IntersectionTextSpan span)? onSpanTap;
+  final VoidCallback? onFallbackTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = item.normalizedTitle;
+    final body = item.normalizedBody;
+    final intersectionRow = _buildPostIntersectionRow(
+      reason: reason,
+      onSpanTap: onSpanTap,
+      onFallbackTap: onFallbackTap,
+      key: const ValueKey('home-article-inline-intersection'),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (title.isNotEmpty) _PostTitle(title: title, maxLines: 1),
+        if (body.isNotEmpty) ...[
+          if (title.isNotEmpty) const SizedBox(height: AppSpacing.intraGroupSm),
+          _ArticleBodyPreview(text: body),
+        ],
+        if (intersectionRow != null) ...[
+          if (title.isNotEmpty || body.isNotEmpty)
+            const SizedBox(height: AppSpacing.intraGroupSm),
+          intersectionRow,
+        ],
+      ],
+    );
+  }
+}
+
+class _ArticleBodyPreview extends StatelessWidget {
+  const _ArticleBodyPreview({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = _articleSummaryTextStyle(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: style),
+          maxLines: 3,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final overflowed = painter.didExceedMaxLines;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              text,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+            if (overflowed) ...[
+              const SizedBox(height: AppSpacing.intraGroupXs),
+              Text(
+                key: const ValueKey('home-article-full-text'),
+                '${UITextConstants.ellipsis}${UITextConstants.fullText}',
+                style: TextStyle(
+                  fontSize: AppTypography.iosFootnote,
+                  color: AppColors.iosAccent(context),
+                  fontWeight: AppTypography.medium,
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PostTitle extends StatelessWidget {
+  const _PostTitle({required this.title, this.maxLines = 2});
+
+  final String title;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      key: const ValueKey('home-post-title'),
+      title,
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: AppTypography.iosSubheadline,
+        fontWeight: AppTypography.medium,
+        color: AppColors.iosLabel(context),
+        height: AppSpacing.textLineHeightBody,
+        letterSpacing: -0.18,
+      ),
+    );
+  }
+}
+
+class _PostBodyText extends StatelessWidget {
+  const _PostBodyText({required this.text, required this.maxLines});
+
+  final String text;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      style: _postBodyTextStyle(context),
+    );
+  }
+}
+
+class _ConstrainedMediaBox extends StatelessWidget {
+  const _ConstrainedMediaBox({
+    required this.aspectRatio,
+    required this.child,
+    this.fullWidth = false,
+    this.maxPortraitWidth,
+    this.widthFactor,
+  });
+
+  final double aspectRatio;
+  final Widget child;
+  final bool fullWidth;
+  final double? maxPortraitWidth;
+  final double? widthFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        final isLandscape = aspectRatio > AppSpacing.one;
+        final portraitWidthFactor = AppSpacing.responsiveWideValue(
+          context,
+          compact: DiscoveryFeedSpacing.homeFeedMediaPortraitWidthFactor,
+          regular: DiscoveryFeedSpacing.homeFeedMediaPortraitWidthFactor,
+          expanded: DiscoveryFeedSpacing.homeFeedMediaPortraitWideWidthFactor,
+          wide: DiscoveryFeedSpacing.homeFeedMediaPortraitWideWidthFactor,
+        );
+        final explicitWidthFactor = widthFactor;
+        final preferredWidth = explicitWidthFactor != null
+            ? available * explicitWidthFactor.clamp(0.0, 1.0)
+            : fullWidth || isLandscape
+            ? available
+            : available * portraitWidthFactor;
+        final portraitMax = maxPortraitWidth;
+        final mediaWidth = !isLandscape && portraitMax != null
+            ? min(preferredWidth, portraitMax)
+            : preferredWidth;
+        final maxHeight =
+            MediaQuery.sizeOf(context).height *
+            DiscoveryFeedSpacing.homeFeedMediaPortraitMaxHeightFactor;
+        final height = (mediaWidth / aspectRatio).clamp(0.0, maxHeight);
+        return Align(
+          alignment: explicitWidthFactor == null && (fullWidth || isLandscape)
+              ? Alignment.center
+              : Alignment.centerLeft,
+          child: SizedBox(width: mediaWidth, height: height, child: child),
+        );
+      },
+    );
+  }
+}
+
+class _ArticleThumb extends StatelessWidget {
+  const _ArticleThumb({
+    required this.url,
+    required this.isDark,
+    this.aspectRatio,
+  });
+
+  final String url;
+  final bool isDark;
+  final double? aspectRatio;
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: aspectRatio ?? AppSpacing.one,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(
+          DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
+        ),
+        child: AppCachedNetworkImage(
+          imageUrl: url,
+          imageUrlCandidates: resolveContentMediaUrlCandidates(url),
+          fit: BoxFit.cover,
+          placeholder: _mediaPlaceholder(isDark),
+          errorWidget: _mediaPlaceholder(isDark),
+        ),
+      ),
+    );
+  }
+}
+
+TextStyle _postBodyTextStyle(BuildContext context) {
+  return TextStyle(
+    fontSize: AppTypography.feedBodyResponsive(context),
+    color: AppColors.iosLabel(context),
+    height: AppSpacing.textLineHeightBody,
+    letterSpacing: -0.12,
+  );
+}
+
+TextStyle _articleSummaryTextStyle(BuildContext context) {
+  return TextStyle(
+    fontSize: AppTypography.feedBodyResponsive(context),
+    color: AppColors.iosLabel(context),
+    fontWeight: AppTypography.regular,
+    height: AppSpacing.textLineHeightBody,
+    letterSpacing: -0.08,
+  );
+}
+
+double _mediaAspectRatio(PostBaseDto item) {
+  final ratio = item.aspectRatio;
+  if (ratio != null && ratio.isFinite && ratio > 0) {
+    return ratio.clamp(
+      DiscoveryFeedSpacing.homeFeedMediaMinAspectRatio,
+      DiscoveryFeedSpacing.homeFeedMediaMaxAspectRatio,
+    );
+  }
+  return item.hasVideo ? DiscoveryFeedSpacing.homeFeedMediaMaxAspectRatio : 4 / 3;
+}
+
+bool _isMomentGridPost(PostBaseDto item) {
+  return item.identity == 'moment' && item.mediaImageUrls.isNotEmpty;
+}
+
+int _momentGridVisibleCount(int total) {
+  if (total <= 0) return 0;
+  if (total <= 2) return total;
+  if (total <= 4) return total;
+  if (total <= 8) return total.clamp(1, 6).toInt();
+  return total.clamp(1, 9).toInt();
+}
+
+int _momentGridColumns(int visibleCount) {
+  if (visibleCount <= 1) return 1;
+  if (visibleCount == 2) return 2;
+  if (visibleCount == 4) return 2;
+  return 3;
+}
+
+double _momentGridAspectRatio(int total) {
+  final visibleCount = _momentGridVisibleCount(total);
+  final columns = _momentGridColumns(visibleCount);
+  final rows = ((visibleCount + columns - 1) ~/ columns).clamp(1, 3).toInt();
+  return columns / rows;
+}
+
+bool _shouldShowIntersection(IntersectionReason? reason) {
+  if (reason == null) return false;
+  return reason.primaryText.trim().isNotEmpty ||
+      reason.connectionSummary.trim().isNotEmpty;
+}
+
+Widget _mediaPlaceholder(bool isDark) {
+  return DecoratedBox(
+    decoration: BoxDecoration(
+      color: AppColorsFunctional.getColor(isDark, ColorType.surfaceMuted),
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 可展开文字
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ExpandableText extends StatelessWidget {
+  const _ExpandableText({
+    required this.text,
+    required this.maxLines,
+    required this.isDark,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final String text;
+  final int maxLines;
+  final bool isDark;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final textStyle = TextStyle(
+      fontSize: AppTypography.feedBodyResponsive(context),
+      color: fg,
+      height: AppSpacing.textLineHeightBodyRelaxed,
+      letterSpacing: -0.18,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tp = TextPainter(
+          text: TextSpan(text: text, style: textStyle),
+          maxLines: maxLines,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final isOverflow = tp.didExceedMaxLines;
+
+        if (!isOverflow) {
+          return Text(text, style: textStyle);
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              text,
+              style: textStyle,
+              maxLines: expanded ? null : maxLines,
+              overflow: expanded ? null : TextOverflow.ellipsis,
+            ),
+            SizedBox(height: AppSpacing.intraGroupXs),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              onPressed: onToggle,
+              child: Text(
+                expanded ? UITextConstants.collapse : UITextConstants.fullText,
+                style: TextStyle(
+                  fontSize: AppTypography.iosFootnote,
+                  color: AppColors.iosAccent(context),
+                  fontWeight: AppTypography.semiBold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+

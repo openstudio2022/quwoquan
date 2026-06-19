@@ -15,6 +15,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_context.
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_rollout_context.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 
@@ -41,8 +42,12 @@ void main() {
 
   testWidgets('主页详情页展示壳层摘要与 contextual publish 入口', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
+      ProviderScope(
+        overrides: [
+          // 「为什么推荐这里」交集卡需要当前用户（你×这里）；游客无「你」即收起（G2）。
+          currentUserIdProvider.overrideWithValue('viewer_demo'),
+        ],
+        child: const MaterialApp(
           home: HomepageDetailPage(homepageId: 'homepage_sight_west_lake'),
         ),
       ),
@@ -50,16 +55,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('西湖景区'), findsWidgets);
-    expect(find.text(UITextConstants.objectConnectionWithYou), findsOneWidget);
+    expect(find.text(UITextConstants.entityWhyRecommendTitle), findsOneWidget);
     expect(find.text('认领主页'), findsNothing);
     expect(find.text(UITextConstants.follow), findsWidgets);
     expect(find.text(UITextConstants.profileDirectMessage), findsWidgets);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -520));
     await tester.pumpAndSettle();
-    expect(find.text('内容'), findsWidgets);
-    expect(find.text('讨论'), findsWidgets);
-    expect(find.text('兴趣圈'), findsOneWidget);
-    expect(find.text('认识西湖景区'), findsOneWidget);
+    expect(find.text(UITextConstants.objectTabRecord), findsWidgets);
+    expect(find.text(UITextConstants.objectTabDiscussion), findsWidgets);
+    expect(find.text(UITextConstants.objectTabRelatedCircles), findsOneWidget);
+    expect(find.text(UITextConstants.entityAboutTitle), findsOneWidget);
     expect(find.text('实体介绍'), findsNothing);
     expect(find.text(UITextConstants.objectIntroMoreLabel), findsOneWidget);
     expect(find.text('治理入口'), findsNothing);
@@ -100,6 +105,43 @@ void main() {
 
     expect(find.text('峨眉山'), findsWidgets);
     expect(find.byType(AppPageErrorState), findsNothing);
+  });
+
+  testWidgets('失效主页会展示明确提示并可安全返回首页', (tester) async {
+    final router = GoRouter(
+      initialLocation: AppRoutePaths.homepageDetail(id: 'missing-homepage-id'),
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoutePaths.home,
+          builder: (_, _) => const Scaffold(
+            body: Center(child: Text('HOME')),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutePaths.homepageDetailPathTemplate.replaceAll(
+            '{id}',
+            ':id',
+          ),
+          builder: (context, state) =>
+              HomepageDetailPage(homepageId: state.pathParameters['id'] ?? ''),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp.router(routerConfig: router)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppPageErrorState), findsOneWidget);
+    expect(find.text(UITextConstants.homepageInfoUnavailableTitle), findsOneWidget);
+    expect(find.text('主页不存在或已下线'), findsOneWidget);
+    expect(find.text(UITextConstants.back), findsOneWidget);
+
+    await tester.tap(find.text(UITextConstants.back));
+    await tester.pumpAndSettle();
+
+    expect(find.text('HOME'), findsOneWidget);
   });
 
   testWidgets('对象页 bundle 请求透传推荐与灰度上下文', (tester) async {

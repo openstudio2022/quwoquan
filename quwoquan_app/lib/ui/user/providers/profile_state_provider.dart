@@ -5,7 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
-    show SubAccountProfileViewData, UserWorkItem;
+    show SubAccountProfileViewData, UserHomepageBundleViewData, UserWorkItem;
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
@@ -17,7 +17,7 @@ class ProfileState {
     this.activeSubTab = CreationSubTab.all,
     this.activeWorkFormat = CreationWorkFormat.all,
     this.activeVisibility = CreationVisibility.all,
-    this.interactionSubTab = InteractionSubTab.likes,
+    this.interactionSubTab = InteractionSubTab.all,
     this.interactionDirection = InteractionDirection.received,
     this.creations = const [],
     this.circles = const [],
@@ -26,6 +26,7 @@ class ProfileState {
     this.isFollowing = false,
     this.capability,
     this.optimisticFollowOverride,
+    this.rawError,
   });
 
   final String userId;
@@ -45,6 +46,17 @@ class ProfileState {
   /// 关系能力位投影（null = 未载入）
   final RelationshipCapabilityDto? capability;
   final bool? optimisticFollowOverride;
+
+  /// 首屏聚合失败的原始错误（null = 无错误）。UI 经 [errorMessage] 消费结构化文案，
+  /// 不直接读异常字符串（对齐 runtime error cutover）。
+  final Object? rawError;
+
+  /// 结构化首屏错误文案（null = 无错误）。
+  String? get errorMessage =>
+      rawError == null ? null : runtimeErrorDisplayMessage(rawError!).trim();
+
+  /// 首屏聚合是否失败（用于错误态分支：重试 / 降级提示）。
+  bool get hasLoadError => rawError != null;
 
   RelationshipCapabilityDto? get displayCapability {
     final base = capability;
@@ -69,8 +81,10 @@ class ProfileState {
     bool? isFollowing,
     RelationshipCapabilityDto? capability,
     bool? optimisticFollowOverride,
+    Object? rawError,
     bool clearCapability = false,
     bool clearOptimisticFollowOverride = false,
+    bool clearError = false,
   }) {
     return ProfileState(
       userId: userId,
@@ -89,6 +103,7 @@ class ProfileState {
       optimisticFollowOverride: clearOptimisticFollowOverride
           ? null
           : (optimisticFollowOverride ?? this.optimisticFollowOverride),
+      rawError: clearError ? null : (rawError ?? this.rawError),
     );
   }
 }
@@ -120,36 +135,39 @@ class ProfileNotifier extends Notifier<ProfileState> {
     state = ProfileState(userId: _userId).copyWith(isLoading: true);
     try {
       final repo = ref.read(userProfileRepositoryProvider);
-      final profile = await repo.getSubAccountProfile(_userId);
-      final posts = await repo.listUserPosts(_userId);
-      final works = await repo.listUserWorks(_userId);
-      final circles = await repo.listProfileCircles(_userId);
+      // 锁定决策 #1：homepage-bundle 一次聚合身份域真相（profile/stats/关系能力/
+      // viewerContext），与作品/帖子内容并发补充，消除首屏串行阻塞。
+      final results = await Future.wait(<Future<Object>>[
+        repo.getUserHomepageBundle(_userId),
+        repo.listUserPosts(_userId),
+        repo.listUserWorks(_userId),
+      ]);
+      final bundle = results[0] as UserHomepageBundleViewData;
+      final posts = results[1] as List<PostBaseDto>;
+      final works = results[2] as List<UserWorkItem>;
+      final profile = bundle.profileWithStats;
       ref
           .read(postInteractionStateProvider.notifier)
           .applyConfirmedPosts(posts);
       final subAccountId = profile.subAccountId.isNotEmpty
           ? profile.subAccountId
           : _userId;
+      // bundle 自带首屏关系能力快照（user 域聚合 follow/block 同源），作为 capability
+      // seed，免去首屏额外 getCapability 串行请求。
+      final bundleCapability = bundle.relationshipCapability;
       final reconcileCap = ref
           .read(relationshipCapabilityRepositoryProvider)
           .reconcilesCapabilityWithSharedRelationshipState;
-      RelationshipCapabilityDto? seededCapability;
-      bool? optimisticFollowOverride;
       final sharedFollowing = ref
           .read(userRelationshipStateProvider)
           .isFollowing(subAccountId);
       final pendingFollowIntent = _pendingFollowIntent(subAccountId);
-      if (reconcileCap) {
-        try {
-          seededCapability = await ref
-              .read(relationshipCapabilityRepositoryProvider)
-              .getCapability(subAccountId);
-          final desiredFollowing = pendingFollowIntent ?? sharedFollowing;
-          if (desiredFollowing != seededCapability.viewerFollowsTarget) {
-            optimisticFollowOverride = desiredFollowing;
-          }
-        } catch (_) {
-          seededCapability = null;
+      final RelationshipCapabilityDto? seededCapability = bundleCapability;
+      bool? optimisticFollowOverride;
+      if (bundleCapability != null && reconcileCap) {
+        final desiredFollowing = pendingFollowIntent ?? sharedFollowing;
+        if (desiredFollowing != bundleCapability.viewerFollowsTarget) {
+          optimisticFollowOverride = desiredFollowing;
         }
       }
       final seededFollowing =
@@ -161,20 +179,21 @@ class ProfileNotifier extends Notifier<ProfileState> {
         profile: profile,
         creations: posts,
         works: works,
-        circles: circles,
         isLoading: false,
         isFollowing: seededFollowing,
         capability: seededCapability,
         optimisticFollowOverride: optimisticFollowOverride,
+        clearError: true,
       );
       ref
           .read(userRelationshipStateProvider.notifier)
           .setFollowing(subAccountId, seededFollowing);
-    } catch (_) {
-      state = state.copyWith(isLoading: false);
+    } catch (e) {
+      // 结构化错误态：保留原始错误供 UI 经 errorMessage 展示，不静默吞异常。
+      state = state.copyWith(isLoading: false, rawError: e);
     }
-    // 异步加载关系能力位（不阻塞主内容展示）
-    if (state.capability == null) {
+    // bundle 未提供关系能力（本人态 / 异常降级）时，异步精确校准（不阻塞首屏）。
+    if (state.capability == null && !state.hasLoadError) {
       _loadRelationshipCapability();
     }
   }

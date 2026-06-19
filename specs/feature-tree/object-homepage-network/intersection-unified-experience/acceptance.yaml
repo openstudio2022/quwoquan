@@ -9,10 +9,12 @@ node:
 scope:
   summary: 交集统一体验与推荐端云一体验收范围（我的主页聚合入口、对象页交集卡、首页/频道交集推荐、事实与概率分通道、保鲜与冷却）。
   in_scope:
+    - 六场景（S1–S5 + 横切句型）primaryText 单句展示与 G2 门禁。
     - 我的主页「我的交集」聚合入口：总数 + 最多 3 维度红点 + 自上次新增列表 + 打开清零。
     - profile/entity/circle 三类主页移除 demo 问小趣 dock。
+    - 全局搜索交集 Tab 与 connectionState 分组消费 intersectionReason 子集。
     - 首页与各频道（含校园、旅行）交集推荐卡重设计：去关注按钮、头像 + 名字 + 红计数。
-    - IntersectionReason 扩展、recommendation/intersection 域契约、viewer_object_intersection 读模型。
+    - IntersectionReason 字段收敛、recommendation/intersection 域契约、viewer_object_intersection 读模型。
     - 事实与概率分通道、保鲜期、跨会话推荐冷却窗口、曝光到转化漏斗埋点。
   out_of_scope:
     - 交易、支付、预约闭环。
@@ -37,8 +39,13 @@ sit_acceptance:
     tests:
       planned:
         - quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
-        - quwoquan_app/test/cloud/intersection/contract/intersection_repository_contract_test.dart
-      recorded: []
+        - quwoquan_app/test/ui/user/pages/my_intersection_inbox_page_test.dart
+        - quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart
+      recorded:
+        - "T2 quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart（聚合入口：总数红点 + ≤3 维度简报 + 展开更多 + 维度下钻导航，2026-06-16 green）"
+        - "T2 quwoquan_app/test/ui/user/pages/my_intersection_inbox_page_test.dart（分组列表展示云侧对象名/证据，打开即 markVisited 清零，2026-06-16 green）"
+        - "T1 quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart（summary/list/visit 契约对齐，2026-06-16 green）"
+        - "PARTIAL T3（2026-06-16 gamma-local 实测，artifacts/local-gamma/search_intersection_smoke.json）：content-service 在 stackctl gamma 运行栈内，`/v1/content/intersections/{summary,object}`、`/v1/content/intersections` GET 路由全部上线并强制 viewer 鉴权（匿名返回 CONTENT.USER.invalid_argument『需要登录』）；`/v1/content/feed/intersections` 200。BLOCKED：populated summary→list→visit 需网关可识别 token + 已 seed viewer 关系，见 backlog R-IX05 衍生待办。"
     status: pending
   SIT2:
     title: 对象页交集卡与 demo dock 移除 SIT
@@ -58,7 +65,10 @@ sit_acceptance:
       planned:
         - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
         - quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
-      recorded: []
+      recorded:
+        - "T2 quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（实体主页交集卡 + 无 demo dock，2026-06-16 green）"
+        - "T2 quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（圈子主页「你认识的人有 N 个在这」交集卡 + 无 demo dock，2026-06-16 green）"
+        - "BLOCKED T3（2026-06-16 gamma-local 实测）：`docker-compose.gamma-local.yaml` 未含 entity-service / circle-service，经网关 `/v1/homepages/*` 返回 404『local-gamma mirror route is not ready』，故 `/v1/homepages/{id}/object-page-bundle` 与 circle impact 的 gamma T3 暂不可冒烟；需先把两服务纳入 gamma-local 拓扑，见 backlog R-IX05 衍生待办。"
     status: pending
   SIT3:
     title: 首页与频道交集推荐重设计 SIT
@@ -78,9 +88,12 @@ sit_acceptance:
         - T1_static_contract
     tests:
       planned:
-        - quwoquan_app/test/ui/discovery/widgets/today_intersection_rail_widget_test.dart
-        - quwoquan_app/test/ui/discovery/intersection_channel_widget_test.dart
-      recorded: []
+        - quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
+        - quwoquan_app/test/ui/discovery/home_intersection_object_nav_test.dart
+      recorded:
+        - "T2 quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart（交集 spotlight rail：去关注按钮、头像+名字+一句 primaryText、≤4 卡曝光归因、换一批、概率交集标注、无 primaryText 过滤，2026-06-16 green）"
+        - "T2 quwoquan_app/test/ui/discovery/home_intersection_object_nav_test.dart（事实/概率交集卡点击经 metadata 路由进对象页，2026-06-16 green）"
+        - "PARTIAL T3（2026-06-16 gamma-local 实测，artifacts/local-gamma/search_intersection_smoke.json）：`/v1/content/feed/intersections` 经网关 200（匿名诚实返回空 items，不伪造）；BLOCKED：校园/旅行频道分通道混排的 populated 结果需 seed viewer 关系 + 频道参数，见 backlog R-IX05/R-IX07。"
     status: pending
   SIT4:
     title: 保鲜冷却与曝光转化漏斗 SIT
@@ -99,9 +112,18 @@ sit_acceptance:
         - T2_module_interaction
     tests:
       planned:
-        - quwoquan_service/tests/recommendation/intersection_window_contract_test.go
+        - quwoquan_service/services/content-service/internal/application/intersection_service_test.go
+        - quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source_test.go
+        - quwoquan_service/services/content-service/tests/viewer_object_intersection_store_contract_test.go
         - quwoquan_app/test/core/trackers/intersection_attribution_test.dart
-      recorded: []
+      recorded:
+        - "T3 quwoquan_service/services/content-service/internal/application/intersection_service_test.go（ExposureRetainsButDemotesSeen 冷却窗口、MaxCandidateWindowCapsBeforeLimit O(logN) 窗口、SummaryNewCountAndVisitClears 水位清零，2026-06-16 green）"
+        - "T3 quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source_test.go（PerDimensionFreshnessTriggersRecompute：computedAt/expiresAt 过保鲜触发重算，2026-06-16 green）"
+        - "T3 quwoquan_service/services/content-service/tests/viewer_object_intersection_store_contract_test.go（read-through 命中保鲜零打分，2026-06-16 green）"
+        - "T2 quwoquan_app/test/core/trackers/intersection_attribution_test.dart（曝光/点击携带 intersectionId/dimension/class/sourceRef/evidenceId，转化携带 dimension/sourceRef/tagRefs，2026-06-16 green）"
+        - "T2 quwoquan_service/services/content-service/internal/application/intersection_metrics_test.go（TestIntersectionService_FunnelMetrics：Feed 候选 fact/affinity·fresh/seen、stale 与 display_incomplete 过滤、ReportExposure 冷却写入、MarkVisited 清零按维度发射业务 SLI，2026-06-16 green）"
+        - "OBS（WP-E）：业务漏斗指标 intersection_feed_candidates_total/feed_filtered_total/cooldown_exposure_reported_total/inbox_visit_total/inbox_filtered_total 经 infrastructure/intersectionmetrics 落地并注入 main.go；HTTP 延迟/可用性走 http_server_* 中间件按 route 过滤；SLO 声明 quwoquan_service/services/content-service/configs/observability/intersection_slo.yaml（P95/可用性/重复曝光率/保鲜过滤率/展示完备率/事实占比/清零量 + 回滚分层）；告警组 deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_intersection（4 条规则，YAML 校验通过）。"
+        - "PENDING T3：gamma 全链路「曝光→点击→转化→清零」漏斗指标的真实采样需 seed viewer 关系后在 stackctl 栈采集 /metrics（依赖 R-IX05 gamma-local 拓扑/鉴权 seed）。"
     status: pending
 execution:
   local_gate:

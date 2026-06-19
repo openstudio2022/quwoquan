@@ -88,9 +88,9 @@ class UserProfileMockData {
         'authorAvatarUrl': _avatarFor(userId),
         'authorBackgroundUrl': _backgroundFor(userId),
         'coverUrl':
-            'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400',
+            'media/image/s/mock/seed/p_1647956450271-2ff54205bebf/v1/image.jpg',
         'imageUrls': [
-          'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=800',
+          'media/image/s/mock/seed/p_1647956450271-2ff54205bebf/v1/image.jpg',
         ],
         'width': 800,
         'height': 600,
@@ -108,9 +108,9 @@ class UserProfileMockData {
         'authorAvatarUrl': _avatarFor(userId),
         'authorBackgroundUrl': _backgroundFor(userId),
         'videoUrl':
-            'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
+            'media/video/s/mock/external/flutter/butterfly/v1/video.mp4',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400',
+            'media/image/s/mock/seed/p_1646034296147-d8ed3aace9a4/v1/image.jpg',
         'width': 720,
         'height': 1280,
         'durationMs': 30000,
@@ -130,7 +130,7 @@ class UserProfileMockData {
         'title': '极简摄影的真谛',
         'body': '通过剥离不必要的元素，我们才能看见事物的本质。这是一篇关于极简主义摄影的思考与实践。',
         'coverUrl':
-            'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
+            'media/image/s/mock/seed/p_1627216661750-c59a4cea849c/v1/image.jpg',
         'likeCount': 2100,
         'commentCount': 78,
         'shareCount': 43,
@@ -145,7 +145,7 @@ class UserProfileMockData {
         'authorBackgroundUrl': _backgroundFor(userId),
         'body': '咖啡厅一角，除了香味，还有孤独。',
         'imageUrls': [
-          'https://images.unsplash.com/photo-1650211573412-9d36d0cbbf00?q=80&w=400',
+          'media/image/s/mock/seed/p_1650211573412-9d36d0cbbf00/v1/image.jpg',
         ],
         'likeCount': 560,
         'commentCount': 18,
@@ -164,7 +164,7 @@ class UserProfileMockData {
         type: 'photo',
         title: '光影的节奏',
         coverUrl:
-            'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400',
+            'media/image/s/mock/seed/p_1647956450271-2ff54205bebf/v1/image.jpg',
         likeCount: 1200,
         date: '2025-12-20',
         desc: '在布鲁塞尔的午后，捕捉到的一组极简主义建筑光影。',
@@ -174,7 +174,7 @@ class UserProfileMockData {
         type: 'video',
         title: '森林的呼吸',
         coverUrl:
-            'https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400',
+            'media/image/s/mock/seed/p_1646034296147-d8ed3aace9a4/v1/image.jpg',
         likeCount: 840,
         date: '2025-12-15',
         desc: '4K延时摄影，记录大兴安岭清晨云雾缭绕的过程。',
@@ -184,7 +184,7 @@ class UserProfileMockData {
         type: 'article',
         title: '极简摄影的真谛',
         coverUrl:
-            'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
+            'media/image/s/mock/seed/p_1627216661750-c59a4cea849c/v1/image.jpg',
         likeCount: 2100,
         date: '2025-12-10',
         desc: '通过剥离不必要的元素，我们才能看见事物的本质。',
@@ -194,7 +194,7 @@ class UserProfileMockData {
         type: 'photo',
         title: '咖啡厅一角',
         coverUrl:
-            'https://images.unsplash.com/photo-1650211573412-9d36d0cbbf00?q=80&w=400',
+            'media/image/s/mock/seed/p_1650211573412-9d36d0cbbf00/v1/image.jpg',
         likeCount: 560,
         date: '2025-12-05',
         desc: '深夜的咖啡馆，除了香味，还有孤独。',
@@ -212,7 +212,7 @@ class UserProfileMockData {
         title: '阿那亚礼堂',
         subtitle: '在海边的孤独感中寻找创作灵感。',
         imageUrl:
-            'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
+            'media/image/s/mock/seed/p_1627216661750-c59a4cea849c/v1/image.jpg',
       ),
       const UserLifeItem(
         id: 'i2',
@@ -220,7 +220,7 @@ class UserProfileMockData {
         title: '《摄影的哲学》',
         subtitle: '比起技巧，我更痴迷于思考快门背后。',
         imageUrl:
-            'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=400',
+            'media/image/s/mock/seed/p_1544716278-ca5e3f4abd8c/v1/image.jpg',
       ),
       const UserLifeItem(
         id: 'i3',
@@ -228,7 +228,7 @@ class UserProfileMockData {
         title: 'Dirty Coffee',
         subtitle: '喜欢那种冷热交替的冲突感。',
         imageUrl:
-            'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=400',
+            'media/image/s/mock/seed/p_1495474472287-4d71bcdd2085/v1/image.jpg',
       ),
       const UserLifeItem(
         id: 'i4',
@@ -236,7 +236,7 @@ class UserProfileMockData {
         title: 'Leica M11',
         subtitle: '它是我身体的延伸。',
         imageUrl:
-            'https://images.unsplash.com/photo-1648049003029-3b3b32cb9a1f?q=80&w=400',
+            'media/image/s/mock/seed/p_1648049003029-3b3b32cb9a1f/v1/image.jpg',
       ),
     ];
   }
@@ -260,31 +260,30 @@ class UserProfileMockData {
   static String _avatarFor(String userId) {
     const map = <String, String>{
       'nature_photographer':
-          'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+          'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
       'travel_photographer':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+          'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
       'street_photo':
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+          'media/avatar/s/mock/seed/u_1472099645785-5658abf4ff4e/v1/avatar.jpg',
       'a1':
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
+          'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
       // photo-1545996124 returns 404 from CDN; align with default avatar for stable mock.
       'mo_yun':
-          'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+          'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
     };
     return map[userId] ??
-        'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100';
+        'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg';
   }
 
   static String _backgroundFor(String userId) {
     const map = <String, String>{
       'nature_photographer':
-          'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
+          'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
       'travel_photographer':
-          'https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1200',
-      'a1':
-          'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200',
+          'media/image/s/mock/seed/p_1539635278303-d4002c07eae3/v1/image.jpg',
+      'a1': 'media/image/s/mock/seed/p_1536440136628-849c177e76a1/v1/image.jpg',
     };
     return map[userId] ??
-        'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200';
+        'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg';
   }
 }

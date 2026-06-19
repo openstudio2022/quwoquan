@@ -94,10 +94,14 @@ func TestPageContextManager_ForwardsUserActionsToHotPath(t *testing.T) {
 		t.Fatalf("Report: %v", err)
 	}
 
-	// Verify hot path received the signal via the exposed set
-	exposed, _ := hp.IsExposed(ctx, "u1", "", "p1")
-	if !exposed {
-		t.Error("p1 should be in exposed set after user action forwarding")
+	// 七态漏斗：like 是 interaction 态，转发到 hot path 后驱动会话标签权重，
+	// 而非写入 served/exposed 集（曝光仅由 feed 下发路径标记）。
+	state, err := hp.GetSessionState(ctx, "u1", "")
+	if err != nil {
+		t.Fatalf("GetSessionState: %v", err)
+	}
+	if state == nil || state.TagWeights["travel"] <= 0 {
+		t.Error("forwarded like action should raise the travel tag weight in the hot path session")
 	}
 }
 

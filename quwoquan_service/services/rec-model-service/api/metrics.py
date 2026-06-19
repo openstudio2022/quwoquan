@@ -33,6 +33,43 @@ rec_model_loaded = Gauge(
     ["model_version"],
 )
 
+rec_model_score_cache_hit_total = Counter(
+    "rec_model_score_cache_hit_total",
+    "Total rec-model-service score cache hits",
+    ["scenario", "model_version"],
+)
+
+rec_model_score_cache_miss_total = Counter(
+    "rec_model_score_cache_miss_total",
+    "Total rec-model-service score cache misses",
+    ["scenario", "model_version"],
+)
+
+rec_model_score_batch_total = Counter(
+    "rec_model_score_batch_total",
+    "Total rec-model-service micro-batches",
+    ["scenario", "model_version", "kind"],
+)
+
+rec_model_score_batch_size = Histogram(
+    "rec_model_score_batch_size",
+    "Number of requests coalesced in a scoring micro-batch",
+    ["scenario", "model_version"],
+    buckets=[1, 2, 4, 8, 16, 32, 64],
+)
+
+rec_model_budget_seconds = Gauge(
+    "rec_model_budget_seconds",
+    "Configured rec-model-service timeout budget by phase",
+    ["phase"],
+)
+
+rec_model_guardrail_mode = Gauge(
+    "rec_model_guardrail_mode",
+    "Guardrail action mode exported by rec-model-service. 1 means suggest_only.",
+    ["mode"],
+)
+
 
 def observe_score_duration(model_version: str, seconds: float) -> None:
     mv = model_version if model_version else "unknown"
@@ -46,6 +83,40 @@ def observe_score_value(model_version: str, score: float) -> None:
 
 def record_rec_request(endpoint: str, status: str) -> None:
     rec_requests_total.labels(endpoint=endpoint, status=status).inc()
+
+
+def record_score_cache_hit(scenario: str, model_version: str) -> None:
+    rec_model_score_cache_hit_total.labels(
+        scenario=scenario or "unknown",
+        model_version=model_version or "unknown",
+    ).inc()
+
+
+def record_score_cache_miss(scenario: str, model_version: str) -> None:
+    rec_model_score_cache_miss_total.labels(
+        scenario=scenario or "unknown",
+        model_version=model_version or "unknown",
+    ).inc()
+
+
+def record_score_batch(scenario: str, model_version: str, kind: str, size: int) -> None:
+    rec_model_score_batch_total.labels(
+        scenario=scenario or "unknown",
+        model_version=model_version or "unknown",
+        kind=kind or "unknown",
+    ).inc()
+    rec_model_score_batch_size.labels(
+        scenario=scenario or "unknown",
+        model_version=model_version or "unknown",
+    ).observe(max(1, size))
+
+
+def set_timeout_budget(phase: str, seconds: float) -> None:
+    rec_model_budget_seconds.labels(phase=phase).set(max(0.0, seconds))
+
+
+def set_guardrail_mode(mode: str) -> None:
+    rec_model_guardrail_mode.labels(mode=mode).set(1.0 if mode == "suggest_only" else 0.0)
 
 
 def refresh_rec_model_loaded_gauges() -> None:

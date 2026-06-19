@@ -105,7 +105,7 @@ void main() {
     await tester.pump();
     await _pumpUntil(
       tester,
-      condition: () => find.textContaining('发现区').evaluate().isNotEmpty,
+      condition: () => find.text('相关搜索').evaluate().isNotEmpty,
     );
 
     expect(find.text('小趣'), findsOneWidget);
@@ -118,8 +118,12 @@ void main() {
     expect(find.text('图片'), findsOneWidget);
     expect(find.text('视频'), findsOneWidget);
     expect(find.text('长文'), findsOneWidget);
-    expect(find.textContaining('已加入圈子'), findsWidgets);
-    expect(find.textContaining('发现区'), findsWidgets);
+    expect(find.textContaining('已加入圈子'), findsNothing);
+    expect(find.textContaining('聊天记录'), findsNothing);
+    expect(find.textContaining('全站结果'), findsNothing);
+    expect(find.text('相关搜索'), findsWidgets);
+    expect(find.text('影 攻略'), findsWidgets);
+    expect(find.text('街头摄影'), findsWidgets);
     expect(find.text('推荐'), findsNothing);
     expect(find.text('遇见'), findsNothing);
     final tabBar = tester.widget<SecondaryCapsuleTabBar>(
@@ -148,7 +152,7 @@ void main() {
     await tester.pump();
     await _pumpUntil(
       tester,
-      condition: () => find.text('光影摄影社主群').evaluate().isNotEmpty,
+      condition: () => find.text('相关搜索').evaluate().isNotEmpty,
     );
 
     await tester.enterText(
@@ -160,19 +164,86 @@ void main() {
     );
     await _pumpUntil(
       tester,
-      condition: () => find.text('西湖摄影讨论').evaluate().isNotEmpty,
+      condition: () => find.text('西湖').evaluate().isNotEmpty,
     );
 
-    expect(find.text('西湖摄影讨论'), findsOneWidget);
+    expect(find.text('实体主页'), findsOneWidget);
+    expect(find.text('西湖摄影讨论'), findsNothing);
   });
 
-  testWidgets('切换交集后展示概览和交集发现流', (tester) async {
+  testWidgets('交集 tab 按云侧 connectionState 分组并只读 primaryText', (tester) async {
     await pumpSearchResultsPage(
       tester,
       _buildAppWithSearchRepository(
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
           prefilledQuery: '影',
+          initialNetworkTabId: 'all',
+        ),
+        repository: _IntersectionContractSearchRepository(),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('交集'));
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('已形成的连接').evaluate().isNotEmpty,
+    );
+
+    // connectionState=connected 的命中进入「已形成的连接」。
+    expect(find.text('已形成的连接'), findsOneWidget);
+    expect(find.text('你点赞过的海边日落'), findsWidgets);
+
+    // intersection_lead / unconnected 的命中进入「发现更多交集」。
+    expect(find.text('发现更多交集'), findsOneWidget);
+    expect(find.text('环岛路骑行机位合集'), findsWidgets);
+    expect(find.text('城市天际线拍摄攻略'), findsWidgets);
+
+    // 交集句严格只读云侧 intersectionReason.primaryText。
+    expect(find.text('你关注的小林也在拍这里'), findsWidgets);
+
+    // 无 primaryText 的命中不得出现端侧拼装/旧字段回退/违禁词。
+    expect(find.textContaining('共同兴趣'), findsNothing);
+    expect(find.textContaining('感兴趣圈子'), findsNothing);
+    expect(find.textContaining('交集发现流'), findsNothing);
+    expect(find.textContaining('好友'), findsNothing);
+    expect(find.textContaining('因为你'), findsNothing);
+  });
+
+  testWidgets('全部 tab 顶卡只来自云侧 entity.homepage 单源', (tester) async {
+    await pumpSearchResultsPage(
+      tester,
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '西湖',
+          initialNetworkTabId: 'all',
+        ),
+        repository: _FakeNetworkSearchRepository(),
+      ),
+    );
+    await tester.pump();
+    await _pumpUntil(
+      tester,
+      condition: () => find.text('实体主页').evaluate().isNotEmpty,
+    );
+
+    // 顶卡走 entity.homepage（badge=实体主页 + 关注/内容计数来自 payload）。
+    expect(find.text('实体主页'), findsOneWidget);
+    expect(find.text('西湖'), findsWidgets);
+    // 不再出现三方 POI 旁路（integration.location_poi 已下线于结果页）。
+    expect(find.text('浙江省杭州市西湖区'), findsNothing);
+  });
+
+  testWidgets('交集 tab 已连接地点来自云侧 location.place', (tester) async {
+    await pumpSearchResultsPage(
+      tester,
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '西湖',
           initialNetworkTabId: 'all',
         ),
         repository: _FakeNetworkSearchRepository(),
@@ -184,12 +255,12 @@ void main() {
     await tester.tap(find.text('交集'));
     await _pumpUntil(
       tester,
-      condition: () => find.text('共同兴趣').evaluate().isNotEmpty,
+      condition: () => find.text('已形成的连接').evaluate().isNotEmpty,
     );
 
-    expect(find.text('共同兴趣'), findsOneWidget);
-    expect(find.textContaining('感兴趣圈子'), findsWidgets);
-    expect(find.textContaining('交集发现流'), findsWidgets);
+    // connectionState=connected 的 location.place 进入「已形成的连接」。
+    expect(find.text('已形成的连接'), findsOneWidget);
+    expect(find.textContaining('西湖旁断桥小巷'), findsWidgets);
   });
 
   testWidgets('旧主页 tab 深链归一到全部', (tester) async {
@@ -212,7 +283,7 @@ void main() {
     expect(tabBar.tabs[tabBar.activeIndex], '全部');
   });
 
-  testWidgets('全部 tab 汇总已连接区和发现区', (tester) async {
+  testWidgets('全部 tab 只汇总实体顶部、媒体文章和相关搜索', (tester) async {
     await pumpSearchResultsPage(
       tester,
       _buildAppWithSearchRepository(
@@ -227,16 +298,18 @@ void main() {
     await tester.pump();
     await _pumpUntil(
       tester,
-      condition: () => find.text('光影摄影社主群').evaluate().isNotEmpty,
+      condition: () => find.text('相关搜索').evaluate().isNotEmpty,
     );
 
     expect(find.text('全部'), findsWidgets);
-    expect(find.textContaining('聊天记录'), findsWidgets);
-    expect(find.text('光影摄影社主群'), findsWidgets);
-    expect(find.textContaining('发现区'), findsWidgets);
+    expect(find.textContaining('聊天记录'), findsNothing);
+    expect(find.text('光影摄影社主群'), findsNothing);
+    expect(find.text('相关搜索'), findsWidgets);
+    expect(find.text('街头摄影'), findsWidgets);
+    expect(find.textContaining('全站结果'), findsNothing);
   });
 
-  testWidgets('旧消息 tab 深链归一到全部并展示聊天结果', (tester) async {
+  testWidgets('旧消息 tab 深链归一到全部但不展示聊天结果', (tester) async {
     await pumpSearchResultsPage(
       tester,
       _buildAppWithSearchRepository(
@@ -251,11 +324,12 @@ void main() {
     await tester.pump();
     await _pumpUntil(
       tester,
-      condition: () => find.text('西湖摄影讨论').evaluate().isNotEmpty,
+      condition: () => find.text('西湖').evaluate().isNotEmpty,
     );
 
     expect(find.text('全部'), findsWidgets);
-    expect(find.text('西湖摄影讨论'), findsWidgets);
+    expect(find.text('实体主页'), findsOneWidget);
+    expect(find.text('西湖摄影讨论'), findsNothing);
   });
 
   testWidgets('小趣 tab 可作为初始 tab 打开', (tester) async {
@@ -298,7 +372,7 @@ void main() {
     expect(tabBar.tabs[tabBar.activeIndex], '全部');
   });
 
-  testWidgets('degrade signal 可在结果页展示', (tester) async {
+  testWidgets('degrade signal 不压过媒体结果', (tester) async {
     await pumpSearchResultsPage(
       tester,
       _buildAppWithSearchRepository(
@@ -313,7 +387,26 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('部分结果已降级'), findsOneWidget);
+    expect(find.textContaining('部分结果已降级'), findsNothing);
+    expect(find.text('街头摄影'), findsWidgets);
+  });
+
+  testWidgets('degrade signal 在无结果时展示降级横幅', (tester) async {
+    await pumpSearchResultsPage(
+      tester,
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '空结果词',
+          initialNetworkTabId: 'all',
+        ),
+        repository: _EmptyDegradedNetworkSearchRepository(),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('circle.group 远端返回空结果'), findsOneWidget);
   });
 
   testWidgets('内容类型筛选可驱动网络结果页加载指定内容结果', (tester) async {
@@ -467,37 +560,62 @@ class _FakeNetworkSearchRepository implements SearchRepository {
         ],
       );
     }
-    if (normalized.objectTypes.contains(
-      SearchObjectType.integrationLocationPoi,
-    )) {
-      return SearchResponse(
-        request: normalized,
-        sections: const <SearchSection>[
-          SearchSection(
-            id: 'locations',
-            title: '地点',
-            objectTypes: <SearchObjectType>[
-              SearchObjectType.integrationLocationPoi,
-            ],
+    if (normalized.objectTypes.contains(SearchObjectType.entityHomepage) ||
+        normalized.objectTypes.contains(SearchObjectType.locationPlace)) {
+      // 顶卡云侧单源：entity.homepage（已绑定实体主页）。一方地点 location.place
+      // 仅在 connectionState=connected 时进交集「已形成的连接」。
+      final sections = <SearchSection>[];
+      if (normalized.objectTypes.contains(SearchObjectType.entityHomepage)) {
+        sections.add(
+          const SearchSection(
+            id: 'homepages',
+            title: '主页',
+            objectTypes: <SearchObjectType>[SearchObjectType.entityHomepage],
             hits: <SearchHit>[
               SearchHit(
-                objectType: SearchObjectType.integrationLocationPoi,
-                objectId: 'poi_west_lake',
+                objectType: SearchObjectType.entityHomepage,
+                objectId: 'homepage_west_lake',
                 title: '西湖',
                 subtitle: '杭州',
-                snippet: '12个交集',
+                snippet: '杭州热门地点',
                 resolvedFrom: SearchResolvedFrom.remote,
                 payload: SearchHitPayloadWireMap(<String, dynamic>{
-                  'id': 'poi_west_lake',
-                  'name': '西湖',
-                  'address': '浙江省杭州市西湖区',
+                  'id': 'homepage_west_lake',
+                  'title': '西湖',
+                  'followerCount': 1200,
+                  'contentCount': 340,
                 }),
               ),
             ],
             resolvedFrom: SearchResolvedFrom.remote,
           ),
-        ],
-      );
+        );
+      }
+      if (normalized.objectTypes.contains(SearchObjectType.locationPlace)) {
+        sections.add(
+          const SearchSection(
+            id: 'locations',
+            title: '位置',
+            objectTypes: <SearchObjectType>[SearchObjectType.locationPlace],
+            hits: <SearchHit>[
+              SearchHit(
+                objectType: SearchObjectType.locationPlace,
+                objectId: 'place_west_lake_alley',
+                title: '西湖旁断桥小巷',
+                subtitle: '杭州',
+                snippet: '被内容引用但未绑定主页的自由文本地点',
+                resolvedFrom: SearchResolvedFrom.remote,
+                payload: SearchHitPayloadWireMap(<String, dynamic>{
+                  'objectId': 'place_west_lake_alley',
+                  'connectionState': 'connected',
+                }),
+              ),
+            ],
+            resolvedFrom: SearchResolvedFrom.remote,
+          ),
+        );
+      }
+      return SearchResponse(request: normalized, sections: sections);
     }
     if (normalized.objectTypes.contains(SearchObjectType.userProfile)) {
       return SearchResponse(
@@ -513,7 +631,7 @@ class _FakeNetworkSearchRepository implements SearchRepository {
                 objectId: 'user_photo_friend',
                 title: '林同学',
                 subtitle: '摄影爱好者',
-                snippet: '共同兴趣 3 个',
+                snippet: '摄影同好',
                 resolvedFrom: SearchResolvedFrom.remote,
                 payload: SearchHitPayloadWireMap(<String, dynamic>{
                   'subAccountId': 'user_photo_friend',
@@ -534,7 +652,7 @@ class _FakeNetworkSearchRepository implements SearchRepository {
                 objectId: 'user_new_photo',
                 title: '新摄影师',
                 subtitle: '同城影像',
-                snippet: '共同兴趣 1 个',
+                snippet: '同城影像创作',
                 resolvedFrom: SearchResolvedFrom.remote,
                 payload: SearchHitPayloadWireMap(<String, dynamic>{
                   'subAccountId': 'user_new_photo',
@@ -563,6 +681,86 @@ class _FakeNetworkSearchRepository implements SearchRepository {
   }
 }
 
+/// 交集消费契约 fake：内容命中携带云侧 connectionState 闭集与 intersectionReason
+/// 子集（primaryText），用于验证端只读 primaryText、按 connectionState 分组、
+/// 无 primaryText 不拼装交集句。
+class _IntersectionContractSearchRepository implements SearchRepository {
+  @override
+  Future<SearchResponse> search(SearchRequest request) async {
+    final normalized = request.normalized();
+    if (!normalized.objectTypes.contains(SearchObjectType.contentPost)) {
+      return SearchResponse(request: normalized, sections: const <SearchSection>[]);
+    }
+    PostSearchItemView item(Map<String, dynamic> map) =>
+        PostSearchItemView.fromMap(map);
+    final connected = item(<String, dynamic>{
+      'postId': 'post_connected_liked',
+      'contentType': 'image',
+      'contentIdentity': 'work',
+      'title': '你点赞过的海边日落',
+      'summary': '已互动内容',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800',
+      'authorDisplayName': '海边摄影师',
+      'connectionState': 'connected',
+      'likeCount': 42,
+    });
+    final leadWithPrimary = item(<String, dynamic>{
+      'postId': 'post_lead_primary',
+      'contentType': 'image',
+      'contentIdentity': 'work',
+      'title': '环岛路骑行机位合集',
+      'summary': '交集线索内容',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
+      'authorDisplayName': '骑行小林',
+      'connectionState': 'intersection_lead',
+      'intersectionReason': <String, dynamic>{
+        'primaryText': '你关注的小林也在拍这里',
+        'dimension': 'sharedFollowees',
+        'intersectionClass': 'fact',
+      },
+    });
+    final discoveryNoPrimary = item(<String, dynamic>{
+      'postId': 'post_discovery_plain',
+      'contentType': 'article',
+      'contentIdentity': 'article',
+      'title': '城市天际线拍摄攻略',
+      'summary': '未连接且无交集句内容',
+      'coverUrl':
+          'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800',
+      'authorDisplayName': '攻略君',
+      'connectionState': 'unconnected',
+    });
+    return SearchResponse(
+      request: normalized,
+      sections: <SearchSection>[
+        SearchSection(
+          id: 'content',
+          title: '内容',
+          objectTypes: const <SearchObjectType>[SearchObjectType.contentPost],
+          hits: <SearchHit>[
+            for (final view in <PostSearchItemView>[
+              connected,
+              leadWithPrimary,
+              discoveryNoPrimary,
+            ])
+              SearchHit(
+                objectType: SearchObjectType.contentPost,
+                objectId: view.postId,
+                title: view.title ?? view.postId,
+                snippet: view.summary,
+                resolvedFrom: SearchResolvedFrom.remote,
+                payload: SearchHitPayloadContentPost(view),
+              ),
+          ],
+          resolvedFrom: SearchResolvedFrom.remote,
+        ),
+      ],
+    );
+  }
+}
+
 class _DegradedNetworkSearchRepository extends _FakeNetworkSearchRepository {
   @override
   Future<SearchResponse> search(SearchRequest request) async {
@@ -570,6 +768,23 @@ class _DegradedNetworkSearchRepository extends _FakeNetworkSearchRepository {
     return SearchResponse(
       request: base.request,
       sections: base.sections,
+      degradeSignals: const <SearchDegradeSignal>[
+        SearchDegradeSignal(
+          code: 'circle_group_remote_empty',
+          message: 'circle.group 远端返回空结果，准备回退本地快照。',
+          objectType: SearchObjectType.circleGroup,
+        ),
+      ],
+    );
+  }
+}
+
+class _EmptyDegradedNetworkSearchRepository implements SearchRepository {
+  @override
+  Future<SearchResponse> search(SearchRequest request) async {
+    return SearchResponse(
+      request: request,
+      sections: const <SearchSection>[],
       degradeSignals: const <SearchDegradeSignal>[
         SearchDegradeSignal(
           code: 'circle_group_remote_empty',

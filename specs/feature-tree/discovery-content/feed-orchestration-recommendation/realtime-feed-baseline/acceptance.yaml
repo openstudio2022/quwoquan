@@ -7,32 +7,56 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: feed-orchestration-recommendation
 scope:
-  summary: realtime feed baseline 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 实时推荐流商用基线：行为回流、HotPath 即时排序、去重、降级与冷启动保底。
+  in_scope:
+  - App 行为上报到 HotPath session 信号。
+  - 多路召回、预排、规则/模型级联打分、重排去重与冷启动保底。
+  - Feed 延迟、空结果、fallback、重复曝光的 SLO 基线。
+  out_of_scope:
+  - 深度排序模型、双塔向量召回、广告竞价、搜索排序。
+  - Thompson Sampling 与大规模曝光状态结构实现。
 gwt_acceptance:
   GWT1:
-    title: realtime feed baseline GWT
+    title: 实时推荐流基线 GWT
     given:
-    - 前置条件明确。
+    - 用户存在 sessionId，内容池含多标签、多作者、多类型候选，推荐引擎启用 HotPath 和 Rule/CascadeScorer。
     when:
-    - 用户或系统动作发生。
+    - 用户产生曝光、点击、停留、点赞、收藏、分享、dislike/report 等行为，并继续请求下一批 feed。
     then:
-    - 可观察结果符合预期。
+    - HotPath session 状态更新；已曝光/负反馈内容被过滤；高停留或正反馈标签在后续排序中提升；模型失败时回退 RuleScorer。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - Engine 7 阶段管线、负反馈过滤、作者/标签多样性、探索注入、冷启动保底、CascadeScorer fallback 均有测试证据。
+    - Feed P95 <= 200ms、P99 <= 400ms；行为上报到 HotPath 生效延迟 < 100ms。
+    edge_cases:
+    - 模型 scorer 超时或失败时不返回空 feed。
+    - 某召回源超时时不阻塞其他召回源。
+    - 冷启动用户无行为时仍返回非空内容。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/service.yaml
+    - quwoquan_service/contracts/metadata/recommendation/rec_model/service.yaml
+    - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+    performance_points:
+    - Feed P95 <= 200ms，P99 <= 400ms。
+    - HotPath 行为生效延迟 < 100ms。
     evidence:
       primary:
       - T1_contract
       - T2_module_interaction
-      supporting: []
+      supporting:
+      - T3_app_api_integration
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - quwoquan_app/test/patrol/discovery/feed_load_test.dart
+      recorded:
+      - quwoquan_service/runtime/recommendation/engine_test.go
+      - quwoquan_service/runtime/recommendation/bench_test.go
+      - quwoquan_service/runtime/recommendation/feed_type_contract_test.go
+      - quwoquan_service/runtime/recommendation/engagement_depth_test.go
+      - quwoquan_service/runtime/recommendation/rerank_mmr_test.go
+      - quwoquan_service/runtime/recommendation/ucb_explore_test.go
+      - quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
+      - quwoquan_app/test/cloud/behavior/contract/behavior_repository_contract_test.dart
+    status: implemented
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

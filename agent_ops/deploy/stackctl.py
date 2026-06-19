@@ -704,7 +704,12 @@ def _selected_verify_commands(kind: str, env_name: str = "") -> list[list[str]]:
     return list(VERIFY_COMMAND_GROUPS[kind])
 
 
-def _selected_tier_commands(env_name: str, target_name: str, tier: str) -> list[dict[str, Any]]:
+def _selected_tier_commands(
+    env_name: str,
+    target_name: str,
+    tier: str,
+    report_dir: Path | None = None,
+) -> list[dict[str, Any]]:
     commands: list[dict[str, Any]] = []
     if tier in {"t2", "all"}:
         commands.extend(
@@ -769,13 +774,13 @@ def _selected_tier_commands(env_name: str, target_name: str, tier: str) -> list[
                 }
             )
     if tier in {"t4", "all"}:
-        if target_name == "gamma-local":
-            commands.append(
-                {
-                    "name": "gamma-local-t4-dry-run",
-                    "argv": ["bash", "quwoquan_app/scripts/gamma/run_local_gamma_t4.sh", "--dry-run"],
-                }
-            )
+        smoke_command = _environment_page_smoke_tier_command(
+            env_name,
+            target_name,
+            report_dir,
+        )
+        if smoke_command is not None:
+            commands.append(smoke_command)
         commands.append(
             {
                 "name": "prod-rollout-stackctl-contract",
@@ -783,6 +788,71 @@ def _selected_tier_commands(env_name: str, target_name: str, tier: str) -> list[
             }
         )
     return commands
+
+
+def _environment_page_smoke_tier_command(
+    env_name: str,
+    target_name: str,
+    report_dir: Path | None,
+) -> dict[str, Any] | None:
+    if target_name not in {"alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"}:
+        return None
+    topology = load_environment_topology()
+    target = get_target(topology, target_name)
+    public_bases = target.get("publicBases") or {}
+    if not {"api", "productOps", "mediaImage"}.issubset(public_bases):
+        return None
+    runtime_env = str(target.get("env") or env_name or "alpha")
+    if target_name in {"prod-sim", "prod-hosted"}:
+        runtime_env = "prod"
+    data_source = "mock" if target_name in {"alpha-local", "prod-sim"} else "remote"
+    token = _resolve_test_auth_token(runtime_env)
+    if not token and target_name != "prod-hosted":
+        token = f"local-{target_name}-token"
+    smoke_report = (
+        report_dir / "environment-page-smoke" / "report.json"
+        if report_dir is not None
+        else ROOT / "artifacts" / "device-matrix" / "environment-smoke" / f"{target_name}.json"
+    )
+    argv = [
+        "python3",
+        "agent_ops/deploy/smoke/run_environment_patrol_smoke.py",
+        "--report",
+        str(smoke_report),
+        "--env-name",
+        target_name,
+        "--runtime-env",
+        runtime_env,
+        "--api-contract-env",
+        runtime_env,
+        "--data-source",
+        data_source,
+        "--gateway-base-url",
+        str(public_bases["api"]),
+        "--product-ops-base-url",
+        str(public_bases["productOps"]),
+        "--media-base-url",
+        str(public_bases["mediaImage"]),
+        "--test-auth-token",
+        token,
+        "--target",
+        "test/patrol/environment/basic_viability_test.dart",
+    ]
+    platform = os.environ.get("STACKCTL_PAGE_SMOKE_PLATFORM", "").strip()
+    if platform:
+        argv.extend(["--platform", platform])
+    device_id = os.environ.get("STACKCTL_PAGE_SMOKE_DEVICE_ID", "").strip()
+    if device_id:
+        argv.extend(["--device-id", device_id])
+    if os.environ.get("STACKCTL_PAGE_SMOKE_DRY_RUN", "").strip() in {"1", "true", "yes"}:
+        argv.append("--dry-run")
+    return {
+        "name": f"{target_name}-environment-page-smoke",
+        "argv": argv,
+        "cwd": ROOT,
+        "blocking": target_name != "alpha-local",
+        "reportPath": relpath(smoke_report),
+    }
 
 
 def fetch_url(
@@ -951,6 +1021,8 @@ def _script_probe_plan_for_target(
         return [{"name": "integration-readonly", "kind": "readonly-http"}]
     if target_name == "beta-local":
         return [{"name": "integration-readonly", "kind": "readonly-http"}]
+    if target_name == "prod-sim":
+        return [{"name": "integration-readonly", "kind": "readonly-http"}]
     if target_name == "prod-hosted":
         return [
             {"name": "integration-readonly", "kind": "readonly-http"},
@@ -990,7 +1062,7 @@ def _script_probes_for_target(
     stdout_sections: list[tuple[str, str]] = []
     findings: list[str] = []
 
-    if target_name in {"alpha-local", "beta-local", "gamma-local", "prod-hosted"}:
+    if target_name in {"alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"}:
         status, output, probe_findings = _run_environment_integration_probe(
             topology,
             target_name,
@@ -1230,12 +1302,18 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         stdout_sections.append((command_key, "\n".join(filter(None, [result.stdout, result.stderr]))))
         if result.returncode != 0:
             issues.append(result.stderr.strip() or result.stdout.strip() or "unknown verify failure")
-    for tier_command in _selected_tier_commands(env_name if env_name in ENVIRONMENTS else "all", target_name, args.tier):
+    for tier_command in _selected_tier_commands(
+        env_name if env_name in ENVIRONMENTS else "all",
+        target_name,
+        args.tier,
+        report_dir,
+    ):
         result = run(
             tier_command["argv"],
             cwd=tier_command.get("cwd"),
             env=tier_command.get("env"),
         )
+        blocking = bool(tier_command.get("blocking", True))
         steps.append(
             {
                 "kind": "tier",
@@ -1243,12 +1321,14 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                 "name": tier_command["name"],
                 "argv": tier_command["argv"],
                 "exitCode": result.returncode,
+                "blocking": blocking,
+                "reportPath": tier_command.get("reportPath", ""),
                 "stdout": result.stdout,
                 "stderr": result.stderr,
             }
         )
         stdout_sections.append((tier_command["name"], "\n".join(filter(None, [result.stdout, result.stderr]))))
-        if result.returncode != 0:
+        if result.returncode != 0 and blocking:
             issues.append(
                 f"{tier_command['name']} failed: "
                 + (result.stderr.strip() or result.stdout.strip() or "unknown tier failure")
@@ -1322,7 +1402,12 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     interactive = _is_interactive_terminal()
     stage_index = 0
-    expected_stage_total = 3 if requested_target in {"alpha-local", "beta-local", "gamma-local"} and not args.skip_app else 2
+    expected_stage_total = (
+        3
+        if requested_target in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
+        and not args.skip_app
+        else 2
+    )
     if requested_target in {"prod-sim", "prod-hosted"} and not args.skip_app:
         expected_stage_total = 2
     elif requested_target == "prod-hosted" and args.skip_app:
@@ -1414,6 +1499,19 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                 ("alpha-product-ops", alpha_log_dir / "product-ops.log"),
                 ("alpha-media-edge", alpha_log_dir / "media-edge.log"),
                 ("alpha-media-origin", alpha_log_dir / "media-origin.log"),
+            ],
+            idle_timeout_seconds=4.0,
+            max_follow_seconds=20.0,
+        )
+
+    def tail_prod_sim_background_logs() -> dict[str, Any]:
+        prod_sim_log_dir = ROOT / "state" / "local" / "prod_sim_stack"
+        return _tail_multiple_logs_for_startup(
+            [
+                ("prod-sim-api-edge", prod_sim_log_dir / "api-edge.log"),
+                ("prod-sim-product-ops", prod_sim_log_dir / "product-ops.log"),
+                ("prod-sim-media-edge", prod_sim_log_dir / "media-edge.log"),
+                ("prod-sim-media-origin", prod_sim_log_dir / "media-origin.log"),
             ],
             idle_timeout_seconds=4.0,
             max_follow_seconds=20.0,
@@ -1683,79 +1781,78 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                         stderr=f"log={relpath(app_launch['log_path'])}",
                     )
     elif requested_target == "prod-sim":
-        if args.skip_app:
-            timing = _finish_timing(started_monotonic, started_at)
-            return {
-                "exitCode": 2,
-                "summary": "stackctl up failed for prod-sim",
-                "details": ["prod-sim only supports app launch; do not pass --skip-app"],
-                **timing,
-            }
-        args.device_id = maybe_resolve_device_id(include_web=True)
-        try:
-            app_launch = start_app_process("prod-sim", args.device_id)
-        except RuntimeError as exc:
-            timing = _finish_timing(started_monotonic, started_at)
-            return {
-                "exitCode": 1,
-                "summary": "stackctl up failed for prod-sim",
-                "details": [str(exc)],
-                "reportDir": relpath(report_dir),
-                **timing,
-            }
-        tail_result = _tail_file_for_startup(
-            app_launch["log_path"],
-            process=app_launch["process"],
-            prefix=f"[{app_launch['stageHeader']} app] ",
-            idle_timeout_seconds=8.0,
-            max_follow_seconds=120.0,
-            ready_patterns=(
-                "Syncing files to device",
-                "Flutter run key commands",
-                "A Dart VM Service",
-                "The Flutter DevTools debugger",
-            ),
-            failure_patterns=(
-                "Failed to build",
-                "Error launching application on",
-                "Lost connection to device.",
-                "Target kernel_snapshot_program failed",
-                "app launch exited before reaching steady state",
-            ),
-            ready_idle_timeout_seconds=3.0,
-        )
-        app_exit_code = app_launch["process"].poll()
-        failure_detail = _app_launch_failure_detail(
-            tail_result,
-            default_message="prod-sim app launch failed",
-            process_exit_code=app_exit_code,
-        )
-        app_failed = failure_detail is not None
-        if not app_failed:
-            announce("prod-sim", "app launch reached steady state")
-            cmd = app_launch["command"]
-            result = subprocess.CompletedProcess(
-                cmd,
-                0,
-                stdout=f"pid={app_launch['process'].pid}",
-                stderr=f"log={relpath(app_launch['log_path'])}",
-            )
-        else:
-            result = subprocess.CompletedProcess(
-                app_launch["command"],
-                1,
-                stdout="",
-                stderr=str(failure_detail),
-            )
+        cmd = ["bash", "agent_ops/deploy/prod_sim/start_prod_sim_stack.sh", "up"]
+        result = run_stage("prod-sim", cmd, live_prefix="[prod-sim] ")
+        background_tail = tail_prod_sim_background_logs()
         steps.append(
             {
-                "argv": app_launch["command"],
-                "exitCode": app_exit_code or 0,
-                "stdout": f"pid={app_launch['process'].pid}",
-                "stderr": f"log={relpath(app_launch['log_path'])}",
-                "tail": tail_result,
+                "kind": "prod-sim-background-tail",
+                "exitCode": 0,
+                "stdout": "tailed prod-sim background logs",
+                "stderr": "",
+                "tail": background_tail,
             }
         )
+        if result.returncode == 0 and not args.skip_app:
+            args.device_id = maybe_resolve_device_id(include_web=True)
+            try:
+                app_launch = start_app_process("prod-sim", args.device_id)
+            except RuntimeError as exc:
+                result = subprocess.CompletedProcess(cmd, 1, stdout="", stderr=str(exc))
+                app_launch = None
+            if app_launch is not None:
+                tail_result = _tail_file_for_startup(
+                    app_launch["log_path"],
+                    process=app_launch["process"],
+                    prefix=f"[{app_launch['stageHeader']} app] ",
+                    idle_timeout_seconds=8.0,
+                    max_follow_seconds=120.0,
+                    ready_patterns=(
+                        "Syncing files to device",
+                        "Flutter run key commands",
+                        "A Dart VM Service",
+                        "The Flutter DevTools debugger",
+                    ),
+                    failure_patterns=(
+                        "Failed to build",
+                        "Error launching application on",
+                        "Lost connection to device.",
+                        "Target kernel_snapshot_program failed",
+                        "app launch exited before reaching steady state",
+                    ),
+                    ready_idle_timeout_seconds=3.0,
+                )
+                app_exit_code = app_launch["process"].poll()
+                failure_detail = _app_launch_failure_detail(
+                    tail_result,
+                    default_message="prod-sim app launch failed",
+                    process_exit_code=app_exit_code,
+                )
+                if failure_detail is not None:
+                    result = subprocess.CompletedProcess(
+                        app_launch["command"],
+                        1,
+                        stdout="",
+                        stderr=str(failure_detail),
+                    )
+                else:
+                    announce("prod-sim", "app launch reached steady state")
+                    cmd = app_launch["command"]
+                    result = subprocess.CompletedProcess(
+                        cmd,
+                        0,
+                        stdout=f"pid={app_launch['process'].pid}",
+                        stderr=f"log={relpath(app_launch['log_path'])}",
+                    )
+                steps.append(
+                    {
+                        "argv": app_launch["command"],
+                        "exitCode": app_exit_code or 0,
+                        "stdout": f"pid={app_launch['process'].pid}",
+                        "stderr": f"log={relpath(app_launch['log_path'])}",
+                        "tail": tail_result,
+                    }
+                )
     elif requested_target == "prod-hosted":
         announce("prod-hosted", "running edge health check")
         health_args = argparse.Namespace(
@@ -1930,13 +2027,17 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
         if app_result.returncode != 0 and result.returncode == 0:
             result = app_result
     elif args.target == "prod-sim":
-        cmd = [
+        app_cmd = [
             "bash",
             "quwoquan_app/scripts/device/stop_app_instance.sh",
             "--env",
             "prod",
         ]
-        result = run(cmd)
+        app_result = run(app_cmd)
+        stack_cmd = ["bash", "agent_ops/deploy/prod_sim/start_prod_sim_stack.sh", "down"]
+        stack_result = run(stack_cmd)
+        cmd = [*app_cmd, "&&", *stack_cmd]
+        result = stack_result if stack_result.returncode != 0 else app_result
     else:
         return {
             "exitCode": 2,
@@ -2351,6 +2452,7 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
     rollback_reason = ""
     rollback_state: dict[str, str] | None = None
     rollout_decision = "continue"
+    rollout_stage = ""
     dry_run_requested = str(getattr(args, "dry_run", "false")).strip().lower() == "true"
     if args.target == "prod-hosted":
         required = [
@@ -2503,6 +2605,18 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
                     report_dir=str(nested_dir),
                 )
                 post_deploy_checks.append(command_doctor(nested_args))
+        if args.target == "prod-hosted" and rollout_stage == "gray-initial":
+            nested_dir = report_dir / "environment-page-smoke"
+            nested_args = argparse.Namespace(
+                command="verify",
+                env="",
+                target=args.target,
+                kind="topology",
+                tier="t4",
+                output_format="json",
+                report_dir=str(nested_dir),
+            )
+            post_deploy_checks.append(command_verify(nested_args))
     post_deploy_failures = [
         item["summary"]
         for item in post_deploy_checks
@@ -2734,9 +2848,11 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT": str(ports["product-ops-service"]),
         "LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT": str(ports["platform-ops-service"]),
         "LOCAL_GAMMA_TAG_PORT": str(ports["tag-service"]),
+        "LOCAL_GAMMA_SEARCH_PORT": str(ports["search-service"]),
         "LOCAL_GAMMA_MONGO_PORT": str(ports["mongodb"]),
         "LOCAL_GAMMA_REDIS_PORT": str(ports["redis"]),
         "LOCAL_GAMMA_POSTGRES_PORT": str(ports["postgres"]),
+        "LOCAL_GAMMA_ES_PORT": str(ports["elasticsearch"]),
     }
 
 
@@ -2747,7 +2863,7 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
     public_bases = target.get("publicBases") or {}
     origins = target.get("origins") or {}
     service_policy = ((env_cfg.get("artifactPolicy") or {}).get("service") or {})
-    allow_fixture_refs = bool(service_policy.get("allowFixtureRefs"))
+    allow_fixture_refs = bool(service_policy.get("allowFixtureRefs")) or target_name == "prod-sim"
     checks: list[dict[str, Any]] = []
     if scope in {"edge", "full"}:
         checks.extend(
@@ -2895,6 +3011,21 @@ def _full_scope_health_checks(
                 },
             ]
         )
+    elif target_name == "prod-sim":
+        checks.extend(
+            [
+                {
+                    "name": "app-config",
+                    "scope": "full",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/config/app",
+                },
+                {
+                    "name": "prod-sim-route-smoke",
+                    "scope": "full",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/v1/content/feed?limit=1",
+                },
+            ]
+        )
     return checks
 
 
@@ -2958,6 +3089,7 @@ def _expected_local_roles(target_name: str) -> list[str]:
             "rec-model-service",
             "product-ops-service",
             "tag-service",
+            "search-service",
         ],
         "prod-sim": [
             "api-edge",

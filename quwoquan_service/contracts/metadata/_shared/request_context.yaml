@@ -77,7 +77,6 @@ domain_operation_page_ids:
     GetMyFootprint: content.footprint.list
     GetPost: content.post.get
     GetReactionState: content.post.reactions
-    GetRecommendation: content.recommend
     InitMediaUpload: content.media.init
     LikePost: content.post.like
     ListComments: content.comment.list

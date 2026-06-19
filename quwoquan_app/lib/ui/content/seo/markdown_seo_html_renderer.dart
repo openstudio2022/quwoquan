@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/core/media/asset_url_resolver.dart';
 import 'package:quwoquan_app/ui/content/markdown/qwq_markdown_ast.dart';
@@ -59,8 +60,8 @@ class MarkdownSeoHtmlRenderer {
        _assetUrlResolver =
            assetUrlResolver ??
            const AssetUrlResolver(
-             imageCdnBaseUrl: 'https://media.quwoquan.invalid',
-             videoCdnBaseUrl: 'https://media.quwoquan.invalid',
+             imageCdnBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
+             videoCdnBaseUrl: CloudRuntimeConfig.mediaVideoCdnBaseUrl,
            );
 
   final QwqMarkdownParser _parser;
@@ -97,9 +98,9 @@ class MarkdownSeoHtmlRenderer {
       _firstParagraph(parsed),
     ]);
     final cover = _firstNonEmpty([
-      input.coverUrl,
+      _resolveRawAssetUrl(input.coverUrl),
       _resolveAssetUrl(parsed.frontMatter.coverAssetId, assetsById),
-      parsed.frontMatter.coverImage,
+      _resolveRawAssetUrl(parsed.frontMatter.coverImage),
     ]);
     if (_visibility(input.visibility) == _SeoVisibility.circleVisible) {
       final previewHtml = <String>[
@@ -297,8 +298,17 @@ class MarkdownSeoHtmlRenderer {
   ) {
     final id = assetId.trim();
     if (id.isEmpty) return '';
-    return assetsById[id]?.urlFor(MediaAssetVariantProfile.display) ??
-        (id.startsWith('https://') ? id : '');
+    return assetsById[id]?.urlFor(MediaAssetVariantProfile.display) ?? '';
+  }
+
+  String _resolveRawAssetUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty || value.startsWith('asset://')) {
+      return '';
+    }
+    return _assetUrlResolver.resolveAssetRowUrl(<String, Object?>{
+      'cdnUrl': value,
+    });
   }
 
   bool _isSafeUrl(String value) {

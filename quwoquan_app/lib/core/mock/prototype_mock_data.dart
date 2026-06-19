@@ -25,7 +25,7 @@ class PrototypeMockData {
           'id': 'u4',
           'name': '李想',
           'avatar':
-              'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop',
+              'media/avatar/s/mock/seed/u_1472099645785-5658abf4ff4e/v1/avatar.jpg',
           'isVip': true,
           'badge': 'V',
           'isOfficial': true,
@@ -40,9 +40,9 @@ class PrototypeMockData {
             {
               'type': 'video',
               'url':
-                  'https://images.unsplash.com/photo-1692735345453-bcb80bf6890d?w=800&h=450&fit=crop',
+                  'media/image/s/mock/seed/p_1692735345453-bcb80bf6890d/v1/image.jpg',
               'thumbnail':
-                  'https://images.unsplash.com/photo-1692735345453-bcb80bf6890d?w=800&h=450&fit=crop',
+                  'media/image/s/mock/seed/p_1692735345453-bcb80bf6890d/v1/image.jpg',
               'duration': '00:24',
               'width': 800,
               'height': 450,
@@ -60,7 +60,7 @@ class PrototypeMockData {
           'id': 'u1',
           'name': '你的皮炎有点辣',
           'avatar':
-              'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100&h=100&fit=crop',
+              'media/avatar/s/mock/seed/u_1599566150163-29194dcaad36/v1/avatar.jpg',
           'isVip': true,
           'badge': 'II',
         },
@@ -71,14 +71,14 @@ class PrototypeMockData {
           {
             'type': 'image',
             'url':
-                'https://images.unsplash.com/photo-1566699270403-3f7e3f340664?w=600&h=600&fit=crop',
+                'media/image/s/mock/seed/p_1566699270403-3f7e3f340664/v1/image.jpg',
             'width': 600,
             'height': 600,
           },
           {
             'type': 'image',
             'url':
-                'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=600&h=600&fit=crop',
+                'media/image/s/mock/seed/p_1497215728101-856f4ea42174/v1/image.jpg',
             'width': 600,
             'height': 600,
           },
@@ -95,7 +95,7 @@ class PrototypeMockData {
           'id': 'u2',
           'name': '仅分组可见',
           'avatar':
-              'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop',
+              'media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg',
           'isVip': true,
           'badge': 'II',
         },
@@ -106,10 +106,10 @@ class PrototypeMockData {
           {
             'type': 'video',
             'url':
-                'https://images.unsplash.com/photo-1736171545084-301185012571?w=450&h=800&fit=crop',
+                'media/image/s/mock/seed/p_1736171545084-301185012571/v1/image.jpg',
             'duration': '00:15',
             'thumbnail':
-                'https://images.unsplash.com/photo-1736171545084-301185012571?w=450&h=800&fit=crop',
+                'media/image/s/mock/seed/p_1736171545084-301185012571/v1/image.jpg',
             'width': 450,
             'height': 800,
           },
@@ -125,7 +125,7 @@ class PrototypeMockData {
           'id': 'u3',
           'name': '原价帝吧',
           'avatar':
-              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
+              'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
           'isVip': true,
           'badge': 'III',
         },
@@ -137,7 +137,7 @@ class PrototypeMockData {
           (i) => <String, dynamic>{
             'type': 'image',
             'url':
-                "https://images.unsplash.com/photo-1762343290960-74b50d205fb8?w=300&h=300&fit=crop&q=80&sig=$i",
+                "media/image/s/mock/seed/p_1762343290960-74b50d205fb8/v1/image.jpg",
             'width': 300,
             'height': 300,
           },
@@ -157,126 +157,126 @@ class PrototypeMockData {
         'id': 'd1',
         'type': 'image',
         'thumbnail':
-            'https://images.unsplash.com/photo-1518152006812-edab29b069ac?w=800',
+            'media/image/s/mock/seed/p_1518152006812-edab29b069ac/v1/image.jpg',
         'images': ['img1', 'img2'],
         'aspectRatio': 1.2,
         'author': {
           'id': 'nature_photographer',
           'name': '自然摄影师',
           'avatar':
-              'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+              'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
         },
       },
       {
         'id': 'd2',
         'type': 'image',
         'thumbnail':
-            'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+            'media/image/s/mock/seed/p_1523275335684-37898b6baf30/v1/image.jpg',
         'aspectRatio': 0.8,
         'author': {
           'id': 'travel_photographer',
           'name': '旅行摄影师',
           'avatar':
-              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+              'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
         },
       },
       {
         'id': 'd4',
         'type': 'image',
         'thumbnail':
-            'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800',
+            'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
         'images': ['img1', 'img2', 'img3'],
         'aspectRatio': 1.0,
         'author': {
           'id': 'street_photo',
           'name': '街头摄影',
           'avatar':
-              'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+              'media/avatar/s/mock/seed/u_1472099645785-5658abf4ff4e/v1/avatar.jpg',
         },
       },
       {
         'id': 'd5',
         'type': 'image',
         'thumbnail':
-            'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800',
+            'media/image/s/mock/seed/p_1470071459604-3b5ec3a7fe05/v1/image.jpg',
         'aspectRatio': 1.5,
         'author': {
           'id': 'nature_photographer',
           'name': '自然摄影师',
           'avatar':
-              'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+              'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
         },
       },
       {
         'id': 'd6',
         'type': 'image',
         'thumbnail':
-            'https://images.unsplash.com/photo-1534067783941-51c9c23ecefd?w=800',
+            'media/image/s/mock/seed/p_1534067783941-51c9c23ecefd/v1/image.jpg',
         'author': {
           'id': 'travel_photographer',
           'name': '旅行摄影师',
           'avatar':
-              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+              'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
         },
       },
       {
         'id': 'd10',
         'type': 'image',
         'thumbnail':
-            'https://images.unsplash.com/photo-1500673922987-e212871fec22?w=800',
+            'media/image/s/mock/seed/p_1500673922987-e212871fec22/v1/image.jpg',
         'author': {
           'id': 'street_photo',
           'name': '街头摄影',
           'avatar':
-              'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+              'media/avatar/s/mock/seed/u_1472099645785-5658abf4ff4e/v1/avatar.jpg',
         },
       },
       {
         'id': 'd11',
         'type': 'image',
         'thumbnail':
-            'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?w=800',
+            'media/image/s/mock/seed/p_1493863641943-9b68992a8d07/v1/image.jpg',
         'author': {
           'id': 'nature_photographer',
           'name': '自然摄影师',
           'avatar':
-              'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+              'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
         },
       },
       {
         'id': 'd12',
         'type': 'image',
         'thumbnail':
-            'https://images.unsplash.com/photo-1504198458649-3128b932f49e?w=800',
+            'media/image/s/mock/seed/p_1504198458649-3128b932f49e/v1/image.jpg',
         'author': {
           'id': 'travel_photographer',
           'name': '旅行摄影师',
           'avatar':
-              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+              'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
         },
       },
       {
         'id': 'd13',
         'type': 'image',
         'thumbnail':
-            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
+            'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
         'author': {
           'id': 'street_photo',
           'name': '街头摄影',
           'avatar':
-              'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+              'media/avatar/s/mock/seed/u_1472099645785-5658abf4ff4e/v1/avatar.jpg',
         },
       },
       {
         'id': 'd14',
         'type': 'image',
         'thumbnail':
-            'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=800',
+            'media/image/s/mock/seed/p_1447752875215-b2761acb3c5d/v1/image.jpg',
         'author': {
           'id': 'nature_photographer',
           'name': '自然摄影师',
           'avatar':
-              'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+              'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
         },
       },
     ];
@@ -302,9 +302,9 @@ class PrototypeMockData {
         'description':
             '探讨React Server Components如何改变前端架构，以及Edge Runtime带来的性能飞跃。',
         'coverImage':
-            'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800',
+            'media/image/s/mock/seed/p_1555066931-4365d14bab8c/v1/image.jpg',
         'images': [
-          'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800',
+          'media/image/s/mock/seed/p_1555066931-4365d14bab8c/v1/image.jpg',
         ],
         'displayStyle': 'left-right',
         'layoutMode': 'float-right',
@@ -318,7 +318,7 @@ class PrototypeMockData {
         'author': {
           'name': 'TechDaily',
           'avatar':
-              'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+              'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
           'isVip': true,
           'badge': 'V',
         },
@@ -332,10 +332,10 @@ class PrototypeMockData {
         'title': '墨韵流芳：汉字书法中的空间美学与精神寄托',
         'description': '在黑与白的交织中，感受传统文化的独特魅力。',
         'coverImage':
-            'https://images.unsplash.com/photo-1545996124-0501eb296251?w=800',
+            'media/image/s/mock/seed/p_1545996124-0501eb296251/v1/image.jpg',
         'images': [
-          'https://images.unsplash.com/photo-1545996124-0501eb296251?w=800',
-          'https://images.unsplash.com/photo-1545996124-0501eb296251?w=800',
+          'media/image/s/mock/seed/p_1545996124-0501eb296251/v1/image.jpg',
+          'media/image/s/mock/seed/p_1545996124-0501eb296251/v1/image.jpg',
         ],
         'displayStyle': 'top-bottom-1',
         'layoutMode': 'hero',
@@ -344,7 +344,7 @@ class PrototypeMockData {
         'author': {
           'name': '墨韵',
           'avatar':
-              'https://images.unsplash.com/photo-1545996124-0501eb296251?w=100',
+              'media/avatar/s/mock/seed/u_1545996124-0501eb296251/v1/avatar.jpg',
           'isOfficial': true,
         },
         'date': '昨天',
@@ -357,9 +357,9 @@ class PrototypeMockData {
         'title': '意式风情：三种经典酱汁的制作秘籍',
         'description': '从博洛尼亚肉酱到罗勒青酱，带你领略正宗意大利风味。',
         'coverImage':
-            'https://images.unsplash.com/photo-1498579150354-977475b7ea0b?w=800',
+            'media/image/s/mock/seed/p_1498579150354-977475b7ea0b/v1/image.jpg',
         'images': [
-          'https://images.unsplash.com/photo-1498579150354-977475b7ea0b?w=800',
+          'media/image/s/mock/seed/p_1498579150354-977475b7ea0b/v1/image.jpg',
         ],
         'displayStyle': 'top-bottom-3',
         'layoutMode': 'carousel',
@@ -372,7 +372,7 @@ class PrototypeMockData {
         'author': {
           'name': 'Chef Mario',
           'avatar':
-              'https://images.unsplash.com/photo-1583394293214-28ded15ee548?w=100',
+              'media/avatar/s/mock/seed/u_1583394293214-28ded15ee548/v1/avatar.jpg',
           'isVip': true,
           'badge': 'II',
         },
@@ -386,9 +386,9 @@ class PrototypeMockData {
         'title': 'UI设计的心理学原理：色彩、布局与用户认知',
         'description': '为什么某些配色能让人产生购买欲？深入解析设计背后的心理学机制。',
         'coverImage':
-            'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800',
+            'media/image/s/mock/seed/p_1561070791-2526d30994b5/v1/image.jpg',
         'images': [
-          'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800',
+          'media/image/s/mock/seed/p_1561070791-2526d30994b5/v1/image.jpg',
         ],
         'displayStyle': 'left-right',
         'layoutMode': 'split',
@@ -401,7 +401,7 @@ class PrototypeMockData {
         'author': {
           'name': 'DesignGuru',
           'avatar':
-              'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
+              'media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg',
           'isVip': true,
         },
         'date': '5小时前',
@@ -417,11 +417,11 @@ class PrototypeMockData {
       {
         'id': 'v1',
         'thumbnail':
-            'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800',
+            'media/image/s/mock/seed/p_1536440136628-849c177e76a1/v1/image.jpg',
         'author': {
           'name': '楹语小筑',
           'avatar':
-              'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
+              'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
           'id': 'a1',
         },
         'content': '东京凌晨两点的街道，有一种难以言喻的孤独美。#治愈系 #东京之夜 #氛围感',
@@ -434,11 +434,11 @@ class PrototypeMockData {
       {
         'id': 'v2',
         'thumbnail':
-            'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=800',
+            'media/image/s/mock/seed/p_1492691527719-9d1e07e534b4/v1/image.jpg',
         'author': {
           'name': '自然摄影师',
           'avatar':
-              'https://images.unsplash.com/photo-1534067783941-51c9c23ecefd?w=100',
+              'media/avatar/s/mock/seed/u_1534067783941-51c9c23ecefd/v1/avatar.jpg',
           'id': 'a2',
         },
         'content': '在大自然中找回内心的平静。🌲✨ #森林漫步 #自然景观 #心灵治愈',
@@ -451,11 +451,11 @@ class PrototypeMockData {
       {
         'id': 'v3',
         'thumbnail':
-            'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800',
+            'media/image/s/mock/seed/p_1516321318423-f06f85e504b3/v1/image.jpg',
         'author': {
           'name': '未来科技',
           'avatar':
-              'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100',
+              'media/avatar/s/mock/seed/u_1523275335684-37898b6baf30/v1/avatar.jpg',
           'id': 'a3',
         },
         'content': '2026年，我们的生活将如何被AI改变？一分钟带你了解。#科技趋势 #未来已来',
@@ -477,7 +477,7 @@ class PrototypeMockData {
         'type': 'photo',
         'title': '光影的节奏',
         'image':
-            'https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=400',
+            'media/image/s/mock/seed/p_1647956450271-2ff54205bebf/v1/image.jpg',
         'likes': '1.2k',
         'date': '2025-12-20',
         'desc': '在布鲁塞尔的午后，捕捉到的一组极简主义建筑光影。',
@@ -487,7 +487,7 @@ class PrototypeMockData {
         'type': 'video',
         'title': '森林的呼吸',
         'image':
-            'https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=400',
+            'media/image/s/mock/seed/p_1646034296147-d8ed3aace9a4/v1/image.jpg',
         'likes': '840',
         'date': '2025-12-15',
         'desc': '4K延时摄影，记录大兴安岭清晨云雾缭绕的过程。',
@@ -497,7 +497,7 @@ class PrototypeMockData {
         'type': 'article',
         'title': '极简摄影的真谛',
         'image':
-            'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
+            'media/image/s/mock/seed/p_1627216661750-c59a4cea849c/v1/image.jpg',
         'likes': '2.1k',
         'date': '2025-12-10',
         'desc': '通过剥离不必要的元素，我们才能看见事物的本质。',
@@ -507,7 +507,7 @@ class PrototypeMockData {
         'type': 'photo',
         'title': '咖啡厅一角',
         'image':
-            'https://images.unsplash.com/photo-1650211573412-9d36d0cbbf00?q=80&w=400',
+            'media/image/s/mock/seed/p_1650211573412-9d36d0cbbf00/v1/image.jpg',
         'likes': '560',
         'date': '2025-12-05',
         'desc': '深夜的咖啡馆，除了香味，还有孤独。',
@@ -517,7 +517,7 @@ class PrototypeMockData {
         'type': 'photo',
         'title': '科技与生活',
         'image':
-            'https://images.unsplash.com/photo-1731160807880-daf859b64420?q=80&w=400',
+            'media/image/s/mock/seed/p_1731160807880-daf859b64420/v1/image.jpg',
         'likes': '1.5k',
         'date': '2025-11-28',
         'desc': '当机械键盘遇上温暖的灯光，是程序员的浪漫。',
@@ -527,7 +527,7 @@ class PrototypeMockData {
         'type': 'video',
         'title': '高山之巅',
         'image':
-            'https://images.unsplash.com/photo-1766852254215-ec02eeec50fa?q=80&w=400',
+            'media/image/s/mock/seed/p_1766852254215-ec02eeec50fa/v1/image.jpg',
         'likes': '920',
         'date': '2025-11-20',
         'desc': '无人机视角下的雪山，感受大自然的伟力。',
@@ -544,7 +544,7 @@ class PrototypeMockData {
         'category': '足迹',
         'categoryKey': 'footprint',
         'image':
-            'https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=400',
+            'media/image/s/mock/seed/p_1627216661750-c59a4cea849c/v1/image.jpg',
         'isMutual': true,
         'desc': '在海边的孤独感中寻找创作灵感。',
       },
@@ -554,7 +554,7 @@ class PrototypeMockData {
         'category': '书影音',
         'categoryKey': 'soul',
         'image':
-            'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=400',
+            'media/image/s/mock/seed/p_1544716278-ca5e3f4abd8c/v1/image.jpg',
         'isMutual': true,
         'desc': '比起技巧，我更痴迷于思考快门背后。',
       },
@@ -564,7 +564,7 @@ class PrototypeMockData {
         'category': '味蕾',
         'categoryKey': 'taste',
         'image':
-            'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=400',
+            'media/image/s/mock/seed/p_1495474472287-4d71bcdd2085/v1/image.jpg',
         'isMutual': true,
         'desc': '喜欢那种冷热交替的冲突感。',
       },
@@ -574,7 +574,7 @@ class PrototypeMockData {
         'category': '爱物',
         'categoryKey': 'private',
         'image':
-            'https://images.unsplash.com/photo-1648049003029-3b3b32cb9a1f?q=80&w=400',
+            'media/image/s/mock/seed/p_1648049003029-3b3b32cb9a1f/v1/image.jpg',
         'isMutual': true,
         'desc': '它是我身体的延伸。',
       },
@@ -584,9 +584,9 @@ class PrototypeMockData {
   /// 1:1 来自 AuthorProfile.tsx const commonAvatars（3 条）
   static List<String> get authorProfileCommonAvatars {
     return [
-      'https://images.unsplash.com/photo-1630939687530-241d630735df?q=80&w=100',
-      'https://images.unsplash.com/photo-1603987248955-9c142c5ae89b?q=80&w=100',
-      'https://images.unsplash.com/photo-1603110502322-93cd2173d19a?q=80&w=100',
+      'media/avatar/s/mock/seed/u_1630939687530-241d630735df/v1/avatar.jpg',
+      'media/avatar/s/mock/seed/u_1603987248955-9c142c5ae89b/v1/avatar.jpg',
+      'media/avatar/s/mock/seed/u_1603110502322-93cd2173d19a/v1/avatar.jpg',
     ];
   }
 
@@ -597,9 +597,9 @@ class PrototypeMockData {
       'name': '光影摄影社',
       'id': 'circle_photo_01',
       'avatar':
-          'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400',
+          'media/image/s/mock/seed/p_1516035069371-29a1b244cc32/v1/image.jpg',
       'cover':
-          'https://images.unsplash.com/photo-1493125594441-2da1f5c644f5?q=80&w=1440',
+          'media/image/s/mock/seed/p_1493125594441-2da1f5c644f5/v1/image.jpg',
       'desc': '汇聚全球摄影爱好者，分享快门背后的故事。无论你是专业摄影师还是手机摄影爱好者，这里都有你的位置。',
       'stats': {
         'members': '128',
@@ -779,9 +779,9 @@ class PrototypeMockData {
         'id': 'c-cam-1',
         'name': '上海交大·2020级校友',
         'avatar':
-            'https://images.unsplash.com/photo-1541339907198-e08756ebafe1?w=200&h=200&fit=crop',
+            'media/avatar/s/mock/seed/u_1541339907198-e08756ebafe1/v1/avatar.jpg',
         'cover':
-            'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1000&fit=crop',
+            'media/avatar/s/mock/seed/u_1523050854058-8df90110c9f1/v1/avatar.jpg',
         'memberCount': 2800,
         'description': 'SJTU Class of 2020 alumni network.',
         'type': 'class',
@@ -792,9 +792,9 @@ class PrototypeMockData {
         'id': 'c-cam-2',
         'name': '互联网校友内推圈',
         'avatar':
-            'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=200&h=200&fit=crop',
+            'media/avatar/s/mock/seed/u_1521737711867-e3b97375f902/v1/avatar.jpg',
         'cover':
-            'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=1000&fit=crop',
+            'media/avatar/s/mock/seed/u_1497215728101-856f4ea42174/v1/avatar.jpg',
         'memberCount': 15600,
         'description': '大厂校友互助，内推直达。',
         'type': 'official',
@@ -805,9 +805,9 @@ class PrototypeMockData {
         'id': 'c-car-1',
         'name': 'Model 3 焕新版·上海车友会',
         'avatar':
-            'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=200&h=200&fit=crop',
+            'media/avatar/s/mock/seed/u_1560958089-b8a1929cea89/v1/avatar.jpg',
         'cover':
-            'https://images.unsplash.com/photo-1536700503339-1e4b06520771?w=1000&fit=crop',
+            'media/avatar/s/mock/seed/u_1536700503339-1e4b06520771/v1/avatar.jpg',
         'memberCount': 4500,
         'description': '特斯拉Model 3车主深度交流、自驾活动。',
         'type': 'fan_club',
@@ -818,9 +818,9 @@ class PrototypeMockData {
         'id': 'c-car-2',
         'name': '极氪001·全国自驾团',
         'avatar':
-            'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=200&h=200&fit=crop',
+            'media/avatar/s/mock/seed/u_1503376780353-7e6692767b70/v1/avatar.jpg',
         'cover':
-            'https://images.unsplash.com/photo-1469033011854-3a045667b738?w=1000&fit=crop',
+            'media/avatar/s/mock/seed/u_1469033011854-3a045667b738/v1/avatar.jpg',
         'memberCount': 8900,
         'description': '开启极氪式生活，发现最美自驾路线。',
         'type': 'tour',
@@ -831,9 +831,9 @@ class PrototypeMockData {
         'id': 'c-meet-1',
         'name': '静安·安福路下午茶搭子',
         'avatar':
-            'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=200&h=200&fit=crop',
+            'media/avatar/s/mock/seed/u_1517248135467-4c7edcad34c4/v1/avatar.jpg',
         'cover':
-            'https://images.unsplash.com/photo-1501339817302-ee4b91357e6a?w=1000&fit=crop',
+            'media/avatar/s/mock/seed/u_1501339817302-ee4b91357e6a/v1/avatar.jpg',
         'memberCount': 12500,
         'description': '附近的人，此刻正有空，一起喝咖啡？',
         'type': 'encounter',
@@ -844,9 +844,9 @@ class PrototypeMockData {
         'id': 'c-meet-2',
         'name': '95后互联网互助树洞',
         'avatar':
-            'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=200&h=200&fit=crop',
+            'media/avatar/s/mock/seed/u_1529156069898-49953e39b3ac/v1/avatar.jpg',
         'cover':
-            'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1000&fit=crop',
+            'media/avatar/s/mock/seed/u_1470071459604-3b5ec3a7fe05/v1/avatar.jpg',
         'memberCount': 18900,
         'description': '成年人的世界，总需要一个宣泄口。',
         'type': 'encounter',
@@ -857,9 +857,9 @@ class PrototypeMockData {
         'id': 'c-human-1',
         'name': '徕卡影像志',
         'avatar':
-            'https://images.unsplash.com/photo-1510127034890-ba27508e9f1c?w=200&h=200&fit=crop',
+            'media/avatar/s/mock/seed/u_1510127034890-ba27508e9f1c/v1/avatar.jpg',
         'cover':
-            'https://images.unsplash.com/photo-1495121553079-4c61bbbc19df?w=1000&fit=crop',
+            'media/avatar/s/mock/seed/u_1495121553079-4c61bbbc19df/v1/avatar.jpg',
         'memberCount': 28000,
         'description': '用镜头记录世界，传递有温度的内容。',
         'type': 'interest',
@@ -871,9 +871,9 @@ class PrototypeMockData {
         'id': 'c-photo-owner',
         'name': '我的摄影圈 (圈主)',
         'avatar':
-            'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?w=200&h=200&fit=crop',
+            'media/avatar/s/mock/seed/u_1542038784456-1ea8e935640e/v1/avatar.jpg',
         'cover':
-            'https://images.unsplash.com/photo-1554080353-a576cf803bda?w=1000&fit=crop',
+            'media/avatar/s/mock/seed/u_1554080353-a576cf803bda/v1/avatar.jpg',
         'memberCount': 128,
         'description': '这是一个测试圈主权限的圈子。',
         'type': 'interest',
@@ -885,9 +885,9 @@ class PrototypeMockData {
         'id': 'c-tech-admin',
         'name': '科技前沿 (管理员)',
         'avatar':
-            'https://images.unsplash.com/photo-1518770660439-4636190af475?w=200&h=200&fit=crop',
+            'media/avatar/s/mock/seed/u_1518770660439-4636190af475/v1/avatar.jpg',
         'cover':
-            'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1000&fit=crop',
+            'media/avatar/s/mock/seed/u_1451187580459-43490279c0fa/v1/avatar.jpg',
         'memberCount': 560,
         'description': '这是一个测试管理员权限的圈子。',
         'type': 'interest',
@@ -900,7 +900,7 @@ class PrototypeMockData {
   // ==================== messages/MockMessageData.ts MOCK_CONVERSATIONS + 私人助理 ====================
   /// 私人助理头像 URL（对话列表与气泡中均使用此头像）
   static const String chatAssistantAvatarUrl =
-      'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400';
+      'media/image/s/mock/seed/p_1518709268805-4e9042af9f23/v1/image.jpg';
 
   /// 私人助理会话（用于趣聊 Tab 全部，标题等展示名来自 AppConceptConstants）
   static Map<String, dynamic> get chatAssistantConversation {
@@ -924,7 +924,7 @@ class PrototypeMockData {
         'type': 'private',
         'title': '用户A',
         'avatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'lastMessage': '周末一起去拍照吗？',
         'lastMessageTime': '10分钟前',
         'unreadCount': 2,
@@ -935,7 +935,7 @@ class PrototypeMockData {
         'type': 'private',
         'title': '用户B',
         'avatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'lastMessage': '谢谢分享，学到很多！',
         'lastMessageTime': '1小时前',
         'unreadCount': 0,
@@ -946,7 +946,7 @@ class PrototypeMockData {
         'type': 'private',
         'title': '用户C',
         'avatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'lastMessage': '[图片]',
         'lastMessageTime': '3小时前',
         'unreadCount': 1,
@@ -957,7 +957,7 @@ class PrototypeMockData {
         'type': 'group',
         'title': '摄影交流群',
         'avatar':
-            'https://images.unsplash.com/photo-1452457807411-4979b707c5be?w=400',
+            'media/image/s/mock/seed/p_1452457807411-4979b707c5be/v1/image.jpg',
         'lastMessage': '用户D: 这张照片构图很棒！',
         'lastMessageTime': '30分钟前',
         'unreadCount': 5,
@@ -968,7 +968,7 @@ class PrototypeMockData {
         'type': 'circle',
         'title': '摄影班交流',
         'avatar':
-            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
+            'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
         'lastMessage': '🔥 推荐秘境 💬 欢迎加入社群😘',
         'lastMessageTime': '2025年12月19日',
         'unreadCount': 0,
@@ -979,8 +979,8 @@ class PrototypeMockData {
         'type': 'private',
         'title': '用户D',
         'avatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
-        'lastMessage': '[链接] https://m.tb.cn/h.7WmACZJ?tk=...',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
+        'lastMessage': '[链接] http://118.31.239.122:19000/s/mock-token',
         'lastMessageTime': '2025年12月18日',
         'unreadCount': 0,
         'hasMention': false,
@@ -990,7 +990,7 @@ class PrototypeMockData {
         'type': 'private',
         'title': '用户E',
         'avatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'lastMessage': '👍',
         'lastMessageTime': '2025年12月17日',
         'unreadCount': 0,
@@ -1001,7 +1001,7 @@ class PrototypeMockData {
         'type': 'circle',
         'title': '20251217坂田合同商务...',
         'avatar':
-            'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400',
+            'media/image/s/mock/seed/p_1531746020798-e6953c6e8e04/v1/image.jpg',
         'lastMessage': '林土 周东淼 已解读该消息',
         'lastMessageTime': '2025年12月17日',
         'unreadCount': 0,
@@ -1012,7 +1012,7 @@ class PrototypeMockData {
         'type': 'private',
         'title': '用户F',
         'avatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'lastMessage': '[图片]',
         'lastMessageTime': '2025年12月17日',
         'unreadCount': 0,
@@ -1023,7 +1023,7 @@ class PrototypeMockData {
         'type': 'private',
         'title': '迷邮助手-楚辉',
         'avatar':
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
+            'media/image/s/mock/seed/p_1507003211169-0a1dd7228f2d/v1/image.jpg',
         'lastMessage': '[条目] [AI星图] 💄 @迪海晴龙 今晚修了一个的好好',
         'lastMessageTime': '2025年12月11日',
         'unreadCount': 0,
@@ -1034,7 +1034,7 @@ class PrototypeMockData {
         'type': 'circle',
         'title': '爪爪猫球-组半电商，有...',
         'avatar':
-            'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=400',
+            'media/image/s/mock/seed/p_1502920917128-1aa500764cbd/v1/image.jpg',
         'lastMessage': '[图片] 重一致反而配也来一趟你🦘 需要',
         'lastMessageTime': '2025年12月8日',
         'unreadCount': 0,
@@ -1045,7 +1045,7 @@ class PrototypeMockData {
         'type': 'private',
         'title': 'AAA孙磊-组半电商，有...',
         'avatar':
-            'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400',
+            'media/image/s/mock/seed/p_1519085360753-af0119f7cbe7/v1/image.jpg',
         'lastMessage': '好一家强反而配也🤝 蹿动',
         'lastMessageTime': '2025年11月30日',
         'unreadCount': 0,
@@ -1062,7 +1062,7 @@ class PrototypeMockData {
         'type': 'encrypted',
         'title': '私密项目组',
         'avatar':
-            'https://images.unsplash.com/photo-1614028674026-a65e31bfd27c?w=400',
+            'media/image/s/mock/seed/p_1614028674026-a65e31bfd27c/v1/image.jpg',
         'lastMessage': '[加密消息] 查看需要验证身份',
         'lastMessageTime': '2025年12月22日',
         'unreadCount': 1,
@@ -1074,7 +1074,7 @@ class PrototypeMockData {
         'type': 'encrypted',
         'title': '与 神秘人 的密信',
         'avatar':
-            'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=400',
+            'media/image/s/mock/seed/p_1566492031773-4f4e44671857/v1/image.jpg',
         'lastMessage': '[加密消息] 文件已发送',
         'lastMessageTime': '昨天',
         'unreadCount': 0,
@@ -1097,7 +1097,7 @@ class PrototypeMockData {
         'id': 'user_123',
         'displayName': '李摄影',
         'avatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'bio': '风光摄影爱好者',
         'relationState': 'mutual',
         'isStarred': true,
@@ -1109,7 +1109,7 @@ class PrototypeMockData {
         'id': 'user_111',
         'displayName': '赵摄影师',
         'avatar':
-            'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400',
+            'media/image/s/mock/seed/p_1519085360753-af0119f7cbe7/v1/image.jpg',
         'bio': '商业摄影师',
         'relationState': 'mutual',
         'isStarred': true,
@@ -1122,7 +1122,7 @@ class PrototypeMockData {
         'id': 'user_a',
         'displayName': '用户A',
         'avatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'bio': '摄影交流圈',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1134,7 +1134,7 @@ class PrototypeMockData {
         'id': 'user_b',
         'displayName': '用户B',
         'avatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'bio': '风光摄影圈',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1146,7 +1146,7 @@ class PrototypeMockData {
         'id': 'user_c',
         'displayName': '用户C',
         'avatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'bio': '人像摄影圈',
         'relationState': 'following',
         'isStarred': false,
@@ -1158,7 +1158,7 @@ class PrototypeMockData {
         'id': 'user_d',
         'displayName': '用户D',
         'avatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'bio': '摄影交流圈',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1170,7 +1170,7 @@ class PrototypeMockData {
         'id': 'user_e',
         'displayName': '用户E',
         'avatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'bio': '风光摄影圈',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1182,7 +1182,7 @@ class PrototypeMockData {
         'id': 'user_f',
         'displayName': '用户F',
         'avatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'bio': '人像摄影圈',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1194,7 +1194,7 @@ class PrototypeMockData {
         'id': 'user_456',
         'displayName': '王小明',
         'avatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'bio': '人像摄影师',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1206,7 +1206,7 @@ class PrototypeMockData {
         'id': 'user_789',
         'displayName': '张三',
         'avatar':
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
+            'media/image/s/mock/seed/p_1507003211169-0a1dd7228f2d/v1/image.jpg',
         'bio': '游戏爱好者',
         'relationState': 'following',
         'isStarred': false,
@@ -1218,7 +1218,7 @@ class PrototypeMockData {
         'id': 'user_222',
         'displayName': '书友小芳',
         'avatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'bio': '科幻文学爱好者',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1230,7 +1230,7 @@ class PrototypeMockData {
         'id': 'user_chuhui',
         'displayName': '迷邮助手-楚辉',
         'avatar':
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
+            'media/image/s/mock/seed/p_1507003211169-0a1dd7228f2d/v1/image.jpg',
         'bio': '技术交流圈',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1242,7 +1242,7 @@ class PrototypeMockData {
         'id': 'user_sunlei',
         'displayName': 'AAA孙磊-组半电商',
         'avatar':
-            'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400',
+            'media/image/s/mock/seed/p_1519085360753-af0119f7cbe7/v1/image.jpg',
         'bio': '商务合作圈',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1255,7 +1255,7 @@ class PrototypeMockData {
         'id': 'user_a1',
         'displayName': '安琪',
         'avatar':
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
+            'media/image/s/mock/seed/p_1494790108377-be9c29b29330/v1/image.jpg',
         'bio': '生活记录',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1267,7 +1267,7 @@ class PrototypeMockData {
         'id': 'user_b1',
         'displayName': '毕涛',
         'avatar':
-            'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400',
+            'media/image/s/mock/seed/p_1506794778202-cad84cf45f1d/v1/image.jpg',
         'bio': '户外徒步',
         'relationState': 'following',
         'isStarred': false,
@@ -1279,7 +1279,7 @@ class PrototypeMockData {
         'id': 'user_c1',
         'displayName': '陈默',
         'avatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'bio': '读书会',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1291,7 +1291,7 @@ class PrototypeMockData {
         'id': 'user_f1',
         'displayName': '方悦',
         'avatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'bio': '插画师',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1303,7 +1303,7 @@ class PrototypeMockData {
         'id': 'user_g1',
         'displayName': '顾晨',
         'avatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'bio': '数码爱好者',
         'relationState': 'following',
         'isStarred': false,
@@ -1315,7 +1315,7 @@ class PrototypeMockData {
         'id': 'user_h1',
         'displayName': '黄小蕾',
         'avatar':
-            'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400',
+            'media/image/s/mock/seed/p_1519085360753-af0119f7cbe7/v1/image.jpg',
         'bio': '美食探店',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1327,7 +1327,7 @@ class PrototypeMockData {
         'id': 'user_j1',
         'displayName': '蒋明',
         'avatar':
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
+            'media/image/s/mock/seed/p_1507003211169-0a1dd7228f2d/v1/image.jpg',
         'bio': '骑行爱好者',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1339,7 +1339,7 @@ class PrototypeMockData {
         'id': 'user_k1',
         'displayName': '孔亮',
         'avatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'bio': '电影爱好者',
         'relationState': 'following',
         'isStarred': false,
@@ -1351,7 +1351,7 @@ class PrototypeMockData {
         'id': 'user_l1',
         'displayName': '刘洋',
         'avatar':
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
+            'media/image/s/mock/seed/p_1494790108377-be9c29b29330/v1/image.jpg',
         'bio': '旅行摄影',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1363,7 +1363,7 @@ class PrototypeMockData {
         'id': 'user_m1',
         'displayName': '马晓东',
         'avatar':
-            'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400',
+            'media/image/s/mock/seed/p_1506794778202-cad84cf45f1d/v1/image.jpg',
         'bio': '篮球爱好者',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1375,7 +1375,7 @@ class PrototypeMockData {
         'id': 'user_p1',
         'displayName': '潘雨',
         'avatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'bio': '手账达人',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1387,7 +1387,7 @@ class PrototypeMockData {
         'id': 'user_q1',
         'displayName': '钱多多',
         'avatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'bio': '理财分享',
         'relationState': 'following',
         'isStarred': false,
@@ -1399,7 +1399,7 @@ class PrototypeMockData {
         'id': 'user_r1',
         'displayName': '任晓雯',
         'avatar':
-            'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400',
+            'media/image/s/mock/seed/p_1519085360753-af0119f7cbe7/v1/image.jpg',
         'bio': '写作爱好者',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1411,7 +1411,7 @@ class PrototypeMockData {
         'id': 'user_s1',
         'displayName': '孙浩然',
         'avatar':
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
+            'media/image/s/mock/seed/p_1507003211169-0a1dd7228f2d/v1/image.jpg',
         'bio': '吉他手',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1423,7 +1423,7 @@ class PrototypeMockData {
         'id': 'user_t1',
         'displayName': '唐果',
         'avatar':
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
+            'media/image/s/mock/seed/p_1494790108377-be9c29b29330/v1/image.jpg',
         'bio': '烘焙爱好者',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1435,7 +1435,7 @@ class PrototypeMockData {
         'id': 'user_w1',
         'displayName': '吴磊',
         'avatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'bio': '游戏主播',
         'relationState': 'following',
         'isStarred': false,
@@ -1447,7 +1447,7 @@ class PrototypeMockData {
         'id': 'user_x1',
         'displayName': '许静',
         'avatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'bio': '瑜伽教练',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1459,7 +1459,7 @@ class PrototypeMockData {
         'id': 'user_y1',
         'displayName': '杨帆',
         'avatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'bio': '航拍爱好者',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1471,7 +1471,7 @@ class PrototypeMockData {
         'id': 'user_z1',
         'displayName': '周杰',
         'avatar':
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
+            'media/image/s/mock/seed/p_1507003211169-0a1dd7228f2d/v1/image.jpg',
         'bio': '街舞老师',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1483,7 +1483,7 @@ class PrototypeMockData {
         'id': 'user_z2',
         'displayName': '郑小希',
         'avatar':
-            'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400',
+            'media/image/s/mock/seed/p_1519085360753-af0119f7cbe7/v1/image.jpg',
         'bio': '宠物博主',
         'relationState': 'mutual',
         'isStarred': false,
@@ -1501,14 +1501,14 @@ class PrototypeMockData {
         'id': 'circle_1',
         'name': '风光摄影圈',
         'avatar':
-            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
+            'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
         'memberCount': '1.2k',
       },
       {
         'id': 'circle_2',
         'name': '人像摄影圈',
         'avatar':
-            'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400',
+            'media/image/s/mock/seed/p_1531746020798-e6953c6e8e04/v1/image.jpg',
         'memberCount': '890',
       },
     ];
@@ -1521,7 +1521,7 @@ class PrototypeMockData {
         'id': 'conv_group_photo',
         'name': '摄影交流群',
         'avatar':
-            'https://images.unsplash.com/photo-1452457807411-4979b707c5be?w=400',
+            'media/image/s/mock/seed/p_1452457807411-4979b707c5be/v1/image.jpg',
         'memberCount': '128',
       },
     ];
@@ -1539,7 +1539,7 @@ class PrototypeMockData {
         'circleName': '互联网校友内推圈',
         'participants': 1250,
         'image':
-            'https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=800&fit=crop',
+            'media/image/s/mock/seed/p_1516280440614-37939bbacd81/v1/image.jpg',
       },
       {
         'id': 'a2',
@@ -1550,7 +1550,7 @@ class PrototypeMockData {
         'circleName': 'Model 3 焕新版·上海车友会',
         'participants': 45,
         'image':
-            'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=800&fit=crop',
+            'media/image/s/mock/seed/p_1460661419201-fd4cecdf8a8b/v1/image.jpg',
       },
     ];
   }
@@ -1685,7 +1685,7 @@ class PrototypeMockData {
         'senderId': 'user_a',
         'senderName': '用户A',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'timestamp': '今天 上午10:30',
         'isRead': true,
         'isSelf': false,
@@ -1698,7 +1698,7 @@ class PrototypeMockData {
         'senderId': 'current_user',
         'senderName': '我',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
+            'media/image/s/mock/seed/p_1535713875002-d1d0cf377fde/v1/image.jpg',
         'timestamp': '今天 上午10:32',
         'isRead': true,
         'isSelf': true,
@@ -1711,7 +1711,7 @@ class PrototypeMockData {
         'senderId': 'user_a',
         'senderName': '用户A',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'timestamp': '今天 上午10:35',
         'isRead': false,
         'isSelf': false,
@@ -1724,7 +1724,7 @@ class PrototypeMockData {
         'senderId': 'user_a',
         'senderName': '用户A',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'timestamp': '今天 上午10:35',
         'isRead': false,
         'isSelf': false,
@@ -1739,7 +1739,7 @@ class PrototypeMockData {
         'senderId': 'user_b',
         'senderName': '用户B',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'timestamp': '昨天 下午3:20',
         'isRead': true,
         'isSelf': false,
@@ -1752,7 +1752,7 @@ class PrototypeMockData {
         'senderId': 'current_user',
         'senderName': '我',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
+            'media/image/s/mock/seed/p_1535713875002-d1d0cf377fde/v1/image.jpg',
         'timestamp': '昨天 下午3:25',
         'isRead': true,
         'isSelf': true,
@@ -1765,7 +1765,7 @@ class PrototypeMockData {
         'senderId': 'user_b',
         'senderName': '用户B',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'timestamp': '昨天 下午3:30',
         'isRead': true,
         'isSelf': false,
@@ -1778,7 +1778,7 @@ class PrototypeMockData {
         'senderId': 'user_b',
         'senderName': '用户B',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'timestamp': '今天 上午9:15',
         'isRead': true,
         'isSelf': false,
@@ -1793,7 +1793,7 @@ class PrototypeMockData {
         'senderId': 'user_c',
         'senderName': '用户C',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'timestamp': '今天 上午8:30',
         'isRead': true,
         'isSelf': false,
@@ -1806,7 +1806,7 @@ class PrototypeMockData {
         'senderId': 'current_user',
         'senderName': '我',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
+            'media/image/s/mock/seed/p_1535713875002-d1d0cf377fde/v1/image.jpg',
         'timestamp': '今天 上午8:32',
         'isRead': true,
         'isSelf': true,
@@ -1819,7 +1819,7 @@ class PrototypeMockData {
         'senderId': 'user_c',
         'senderName': '用户C',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'timestamp': '今天 上午8:35',
         'isRead': true,
         'isSelf': false,
@@ -1830,13 +1830,13 @@ class PrototypeMockData {
         'type': 'image',
         'content': '图片',
         'imageUrl':
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600',
+            'media/image/s/mock/seed/p_1494790108377-be9c29b29330/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+            'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
         'senderId': 'user_c',
         'senderName': '用户C',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'timestamp': '今天 上午8:36',
         'isRead': false,
         'isSelf': false,
@@ -1851,7 +1851,7 @@ class PrototypeMockData {
         'senderId': 'user_d',
         'senderName': '用户D',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'timestamp': '今天 上午9:00',
         'isRead': true,
         'isSelf': false,
@@ -1864,7 +1864,7 @@ class PrototypeMockData {
         'senderId': 'user_e',
         'senderName': '用户E',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+            'media/image/s/mock/seed/p_1500648767791-00dcc994a43e/v1/image.jpg',
         'timestamp': '今天 上午9:05',
         'isRead': true,
         'isSelf': false,
@@ -1877,7 +1877,7 @@ class PrototypeMockData {
         'senderId': 'current_user',
         'senderName': '我',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
+            'media/image/s/mock/seed/p_1535713875002-d1d0cf377fde/v1/image.jpg',
         'timestamp': '今天 上午9:10',
         'isRead': true,
         'isSelf': true,
@@ -1888,13 +1888,13 @@ class PrototypeMockData {
         'type': 'image',
         'content': '图片',
         'imageUrl':
-            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600',
+            'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200',
+            'media/avatar/s/mock/seed/u_1506905925346-21bda4d32df4/v1/avatar.jpg',
         'senderId': 'user_f',
         'senderName': '用户F',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
+            'media/image/s/mock/seed/p_1438761681033-6461ffad8d80/v1/image.jpg',
         'timestamp': '今天 上午9:15',
         'isRead': true,
         'isSelf': false,
@@ -1907,7 +1907,7 @@ class PrototypeMockData {
         'senderId': 'user_d',
         'senderName': '用户D',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'timestamp': '今天 上午9:20',
         'isRead': true,
         'isSelf': false,
@@ -1922,7 +1922,7 @@ class PrototypeMockData {
         'senderId': 'circle_1',
         'senderName': '摄影班交流',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
+            'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
         'timestamp': '2025年12月19日',
         'isRead': true,
         'isSelf': false,
@@ -1933,11 +1933,11 @@ class PrototypeMockData {
         'id': 'msg_p1_1',
         'conversationId': 'conv_private_1',
         'type': 'text',
-        'content': '[链接] https://m.tb.cn/h.7WmACZJ?tk=...',
+        'content': '[链接] http://118.31.239.122:19000/s/mock-token',
         'senderId': 'user_d',
         'senderName': '用户D',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+            'media/image/s/mock/seed/p_1472099645785-5658abf4ff4e/v1/image.jpg',
         'timestamp': '2025年12月18日',
         'isRead': true,
         'isSelf': false,
@@ -1952,7 +1952,7 @@ class PrototypeMockData {
         'senderId': 'enc_user_1',
         'senderName': '私密项目组',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1614028674026-a65e31bfd27c?w=400',
+            'media/image/s/mock/seed/p_1614028674026-a65e31bfd27c/v1/image.jpg',
         'timestamp': '2025年12月22日',
         'isRead': false,
         'isSelf': false,
@@ -1967,7 +1967,7 @@ class PrototypeMockData {
         'senderId': 'enc_user_2',
         'senderName': '神秘人',
         'senderAvatar':
-            'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=400',
+            'media/image/s/mock/seed/p_1566492031773-4f4e44671857/v1/image.jpg',
         'timestamp': '昨天',
         'isRead': true,
         'isSelf': false,

@@ -1,0 +1,60 @@
+id: CR-20260616-038-location-first-party-search-object
+title: 地点成为统一检索的一类第一方对象：新增 location.place target + 第一方地点快照存储（复用 geo 维度）
+slug: location-first-party-search-object
+revision: 1
+status: specified
+
+affected_nodes:
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry
+
+entries:
+  - timestamp: "2026-06-16T00:00:00+08:00"
+    summary: |
+      在并发会话已落地的跨对象 geo/地点维度（runtime/search.Document.Geo + Fields(placeId/
+      placeName) + filters.near + es geo mapping + RetrieveHit.geo/distanceKm/placeName）之上，
+      叠加一类复用该维度的第一方对象 target：location.place（ai_targets.location）。新增内容：
+      - metadata：search_objects.yaml 注册 object_type=location.place 与 ai_target=location，
+        改写 location_dimension 注释从“location 不是 target、第一方地点即 entity.homepage”为
+        “geo 是跨对象维度（保留）+ location.place 是复用该维度的第一方对象，仅覆盖未绑定
+        canonicalEntityId/primaryHomepageId 的自由文本地点，已绑定者由 entity.homepage 承载”。
+      - runtime/search：加性新增 ObjectTypeLocation/TargetLocation，AllTargets/TargetForDocument/
+        ObjectTypesForTargets 增 location 分支；search-service DefaultResultTargets 增 location。
+      - content-service：新增第一方地点快照存储 place_snapshots（派生读模型，按引用集去重）+
+        placeindex 写时投影器/backfill，复用统一 ES 索引；共享投影 application.ProjectPlaceToSearchDocument
+        与身份函数 CanonicalPlaceID（normalize(locationName)+粗 geohash，不用第三方 poiId）。
+      - App：metadata-first + codegen 重生 search_registry.g.dart 的 SearchObjectType/RetrieveTarget 枚举。
+    reason: |
+      用户拍板 force_target：未提升为实体主页的自由文本地点需作为独立一类对象被搜到，并作为
+      后续提升为 entity.homepage 的入口。原 geo 维度方案明确写死“location 不是 target”，与此目标
+      矛盾。按“当前未上线、零历史兼容、单一真相源”，保留并复用 geo 维度（不推翻不删改其语义），
+      仅做加性扩展，并改写被刻意写进 metadata 的设计不变量；同一地点只出现一次（未提升=location.place、
+      已提升=entity.homepage），geo 机制只有一套。
+    change_type:
+      - extend
+      - contract
+      - arch
+    changed_documents:
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md
+        sections:
+          - 第一方地点对象 location.place（R-S05e，force_target）
+          - 验收重点
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+          - gwt_acceptance.GWT2
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 仅加性扩展检索契约；geo 跨对象维度（GeoNear/Near/Document.Geo/nearMatch/es geo/anchor placeId+placeName）全部保留不删改。
+      - 单一真相源：地点绑定 canonicalEntity 后删除其 location.place，避免与 entity.homepage 重复。
+      - 地点快照是 content 域派生读模型，posts 为唯一写真相源，可由 backfill 重建。
+      - 衍生待办：location.place 落地页（detail/route）归属与渲染未定，登记到 docs/outstanding_risks_backlog.md。
+      - search_contract.yaml 无需改动：near filter 与 geo/distanceKm/placeName hit 字段已存在，location target 仅在 ai_targets 注册。

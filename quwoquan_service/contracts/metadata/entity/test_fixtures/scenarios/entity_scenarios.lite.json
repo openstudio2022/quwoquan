@@ -55,6 +55,46 @@
             "城市地标",
             "赏景"
           ],
+          "verified": true,
+          "establishedYear": 1982,
+          "followerCount": 1286,
+          "contentPreview": [
+            {
+              "postId": "west_lake_record_1",
+              "title": "西湖日落散步路线",
+              "summary": "一条适合黄昏慢走的完整打卡笔记。",
+              "contentType": "article",
+              "coverUrl": "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+              "intersectionReasons": [
+                {
+                  "primaryText": "你关注的9人来过这里",
+                  "displayText": "关注的人来过",
+                  "dimension": "location"
+                }
+              ]
+            },
+            {
+              "postId": "west_lake_record_2",
+              "title": "断桥边的夜色作品",
+              "summary": "断桥残雪机位与曝光参数实拍。",
+              "contentType": "image",
+              "coverUrl": "https://images.unsplash.com/photo-1538970272646-f61fabb3a8a2"
+            },
+            {
+              "postId": "west_lake_record_3",
+              "title": "苏堤骑行 vlog",
+              "summary": "清晨苏堤骑行的一镜到底。",
+              "contentType": "video",
+              "coverUrl": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b",
+              "intersectionReasons": [
+                {
+                  "primaryText": "你常看的摄影作者都拍过这里",
+                  "displayText": "摄影作者常拍",
+                  "dimension": "interest"
+                }
+              ]
+            }
+          ],
           "introduction": {
             "homepageId": "homepage_sight_west_lake",
             "displayName": "西湖景区",
@@ -273,7 +313,11 @@
           "summary": "聚合夜宵推荐、本地吃法、真实口碑与杭州老城夜色内容。",
           "city": "杭州",
           "status": "published",
-          "categoryTags": ["餐厅", "夜宵", "本地推荐"],
+          "categoryTags": [
+            "餐厅",
+            "夜宵",
+            "本地推荐"
+          ],
           "relatedGroups": [
             {
               "circleId": "night_market_circle_1",
@@ -293,7 +337,11 @@
           "summary": "承接登山路线、寺院游览、云海日出与川西南旅行内容沉淀。",
           "city": "乐山",
           "status": "published",
-          "categoryTags": ["景点", "山地旅行", "乐山"]
+          "categoryTags": [
+            "景点",
+            "山地旅行",
+            "乐山"
+          ]
         },
         {
           "homepageId": "homepage_sight_leshan_giant_buddha",
@@ -304,7 +352,11 @@
           "summary": "聚合大佛观景位、江岸路线、城市停留与乐山旅行内容。",
           "city": "乐山",
           "status": "published",
-          "categoryTags": ["景点", "石刻", "乐山"]
+          "categoryTags": [
+            "景点",
+            "石刻",
+            "乐山"
+          ]
         },
         {
           "homepageId": "fixture_homepage_travel_photo_dali",

@@ -158,6 +158,7 @@ components:
             - CONTENT
             - CIRCLE
             - ENTITY
+            - SEARCH
             - INTEGRATION
             - USER
             - CHAT

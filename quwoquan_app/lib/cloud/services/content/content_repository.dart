@@ -19,6 +19,7 @@ import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_reaction_state.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
@@ -33,6 +34,8 @@ import 'package:quwoquan_cloud_contracts/content_repository.dart'
 
 export 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart'
     show DiscoveryPresentationWire;
+export 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart'
+    show DiscoveryFeedPage;
 export 'package:quwoquan_cloud_contracts/content_repository.dart'
     show
         CommentPage,

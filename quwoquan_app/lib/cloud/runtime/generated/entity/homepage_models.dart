@@ -189,6 +189,8 @@ class HomepageDetail extends HomepageCanonicalReference {
     this.ownerSubAccountId,
     this.viewerFollowsHomepage = false,
     this.followerCount = 0,
+    this.verified = false,
+    this.establishedYear,
     this.averageRating,
     this.ratingCount = 0,
     this.reviewSummary,
@@ -211,6 +213,12 @@ class HomepageDetail extends HomepageCanonicalReference {
   final String? ownerSubAccountId;
   final bool viewerFollowsHomepage;
   final int followerCount;
+
+  /// 实体主页官方认证标识（头部认证 badge）；缺省 false 不展示。
+  final bool verified;
+
+  /// 成立年份（基础信息行展示）；缺省不展示。
+  final int? establishedYear;
   final double? averageRating;
   final int ratingCount;
   final HomepageReviewSummaryData? reviewSummary;
@@ -258,6 +266,9 @@ class HomepageDetail extends HomepageCanonicalReference {
           map['viewerFollowsHomepage'] == true ||
           map['viewerFollowsHomepage']?.toString() == 'true',
       followerCount: (map['followerCount'] as num?)?.toInt() ?? 0,
+      verified:
+          map['verified'] == true || map['verified']?.toString() == 'true',
+      establishedYear: (map['establishedYear'] as num?)?.toInt(),
       averageRating: HomepageWireCodec.optionalDouble(map['averageRating']),
       ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
       reviewSummary: () {
@@ -304,6 +315,8 @@ class HomepageDetail extends HomepageCanonicalReference {
     String? ownerSubAccountId,
     bool? viewerFollowsHomepage,
     int? followerCount,
+    bool? verified,
+    int? establishedYear,
     double? averageRating,
     int? ratingCount,
     HomepageReviewSummaryData? reviewSummary,
@@ -334,6 +347,8 @@ class HomepageDetail extends HomepageCanonicalReference {
       viewerFollowsHomepage:
           viewerFollowsHomepage ?? this.viewerFollowsHomepage,
       followerCount: followerCount ?? this.followerCount,
+      verified: verified ?? this.verified,
+      establishedYear: establishedYear ?? this.establishedYear,
       averageRating: averageRating ?? this.averageRating,
       ratingCount: ratingCount ?? this.ratingCount,
       reviewSummary: reviewSummary ?? this.reviewSummary,

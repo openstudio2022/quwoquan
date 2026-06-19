@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
@@ -42,7 +42,8 @@ void main() {
     expect(find.text('写长文'), findsOneWidget);
     expect(find.text('续草稿'), findsOneWidget);
     expect(find.text('加联系'), findsOneWidget);
-    expect(find.text(UITextConstants.createActionCreateGroupShort), findsOneWidget);
+    expect(find.text('发起讨论'), findsOneWidget);
+    expect(find.byIcon(FluentIcons.chat_multiple_24_regular), findsOneWidget);
     expect(find.text('创作'), findsNothing);
     expect(find.text('连接'), findsNothing);
     expect(find.text('取消'), findsOneWidget);

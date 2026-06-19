@@ -5,15 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
 import '../../../support/harness/profile_shell_scroll_utils.dart';
 
-/// T4 旅程：我的主页一级 3 Tab（创作/圈子/互动）端到端可达。
+/// T4 旅程：我的主页一级 2 Tab（创作/互动）端到端可达，圈子进入统计区。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
 
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -62,7 +62,7 @@ void main() {
     HttpOverrides.global = _NoNetworkHttpOverrides();
   });
 
-  testWidgets('我的主页可依次浏览 创作→圈子→互动 三个一级 Tab', (tester) async {
+  testWidgets('我的主页可浏览创作/互动，圈子作为统计入口展示', (tester) async {
     _setPhoneSize(tester);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -77,9 +77,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tapProfilePrimaryTab(tester, '圈子');
-    await _pumpFrames(tester);
-    expect(find.byType(ProfileCirclesTab), findsOneWidget);
+    expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
 
     await tapProfilePrimaryTab(tester, '互动');
     await _pumpFrames(tester);

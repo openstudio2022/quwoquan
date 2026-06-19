@@ -1,0 +1,108 @@
+id: CR-20260617-043-recommendation-exposure-state-capacity
+title: 推荐曝光七态分离与并发容量实时性规格刷新
+slug: recommendation-exposure-state-capacity
+revision: 2
+status: partially_implemented_p0
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/exposure-governance
+  - specs/feature-tree/discovery-content/exposure-governance/served-dedup-write-behind
+  - specs/feature-tree/discovery-content/exposure-governance/cross-session-fatigue-memory
+  - specs/feature-tree/discovery-content/exposure-governance/exposure-observability-capacity
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling
+  - specs/feature-tree/recommendation-platform/rec-model-service/inference-capacity-elasticity
+  - specs/feature-tree/runtime/runtime-recommendation
+  - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+  - deploy/monitoring/alerts/quwoquan_alerts.yaml
+
+entries:
+  - timestamp: "2026-06-17T00:40:00+08:00"
+    summary: |
+      承接 /plan-review（埋点 / 状态 / 存储 / 模型 / 容量 / 实时性）多角色评审：把推荐反馈状态
+      从二元「已读/已曝光」升级为七态闭集（served/visible/impressed/dwell/interaction/negative/
+      training_sample），冻结端侧统一上报抗冲击规格（新 L3 feedback-ingestion-sampling）、
+      曝光记忆去全量化与运行时边界（ExposureMemory/ExposureFilter/FeedbackIngestor）、
+      rec-model-service 商用并发容量（新 L3 inference-capacity-elasticity），并把状态分离 /
+      ingest/drop / 容量 SLI 命名与死告警 emitter 前置写入 SLO 与告警真相源。
+    reason: |
+      plan-review 给出 GATE_BLOCK：状态未分离、记忆全量化（engine 每次 feed 全量 SMembers）、
+      上报双通道无幂等、商用成熟度指标全 objective_only 且 5 条运营告警为死告警，直接威胁并发、
+      容量与实时性。需先冻结状态闭集、去全量化存储、端侧抗冲击与模型容量规格，再进入 /baseline 与 /dev。
+    change_type:
+      - planning
+      - feature-tree
+      - acceptance
+      - observability
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/exposure-governance/design.md
+        sections:
+          - 状态闭集（七态）
+          - 端云数据流与归因闭环
+          - 端侧抗冲击与采样
+          - 容量与去全量化
+      - path: specs/feature-tree/discovery-content/exposure-governance/spec.md
+        sections:
+          - 商用目标
+          - In Scope
+          - 验收标准
+      - path: specs/feature-tree/discovery-content/exposure-governance/acceptance.yaml
+        sections:
+          - sit_acceptance.SIT1.done_when
+      - path: specs/feature-tree/discovery-content/exposure-governance/served-dedup-write-behind
+        sections:
+          - 范围
+          - 验收标准
+      - path: specs/feature-tree/discovery-content/exposure-governance/cross-session-fatigue-memory
+        sections:
+          - 范围
+          - 验收标准
+      - path: specs/feature-tree/discovery-content/exposure-governance/exposure-observability-capacity
+        sections:
+          - 范围
+          - 验收标准
+      - path: specs/feature-tree/discovery-content/exposure-governance/metadata-first-preconditions.md
+        sections:
+          - Redis Keyspace
+          - 容量与去全量化约束
+          - Recpolicy Factors
+          - Behavior / Training Semantics
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling
+        sections:
+          - 新增 L3 spec/acceptance
+      - path: specs/feature-tree/recommendation-platform/rec-model-service/inference-capacity-elasticity
+        sections:
+          - 新增 L3 spec/acceptance
+      - path: specs/feature-tree/runtime/runtime-recommendation/design.md
+        sections:
+          - 状态与接口
+          - 7 阶段管线
+          - 降级与可靠性
+      - path: quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+        sections:
+          - metrics
+          - slis
+          - commercial_maturity
+      - path: deploy/monitoring/alerts/quwoquan_alerts.yaml
+        sections:
+          - quwoquan_rec_model
+      - path: docs/recommendation-commercial-maturity-plan.md
+        sections:
+          - 反馈状态闭集与并发容量下一轮
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: low
+      breaking_contract: false
+    notes:
+      - P0 已进入实现：新 Redis key（served/impressed day-bucket、negative 用户级）、recpolicy 采样/阈值/限流/容量预算、行为 wire schema（clientEventId/feedRequestId/state）已回到 metadata/codegen 后落 runtime/app/service。
+      - runtime/recommendation 已引入 ExposureMemory/ExposureFilter/FeedbackIngestor，feed 过滤改候选 membership 点查，served write-behind 失败不阻断，HotPath/BufferedHotPath/SessionCache 透传能力边界。
+      - App 端行为模型和 tracker 已透传 clientEventId/state/feedRequestId；真实 impressed 需要可见面积 + 停留阈值，未达阈值降级 visible；negative/interaction/dwell 显式七态。
+      - content-service 行为入口已接 clientEventId 去重与七态写入；P0 emitter（七态计数、ingest/drop、hotpath drop、smembers fallback）由 objective_only 转 measured，P1/P2 无 emitter 告警保留前置标注。
+      - 第一切片 P0 的 T1/T2 已登记到 acceptance recorded；T3 local-gamma 与 T4 重复曝光旅程仍需继续补证。
+      - 动态曝光预算、生命周期复活、协同召回、模型容量和真集群容量仍按 P1/P2 Story 推进，不在 P0 里伪完成。
+      - 深度排序模型平台轨（MMoE/PLE/ESMM、双塔 ANN、IPS）仍为长期上限，不计入当前商用成熟度门槛。

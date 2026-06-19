@@ -7,7 +7,7 @@ description: >
   - workload 归属真相源：deploy/shared/workload_topology_inventory.yaml（planes: application/edge-media 的部署形态）。
   - domain↔control-plane 真相源：deploy/shared/process_domain_plane_mapping.yaml。
   本层把上述运行时四平面映射到 prod ECS 上的最小权限 Linux service 账号，远端唯一托管目标为 prod-hosted（backend=ssh-hosted）。
-  成本约束说明：gray-initial 与 full 共享同一物理 ECS/集群；隔离强度为「账号 + rollout stage + compose 项目命名空间」级逻辑隔离，非物理隔离。
+  成本约束保留项：gray-initial 与 full 共享同一物理 ECS/集群；隔离强度为「账号 + rollout stage + compose 项目命名空间」级逻辑隔离，非物理隔离。
 
 # 远端唯一托管目标：取消远端 gamma 后，只有 prod-hosted 一个远端访问面。
 target: prod-hosted

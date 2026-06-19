@@ -49,6 +49,21 @@ void main() {
     expect(exception.runtimeFailure?.context.attributes.first.value, '503');
   });
 
+  test('CloudErrorMapper 兼容简化错误体里的 userMessage', () {
+    final exception = CloudErrorMapper.fromStatusCode(
+      404,
+      body: jsonEncode(<String, dynamic>{
+        'code': 'CONTENT.USER.post_not_found',
+        'userMessage': '内容不存在或已删除',
+      }),
+      requestPath: '/content/posts/deleted',
+    );
+
+    expect(exception.userMessage, '内容不存在或已删除');
+    expect(exception.code, 'CONTENT.USER.post_not_found');
+    expect(exception.runtimeFailure?.kind, RuntimeFailureKind.notFound);
+  });
+
   test('CloudErrorMapper maps local runtime exceptions', () {
     final timeout = CloudErrorMapper.runtimeFailureFromException(
       TimeoutException('slow'),

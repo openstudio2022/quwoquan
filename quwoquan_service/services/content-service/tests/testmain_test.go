@@ -106,11 +106,13 @@ func TestMain(m *testing.M) {
 	reportService := application.NewReportService(reportStore, eventSpy)
 	dailyMetricsStore := persistence.NewDailyMetricsStore(mongoDB, slog.Default())
 	authorImpactStore := persistence.NewAuthorImpactStore(mongoDB, slog.Default())
+	authorImpactEvidenceStore := persistence.NewAuthorImpactEvidenceStore(mongoDB, slog.Default())
 	behaviorService := application.NewBehaviorService(
 		hotPath,
 		postStore,
 		application.WithDailyMetricsStore(dailyMetricsStore),
 		application.WithAuthorImpactStore(authorImpactStore),
+		application.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
 	)
 	baseHandler := contenhttp.NewContentHandler(
 		feedService,
@@ -118,6 +120,7 @@ func TestMain(m *testing.M) {
 		reportService,
 		behaviorService,
 		contenhttp.WithAuthorImpactStore(authorImpactStore),
+		contenhttp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
 	).Routes()
 	testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")) == "" {

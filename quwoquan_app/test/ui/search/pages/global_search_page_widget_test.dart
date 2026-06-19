@@ -103,16 +103,52 @@ void main() {
     await const MockUserProfileRepository().clearRecentSearches();
   });
 
-  testWidgets('默认页固定 Tab 与结果页一致且空历史隐藏最近搜索', (tester) async {
+  testWidgets('默认页无结果 Tab 且展示搜索入口模块', (tester) async {
+    tester.view.physicalSize = const Size(390, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('小趣'), findsOneWidget);
-    expect(find.text('全部'), findsWidgets);
-    expect(find.text('交集'), findsOneWidget);
-    expect(find.text('图片'), findsOneWidget);
-    expect(find.text('视频'), findsOneWidget);
-    expect(find.text('长文'), findsOneWidget);
+    expect(find.text('小趣'), findsNothing);
+    expect(find.text('全部'), findsNothing);
+    expect(find.text('交集'), findsNothing);
+    expect(find.text('图片'), findsNothing);
+    expect(find.text('视频'), findsNothing);
+    expect(find.text('长文'), findsNothing);
+    expect(find.text('猜你想搜'), findsOneWidget);
+    expect(find.text('热门圈子'), findsOneWidget);
+    expect(find.text('热门地点'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('search_home_guess_refresh_button')),
+      findsOneWidget,
+    );
+    expect(find.text('毕业旅行'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('search_home_guess_refresh_button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('毕业旅行'), findsOneWidget);
+
+    await tester.tap(find.text('热门圈子'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('search_home_guess_refresh_button')),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('热门地点'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('search_home_guess_refresh_button')),
+      findsNothing,
+    );
     expect(find.byKey(TestKeys.searchContentSelectorButton), findsNothing);
     expect(find.byKey(TestKeys.globalSearchScopeRail), findsNothing);
     expect(find.text('搜索历史'), findsNothing);
@@ -151,18 +187,18 @@ void main() {
     expect(find.text('搜索历史'), findsOneWidget);
     expect(find.text('展开'), findsOneWidget);
     expect(find.byKey(TestKeys.searchHistoryExpandButton), findsOneWidget);
-    expect(find.text('环岛路'), findsNothing);
+    expect(find.text('黄山'), findsNothing);
 
     await tester.tap(find.byKey(TestKeys.searchHistoryExpandButton));
     await tester.pumpAndSettle();
 
-    expect(find.text('环岛路'), findsOneWidget);
+    expect(find.text('黄山'), findsOneWidget);
     expect(find.text('收起'), findsOneWidget);
 
     await tester.tap(find.byKey(TestKeys.searchHistoryExpandButton));
     await tester.pumpAndSettle();
 
-    expect(find.text('环岛路'), findsNothing);
+    expect(find.text('黄山'), findsNothing);
   });
 
   testWidgets('搜索历史删除态支持单条删除与全部删除', (tester) async {
@@ -207,7 +243,7 @@ void main() {
     expect(find.text('搜索历史'), findsNothing);
   });
 
-  testWidgets('输入关键词后展示实时联想联系人与推荐搜索', (tester) async {
+  testWidgets('输入关键词后展示本地匹配与匹配搜索词', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
@@ -218,7 +254,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 220));
     await tester.pumpAndSettle();
 
-    expect(find.text('推荐搜索'), findsOneWidget);
+    expect(find.text('匹配搜索词'), findsOneWidget);
     expect(find.text('联系人'), findsWidgets);
 
     final liXiangButton = find.ancestor(
@@ -232,7 +268,7 @@ void main() {
     expect(find.text('chat:conv_007'), findsOneWidget);
   });
 
-  testWidgets('聊天记录可展开并直达对应对话页', (tester) async {
+  testWidgets('聊天记录最多三条且可直达对应对话页', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
@@ -243,18 +279,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 220));
     await tester.pumpAndSettle();
 
-    expect(find.text('更多聊天记录'), findsOneWidget);
-
-    final moreChatRecordsButton = find.ancestor(
-      of: find.text('更多聊天记录'),
-      matching: find.byType(CupertinoButton),
-    );
-    await tester.ensureVisible(moreChatRecordsButton);
-    await tester.pumpAndSettle();
-    await tester.tap(moreChatRecordsButton);
-    await tester.pumpAndSettle();
-
     expect(find.text('3人测试群'), findsWidgets);
+    expect(find.text('更多聊天记录'), findsNothing);
 
     await tester.ensureVisible(find.text('3人测试群').first);
     await tester.pumpAndSettle();

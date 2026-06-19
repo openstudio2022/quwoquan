@@ -1,51 +1,5 @@
 part of 'circle_repository.dart';
 
-/// Mock 详情 wire：在 [CircleDto.toMap] 上补齐 UI/Mock 仍消费的别名键与主圈视角字段。
-Map<String, dynamic> _mockCircleDetailWireFromDto(CircleDto d) {
-  final w = Map<String, dynamic>.from(d.toMap());
-  final contractRow = CircleContractSeedHelpers.circleRowById(d.id);
-  w['categoryId'] = d.category;
-  final cover = (d.coverUrl ?? '').trim();
-  if (cover.isNotEmpty) {
-    w['cover'] = cover;
-    w['avatar'] = cover;
-    w['avatarUrl'] = cover;
-  }
-  if (d.description != null && d.description!.isNotEmpty) {
-    w['desc'] = d.description;
-  }
-  if (contractRow != null) {
-    final role = (contractRow['role'] ?? '').toString().trim();
-    final joinStatus = (contractRow['joinStatus'] ?? '').toString().trim();
-    if (role.isNotEmpty) {
-      w['role'] = role;
-    }
-    if (joinStatus.isNotEmpty) {
-      w['joinStatus'] = joinStatus;
-    }
-    if (contractRow['isFollowed'] is bool) {
-      w['isFollowed'] = contractRow['isFollowed'] as bool;
-    }
-  } else {
-    w.putIfAbsent('role', () => 'member');
-    w.putIfAbsent('joinStatus', () => 'none');
-    w.putIfAbsent('isFollowed', () => false);
-  }
-  final sectionConfig = w['sectionConfig'];
-  if (sectionConfig is! List || sectionConfig.isEmpty) {
-    w['sectionConfig'] = const <Map<String, dynamic>>[
-      {'sectionType': 'works', 'visible': true, 'order': 0},
-      {'sectionType': 'interaction', 'visible': true, 'order': 1},
-      {'sectionType': 'chat', 'visible': true, 'order': 2},
-      {'sectionType': 'storage', 'visible': true, 'order': 3},
-    ];
-  }
-  w.putIfAbsent('storageUsedBytes', () => 0);
-  w.putIfAbsent('storageQuotaBytes', () => 1073741824);
-  w.putIfAbsent('autoSyncChat', () => true);
-  return w;
-}
-
 // ---------------------------------------------------------------------------
 // Mock
 // ---------------------------------------------------------------------------
@@ -349,7 +303,12 @@ class MockCircleRepository implements CircleRepository {
   Future<CircleDetailPayload> getCircle(String circleId) async {
     final match = _findCircle(circleId);
     if (match == null) {
-      return Future.error(Exception('Circle $circleId not found'));
+      throw CloudErrorMapper.fromStatusCode(
+        404,
+        body:
+            '{"code":"${CircleErrorCode.circleNotFound.code}","userMessage":"${CircleErrorMessages.zh[CircleErrorCode.circleNotFound]}"}',
+        requestPath: CircleApiMetadata.getCirclePath(circleId: circleId),
+      );
     }
     return CircleDetailPayload.fromWire(_mockCircleDetailWireFromDto(match));
   }
@@ -783,6 +742,33 @@ class MockCircleRepository implements CircleRepository {
     });
   }
 
+  /// 圈子影响样本视觉（统一交互子契约 · 传播节点）；asset 路径，非外链。
+  static final List<IntersectionVisual>
+  _circleImpactSampleVisuals = <IntersectionVisual>[
+    IntersectionVisual(
+      assetKind: 'avatar',
+      imageUrl:
+          'media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png',
+      displayName: '林清越',
+      target: IntersectionTarget(
+        objectId: 'fixture_user_lin',
+        objectKind: 'person',
+        routeId: 'userProfile',
+      ),
+    ),
+    IntersectionVisual(
+      assetKind: 'avatar',
+      imageUrl:
+          'media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png',
+      displayName: '周屿',
+      target: IntersectionTarget(
+        objectId: 'fixture_user_zhou',
+        objectKind: 'person',
+        routeId: 'userProfile',
+      ),
+    ),
+  ];
+
   @override
   Future<CircleImpactSummary> getCircleImpact(String circleId) async {
     final stats = (await getCircleStats(circleId)).raw;
@@ -806,7 +792,22 @@ class MockCircleRepository implements CircleRepository {
             intersectionDimension: 'relationship',
             source: 'circle_members',
             count: memberCount,
-            displayText: '$memberCount人在这里建立了新连接',
+            primaryText: '$memberCount人在这里建立了新连接',
+            subtitleText: '你认识的人也在这里',
+            iconKey: 'connect',
+            impactId: 'circle_${circleId}_relationship',
+            primarySpans: <IntersectionTextSpan>[
+              IntersectionTextSpan(text: '$memberCount', role: 'count'),
+              IntersectionTextSpan(text: '人在这里建立了新连接', role: 'plain'),
+            ],
+            sampleVisuals: _circleImpactSampleVisuals,
+            propagationPath: IntersectionPropagationPath(
+              pathKind: 'personToPerson',
+              hopCount: 1,
+              secondarySpreadCount: memberCount > 6 ? 4 : 1,
+              summaryText: '你认识的人也在这里',
+              nodes: _circleImpactSampleVisuals,
+            ),
           ),
         if (postCount > 0)
           CircleImpactItem(
@@ -815,7 +816,13 @@ class MockCircleRepository implements CircleRepository {
             intersectionDimension: 'content',
             source: 'circle_posts',
             count: postCount,
-            displayText: '$postCount个讨论正在这里发生',
+            primaryText: '$postCount个讨论正在这里发生',
+            iconKey: 'discussion',
+            impactId: 'circle_${circleId}_community',
+            primarySpans: <IntersectionTextSpan>[
+              IntersectionTextSpan(text: '$postCount', role: 'count'),
+              IntersectionTextSpan(text: '个讨论正在这里发生', role: 'plain'),
+            ],
           ),
         if (weeklyActive > 0)
           CircleImpactItem(
@@ -824,7 +831,13 @@ class MockCircleRepository implements CircleRepository {
             intersectionDimension: 'interest',
             source: 'circle_weekly_active',
             count: weeklyActive,
-            displayText: '$weeklyActive人最近参与了这里',
+            primaryText: '$weeklyActive人最近参与了这里',
+            iconKey: 'people',
+            impactId: 'circle_${circleId}_spread',
+            primarySpans: <IntersectionTextSpan>[
+              IntersectionTextSpan(text: '$weeklyActive', role: 'count'),
+              IntersectionTextSpan(text: '人最近参与了这里', role: 'plain'),
+            ],
           ),
       ],
     );
@@ -953,7 +966,7 @@ class MockCircleRepository implements CircleRepository {
         id: 'rec-city',
         name: '城市探索',
         coverUrl:
-            'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=400',
+            'media/image/s/mock/seed/p_1500530855697-b586d89ba3ee/v1/image.jpg',
         ownerId: 'embedded_owner',
         memberCount: 890,
         postCount: 126,
@@ -964,7 +977,7 @@ class MockCircleRepository implements CircleRepository {
         id: 'rec-run',
         name: '跑步日记',
         coverUrl:
-            'https://images.unsplash.com/photo-1486218119243-13883505764c?q=80&w=400',
+            'media/image/s/mock/seed/p_1486218119243-13883505764c/v1/image.jpg',
         ownerId: 'embedded_owner',
         memberCount: 312,
         postCount: 58,

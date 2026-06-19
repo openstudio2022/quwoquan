@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/object_page/evidence_group.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
 /// 对象页统一交集卡（V4 · 纵向交集列表）。
 ///
@@ -211,8 +212,8 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
     final label = expanded
         ? (canOpenAll
               ? widget.moreLabel!
-              : UITextConstants.intersectionCollapse)
-        : UITextConstants.intersectionExpandMore;
+              : DiscoveryFeedText.intersectionCollapse)
+        : DiscoveryFeedText.intersectionExpandMore;
     final opensAll = expanded && canOpenAll;
     return Padding(
       padding: EdgeInsets.only(top: AppSpacing.intraGroupSm),
@@ -431,7 +432,7 @@ class _RecommendBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
       ),
       child: Text(
-        UITextConstants.intersectionAffinityLabel,
+        DiscoveryFeedText.intersectionAffinityLabel,
         style: TextStyle(
           fontSize: AppTypography.iosCaption2,
           fontWeight: AppTypography.medium,

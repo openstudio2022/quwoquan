@@ -13,7 +13,7 @@ const baselinePolicyYAML = `version: 1
 # 推荐评分策略元数据（单一真相源 / metadata-first）。
 #
 # 本文件取代 runtime/recommendation 中此前手写的硬编码：
-#   - engine.go DefaultWeights（12 维评分权重）
+#   - engine.go DefaultWeights（13 维评分权重）
 #   - experiments.go WeightPresets（control/engagement_heavy/freshness_heavy/explore_heavy 预设）
 #   - scorer.go 二级系数（popularity 子权重、freshness 半衰期、explore_fraction、各混合因子）
 # 现统一由 tools/codegen_rec_policy 生成强类型 baseline（generated/recpolicy/rec_policy.gen.go），
@@ -30,7 +30,7 @@ policyVersion: v1
 defaultPreset: control
 
 # ---------------------------------------------------------------------------
-# 12 维评分权重预设（对齐 ScoringWeights）。AB 实验分桶名 = 预设名。
+# 13 维评分权重预设（对齐 ScoringWeights）。AB 实验分桶名 = 预设名。
 # ---------------------------------------------------------------------------
 weightPresets:
   control:
@@ -46,6 +46,7 @@ weightPresets:
     topicMatch: 1.0
     audienceMatch: 0.8
     formatMatch: 0.6
+    searchIntent: 0.9
   engagement_heavy:
     tagRelevance: 2.0
     authorAffinity: 1.0
@@ -59,6 +60,7 @@ weightPresets:
     topicMatch: 1.2
     audienceMatch: 1.0
     formatMatch: 0.8
+    searchIntent: 1.2
   freshness_heavy:
     tagRelevance: 2.5
     authorAffinity: 1.5
@@ -72,6 +74,7 @@ weightPresets:
     topicMatch: 0.8
     audienceMatch: 0.6
     formatMatch: 0.4
+    searchIntent: 0.8
   explore_heavy:
     tagRelevance: 2.0
     authorAffinity: 1.0
@@ -85,6 +88,35 @@ weightPresets:
     topicMatch: 0.6
     audienceMatch: 0.5
     formatMatch: 0.4
+    searchIntent: 0.6
+  # 精品预设：弱化纯热度/病毒传播，强调完成/停留（dwellBonus）与相关性/作者可信度，
+  # 用于实体/人物主页记录流等「深度消费」场景。质量分由 finish/dwell 行为驱动回流。
+  premium:
+    tagRelevance: 3.5
+    authorAffinity: 2.0
+    popularity: 1.0
+    freshness: 1.2
+    socialPrior: 1.2
+    exploreBoost: 0.4
+    negativePenalty: 5.0
+    dwellBonus: 2.5
+    entityAffinity: 1.5
+    topicMatch: 1.5
+    audienceMatch: 1.0
+    formatMatch: 0.8
+    searchIntent: 1.0
+
+# ---------------------------------------------------------------------------
+# 场景路由：feed 场景（FeedType）→ 基础预设。无实验分桶时按场景选基础预设；
+# 实验分桶仍优先于场景基础，segment presetOverride / weightDeltas 仍在解析时叠加。
+# 未列场景回落 defaultPreset，故主发现流（discovery）保持 control 行为不变。
+# ---------------------------------------------------------------------------
+scenarioRouting:
+  homepage: premium        # 实体/人物主页记录流：深度消费 → 精品
+  similar: premium         # 相似/沉浸消费：相关性 + 完成
+  circle: engagement_heavy # 圈子记录流：成员互动密度
+  topic: engagement_heavy  # 话题流：互动
+  search: engagement_heavy # 搜索发现区：意图明确，偏互动转化
 
 # ---------------------------------------------------------------------------
 # RuleScorer / Engine 二级系数（此前散落在 scorer.go / engine.go 的隐藏常量）。
@@ -107,11 +139,69 @@ scorer:
   engagementBonusFactor: 0.5
   enerBonusFactor: 0.5
   entityCategoryFactor: 0.4
+  # 搜索在线意图融合系数：recent query / related term 命中 candidate tags/title 时
+  # 形成 searchIntentBoost；FeatureStore 24h 新鲜度剔除，避免长期污染。
+  searchIntentFactor: 0.4
   negativePenaltyFactor: 0.1
+  # 交集信号融合系数（单点注入）：社交/交集来源候选按 viewer 揭示的同 kind 参与度
+  # 给 socialPrior 一个有界提升。交集事实信号权重高于纯热度，但不覆盖确证事实。
+  intersectionSignalFactor: 0.3
   # rerank 多样性 / 冷启约束
   maxAuthorPerFeed: 3
   coldStartAgeHours: 24.0
   coldStartViewThreshold: 100
+  # rerank 多样性策略：greedy（默认，类型/作者/连续 top-tag 去重 + 探索/冷启注入）
+  # 或 mmr（Maximal Marginal Relevance：相关性与新颖性按 diversityLambda 平衡，
+  # 相似度以 topic/author/entity 重合度度量）。diversityLambda ∈ [0,1]，越大越偏相关性。
+  diversityStrategy: greedy
+  diversityLambda: 0.7
+
+# ---------------------------------------------------------------------------
+# 曝光治理：端侧可见性阈值、上报抗冲击、跨会话疲劳与 day-bucket 容量。
+# 消费方：App BehaviorReporter、content-service FeedbackIngestor、runtime/recommendation
+# ExposureMemory/ExposureFilter。参数只来自本 recpolicy，不在端云代码硬编码。
+# ---------------------------------------------------------------------------
+exposureGovernance:
+  visibility:
+    impressionAreaThreshold: 0.5
+    impressionMinDwellMs: 1000
+    dwellMinReportMs: 1000
+  sampling:
+    visibleSampleRate: 0.1
+    impressionSampleRate: 1.0
+    dwellSampleRate: 1.0
+  reporting:
+    behaviorBatchMaxSize: 50
+    behaviorFlushIntervalMs: 5000
+    ingestRateLimitPerUserPerMinute: 120
+    ingestGlobalRateLimitPerSecond: 5000
+    ingestInflightLimit: 256
+    clientEventIdWindowMs: 86400000
+  memory:
+    servedTtlHours: 48
+    impressedTtlHours: 168
+    negativeTtlHours: 168
+    fatigueHalfLifeHours: 72
+    dayBucketCardinalityBudget: 10000
+    smembersFallbackAllowed: false
+  dynamicBudget:
+    enabled: false
+    trialMinServed: 100
+    promotionCtrThreshold: 0.05
+    promotionCompletionThreshold: 0.4
+    retirementNegativeRateThreshold: 0.2
+  frequencyAndNearDup:
+    enabled: true
+    maxSameAuthorPerWindow: 2
+    maxSameTagPerWindow: 3
+    maxSameTopicPerWindow: 3
+    nearDupJaccardMax: 0.8
+    softFallbackMinFillPct: 80
+  collaborativeRecall:
+    enabled: false
+    maxI2ICandidates: 80
+    maxU2ICandidates: 80
+    quotaPct: 15
 
 # ---------------------------------------------------------------------------
 # AB 实验：bucket → preset / model。eligibleSegments 为空 = 全员；非空 = 仅命中
@@ -176,4 +266,86 @@ guardrails:
     minSamples: 2000
     window: 168h
     action: suggest_only
+
+# ---------------------------------------------------------------------------
+# 在线 AB 准入（单一真相源）。experiments 定义分桶，abAdmission 定义"何时一个实验
+# 结论可用于晋升/回滚"的统计门槛：每桶最小样本量、分桶偏斜上限、显著性水平、最小可
+# 检测效应；rollback 定义主指标相对 control 的回归阈值与是否自动回滚。
+# 校验由 recpolicy.validateABAdmission 承载；准入结果喂
+# recommendation_feed_ab_experiment_validity_total{result}，对齐 SLI ab_experiment_validity。
+# 默认零值（全 0/空）= 关闭准入门控（不强制每次部署声明实验统计量）。
+#   minSamplesPerBucket: 每个分桶进入显著性判定所需的最小样本量
+#   maxBucketSkewPct:    实际分桶占比与设计 weightPct 的最大允许偏差（SRM 守卫）
+#   significanceLevel:   显著性水平 alpha（双尾），(0,1)
+#   minDetectableEffect: 最小可检测相对效应（MDE），> 0
+#   primaryMetric:       主指标（与 guardrails/SLO 指标同名，如 ctr）
+#   rollback.regressionRatio: 挑战桶主指标 / control 低于该比例即回滚候选，(0,1]
+#   rollback.autoRollback:    true=自动回滚；false=仅建议（与 guardrail suggest_only 同治理姿态）
+abAdmission:
+  minSamplesPerBucket: 1000
+  maxBucketSkewPct: 5.0
+  significanceLevel: 0.05
+  minDetectableEffect: 0.02
+  primaryMetric: ctr
+  rollback:
+    regressionRatio: 0.95
+    autoRollback: false
+
+# ---------------------------------------------------------------------------
+# 交集模块策略（事实 + 概率分通道）：跨会话冷却、分维度保鲜 TTL、事实/概率混排。
+# 取代 content-service IntersectionService 中此前硬编码的 cooldownDays=14 /
+# maxCandidateWindow=20，统一为 metadata-first 配置。cooldown TTL 唯一真相源同时
+# 登记在 _shared/redis_keyspace.yaml: rec:icool。消费方：IntersectionService（冷却 /
+# 候选窗）+ 交集混排（事实优先、affinity 受控补充）+ 分维度保鲜判定。
+# ---------------------------------------------------------------------------
+intersection:
+  # 跨会话推荐冷却窗口天数：窗口内已曝光交集降权 / 抑制，避免反复打扰。
+  cooldownDays: 14
+  # 单次请求交集候选最大窗口：截断到该窗口再做稳定排序与 limit。
+  maxCandidateWindow: 20
+  # 分维度事实交集保鲜 TTL（天）：超过后需重算 / 降权，避免陈旧事实长期占位。
+  freshnessTtlDaysByDimension:
+    identity: 30
+    location: 14
+    content: 7
+    interest: 7
+    relationship: 30
+  # 事实 / 概率分通道混排：事实始终优先；affinity 仅作补充，权重与每面板数量受控。
+  mixing:
+    factWeight: 1.0
+    affinityWeight: 0.4
+    maxAffinityPerSurface: 3
+  # 架构基线 v2（§21.2/§21.3/§21.4 配置位，草案/未冻结；数值真算在云侧算法会话落地）。
+  # 本期只登记口径与安全默认；content-service 暂不消费这些键（YAML 多余键被忽略）。
+  graphWeights:
+    # edgeWeight = relationStrengthBase(valueTier) × interactionFrequency × recencyDecay
+    valueTierStrength: { T1: 1.0, T2: 0.75, T3: 0.5, T4: 0.3 }
+    recencyHalfLifeDaysDefault: 14
+    interactionFrequencyCap: 5.0
+  lifecycleWeights:
+    # 选择得分 lifecycleWeight(state)：new/reactivated 高 > strengthened > stable > weakened
+    new: 1.0
+    reactivated: 0.9
+    strengthened: 0.8
+    stable: 0.6
+    weakened: 0.3
+  propagation:
+    # 传播视图：只承载可证绝对计数与路径节点；禁 reach/conversion 比率下发。
+    maxHopCount: 2
+    maxPathNodesPerSurface: 3
+    secondarySpreadEnabled: false
+
+# ---------------------------------------------------------------------------
+# 运营干预（置顶 / 降权 / 屏蔽）配置真相源。metadata-first、热加载、可审计；
+# 不接 UI，运营改 YAML 即生效。每条干预命中即喂 recommendation_feed_ops_intervention_audit_total
+# （action × target_type），对齐 SLI ops_intervention_audit_coverage。
+#   action:     pin（置顶，按 weight 提分并前置） | demote（降权，score *= weight∈[0,1)） | block（移出 feed）
+#   targetType: content（contentId） | author（authorId） | tag（tagRef 命中）
+#   scenario:   限定 feed 场景（homepage/circle/search/...）；空=全场景
+#   expiresAt:  RFC3339 过期时间；空=长期有效；过期后自动失效（无需删除）
+# 优先级：block > pin > demote（同一候选命中多条时取更强动作）。
+# 默认空集 + enabled=false：主链路零开销 no-op，仅作预留接口与安全基线。
+opsIntervention:
+  enabled: false
+  interventions: []
 `

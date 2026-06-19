@@ -1,0 +1,434 @@
+# 搜索商用发布候选 diff 落盘清单（release-diff-scope）
+
+- 生成时间：2026-06-16 16:03
+- 工作树条目总数：389
+- git 策略：本轮 `verify_only`，**不由 agent 提交**；本清单供用户按桶分批提交。
+- 状态码：`??`=未跟踪，`M`=已修改，`D`=已删除。
+
+## 分桶提交建议
+
+| 桶 | 含义 | 提交策略 |
+|---|---|---|
+| SEARCH | 搜索发布必须提交（服务/契约/App/落地页/CR） | **本发布提交** |
+| SHARED | 搜索与并发会话共改的共享契约/路由/部署/backlog | **拆分提交**：仅提交搜索相关增量行，勿覆盖 intersection 行 |
+| INTERSECTION | 并发 intersection-unification 会话改动 | **不属于本发布**，由对应会话提交 |
+| DATA | 数据工程任务/脚本 | 与搜索无关，独立提交 |
+| OTHER | 其余跨域改动 | 评审归属后再定 |
+
+## SEARCH —— 搜索发布必须提交（72）
+
+- `[??]` deploy/service/search-service/
+- `[??]` quwoquan_app/lib/cloud/runtime/generated/search/search_api_metadata.g.dart
+- `[??]` quwoquan_app/lib/cloud/runtime/generated/search/search_request_page_ids.g.dart
+- `[??]` quwoquan_app/lib/core/services/remote_search_repository.dart
+- `[??]` quwoquan_app/lib/ui/search/pages/location_place_landing_page.dart
+- `[??]` quwoquan_app/test/ui/search/pages/location_place_landing_page_widget_test.dart
+- `[??]` quwoquan_service/contracts/metadata/search/
+- `[??]` quwoquan_service/runtime/search/es/assembly.go
+- `[??]` quwoquan_service/runtime/search/es/assembly_test.go
+- `[??]` quwoquan_service/runtime/search/es/http_client.go
+- `[??]` quwoquan_service/runtime/search/es/http_client_test.go
+- `[??]` quwoquan_service/runtime/search/es/index_schema.go
+- `[??]` quwoquan_service/runtime/search/query_first.go
+- `[??]` quwoquan_service/runtime/search/query_first_test.go
+- `[??]` quwoquan_service/runtime/search/retrieve_location_test.go
+- `[??]` quwoquan_service/runtime/search/retrieve_near_test.go
+- `[??]` quwoquan_service/services/circle-service/cmd/search-backfill/
+- `[??]` quwoquan_service/services/circle-service/internal/application/circle_search_projection.go
+- `[??]` quwoquan_service/services/circle-service/internal/infrastructure/searchindex/
+- `[??]` quwoquan_service/services/content-service/cmd/search-backfill/
+- `[??]` quwoquan_service/services/content-service/internal/application/place_search_projection.go
+- `[??]` quwoquan_service/services/content-service/internal/application/place_search_projection_test.go
+- `[??]` quwoquan_service/services/content-service/internal/infrastructure/placeindex/
+- `[??]` quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer.go
+- `[??]` quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
+- `[??]` quwoquan_service/services/content-service/internal/infrastructure/searchindex/
+- `[??]` quwoquan_service/services/entity-service/cmd/search-backfill/
+- `[??]` quwoquan_service/services/entity-service/internal/application/homepage_search_projection.go
+- `[??]` quwoquan_service/services/entity-service/internal/application/homepage_search_projection_test.go
+- `[??]` quwoquan_service/services/entity-service/internal/infrastructure/searchindex/
+- `[??]` quwoquan_service/services/search-service/
+- `[??]` quwoquan_service/services/user-service/cmd/search-backfill/
+- `[??]` quwoquan_service/services/user-service/internal/application/user_search_projection.go
+- `[??]` quwoquan_service/services/user-service/internal/infrastructure/searchindex/
+- `[??]` releases/config/search-service/
+- `[??]` specs/changelog/CR-20260615-037-search-dedicated-es-service-landing.yaml
+- `[??]` specs/changelog/CR-20260616-038-location-first-party-search-object.yaml
+- `[??]` specs/changelog/CR-20260616-039-location-place-landing-page.yaml
+- `[??]` specs/feature-tree/global-search-experience/cross-domain-search-journey/search-intersection-consumption/
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/content/post_search_item_view_dto.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/search/search_contract.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/search/search_registry.g.dart
+- `[M]` quwoquan_app/lib/core/models/search_models.dart
+- `[M]` quwoquan_app/lib/core/services/search_repository.dart
+- `[M]` quwoquan_app/lib/ui/search/models/search_result_tab_spec.dart
+- `[M]` quwoquan_app/lib/ui/search/pages/global_search_page.dart
+- `[M]` quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
+- `[M]` quwoquan_app/lib/ui/search/providers/search_coordinator.dart
+- `[M]` quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+- `[M]` quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+- `[M]` quwoquan_app/test/ui/search/search_repository_test.dart
+- `[M]` quwoquan_data/scripts/download/research_plan.py
+- `[M]` quwoquan_service/contracts/metadata/_shared/search_contract.yaml
+- `[M]` quwoquan_service/contracts/metadata/_shared/search_objects.yaml
+- `[M]` quwoquan_service/runtime/search/core.go
+- `[M]` quwoquan_service/runtime/search/es/indexer.go
+- `[M]` quwoquan_service/runtime/search/es/indexer_test.go
+- `[M]` quwoquan_service/runtime/search/es/query_builder.go
+- `[M]` quwoquan_service/runtime/search/es/query_builder_test.go
+- `[M]` quwoquan_service/runtime/search/retrieve.go
+- `[M]` quwoquan_service/runtime/search/retrieve_contract_test.go
+- `[M]` specs/feature-tree/global-search-experience/acceptance.yaml
+- `[M]` specs/feature-tree/global-search-experience/cross-domain-search-journey/acceptance.yaml
+- `[M]` specs/feature-tree/global-search-experience/cross-domain-search-journey/spec.md
+- `[M]` specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/acceptance.yaml
+- `[M]` specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md
+- `[M]` specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/acceptance.yaml
+- `[M]` specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md
+- `[M]` specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/acceptance.yaml
+- `[M]` specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md
+- `[M]` specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md
+- `[M]` specs/feature-tree/global-search-experience/spec.md
+
+## SHARED —— 共享契约/路由/部署（拆分提交）（21）
+
+- `[??]` docs/outstanding_risks_backlog.md
+- `[M]` agent_ops/deploy/stackctl.py
+- `[M]` deploy/local-gamma/Caddyfile
+- `[M]` deploy/monitoring/alerts/quwoquan_alerts.yaml
+- `[M]` deploy/shared/local_env_port_manifest.yaml
+- `[M]` deploy/shared/module_package_mapping.yaml
+- `[M]` deploy/shared/process_domain_mapping.yaml
+- `[M]` deploy/shared/process_domain_plane_mapping.yaml
+- `[M]` deploy/shared/reliable_task_module_catalog.yaml
+- `[M]` deploy/shared/workload_topology_inventory.yaml
+- `[M]` quwoquan_app/lib/app/navigation/app_router.dart
+- `[M]` quwoquan_app/lib/app/navigation/generated/app_route_paths.g.dart
+- `[M]` quwoquan_app/lib/app/navigation/generated/app_ui_surfaces.g.dart
+- `[M]` quwoquan_app/lib/core/constants/ui_text_constants.dart
+- `[M]` quwoquan_app/lib/core/providers/app_providers.dart
+- `[M]` quwoquan_app/lib/core/test_keys.dart
+- `[M]` quwoquan_service/contracts/metadata/_shared/app_routes.yaml
+- `[M]` quwoquan_service/contracts/metadata/_shared/redis_keyspace.yaml
+- `[M]` quwoquan_service/contracts/metadata/_shared/types.yaml
+- `[M]` quwoquan_service/contracts/metadata/_shared/ui_surfaces.yaml
+- `[M]` quwoquan_service/docker-compose.gamma-local.yaml
+
+## INTERSECTION —— 并发会话，勿动（49）
+
+- `[??]` docs/intersection-unification-plan.md
+- `[??]` quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
+- `[??]` quwoquan_service/runtime/recommendation/intersection_fusion_test.go
+- `[??]` quwoquan_service/services/content-service/internal/application/intersection_metrics.go
+- `[??]` quwoquan_service/services/content-service/internal/application/intersection_metrics_test.go
+- `[??]` quwoquan_service/services/content-service/internal/application/intersection_readpath_invariant_test.go
+- `[??]` quwoquan_service/services/content-service/internal/infrastructure/intersectionmetrics/
+- `[??]` quwoquan_service/services/content-service/internal/infrastructure/recommendation/intersection_feature_test.go
+- `[??]` quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source.go
+- `[??]` quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source_test.go
+- `[??]` quwoquan_service/services/content-service/internal/infrastructure/recommendation/viewer_object_intersection_store.go
+- `[??]` quwoquan_service/services/content-service/tests/viewer_object_intersection_store_contract_test.go
+- `[??]` specs/feature-tree/object-homepage-network/intersection-unified-experience/circle-homepage-intersection-redesign/
+- `[??]` specs/feature-tree/object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign/
+- `[??]` specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/
+- `[??]` specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/
+- `[??]` specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-sentence-unification/
+- `[??]` specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/
+- `[??]` specs/product/intersection-unification-dispatch-index.md
+- `[D]` quwoquan_app/lib/cloud/runtime/generated/entity/object_intersection.g.dart
+- `[D]` quwoquan_app/lib/cloud/runtime/generated/entity/object_intersection_evidence.g.dart
+- `[D]` quwoquan_app/lib/components/object_page/tag_intersection_mapper.dart
+- `[D]` quwoquan_app/test/components/object_page/tag_intersection_mapper_test.dart
+- `[D]` quwoquan_app/test/ui/user/widgets/my_intersection_inbox_card_test.dart
+- `[D]` quwoquan_service/contracts/metadata/entity/homepage/projections/object_intersection.yaml
+- `[D]` quwoquan_service/contracts/metadata/entity/homepage/projections/object_intersection_evidence.yaml
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/recommendation/intersection_reason.g.dart
+- `[M]` quwoquan_app/lib/cloud/services/content/intersection_repository.dart
+- `[M]` quwoquan_app/lib/components/object_page/intersection_entity.dart
+- `[M]` quwoquan_app/lib/ui/content/widgets/intersection_reason_chip.dart
+- `[M]` quwoquan_app/lib/ui/discovery/widgets/intersection_spotlight_module.dart
+- `[M]` quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart
+- `[M]` quwoquan_app/test/cloud/content/moment_post_intersection_reasons_test.dart
+- `[M]` quwoquan_app/test/cloud/recommendation/intersection_reason_test.dart
+- `[M]` quwoquan_app/test/components/object_page/object_intersection_card_test.dart
+- `[M]` quwoquan_app/test/ui/content/widgets/intersection_reason_chip_widget_test.dart
+- `[M]` quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
+- `[M]` quwoquan_app/test/ui/user/pages/my_intersection_inbox_page_test.dart
+- `[M]` quwoquan_app/test/ui/user/widgets/profile_intersection_card_test.dart
+- `[M]` quwoquan_data/scripts/_common/intersection_signal.py
+- `[M]` quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
+- `[M]` quwoquan_service/services/content-service/internal/adapters/http/intersection_handler.go
+- `[M]` quwoquan_service/services/content-service/internal/application/intersection_service.go
+- `[M]` quwoquan_service/services/content-service/internal/application/intersection_service_test.go
+- `[M]` specs/feature-tree/object-homepage-network/intersection-unified-experience/acceptance.yaml
+- `[M]` specs/feature-tree/object-homepage-network/intersection-unified-experience/design.md
+- `[M]` specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md
+- `[M]` specs/product/2026H1-positioning-refactor/wp-01-intersection-data-and-expression.md
+- `[M]` specs/product/intersection-definition-and-application.md
+
+## DATA —— 数据工程，独立（53）
+
+- `[??]` quwoquan_data/scripts/_common/creative_brief.py
+- `[??]` quwoquan_data/tasks/旅行/地域/四川省/景区/AI创作自治三景试跑/
+- `[??]` quwoquan_data/tasks/旅行/地域/四川省/景区/四川source-ready10放量前修复试跑/
+- `[??]` quwoquan_data/tasks/旅行/地域/四川省/景区/四川source-ready10端到端试跑/
+- `[??]` quwoquan_data/tests/produce/test_creative_autonomy_gate.py
+- `[M]` quwoquan_data/scripts/_common/batch_orchestration.py
+- `[M]` quwoquan_data/scripts/_common/content_object.py
+- `[M]` quwoquan_data/scripts/_common/content_plan.py
+- `[M]` quwoquan_data/scripts/_common/draft_io.py
+- `[M]` quwoquan_data/scripts/_common/entity_annotation.py
+- `[M]` quwoquan_data/scripts/_common/image_safety.py
+- `[M]` quwoquan_data/scripts/_common/image_variants.py
+- `[M]` quwoquan_data/scripts/_common/provenance.py
+- `[M]` quwoquan_data/scripts/_common/python_runtime.py
+- `[M]` quwoquan_data/scripts/_common/release_integrity.py
+- `[M]` quwoquan_data/scripts/_common/source_unit.py
+- `[M]` quwoquan_data/scripts/_common/writing_pack.py
+- `[M]` quwoquan_data/scripts/build/handler.py
+- `[M]` quwoquan_data/scripts/build/homepage.py
+- `[M]` quwoquan_data/scripts/download/fetch.py
+- `[M]` quwoquan_data/scripts/download/gate.py
+- `[M]` quwoquan_data/scripts/download/handler.py
+- `[M]` quwoquan_data/scripts/download/source_inputs.py
+- `[M]` quwoquan_data/scripts/media/gate.py
+- `[M]` quwoquan_data/scripts/produce/entity_workflow.py
+- `[M]` quwoquan_data/scripts/produce/gate.py
+- `[M]` quwoquan_data/scripts/produce/handler.py
+- `[M]` quwoquan_data/scripts/produce/materialize.py
+- `[M]` quwoquan_data/scripts/produce/route_workflow.py
+- `[M]` quwoquan_data/scripts/publish/gate.py
+- `[M]` quwoquan_data/scripts/quality/dirty_data.py
+- `[M]` quwoquan_data/scripts/task/handler.py
+- `[M]` quwoquan_data/scripts/task/run.py
+- `[M]` quwoquan_data/scripts/task/target_selection.py
+- `[M]` quwoquan_data/scripts/verify/scale_readiness.py
+- `[M]` quwoquan_data/scripts/verify/verify_content_quality.py
+- `[M]` quwoquan_data/scripts/verify/verify_quwoquan_data.sh
+- `[M]` quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+- `[M]` quwoquan_data/tests/bootstrap/test_sop_injection.py
+- `[M]` quwoquan_data/tests/common/test_content_plan_source_reject.py
+- `[M]` quwoquan_data/tests/common/test_entity_annotation.py
+- `[M]` quwoquan_data/tests/download/test_download_gate.py
+- `[M]` quwoquan_data/tests/download/test_download_images.py
+- `[M]` quwoquan_data/tests/download/test_source_plan_guidance.py
+- `[M]` quwoquan_data/tests/helpers/agent_draft_kit.py
+- `[M]` quwoquan_data/tests/produce/test_gallery_carrier.py
+- `[M]` quwoquan_data/tests/produce/test_post_dir_layout.py
+- `[M]` quwoquan_data/tests/produce/test_style_gates.py
+- `[M]` quwoquan_data/tests/task/test_target_selection.py
+- `[M]` quwoquan_data/tests/verify/test_release_integrity_gate.py
+- `[M]` quwoquan_data/tests/verify/test_scale_readiness.py
+- `[M]` quwoquan_data/tests/workflow/test_task_run_pipeline.py
+- `[M]` quwoquan_data/verticals/travel/sources/source_registry.yaml
+
+## OTHER —— 跨域，待归属（194）
+
+- `[??]` .cursor/rules/16-outstanding-risk-backlog.mdc
+- `[??]` quwoquan_app/lib/ui/content/widgets/record_post_card.dart
+- `[??]` quwoquan_app/test/core/trackers/
+- `[??]` quwoquan_service/runtime/impact/
+- `[??]` quwoquan_service/runtime/recommendation/rerank_mmr_test.go
+- `[??]` quwoquan_service/runtime/recommendation/ucb_explore_test.go
+- `[??]` quwoquan_service/runtime/recpolicy/scenario_routing_test.go
+- `[??]` quwoquan_service/services/circle-service/internal/infrastructure/messaging/
+- `[??]` quwoquan_service/services/content-service/configs/observability/
+- `[M]` .github/workflows/CI_CD_SECRETS.md
+- `[M]` AGENTS.md
+- `[M]` agent_ops/deploy/print_local_port_profile.py
+- `[M]` agent_ops/tests/test_prod_plane_access_isolation.py
+- `[M]` artifacts/local-gamma/discovered_devices.json
+- `[M]` artifacts/local-gamma/t3_report.json
+- `[M]` artifacts/local-gamma/t4_report.json
+- `[M]` deploy/service/seed-box/seed_box_entrypoint.py
+- `[M]` deploy/shared/environment_matrix.md
+- `[M]` deploy/shared/prod_plane_access_isolation.yaml
+- `[M]` docs/agent_context_contract.md
+- `[M]` docs/codex_workflow.md
+- `[M]` quwoquan_app/lib/cloud/content/generated/content_behaviors.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/auth/auth_policy.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/circle/circle_dto.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/circle/circle_impact_item.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/circle/circle_ui_config.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/content/article_post_dto.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/content/author_impact_item.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/content/photo_post_dto.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/content/video_post_dto.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/entity/homepage_content_preview.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/entity/homepage_models.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/entity/homepage_ui_config.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/entity/object_page_bundle.g.dart
+- `[M]` quwoquan_app/lib/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart
+- `[M]` quwoquan_app/lib/cloud/services/behavior/behavior_repository.dart
+- `[M]` quwoquan_app/lib/cloud/services/circle/circle_repository_mock.dart
+- `[M]` quwoquan_app/lib/cloud/services/circle/circle_repository_remote.dart
+- `[M]` quwoquan_app/lib/cloud/services/entity/entity_object_page_bundle_mock.dart
+- `[M]` quwoquan_app/lib/cloud/services/entity/entity_repository.dart
+- `[M]` quwoquan_app/lib/cloud/services/entity/mock/homepage_mock_data.dart
+- `[M]` quwoquan_app/lib/cloud/services/user/profile_homepage_models.dart
+- `[M]` quwoquan_app/lib/cloud/services/user/user_profile_contract_seed_helpers.dart
+- `[M]` quwoquan_app/lib/components/navigation/secondary_capsule_tab_bar.dart
+- `[M]` quwoquan_app/lib/components/object_page/evidence_group.dart
+- `[M]` quwoquan_app/lib/components/object_page/object_page_sections.dart
+- `[M]` quwoquan_app/lib/components/post/post_preview_card.dart
+- `[M]` quwoquan_app/lib/core/auth/auth_session.dart
+- `[M]` quwoquan_app/lib/core/constants/settings_semantic_constants.dart
+- `[M]` quwoquan_app/lib/core/constants/ui_text_constants_content_labels.dart
+- `[M]` quwoquan_app/lib/core/design_system/icons/app_custom_icons.dart
+- `[M]` quwoquan_app/lib/core/services/app_content_repository.dart
+- `[M]` quwoquan_app/lib/core/services/retrieve_request.dart
+- `[M]` quwoquan_app/lib/core/trackers/content_behavior_tracker.dart
+- `[M]` quwoquan_app/lib/ui/chat/pages/chat_page.dart
+- `[M]` quwoquan_app/lib/ui/chat/providers/message_home_rows_provider.dart
+- `[M]` quwoquan_app/lib/ui/circle/widgets/circle_header.dart
+- `[M]` quwoquan_app/lib/ui/circle/widgets/circle_shell.dart
+- `[M]` quwoquan_app/lib/ui/circle/widgets/circle_shell_builders.dart
+- `[M]` quwoquan_app/lib/ui/circle/widgets/section_creations.dart
+- `[M]` quwoquan_app/lib/ui/content/entry/widgets/create_action_sheet.dart
+- `[M]` quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer_controls.dart
+- `[M]` quwoquan_app/lib/ui/entity/pages/homepage_introduction_page.dart
+- `[M]` quwoquan_app/lib/ui/entity/widgets/homepage_detail_shell.dart
+- `[M]` quwoquan_app/lib/ui/entity/widgets/homepage_detail_shell_builders.dart
+- `[M]` quwoquan_app/lib/ui/entity/widgets/homepage_detail_shell_components2.dart
+- `[M]` quwoquan_app/lib/ui/user/pages/login_page.dart
+- `[M]` quwoquan_app/lib/ui/user/widgets/author_impact_card.dart
+- `[M]` quwoquan_app/lib/ui/user/widgets/profile_header.dart
+- `[M]` quwoquan_app/lib/ui/user/widgets/profile_shell.dart
+- `[M]` quwoquan_app/lib/ui/user/widgets/profile_shell_builders.dart
+- `[M]` quwoquan_app/lib/ui/user/widgets/profile_stats_row.dart
+- `[M]` quwoquan_app/lib/ui/user/widgets/profile_works_tab.dart
+- `[M]` quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
+- `[M]` quwoquan_app/scripts/runtime/verify_retired_terms_zero.py
+- `[M]` quwoquan_app/test/cloud/entity/contract/homepage_repository_contract_test.dart
+- `[M]` quwoquan_app/test/ui/chat/providers/message_home_rows_provider_test.dart
+- `[M]` quwoquan_app/test/ui/chat/widgets/chat_page_widget_test.dart
+- `[M]` quwoquan_app/test/ui/circle/circle_content_identity_widget_test.dart
+- `[M]` quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
+- `[M]` quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+- `[M]` quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart
+- `[M]` quwoquan_app/test/ui/content/entry/create_entry_information_architecture_widget_test.dart
+- `[M]` quwoquan_app/test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart
+- `[M]` quwoquan_app/test/ui/content/models/content_surface_view_mapper_test.dart
+- `[M]` quwoquan_app/test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+- `[M]` quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+- `[M]` quwoquan_app/test/ui/user/author_impact_card_test.dart
+- `[M]` quwoquan_app/test/ui/user/login_page_widget_test.dart
+- `[M]` quwoquan_app/test/ui/user/widgets/profile_creations_tab_test.dart
+- `[M]` quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
+- `[M]` quwoquan_app/test/ui/user/widgets/profile_stats_row_test.dart
+- `[M]` quwoquan_service/.dockerignore
+- `[M]` quwoquan_service/codegen_app_metadata
+- `[M]` quwoquan_service/contracts/metadata/content/post/behaviors.yaml
+- `[M]` quwoquan_service/contracts/metadata/content/post/fields.yaml
+- `[M]` quwoquan_service/contracts/metadata/content/post/projections/article_post.yaml
+- `[M]` quwoquan_service/contracts/metadata/content/post/projections/author_impact_item.yaml
+- `[M]` quwoquan_service/contracts/metadata/content/post/projections/author_impact_summary.yaml
+- `[M]` quwoquan_service/contracts/metadata/content/post/projections/photo_post.yaml
+- `[M]` quwoquan_service/contracts/metadata/content/post/projections/video_post.yaml
+- `[M]` quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.gamma-curated.json
+- `[M]` quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json
+- `[M]` quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.lite.json
+- `[M]` quwoquan_service/contracts/metadata/entity/homepage/fields.yaml
+- `[M]` quwoquan_service/contracts/metadata/entity/homepage/projections/homepage_content_preview.yaml
+- `[M]` quwoquan_service/contracts/metadata/entity/homepage/projections/object_page_bundle.yaml
+- `[M]` quwoquan_service/contracts/metadata/entity/homepage/ui_config.yaml
+- `[M]` quwoquan_service/contracts/metadata/entity/test_fixtures/scenarios/entity_scenarios.json
+- `[M]` quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+- `[M]` quwoquan_service/contracts/metadata/recommendation/rec_model/projections/recommend_feature.yaml
+- `[M]` quwoquan_service/contracts/metadata/social/circle/fields.yaml
+- `[M]` quwoquan_service/contracts/metadata/social/circle/projections/circle_impact_item.yaml
+- `[M]` quwoquan_service/contracts/metadata/social/circle/projections/circle_impact_summary.yaml
+- `[M]` quwoquan_service/contracts/metadata/social/circle/ui_config.yaml
+- `[M]` quwoquan_service/contracts/metadata/user/follow_edge/entity.yaml
+- `[M]` quwoquan_service/contracts/metadata/user/follow_edge/fields.yaml
+- `[M]` quwoquan_service/contracts/metadata/user/test_fixtures/scenarios/user_scenarios.gamma-curated.json
+- `[M]` quwoquan_service/contracts/metadata/user/test_fixtures/scenarios/user_scenarios.json
+- `[M]` quwoquan_service/contracts/metadata/user/test_fixtures/scenarios/user_scenarios.lite.json
+- `[M]` quwoquan_service/contracts/metadata/user/user_profile/fields.yaml
+- `[M]` quwoquan_service/contracts/metadata/user/user_profile/projections/profile_social_relation_row_wire.yaml
+- `[M]` quwoquan_service/contracts/metadata/user/user_profile/projections/sub_account_profile_wire.yaml
+- `[M]` quwoquan_service/contracts/metadata/user/user_profile/projections/user_profile_stats_wire.yaml
+- `[M]` quwoquan_service/runtime/errors/errors.go
+- `[M]` quwoquan_service/runtime/recommendation/engine.go
+- `[M]` quwoquan_service/runtime/recommendation/engine_test.go
+- `[M]` quwoquan_service/runtime/recommendation/feature.go
+- `[M]` quwoquan_service/runtime/recommendation/scorer.go
+- `[M]` quwoquan_service/runtime/recpolicy/policy.go
+- `[M]` quwoquan_service/runtime/recpolicy/rec_policy_baseline.gen.go
+- `[M]` quwoquan_service/runtime/redis/default_prefix_routes.g.go
+- `[M]` quwoquan_service/scripts/ml/feature_registry.yaml
+- `[M]` quwoquan_service/services/circle-service/cmd/api/main.go
+- `[M]` quwoquan_service/services/circle-service/configs/alpha/config.yaml
+- `[M]` quwoquan_service/services/circle-service/configs/beta/config.yaml
+- `[M]` quwoquan_service/services/circle-service/configs/default/config.yaml
+- `[M]` quwoquan_service/services/circle-service/configs/gamma/config.yaml
+- `[M]` quwoquan_service/services/circle-service/configs/prod/config.yaml
+- `[M]` quwoquan_service/services/circle-service/internal/application/circle_impact_service_test.go
+- `[M]` quwoquan_service/services/circle-service/internal/application/circle_service.go
+- `[M]` quwoquan_service/services/circle-service/internal/domain/circle/model/circle.go
+- `[M]` quwoquan_service/services/circle-service/internal/infrastructure/cache/circle_cache.go
+- `[M]` quwoquan_service/services/circle-service/internal/infrastructure/persistence/mongo_circle_store.go
+- `[M]` quwoquan_service/services/circle-service/internal/infrastructure/persistence/mongo_feed_store.go
+- `[M]` quwoquan_service/services/circle-service/internal/infrastructure/persistence/mongo_member_store.go
+- `[M]` quwoquan_service/services/circle-service/internal/infrastructure/persistence/store_iface.go
+- `[M]` quwoquan_service/services/circle-service/tests/circle_section_contract_test.go
+- `[M]` quwoquan_service/services/content-service/cmd/api/main.go
+- `[M]` quwoquan_service/services/content-service/configs/alpha/config.yaml
+- `[M]` quwoquan_service/services/content-service/configs/beta/config.yaml
+- `[M]` quwoquan_service/services/content-service/configs/config.yaml
+- `[M]` quwoquan_service/services/content-service/configs/default/config.yaml
+- `[M]` quwoquan_service/services/content-service/configs/gamma/config.yaml
+- `[M]` quwoquan_service/services/content-service/configs/prod/config.yaml
+- `[M]` quwoquan_service/services/content-service/internal/application/author_impact_language.go
+- `[M]` quwoquan_service/services/content-service/internal/application/behavior_service.go
+- `[M]` quwoquan_service/services/content-service/internal/application/post_retrieve.go
+- `[M]` quwoquan_service/services/content-service/internal/application/post_retrieve_test.go
+- `[M]` quwoquan_service/services/content-service/internal/application/post_service.go
+- `[M]` quwoquan_service/services/content-service/internal/domain/post/model/post.go
+- `[M]` quwoquan_service/services/content-service/internal/infrastructure/persistence/author_impact_store.go
+- `[M]` quwoquan_service/services/content-service/internal/infrastructure/recommendation/interest_profile_test.go
+- `[M]` quwoquan_service/services/content-service/internal/infrastructure/recommendation/recommend_feature.go
+- `[M]` quwoquan_service/services/content-service/tests/post_event_contract_test.go
+- `[M]` quwoquan_service/services/entity-service/cmd/api/main.go
+- `[M]` quwoquan_service/services/entity-service/configs/alpha/config.yaml
+- `[M]` quwoquan_service/services/entity-service/configs/beta/config.yaml
+- `[M]` quwoquan_service/services/entity-service/configs/default/config.yaml
+- `[M]` quwoquan_service/services/entity-service/configs/gamma/config.yaml
+- `[M]` quwoquan_service/services/entity-service/configs/prod/config.yaml
+- `[M]` quwoquan_service/services/entity-service/internal/application/homepage_service.go
+- `[M]` quwoquan_service/services/user-service/cmd/api/main.go
+- `[M]` quwoquan_service/services/user-service/configs/alpha/config.yaml
+- `[M]` quwoquan_service/services/user-service/configs/beta/config.yaml
+- `[M]` quwoquan_service/services/user-service/configs/default/config.yaml
+- `[M]` quwoquan_service/services/user-service/configs/gamma/config.yaml
+- `[M]` quwoquan_service/services/user-service/configs/prod/config.yaml
+- `[M]` quwoquan_service/services/user-service/internal/infrastructure/persistence/pg_profile_store_ext.go
+- `[M]` quwoquan_service/services/user-service/tests/auth_contract_test.go
+- `[M]` quwoquan_service/tools/codegen_app_metadata/content_wire_dtos_codegen.go
+- `[M]` quwoquan_service/tools/codegen_app_metadata/main.go
+- `[M]` quwoquan_service/tools/codegen_app_metadata/ui_config_entity_circle.go
+- `[M]` specs/00_GLOBAL_TERMINOLOGY.md
+- `[M]` specs/00_PRODUCT_CONCEPT_SYSTEM.md
+- `[M]` specs/feature-tree/discovery-content/feed-orchestration-recommendation/personalized-ranking--ranking-signal-fusion/spec.md
+- `[M]` specs/feature-tree/journey_scenario_registry.yaml
+- `[M]` specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+- `[M]` specs/feature-tree/tree_index.yaml
+- `[M]` specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry/acceptance.yaml
+- `[M]` specs/gates/file_line_budget_allowlist.yaml
+- `[M]` specs/gates/metadata_driven_ui_gap_inventory.yaml
+- `[M]` specs/gates/repository_interface_method_budget_allowlist.yaml
+- `[M]` specs/product/2026H1-positioning-refactor/00-overview.md
+
+## 干净检出复现要点
+
+以下为搜索发布在干净检出中必须存在的关键文件（缺失即 CI 不可复现）：
+
+- quwoquan_service/services/search-service/go.mod
+- quwoquan_service/services/search-service/go.sum
+- quwoquan_service/contracts/metadata/search/
+- quwoquan_app/lib/core/services/remote_search_repository.dart
+- quwoquan_app/lib/cloud/runtime/generated/search/
+- quwoquan_app/lib/ui/search/pages/location_place_landing_page.dart
+- deploy/service/search-service/Dockerfile
+- releases/config/search-service/
+

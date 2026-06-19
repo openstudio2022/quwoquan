@@ -6,3 +6,9 @@ service:
 mongo:
   uri: "mongodb://localhost:27017"
   database: "quwoquan_circle_local"
+
+# beta keeps ES disabled by default; endpoints are injected via SEARCH_ES_* when
+# a shared cluster is available for manual integration.
+es:
+  enabled: false
+  endpoints: []

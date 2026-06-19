@@ -24,6 +24,7 @@ CURATED_REFS: dict[str, list[str]] = {
     CONTENT_SCENARIO: [
         "content_discovery_core",
         "intersection_core",
+        "home_showcase_core",
     ],
     USER_SCENARIO: [
         "user_profile_core",

@@ -172,6 +172,8 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                       final badgeText = badgeNumber > 99
                           ? '99+'
                           : badgeNumber.toString();
+                      final badgeIsSingleDigit =
+                          badgeNumber > 0 && badgeNumber < 10;
 
                       return CupertinoButton(
                         padding: EdgeInsets.zero,
@@ -228,6 +230,14 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                                 right: -4,
                                 top: -4,
                                 child: Container(
+                                  key: ValueKey<String>(
+                                    'secondary-capsule-number-badge-$index',
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: AppSpacing.twenty,
+                                    minHeight: AppSpacing.twenty,
+                                  ),
+                                  alignment: Alignment.center,
                                   padding: EdgeInsets.symmetric(
                                     horizontal: badgeNumber > 9
                                         ? AppSpacing.xs
@@ -237,7 +247,9 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: AppColors.error,
                                     borderRadius: BorderRadius.circular(
-                                      AppSpacing.radiusTen,
+                                      badgeIsSingleDigit
+                                          ? AppSpacing.radiusNinetyNine
+                                          : AppSpacing.radiusTen,
                                     ),
                                     border: Border.all(
                                       color: bgPrimary,
@@ -263,6 +275,9 @@ class SecondaryCapsuleTabBar extends StatelessWidget {
                                 right: 0,
                                 top: 0,
                                 child: Container(
+                                  key: ValueKey<String>(
+                                    'secondary-capsule-dot-badge-$index',
+                                  ),
                                   width: AppSpacing.sm,
                                   height: AppSpacing.sm,
                                   decoration: BoxDecoration(

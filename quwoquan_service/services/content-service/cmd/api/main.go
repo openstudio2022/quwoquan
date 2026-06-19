@@ -31,9 +31,12 @@ import (
 	httpadapter "quwoquan_service/services/content-service/internal/adapters/http"
 	"quwoquan_service/services/content-service/internal/application"
 	"quwoquan_service/services/content-service/internal/infrastructure/cache"
+	"quwoquan_service/services/content-service/internal/infrastructure/intersectionmetrics"
 	"quwoquan_service/services/content-service/internal/infrastructure/messaging"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
+	"quwoquan_service/services/content-service/internal/infrastructure/placeindex"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
+	"quwoquan_service/services/content-service/internal/infrastructure/searchindex"
 )
 
 // redisSceneCfg holds configuration for a single Redis deployment (one logical scene).
@@ -110,6 +113,13 @@ type config struct {
 		CDNTTLMin       int    `yaml:"cdn_ttl_minutes"`
 		UseSSL          bool   `yaml:"use_ssl"`
 	} `yaml:"oss"`
+
+	// ES is the write side of the unified search index (content.search_index_worker).
+	// Endpoints/credentials are injected per-env via the shared SEARCH_ES_* env so
+	// content-service and search-service target the same cluster/index. Disabled by
+	// default; when off the search-index projector is a no-op and the write path is
+	// unaffected.
+	ES searchindex.ESConfig `yaml:"es"`
 }
 
 func main() {
@@ -178,6 +188,7 @@ func main() {
 	var behaviorEventStore persistence.BehaviorEventStore = persistence.NoopBehaviorEventStore{}
 	var dailyMetricsStore *persistence.DailyMetricsStore
 	var authorImpactStore *persistence.AuthorImpactStore
+	var authorImpactEvidenceStore *persistence.AuthorImpactEvidenceStore
 	var intersectionService *application.IntersectionService
 	recOpts := []rtrec.EngineOption{
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
@@ -242,7 +253,32 @@ func main() {
 		}
 		interestAgg := recinfra.NewInterestProfileAggregator(db, recinfra.DefaultInterestProfileConfig(), eventPub, recinfra.WithSegments(segDefs))
 		recommendProjector := recinfra.NewRecommendFeatureProjector(db, recinfra.WithEntityPropagation(entityPropagation), recinfra.WithSignalProcessor(bufferedWriter), recinfra.WithInterestAggregator(interestAgg))
-		sharedProjector = &projectorAdapter{discovery: discoveryProjector, recommend: recommendProjector}
+		searchSignalConsumer := recinfra.NewSearchSignalConsumer(router.Scene("general"), recommendProjector, instanceID, logger)
+		go searchSignalConsumer.Run(ctx, 500*time.Millisecond)
+
+		// Write-time search index projector (content.search_index_worker). Disabled
+		// when ES is off (alpha): Built is empty and the projector is nil, so the
+		// write path is unaffected. When enabled we ensure the shared index exists
+		// up front so increments have somewhere to land, and register a liveness ping.
+		searchBuilt, searchErr := searchindex.Build(cfg.ES, store, searchindex.WithLogger(logger))
+		if searchErr != nil {
+			log.Printf("WARN: content-service search index assembly failed (search indexing disabled): %v", searchErr)
+		}
+		// First-party place projector (R-S05e): location.place objects reuse the
+		// SAME ES indexer (one geo mechanism, one client) and a derived
+		// place_snapshots store. Built only when ES is enabled, so alpha is
+		// unaffected.
+		var placeProjector *placeindex.PlaceProjector
+		if searchBuilt.Client != nil {
+			healthChecker.Register("elasticsearch", searchBuilt.HealthPing())
+			if err := searchBuilt.EnsureIndex(ctx); err != nil {
+				log.Printf("WARN: content-service ensure ES search index failed: %v", err)
+			}
+			placeStore := placeindex.NewMongoPlaceStore(db.Collection(placeindex.PlaceSnapshotCollection), logger)
+			placeProjector = placeindex.NewProjector(searchBuilt.Indexer, store, placeStore, placeindex.WithLogger(logger))
+			log.Printf("content-service search index projector enabled (es endpoints=%d index=%s, place objects on)", len(cfg.ES.Endpoints), searchBuilt.Client.IndexName())
+		}
+		sharedProjector = &projectorAdapter{discovery: discoveryProjector, recommend: recommendProjector, search: searchBuilt.Projector, place: placeProjector}
 
 		// Periodic raw-affinity decay so $inc growth never permanently
 		// fossilizes stale interests. A per-day Redis single-flight lock
@@ -290,22 +326,55 @@ func main() {
 		socialRecall := rtrec.NewSocialRecallSource(socialProvider, socialCandidateDB, 7*24*time.Hour)
 		mongoCandidateSources = append(mongoCandidateSources, socialRecall)
 		recOpts = append(recOpts, rtrec.WithSocialMiner(rtrec.NewSocialInterestMiner(socialProvider)))
-		intersectionService = application.NewIntersectionService(
-			router,
-			application.WithIntersectionSource(
-				recinfra.NewMongoIntersectionSource(
-					socialProvider,
-					recinfra.NewMongoEntityTagIndex(db),
-					socialCandidateDB,
-				),
-			),
+		collabCfg := rtrecpolicy.Baseline().ExposureGovernance.CollaborativeRecall
+		if collabCfg.Enabled {
+			collabSource := rtrec.NewCollaborativeRecallSource(
+				recinfra.NewMongoCollaborativeCandidateStore(db),
+				rtrec.CollaborativeRecallConfig{
+					Enabled:          collabCfg.Enabled,
+					MaxI2ICandidates: collabCfg.MaxI2ICandidates,
+					MaxU2ICandidates: collabCfg.MaxU2ICandidates,
+					QuotaPct:         collabCfg.QuotaPct,
+				},
+			)
+			mongoCandidateSources = append(mongoCandidateSources, collabSource)
+			log.Printf("content-service collaborative recall enabled quotaPct=%d i2i=%d u2i=%d", collabCfg.QuotaPct, collabCfg.MaxI2ICandidates, collabCfg.MaxU2ICandidates)
+		}
+		intersectionPolicy := rtrecpolicy.Baseline().Intersection
+		// 事实交集读穿透：MongoIntersectionSource（请求期 compute）外包一层
+		// rm_viewer_object_intersection 读模型，使 summary/list/feed 热路径零图谱计算，
+		// 仅在缺失/分维度保鲜过期时回算并回写（WP-2）。
+		intersectionCompute := recinfra.NewMongoIntersectionSource(
+			socialProvider,
+			recinfra.NewMongoEntityTagIndex(db),
+			socialCandidateDB,
 		)
+		intersectionReadModel := recinfra.NewReadModelIntersectionSource(
+			intersectionCompute,
+			recinfra.NewMongoViewerIntersectionStore(db, logger),
+			intersectionPolicy.FreshnessTTLDaysByDimension,
+		)
+		intersectionOpts := []application.IntersectionServiceOption{
+			application.WithIntersectionSource(intersectionReadModel),
+			application.WithIntersectionMetrics(intersectionmetrics.New()),
+			// 已读水位耐久兜底：Redis 退化为加速缓存，Redis flush/宕机后读位不丢、写降级不阻断主请求。
+			application.WithIntersectionWatermarkStore(recinfra.NewMongoWatermarkStore(db, logger)),
+			application.WithIntersectionLogger(logger),
+		}
+		if intersectionPolicy.CooldownDays > 0 {
+			intersectionOpts = append(intersectionOpts, application.WithIntersectionCooldownDays(intersectionPolicy.CooldownDays))
+		}
+		if intersectionPolicy.MaxCandidateWindow > 0 {
+			intersectionOpts = append(intersectionOpts, application.WithIntersectionMaxCandidateWindow(intersectionPolicy.MaxCandidateWindow))
+		}
+		intersectionService = application.NewIntersectionService(router, intersectionOpts...)
 		log.Printf("content-service social recall + social miner enabled")
 
 		bulkImportService = application.NewBulkImportService(recinfra.NewMongoBulkImportStore(db))
 		behaviorEventStore = persistence.NewMongoBehaviorEventStore(db, logger)
 		dailyMetricsStore = persistence.NewDailyMetricsStore(db, logger)
 		authorImpactStore = persistence.NewAuthorImpactStore(db, logger)
+		authorImpactEvidenceStore = persistence.NewAuthorImpactEvidenceStore(db, logger)
 	} else {
 		store = persistence.NewPostStore(recinfra.DefaultSeedPosts())
 		log.Printf("content-service storage=inmemory (no mongo.uri configured)")
@@ -415,6 +484,7 @@ func main() {
 		log.Printf("content-service rec policy using codegen baseline=%s (no live file at %s)", rtrecpolicy.BaselinePolicyVersion, policyPath)
 	}
 	recOpts = append(recOpts, rtrec.WithPolicyStore(policyStore))
+	recOpts = append(recOpts, rtrec.WithExposureGovernance(sessionCache, sessionCache))
 
 	engine := rtrec.NewEngine(sessionCache, candidateSources, recOpts...)
 	feedServiceOpts := []application.FeedServiceOption{}
@@ -424,6 +494,12 @@ func main() {
 	feedService := application.NewFeedService(engine, source, feedServiceOpts...)
 	postService := application.NewPostService(store, postServiceOpts...)
 	reportService := application.NewReportService(reportStore, eventPub)
+	// 低风险实时推荐 patch（阶段七 §G）：复用 realtime redis scene 的 per-user pub/sub
+	// 在安全边界发射 negative_feedback_removal / new_candidate_hint / refresh_suggestion。
+	feedPatchEmitter := rtrec.NewFeedPatchEmitter(
+		router.Scene("realtime"),
+		rtrec.WithFeedPatchLogger(logger),
+	)
 	behaviorService := application.NewBehaviorService(
 		bufferedWriter,
 		store,
@@ -434,6 +510,8 @@ func main() {
 		application.WithBehaviorEventStore(behaviorEventStore),
 		application.WithDailyMetricsStore(dailyMetricsStore),
 		application.WithAuthorImpactStore(authorImpactStore),
+		application.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
+		application.WithFeedPatchEmitter(feedPatchEmitter),
 	)
 
 	var handlerOpts []httpadapter.ContentHandlerOption
@@ -443,12 +521,15 @@ func main() {
 	}
 
 	// 交集统一体验服务：跨会话冷却窗口（rec:icool ZSET）+ per-dimension 已读水位
-	// （cache:viewer_intersections）+ 事实/概率合并排序。
+	// （ix:watermark HASH）+ 事实/概率合并排序。
 	if intersectionService != nil {
 		handlerOpts = append(handlerOpts, httpadapter.WithIntersectionService(intersectionService))
 	}
 	if authorImpactStore != nil {
 		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactStore(authorImpactStore))
+	}
+	if authorImpactEvidenceStore != nil {
+		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore))
 	}
 
 	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService, handlerOpts...).Routes()
@@ -688,6 +769,7 @@ func compareSemver(a, b string) int {
 func applyEnvOverrides(cfg *config) {
 	applyRedisSceneEnv("CONTENT_REDIS_REC", &cfg.Redis.Rec)
 	applyRedisSceneEnv("CONTENT_REDIS_GENERAL", &cfg.Redis.General)
+	searchindex.ApplyESEnvOverrides(&cfg.ES)
 
 	// Current single-Redis env vars → rec scene (backward compat)
 	if v := os.Getenv("CONTENT_REDIS_ADDR"); v != "" && cfg.Redis.Rec.Addr == "" {
@@ -753,6 +835,8 @@ func hostname() string {
 type projectorAdapter struct {
 	discovery *recinfra.DiscoveryFeedProjector
 	recommend *recinfra.RecommendFeatureProjector
+	search    *searchindex.Projector
+	place     *placeindex.PlaceProjector
 }
 
 func (a *projectorAdapter) Project(ctx context.Context, event application.ProjectorEvent) error {
@@ -770,6 +854,21 @@ func (a *projectorAdapter) Project(ctx context.Context, event application.Projec
 	}
 	if a.recommend != nil {
 		if err := a.recommend.Project(ctx, projectorEvent); err != nil {
+			return err
+		}
+	}
+	// Search index is a derived read store and runs last: it swallows its own
+	// failures (returns nil) so an ES outage never blocks the primary write path
+	// nor the discovery/recommend projections above.
+	if a.search != nil {
+		if err := a.search.Project(ctx, event); err != nil {
+			return err
+		}
+	}
+	// First-party place index (location.place) is likewise a derived read store
+	// that swallows its own failures; it shares the same ES client.
+	if a.place != nil {
+		if err := a.place.Project(ctx, event); err != nil {
 			return err
 		}
 	}
@@ -854,81 +953,3 @@ const dailyAffinityDecayCheckInterval = time.Hour
 // single-flight lock (SET NX) guarantees only one replica performs the
 // non-idempotent $multiply decay, preventing over-decay. A nil aggregator
 // degrades to a no-op; a nil lock degrades to an unguarded single run.
-func startDailyAffinityDecay(ctx context.Context, agg *recinfra.InterestProfileAggregator, lock rtredis.Client, logger *slog.Logger) {
-	if agg == nil {
-		return
-	}
-	go func() {
-		ticker := time.NewTicker(dailyAffinityDecayCheckInterval)
-		defer ticker.Stop()
-		runDailyAffinityDecayOnce(ctx, agg, lock, logger)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				runDailyAffinityDecayOnce(ctx, agg, lock, logger)
-			}
-		}
-	}()
-}
-
-// runDailyAffinityDecayOnce acquires the per-day single-flight lock and, if won,
-// decays one day's worth of half-life from every user's affinity counters.
-func runDailyAffinityDecayOnce(ctx context.Context, agg *recinfra.InterestProfileAggregator, lock rtredis.Client, logger *slog.Logger) {
-	if lock != nil {
-		key := "rec:affinity-decay:lock:" + time.Now().UTC().Format("2006-01-02")
-		// TTL > 24h so the daily key survives until the next day's key takes
-		// over; the date in the key, not the TTL, scopes one run per day.
-		won, err := lock.SetNX(ctx, key, "1", 26*time.Hour)
-		if err != nil {
-			logger.Warn("affinity decay lock acquire failed; skipping tick", "err", err)
-			return
-		}
-		if !won {
-			return // another replica already ran (or is running) today
-		}
-	}
-	if err := agg.DecayAll(ctx, 1); err != nil {
-		logger.Warn("affinity decay failed", "err", err)
-	}
-}
-
-// buildRedisRouter creates a redis.Router from the YAML config.
-// Falls back to in-memory mode for scenes without addresses (local dev / tests).
-func buildRedisRouter(cfg config) *rtredis.Router {
-	routerCfg := rtredis.RouterConfig{
-		Scenes: map[string]rtredis.SceneConfig{
-			"rec":      toSceneConfig(cfg.Redis.Rec),
-			"general":  toSceneConfig(cfg.Redis.General),
-			"realtime": toSceneConfig(cfg.Redis.Realtime),
-		},
-		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
-		DefaultScene: rtredis.GeneratedDefaultScene,
-	}
-	return rtredis.MustNewRouter(routerCfg)
-}
-
-// toSceneConfig converts the YAML redisSceneCfg to rtredis.SceneConfig.
-func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {
-	mode := strings.ToLower(strings.TrimSpace(r.Mode))
-	if mode == "" {
-		mode = "standalone"
-	}
-	if mode == "standalone" && r.Addr == "" {
-		mode = "memory"
-	}
-	if mode == "cluster" && len(r.Addrs) == 0 {
-		mode = "memory"
-	}
-	return rtredis.SceneConfig{
-		Mode:         mode,
-		Addr:         r.Addr,
-		Addrs:        r.Addrs,
-		Password:     r.Password,
-		DB:           r.DB,
-		TLS:          r.TLS,
-		PoolSize:     r.Pool.Size,
-		MinIdleConns: r.Pool.MinIdle,
-	}
-}

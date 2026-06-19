@@ -1,5 +1,26 @@
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 
+const List<String> _archivedSeedImageFallbackPool = <String>[
+  'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
+  'media/image/s/archived-image/post/fixture_photo_002/v1/cover.png',
+  'media/image/s/archived-image/post/fixture_photo_003/v1/cover.png',
+  'media/image/s/archived-image/post/fixture_article_001/v1/cover.png',
+  'media/image/s/archived-image/post/fixture_moment_001/v1/cover.png',
+  'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+];
+
+const List<String> _archivedSeedBackgroundFallbackPool = <String>[
+  'media/background/s/archived-avatar/user/fixture_user_current/v1/background.png',
+  'media/background/s/archived-avatar/user/fixture_user_friend/v1/background.png',
+  'media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png',
+  'media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png',
+  'media/background/s/archived-avatar/user/fixture_user_article/v1/background.png',
+];
+
+const List<String> _archivedSeedVideoFallbackPool = <String>[
+  'media/video/s/archived-video/beta-sample.mp4',
+];
+
 /// 将内容媒体引用解析成可直接加载的绝对 URL。
 ///
 /// 契约 seed / 本地联调里经常返回 `media/image/...` 这类 object key。
@@ -43,11 +64,21 @@ List<String> resolveContentMediaUrlCandidates(
   }
 
   if (source.startsWith('//')) {
-    return <String>['https:$source'];
+    return _resolveAbsoluteContentMediaUrlCandidates(
+      'https:$source',
+      gatewayBaseUrl: gateway,
+      imageCdnBaseUrl: imageCdn,
+      videoCdnBaseUrl: videoCdn,
+    );
   }
 
   if (_looksLikeBareHostUrl(source)) {
-    return <String>['https://$source'];
+    return _resolveAbsoluteContentMediaUrlCandidates(
+      'https://$source',
+      gatewayBaseUrl: gateway,
+      imageCdnBaseUrl: imageCdn,
+      videoCdnBaseUrl: videoCdn,
+    );
   }
 
   if (lower.startsWith('http://') || lower.startsWith('https://')) {
@@ -63,7 +94,9 @@ List<String> resolveContentMediaUrlCandidates(
     return <String>[source];
   }
 
-  final normalizedPath = source.startsWith('/') ? source : '/$source';
+  final normalizedPath = _rewriteArchivedSeedContentPath(
+    source.startsWith('/') ? source : '/$source',
+  );
   return _contentMediaUrlCandidatesForPath(
     normalizedPath,
     gatewayBaseUrl: gateway,
@@ -102,13 +135,29 @@ List<String> _resolveAbsoluteContentMediaUrlCandidates(
     return <String>[source];
   }
   final path = _uriPathWithQuery(uri);
+  final normalizedPath = _rewriteArchivedSeedContentPath(path);
+  if (normalizedPath != path) {
+    return _contentMediaUrlCandidatesForPath(
+      normalizedPath,
+      gatewayBaseUrl: gatewayBaseUrl,
+      imageCdnBaseUrl: imageCdnBaseUrl,
+      videoCdnBaseUrl: videoCdnBaseUrl,
+    );
+  }
   final objectKey = uri.path.replaceFirst(RegExp(r'^/+'), '');
   if (!_looksLikeMediaObjectKey(objectKey)) {
-    return <String>[source];
+    return _isTrustedRuntimeHost(
+          uri,
+          gatewayBaseUrl: gatewayBaseUrl,
+          imageCdnBaseUrl: imageCdnBaseUrl,
+          videoCdnBaseUrl: videoCdnBaseUrl,
+        )
+        ? <String>[source]
+        : const <String>[];
   }
 
   final candidates = _contentMediaUrlCandidatesForPath(
-    path,
+    normalizedPath,
     gatewayBaseUrl: gatewayBaseUrl,
     imageCdnBaseUrl: imageCdnBaseUrl,
     videoCdnBaseUrl: videoCdnBaseUrl,
@@ -121,6 +170,14 @@ List<String> _resolveAbsoluteContentMediaUrlCandidates(
         videoCdnBaseUrl: videoCdnBaseUrl,
       )) {
     return candidates.isEmpty ? <String>[source] : candidates;
+  }
+  if (!_isTrustedRuntimeHost(
+    uri,
+    gatewayBaseUrl: gatewayBaseUrl,
+    imageCdnBaseUrl: imageCdnBaseUrl,
+    videoCdnBaseUrl: videoCdnBaseUrl,
+  )) {
+    return candidates;
   }
   return _uniqueNonEmpty(<String>[source, ...candidates]);
 }
@@ -154,7 +211,10 @@ List<String> _orderedBasesForPath(
     imageCdnBaseUrl: imageCdnBaseUrl,
     videoCdnBaseUrl: videoCdnBaseUrl,
   );
-  return _uniqueNonEmpty(<String>[preferredCdn, gateway]);
+  return _uniqueNonEmpty(<String>[
+    ..._localHostBaseCandidates(preferredCdn),
+    ..._localHostBaseCandidates(gateway),
+  ]);
 }
 
 String _preferredBaseForPath(
@@ -203,9 +263,55 @@ bool _looksLikeMediaObjectKey(String source) {
   final normalized = source.replaceFirst(RegExp(r'^/+'), '').toLowerCase();
   return normalized.startsWith('media/image/') ||
       normalized.startsWith('media/video/') ||
+      normalized.startsWith('media/background/') ||
       normalized.startsWith('image/') ||
       normalized.startsWith('video/') ||
       normalized.startsWith('media/');
+}
+
+String _rewriteArchivedSeedContentPath(String path) {
+  final objectKey = path.replaceFirst(RegExp(r'^/+'), '');
+  final lower = objectKey.toLowerCase();
+  if (lower.startsWith('media/image/s/mock/') ||
+      lower.startsWith('media/image/s/archived-image/seed/')) {
+    final fallbackObjectKey =
+        _archivedSeedImageFallbackPool[_stableArchivedSeedMediaIndex(
+          objectKey,
+        )];
+    return '/$fallbackObjectKey';
+  }
+  if (lower.startsWith('media/background/s/mock/') ||
+      lower.startsWith('media/background/s/archived-avatar/seed/') ||
+      lower.startsWith('media/background/s/archived-avatar/user/user_')) {
+    final fallbackObjectKey =
+        _archivedSeedBackgroundFallbackPool[_stableArchivedSeedMediaIndex(
+          objectKey,
+        )];
+    return '/$fallbackObjectKey';
+  }
+  if (lower.startsWith('media/video/s/mock/') ||
+      lower.startsWith('media/video/s/archived-video/seed/')) {
+    final fallbackObjectKey =
+        _archivedSeedVideoFallbackPool[_stableArchivedSeedMediaIndex(
+          objectKey,
+        )];
+    return '/$fallbackObjectKey';
+  }
+  return path;
+}
+
+int _stableArchivedSeedMediaIndex(String objectKey) {
+  var hash = 0;
+  for (final codeUnit in objectKey.codeUnits) {
+    hash = (hash * 31 + codeUnit) & 0x7fffffff;
+  }
+  if (objectKey.toLowerCase().startsWith('media/video/')) {
+    return hash % _archivedSeedVideoFallbackPool.length;
+  }
+  if (objectKey.toLowerCase().startsWith('media/background/')) {
+    return hash % _archivedSeedBackgroundFallbackPool.length;
+  }
+  return hash % _archivedSeedImageFallbackPool.length;
 }
 
 bool _looksLikeBareHostUrl(String source) {
@@ -223,6 +329,41 @@ bool _isPrivateDevHost(String host) {
       lower == '::1' ||
       lower == '10.0.2.2' ||
       lower.startsWith('192.168.');
+}
+
+List<String> _localHostBaseCandidates(String base) {
+  final normalized = _normalizeBase(base);
+  if (normalized.isEmpty) {
+    return const <String>[];
+  }
+  final uri = Uri.tryParse(normalized);
+  if (uri == null || !_isPrivateDevHost(uri.host)) {
+    return <String>[normalized];
+  }
+  return _uniqueNonEmpty(<String>[
+    normalized,
+    for (final host in const <String>['127.0.0.1', 'localhost', '10.0.2.2'])
+      uri.replace(host: host).toString().replaceFirst(RegExp(r'/+$'), ''),
+  ]);
+}
+
+bool _isTrustedRuntimeHost(
+  Uri uri, {
+  required String gatewayBaseUrl,
+  required String imageCdnBaseUrl,
+  required String videoCdnBaseUrl,
+}) {
+  final hosts = <String>{
+    _hostFromBase(gatewayBaseUrl),
+    _hostFromBase(imageCdnBaseUrl),
+    _hostFromBase(videoCdnBaseUrl),
+  }..remove('');
+  return hosts.contains(uri.host.toLowerCase());
+}
+
+String _hostFromBase(String raw) {
+  final uri = Uri.tryParse(raw.trim());
+  return uri?.host.toLowerCase() ?? '';
 }
 
 String _uriPathWithQuery(Uri uri) {

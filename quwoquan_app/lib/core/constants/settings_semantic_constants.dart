@@ -158,13 +158,16 @@ class SettingsSemanticConstants {
   static Color createSheetActionHaloColor(bool isDark) =>
       AppColors.primaryColor.withValues(alpha: isDark ? 0.22 : 0.10);
 
-  /// 创作入口草稿动作色：唯一辅助色，用于表达未完成/待续。
+  /// 创作入口草稿动作色：中性灰（文档+时钟高保稿口径），表达未完成/存档草稿。
   static Color createSheetDraftActionIconColor(bool isDark) =>
-      AppColors.warning;
+      AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
 
-  /// 创作入口草稿 halo：由 warning 透明派生。
+  /// 创作入口草稿 halo：由中性灰透明派生。
   static Color createSheetDraftActionHaloColor(bool isDark) =>
-      AppColors.warning.withValues(alpha: isDark ? 0.24 : 0.16);
+      AppColorsFunctional.getColor(
+        isDark,
+        ColorType.foregroundSecondary,
+      ).withValues(alpha: isDark ? 0.22 : 0.12);
 
   /// 创作入口拖拽手柄色，与 iOS secondary label 同源透明派生。
   static Color createSheetDragHandleColor(bool isDark) =>

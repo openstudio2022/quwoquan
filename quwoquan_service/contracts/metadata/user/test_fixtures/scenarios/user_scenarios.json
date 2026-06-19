@@ -12,6 +12,7 @@
       "profiles": [
         {
           "userId": "fixture_user_current",
+          "verified": true,
           "displayName": "契约当前用户",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
@@ -173,10 +174,13 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_photo",
+          "verified": true,
           "displayName": "契约摄影师",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
           "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
@@ -328,7 +332,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel",
@@ -484,7 +490,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_video",
@@ -646,7 +654,9 @@
             "cityWalk",
             "photography",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_article",
@@ -750,7 +760,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_friend",
@@ -907,7 +919,9 @@
             "coffee",
             "food",
             "designWriting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_weekend_1",
@@ -1071,7 +1085,9 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_weekend_2",
@@ -1239,7 +1255,9 @@
             "food",
             "coffee",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_owner",
@@ -1390,7 +1408,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel_owner",
@@ -1542,7 +1562,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_commenter",
@@ -1657,7 +1679,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_photography_01",
@@ -1810,7 +1834,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_photography_02",
@@ -1963,7 +1989,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_photography_03",
@@ -2125,7 +2153,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_photography_04",
@@ -2294,7 +2324,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_photography_05",
@@ -2450,7 +2482,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_photography_06",
@@ -2606,7 +2640,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_photography_07",
@@ -2755,7 +2791,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_photography_08",
@@ -2906,7 +2944,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel_01",
@@ -3059,7 +3099,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel_02",
@@ -3212,7 +3254,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel_03",
@@ -3374,7 +3418,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel_04",
@@ -3543,7 +3589,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel_05",
@@ -3699,7 +3747,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel_06",
@@ -3855,7 +3905,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel_07",
@@ -4004,7 +4056,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel_08",
@@ -4155,7 +4209,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_citywalk_01",
@@ -4316,7 +4372,9 @@
             "cityWalk",
             "photography",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_citywalk_02",
@@ -4479,7 +4537,9 @@
             "cityWalk",
             "photography",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_citywalk_03",
@@ -4642,7 +4702,9 @@
             "cityWalk",
             "photography",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_citywalk_04",
@@ -4806,7 +4868,9 @@
             "cityWalk",
             "photography",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_citywalk_05",
@@ -4975,7 +5039,9 @@
             "cityWalk",
             "photography",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_citywalk_06",
@@ -5132,7 +5198,9 @@
             "cityWalk",
             "photography",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_citywalk_07",
@@ -5288,7 +5356,9 @@
             "cityWalk",
             "photography",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_citywalk_08",
@@ -5440,7 +5510,9 @@
             "cityWalk",
             "photography",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_food_01",
@@ -5601,7 +5673,9 @@
             "food",
             "coffee",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_food_02",
@@ -5764,7 +5838,9 @@
             "food",
             "coffee",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_food_03",
@@ -5927,7 +6003,9 @@
             "food",
             "coffee",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_food_04",
@@ -6091,7 +6169,9 @@
             "food",
             "coffee",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_food_05",
@@ -6260,7 +6340,9 @@
             "food",
             "coffee",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_food_06",
@@ -6417,7 +6499,9 @@
             "food",
             "coffee",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_food_07",
@@ -6573,7 +6657,9 @@
             "food",
             "coffee",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_food_08",
@@ -6725,7 +6811,9 @@
             "food",
             "coffee",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_coffee_01",
@@ -6880,7 +6968,9 @@
             "coffee",
             "food",
             "designWriting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_coffee_02",
@@ -7037,7 +7127,9 @@
             "coffee",
             "food",
             "designWriting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_coffee_03",
@@ -7194,7 +7286,9 @@
             "coffee",
             "food",
             "designWriting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_coffee_04",
@@ -7352,7 +7446,9 @@
             "coffee",
             "food",
             "designWriting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_coffee_05",
@@ -7515,7 +7611,9 @@
             "coffee",
             "food",
             "designWriting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_coffee_06",
@@ -7672,7 +7770,9 @@
             "coffee",
             "food",
             "designWriting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_coffee_07",
@@ -7829,7 +7929,9 @@
             "coffee",
             "food",
             "designWriting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_coffee_08",
@@ -7980,7 +8082,9 @@
             "coffee",
             "food",
             "designWriting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_lifestyle_01",
@@ -8133,7 +8237,9 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_lifestyle_02",
@@ -8288,7 +8394,9 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_lifestyle_03",
@@ -8450,7 +8558,9 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_lifestyle_04",
@@ -8621,7 +8731,9 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_lifestyle_05",
@@ -8777,7 +8889,9 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_lifestyle_06",
@@ -8935,7 +9049,9 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_lifestyle_07",
@@ -9084,7 +9200,9 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_lifestyle_08",
@@ -9237,7 +9355,9 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_fitness_01",
@@ -9393,7 +9513,9 @@
             "fitness",
             "outdoor",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_fitness_02",
@@ -9555,7 +9677,9 @@
             "fitness",
             "outdoor",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_fitness_03",
@@ -9718,7 +9842,9 @@
             "fitness",
             "outdoor",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_fitness_04",
@@ -9884,7 +10010,9 @@
             "fitness",
             "outdoor",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_fitness_05",
@@ -10050,7 +10178,9 @@
             "fitness",
             "outdoor",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_fitness_06",
@@ -10212,7 +10342,9 @@
             "fitness",
             "outdoor",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_fitness_07",
@@ -10369,7 +10501,9 @@
             "fitness",
             "outdoor",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_fitness_08",
@@ -10527,7 +10661,9 @@
             "fitness",
             "outdoor",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_pet_01",
@@ -10682,7 +10818,9 @@
             "pet",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_pet_02",
@@ -10845,7 +10983,9 @@
             "pet",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_pet_03",
@@ -11007,7 +11147,9 @@
             "pet",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_pet_04",
@@ -11174,7 +11316,9 @@
             "pet",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_pet_05",
@@ -11339,7 +11483,9 @@
             "pet",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_pet_06",
@@ -11502,7 +11648,9 @@
             "pet",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_pet_07",
@@ -11658,7 +11806,9 @@
             "pet",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_pet_08",
@@ -11817,7 +11967,9 @@
             "pet",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_parenting_01",
@@ -11972,7 +12124,9 @@
             "parenting",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_parenting_02",
@@ -12134,7 +12288,9 @@
             "parenting",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_parenting_03",
@@ -12296,7 +12452,9 @@
             "parenting",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_parenting_04",
@@ -12462,7 +12620,9 @@
             "parenting",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_parenting_05",
@@ -12627,7 +12787,9 @@
             "parenting",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_parenting_06",
@@ -12789,7 +12951,9 @@
             "parenting",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_parenting_07",
@@ -12945,7 +13109,9 @@
             "parenting",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_parenting_08",
@@ -13103,7 +13269,9 @@
             "parenting",
             "lifestyle",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_outdoor_01",
@@ -13259,7 +13427,9 @@
             "outdoor",
             "travel",
             "fitness"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_outdoor_02",
@@ -13421,7 +13591,9 @@
             "outdoor",
             "travel",
             "fitness"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_outdoor_03",
@@ -13584,7 +13756,9 @@
             "outdoor",
             "travel",
             "fitness"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_outdoor_04",
@@ -13750,7 +13924,9 @@
             "outdoor",
             "travel",
             "fitness"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_outdoor_05",
@@ -13916,7 +14092,9 @@
             "outdoor",
             "travel",
             "fitness"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_outdoor_06",
@@ -14078,7 +14256,9 @@
             "outdoor",
             "travel",
             "fitness"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_outdoor_07",
@@ -14235,7 +14415,9 @@
             "outdoor",
             "travel",
             "fitness"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_outdoor_08",
@@ -14393,7 +14575,9 @@
             "outdoor",
             "travel",
             "fitness"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_tech_01",
@@ -14554,7 +14738,9 @@
             "tech",
             "designWriting",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_tech_02",
@@ -14722,7 +14908,9 @@
             "tech",
             "designWriting",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_tech_03",
@@ -14890,7 +15078,9 @@
             "tech",
             "designWriting",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_tech_04",
@@ -15062,7 +15252,9 @@
             "tech",
             "designWriting",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_tech_05",
@@ -15233,7 +15425,9 @@
             "tech",
             "designWriting",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_tech_06",
@@ -15401,7 +15595,9 @@
             "tech",
             "designWriting",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_tech_07",
@@ -15557,7 +15753,9 @@
             "tech",
             "designWriting",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_tech_08",
@@ -15715,7 +15913,9 @@
             "tech",
             "designWriting",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_designwriting_01",
@@ -15853,7 +16053,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_designwriting_02",
@@ -15991,7 +16193,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_designwriting_03",
@@ -16129,7 +16333,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_designwriting_04",
@@ -16268,7 +16474,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_designwriting_05",
@@ -16400,7 +16608,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_designwriting_06",
@@ -16532,7 +16742,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_designwriting_07",
@@ -16657,7 +16869,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_designwriting_08",
@@ -16784,7 +16998,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         }
       ]
     },

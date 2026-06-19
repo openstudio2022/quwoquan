@@ -52,7 +52,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // 二级过滤收敛为最右漏斗入口（默认「全部」）。
     expect(find.text('全部'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('circle-creations-filter-button')),
+    );
+    await tester.pumpAndSettle();
     expect(find.text('图片'), findsAtLeastNWidgets(1));
     expect(find.text('视频'), findsAtLeastNWidgets(1));
     expect(find.text('文字'), findsAtLeastNWidgets(1));
@@ -80,7 +85,15 @@ void main() {
 
     await tester.tap(find.byTooltip('列表视图'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('文字').first);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('circle-creations-filter-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('circle-creations-filter-option-article'),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('文字'), findsAtLeastNWidgets(1));

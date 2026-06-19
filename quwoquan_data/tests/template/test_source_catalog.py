@@ -53,12 +53,26 @@ def test_coverage_satisfied_when_diverse():
     sources = [
         {"platform": "百度百科"},
         {"platform": "马蜂窝"},
-        {"platform": "景区官网"},
         {"platform": "两步路"},
     ]
     cov = source_category_coverage(sources, vertical="travel")
     assert cov["coveredCount"] >= 3
     assert cov["missingCore"] == [], cov
+    assert "official" in cov["missingPreferred"], cov
+    assert cov["satisfied"] is True
+    assert coverage_issues(sources, vertical="travel") == []
+
+
+def test_coverage_accepts_quality_article_sources_without_travelogue():
+    sources = [
+        {"platform": "百度百科"},
+        {"platform": "文旅局"},
+        {"platform": "新华网"},
+    ]
+    cov = source_category_coverage(sources, vertical="travel")
+    assert cov["coveredCategories"] == ["authoritative_reference", "encyclopedia", "official"], cov
+    assert cov["missingCore"] == [], cov
+    assert "travelogue" in cov["missingPreferred"], cov
     assert cov["satisfied"] is True
     assert coverage_issues(sources, vertical="travel") == []
 

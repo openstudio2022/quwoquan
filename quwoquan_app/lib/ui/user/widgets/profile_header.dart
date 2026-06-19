@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// Profile header with left-aligned avatar that intrudes 1/3 into the
@@ -12,17 +13,29 @@ class ProfileHeader extends StatelessWidget {
     required this.isDark,
     this.avatarUrl,
     this.displayName,
-    this.bio,
     this.identityTags = const <String>[],
+    this.verified = false,
+    this.showEdit = false,
+    this.onEdit,
   });
 
   final bool isDark;
   final String? avatarUrl;
   final String? displayName;
-  final String? bio;
 
   /// 主页单行身份标签（云侧 identityTags 直出，端以 · 分隔；与 bio 互补不重复）。
   final List<String> identityTags;
+
+  /// 认证标识（蓝勾）。云侧 verified 直出，端只读展示。
+  final bool verified;
+
+  /// 我的主页昵称右侧编辑入口。
+  final bool showEdit;
+  final VoidCallback? onEdit;
+
+  static const Key verifiedBadgeKey = ValueKey<String>(
+    'profile-header-verified-badge',
+  );
 
   static const double avatarRadius = AppSpacing.xl;
   static const double _avatarBorder = AppSpacing.three;
@@ -32,7 +45,8 @@ class ProfileHeader extends StatelessWidget {
   static double get avatarIntrusion => avatarOverlapPx;
 
   Widget _buildAvatar(BuildContext context, Color bg, Color fgSecondary) {
-    final hasAvatar = avatarUrl != null && avatarUrl!.isNotEmpty;
+    final resolvedAvatarUrl = resolveAvatarImageUrl(avatarUrl);
+    final hasAvatar = resolvedAvatarUrl.isNotEmpty;
     return Container(
       key: const ValueKey<String>('profile-header-avatar'),
       decoration: BoxDecoration(
@@ -50,7 +64,7 @@ class ProfileHeader extends StatelessWidget {
           ? CircleAvatar(
               radius: avatarRadius,
               backgroundColor: AppColors.iosSecondaryFill(context),
-              backgroundImage: NetworkImage(avatarUrl!),
+              backgroundImage: NetworkImage(resolvedAvatarUrl),
               onBackgroundImageError: (e, s) {},
             )
           : CircleAvatar(
@@ -85,16 +99,54 @@ class ProfileHeader extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(height: AppSpacing.intraGroupXs),
-              Text(
-                displayName ?? '',
-                style: TextStyle(
-                  fontSize: AppTypography.iosNavTitle,
-                  fontWeight: AppTypography.medium,
-                  color: fg.withValues(alpha: 0.94),
-                  letterSpacing: -0.16,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      displayName ?? '',
+                      style: TextStyle(
+                        fontSize: AppTypography.iosTitle3,
+                        fontWeight: AppTypography.regular,
+                        color: fg.withValues(alpha: 0.94),
+                        letterSpacing: -0.24,
+                        height: AppSpacing.textLineHeightDense,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (verified) ...[
+                    SizedBox(width: AppSpacing.intraGroupXs),
+                    Icon(
+                      key: verifiedBadgeKey,
+                      CupertinoIcons.checkmark_seal_fill,
+                      size: AppSpacing.iconSmall,
+                      color: AppColors.iosAccent(context),
+                    ),
+                  ],
+                  if (showEdit && onEdit != null) ...[
+                    SizedBox(width: AppSpacing.intraGroupXs),
+                    CupertinoButton(
+                      key: const ValueKey<String>('profile-header-edit'),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.intraGroupXs,
+                        vertical: AppSpacing.intraGroupXs,
+                      ),
+                      minimumSize: const Size(
+                        AppSpacing.buttonHeightSm,
+                        AppSpacing.buttonHeightSm,
+                      ),
+                      onPressed: onEdit,
+                      child: Icon(
+                        CupertinoIcons.square_pencil,
+                        size: AppSpacing.iconMedium,
+                        color: fg.withValues(alpha: 0.88),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               if (tags.isNotEmpty) ...[
                 SizedBox(height: AppSpacing.intraGroupXs),
@@ -107,21 +159,6 @@ class ProfileHeader extends StatelessWidget {
                     letterSpacing: -0.08,
                   ),
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              if (bio != null && bio!.isNotEmpty) ...[
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  bio!,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    color: fgSecondary,
-                    height: AppSpacing.textLineHeightBody,
-                    letterSpacing: -0.16,
-                  ),
-                  textAlign: TextAlign.start,
-                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],

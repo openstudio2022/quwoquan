@@ -36,7 +36,7 @@
       "deviceMatrix": {
         "envs": ["gamma"],
         "requireAllPlatforms": false,
-        "matrixKinds": ["assistant", "chat-avatar"]
+        "matrixKinds": ["assistant", "chat-avatar", "environment-smoke"]
       }
     },
     "nightly_full": {
@@ -64,7 +64,7 @@
       "deviceMatrix": {
         "envs": ["gamma"],
         "requireAllPlatforms": true,
-        "matrixKinds": ["assistant", "chat-avatar"]
+        "matrixKinds": ["assistant", "chat-avatar", "environment-smoke"]
       }
     },
     "release_candidate": {
@@ -92,7 +92,7 @@
       "deviceMatrix": {
         "envs": ["gamma"],
         "requireAllPlatforms": true,
-        "matrixKinds": ["assistant", "chat-avatar"]
+        "matrixKinds": ["assistant", "chat-avatar", "environment-smoke"]
       }
     },
     "mainline_auto_prod": {
@@ -108,7 +108,7 @@
       "deviceMatrix": {
         "envs": ["beta"],
         "requireAllPlatforms": true,
-        "matrixKinds": ["assistant", "chat-avatar"]
+        "matrixKinds": ["assistant", "chat-avatar", "environment-smoke"]
       }
     }
   },

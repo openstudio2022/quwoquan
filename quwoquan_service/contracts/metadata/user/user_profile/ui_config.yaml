@@ -44,23 +44,22 @@ profile_tabs:
       mine: [all, public, private]
       other: [all, public]
 
-  - id: circles
-    label_key: profile_tab_circles
-    order: 1
-
   - id: interaction
     label_key: profile_tab_interaction
-    order: 2
+    order: 1
     sub_tabs:
-      - id: likes
-        label_key: interaction_sub_likes
+      - id: all
+        label_key: interaction_sub_all
         order: 0
       - id: comments
         label_key: interaction_sub_comments
         order: 1
+      - id: likes
+        label_key: interaction_sub_likes
+        order: 2
       - id: shares
         label_key: interaction_sub_shares
-        order: 2
+        order: 3
     direction_filter:
       mine: [received, sent]
       other: [received]

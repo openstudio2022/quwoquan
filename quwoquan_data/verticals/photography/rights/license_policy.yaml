@@ -1,9 +1,13 @@
 schemaVersion: quwoquan.photography_license_policy.v1
 vertical: photography
 defaultAction: block
-blockedDiscoveryOnlyPlatforms:
-  - Pinterest
-  - pinterest
+discoveryPlatformRoles:
+  - platform: Pinterest
+    defaultDiscoveryRole: discovery_only
+  - platform: pinterest
+    defaultDiscoveryRole: discovery_only
+  - platform: 图虫
+    defaultDiscoveryRole: licensed_candidate
 requiredImageFields:
   - license
   - credit

@@ -1,0 +1,52 @@
+version: 2
+node:
+  id: interest-onboarding-prior
+  level: L3_story
+  path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/interest-onboarding-prior
+  title: interest onboarding prior
+  parent_domain_service: discovery-content
+  parent_business_capability: feed-orchestration-recommendation
+scope:
+  summary: 新用户兴趣采集先验，支撑首刷召回和排序保底。
+  in_scope:
+    - 标签、垂类、地点、内容类型兴趣先验。
+    - 游客可跳过、登录后同步、首刷保底。
+  out_of_scope:
+    - 本轮不实现 App onboarding 页面或画像写入。
+gwt_acceptance:
+  GWT1:
+    title: 新用户兴趣先验 GWT
+    given:
+      - 新用户首次进入发现页，尚无过往行为。
+    when:
+      - 用户选择兴趣或跳过兴趣采集。
+    then:
+      - 选择的兴趣进入画像先验；跳过时使用默认探索保底；首刷不为空。
+    done_when:
+      - 兴趣字段、跳过语义、游客/登录同步和首刷 SLO 均冻结。
+    edge_cases:
+      - 兴趣采集失败时不阻塞登录或首刷，回退默认探索。
+    contract_refs:
+      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+      - quwoquan_service/contracts/metadata/user/profile/fields.yaml
+    performance_points:
+      - cold_start_non_empty_rate >= 0.999
+      - negative_feedback_rate <= 0.08
+    evidence:
+      primary:
+        - T1_contract
+        - T2_module_interaction
+      supporting:
+        - T4_e2e_journey
+    tests:
+      planned:
+        - quwoquan_app/test/ui/welcome/interest_onboarding_prior_test.dart
+        - quwoquan_service/runtime/recommendation/cold_start_interest_prior_test.go
+      recorded: []
+    status: specified
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+    - make gate

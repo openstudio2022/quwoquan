@@ -10,3 +10,6 @@ state/
 # gamma/local-hosted 运行时会单独同步 curated media；镜像构建不需要把 1GB+ fixture 资源打包进上下文。
 contracts/metadata/_shared/test_fixtures/media/
 contracts/metadata/_shared/test_fixtures/original_media/
+# compose / 编排文件从不进任何服务镜像；排除后避免改 compose 误击穿 `COPY . .` 构建缓存导致全量重编。
+docker-compose*.yaml
+docker-compose*.yml

@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"math"
-	"math/rand"
+	"strings"
 	"time"
 
 	"quwoquan_service/runtime/recpolicy"
@@ -62,6 +62,16 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 	}
 	user := features.User
 
+	// Batch exposure total feeds the UCB1 exploration radius (see
+	// ucbExplorationRadius): more total corpus exposure widens the confidence
+	// bound, so under-served content keeps an exploration budget at scale.
+	var totalExposure int64
+	for _, c := range candidates {
+		if c.ViewCount > 0 {
+			totalExposure += c.ViewCount
+		}
+	}
+
 	scored := make([]ScoredCandidate, 0, len(candidates))
 	for _, c := range candidates {
 		detail := make(map[string]float64, 8)
@@ -112,10 +122,15 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		freshness := math.Exp(-ageHours / halfLife)
 		detail["freshness"] = freshness
 
-		// Exploration boost: random perturbation for diversity (disabled when Deterministic for cursor pagination)
+		// Exploration boost: UCB1-style exposure-aware confidence radius (replaces
+		// the prior pure-random perturbation). Under-exposed / cold-start content
+		// (low ViewCount relative to the corpus) earns a larger, *deterministic*
+		// exploration lift — a principled exposure-bias correction rather than
+		// noise, and reproducible across cursor pages. Scaled by the policy-driven
+		// ExploreRate so the contribution range matches prior behavior.
 		exploreBoost := 0.0
 		if features.ExploreRate > 0 && !features.Deterministic {
-			exploreBoost = rand.Float64() * features.ExploreRate
+			exploreBoost = features.ExploreRate * ucbExplorationRadius(c.ViewCount, totalExposure)
 		}
 		detail["exploreBoost"] = exploreBoost
 
@@ -138,11 +153,25 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		if user != nil && user.SocialInterestScore > 0 {
 			socialPrior += math.Log1p(user.SocialInterestScore) * sc.SocialInterestFactor
 		}
+		// Intersection signal fusion (single injection point): a candidate recalled
+		// via a social/intersection origin earns a bounded lift scaled by the viewer's
+		// revealed engagement with the matching intersection kind. Fact-channel only;
+		// keeps the intersection signal in one dimension rather than scattering it.
+		if user != nil && sc.IntersectionSignalFactor > 0 {
+			switch c.RecallPath {
+			case "social_friend":
+				socialPrior += math.Log1p(float64(user.SharedFolloweesCount)) * sc.IntersectionSignalFactor
+			case "social_circle":
+				socialPrior += math.Log1p(float64(user.SharedCircleCount)) * sc.IntersectionSignalFactor
+			}
+		}
 		detail["socialPrior"] = socialPrior
 
-		// Negative penalty: suppress content with same author/tags as disliked items
+		// Negative penalty: suppress content with tags that accumulated negative
+		// weights. Explicit content-level negatives are handled by ExposureFilter
+		// via candidate point lookups, not by loading large NegativeIDs sets.
 		negativePenalty := 0.0
-		if session != nil && len(session.NegativeIDs) > 0 {
+		if session != nil {
 			for _, tag := range c.Tags {
 				if tw, ok := session.TagWeights[tag]; ok && tw < 0 {
 					negativePenalty += math.Abs(tw) * sc.NegativePenaltyFactor
@@ -207,6 +236,15 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		detail["audienceMatch"] = audienceMatch
 		detail["formatMatch"] = formatMatch
 
+		// Search intent: recent search query/related terms lift matching feed
+		// candidates. The feature is freshness-gated in FeatureStore and weighted
+		// through recpolicy so it cannot become a dead or unbounded side channel.
+		searchIntentBoost := 0.0
+		if user != nil && sc.SearchIntentFactor > 0 {
+			searchIntentBoost = searchIntentScore(user, c) * sc.SearchIntentFactor
+		}
+		detail["searchIntentBoost"] = searchIntentBoost
+
 		score := w.TagRelevance*(tagScore+longTermTagBoost*sc.LongTermTagBoostFactor) +
 			w.AuthorAffinity*authorAffinity +
 			w.Popularity*popularity +
@@ -217,7 +255,8 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 			w.EntityAffinity*entityAffinity +
 			w.TopicMatch*topicMatch +
 			w.AudienceMatch*audienceMatch +
-			w.FormatMatch*formatMatch -
+			w.FormatMatch*formatMatch +
+			w.SearchIntent*searchIntentBoost -
 			w.NegativePenalty*negativePenalty
 
 		detail["total"] = score
@@ -226,6 +265,73 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 	}
 
 	return scored, nil
+}
+
+func searchIntentScore(user *UserFeatureVector, c ContentCandidate) float64 {
+	if user == nil {
+		return 0
+	}
+	score := 0.0
+	if len(user.SearchTopObjectAffinities) > 0 {
+		if aff, ok := user.SearchTopObjectAffinities[c.ContentID]; ok && aff > 0 {
+			score += aff
+		}
+		for _, ref := range c.EntityRefs {
+			if aff, ok := user.SearchTopObjectAffinities[ref]; ok && aff > 0 {
+				score += aff * 0.5
+			}
+		}
+	}
+	if len(user.SearchTermAffinities) > 0 {
+		hay := candidateSearchHaystack(c)
+		for term, aff := range user.SearchTermAffinities {
+			if aff <= 0 {
+				continue
+			}
+			term = strings.ToLower(strings.TrimSpace(term))
+			if term == "" {
+				continue
+			}
+			if strings.Contains(hay, term) {
+				score += aff
+			}
+		}
+	}
+	if user.SearchTermHeat > 0 && score > 0 {
+		score *= math.Log1p(user.SearchTermHeat)
+	}
+	return score
+}
+
+func candidateSearchHaystack(c ContentCandidate) string {
+	parts := make([]string, 0, 2+len(c.Tags)+len(c.EntityRefs))
+	parts = append(parts, c.Title, c.ContentType)
+	parts = append(parts, c.Tags...)
+	parts = append(parts, c.EntityRefs...)
+	return strings.ToLower(strings.Join(parts, " "))
+}
+
+// ucbExplorationRadius returns the UCB1 confidence radius for an item given its
+// own exposure (views ≈ arm pulls n_i) and the corpus total exposure (N), clamped
+// to [0,1]. radius = sqrt( ln(1+N) / (1+n_i) ): brand-new content (n_i=0) earns
+// the widest bound; heavily-exposed content asymptotes toward 0. As corpus traffic
+// (N) grows the bound widens, preserving an exploration budget at scale. The value
+// is deterministic, so exploration is reproducible across cursor pages.
+func ucbExplorationRadius(views, totalViews int64) float64 {
+	if views < 0 {
+		views = 0
+	}
+	if totalViews < 0 {
+		totalViews = 0
+	}
+	radius := math.Sqrt(math.Log1p(float64(totalViews)) / float64(1+views))
+	if radius > 1 {
+		return 1
+	}
+	if radius < 0 {
+		return 0
+	}
+	return radius
 }
 
 // ---------------------------------------------------------------------------

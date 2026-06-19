@@ -32,6 +32,7 @@ import (
 	userintegration "quwoquan_service/services/user-service/internal/infrastructure/integration"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
 	"quwoquan_service/services/user-service/internal/infrastructure/projection"
+	"quwoquan_service/services/user-service/internal/infrastructure/searchindex"
 )
 
 type redisSceneCfg struct {
@@ -71,6 +72,7 @@ type config struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
 	} `yaml:"mongodb"`
+	ES    searchindex.ESConfig `yaml:"es"`
 	Redis struct {
 		General  redisSceneCfg `yaml:"general"`
 		Realtime redisSceneCfg `yaml:"realtime"`
@@ -220,11 +222,31 @@ func main() {
 		}
 	}
 
+	// 5b. Search index (ES) — write side of user.search_index_worker. Disabled
+	// (no-op) unless es.enabled / SEARCH_ES_* are set, so the primary write path
+	// is unaffected in alpha and any env without the shared cluster.
+	searchindex.ApplyESEnvOverrides(&cfg.ES)
+	searchBuilt, err := searchindex.Build(cfg.ES, profileStore)
+	if err != nil {
+		log.Fatalf("user-service search index build failed: %v", err)
+	}
+	if searchBuilt.Client != nil {
+		if err := searchBuilt.EnsureIndex(ctx); err != nil {
+			log.Fatalf("user-service search index ensure failed: %v", err)
+		}
+		log.Printf("user-service search index enabled: %s", searchBuilt.Client.IndexName())
+	}
+
 	// 6. Caches
 	profileCache := cache.NewProfileCache(redisClient)
 	settingCache := cache.NewSettingCache(redisClient)
 	blockCache := cache.NewBlockCache(redisClient)
-	userEventPublisher := mq.NewEventPublisher(redisClient)
+	// The domain MQ publisher stays the primary; when ES is enabled the search
+	// projector is composed onto the fan-out tail (best-effort, never blocks).
+	var userEventPublisher application.UserEventPublisher = mq.NewEventPublisher(redisClient)
+	if searchBuilt.Projector != nil {
+		userEventPublisher = searchindex.ComposePublisher(userEventPublisher, searchBuilt.Projector)
+	}
 	userSyncService := runtimesync.NewService(redisClient, redisRouter.Scene("realtime"))
 
 	// 7. Services
@@ -324,6 +346,9 @@ func main() {
 		healthChecker.Register("mongodb", func(hctx context.Context) error {
 			return mongoClient.Ping(hctx, nil)
 		})
+	}
+	if ping := searchBuilt.HealthPing(); ping != nil {
+		healthChecker.Register("search_es", ping)
 	}
 
 	// 8. Handler

@@ -8,3 +8,9 @@ redis:
     mode: standalone
     addr: "127.0.0.1:6379"
     db: 0
+
+# beta keeps ES disabled by default; endpoints are injected via SEARCH_ES_* when
+# a shared cluster is available for manual integration.
+es:
+  enabled: false
+  endpoints: []

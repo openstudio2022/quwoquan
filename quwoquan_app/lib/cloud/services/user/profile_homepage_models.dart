@@ -10,6 +10,13 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wi
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_user_like_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_normalized_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_profile_stats_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_bundle_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_tab_counts_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_viewer_context_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
+part 'profile_homepage_bundle_models.dart';
 
 @immutable
 class SubAccountProfileViewData {
@@ -24,11 +31,14 @@ class SubAccountProfileViewData {
     required this.backgroundUrl,
     required this.bio,
     this.identityTags = const <String>[],
+    this.verified = false,
     required this.followerCount,
     required this.followingCount,
     required this.postCount,
     required this.circleCount,
     required this.likeCount,
+    this.profileCompleteness = 100,
+    this.profileCompletenessMissingItems = const <String>[],
     required this.isolationLevel,
     required this.profileVisibility,
     required this.inheritsFromOwner,
@@ -48,11 +58,21 @@ class SubAccountProfileViewData {
 
   /// 主页单行身份标签（云侧 identityTags，端以 · 分隔单行展示）。
   final List<String> identityTags;
+
+  /// 认证标识（蓝勾）。云侧 verified 直出，端只读展示，缺省 false。
+  final bool verified;
   final int followerCount;
   final int followingCount;
   final int postCount;
   final int circleCount;
   final int likeCount;
+
+  /// 主页完善度（0-100），用于「完善主页」提示。默认 100 表示不展示提示。
+  final int profileCompleteness;
+
+  /// 主页待补全项（avatar / tags / circles / entities 等开放字符串）。
+  final List<String> profileCompletenessMissingItems;
+
   final String isolationLevel;
   final String profileVisibility;
   final bool inheritsFromOwner;
@@ -73,6 +93,8 @@ class SubAccountProfileViewData {
         : (w.username.isNotEmpty ? w.username : subAccountId);
     final subjectType = w.subjectType.isNotEmpty ? w.subjectType : 'user';
     final username = w.username.isNotEmpty ? w.username : userHandle;
+    final avatarUrl = resolveAvatarImageUrl(w.avatarUrl);
+    final backgroundUrl = resolveContentMediaUrl(w.backgroundUrl);
     return SubAccountProfileViewData(
       subAccountId: subAccountId,
       ownerUserId: w.ownerUserId,
@@ -80,15 +102,18 @@ class SubAccountProfileViewData {
       userHandle: userHandle,
       username: username,
       displayName: displayName,
-      avatarUrl: w.avatarUrl,
-      backgroundUrl: w.backgroundUrl,
+      avatarUrl: avatarUrl,
+      backgroundUrl: backgroundUrl,
       bio: w.bio,
       identityTags: w.identityTags,
+      verified: w.verified,
       followerCount: w.followerCount,
       followingCount: w.followingCount,
       postCount: w.postCount,
       circleCount: w.circleCount,
       likeCount: w.likeCount,
+      profileCompleteness: w.profileCompleteness,
+      profileCompletenessMissingItems: w.profileCompletenessMissingItems,
       isolationLevel: w.isolationLevel,
       profileVisibility: w.profileVisibility,
       inheritsFromOwner: w.inheritsFromOwner,
@@ -117,11 +142,14 @@ class SubAccountProfileViewData {
       backgroundUrl: backgroundUrl,
       bio: bio,
       identityTags: identityTags,
+      verified: verified,
       followerCount: stats.followerCount,
       followingCount: stats.followingCount,
       postCount: stats.postCount,
       circleCount: stats.circleCount,
       likeCount: stats.likeCount,
+      profileCompleteness: profileCompleteness,
+      profileCompletenessMissingItems: profileCompletenessMissingItems,
       isolationLevel: isolationLevel,
       profileVisibility: profileVisibility,
       inheritsFromOwner: inheritsFromOwner,
@@ -239,9 +267,9 @@ class ProfileUserLikeRowViewData {
     return ProfileUserLikeRowViewData(
       postId: w.postId,
       title: w.title,
-      coverUrl: w.coverUrl,
+      coverUrl: resolveContentMediaUrl(w.coverUrl),
       likerNickname: w.likerNickname,
-      likerAvatarUrl: w.likerAvatarUrl,
+      likerAvatarUrl: resolveAvatarImageUrl(w.likerAvatarUrl),
       likedAt: w.likedAt,
     );
   }
@@ -277,7 +305,7 @@ class ProfileSocialRelationRowViewData {
     return ProfileSocialRelationRowViewData(
       subAccountId: id,
       displayName: name,
-      avatarUrl: w.avatarUrl,
+      avatarUrl: resolveAvatarImageUrl(w.avatarUrl),
       isFollowing: w.isFollowing,
     );
   }
@@ -304,6 +332,7 @@ class ProfileInteractionActivityViewData {
     required this.activityId,
     required this.activityType,
     required this.direction,
+    required this.commentKind,
     required this.actorSubAccountId,
     required this.actorDisplayName,
     required this.actorAvatarUrl,
@@ -311,12 +340,26 @@ class ProfileInteractionActivityViewData {
     required this.targetContentId,
     required this.targetContentType,
     required this.targetContentSummary,
+    required this.displaySubAccountId,
+    required this.displayName,
+    required this.displayAvatarUrl,
+    required this.displayUserRouteId,
+    required this.primaryText,
+    required this.contextText,
+    required this.previewMediaKind,
+    required this.previewImageUrl,
+    required this.previewText,
+    required this.previewUnavailable,
+    required this.previewObjectId,
+    required this.previewRouteId,
+    required this.filterKeys,
     required this.createdAt,
   });
 
   final String activityId;
   final String activityType;
   final String direction;
+  final String commentKind;
   final String actorSubAccountId;
   final String actorDisplayName;
   final String actorAvatarUrl;
@@ -324,6 +367,19 @@ class ProfileInteractionActivityViewData {
   final String targetContentId;
   final String targetContentType;
   final String targetContentSummary;
+  final String displaySubAccountId;
+  final String displayName;
+  final String displayAvatarUrl;
+  final String displayUserRouteId;
+  final String primaryText;
+  final String contextText;
+  final String previewMediaKind;
+  final String previewImageUrl;
+  final String previewText;
+  final bool previewUnavailable;
+  final String previewObjectId;
+  final String previewRouteId;
+  final List<String> filterKeys;
   final DateTime? createdAt;
 
   factory ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
@@ -337,17 +393,56 @@ class ProfileInteractionActivityViewData {
     final actorDisplayName = w.actorDisplayName.isNotEmpty
         ? w.actorDisplayName
         : w.actorSubAccountId;
+    final displaySubAccountId = w.displaySubAccountId.isNotEmpty
+        ? w.displaySubAccountId
+        : w.actorSubAccountId;
+    final displayName = w.displayName.isNotEmpty
+        ? w.displayName
+        : (actorDisplayName.isNotEmpty
+              ? actorDisplayName
+              : displaySubAccountId);
+    final displayAvatarUrl = w.displayAvatarUrl.isNotEmpty
+        ? w.displayAvatarUrl
+        : w.actorAvatarUrl;
+    final primaryText = w.primaryText;
+    final previewObjectId = w.previewObjectId.isNotEmpty
+        ? w.previewObjectId
+        : w.targetContentId;
+    final previewMediaKind = w.previewMediaKind.isNotEmpty
+        ? w.previewMediaKind
+        : 'none';
+    final filterKeys = <String>{
+      'all',
+      ...w.filterKeys.map((key) => key.trim()).where((key) => key.isNotEmpty),
+    }.toList(growable: false);
+    final actorAvatarUrl = resolveAvatarImageUrl(w.actorAvatarUrl);
+    final resolvedDisplayAvatarUrl = resolveAvatarImageUrl(displayAvatarUrl);
+    final previewImageUrl = resolveContentMediaUrl(w.previewImageUrl);
     return ProfileInteractionActivityViewData(
       activityId: activityId,
       activityType: w.activityType,
       direction: w.direction,
+      commentKind: w.commentKind,
       actorSubAccountId: w.actorSubAccountId,
       actorDisplayName: actorDisplayName,
-      actorAvatarUrl: w.actorAvatarUrl,
+      actorAvatarUrl: actorAvatarUrl,
       targetSubAccountId: w.targetSubAccountId,
       targetContentId: w.targetContentId,
       targetContentType: w.targetContentType,
       targetContentSummary: w.targetContentSummary,
+      displaySubAccountId: displaySubAccountId,
+      displayName: displayName,
+      displayAvatarUrl: resolvedDisplayAvatarUrl,
+      displayUserRouteId: w.displayUserRouteId,
+      primaryText: primaryText,
+      contextText: w.contextText,
+      previewMediaKind: previewMediaKind,
+      previewImageUrl: previewImageUrl,
+      previewText: w.previewText,
+      previewUnavailable: w.previewUnavailable,
+      previewObjectId: previewObjectId,
+      previewRouteId: w.previewRouteId,
+      filterKeys: filterKeys,
       createdAt: w.createdAt,
     );
   }
@@ -421,7 +516,7 @@ class ActivePersonaContextViewData {
       ownerUserId: ownerUserId,
       subjectType: subjectType,
       displayName: displayName,
-      avatarUrl: w.avatarUrl,
+      avatarUrl: resolveAvatarImageUrl(w.avatarUrl),
       personaContextVersion: w.personaContextVersion,
       isPrimary: w.isPrimary,
     );
@@ -521,7 +616,7 @@ class PersonaManagementItemViewData {
       userHandle: w.userHandle,
       phone: w.phone,
       email: w.email,
-      avatarUrl: w.avatarUrl,
+      avatarUrl: resolveAvatarImageUrl(w.avatarUrl),
       isolationLevel: w.isolationLevel,
       profileVisibility: w.profileVisibility,
       isPrimary: w.isPrimary,
@@ -746,3 +841,6 @@ class UserLifeItem {
   /// 关联内容引用（作品/圈子等）。
   final String refId;
 }
+
+// ─── 主页首屏聚合（homepage-bundle，锁定决策 #1：一次聚合 + 交集/影响力并发补充）──
+

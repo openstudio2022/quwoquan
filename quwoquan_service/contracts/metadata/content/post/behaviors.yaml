@@ -9,6 +9,75 @@ description: |
     - Python: ContentFeatures + ContentTrainingSample（Pydantic BaseModel）
 
 # ── 一、用户行为事件 ────────────────────────────────────────────────────
+wire_schema:
+  # common_fields 为「全事件携带」的通用归因/幂等字段（单一真相源）：
+  # clientEventId/feedRequestId/state/referralSource/position/channelId/rankingVersion
+  # 适用于所有 behavior_events（含 dedicated_route 的 comment）；事件级 payload_fields
+  # 只声明事件专属上下文（如 commentLength/shareTarget/circleId），禁止再重复列举通用归因字段。
+  # channelId/rankingVersion 全事件携带且被服务端 BehaviorEventInput 实际消费（持久化 RawBehaviorEvent +
+  # HotPath BehaviorSignal + 特征宽表投影），使 served/impressed 双轨记账、CTR、特征工程可直接按
+  # 频道与精排版本分桶（AB / 离线 replay），无需回 join 一次 feed 下发记录（其有 TTL/留存限制），
+  # 保持 metadata↔服务端消费一一对应（R08）。
+  common_fields:
+    - name: clientEventId
+      type: string
+      required: true
+      description: |
+        端侧生成的事件幂等 ID。云侧以 rec:event_dedup:{<userId>}:<clientEventId>
+        做 SET NX 去重；重复事件不得再次进入 HotPath、训练样本或运营指标。
+    - name: feedRequestId
+      type: string
+      required: false
+      description: |
+        Feed 下发时返回的请求归因 ID。端侧曝光、停留、点击、互动和负反馈必须回传
+        同一个 feedRequestId，禁止点击时重生，确保召回 → 下发 → 曝光 → 互动漏斗可对齐。
+    - name: referralSource
+      type: enum
+      enum: [organic_feed, friend_share, chat_link, circle_post, author_profile, entity_page, search, push_notification, deep_link]
+      required: false
+      description: |
+        用户到达内容的来源渠道。曝光/点击/停留/互动/负反馈全事件回传，供推荐侧按来源加权
+        （runtime/recommendation.ReferralSourceMultiplier）与归因下钻。端侧 ReferralSource 枚举与
+        云侧 ReferralSourceMultiplier 键必须与本闭集一一对应（R08 端云对齐）。
+    - name: position
+      type: int
+      required: false
+      description: |
+        事件发生时内容在 feed 流中的 0-based 序位。曝光/点击事件既往以 feedPosition 具名上报，
+        云侧 BehaviorEventInput 同时接收 position/feedPosition 并归一到 Position；与 feedRequestId
+        组合可还原「某次 feed 下发的第几位被曝光/点击」，供位置偏置校正与离线 replay 归因。
+    - name: channelId
+      type: string
+      required: false
+      description: |
+        事件发生时 feed 所属频道（如 recommend / following / video）。全事件回传，服务端
+        BehaviorEventInput → RawBehaviorEvent / BehaviorSignal / 特征宽表均消费，使 served/impressed
+        双轨记账与 CTR、互动率可按频道分桶，供 AB 与频道级归因下钻。
+    - name: rankingVersion
+      type: string
+      required: false
+      description: |
+        事件发生时 feed 下发所用的精排版本（与 DiscoveryFeedPage.rankingVersion 同源）。全事件回传，
+        服务端持久化并投影到特征宽表，使离线 replay / AB 可按精排版本切分曝光与转化，
+        定位某版本精排的位置偏置与 CTR 退化。
+    - name: state
+      type: enum
+      enum: [served, visible, impressed, click, dwell, interaction, negative]
+      required: false
+      description: |
+        反馈状态闭集（七态漏斗）。served 由云侧下发写入；visible/impressed/click/dwell/
+        interaction/negative 由端侧上报。click 是独立漏斗态（CTR = click / impressed），
+        与点赞/评论/分享等深度互动(interaction)分离。training_sample 只能由云侧派生，
+        不允许端侧上报。
+  state_derivation:
+    served: 云侧 feed 返回即 write-behind 写入 rec:served day-bucket，不作为训练正样本。
+    visible: 端侧进入视窗的弱信号，按 recpolicy 采样或仅本地聚合。
+    impressed: 端侧达到可见面积 + 停留阈值后的真实曝光，写入 rec:impressed day-bucket。
+    click: 端侧点击进入详情/沉浸态的独立漏斗态，作为 CTR 分子，区别于 interaction。
+    dwell: 离开/切走/翻页时聚合停留时长，弱停留可按 recpolicy 丢弃。
+    interaction: 点赞、评论、分享、关注、进圈、加联系人等强正向深度互动行为。
+    negative: dislike、report、hide_author、hide_content_type 等显式负反馈，用户级即时过滤。
+
 behavior_events:
   - type: impression
     description: 内容进入可视区域曝光
@@ -16,13 +85,13 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackImpression
-    payload_fields: [postId, contentType, feedPosition, intersectionId, intersectionDimension, intersectionClass, intersectionEvidenceId]
+    payload_fields: [postId, contentType, feedPosition, intersectionId, intersectionDimension, intersectionClass, intersectionSourceRef, intersectionEvidenceId]
     ml_signal: weak_positive
     signal_weight: 0.1
     notes: |
       交集曝光归因（交集统一体验）：当帖/卡承载交集理由时，随曝光带
       intersectionId / intersectionDimension / intersectionClass(fact|affinity) /
-      intersectionEvidenceId，闭合「交集曝光 → 点击 → 转化」漏斗，并供推荐冷却窗口判定。
+      intersectionSourceRef(§5.4 标准 kind) / intersectionEvidenceId，闭合「交集曝光 → 点击 → 转化」漏斗，并供推荐冷却窗口判定。
       非交集曝光时这些字段为空，不影响普通内容曝光归因。
 
   - type: dwell
@@ -41,12 +110,24 @@ behavior_events:
     batch: false
     batch_route: POST /v1/content/behaviors
     dart_method: trackClick
-    payload_fields: [postId, contentType, feedPosition, intersectionId, intersectionDimension, intersectionClass, intersectionEvidenceId]
+    payload_fields: [postId, contentType, feedPosition, intersectionId, intersectionDimension, intersectionClass, intersectionSourceRef, intersectionEvidenceId]
     ml_signal: strong_positive
     signal_weight: 0.5
     notes: |
-      交集点击归因：交集卡点击进入对象页时，随点击带 intersectionId/dimension/class/evidenceId，
-      使曝光→点击→转化漏斗可按维度与事实/概率类别下钻。
+      交集点击归因：交集卡点击进入对象页时，随点击带 intersectionId/dimension/class/sourceRef(§5.4 kind)/evidenceId，
+      使曝光→点击→转化漏斗可按维度、标准 kind 与事实/概率类别下钻。
+
+  - type: intersection_expand
+    description: 列表入口「查看更多」展开交集列表（我的连接 / 为什么推荐TA 等）
+    trigger: tap_intersection_list_expand
+    batch: false
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackIntersectionExpand
+    payload_fields: [intersectionId, intersectionDimension, intersectionClass, intersectionSourceRef, surfaceId]
+    ml_signal: weak_positive
+    signal_weight: 0.2
+    notes: |
+      六场景列表入口展开归因；surfaceId 来自 ui_config codegen 常量。
 
   - type: dislike
     description: 用户明确标记"不感兴趣"
@@ -54,9 +135,29 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackDislike
-    payload_fields: [postId, contentType]
+    payload_fields: [postId, contentType, authorId]
     ml_signal: explicit_negative
     signal_weight: -5.0
+
+  - type: hide_author
+    description: 用户明确表示减少/不想看该作者内容；推荐侧即时过滤同作者未来窗口
+    trigger: user_action_more_menu_hide_author
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackHideAuthor
+    payload_fields: [postId, authorId, contentType]
+    ml_signal: explicit_negative
+    signal_weight: -5.0
+
+  - type: hide_content_type
+    description: 用户明确表示减少此类内容；推荐侧即时过滤同内容类型未来窗口
+    trigger: user_action_more_menu_hide_content_type
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackHideContentType
+    payload_fields: [postId, contentType]
+    ml_signal: explicit_negative
+    signal_weight: -4.0
 
   - type: share
     description: 分享到外部/圈子
@@ -81,6 +182,9 @@ behavior_events:
       用户在内容下发表评论（由 intent layer 处理，走专用路由）。
       评论是比点赞更强的深度互动信号：用户需主动输入，代表高兴趣度。
       payload 额外携带 commentLength，供推荐侧判断内容吸引力（长评 > 短评）。
+      评论走专用路由但仍须回传 common_fields 的归因字段（feedRequestId/referralSource/position），
+      使评论这一深度互动可按同一次 feed 下发归因（召回 → 下发 → 曝光 → 评论漏斗对齐），
+      不因专用路由而断链。
     dedicated_route: POST /v1/content/posts/{postId}/comments
     dart_method: null
     payload_fields: [postId, contentType, commentLength]
@@ -88,7 +192,9 @@ behavior_events:
     signal_weight: 2.5
     notes: |
       like/comment/report 三个显式行为均走专用路由，不进批量队列，
-      以保证实时性和幂等语义。commentLength 从评论完成事件回调中获取。
+      以保证实时性和幂等语义。commentLength 从评论完成事件回调中获取，是评论事件的专属
+      payload；feedRequestId/referralSource/position 为全事件通用归因，
+      统一声明在 wire_schema.common_fields，不在此重复列举（单一真相源）。
 
   - type: report
     description: 举报（由专用路由处理）
@@ -113,13 +219,14 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackFollow
-    payload_fields: [postId, authorId, intersectionDimension, intersectionTagRefs]
+    payload_fields: [postId, authorId, intersectionDimension, intersectionSourceRef, intersectionTagRefs]
     ml_signal: very_strong_positive
     signal_weight: 4.0
     notes: |
       交集转化归因（S6）：intersectionDimension（identity/location/content/interest/relationship
-      五维之一）+ intersectionTagRefs（路径制 tagRef，唯一真相源 publish/v1/tags）随关注上报，
-      供推荐回流与「交集转化率」北极星指标按维度/tagRef 下钻。
+      五维之一）+ intersectionSourceRef（§5.4 标准 kind，与曝光/点击/展开同名）+ intersectionTagRefs
+      （路径制 tagRef，唯一真相源 publish/v1/tags）随关注上报，使「交集曝光 → 点击 → 转化」整条漏斗
+      可按同一 sourceRef 下钻，供推荐回流与「交集转化率」北极星指标按维度/kind/tagRef 切分。
 
   - type: join_circle
     description: 加入圈子（交集转化第二类：进圈子）。与 follow 区分以拆分转化漏斗。
@@ -127,7 +234,7 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackJoinCircle
-    payload_fields: [postId, circleId, intersectionDimension, intersectionTagRefs]
+    payload_fields: [postId, circleId, intersectionDimension, intersectionSourceRef, intersectionTagRefs]
     ml_signal: very_strong_positive
     signal_weight: 4.0
     notes: |
@@ -140,7 +247,7 @@ behavior_events:
     batch: true
     batch_route: POST /v1/content/behaviors
     dart_method: trackAddContact
-    payload_fields: [postId, authorId, intersectionDimension, intersectionTagRefs]
+    payload_fields: [postId, authorId, intersectionDimension, intersectionSourceRef, intersectionTagRefs]
     ml_signal: very_strong_positive
     signal_weight: 4.5
 
@@ -282,6 +389,10 @@ training_sample:
 
   negative_signals:
     - type: dislike
+      weight: 3
+    - type: hide_author
+      weight: 4
+    - type: hide_content_type
       weight: 3
     - type: report
       weight: 5

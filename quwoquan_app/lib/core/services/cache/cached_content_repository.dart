@@ -36,7 +36,7 @@ class CachedContentRepository implements ContentRepository {
   final Set<String> _inflightRefreshes = <String>{};
 
   @override
-  Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? identity,
     String? type,
@@ -74,7 +74,7 @@ class CachedContentRepository implements ContentRepository {
           ),
         );
       }
-      return cached.value.toCursorPage();
+      return cached.value.toDiscoveryFeedPage();
     }
     final page = await _delegate.listDiscoveryFeedPage(
       category: category,
@@ -266,14 +266,6 @@ class CachedContentRepository implements ContentRepository {
     required String body,
   }) {
     return _delegate.generateArticleSummary(title: title, body: body);
-  }
-
-  @override
-  Future<ContentRecommendationResponseDto> getRecommendation({
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  }) {
-    return _delegate.getRecommendation(cursor: cursor, limit: limit);
   }
 
   @override
@@ -505,12 +497,15 @@ class CachedContentRepository implements ContentRepository {
     }
   }
 
-  void _storeFeedPage(String key, CursorPage<PostBaseDto> page) {
+  void _storeFeedPage(String key, DiscoveryFeedPage page) {
     _storePostProjections(page.items);
     _querySnapshotStore.put(
       key: key,
       items: page.items,
       nextCursor: page.nextCursor,
+      feedRequestId: page.feedRequestId,
+      rankingVersion: page.rankingVersion,
+      reasonVersion: page.reasonVersion,
     );
   }
 

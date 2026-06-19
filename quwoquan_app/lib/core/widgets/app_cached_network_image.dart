@@ -2,6 +2,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:quwoquan_app/cloud/media/cdn_image_url_builder.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
@@ -89,7 +91,7 @@ class AppCachedNetworkImage extends StatelessWidget {
   });
 
   List<String> get _processedUrlCandidates {
-    final rawCandidates = imageUrlCandidates ?? <String>[imageUrl];
+    final rawCandidates = imageUrlCandidates ?? _resolveImplicitCandidates(imageUrl);
     final processed = <String>[];
     for (final candidate in rawCandidates) {
       final normalized = candidate.trim();
@@ -125,6 +127,24 @@ class AppCachedNetworkImage extends StatelessWidget {
       }
     }
     return processed;
+  }
+
+  static List<String> _resolveImplicitCandidates(String raw) {
+    final normalized = raw.trim();
+    if (normalized.isEmpty) {
+      return const <String>[];
+    }
+    if (_looksLikeAvatarMedia(normalized)) {
+      return resolveAvatarImageUrlCandidates(normalized);
+    }
+    return resolveContentMediaUrlCandidates(normalized);
+  }
+
+  static bool _looksLikeAvatarMedia(String raw) {
+    final normalized = raw.replaceFirst(RegExp(r'^/+'), '').toLowerCase();
+    return normalized.startsWith('media/avatar/') ||
+        normalized.startsWith('avatar/') ||
+        normalized.contains('/media/avatar/');
   }
 
   @override

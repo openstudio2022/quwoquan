@@ -10,6 +10,7 @@ enum SearchObjectType {
   circleGroup('circle.group'),
   circleCircle('circle.circle'),
   contentPost('content.post'),
+  locationPlace('location.place'),
   entityHomepage('entity.homepage'),
   userProfile('user.profile'),
   tag('tag'),
@@ -36,6 +37,8 @@ enum SearchObjectType {
         return SearchObjectType.circleCircle;
       case 'content.post':
         return SearchObjectType.contentPost;
+      case 'location.place':
+        return SearchObjectType.locationPlace;
       case 'entity.homepage':
         return SearchObjectType.entityHomepage;
       case 'user.profile':
@@ -133,6 +136,13 @@ class SearchRegistry {
       provider: 'content_remote',
     ),
     SearchObjectRegistryEntry(
+      type: SearchObjectType.locationPlace,
+      label: '地点',
+      domain: 'content',
+      executionStrategy: SearchExecutionStrategy.remoteOnly,
+      provider: 'content_remote',
+    ),
+    SearchObjectRegistryEntry(
       type: SearchObjectType.entityHomepage,
       label: '主页',
       domain: 'entity',
@@ -191,7 +201,7 @@ class SearchRegistry {
     SearchSectionRegistryEntry(
       id: 'locations',
       title: '位置',
-      defaultObjectTypes: <SearchObjectType>[SearchObjectType.integrationLocationPoi],
+      defaultObjectTypes: <SearchObjectType>[SearchObjectType.locationPlace, SearchObjectType.integrationLocationPoi],
     ),
     SearchSectionRegistryEntry(
       id: 'web',
@@ -237,6 +247,7 @@ enum RetrieveTarget {
   video('video'),
   user('user'),
   entity('entity'),
+  location('location'),
   circle('circle'),
   group('group'),
   chat('chat'),
@@ -258,6 +269,8 @@ enum RetrieveTarget {
         return RetrieveTarget.user;
       case 'entity':
         return RetrieveTarget.entity;
+      case 'location':
+        return RetrieveTarget.location;
       case 'circle':
         return RetrieveTarget.circle;
       case 'group':
@@ -317,6 +330,12 @@ class RetrieveTargetRegistry {
       target: RetrieveTarget.entity,
       label: '实体主页',
       objectType: SearchObjectType.entityHomepage,
+      contentType: '',
+    ),
+    RetrieveTargetEntry(
+      target: RetrieveTarget.location,
+      label: '地点',
+      objectType: SearchObjectType.locationPlace,
       contentType: '',
     ),
     RetrieveTargetEntry(

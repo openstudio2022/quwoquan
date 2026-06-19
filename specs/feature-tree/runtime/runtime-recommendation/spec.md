@@ -1,6 +1,9 @@
 # L2 特性：runtime-recommendation
 
 ## 功能说明
+
+`runtime-recommendation` 是推荐运行时基础能力，提供 HotPath、SessionCache、BufferedHotPath、7 阶段 Engine、Rule/Remote/CascadeScorer、MMR/UCB1 重排与可观测。首页 feed 业务编排、频道 IA、流式体验与推荐 SLO 归属 `discovery-content/feed-orchestration-recommendation`，本节点只提供可复用引擎能力。
+
 - 双通道架构：Redis 热路径（session 级实时信号）+ 冷路径（离线特征 + ML 模型）。
 - 热路径：session_signals（标签权重漂移）、exposed_set（去重）、negative_set（负反馈过滤）、realtime_interest（实时兴趣向量）。
 - 推荐引擎：7 阶段管线 — Session → Recall → PreRank → Filter → FeatureAssembly → Score → Rerank。
@@ -39,6 +42,8 @@
 - 已曝光内容不再推荐。
 - 推荐策略参数可通过 experiments 灰度。
 - CascadeScorer 保证 ML 不可用时降级到 RuleScorer。
+- runtime 不拥有 route/surface/页面 IA，不维护第二套 feed 编排真相源。
+- 深度排序模型平台轨（MMoE/PLE/双塔 ANN/IPS）是长期上限，不进入本轮基线实现。
 
 ## 验收标准
 - A1：信号上报 → 偏好反映 → 下一批内容变化。✅ 通过
@@ -57,3 +62,8 @@
 - A/B 路由集成（按用户分组选择打分策略）
 - CTR/曝光/留存 metric dashboard
 - 内容 Embedding 生成 pipeline
+
+## 关联基线
+
+- 业务编排：`specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md`
+- 推荐 SLO：`quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml`

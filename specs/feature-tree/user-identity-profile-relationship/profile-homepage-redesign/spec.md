@@ -5,7 +5,8 @@
 > 本阶段以“四类主页高保统一落地”为当前执行口径：用户主页与我的主页首屏统一为
 > `身份区 -> CTA -> 交集 -> 影响力 -> Tab -> 内容流`。首屏 CTA 固定为他人主页
 > `关注 / 私信`、我的主页 `编辑资料 / 分享主页`；不再把打招呼、语音、视频、分身管理等
-> 操作放在首屏。Profile 一级 Tab 当前收敛为 `作品 / 圈子 / 互动`，作品二级只保留
+> 操作放在首屏。Profile 一级 Tab 当前收敛为 `作品 / 互动`，圈子作为统计数字与粉丝/关注同层进入
+> 统计详情页，不再占据主页一级 Tab；作品二级只保留
 > `全部 / 图片 / 视频 / 文字`，其中底层类型仍为 `article`，展示筛选用“文字”。
 > “文章”只用于正式内容类型或详情语境，“长文”只用于编辑创作语境。
 >
@@ -15,7 +16,7 @@
 
 > 版本口径冻结（V5，参见 specs/changelog/CR-20260531-027）：本 spec 为 `profile-homepage-redesign` 能力的**唯一冻结口径**。本次 V5 在历史 `profile-commercial-readiness`（已上线收窄子集）基础上**全量补全**，并明确以下三处与历史口径的差异，**不向后兼容旧实现**：
 >
-> 1. **一级 Tab 为全量 4 个**：`[创作 | 圈子 | 互动 | 生活]`（commercial-readiness 曾去掉生活 Tab，V5 恢复并按新架构重做）。
+> 1. **一级 Tab 收敛为 2 个**：`[创作 | 互动]`；`圈子`作为统计数字进入`粉丝 / 关注 / 圈子`三 Tab 详情页，`生活`不再作为本阶段主页一级 Tab。
 > 2. **profile 内容形式只有三类**：文章 / 图片 / 视频（均为 `contentIdentity=work` 作品）。**profile 不存在「微趣」概念**；`moment/micro`（点滴微动态）是 content/discovery 域的独立活跃概念，不进 profile 创作 Tab。历史 spec/commercial-readiness 中创作含「微趣」的表述在 V5 一律废止。
 > 3. **交集卡为真闭环**：`你们的交集` 卡由 tag-service `shared-tags` 真实倒排数据驱动（`object_tag_index` 打标管道），统一到 `IntersectionReason`；历史 `resonance`（共鸣）旧链路全部删除，不保留。
 
@@ -25,7 +26,7 @@
 
 1. **代码重复**：`my_profile_page.dart`（1546行）与 `author_profile_page.dart`（2539行）存在 80%+ 重复代码（背景图拉伸、头像、统计行、Tab 框架），但数据源、操作按钮不同，维护成本高且易产生不一致。
 2. **Tab 结构与发现页脱节**：发现页使用 `[微趣, 作品]` 双轨道，个人主页使用 `[创作, 互动, 生活]`，内容分类语义不统一，用户在发现页看到的分类无法在主页上找到对应。
-3. **无圈子展示**：个人主页统计行有"圈子"数字，但无已加入圈子的列表展示，与圈子社区功能脱节。
+3. **圈子入口层级不清**：个人主页同时存在圈子 Tab 与统计数字语义，用户需要在统计层直接进入已加入圈子列表。
 4. **目录结构违规**：`my_profile_page` 仍在 `lib/features/profile/`，未按领域规范迁移到 `lib/ui/user/`。
 5. **编码质量低下**：大量硬编码间距（`16.w`, `50.h`, `140.w`）、非语义颜色引用、中文硬编码文案，违反设计系统规范。
 6. **数据源割裂**：`my_profile_page` 使用 `_generateMockPosts()` 硬编码假数据，而 `author_profile_page` 已接入 `userProfileRepositoryProvider`。
@@ -54,11 +55,13 @@
 **mine 差异**：操作按钮 = [编辑资料, 管理人设]（等宽双按钮）；创作可见性含「私密」；顶栏 = [设置]
 **other 差异**：操作按钮 = [关注/已关注, 私信]（等宽双按钮，与 mine 布局一致）；无「私密」；顶栏 = [返回, 更多]
 
-### F2: 一级 Tab 重新设计
+### F2: 一级 Tab 与统计入口重新设计
 
-一级 Tab：`[创作 | 圈子 | 互动 | 生活]`，默认选中「创作」。一级 Tab 由 codegen `profile_tabs`（`user/user_profile/ui_config.yaml`）驱动，端侧不得硬编码 Tab id/文案。
+一级 Tab：`[创作 | 互动]`，默认选中「创作」。一级 Tab 由 codegen `profile_tabs`（`user/user_profile/ui_config.yaml`）驱动，端侧不得硬编码 Tab id/文案。
 
 命名语义：「创作」= 用户发布的全部原创**作品**（`contentIdentity=work`），内容形式为 文章 / 图片 / 视频 三类。**profile 不引入「微趣」(moment/micro) 概念**——点滴微动态属 content/discovery 域，profile 创作 Tab 不展示。
+
+统计区统一为 `粉丝 / 关注 / 获赞 / 圈子` 四项，数字可点击：粉丝、关注、圈子进入统一统计详情页并默认落在对应一级 Tab；获赞进入现有互动 Tab 的点赞子维度，不新增第二条点赞列表。
 
 ### F3: 创作 Tab（二级分类 + 可见性过滤）
 
@@ -71,9 +74,10 @@
   - 私密作品封面叠加锁标
   - 选中非「全部」时，Tab 文字旁显示筛选指示器
 
-### F4: 圈子 Tab
+### F4: 圈子统计详情
 
-- 展示用户已加入的全部圈子（我的主页）或公开圈子（他人主页）
+- 圈子不再作为主页一级 Tab；展示用户已加入的全部圈子（我的主页）或公开圈子（他人主页）
+- 入口来自统计区「圈子」数字，与「粉丝 / 关注」共享同一个统计详情页；详情页一级 Tab 为 `[粉丝 | 关注 | 圈子]`
 - 卡片形式：圈子封面 + 圈子名
 - 点击跳转到 `circle_detail_page`
 - 空态：友好提示「还没加入圈子」或「Ta 还没加入圈子」
@@ -145,7 +149,7 @@
 
 - **O1**: 用户档案编辑页重构（`edit_profile_page.dart` 保持现有实现）
 - **O2**: 分身管理页重构（`persona_management_page.dart` 保持现有实现）
-- **O3**: 统计详情页重写（`profile_stats_page.dart` 保持现有实现）
+- **O3**: 大范围重写统计详情页之外的数据契约；`profile_stats_page.dart` 仅升级为粉丝/关注/圈子三 Tab 容器，继续复用现有 Repository 与列表能力
 - **O4**: 圈子推荐算法（圈子 Tab 仅展示已加入列表，不含推荐）
 - **O5**: content/discovery 域的 moment/micro（点滴微动态）能力变更——profile 不引入微趣，但也不修改 content 域既有 moment 实现
 - **O6**: 其他 features/ 目录迁移（create、assistant、settings、welcome 不在本次范围）
@@ -195,7 +199,7 @@
 ### 内部对标
 
 - **发现页** `discovery_page.dart`：双轨道 `[微趣, 作品]`，Tab 组件 `CenteredScrollableTabBar`，contentType 枚举 → 创作 SubTab 对齐
-- **圈子页** `circles_page.dart`：圈子卡片样式、分类导航 → 主页圈子 Tab 复用
+- **圈子页** `circles_page.dart`：圈子卡片样式、分类导航 → 统计详情页的圈子列表复用
 
 ## 商用基线（V5 冻结）
 
@@ -227,7 +231,7 @@
 ### 灰度与回滚
 
 - 灰度：交集卡真数据依赖 gamma/prod `object_tag_index` 打标产物；打标产物缺失时交集卡自动空兜底（契约正确、不报错），可独立于打标管道先行发布前端。
-- 一级 4 Tab / 生活 Tab / 创作 SubTab 由 codegen `profile_tabs` 驱动，支持配置层灰度（feature flag 留存口子）。
+- 一级 Tab / 创作 SubTab 由 codegen `profile_tabs` 驱动，支持配置层灰度（feature flag 留存口子）。
 - 回滚：V5 不向后兼容旧 resonance 实现；回滚以 git revert 整切片为单位（S2 云侧打标、S3-S5 端侧）；打标管道回滚仅影响交集卡数据（退化为空兜底），不影响主页其余功能。
 
 ### 观测方案

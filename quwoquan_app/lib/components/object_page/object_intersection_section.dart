@@ -9,7 +9,7 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card_skeleton.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 /// 对象页交集区块（V4 · 商用完整态 · 三主页统一）。
@@ -82,7 +82,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
       inlineExpandCount: ref
           .watch(intersectionDisplayConfigProvider)
           .inlineExpandCount,
-      moreLabel: UITextConstants.intersectionMoreLabel,
+      moreLabel: DiscoveryFeedText.intersectionMoreLabel,
       highlightKind: highlightKind,
       onMoreTap: () => context.push(
         AppRoutePaths.objectIntersections(

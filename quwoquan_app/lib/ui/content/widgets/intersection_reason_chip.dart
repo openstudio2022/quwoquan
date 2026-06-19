@@ -31,7 +31,7 @@ class IntersectionReasonChip extends StatelessWidget {
   final String weightTier;
 
   /// 交集理由位口径真相源：云侧主交集结论句 [IntersectionReason.primaryText] 直出，
-  /// 缺省回退整句 displayText；端不本地拼装事实（G2）。
+  /// 缺省回退连接说明 connectionSummary；端不本地拼装事实（G2）。
   /// 无来源 / 无可展示结论句 → null（不展示）。
   /// 所有承载交集理由位的 surface 必须经此函数解析（四口径一致）。
   static String? primaryText(List<IntersectionReason>? reasons) {
@@ -39,8 +39,8 @@ class IntersectionReasonChip extends StatelessWidget {
     final first = reasons.first;
     final primary = first.primaryText.trim();
     if (primary.isNotEmpty) return primary;
-    final displayOnly = first.displayText.trim();
-    if (displayOnly.isNotEmpty) return displayOnly;
+    final summary = first.connectionSummary.trim();
+    if (summary.isNotEmpty) return summary;
     return null;
   }
 

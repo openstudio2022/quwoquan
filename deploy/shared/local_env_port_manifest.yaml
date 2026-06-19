@@ -79,6 +79,18 @@
       "plane": "service",
       "slotOffset": 270
     },
+    "search-service": {
+      "plane": "service",
+      "slotOffset": 280
+    },
+    "entity-service": {
+      "plane": "service",
+      "slotOffset": 290
+    },
+    "circle-service": {
+      "plane": "service",
+      "slotOffset": 300
+    },
     "postgres": {
       "plane": "dataDebug",
       "slotOffset": 400
@@ -90,6 +102,10 @@
     "redis": {
       "plane": "dataDebug",
       "slotOffset": 420
+    },
+    "elasticsearch": {
+      "plane": "dataDebug",
+      "slotOffset": 430
     }
   },
   "profiles": {

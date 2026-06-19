@@ -471,6 +471,48 @@ void main() {
       },
     );
 
+    test(
+      'returns location.place hits through locations section',
+      () async {
+        final repo = AppSearchRepository(
+          circleRepository: MockCircleRepository(),
+          contentRepository: MockContentRepository(),
+          homepageRepository: MockHomepageRepository(),
+          integrationRepository: const MockIntegrationRepository(),
+          userProfileRepository: const MockUserProfileRepository(),
+          localChatSearchStore: chatStore,
+          localChatSearchSyncService: chatSyncService,
+          localCircleGroupSnapshotStore: circleStore,
+          personaContextLoader: () async {
+            return ActivePersonaContextViewData.fallback(
+              subAccountId: namespace.subAccountId,
+              ownerUserId: namespace.ownerUserId,
+              subjectType: namespace.subjectType,
+              displayName: '测试用户',
+              avatarUrl: '',
+              personaContextVersion: namespace.personaContextVersion,
+            );
+          },
+        );
+
+        final response = await repo.search(
+          const SearchRequest(
+            query: '西湖',
+            mode: SearchMode.result,
+            objectTypes: <SearchObjectType>{SearchObjectType.locationPlace},
+          ),
+        );
+
+        expect(response.sections, isNotEmpty);
+        expect(response.sections.first.id, equals('locations'));
+        expect(
+          response.sections.first.hits.first.objectType,
+          equals(SearchObjectType.locationPlace),
+        );
+        expect(response.sections.first.hits.first.title, contains('西湖'));
+      },
+    );
+
     test('isolates local chat results by namespace', () async {
       final repo = AppSearchRepository(
         circleRepository: MockCircleRepository(),

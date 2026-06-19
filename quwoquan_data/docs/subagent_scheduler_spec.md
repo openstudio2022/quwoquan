@@ -16,6 +16,13 @@
 
 业界内容/标注/生成流水线的通用形态：`controller + work queue + isolated worker + handoff packet + retry policy + reducer gate`。
 
+组织层角色与职责边界见 [`agent_content_supply_operating_model.md`](agent_content_supply_operating_model.md)。本文件只描述执行层调度机制；执行层不得改变组织层职责：
+
+- Controller 只编排、限流、采纳 envelope 和跑 reducer，不写正文。
+- Source Research、Creative Planner、Creator、Self Critic、Independent Review、Optimizer 是不同职责，不得把“自选源、自创作、自审通过”合并成一个无审计黑箱。
+- 任一 worker 只能处理一个 `ObjectJob` 的一个 stage；完成标准是文件 + hash + gate，而不是会话回复。
+- 快速失败对象进入 `dead`、`spilled`、`abandoned` 或 `manual_required`，不占用同批其它对象的并发槽位。
+
 | 角色 | 职责 | 落地 |
 |---|---|---|
 | Controller / 主 Agent | 入队、限流、收集结果、推进 DAG、跑 reducer；**不写正文** | Cursor 主会话 + `qwq-data object-queue` |
@@ -63,6 +70,7 @@
 - Subagent 不允许把"我已完成"作为准出，必须有文件路径 + `author_self_check.json` + `ref_review_gate.passed`。
 - 主 Agent 不允许在缺 `ref_review_gate` 的情况下把 ref 标 done。
 - 批次不允许在缺 `batch_reducer_gate` 的情况下进入 publish。
+- 创作自由只在 `ObjectEvidencePacket` 和 `CreativeBrief` 内发生；Subagent 不得自行扩展来源、换图、改变载体或写入未发布 refs。
 - 同一 `baseSourceRef` 被多篇使用时，reducer 标记 `source_reuse_risk`，要求人工确认或重选底稿。
 - `ref_review_gate` 含的出口门（单一 gate library）：`writingIntentConsistency` / `imageReferenceClosure` / `skeletonSimilarity` / `registerMismatch` / `sourceRejectBlock` / `contactInfo`（私人电话/微信/QQ）/ `mechanicalHeading`（清单式标题）。
 - 超墙钟（`deadlineEpoch`）的 ref 由 `reap` 标 `timeout` 失败，不阻塞同批其它 ref。

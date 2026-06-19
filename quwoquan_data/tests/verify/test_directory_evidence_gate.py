@@ -190,12 +190,23 @@ def test_gate_passes_clean_object():
     write_json(
         ent / "manifest.json",
         {
-            "assets": [{"assetId": asset_id, "fileName": f"{asset_id}.jpg"}],
+            "assets": [
+                {
+                    "assetId": asset_id,
+                    "fileName": f"{asset_id}.jpg",
+                    "sourceRef": "entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md",
+                    "sourceAssetRef": "entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/assets/001_cover.jpg",
+                    "termsUrl": "https://zh.wikipedia.org/wiki/Wikipedia:CC",
+                }
+            ],
             "citedSourceRefs": ["entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md"],
         },
     )
     (ent / "assets").mkdir(parents=True, exist_ok=True)
     (ent / "assets" / f"{asset_id}.jpg").write_bytes(b"cover")
+    src_unit_assets = ent / "1.download" / "sources" / "01.overview_baike" / "assets"
+    src_unit_assets.mkdir(parents=True, exist_ok=True)
+    (src_unit_assets / "001_cover.jpg").write_bytes(b"cover")
     write_json(ent / "3.compose" / "entity_page_input.json", {"payload": {"name": "峨眉山"}})
     issues = validate_entity_pages(TASK, batch, _seed_homepage_spec("峨眉山"))
     assert not issues, issues
@@ -252,7 +263,51 @@ def test_gate_entity_homepage_writes_review_sidecars():
     )
     (ent / "assets").mkdir(parents=True, exist_ok=True)
     (ent / "assets" / f"{asset_id}.jpg").write_bytes(b"cover")
-    write_json(ent / "manifest.json", {"assets": [{"assetId": asset_id, "fileName": f"{asset_id}.jpg", "caption": "水利工程"}]})
+    write_source_unit(
+        ent,
+        ordinal=2,
+        source_id="baike_overview",
+        source_md="# 都江堰\n\n百科概述",
+        clean_md="# 都江堰\n\n百科概述",
+        source_category="encyclopedia",
+        research_lane="homepage",
+        url="https://baike.example.com/djy",
+        title="都江堰百科",
+        target_ref="/entity/地点/景区/都江堰",
+    )
+    homepage_source_ref = (
+        "entities/地点/景区/都江堰/1.download/sources/02.baike_overview/source.md"
+    )
+    djy_src_assets = ent / "1.download" / "sources" / "02.baike_overview" / "assets"
+    djy_src_assets.mkdir(parents=True, exist_ok=True)
+    (djy_src_assets / "001_cover.jpg").write_bytes(b"cover")
+    write_json(
+        ent / "2.quality" / "quality_analysis.json",
+        {
+            "entityRef": "/entity/地点/景区/都江堰",
+            "baseDraft": {"sourceRef": homepage_source_ref},
+            "candidateCount": 1,
+            "candidates": [],
+            "recommendation": "proceed",
+            "issues": [],
+            "sourcePaths": [homepage_source_ref],
+        },
+    )
+    write_json(
+        ent / "manifest.json",
+        {
+            "assets": [
+                {
+                    "assetId": asset_id,
+                    "fileName": f"{asset_id}.jpg",
+                    "caption": "水利工程",
+                    "sourceRef": homepage_source_ref,
+                    "sourceAssetRef": "entities/地点/景区/都江堰/1.download/sources/02.baike_overview/assets/001_cover.jpg",
+                    "termsUrl": "https://baike.example.com/license",
+                }
+            ]
+        },
+    )
     write_json(ent / "3.compose" / "entity_page_input.json", {"payload": {"name": "都江堰"}})
     issues = validate_entity_pages(TASK, batch, _seed_homepage_spec("都江堰"))
     assert not issues, issues

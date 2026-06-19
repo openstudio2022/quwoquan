@@ -60,8 +60,20 @@ func TestRetrieveContractMetadataForbidsRetiredFields(t *testing.T) {
 	if got := meta.RetrieveContract.MatchConditions; len(got) != 3 {
 		t.Fatalf("match_conditions=%v want [ids names terms]", got)
 	}
-	if got := meta.RetrieveContract.FilterFields; len(got) != 2 {
-		t.Fatalf("filter_fields=%v want [tags timeRange]", got)
+	// filter_fields is the named filter group: tags / timeRange / near (the
+	// cross-object geo radius dimension). It stays a fixed allowlist, never a
+	// free-form where clause.
+	filters := map[string]bool{}
+	for _, f := range meta.RetrieveContract.FilterFields {
+		filters[f] = true
+	}
+	for _, must := range []string{"tags", "timeRange", "near"} {
+		if !filters[must] {
+			t.Fatalf("filter_fields must include %q, got=%v", must, meta.RetrieveContract.FilterFields)
+		}
+	}
+	if got := len(meta.RetrieveContract.FilterFields); got != 3 {
+		t.Fatalf("filter_fields=%v want exactly [tags timeRange near]", meta.RetrieveContract.FilterFields)
 	}
 }
 

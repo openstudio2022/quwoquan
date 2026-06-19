@@ -827,9 +827,11 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 			"author mismatch",
 		)
 	}
+	previousCircleIDs := asStringSlice(post.CircleIds)
 	if err := applyPostSettingsPayload(post, payload); err != nil {
 		return nil, err
 	}
+	addedCircleIDs, removedCircleIDs := diffCircleIDs(previousCircleIDs, asStringSlice(post.CircleIds))
 	now := time.Now().UTC()
 	post.UpdatedAt = now
 	if !s.store.Update(ctx, post.ID, post) {
@@ -848,6 +850,8 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 		"status":             post.Status,
 		"visibility":         post.Visibility,
 		"circleIds":          asStringSlice(post.CircleIds),
+		"addedCircleIds":     addedCircleIDs,
+		"removedCircleIds":   removedCircleIDs,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
@@ -862,6 +866,8 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 		"status":             post.Status,
 		"visibility":         post.Visibility,
 		"circleIds":          asStringSlice(post.CircleIds),
+		"addedCircleIds":     addedCircleIDs,
+		"removedCircleIds":   removedCircleIDs,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
@@ -994,6 +1000,7 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 			"author mismatch",
 		)
 	}
+	statusBeforeDelete := post.Status
 	now := time.Now().UTC()
 	post.Status = "deleted"
 	post.DeletedAt = now
@@ -1015,12 +1022,16 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 		"authorId":        post.AuthorId,
 		"contentType":     post.ContentType,
 		"contentIdentity": post.ContentIdentity,
+		"status":          statusBeforeDelete,
+		"circleIds":       asStringSlice(post.CircleIds),
 		"deletedAt":       post.DeletedAt.Format(time.RFC3339),
 	}, now)
 	s.projectPostEvent(ctx, "PostDeleted", post, map[string]any{
 		"_id":             post.ID,
 		"contentType":     post.ContentType,
 		"contentIdentity": post.ContentIdentity,
+		"status":          statusBeforeDelete,
+		"circleIds":       asStringSlice(post.CircleIds),
 		"deletedAt":       post.DeletedAt.Format(time.RFC3339),
 	}, now)
 	return nil
@@ -1051,6 +1062,7 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	previousCircleIDs := asStringSlice(post.CircleIds)
 	byPost, ok := s.distributions[post.ID]
 	if !ok {
 		byPost = map[string]bool{}
@@ -1071,6 +1083,7 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 		}
 	}
 	post.CircleIds = active
+	addedCircleIDs, removedCircleIDs := diffCircleIDs(previousCircleIDs, active)
 	now := time.Now().UTC()
 	post.UpdatedAt = now
 	_ = s.store.Update(ctx, post.ID, post)
@@ -1083,6 +1096,8 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 		"status":             post.Status,
 		"visibility":         post.Visibility,
 		"circleIds":          asStringSlice(post.CircleIds),
+		"addedCircleIds":     addedCircleIDs,
+		"removedCircleIds":   removedCircleIDs,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
@@ -1097,6 +1112,8 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 		"status":             post.Status,
 		"visibility":         post.Visibility,
 		"circleIds":          asStringSlice(post.CircleIds),
+		"addedCircleIds":     addedCircleIDs,
+		"removedCircleIds":   removedCircleIDs,
 		"assistantUsePolicy": post.AssistantUsePolicy,
 		"publishedAt":        formatTimePtr(post.PublishedAt),
 		"title":              post.Title,
@@ -1687,15 +1704,15 @@ func (s *PostService) ListProfileInteractionActivities(
 			} else if actorID != profileSubjectID {
 				continue
 			}
-			items = append(items, buildProfileInteractionActivityView(
-				fmt.Sprintf("like:%s:%s", postID, actorID),
-				"like",
-				direction,
-				actorID,
-				post.AuthorId,
-				post,
-				post.UpdatedAt,
-			))
+			items = append(items, buildProfileInteractionActivityView(profileInteractionProjectionInput{
+				ActivityID:         fmt.Sprintf("like:%s:%s", postID, actorID),
+				ActivityType:       "like",
+				Direction:          direction,
+				ActorID:            actorID,
+				TargetSubAccountID: post.AuthorId,
+				Post:               post,
+				CreatedAt:          post.UpdatedAt,
+			}))
 		}
 	}
 
@@ -1716,15 +1733,16 @@ func (s *PostService) ListProfileInteractionActivities(
 			} else if actorID != profileSubjectID {
 				continue
 			}
-			items = append(items, buildProfileInteractionActivityView(
-				fmt.Sprintf("comment:%s", stringValue(comment["_id"])),
-				"comment",
-				direction,
-				actorID,
-				post.AuthorId,
-				post,
-				parseActivityTime(comment["createdAt"]),
-			))
+			items = append(items, buildProfileInteractionActivityView(profileInteractionProjectionInput{
+				ActivityID:         fmt.Sprintf("comment:%s", stringValue(comment["_id"])),
+				ActivityType:       "comment",
+				Direction:          direction,
+				ActorID:            actorID,
+				TargetSubAccountID: post.AuthorId,
+				Post:               post,
+				Comment:            comment,
+				CreatedAt:          parseActivityTime(comment["createdAt"]),
+			}))
 		}
 	}
 
@@ -1748,15 +1766,15 @@ func (s *PostService) ListProfileInteractionActivities(
 			} else if actorID != profileSubjectID {
 				continue
 			}
-			items = append(items, buildProfileInteractionActivityView(
-				fmt.Sprintf("share:%s:%s", postID, actorID),
-				"share",
-				direction,
-				actorID,
-				post.AuthorId,
-				post,
-				post.UpdatedAt,
-			))
+			items = append(items, buildProfileInteractionActivityView(profileInteractionProjectionInput{
+				ActivityID:         fmt.Sprintf("share:%s:%s", postID, actorID),
+				ActivityType:       "share",
+				Direction:          direction,
+				ActorID:            actorID,
+				TargetSubAccountID: post.AuthorId,
+				Post:               post,
+				CreatedAt:          post.UpdatedAt,
+			}))
 		}
 	}
 
@@ -1767,58 +1785,6 @@ func (s *PostService) ListProfileInteractionActivities(
 		items = items[:limit]
 	}
 	return items, nil
-}
-
-func buildProfileInteractionActivityView(
-	activityID string,
-	activityType string,
-	direction string,
-	actorID string,
-	targetSubAccountID string,
-	post *postmodel.Post,
-	createdAt time.Time,
-) postmodel.ProfileInteractionActivityView {
-	summary := ""
-	contentType := ""
-	targetContentID := ""
-	if post != nil {
-		summary = summarizeInteractionTarget(post)
-		contentType = post.ContentType
-		targetContentID = post.ID
-	}
-	if createdAt.IsZero() {
-		createdAt = time.Now().UTC()
-	}
-	return postmodel.ProfileInteractionActivityView{
-		ActivityId:           activityID,
-		ActivityType:         activityType,
-		Direction:            direction,
-		ActorSubAccountId:    actorID,
-		ActorDisplayName:     actorID,
-		ActorAvatarUrl:       "",
-		TargetSubAccountId:   targetSubAccountID,
-		TargetContentId:      targetContentID,
-		TargetContentType:    contentType,
-		TargetContentSummary: summary,
-		CreatedAt:            createdAt,
-	}
-}
-
-func summarizeInteractionTarget(post *postmodel.Post) string {
-	if post == nil {
-		return ""
-	}
-	if summary := strings.TrimSpace(post.Summary); summary != "" {
-		return summary
-	}
-	if title := strings.TrimSpace(post.Title); title != "" {
-		return title
-	}
-	body := strings.TrimSpace(post.Body)
-	if len(body) > 60 {
-		return body[:60]
-	}
-	return body
 }
 
 func parseActivityTime(raw any) time.Time {
@@ -2989,13 +2955,6 @@ func (s *PostService) SearchPosts(
 				continue
 			}
 		}
-		primaryCircleID := strings.TrimSpace(post.CircleId)
-		if primaryCircleID == "" {
-			circleIDs := asStringSlice(post.CircleIds)
-			if len(circleIDs) > 0 {
-				primaryCircleID = strings.TrimSpace(circleIDs[0])
-			}
-		}
 		summary := strings.TrimSpace(post.Summary)
 		if summary == "" {
 			summary = strings.TrimSpace(post.Body)
@@ -3024,14 +2983,12 @@ func (s *PostService) SearchPosts(
 			ObjectType:   rtsearch.ObjectTypeContentPost,
 			ObjectID:     post.ID,
 			Title:        post.Title,
-			Summary:      summary,
+			Summary:      strings.TrimSpace(post.Summary),
 			Body:         post.Body,
 			SourceDomain: "content",
 			ContentType:  post.ContentType,
 			Visibility:   visibility,
 			BadgeLabel:   "内容",
-			Tags:         asStringSlice(post.TagRefs),
-			Entities:     asStringSlice(post.EntityRefs),
 			Popularity:   float64(post.LikeCount + post.CommentCount + post.ShareCount),
 			Freshness:    post.PublishedAt,
 			Fields: map[string]string{
@@ -3039,9 +2996,6 @@ func (s *PostService) SearchPosts(
 				"entityRefs":        strings.Join(asStringSlice(post.EntityRefs), " "),
 				"authorDisplayName": post.AuthorDisplayNameSnapshot,
 				"locationName":      post.LocationName,
-				"categoryId":        categoryID,
-				"subCategory":       subCategory,
-				"circleId":          primaryCircleID,
 			},
 		})
 	}
@@ -3338,6 +3292,36 @@ func asStringSlice(v any) []string {
 	default:
 		return nil
 	}
+}
+
+func diffCircleIDs(before []string, after []string) ([]string, []string) {
+	beforeSet := normalizedStringSet(before)
+	afterSet := normalizedStringSet(after)
+	added := make([]string, 0)
+	removed := make([]string, 0)
+	for id := range afterSet {
+		if !beforeSet[id] {
+			added = append(added, id)
+		}
+	}
+	for id := range beforeSet {
+		if !afterSet[id] {
+			removed = append(removed, id)
+		}
+	}
+	sort.Strings(added)
+	sort.Strings(removed)
+	return added, removed
+}
+
+func normalizedStringSet(values []string) map[string]bool {
+	out := make(map[string]bool, len(values))
+	for _, value := range values {
+		if id := strings.TrimSpace(value); id != "" {
+			out[id] = true
+		}
+	}
+	return out
 }
 
 func asMap(v any) map[string]any {

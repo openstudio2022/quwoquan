@@ -67,9 +67,32 @@ def handle_verify(args: argparse.Namespace) -> None:
             daily_target=int(args.daily_target),
             release_id=getattr(args, "release", None),
             require_import=not bool(getattr(args, "allow_missing_import", False)),
+            mode=str(getattr(args, "mode", "commercial") or "commercial"),
         )
         if getattr(args, "report_out", None):
             write_scale_readiness_report(Path(args.report_out), report)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if not report.get("passed"):
+            raise SystemExit(1)
+        return
+    if cmd == "site-scale-readiness":
+        from verify.site_scale_readiness import build_site_scale_readiness_report, write_site_scale_readiness_report
+
+        report = build_site_scale_readiness_report(
+            vertical=str(args.vertical),
+            batch_id=str(args.batch),
+            site_id=getattr(args, "site_id", None),
+            daily_target=int(args.daily_target),
+            require_import=not bool(getattr(args, "allow_missing_import", False)),
+            mode=str(getattr(args, "mode", "commercial") or "commercial"),
+            min_lane_counts={
+                "article": int(getattr(args, "min_article_count", 0) or 0),
+                "image": int(getattr(args, "min_image_count", 0) or 0),
+                "video": int(getattr(args, "min_video_count", 0) or 0),
+            },
+        )
+        if getattr(args, "report_out", None):
+            write_site_scale_readiness_report(Path(args.report_out), report)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         if not report.get("passed"):
             raise SystemExit(1)
@@ -296,8 +319,20 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     psr.add_argument("--task", required=True, help="Task ID")
     psr.add_argument("--batch", required=True, help="Batch ID")
     psr.add_argument("--daily-target", type=int, default=10000, help="目标日产内容对象数，默认 10000")
+    psr.add_argument("--mode", choices=["trial", "commercial"], default="commercial", help="trial 允许已替补 abandoned；commercial 要求零未替补失败")
     psr.add_argument("--release", help="可选 isolated release ID，用于证明 release verify 入口存在")
     psr.add_argument("--allow-missing-import", action="store_true", help="仅本地试跑时允许缺少 staging/gamma import 证据")
     psr.add_argument("--report-out", help="可选：写出 readiness JSON 报告")
+    pss = sub.add_parser("site-scale-readiness", help="校验网站维度内容供给是否具备日产 10 万级准出证据")
+    pss.add_argument("--vertical", default="travel", help="垂类，默认 travel")
+    pss.add_argument("--site-id", help="可选：只校验单个 siteId；不传则聚合同垂类该 batch 全部站点")
+    pss.add_argument("--batch", required=True, help="site_supply batch ID")
+    pss.add_argument("--daily-target", type=int, default=100000, help="目标日产内容对象数，默认 100000")
+    pss.add_argument("--mode", choices=["trial", "commercial"], default="commercial", help="trial 只验结构/吞吐/账本，commercial 要求 release/import/search/rec 证据")
+    pss.add_argument("--allow-missing-import", action="store_true", help="仅本地试跑时允许缺少 import 证据")
+    pss.add_argument("--min-article-count", type=int, default=0, help="trial/commercial 均可选：全批 content_plan handoff 文章最低数")
+    pss.add_argument("--min-image-count", type=int, default=0, help="trial/commercial 均可选：全批 content_plan handoff 图片作品最低数")
+    pss.add_argument("--min-video-count", type=int, default=0, help="trial/commercial 均可选：全批 content_plan handoff 视频作品最低数")
+    pss.add_argument("--report-out", help="可选：写出 readiness JSON 报告")
 
     p.set_defaults(handler=handle_verify)

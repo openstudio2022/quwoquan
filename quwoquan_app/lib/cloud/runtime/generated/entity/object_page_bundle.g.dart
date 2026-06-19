@@ -4,7 +4,6 @@
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'homepage_content_preview.g.dart';
 import 'homepage_related_group_summary.g.dart';
-import 'object_intersection.g.dart';
 import 'object_relation_edge.g.dart';
 import 'object_page_context.g.dart';
 import 'object_page_rollout_context.g.dart';
@@ -20,7 +19,6 @@ class ObjectPageBundle {
   final List<String> tagRefs;
   final Map<String, dynamic> stats;
   final List<IntersectionReason> intersectionReasons;
-  final List<ObjectIntersection> intersections;
   final List<HomepageContentPreview> highlightItems;
   final Map<String, dynamic> contentSections;
   final List<HomepageRelatedGroupSummary> relatedObjects;
@@ -39,7 +37,6 @@ class ObjectPageBundle {
     this.tagRefs = const <String>[],
     this.stats = const <String, dynamic>{},
     this.intersectionReasons = const <IntersectionReason>[],
-    this.intersections = const <ObjectIntersection>[],
     this.highlightItems = const <HomepageContentPreview>[],
     this.contentSections = const <String, dynamic>{},
     this.relatedObjects = const <HomepageRelatedGroupSummary>[],
@@ -60,7 +57,6 @@ class ObjectPageBundle {
       tagRefs: _parseStringList(m['tagRefs']) ?? <String>[],
       stats: _parseStringKeyMap(m['stats']) ?? <String, dynamic>{},
       intersectionReasons: _parseProjectionDtoList(m['intersectionReasons'], IntersectionReason.fromMap),
-      intersections: _parseProjectionDtoList(m['intersections'], ObjectIntersection.fromMap),
       highlightItems: _parseProjectionDtoList(m['highlightItems'], HomepageContentPreview.fromMap),
       contentSections: _parseStringKeyMap(m['contentSections']) ?? <String, dynamic>{},
       relatedObjects: _parseProjectionDtoList(m['relatedObjects'], HomepageRelatedGroupSummary.fromMap),
@@ -82,7 +78,6 @@ class ObjectPageBundle {
       'tagRefs': tagRefs,
       'stats': stats,
       'intersectionReasons': intersectionReasons,
-      'intersections': intersections,
       'highlightItems': highlightItems,
       'contentSections': contentSections,
       'relatedObjects': relatedObjects,
@@ -103,7 +98,6 @@ class ObjectPageBundle {
     List<String>? tagRefs,
     Map<String, dynamic>? stats,
     List<IntersectionReason>? intersectionReasons,
-    List<ObjectIntersection>? intersections,
     List<HomepageContentPreview>? highlightItems,
     Map<String, dynamic>? contentSections,
     List<HomepageRelatedGroupSummary>? relatedObjects,
@@ -122,7 +116,6 @@ class ObjectPageBundle {
       tagRefs: tagRefs ?? this.tagRefs,
       stats: stats ?? this.stats,
       intersectionReasons: intersectionReasons ?? this.intersectionReasons,
-      intersections: intersections ?? this.intersections,
       highlightItems: highlightItems ?? this.highlightItems,
       contentSections: contentSections ?? this.contentSections,
       relatedObjects: relatedObjects ?? this.relatedObjects,

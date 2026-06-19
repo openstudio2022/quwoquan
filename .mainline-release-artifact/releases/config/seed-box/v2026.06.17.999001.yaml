@@ -1,0 +1,8 @@
+config:
+  version: v2026.06.17.999001
+  min_image_version: 1.0.0
+  max_image_version: 2.0.0
+service:
+  name: seed-box
+  http:
+    addr: :8080

@@ -25,6 +25,8 @@ L3_story：
 风险：
 ```
 
+形成 `风险` 前，先对照 `docs/outstanding_risks_backlog.md` 的未解决项；若出现新的长期遗留，需先向用户复述并在确认后登记。
+
 如果无法填写关键项，Agent 必须先切回 `/explore`、`/prd` 或 `/plan-review`，不得进入实现。
 
 ### 0.2 Pre-work Reflection
@@ -82,6 +84,8 @@ E2E 验证：
 自动化/门禁：
 剩余风险：
 ```
+
+若本轮关闭或新增了长期遗留/风险，必须同步更新 `docs/outstanding_risks_backlog.md`。
 
 不适用项必须说明原因；禁止只输出“修改了哪些文件”。
 

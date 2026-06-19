@@ -3,6 +3,8 @@
 
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+
 class PhotoPostDto extends PostBaseDto {
   @override final String id;
   @override final String type;
@@ -12,6 +14,9 @@ class PhotoPostDto extends PostBaseDto {
   @override final String displayName;
   @override final String avatarUrl;
   @override final String? authorBackgroundUrl;
+  final String authorRoleLabel;
+  final List<String> authorIdentityTags;
+  final bool authorVerified;
   final String? body;
   final String coverUrl;
   final List<String> imageUrls;
@@ -23,6 +28,7 @@ class PhotoPostDto extends PostBaseDto {
   @override final DateTime createdAt;
   @override final DateTime? updatedAt;
   @override final DateTime? publishedAt;
+  @override final List<IntersectionReason>? intersectionReasons;
 
   const PhotoPostDto({
     required this.id,
@@ -33,6 +39,9 @@ class PhotoPostDto extends PostBaseDto {
     required this.displayName,
     required this.avatarUrl,
     this.authorBackgroundUrl,
+    required this.authorRoleLabel,
+    required this.authorIdentityTags,
+    required this.authorVerified,
     this.body,
     required this.coverUrl,
     required this.imageUrls,
@@ -44,6 +53,7 @@ class PhotoPostDto extends PostBaseDto {
     required this.createdAt,
     this.updatedAt,
     this.publishedAt,
+    this.intersectionReasons,
   });
 
   factory PhotoPostDto.fromMap(Map<String, dynamic> m) {
@@ -56,6 +66,9 @@ class PhotoPostDto extends PostBaseDto {
       displayName: m['authorNickname']?.toString() ?? m['nickname']?.toString() ?? m['username']?.toString() ?? m['displayName']?.toString() ?? '',
       avatarUrl: m['authorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
       authorBackgroundUrl: m['authorBackgroundUrl']?.toString() ?? null,
+      authorRoleLabel: m['authorRoleLabel']?.toString() ?? m['roleLabel']?.toString() ?? m['authorRole']?.toString() ?? '',
+      authorIdentityTags: _parseStringList(m['authorIdentityTags']) ?? _parseStringList(m['identityTags']) ?? _parseStringList(m['authorTags']) ?? <String>[],
+      authorVerified: m['authorVerified'] as bool? ?? m['verified'] as bool? ?? m['isVerified'] as bool? ?? false,
       body: m['body']?.toString() ?? m['description']?.toString() ?? m['content']?.toString() ?? m['caption']?.toString() ?? null,
       coverUrl: m['coverUrl']?.toString() ?? m['cover']?.toString() ?? m['thumbnail']?.toString() ?? m['thumbnailUrl']?.toString() ?? '',
       imageUrls: _parseStringList(m['mediaUrls']) ?? _parseStringList(m['images']) ?? _parseStringList(m['imageUrls']) ?? _parseStringList(m['image_urls']) ?? <String>[],
@@ -67,6 +80,7 @@ class PhotoPostDto extends PostBaseDto {
       createdAt: _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
       updatedAt: _parseDateTime(m['updatedAt']) ?? _parseDateTime(m['updated_at']) ?? null,
       publishedAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['published_at']) ?? null,
+      intersectionReasons: m['intersectionReasons'] == null ? null : _parseProjectionDtoList(m['intersectionReasons'], IntersectionReason.fromMap),
     );
   }
 
@@ -81,6 +95,9 @@ class PhotoPostDto extends PostBaseDto {
       'displayName': displayName,
       'avatarUrl': avatarUrl,
       'authorBackgroundUrl': authorBackgroundUrl,
+      'authorRoleLabel': authorRoleLabel,
+      'authorIdentityTags': authorIdentityTags,
+      'authorVerified': authorVerified,
       'body': body,
       'coverUrl': coverUrl,
       'imageUrls': imageUrls,
@@ -92,6 +109,7 @@ class PhotoPostDto extends PostBaseDto {
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'publishedAt': publishedAt,
+      'intersectionReasons': intersectionReasons,
     };
   }
 
@@ -104,6 +122,9 @@ class PhotoPostDto extends PostBaseDto {
     String? displayName,
     String? avatarUrl,
     String? authorBackgroundUrl,
+    String? authorRoleLabel,
+    List<String>? authorIdentityTags,
+    bool? authorVerified,
     String? body,
     String? coverUrl,
     List<String>? imageUrls,
@@ -115,6 +136,7 @@ class PhotoPostDto extends PostBaseDto {
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? publishedAt,
+    List<IntersectionReason>? intersectionReasons,
   }) {
     return PhotoPostDto(
       id: id ?? this.id,
@@ -125,6 +147,9 @@ class PhotoPostDto extends PostBaseDto {
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       authorBackgroundUrl: authorBackgroundUrl ?? this.authorBackgroundUrl,
+      authorRoleLabel: authorRoleLabel ?? this.authorRoleLabel,
+      authorIdentityTags: authorIdentityTags ?? this.authorIdentityTags,
+      authorVerified: authorVerified ?? this.authorVerified,
       body: body ?? this.body,
       coverUrl: coverUrl ?? this.coverUrl,
       imageUrls: imageUrls ?? this.imageUrls,
@@ -136,6 +161,7 @@ class PhotoPostDto extends PostBaseDto {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       publishedAt: publishedAt ?? this.publishedAt,
+      intersectionReasons: intersectionReasons ?? this.intersectionReasons,
     );
   }
 
@@ -162,4 +188,21 @@ List<String>? _parseStringList(dynamic v) {
   if (v == null) return null;
   if (v is List) return v.map((e) => e?.toString() ?? '').toList();
   return null;
+}
+
+List<T> _parseProjectionDtoList<T>(
+  Object? v,
+  T Function(Map<String, dynamic> m) fromMap,
+) {
+  if (v == null) return List<T>.empty(growable: false);
+  if (v is! List) return List<T>.empty(growable: false);
+  final out = <T>[];
+  for (final e in v) {
+    if (e is Map<String, dynamic>) {
+      out.add(fromMap(e));
+    } else if (e is Map) {
+      out.add(fromMap(Map<String, dynamic>.from(e)));
+    }
+  }
+  return out;
 }

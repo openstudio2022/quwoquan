@@ -47,8 +47,6 @@ func (s *MongoIntersectionSource) FactReasons(ctx context.Context, userID, chann
 			now,
 			"interest",
 			"circle_tags",
-			"圈子兴趣",
-			"你在圈子里常见这些主题",
 			"circleTag",
 			"sharedTagSample",
 			"view_object",
@@ -62,8 +60,6 @@ func (s *MongoIntersectionSource) FactReasons(ctx context.Context, userID, chann
 			now,
 			"relationship",
 			"friend_tags",
-			"社交交集",
-			"你关注的人也更常讨论这些主题",
 			"followEdge",
 			"followeeDiscussedThis",
 			"view_object",
@@ -90,8 +86,6 @@ func (s *MongoIntersectionSource) AffinityReasons(ctx context.Context, userID, c
 				now,
 				"content",
 				"circle_hot",
-				"圈子热看",
-				"圈子里最近更热的内容",
 				"social_circle",
 				"sharedCircle",
 				"open_object",
@@ -104,7 +98,6 @@ func (s *MongoIntersectionSource) AffinityReasons(ctx context.Context, userID, c
 
 	if friendContentReason, ok := s.friendContentReason(ctx, now, userID); ok {
 		friendContentReason.IntersectionClass = "affinity"
-		friendContentReason.DisplayText = "你关注的人最近在看这些"
 		friendContentReason.Source = "social_friend"
 		friendContentReason.ActionType = "open_object"
 		reasons = append(reasons, friendContentReason)
@@ -127,8 +120,6 @@ func (s *MongoIntersectionSource) ObjectReasons(ctx context.Context, viewerID, o
 			now,
 			dimension,
 			objectID+"_tags",
-			objectLabel(objectType),
-			objectDisplayText(objectType, objectTags),
 			"tagRef",
 			"sharedTagSample",
 			"view_object",
@@ -185,8 +176,6 @@ func (s *MongoIntersectionSource) friendContentReason(ctx context.Context, now t
 		now,
 		"content",
 		"friend_content",
-		"关注的人在看",
-		"你关注的人最近看过这些内容",
 		"social_friend",
 		"followeeViewing",
 		"open_object",
@@ -376,7 +365,6 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 	} else if !viewerFollows && !objectFollows {
 		relationKind = "none"
 	}
-	primary := points[0]
 	// T3 空窗治理：人级 reason 回填对方真实展示资料，避免 spotlight 空头像。
 	displayName, avatarURL := s.userDisplayProfile(ctx, objectID)
 	if displayName == "" {
@@ -388,9 +376,6 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 		Dimension:          "relationship",
 		DisplayName:        displayName,
 		AvatarURL:          avatarURL,
-		Label:              primary.Label,
-		DisplayText:        primary.DisplayText,
-		SharedCount:        len(points),
 		Strength:           scoreFromCount(len(points), 4),
 		ConfidenceLabel:    "",
 		RelationKind:       relationKind,
@@ -446,29 +431,24 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 	}
 	sort.Strings(visitorIDs)
 	n := len(visitorIDs)
-	displayText := strconv.Itoa(n) + "位你关注的人来过这里"
-	points := make([]app.IntersectionPointView, 0, maxIntersectionPoint)
-	for i, id := range headKeys(visitorIDs, maxIntersectionPoint) {
-		points = append(points, app.IntersectionPointView{
-			PointID:     objectID + "_followee_visited_" + strconv.Itoa(i),
-			PointClass:  "fact",
-			Dimension:   "relationship",
-			Label:       "你关注的人来过",
-			DisplayText: "你关注的人来过这里",
-			SourceRef:   "followeeVisited",
-			Visibility:  "public",
-			Count:       1,
-			SampleText:  id,
-		})
-	}
+	// R-ID01：桥接型统一为单聚合点 Count=n（取代 reason 级 SharedCount），
+	// 端/Explain 经 anchor.Count 取数；样本走 SampleText（前 maxIntersectionPoint 个访客）。
+	points := []app.IntersectionPointView{{
+		PointID:     objectID + "_followee_visited",
+		PointClass:  "fact",
+		Dimension:   "relationship",
+		Label:       "你关注的人来过",
+		DisplayText: strconv.Itoa(n) + "位你关注的人来过这里",
+		SourceRef:   "followeeVisited",
+		Visibility:  "public",
+		Count:       n,
+		SampleText:  strings.Join(headKeys(visitorIDs, maxIntersectionPoint), "、"),
+	}}
 	return app.IntersectionReasonView{
 		IntersectionID:     objectID + "_followee_visited",
 		IntersectionClass:  "fact",
 		Dimension:          "relationship",
 		DisplayName:        objectLabel(objectType),
-		Label:              "你关注的人来过",
-		DisplayText:        displayText,
-		SharedCount:        n,
 		Strength:           scoreFromCount(n, 4),
 		RelationKind:       "bridge",
 		RelationObjectID:   objectID,
@@ -478,8 +458,8 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 		FreshAt:            now.Format(time.RFC3339),
 		ExpiresAt:          now.Add(7 * 24 * time.Hour).Format(time.RFC3339),
 		IntersectionPoints: points,
-		FactPointCount:     len(points),
-		TotalPointCount:    len(points),
+		FactPointCount:     1,
+		TotalPointCount:    1,
 	}, true
 }
 
@@ -560,8 +540,6 @@ func buildTagReason(
 	now time.Time,
 	dimension string,
 	intersectionID string,
-	label string,
-	displayText string,
 	source string,
 	pointKind string,
 	actionType string,
@@ -586,9 +564,6 @@ func buildTagReason(
 		IntersectionID:     intersectionID,
 		IntersectionClass:  "fact",
 		Dimension:          dimension,
-		Label:              label,
-		DisplayText:        displayText,
-		SharedCount:        len(points),
 		Strength:           scoreFromCount(len(points), 6),
 		RelationKind:       "mutual",
 		RelationObjectID:   intersectionID,
@@ -607,8 +582,6 @@ func buildContentReason(
 	now time.Time,
 	dimension string,
 	intersectionID string,
-	label string,
-	displayText string,
 	source string,
 	pointKind string,
 	actionType string,
@@ -639,9 +612,6 @@ func buildContentReason(
 		IntersectionID:     intersectionID,
 		IntersectionClass:  class,
 		Dimension:          dimension,
-		Label:              label,
-		DisplayText:        displayText,
-		SharedCount:        len(points),
 		Strength:           scoreFromCount(len(points), 4),
 		RelationKind:       "mutual",
 		RelationObjectID:   intersectionID,
@@ -721,17 +691,6 @@ func objectLabel(objectType string) string {
 		return "同游"
 	default:
 		return "同好"
-	}
-}
-
-func objectDisplayText(objectType string, tags []string) string {
-	switch strings.TrimSpace(objectType) {
-	case "university":
-		return "你们在同一个校园或组织里有交集"
-	case "travel_photo", "sight":
-		return "你们都关注过这些地点"
-	default:
-		return "你们都关注这些主题"
 	}
 }
 

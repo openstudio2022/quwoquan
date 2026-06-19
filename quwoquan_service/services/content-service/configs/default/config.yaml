@@ -71,5 +71,23 @@ oss:
   cdn_ttl_minutes: 60
   use_ssl: false
 
+# Unified search index — WRITE side (content.search_index_worker).
+# content-service is the indexing producer for the shared ES/OpenSearch index that
+# search-service reads; both target the same cluster + index. Endpoints/credentials
+# are injected per-env via the shared SEARCH_ES_ENDPOINTS / SEARCH_ES_* env (deploy
+# secrets); committed config never hardcodes cluster URLs/secrets. When disabled or
+# endpoints empty, the write-time projector is a no-op and the post write path is
+# unaffected.
+es:
+  enabled: false
+  endpoints: []
+  index: "quwoquan_objects"
+  requestTimeoutMs: 800
+  insecureTls: false
+  shards: 1
+  replicas: 1
+  embeddingDims: 0
+  synonyms: []
+
 metadata:
   dir: "../../../contracts/metadata"

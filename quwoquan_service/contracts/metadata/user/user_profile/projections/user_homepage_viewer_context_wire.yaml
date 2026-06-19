@@ -1,0 +1,50 @@
+version: 1
+read_model: UserHomepageViewerContextWire
+
+description: |
+  用户主页 / 我的主页 viewer 上下文 wire（homepage-bundle 子对象）。回答「我是谁在看这个主页」：
+  本人态(isOwner) / 游客态(isGuest) / 与目标的归一化关系态(relationToTarget) / 是否可见完整主页
+  (canViewFullProfile，受隔离级别与可见性约束)。端据此切换「我的主页」与「他人主页」差异化外观，
+  以及陌生人优雅隐藏（不造假）。relationToTarget 闭集：self|mutual|following|followed_by|not_following。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: UserHomepageViewerContextWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/user_homepage_viewer_context_wire_dto.g.dart
+  fields:
+    - name: viewerSubAccountId
+      dart_type: String
+      nullable: false
+      source: viewerSubAccountId
+      aliases: [viewerSubAccountId]
+      default: "''"
+    - name: isOwner
+      dart_type: bool
+      nullable: false
+      source: isOwner
+      aliases: [isOwner]
+      default: "false"
+    - name: isGuest
+      dart_type: bool
+      nullable: false
+      source: isGuest
+      aliases: [isGuest]
+      default: "false"
+    - name: relationToTarget
+      dart_type: String
+      nullable: false
+      source: relationToTarget
+      aliases: [relationToTarget]
+      default: "'not_following'"
+    - name: canViewFullProfile
+      dart_type: bool
+      nullable: false
+      source: canViewFullProfile
+      aliases: [canViewFullProfile]
+      default: "true"

@@ -48,6 +48,39 @@ scenarios:
         type: float
         source: rm_recommend_feature.userFeatures.avgEngagementDepth
         description: "Running average of engagement depth level (0-4)"
+      - name: sharedFolloweesCount
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.sharedFolloweesCount
+        description: "Fact intersection: mutual followee count with object"
+      - name: sharedCircleCount
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.sharedCircleCount
+        description: "Fact intersection: shared circle count"
+      - name: coCommentedCount
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.coCommentedCount
+        description: "Fact intersection: co-comment count"
+      - name: affinityIntersectionScore
+        type: float
+        source: rm_recommend_feature.socialFeatures.intersection.affinityIntersectionScore
+        description: "Affinity channel score; must not override fact signals in fusion"
+      - name: coVisitedEntityCount
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.coVisitedEntityCount
+        description: "Fact intersection: co-visited entity (object) count with the candidate's object"
+      - name: followeeInObjectActive
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.followeeInObjectActive
+        description: "Fact intersection: number of followees active inside this object"
+      - name: followeeViewingActive
+        type: int
+        source: rm_recommend_feature.socialFeatures.intersection.followeeViewingActive
+        description: "Fact intersection: number of followees recently viewing this object"
+      - name: intersectionSourceRefTop
+        type: categorical
+        source: rm_recommend_feature.socialFeatures.intersection.intersectionSourceRefTop
+        description: "Strongest fact intersection kind (§5.4 standard name) between viewer and object"
+        nullable: true
       - name: depthDistribution
         type: map_int
         source: rm_recommend_feature.userFeatures.depthDistribution
@@ -68,6 +101,21 @@ scenarios:
         type: map_float
         source: rm_recommend_feature.userFeatures.typeENER
         description: "Exposure-Normalized Engagement Rate per content type"
+        nullable: true
+      - name: searchTermAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.searchTermAffinity
+        description: "Recent normalized search / related term intent weights, freshness-gated by searchTermUpdatedAt (24h)"
+        nullable: true
+      - name: searchTopObjectAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.searchTopObjectAffinity
+        description: "Object ids repeatedly clicked under related search terms; consumed by object recall/scoring explainability"
+        nullable: true
+      - name: searchTermHeat
+        type: float
+        source: rm_recommend_feature.userFeatures.searchTermHeat
+        description: "Bounded recent search intent strength used by RuleScorer searchIntentBoost"
         nullable: true
       - name: userEmbedding
         type: vector_float64

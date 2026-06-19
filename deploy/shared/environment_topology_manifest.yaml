@@ -115,13 +115,13 @@
     },
     "gamma": {
       "publicBases": {
-        "api": "http://118.31.239.122:19000",
-        "realtime": "ws://118.31.239.122:19000",
-        "productOps": "http://118.31.239.122:19010",
-        "mediaAvatar": "http://118.31.239.122:19100",
-        "mediaImage": "http://118.31.239.122:19100",
-        "mediaVideo": "http://118.31.239.122:19100",
-        "mediaUpload": "http://118.31.239.122:19100"
+        "api": "http://127.0.0.1:19000",
+        "realtime": "ws://127.0.0.1:19000",
+        "productOps": "http://127.0.0.1:19010",
+        "mediaAvatar": "http://127.0.0.1:19100",
+        "mediaImage": "http://127.0.0.1:19100",
+        "mediaVideo": "http://127.0.0.1:19100",
+        "mediaUpload": "http://127.0.0.1:19100"
       },
       "subnets": {
         "edge": "172.40.10.0/24",
@@ -147,21 +147,23 @@
           "runtimeEnv": "gamma",
           "dataSource": "remote",
           "allowSeeds": false,
-          "allowLocalHosts": false,
+          "allowLocalHosts": true,
           "allowProdHosts": false,
-          "distribution": "pre-release"
+          "distribution": "internal-only"
         },
         "service": {
-          "allowFixtureRefs": false,
+          "allowFixtureRefs": true,
           "allowReleaseSnapshot": true,
           "secretScope": "gamma",
-          "distribution": "pre-release"
+          "distribution": "internal-only"
         }
       },
-      "hostAllowlist": [
+      "hostAllowlist": ["127.0.0.1", "10.0.2.2", "localhost"],
+      "forbiddenHostTokens": [
+        "api.quwoquan.com",
+        "avatar-cdn.quwoquan.com",
         "118.31.239.122"
       ],
-      "forbiddenHostTokens": ["api.quwoquan.com", "avatar-cdn.quwoquan.com"],
       "rolloutStagePolicy": {
         "mode": "fixed-env",
         "allowedStages": []

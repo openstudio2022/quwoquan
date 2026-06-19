@@ -2,12 +2,70 @@ package application
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
 )
+
+// failingRedisClient 包裹一个 Redis client，使受 D（Redis 不可用降级/兜底）覆盖的命令全部
+// 返回错误，用于模拟 Redis 宕机。仅覆盖交集服务实际触达的命令；其余命令不应被调用。
+type failingRedisClient struct {
+	rtredis.Client
+	err error
+}
+
+func (f failingRedisClient) ZAdd(context.Context, string, float64, string) error { return f.err }
+func (f failingRedisClient) HSet(context.Context, string, string, string) error  { return f.err }
+func (f failingRedisClient) Expire(context.Context, string, time.Duration) error { return f.err }
+func (f failingRedisClient) HGetAll(context.Context, string) (map[string]string, error) {
+	return nil, f.err
+}
+func (f failingRedisClient) ZRangeByScore(context.Context, string, float64, float64, int) ([]string, error) {
+	return nil, f.err
+}
+
+// failingRedisRouter 满足 intersectionRedis，所有 key 都路由到失败 client。
+type failingRedisRouter struct{ err error }
+
+func (r failingRedisRouter) ForKey(string) rtredis.Client {
+	return failingRedisClient{err: r.err}
+}
+
+// memWatermarkStore 是内存耐久兜底，避免单测依赖 Mongo。
+type memWatermarkStore struct {
+	docs      map[string]map[string]int64
+	loadCalls int
+	saveCalls int
+}
+
+func newMemWatermarkStore() *memWatermarkStore {
+	return &memWatermarkStore{docs: map[string]map[string]int64{}}
+}
+
+func (m *memWatermarkStore) LoadWatermarks(_ context.Context, userID string) (map[string]int64, error) {
+	m.loadCalls++
+	out := map[string]int64{}
+	for d, ts := range m.docs[userID] {
+		out[d] = ts
+	}
+	return out, nil
+}
+
+func (m *memWatermarkStore) SaveWatermarks(_ context.Context, userID string, dims map[string]int64) error {
+	m.saveCalls++
+	if m.docs[userID] == nil {
+		m.docs[userID] = map[string]int64{}
+	}
+	for d, ts := range dims {
+		if ts > m.docs[userID][d] { // 单调推进
+			m.docs[userID][d] = ts
+		}
+	}
+	return nil
+}
 
 type stubSource struct {
 	facts      []IntersectionReasonView
@@ -75,8 +133,8 @@ func TestIntersectionService_SummaryNewCountAndVisitClears(t *testing.T) {
 func TestIntersectionService_ExposureRetainsButDemotesSeen(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{facts: []IntersectionReasonView{
-		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1", DisplayText: "同校校友"},
-		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "p1", DisplayText: "共同讨论"},
+		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1", PrimaryText: "你的8位校友关注了这里"},
+		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "p1", PrimaryText: "你们都讨论过2篇相同内容"},
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
@@ -116,7 +174,7 @@ func TestIntersectionService_PointSummaryDerivedFromVisiblePoints(t *testing.T) 
 			IntersectionID: "multi",
 			Dimension:      "relationship",
 			Strength:       0.8,
-			DisplayText:    "共同关注的人",
+			PrimaryText:    "你们有2位共同关注的人",
 			FreshAt:        now.Add(-time.Hour).Format(time.RFC3339),
 			ActionTargetID: "u1",
 			IntersectionPoints: []IntersectionPointView{
@@ -156,11 +214,11 @@ func TestIntersectionService_FeedFactBeforeAffinityAndFreshness(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{
 		facts: []IntersectionReasonView{
-			{IntersectionID: "f1", IntersectionClass: "fact", Dimension: "identity", Strength: 0.5, ActionTargetID: "u1", DisplayText: "同校校友"},
-			{IntersectionID: "stale", IntersectionClass: "fact", Dimension: "content", Strength: 0.99, ActionTargetID: "u9", DisplayText: "过期交集", ExpiresAt: now.Add(-time.Hour).Format(time.RFC3339)},
+			{IntersectionID: "f1", IntersectionClass: "fact", Dimension: "identity", Strength: 0.5, ActionTargetID: "u1", PrimaryText: "你的8位校友关注了这里"},
+			{IntersectionID: "stale", IntersectionClass: "fact", Dimension: "content", Strength: 0.99, ActionTargetID: "u9", PrimaryText: "你们都讨论过3篇相同内容", ExpiresAt: now.Add(-time.Hour).Format(time.RFC3339)},
 		},
 		affinities: []IntersectionReasonView{
-			{IntersectionID: "p1", IntersectionClass: "affinity", Dimension: "interest", Strength: 0.95, ActionTargetID: "u2", DisplayText: "可能合得来"},
+			{IntersectionID: "p1", IntersectionClass: "affinity", Dimension: "interest", Strength: 0.95, ActionTargetID: "u2", PrimaryText: "为你推荐的相关内容"},
 		},
 	}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
@@ -184,9 +242,9 @@ func TestIntersectionService_FeedFactBeforeAffinityAndFreshness(t *testing.T) {
 func TestIntersectionService_MaxCandidateWindowCapsBeforeLimit(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{facts: []IntersectionReasonView{
-		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1", DisplayText: "同校校友"},
-		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "u2", DisplayText: "共同讨论"},
-		{IntersectionID: "c", Dimension: "relationship", Strength: 0.7, ActionTargetID: "u3", DisplayText: "共同关注的人"},
+		{IntersectionID: "a", Dimension: "identity", Strength: 0.9, ActionTargetID: "u1", PrimaryText: "你的8位校友关注了这里"},
+		{IntersectionID: "b", Dimension: "content", Strength: 0.8, ActionTargetID: "u2", PrimaryText: "你们都讨论过2篇相同内容"},
+		{IntersectionID: "c", Dimension: "relationship", Strength: 0.7, ActionTargetID: "u3", PrimaryText: "你们有4位共同关注的人"},
 	}}
 	svc := NewIntersectionService(
 		newTestRouter(t),
@@ -261,14 +319,14 @@ func TestIntersectionService_SpotlightFiltersIncompleteDisplay(t *testing.T) {
 		{IntersectionID: "no_text", Dimension: "content", Strength: 0.9, ActionTargetID: "p0"},
 		// 人级但缺头像 → 不得进候选窗。
 		{IntersectionID: "person_no_avatar", Dimension: "relationship", Strength: 0.8,
-			ActionTargetID: "u1", ObjectKind: "person", DisplayText: "3位共同关注的人"},
+			ActionTargetID: "u1", ObjectKind: "person", PrimaryText: "你们有3位共同关注的人"},
 		// 人级且头像完备 → 进候选窗。
 		{IntersectionID: "person_ok", Dimension: "relationship", Strength: 0.7,
-			ActionTargetID: "u2", ObjectKind: "person", DisplayText: "2位共同关注的人",
+			ActionTargetID: "u2", ObjectKind: "person", PrimaryText: "你们有2位共同关注的人",
 			DisplayName: "林清越", AvatarURL: "https://static.quwoquan.test/a.png"},
 		// 非人对象无需头像，但要有结论句 → 进候选窗。
 		{IntersectionID: "place_ok", Dimension: "location", Strength: 0.6,
-			ActionTargetID: "e1", ObjectKind: "place", DisplayText: "1位你关注的人来过这里"},
+			ActionTargetID: "e1", ObjectKind: "place", PrimaryText: "1位你关注的人来过这里"},
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
@@ -338,5 +396,233 @@ func TestEvidenceKindRank_MatchesWP1AppendixA(t *testing.T) {
 	// recommended 点恒为 rank 900，与 kind 无关。
 	if got := evidenceKindRank("sharedFollowees", "recommended"); got != 900 {
 		t.Fatalf("recommended rank = %d, want 900", got)
+	}
+}
+
+// ── D：Redis 不可用降级 / 持久兜底 ───────────────────────────────────────────
+
+// TestIntersectionService_MarkVisited_RedisDownPersistsDurable 验证 Redis 宕机时
+// 清零仍写入耐久兜底、不向上抛错、发降级指标（写降级不阻断主请求 + 读位不丢）。
+func TestIntersectionService_MarkVisited_RedisDownPersistsDurable(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store := newMemWatermarkStore()
+	metrics := newCaptureMetrics()
+	svc := NewIntersectionService(
+		failingRedisRouter{err: errors.New("redis down")},
+		WithIntersectionSource(stubSource{}),
+		WithIntersectionWatermarkStore(store),
+		WithIntersectionMetrics(metrics),
+	)
+	fixedNow(svc, now)
+
+	if err := svc.MarkVisited(context.Background(), "viewer1", "identity"); err != nil {
+		t.Fatalf("Redis 宕机时清零必须降级返回 nil，得到 %v", err)
+	}
+	if store.docs["viewer1"]["identity"] != now.Unix() {
+		t.Fatalf("清零必须持久到耐久兜底，got %+v", store.docs["viewer1"])
+	}
+	if metrics.redisDegraded["watermark_write"] == 0 {
+		t.Fatalf("Redis 写失败必须发降级指标 watermark_write，got %+v", metrics.redisDegraded)
+	}
+}
+
+// TestIntersectionService_Watermarks_RedisDownFallsBackToDurable 验证 Redis 读失败时
+// 回落耐久兜底（已读位不丢），并发降级指标。
+func TestIntersectionService_Watermarks_RedisDownFallsBackToDurable(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store := newMemWatermarkStore()
+	store.docs["viewer1"] = map[string]int64{"identity": now.Add(-time.Hour).Unix()}
+	metrics := newCaptureMetrics()
+	svc := NewIntersectionService(
+		failingRedisRouter{err: errors.New("redis down")},
+		WithIntersectionSource(stubSource{}),
+		WithIntersectionWatermarkStore(store),
+		WithIntersectionMetrics(metrics),
+	)
+	fixedNow(svc, now)
+
+	wm := svc.watermarks(context.Background(), "viewer1")
+	if wm["identity"] != now.Add(-time.Hour).Unix() {
+		t.Fatalf("Redis 故障必须回落耐久兜底读位，got %+v", wm)
+	}
+	if metrics.redisDegraded["watermark_read"] == 0 {
+		t.Fatalf("Redis 读失败必须发降级指标 watermark_read，got %+v", metrics.redisDegraded)
+	}
+}
+
+// TestIntersectionService_Watermarks_RedisFlushRecoversAndWarms 验证 Redis 被 flush
+// （可用但为空）时从耐久兜底恢复读位，并回暖 Redis（后续读命中 Redis）。
+func TestIntersectionService_Watermarks_RedisFlushRecoversAndWarms(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	router := newTestRouter(t)
+	store := newMemWatermarkStore()
+	store.docs["viewer1"] = map[string]int64{"content": now.Add(-2 * time.Hour).Unix()}
+	svc := NewIntersectionService(
+		router,
+		WithIntersectionSource(stubSource{}),
+		WithIntersectionWatermarkStore(store),
+	)
+	fixedNow(svc, now)
+	ctx := context.Background()
+
+	wm := svc.watermarks(ctx, "viewer1")
+	if wm["content"] != now.Add(-2*time.Hour).Unix() {
+		t.Fatalf("Redis flush 后必须从耐久兜底恢复读位，got %+v", wm)
+	}
+	// 回暖：直接查 Redis 应已有该字段（后续热路径命中、不再回落耐久）。
+	key := watermarkKey("viewer1")
+	all, err := router.ForKey(key).HGetAll(ctx, key)
+	if err != nil {
+		t.Fatalf("redis hgetall: %v", err)
+	}
+	if all["wm:content"] == "" {
+		t.Fatalf("耐久恢复后必须回暖 Redis 缓存，got %+v", all)
+	}
+	store.loadCalls = 0
+	if wm2 := svc.watermarks(ctx, "viewer1"); wm2["content"] != now.Add(-2*time.Hour).Unix() {
+		t.Fatalf("回暖后再读应命中 Redis，got %+v", wm2)
+	}
+	if store.loadCalls != 0 {
+		t.Fatalf("回暖后再读不应再触达耐久兜底，loadCalls=%d", store.loadCalls)
+	}
+}
+
+// TestIntersectionService_ReportExposure_RedisDownDegrades 验证曝光上报在 Redis 宕机时
+// 降级返回 nil（不拖垮 feed），并发降级指标。
+func TestIntersectionService_ReportExposure_RedisDownDegrades(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	metrics := newCaptureMetrics()
+	svc := NewIntersectionService(
+		failingRedisRouter{err: errors.New("redis down")},
+		WithIntersectionSource(stubSource{}),
+		WithIntersectionMetrics(metrics),
+	)
+	fixedNow(svc, now)
+
+	if err := svc.ReportExposure(context.Background(), "viewer1", []string{"u1", "u2"}); err != nil {
+		t.Fatalf("Redis 宕机时曝光上报必须降级返回 nil，得到 %v", err)
+	}
+	if metrics.redisDegraded["exposure_write"] == 0 {
+		t.Fatalf("Redis 写失败必须发降级指标 exposure_write，got %+v", metrics.redisDegraded)
+	}
+}
+
+// TestIntersectionService_MarkVisited_DurableErrorSurfaces 验证耐久写失败（真正不可用）
+// 仍向上抛错——耐久是真相源，不能静默丢读位。
+func TestIntersectionService_MarkVisited_DurableErrorSurfaces(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	svc := NewIntersectionService(
+		newTestRouter(t),
+		WithIntersectionSource(stubSource{}),
+		WithIntersectionWatermarkStore(errWatermarkStore{err: errors.New("mongo down")}),
+	)
+	fixedNow(svc, now)
+	if err := svc.MarkVisited(context.Background(), "viewer1", "identity"); err == nil {
+		t.Fatalf("耐久兜底写失败必须向上抛错（真相源不可静默丢失）")
+	}
+}
+
+// errWatermarkStore 让耐久写恒失败。
+type errWatermarkStore struct{ err error }
+
+func (e errWatermarkStore) LoadWatermarks(context.Context, string) (map[string]int64, error) {
+	return map[string]int64{}, nil
+}
+func (e errWatermarkStore) SaveWatermarks(context.Context, string, map[string]int64) error {
+	return e.err
+}
+
+// TestIntersectionService_ExplainPipelineInstantiatesPrimaryText（WP1·T2）：
+// 云侧 Explain 管线按 §17.1 主谓宾模板由结构化 kind+count 实例化 primaryText，
+// 禁止回退旧 displayText；secondaryText 罗列跨 kind 辅助说明；连接说明按共同点产出。
+func TestIntersectionService_ExplainPipelineInstantiatesPrimaryText(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	src := stubSource{facts: []IntersectionReasonView{
+		{
+			IntersectionID: "rel", IntersectionClass: "fact", Dimension: "relationship",
+			Strength: 0.9, ActionTargetID: "u1", RelationKind: "none",
+			// R-ID01：reason 级 displayText 已零兼容删除；primaryText 必须由 kind+count 模板化产出。
+			IntersectionPoints: []IntersectionPointView{
+				{PointID: "p1", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", Count: 3, Visibility: "public"},
+				{PointID: "p2", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedCircle", Label: "共同圈子", Count: 2, Visibility: "public"},
+			},
+		},
+	}}
+	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
+	fixedNow(svc, now)
+
+	feed, err := svc.Feed(context.Background(), "viewer1", "recommend", 10)
+	if err != nil {
+		t.Fatalf("feed: %v", err)
+	}
+	if len(feed) != 1 {
+		t.Fatalf("want 1 reason, got %d", len(feed))
+	}
+	got := feed[0]
+	if got.PrimaryText != "你们有3位共同关注的人" {
+		t.Fatalf("primaryText must instantiate sharedFollowees template, got %q", got.PrimaryText)
+	}
+	if !strings.Contains(got.SecondaryText, "共同圈子") {
+		t.Fatalf("secondaryText should enumerate other-kind evidence, got %q", got.SecondaryText)
+	}
+	if got.ConnectionSummary != "你们已有2个共同点" {
+		t.Fatalf("connectionSummary mismatch, got %q", got.ConnectionSummary)
+	}
+}
+
+// TestIntersectionService_AffinityChannelLabeled（WP1·T2）：概率通道必须分通道——
+// affinity reason 带 confidenceLabel 与 modelReasonBucket，fact 不得带 confidenceLabel。
+func TestIntersectionService_AffinityChannelLabeled(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	src := stubSource{
+		facts: []IntersectionReasonView{
+			{
+				IntersectionID: "fact1", IntersectionClass: "fact", Dimension: "relationship",
+				Strength: 0.9, ActionTargetID: "u1", RelationKind: "none",
+				IntersectionPoints: []IntersectionPointView{
+					{PointID: "f1", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", Count: 2, Visibility: "public"},
+				},
+			},
+		},
+		affinities: []IntersectionReasonView{
+			{
+				IntersectionID: "aff", IntersectionClass: "affinity", Dimension: "content",
+				Strength: 0.8, ActionTargetID: "c1", Source: "social_circle",
+				IntersectionPoints: []IntersectionPointView{
+					{PointID: "a1", PointClass: "recommended", Dimension: "content", SourceRef: "sharedCircle", Label: "圈子热看", Visibility: "public"},
+				},
+			},
+		},
+	}
+	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
+	fixedNow(svc, now)
+
+	feed, err := svc.Feed(context.Background(), "viewer1", "recommend", 10)
+	if err != nil {
+		t.Fatalf("feed: %v", err)
+	}
+	byID := map[string]IntersectionReasonView{}
+	for _, r := range feed {
+		byID[r.IntersectionID] = r
+	}
+	fact, ok := byID["fact1"]
+	if !ok {
+		t.Fatalf("fact reason missing, got %v", feed)
+	}
+	if strings.TrimSpace(fact.ConfidenceLabel) != "" {
+		t.Fatalf("fact reason must not carry confidenceLabel, got %q", fact.ConfidenceLabel)
+	}
+	aff, ok := byID["aff"]
+	if !ok {
+		t.Fatalf("affinity reason missing, got %v", feed)
+	}
+	if strings.TrimSpace(aff.PrimaryText) == "" {
+		t.Fatalf("affinity primaryText must be produced")
+	}
+	if strings.TrimSpace(aff.ConfidenceLabel) == "" {
+		t.Fatalf("affinity must carry confidenceLabel (channel separation)")
+	}
+	if !strings.HasPrefix(aff.ModelReasonBucket, "affinity:") {
+		t.Fatalf("affinity must carry modelReasonBucket, got %q", aff.ModelReasonBucket)
 	}
 }

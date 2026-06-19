@@ -41,7 +41,7 @@ class ObjectContextTabs {
     ),
     ObjectContextTabSpec(
       id: 'interest_circles',
-      label: UITextConstants.objectTabInterestCircles,
+      label: UITextConstants.objectTabRelatedCircles,
     ),
   ];
 }

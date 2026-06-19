@@ -30,7 +30,24 @@ from template.condition import REGION_LOCKED_TERMS
 _ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9_./\u4e00-\u9fff-]+)")
 
 
-FORBIDDEN = ["冷启动", "批次", "角色：", "占位", "contract_fixture", "isSystemBuiltin", "routingReason"]
+FORBIDDEN = ["冷启动", "批次", "角色：", "contract_fixture", "isSystemBuiltin", "routingReason"]
+FORBIDDEN_PATTERNS = [
+    ("占位稿", "占位稿"),
+    ("占位正文", "占位正文"),
+    ("占位内容", "占位内容"),
+    ("占位图片", "占位图片"),
+    ("占位实体", "占位实体"),
+    ("占位符", "占位符"),
+    ("占位数据", "占位数据"),
+]
+
+
+def forbidden_phrase_hits(article: str) -> list[str]:
+    hits = [word for word in FORBIDDEN if word in article]
+    for pattern, label in FORBIDDEN_PATTERNS:
+        if pattern in article:
+            hits.append(label)
+    return hits
 
 
 def _normalized_entity_ref_issues(manifest_path: Path, manifest: dict) -> list[str]:
@@ -64,15 +81,32 @@ def _default_posts_root(task: str | None, batch: str | None) -> Path | None:
     return None
 
 
-def verify_posts(posts_root: Path) -> list[str]:
+def _post_rel(posts_root: Path, post_dir: Path) -> str:
+    try:
+        return post_dir.relative_to(posts_root.parent).as_posix()
+    except ValueError:
+        return post_dir.as_posix()
+
+
+def _post_allowed(posts_root: Path, post_dir: Path, post_rels: set[str] | None) -> bool:
+    if post_rels is None:
+        return True
+    return _post_rel(posts_root, post_dir) in post_rels
+
+
+def verify_posts(posts_root: Path, *, post_rels: set[str] | None = None) -> list[str]:
     issues: list[str] = []
     if not posts_root.exists():
         return issues
-    collected: list[tuple[Path, str]] = []  # (article_path, article) 供跨篇骨架门复跑
+    collected: list[tuple[Path, str]] = []  # selected (article_path, article)
+    peer_articles: list[tuple[Path, str]] = []  # all articles, used as scoped-review peers
     for article_path in sorted(posts_root.rglob("article.md")):
         post_dir = article_path.parent
         manifest_path = post_dir / "manifest.json"
         article = article_path.read_text(encoding="utf-8")
+        peer_articles.append((article_path, article))
+        if not _post_allowed(posts_root, post_dir, post_rels):
+            continue
         manifest = {}
         if manifest_path.exists():
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -80,9 +114,8 @@ def verify_posts(posts_root: Path) -> list[str]:
             issues.append(f"{post_dir}: missing manifest.json")
         collected.append((article_path, article))
 
-        for word in FORBIDDEN:
-            if word in article:
-                issues.append(f"{article_path}: forbidden phrase found: {word}")
+        for word in forbidden_phrase_hits(article):
+            issues.append(f"{article_path}: forbidden phrase found: {word}")
         if len(re.sub(r"\s+", "", article)) < 600:
             issues.append(f"{article_path}: article body shorter than 600 non-space chars")
         if re.search(r"(?m)^标签[:：]", article):
@@ -116,7 +149,7 @@ def verify_posts(posts_root: Path) -> list[str]:
         issues.extend(_semantic_gate_issues(article_path, article, manifest))
 
     # 跨篇模板骨架门 + SimHash 语义去重双指标：换实体名同骨架在发布面也要拦。
-    all_articles = [art for _, art in collected]
+    all_articles = [art for _, art in peer_articles]
     for path, art in collected:
         peers = [other for other in all_articles if other is not art]
         for msg in qg.skeleton_similarity_issues(art, peers):

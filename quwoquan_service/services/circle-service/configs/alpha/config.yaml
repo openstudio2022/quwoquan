@@ -6,3 +6,9 @@ service:
 mongo:
   uri: "mongodb://localhost:27017"
   database: "quwoquan_circle_local"
+
+# alpha keeps ES disabled: native in-memory search remains the source, the
+# write-time projector is a no-op.
+es:
+  enabled: false
+  endpoints: []

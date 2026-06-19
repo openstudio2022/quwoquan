@@ -24,8 +24,7 @@
       "fixturePath": "content/test_fixtures/scenarios/content_scenarios.lite.json",
       "refs": [
         "content_discovery_core",
-        "intersection_core",
-        "footprint_core"
+        "home_showcase_core"
       ],
       "resetScope": "fixture_content_*",
       "targetStore": "alpha-dev-lite:app-fixture-json",
@@ -77,10 +76,8 @@
       "fixturePath": "user/test_fixtures/scenarios/user_scenarios.lite.json",
       "refs": [
         "user_profile_core",
-        "persona_core",
         "profile_feed_core",
-        "relationship_core",
-        "following_subject_core"
+        "relationship_core"
       ],
       "resetScope": "fixture_user_*",
       "targetStore": "alpha-dev-lite:app-fixture-json",
@@ -96,7 +93,9 @@
       "domain": "entity",
       "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.lite.json",
       "refs": [
-        "entity_homepage_core"
+        "entity_homepage_core",
+        "entity_claim_core",
+        "entity_picker_core"
       ],
       "resetScope": "fixture_entity_*",
       "targetStore": "alpha-dev-lite:app-fixture-json",

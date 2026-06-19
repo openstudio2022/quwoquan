@@ -27,6 +27,7 @@ class MockContentRepository implements ContentRepository {
 
   static List<PostBaseDto> _discoverySeedPosts() {
     return aggregateDiscoveryWireSlices(
+      showcase: ContentMockData.seededShowcaseFeedItems,
       photo: ContentMockData.discoveryPhotoData,
       video: ContentMockData.discoveryVideoData,
       moment: ContentMockData.discoveryMomentData,
@@ -52,7 +53,7 @@ class MockContentRepository implements ContentRepository {
     throw CloudErrorMapper.fromStatusCode(
       404,
       body:
-          '{"code":"${ContentErrorCode.postNotFound.code}","message":"${ContentErrorMessages.zh[ContentErrorCode.postNotFound]}"}',
+          '{"code":"${ContentErrorCode.postNotFound.code}","userMessage":"${ContentErrorMessages.zh[ContentErrorCode.postNotFound]}"}',
       requestPath: ContentApiMetadata.getPostPath(postId: postId),
     );
   }
@@ -71,10 +72,7 @@ class MockContentRepository implements ContentRepository {
   String? lastCommentText;
   String? lastCommentPostId;
 
-  Map<String, dynamic> reactionStateStub = {
-    'liked': false,
-    'shared': false,
-  };
+  Map<String, dynamic> reactionStateStub = {'liked': false, 'shared': false};
   List<CommentDto> commentsStub = _contractSeedComments();
   int countersStubLikeCount = 0;
   int countersStubCommentCount = 0;
@@ -92,9 +90,9 @@ class MockContentRepository implements ContentRepository {
         continue;
       }
       comments.addAll(
-        raw
-            .whereType<Map>()
-            .map((item) => CommentDto.fromMap(item.cast<String, dynamic>())),
+        raw.whereType<Map>().map(
+          (item) => CommentDto.fromMap(item.cast<String, dynamic>()),
+        ),
       );
     }
     final byId = <String, CommentDto>{};
@@ -123,7 +121,8 @@ class MockContentRepository implements ContentRepository {
       'id': postId,
       'authorId': 'mock_user',
       'displayName': 'Mock User',
-      'authorAvatarUrl': 'https://example.com/avatar.jpg',
+      'authorAvatarUrl':
+          'media/avatar/s/archived-avatar/content/default/v1/avatar.jpg',
       'body': '',
       'mediaUrls': <String>[],
       'likeCount': 0,
@@ -148,7 +147,7 @@ class MockContentRepository implements ContentRepository {
   }
 
   @override
-  Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? identity,
     String? type,
@@ -170,7 +169,17 @@ class MockContentRepository implements ContentRepository {
     final end = (safeOffset + safeLimit).clamp(0, items.length);
     final pageItems = items.sublist(safeOffset, end);
     final nextCursor = end < items.length ? '$end' : null;
-    return CursorPage<PostBaseDto>(items: pageItems, nextCursor: nextCursor);
+    // 模拟服务端权威下发：首刷生成 frq_ 归因 id，分页回显客户端透传的同一 id。
+    final resolvedFeedRequestId = (feedRequestId?.trim().isNotEmpty == true)
+        ? feedRequestId!.trim()
+        : 'frq_mock_${DateTime.now().microsecondsSinceEpoch}';
+    return DiscoveryFeedPage(
+      items: pageItems,
+      nextCursor: nextCursor,
+      feedRequestId: resolvedFeedRequestId,
+      rankingVersion: 'rec-mock',
+      reasonVersion: 'reason-mock',
+    );
   }
 
   @override
@@ -217,7 +226,9 @@ class MockContentRepository implements ContentRepository {
     if (_deletedPostIds.contains(postId)) {
       _throwMockPostNotFound(postId);
     }
-    final raw = _contractSeedPostWire(postId) ?? lookupCanonicalDiscoveryWireRowByPostId(postId);
+    final raw =
+        _contractSeedPostWire(postId) ??
+        lookupCanonicalDiscoveryWireRowByPostId(postId);
     if (raw == null) {
       _throwMockPostNotFound(postId);
     }
@@ -312,13 +323,15 @@ class MockContentRepository implements ContentRepository {
     String? cursor,
     int limit = CloudApiQueryDefaults.commentRepliesLimit,
   }) async {
-    final replies = commentsStub
-        .where(
-          (comment) =>
-              comment.postId == postId && comment.parentCommentId == commentId,
-        )
-        .toList(growable: false)
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final replies =
+        commentsStub
+            .where(
+              (comment) =>
+                  comment.postId == postId &&
+                  comment.parentCommentId == commentId,
+            )
+            .toList(growable: false)
+          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final offset = int.tryParse((cursor ?? '').trim()) ?? 0;
     final safeOffset = offset.clamp(0, replies.length);
     final safeLimit = limit <= 0 ? replies.length : limit;
@@ -404,28 +417,30 @@ class MockContentRepository implements ContentRepository {
     required String reaction,
   }) async {
     CommentDto? updated;
-    commentsStub = commentsStub.map((comment) {
-      if (comment.id != commentId) {
-        return comment;
-      }
-      final current = comment.viewerReaction;
-      var likeCount = comment.likeCount;
-      var dislikeCount = comment.dislikeCount;
-      if (current == 'like') {
-        likeCount = (likeCount - 1).clamp(0, 1 << 31).toInt();
-      }
-      if (current == 'dislike') {
-        dislikeCount = (dislikeCount - 1).clamp(0, 1 << 31).toInt();
-      }
-      if (reaction == 'like') likeCount++;
-      if (reaction == 'dislike') dislikeCount++;
-      updated = comment.copyWith(
-        likeCount: likeCount,
-        dislikeCount: dislikeCount,
-        viewerReaction: reaction,
-      );
-      return updated!;
-    }).toList(growable: false);
+    commentsStub = commentsStub
+        .map((comment) {
+          if (comment.id != commentId) {
+            return comment;
+          }
+          final current = comment.viewerReaction;
+          var likeCount = comment.likeCount;
+          var dislikeCount = comment.dislikeCount;
+          if (current == 'like') {
+            likeCount = (likeCount - 1).clamp(0, 1 << 31).toInt();
+          }
+          if (current == 'dislike') {
+            dislikeCount = (dislikeCount - 1).clamp(0, 1 << 31).toInt();
+          }
+          if (reaction == 'like') likeCount++;
+          if (reaction == 'dislike') dislikeCount++;
+          updated = comment.copyWith(
+            likeCount: likeCount,
+            dislikeCount: dislikeCount,
+            viewerReaction: reaction,
+          );
+          return updated!;
+        })
+        .toList(growable: false);
     return updated ??
         CommentDto(
           id: commentId,
@@ -610,13 +625,15 @@ class MockContentRepository implements ContentRepository {
     String mediaType = 'image',
   }) async {
     final ts = DateTime.now().millisecondsSinceEpoch;
+    final uploadObjectKey =
+        'upload/media/user/mock/draft/post/mock_user/mock_upload_$ts/mock_media_$ts/original.jpg';
+    final uploadUrl =
+        '${CloudRuntimeConfig.mediaUploadBaseUrl}/$uploadObjectKey';
     return ContentMediaInitUploadResponseDto(
       sessionId: 'mock_upload_$ts',
       mediaId: 'mock_media_$ts',
-      uploadUrl:
-          'https://media-origin.quwoquan.invalid/upload/media/user/mock/draft/post/mock_user/mock_upload_$ts/mock_media_$ts/original.jpg',
-      presignUrl:
-          'https://media-origin.quwoquan.invalid/upload/media/user/mock/draft/post/mock_user/mock_upload_$ts/mock_media_$ts/original.jpg',
+      uploadUrl: uploadUrl,
+      presignUrl: uploadUrl,
     );
   }
 
@@ -624,11 +641,12 @@ class MockContentRepository implements ContentRepository {
   Future<ContentMediaCompleteUploadResponseDto> completeMediaUpload({
     required String sessionId,
   }) async {
+    final objectKey =
+        'media/user/mock/draft/post/mock_user/$sessionId/mock_media_$sessionId/original.jpg';
     return ContentMediaCompleteUploadResponseDto(
       sessionId: sessionId,
       status: 'ready',
-      cdnUrl:
-          'https://media.quwoquan.invalid/media/user/mock/draft/post/mock_user/$sessionId/mock_media_$sessionId/original.jpg',
+      cdnUrl: '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/$objectKey',
       assetId: 'mock_media_$sessionId',
     );
   }
@@ -640,12 +658,13 @@ class MockContentRepository implements ContentRepository {
   Future<ContentMediaAssetWireDto> getMediaAsset({
     required String mediaId,
   }) async {
+    final objectKey =
+        'media/user/mock/draft/post/mock_user/mock_session/$mediaId/original.jpg';
     return ContentMediaAssetWireDto(
       id: mediaId,
       status: 'ready',
       type: 'image',
-      cdnUrl:
-          'https://media.quwoquan.invalid/media/user/mock/draft/post/mock_user/mock_session/$mediaId/original.jpg',
+      cdnUrl: '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/$objectKey',
     );
   }
 
@@ -678,14 +697,6 @@ class MockContentRepository implements ContentRepository {
   }) async {
     final preview = body.length > 100 ? body.substring(0, 100) : body;
     return ContentArticleSummaryGenerateResponseDto(summary: '$title：$preview');
-  }
-
-  @override
-  Future<ContentRecommendationResponseDto> getRecommendation({
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    return ContentRecommendationResponseDto(items: <Map<String, dynamic>>[]);
   }
 
   @override
@@ -766,6 +777,15 @@ class MockContentRepository implements ContentRepository {
     String? identity,
     String? type,
   }) {
+    final requestedIdentity = (identity ?? '').trim();
+    final requestedType = _normalizeFeedType(type);
+    if (_shouldServeAlphaShowcaseFeed(
+      category: category,
+      requestedIdentity: requestedIdentity,
+      requestedType: requestedType,
+    )) {
+      return _alphaShowcasePosts();
+    }
     final resolvedIdentity = identity ?? _mapCategoryToIdentity(category);
     final resolvedType = _normalizeFeedType(
       type ?? _mapCategoryToFeedType(category),
@@ -779,6 +799,30 @@ class MockContentRepository implements ContentRepository {
           ),
         )
         .toList(growable: false);
+  }
+
+  List<PostBaseDto> _alphaShowcasePosts() {
+    return ContentMockData.seededShowcaseFeedItems
+        .map((item) => postBaseDtoFromMap(item.toDiscoveryWireMap()))
+        .toList(growable: false);
+  }
+
+  bool _shouldServeAlphaShowcaseFeed({
+    required String category,
+    required String requestedIdentity,
+    required String? requestedType,
+  }) {
+    if (requestedType != null) return false;
+    switch (category.trim()) {
+      case 'recommend':
+      case 'recommended':
+        return requestedIdentity.isEmpty || requestedIdentity == 'moment';
+      case 'micro':
+      case 'moment':
+        return requestedIdentity == 'moment';
+      default:
+        return false;
+    }
   }
 
   bool _matchesIdentityAndTypePost(

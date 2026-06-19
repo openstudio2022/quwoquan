@@ -1,0 +1,34 @@
+config:
+  version: v2026.06.17.999001
+  min_image_version: 1.0.0
+  max_image_version: 2.0.0
+service:
+  name: chat-service
+  http:
+    addr: :18081
+mongodb:
+  uri: ''
+  database: quwoquan_chat
+redis:
+  realtime:
+    mode: standalone
+    addr: ''
+    addrs: []
+    tls: false
+  general:
+    mode: standalone
+    addr: ''
+    addrs: []
+    tls: false
+  reliable_task:
+    mode: standalone
+    addr: ''
+    addrs: []
+    tls: false
+runtime:
+  media:
+    group_avatar_cdn_base_url: ''
+    group_avatar_local_media_root: /tmp/chat-media
+  reliable_task:
+    ready_index:
+      enabled: false

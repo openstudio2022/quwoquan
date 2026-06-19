@@ -68,6 +68,7 @@ COPY quwoquan_service/scripts/ml/model_registry.py ./ml/model_registry.py
 
 ENV PYTHONPATH=.
 ENV PYTHONUNBUFFERED=1
+ENV REC_MODEL_UVICORN_WORKERS=2
 
 RUN useradd -m app && mkdir -p /app/cache && chown -R app:app /app
 ENV MODEL_CACHE_DIR=/app/cache
@@ -78,4 +79,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')" || exit 1
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${REC_MODEL_UVICORN_WORKERS:-2}"]

@@ -11,8 +11,11 @@ import (
 func TestLogin_CreatesOwnerAccountOnFirstUse(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	rec := doRequest(t, http.MethodPost, "/v1/auth/login",
-		`{"credentialType":"phone","credentialKey":"hash_new_phone","displayLabel":"13900000001"}`,
+	// 登录路由已按凭证类型拆分（phone 走 OTP，社交方走 authCode 置换）；凭证直登
+	// （credentialType+credentialKey 一步创建/复用绑定）现由 typed credential 端点
+	// /v1/auth/login/apple 承载（appleIdToken 即稳定凭证 key）。
+	rec := doRequest(t, http.MethodPost, "/v1/auth/login/apple",
+		`{"appleIdToken":"apple_subject_new","displayLabel":"13900000001"}`,
 		nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("login: expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -37,7 +40,7 @@ func TestLogin_CreatesOwnerAccountOnFirstUse(t *testing.T) {
 
 	var credCount int
 	_ = pgPool.QueryRow(context.Background(),
-		`SELECT COUNT(*) FROM credential_bindings WHERE owner_id = $1 AND credential_type = 'phone'`,
+		`SELECT COUNT(*) FROM credential_bindings WHERE owner_id = $1 AND credential_type = 'apple'`,
 		ownerID).Scan(&credCount)
 	if credCount != 1 {
 		t.Errorf("expected credential_binding to be created, got count=%d", credCount)
@@ -55,11 +58,12 @@ func TestLogin_CreatesOwnerAccountOnFirstUse(t *testing.T) {
 func TestLogin_ExistingCredentialReturnsOwner(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "existing_owner", "existing_user")
-	createTestCredential(t, "cred_existing", "existing_owner", "phone", "hash_existing_phone")
+	createTestCredential(t, "cred_existing", "existing_owner", "apple", "apple_subject_existing")
 
-	// 第一次登录
-	rec := doRequest(t, http.MethodPost, "/v1/auth/login",
-		`{"credentialType":"phone","credentialKey":"hash_existing_phone"}`, nil)
+	// 已存在凭证再次登录：typed credential 端点按 (type,key) 命中既有绑定并返回原 owner，
+	// 不重复建号。
+	rec := doRequest(t, http.MethodPost, "/v1/auth/login/apple",
+		`{"appleIdToken":"apple_subject_existing"}`, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("login: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}

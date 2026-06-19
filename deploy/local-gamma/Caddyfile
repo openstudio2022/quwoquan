@@ -31,6 +31,10 @@ gamma-api.quwoquan-env.test {
 	handle @api_content {
 		reverse_proxy content-service:18080
 	}
+	@api_search path /v1/search*
+	handle @api_search {
+		reverse_proxy search-service:18095
+	}
 	@api_chat path /v1/chat*
 	handle @api_chat {
 		reverse_proxy chat-service:18081
@@ -105,6 +109,10 @@ gamma-upload.quwoquan-env.test {
 	@pub_content path /v1/content*
 	handle @pub_content {
 		reverse_proxy content-service:18080
+	}
+	@pub_search path /v1/search*
+	handle @pub_search {
+		reverse_proxy search-service:18095
 	}
 	@pub_chat path /v1/chat*
 	handle @pub_chat {

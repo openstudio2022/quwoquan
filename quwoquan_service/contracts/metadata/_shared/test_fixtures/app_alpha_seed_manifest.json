@@ -32,7 +32,8 @@
         "search_core",
         "publish_core",
         "intersection_core",
-        "footprint_core"
+        "footprint_core",
+        "home_showcase_core"
       ],
       "resetScope": "fixture_content_*",
       "targetStore": "alpha-local-mock+content-service:test_store",

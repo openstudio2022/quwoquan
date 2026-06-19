@@ -5,3 +5,4 @@ numpy==2.4.6
 opencv-python-headless==4.13.0.92
 pytesseract==0.3.13
 ImageHash==4.3.2
+pytest==8.4.2

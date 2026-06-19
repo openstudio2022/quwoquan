@@ -1,0 +1,53 @@
+version: 2
+node:
+  id: served-dedup-write-behind
+  level: L3_story
+  path: specs/feature-tree/discovery-content/exposure-governance/served-dedup-write-behind
+  title: served dedup write behind
+  parent_domain_service: discovery-content
+  parent_business_capability: exposure-governance
+scope:
+  summary: 服务端下发即写 served 短窗口，解决翻页与短窗口重复，同时保持 served/impressed 训练语义分离。
+  in_scope:
+    - served/impressed 双轨语义。
+    - write-behind、召回下推 exclude、失败降级和重复曝光指标。
+  out_of_scope:
+    - 不把 P1/P2 的动态曝光预算、协同召回或 near-dup 一并塞入 served 去重链路。
+gwt_acceptance:
+  GWT1:
+    title: served 短窗口去重 GWT
+    given:
+      - 用户请求 feed 首屏，服务端返回一批候选。
+    when:
+      - 用户立即翻页或刷新，候选池发生小幅变化。
+    then:
+      - 已 served 内容在配置窗口内不重复返回；端侧真实 impressed 仍由曝光 tracker 产生。
+    done_when:
+      - served 和 impressed 的 key、指标、训练语义、降级路径均在规格中分离。
+      - served 按 user+day 分桶，过滤走 SISMEMBER 批量或短 Bloom，不依赖长窗口全量 SMembers。
+    edge_cases:
+      - served 写失败时不阻断 feed，但重复曝光风险进入告警或 observe_only 指标。
+    contract_refs:
+      - quwoquan_service/contracts/metadata/_shared/redis_keyspace.yaml
+      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    performance_points:
+      - repeat_exposure_rate < 0.01
+    evidence:
+      primary:
+        - T1_contract
+        - T2_module_interaction
+      supporting:
+        - T3_app_api_integration
+    tests:
+      planned:
+        - quwoquan_service/services/content-service/tests/post_feed_exposure_governance_contract_test.go
+        - quwoquan_app/test/patrol/discovery/feed_exposure_governance_journey_test.dart
+      recorded:
+        - quwoquan_service/runtime/recommendation/engine_test.go
+    status: implemented
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+    - make gate

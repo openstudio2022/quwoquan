@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"time"
 
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
 )
@@ -15,6 +16,8 @@ type CircleStore interface {
 	List(ctx context.Context, opts ListCirclesOpts) ([]model.Circle, string)
 	Archive(ctx context.Context, id string) bool
 	IncrementMemberCount(ctx context.Context, id string, delta int64) error
+	IncrementPostCount(ctx context.Context, id string, delta int64) error
+	UpdateWeeklyActiveCount(ctx context.Context, id string, count int64) error
 	UpdateStorageUsed(ctx context.Context, id string, deltaBytes int64) error
 	UpdateSections(ctx context.Context, id string, sections []model.CircleSectionConfig) error
 }
@@ -35,6 +38,8 @@ type MemberStore interface {
 	FindByCircleAndUser(ctx context.Context, circleID, userID string) (*model.CircleMember, bool)
 	Delete(ctx context.Context, circleID, userID string) bool
 	UpdateRole(ctx context.Context, circleID, userID string, role model.CircleMemberRole) bool
+	TouchActivity(ctx context.Context, circleID, userID string) bool
+	CountActiveSince(ctx context.Context, circleID string, since time.Time) (int64, error)
 	ListByCircle(ctx context.Context, circleID string, limit int, cursor string) ([]model.CircleMember, string)
 	ListByUser(ctx context.Context, userID string, limit int, cursor string) ([]model.CircleMember, string)
 }
@@ -71,9 +76,11 @@ type ListFilesOpts struct {
 	Limit    int
 }
 
-// FeedStore defines read-only access to posts associated with circles.
+// FeedStore defines access to posts associated with circles.
 type FeedStore interface {
 	ListCirclePosts(ctx context.Context, circleID string, opts ListCirclePostsOpts) ([]map[string]any, string)
+	UpdateCirclePostPinned(ctx context.Context, circleID, postID string, pinned bool) (bool, error)
+	UpdateCirclePostFeatured(ctx context.Context, circleID, postID string, featured bool) (bool, error)
 }
 
 // ListCirclePostsOpts controls circle feed queries.

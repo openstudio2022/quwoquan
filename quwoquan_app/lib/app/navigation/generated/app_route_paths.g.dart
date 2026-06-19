@@ -120,6 +120,17 @@ class AppRoutePaths {
   }
   static const String globalSearchNetworkResultsSegment = 'network';
 
+  static const String locationPlaceLandingPathTemplate = '/locations/{placeId}';
+  static String locationPlaceLanding({required String placeId, String? name, String? source}) {
+    return _buildPath(locationPlaceLandingPathTemplate, <String, String>{
+      'placeId': placeId,
+    }, <String, String?>{
+      'name': name,
+      'source': source,
+    });
+  }
+  static const String locationPlaceLandingSegment = '{placeId}';
+
   static const String homepagePickerPathTemplate = '/homepages/picker';
   static String homepagePicker({String? query}) {
     return _buildPath(homepagePickerPathTemplate, <String, String>{
@@ -206,19 +217,24 @@ class AppRoutePaths {
   static const String profileCommentsSegment = 'comments';
 
   static const String profileStatsPathTemplate = '/profile/stats';
-  static String profileStats({String? type}) {
+  static String profileStats({String? type, String? userId}) {
     return _buildPath(profileStatsPathTemplate, <String, String>{
     }, <String, String?>{
       'type': type,
+      'userId': userId,
     });
   }
   static const String profileStatsSegment = 'stats';
 
   static const String myIntersectionsPathTemplate = '/profile/intersections';
-  static String myIntersections({String? dimension}) {
+  static String myIntersections({String? dimension, String? sourceRef, String? filter, String? timeBucket, String? intersectionId}) {
     return _buildPath(myIntersectionsPathTemplate, <String, String>{
     }, <String, String?>{
       'dimension': dimension,
+      'sourceRef': sourceRef,
+      'filter': filter,
+      'timeBucket': timeBucket,
+      'intersectionId': intersectionId,
     });
   }
   static const String myIntersectionsSegment = 'intersections';

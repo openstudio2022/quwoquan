@@ -54,7 +54,7 @@ class _ContentSession {
 /// differentiated depth calculation and referral source attribution.
 class ContentEngagementTracker {
   ContentEngagementTracker({required BehaviorRepository repository})
-      : _repository = repository;
+    : _repository = repository;
 
   final BehaviorRepository _repository;
   final Map<String, _ContentSession> _activeSessions = {};
@@ -101,19 +101,29 @@ class ContentEngagementTracker {
       position: position,
     );
 
-    _fireAndTrack(_repository.reportEvents(events: [
-      BehaviorEvent(
-        contentId: contentId,
-        action: BehaviorAction.impression,
-        contentType: contentType.wireValue,
-        tags: tags,
-        feedRequestId: feedRequestId,
-        position: position,
-        authorId: authorId,
-        referralSource: referralSource,
-        entityRefs: entityRefs,
+    _fireAndTrack(
+      _repository.reportEvents(
+        events: [
+          BehaviorEvent(
+            contentId: contentId,
+            action: BehaviorAction.impression,
+            state: 'visible',
+            clientEventId: _clientEventId(
+              action: BehaviorAction.impression,
+              contentId: contentId,
+              feedRequestId: feedRequestId,
+            ),
+            contentType: contentType.wireValue,
+            tags: tags,
+            feedRequestId: feedRequestId,
+            position: position,
+            authorId: authorId,
+            referralSource: referralSource,
+            entityRefs: entityRefs,
+          ),
+        ],
       ),
-    ]));
+    );
   }
 
   /// Called to update progress (page flip, image swipe, video progress).
@@ -147,8 +157,7 @@ class ContentEngagementTracker {
     final session = _activeSessions.remove(contentId);
     if (session == null) return;
 
-    final dwellMs =
-        DateTime.now().difference(session.enterTime).inMilliseconds;
+    final dwellMs = DateTime.now().difference(session.enterTime).inMilliseconds;
     final dwellSeconds = dwellMs / 1000.0;
 
     if (dwellSeconds < 1.0) return;
@@ -162,6 +171,12 @@ class ContentEngagementTracker {
       BehaviorEvent(
         contentId: contentId,
         action: BehaviorAction.dwell,
+        state: 'dwell',
+        clientEventId: _clientEventId(
+          action: BehaviorAction.dwell,
+          contentId: contentId,
+          feedRequestId: session.feedRequestId,
+        ),
         contentType: ct,
         duration: dwellSeconds,
         tags: session.tags,
@@ -177,6 +192,12 @@ class ContentEngagementTracker {
       BehaviorEvent(
         contentId: contentId,
         action: BehaviorAction.contentDepth,
+        state: 'interaction',
+        clientEventId: _clientEventId(
+          action: BehaviorAction.contentDepth,
+          contentId: contentId,
+          feedRequestId: session.feedRequestId,
+        ),
         contentType: ct,
         tags: session.tags,
         feedRequestId: session.feedRequestId,
@@ -194,14 +215,23 @@ class ContentEngagementTracker {
 
   /// Track author profile view.
   void trackAuthorProfileView(String authorId, {required ReferralSource from}) {
-    _fireAndTrack(_repository.reportEvents(events: [
-      BehaviorEvent(
-        contentId: authorId,
-        action: BehaviorAction.authorView,
-        referralSource: from,
-        authorId: authorId,
+    _fireAndTrack(
+      _repository.reportEvents(
+        events: [
+          BehaviorEvent(
+            contentId: authorId,
+            action: BehaviorAction.authorView,
+            state: 'interaction',
+            clientEventId: _clientEventId(
+              action: BehaviorAction.authorView,
+              contentId: authorId,
+            ),
+            referralSource: from,
+            authorId: authorId,
+          ),
+        ],
       ),
-    ]));
+    );
   }
 
   /// Track tag click within content.
@@ -212,28 +242,50 @@ class ContentEngagementTracker {
     String? feedRequestId,
   }) {
     final session = _activeSessions[fromContentId];
-    _fireAndTrack(_repository.reportEvents(events: [
-      BehaviorEvent(
-        contentId: fromContentId,
-        action: BehaviorAction.tagClick,
-        tags: [tagRef],
-        referralSource: referralSource ?? session?.referralSource ?? ReferralSource.organicFeed,
-        feedRequestId: feedRequestId ?? session?.feedRequestId,
-        authorId: session?.authorId,
+    _fireAndTrack(
+      _repository.reportEvents(
+        events: [
+          BehaviorEvent(
+            contentId: fromContentId,
+            action: BehaviorAction.tagClick,
+            state: 'interaction',
+            clientEventId: _clientEventId(
+              action: BehaviorAction.tagClick,
+              contentId: fromContentId,
+              feedRequestId: feedRequestId ?? session?.feedRequestId,
+            ),
+            tags: [tagRef],
+            referralSource:
+                referralSource ??
+                session?.referralSource ??
+                ReferralSource.organicFeed,
+            feedRequestId: feedRequestId ?? session?.feedRequestId,
+            authorId: session?.authorId,
+          ),
+        ],
       ),
-    ]));
+    );
   }
 
   /// Track entity page navigation.
   void trackEntityPageView(String entityId, {required ReferralSource from}) {
-    _fireAndTrack(_repository.reportEvents(events: [
-      BehaviorEvent(
-        contentId: entityId,
-        action: BehaviorAction.entityPageView,
-        referralSource: from,
-        entityRefs: [entityId],
+    _fireAndTrack(
+      _repository.reportEvents(
+        events: [
+          BehaviorEvent(
+            contentId: entityId,
+            action: BehaviorAction.entityPageView,
+            state: 'interaction',
+            clientEventId: _clientEventId(
+              action: BehaviorAction.entityPageView,
+              contentId: entityId,
+            ),
+            referralSource: from,
+            entityRefs: [entityId],
+          ),
+        ],
       ),
-    ]));
+    );
   }
 
   /// Track video play progress (called periodically or on pause/seek).
@@ -256,23 +308,51 @@ class ContentEngagementTracker {
     for (final t in thresholds) {
       if (ratio >= t) currentThreshold = t;
     }
-    if (currentThreshold <= 0 || currentThreshold <= session.lastReportedPlayThreshold) {
+    if (currentThreshold <= 0 ||
+        currentThreshold <= session.lastReportedPlayThreshold) {
       return;
     }
     session.lastReportedPlayThreshold = currentThreshold;
 
-    _fireAndTrack(_repository.reportEvents(events: [
-      BehaviorEvent(
-        contentId: contentId,
-        action: BehaviorAction.playProgress,
-        contentType: session.contentType.wireValue,
-        consumedRatio: ratio,
-        totalUnits: (totalDurationMs / 1000).round(),
-        referralSource: session.referralSource,
-        feedRequestId: session.feedRequestId,
-        authorId: session.authorId,
+    _fireAndTrack(
+      _repository.reportEvents(
+        events: [
+          BehaviorEvent(
+            contentId: contentId,
+            action: BehaviorAction.playProgress,
+            state: 'interaction',
+            clientEventId: _clientEventId(
+              action: BehaviorAction.playProgress,
+              contentId: contentId,
+              feedRequestId: session.feedRequestId,
+              suffix: currentThreshold.toStringAsFixed(2),
+            ),
+            contentType: session.contentType.wireValue,
+            consumedRatio: ratio,
+            totalUnits: (totalDurationMs / 1000).round(),
+            referralSource: session.referralSource,
+            feedRequestId: session.feedRequestId,
+            authorId: session.authorId,
+          ),
+        ],
       ),
-    ]));
+    );
+  }
+
+  String _clientEventId({
+    required BehaviorAction action,
+    required String contentId,
+    String? feedRequestId,
+    String? suffix,
+  }) {
+    final now = DateTime.now().toUtc().microsecondsSinceEpoch;
+    final feed = feedRequestId == null || feedRequestId.trim().isEmpty
+        ? now.toString()
+        : feedRequestId.trim();
+    final safeSuffix = suffix == null || suffix.isEmpty
+        ? now.toString()
+        : suffix;
+    return 'eng:${action.wireValue}:$contentId:$feed:$safeSuffix';
   }
 
   /// Compute engagement depth level (0-4).

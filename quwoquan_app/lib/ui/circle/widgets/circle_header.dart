@@ -13,6 +13,7 @@ class CircleHeader extends StatelessWidget {
     this.tags = const [],
     this.metaLine,
     this.badgeLabel,
+    this.memberAvatarUrls = const <String>[],
     this.onTagTap,
   });
 
@@ -23,6 +24,9 @@ class CircleHeader extends StatelessWidget {
   final List<String> tags;
   final String? metaLine;
   final String? badgeLabel;
+
+  /// 头部成员头像簇（圈子里你认识的人，最多展示前若干个）；为空则不展示。
+  final List<String> memberAvatarUrls;
   final ValueChanged<String>? onTagTap;
 
   static const double avatarRadius = AppSpacing.xl;
@@ -61,6 +65,44 @@ class CircleHeader extends StatelessWidget {
                 color: fgSecondary,
               ),
             ),
+    );
+  }
+
+  /// 成员头像簇：叠加展示前若干位成员头像，传达「圈子里有真实的人」。
+  Widget _buildMemberCluster(Color bg, Color fgSecondary) {
+    final urls = memberAvatarUrls
+        .where((u) => u.trim().isNotEmpty)
+        .take(4)
+        .toList(growable: false);
+    if (urls.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    const double diameter = AppSpacing.avatarUserXs;
+    const double step = diameter - AppSpacing.sm;
+    return SizedBox(
+      key: const ValueKey<String>('circle-header-member-cluster'),
+      height: diameter,
+      width: diameter + step * (urls.length - 1),
+      child: Stack(
+        children: [
+          for (var i = 0; i < urls.length; i++)
+            Positioned(
+              left: i * step,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: bg, width: AppSpacing.hairline * 2),
+                ),
+                child: CircleAvatar(
+                  radius: diameter / 2,
+                  backgroundColor: fgSecondary.withValues(alpha: 0.2),
+                  backgroundImage: circleImageProvider(urls[i]),
+                  onBackgroundImageError: (e, s) {},
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -152,6 +194,10 @@ class CircleHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+              ],
+              if (memberAvatarUrls.any((u) => u.trim().isNotEmpty)) ...[
+                SizedBox(height: AppSpacing.intraGroupSm),
+                _buildMemberCluster(bg, fgSecondary),
               ],
               if (description != null && description!.isNotEmpty) ...[
                 SizedBox(height: AppSpacing.intraGroupXs),

@@ -1,0 +1,35 @@
+{
+  "artifactName": "mainline-release-artifact",
+  "generatedAt": "2026-06-17T11:13:36.424816Z",
+  "images": {
+    "recommendationService": {
+      "ref": "ghcr.io/openstudio2022/quwoquan/recommendation-service:1.20260617.999001",
+      "repository": "ghcr.io/openstudio2022/quwoquan/recommendation-service",
+      "tag": "1.20260617.999001"
+    },
+    "seedBox": {
+      "ref": "ghcr.io/openstudio2022/quwoquan/seed-box:1.20260617.999001",
+      "repository": "ghcr.io/openstudio2022/quwoquan/seed-box",
+      "tag": "1.20260617.999001"
+    }
+  },
+  "releaseFiles": {
+    "chat-service": "releases/config/chat-service/v2026.06.17.999001.yaml",
+    "circle-service": "releases/config/circle-service/v2026.06.17.999001.yaml",
+    "content-service": "releases/config/content-service/v2026.06.17.999001.yaml",
+    "integration-service": "releases/config/integration-service/v2026.06.17.999001.yaml",
+    "recommendation-service": "releases/config/recommendation-service/v2026.06.17.999001.yaml",
+    "seed-box": "releases/config/seed-box/v2026.06.17.999001.yaml",
+    "user-service": "releases/config/user-service/v2026.06.17.999001.yaml"
+  },
+  "schemaVersion": 1,
+  "source": {
+    "gitSha": "bd7c5ab99507d1e891f737394be0d4ba33f4f2e6",
+    "repository": "openstudio2022/quwoquan",
+    "runNumber": 999001
+  },
+  "versions": {
+    "configVersion": "v2026.06.17.999001",
+    "imageVersion": "1.20260617.999001"
+  }
+}

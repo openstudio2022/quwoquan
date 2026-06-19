@@ -2,23 +2,28 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
+import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
+import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
 
-/// 我的主页「我的交集」聚合入口卡（V4 · 动态简报）。
+/// 我的主页「我的交集」预览卡（高保版）。
 ///
-/// 设计（专业设计师视角：精致 / 事实清晰 / 简洁）：
-/// - 头部总数 + 未读红点；
-/// - 维度胶囊改为「动态简报行」：每行一条云侧实例化简报句（briefText，
-///   如"3 位联系人新加入了你关注的圈子"），缺省回落 label + 新增数，端不编造事实；
-/// - 默认 3 行，超出收起「展开更多」；点击行/卡进入分维度列表页（打开即清零红点）。
-/// - 维度 dimension 为开放字符串，未知维度优雅降级（必读要求 1）。
+/// 只展示真实 fact 交集 item：蓝色线性图标 + 单行主文案 + chevron。
+/// 端侧只读 [IntersectionReason.primaryText]/[IntersectionReason.primarySpans]，
+/// 不渲染 secondaryText、样本头像、胶囊解释或 affinity 推荐。
 class MyIntersectionInboxCard extends ConsumerStatefulWidget {
   const MyIntersectionInboxCard({super.key, required this.isDark});
+
+  static const Key cardKey = ValueKey<String>('my-intersection-inbox-card');
 
   final bool isDark;
 
@@ -29,273 +34,271 @@ class MyIntersectionInboxCard extends ConsumerStatefulWidget {
 
 class _MyIntersectionInboxCardState
     extends ConsumerState<MyIntersectionInboxCard> {
-  static const int _collapsedMax = 3;
-  bool _expanded = false;
-
   @override
   void initState() {
     super.initState();
     Future<void>.microtask(
-      () => ref.read(myIntersectionSummaryProvider.notifier).load(),
+      () => ref.read(myIntersectionPreviewProvider.notifier).load(),
     );
   }
 
-  void _openList({String dimension = ''}) {
-    final path = dimension.isEmpty
-        ? AppRoutePaths.myIntersections()
-        : AppRoutePaths.myIntersections(dimension: dimension);
-    context.push(path);
+  IntersectionTargetNavigator get _navigator => IntersectionTargetNavigator(
+    onTrack: (target, attribution) {
+      final id = target.objectId.trim();
+      if (id.isEmpty) {
+        return;
+      }
+      ref
+          .read(contentBehaviorTrackerProvider)
+          .trackClick(
+            id,
+            referralSource: ReferralSource.organicFeed,
+            intersectionDimension: attribution.dimension,
+            intersectionSourceRef: attribution.sourceRef,
+            intersectionClass: attribution.intersectionClass,
+            intersectionTagRefs: attribution.tagRefs,
+            intersectionEvidenceId: attribution.evidenceId,
+          );
+    },
+  );
+
+  void _openList({String intersectionId = ''}) {
+    context.push(
+      AppRoutePaths.myIntersections(
+        filter: 'fact',
+        intersectionId: intersectionId.isEmpty ? null : intersectionId,
+      ),
+    );
+  }
+
+  void _onSpanTap(IntersectionReason reason, IntersectionTextSpan span) {
+    final target = span.target;
+    if (target == null) {
+      return;
+    }
+    final sourceRef = span.role == 'count' ? _sourceRefFor(reason) : '';
+    _navigator.open(
+      context,
+      target,
+      sourceRef: sourceRef,
+      attribution: IntersectionNavAttribution(
+        intersectionId: reason.intersectionId,
+        dimension: reason.dimension,
+        intersectionClass: reason.intersectionClass,
+        sourceRef: _sourceRefFor(reason),
+        tagRefs: reason.tagRefs,
+        evidenceId: reason.pointSummarySnapshotId,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(myIntersectionSummaryProvider);
-    final summary = state.summary;
-    if (summary == null) {
-      return const SizedBox.shrink();
-    }
-    if (summary.totalCount == 0) {
-      return _shell(context, child: _buildEmpty(context));
-    }
-    final dimensions = summary.dimensions;
-    final visible = _expanded
-        ? dimensions
-        : dimensions.take(_collapsedMax).toList(growable: false);
-    final hasMore = dimensions.length > _collapsedMax;
-    return _shell(
-      context,
-      onTap: () => _openList(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          _buildSummaryHeader(context, totalNew: summary.totalNewCount),
-          SizedBox(height: AppSpacing.intraGroupSm),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final state = ref.watch(myIntersectionPreviewProvider);
+    final visible = state.items
+        .where((item) => item.intersectionClass == 'fact')
+        .take(3)
+        .toList(growable: false);
+    return _ProfileInsightSectionCard(
+      key: MyIntersectionInboxCard.cardKey,
+      title: DiscoveryFeedText.myIntersectionsTitle,
+      actionLabel: DiscoveryFeedText.intersectionViewAll,
+      onAction: () => _openList(),
+      topPadding: true,
+      child: state.isLoading && visible.isEmpty
+          ? const _MyIntersectionSkeletonList()
+          : visible.isEmpty
+          ? _MyIntersectionEmptyState()
+          : Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                for (var i = 0; i < visible.length; i++) ...<Widget>[
-                  if (i > 0)
-                    Container(
-                      height: AppSpacing.hairline,
-                      margin: EdgeInsets.symmetric(
-                        vertical: AppSpacing.intraGroupXs,
-                      ),
-                      color: AppColors.iosSeparator(
-                        context,
-                      ).withValues(alpha: widget.isDark ? 0.18 : 0.06),
+                for (var index = 0; index < visible.length; index += 1) ...[
+                  if (index > 0) _InsightDivider(),
+                  _MyIntersectionPreviewRow(
+                    reason: visible[index],
+                    onTap: () => _openList(
+                      intersectionId: visible[index].intersectionId,
                     ),
-                  _BriefRow(
-                    tally: visible[i],
-                    isPrimary: i == 0,
-                    onTap: () => _openList(dimension: visible[i].dimension),
+                    onSpanTap: (span) => _onSpanTap(visible[index], span),
                   ),
                 ],
               ],
             ),
-          ),
-          if (hasMore)
-            Padding(
-              padding: EdgeInsets.only(top: AppSpacing.intraGroupSm),
-              child: _MorePill(
-                expanded: _expanded,
-                onTap: () => setState(() => _expanded = !_expanded),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _shell(
-    BuildContext context, {
-    required Widget child,
-    VoidCallback? onTap,
-  }) {
-    final surface = AppColors.iosProfileSurface(context);
-    final border = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: widget.isDark ? 0.24 : 0.08);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(AppSpacing.containerMd),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyFour),
-          border: Border.all(color: border, width: AppSpacing.hairline),
-        ),
-        child: child,
-      ),
-    );
-  }
-
-  Widget _buildSummaryHeader(BuildContext context, {required int totalNew}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Container(
-          width: AppSpacing.largeButtonSize,
-          height: AppSpacing.largeButtonSize,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.iosAccent(context).withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
-          ),
-          child: Icon(
-            CupertinoIcons.circle_grid_hex,
-            size: AppSpacing.iconMedium,
-            color: AppColors.iosAccent(context),
-          ),
-        ),
-        SizedBox(width: AppSpacing.intraGroupSm),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      UITextConstants.myIntersectionsTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.semiBold,
-                        color: AppColors.iosLabel(context),
-                        height: AppSpacing.textLineHeightSingle,
-                      ),
-                    ),
-                  ),
-                  if (totalNew > 0) ...<Widget>[
-                    SizedBox(width: AppSpacing.intraGroupXs),
-                    _RedCountBadge(count: totalNew),
-                  ],
-                ],
-              ),
-              SizedBox(height: AppSpacing.intraGroupXs),
-              Text(
-                UITextConstants.myIntersectionsSubtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.iosCaption1,
-                  color: AppColors.iosSecondaryLabel(context),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(width: AppSpacing.intraGroupSm),
-        Padding(
-          padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
-          child: Icon(
-            CupertinoIcons.chevron_forward,
-            size: AppSpacing.iconSmall,
-            color: AppColors.iosTertiaryLabel(context),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmpty(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Icon(
-          CupertinoIcons.circle_grid_hex,
-          size: AppSpacing.iconSmall,
-          color: AppColors.iosTertiaryLabel(context),
-        ),
-        SizedBox(width: AppSpacing.intraGroupSm),
-        Expanded(
-          child: Text(
-            UITextConstants.myIntersectionsEmpty,
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
 
-/// 动态简报行：云侧实例化一句话（briefText）优先；缺省回落 label + 新增数。
-class _BriefRow extends StatelessWidget {
-  const _BriefRow({
-    required this.tally,
-    required this.isPrimary,
-    required this.onTap,
+String _sourceRefFor(IntersectionReason reason) {
+  final source = reason.source.trim();
+  if (source.isNotEmpty) {
+    return source;
+  }
+  if (reason.intersectionPoints.isEmpty) {
+    return '';
+  }
+  return reason.intersectionPoints.first.sourceRef.trim();
+}
+
+class _ProfileInsightSectionCard extends StatelessWidget {
+  const _ProfileInsightSectionCard({
+    super.key,
+    required this.title,
+    required this.actionLabel,
+    required this.child,
+    this.onAction,
+    this.topPadding = false,
   });
 
-  final IntersectionDimensionTally tally;
-  final bool isPrimary;
-  final VoidCallback onTap;
+  final String title;
+  final String actionLabel;
+  final Widget child;
+  final VoidCallback? onAction;
+  final bool topPadding;
 
   @override
   Widget build(BuildContext context) {
-    final hasNew = tally.newCount > 0;
-    final brief = tally.briefText.trim();
-    final text = brief.isNotEmpty
-        ? brief
-        : (hasNew
-              ? '${tally.label} ${tally.newCount} ${UITextConstants.intersectionNewBadgeSuffix}'
-              : '${tally.label} ${tally.count}');
-    final accent = AppColors.iosAccent(context);
-    final primaryColor = isPrimary ? accent : AppColors.iosLabel(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: AppSpacing.minInteractiveSize),
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final border = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.14 : 0.07);
+    final shadow = AppColors.black.withValues(alpha: isDark ? 0.10 : 0.018);
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding ? AppSpacing.interGroupSm : 0),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: AppColors.iosProfileSurface(context),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+          border: Border.all(color: border, width: AppSpacing.hairline),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: shadow,
+              blurRadius: AppSpacing.fourteen,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.containerSm,
+                AppSpacing.containerXs,
+                AppSpacing.intraGroupXs,
+                AppSpacing.intraGroupXs,
+              ),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: AppSpacing.xs / 2,
+                    height: AppSpacing.iconSmall,
+                    decoration: BoxDecoration(
+                      color: AppColors.iosAccent(context),
+                      borderRadius: BorderRadius.circular(AppSpacing.xs / 2),
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosSubheadline,
+                        fontWeight: AppTypography.regular,
+                        color: AppColors.iosLabel(context),
+                      ),
+                    ),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size(
+                      AppSpacing.minInteractiveSize,
+                      AppSpacing.buttonHeightSm,
+                    ),
+                    onPressed: onAction,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          actionLabel,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            color: AppColors.iosAccent(context),
+                          ),
+                        ),
+                        SizedBox(width: AppSpacing.intraGroupXs / 2),
+                        Icon(
+                          CupertinoIcons.chevron_forward,
+                          size: AppSpacing.iconXSmall,
+                          color: AppColors.iosAccent(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _InsightDivider(),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MyIntersectionPreviewRow extends StatelessWidget {
+  const _MyIntersectionPreviewRow({
+    required this.reason,
+    required this.onTap,
+    required this.onSpanTap,
+  });
+
+  final IntersectionReason reason;
+  final VoidCallback onTap;
+  final void Function(IntersectionTextSpan span) onSpanTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.square(AppSpacing.minInteractiveSize),
+      onPressed: onTap,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.containerSm,
+          vertical: AppSpacing.containerXs,
+        ),
         child: Row(
           children: <Widget>[
-            Container(
-              width: AppSpacing.avatarUserSm,
-              height: AppSpacing.avatarUserSm,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isPrimary
-                    ? accent.withValues(alpha: 0.12)
-                    : AppColors.iosFill(context),
-              ),
-              child: Icon(
-                CupertinoIcons.person_2_fill,
-                size: AppSpacing.iconSmall,
-                color: isPrimary
-                    ? accent
-                    : AppColors.iosSecondaryLabel(context),
-              ),
+            IntersectionTypeIcon(
+              iconKey: reason.iconKey,
+              sourceRef: _sourceRefFor(reason),
+              dimension: reason.dimension,
             ),
             SizedBox(width: AppSpacing.intraGroupSm),
             Expanded(
-              child: Text(
-                text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+              child: InteractiveIntersectionText(
+                spans: reason.primarySpans,
+                fallbackText: reason.primaryText,
+                onSpanTap: onSpanTap,
+                onFallbackTap: onTap,
+                accentFontWeight: AppTypography.regular,
+                baseStyle: TextStyle(
                   fontSize: AppTypography.iosSubheadline,
-                  fontWeight: isPrimary || hasNew
-                      ? AppTypography.medium
-                      : AppTypography.regular,
-                  color: primaryColor,
+                  height: AppSpacing.textLineHeightFootnote,
+                  fontWeight: AppTypography.regular,
+                  color: AppColors.iosLabel(context),
+                  letterSpacing: -0.08,
                 ),
               ),
             ),
-            SizedBox(width: AppSpacing.intraGroupXs),
+            SizedBox(width: AppSpacing.intraGroupSm),
             Icon(
               CupertinoIcons.chevron_forward,
-              size: AppSpacing.fourteen,
-              color: AppColors.iosTertiaryLabel(context),
+              size: AppSpacing.iconXSmall,
+              color: AppColors.iosQuaternaryLabel(context),
             ),
           ],
         ),
@@ -304,63 +307,84 @@ class _BriefRow extends StatelessWidget {
   }
 }
 
-class _MorePill extends StatelessWidget {
-  const _MorePill({required this.expanded, required this.onTap});
-
-  final bool expanded;
-  final VoidCallback onTap;
-
+class _MyIntersectionEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.intraGroupSm,
-        ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
-        ),
-        child: Text(
-          expanded
-              ? UITextConstants.intersectionCollapse
-              : UITextConstants.intersectionExpandMore,
-          style: TextStyle(
-            fontSize: AppTypography.iosCaption1,
-            fontWeight: AppTypography.medium,
-            color: AppColors.iosAccent(context),
-          ),
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.containerMd,
+      ),
+      child: Text(
+        DiscoveryFeedText.myIntersectionsEmpty,
+        style: TextStyle(
+          fontSize: AppTypography.iosSubheadline,
+          color: AppColors.iosSecondaryLabel(context),
         ),
       ),
     );
   }
 }
 
-/// 仅用于「未读/新增」数字的红色提醒徽标。
-class _RedCountBadge extends StatelessWidget {
-  const _RedCountBadge({required this.count});
-
-  final int count;
+class _MyIntersectionSkeletonList extends StatelessWidget {
+  const _MyIntersectionSkeletonList();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(minWidth: AppSpacing.lg),
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.intraGroupXs),
-      decoration: BoxDecoration(
-        color: AppColors.error,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (var i = 0; i < 3; i += 1) ...[
+          if (i > 0) _InsightDivider(),
+          const _MyIntersectionSkeletonRow(),
+        ],
+      ],
+    );
+  }
+}
+
+class _MyIntersectionSkeletonRow extends StatelessWidget {
+  const _MyIntersectionSkeletonRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final fill = AppColors.iosSecondaryFill(context).withValues(alpha: 0.65);
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.containerSm,
       ),
-      child: Text(
-        count > 99 ? '99+' : '$count',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: AppTypography.iosCaption2,
-          fontWeight: AppTypography.semiBold,
-          color: AppColors.white,
-        ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: AppSpacing.avatarUserSm,
+            height: AppSpacing.avatarUserSm,
+            decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
+          ),
+          SizedBox(width: AppSpacing.intraGroupSm),
+          Expanded(
+            child: Container(
+              height: AppSpacing.sm,
+              decoration: BoxDecoration(
+                color: fill,
+                borderRadius: BorderRadius.circular(AppSpacing.sm),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InsightDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(left: AppSpacing.containerSm * 2),
+      child: Container(
+        height: AppSpacing.hairline,
+        color: AppColors.iosSeparator(context).withValues(alpha: 0.12),
       ),
     );
   }

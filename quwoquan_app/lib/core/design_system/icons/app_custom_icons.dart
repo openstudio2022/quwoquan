@@ -103,7 +103,7 @@ class _ContactsPainter extends CustomPainter {
   final Color color;
   final bool filled;
 
-  static const double _strokeRatio = 1.28 / 24.0;
+  static const double _strokeRatio = 1.34 / 24.0;
 
   double _x(Size size, double value) => size.width * value / 24.0;
 
@@ -177,28 +177,29 @@ class _ContactsPainter extends CustomPainter {
   Path _largeBubblePath(Size size) {
     return _bubblePath(
       size,
-      body: const Rect.fromLTRB(0.55, 1.92, 15.45, 16.22),
+      body: const Rect.fromLTRB(0.50, 1.30, 15.85, 17.35),
       tailStartDegrees: 130.0,
-      tailEndDegrees: 97.0,
-      tipA: const Offset(3.08, 19.12),
-      tipB: const Offset(4.16, 18.72),
-      roundA: const Offset(3.92, 16.42),
-      roundTip: const Offset(3.14, 19.52),
-      roundB: const Offset(5.40, 17.82),
+      tailEndDegrees: 98.0,
+      tipA: const Offset(2.90, 21.05),
+      tipB: const Offset(4.45, 20.42),
+      roundA: const Offset(3.72, 17.58),
+      roundTip: const Offset(2.95, 21.52),
+      roundB: const Offset(5.80, 19.08),
     );
   }
 
   Path _smallBubblePath(Size size) {
     return _bubblePath(
       size,
-      body: const Rect.fromLTRB(12.52, 5.78, 23.62, 16.88),
-      tailStartDegrees: 65.0,
-      tailEndDegrees: 43.0,
-      tipA: const Offset(21.86, 19.02),
-      tipB: const Offset(22.44, 18.78),
-      roundA: const Offset(21.20, 17.28),
-      roundTip: const Offset(22.30, 19.36),
-      roundB: const Offset(22.08, 17.22),
+      // 小气泡应压在大气泡右上，不向下坠；尾巴也收短以贴近建群聊图标。
+      body: const Rect.fromLTRB(11.75, 3.00, 23.35, 15.15),
+      tailStartDegrees: 66.0,
+      tailEndDegrees: 46.0,
+      tipA: const Offset(21.40, 17.20),
+      tipB: const Offset(22.08, 16.88),
+      roundA: const Offset(20.72, 15.68),
+      roundTip: const Offset(21.92, 17.62),
+      roundB: const Offset(21.76, 15.55),
     );
   }
 

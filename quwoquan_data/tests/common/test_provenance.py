@@ -43,6 +43,7 @@ from _common.provenance import (  # noqa: E402
     build_provenance,
     provenance_issues,
 )
+from _common.post_evidence_chain import build_source_refs_snapshot  # noqa: E402
 from _common.source_unit import write_source_unit  # noqa: E402
 from _common.stage_reports import write_stage_result  # noqa: E402
 from produce.materialize import materialize_posts  # noqa: E402
@@ -219,6 +220,46 @@ def test_materialize_writes_source_refs_snapshot_and_finalization_report():
     assert report["frontmatterInjected"] is True
     assert report["bodyChanged"] is False
     assert report["frontmatterOnlyChange"] is True
+
+
+def test_source_refs_snapshot_records_binary_asset_without_text_decode():
+    ensure_task_layout(TASK)
+    ensure_batch_layout(TASK, "binary_source_asset", "produce")
+    obj = batch_entity_object_dir(TASK, "binary_source_asset", "地点", "景区", "九寨沟")
+    write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="base",
+        source_md="# 九寨沟\n\nsource a",
+        clean_md="# 九寨沟\n\nsource a",
+        platform="curated",
+        source_category="overview_baike",
+        url="https://example.com/a",
+        title="source a",
+        target_ref="/entity/地点/景区/九寨沟",
+        relevance="九寨沟基础事实",
+        task_id=TASK,
+        batch_id="binary_source_asset",
+    )
+    binary_path = obj / "1.download" / "sources" / "01.base" / "assets" / "photo.jpg"
+    binary_path.parent.mkdir(parents=True, exist_ok=True)
+    binary_path.write_bytes(b"\xff\xd8\xff\xe0binary-test-image")
+    source_md = "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
+    binary_ref = "entities/地点/景区/九寨沟/1.download/sources/01.base/assets/photo.jpg"
+
+    source_refs = build_source_refs_snapshot(
+        TASK,
+        "binary_source_asset",
+        base_source_ref=source_md,
+        cited_source_refs=[],
+        source_paths=[source_md, binary_ref],
+    )
+
+    binary_entries = [row for row in source_refs["sources"] if row["sourceRef"].endswith("assets/photo.jpg")]
+    assert len(binary_entries) == 1
+    assert binary_entries[0]["sourceContentKind"] == "binary_asset"
+    assert binary_entries[0]["sourceFileSha256"]
+    assert "sourceMarkdown" not in binary_entries[0]
 
 
 def test_materialize_relativizes_repo_runtime_cited_source_paths():
@@ -400,6 +441,36 @@ def test_build_provenance_uses_meta_over_compose():
     assert data["final"]["articleDigest"] == "d"
     assert "mustIncludeFacts" not in data["agentInput"]
     assert data["agentInput"]["promptSha256"] == "sha256:a"
+
+
+def test_build_provenance_records_cited_binary_asset_as_original_source():
+    source_md = "entities/地点/景区/都江堰/1.download/sources/04.article/source.md"
+    asset_ref = "entities/地点/景区/都江堰/1.download/sources/04.article/assets/cover.jpg"
+    data = build_provenance(
+        "ref2",
+        writing_pack={"title": "都江堰"},
+        draft_meta={
+            "generator": "agent",
+            "agentRunId": "run-2",
+            "promptSha256": "sha256:p",
+            "writingPackSha256": "sha256:w",
+            "sourceBundleSha256": "sha256:s",
+            "draftSha256": "sha256:d",
+            "citedSourcePaths": [source_md, asset_ref],
+        },
+        review_payload={"decision": "approved", "checks": {}},
+        compose_payload={
+            "sourcePaths": [source_md],
+            "sourceUrls": ["https://example.com/source"],
+            "citedSourceRefs": [source_md, asset_ref],
+            "articleMarkdownDigest": "digest",
+        },
+        manifest={"contentType": "article", "articleMarkdownDigest": "digest"},
+    )
+
+    original_paths = {str(row.get("path")) for row in data["originalSources"]}
+    assert source_md in original_paths
+    assert asset_ref in original_paths
 
 
 def _run_all() -> None:

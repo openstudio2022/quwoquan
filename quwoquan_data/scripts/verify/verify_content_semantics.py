@@ -58,13 +58,34 @@ def _load_brief_facts(task: str, batch: str, ref: str) -> list[str]:
     return [str(f) for f in (brief or {}).get("mustIncludeFacts", []) if f]
 
 
-def verify_semantics(posts_root: Path, task: str | None = None, batch: str | None = None) -> list[str]:
+def _post_rel(posts_root: Path, post_dir: Path) -> str:
+    try:
+        return post_dir.relative_to(posts_root.parent).as_posix()
+    except ValueError:
+        return post_dir.as_posix()
+
+
+def _post_allowed(posts_root: Path, post_dir: Path, post_rels: set[str] | None) -> bool:
+    if post_rels is None:
+        return True
+    return _post_rel(posts_root, post_dir) in post_rels
+
+
+def verify_semantics(
+    posts_root: Path,
+    task: str | None = None,
+    batch: str | None = None,
+    *,
+    post_rels: set[str] | None = None,
+) -> list[str]:
     issues: list[str] = []
     if not posts_root.exists():
         return [f"posts root missing: {posts_root}"]
 
     for article_path in sorted(posts_root.rglob("article.md")):
         post_dir = article_path.parent
+        if not _post_allowed(posts_root, post_dir, post_rels):
+            continue
         manifest_path = post_dir / "manifest.json"
         article = article_path.read_text(encoding="utf-8")
         manifest = read_json(manifest_path) if manifest_path.exists() else {}
@@ -136,6 +157,8 @@ def verify_semantics(posts_root: Path, task: str | None = None, batch: str | Non
                 issues.append(f"{ref}: same asset reused {max(counts.values())} times in body")
 
     for manifest_path in sorted(posts_root.rglob("manifest.json")):
+        if not _post_allowed(posts_root, manifest_path.parent, post_rels):
+            continue
         if (manifest_path.parent / "article.md").exists():
             continue
         ref = manifest_path.parent.name

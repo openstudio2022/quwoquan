@@ -136,6 +136,61 @@ def test_ship_e2e_writes_bundle_and_meta():
         assert (tmp_publish / "env_releases" / meta["lastDataReleaseId"] / "alpha.json").is_file()
 
 
+def test_ship_writes_source_batch_ship_and_import_evidence():
+    tmp_publish = Path(tempfile.mkdtemp(prefix="ship_batch_evidence_pub_"))
+    tmp_shared = Path(tempfile.mkdtemp(prefix="ship_batch_evidence_shared_"))
+    posts_dir = tmp_publish / "index" / "posts"
+    ent_dir = tmp_publish / "index" / "entities"
+    posts_dir.mkdir(parents=True, exist_ok=True)
+    ent_dir.mkdir(parents=True, exist_ok=True)
+    import json
+    with open(posts_dir / "article__体验__四川省.ndjson", "w", encoding="utf-8") as f:
+        f.write(json.dumps({"postRef": "posts/article/体验/t0/1", "contentType": "article", "angle": "体验"}, ensure_ascii=False) + "\n")
+    write_json(
+        tmp_publish / "posts" / "article" / "体验" / "t0" / "1" / "manifest.json",
+        {"contentType": "article", "assets": []},
+    )
+
+    from ship.handler import handle_ship
+    import ship.handler as handler
+
+    saved_run_importer = handler._run_importer
+    saved_batch_shared_dir = handler.batch_shared_dir
+
+    def fake_run_importer(mongo_uri, bundles, *, release_id, mode, delete_policy, source_owner, dry_run):
+        reports = []
+        for bundle in bundles:
+            report = tmp_publish / "env_releases" / release_id / f"import-{bundle.stem}.json"
+            write_json(report, {"schemaVersion": "test.import", "status": "dry-run", "environment": bundle.stem})
+            reports.append(report)
+        return reports
+
+    try:
+        handler._run_importer = fake_run_importer
+        handler.batch_shared_dir = lambda task_id, batch_id: tmp_shared
+        args = argparse.Namespace(
+            release_id=None, task="旅行/地域/测试省/景区/试跑", batch="batch_1", copy_entities=False,
+            env="alpha", skip_promote=True, skip_index=True,
+            import_to_db=True, mongo_uri="mongodb://example.invalid",
+            data_release_id="test_release", mode="upsert", delete_policy="none",
+            source_owner="qwq_data", approved_by=None, dry_run=True, confirm_prod_apply=False,
+        )
+        with _PatchedPublishRoot(tmp_publish):
+            handle_ship(args)
+    finally:
+        handler._run_importer = saved_run_importer
+        handler.batch_shared_dir = saved_batch_shared_dir
+
+    ship_report = read_json(tmp_shared / "ship_report.json")
+    assert ship_report["taskId"] == "旅行/地域/测试省/景区/试跑"
+    assert ship_report["batchId"] == "batch_1"
+    assert ship_report["importRequested"] is True
+    assert ship_report["importReports"]
+    import_report = read_json(tmp_shared / "alpha_import_report.json")
+    assert import_report["status"] == "dry-run"
+    assert import_report["sourceReportPath"].endswith("import-alpha.json")
+
+
 def test_ship_blocks_prod_apply_without_explicit_confirmation():
     tmp_publish = Path(tempfile.mkdtemp(prefix="ship_prod_guard_"))
     posts_dir = tmp_publish / "index" / "posts"

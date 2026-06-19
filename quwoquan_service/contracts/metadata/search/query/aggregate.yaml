@@ -1,0 +1,27 @@
+version: 1
+domain: search
+aggregate_root: SearchQuery
+
+description: |
+  搜索查询与反馈聚合。承载 canonical search(request) 的查询日志与 feedback 事件，
+  作为搜索词热力(query_popularity / query_cooccurrence)与 relevance 评测的派生数据源。
+  统一对象检索读库为专用 ES 索引 quwoquan_objects（派生数据，由 search-service 的
+  indexer 从各业务域灌入，不在本聚合的主存储真相源内）。
+
+storage_backend: mongodb
+cache_layer: redis
+cache_ttl_seconds: 60
+
+capabilities:
+  - queryable
+  - searchable
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: services/search-service/internal/domain/query/model
+  repository: services/search-service/internal/domain/query/repository
+  application: services/search-service/internal/application
+  adapter_rest: services/search-service/internal/adapters/http
+  adapter_event: services/search-service/internal/adapters/mq

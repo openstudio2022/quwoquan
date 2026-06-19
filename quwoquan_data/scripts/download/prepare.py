@@ -11,7 +11,9 @@ from _common.paths import (
     batch_shared_dir,
 )
 from _common.io import write_json, write_assistant_task
+from _common.content_source_registry import build_content_source_guidance
 from _common.source_catalog import source_plan_guidance, vertical_from_task_id
+from _common.source_plan_contract import source_plan_rule_signature
 from _common.source_unit import resolve_entity_object_dir
 from vertical.source_registry import build_travel_source_guidance
 
@@ -88,7 +90,11 @@ def _lane_payload(
                 "termsUrl",
                 "authorizationProof",
             ],
-            "discoveryOnlyPlatforms": ["Pinterest", "小红书"],
+            "discoveryPolicy": (
+                "平台不按来源名硬阻断；Pinterest/小红书/微博/抖音/B站等可做发现或参考，"
+                "但进入 collections 的每张图都必须具备资产级许可、署名、条款和授权证据。"
+            ),
+            "defaultDiscoveryRoles": ["discovery_only", "reference_only", "licensed_candidate", "publish_candidate"],
             "aiImagesAllowed": False,
         },
         "collections": [],
@@ -105,6 +111,14 @@ def prepare_source_plan(task_id: str, batch_id: str, entities: list[dict]) -> Pa
     guidance = source_plan_guidance(vertical_from_task_id(task_id))
     vertical = vertical_from_task_id(task_id)
     registry_guidance = build_travel_source_guidance() if vertical == "travel" else {}
+    content_source_guidance = build_content_source_guidance(vertical)
+    if registry_guidance:
+        registry_guidance = {
+            **registry_guidance,
+            "contentSourceGuidance": content_source_guidance,
+        }
+    else:
+        registry_guidance = {"contentSourceGuidance": content_source_guidance}
     refs_by_lane: dict[str, list[str]] = {lane: [] for lane in RESEARCH_PLAN_FILES}
     for ent in entities:
         ref = ent.get("entityId", ent.get("id"))
@@ -122,6 +136,7 @@ def prepare_source_plan(task_id: str, batch_id: str, entities: list[dict]) -> Pa
                         "batchId": batch_id,
                         "step": f"{lane}_research",
                         "ref": ref,
+                        "sourceRuleSignature": source_plan_rule_signature(vertical, str(ref or "")),
                         "payload": _lane_payload(
                             lane,
                             ref=ref,

@@ -21,6 +21,15 @@ final messageHomeRowsProvider =
       return rows.map(ChatListItemViewModel.fromMessageHomeDto).toList();
     });
 
+int totalUnreadMessages(Iterable<ChatListItemViewModel> rows) {
+  return rows.fold<int>(0, (total, row) => total + row.unreadCount);
+}
+
+final messageHomeUnreadBadgeCountProvider = Provider<int?>((ref) {
+  final unreadRows = ref.watch(messageHomeRowsProvider('unread'));
+  return unreadRows.maybeWhen(data: totalUnreadMessages, orElse: () => null);
+});
+
 void refreshMessageReadState(WidgetRef ref, String conversationId) {
   ref.read(chatInboxListProvider.notifier).markConversationRead(conversationId);
   for (final filter in messageHomeFilters) {

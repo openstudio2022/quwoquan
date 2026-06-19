@@ -32,9 +32,11 @@ Future<void> openHomeFeedPost(
     return;
   }
 
+  // 复用服务端权威下发并已采纳的 feedRequestId（首页发现流唯一归因 id），
+  // 不再在打开动作处客户端另造新 id，保证曝光→点击→打开归因一致。
   final navFeedRequestId = ref
       .read(feedSessionProvider.notifier)
-      .newFeedRequestId();
+      .currentFeedRequestId;
   // 入口 post 在 feed 中的位置（推荐归因；-1 → null 不上报）。
   final feedPosition = (feedPosts ?? const <PostBaseDto>[]).indexWhere(
     (item) => item.id == post.id,
@@ -78,7 +80,7 @@ Future<void> openHomeFeedPost(
       filter: post.isVideoLike
           ? 'video'
           : (post.isArticleLike ? 'article' : 'image'),
-      source: 'following',
+      source: 'home_feed',
       index: '$initialIndex',
     ),
     extra: MediaViewerExtra(
@@ -86,7 +88,7 @@ Future<void> openHomeFeedPost(
       dtoPosts: viewerPosts,
       initialIndex: initialIndex,
       category: 'following',
-      source: 'following',
+      source: 'home_feed',
       initialImageIndex: mediaIndex,
       rawPostsById: rawPostsById,
       interactionSnapshot: interactionSnapshot,

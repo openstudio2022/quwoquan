@@ -374,6 +374,7 @@ type uiConfigFile struct {
 	ScrollMotion                   profileScrollMotionDef             `yaml:"scroll_motion"`
 	ProfileTabs                    []profileTabDef                    `yaml:"profile_tabs"`
 	HomepageTabs                   []homepageTabDef                   `yaml:"homepage_tabs"`
+	HomepageSubTabs                []homepageSubTabDef                `yaml:"homepage_sub_tabs"`
 	CircleTabs                     []circleTabDef                     `yaml:"circle_tabs"`
 	CircleSections                 []circleSectionDef                 `yaml:"circle_sections"`
 	ShareTemplateProfiles          []shareTemplateProfileDef          `yaml:"share_template_profiles"`
@@ -569,7 +570,6 @@ func main() {
 	feedCategoryToType, appTabToCategory := buildDiscoveryMappings(contentTypes)
 	feedRoute := findRoute(service.APIRoutes, "GetFeed")
 	getPostRoute := findRoute(service.APIRoutes, "GetPost")
-	recommendRoute := findRoute(service.APIRoutes, "GetRecommendation")
 	feedDefaultLimit := paginationLimitDefault(shared, 20)
 	writableFields := findWritableFields(service.APIRoutes, "CreatePost")
 	likeRoutes := buildMutationRoutes(service.APIRoutes,
@@ -584,7 +584,6 @@ func main() {
 		appTabToCategory,
 		feedRoute,
 		getPostRoute,
-		recommendRoute,
 		feedDefaultLimit,
 		writableFields,
 		likeRoutes,
@@ -857,6 +856,9 @@ func main() {
 		exitErr(err)
 	}
 	if err := writeRtcSignalPayloads(appDir, metadataDir); err != nil {
+		exitErr(err)
+	}
+	if err := writeRecommendationFeedPatches(appDir, metadataDir); err != nil {
 		exitErr(err)
 	}
 	if err := writeRtcRequestWires(appDir, metadataDir); err != nil {
@@ -1807,7 +1809,6 @@ func renderContentMetadataDart(
 	appTabToCategory map[string]string,
 	feedRoute routeDef,
 	getPostRoute routeDef,
-	recommendRoute routeDef,
 	feedDefaultLimit int,
 	writableFields []string,
 	likeRoutes map[string]string,
@@ -1843,8 +1844,7 @@ func renderContentMetadataDart(
 
 	b.WriteString(fmt.Sprintf("  static const int feedDefaultLimit = %d;\n\n", feedDefaultLimit))
 	b.WriteString(fmt.Sprintf("  static const String feedPath = '%s';\n", nonEmpty(feedRoute.Path, "/v1/content/feed")))
-	b.WriteString(fmt.Sprintf("  static const String postDetailPathTemplate = '%s';\n", nonEmpty(getPostRoute.Path, "/v1/content/posts/{postId}")))
-	b.WriteString(fmt.Sprintf("  static const String recommendPath = '%s';\n\n", nonEmpty(recommendRoute.Path, "/v1/content/recommend")))
+	b.WriteString(fmt.Sprintf("  static const String postDetailPathTemplate = '%s';\n\n", nonEmpty(getPostRoute.Path, "/v1/content/posts/{postId}")))
 
 	b.WriteString("  static const List<String> feedQueryParams = <String>[\n")
 	for _, key := range feedRoute.QueryParams {
@@ -3662,13 +3662,24 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 				named = append(named, "String intersectionId = ''")
 			case "intersectionClass":
 				named = append(named, "String intersectionClass = ''")
+			case "intersectionSourceRef":
+				named = append(named, "String intersectionSourceRef = ''")
 			case "intersectionEvidenceId":
 				named = append(named, "String intersectionEvidenceId = ''")
+			case "surfaceId":
+				named = append(named, "String surfaceId = ''")
+			default:
+				// Fail loudly so a newly-added payload_field in behaviors.yaml can never
+				// silently emit an undefined variable reference in the generated tracker.
+				panic(fmt.Sprintf("content_behaviors codegen: unmapped payload field %q on event %q; add an explicit case in the track-method generator", pf, ev.Type))
 			}
 		}
 		sig := strings.Join(positional, ", ")
 		if len(named) > 0 {
-			sig += ", {" + strings.Join(named, ", ") + "}"
+			if sig != "" {
+				sig += ", "
+			}
+			sig += "{" + strings.Join(named, ", ") + "}"
 		}
 		b.WriteString(fmt.Sprintf("  static void %s(%s) {\n", ev.DartMethod, sig))
 		b.WriteString("    _enqueue(<String, dynamic>{\n")

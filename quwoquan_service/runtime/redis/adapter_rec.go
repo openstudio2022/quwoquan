@@ -26,6 +26,10 @@ func (a *recAdapter) Set(ctx context.Context, key, value string, ttl time.Durati
 	return a.client.Set(ctx, key, value, ttl)
 }
 
+func (a *recAdapter) SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	return a.client.SetNX(ctx, key, value, ttl)
+}
+
 func (a *recAdapter) Del(ctx context.Context, keys ...string) error {
 	return a.client.Del(ctx, keys...)
 }

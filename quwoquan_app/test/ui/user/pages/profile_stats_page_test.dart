@@ -254,22 +254,39 @@ void main() {
   }
 
   group('ProfileStatsPage — 统计行与列表 (A3)', () {
-    testWidgets('type=circles 时渲染圈子列表', (tester) async {
-      await tester.pumpWidget(buildTestApp(type: 'circles'));
+    testWidgets('type=fans 默认落在粉丝 tab，并可切换到圈子 tab', (tester) async {
+      await tester.pumpWidget(buildTestApp(type: 'fans'));
       await pumpUntilLoaded(tester);
 
-      expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
+      expect(find.text(UITextConstants.circleFans), findsAtLeastNWidgets(1));
+      expect(find.text('你的皮炎有点辣'), findsOneWidget);
+
+      await tester.tap(find.text(UITextConstants.contactsTabCircles).last);
+      await pumpUntilLoaded(tester);
+
       expect(find.text('极简摄影俱乐部'), findsOneWidget);
       expect(find.text('旅行手账'), findsOneWidget);
-      expect(find.text('128 创作'), findsOneWidget);
     });
 
-    testWidgets('type=following 时渲染关注列表', (tester) async {
+    testWidgets('type=following 默认落在关注 tab', (tester) async {
       await tester.pumpWidget(buildTestApp(type: 'following'));
       await pumpUntilLoaded(tester);
 
       expect(find.text(UITextConstants.follow), findsAtLeastNWidgets(1));
       expect(find.text('你的皮炎有点辣'), findsOneWidget);
+    });
+
+    testWidgets('type=circles 时渲染圈子列表', (tester) async {
+      await tester.pumpWidget(buildTestApp(type: 'circles'));
+      await pumpUntilLoaded(tester);
+
+      expect(
+        find.text(UITextConstants.contactsTabCircles),
+        findsAtLeastNWidgets(1),
+      );
+      expect(find.text('极简摄影俱乐部'), findsOneWidget);
+      expect(find.text('旅行手账'), findsOneWidget);
+      expect(find.text('128 创作'), findsOneWidget);
     });
 
     testWidgets('type=fans 时渲染粉丝列表', (tester) async {

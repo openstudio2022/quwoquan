@@ -234,12 +234,12 @@ content:
   - image
   quotas:
     entityArticlesPerTarget: 4
-    imageWorksPerTarget: 1
+    imageWorksPerTarget: 2
     entityHomepagesPerTarget: 1
     routeArticles: 0
 acceptance:
   minEntities: 100
-  minPostsPerEntity: 5
+  minPostsPerEntity: 6
   requiredAngles:
   - planning_consultation
   - decision_experience

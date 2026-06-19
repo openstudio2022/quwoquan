@@ -29,7 +29,7 @@ void main() {
         );
         expect(
           image.imageUrl,
-        'https://127.0.0.1:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
+          'http://127.0.0.1:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
         );
         expect(find.text('契'), findsNothing);
       },

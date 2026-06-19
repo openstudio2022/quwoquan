@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -161,6 +162,83 @@ func TestBehaviorBatchWireAliases(t *testing.T) {
 	}
 }
 
+// TestBehaviorEventInputDecodesAttributionFields 冻结阶段五归因 wire 契约：
+// channelId/rankingVersion/feedRequestId/referralSource/position/state 必须从批量 JSON
+// 正确解析进 BehaviorEventInput（端云 DTO↔struct↔YAML common_fields 对齐，R08）。
+func TestBehaviorEventInputDecodesAttributionFields(t *testing.T) {
+	raw := `{"contentId":"post_attr_1","action":"impression","state":"impressed",` +
+		`"feedRequestId":"frq_01H","referralSource":"organic_feed","position":7,` +
+		`"channelId":"following","rankingVersion":"rank-v3","commentLength":42}`
+	var in application.BehaviorEventInput
+	if err := json.Unmarshal([]byte(raw), &in); err != nil {
+		t.Fatalf("decode behavior event input: %v", err)
+	}
+	if in.State != "impressed" {
+		t.Errorf("state: want impressed, got %q", in.State)
+	}
+	if in.FeedRequestID != "frq_01H" {
+		t.Errorf("feedRequestId: want frq_01H, got %q", in.FeedRequestID)
+	}
+	if in.ReferralSource != "organic_feed" {
+		t.Errorf("referralSource: want organic_feed, got %q", in.ReferralSource)
+	}
+	if in.Position != 7 {
+		t.Errorf("position: want 7, got %d", in.Position)
+	}
+	if in.ChannelID != "following" {
+		t.Errorf("channelId: want following, got %q", in.ChannelID)
+	}
+	if in.RankingVersion != "rank-v3" {
+		t.Errorf("rankingVersion: want rank-v3, got %q", in.RankingVersion)
+	}
+	if in.CommentLength != 42 {
+		t.Errorf("commentLength: want 42, got %d", in.CommentLength)
+	}
+}
+
+func TestBehaviorBatchDeduplicatesClientEventID(t *testing.T) {
+	ctx := context.Background()
+	behaviorService := application.NewBehaviorService(
+		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
+		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
+	)
+
+	err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
+		{
+			ClientEventID: "evt-dedup-001",
+			UserID:        "user_dedup_001",
+			SessionID:     "sess_dedup_001",
+			ContentID:     "post_dedup_001",
+			Action:        "impression",
+			State:         "impressed",
+		},
+		{
+			ClientEventID: "evt-dedup-001",
+			UserID:        "user_dedup_001",
+			SessionID:     "sess_dedup_001",
+			ContentID:     "post_dedup_001",
+			Action:        "impression",
+			State:         "impressed",
+		},
+	})
+	if err != nil {
+		t.Fatalf("process duplicate clientEventId: %v", err)
+	}
+
+	filtered, err := rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))).FilterCandidates(
+		ctx,
+		"user_dedup_001",
+		[]rtrec.ContentCandidate{{ContentID: "post_dedup_001"}, {ContentID: "post_fresh_001"}},
+		time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("filter candidates: %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].ContentID != "post_fresh_001" {
+		t.Fatalf("impressed event should filter only deduped content once, got %+v", filtered)
+	}
+}
+
 // TestBehaviorBatchAssistantInterestAllowsEmptyContentID verifies the Phase 3
 // flywheel contract: assistant_interest is a tag-only signal and must not be
 // rejected when contentId/postId are absent.
@@ -222,6 +300,51 @@ func TestBehaviorBatchAssistantInterestProjectsTagInteraction(t *testing.T) {
 	}
 	if got.UserFeatures.TagInteraction["Topic/旅行"] != 1 || got.UserFeatures.TagInteraction["Topic/旅行主题"] != 1 {
 		t.Fatalf("tagInteraction not projected: %+v", got.UserFeatures.TagInteraction)
+	}
+}
+
+// TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick 验证阶段五七态漏斗在
+// 特征投影中的语义：弱可见 visible 不计入 typeImpressions（served/impressed 双轨的 impressed 侧），
+// 仅真实曝光 impressed 计入；click 计入 typeEngagements（CTR 分子）。同时携带 channelId/rankingVersion
+// 归因字段，验证其可随批次贯穿。
+func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.T) {
+	ctx := context.Background()
+	userID := "user_seven_state_001"
+	featureColl := mongoDB.Collection("rm_recommend_feature")
+	if _, err := featureColl.DeleteMany(ctx, bson.M{"userId": userID}); err != nil {
+		t.Fatalf("clean recommend feature: %v", err)
+	}
+	behaviorService := application.NewBehaviorService(
+		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
+		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
+		application.WithBehaviorProjector(&recommendOnlyProjectorAdapter{
+			p: recinfra.NewRecommendFeatureProjector(mongoDB),
+		}),
+	)
+
+	err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
+		{UserID: userID, ContentID: "post_ss_visible", Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
+		{UserID: userID, ContentID: "post_ss_impressed", Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
+		{UserID: userID, ContentID: "post_ss_click", Action: "click", State: "interaction", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
+	})
+	if err != nil {
+		t.Fatalf("process seven-state batch: %v", err)
+	}
+
+	var got struct {
+		UserFeatures struct {
+			TypeImpressions map[string]int `bson:"typeImpressions"`
+			TypeEngagements map[string]int `bson:"typeEngagements"`
+		} `bson:"userFeatures"`
+	}
+	if err := featureColl.FindOne(ctx, bson.M{"userId": userID}).Decode(&got); err != nil {
+		t.Fatalf("find recommend feature: %v", err)
+	}
+	if got.UserFeatures.TypeImpressions["image"] != 1 {
+		t.Fatalf("typeImpressions[image] want 1 (impressed only, exclude weak visible), got %d", got.UserFeatures.TypeImpressions["image"])
+	}
+	if got.UserFeatures.TypeEngagements["image"] < 1 {
+		t.Fatalf("typeEngagements[image] want >=1 (click counted as CTR numerator), got %d", got.UserFeatures.TypeEngagements["image"])
 	}
 }
 

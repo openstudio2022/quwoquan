@@ -18,7 +18,6 @@ import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
-import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page_visit_recorder.dart';
@@ -287,22 +286,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Map<int, bool>? dotBadges;
 
     if (_mainTabIndex == 0) {
-      int unreadCount = 0;
-
-      final inboxItems = ref.watch(chatInboxListProvider).items;
-      for (final item in inboxItems) {
-        final isSecret = item.type == 'encrypted';
-        if (isSecret) {
-          continue;
-        }
-        unreadCount += item.unreadCount;
-      }
+      final unreadCount = ref.watch(messageHomeUnreadBadgeCountProvider);
 
       numberBadges = {};
       dotBadges = {};
 
       final unreadIndex = _messageSubTabs.indexOf(UITextConstants.unread);
-      if (unreadIndex != -1 && unreadCount > 0) {
+      if (unreadIndex != -1 && unreadCount != null && unreadCount > 0) {
         numberBadges[unreadIndex] = unreadCount;
       }
     }
@@ -1188,17 +1178,20 @@ class _InboxConversationTile extends StatelessWidget {
                           top: -4,
                           right: -4,
                           child: Container(
-                            constraints: const BoxConstraints(minWidth: 20),
+                            constraints: const BoxConstraints(
+                              minWidth: AppSpacing.twenty,
+                              minHeight: AppSpacing.twenty,
+                            ),
                             padding: EdgeInsets.symmetric(
                               horizontal: item.unreadCount > 9
-                                  ? AppSpacing.xs + 1
-                                  : AppSpacing.xs,
+                                  ? AppSpacing.xs + AppSpacing.one
+                                  : AppSpacing.three,
                               vertical: AppSpacing.two,
                             ),
                             decoration: BoxDecoration(
                               color: AppColors.error,
                               borderRadius: BorderRadius.circular(
-                                AppSpacing.ten,
+                                AppSpacing.radiusNinetyNine,
                               ),
                               border: Border.all(
                                 color: rowBackground,

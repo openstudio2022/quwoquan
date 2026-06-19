@@ -1,0 +1,66 @@
+version: 1
+read_model: IntersectionPropagationPath
+description: |
+  交集传播链值对象（架构基线 v2 §21.4 · 统一交互子契约延伸；草案/未冻结）。
+  承载「沿边的可证下游传播」：路径节点视觉 + 跳数 + 二级传播绝对人数 + 一句话摘要。
+  红线（§21.4 / author·circle impact 对齐）：只承载可证绝对计数与路径节点视觉，
+  禁止 reach / conversion / 漏斗 / 增长率等运营比率指标进入本契约。
+  端只读渲染（传播视图件，复用 IntersectionVisualCluster / IntersectionTargetNavigator），
+  云侧同源产出；本期端 Mock 原型，云侧多跳真算后置（§21.10）。
+
+  闭集枚举（端按字符串解析，未知值优雅降级为通用路径）：
+    pathKind: personToPerson | personToCircle | personToContentToPerson
+
+  字段语义：
+    summaryText 为云侧产出的一句话（如「8人通过你建立了新连接」），端只读直出（G2）。
+    summaryTarget 为该摘要的可点击下钻目标（可空表示不可点击）。
+    nodes 为传播路径节点视觉（起点 → 桥接 → 终点，按 assetKind 渲染头像/封面）。
+    hopCount 为路径跳数（单跳=1）；secondarySpreadCount 为二级传播绝对人数（守红线，非比率）。
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: IntersectionPropagationPath
+  base_class: ""
+  output_path: cloud/runtime/generated/recommendation/intersection_propagation_path.g.dart
+  dart_imports:
+    - intersection_visual.g.dart
+    - intersection_target.g.dart
+  fields:
+    - name: pathKind
+      dart_type: String
+      nullable: false
+      source: pathKind
+      aliases: [pathKind]
+      default: "''"
+    - name: hopCount
+      dart_type: int
+      nullable: false
+      source: hopCount
+      aliases: [hopCount]
+      default: "0"
+    - name: secondarySpreadCount
+      dart_type: int
+      nullable: false
+      source: secondarySpreadCount
+      aliases: [secondarySpreadCount]
+      default: "0"
+    - name: summaryText
+      dart_type: String
+      nullable: false
+      source: summaryText
+      aliases: [summaryText]
+      default: "''"
+    - name: summaryTarget
+      dart_type: IntersectionTarget
+      nullable: true
+      source: summaryTarget
+      aliases: [summaryTarget]
+      map_from_string_key_class: IntersectionTarget
+    - name: nodes
+      dart_type: List<IntersectionVisual>
+      nullable: false
+      source: nodes
+      aliases: [nodes]
+      list_element_dart_class: IntersectionVisual

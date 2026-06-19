@@ -365,6 +365,25 @@ void main() {
       expect(find.text('圈子普通聊天'), findsNothing);
     });
 
+    testWidgets('未读胶囊数与未读筛选 read model 保持一致', (tester) async {
+      await tester.pumpWidget(
+        _scopedApp(mock: _UnreadBadgeConsistencyChatRepository()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('7'), findsOneWidget);
+      expect(find.text('摄影爱好者圈子'), findsOneWidget);
+      expect(find.text('产品共创群'), findsOneWidget);
+      expect(find.text('旅行搭子讨论组'), findsOneWidget);
+      expect(find.text('陈倩'), findsNothing);
+
+      final badgeFinder = find.byKey(
+        const ValueKey<String>('secondary-capsule-number-badge-1'),
+      );
+      expect(badgeFinder, findsOneWidget);
+      expect(tester.getSize(badgeFinder), const Size.square(AppSpacing.twenty));
+    });
+
     testWidgets('打招呼请求箱回复后进入正式会话', (tester) async {
       final greetingRepo = MockGreetingRepository(
         seedInbox: <GreetingRequestDto>[
@@ -730,6 +749,78 @@ class _XiaoquDeliveryChatRepository extends MockChatRepository {
         title: '圈子普通聊天',
         lastMessagePreview: '今晚一起拍照吗',
         lastMessageTime: now.subtract(const Duration(minutes: 2)),
+      ),
+    ];
+  }
+
+  @override
+  Future<List<ChatInboxDto>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return listInbox(cursor: cursor, limit: limit);
+  }
+}
+
+class _UnreadBadgeConsistencyChatRepository extends MockChatRepository {
+  @override
+  Future<List<MessageHomeRowDto>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) async {
+    final now = DateTime.utc(2026, 6, 16, 10);
+    final unreadRows = <MessageHomeRowDto>[
+      MessageHomeRowDto(
+        id: 'conv_group_photo',
+        kind: 'conversation',
+        conversationId: 'conv_group_photo',
+        conversationType: 'group',
+        title: '摄影爱好者圈子',
+        summary: '分享一组新疆风景照',
+        lastActiveAt: now,
+        unreadCount: 2,
+      ),
+      MessageHomeRowDto(
+        id: 'conv_group_product',
+        kind: 'conversation',
+        conversationId: 'conv_group_product',
+        conversationType: 'group',
+        title: '产品共创群',
+        summary: '今晚 8 点前把评审意见同步到文档里',
+        lastActiveAt: now.subtract(const Duration(minutes: 3)),
+        unreadCount: 1,
+      ),
+      MessageHomeRowDto(
+        id: 'conv_group_travel',
+        kind: 'conversation',
+        conversationId: 'conv_group_travel',
+        conversationType: 'group',
+        title: '旅行搭子讨论组',
+        summary: '我把演示视频压缩后重新发你了',
+        lastActiveAt: now.subtract(const Duration(minutes: 5)),
+        unreadCount: 4,
+      ),
+    ];
+    if (filter == 'unread' || filter == 'all' || filter == 'group') {
+      return unreadRows;
+    }
+    if (filter == 'direct' || filter == 'notification') {
+      return const <MessageHomeRowDto>[];
+    }
+    return unreadRows;
+  }
+
+  @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    return <ChatInboxDto>[
+      ChatInboxDto(
+        id: 'conv_direct_mismatch_seed',
+        type: 'direct',
+        title: '陈倩',
+        lastMessagePreview: '我把演示视频压缩后重新发你了',
+        lastMessageTime: DateTime.utc(2026, 6, 16, 9, 58),
+        unreadCount: 1,
       ),
     ];
   }

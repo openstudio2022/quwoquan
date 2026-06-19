@@ -24,6 +24,7 @@ const (
 	ModuleRTC         Module = "RTC"
 	ModuleOps         Module = "OPS"
 	ModuleAssistant   Module = "ASSISTANT"
+	ModuleSearch      Module = "SEARCH"
 	ModuleDB          Module = "DB"
 	ModuleMQ          Module = "MQ"
 	ModuleCache       Module = "CACHE"
@@ -201,6 +202,7 @@ var allowedModules = map[Module]struct{}{
 	ModuleRTC:         {},
 	ModuleOps:         {},
 	ModuleAssistant:   {},
+	ModuleSearch:      {},
 	ModuleDB:          {},
 	ModuleMQ:          {},
 	ModuleCache:       {},
@@ -560,12 +562,8 @@ func HTTPStatusFromError(err *AppError) int {
 			return http.StatusBadRequest
 		case "unauthorized", "token_expired":
 			return http.StatusUnauthorized
-		case "forbidden",
-			"original_access_denied",
-			"blocked",
-			"not_mutual",
-			"not_participant",
-			"recording_not_allowed":
+		case "forbidden", "original_access_denied",
+			"not_participant", "not_mutual", "blocked", "recording_not_allowed":
 			return http.StatusForbidden
 		case "not_found", "route_not_found":
 			return http.StatusNotFound
@@ -575,16 +573,16 @@ func HTTPStatusFromError(err *AppError) int {
 			"already_contact",
 			"invalid_status_transition",
 			"conflict",
-			"already_in_call",
-			"call_full",
-			"cannot_answer",
-			"invalid_call_action",
-			"screen_share_conflict",
 			"nickname_taken",
 			"handle_taken",
 			"credential_conflict",
 			"already_accepted",
-			"retire_required":
+			"retire_required",
+			"already_in_call",
+			"call_full",
+			"cannot_answer",
+			"invalid_call_action",
+			"screen_share_conflict":
 			return http.StatusConflict
 		case "expired", "call_ended":
 			return http.StatusGone

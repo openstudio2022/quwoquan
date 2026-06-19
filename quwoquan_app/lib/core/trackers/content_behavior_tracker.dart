@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -40,6 +41,7 @@ class ContentBehaviorTracker {
   final int _maxBatchSize;
 
   final List<BehaviorEvent> _buffer = <BehaviorEvent>[];
+  final Set<String> _bufferDedupKeys = <String>{};
   // 同一页面 impression 去重：同一 contentId 只上报一次
   final Set<String> _impressionSeen = <String>{};
   Timer? _timer;
@@ -48,7 +50,10 @@ class ContentBehaviorTracker {
     _timer = Timer.periodic(_flushInterval, (_) => flush());
   }
 
-  /// 记录一次曝光（impression）。同一 contentId 在本 session 内去重。
+  /// 记录一次真实曝光（impressed）。同一 contentId 在本 session 内去重。
+  ///
+  /// 调用方应在可见面积 + 停留阈值达标后调用；若没有阈值证据，
+  /// 请调用 [trackVisible]，避免把 build/enter 误记为真实曝光。
   void trackImpression(
     String contentId, {
     String? contentType,
@@ -56,25 +61,112 @@ class ContentBehaviorTracker {
     String? feedRequestId,
     int? position,
     ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
     String? intersectionId,
     String? intersectionDimension,
+    String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
     String? intersectionClass,
     String? intersectionEvidenceId,
   }) {
+    trackQualifiedImpression(
+      contentId,
+      visibleFraction: 1,
+      visibleDuration: const Duration(milliseconds: 1000),
+      contentType: contentType,
+      tags: tags,
+      feedRequestId: feedRequestId,
+      position: position,
+      referralSource: referralSource,
+      channelId: channelId,
+      rankingVersion: rankingVersion,
+      intersectionId: intersectionId,
+      intersectionDimension: intersectionDimension,
+      intersectionSourceRef: intersectionSourceRef,
+      intersectionTagRefs: intersectionTagRefs,
+      intersectionClass: intersectionClass,
+      intersectionEvidenceId: intersectionEvidenceId,
+    );
+  }
+
+  /// 记录弱可见性（visible），不等同于真实 impressed。
+  void trackVisible(
+    String contentId, {
+    String? contentType,
+    List<String>? tags,
+    String? feedRequestId,
+    int? position,
+    ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
+  }) {
+    _add(
+      BehaviorEvent(
+        contentId: contentId,
+        action: BehaviorAction.impression,
+        state: 'visible',
+        contentType: contentType,
+        tags: tags,
+        feedRequestId: feedRequestId,
+        position: position,
+        referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
+      ),
+    );
+  }
+
+  /// 达到「可见面积 + 停留」阈值后上报真实 impressed；未达标仅记 visible。
+  void trackQualifiedImpression(
+    String contentId, {
+    required double visibleFraction,
+    required Duration visibleDuration,
+    String? contentType,
+    List<String>? tags,
+    String? feedRequestId,
+    int? position,
+    ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
+    String? intersectionId,
+    String? intersectionDimension,
+    String? intersectionSourceRef,
+    List<String>? intersectionTagRefs,
+    String? intersectionClass,
+    String? intersectionEvidenceId,
+  }) {
+    if (visibleFraction < 0.5 ||
+        visibleDuration < const Duration(milliseconds: 1000)) {
+      trackVisible(
+        contentId,
+        contentType: contentType,
+        tags: tags,
+        feedRequestId: feedRequestId,
+        position: position,
+        referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
+      );
+      return;
+    }
     if (_impressionSeen.contains(contentId)) return;
     _impressionSeen.add(contentId);
     _add(
       BehaviorEvent(
         contentId: contentId,
         action: BehaviorAction.impression,
+        state: 'impressed',
         contentType: contentType,
         tags: tags,
         feedRequestId: feedRequestId,
         position: position,
         referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
         intersectionId: intersectionId,
         intersectionDimension: intersectionDimension,
+        intersectionSourceRef: intersectionSourceRef,
         intersectionTagRefs: intersectionTagRefs,
         intersectionClass: intersectionClass,
         intersectionEvidenceId: intersectionEvidenceId,
@@ -91,18 +183,23 @@ class ContentBehaviorTracker {
     String? feedRequestId,
     int? position,
     ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
   }) {
     if (durationSeconds < 1) return;
     _add(
       BehaviorEvent(
         contentId: contentId,
         action: BehaviorAction.dwell,
+        state: 'dwell',
         contentType: contentType,
         tags: tags,
         duration: durationSeconds,
         feedRequestId: feedRequestId,
         position: position,
         referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
       ),
     );
   }
@@ -115,8 +212,11 @@ class ContentBehaviorTracker {
     String? feedRequestId,
     int? position,
     ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
     String? intersectionId,
     String? intersectionDimension,
+    String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
     String? intersectionClass,
     String? intersectionEvidenceId,
@@ -125,13 +225,17 @@ class ContentBehaviorTracker {
       BehaviorEvent(
         contentId: contentId,
         action: BehaviorAction.click,
+        state: 'interaction',
         contentType: contentType,
         tags: tags,
         feedRequestId: feedRequestId,
         position: position,
         referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
         intersectionId: intersectionId,
         intersectionDimension: intersectionDimension,
+        intersectionSourceRef: intersectionSourceRef,
         intersectionTagRefs: intersectionTagRefs,
         intersectionClass: intersectionClass,
         intersectionEvidenceId: intersectionEvidenceId,
@@ -144,19 +248,88 @@ class ContentBehaviorTracker {
     String contentId, {
     String? contentType,
     List<String>? tags,
+    String? authorId,
     String? feedRequestId,
     int? position,
     ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
   }) {
     _add(
       BehaviorEvent(
         contentId: contentId,
         action: BehaviorAction.dislike,
+        state: 'negative',
         contentType: contentType,
         tags: tags,
+        authorId: authorId,
         feedRequestId: feedRequestId,
         position: position,
         referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
+      ),
+    );
+  }
+
+  /// 记录「减少该作者内容」（hide_author）。当前内容同时会被云侧纳入 negative。
+  void trackHideAuthor(
+    String contentId, {
+    required String authorId,
+    String? contentType,
+    List<String>? tags,
+    String? feedRequestId,
+    int? position,
+    ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
+  }) {
+    final normalizedAuthorId = authorId.trim();
+    if (normalizedAuthorId.isEmpty) return;
+    _add(
+      BehaviorEvent(
+        contentId: contentId,
+        action: BehaviorAction.hideAuthor,
+        state: 'negative',
+        contentType: contentType,
+        tags: tags,
+        authorId: normalizedAuthorId,
+        feedRequestId: feedRequestId,
+        position: position,
+        referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
+      ),
+    );
+  }
+
+  /// 记录「减少此类内容」（hide_content_type）。当前内容同时会被云侧纳入 negative。
+  void trackHideContentType(
+    String contentId, {
+    required String contentType,
+    List<String>? tags,
+    String? authorId,
+    String? feedRequestId,
+    int? position,
+    ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
+  }) {
+    final normalizedType = contentType.trim();
+    if (normalizedType.isEmpty) return;
+    _add(
+      BehaviorEvent(
+        contentId: contentId,
+        action: BehaviorAction.hideContentType,
+        state: 'negative',
+        contentType: normalizedType,
+        tags: tags,
+        authorId: authorId,
+        feedRequestId: feedRequestId,
+        position: position,
+        referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
       ),
     );
   }
@@ -169,16 +342,21 @@ class ContentBehaviorTracker {
     String? feedRequestId,
     int? position,
     ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
   }) {
     _add(
       BehaviorEvent(
         contentId: contentId,
         action: BehaviorAction.share,
+        state: 'interaction',
         contentType: contentType,
         tags: tags,
         feedRequestId: feedRequestId,
         position: position,
         referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
       ),
     );
   }
@@ -192,17 +370,22 @@ class ContentBehaviorTracker {
     String? feedRequestId,
     int? position,
     ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
   }) {
     _add(
       BehaviorEvent(
         contentId: contentId,
         action: BehaviorAction.skip,
+        state: 'negative',
         contentType: contentType,
         tags: tags,
         duration: dwellSeconds,
         feedRequestId: feedRequestId,
         position: position,
         referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
       ),
     );
   }
@@ -215,16 +398,21 @@ class ContentBehaviorTracker {
     List<String>? tags,
     String? feedRequestId,
     ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
   }) {
     _add(
       BehaviorEvent(
         contentId: contentId,
         action: BehaviorAction.comment,
+        state: 'interaction',
         contentType: contentType,
         tags: tags,
         feedRequestId: feedRequestId,
         commentLength: commentLength,
         referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
       ),
     );
   }
@@ -234,17 +422,24 @@ class ContentBehaviorTracker {
     String authorId, {
     String? feedRequestId,
     ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
     String? intersectionDimension,
+    String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
   }) {
     _add(
       BehaviorEvent(
         contentId: authorId,
         action: BehaviorAction.follow,
+        state: 'interaction',
         authorId: authorId,
         feedRequestId: feedRequestId,
         referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
         intersectionDimension: intersectionDimension,
+        intersectionSourceRef: intersectionSourceRef,
         intersectionTagRefs: intersectionTagRefs,
       ),
     );
@@ -255,16 +450,23 @@ class ContentBehaviorTracker {
     String circleId, {
     String? feedRequestId,
     ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
     String? intersectionDimension,
+    String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
   }) {
     _add(
       BehaviorEvent(
         contentId: circleId,
         action: BehaviorAction.joinCircle,
+        state: 'interaction',
         feedRequestId: feedRequestId,
         referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
         intersectionDimension: intersectionDimension,
+        intersectionSourceRef: intersectionSourceRef,
         intersectionTagRefs: intersectionTagRefs,
       ),
     );
@@ -275,17 +477,24 @@ class ContentBehaviorTracker {
     String authorId, {
     String? feedRequestId,
     ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
     String? intersectionDimension,
+    String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
   }) {
     _add(
       BehaviorEvent(
         contentId: authorId,
         action: BehaviorAction.addContact,
+        state: 'interaction',
         authorId: authorId,
         feedRequestId: feedRequestId,
         referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
         intersectionDimension: intersectionDimension,
+        intersectionSourceRef: intersectionSourceRef,
         intersectionTagRefs: intersectionTagRefs,
       ),
     );
@@ -306,15 +515,88 @@ class ContentBehaviorTracker {
       BehaviorEvent(
         contentId: '',
         action: BehaviorAction.assistantInterest,
+        state: 'interaction',
         tags: normalized,
       ),
     );
   }
 
   void _add(BehaviorEvent event) {
-    _buffer.add(event);
+    final normalized = _withClientEventId(event);
+    final dedupKey = _dedupKey(normalized);
+    if (!_bufferDedupKeys.add(dedupKey)) return;
+    _buffer.add(normalized);
     if (_buffer.length >= _maxBatchSize) {
       flush();
+    }
+  }
+
+  BehaviorEvent _withClientEventId(BehaviorEvent event) {
+    if ((event.clientEventId ?? '').isNotEmpty) return event;
+    final now = DateTime.now().toUtc().microsecondsSinceEpoch;
+    final safeContent = event.contentId.isEmpty ? 'none' : event.contentId;
+    final feed = event.feedRequestId?.trim();
+    final suffix = feed == null || feed.isEmpty ? now.toString() : feed;
+    return BehaviorEvent(
+      clientEventId: 'beh:${event.action.wireValue}:$safeContent:$suffix:$now',
+      state: event.state ?? _stateForAction(event.action),
+      contentId: event.contentId,
+      action: event.action,
+      contentType: event.contentType,
+      tags: event.tags,
+      duration: event.duration,
+      feedRequestId: event.feedRequestId,
+      position: event.position,
+      channelId: event.channelId,
+      rankingVersion: event.rankingVersion,
+      commentLength: event.commentLength,
+      authorId: event.authorId,
+      referralSource: event.referralSource,
+      engagementDepth: event.engagementDepth,
+      consumedRatio: event.consumedRatio,
+      totalUnits: event.totalUnits,
+      entityRefs: event.entityRefs,
+      pageVisitId: event.pageVisitId,
+      intersectionDimension: event.intersectionDimension,
+      intersectionSourceRef: event.intersectionSourceRef,
+      intersectionTagRefs: event.intersectionTagRefs,
+      intersectionId: event.intersectionId,
+      intersectionClass: event.intersectionClass,
+      intersectionEvidenceId: event.intersectionEvidenceId,
+    );
+  }
+
+  String _dedupKey(BehaviorEvent event) {
+    final feed = event.feedRequestId ?? '';
+    return '$feed|${event.contentId}|${event.action.wireValue}|${event.state ?? ''}';
+  }
+
+  String _stateForAction(BehaviorAction action) {
+    switch (action) {
+      case BehaviorAction.impression:
+        return 'impressed';
+      case BehaviorAction.dwell:
+        return 'dwell';
+      case BehaviorAction.dislike:
+      case BehaviorAction.hideAuthor:
+      case BehaviorAction.hideContentType:
+      case BehaviorAction.report:
+      case BehaviorAction.skip:
+        return 'negative';
+      case BehaviorAction.click:
+      case BehaviorAction.like:
+      case BehaviorAction.share:
+      case BehaviorAction.comment:
+      case BehaviorAction.follow:
+      case BehaviorAction.authorView:
+      case BehaviorAction.entityPageView:
+      case BehaviorAction.tagClick:
+      case BehaviorAction.playProgress:
+      case BehaviorAction.contentDepth:
+      case BehaviorAction.joinCircle:
+      case BehaviorAction.addContact:
+      case BehaviorAction.assistantInterest:
+        return 'interaction';
     }
   }
 
@@ -323,7 +605,22 @@ class ContentBehaviorTracker {
     if (_buffer.isEmpty) return;
     final toSend = List<BehaviorEvent>.from(_buffer);
     _buffer.clear();
-    await _repository.reportEvents(events: toSend);
+    _bufferDedupKeys.clear();
+    try {
+      await _repository.reportEvents(events: toSend);
+    } catch (error, stackTrace) {
+      // 任务 B · 失败路径结构化归因：批量上报失败时记录并有界回灌，
+      // 避免周期 flush 抛出未捕获异步异常，也避免行为事件被静默丢弃。
+      developer.log(
+        'behavior flush failed: ${toSend.length} event(s) deferred for retry',
+        name: 'ContentBehaviorTracker',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (_buffer.length < _maxBatchSize * 3) {
+        _buffer.insertAll(0, toSend);
+      }
+    }
   }
 
   /// 销毁时停止定时器并 flush 剩余事件。

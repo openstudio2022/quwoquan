@@ -1,0 +1,32 @@
+config:
+  version: v2026.06.17.999001
+  min_image_version: 1.0.0
+  max_image_version: 2.0.0
+service:
+  name: content-service
+  http:
+    addr: :18080
+mongo:
+  uri: ''
+  database: quwoquan_content
+  collection: posts
+redis:
+  rec:
+    mode: memory
+    addr: ''
+    addrs: []
+    tls: false
+  general:
+    mode: memory
+    addr: ''
+    addrs: []
+    tls: false
+rec_model_service:
+  enabled: false
+  url: http://127.0.0.1:8000
+  timeout_ms: 80
+experiments:
+  rec_model_vs_rule:
+    enabled: false
+  rec_scoring_weights:
+    enabled: false

@@ -675,8 +675,8 @@ enum SearchSuggestionSectionKind {
     SearchSuggestionSectionKind.chatRecords => '聊天记录',
     SearchSuggestionSectionKind.circles => '已加入圈子',
     SearchSuggestionSectionKind.locations => '已关注地点',
-    SearchSuggestionSectionKind.followedPeople => '已关注的人',
-    SearchSuggestionSectionKind.network => '推荐搜索',
+    SearchSuggestionSectionKind.followedPeople => '人',
+    SearchSuggestionSectionKind.network => '匹配搜索词',
   };
 }
 
@@ -764,6 +764,111 @@ class NetworkSearchSuggestion {
   final String? initialTabId;
 
   String get displayTitle => title ?? query;
+}
+
+class SearchHighlightSpan {
+  const SearchHighlightSpan({required this.text, this.isMatch = false});
+
+  final String text;
+  final bool isMatch;
+
+  static List<SearchHighlightSpan> build({
+    required String text,
+    required String keyword,
+  }) {
+    final source = text;
+    final query = keyword.trim();
+    if (source.isEmpty || query.isEmpty) {
+      return <SearchHighlightSpan>[SearchHighlightSpan(text: source)];
+    }
+    final lowerSource = source.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    final spans = <SearchHighlightSpan>[];
+    var cursor = 0;
+    while (cursor < source.length) {
+      final index = lowerSource.indexOf(lowerQuery, cursor);
+      if (index < 0) {
+        spans.add(SearchHighlightSpan(text: source.substring(cursor)));
+        break;
+      }
+      if (index > cursor) {
+        spans.add(SearchHighlightSpan(text: source.substring(cursor, index)));
+      }
+      final end = index + query.length;
+      spans.add(
+        SearchHighlightSpan(text: source.substring(index, end), isMatch: true),
+      );
+      cursor = end;
+    }
+    return spans.where((span) => span.text.isNotEmpty).toList(growable: false);
+  }
+}
+
+class SearchHomeState {
+  const SearchHomeState({
+    this.history = const <RecentSearchEntryView>[],
+    this.guessKeywords = const <NetworkSearchSuggestion>[],
+    this.hotCircles = const <SearchInspirationCardView>[],
+    this.hotLocations = const <SearchInspirationCardView>[],
+  });
+
+  final List<RecentSearchEntryView> history;
+  final List<NetworkSearchSuggestion> guessKeywords;
+  final List<SearchInspirationCardView> hotCircles;
+  final List<SearchInspirationCardView> hotLocations;
+}
+
+class SearchLocalMatchesState {
+  const SearchLocalMatchesState({
+    this.contacts = const <SearchSuggestionEntry>[],
+    this.chatRecords = const <SearchSuggestionEntry>[],
+    this.circles = const <SearchSuggestionEntry>[],
+    this.places = const <SearchSuggestionEntry>[],
+    this.people = const <SearchSuggestionEntry>[],
+    this.keywordTerms = const <SearchSuggestionEntry>[],
+  });
+
+  final List<SearchSuggestionEntry> contacts;
+  final List<SearchSuggestionEntry> chatRecords;
+  final List<SearchSuggestionEntry> circles;
+  final List<SearchSuggestionEntry> places;
+  final List<SearchSuggestionEntry> people;
+  final List<SearchSuggestionEntry> keywordTerms;
+}
+
+enum UnifiedSearchResultItemKind {
+  intersection,
+  circle,
+  place,
+  person,
+  article,
+  image,
+  video,
+  relatedSearchTerms,
+}
+
+class RelatedSearchTermCardView {
+  const RelatedSearchTermCardView({required this.terms});
+
+  final List<NetworkSearchSuggestion> terms;
+
+  RelatedSearchTermCardView limited() {
+    return RelatedSearchTermCardView(
+      terms: terms.take(5).toList(growable: false),
+    );
+  }
+}
+
+class UnifiedSearchResultStream {
+  const UnifiedSearchResultStream({
+    this.connectedGroups = const <Object>[],
+    this.globalMixedGroups = const <Object>[],
+    this.tabSpecificCollections = const <String, List<Object>>{},
+  });
+
+  final List<Object> connectedGroups;
+  final List<Object> globalMixedGroups;
+  final Map<String, List<Object>> tabSpecificCollections;
 }
 
 enum SearchSuggestionEntryKind {
@@ -895,6 +1000,8 @@ class SearchInspirationPersonView {
 class SearchInspirationState {
   const SearchInspirationState({
     this.todayIntersections = const <SearchInspirationChipView>[],
+    this.guessKeywords = const <NetworkSearchSuggestion>[],
+    this.guessBatchIndex = 0,
     this.hotCircles = const <SearchInspirationCardView>[],
     this.hotLocations = const <SearchInspirationCardView>[],
     this.people = const <SearchInspirationPersonView>[],
@@ -902,6 +1009,8 @@ class SearchInspirationState {
   });
 
   final List<SearchInspirationChipView> todayIntersections;
+  final List<NetworkSearchSuggestion> guessKeywords;
+  final int guessBatchIndex;
   final List<SearchInspirationCardView> hotCircles;
   final List<SearchInspirationCardView> hotLocations;
   final List<SearchInspirationPersonView> people;
@@ -909,12 +1018,15 @@ class SearchInspirationState {
 
   bool get isEmpty =>
       todayIntersections.isEmpty &&
+      guessKeywords.isEmpty &&
       hotCircles.isEmpty &&
       hotLocations.isEmpty &&
       people.isEmpty;
 
   SearchInspirationState copyWith({
     List<SearchInspirationChipView>? todayIntersections,
+    List<NetworkSearchSuggestion>? guessKeywords,
+    int? guessBatchIndex,
     List<SearchInspirationCardView>? hotCircles,
     List<SearchInspirationCardView>? hotLocations,
     List<SearchInspirationPersonView>? people,
@@ -922,6 +1034,8 @@ class SearchInspirationState {
   }) {
     return SearchInspirationState(
       todayIntersections: todayIntersections ?? this.todayIntersections,
+      guessKeywords: guessKeywords ?? this.guessKeywords,
+      guessBatchIndex: guessBatchIndex ?? this.guessBatchIndex,
       hotCircles: hotCircles ?? this.hotCircles,
       hotLocations: hotLocations ?? this.hotLocations,
       people: people ?? this.people,

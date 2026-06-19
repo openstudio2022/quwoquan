@@ -1,0 +1,4 @@
+service:
+  name: search-service
+  http:
+    addr: ":18095"

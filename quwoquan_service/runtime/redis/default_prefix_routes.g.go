@@ -12,6 +12,8 @@ func GeneratedPrefixRoutes() []PrefixRoute {
 		{Prefix: "counter:", Scene: "general"},
 		{Prefix: "dedup:", Scene: "realtime"},
 		{Prefix: "device_tokens:", Scene: "general"},
+		{Prefix: "events.search.", Scene: "general"},
+		{Prefix: "ix:", Scene: "general"},
 		{Prefix: "login_fail:", Scene: "general"},
 		{Prefix: "page_ctx:", Scene: "general"},
 		{Prefix: "presence:", Scene: "realtime"},

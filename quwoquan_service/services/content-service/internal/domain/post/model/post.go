@@ -207,23 +207,25 @@ type PostCircleReshare struct {
 
 // PostSearchItemView domain model.
 type PostSearchItemView struct {
-	PostId            string    `json:"postId" bson:"postId"`
-	ContentType       string    `json:"contentType" bson:"contentType"`
-	ContentIdentity   string    `json:"contentIdentity" bson:"contentIdentity"`
-	Title             string    `json:"title" bson:"title"`
-	Summary           string    `json:"summary" bson:"summary"`
-	CoverUrl          string    `json:"coverUrl" bson:"coverUrl"`
-	AuthorId          string    `json:"authorId" bson:"authorId"`
-	AuthorDisplayName string    `json:"authorDisplayName" bson:"authorDisplayName"`
-	AuthorAvatarUrl   string    `json:"authorAvatarUrl" bson:"authorAvatarUrl"`
-	CircleId          string    `json:"circleId" bson:"circleId"`
-	CircleName        string    `json:"circleName" bson:"circleName"`
-	CategoryId        string    `json:"categoryId" bson:"categoryId"`
-	SubCategory       string    `json:"subCategory" bson:"subCategory"`
-	LikeCount         int64     `json:"likeCount" bson:"likeCount"`
-	HighlightText     string    `json:"highlightText" bson:"highlightText"`
-	MatchedField      string    `json:"matchedField" bson:"matchedField"`
-	PublishedAt       time.Time `json:"publishedAt" bson:"publishedAt"`
+	PostId             string         `json:"postId" bson:"postId"`
+	ContentType        string         `json:"contentType" bson:"contentType"`
+	ContentIdentity    string         `json:"contentIdentity" bson:"contentIdentity"`
+	Title              string         `json:"title" bson:"title"`
+	Summary            string         `json:"summary" bson:"summary"`
+	CoverUrl           string         `json:"coverUrl" bson:"coverUrl"`
+	AuthorId           string         `json:"authorId" bson:"authorId"`
+	AuthorDisplayName  string         `json:"authorDisplayName" bson:"authorDisplayName"`
+	AuthorAvatarUrl    string         `json:"authorAvatarUrl" bson:"authorAvatarUrl"`
+	CircleId           string         `json:"circleId" bson:"circleId"`
+	CircleName         string         `json:"circleName" bson:"circleName"`
+	CategoryId         string         `json:"categoryId" bson:"categoryId"`
+	SubCategory        string         `json:"subCategory" bson:"subCategory"`
+	LikeCount          int64          `json:"likeCount" bson:"likeCount"`
+	HighlightText      string         `json:"highlightText" bson:"highlightText"`
+	MatchedField       string         `json:"matchedField" bson:"matchedField"`
+	PublishedAt        time.Time      `json:"publishedAt" bson:"publishedAt"`
+	ConnectionState    string         `json:"connectionState" bson:"connectionState"`
+	IntersectionReason map[string]any `json:"intersectionReason" bson:"intersectionReason"`
 }
 
 // ProfileInteractionActivityView domain model.
@@ -231,6 +233,7 @@ type ProfileInteractionActivityView struct {
 	ActivityId           string    `json:"activityId" bson:"activityId"`
 	ActivityType         string    `json:"activityType" bson:"activityType"`
 	Direction            string    `json:"direction" bson:"direction"`
+	CommentKind          string    `json:"commentKind" bson:"commentKind"`
 	ActorSubAccountId    string    `json:"actorSubAccountId" bson:"actorSubAccountId"`
 	ActorDisplayName     string    `json:"actorDisplayName" bson:"actorDisplayName"`
 	ActorAvatarUrl       string    `json:"actorAvatarUrl" bson:"actorAvatarUrl"`
@@ -238,5 +241,18 @@ type ProfileInteractionActivityView struct {
 	TargetContentId      string    `json:"targetContentId" bson:"targetContentId"`
 	TargetContentType    string    `json:"targetContentType" bson:"targetContentType"`
 	TargetContentSummary string    `json:"targetContentSummary" bson:"targetContentSummary"`
+	DisplaySubAccountId  string    `json:"displaySubAccountId" bson:"displaySubAccountId"`
+	DisplayName          string    `json:"displayName" bson:"displayName"`
+	DisplayAvatarUrl     string    `json:"displayAvatarUrl" bson:"displayAvatarUrl"`
+	DisplayUserRouteId   string    `json:"displayUserRouteId" bson:"displayUserRouteId"`
+	PrimaryText          string    `json:"primaryText" bson:"primaryText"`
+	ContextText          string    `json:"contextText" bson:"contextText"`
+	PreviewMediaKind     string    `json:"previewMediaKind" bson:"previewMediaKind"`
+	PreviewImageUrl      string    `json:"previewImageUrl" bson:"previewImageUrl"`
+	PreviewText          string    `json:"previewText" bson:"previewText"`
+	PreviewUnavailable   bool      `json:"previewUnavailable" bson:"previewUnavailable"`
+	PreviewObjectId      string    `json:"previewObjectId" bson:"previewObjectId"`
+	PreviewRouteId       string    `json:"previewRouteId" bson:"previewRouteId"`
+	FilterKeys           []string  `json:"filterKeys" bson:"filterKeys"`
 	CreatedAt            time.Time `json:"createdAt" bson:"createdAt"`
 }

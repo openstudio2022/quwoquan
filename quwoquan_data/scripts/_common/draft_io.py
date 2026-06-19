@@ -223,6 +223,8 @@ def write_agent_draft(
     extracted_entities: Sequence[dict[str, Any]] | None = None,
     style_family: str | None = None,
     opening_strategy: str | None = None,
+    creative_plan: dict[str, Any] | None = None,
+    self_critique: dict[str, Any] | None = None,
 ) -> None:
     """会话模型创作正文写回（SOP 与测试 fixture 共用）。generator 固定为 agent。
 
@@ -247,6 +249,24 @@ def write_agent_draft(
         article_markdown=article_markdown,
         cited_source_paths=cited_source_paths,
     )
+    pack = read_writing_pack(task_id, batch_id, ref) or {}
+    creative = pack.get("creativeBrief") if isinstance(pack.get("creativeBrief"), dict) else {}
+    reader_promise = str(creative.get("readerPromise") or "兑现写作任务承诺").strip()
+    title_match = re.search(r"(?m)^#\s+(.+)$", article_markdown or "")
+    selected_title = title_match.group(1).strip() if title_match else str(pack.get("title") or ref)
+    if creative_plan is None:
+        from _common.creative_brief import default_creative_plan_meta
+
+        creative_plan = default_creative_plan_meta(
+            reader_promise=reader_promise,
+            selected_title=selected_title,
+            style_family=style_family,
+            opening_strategy=opening_strategy,
+        )
+    if self_critique is None:
+        from _common.creative_brief import default_self_critique
+
+        self_critique = default_self_critique(reader_promise)
     write_json(
         draft_meta_path(task_id, batch_id, ref),
         {
@@ -261,6 +281,8 @@ def write_agent_draft(
             "citedSourcePaths": list(cited_source_paths),
             "coveredFacts": list(covered_facts),
             "extractedEntities": list(extracted_entities or []),
+            "creativePlan": creative_plan,
+            "selfCritique": self_critique,
             "promptSha256": facts.get("promptSha256"),
             "writingPackSha256": facts.get("writingPackSha256"),
             "sourceBundleSha256": facts.get("sourceBundleSha256"),

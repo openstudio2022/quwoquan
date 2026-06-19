@@ -57,5 +57,11 @@ def validate_source_catalog(registry: TemplateRegistry) -> list[str]:
             for core in pol.get("coreCategories") or []:
                 if str(core) not in ids:
                     errors.append(f"source_catalog.coveragePolicy.{vertical}: unknown coreCategory '{core}'")
+            for preferred in pol.get("preferredCategories") or []:
+                if str(preferred) not in ids:
+                    errors.append(
+                        f"source_catalog.coveragePolicy.{vertical}: "
+                        f"unknown preferredCategory '{preferred}'"
+                    )
 
     return errors

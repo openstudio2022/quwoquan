@@ -5,24 +5,24 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 /// 验收 G2：dimension 为 5 源闭集；端只读展示、无来源时字段空且不编造。
 void main() {
   group('IntersectionReason 契约', () {
-    test('fromMap 解析全字段', () {
+    test('fromMap 解析全字段（云侧主结论句 primaryText + 计数 totalPointCount）', () {
       final r = IntersectionReason.fromMap(<String, dynamic>{
         'dimension': 'identity',
         'tagRefs': <String>['Entity/机构/学校/北京大学'],
-        'label': '北京大学',
-        'sharedCount': 3,
+        'displayName': '北京大学',
+        'totalPointCount': 3,
         'strength': 0.9,
-        'displayText': '你们都是北大的',
+        'primaryText': '你们都是北大的',
         'actionType': 'follow',
         'actionTargetId': 'user_x',
         'source': 'entityRef',
       });
       expect(r.dimension, 'identity');
       expect(r.tagRefs, <String>['Entity/机构/学校/北京大学']);
-      expect(r.label, '北京大学');
-      expect(r.sharedCount, 3);
+      expect(r.displayName, '北京大学');
+      expect(r.totalPointCount, 3);
       expect(r.strength, 0.9);
-      expect(r.displayText, '你们都是北大的');
+      expect(r.primaryText, '你们都是北大的');
       expect(r.actionType, 'follow');
       expect(r.source, 'entityRef');
     });
@@ -31,8 +31,8 @@ void main() {
       final r = IntersectionReason.fromMap(<String, dynamic>{});
       expect(r.dimension, '');
       expect(r.tagRefs, isEmpty);
-      expect(r.displayText, '');
-      expect(r.label, '');
+      expect(r.primaryText, '');
+      expect(r.connectionSummary, '');
     });
 
     test('dimension 为 5 源闭集', () {
@@ -54,7 +54,7 @@ void main() {
         'dimension': 'relationship',
         'relationKind': 'mutual',
         'relationObjectId': 'user_friend_1',
-        'displayText': '你们有共同好友',
+        'primaryText': '你们有共同好友',
       });
       expect(r.dimension, 'relationship');
       expect(r.relationKind, 'mutual');
@@ -65,15 +65,15 @@ void main() {
       final r = IntersectionReason(
         dimension: 'interest',
         tagRefs: const <String>['Topic/摄影'],
-        label: '摄影',
-        displayText: '你们都爱摄影',
+        displayName: '摄影',
+        primaryText: '你们都爱摄影',
         actionType: 'view_object',
         source: 'tagRef',
       );
       final r2 = IntersectionReason.fromMap(r.toMap());
       expect(r2.dimension, 'interest');
       expect(r2.tagRefs, const <String>['Topic/摄影']);
-      expect(r2.displayText, '你们都爱摄影');
+      expect(r2.primaryText, '你们都爱摄影');
       expect(r2.source, 'tagRef');
     });
   });

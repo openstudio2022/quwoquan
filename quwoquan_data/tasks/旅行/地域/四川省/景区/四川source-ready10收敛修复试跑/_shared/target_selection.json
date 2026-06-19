@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "quwoquan_data.target_selection",
+  "strategy": "mandatory targets plus deterministic round-robin regional coverage",
+  "discoveryPath": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_data/tasks/旅行/地域/四川省/景区/景区精选/discovery_sichuan_100e.json",
+  "limit": 10,
+  "reserveRatio": 0.2,
+  "mandatory": [
+    "四姑娘山",
+    "毕棚沟",
+    "稻城亚丁",
+    "海螺沟",
+    "墨石公园"
+  ],
+  "excluded": [],
+  "targets": [
+    {
+      "name": "四姑娘山",
+      "entityType": "地点/景区",
+      "region": "阿坝藏族羌族自治州"
+    },
+    {
+      "name": "毕棚沟",
+      "entityType": "地点/景区",
+      "region": "阿坝藏族羌族自治州"
+    },
+    {
+      "name": "稻城亚丁",
+      "entityType": "地点/景区",
+      "region": "甘孜藏族自治州"
+    },
+    {
+      "name": "海螺沟",
+      "entityType": "地点/景区",
+      "region": "甘孜藏族自治州"
+    },
+    {
+      "name": "墨石公园",
+      "entityType": "地点/景区",
+      "region": "甘孜藏族自治州"
+    },
+    {
+      "name": "都江堰",
+      "entityType": "地点/景区",
+      "region": "成都市"
+    },
+    {
+      "name": "九寨沟",
+      "entityType": "地点/景区",
+      "region": "阿坝藏族羌族自治州"
+    },
+    {
+      "name": "乐山大佛",
+      "entityType": "地点/景区",
+      "region": "乐山市"
+    },
+    {
+      "name": "碧峰峡",
+      "entityType": "地点/景区",
+      "region": "雅安市"
+    },
+    {
+      "name": "蜀南竹海",
+      "entityType": "地点/景区",
+      "region": "宜宾市"
+    }
+  ],
+  "reserveTargets": [
+    {
+      "name": "青城山",
+      "entityType": "地点/景区",
+      "region": "成都市"
+    },
+    {
+      "name": "武侯祠",
+      "entityType": "地点/景区",
+      "region": "成都市"
+    }
+  ],
+  "sourceTaskId": "旅行/地域/四川省/景区/景区精选",
+  "taskId": "旅行/地域/四川省/景区/四川source-ready10收敛修复试跑"
+}

@@ -39,7 +39,7 @@ on:
         required: false
         default: ''
       matrix_kind:
-        description: assistant / chat-avatar / JSON 数组（留空则按 profile 决定）
+        description: assistant / chat-avatar / environment-smoke / JSON 数组（留空则按 profile 决定）
         required: false
         default: ''
   workflow_call:
@@ -75,7 +75,7 @@ on:
         type: string
         default: ''
       matrix_kind:
-        description: 'assistant / chat-avatar / JSON array (overrides profile default)'
+        description: 'assistant / chat-avatar / environment-smoke / JSON array (overrides profile default)'
         required: false
         type: string
         default: ''
@@ -524,6 +524,62 @@ jobs:
                 if [ "${matrix_kind}" = "chat-avatar" ]; then
                   python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --platform "${platform}"
                   matrix_exit_code=$?
+                elif [ "${matrix_kind}" = "environment-smoke" ]; then
+                  smoke_supported=1
+                  case "${env_name}" in
+                    alpha)
+                      smoke_env_alias="alpha-local"
+                      smoke_runtime_env="alpha"
+                      smoke_data_source="mock"
+                      smoke_gateway_base_url="http://127.0.0.1:17000"
+                      smoke_product_ops_base_url="http://127.0.0.1:17010"
+                      smoke_media_base_url="http://127.0.0.1:17100"
+                      ;;
+                    beta)
+                      smoke_env_alias="beta-local"
+                      smoke_runtime_env="beta"
+                      smoke_data_source="remote"
+                      smoke_gateway_base_url="http://127.0.0.1:18000"
+                      smoke_product_ops_base_url="http://127.0.0.1:18010"
+                      smoke_media_base_url="http://127.0.0.1:18100"
+                      ;;
+                    gamma)
+                      smoke_env_alias="gamma-local"
+                      smoke_runtime_env="gamma"
+                      smoke_data_source="remote"
+                      smoke_gateway_base_url="${GAMMA_BASE_URL:-http://127.0.0.1:19000}"
+                      smoke_product_ops_base_url="http://127.0.0.1:19010"
+                      smoke_media_base_url="${MEDIA_AVATAR_CDN_BASE_URL:-http://127.0.0.1:19100}"
+                      ;;
+                    prod-sim)
+                      smoke_env_alias="prod-sim"
+                      smoke_runtime_env="prod"
+                      smoke_data_source="mock"
+                      smoke_gateway_base_url="http://127.0.0.1:20000"
+                      smoke_product_ops_base_url="http://127.0.0.1:20010"
+                      smoke_media_base_url="http://127.0.0.1:20100"
+                      ;;
+                    *)
+                      echo "::error::environment-smoke does not support env=${env_name}"
+                      smoke_supported=0
+                      ;;
+                  esac
+                  if [ "${smoke_supported}" = "1" ]; then
+                    python3 agent_ops/deploy/smoke/run_environment_patrol_smoke.py \
+                      --env-name "${smoke_env_alias}" \
+                      --runtime-env "${smoke_runtime_env}" \
+                      --api-contract-env "${smoke_runtime_env}" \
+                      --data-source "${smoke_data_source}" \
+                      --gateway-base-url "${smoke_gateway_base_url}" \
+                      --product-ops-base-url "${smoke_product_ops_base_url}" \
+                      --media-base-url "${smoke_media_base_url}" \
+                      --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-local-${env_name}-token}" \
+                      --platform "${platform}" \
+                      --report "artifacts/device-matrix/environment-smoke/${env_name}-${platform}.json"
+                    matrix_exit_code=$?
+                  else
+                    matrix_exit_code=2
+                  fi
                 else
                   python3 agent_ops/assistant/run_assistant_device_matrix_ci.py --platform "${platform}"
                   matrix_exit_code=$?
@@ -584,6 +640,7 @@ jobs:
             ${{ github.workspace }}/repo/artifacts/device-matrix/*-ios.json
             ${{ github.workspace }}/repo/artifacts/device-matrix/assistant_device_matrix_logs/**
             ${{ github.workspace }}/repo/artifacts/device-matrix/chat-avatar/**
+            ${{ github.workspace }}/repo/artifacts/device-matrix/environment-smoke/**
             ${{ github.workspace }}/repo/artifacts/stackctl/beta/**
           if-no-files-found: ignore
           compression-level: 0
@@ -606,6 +663,7 @@ jobs:
             ${{ github.workspace }}/repo/artifacts/device-matrix/*-ios.json
             ${{ github.workspace }}/repo/artifacts/device-matrix/assistant_device_matrix_logs/**
             ${{ github.workspace }}/repo/artifacts/device-matrix/chat-avatar/**
+            ${{ github.workspace }}/repo/artifacts/device-matrix/environment-smoke/**
             ${{ github.workspace }}/repo/artifacts/stackctl/beta/**
           if-no-files-found: ignore
           compression-level: 0

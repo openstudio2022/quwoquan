@@ -30,7 +30,7 @@ flowchart LR
 
 ### D1：事实与概率严格分通道
 
-事实交集（`ObjectIntersection`）必须带证据、可回查、满足权限；概率交集（`RecommendationAffinity`）只承载排序分与模型理由桶，不生成事实文案。两者在 `IntersectionReason.intersectionClass`（`fact|affinity`）上区分，端侧据此选择"事实证据样式"或"推荐样式"。
+事实交集必须带证据、可回查、满足权限；概率交集（`RecommendationAffinity`）只承载排序分与模型理由桶，不生成事实文案。两者在 `IntersectionReason.intersectionClass`（`fact|affinity`）上区分。**已删除 `ObjectIntersection` 独立 projection**；对象页/feed/搜索统一 `List<IntersectionReason>` + `IntersectionPoint`。
 
 ### D2：请求期零打分，事实预物化
 
@@ -73,7 +73,7 @@ flowchart LR
 
 ### 接通已存契约
 
-- `object_page_bundle.yaml` 的 `intersections: List<ObjectIntersection>` 后端真实填充（替换 `defaultIntersectionReasons` 硬编码）。
+- `object_page_bundle.yaml` 仅 `intersectionReasons: List<IntersectionReason>` 单通道（删除并行 `intersections`）。
 - `object_membership.yaml` 增 `expiresAt`。
 
 ### 行为归因
@@ -118,3 +118,113 @@ flowchart LR
 - 事实物化管线复杂：先保证读模型 + summary/list 最小闭环，再接全量事件源。
 - 冷却窗口与保鲜期交叉：以 `policy.yaml` 单一真相源配置，避免双处硬编码。
 - 端侧多入口统一：先抽 `IntersectionEntity` 原子，三入口不可各自实现。
+
+---
+
+## Phase 0 冻结：`IntersectionService` pipeline 与选择得分（交集落地总路标）
+
+> 本节是「交集落地总路标」Phase 0 在服务端 design 的冻结口径，配套真相源
+> [`specs/product/intersection-definition-and-application.md`](../../../product/intersection-definition-and-application.md) §20
+> 与机读注册表 `recommendation/rec_model/intersection_kind_registry.yaml`。门禁
+> `quwoquan_service/scripts/recommendation/verify_intersection_kind_registry.py`（入 `make verify`）。
+
+### P0-1 固定管线
+
+`IntersectionService`（消费方：我的主页 summary/list、对象页 object）固定六段管线：
+
+```text
+召回(source) → 隐私过滤(privacyScope) → 去重(dedupeKey) → 价值打分排序 → 冷却/多样性裁剪 → 渲染契约(hydrate primaryText)
+```
+
+每段单一职责、单向流动；上节「核心数据流」是事实/概率双通道召回的展开，本节是召回之后的统一裁决链。
+
+### P0-2 选择得分公式
+
+```text
+score = valueWeight(tier) × freshness(decay) × confidence × diversityPenalty × cooldownGate
+```
+
+- `valueWeight(tier)`：T1=1.0 / T2=0.75 / T3=0.5 / T4=0.3（注册表 `valueTierWeights`）。
+- `freshness = exp(-ageHours / freshnessHalfLifeHours)`，`policy.yaml` 分维度 TTL 派生半衰期。
+- `confidence`：fact=1.0；affinity=模型分，低于注册表 `confidenceThreshold` 不产出。
+- `diversityPenalty`：同维度/同对象连续命中降权，保证多样性。
+- `cooldownGate`：`rec:icool` 窗口内已曝光对象降权（`policy.intersection.cooldownDays`）。
+- **affinity 永远排在 fact 之后，且必须显式标「推荐」**（`intersectionClass=affinity`）。
+
+### P0-3 入选门槛 / 红线（GATE_BLOCK 语义）
+
+1. 数量门槛：至少 1 个可枚举可点击样本，否则降级纯计数 → 维度母表达 → 隐藏整块。
+2. 置信门槛：affinity < `confidenceThreshold` 不产出；fact 达数量门槛即可。
+3. 真实性红线：禁用推荐分/热度伪造 fact；fact 数字必须来自真实证据点派生（single-source）。
+4. 隐私门槛：`commonContact` 必须先过双向可见性才产出。
+5. 空态：无合格交集隐藏整块，禁占位假交集。
+
+### P0-4 与 `policy.yaml` 对齐
+
+`recommendation/rec_model/policy.yaml` `intersection` 块为冷却/保鲜/混排权重唯一真相源
+（`factWeight / affinityWeight / maxAffinityPerSurface / cooldownDays / freshnessTtlDaysByDimension`），
+feed 内混排见 `feed_intersection_mixer.go`。
+
+### P0-5 feed 交集 API 的 Phase 0 处置（交接会话 E）
+
+上文「新增 `recommendation/intersection` 域」列出的 `GET /v1/feed/intersections` 与
+`POST /v1/intersections/exposure` 属**首页推荐页（会话 E）**范围：Phase 0 决定**删除 feed spotlight 独立 API**，
+交集改由 post 内 `intersection_reason_chip` 承载（详见 §20.6 删除清单）。`Feed()` 内部数据路径
+（`feed_service.go` post-chip 用）**保留**。Phase 0 不在本会话执行该删除，避免触发会话 E 的推荐页 UI 大改。
+
+---
+
+## 架构基线 v2 设计（Graph + Lifecycle + Propagation + Projection）
+
+> 真相源：`specs/product/intersection-definition-and-application.md` §21。本节是服务/端侧设计承接；本期只落契约草案 + 端原型，云侧算法分期。
+
+### 端到端三段管线
+
+```mermaid
+flowchart LR
+  subgraph ingest [采集]
+    beh["rm_behavior_events 写侧唯一"]
+    rel["follow_edges / circle_members / 对象关注边"]
+  end
+  subgraph algo [算法]
+    g["Graph 加权边"] --> l["Lifecycle 状态机"] --> p["Propagation 路径"] --> s["Selection 得分 + 隐私/去重/冷却"]
+  end
+  subgraph proj [投影]
+    j["iconKey + primaryText/spans + visuals + target + lifecycle 弱标"]
+  end
+  ingest --> algo --> proj --> apps["A/B/C/D/E"]
+  apps -.埋点回流.-> ingest
+```
+
+统一血缘：`边(sourceRef+dimension)` → `edgeWeight + lifecycleState + propagationPath` → `primaryText/spans + visuals + target` → 埋点回流，全程单一真相源、无第二文案/标识通道。
+
+### 草案契约字段设计（metadata-first，本期生成端 DTO，云侧不实现逻辑）
+
+| 契约 | 新增字段 | 用途 |
+|---|---|---|
+| `intersection_kind_registry.yaml` | `relationStrengthBase` / `interactionFrequencyKey` / `recencyHalfLifeDays` / `lifecycleApplicable` / `propagationRole` / `iconKey`；恢复 `coLiked` | Graph 加权 + iconKey 真相源 |
+| `intersection_reason.yaml` | `lifecycleState` / `previousStrength` / `strengthDelta` / `edgeWeight` / `iconKey` / `objectVisual` | Lifecycle 弱标 + 类型图标 + 尾部对象封面 |
+| `intersection_text_span.yaml` | `visual`(IntersectionVisual?) | 句内 inline 头像簇 |
+| `intersection_dimension_tally.yaml` / `intersection_inbox_summary.yaml` | `strengthenedCount` / `reactivatedCount` / `iconKey` | lifecycle 态分桶 |
+| `author_impact_item.yaml` | `propagationPath` / `hopCount` / `secondarySpreadCount` / `iconKey` | 传播视图（守红线，绝对计数） |
+| `circle_impact_item.yaml` | `impactId` / `primarySpans` / `sampleVisuals` / `countTarget` / `evidenceSnapshotId` / `countObjectKind` / `propagationPath` / `iconKey` | 补统一交互子契约（解决 G4）+ 传播视图 |
+| `intersection_propagation_path.yaml`（新增） | `nodes`(visual+target) / `hopCount` / `pathKind` | 传播链值对象（可选多跳承载） |
+| `policy.yaml` `intersection` | `graphWeights` / `lifecycleWeights` / `propagation` | 数值真算配置位（本期给安全默认） |
+
+### 性能与容量弹性（冷热三档，云侧部分后置）
+
+- 热（请求期）：小集合求交 + `cache:viewer_intersections`(TTL 900s) + `rec:icool` 冷却 + 上限/截断 + 分页 cursor。
+- 温（高频聚合）：`viewer_object_intersections` 增量物化预投影，按 viewer 分片水平扩展。
+- 冷（离线批）：Lifecycle 状态机、多跳 Propagation、Affinity 打分、**coLiked 大集合求交** —— 分期。
+- coLiked 红线：禁请求期全量，必须预投影/采样/上限，排序最末（T4）。
+- 降级开关分级：关概率 → 关频道 → 回退简化卡。
+
+### 端侧实现（本期 Mock 原型）
+
+- 共享层：`IntersectionIconResolver`（iconKey→设计系统图标）+ `IntersectionLifecycleBadge`（新/增强/重新活跃）+ 句内 inline 头像渲染（`InteractiveIntersectionText` 消费 `span.visual`）+ 尾部对象封面 + 传播视图件（复用 `IntersectionVisualCluster`/`IntersectionTargetNavigator`）。
+- `circle_impact` 卡接入统一三件套，与 author_impact 同源。
+- `intersection_repository.dart` Mock + fixture 补 lifecycle / 传播 / coLiked / iconKey 样本，供 A–E alpha 原型。
+
+### 分期边界
+
+本期不做：云侧 Go 算法与采集实现、Remote 真实数据、Lifecycle 状态机/多跳 Propagation/Graph 加权/coLiked 大集合求交真算。待 UI 原型评审通过、契约冻结后另会话落地。

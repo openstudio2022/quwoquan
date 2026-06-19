@@ -14,6 +14,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/spacing/discovery_feed_spacing.dart';
 import 'package:quwoquan_app/core/design_system/spacing/spacing_extensions.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -64,6 +65,14 @@ class ImageViewer extends ConsumerStatefulWidget {
 
 class _ImageViewerState extends ConsumerState<ImageViewer>
     with TickerProviderStateMixin {
+  static const SystemUiOverlayStyle _mediaOverlayStyle = SystemUiOverlayStyle(
+    statusBarColor: AppColors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: AppColors.transparent,
+    systemNavigationBarIconBrightness: Brightness.light,
+  );
+
   late PageController _pageController;
   late AnimationController _fadeController;
   late AnimationController _slideController;
@@ -159,28 +168,12 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
   void _applySystemUiMode() {
     if (_isPureMode) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      SystemChrome.setSystemUIOverlayStyle(
-        const SystemUiOverlayStyle(
-          statusBarColor: AppColors.transparent,
-          statusBarIconBrightness: Brightness.dark,
-          statusBarBrightness: Brightness.light,
-          systemNavigationBarColor: AppColors.transparent,
-          systemNavigationBarIconBrightness: Brightness.dark,
-        ),
-      );
+      SystemChrome.setSystemUIOverlayStyle(_mediaOverlayStyle);
       return;
     }
 
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: AppColors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: AppColors.transparent,
-        systemNavigationBarIconBrightness: Brightness.dark,
-      ),
-    );
+    SystemChrome.setSystemUIOverlayStyle(_mediaOverlayStyle);
   }
 
   void _restoreSystemUiMode() {
@@ -458,7 +451,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
                     _buildTopInfoBar(isDark),
                     const Spacer(),
                     // 图片指示器
-                    if (widget.imageUrls.length > 1) _buildImageIndicator(),
+                    if (widget.imageUrls.length > 1)
+                      _buildImageIndicator(isDark),
                   ],
                 ),
               ),
@@ -534,24 +528,68 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
   }
 
   /// 构建图片指示器 - 基于原型代码
-  Widget _buildImageIndicator() {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: List.generate(widget.imageUrls.length, (index) {
-          return Container(
-            margin: EdgeInsets.symmetric(horizontal: 2.w),
-            width: AppSpacing.sm.w,
-            height: AppSpacing.sm.w,
+  Widget _buildImageIndicator(bool isDark) {
+    final dotColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.mediaThumbnailOverlayForeground,
+    );
+    final surfaceColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.mediaThumbnailOverlayScrim,
+    ).withValues(alpha: 0.08);
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.mediaThumbnailOverlayBorder,
+    ).withValues(alpha: 0.06);
+    return Center(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: DiscoveryFeedSpacing.homeFeedCarouselDotsBackdropBlur,
+            sigmaY: DiscoveryFeedSpacing.homeFeedCarouselDotsBackdropBlur,
+          ),
+          child: DecoratedBox(
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: index == _currentIndex
-                  ? AppColors.white
-                  : AppColors.overlayMedium,
+              color: surfaceColor,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+              border: Border.all(
+                color: borderColor,
+                width: AppSpacing.hairline,
+              ),
             ),
-          );
-        }),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.intraGroupSm,
+                vertical: AppSpacing.xs,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (
+                    var index = 0;
+                    index < widget.imageUrls.length;
+                    index++
+                  ) ...[
+                    if (index > 0) const SizedBox(width: AppSpacing.xs),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      width: AppSpacing.xs + AppSpacing.hairline,
+                      height: AppSpacing.xs + AppSpacing.hairline,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: dotColor.withValues(
+                          alpha: index == _currentIndex ? 0.94 : 0.38,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

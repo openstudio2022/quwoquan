@@ -166,6 +166,37 @@ def test_publish_filter_accepts_release_entities_root():
     assert verdict.manifest["entityRefs"] == ["/entity/地点/景区/有主页"]
 
 
+def test_publish_filter_syncs_readonly_ref_projections_after_entity_filter():
+    publish_root = Path(tempfile.mkdtemp(prefix="pf_projection_pub_"))
+    (publish_root / "entities" / "地点" / "景区" / "有主页").mkdir(parents=True, exist_ok=True)
+    (publish_root / "entities" / "地点" / "景区" / "有主页" / "page.md").write_text("# 有主页\n", encoding="utf-8")
+
+    topic = Path(tempfile.mkdtemp(prefix="pf_projection_topic_"))
+    write_json(topic / "manifest.json", {
+        "topicId": REF,
+        "entityRefs": ["/entity/地点/景区/有主页", "/entity/地点/景区/无主页"],
+        "normalizedEntityRefs": ["entity:景区:有主页", "entity:景区:无主页"],
+        "semanticMentions": [],
+        "intersectionHints": [
+            {"source": "entityRef", "actionTargetId": "entity:景区:有主页"},
+            {"source": "entityRef", "actionTargetId": "entity:景区:无主页"},
+            {"source": "tagRef", "actionTargetId": "Topic/旅行"},
+        ],
+        "assets": [],
+    })
+    (topic / "article.md").write_text("# t\n\n正文。\n", encoding="utf-8")
+
+    verdict = apply_publish_filter(topic, publish_root)
+
+    assert "semanticMentions" not in verdict.manifest
+    assert verdict.manifest["entityRefs"] == ["/entity/地点/景区/有主页"]
+    assert verdict.manifest["normalizedEntityRefs"] == ["entity:景区:有主页"]
+    action_targets = [item.get("actionTargetId") for item in verdict.manifest["intersectionHints"]]
+    assert "entity:景区:无主页" not in action_targets
+    assert "entity:景区:有主页" in action_targets
+    assert "Topic/旅行" in action_targets
+
+
 def _run_all() -> None:
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

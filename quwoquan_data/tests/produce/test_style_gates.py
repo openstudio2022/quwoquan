@@ -30,11 +30,13 @@ os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp()
 
 from _common.draft_io import write_agent_draft  # noqa: E402
 from _common.content_object import register_content_object  # noqa: E402
+from _common.content_review import check_narrative_quality  # noqa: E402
 from _common.paths import ensure_batch_layout, ensure_task_layout  # noqa: E402
 from produce.route_workflow import (  # noqa: E402
     _check_cross_article_similarity,
     _check_travelogue_density,
 )
+from verify.verify_content_quality import forbidden_phrase_hits  # noqa: E402
 
 # 隔离开篇校验：关闭 like/dislike/decision/tips，仅观察开篇钩子是否落地。
 DENSITY_BRIEF = {
@@ -55,6 +57,31 @@ def test_monotonous_opening_blocked_for_guide_family():
 
 def test_conclusion_first_opening_passes_for_guide_family():
     article = "先说结论：淡季来九寨沟最值，人少水更干净。\n\n## 正文\n后续。"
+    res = _check_travelogue_density(article, DENSITY_BRIEF, style_family="实用攻略风")
+    assert res["passed"], res["issues"]
+
+
+def test_negative_tradeoff_markers_include_short_risk_words():
+    article = (
+        "先说结论：旺季去都江堰要错峰。\n\n"
+        "## 正文\n"
+        "鱼嘴这一段很打动人，也值得慢慢看；但桥头排队很久，酒店价格翻倍，"
+        "带老人时不建议硬排，放弃硬排反而更稳。如果你只能国庆去，我会建议住成都早出晚归。"
+    )
+    res = _check_travelogue_density(article, {}, style_family="实用攻略风")
+    assert res["passed"], res["issues"]
+
+
+def test_opening_after_title_figure_and_heading_is_detected():
+    article = (
+        "# 九寨沟·值不值得去\n\n"
+        ':::figure id="cover" layout="fullWidth" caption="水色"\n'
+        "asset://jiuzhaigou_cover\n"
+        ":::\n\n"
+        "## 先说结论\n\n"
+        "直接说：淡季来九寨沟最值，人少水更干净，预算也更稳。\n\n"
+        "## 正文\n后续。"
+    )
     res = _check_travelogue_density(article, DENSITY_BRIEF, style_family="实用攻略风")
     assert res["passed"], res["issues"]
 
@@ -145,6 +172,16 @@ def test_cross_article_similarity_ignores_frontmatter_only_overlap():
     _seed_draft("峨眉山_画报_frontmatter", gallery)
     res = _check_cross_article_similarity(_TASK, _BATCH, "峨眉山_攻略_frontmatter", article)
     assert res["passed"], res["issues"]
+
+
+def test_forbidden_placeholder_gate_does_not_block_normal_occupy_word():
+    assert forbidden_phrase_hits("凌晨到金顶占位，等到八点仍只见大雾。") == []
+    assert "占位稿" in forbidden_phrase_hits("这是一段占位稿，不能发布。")
+
+
+def test_review_blocks_batch_boundary_terms_before_release_gate():
+    issues = check_narrative_quality("同批次另一篇提到了雨季经验。", {"template": "travel.entity.guide"})
+    assert any("批次" in issue for issue in issues), issues
 
 
 def _run_all() -> None:

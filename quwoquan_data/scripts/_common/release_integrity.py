@@ -8,6 +8,7 @@ from collections import defaultdict
 import hashlib
 import re
 from pathlib import Path
+from collections.abc import Iterable
 from typing import Any, Mapping
 
 from _common.io import read_json
@@ -36,7 +37,20 @@ ARTICLE_HARD_CHECKS = {
     "contactInfo",
     "mechanicalHeading",
 }
-ENTITY_SOURCE_KINDS = ("百科", "wiki", "wikipedia", "官网", "官方", "政府", "文旅", "政务")
+ENTITY_SOURCE_KINDS = (
+    "百科",
+    "encyclopedia",
+    "wiki",
+    "wikipedia",
+    "official",
+    "government",
+    "authoritative_reference",
+    "官网",
+    "官方",
+    "政府",
+    "文旅",
+    "政务",
+)
 AUTHOR_EXPERIENCE_SOURCE_KINDS = ("攻略", "游记", "评论", "点评", "小红书", "图虫", "摄影")
 FACTUAL_REFERENCE_ADAPTATION_MARKERS = (
     "授权底稿来源",
@@ -184,10 +198,17 @@ def _base_draft_issues(
     assignments = ledger.get("assignments") if isinstance(ledger, Mapping) else {}
     if not isinstance(assignments, Mapping) or not assignments:
         issues.append(f"{release_id}: base_draft_ledger.assignments missing")
-    elif base_source and str(assignments.get(base_source) or "") != topic_id:
-        issues.append(
-            f"{post_rel}: base draft ledger does not map {base_source} to topicId {topic_id}"
+    else:
+        assigned = assignments.get(base_source) if base_source else None
+        assigned_refs = (
+            [str(item) for item in assigned if str(item).strip()]
+            if isinstance(assigned, list)
+            else ([str(assigned)] if str(assigned or "").strip() else [])
         )
+        if base_source and topic_id not in assigned_refs:
+            issues.append(
+                f"{post_rel}: base draft ledger does not map {base_source} to topicId {topic_id}"
+            )
     base_text = str(writing_pack.get("baseDraftText") or "")
     effective_len = len(re.sub(r"\s+", "", base_text))
     if effective_len < MIN_ARTICLE_BASE_DRAFT_CHARS:
@@ -226,14 +247,9 @@ def _article_asset_source_issues(
     source_ref = str(asset.get("sourceRef") or "").strip()
     source_asset_ref = str(asset.get("sourceAssetRef") or "").strip()
     issues: list[str] = []
-    if base_source and source_ref and source_ref != base_source:
+    if source_ref and source_asset_ref and not _same_source_unit(source_ref, source_asset_ref):
         issues.append(
-            f"{post_rel}: {asset_label} sourceRef must match article baseSourceRef "
-            f"({source_ref} != {base_source})"
-        )
-    if base_source and source_asset_ref and not _same_source_unit(base_source, source_asset_ref):
-        issues.append(
-            f"{post_rel}: {asset_label} sourceAssetRef must come from article base draft source unit"
+            f"{post_rel}: {asset_label} sourceAssetRef must belong to its declared sourceRef unit"
         )
     return issues
 
@@ -431,6 +447,158 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
         "releaseId": release_id,
         "sourceTaskId": task_id,
         "sourceBatchId": batch_id,
+        "passed": not issues,
+        "issues": issues,
+        "stats": stats,
+    }
+
+
+def scan_runtime_batch_integrity(
+    task_id: str,
+    batch_id: str,
+    *,
+    refs: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Run the same publish-facing integrity checks before release assembly.
+
+    This is the bridge between review/materialize and publish: approved runtime
+    objects must already have complete source/image/base-draft evidence. A
+    later release gate should be a confirmation, not the first place these
+    defects are discovered.
+    """
+
+    root = batch_root(task_id, batch_id)
+    label = f"{task_id}/{batch_id}"
+    issues: list[str] = []
+    stats: dict[str, Any] = {
+        "postCount": 0,
+        "articleCount": 0,
+        "imageCount": 0,
+        "assetCount": 0,
+    }
+    if not root.is_dir():
+        issues.append(f"{label}: runtime batch directory not found")
+        return {
+            "schemaVersion": REPORT_SCHEMA,
+            "taskId": task_id,
+            "batchId": batch_id,
+            "passed": False,
+            "issues": issues,
+            "stats": stats,
+        }
+
+    ledger_path = root / "_shared" / "base_draft_ledger.json"
+    ledger = _json(ledger_path)
+    schema = str(ledger.get("schemaVersion") or "")
+    if not ledger:
+        issues.append(f"{label}: missing _shared/base_draft_ledger.json")
+    elif schema != BASE_DRAFT_LEDGER_SCHEMA:
+        issues.append(
+            f"{label}: base_draft_ledger schemaVersion must be "
+            f"{BASE_DRAFT_LEDGER_SCHEMA}, got {schema or '<empty>'}"
+        )
+
+    issues.extend(_entity_homepage_issues(root, root))
+
+    allowed_post_rels: set[str] = set()
+    if refs is not None:
+        from _common import content_object
+
+        for ref in refs:
+            try:
+                allowed_post_rels.add(content_object.content_object_rel(task_id, batch_id, str(ref)))
+            except KeyError:
+                continue
+
+    asset_sha_posts: dict[str, list[str]] = defaultdict(list)
+    source_asset_posts: dict[str, list[str]] = defaultdict(list)
+    source_collection_posts: dict[str, list[str]] = defaultdict(list)
+    post_manifests = sorted((root / "posts").rglob("manifest.json")) if (root / "posts").is_dir() else []
+    for manifest_path in post_manifests:
+        post_rel = manifest_path.parent.relative_to(root).as_posix()
+        if allowed_post_rels and post_rel not in allowed_post_rels:
+            continue
+        manifest = _payload(manifest_path)
+        stats["postCount"] += 1
+        is_image = _is_image_post(manifest)
+        if is_image:
+            stats["imageCount"] += 1
+        else:
+            stats["articleCount"] += 1
+            runtime_post = root / post_rel
+            issues.extend(
+                _base_draft_issues(
+                    release_id=label,
+                    post_rel=post_rel,
+                    manifest=manifest,
+                    runtime_post=runtime_post,
+                    ledger=ledger,
+                )
+            )
+            issues.extend(_review_gate_issues(post_rel, runtime_post))
+
+        assets = manifest.get("assets") if isinstance(manifest.get("assets"), list) else []
+        if not is_image and not assets:
+            issues.append(f"{post_rel}: article must include at least one sourced image asset from its base draft")
+        for index, asset in enumerate(assets):
+            if not isinstance(asset, Mapping):
+                issues.append(f"{post_rel}: manifest.assets[{index}] must be an object")
+                continue
+            stats["assetCount"] += 1
+            asset_label = str(asset.get("assetId") or asset.get("fileName") or f"asset[{index}]")
+            source_ref = str(asset.get("sourceRef") or "").strip()
+            source_asset_ref = str(asset.get("sourceAssetRef") or "").strip()
+            if not source_ref:
+                issues.append(f"{post_rel}: {asset_label} missing manifest.assets[].sourceRef")
+            if not source_asset_ref:
+                issues.append(f"{post_rel}: {asset_label} missing manifest.assets[].sourceAssetRef")
+            if source_asset_ref:
+                source_asset_posts[source_asset_ref].append(post_rel)
+            collection_id = str(asset.get("sourceCollectionId") or "").strip()
+            if collection_id:
+                source_collection_posts[collection_id].append(post_rel)
+            manifest_sha = _norm_sha(str(asset.get("sha256") or ""))
+            file_name = str(asset.get("fileName") or asset.get("path") or "").strip()
+            actual_sha = _file_sha(manifest_path.parent / "assets" / file_name) if file_name else ""
+            effective_sha = actual_sha or manifest_sha
+            if not manifest_sha:
+                issues.append(f"{post_rel}: {asset_label} missing sha256")
+            elif actual_sha and manifest_sha != actual_sha:
+                issues.append(f"{post_rel}: {asset_label} sha256 mismatch with asset file")
+            if effective_sha:
+                asset_sha_posts[effective_sha].append(post_rel)
+            if source_ref:
+                meta = _source_unit_meta(root, source_ref)
+                if not _has_rights_proof(asset, meta):
+                    issues.append(f"{post_rel}: {asset_label} missing image authorization proof or license snapshot")
+            issues.extend(_asset_alignment_issues(post_rel, manifest, asset))
+            if not is_image:
+                issues.extend(
+                    _article_asset_source_issues(
+                        post_rel=post_rel,
+                        asset_label=asset_label,
+                        asset=asset,
+                        runtime_post=root / post_rel,
+                    )
+                )
+
+    for sha, posts in sorted(asset_sha_posts.items()):
+        distinct = sorted(set(posts))
+        if len(distinct) > 1:
+            issues.append(f"asset sha reused across posts {sha[:16]}: {distinct}")
+    for ref, posts in sorted(source_asset_posts.items()):
+        distinct = sorted(set(posts))
+        if len(distinct) > 1:
+            issues.append(f"sourceAssetRef reused across posts {ref}: {distinct}")
+    for collection_id, posts in sorted(source_collection_posts.items()):
+        distinct = sorted(set(posts))
+        if len(distinct) > 1:
+            issues.append(f"sourceCollectionId reused across posts {collection_id}: {distinct}")
+
+    return {
+        "schemaVersion": REPORT_SCHEMA,
+        "taskId": task_id,
+        "batchId": batch_id,
         "passed": not issues,
         "issues": issues,
         "stats": stats,

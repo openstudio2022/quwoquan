@@ -1,0 +1,84 @@
+version: 1
+read_model: AuthorImpactEvidenceItem
+description: |
+  创作者影响力单条证据明细（「我的影响力 / TA的影响」数字下钻明细行真相源，
+  对应云侧读模型 rm_author_impact_evidence）。每条 evidence 对应一次对作者
+  产生影响的真实行为（如收藏 / 分享 / 进圈 / 关注 / 读完），以「被影响内容」为
+  载体呈现（内容标题与封面），云侧按 viewer 视角产出 summaryText 结论句，端只读
+  直出，禁止本地拼装文案（全局验收 G2）。
+
+  红线：不展示产生影响的具体用户身份（actorId 仅服务端存储用于去重 / 幂等，不下发）；
+  不下发任何运营指标（转化率 / 漏斗 / 增长率）。无证据时端不编造全量。
+
+  闭集枚举（端按字符串解析，与 AuthorImpactItem 一致）：
+    helpType: relationship | community | decision | knowledge | spread
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: AuthorImpactEvidenceItem
+  base_class: ""
+  output_path: cloud/runtime/generated/content/author_impact_evidence_item.g.dart
+  # 复用 recommendation 域统一交互子契约值对象（§20.7），跨域引用走相对路径。
+  dart_imports:
+    - ../recommendation/intersection_visual.g.dart
+    - ../recommendation/intersection_target.g.dart
+  fields:
+    - name: evidenceId
+      dart_type: String
+      nullable: false
+      source: evidenceId
+      aliases: [evidenceId]
+      default: "''"
+    - name: impactId
+      dart_type: String
+      nullable: false
+      source: impactId
+      aliases: [impactId]
+      default: "''"
+    - name: helpType
+      dart_type: String
+      nullable: false
+      source: helpType
+      aliases: [helpType]
+      default: "''"
+    - name: action
+      dart_type: String
+      nullable: false
+      source: action
+      aliases: [action]
+      default: "''"
+    - name: intersectionDimension
+      dart_type: String
+      nullable: false
+      source: intersectionDimension
+      aliases: [intersectionDimension]
+      default: "''"
+    - name: occurredAt
+      dart_type: String
+      nullable: false
+      source: occurredAt
+      aliases: [occurredAt]
+      default: "''"
+    # summaryText：云侧实例化结论句（如「有人收藏了你的《城市漫步》」），端只读直出。
+    - name: summaryText
+      dart_type: String
+      nullable: false
+      source: summaryText
+      aliases: [summaryText]
+      default: "''"
+    # sampleVisual：被影响内容的样本视觉（封面 + 标题），点击经 target 跳内容详情。
+    - name: sampleVisual
+      dart_type: IntersectionVisual
+      nullable: true
+      source: sampleVisual
+      aliases: [sampleVisual]
+      map_from_string_key_class: IntersectionVisual
+    # contentTarget：明细行点击下钻目标（被影响内容），可空表示暂不可下钻。
+    - name: contentTarget
+      dart_type: IntersectionTarget
+      nullable: true
+      source: contentTarget
+      aliases: [contentTarget]
+      map_from_string_key_class: IntersectionTarget

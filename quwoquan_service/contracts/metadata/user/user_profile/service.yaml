@@ -295,6 +295,18 @@ api_routes:
     note: 不暴露 owner 映射字段；IsolationLevel 是公开访问真相源，strict 时返回 404
 
   - method: GET
+    path: /v1/user/sub-accounts/{subAccountId}/homepage-bundle
+    operation: GetUserHomepageBundle
+    description: |
+      主页首屏聚合（锁定决策 #1）：一次返回身份域真相 profile/stats/relationshipCapability/
+      tabCounts/viewerContext/cacheVersion，消除首屏串行阻塞。交集与影响力 evidence 仍由 content
+      域接口端侧并发拉取，user 域不聚合 content/intersection 事实。陌生人 strict 隔离返回 404。
+    response_entity: UserHomepageBundleView
+    response_fields: [profile, stats, relationshipCapability, tabCounts, viewerContext, cacheVersion]
+    auth: optional
+    note: viewer 由鉴权头解析；本人态返回 viewerContext.isOwner=true，游客可读公开档案
+
+  - method: GET
     path: /v1/me
     operation: GetMeProfile
     description: 当前激活子账号快捷视图（等同于 GetSubAccountProfile(activeSub)）

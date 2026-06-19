@@ -1,0 +1,124 @@
+import 'package:flutter/widgets.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
+
+/// 交集导航归因（埋点上下文），由展示面在构造导航器时透传。
+///
+/// 不承载任何人类可读结论句，只携带可观测/归因标识，供 [IntersectionTargetNavigator.open]
+/// 在跳转时上报（contentBehaviorTracker.trackClick）。
+class IntersectionNavAttribution {
+  const IntersectionNavAttribution({
+    this.intersectionId = '',
+    this.dimension = '',
+    this.intersectionClass = '',
+    this.sourceRef = '',
+    this.tagRefs = const <String>[],
+    this.evidenceId = '',
+  });
+
+  final String intersectionId;
+  final String dimension;
+  final String intersectionClass;
+  final String sourceRef;
+  final List<String> tagRefs;
+  final String evidenceId;
+}
+
+/// 导航埋点回调：把命中的 [IntersectionTarget] 与归因透传给展示面（通常接 tracker）。
+typedef IntersectionNavTrack =
+    void Function(
+      IntersectionTarget target,
+      IntersectionNavAttribution attribution,
+    );
+
+/// 统一交集导航器（统一交互子契约 · A–E 横切复用，Phase 0 §20.7）。
+///
+/// 把云侧 [IntersectionTarget]（objectId + objectKind + routeId）映射为 codegen 路由
+/// （[AppRoutePaths]）跳转，端侧不硬编码 path。`routeId` 为云侧「路由逻辑名」闭集
+/// （userProfile / circleDetail / homepageDetail / myIntersections），缺省 / 未知时
+/// 回退 [UnifiedObjectKind] 兜底映射；objectKind 也不在已知闭集时视为不可点击（返回 null）。
+///
+/// 不可解析（target 缺省 / objectId 空 / 未知 kind）时静默不跳转（优雅降级，不抛错、不崩溃）。
+/// 埋点经构造时注入的 [onTrack] 透传，导航器本身不依赖 Riverpod，便于 A–E 复用与组件测试。
+class IntersectionTargetNavigator {
+  const IntersectionTargetNavigator({this.onTrack});
+
+  final IntersectionNavTrack? onTrack;
+
+  static const Set<String> _knownObjectKinds = <String>{
+    'person',
+    'circle',
+    'school',
+    'place',
+    'enterprise',
+  };
+
+  /// 解析 [target] → codegen 路由 path；不可路由返回 null。
+  ///
+  /// [sourceRef] 仅在下钻「我的交集」维度列表（routeId == myIntersections）时附加证据组过滤。
+  static String? resolvePath(
+    IntersectionTarget? target, {
+    String sourceRef = '',
+  }) {
+    if (target == null) {
+      return null;
+    }
+    final id = target.objectId.trim();
+    if (id.isEmpty) {
+      return null;
+    }
+    final ref = sourceRef.trim();
+    switch (target.routeId.trim()) {
+      case 'userProfile':
+        return AppRoutePaths.userProfile(username: id);
+      case 'circleDetail':
+        return AppRoutePaths.circleDetail(id: id);
+      case 'homepageDetail':
+        return AppRoutePaths.homepageDetail(id: id);
+      case 'myIntersections':
+        return AppRoutePaths.myIntersections(
+          dimension: id,
+          sourceRef: ref.isEmpty ? null : ref,
+        );
+    }
+    // routeId 缺省 / 未知：回退 objectKind 兜底映射（与 IntersectionEntity 一致）。
+    final kind = target.objectKind.trim();
+    if (!_knownObjectKinds.contains(kind)) {
+      return null;
+    }
+    switch (UnifiedObjectKind.resolve(objectKind: kind)) {
+      case UnifiedObjectKind.person:
+        return AppRoutePaths.userProfile(username: id);
+      case UnifiedObjectKind.circle:
+        return AppRoutePaths.circleDetail(id: id);
+      case UnifiedObjectKind.place:
+      case UnifiedObjectKind.school:
+      case UnifiedObjectKind.enterprise:
+        return AppRoutePaths.homepageDetail(id: id);
+    }
+  }
+
+  /// [target] 是否可点击跳转（用于 UI 决定是否赋予点击态）。
+  bool canNavigate(IntersectionTarget? target, {String sourceRef = ''}) =>
+      resolvePath(target, sourceRef: sourceRef) != null;
+
+  /// 跳转到 [target] 对应对象页 / 维度列表页；不可路由时静默返回 false（不导航、不上报）。
+  bool open(
+    BuildContext context,
+    IntersectionTarget? target, {
+    String sourceRef = '',
+    IntersectionNavAttribution? attribution,
+  }) {
+    final path = resolvePath(target, sourceRef: sourceRef);
+    if (path == null || target == null) {
+      return false;
+    }
+    if (attribution != null) {
+      onTrack?.call(target, attribution);
+    }
+    context.push(path);
+    return true;
+  }
+}

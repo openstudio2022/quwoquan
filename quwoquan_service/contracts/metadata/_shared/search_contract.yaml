@@ -56,6 +56,9 @@ retrieve_contract:
   filter_fields:
     - tags
     - timeRange
+    # near 是跨对象 geo/地点维度的"附近"过滤（lat/lng/radiusKm）；任何带 geo 维度的
+    # target（entity/content 已接入，user/circle 为零契约扩展点）都参与半径检索。
+    - near
   page_fields:
     - limit
     - cursor
@@ -65,6 +68,11 @@ retrieve_contract:
     - facets
     - degradeSignals
     - provenance
+    # Commercial search-service envelope additions (App + AI consume; never UI-hardcoded).
+    - relatedTerms
+    - rankingVersion
+    - experimentBucket
+    - requestId
   hit_fields:
     - target
     - objectId
@@ -75,6 +83,19 @@ retrieve_contract:
     - matchedTags
     - evidence
     - payload
+    - connectionState
+    - intersectionReason
+    # Ranking transparency + media layout, supplied by the cloud (R06 metadata-first).
+    - rankReasons
+    - rankPosition
+    - coverWidth
+    - coverHeight
+    # 跨对象地点维度（R-S05e）：geo(lat/lng) 结构化坐标、distanceKm 仅在 near 查询下
+    # 由后端按 haversine 计算、placeName 人类可读地点名。无地点维度的 hit 三者皆空，
+    # 端侧只读不得自行合成。
+    - geo
+    - distanceKm
+    - placeName
   # Fields that must NEVER be exposed to AI/App callers on the retrieve contract.
   forbidden_fields:
     - type
@@ -128,3 +149,4 @@ tool_contract:
     - visibility
     - reasons
     - evidence
+    - connectionState

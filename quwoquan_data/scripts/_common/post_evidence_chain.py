@@ -18,6 +18,7 @@ SOURCE_REFS_SCHEMA = "quwoquan_data.source_refs"
 FINALIZATION_REPORT_SCHEMA = "quwoquan_data.finalization_report"
 
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n?", re.S)
+_TEXT_SOURCE_SUFFIXES = {".md", ".markdown", ".txt"}
 
 
 def _normalize_text(text: str) -> str:
@@ -128,6 +129,10 @@ def _read_json_or_none(path: Path | None) -> Any | None:
     return read_json(path)
 
 
+def _is_text_source_file(path: Path) -> bool:
+    return path.suffix.lower() in _TEXT_SOURCE_SUFFIXES
+
+
 def _build_source_entry(
     task_id: str,
     batch_id: str,
@@ -144,7 +149,6 @@ def _build_source_entry(
     quality_path = unit_dir / "source.quality.json"
     clean_path = unit_dir / "source.clean.md"
     source_unit_ref = _normalized_ref(task_id, batch_id, str(unit_dir), unit_dir.resolve())
-    source_markdown = resolved.read_text(encoding="utf-8")
     meta = _read_json_or_none(meta_path)
     quality = _read_json_or_none(quality_path)
     entry: dict[str, Any] = {
@@ -155,10 +159,16 @@ def _build_source_entry(
         "qualityRef": _relative_ref_or_none(task_id, batch_id, quality_path),
         "cleanSourceRef": _relative_ref_or_none(task_id, batch_id, clean_path),
         "roles": roles,
-        "sourceMarkdownSha256": sha256_text(source_markdown),
-        "sourceMarkdown": source_markdown,
+        "sourceFileSha256": sha256_file(resolved),
     }
-    if clean_path.is_file():
+    if _is_text_source_file(resolved):
+        source_markdown = resolved.read_text(encoding="utf-8")
+        entry["sourceMarkdownSha256"] = sha256_text(source_markdown)
+        entry["sourceMarkdown"] = source_markdown
+    else:
+        entry["sourceFileRef"] = normalized_ref
+        entry["sourceContentKind"] = "binary_asset"
+    if clean_path.is_file() and _is_text_source_file(clean_path):
         clean_markdown = clean_path.read_text(encoding="utf-8")
         entry["sourceCleanMarkdownSha256"] = sha256_text(clean_markdown)
         entry["sourceCleanMarkdown"] = clean_markdown

@@ -45,6 +45,7 @@ class UserApiMetadata {
     'GetRelationship': '/v1/user/sub-accounts/{subAccountId}/relationship',
     'GetRelationshipCapability': '/v1/user/sub-accounts/{subAccountId}/relationship/capability',
     'GetSubAccountProfile': '/v1/user/{subAccountId}',
+    'GetUserHomepageBundle': '/v1/user/sub-accounts/{subAccountId}/homepage-bundle',
     'GetUserInterestProfile': '/v1/users/{userId}/interest-profile',
     'GetUserProfile': '/v1/user/profile/{userId}',
     'IgnoreGreetingRequest': '/v1/user/greeting-request/{requestId}/ignore',
@@ -123,6 +124,7 @@ class UserApiMetadata {
     'GetRelationship': 'GET',
     'GetRelationshipCapability': 'GET',
     'GetSubAccountProfile': 'GET',
+    'GetUserHomepageBundle': 'GET',
     'GetUserInterestProfile': 'GET',
     'GetUserProfile': 'GET',
     'IgnoreGreetingRequest': 'POST',
@@ -202,6 +204,7 @@ class UserApiMetadata {
     'GetRelationship': 'public',
     'GetRelationshipCapability': 'public',
     'GetSubAccountProfile': 'public',
+    'GetUserHomepageBundle': 'optional',
     'GetUserInterestProfile': 'required',
     'GetUserProfile': 'public',
     'IgnoreGreetingRequest': 'required',
@@ -279,6 +282,7 @@ class UserApiMetadata {
   static const String getRelationshipOperation = 'GetRelationship';
   static const String getRelationshipCapabilityOperation = 'GetRelationshipCapability';
   static const String getSubAccountProfileOperation = 'GetSubAccountProfile';
+  static const String getUserHomepageBundleOperation = 'GetUserHomepageBundle';
   static const String getUserInterestProfileOperation = 'GetUserInterestProfile';
   static const String getUserProfileOperation = 'GetUserProfile';
   static const String ignoreGreetingRequestOperation = 'IgnoreGreetingRequest';
@@ -432,6 +436,12 @@ class UserApiMetadata {
   static const String getSubAccountProfilePathTemplate = '/v1/user/{subAccountId}';
   static String getSubAccountProfilePath({required String subAccountId}) {
     return _fillPath(getSubAccountProfilePathTemplate, <String, String>{
+      'subAccountId': subAccountId,
+    });
+  }
+  static const String getUserHomepageBundlePathTemplate = '/v1/user/sub-accounts/{subAccountId}/homepage-bundle';
+  static String getUserHomepageBundlePath({required String subAccountId}) {
+    return _fillPath(getUserHomepageBundlePathTemplate, <String, String>{
       'subAccountId': subAccountId,
     });
   }

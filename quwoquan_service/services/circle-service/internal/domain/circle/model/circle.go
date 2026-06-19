@@ -220,6 +220,7 @@ type Circle struct {
 	Name                 string                   `json:"name" bson:"name"`
 	Description          string                   `json:"description" bson:"description"`
 	CoverUrl             string                   `json:"coverUrl" bson:"coverUrl"`
+	IconUrl              string                   `json:"iconUrl" bson:"iconUrl"`
 	OwnerID              string                   `json:"ownerId" bson:"ownerId"`
 	Category             string                   `json:"category" bson:"category"`
 	SubCategory          string                   `json:"subCategory" bson:"subCategory"`

@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+
 class AuthLegalConfig {
   const AuthLegalConfig._();
 
@@ -11,13 +13,29 @@ class AuthLegalConfig {
     defaultValue: '2026-05',
   );
 
-  static const String userAgreementUrl = String.fromEnvironment(
+  static const String _userAgreementUrlOverride = String.fromEnvironment(
     'APP_USER_AGREEMENT_URL',
-    defaultValue: 'https://www.quwoquan.com/legal/user-agreement',
+    defaultValue: '',
   );
 
-  static const String privacyPolicyUrl = String.fromEnvironment(
+  static const String _privacyPolicyUrlOverride = String.fromEnvironment(
     'APP_PRIVACY_POLICY_URL',
-    defaultValue: 'https://www.quwoquan.com/legal/privacy-policy',
+    defaultValue: '',
   );
+
+  static String get userAgreementUrl {
+    final override = _userAgreementUrlOverride.trim();
+    if (override.isNotEmpty) {
+      return override;
+    }
+    return '${CloudRuntimeConfig.gatewayBaseUrl}/legal/user-agreement';
+  }
+
+  static String get privacyPolicyUrl {
+    final override = _privacyPolicyUrlOverride.trim();
+    if (override.isNotEmpty) {
+      return override;
+    }
+    return '${CloudRuntimeConfig.gatewayBaseUrl}/legal/privacy-policy';
+  }
 }

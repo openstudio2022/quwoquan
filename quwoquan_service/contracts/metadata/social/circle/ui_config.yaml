@@ -9,7 +9,7 @@ description: |
 
 circle_tabs:
   - id: content
-    label_key: circle_tab_content
+    label_key: circle_tab_record
     body_slot: creations
     section_types: [works]
     order: 0

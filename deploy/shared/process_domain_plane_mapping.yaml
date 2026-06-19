@@ -9,6 +9,10 @@ environments:
       bindings:
         - domain: content
           planes: [user-plane]
+    search-service:
+      bindings:
+        - domain: search
+          planes: [user-plane]
     entity-service:
       bindings:
         - domain: entity
@@ -72,6 +76,10 @@ environments:
       bindings:
         - domain: content
           planes: [user-plane]
+    search-service:
+      bindings:
+        - domain: search
+          planes: [user-plane]
     entity-service:
       bindings:
         - domain: entity
@@ -131,6 +139,10 @@ environments:
         - domain: notification
           planes: [user-plane, platform-control-plane, product-control-plane]
   beta:
+    search-service:
+      bindings:
+        - domain: search
+          planes: [user-plane]
     entity-service:
       bindings:
         - domain: entity
@@ -174,6 +186,10 @@ environments:
         - domain: notification
           planes: [user-plane, platform-control-plane, product-control-plane]
   gamma:
+    search-service:
+      bindings:
+        - domain: search
+          planes: [user-plane]
     entity-service:
       bindings:
         - domain: entity
@@ -217,6 +233,10 @@ environments:
         - domain: notification
           planes: [user-plane, platform-control-plane, product-control-plane]
   prod:
+    search-service:
+      bindings:
+        - domain: search
+          planes: [user-plane]
     entity-service:
       bindings:
         - domain: entity

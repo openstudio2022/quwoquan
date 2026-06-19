@@ -5,6 +5,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from datetime import datetime, timezone
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 TESTS_ROOT = DATA_ROOT / "tests"
@@ -86,6 +87,46 @@ def _relativize_ref(value: str, task_id: str, batch_id: str) -> str:
     except (ValueError, OSError):
         return s
     return relative_batch_ref(p, task_id, batch_id)
+
+
+def _source_ref_from_asset_ref(source_asset_ref: str) -> str:
+    normalized = str(source_asset_ref or "").replace("\\", "/").strip()
+    if not normalized or "/assets/" not in normalized:
+        return ""
+    source_unit = normalized.split("/assets/", 1)[0].rstrip("/")
+    if not source_unit:
+        return ""
+    return f"{source_unit}/source.md"
+
+
+def _materialized_asset_refs(
+    asset: Mapping[str, Any],
+    *,
+    task_id: str,
+    batch_id: str,
+) -> tuple[str, str]:
+    source_asset_ref = _relativize_ref(
+        str(asset.get("sourceAssetRef") or asset.get("sourcePath") or ""),
+        task_id,
+        batch_id,
+    )
+    source_ref = _relativize_ref(str(asset.get("sourceRef") or ""), task_id, batch_id)
+    if source_ref and "/assets/" in source_ref:
+        if not source_asset_ref:
+            source_asset_ref = source_ref
+        source_ref = ""
+    if not source_ref:
+        source_ref = _source_ref_from_asset_ref(source_asset_ref)
+    return source_ref, source_asset_ref
+
+
+def _materialized_alignment_evidence(asset: Mapping[str, Any]) -> str:
+    for key in ("alignmentEvidence", "imageTextAlignment", "nearbyText", "relevance"):
+        value = str(asset.get(key) or "").strip()
+        if value:
+            return value
+    caption = str(asset.get("caption") or "").strip()
+    return f"图片说明与正文关联：{caption}" if caption else ""
 
 
 def _publication_condition_context(raw: object) -> object:
@@ -179,6 +220,30 @@ def _manifest_time_fact(payload: dict[str, Any], key: str) -> str | None:
     value = payload.get(key)
     text = str(value or "").strip()
     return text or None
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _materialized_manifest_times(
+    compose_payload: dict[str, Any],
+    review_payload: dict[str, Any],
+    batch_manifest: Mapping[str, Any],
+) -> tuple[str, str]:
+    created_at = (
+        _manifest_time_fact(compose_payload, "createdAt")
+        or _manifest_time_fact(review_payload, "createdAt")
+        or str(batch_manifest.get("createdAt") or "").strip()
+        or _now_iso()
+    )
+    updated_at = (
+        _manifest_time_fact(compose_payload, "updatedAt")
+        or _manifest_time_fact(review_payload, "updatedAt")
+        or str(batch_manifest.get("updatedAt") or "").strip()
+        or created_at
+    )
+    return created_at, updated_at
 
 
 _IMAGE_SOURCE_ALIASES = {
@@ -320,7 +385,50 @@ def _resolve_materialized_article(
     return article_md, actions
 
 
-def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Path]:
+MATERIALIZED_FINAL_ENTRIES = (
+    "article.md",
+    "gallery.md",
+    "manifest.json",
+    "_object.json",
+    "assets",
+)
+
+
+def prune_materialized_refs(task_id: str, batch_id: str, refs: list[str] | set[str] | tuple[str, ...]) -> list[Path]:
+    """Remove publish-facing files for refs that are no longer active.
+
+    Process evidence under stage directories is intentionally retained for
+    audit. Only final package files are removed so release/gates cannot consume
+    a stale half-product after an object is abandoned.
+    """
+    from _common import content_object
+
+    removed: list[Path] = []
+    for ref in sorted({str(item) for item in refs if str(item).strip()}):
+        try:
+            post_dir = content_object.content_object_dir(task_id, batch_id, ref)
+        except KeyError:
+            continue
+        for name in MATERIALIZED_FINAL_ENTRIES:
+            path = post_dir / name
+            if path.is_dir():
+                shutil.rmtree(path)
+                removed.append(path)
+            elif path.is_file():
+                path.unlink()
+                removed.append(path)
+        if post_dir.exists():
+            content_object.write_content_object_index(task_id, batch_id, ref)
+    return removed
+
+
+def materialize_posts(
+    task_id: str,
+    batch_id: str,
+    content_type: str,
+    *,
+    refs: list[str] | set[str] | tuple[str, ...] | None = None,
+) -> list[Path]:
     """把 approved+agent 的 compose/review 成品落到**内容对象根**（§2.4）。
 
     成品（article.md/manifest.json/assets/ + _object.json）与过程
@@ -331,12 +439,16 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
     from _common.stage_reports import iter_stage_envelopes, read_stage_envelope
 
     materialized: list[Path] = []
+    batch_manifest = load_batch_manifest(task_id, batch_id)
 
+    allowed_refs = {str(ref) for ref in refs or []}
     review_envelopes = iter_stage_envelopes(task_id, batch_id, "produce", "review")
     if not review_envelopes:
         return materialized
 
     for ref, review in review_envelopes:
+        if allowed_refs and ref not in allowed_refs:
+            continue
         payload = review.get("payload", review)
         if payload.get("decision") != "approved":
             continue
@@ -351,12 +463,16 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
 
         compose_payload = compose.get("payload", compose)
 
-        # 出处门：只有 generator=agent 的正文允许进入交付面，脚本/占位一律拒绝落地。
-        if str(compose_payload.get("generator") or "") != "agent":
+        is_image = content_type == "image"
+        # 出处门：文章正文必须由 generator=agent 创作；图片作品不生成正文，
+        # 只接受结构化 sourceCollection/assets/caption 证据包。
+        generator = str(compose_payload.get("generator") or "")
+        if (is_image and generator != "image_evidence_pack") or (
+            not is_image and generator != "agent"
+        ):
             continue
 
         writing_pack = read_writing_pack(task_id, batch_id, ref) or {}
-        is_image = content_type == "image"
         raw_title = compose_payload.get("title")
         title = str(raw_title if raw_title is not None else ("" if is_image else ref))
         caption = str(compose_payload.get("caption") or compose_payload.get("summary") or "")
@@ -397,8 +513,7 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
 
         raw_assets = compose_payload.get("assets") or []
         if not raw_assets and compose_payload.get("coverAssetRef"):
-            manifest = load_batch_manifest(task_id, batch_id)
-            global_batch_seq = int(manifest.get("globalBatchSeq") or 0)
+            global_batch_seq = int(batch_manifest.get("globalBatchSeq") or 0)
             if global_batch_seq <= 0:
                 raise RuntimeError(f"missing globalBatchSeq for task={task_id} batch={batch_id}")
             asset_registry = load_batch_asset_registry(task_id, batch_id, global_batch_seq)
@@ -497,11 +612,9 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
                     "imageLayout": a.get("imageLayout", "fullWidth"),
                     "sha256": a.get("sha256", ""),
                     # 资产证据链（相对 batch 根）：source 原图 + 原文，禁绝对路径。
-                    "sourceAssetRef": _relativize_ref(
-                        a.get("sourceAssetRef") or a.get("sourcePath") or "", task_id, batch_id
-                    ),
-                    "sourceRef": _relativize_ref(a.get("sourceRef") or "", task_id, batch_id),
-                    "alignmentEvidence": a.get("alignmentEvidence", ""),
+                    "sourceAssetRef": _materialized_asset_refs(a, task_id=task_id, batch_id=batch_id)[1],
+                    "sourceRef": _materialized_asset_refs(a, task_id=task_id, batch_id=batch_id)[0],
+                    "alignmentEvidence": _materialized_alignment_evidence(a),
                     "sourceCollectionId": a.get("sourceCollectionId", ""),
                     "creator": a.get("creator", ""),
                     "collectionPageUrl": a.get("collectionPageUrl", ""),
@@ -548,12 +661,13 @@ def materialize_posts(task_id: str, batch_id: str, content_type: str) -> list[Pa
                     "articleRenderProfile": render_profile,
                 }
             )
-        created_at = _manifest_time_fact(compose_payload, "createdAt")
-        updated_at = _manifest_time_fact(compose_payload, "updatedAt")
-        if created_at:
-            manifest["createdAt"] = created_at
-        if updated_at:
-            manifest["updatedAt"] = updated_at
+        created_at, updated_at = _materialized_manifest_times(
+            compose_payload,
+            payload,
+            batch_manifest,
+        )
+        manifest["createdAt"] = created_at
+        manifest["updatedAt"] = updated_at
         for optional_creator_key in (
             "authorId",
             "creatorProfileId",

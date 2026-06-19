@@ -356,7 +356,7 @@ def test_rollup_backfills_run_matrix_success_summary():
     write_json(
         fanout_run_matrix_path("p_rollup_backfill_matrix"),
         {
-            "schemaVersion": "quwoquan_data.fanout_run_matrix/1",
+            "schemaVersion": "quwoquan_data.fanout_run_matrix",
             "planId": "p_rollup_backfill_matrix",
             "refs": {
                 "route_九寨沟": {

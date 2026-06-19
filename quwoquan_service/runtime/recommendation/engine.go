@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"quwoquan_service/runtime/id"
 	learning "quwoquan_service/runtime/learning"
 	"quwoquan_service/runtime/recpolicy"
 )
@@ -32,6 +32,12 @@ const (
 const (
 	FeedSortRecommend = "recommend"
 	defaultCursorTTL  = 10 * time.Minute
+
+	// RankingVersion 标识当前精排/打分管线版本，随 feed envelope 下发，
+	// 供观测与 AB 把命中归因到具体排序修订（对齐 search-service 的 RankingVersion 约定）。
+	RankingVersion = "rec-v1"
+	// ReasonVersion 标识交集理由生成管线版本，随 feed envelope 下发。
+	ReasonVersion = "reason-v1"
 )
 
 // GetFeedRequest defines input for feed generation.
@@ -49,10 +55,22 @@ type GetFeedRequest struct {
 	Limit         int
 }
 
+// NewFeedRequestID 生成服务端权威 feedRequestId（frq_ 前缀 ULID）。
+// 这是 feedRequestId 生成的唯一入口，engine 与 content-service feed 应用层共用。
+func NewFeedRequestID() string {
+	return id.MustGenerate(id.PrefixFeedRequest)
+}
+
 // FeedResponse holds the recommendation result.
 type FeedResponse struct {
 	Items      []FeedItem `json:"items"`
 	NextCursor string     `json:"nextCursor,omitempty"`
+	// FeedRequestID 为服务端权威生成的归因 id（frq_ 前缀 ULID）。
+	// 首刷由 engine 生成；分页时回显请求携带的同一 id 以保持归因连续。
+	FeedRequestID string `json:"feedRequestId,omitempty"`
+	// RankingVersion / ReasonVersion 为本次结果的排序与理由管线版本，随 envelope 下发。
+	RankingVersion string `json:"rankingVersion,omitempty"`
+	ReasonVersion  string `json:"reasonVersion,omitempty"`
 }
 
 // FeedItem represents a single item in the feed.
@@ -135,8 +153,10 @@ type Engine struct {
 	// to the codegen baseline. Hot-reloadable via recpolicy.StartSyncLoop.
 	policyStore *recpolicy.Store
 
-	logger   *slog.Logger
-	feedback *FeedbackRecorder
+	logger         *slog.Logger
+	feedback       *FeedbackRecorder
+	exposureFilter ExposureFilter
+	exposureMemory ExposureMemory
 }
 
 // EngineOption configures the Engine.
@@ -158,6 +178,13 @@ func WithLogger(l *slog.Logger) EngineOption {
 
 func WithFeedbackRecorder(f *FeedbackRecorder) EngineOption {
 	return func(e *Engine) { e.feedback = f }
+}
+
+func WithExposureGovernance(memory ExposureMemory, filter ExposureFilter) EngineOption {
+	return func(e *Engine) {
+		e.exposureMemory = memory
+		e.exposureFilter = filter
+	}
 }
 
 // WithRecallTimeout sets the per-source recall deadline.
@@ -204,6 +231,51 @@ func NewEngine(sessions SessionReader, sources []CandidateSource, opts ...Engine
 	return e
 }
 
+// NegativeFeedbackReader exposes a user's full explicit-negative content set so
+// feed paths that bypass recall (repository fallback) can honor it. *HotPath
+// implements this; session readers that do not track negatives simply return
+// nothing and the engine recall filter remains the primary enforcement point.
+type NegativeFeedbackReader interface {
+	NegativeContentIDs(ctx context.Context, userID string) ([]string, error)
+}
+
+// FeedbackExclusions is the strong negative-feedback set every feed path must
+// honor regardless of recall vs fallback: explicitly disliked/hidden content,
+// hidden authors and hidden content types. Repeat-exposure governance
+// (served/impressed) stays inside the recall pipeline and is deliberately not
+// part of this product-level hard rule.
+type FeedbackExclusions struct {
+	NegativeContentIDs map[string]bool
+	HiddenAuthors      map[string]bool
+	HiddenContentTypes map[string]bool
+}
+
+// LoadFeedbackExclusions resolves the strong negative-feedback exclusions for a
+// user from the same source of truth the recall filter uses (session hidden
+// sets + negative content set), so engine and fallback feed paths converge on
+// one truth instead of diverging per path.
+func (e *Engine) LoadFeedbackExclusions(ctx context.Context, userID, sessionID string) FeedbackExclusions {
+	excl := FeedbackExclusions{
+		NegativeContentIDs: map[string]bool{},
+		HiddenAuthors:      map[string]bool{},
+		HiddenContentTypes: map[string]bool{},
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return excl
+	}
+	if session, err := e.sessions.GetSessionState(ctx, userID, sessionID); err == nil && session != nil {
+		excl.HiddenAuthors = toSet(session.HiddenAuthorIDs)
+		excl.HiddenContentTypes = toSet(session.HiddenContentTypes)
+	}
+	if reader, ok := e.sessions.(NegativeFeedbackReader); ok {
+		if ids, err := reader.NegativeContentIDs(ctx, userID); err == nil {
+			excl.NegativeContentIDs = toSet(ids)
+		}
+	}
+	return excl
+}
+
 // GetFeed generates a personalized feed.
 // Pipeline: Session → Recall → PreRank → Filter → Features → Score → Rerank
 func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse, error) {
@@ -213,6 +285,13 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		req.Limit = 20
 	}
 	req.Sort = normalizeSort(req.Sort)
+
+	// feedRequestId 服务端权威化：首刷无 id 时由 engine 生成 frq_ ULID；
+	// 分页/继续加载时客户端回显原 id，这里直接复用以保持同一 feed 会话归因连续。
+	req.FeedRequestID = strings.TrimSpace(req.FeedRequestID)
+	if req.FeedRequestID == "" {
+		req.FeedRequestID = NewFeedRequestID()
+	}
 
 	pagingOffset := 0
 	sessionID := strings.TrimSpace(req.SessionID)
@@ -252,19 +331,37 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	windowLimit := req.Limit*5 + pagingOffset + req.Limit
 	preranked := e.preRanker.PreRank(ctx, allCandidates, windowLimit)
 
-	// Stage 4: Filter exposed + negative + dedup
+	// Stage 4: Filter served + impressed + negative + dedup.
+	// Long-window exposure memory is resolved by candidate membership point
+	// lookups, not by loading per-user SMembers into SessionState.
 	exposedSet := toSet(session.ExposedIDs)
 	negativeSet := toSet(session.NegativeIDs)
+	hiddenAuthors := toSet(session.HiddenAuthorIDs)
+	hiddenTypes := toSet(session.HiddenContentTypes)
 	filteredBuf := acquireCandidates()
 	seen := make(map[string]bool, len(preranked))
 	for _, c := range preranked {
-		if exposedSet[c.ContentID] || negativeSet[c.ContentID] || seen[c.ContentID] {
+		if exposedSet[c.ContentID] ||
+			negativeSet[c.ContentID] ||
+			hiddenAuthors[c.AuthorID] ||
+			hiddenTypes[c.ContentType] ||
+			seen[c.ContentID] {
 			continue
 		}
 		seen[c.ContentID] = true
 		*filteredBuf = append(*filteredBuf, c)
 	}
 	filtered := *filteredBuf
+	if e.exposureFilter != nil {
+		exposureFiltered, filterErr := e.exposureFilter.FilterCandidates(ctx, req.UserID, filtered, pipelineStart)
+		if filterErr != nil {
+			if e.logger != nil {
+				e.logger.Warn("rec.exposure_filter.error", slog.String("err", filterErr.Error()))
+			}
+		} else {
+			filtered = exposureFiltered
+		}
+	}
 
 	// Stage 5: Feature assembly (user features from feature store, with timeout)
 	var userFeatures *UserFeatureVector
@@ -310,7 +407,11 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	if userFeatures != nil {
 		userSegments = userFeatures.Segments
 	}
-	scoringBucket := policy.ResolveBucketOr(recpolicy.ExpScoringWeights, req.UserID, userSegments, policy.DefaultPreset)
+	// Scenario routing: the feed scenario (FeedType) selects the base preset
+	// (e.g. homepage/similar → premium for deep consumption). Experiment buckets
+	// still win; segment overrides/deltas still apply inside ResolveWeights.
+	scenarioBasePreset := policy.PresetForScenario(string(req.FeedType))
+	scoringBucket := policy.ResolveBucketOr(recpolicy.ExpScoringWeights, req.UserID, userSegments, scenarioBasePreset)
 	resolved := policy.ResolveWeights(scoringBucket, userSegments)
 	modelBucket := policy.ResolveBucketOr(recpolicy.ExpModelVsRule, req.UserID, userSegments, "rule")
 	modelVersion := policy.ResolveBucketOr(recpolicy.ExpModelVersion, req.UserID, userSegments, "champion")
@@ -387,10 +488,17 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	releaseCandidates(recallBuf)
 	releaseCandidates(filteredBuf)
 
+	// Stage 6.5: Operational interventions (pin/demote/block). Config truth source
+	// is the hot-reloadable policy; empty/disabled is a zero-cost no-op. Applied
+	// before rerank so pins lead and demoted/blocked items respect diversity caps.
+	scored = applyOpsInterventions(scored, policy.OpsIntervention, string(req.FeedType), pipelineStart)
+
 	// Stage 7: Rerank (diversity + author dedup) — diversity/cold-start
 	// thresholds come from the resolved policy, not hand-coded constants.
 	rerankStart := time.Now()
 	reranked := e.rerank(scored, windowLimit, resolved.Scorer)
+	reranked = applyFrequencyAndNearDupCaps(reranked, windowLimit, policy.ExposureGovernance.FrequencyAndNearDup)
+	reranked = applyDynamicExposureBudget(reranked, windowLimit, policy.ExposureGovernance.DynamicBudget, modelBucket)
 	rerankLatency := time.Since(rerankStart)
 
 	topicEntropy := computeTopicEntropy(reranked)
@@ -438,8 +546,11 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	}
 
 	resp := &FeedResponse{
-		Items:      items,
-		NextCursor: nextCursor,
+		Items:          items,
+		NextCursor:     nextCursor,
+		FeedRequestID:  req.FeedRequestID,
+		RankingVersion: RankingVersion,
+		ReasonVersion:  ReasonVersion,
 	}
 
 	// Observability: emit pipeline metrics
@@ -493,6 +604,19 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	}
 
 	RecordPipelineResult(modelBucket, len(items) == 0)
+
+	if e.exposureMemory != nil && req.UserID != "" && len(items) > 0 {
+		servedItems := make([]FeedItem, len(items))
+		copy(servedItems, items)
+		RecordServedItems(len(servedItems))
+		go func() {
+			servedCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			if err := e.exposureMemory.RecordServed(servedCtx, req.UserID, servedItems, time.Now().UTC()); err != nil && e.logger != nil {
+				e.logger.Warn("rec.exposure.served_write_failed", slog.String("err", err.Error()))
+			}
+		}()
+	}
 
 	return resp, nil
 }
@@ -599,6 +723,9 @@ func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, ses
 // rerank applies diversity constraints: content type variety, author dedup, tag dedup,
 // explore injection, and cold-start minimum guarantee.
 func (e *Engine) rerank(scored []ScoredCandidate, limit int, scorer recpolicy.ScorerConfig) []ScoredCandidate {
+	if scorer.DiversityStrategy == "mmr" {
+		return e.rerankMMR(scored, limit, scorer)
+	}
 	if len(scored) == 0 {
 		return scored
 	}
@@ -751,128 +878,6 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int, scorer recpolicy.Sc
 	}
 
 	return final
-}
-
-// computeTopicEntropy calculates Shannon entropy of topic tag distribution.
-// Higher entropy = more diverse; lower = more concentrated (potential filter bubble).
-func computeTopicEntropy(items []ScoredCandidate) float64 {
-	topicCounts := make(map[string]int)
-	total := 0
-	for _, item := range items {
-		for _, tag := range item.Candidate.Tags {
-			if ClassifyTagDimension(tag) == DimensionTopic {
-				topicCounts[tag]++
-				total++
-			}
-		}
-	}
-	if total == 0 {
-		return 0
-	}
-	entropy := 0.0
-	for _, count := range topicCounts {
-		p := float64(count) / float64(total)
-		if p > 0 {
-			entropy -= p * math.Log2(p)
-		}
-	}
-	return entropy
-}
-
-func computeAuthorDiversity(items []ScoredCandidate) (repeatRate float64, hhi float64, distinctAuthors int) {
-	authorCounts := make(map[string]int)
-	total := 0
-	for _, item := range items {
-		author := strings.TrimSpace(item.Candidate.AuthorID)
-		if author == "" {
-			continue
-		}
-		authorCounts[author]++
-		total++
-	}
-	if total == 0 {
-		return 0, 0, 0
-	}
-	distinctAuthors = len(authorCounts)
-	repeatRate = 1 - float64(distinctAuthors)/float64(total)
-	for _, count := range authorCounts {
-		p := float64(count) / float64(total)
-		hhi += p * p
-	}
-	return repeatRate, hhi, distinctAuthors
-}
-
-func computeGeoCoverage(items []ScoredCandidate) (coverage float64, distinctGeoBuckets int) {
-	geoCounts := make(map[string]int)
-	total := 0
-	for _, item := range items {
-		bucket := primaryGeoBucket(item.Candidate.Tags)
-		if bucket == "" {
-			continue
-		}
-		geoCounts[bucket]++
-		total++
-	}
-	if total == 0 {
-		return 0, 0
-	}
-	distinctGeoBuckets = len(geoCounts)
-	return float64(distinctGeoBuckets) / float64(len(items)), distinctGeoBuckets
-}
-
-func computeDistinctTopicCount(items []ScoredCandidate) int {
-	topics := make(map[string]struct{})
-	for _, item := range items {
-		for _, tag := range item.Candidate.Tags {
-			if ClassifyTagDimension(tag) == DimensionTopic {
-				topics[tag] = struct{}{}
-			}
-		}
-	}
-	return len(topics)
-}
-
-func primaryGeoBucket(tags []string) string {
-	for _, tag := range tags {
-		if strings.HasPrefix(tag, "Topic/地理/行政区/") {
-			parts := strings.Split(tag, "/")
-			if len(parts) >= 5 {
-				return parts[4]
-			}
-		}
-	}
-	return ""
-}
-
-func topNTags(weights map[string]float64, n int) []string {
-	type tw struct {
-		tag    string
-		weight float64
-	}
-	var pairs []tw
-	for t, w := range weights {
-		if w > 0 {
-			pairs = append(pairs, tw{t, w})
-		}
-	}
-	sort.Slice(pairs, func(i, j int) bool { return pairs[i].weight > pairs[j].weight })
-
-	result := make([]string, 0, n)
-	for i, p := range pairs {
-		if i >= n {
-			break
-		}
-		result = append(result, p.tag)
-	}
-	return result
-}
-
-func toSet(ss []string) map[string]bool {
-	m := make(map[string]bool, len(ss))
-	for _, s := range ss {
-		m[s] = true
-	}
-	return m
 }
 
 // recordShadowScores writes shadow (challenger) scores as learning events

@@ -144,19 +144,10 @@ class AssetUrlResolver {
   }
 
   String resolveAssetRowUrl(Map<String, Object?> row) {
-    final candidate =
-        <Object?>[
-              row['cdnUrl'],
-              row['objectKey'],
-            ]
-            .map((value) => value?.toString().trim() ?? '')
-            .firstWhere((value) => value.isNotEmpty, orElse: () => '');
-    return resolveContentMediaUrl(
-      candidate,
-      gatewayBaseUrl: gatewayBaseUrl,
-      imageCdnBaseUrl: imageCdnBaseUrl,
-      videoCdnBaseUrl: videoCdnBaseUrl,
-    );
+    return _firstResolvedContentMediaUrl(<Object?>[
+      row['cdnUrl'],
+      row['objectKey'],
+    ]);
   }
 
   String resolveAssetUrl(String assetId, Map<String, String> assetsById) {
@@ -187,23 +178,18 @@ class AssetUrlResolver {
       final requiresAccess = variant['requiresAccess'] == true;
       final url = requiresAccess
           ? ''
-          : resolveContentMediaUrl(
-              (variant['cdnUrl'] ?? variant['objectKey'] ?? '')
-                  .toString()
-                  .trim(),
-              gatewayBaseUrl: gatewayBaseUrl,
-              imageCdnBaseUrl: imageCdnBaseUrl,
-              videoCdnBaseUrl: videoCdnBaseUrl,
-            );
+          : _firstResolvedContentMediaUrl(<Object?>[
+              variant['cdnUrl'],
+              variant['objectKey'],
+            ]);
       out[profile] = MediaAssetVariant(
         profile: profile,
         url: url,
         objectKey: (variant['objectKey'] ?? '').toString().trim(),
         requiresAccess: requiresAccess,
-        sourceSha256:
-            (variant['sourceSha256'] ?? variant['sha256'] ?? '')
-                .toString()
-                .trim(),
+        sourceSha256: (variant['sourceSha256'] ?? variant['sha256'] ?? '')
+            .toString()
+            .trim(),
         mimeType: (variant['mimeType'] ?? '').toString().trim(),
         format: (variant['format'] ?? '').toString().trim(),
         width: _intValue(variant['width']),
@@ -212,6 +198,25 @@ class AssetUrlResolver {
       );
     }
     return Map<String, MediaAssetVariant>.unmodifiable(out);
+  }
+
+  String _firstResolvedContentMediaUrl(Iterable<Object?> rawValues) {
+    for (final raw in rawValues) {
+      final candidate = raw?.toString().trim() ?? '';
+      if (candidate.isEmpty) {
+        continue;
+      }
+      final resolved = resolveContentMediaUrl(
+        candidate,
+        gatewayBaseUrl: gatewayBaseUrl,
+        imageCdnBaseUrl: imageCdnBaseUrl,
+        videoCdnBaseUrl: videoCdnBaseUrl,
+      );
+      if (resolved.isNotEmpty) {
+        return resolved;
+      }
+    }
+    return '';
   }
 }
 

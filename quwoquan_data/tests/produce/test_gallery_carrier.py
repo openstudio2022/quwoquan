@@ -55,8 +55,10 @@ ENTITIES = ["雅拉雪山", "黑石城", "莲花湖", "墨石公园"]
 def _distinct_image(seed: int) -> np.ndarray:
     img = np.zeros((240, 320, 3), np.uint8)
     rng = np.random.default_rng(seed)
-    img[:] = rng.integers(0, 255, size=3, dtype=np.uint8)
-    cv2.circle(img, (160 + seed, 120), 30 + seed * 4, (int(seed * 31) % 255, 60, 180), -1)
+    img[:] = rng.integers(0, 255, size=(240, 320, 3), dtype=np.uint8)
+    cv2.circle(img, (40 + seed * 17 % 220, 60 + seed * 19 % 120), 20 + seed * 3, (int(seed * 31) % 255, 60, 180), -1)
+    cv2.rectangle(img, (seed * 11 % 180, seed * 7 % 120), (220, 190), (30, int(seed * 47) % 255, 210), 3)
+    cv2.putText(img, f"{seed}", (20 + seed * 9 % 160, 220), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
     return img
 
 
@@ -80,22 +82,39 @@ def _seed():
         write_source_unit(
             obj,
             ordinal=1,
-            source_id="curated_story",
+            source_id="curated_image_collection",
             source_md=f"{name} 的光影与现场氛围记录，仅作内部参考。\n",
             platform="curated",
-            source_category="internal-curated",
+            source_category="image_collection",
+            research_lane="image",
+            license_value="CC-BY-SA 4.0",
             url=f"https://example.com/{name}",
             title=name,
             target_ref=f"/entity/地点/景区/{name}",
             relevance=f"{name} 的图文证据",
-            images=[{"sourcePath": str(path), "caption": f"{name} 图{k}", "relevance": f"{name} 图{k}"} for k, path in enumerate(image_paths)],
+            images=[
+                {
+                    "sourcePath": str(path),
+                    "caption": f"{name} 图{k}",
+                    "relevance": f"{name} 图{k}",
+                    "sourceCollectionId": "fixture:gallery:gongga-west",
+                    "creator": "测试摄影师",
+                    "collectionPageUrl": "https://example.com/gallery",
+                    "license": "CC-BY-SA 4.0",
+                    "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                    "authorizationProof": "fixture rights proof",
+                    "usageScope": "app_publish",
+                }
+                for k, path in enumerate(image_paths)
+            ],
         )
-        _SOURCE_PATHS.append(str(obj / "1.download" / "sources" / "01.curated_story" / "source.md"))
+        _SOURCE_PATHS.append(str(obj / "1.download" / "sources" / "01.curated_image_collection" / "source.md"))
 
 
 def _gallery_brief() -> dict:
     return {
         "carrier": "gallery",
+        "sourceCollectionId": "fixture:gallery:gongga-west",
         "imagePolicy": {"minImages": 4, "captionMaxChars": 20},
         "titleHint": "贡嘎西坡光影图集",
         "templateId": "主题_风光画报",
@@ -129,15 +148,15 @@ def test_declared_article_stays_article():
     assert RW.resolve_carrier({"carrier": "article"}, {"routeNodes": []}, assets) == "article"
 
 
-def test_image_heavy_low_narrative_routes_gallery():
+def test_image_heavy_low_narrative_routes_image():
     assets = [{"imageStatus": "safe"} for _ in range(5)]
-    assert RW.resolve_carrier({}, {"routeNodes": []}, assets) == "gallery"
+    assert RW.resolve_carrier({}, {"routeNodes": []}, assets) == "image"
 
 
 REF = "贡嘎画报"
 
 
-def test_gallery_compose_brief_then_agent_draft_green():
+def test_gallery_compose_brief_uses_structural_image_contract():
     _seed()
     brief = _gallery_brief()
     write_json(batch_inputs_dir(TASK, BATCH, "produce", "compose") / f"{REF}.json", brief)
@@ -145,36 +164,59 @@ def test_gallery_compose_brief_then_agent_draft_green():
 
     # prepare：写作契约解析为 gallery 载体 + 占位草稿。
     pack = build_route_writing_pack(TASK, BATCH, REF, brief, quality)
-    assert pack["carrier"] == "gallery", pack.get("carrier")
-    assert pack["publishLayout"] == "gallery"
+    assert pack["carrier"] == "image", pack.get("carrier")
+    assert pack["publishLayout"] == "image"
     assert read_writing_pack(TASK, BATCH, REF) is not None
-    placeholder = review_route_draft(TASK, BATCH, REF, brief, quality)
-    assert placeholder["decision"] == "revision_needed"
-    assert not placeholder["checks"]["generatorProvenance"]["passed"]
-
-    # 会话模型创作画报（图为主、配小字）→ review 全绿。
-    byline = public_byline_label(str(brief.get("templateId")), brief.get("creator") or {})
-    md = gallery_article(brief["titleHint"], byline, pack.get("assets") or [])
-    assert md.count(":::figure") >= 4, md
-    assert "\n\n\n" not in md, "gallery must not have large blank gaps"
-    write_agent_draft(
-        TASK,
-        BATCH,
-        REF,
-        md,
-        model="test-agent/contract",
-        cited_source_paths=quality.get("sourcePaths") or [],
-        covered_facts=[],
-        agent_run_id="run-gallery",
-        agent_id="agent-gallery",
-    )
+    # 图片作品是结构化图片集合 + 可选短配文，不生成 article/gallery markdown。
     review = review_route_draft(TASK, BATCH, REF, brief, quality)
     assert review["decision"] == "approved", review["issues"]
     assert review["checks"]["carrierConsistency"]["passed"]
     assert review["checks"]["imageGate"]["passed"]
     assert review["checks"]["galleryCaption"]["passed"], review["checks"]["galleryCaption"]["issues"]
     assert "travelogueDensity" not in review["checks"], "画报载体不应套长文叙事门"
-    assert review["generator"] == "agent"
+    assert review["generator"] == "image_evidence_pack"
+
+
+def test_declared_image_asset_ref_reports_safety_block_separately_from_missing_asset():
+    _seed()
+    target = ENTITIES[0]
+    candidate = RW._entity_image_candidates(TASK, BATCH, target, f"/entity/地点/景区/{target}")[0]
+    brief = {
+        **_gallery_brief(),
+        "carrier": "image",
+        "entityRefs": [f"/entity/地点/景区/{target}"],
+        "sourceCollectionId": candidate["sourceCollectionId"],
+        "assetRefs": [candidate["sourceAssetRef"]],
+    }
+    quality = {
+        "routeNodes": [],
+        "evidenceBundle": {
+            "routeNodes": [
+                {"entityName": target, "entityRef": f"/entity/地点/景区/{target}"}
+            ]
+        },
+    }
+
+    class _UnsafeVerdict:
+        status = RW.STATUS_UNSAFE
+        reasons = ("watermark_or_platform_text",)
+        text_area_ratio = 0.0
+        is_text_heavy = False
+
+    original = RW.assess_image
+    try:
+        RW.assess_image = lambda _path: _UnsafeVerdict()
+        try:
+            RW._build_route_assets(TASK, BATCH, "安全门归因测试", brief, quality["evidenceBundle"])
+        except RuntimeError as exc:
+            message = str(exc)
+        else:  # pragma: no cover - explicit assertion keeps direct script runner useful
+            raise AssertionError("expected image safety gate failure")
+    finally:
+        RW.assess_image = original
+
+    assert "blocked by image safety gate" in message
+    assert candidate["sourceAssetRef"] in message
 
 
 def _run_all() -> None:

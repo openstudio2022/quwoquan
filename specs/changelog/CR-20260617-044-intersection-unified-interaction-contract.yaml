@@ -1,0 +1,75 @@
+id: CR-20260617-044-intersection-unified-interaction-contract
+title: 交集统一交互子契约基线扩展（可交互交集句横切复用）+ 我的主页首落地
+slug: intersection-unified-interaction-contract
+revision: 1
+status: partially_implemented_p0
+
+affected_nodes:
+  - specs/feature-tree/object-homepage-network/intersection-unified-experience
+  - specs/product/intersection-definition-and-application.md
+  - specs/product/intersection-contract-freeze-checklist.md
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_target.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_text_span.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_visual.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_point.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_dimension_tally.yaml
+  - quwoquan_service/contracts/metadata/content/post/projections/author_impact_item.yaml
+  - quwoquan_service/contracts/metadata/_shared/app_routes.yaml
+
+entries:
+  - timestamp: "2026-06-17T21:20:00+08:00"
+    summary: |
+      把「可交互交集句」从逐 DTO 打补丁升级为横切所有交集展示面的统一交互子契约 +
+      端侧统一渲染器 / 导航器，回写 Phase 0 §20.7。新增 recommendation 域三个共享值对象
+      IntersectionTarget / IntersectionTextSpan / IntersectionVisual；reason/point/tally/author_impact
+      四个 read_model 只附加旁挂 primarySpans / briefSpans / sampleVisuals / sourceRef /
+      countObjectKind / countTarget / evidenceSnapshotId / impactId。冻结单通道不变量
+      join(spans.text)==primaryText/briefText。我的主页「我的连接 / 我的影响力」为首个落地：
+      名字 span 进对应主页、数字 span 进维度(+sourceRef)下钻列表、列表项进对象页；
+      新建端侧共享 InteractiveIntersectionText + IntersectionVisualCluster + IntersectionTargetNavigator，
+      供 B–E 直接复用。myIntersections 路由新增 sourceRef query 支持维度内证据组过滤。
+    reason: |
+      旧实现各交集 surface（我的主页 / 用户主页 / 圈子主页 / 实体主页 / 首页推荐页）对「名字可点击、
+      数字可点击、整行可点击」各写一套，且我的连接 / 我的影响力仍是呆板纯文本行 + 纯文本 action sheet。
+      必须先沉淀统一交互子契约 + 共享渲染器，避免 B–E 二次分叉，并让 A 成为首个落地标杆。
+    change_type:
+      - planning
+      - metadata
+      - codegen
+      - feature-implementation
+      - acceptance
+    changed_documents:
+      - path: specs/product/intersection-definition-and-application.md
+        sections:
+          - 20.7 统一交互子契约
+      - path: specs/product/intersection-contract-freeze-checklist.md
+        sections:
+          - 1 冻结字段
+          - 4 全局 UI 约束
+      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
+        sections:
+          - primarySpans / sampleVisuals（只附加）
+      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_dimension_tally.yaml
+        sections:
+          - briefSpans / sampleVisuals / sourceRef / countObjectKind（只附加）
+      - path: quwoquan_service/contracts/metadata/content/post/projections/author_impact_item.yaml
+        sections:
+          - impactId / primarySpans / sampleVisuals / countTarget / evidenceSnapshotId / countObjectKind（只附加）
+      - path: quwoquan_service/contracts/metadata/_shared/app_routes.yaml
+        sections:
+          - myIntersections query_params 增加 sourceRef
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+      rollout_impact: low
+      breaking_contract: false
+    notes:
+      - 只附加策略：保留 reason/point/tally/author_impact 已冻结字段位置不动，旁挂统一子类型；intersection_point 保留裸 sampleAvatarUrls 过渡。
+      - 单通道不变量由契约测试强制：join(primarySpans.text)==primaryText、join(briefSpans.text)==briefText；禁止 recommendationTraceId / reason 级 displayText/label/sharedCount 回归。
+      - Go 侧新字段为「只附加的可选投影」，云端暂不产出时端侧默认空值降级（spans → primaryText → 隐藏），与 §20.5 漂移 a/e 延后策略一致；未削弱任何 Go 契约。
+      - Mock 模拟云端产出 spans/visuals/target（保证不变量），Remote 只读 codegen DTO；alpha seed 与 contract fixture intersection_core 同源。
+      - 完整分页影响明细 API（listAuthorImpactEvidence）列为 P1：evidenceSnapshotId 已在契约预留，未就绪前我的影响力只展示云侧 sampleVisuals 样本、明确不编造全量；需用户确认后登记 docs/outstanding_risks_backlog.md。

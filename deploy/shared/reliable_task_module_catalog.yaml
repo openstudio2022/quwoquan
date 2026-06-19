@@ -307,6 +307,14 @@ modules:
     requiredQueues: []
     planes: [user-plane, platform-control-plane, product-control-plane]
     allowOnebox: false
+
+  search.api:
+    domain: search
+    capabilities: [api]
+    requiredStores: [search.mongodb]
+    requiredQueues: []
+    planes: [user-plane]
+    allowOnebox: false
     allowStandalonePackage: true
   realtime.gateway:
     domain: realtime

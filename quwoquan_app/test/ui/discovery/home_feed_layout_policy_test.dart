@@ -6,12 +6,12 @@ import 'package:quwoquan_app/ui/discovery/models/home_feed_layout_policy.dart';
 const _recommend = HomeChannelConfig(
   id: 'recommend',
   labelKey: 'home_tab_recommend',
-  template: 'intersection_rail_masonry',
-  layoutTemplate: 'dualColumnDiscovery',
-  phoneColumns: 2,
-  supportsFullSpanModules: true,
-  intersectionModulePolicy: 'spotlightSegment',
-  contentCardPolicy: 'compactVisual',
+  template: 'single_column_multiform',
+  layoutTemplate: 'singleColumnMultiForm',
+  phoneColumns: 1,
+  supportsFullSpanModules: false,
+  intersectionModulePolicy: 'inlineOnly',
+  contentCardPolicy: 'richMultiForm',
   feedQuery: <String, String>{'category': 'micro', 'identity': 'moment'},
   moodCopyKey: 'home_mood_recommend',
   order: 1,
@@ -33,7 +33,7 @@ const _following = HomeChannelConfig(
 
 void main() {
   group('HomeFeedLayoutPolicy', () {
-    testWidgets('手机端推荐频道使用双列发现流', (tester) async {
+    testWidgets('手机端推荐频道使用单列多形态内容流', (tester) async {
       late int columns;
       await tester.pumpWidget(
         Directionality(
@@ -52,7 +52,7 @@ void main() {
           ),
         ),
       );
-      expect(columns, equals(2));
+      expect(columns, equals(1));
     });
 
     testWidgets('关注频道始终单列', (tester) async {
@@ -77,13 +77,14 @@ void main() {
       expect(columns, equals(1));
     });
 
-    test('template 缺新字段时仍能降级到双列发现策略', () {
+    test('template 缺新字段时降级到单列多形态策略', () {
       final policy = HomeFeedLayoutPolicy.fromTemplateFallback(
         'intersection_rail_masonry',
       );
-      expect(policy.phoneColumns, equals(2));
-      expect(policy.hasIntersectionSpotlight, isTrue);
-      expect(policy.usesCompactDiscoveryCards, isTrue);
+      expect(policy.phoneColumns, equals(1));
+      expect(policy.hasIntersectionSpotlight, isFalse);
+      expect(policy.usesCompactDiscoveryCards, isFalse);
+      expect(policy.contentCardPolicy, 'richMultiForm');
     });
   });
 }

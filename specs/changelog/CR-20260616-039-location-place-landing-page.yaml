@@ -1,0 +1,54 @@
+id: CR-20260616-039-location-place-landing-page
+title: location.place 点击落地页（WP-D）：临时地点卡 + 提升为 entity.homepage 引导（关闭 R-S05e-1）
+slug: location-place-landing-page
+revision: 1
+status: specified
+
+affected_nodes:
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry
+
+entries:
+  - timestamp: "2026-06-16T14:00:00+08:00"
+    summary: |
+      为 CR-20260616-038 衍生待办 R-S05e-1 落地点击体验（WP-D）。location.place 命中后进入
+      临时地点卡，并提供「提升为实体主页」引导 CTA。新增内容：
+      - metadata-first：_shared/app_routes.yaml 新增 route locationPlaceLanding（/locations/{placeId}，
+        query name/source）；_shared/ui_surfaces.yaml 新增 surface locationPlaceLanding（owner=search，
+        operation_ids=[]，落地页无独立后端 operation）。
+      - codegen：make codegen-app 重生 app_route_paths.g.dart（AppRoutePaths.locationPlaceLanding）+
+        app_ui_surfaces.g.dart（AppUiSurfaces.locationPlaceLanding）。
+      - App 消费：新页 lib/ui/search/pages/location_place_landing_page.dart + app_router.dart 路由 wiring；
+        search_network_results_page 交集「已连接地点」改走 _IntersectionTargetType.locationPlace →
+        落地页（不再误导 entity.homepage 详情）；命中详情来自搜索结果 payload 经
+        LocationPlaceLandingPageRouteExtra 透传；提升 CTA 复用 suggestHomepage surface。
+      - 页面治理：page-horizontal-quality-matrix.md + metadata_driven_ui_gap_inventory.yaml 登记新页；
+        JourneyEventTracker enter/exit 曝光停留 + promote_click。
+    reason: |
+      R-S05e 已让 location.place 可被 canonical search 召回，但点击落地体验未定义（CR-038 衍生待办）。
+      按单一真相源（未提升=location.place、已提升=entity.homepage），落地为临时地点卡 + 提升引导最自洽：
+      不新造写路径（复用 suggestHomepage），route/surface 全部 metadata-first，禁止 UI 硬编码。
+    change_type:
+      - extend
+      - contract
+    changed_documents:
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md
+        sections:
+          - 点击落地页归属（R-S05e-1，已定义 / WP-D 落地）
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT3
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+      rollout_impact: low
+      breaking_contract: false
+    notes:
+      - 落地页无独立后端 operation；命中详情来自搜索结果 payload（route extra），surface operation_ids=[]。
+      - 提升动作复用既有 suggestHomepage surface，不新增写契约。
+      - T1/T2 已落：location_place_landing_page_widget_test.dart（渲染/CTA跳转/埋点）+ search_network_results_page_widget_test.dart（交集已连接地点来自 location.place）。
+      - T3：gamma 真实 location.place 召回后端云联调随 search-service 集成补录。
+      - 代码当前 untracked，版本落盘待用户 git 提交（与 CR-038 同批 search 工作一致）。

@@ -25,7 +25,17 @@ PROVENANCE_FILE = "5.review/provenance.json"
 
 
 def _original_sources(compose_payload: Mapping[str, Any]) -> list[dict[str, Any]]:
-    paths = [str(p) for p in (compose_payload.get("sourcePaths") or []) if p]
+    paths: list[str] = []
+    seen_paths: set[str] = set()
+    for value in [
+        *(compose_payload.get("sourcePaths") or []),
+        *(compose_payload.get("citedSourceRefs") or []),
+    ]:
+        path = str(value or "").strip()
+        if not path or path in seen_paths:
+            continue
+        seen_paths.add(path)
+        paths.append(path)
     urls = [str(u) for u in (compose_payload.get("sourceUrls") or []) if u]
     out: list[dict[str, Any]] = []
     for index, path in enumerate(paths):
@@ -175,8 +185,11 @@ def provenance_issues(post_dir: Path, manifest: Mapping[str, Any]) -> list[str]:
                 expected_digest = compute_document_sha256(article_path.read_text(encoding="utf-8"))
         if final.get("articleDigest") != expected_digest:
             issues.append(f"{post_dir}: provenance.final.articleDigest != article.md digest")
-    if final.get("generator") != "agent":
-        issues.append(f"{post_dir}: provenance.final.generator must be 'agent'")
+    expected_generator = "image_evidence_pack" if is_image else "agent"
+    if final.get("generator") != expected_generator:
+        issues.append(
+            f"{post_dir}: provenance.final.generator must be {expected_generator!r}"
+        )
     if not is_image and not str(final.get("agentRunId") or "").strip():
         issues.append(f"{post_dir}: provenance.final.agentRunId missing")
     if not data.get("agentInput"):

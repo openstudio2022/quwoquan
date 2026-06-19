@@ -108,6 +108,26 @@ def test_render_prompt_factual_reference_uses_independent_expression():
     assert "`draft.article.md`" in prompt
 
 
+def test_factual_reference_sanitizes_adaptation_markers_from_sop_fewshot():
+    pack = _build(
+        {
+            "titleHint": "峨眉山",
+            "baseSourceRef": "entities/地点/景区/峨眉山/1.download/sources/01.base/source.md",
+        },
+        ref="entity-factual-sop",
+    )
+    pack["baseDraftText"] = "# 事实材料\n\n这是一段事实材料。"
+    pack["sopFewshot"] = {
+        "example": "以百科底稿为基础适度加工（轻改）。",
+        "guide": "授权底稿来源，可在许可范围内改编；贴合度控制；以下方授权底稿为基底；轻改。",
+    }
+    prompt = render_prompt_md(pack)
+    for marker in ("轻改", "授权底稿来源", "可在许可范围内改编", "以下方授权底稿为基底", "贴合度控制"):
+        assert marker not in prompt
+    assert "事实参考来源" in prompt
+    assert "独立表达" in prompt
+
+
 def test_render_prompt_licensed_adaptation_uses_runtime_fidelity_range_and_draft_filename():
     pack = _build(
         {

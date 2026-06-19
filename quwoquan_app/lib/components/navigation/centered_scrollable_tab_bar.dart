@@ -37,6 +37,9 @@ class CenteredScrollableTabBar extends ConsumerStatefulWidget {
   /// 不显示蓝色下划线的 Tab ID（如作品），保持深色模式样式
   final List<String> excludeUnderlineTabIds;
 
+  /// 可选：仅覆盖选中态文字颜色，未选中态仍走 fgUnselected。
+  final Color? selectedLabelColor;
+
   /// 兼容参数：一级 Tab 现已统一语义 token，不再为作者主页维护独立字号/间距例外。
   final bool iosProfileStyle;
 
@@ -54,6 +57,7 @@ class CenteredScrollableTabBar extends ConsumerStatefulWidget {
     this.transparentBackground = false,
     this.leftAlignedCompactMode = false,
     this.excludeUnderlineTabIds = const [],
+    this.selectedLabelColor,
     this.iosProfileStyle = false,
   });
 
@@ -611,7 +615,7 @@ class _CenteredScrollableTabBarState
   }) {
     final isExcluded = widget.excludeUnderlineTabIds.contains(tab.id);
     final chipFontSize = AppTypography.primaryTabLabelResponsive(context);
-    final selectedColor = fg;
+    final selectedColor = widget.selectedLabelColor ?? fg;
     final showBlueUnderline = selected && !isExcluded;
     final underlineColor = showBlueUnderline
         ? (isDark ? AppColors.iosAccentDark : AppColors.primaryColor)

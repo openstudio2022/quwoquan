@@ -48,6 +48,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   late String _currentLocation;
   late String _currentPageVisitId;
   late DateTime _currentPageEnterAt;
+  late final Set<int> _initializedTabIndexes;
 
   /// 供 [dispose] 使用；卸载时 [ref] 不可用，须在 [build] 中刷新。
   OpsEventRepository? _pageAccessOpsRepository;
@@ -109,6 +110,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   void initState() {
     super.initState();
     _currentIndex = bottomNavIndexFromLocation(widget.currentLocation);
+    _initializedTabIndexes = <int>{_currentIndex};
     _currentLocation = widget.currentLocation;
     _currentPageVisitId = AppTraceContextStore.instance.newPageVisitId();
     _currentPageEnterAt = DateTime.now();
@@ -135,6 +137,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentLocation != widget.currentLocation) {
       _currentIndex = bottomNavIndexFromLocation(widget.currentLocation);
+      _initializedTabIndexes.add(_currentIndex);
       writeAppPageAccessReturn(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
@@ -266,14 +269,31 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                               IndexedStack(
                                 index: _currentIndex,
                                 children: [
-                                  HomePage(routeLocation: _currentLocation),
-                                  HomeFeaturedImmersivePage(
-                                    onExitToHome: () =>
-                                        _selectMainTab(MainTabDestination.home),
+                                  _buildTabBody(
+                                    index: MainTabDestination.home.bottomNavIndex,
+                                    child: HomePage(
+                                      routeLocation: _currentLocation,
+                                    ),
+                                  ),
+                                  _buildTabBody(
+                                    index:
+                                        MainTabDestination.featured.bottomNavIndex,
+                                    child: HomeFeaturedImmersivePage(
+                                      onExitToHome: () => _selectMainTab(
+                                        MainTabDestination.home,
+                                      ),
+                                    ),
                                   ),
                                   const SizedBox.shrink(),
-                                  const ChatPage(),
-                                  const MyProfilePage(),
+                                  _buildTabBody(
+                                    index: MainTabDestination.chat.bottomNavIndex,
+                                    child: const ChatPage(),
+                                  ),
+                                  _buildTabBody(
+                                    index:
+                                        MainTabDestination.profile.bottomNavIndex,
+                                    child: const MyProfilePage(),
+                                  ),
                                 ],
                               ),
                               if (!bottomNavHidden)
@@ -382,6 +402,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   void _selectMainTab(MainTabDestination nextTab) {
     setState(() {
       _currentIndex = nextTab.bottomNavIndex;
+      _initializedTabIndexes.add(_currentIndex);
     });
 
     switch (nextTab) {
@@ -407,6 +428,14 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         context.go(nextTab.routePath);
         break;
     }
+  }
+
+  Widget _buildTabBody({required int index, required Widget child}) {
+    if (_initializedTabIndexes.contains(index) || _currentIndex == index) {
+      _initializedTabIndexes.add(index);
+      return child;
+    }
+    return const SizedBox.shrink();
   }
 
   /// 强入口（底栏 创作/消息/我的）登录拦截：不展示中间提示，直接上推全屏登录页，

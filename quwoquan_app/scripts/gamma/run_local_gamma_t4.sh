@@ -65,13 +65,17 @@ mkdir -p "$(dirname "$REPORT")"
 
 cmd=(
   python3
-  agent_ops/deploy/gamma/run_gamma_patrol_matrix_ci.py
+  agent_ops/deploy/smoke/run_environment_patrol_smoke.py
   --report "$REPORT"
   --target "$PATROL_TARGET"
   --env-name "local-gamma"
+  --runtime-env "gamma"
+  --api-contract-env "gamma"
+  --data-source "remote"
   --platform "$PLATFORM"
   --gateway-base-url "$GATEWAY_BASE_URL"
   --product-ops-base-url "$PRODUCT_OPS_BASE_URL"
+  --media-base-url "$MEDIA_BASE_URL"
   --test-auth-token "$TEST_AUTH_TOKEN"
 )
 if [[ -n "$DEVICE_ID" ]]; then

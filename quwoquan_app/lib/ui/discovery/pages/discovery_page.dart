@@ -12,7 +12,6 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
@@ -39,7 +38,6 @@ import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
-import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
@@ -552,7 +550,6 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           _trackBehavior(BehaviorAction.click, post);
           _onPostTap(post, index, feedPosts: feedPosts, category: 'moment');
         },
-        onIntersectionObjectOpen: _openIntersectionObject,
         onMoreTap: (post) => _onMomentMoreTap(context, post),
       );
     }
@@ -905,9 +902,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+    // 复用服务端权威下发并已采纳的 feedRequestId，与本页曝光归因保持一致。
     final navFeedRequestId = ref
         .read(feedSessionProvider.notifier)
-        .newFeedRequestId();
+        .currentFeedRequestId;
     // For moment (multi-image per post): initialIndex = post index so viewer shows correct post
     final initialIndex = (feedPosts != null && feedPosts.isNotEmpty)
         ? feedPosts
@@ -956,42 +954,6 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     ref
         .read(intersectionHighlightIntentProvider.notifier)
         .primeFromReasons(authorId, reasons);
-  }
-
-  void _openIntersectionObject(IntersectionReason reason) {
-    final actionTargetId = reason.actionTargetId.trim();
-    final entityTargetId = reason.relationObjectId.trim().isNotEmpty
-        ? reason.relationObjectId.trim()
-        : actionTargetId;
-    if (actionTargetId.isEmpty && entityTargetId.isEmpty) return;
-    ref
-        .read(contentBehaviorTrackerProvider)
-        .trackClick(
-          actionTargetId.isEmpty ? entityTargetId : actionTargetId,
-          referralSource: ReferralSource.organicFeed,
-          intersectionId: reason.intersectionId,
-          intersectionDimension: reason.dimension,
-          intersectionClass: reason.intersectionClass,
-          intersectionTagRefs: reason.tagRefs,
-        );
-    final kind = UnifiedObjectKind.resolve(
-      objectKind: reason.objectKind,
-      relationKind: reason.relationKind,
-    );
-    switch (kind) {
-      case UnifiedObjectKind.person:
-        if (actionTargetId.isNotEmpty) {
-          context.push(AppRoutePaths.userProfile(username: actionTargetId));
-        }
-      case UnifiedObjectKind.circle:
-        if (actionTargetId.isNotEmpty) {
-          context.push(AppRoutePaths.circleDetail(id: actionTargetId));
-        }
-      case UnifiedObjectKind.place:
-      case UnifiedObjectKind.school:
-      case UnifiedObjectKind.enterprise:
-        context.push(AppRoutePaths.homepageDetail(id: entityTargetId));
-    }
   }
 
   void _onMomentCommentTap(BuildContext context, PostBaseDto post) {
