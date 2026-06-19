@@ -257,6 +257,30 @@ guardrails:
     action: suggest_only
 
 # ---------------------------------------------------------------------------
+# 在线 AB 准入（单一真相源）。experiments 定义分桶，abAdmission 定义"何时一个实验
+# 结论可用于晋升/回滚"的统计门槛：每桶最小样本量、分桶偏斜上限、显著性水平、最小可
+# 检测效应；rollback 定义主指标相对 control 的回归阈值与是否自动回滚。
+# 校验由 recpolicy.validateABAdmission 承载；准入结果喂
+# recommendation_feed_ab_experiment_validity_total{result}，对齐 SLI ab_experiment_validity。
+# 默认零值（全 0/空）= 关闭准入门控（不强制每次部署声明实验统计量）。
+#   minSamplesPerBucket: 每个分桶进入显著性判定所需的最小样本量
+#   maxBucketSkewPct:    实际分桶占比与设计 weightPct 的最大允许偏差（SRM 守卫）
+#   significanceLevel:   显著性水平 alpha（双尾），(0,1)
+#   minDetectableEffect: 最小可检测相对效应（MDE），> 0
+#   primaryMetric:       主指标（与 guardrails/SLO 指标同名，如 ctr）
+#   rollback.regressionRatio: 挑战桶主指标 / control 低于该比例即回滚候选，(0,1]
+#   rollback.autoRollback:    true=自动回滚；false=仅建议（与 guardrail suggest_only 同治理姿态）
+abAdmission:
+  minSamplesPerBucket: 1000
+  maxBucketSkewPct: 5.0
+  significanceLevel: 0.05
+  minDetectableEffect: 0.02
+  primaryMetric: ctr
+  rollback:
+    regressionRatio: 0.95
+    autoRollback: false
+
+# ---------------------------------------------------------------------------
 # 交集模块策略（事实 + 概率分通道）：跨会话冷却、分维度保鲜 TTL、事实/概率混排。
 # 取代 content-service IntersectionService 中此前硬编码的 cooldownDays=14 /
 # maxCandidateWindow=20，统一为 metadata-first 配置。cooldown TTL 唯一真相源同时
@@ -280,3 +304,36 @@ intersection:
     factWeight: 1.0
     affinityWeight: 0.4
     maxAffinityPerSurface: 3
+  # 架构基线 v2（§21.2/§21.3/§21.4 配置位，草案/未冻结；数值真算在云侧算法会话落地）。
+  # 本期只登记口径与安全默认；content-service 暂不消费这些键（YAML 多余键被忽略）。
+  graphWeights:
+    # edgeWeight = relationStrengthBase(valueTier) × interactionFrequency × recencyDecay
+    valueTierStrength: { T1: 1.0, T2: 0.75, T3: 0.5, T4: 0.3 }
+    recencyHalfLifeDaysDefault: 14
+    interactionFrequencyCap: 5.0
+  lifecycleWeights:
+    # 选择得分 lifecycleWeight(state)：new/reactivated 高 > strengthened > stable > weakened
+    new: 1.0
+    reactivated: 0.9
+    strengthened: 0.8
+    stable: 0.6
+    weakened: 0.3
+  propagation:
+    # 传播视图：只承载可证绝对计数与路径节点；禁 reach/conversion 比率下发。
+    maxHopCount: 2
+    maxPathNodesPerSurface: 3
+    secondarySpreadEnabled: false
+
+# ---------------------------------------------------------------------------
+# 运营干预（置顶 / 降权 / 屏蔽）配置真相源。metadata-first、热加载、可审计；
+# 不接 UI，运营改 YAML 即生效。每条干预命中即喂 recommendation_feed_ops_intervention_audit_total
+# （action × target_type），对齐 SLI ops_intervention_audit_coverage。
+#   action:     pin（置顶，按 weight 提分并前置） | demote（降权，score *= weight∈[0,1)） | block（移出 feed）
+#   targetType: content（contentId） | author（authorId） | tag（tagRef 命中）
+#   scenario:   限定 feed 场景（homepage/circle/search/...）；空=全场景
+#   expiresAt:  RFC3339 过期时间；空=长期有效；过期后自动失效（无需删除）
+# 优先级：block > pin > demote（同一候选命中多条时取更强动作）。
+# 默认空集 + enabled=false：主链路零开销 no-op，仅作预留接口与安全基线。
+opsIntervention:
+  enabled: false
+  interventions: []

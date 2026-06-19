@@ -13,6 +13,7 @@ from _common.paths import (
 from _common.io import write_json, write_assistant_task
 from _common.content_source_registry import build_content_source_guidance
 from _common.source_catalog import source_plan_guidance, vertical_from_task_id
+from _common.source_plan_contract import source_plan_rule_signature
 from _common.source_unit import resolve_entity_object_dir
 from vertical.source_registry import build_travel_source_guidance
 
@@ -135,6 +136,7 @@ def prepare_source_plan(task_id: str, batch_id: str, entities: list[dict]) -> Pa
                         "batchId": batch_id,
                         "step": f"{lane}_research",
                         "ref": ref,
+                        "sourceRuleSignature": source_plan_rule_signature(vertical, str(ref or "")),
                         "payload": _lane_payload(
                             lane,
                             ref=ref,

@@ -41,6 +41,31 @@ def load_vertical_license_policy(vertical: str) -> dict[str, Any]:
     return data
 
 
+def _normalized_license_kind(value: str) -> str:
+    normalized = re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+    normalized = normalized.replace("_", " ").replace("-", " ")
+    if not normalized:
+        return ""
+    if "cc0" in normalized:
+        if "1.0" in normalized or "universal" in normalized:
+            return "cc0 1.0 universal"
+        return "cc0"
+    if "public domain" in normalized or normalized == "pd":
+        return "public domain"
+    if normalized.startswith("cc "):
+        if re.search(r"\b(nc|noncommercial|nd|noderivatives)\b", normalized):
+            return normalized
+        if re.search(r"\b1\.0\b", normalized):
+            return normalized
+        version = re.search(r"\b([234](?:\.0)?|2\.5|3\.0|4\.0)\b", normalized)
+        suffix = f" {version.group(1)}" if version else ""
+        if re.search(r"\bby\s+sa\b", normalized):
+            return f"cc by sa{suffix}"
+        if re.search(r"\bby\b", normalized):
+            return f"cc by{suffix}"
+    return normalized
+
+
 def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str]:
     if vertical not in _POLICY_PATHS:
         return []
@@ -54,10 +79,10 @@ def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str
             issues.append(f"imageRights: missing required field {field}")
     license_value = str(spec.get("license") or "").strip()
     normalized_allowed = {
-        re.sub(r"\s+", " ", str(item).strip()).casefold()
+        _normalized_license_kind(str(item))
         for item in (policy.get("allowedLicenseKinds") or [])
     }
-    normalized_license = re.sub(r"\s+", " ", license_value).casefold()
+    normalized_license = _normalized_license_kind(license_value)
     if license_value and normalized_license not in normalized_allowed:
         issues.append(f"imageRights: unsupported license {license_value}")
     if normalized_license == "ai generated original".casefold():

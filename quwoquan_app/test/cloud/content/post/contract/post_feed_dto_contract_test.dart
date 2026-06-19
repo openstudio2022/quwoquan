@@ -24,9 +24,9 @@ void main() {
       expect(dto.type, equals('image'));
       expect(dto.authorId, equals('nature_photographer'));
       expect(dto.displayName, equals('自然摄影师'));
-      expect(dto.avatarUrl, contains('unsplash.com'));
-      expect(dto.coverUrl, contains('unsplash.com'));
-      expect(dto.thumbnailUrl, contains('unsplash.com'));
+      expect(dto.avatarUrl, contains('media/avatar/s/archived-avatar/'));
+      expect(dto.coverUrl, contains('media/image/s/archived-image/'));
+      expect(dto.thumbnailUrl, contains('media/image/s/archived-image/'));
       expect(dto.imageUrls, isNotEmpty);
       expect(dto.likeCount, equals(1200));
       expect(dto.commentCount, equals(45));
@@ -44,7 +44,7 @@ void main() {
       expect(dto.type, equals('video'));
       expect(dto.authorId, equals('a1'));
       expect(dto.displayName, equals('楹语小筑'));
-      expect(dto.coverUrl, contains('unsplash.com'));
+      expect(dto.coverUrl, contains('media/image/s/archived-image/'));
       expect(dto.body, contains('东京'));
       expect(dto.durationMs, equals(45000));
       expect(dto.likeCount, equals(12500));

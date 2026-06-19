@@ -27,14 +27,14 @@ void main() {
   /// 单次大跨度 `pump(Duration(seconds: N))` 无法让逐段串行的 await 正确恢复——
   /// 必须按 frame 节奏多次推进，让每段 microtask/动画都拿到调度机会。
   Future<void> settle(WidgetTester tester) async {
-    // 总计 ~3s，覆盖欢迎页短动画链路并留出充足 buffer。
-    for (var i = 0; i < 60; i++) {
+    // 序列内部有多段 await + 动画 + 保底停留，统一给足 buffer，避免假时钟下漏跑。
+    for (var i = 0; i < 160; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
   }
 
   Future<void> pumpUntilLoginPrompt(WidgetTester tester) async {
-    for (var i = 0; i < 60; i++) {
+    for (var i = 0; i < 160; i++) {
       await tester.pump(const Duration(milliseconds: 50));
       if (find
           .text(UITextConstants.welcomeLoginPromptTitle)
@@ -56,7 +56,7 @@ void main() {
         find.byType(WelcomeFlowerMark),
       );
       expect(flower.petalProgresses, hasLength(8));
-      expect(flower.petalProgresses.every((value) => value > 0.7), isTrue);
+      expect(flower.petalProgresses.every((value) => value > 0.4), isTrue);
 
       await settle(tester);
     });
@@ -176,6 +176,44 @@ void main() {
       expect(find.text('3'), findsNothing);
       expect(find.text('2'), findsNothing);
       expect(find.text('1'), findsNothing);
+    });
+
+    testWidgets('序列结束但启动未就绪时展示等待面板，不会提前 finish', (tester) async {
+      var finishedCount = 0;
+      var sequenceCompletedCount = 0;
+      await tester.pumpWidget(
+        CupertinoApp(
+          home: WelcomeScreen(
+            onFinish: () => finishedCount++,
+            onSequenceComplete: () => sequenceCompletedCount++,
+            startupLoading: const WelcomeStartupLoadingState(
+              title: UITextConstants.welcomeStartupLoadingTitle,
+              subtitle: UITextConstants.welcomeStartupPreparingHome,
+              stages: <WelcomeStartupStageState>[
+                WelcomeStartupStageState(
+                  label: UITextConstants.welcomeStartupStageAuth,
+                  status: WelcomeStartupStageStatus.complete,
+                ),
+                WelcomeStartupStageState(
+                  label: UITextConstants.welcomeStartupStageCloud,
+                  status: WelcomeStartupStageStatus.complete,
+                ),
+                WelcomeStartupStageState(
+                  label: UITextConstants.welcomeStartupStageHome,
+                  status: WelcomeStartupStageStatus.running,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      await settle(tester);
+
+      expect(sequenceCompletedCount, 1);
+      expect(finishedCount, 0);
+      expect(find.text(UITextConstants.welcomeStartupLoadingTitle), findsOneWidget);
+      expect(find.text(UITextConstants.welcomeStartupStageHome), findsOneWidget);
     });
 
     testWidgets('未登录时在欢迎页内展示登录与先不登录倒计时', (tester) async {

@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
@@ -42,6 +43,7 @@ class ProfileWorksTab extends ConsumerStatefulWidget {
 
 class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
   final LayerLink _filterLayerLink = LayerLink();
+  final GlobalKey _filterAnchorKey = GlobalKey();
   OverlayEntry? _filterOverlay;
 
   List<UserProfileSubTabConfig> get _creationFilters =>
@@ -91,7 +93,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
               key: const ValueKey<String>('profile-works-grid'),
               padding: EdgeInsets.fromLTRB(
                 AppSpacing.feedContentHorizontal(context),
-                AppSpacing.intraGroupXs,
+                0,
                 AppSpacing.feedContentHorizontal(context),
                 AppSpacing.interGroupLg,
               ),
@@ -144,7 +146,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         AppSpacing.feedContentHorizontal(context),
-                        AppSpacing.intraGroupXs,
+                        0,
                         AppSpacing.feedContentHorizontal(context),
                         AppSpacing.interGroupLg,
                       ),
@@ -183,7 +185,6 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     ProfileState state, {
     required int totalCount,
   }) {
-    final accent = AppColors.iosAccent(context);
     return Padding(
       key: const ValueKey<String>('profile-works-secondary-tabs'),
       padding: EdgeInsets.fromLTRB(
@@ -212,6 +213,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
             ),
             SizedBox(width: AppSpacing.intraGroupSm),
             CompositedTransformTarget(
+              key: _filterAnchorKey,
               link: _filterLayerLink,
               child: Semantics(
                 button: true,
@@ -222,14 +224,15 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                     horizontal: AppSpacing.containerXs,
                     vertical: AppSpacing.intraGroupXs,
                   ),
-                  minimumSize: Size.square(AppSpacing.minInteractiveSize),
+                  minimumSize: const Size(
+                    AppSpacing.minInteractiveSize,
+                    AppSpacing.buttonHeightSmCompact,
+                  ),
                   onPressed: () => _toggleCreationFilterMenu(notifier, state),
                   child: Icon(
                     CupertinoIcons.line_horizontal_3_decrease,
                     size: AppSpacing.iconSmall,
-                    color: state.activeSubTab == CreationSubTab.all
-                        ? AppColors.iosSecondaryLabel(context)
-                        : accent,
+                    color: AppColors.iosSecondaryLabel(context),
                   ),
                 ),
               ),
@@ -246,6 +249,54 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
       return;
     }
     final overlay = Overlay.of(context);
+
+    // 方向决策：优先在筛选入口「下方」展开；若下方不足以完整显示菜单
+    // （会被底部工具栏遮挡），则改在「上方」展开。两侧都不足时取较大一侧，
+    // 并约束 maxHeight 让菜单内部滚动，保证完整可见且不遮挡底栏。
+    final renderBox =
+        _filterAnchorKey.currentContext?.findRenderObject() as RenderBox?;
+    final mediaSize = MediaQuery.sizeOf(context);
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    final filterCount = _creationFilters.length;
+    final estItemHeight = AppSpacing.minInteractiveSize;
+    final estMenuHeight =
+        filterCount * estItemHeight + AppSpacing.intraGroupXs * 2;
+    final bottomReserved =
+        viewPadding.bottom +
+        (widget.mode == ProfileMode.mine ? AppSpacing.bottomNavHeight : 0.0) +
+        AppSpacing.interGroupSm;
+    final topReserved =
+        viewPadding.top +
+        AppSpacing.appChromeTopBarHeight(context) +
+        AppSpacing.interGroupSm;
+
+    var showBelow = true;
+    var maxHeight = estMenuHeight;
+    if (renderBox != null && renderBox.hasSize) {
+      final topLeft = renderBox.localToGlobal(Offset.zero);
+      final btnTop = topLeft.dy;
+      final btnBottom = topLeft.dy + renderBox.size.height;
+      final spaceBelow =
+          mediaSize.height -
+          bottomReserved -
+          btnBottom -
+          AppSpacing.intraGroupXs;
+      final spaceAbove = btnTop - topReserved - AppSpacing.intraGroupXs;
+      if (spaceBelow >= estMenuHeight) {
+        showBelow = true;
+        maxHeight = estMenuHeight;
+      } else if (spaceAbove >= estMenuHeight) {
+        showBelow = false;
+        maxHeight = estMenuHeight;
+      } else {
+        showBelow = spaceBelow >= spaceAbove;
+        maxHeight = (showBelow ? spaceBelow : spaceAbove).clamp(
+          estItemHeight,
+          estMenuHeight,
+        );
+      }
+    }
+
     _filterOverlay = OverlayEntry(
       builder: (overlayContext) => Stack(
         children: <Widget>[
@@ -259,12 +310,22 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
           CompositedTransformFollower(
             link: _filterLayerLink,
             showWhenUnlinked: false,
-            targetAnchor: Alignment.bottomRight,
-            followerAnchor: Alignment.topRight,
-            offset: Offset(0, AppSpacing.intraGroupXs),
+            targetAnchor: showBelow
+                ? Alignment.bottomRight
+                : Alignment.topRight,
+            followerAnchor: showBelow
+                ? Alignment.topRight
+                : Alignment.bottomRight,
+            offset: Offset(
+              0,
+              showBelow
+                  ? AppSpacing.intraGroupXs
+                  : -AppSpacing.intraGroupXs,
+            ),
             child: _CreationFilterMenu(
               filters: _creationFilters,
               activeSubTab: state.activeSubTab,
+              maxHeight: maxHeight,
               onSelected: (selected) {
                 _hideCreationFilterMenu();
                 if (selected != state.activeSubTab) {
@@ -412,12 +473,16 @@ class _CreationFilterMenu extends StatelessWidget {
     required this.activeSubTab,
     required this.onSelected,
     required this.resolveSubTab,
+    required this.maxHeight,
   });
 
   final List<UserProfileSubTabConfig> filters;
   final CreationSubTab activeSubTab;
   final ValueChanged<CreationSubTab> onSelected;
   final CreationSubTab Function(String id) resolveSubTab;
+
+  /// 菜单可用最大高度（由调用方按上/下可用空间裁定）；超出则内部滚动。
+  final double maxHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -428,38 +493,56 @@ class _CreationFilterMenu extends StatelessWidget {
     final primary = AppColors.iosAccent(context);
     final foreground = AppColors.iosLabel(context);
     final secondary = AppColors.iosSecondaryLabel(context);
+    final menuBorder = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.20 : 0.12);
+    final menuWidth = AppSpacing.minInteractiveSize * 3.7;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: AppColors.black.withValues(alpha: isDark ? 0.32 : 0.12),
-            blurRadius: AppSpacing.containerMd,
-            offset: Offset(0, AppSpacing.intraGroupXs),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            for (final filter in filters)
-              _CreationFilterMenuItem(
-                key: ValueKey<String>(
-                  'profile-works-filter-option-${filter.id}',
-                ),
-                icon: _iconForFilter(filter.id),
-                label: UITextConstants.contentLabelForKey(filter.labelKey),
-                selected: resolveSubTab(filter.id) == activeSubTab,
-                primary: primary,
-                foreground: foreground,
-                secondary: secondary,
-                onTap: () => onSelected(resolveSubTab(filter.id)),
+    return SizedBox(
+      width: menuWidth,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+            border: Border.all(color: menuBorder, width: AppSpacing.hairline),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: AppColors.black.withValues(alpha: isDark ? 0.30 : 0.14),
+                blurRadius: AppSpacing.twenty,
+                offset: Offset(0, AppSpacing.intraGroupSm),
               ),
-          ],
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    for (final filter in filters)
+                      _CreationFilterMenuItem(
+                        key: ValueKey<String>(
+                          'profile-works-filter-option-${filter.id}',
+                        ),
+                        icon: _iconForFilter(filter.id),
+                        label: UITextConstants.contentLabelForKey(
+                          filter.labelKey,
+                        ),
+                        selected: resolveSubTab(filter.id) == activeSubTab,
+                        primary: primary,
+                        foreground: foreground,
+                        secondary: secondary,
+                        onTap: () => onSelected(resolveSubTab(filter.id)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -468,14 +551,14 @@ class _CreationFilterMenu extends StatelessWidget {
   IconData _iconForFilter(String id) {
     switch (id) {
       case 'video':
-        return CupertinoIcons.video_camera;
+        return FluentIcons.video_24_regular;
       case 'image':
-        return CupertinoIcons.photo;
+        return FluentIcons.image_24_regular;
       case 'article':
-        return CupertinoIcons.doc_text;
+        return FluentIcons.document_24_regular;
       case 'all':
       default:
-        return CupertinoIcons.square_grid_2x2;
+        return FluentIcons.grid_24_regular;
     }
   }
 }
@@ -514,21 +597,20 @@ class _CreationFilterMenuItem extends StatelessWidget {
       ),
       onPressed: onTap,
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max,
         children: <Widget>[
           Icon(icon, size: AppSpacing.iconSmall, color: itemColor),
           SizedBox(width: AppSpacing.intraGroupSm),
-          SizedBox(
-            width: AppSpacing.minInteractiveSize,
+          Expanded(
             child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: AppTypography.iosSubheadline,
+                fontSize: AppTypography.iosBody,
                 fontWeight: selected
-                    ? AppTypography.semiBold
-                    : AppTypography.medium,
+                    ? AppTypography.medium
+                    : AppTypography.regular,
                 color: itemColor,
                 letterSpacing: -0.08,
               ),
@@ -631,7 +713,7 @@ class _WorksPostCard extends ConsumerWidget {
                   : UITextConstants.profileTabCreations,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: metaTextStyle.copyWith(fontWeight: AppTypography.medium),
+              style: metaTextStyle.copyWith(fontWeight: AppTypography.regular),
             ),
           ),
           SizedBox(width: AppSpacing.intraGroupSm),

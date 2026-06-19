@@ -22,6 +22,7 @@ python3 quwoquan_data/scripts/cli.py <command> ...
 |---|---|
 | `plan` | 内容指令 → compose_brief（叙事契约 / imagePlan / imagePolicy） |
 | `download` | 多平台素材获取 + 来源质量评分 + 匿名化 |
+| `site-supply` | 网站维度前半段供给线：site frontier/candidate/score/map/rollup packet 与站点准出门 |
 | `produce --stage compose-brief` | 准备阶段：analyze + 选图 → 落写作契约 `writing_pack.json` + `prompt.md` + 占位（**不拼正文**） |
 | `produce --stage review` | 校验阶段：读会话模型写回的 `article.md` → 三道门 + 图片/游记感密度门 → 裁决 |
 | `produce --stage review --materialize` | review 通过后落地为 post package（仅 `generator=agent`；含账本/实体 sidecar） |
@@ -29,6 +30,7 @@ python3 quwoquan_data/scripts/cli.py <command> ...
 | `annotate` | Human-in-loop 标注：发布前对账本图片/事实/文章下人判定/打分/置发布态/记再加工 |
 | `ship` | 一键发布：promote→重建索引→按环境采样写 sample bundle→(可选)调用服务侧 importer 灌库 |
 | `verify` | 收紧范围校验 post package（schema + 语义 + 图片 + 三道门） |
+| `verify site-scale-readiness` | 网站维度放量准出门：trial 验结构/吞吐/账本，commercial 额外强制 release/import/搜索推荐证据 |
 | `template lint` | 模板蓝图门禁（route 叙事契约 / gallery imagePolicy） |
 
 > **Human-in-loop + 发布门**：review 产出每图/事实/文章的 agent 判定+打分写账本（`produce/review/ledger/{ref}.json`）；

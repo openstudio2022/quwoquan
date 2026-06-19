@@ -20,6 +20,10 @@ type IntersectionMetricsRecorder interface {
 	ObserveInboxVisit(dimension string)
 	// ObserveInboxFiltered 记录我的交集 summary/list 中被保鲜过滤的交集（触发重算）。
 	ObserveInboxFiltered(reason string)
+	// ObserveRedisDegraded 记录一次 Redis 不可用降级（写降级 / 读回落持久兜底）。
+	// op: exposure_write | watermark_write | watermark_read。是「Redis 可用性 / 降级率」
+	// SLI 的真实度量源，支撑「Redis 故障不拖垮主请求、watermark 持久不丢」的可观测验收。
+	ObserveRedisDegraded(op string)
 }
 
 // noopIntersectionMetrics 默认实现：未注入 recorder 时零开销，便于单测与无观测环境。
@@ -30,3 +34,4 @@ func (noopIntersectionMetrics) ObserveFeedFiltered(string, string)          {}
 func (noopIntersectionMetrics) ObserveExposureReported(int)                 {}
 func (noopIntersectionMetrics) ObserveInboxVisit(string)                    {}
 func (noopIntersectionMetrics) ObserveInboxFiltered(string)                 {}
+func (noopIntersectionMetrics) ObserveRedisDegraded(string)                 {}

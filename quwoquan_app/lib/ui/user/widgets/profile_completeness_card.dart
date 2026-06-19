@@ -56,7 +56,7 @@ class ProfileCompletenessCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: AppTypography.iosSubheadline,
-                      fontWeight: AppTypography.semiBold,
+                      fontWeight: AppTypography.regular,
                       color: AppColors.iosAccent(context),
                     ),
                   ),

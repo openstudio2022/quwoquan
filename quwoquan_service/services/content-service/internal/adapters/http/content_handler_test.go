@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	rtrec "quwoquan_service/runtime/recommendation"
@@ -27,7 +28,7 @@ func newTestHandler() http.Handler {
 	return NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
 }
 
-func newRecommendationHandlerWithFeatures(features rtrec.FeatureProvider) http.Handler {
+func newFeedHandlerWithFeatures(features rtrec.FeatureProvider) http.Handler {
 	redis := recinfra.NewMemoryRedis()
 	hotPath := rtrec.NewHotPath(redis)
 	store := persistence.NewPostStore(recinfra.DefaultSeedPosts())
@@ -139,45 +140,79 @@ func TestReportBehaviorsEndpoint(t *testing.T) {
 	}
 }
 
-func TestRecommendEndpoint(t *testing.T) {
-	req := httptest.NewRequest(
-		"POST",
-		"/v1/content/recommend",
-		bytes.NewBufferString(`{"userId":"u1","limit":2}`),
+// TestFeedIssuesServerFeedRequestID 断言首页推荐主链路服务端权威下发 feedRequestId（frq_ 前缀）
+// 与 rankingVersion，并在客户端回显时保持同一归因 id（feedRequestId echo）。
+func TestFeedIssuesServerFeedRequestID(t *testing.T) {
+	handler := newTestHandler()
+
+	firstReq := httptest.NewRequest("GET", "/v1/content/feed?sort=recommend&limit=2", nil)
+	firstRec := httptest.NewRecorder()
+	handler.ServeHTTP(firstRec, firstReq)
+	if firstRec.Code != http.StatusOK {
+		t.Fatalf("unexpected feed status: %d", firstRec.Code)
+	}
+	var firstBody struct {
+		FeedRequestID  string `json:"feedRequestId"`
+		RankingVersion string `json:"rankingVersion"`
+		ReasonVersion  string `json:"reasonVersion"`
+	}
+	if err := json.Unmarshal(firstRec.Body.Bytes(), &firstBody); err != nil {
+		t.Fatalf("decode feed response: %v", err)
+	}
+	if !strings.HasPrefix(firstBody.FeedRequestID, "frq_") {
+		t.Fatalf("expected server-issued feedRequestId with frq_ prefix, got %q", firstBody.FeedRequestID)
+	}
+	if firstBody.RankingVersion != rtrec.RankingVersion {
+		t.Fatalf("expected rankingVersion %q, got %q", rtrec.RankingVersion, firstBody.RankingVersion)
+	}
+	if firstBody.ReasonVersion != rtrec.ReasonVersion {
+		t.Fatalf("expected reasonVersion %q, got %q", rtrec.ReasonVersion, firstBody.ReasonVersion)
+	}
+
+	echoReq := httptest.NewRequest(
+		"GET",
+		"/v1/content/feed?sort=recommend&limit=2&feedRequestId="+firstBody.FeedRequestID,
+		nil,
 	)
-	rec := httptest.NewRecorder()
-	newTestHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("unexpected recommend status: %d", rec.Code)
+	echoRec := httptest.NewRecorder()
+	handler.ServeHTTP(echoRec, echoReq)
+	if echoRec.Code != http.StatusOK {
+		t.Fatalf("unexpected feed echo status: %d", echoRec.Code)
+	}
+	var echoBody struct {
+		FeedRequestID string `json:"feedRequestId"`
+	}
+	if err := json.Unmarshal(echoRec.Body.Bytes(), &echoBody); err != nil {
+		t.Fatalf("decode feed echo response: %v", err)
+	}
+	if echoBody.FeedRequestID != firstBody.FeedRequestID {
+		t.Fatalf("expected feedRequestId echo %q, got %q", firstBody.FeedRequestID, echoBody.FeedRequestID)
 	}
 }
 
-func TestRecommendEndpoint_UsesLongTermTagFeatures(t *testing.T) {
-	handler := newRecommendationHandlerWithFeatures(&stubFeatureProvider{features: &rtrec.UserFeatureVector{
+func TestFeedRecommendUsesLongTermTagFeatures(t *testing.T) {
+	handler := newFeedHandlerWithFeatures(&stubFeatureProvider{features: &rtrec.UserFeatureVector{
 		TagAffinities: map[string]float64{"art": 10},
 	}})
-	req := httptest.NewRequest(
-		"POST",
-		"/v1/content/recommend",
-		bytes.NewBufferString(`{"userId":"u1","limit":1}`),
-	)
+	req := httptest.NewRequest("GET", "/v1/content/feed?sort=recommend&limit=1", nil)
+	req.Header.Set("X-Client-User-Id", "u1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("unexpected recommend status: %d", rec.Code)
+		t.Fatalf("unexpected feed status: %d", rec.Code)
 	}
 	var body struct {
 		Items []map[string]any `json:"items"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode recommend response: %v", err)
+		t.Fatalf("decode feed response: %v", err)
 	}
 	if len(body.Items) == 0 {
-		t.Fatalf("expected recommend items")
+		t.Fatalf("expected feed items")
 	}
-	contentID, _ := body.Items[0]["contentId"].(string)
-	if contentID == "" {
-		t.Fatalf("missing contentId in first item")
+	id, _ := body.Items[0]["id"].(string)
+	if id == "" {
+		t.Fatalf("missing id in first item")
 	}
 }
 

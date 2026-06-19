@@ -109,6 +109,8 @@ class BehaviorEvent {
     this.duration,
     this.feedRequestId,
     this.position,
+    this.channelId,
+    this.rankingVersion,
     this.commentLength,
     this.authorId,
     this.referralSource,
@@ -147,6 +149,13 @@ class BehaviorEvent {
 
   /// Position in feed list (0-based)
   final int? position;
+
+  /// 首页推荐频道 id（following/moment/work/photo/video/article 等）；非首页 feed 面为空字符串。
+  final String? channelId;
+
+  /// feed 下发精排管线版本（来源 DiscoveryFeedPage.rankingVersion）；
+  /// 闭合「召回 → 下发(rankingVersion) → 曝光 → 互动」AB / replay 归因。
+  final String? rankingVersion;
 
   /// Comment text length (for comment action)
   final int? commentLength;
@@ -204,6 +213,9 @@ class BehaviorEvent {
     if (duration != null && duration! > 0) 'duration': duration,
     if (feedRequestId != null) 'feedRequestId': feedRequestId,
     if (position != null) 'position': position,
+    if (channelId != null && channelId!.isNotEmpty) 'channelId': channelId,
+    if (rankingVersion != null && rankingVersion!.isNotEmpty)
+      'rankingVersion': rankingVersion,
     if (commentLength != null) 'commentLength': commentLength,
     if (authorId != null && authorId!.isNotEmpty) 'authorId': authorId,
     if (referralSource != null) 'referralSource': referralSource!.value,
@@ -244,6 +256,8 @@ abstract class BehaviorRepository {
     String? authorId,
     ReferralSource? referralSource,
     int? position,
+    String? channelId,
+    String? rankingVersion,
     String? feedRequestId,
   }) {
     return reportEvents(
@@ -257,6 +271,8 @@ abstract class BehaviorRepository {
           authorId: authorId,
           referralSource: referralSource,
           position: position,
+          channelId: channelId,
+          rankingVersion: rankingVersion,
           feedRequestId: feedRequestId,
         ),
       ],
@@ -588,6 +604,8 @@ class RemoteBehaviorRepository extends BehaviorRepository
       duration: (json['duration'] as num?)?.toDouble(),
       feedRequestId: json['feedRequestId'] as String?,
       position: (json['position'] as num?)?.toInt(),
+      channelId: json['channelId'] as String?,
+      rankingVersion: json['rankingVersion'] as String?,
       commentLength: (json['commentLength'] as num?)?.toInt(),
       authorId: json['authorId'] as String?,
       referralSource: _parseReferralSource(json['referralSource'] as String?),

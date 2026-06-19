@@ -39,7 +39,8 @@ class ProfileStatsPage extends ConsumerStatefulWidget {
 }
 
 class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
-  String get _type => widget.type;
+  late String _activeType;
+  String get _type => _activeType;
   String get _userId => widget.userId;
   String _searchQuery = '';
 
@@ -52,15 +53,41 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
   @override
   void initState() {
     super.initState();
+    _activeType = _normalizeType(widget.type);
     _load();
   }
 
   @override
   void didUpdateWidget(covariant ProfileStatsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.type != widget.type || oldWidget.userId != widget.userId) {
+    final nextType = _normalizeType(widget.type);
+    if (oldWidget.userId != widget.userId || nextType != _activeType) {
+      _activeType = nextType;
       _load();
     }
+  }
+
+  static String _normalizeType(String type) {
+    switch (type) {
+      case 'following':
+      case 'circles':
+      case 'fans':
+        return type;
+      default:
+        return 'fans';
+    }
+  }
+
+  void _selectType(String type) {
+    final normalized = _normalizeType(type);
+    if (normalized == _activeType) {
+      return;
+    }
+    setState(() {
+      _activeType = normalized;
+      _searchQuery = '';
+    });
+    _load();
   }
 
   Future<void> _load() async {
@@ -73,7 +100,12 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       });
       return;
     }
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _circles = null;
+      _users = null;
+      _loadErrorSemantic = null;
+    });
     final repo = ref.read(userProfileRepositoryProvider);
     try {
       if (_type == 'circles') {
@@ -181,6 +213,15 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       child: Column(
         children: [
           Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.intraGroupMd,
+              AppSpacing.md,
+              AppSpacing.zero,
+            ),
+            child: _buildTypeTabs(context, fg, fgSecondary),
+          ),
+          Padding(
             padding: EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
               vertical: AppSpacing.intraGroupLg,
@@ -210,6 +251,49 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTypeTabs(BuildContext context, Color fg, Color fgSecondary) {
+    Text tabLabel(String label, bool selected) {
+      return Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: AppTypography.iosSubheadline,
+          fontWeight: selected ? AppTypography.medium : AppTypography.regular,
+          color: selected ? fg : fgSecondary,
+        ),
+      );
+    }
+
+    return CupertinoSlidingSegmentedControl<String>(
+      groupValue: _type,
+      backgroundColor: AppColors.iosFill(context),
+      thumbColor: AppColors.iosSystemBackground(context),
+      onValueChanged: (value) {
+        if (value != null) {
+          _selectType(value);
+        }
+      },
+      children: <String, Widget>{
+        'fans': Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
+          child: tabLabel(UITextConstants.circleFans, _type == 'fans'),
+        ),
+        'following': Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
+          child: tabLabel(UITextConstants.follow, _type == 'following'),
+        ),
+        'circles': Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
+          child: tabLabel(
+            UITextConstants.contactsTabCircles,
+            _type == 'circles',
+          ),
+        ),
+      },
     );
   }
 

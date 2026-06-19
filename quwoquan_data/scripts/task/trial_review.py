@@ -46,6 +46,19 @@ def _count_ndjson(path: Path) -> int:
         return 0
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _ratio(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(max(0, numerator) / denominator, 4)
+
+
 def _coverage_target_names(spec: Mapping[str, Any]) -> list[str]:
     targets = (((spec.get("scope") or {}).get("coverageTargets") or []) if isinstance(spec, Mapping) else [])
     names: list[str] = []
@@ -132,6 +145,9 @@ def _workflow_snapshot(task_id: str, batch_id: str) -> dict[str, Any]:
     last_agent = state.get("lastAgentRun") or {}
     if not isinstance(last_agent, Mapping):
         last_agent = {}
+    active_scheduler = state.get("activeAgentScheduler") or {}
+    if not isinstance(active_scheduler, Mapping):
+        active_scheduler = {}
     agent_history = state.get("agentRunHistory") if isinstance(state.get("agentRunHistory"), list) else []
     return {
         "batchRootExists": batch_root(task_id, batch_id).is_dir(),
@@ -163,6 +179,21 @@ def _workflow_snapshot(task_id: str, batch_id: str) -> dict[str, Any]:
                 "finishedAt",
             )
         },
+        "activeAgentScheduler": {
+            key: active_scheduler.get(key)
+            for key in (
+                "stage",
+                "requestedMaxWorkers",
+                "effectiveWorkerCount",
+                "localCursorMaxWorkers",
+                "runtime",
+                "promptCount",
+                "estimatedMinWaves",
+                "laneLimits",
+                "startedAt",
+                "elapsedSeconds",
+            )
+        } if active_scheduler else {},
         "agentRunHistory": [
             {
                 key: row.get(key)
@@ -180,6 +211,115 @@ def _workflow_snapshot(task_id: str, batch_id: str) -> dict[str, Any]:
             for row in agent_history
             if isinstance(row, Mapping)
         ],
+    }
+
+
+def _source_readiness_summary(
+    auto_research: Mapping[str, Any],
+    managed_audit: Mapping[str, Any],
+) -> dict[str, Any]:
+    availability = auto_research.get("sourceAvailability") if isinstance(auto_research, Mapping) else {}
+    if not isinstance(availability, Mapping):
+        availability = {}
+    auto_ready = [str(item).strip() for item in availability.get("readyTargets") or [] if str(item).strip()]
+    auto_ineligible = [
+        item for item in availability.get("ineligibleTargets") or []
+        if isinstance(item, Mapping)
+    ]
+    auto_unavailable = [
+        item for item in auto_research.get("sourceUnavailable") or []
+        if isinstance(item, Mapping)
+    ] if isinstance(auto_research, Mapping) else []
+    target_count = _safe_int(managed_audit.get("targetCount"))
+    lane_passed_raw = managed_audit.get("lanePassed") if isinstance(managed_audit.get("lanePassed"), Mapping) else {}
+    lane_passed = {lane: _safe_int((lane_passed_raw or {}).get(lane)) for lane in LANES}
+    failed_lanes = [
+        item for item in managed_audit.get("failedLanes") or []
+        if isinstance(item, Mapping)
+    ]
+    failed_entities = sorted({
+        str(item.get("entity") or "").strip()
+        for item in failed_lanes
+        if str(item.get("entity") or "").strip() and str(item.get("entity") or "").strip() != "__batch__"
+    })
+    failed_lane_count = _safe_int(managed_audit.get("failedLaneCount"))
+    auto_signal = bool(auto_ready or auto_ineligible)
+    if auto_signal:
+        target_count = target_count or len(auto_ready) + len(auto_ineligible)
+        lane_missing = {lane: 0 for lane in LANES}
+        failed_entities = []
+        for item in auto_ineligible:
+            entity = str(item.get("entityId") or "").strip()
+            if entity:
+                failed_entities.append(entity)
+            lanes = [str(lane) for lane in (item.get("lanes") or []) if str(lane).strip()]
+            if not lanes:
+                lanes = list(LANES)
+            for lane in lanes:
+                if lane in lane_missing:
+                    lane_missing[lane] += 1
+        lane_passed = {
+            lane: max(0, target_count - int(lane_missing.get(lane) or 0))
+            for lane in LANES
+        }
+        failed_lane_count = len(auto_ineligible)
+        all_lane_ready = len(auto_ready)
+    elif target_count and failed_entities:
+        all_lane_ready = max(0, target_count - len(failed_entities))
+    elif target_count and lane_passed:
+        all_lane_ready = min(lane_passed.values())
+    else:
+        all_lane_ready = len(auto_ready)
+    lane_coverage = {
+        lane: {
+            "passed": passed,
+            "targetCount": target_count,
+            "missing": max(0, target_count - passed) if target_count else 0,
+            "ratio": _ratio(passed, target_count),
+        }
+        for lane, passed in lane_passed.items()
+    }
+    bottleneck_lane = ""
+    if lane_coverage:
+        bottleneck_lane = min(
+            lane_coverage,
+            key=lambda lane: (float(lane_coverage[lane]["ratio"]), int(lane_coverage[lane]["passed"])),
+        )
+    missing_parts = [
+        f"{lane} {row['passed']}/{row['targetCount']}"
+        for lane, row in lane_coverage.items()
+        if int(row.get("missing") or 0) > 0
+    ]
+    if auto_signal and auto_ineligible:
+        missing_parts.insert(0, f"source availability ready {len(auto_ready)}/{target_count}")
+    status = "ready"
+    next_action = "advance_to_author_or_release_gate"
+    if failed_lane_count or missing_parts:
+        status = "blocked"
+        next_action = "source_ready_target_replacement_or_upstream_source_expansion"
+    return {
+        "status": status,
+        "targetCount": target_count,
+        "allLaneReadyTargetCount": all_lane_ready,
+        "allLaneReadyRatio": _ratio(all_lane_ready, target_count),
+        "laneCoverage": lane_coverage,
+        "bottleneckLane": bottleneck_lane,
+        "failedLaneCount": failed_lane_count,
+        "failedEntityCount": len(failed_entities),
+        "failedEntitySample": failed_entities[:20],
+        "missingSummary": ", ".join(missing_parts),
+        "nextAction": next_action,
+        "autoResearch": {
+            "readyTargets": len(auto_ready),
+            "ineligibleTargets": len(auto_ineligible),
+            "sourceUnavailable": len(auto_unavailable),
+            "readyTargetSample": auto_ready[:20],
+            "ineligibleTargetSample": [
+                str(item.get("entityId") or "").strip()
+                for item in auto_ineligible[:20]
+                if str(item.get("entityId") or "").strip()
+            ],
+        },
     }
 
 
@@ -242,6 +382,7 @@ def _artifact_evidence(task_id: str, batch_id: str) -> dict[str, Any]:
             "failedLaneCount": managed_audit.get("failedLaneCount"),
             "abandonedCount": managed_audit.get("abandonedCount"),
         },
+        "sourceReadiness": _source_readiness_summary(auto_research, managed_audit),
         "contentPlanSourceDiagnosticsExists": bool(content_plan_diag),
         "contentPlanSourceDiagnostics": {
             target: {
@@ -398,9 +539,29 @@ def _blockers_and_warnings(
             blockers.append("agent jobs planned but no worker started")
         if job_count and finished < job_count:
             blockers.append(f"agent jobs unfinished: {finished}/{job_count}")
+    active_scheduler = workflow.get("activeAgentScheduler") or {}
+    if isinstance(active_scheduler, Mapping) and active_scheduler:
+        warnings.append(
+            "activeAgentScheduler evidence exists; previous managed run did not finalize cleanly"
+        )
+        prompt_count = int(active_scheduler.get("promptCount") or 0)
+        effective_workers = int(active_scheduler.get("effectiveWorkerCount") or 0)
+        if prompt_count and effective_workers:
+            warnings.append(
+                f"managed checkpoint had {prompt_count} prompts with {effective_workers} effective worker(s)"
+            )
     audit = evidence.get("managedBatchAudit") or {}
     if isinstance(audit, Mapping) and int(audit.get("failedLaneCount") or 0):
         blockers.append(f"managed batch failed lanes={audit.get('failedLaneCount')}")
+    readiness = evidence.get("sourceReadiness") or {}
+    if isinstance(readiness, Mapping) and readiness.get("status") == "blocked":
+        target_count = int(readiness.get("targetCount") or 0)
+        ready_count = int(readiness.get("allLaneReadyTargetCount") or 0)
+        missing = str(readiness.get("missingSummary") or "").strip()
+        if target_count:
+            blockers.append(f"source-ready targets {ready_count}/{target_count}")
+        if missing:
+            blockers.append(f"source lane coverage below target: {missing}")
     env_ready = evidence.get("envReady") if evidence.get("envReadyReportExists") else evidence.get("managedEnvReady")
     if env_ready is not True and not env.get("CURSOR_API_KEY"):
         blockers.append("CURSOR_API_KEY missing; real managed Cursor SDK trial cannot run")
@@ -423,13 +584,6 @@ def _terminal_cause(
     env: Mapping[str, str],
 ) -> dict[str, Any]:
     env_ready = evidence.get("envReady") if evidence.get("envReadyReportExists") else evidence.get("managedEnvReady")
-    if env_ready is not True and not env.get("CURSOR_API_KEY"):
-        return {
-            "category": "environment_blocker",
-            "stage": "env_ready",
-            "reason": "CURSOR_API_KEY missing; managed Cursor SDK authoring cannot start",
-            "retryClass": "operator_action_required",
-        }
     last_agent = workflow.get("lastAgentRun") or {}
     if isinstance(last_agent, Mapping) and int(last_agent.get("infrastructureFailures") or 0):
         return {
@@ -438,13 +592,31 @@ def _terminal_cause(
             "reason": f"infrastructureFailures={last_agent.get('infrastructureFailures')}",
             "retryClass": "infra_retry_then_manual",
         }
+    readiness = evidence.get("sourceReadiness") or {}
+    if isinstance(readiness, Mapping) and readiness.get("status") == "blocked":
+        reason = str(readiness.get("missingSummary") or "").strip()
+        if not reason:
+            reason = f"source-ready targets {readiness.get('allLaneReadyTargetCount')}/{readiness.get('targetCount')}"
+        return {
+            "category": "source_sufficiency_blocker",
+            "stage": "download_plan",
+            "reason": reason,
+            "retryClass": "source_ready_or_target_replacement",
+        }
     audit = evidence.get("managedBatchAudit") or {}
     if isinstance(audit, Mapping) and int(audit.get("failedLaneCount") or 0):
         return {
             "category": "source_sufficiency_blocker",
-            "stage": "content_plan",
+            "stage": "download_plan",
             "reason": f"failedLaneCount={audit.get('failedLaneCount')}",
             "retryClass": "source_ready_or_target_replacement",
+        }
+    if env_ready is not True and not env.get("CURSOR_API_KEY"):
+        return {
+            "category": "environment_blocker",
+            "stage": "env_ready",
+            "reason": "CURSOR_API_KEY missing; managed Cursor SDK authoring cannot start",
+            "retryClass": "operator_action_required",
         }
     state = workflow.get("workflowState") or {}
     if isinstance(state, Mapping):
@@ -454,7 +626,7 @@ def _terminal_cause(
         if "source_unavailable" in joined_failed or "source-unavailable" in next_action:
             return {
                 "category": "source_sufficiency_blocker",
-                "stage": "content_plan",
+                "stage": "download_plan",
                 "reason": next_action or "content plan has source_unavailable failed objects",
                 "retryClass": "source_ready_or_target_replacement",
             }
@@ -498,6 +670,7 @@ def _efficiency_assessment(scope: Mapping[str, Any], workflow: Mapping[str, Any]
     config = _managed_runtime_config()
     state = workflow.get("workflowState") or {}
     last_agent = workflow.get("lastAgentRun") or {}
+    active_scheduler = workflow.get("activeAgentScheduler") or {}
     history = workflow.get("agentRunHistory") if isinstance(workflow.get("agentRunHistory"), list) else []
     def _run_key(row: Mapping[str, Any]) -> tuple[str, str, str, str]:
         scheduler = row.get("scheduler") if isinstance(row.get("scheduler"), Mapping) else {}
@@ -522,6 +695,19 @@ def _efficiency_assessment(scope: Mapping[str, Any], workflow: Mapping[str, Any]
         key = _run_key(last_agent)
         if key not in seen:
             agent_runs.append(last_agent)
+    if isinstance(active_scheduler, Mapping) and active_scheduler:
+        active_record = {
+            "stage": active_scheduler.get("stage"),
+            "plannedJobCount": active_scheduler.get("promptCount"),
+            "jobCount": 0,
+            "startedCount": 0,
+            "finishedCount": 0,
+            "infrastructureFailures": 0,
+            "scheduler": dict(active_scheduler),
+        }
+        key = _run_key(active_record)
+        if key not in seen:
+            agent_runs.append(active_record)
 
     def _run_prompt_count(row: Mapping[str, Any]) -> int:
         scheduler = row.get("scheduler") if isinstance(row.get("scheduler"), Mapping) else {}
@@ -549,6 +735,11 @@ def _efficiency_assessment(scope: Mapping[str, Any], workflow: Mapping[str, Any]
         )
     if author_jobs and author_jobs <= 20:
         issues.append("small batches pay bridge/subprocess startup overhead per job before throughput benefits appear")
+    if prompt_count >= 50 and str(primary_run.get("stage") or "") != "produce_author":
+        issues.append(
+            f"managed checkpoint {primary_run.get('stage') or 'unknown'} has {prompt_count} prompts; "
+            "source discovery/repair must be batched or deterministic before hundred-level trials"
+        )
     if not workflow.get("workflowStateExists"):
         issues.append("current evidence stops before timing/token ledgers, so real content latency is not measurable")
     if target_count and author_jobs:
@@ -607,14 +798,17 @@ def _trial_strategy(
         ]
     elif category == "source_sufficiency_blocker":
         mode = "source_ready_repair_or_replace"
+        limit = int(scope.get("targetCount") or 100)
+        replacement_task_name = f"{batch_id}_source_ready_retry"
         commands = [
-            (
-                "python3 quwoquan_data/scripts/cli.py data source-discover "
-                f"--task '{task_id}' --batch {batch_id} --lane all --force"
-            ),
             (
                 "python3 quwoquan_data/scripts/cli.py task audit-batch "
                 f"--task '{task_id}' --batch {batch_id} --json --write --strict"
+            ),
+            (
+                "python3 quwoquan_data/scripts/cli.py task select-targets "
+                f"--limit {limit} --mandatory '' --exclude-from-run '{task_id}::{batch_id}' "
+                f"--name '{replacement_task_name}' --write"
             ),
         ]
     elif category == "cursor_sdk_infra_failure":

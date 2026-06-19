@@ -12,6 +12,7 @@ import tempfile
 import time
 import urllib.parse
 from pathlib import Path
+from typing import Any, Mapping
 
 from _common.paths import DATA_ROOT
 from vertical.source_registry import resolve_travel_source_runtime
@@ -73,6 +74,7 @@ def _wikipedia_api_plaintext(url: str) -> str:
         "action": "query",
         "prop": "extracts",
         "explaintext": "1",
+        "redirects": "1",
         "titles": title,
         "format": "json",
     })
@@ -110,6 +112,37 @@ def _html_to_plain_text(html: str) -> str:
             continue
         kept.append(ln)
     return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+
+
+def _html_meta_plain_text(html: str) -> str:
+    """Extract only useful head metadata, including disabled meta comments.
+
+    Some official scenic sites keep their stable introduction in
+    keywords/description meta tags, and a few leave those tags commented out in
+    the deployed shell. We intentionally extract only meta tag content rather
+    than preserving arbitrary HTML comments, which would pull in templates and
+    implementation notes as source text.
+    """
+    search_space = str(html or "")
+    comments = "\n".join(re.findall(r"(?is)<!--(.*?)-->", search_space))
+    if comments:
+        search_space = f"{search_space}\n{comments}"
+    chunks: list[str] = []
+    for tag in re.findall(r"(?is)<meta\b[^>]*>", search_space):
+        if not re.search(
+            r"""(?is)\b(?:name|property)\s*=\s*["'](?:description|keywords|og:description|twitter:description)["']""",
+            tag,
+        ):
+            continue
+        match = re.search(r"""(?is)\bcontent\s*=\s*(["'])(.*?)\1""", tag)
+        if not match:
+            continue
+        value = html_lib.unescape(match.group(2)).strip()
+        value = re.sub(r"\s+", " ", value)
+        if len(value) < 12 or not re.search(r"[\u4e00-\u9fff]", value):
+            continue
+        chunks.append(value)
+    return _join_unique_text_chunks(chunks)
 
 
 def _baike_html_plaintext(url: str) -> str:
@@ -315,11 +348,12 @@ def _static_official_plaintext(url: str) -> str:
             text = _ems517_shell_plaintext(url, html)
             if text:
                 return text[:50000]
-    text = _html_to_plain_text(html)
+    meta_text = _html_meta_plain_text(html)
+    text = _join_unique_text_chunks([meta_text, _html_to_plain_text(html)])
     if len(text) < 200 or "加载中" in text:
         bundle_text = _spa_bundle_plaintext(url, html)
         if bundle_text:
-            return bundle_text[:50000]
+            return _join_unique_text_chunks([meta_text, bundle_text])[:50000]
     return text[:50000]
 
 
@@ -451,17 +485,32 @@ def fetch_source(url: str, output_dir: Path) -> dict:
     }
 
 
-def fetch_source_payload(url: str) -> dict:
+def _source_fetchable_override(source: Mapping[str, Any] | None) -> bool:
+    if not isinstance(source, Mapping):
+        return False
+    for key in ("fetchableOverride", "fetchable"):
+        value = source.get(key)
+        if value is True:
+            return True
+        if isinstance(value, str) and value.strip().lower() in {"true", "1", "yes"}:
+            return True
+    return False
+
+
+def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -> dict:
     """抓取原文但不落盘，返回 {url, statusCode, htmlBytes, text, sha256}。
 
     供来源单元写入器把 page.html/source.md 落进 1.download/sources/{NN}.{sourceKind}/。
     网络异常抛出，由调用方走离线兜底。
     """
     runtime = resolve_travel_source_runtime(url)
-    if runtime.get("matched") and not runtime.get("fetchable"):
+    fetchable_override = _source_fetchable_override(source)
+    if runtime.get("matched") and not runtime.get("fetchable") and not fetchable_override:
         raise RuntimeError(
             f"fetch blocked for {url}: siteId={runtime.get('siteId')} marked fetchable=false in source registry"
         )
+    if fetchable_override:
+        runtime = {**runtime, "sourceFetchableOverride": True}
     status, body, _ = _http_get_bytes(url, timeout=20, max_redirects=4, max_retries=4)
     if status != 200 or not body:
         raise RuntimeError(f"fetch failed for {url} (status={status})")

@@ -18,6 +18,12 @@ client_projection:
   dart_class: AuthorImpactItem
   base_class: ""
   output_path: cloud/runtime/generated/content/author_impact_item.g.dart
+  # 复用 recommendation 域统一交互子契约值对象（§20.7），跨域引用走相对路径。
+  dart_imports:
+    - ../recommendation/intersection_text_span.g.dart
+    - ../recommendation/intersection_visual.g.dart
+    - ../recommendation/intersection_target.g.dart
+    - ../recommendation/intersection_propagation_path.g.dart
   fields:
     - name: helpType
       dart_type: String
@@ -66,4 +72,62 @@ client_projection:
       nullable: false
       source: subtitleText
       aliases: [subtitleText]
+      default: "''"
+    # 统一交互子契约（§20.7，只附加）：
+    #   impactId 为该影响事实稳定 id（明细下钻 / 埋点用）；
+    #   primarySpans 是 primaryText 的结构化富文本切分，join(spans.text)==primaryText（契约不变量）；
+    #   sampleVisuals 为受影响样本视觉（数字下钻明细展示）；
+    #   countTarget 为数字下钻目标（影响明细，可空表示暂不可下钻）；
+    #   evidenceSnapshotId 为证据快照 id（完整分页明细 P1 就绪后据此拉全量）；
+    #   countObjectKind 为被计数对象类型。
+    - name: impactId
+      dart_type: String
+      nullable: false
+      source: impactId
+      aliases: [impactId]
+      default: "''"
+    - name: primarySpans
+      dart_type: List<IntersectionTextSpan>
+      nullable: false
+      source: primarySpans
+      aliases: [primarySpans]
+      list_element_dart_class: IntersectionTextSpan
+    - name: sampleVisuals
+      dart_type: List<IntersectionVisual>
+      nullable: false
+      source: sampleVisuals
+      aliases: [sampleVisuals]
+      list_element_dart_class: IntersectionVisual
+    - name: countTarget
+      dart_type: IntersectionTarget
+      nullable: true
+      source: countTarget
+      aliases: [countTarget]
+      map_from_string_key_class: IntersectionTarget
+    - name: evidenceSnapshotId
+      dart_type: String
+      nullable: false
+      source: evidenceSnapshotId
+      aliases: [evidenceSnapshotId]
+      default: "''"
+    - name: countObjectKind
+      dart_type: String
+      nullable: false
+      source: countObjectKind
+      aliases: [countObjectKind]
+      default: "''"
+    # 架构基线 v2（§21.4 传播视图 + §21.5.2 iconKey，草案/未冻结）：
+    #   propagationPath 承载可证下游传播链（路径节点 + 跳数 + 二级传播绝对人数），守红线（禁比率）；
+    #   iconKey 影响类型图标语义键（helpType → connect/circle/discussion/compass/read/share）。
+    - name: propagationPath
+      dart_type: IntersectionPropagationPath
+      nullable: true
+      source: propagationPath
+      aliases: [propagationPath]
+      map_from_string_key_class: IntersectionPropagationPath
+    - name: iconKey
+      dart_type: String
+      nullable: false
+      source: iconKey
+      aliases: [iconKey]
       default: "''"

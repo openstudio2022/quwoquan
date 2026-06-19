@@ -42,11 +42,26 @@ type RawBehaviorEvent struct {
 	TotalUnits      int      `bson:"totalUnits,omitempty"`
 	EntityRefs      []string `bson:"entityRefs,omitempty"`
 	FeedRequestID   string   `bson:"feedRequestId,omitempty"`
+	// Position 是事件发生时的 feed 内序位（曝光/点击位置），与 FeedRequestID 组合可还原
+	// 「某一次 feed 下发的第几位被点击/停留」，供位置偏置校正与离线 replay 归因。
+	Position int `bson:"position,omitempty"`
+	// CommentLength 是评论行为的正文长度，供评论质量/深度互动信号离线分析。
+	CommentLength int `bson:"commentLength,omitempty"`
+	// ChannelID/RankingVersion 是阶段五归因字段：feed 下发频道与精排版本；与 FeedRequestID 组合可
+	// 离线还原「某次 feed 下发(频道/精排版本)的第几位被曝光/点击/转化」，供位置偏置校正与 AB / replay。
+	ChannelID      string `bson:"channelId,omitempty"`
+	RankingVersion string `bson:"rankingVersion,omitempty"`
 	// 交集转化归因（S6）：触发交集行动（follow/join_circle/add_contact）的维度与路径制 tagRef。
-	IntersectionDimension string    `bson:"intersectionDimension,omitempty"`
-	IntersectionTagRefs   []string  `bson:"intersectionTagRefs,omitempty"`
-	OccurredAt            string    `bson:"occurredAt"`
-	CreatedAt             time.Time `bson:"createdAt"`
+	IntersectionDimension string   `bson:"intersectionDimension,omitempty"`
+	IntersectionTagRefs   []string `bson:"intersectionTagRefs,omitempty"`
+	// 交集漏斗归因（曝光/点击/转化，R08 端云对齐）：交集稳定标识、类别（fact|affinity）、
+	// 来源 kind 与点级证据 id，使「交集曝光 → 点击 → 转化」可按同一 intersectionId 离线下钻。
+	IntersectionID         string    `bson:"intersectionId,omitempty"`
+	IntersectionClass      string    `bson:"intersectionClass,omitempty"`
+	IntersectionSourceRef  string    `bson:"intersectionSourceRef,omitempty"`
+	IntersectionEvidenceID string    `bson:"intersectionEvidenceId,omitempty"`
+	OccurredAt             string    `bson:"occurredAt"`
+	CreatedAt              time.Time `bson:"createdAt"`
 }
 
 // MongoBehaviorEventStore persists raw behavior events to MongoDB with TTL.

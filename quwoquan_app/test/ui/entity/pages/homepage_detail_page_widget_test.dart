@@ -107,6 +107,43 @@ void main() {
     expect(find.byType(AppPageErrorState), findsNothing);
   });
 
+  testWidgets('失效主页会展示明确提示并可安全返回首页', (tester) async {
+    final router = GoRouter(
+      initialLocation: AppRoutePaths.homepageDetail(id: 'missing-homepage-id'),
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoutePaths.home,
+          builder: (_, _) => const Scaffold(
+            body: Center(child: Text('HOME')),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutePaths.homepageDetailPathTemplate.replaceAll(
+            '{id}',
+            ':id',
+          ),
+          builder: (context, state) =>
+              HomepageDetailPage(homepageId: state.pathParameters['id'] ?? ''),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp.router(routerConfig: router)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppPageErrorState), findsOneWidget);
+    expect(find.text(UITextConstants.homepageInfoUnavailableTitle), findsOneWidget);
+    expect(find.text('主页不存在或已下线'), findsOneWidget);
+    expect(find.text(UITextConstants.back), findsOneWidget);
+
+    await tester.tap(find.text(UITextConstants.back));
+    await tester.pumpAndSettle();
+
+    expect(find.text('HOME'), findsOneWidget);
+  });
+
   testWidgets('对象页 bundle 请求透传推荐与灰度上下文', (tester) async {
     final repository = _RecordingHomepageRepository();
     await tester.pumpWidget(

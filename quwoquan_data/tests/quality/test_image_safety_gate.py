@@ -94,10 +94,53 @@ def test_at_handle_is_unsafe():
     assert v.status == I.STATUS_UNSAFE, v.to_dict()
 
 
+def test_bare_copyright_symbol_without_rights_context_is_not_watermark():
+    assert I._has_watermark("严复 故居 中华人民共和国 国务院 8:30—22:00 © RMB") is False
+
+
+def test_copyright_symbol_with_rights_context_is_watermark():
+    assert I._has_watermark("© Alice all rights reserved") is True
+
+
 def test_text_heavy_routes_to_article():
     v = I.assess_image(_text_heavy_image())
     assert v.is_text_heavy is True, v.to_dict()
     assert v.status in (I.STATUS_TEXT_HEAVY, I.STATUS_UNSAFE), v.to_dict()
+
+
+def test_oversized_image_is_blocked_before_heavy_cv_ocr():
+    img = np.zeros((120, 120, 3), np.uint8)
+    p = _write(img, ".png")
+    old_limit = I.MAX_ASSESS_PIXELS
+    try:
+        I.MAX_ASSESS_PIXELS = 10_000
+        v = I.assess_image(p)
+    finally:
+        I.MAX_ASSESS_PIXELS = old_limit
+    assert v.status == I.STATUS_UNSAFE, v.to_dict()
+    assert any(reason.startswith("image_pixels_too_large:") for reason in v.reasons), v.to_dict()
+
+
+def test_publish_prefilter_blocks_oversized_and_unreadable_images():
+    img = np.zeros((120, 120, 3), np.uint8)
+    oversized = _write(img, ".png")
+    unreadable = _TMP_DIR / "unreadable.jpg"
+    unreadable.write_bytes(b"not-an-image")
+    old_limit = I.MAX_ASSESS_PIXELS
+    try:
+        I.MAX_ASSESS_PIXELS = 10_000
+        oversized_verdict = I.assess_image_publish_prefilter(oversized)
+    finally:
+        I.MAX_ASSESS_PIXELS = old_limit
+    unreadable_verdict = I.assess_image_publish_prefilter(unreadable)
+
+    assert oversized_verdict.status == I.STATUS_UNSAFE, oversized_verdict.to_dict()
+    assert any(
+        reason.startswith("image_pixels_too_large:")
+        for reason in oversized_verdict.reasons
+    ), oversized_verdict.to_dict()
+    assert unreadable_verdict.status == I.STATUS_NEEDS_REVIEW, unreadable_verdict.to_dict()
+    assert "image_dimensions_unreadable" in unreadable_verdict.reasons
 
 
 def test_face_image_needs_review():

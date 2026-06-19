@@ -64,7 +64,6 @@ class GeneratedPostRuntimeMetadata {
 
   static const String feedPath = '/v1/content/feed';
   static const String postDetailPathTemplate = '/v1/content/posts/{postId}';
-  static const String recommendPath = '/v1/content/recommend';
 
   static const List<String> feedQueryParams = <String>[
     'identity',
@@ -73,6 +72,7 @@ class GeneratedPostRuntimeMetadata {
     'cursor',
     'limit',
     'subCategory',
+    'feedRequestId',
   ];
 
   static const List<String> createWritableFields = <String>[

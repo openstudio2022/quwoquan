@@ -19,6 +19,8 @@ python3 quwoquan_data/tests/task/test_object_queue.py
 python3 quwoquan_data/scripts/cli.py verify single-contract-source
 python3 quwoquan_data/scripts/cli.py verify content-supply-production
 python3 quwoquan_data/tests/verify/test_scale_readiness.py
+python3 quwoquan_data/tests/site_supply/test_site_supply_contract.py
+python3 quwoquan_data/tests/verify/test_site_scale_readiness.py
 # Subagent handoff packet 与出口门（single ref gate + batch reducer gate + 执行合约 5 要素）
 python3 quwoquan_data/tests/common/test_handoff.py
 # LLM-as-judge 严格性门：判官元数据 pin / 族分离 / 二元+理由 / 偏差缓解 / jury 多数表决 / kappa

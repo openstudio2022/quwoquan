@@ -8,12 +8,16 @@ class IntersectionInboxSummary {
   final int totalNewCount;
   final List<IntersectionDimensionTally> dimensions;
   final String generatedAt;
+  final int totalStrengthenedCount;
+  final int totalReactivatedCount;
 
   IntersectionInboxSummary({
     this.totalCount = 0,
     this.totalNewCount = 0,
     this.dimensions = const <IntersectionDimensionTally>[],
     this.generatedAt = '',
+    this.totalStrengthenedCount = 0,
+    this.totalReactivatedCount = 0,
   });
 
   factory IntersectionInboxSummary.fromMap(Map<String, dynamic> m) {
@@ -22,6 +26,8 @@ class IntersectionInboxSummary {
       totalNewCount: (m['totalNewCount'] as num?)?.toInt() ?? 0,
       dimensions: _parseProjectionDtoList(m['dimensions'], IntersectionDimensionTally.fromMap),
       generatedAt: m['generatedAt']?.toString() ?? '',
+      totalStrengthenedCount: (m['totalStrengthenedCount'] as num?)?.toInt() ?? 0,
+      totalReactivatedCount: (m['totalReactivatedCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -31,6 +37,8 @@ class IntersectionInboxSummary {
       'totalNewCount': totalNewCount,
       'dimensions': dimensions,
       'generatedAt': generatedAt,
+      'totalStrengthenedCount': totalStrengthenedCount,
+      'totalReactivatedCount': totalReactivatedCount,
     };
   }
 
@@ -39,12 +47,16 @@ class IntersectionInboxSummary {
     int? totalNewCount,
     List<IntersectionDimensionTally>? dimensions,
     String? generatedAt,
+    int? totalStrengthenedCount,
+    int? totalReactivatedCount,
   }) {
     return IntersectionInboxSummary(
       totalCount: totalCount ?? this.totalCount,
       totalNewCount: totalNewCount ?? this.totalNewCount,
       dimensions: dimensions ?? this.dimensions,
       generatedAt: generatedAt ?? this.generatedAt,
+      totalStrengthenedCount: totalStrengthenedCount ?? this.totalStrengthenedCount,
+      totalReactivatedCount: totalReactivatedCount ?? this.totalReactivatedCount,
     );
   }
 }

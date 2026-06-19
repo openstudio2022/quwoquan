@@ -39,7 +39,12 @@ class ProfileStatsRow extends StatelessWidget {
       _StatItem(
         value: _formatCount(subject?.likeCount ?? 0),
         label: UITextConstants.circleLikes,
-        type: '',
+        type: 'likes',
+      ),
+      _StatItem(
+        value: _formatCount(subject?.circleCount ?? 0),
+        label: UITextConstants.contactsTabCircles,
+        type: 'circles',
       ),
     ];
 
@@ -56,7 +61,7 @@ class ProfileStatsRow extends StatelessWidget {
               '·',
               style: TextStyle(
                 fontSize: AppTypography.iosSubheadline,
-                fontWeight: AppTypography.medium,
+                fontWeight: AppTypography.regular,
                 color: fg.withValues(alpha: 0.86),
               ),
             ),
@@ -76,10 +81,10 @@ extension on ProfileStatsRow {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            fontSize: AppTypography.iosBody,
-            fontWeight: AppTypography.semiBold,
-            color: fg.withValues(alpha: 0.94),
-            letterSpacing: -0.24,
+            fontSize: AppTypography.iosSubheadline,
+            fontWeight: AppTypography.regular,
+            color: fg.withValues(alpha: 0.9),
+            letterSpacing: -0.08,
           ),
         ),
         SizedBox(width: AppSpacing.intraGroupXs / 2),
@@ -89,7 +94,7 @@ extension on ProfileStatsRow {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: AppTypography.iosFootnote,
-            fontWeight: AppTypography.medium,
+            fontWeight: AppTypography.regular,
             color: fgSecondary,
           ),
         ),

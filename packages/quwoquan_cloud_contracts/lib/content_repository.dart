@@ -6,17 +6,22 @@ import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_reaction_state.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 
 /// 与 [`quwoquan_app/lib/cloud/services/content/content_repository.dart`] 中常量一致。
 const String kFeedSortRecommend = 'recommend';
 
-/// 内容读取（feed / 搜索 / 详情 / 用户作品 / 推荐 / 展示 wire）。
+/// 内容读取（feed / 搜索 / 详情 / 用户作品 / 展示 wire）。
 ///
 /// R02：单接口 ≤10 方法。
 abstract class ContentReadRepository {
-  Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
+  /// 首页发现流唯一主链路（GET /v1/content/feed?sort=recommend）。
+  ///
+  /// 返回 [DiscoveryFeedPage] 强类型 envelope；feedRequestId 由服务端权威下发，
+  /// 首刷传 null，分页时回显上一页 envelope 的 feedRequestId 以保持归因连续。
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? identity,
     String? type,
@@ -48,11 +53,6 @@ abstract class ContentReadRepository {
   });
 
   Future<ContentPostDetailPayload> getPost({required String postId});
-
-  Future<ContentRecommendationResponseDto> getRecommendation({
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  });
 
   Future<CursorPage<PostBaseDto>> listUserPosts({
     required String userId,

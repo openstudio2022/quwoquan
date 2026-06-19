@@ -69,11 +69,27 @@ _HOMEPAGE_GUIDE_PENALTY = ("攻略", "游记", "评论", "点评", "小红书", 
 _HOMEPAGE_ALLOWED_LANES = ("homepage", "legacy", "")
 _HOMEPAGE_FACT_NOISE_MARKERS = (
     "欢迎访问",
+    "首页",
+    "English",
+    "中文",
+    "官方网站",
+    "网站首页",
+    "Toggle navigation",
+    "查看更多",
+    "今日实时游客量",
+    "旅游咨询热线",
     "为您提供景区美食大全",
     "请提前查看",
     "打开微信扫一扫",
     "扫码",
     "关注",
+    "浏览全部图片",
+    "查看地图",
+    "更多精彩视频",
+    "友情链接",
+    "外部链接",
+    "页面存档",
+    "互联网档案馆",
     "暂停服务",
     "暂无",
 )
@@ -91,6 +107,118 @@ _HOMEPAGE_HISTORY_MARKERS = (
     "朝",
     "世纪",
 )
+_HOMEPAGE_FACT_SIGNAL_MARKERS = (
+    "位于",
+    "位於",
+    "地处",
+    "坐落",
+    "分布",
+    "距",
+    "距离",
+    "面积",
+    "海拔",
+    "最高点",
+    "全长",
+    "总长",
+    "长度",
+    "高度",
+    "宽",
+    "建于",
+    "始建",
+    "建成",
+    "修建",
+    "开凿",
+    "设立",
+    "成立",
+    "开放",
+    "開放",
+    "保护",
+    "遗产",
+    "文物",
+    "遗址",
+    "博物馆",
+    "景点",
+    "景點",
+    "景区",
+    "風景区",
+    "风景区",
+    "風景名勝区",
+    "风景名胜区",
+    "風景",
+    "公园",
+    "古镇",
+    "长城",
+    "大坝",
+    "水电站",
+    "工程",
+    "机组",
+    "装机",
+    "发电量",
+    "AAAAA",
+    "5A",
+    "国家",
+    "世界",
+    "中国",
+    "著名",
+    "最早",
+    "最大",
+    "气候",
+    "天气",
+    "交通",
+    "接驳",
+    "步道",
+    "预约",
+    "票务",
+    "组成",
+    "包括",
+    "得名",
+    "扩建",
+    "擴建",
+    "授予",
+)
+_HOMEPAGE_SPATIAL_PRACTICAL_MARKERS = (
+    "雪山",
+    "湖泊",
+    "水库",
+    "水域",
+    "沙漠",
+    "草甸",
+    "峡谷",
+    "高原",
+    "山地",
+    "森林",
+    "湿地",
+    "水利",
+    "交通",
+    "接驳",
+    "步道",
+    "开放",
+    "预约",
+    "票务",
+    "风景区",
+    "風景名勝区",
+    "风景名胜区",
+    "景区",
+)
+_HOMEPAGE_LOCATION_RE = re.compile(r"(位于|位於).{2,40}[省市县縣区區镇鎮乡鄉村]")
+_HOMEPAGE_FACT_UNIT_RE = re.compile(
+    r"(A{1,5}级|"
+    r"(\d|[一二三四五六七八九十百千万亿])"
+    r".{0,8}(年|月|日|米|公里|千米|公顷|平方公里|亩|万千瓦|千瓦|MW|亿千瓦时|吨|级|A))"
+)
+_HOMEPAGE_TERMINAL_SPLIT_RE = re.compile(r"[^。！？；;]+[。！？；;]?")
+_HOMEPAGE_SOFT_SPLIT_RE = re.compile(r"[^，,、：:]+[，,、：:]?")
+_HOMEPAGE_ENTITY_SPLIT_RE = re.compile(r"[—－\-·•、/|()（）]+")
+_HOMEPAGE_GENERIC_ENTITY_TOKENS = {
+    "景区",
+    "旅游区",
+    "旅游景区",
+    "风景区",
+    "风景名胜区",
+    "文化旅游区",
+    "公园",
+}
+_HOMEPAGE_ALIAS_SUFFIXES = tuple(sorted(_HOMEPAGE_GENERIC_ENTITY_TOKENS, key=len, reverse=True))
 
 
 def _safe_ref(domain: str, etype: str, name: str) -> str:
@@ -182,20 +310,24 @@ def _entity_base_draft(task_id: str, batch_id: str, domain: str, etype: str, nam
     for candidate in candidates:
         meta_path = Path(candidate["unitDir"]) / "meta.json"
         meta = read_json(meta_path) if meta_path.is_file() else {}
-        priority = _homepage_source_priority(meta)
+        readiness = homepage_base_draft_readiness(meta, candidate_text := load_base_draft_text(
+            task_id, batch_id, candidate["sourceRef"]
+        ).strip(), entity_name=name)
+        priority = int(readiness.get("priority") or 0)
         if priority > 0:
-            candidate_text = load_base_draft_text(task_id, batch_id, candidate["sourceRef"]).strip()
-            fact_count = len(_split_fact_sentences(candidate_text[:4000], entity_name=name))
             homepage_candidates.append(
                 {
                     **candidate,
                     "_homepagePriority": priority,
                     "_sourceKind": _homepage_source_text(meta),
-                    "_factCount": fact_count,
-                    "_factReady": fact_count >= 4,
+                    "_factCount": int(readiness.get("factCount") or 0),
+                    "_factReady": bool(readiness.get("ready")),
                     "_baseText": candidate_text,
                 }
             )
+    if not homepage_candidates:
+        return {}
+    homepage_candidates = [row for row in homepage_candidates if row.get("_factReady")]
     if not homepage_candidates:
         return {}
     homepage_candidates.sort(
@@ -220,6 +352,39 @@ def _entity_base_draft(task_id: str, batch_id: str, domain: str, etype: str, nam
         "primaryEvidenceRef": best["sourceRef"],
         "sourceUseMode": str(meta.get("sourceUseMode") or "factual_reference_only"),
         "text": text[:4000],
+    }
+
+
+def homepage_base_draft_readiness(meta: dict[str, Any], text: str, *, entity_name: str) -> dict[str, Any]:
+    """Return the shared admission verdict for entity homepage base drafts.
+
+    This is the exact contract used before asking the Agent to write an entity
+    homepage. Download gates call the same function so a retained homepage
+    source cannot pass upstream and then fail `build_prepare` for missing
+    usable facts.
+    """
+    priority = _homepage_source_priority(meta)
+    if priority <= 0:
+        return {
+            "ready": False,
+            "priority": priority,
+            "factCount": 0,
+            "issue": "not encyclopedia/wiki/official homepage source",
+        }
+    source_text = str(text or "").strip()
+    if not source_text:
+        return {
+            "ready": False,
+            "priority": priority,
+            "factCount": 0,
+            "issue": "empty source text",
+        }
+    fact_count = len(_split_fact_sentences(source_text[:4000], entity_name=entity_name))
+    return {
+        "ready": fact_count >= 4,
+        "priority": priority,
+        "factCount": fact_count,
+        "issue": "" if fact_count >= 4 else f"usable facts {fact_count}<4",
     }
 
 
@@ -264,6 +429,7 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
     axes = spec.get("conditionAxes") or {}
     data = task_data(task_id)
     refs: list[str] = []
+    active_input_paths: set[Path] = set()
     for target in _coverage_targets(spec):
         domain, etype, name = target["domain"], target["etype"], target["name"]
         resolve_entity_object_dir(task_id, batch_id, name, etype_hint=f"{domain}/{etype}")
@@ -271,6 +437,7 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
         sop_dir = data.sop_dir(domain, etype)
         base_draft = _entity_base_draft(task_id, batch_id, domain, etype, name)
         input_path = batch_entity_page_input_path(task_id, batch_id, domain, etype, name)
+        active_input_paths.add(input_path)
         write_json(input_path, {
             "schemaVersion": "quwoquan_data.stage_envelope",
             "taskId": task_id,
@@ -322,10 +489,71 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
         })
         _write_entity_quality_stage(task_id, batch_id, domain, etype, name, base_draft=base_draft)
         refs.append(ref)
+    for stale_input in inputs_root.glob("**/3.compose/entity_page_input.json"):
+        if stale_input not in active_input_paths:
+            stale_input.unlink()
     manifest_path = batch_assistant_task(task_id, batch_id, "build", "entity_page")
     results_dir = batch_root(task_id, batch_id) / "entities"
     write_assistant_task(manifest_path, step="entity_page", input_dir=inputs_root, result_dir=results_dir, refs=refs)
     return inputs_root, refs
+
+
+def validate_entity_page_inputs(task_id: str, batch_id: str, spec: dict[str, Any]) -> list[str]:
+    """Pre-Agent admission gate for homepage contracts.
+
+    `build_prepare` is the last deterministic point before Cursor/Codex writes
+    entity pages. A homepage input is admissible only when the homepage lane has
+    already produced a readable encyclopedia/wiki/official base draft; the
+    Agent must not be asked to invent or repair missing upstream facts.
+    """
+    issues: list[str] = []
+    seen: set[str] = set()
+    root = batch_root(task_id, batch_id)
+    for target in _coverage_targets(spec):
+        domain, etype, name = target["domain"], target["etype"], target["name"]
+        label = f"{domain}/{etype}/{name}"
+        input_path = batch_entity_page_input_path(task_id, batch_id, domain, etype, name)
+        if not input_path.is_file():
+            issue = f"{label}: entity_page_input.json 缺失"
+            issues.append(issue)
+            seen.add(issue)
+            continue
+        try:
+            raw = read_json(input_path)
+        except Exception as exc:  # noqa: BLE001
+            issue = f"{label}: entity_page_input.json unreadable: {exc}"
+            issues.append(issue)
+            seen.add(issue)
+            continue
+        payload = raw.get("payload") if isinstance(raw.get("payload"), dict) else raw
+        base = payload.get("baseDraft") if isinstance(payload, dict) and isinstance(payload.get("baseDraft"), dict) else {}
+        source_ref = str(base.get("sourceRef") or "").strip()
+        text = str(base.get("text") or "").strip()
+        if not source_ref:
+            issue = f"{label}: entity homepage baseDraft.sourceRef is empty"
+            issues.append(issue)
+            seen.add(issue)
+        else:
+            source_path = root / source_ref
+            if not source_path.is_file():
+                issue = f"{label}: entity homepage baseDraft.sourceRef missing file {source_ref}"
+                issues.append(issue)
+                seen.add(issue)
+        if not text:
+            issue = f"{label}: homepage baseDraft.text 缺失"
+            issues.append(issue)
+            seen.add(issue)
+        else:
+            fact_count = len(_split_fact_sentences(text[:4000], entity_name=name))
+            if fact_count < 4:
+                issue = f"{label}: homepage baseDraft 可用事实不足"
+                issues.append(issue)
+                seen.add(issue)
+        for issue in _homepage_base_source_issues(task_id, batch_id, domain, etype, name):
+            if issue not in seen:
+                issues.append(issue)
+                seen.add(issue)
+    return issues
 
 
 def _entity_source_paths(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> list[str]:
@@ -405,17 +633,20 @@ def _strip_frontmatter(text: str) -> str:
 
 
 def _split_fact_sentences(text: str, *, entity_name: str) -> list[str]:
+    if _homepage_text_looks_structured_payload(text):
+        return []
     body = _strip_frontmatter(text)
-    chunks = re.split(r"(?<=[。！？；;])\s*|\n+", body)
     out: list[str] = []
     seen: set[str] = set()
-    for chunk in chunks:
+    entity_tokens = _homepage_entity_tokens(entity_name)
+    for chunk in _homepage_fact_candidates(body):
         sentence = re.sub(r"\s+", "", str(chunk or "")).strip()
-        if len(sentence) < 12:
+        sentence = sentence.strip(" \t\r\n，,、：:；;>")
+        if len(sentence) < 8:
             continue
         if any(marker in sentence for marker in _HOMEPAGE_FACT_NOISE_MARKERS):
             continue
-        if not any(token in sentence for token in (entity_name, "位于", "海拔", "面积", "景区", "遗产", "博物馆", "历史", "开放", "交通", "气候", "保护")):
+        if not _homepage_sentence_has_fact_signal(sentence, entity_tokens=entity_tokens):
             continue
         sentence = sentence[:120]
         key = sentence[:48]
@@ -426,6 +657,101 @@ def _split_fact_sentences(text: str, *, entity_name: str) -> list[str]:
         if len(out) >= 18:
             break
     return out
+
+
+def _homepage_text_looks_structured_payload(text: str) -> bool:
+    raw = str(text or "").lstrip()
+    if not raw:
+        return False
+    head = raw[:1200]
+    if head.startswith(("{", "[")):
+        api_markers = (
+            '"code"',
+            '"msg"',
+            '"data"',
+            '"newsId"',
+            '"newsName"',
+            '"sightId"',
+            '"sightName"',
+            '"newsContext"',
+            '"sightDescription"',
+        )
+        if sum(1 for marker in api_markers if marker in head) >= 3:
+            return True
+    if head.count('":"') >= 8 and head.count('","') >= 6:
+        return True
+    return False
+
+
+def _homepage_fact_candidates(body: str) -> list[str]:
+    """Return sentence/clause candidates while preserving local context.
+
+    Official scenic-site pages often pack several facts into a single hero block
+    with navigation copy before it. We therefore keep normal full sentences when
+    they are usable, but also split long chunks on soft Chinese punctuation and
+    emit small windows so aliases such as "云龙湖，位于徐州南部" retain enough
+    context to pass the homepage fact gate.
+    """
+    chunks = _HOMEPAGE_TERMINAL_SPLIT_RE.findall(body) or [body]
+    candidates: list[str] = []
+    for chunk in chunks:
+        chunk = str(chunk or "").strip()
+        if not chunk:
+            continue
+        candidates.append(chunk)
+        compact = re.sub(r"\s+", "", chunk)
+        if len(compact) < 40 and not any(marker in compact for marker in _HOMEPAGE_FACT_NOISE_MARKERS):
+            continue
+        parts = [part.strip() for part in _HOMEPAGE_SOFT_SPLIT_RE.findall(chunk) if part.strip()]
+        for part in parts:
+            candidates.append(part)
+        for width in (2, 3):
+            if len(parts) < width:
+                continue
+            for idx in range(0, len(parts) - width + 1):
+                candidates.append("".join(parts[idx:idx + width]))
+    return candidates
+
+
+def _homepage_entity_tokens(entity_name: str) -> set[str]:
+    tokens = {str(entity_name or "").strip()}
+    for part in _HOMEPAGE_ENTITY_SPLIT_RE.split(str(entity_name or "")):
+        cleaned = part.strip()
+        if len(cleaned) >= 2 and cleaned not in _HOMEPAGE_GENERIC_ENTITY_TOKENS:
+            tokens.add(cleaned)
+            alias = cleaned
+            changed = True
+            while changed:
+                changed = False
+                for suffix in _HOMEPAGE_ALIAS_SUFFIXES:
+                    if alias.endswith(suffix) and len(alias) > len(suffix) + 1:
+                        alias = alias[: -len(suffix)].strip()
+                        if len(alias) >= 2:
+                            tokens.add(alias)
+                        changed = True
+                        break
+    return {token for token in tokens if token}
+
+
+def _homepage_sentence_has_fact_signal(sentence: str, *, entity_tokens: set[str]) -> bool:
+    has_entity_token = any(token in sentence for token in entity_tokens)
+    has_signal = any(marker in sentence for marker in _HOMEPAGE_FACT_SIGNAL_MARKERS)
+    has_unit_fact = bool(_HOMEPAGE_FACT_UNIT_RE.search(sentence))
+    if has_entity_token and (has_signal or has_unit_fact or len(sentence) >= 20):
+        return True
+    if has_signal and has_unit_fact:
+        return True
+    if has_signal and any(token in sentence for token in ("长城", "大坝", "水电站", "遗产", "文物", "遗址", "博物馆")):
+        return True
+    if has_signal and any(token in sentence for token in _HOMEPAGE_SPATIAL_PRACTICAL_MARKERS) and len(sentence) >= 18:
+        return True
+    if has_unit_fact and any(token in sentence for token in _HOMEPAGE_SPATIAL_PRACTICAL_MARKERS) and len(sentence) >= 12:
+        return True
+    if has_signal and _HOMEPAGE_LOCATION_RE.search(sentence) and len(sentence) >= 10:
+        return True
+    if has_signal and any(token in sentence for token in ("景点", "景點", "古寺", "寺", "桥", "橋")) and len(sentence) >= 12:
+        return True
+    return False
 
 
 def _homepage_summary(name: str, facts: list[str]) -> str:

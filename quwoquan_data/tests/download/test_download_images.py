@@ -265,6 +265,52 @@ def test_prune_stale_source_units_removes_dirs_absent_from_current_plan():
     assert not stale.exists()
 
 
+def test_prune_stale_rejected_units_preserves_homepage_baike_memory():
+    from _common.paths import source_unit_dir
+
+    object_dir = resolve_entity_object_dir(
+        _TASK, "b_prune_stale_rejected_memory", _EID, etype_hint="景区"
+    )
+    rejected_root = object_dir / STAGE_DOWNLOAD / "rejected_sources"
+    baike = source_unit_dir(object_dir, 1, "home_baidu_baike")
+    article = source_unit_dir(object_dir, 2, "article_qunar_base")
+    baike = rejected_root / baike.name
+    article = rejected_root / article.name
+    baike.mkdir(parents=True, exist_ok=True)
+    article.mkdir(parents=True, exist_ok=True)
+    write_json(
+        baike / "meta.json",
+        {
+            "researchLane": "homepage",
+            "platform": "百度百科",
+            "sourceKind": "encyclopedia",
+            "url": "https://baike.baidu.com/item/foo",
+        },
+    )
+    write_json(
+        baike / "source.quality.json",
+        {"quality": "Reject", "fetchSucceeded": False, "statusCode": 0},
+    )
+    write_json(
+        article / "meta.json",
+        {"researchLane": "article", "platform": "去哪儿攻略", "url": "https://touch.travel.qunar.com/foo"},
+    )
+    write_json(
+        article / "source.quality.json",
+        {"quality": "Reject", "fetchSucceeded": False, "statusCode": 0},
+    )
+
+    pruned = handler_mod._prune_stale_rejected_source_units(
+        object_dir,
+        set(),
+        selected_lanes={"homepage", "article"},
+    )
+
+    assert pruned == ["02.article_qunar_base"]
+    assert baike.is_dir()
+    assert not article.exists()
+
+
 def test_handle_download_fetches_images_into_source_unit():
     """新布局：图片落到首个来源单元 assets/，写 assets/index.json，无对象级散 images/。"""
     from _common.source_unit import iter_source_units, resolve_entity_object_dir
@@ -322,7 +368,7 @@ def test_handle_download_fetches_images_into_source_unit():
             "sha256": _h.sha256(body).hexdigest(),
         }
 
-    def _fake_source_fetch(url: str):
+    def _fake_source_fetch(url: str, **_kwargs):
         return {
             "url": url,
             "statusCode": 200,
@@ -430,7 +476,7 @@ def test_repeated_image_lane_fetch_reuses_cached_assets_when_network_fails():
             "sha256": _h.sha256(body).hexdigest(),
         }
 
-    def _fake_source_fetch(url: str):
+    def _fake_source_fetch(url: str, **_kwargs):
         return {
             "url": url,
             "statusCode": 200,
@@ -521,7 +567,7 @@ def test_failed_image_lane_repair_preserves_previous_image_source_units():
             "sha256": _h.sha256(body).hexdigest(),
         }
 
-    def _fake_source_fetch(url: str):
+    def _fake_source_fetch(url: str, **_kwargs):
         return {
             "url": url,
             "statusCode": 200,
@@ -637,7 +683,7 @@ def test_handle_download_isolates_rejected_sources_when_retained_bundle_is_suffi
             "sha256": _h.sha256(body).hexdigest(),
         }
 
-    def _fake_source_fetch(url: str):
+    def _fake_source_fetch(url: str, **_kwargs):
         if url.endswith("/bad"):
             return {
                 "url": url,
@@ -737,7 +783,7 @@ def test_handle_download_blocks_unsafe_images_before_persist():
         def blocks_image_publish(self):
             return True
 
-    def _fake_source_fetch(url: str):
+    def _fake_source_fetch(url: str, **_kwargs):
         return {
             "url": url,
             "statusCode": 200,

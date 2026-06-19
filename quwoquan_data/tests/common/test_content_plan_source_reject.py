@@ -7,6 +7,9 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import struct
+import zlib
+from io import BytesIO
 from pathlib import Path
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
@@ -28,11 +31,48 @@ TASK = "旅行/地域/四川省/景区/景区精选"
 BATCH = "test_batch_reject"
 
 
+def _real_jpeg(seed: int = 0) -> bytes:
+    from PIL import Image
+
+    width, height = 320, 220
+    img = Image.new("RGB", (width, height))
+    for y in range(height):
+        for x in range(width):
+            img.putpixel(
+                (x, y),
+                (
+                    (x * 5 + seed * 17) % 256,
+                    (y * 7 + seed * 29) % 256,
+                    ((x + y) * 3 + seed * 11) % 256,
+                ),
+            )
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
+def _png_chunk(kind: bytes, data: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + kind
+        + data
+        + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+    )
+
+
+def _oversized_png_header(width: int = 9000, height: int = 6000) -> bytes:
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + _png_chunk(b"IEND", b"")
+    )
+
+
 def _write_article_source_asset(source_dir: Path, *, label: str) -> None:
     asset_dir = source_dir / "assets"
     asset_dir.mkdir(parents=True, exist_ok=True)
     asset_file = asset_dir / f"{label}.jpg"
-    asset_file.write_bytes(b"fake-image")
+    asset_file.write_bytes(_real_jpeg(len(label)))
     write_json(
         asset_dir / "index.json",
         {
@@ -91,6 +131,163 @@ def test_content_plan_blocks_rejected_source():
 def test_content_plan_quotas_required_includes_image_works():
     spec = {"content": {"modalityContract": "separated_research", "quotas": {"imageWorksPerTarget": 2}}}
     assert cp.content_plan_quotas_required(spec) is True
+
+
+def test_content_plan_blocks_base_source_reuse_policy_in_strict_mode():
+    batch = "base_source_reuse_policy_disallowed"
+    entity = "九寨沟"
+    source_dir = (
+        batch_root(TASK, batch)
+        / "entities/地点/景区/九寨沟/1.download/sources/01.shared_article"
+    )
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_path = source_dir / "source.md"
+    source_path.write_text(
+        (
+            "九寨沟长篇图文底稿，包含行前交通、沟内动线、旺季预约、季节差异、"
+            "拍摄视角和游览节奏判断。"
+        )
+        * 80,
+        encoding="utf-8",
+    )
+    _write_article_source_asset(source_dir, label="jiuzhaigou_shared")
+    write_json(
+        source_dir / "meta.json",
+        {
+            "sourceId": "shared_article",
+            "sourceUseMode": "factual_reference_only",
+            "researchLane": "article",
+            "sourceRole": "base",
+            "category": "travelogue",
+        },
+    )
+    source_ref = source_path.relative_to(batch_root(TASK, batch)).as_posix()
+    items = []
+    for index, intent in enumerate(("planning_consultation", "seasonal_timing"), start=1):
+        ref = f"{entity}_{intent}"
+        title = f"九寨沟{intent}"
+        content_object.register_content_object(
+            TASK,
+            batch,
+            ref,
+            content_type="article",
+            angle="攻略",
+            title=title,
+        )
+        brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
+        write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": title, "writingIntent": intent})
+        item = {
+            "ref": ref,
+            "kind": "entity",
+            "carrier": "article",
+            "researchLane": "article",
+            "title": title,
+            "entityRefs": [f"/entity/地点/景区/{entity}"],
+            "evidenceRefs": [source_ref],
+            "rationale": f"{intent} 主线证据",
+            "writingIntent": intent,
+            "baseSourceRef": source_ref,
+            "sourceUseMode": "factual_reference_only",
+        }
+        if index == 2:
+            item["baseSourceReusePolicy"] = "multi_intent_source_bundle"
+        items.append(item)
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
+        {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items},
+    )
+    spec = {
+        "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
+        "content": {
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityArticlesPerTarget": 2,
+                "imageWorksPerTarget": 0,
+                "entityHomepagesPerTarget": 1,
+                "routeArticles": 0,
+            },
+        },
+    }
+    issues = cp.validate_content_plan(TASK, batch, spec)
+    assert any("baseSourceReusePolicy is not allowed" in issue for issue in issues), issues
+    assert any("baseSourceRef reused by" in issue for issue in issues), issues
+
+
+def test_content_plan_blocks_article_base_source_without_source_assets():
+    batch = "article_base_without_source_assets"
+    entity = "九寨沟"
+    ref = f"{entity}_planning_consultation"
+    title = "九寨沟行前怎么安排"
+    source_dir = (
+        batch_root(TASK, batch)
+        / "entities/地点/景区/九寨沟/1.download/sources/01.no_image_article"
+    )
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_path = source_dir / "source.md"
+    source_path.write_text(
+        (
+            "九寨沟长篇图文底稿，覆盖交通方式、沟内换乘、开放时间、季节差异、"
+            "拍照点、亲子老人同行和雨雪天气替代安排。"
+        )
+        * 80,
+        encoding="utf-8",
+    )
+    write_json(
+        source_dir / "meta.json",
+        {
+            "sourceId": "no_image_article",
+            "sourceUseMode": "factual_reference_only",
+            "researchLane": "article",
+            "sourceRole": "base",
+            "category": "travelogue",
+        },
+    )
+    content_object.register_content_object(
+        TASK,
+        batch,
+        ref,
+        content_type="article",
+        angle="攻略",
+        title=title,
+    )
+    brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
+    write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": title, "writingIntent": "planning_consultation"})
+    source_ref = source_path.relative_to(batch_root(TASK, batch)).as_posix()
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
+        {
+            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "items": [
+                {
+                    "ref": ref,
+                    "kind": "entity",
+                    "carrier": "article",
+                    "researchLane": "article",
+                    "title": title,
+                    "entityRefs": [f"/entity/地点/景区/{entity}"],
+                    "evidenceRefs": [source_ref],
+                    "rationale": "缺图底稿应被拦截",
+                    "writingIntent": "planning_consultation",
+                    "baseSourceRef": source_ref,
+                    "sourceUseMode": "factual_reference_only",
+                }
+            ],
+        },
+    )
+    spec = {
+        "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
+        "content": {
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityArticlesPerTarget": 1,
+                "imageWorksPerTarget": 0,
+                "entityHomepagesPerTarget": 1,
+                "routeArticles": 0,
+            },
+        },
+    }
+    issues = cp.validate_content_plan(TASK, batch, spec)
+    assert any("article baseSourceRef must include at least one source asset" in issue for issue in issues), issues
 
 
 def test_content_plan_enforces_per_target_2_plus_2_distribution():
@@ -158,7 +355,7 @@ def test_content_plan_enforces_per_target_2_plus_2_distribution():
             asset_dir = batch_root(TASK, batch) / "entities/地点/景区/四姑娘山/1.download/sources" / f"image_{index}" / "assets"
             asset_dir.mkdir(parents=True, exist_ok=True)
             asset_file = asset_dir / f"asset_{index}.jpg"
-            asset_file.write_bytes(b"fake-image")
+            asset_file.write_bytes(_real_jpeg(index))
             write_json(
                 asset_dir / "index.json",
                 {
@@ -287,7 +484,7 @@ def test_content_plan_enforces_required_angles_for_4_plus_1_distribution():
     source_path = image_source / "source.md"
     source_path.write_text("九寨沟同一摄影集合，图片底稿。", encoding="utf-8")
     asset_file = asset_dir / "asset_1.jpg"
-    asset_file.write_bytes(b"fake-image")
+    asset_file.write_bytes(_real_jpeg(41))
     write_json(
         asset_dir / "index.json",
         {"assets": [{"fileName": asset_file.name, "sourceCollectionId": "jiuzhaigou:image:one"}]},
@@ -378,6 +575,194 @@ def test_content_plan_enforces_required_angles_for_4_plus_1_distribution():
     assert any("acceptance.requiredAngles" in issue for issue in issues), issues
     partial_spec = {**spec, "workflowPolicy": {"allowContentQuotaShortfall": True}}
     assert cp.validate_content_plan(TASK, batch, partial_spec) == []
+
+
+def test_content_plan_blocks_oversized_image_asset_refs():
+    batch = "image_asset_safety_gate"
+    entity = "九寨沟"
+    image_source = (
+        batch_root(TASK, batch)
+        / "entities/地点/景区/九寨沟/1.download/sources/01.image_collection"
+    )
+    asset_dir = image_source / "assets"
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    source_path = image_source / "source.md"
+    source_path.write_text("九寨沟同一摄影集合，图片底稿。", encoding="utf-8")
+    asset_file = asset_dir / "oversized.png"
+    asset_file.write_bytes(_oversized_png_header())
+    write_json(
+        asset_dir / "index.json",
+        {"assets": [{"fileName": asset_file.name, "sourceCollectionId": "jiuzhaigou:image:huge"}]},
+    )
+    write_json(
+        image_source / "meta.json",
+        {"researchLane": "image", "sourceCollectionId": "jiuzhaigou:image:huge"},
+    )
+    ref = f"{entity}_image"
+    content_object.register_content_object(
+        TASK,
+        batch,
+        ref,
+        content_type="image",
+        angle="画报",
+        title="九寨沟图片作品",
+    )
+    brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
+    write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": "九寨沟图片作品"})
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
+        {
+            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "items": [
+                {
+                    "ref": ref,
+                    "kind": "entity",
+                    "carrier": "image",
+                    "researchLane": "image",
+                    "title": "九寨沟图片作品",
+                    "entityRefs": [f"/entity/地点/景区/{entity}"],
+                    "evidenceRefs": [source_path.relative_to(batch_root(TASK, batch)).as_posix()],
+                    "rationale": "同一图片集合证据",
+                    "sourceCollectionId": "jiuzhaigou:image:huge",
+                    "assetRefs": [asset_file.relative_to(batch_root(TASK, batch)).as_posix()],
+                }
+            ],
+        },
+    )
+    spec = {
+        "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
+        "content": {
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityArticlesPerTarget": 0,
+                "imageWorksPerTarget": 1,
+                "entityHomepagesPerTarget": 1,
+                "routeArticles": 0,
+            },
+        },
+        "acceptance": {"requiredAngles": ["image"]},
+    }
+
+    issues = cp.validate_content_plan(TASK, batch, spec)
+
+    assert any("image asset blocked by image safety gate" in issue for issue in issues), issues
+    assert any("image_pixels_too_large" in issue for issue in issues), issues
+
+
+def test_content_plan_blocks_image_work_reusing_article_base_asset():
+    batch = "article_image_asset_reuse_gate"
+    entity = "九寨沟"
+    root = batch_root(TASK, batch)
+    article_source = root / "entities/地点/景区/九寨沟/1.download/sources/01.article_base"
+    image_source = root / "entities/地点/景区/九寨沟/1.download/sources/02.image_collection"
+    shared_bytes = _real_jpeg(91)
+    shared_digest = __import__("hashlib").sha256(shared_bytes).hexdigest()
+    for source_dir, lane, file_name in [
+        (article_source, "article", "article.jpg"),
+        (image_source, "image", "image.jpg"),
+    ]:
+        asset_dir = source_dir / "assets"
+        asset_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "source.md").write_text("九寨沟图文底稿。" * 120, encoding="utf-8")
+        (asset_dir / file_name).write_bytes(shared_bytes)
+        write_json(
+            source_dir / "meta.json",
+            {
+                "researchLane": lane,
+                "sourceRole": "base" if lane == "article" else "",
+                "sourceUseMode": "factual_reference_only",
+                "category": "travelogue" if lane == "article" else "image_collection",
+                "sourceCollectionId": "shared:collection",
+            },
+        )
+        write_json(
+            asset_dir / "index.json",
+            {
+                "assets": [
+                    {
+                        "fileName": file_name,
+                        "sha256": f"sha256:{shared_digest}",
+                        "sourceCollectionId": "shared:collection",
+                        "caption": "九寨沟共享图",
+                        "license": "CC-BY-SA 4.0",
+                        "credit": "测试摄影师",
+                        "sourceUrl": "https://example.test/shared",
+                        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                        "usageScope": "app_publish",
+                    }
+                ]
+            },
+        )
+    article_ref = f"{entity}_planning_consultation"
+    image_ref = f"{entity}_image"
+    for ref, content_type, title in [
+        (article_ref, "article", "九寨沟文章"),
+        (image_ref, "image", "九寨沟图片"),
+    ]:
+        content_object.register_content_object(
+            TASK,
+            batch,
+            ref,
+            content_type=content_type,
+            angle="攻略",
+            title=title,
+        )
+        brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
+        write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": title})
+    article_source_ref = (article_source / "source.md").relative_to(root).as_posix()
+    image_source_ref = (image_source / "source.md").relative_to(root).as_posix()
+    image_asset_ref = (image_source / "assets" / "image.jpg").relative_to(root).as_posix()
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
+        {
+            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "items": [
+                {
+                    "ref": article_ref,
+                    "kind": "entity",
+                    "carrier": "article",
+                    "researchLane": "article",
+                    "title": "九寨沟文章",
+                    "entityRefs": [f"/entity/地点/景区/{entity}"],
+                    "evidenceRefs": [article_source_ref],
+                    "rationale": "文章底稿",
+                    "writingIntent": "planning_consultation",
+                    "baseSourceRef": article_source_ref,
+                    "sourceUseMode": "factual_reference_only",
+                },
+                {
+                    "ref": image_ref,
+                    "kind": "entity",
+                    "carrier": "image",
+                    "researchLane": "image",
+                    "title": "九寨沟图片",
+                    "entityRefs": [f"/entity/地点/景区/{entity}"],
+                    "evidenceRefs": [image_source_ref],
+                    "rationale": "图片作品",
+                    "sourceCollectionId": "shared:collection",
+                    "assetRefs": [image_asset_ref],
+                },
+            ],
+        },
+    )
+    spec = {
+        "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
+        "content": {
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityArticlesPerTarget": 1,
+                "imageWorksPerTarget": 1,
+                "entityHomepagesPerTarget": 1,
+                "routeArticles": 0,
+            },
+        },
+        "acceptance": {"requiredAngles": ["planning_consultation", "image"]},
+    }
+
+    issues = cp.validate_content_plan(TASK, batch, spec)
+
+    assert any("image sha256" in issue and "reused" in issue for issue in issues), issues
+    assert any("sourceCollectionId" in issue and "reused" in issue for issue in issues), issues
 
 
 def test_base_draft_candidates_exclude_reject_sources():

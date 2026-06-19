@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
@@ -54,8 +55,8 @@ class ContentSurfaceViewMapper {
       author: ContentAuthorRef(
         id: dto.subAccountId,
         displayName: dto.displayName,
-        avatarUrl: dto.avatarUrl,
-        backgroundUrl: dto.authorBackgroundUrl,
+        avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
+        backgroundUrl: resolveContentMediaUrl(dto.authorBackgroundUrl),
       ),
       stats: ContentStats(
         like: dto.likeCount,

@@ -54,6 +54,7 @@ ENV_EXPORTS = {
     },
     "prod-sim": {
         "PROD_SIM_GATEWAY_PORT": "api-edge",
+        "PROD_SIM_PRODUCT_OPS_PORT": "product-ops-edge",
         "PROD_SIM_MEDIA_EDGE_PORT": "media-edge",
         "PROD_SIM_MEDIA_ORIGIN_PORT": "media-origin",
     },

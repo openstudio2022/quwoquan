@@ -172,7 +172,7 @@ def test_runtime_integrity_flags_same_asset_contract_before_release():
     assert "base draft ledger does not map" in text
 
 
-def test_release_integrity_flags_article_asset_outside_base_source_unit():
+def test_release_integrity_allows_article_asset_from_independent_source_unit():
     _reset()
     _seed_release_root()
     base = _seed_source("毕棚沟", "01.base", kind="维基百科")
@@ -184,8 +184,27 @@ def test_release_integrity_flags_article_asset_outside_base_source_unit():
     )
     report = scan_release_integrity(RELEASE)
     text = "\n".join(report["issues"])
-    assert "sourceRef must match article baseSourceRef" in text
-    assert "sourceAssetRef must come from article base draft source unit" in text
+    assert "sourceRef must match article baseSourceRef" not in text
+    assert "sourceAssetRef must belong to its declared sourceRef unit" not in text
+
+
+def test_release_integrity_flags_article_asset_not_belonging_to_declared_source_unit():
+    _reset()
+    _seed_release_root()
+    base = _seed_source("毕棚沟", "01.base", kind="维基百科")
+    other = _seed_source("毕棚沟", "02.other", kind="搜狗百科")
+    _seed_release_post("毕棚沟D", "d", base_source=base, asset_source=other, asset_sha="sha256:ghi")
+    manifest_path = release_root(RELEASE) / "posts/article/攻略/毕棚沟D/1/manifest.json"
+    manifest = __import__("json").loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["assets"][0]["sourceAssetRef"] = base.replace("source.md", "assets/001.jpg")
+    write_json(manifest_path, manifest)
+    write_json(
+        batch_root(TASK, BATCH) / "_shared" / "base_draft_ledger.json",
+        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {base: "d"}},
+    )
+    report = scan_release_integrity(RELEASE)
+    text = "\n".join(report["issues"])
+    assert "sourceAssetRef must belong to its declared sourceRef unit" in text
 
 
 def test_release_integrity_flags_entity_homepage_using_guide_base():

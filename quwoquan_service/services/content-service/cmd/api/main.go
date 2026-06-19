@@ -188,6 +188,7 @@ func main() {
 	var behaviorEventStore persistence.BehaviorEventStore = persistence.NoopBehaviorEventStore{}
 	var dailyMetricsStore *persistence.DailyMetricsStore
 	var authorImpactStore *persistence.AuthorImpactStore
+	var authorImpactEvidenceStore *persistence.AuthorImpactEvidenceStore
 	var intersectionService *application.IntersectionService
 	recOpts := []rtrec.EngineOption{
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
@@ -356,6 +357,9 @@ func main() {
 		intersectionOpts := []application.IntersectionServiceOption{
 			application.WithIntersectionSource(intersectionReadModel),
 			application.WithIntersectionMetrics(intersectionmetrics.New()),
+			// 已读水位耐久兜底：Redis 退化为加速缓存，Redis flush/宕机后读位不丢、写降级不阻断主请求。
+			application.WithIntersectionWatermarkStore(recinfra.NewMongoWatermarkStore(db, logger)),
+			application.WithIntersectionLogger(logger),
 		}
 		if intersectionPolicy.CooldownDays > 0 {
 			intersectionOpts = append(intersectionOpts, application.WithIntersectionCooldownDays(intersectionPolicy.CooldownDays))
@@ -370,6 +374,7 @@ func main() {
 		behaviorEventStore = persistence.NewMongoBehaviorEventStore(db, logger)
 		dailyMetricsStore = persistence.NewDailyMetricsStore(db, logger)
 		authorImpactStore = persistence.NewAuthorImpactStore(db, logger)
+		authorImpactEvidenceStore = persistence.NewAuthorImpactEvidenceStore(db, logger)
 	} else {
 		store = persistence.NewPostStore(recinfra.DefaultSeedPosts())
 		log.Printf("content-service storage=inmemory (no mongo.uri configured)")
@@ -489,6 +494,12 @@ func main() {
 	feedService := application.NewFeedService(engine, source, feedServiceOpts...)
 	postService := application.NewPostService(store, postServiceOpts...)
 	reportService := application.NewReportService(reportStore, eventPub)
+	// 低风险实时推荐 patch（阶段七 §G）：复用 realtime redis scene 的 per-user pub/sub
+	// 在安全边界发射 negative_feedback_removal / new_candidate_hint / refresh_suggestion。
+	feedPatchEmitter := rtrec.NewFeedPatchEmitter(
+		router.Scene("realtime"),
+		rtrec.WithFeedPatchLogger(logger),
+	)
 	behaviorService := application.NewBehaviorService(
 		bufferedWriter,
 		store,
@@ -499,6 +510,8 @@ func main() {
 		application.WithBehaviorEventStore(behaviorEventStore),
 		application.WithDailyMetricsStore(dailyMetricsStore),
 		application.WithAuthorImpactStore(authorImpactStore),
+		application.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
+		application.WithFeedPatchEmitter(feedPatchEmitter),
 	)
 
 	var handlerOpts []httpadapter.ContentHandlerOption
@@ -508,12 +521,15 @@ func main() {
 	}
 
 	// 交集统一体验服务：跨会话冷却窗口（rec:icool ZSET）+ per-dimension 已读水位
-	// （cache:viewer_intersections）+ 事实/概率合并排序。
+	// （ix:watermark HASH）+ 事实/概率合并排序。
 	if intersectionService != nil {
 		handlerOpts = append(handlerOpts, httpadapter.WithIntersectionService(intersectionService))
 	}
 	if authorImpactStore != nil {
 		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactStore(authorImpactStore))
+	}
+	if authorImpactEvidenceStore != nil {
+		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore))
 	}
 
 	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService, handlerOpts...).Routes()
@@ -937,81 +953,3 @@ const dailyAffinityDecayCheckInterval = time.Hour
 // single-flight lock (SET NX) guarantees only one replica performs the
 // non-idempotent $multiply decay, preventing over-decay. A nil aggregator
 // degrades to a no-op; a nil lock degrades to an unguarded single run.
-func startDailyAffinityDecay(ctx context.Context, agg *recinfra.InterestProfileAggregator, lock rtredis.Client, logger *slog.Logger) {
-	if agg == nil {
-		return
-	}
-	go func() {
-		ticker := time.NewTicker(dailyAffinityDecayCheckInterval)
-		defer ticker.Stop()
-		runDailyAffinityDecayOnce(ctx, agg, lock, logger)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				runDailyAffinityDecayOnce(ctx, agg, lock, logger)
-			}
-		}
-	}()
-}
-
-// runDailyAffinityDecayOnce acquires the per-day single-flight lock and, if won,
-// decays one day's worth of half-life from every user's affinity counters.
-func runDailyAffinityDecayOnce(ctx context.Context, agg *recinfra.InterestProfileAggregator, lock rtredis.Client, logger *slog.Logger) {
-	if lock != nil {
-		key := "rec:affinity-decay:lock:" + time.Now().UTC().Format("2006-01-02")
-		// TTL > 24h so the daily key survives until the next day's key takes
-		// over; the date in the key, not the TTL, scopes one run per day.
-		won, err := lock.SetNX(ctx, key, "1", 26*time.Hour)
-		if err != nil {
-			logger.Warn("affinity decay lock acquire failed; skipping tick", "err", err)
-			return
-		}
-		if !won {
-			return // another replica already ran (or is running) today
-		}
-	}
-	if err := agg.DecayAll(ctx, 1); err != nil {
-		logger.Warn("affinity decay failed", "err", err)
-	}
-}
-
-// buildRedisRouter creates a redis.Router from the YAML config.
-// Falls back to in-memory mode for scenes without addresses (local dev / tests).
-func buildRedisRouter(cfg config) *rtredis.Router {
-	routerCfg := rtredis.RouterConfig{
-		Scenes: map[string]rtredis.SceneConfig{
-			"rec":      toSceneConfig(cfg.Redis.Rec),
-			"general":  toSceneConfig(cfg.Redis.General),
-			"realtime": toSceneConfig(cfg.Redis.Realtime),
-		},
-		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
-		DefaultScene: rtredis.GeneratedDefaultScene,
-	}
-	return rtredis.MustNewRouter(routerCfg)
-}
-
-// toSceneConfig converts the YAML redisSceneCfg to rtredis.SceneConfig.
-func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {
-	mode := strings.ToLower(strings.TrimSpace(r.Mode))
-	if mode == "" {
-		mode = "standalone"
-	}
-	if mode == "standalone" && r.Addr == "" {
-		mode = "memory"
-	}
-	if mode == "cluster" && len(r.Addrs) == 0 {
-		mode = "memory"
-	}
-	return rtredis.SceneConfig{
-		Mode:         mode,
-		Addr:         r.Addr,
-		Addrs:        r.Addrs,
-		Password:     r.Password,
-		DB:           r.DB,
-		TLS:          r.TLS,
-		PoolSize:     r.Pool.Size,
-		MinIdleConns: r.Pool.MinIdle,
-	}
-}

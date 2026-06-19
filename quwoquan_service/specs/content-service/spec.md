@@ -22,14 +22,19 @@
 - **WHEN** 请求含 `sort=recommend` 且用户已登录
 - **THEN** 系统按用户画像与行为进行个性化排序返回
 
+#### Scenario: 服务端权威下发 feedRequestId
+
+- **WHEN** 客户端首刷请求 `GET /v1/content/feed?sort=recommend` 且未携带 `feedRequestId`
+- **THEN** 系统生成 `frq_` 前缀的归因 id 写入响应 envelope，并随 `rankingVersion`/`reasonVersion` 一并下发；客户端分页时回显该 `feedRequestId`，系统原样沿用同一归因 id
+
 ### Requirement: 内容推荐能力
 
-系统 MUST 提供内容推荐能力，输入用户画像与行为，输出推荐内容 ID 列表。
+系统 MUST 提供内容推荐能力，输入用户画像与行为，输出个性化排序后的发现流内容；推荐能力作为 content-service 内部编排能力，对外唯一入口是 `GET /v1/content/feed?sort=recommend`，不再暴露独立的对外推荐 API。
 
-#### Scenario: 推荐接口可用
+#### Scenario: 推荐通过 Feed 主链路对外
 
-- **WHEN** 客户端请求 `POST /v1/content/recommend` 并携带 userId、候选池、数量
-- **THEN** 系统返回推荐内容 ID 列表，按相关性排序
+- **WHEN** 客户端请求 `GET /v1/content/feed?sort=recommend`
+- **THEN** 系统经内部推荐引擎编排候选并按相关性排序，通过 Feed envelope 返回内容列表与归因上下文
 
 #### Scenario: 推荐输入可含行为信号
 

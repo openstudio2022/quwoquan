@@ -158,13 +158,13 @@ void main() {
     expect(find.byIcon(FluentIcons.video_add_24_regular), findsOneWidget);
     expect(find.byIcon(FluentIcons.document_edit_24_regular), findsOneWidget);
     expect(
-      find.byIcon(FluentIcons.folder_arrow_right_24_regular),
+      find.byIcon(FluentIcons.document_text_clock_24_regular),
       findsOneWidget,
     );
     expect(find.byIcon(FluentIcons.person_add_24_regular), findsOneWidget);
     expect(find.byIcon(FluentIcons.chat_multiple_24_regular), findsOneWidget);
     expect(
-      find.byIcon(FluentIcons.people_community_add_24_regular),
+      find.byIcon(FluentIcons.people_add_24_regular),
       findsOneWidget,
     );
     expect(
@@ -180,7 +180,7 @@ void main() {
       SettingsSemanticConstants.createSheetActionIconColor(false),
     );
     expect(
-      iconFor(tester, FluentIcons.folder_arrow_right_24_regular).color,
+      iconFor(tester, FluentIcons.document_text_clock_24_regular).color,
       SettingsSemanticConstants.createSheetDraftActionIconColor(false),
     );
     expect(
@@ -192,7 +192,7 @@ void main() {
       SettingsSemanticConstants.createSheetActionIconColor(false),
     );
     expect(
-      iconFor(tester, FluentIcons.people_community_add_24_regular).color,
+      iconFor(tester, FluentIcons.people_add_24_regular).color,
       SettingsSemanticConstants.createSheetActionIconColor(false),
     );
 

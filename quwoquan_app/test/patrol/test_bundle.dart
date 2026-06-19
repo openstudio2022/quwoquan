@@ -9,7 +9,7 @@ import 'package:patrol/src/platform/contracts/contracts.dart';
 import 'package:test_api/src/backend/invoker.dart';
 
 // START: GENERATED TEST IMPORTS
-import 'discovery/feed_load_test.dart' as discovery__feed_load_test;
+import 'environment/basic_viability_test.dart' as environment__basic_viability_test;
 // END: GENERATED TEST IMPORTS
 
 Future<void> main() async {
@@ -72,7 +72,7 @@ Future<void> main() async {
   });
 
 // START: GENERATED TEST GROUPS
-  group('discovery.feed_load_test', discovery__feed_load_test.main);
+  group('environment.basic_viability_test', environment__basic_viability_test.main);
 // END: GENERATED TEST GROUPS
 
   final dartTestGroup = await testExplorationCompleter.future;

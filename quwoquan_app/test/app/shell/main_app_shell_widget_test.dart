@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:go_router/go_router.dart';
@@ -22,135 +23,149 @@ import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
+import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _buildShell(String location, {bool authenticated = true}) {
-  return ProviderScope(
-    overrides: [
-      authSessionStoreProvider.overrideWithValue(
-        _TestAuthSessionStore(authenticated: authenticated),
-      ),
-    ],
-    child: MaterialApp(
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
+  return ScreenUtilInit(
+    designSize: const Size(393, 852),
+    child: ProviderScope(
+      overrides: [
+        authSessionStoreProvider.overrideWithValue(
+          _TestAuthSessionStore(authenticated: authenticated),
+        ),
       ],
-      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-      home: MainAppShell(
-        currentLocation: location,
-        child: const SizedBox.shrink(),
+      child: MaterialApp(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+        home: MainAppShell(
+          currentLocation: location,
+          child: const SizedBox.shrink(),
+        ),
       ),
     ),
   );
 }
 
 Widget _buildDarkShell(String location, {bool authenticated = true}) {
-  return ProviderScope(
-    overrides: [
-      isDarkProvider.overrideWith((ref) => true),
-      authSessionStoreProvider.overrideWithValue(
-        _TestAuthSessionStore(authenticated: authenticated),
-      ),
-    ],
-    child: MaterialApp(
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
+  return ScreenUtilInit(
+    designSize: const Size(393, 852),
+    child: ProviderScope(
+      overrides: [
+        isDarkProvider.overrideWith((ref) => true),
+        authSessionStoreProvider.overrideWithValue(
+          _TestAuthSessionStore(authenticated: authenticated),
+        ),
       ],
-      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-      home: MainAppShell(
-        currentLocation: location,
-        child: const SizedBox.shrink(),
+      child: MaterialApp(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+        home: MainAppShell(
+          currentLocation: location,
+          child: const SizedBox.shrink(),
+        ),
       ),
     ),
   );
 }
 
 Widget _buildShellRouter({required bool authenticated}) {
-  return ProviderScope(
-    overrides: [
-      authSessionStoreProvider.overrideWithValue(
-        _TestAuthSessionStore(authenticated: authenticated),
-      ),
-    ],
-    child: MaterialApp.router(
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
+  return ScreenUtilInit(
+    designSize: const Size(393, 852),
+    child: ProviderScope(
+      overrides: [
+        authSessionStoreProvider.overrideWithValue(
+          _TestAuthSessionStore(authenticated: authenticated),
+        ),
       ],
-      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-      routerConfig: GoRouter(
-        initialLocation: AppRoutePaths.home,
-        routes: [
-          GoRoute(
-            path: AppRoutePaths.home,
-            builder: (context, state) => MainAppShell(
-              currentLocation: state.uri.path,
-              child: const SizedBox.shrink(),
-            ),
-          ),
-          GoRoute(
-            path: AppRoutePaths.loginPathTemplate,
-            builder: (context, state) => LoginPage(
-              reason: state.uri.queryParameters['reason'],
-              redirect: state.uri.queryParameters['redirect'],
-              dismissFallback:
-                  state.uri.queryParameters[loginDismissFallbackQueryParam],
-              allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
-                state.uri.queryParameters[loginGuestDismissPopQueryParam],
+      child: MaterialApp.router(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+        routerConfig: GoRouter(
+          initialLocation: AppRoutePaths.home,
+          routes: [
+            GoRoute(
+              path: AppRoutePaths.home,
+              builder: (context, state) => MainAppShell(
+                currentLocation: state.uri.path,
+                child: const SizedBox.shrink(),
               ),
             ),
-          ),
-        ],
+            GoRoute(
+              path: AppRoutePaths.loginPathTemplate,
+              builder: (context, state) => LoginPage(
+                reason: state.uri.queryParameters['reason'],
+                redirect: state.uri.queryParameters['redirect'],
+                dismissFallback:
+                    state.uri.queryParameters[loginDismissFallbackQueryParam],
+                allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+                  state.uri.queryParameters[loginGuestDismissPopQueryParam],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   );
 }
 
 Widget _buildShellRouterWithStore(AuthSessionStore store) {
-  return ProviderScope(
-    overrides: [authSessionStoreProvider.overrideWithValue(store)],
-    child: MaterialApp.router(
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-      routerConfig: GoRouter(
-        initialLocation: AppRoutePaths.home,
-        routes: [
-          GoRoute(
-            path: AppRoutePaths.home,
-            builder: (context, state) => MainAppShell(
-              currentLocation: state.uri.path,
-              child: const SizedBox.shrink(),
-            ),
-          ),
-          GoRoute(
-            path: AppRoutePaths.loginPathTemplate,
-            builder: (context, state) => LoginPage(
-              reason: state.uri.queryParameters['reason'],
-              redirect: state.uri.queryParameters['redirect'],
-              dismissFallback:
-                  state.uri.queryParameters[loginDismissFallbackQueryParam],
-              allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
-                state.uri.queryParameters[loginGuestDismissPopQueryParam],
+  return ScreenUtilInit(
+    designSize: const Size(393, 852),
+    child: ProviderScope(
+      overrides: [authSessionStoreProvider.overrideWithValue(store)],
+      child: MaterialApp.router(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+        routerConfig: GoRouter(
+          initialLocation: AppRoutePaths.home,
+          routes: [
+            GoRoute(
+              path: AppRoutePaths.home,
+              builder: (context, state) => MainAppShell(
+                currentLocation: state.uri.path,
+                child: const SizedBox.shrink(),
               ),
             ),
-          ),
-        ],
+            GoRoute(
+              path: AppRoutePaths.loginPathTemplate,
+              builder: (context, state) => LoginPage(
+                reason: state.uri.queryParameters['reason'],
+                redirect: state.uri.queryParameters['redirect'],
+                dismissFallback:
+                    state.uri.queryParameters[loginDismissFallbackQueryParam],
+                allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+                  state.uri.queryParameters[loginGuestDismissPopQueryParam],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -162,13 +177,16 @@ Widget _buildGuardedRouter({
   required bool authenticated,
   required String initialLocation,
 }) {
-  return ProviderScope(
-    overrides: [
-      authSessionStoreProvider.overrideWithValue(
-        _TestAuthSessionStore(authenticated: authenticated),
-      ),
-    ],
-    child: _GuardedRouterHost(initialLocation: initialLocation),
+  return ScreenUtilInit(
+    designSize: const Size(393, 852),
+    child: ProviderScope(
+      overrides: [
+        authSessionStoreProvider.overrideWithValue(
+          _TestAuthSessionStore(authenticated: authenticated),
+        ),
+      ],
+      child: _GuardedRouterHost(initialLocation: initialLocation),
+    ),
   );
 }
 
@@ -465,6 +483,17 @@ void main() {
 
       expect(find.byType(MainAppShell), findsOneWidget);
       expect(find.byType(HomePage), findsOneWidget);
+    });
+
+    testWidgets('首页初次进入只构建首页页签，非首页页签延后到首次访问', (tester) async {
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildShell(AppRoutePaths.home));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(HomePage), findsOneWidget);
+      expect(find.byType(HomeFeaturedImmersivePage), findsNothing);
+      expect(find.byType(ChatPage), findsNothing);
+      expect(find.byType(MyProfilePage), findsNothing);
     });
 
     testWidgets('深色模式下底部导航仍展示五栏', (tester) async {
@@ -995,24 +1024,27 @@ void main() {
       addTearDown(router.dispose);
 
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            platformCapabilitiesProvider.overrideWithValue(
-              CapabilityProfile.web,
-            ),
-            authSessionStoreProvider.overrideWithValue(
-              const _TestAuthSessionStore(authenticated: true),
-            ),
-          ],
-          child: MaterialApp.router(
-            localizationsDelegates: const [
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
+        ScreenUtilInit(
+          designSize: const Size(393, 852),
+          child: ProviderScope(
+            overrides: [
+              platformCapabilitiesProvider.overrideWithValue(
+                CapabilityProfile.web,
+              ),
+              authSessionStoreProvider.overrideWithValue(
+                const _TestAuthSessionStore(authenticated: true),
+              ),
             ],
-            supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-            routerConfig: router,
+            child: MaterialApp.router(
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+              routerConfig: router,
+            ),
           ),
         ),
       );
@@ -1053,24 +1085,27 @@ void main() {
       addTearDown(router.dispose);
 
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            platformCapabilitiesProvider.overrideWithValue(
-              CapabilityProfile.web,
-            ),
-            authSessionStoreProvider.overrideWithValue(
-              const _TestAuthSessionStore(authenticated: true),
-            ),
-          ],
-          child: MaterialApp.router(
-            localizationsDelegates: const [
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
+        ScreenUtilInit(
+          designSize: const Size(393, 852),
+          child: ProviderScope(
+            overrides: [
+              platformCapabilitiesProvider.overrideWithValue(
+                CapabilityProfile.web,
+              ),
+              authSessionStoreProvider.overrideWithValue(
+                const _TestAuthSessionStore(authenticated: true),
+              ),
             ],
-            supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-            routerConfig: router,
+            child: MaterialApp.router(
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+              routerConfig: router,
+            ),
           ),
         ),
       );
@@ -1200,24 +1235,27 @@ void main() {
       addTearDown(router.dispose);
 
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            platformCapabilitiesProvider.overrideWithValue(
-              CapabilityProfile.web,
-            ),
-            authSessionStoreProvider.overrideWithValue(
-              const _TestAuthSessionStore(authenticated: false),
-            ),
-          ],
-          child: MaterialApp.router(
-            localizationsDelegates: const [
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
+        ScreenUtilInit(
+          designSize: const Size(393, 852),
+          child: ProviderScope(
+            overrides: [
+              platformCapabilitiesProvider.overrideWithValue(
+                CapabilityProfile.web,
+              ),
+              authSessionStoreProvider.overrideWithValue(
+                const _TestAuthSessionStore(authenticated: false),
+              ),
             ],
-            supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-            routerConfig: router,
+            child: MaterialApp.router(
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+              routerConfig: router,
+            ),
           ),
         ),
       );

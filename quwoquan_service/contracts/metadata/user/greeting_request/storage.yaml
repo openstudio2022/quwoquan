@@ -21,8 +21,8 @@ tables:
       - { name: idx_gr_inbox, columns: [target_sub_account_id, status, created_at DESC] }
       - { name: idx_gr_outbox, columns: [requester_sub_account_id, status, created_at DESC] }
       - { name: idx_gr_unique_pending, columns: [requester_sub_account_id, target_sub_account_id],
-          where: "status = 'pending'", unique: true }
-      - { name: idx_gr_expire, columns: [expire_at], where: "status = 'pending'",
+          condition: "status = 'pending'", unique: true }
+      - { name: idx_gr_expire, columns: [expire_at], condition: "status = 'pending'",
           description: 过期清理任务扫描索引 }
 
 cache:

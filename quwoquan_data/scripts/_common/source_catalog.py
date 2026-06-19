@@ -92,7 +92,11 @@ def vertical_from_task_id(task_id: str) -> str:
 def source_category_coverage(
     sources: Sequence[Mapping[str, Any]], *, vertical: str = "travel"
 ) -> dict[str, Any]:
-    """统计实体来源覆盖的源类别集合，并按 coveragePolicy 判定是否满足「全」。"""
+    """统计实体来源覆盖集合，并按 coveragePolicy 判定硬门与推荐补证。
+
+    coreCategories 是必须满足的准出门；preferredCategories 是规模化运营的
+    补证方向，不能把缺官网/地图这类可替代来源误判成对象不可生产。
+    """
     covered: set[str] = set()
     unknown: list[str] = []
     for src in sources or []:
@@ -106,7 +110,9 @@ def source_category_coverage(
     policy = coverage_policy(vertical)
     min_cats = int(policy.get("minCategoriesPerEntity") or 0)
     core = [str(c) for c in (policy.get("coreCategories") or [])]
+    preferred = [str(c) for c in (policy.get("preferredCategories") or [])]
     missing_core = [c for c in core if c not in covered]
+    missing_preferred = [c for c in preferred if c not in covered]
     return {
         "vertical": vertical,
         "coveredCategories": sorted(covered),
@@ -114,6 +120,8 @@ def source_category_coverage(
         "minCategories": min_cats,
         "coreCategories": core,
         "missingCore": missing_core,
+        "preferredCategories": preferred,
+        "missingPreferred": missing_preferred,
         "unknownPlatforms": sorted(set(unknown)),
         "satisfied": len(covered) >= min_cats and not missing_core,
     }
@@ -178,11 +186,13 @@ def source_plan_guidance(vertical: str = "travel") -> dict[str, Any]:
     return {
         "minCategoriesPerEntity": int(policy.get("minCategoriesPerEntity") or 0),
         "coreCategories": [str(x) for x in (policy.get("coreCategories") or [])],
+        "preferredCategories": [str(x) for x in (policy.get("preferredCategories") or [])],
         "categories": cats,
         "instruction": (
             "按类别全面采源（追求「全」）：每实体须覆盖 ≥minCategoriesPerEntity 类来源，"
-            "且必须包含全部 coreCategories；每条 source 的 platform 字段取自对应类别的 "
-            "examplePlatforms 之一，以便 download 源类别覆盖门正确归类。"
+            "且必须包含全部 coreCategories；preferredCategories 是优先补证方向，"
+            "缺失时应继续检索但不得把可替代实体整体判死；每条 source 的 platform "
+            "字段取自对应类别的 examplePlatforms 之一，以便 download 源类别覆盖门正确归类。"
         ),
     }
 

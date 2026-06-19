@@ -167,6 +167,7 @@ def build_writing_pack(
         "sopExampleRef": brief.get("sopExampleRef"),
         "writingIntent": brief.get("writingIntent"),
         "baseSourceRef": brief.get("baseSourceRef"),
+        "baseSourceReusePolicy": brief.get("baseSourceReusePolicy"),
         "sourceUseMode": brief.get("sourceUseMode"),
         "bannedRegisterTerms": [str(x) for x in (brief.get("bannedRegisterTerms") or []) if x],
     }

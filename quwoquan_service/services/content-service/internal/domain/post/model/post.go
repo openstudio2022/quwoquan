@@ -233,6 +233,7 @@ type ProfileInteractionActivityView struct {
 	ActivityId           string    `json:"activityId" bson:"activityId"`
 	ActivityType         string    `json:"activityType" bson:"activityType"`
 	Direction            string    `json:"direction" bson:"direction"`
+	CommentKind          string    `json:"commentKind" bson:"commentKind"`
 	ActorSubAccountId    string    `json:"actorSubAccountId" bson:"actorSubAccountId"`
 	ActorDisplayName     string    `json:"actorDisplayName" bson:"actorDisplayName"`
 	ActorAvatarUrl       string    `json:"actorAvatarUrl" bson:"actorAvatarUrl"`
@@ -240,5 +241,18 @@ type ProfileInteractionActivityView struct {
 	TargetContentId      string    `json:"targetContentId" bson:"targetContentId"`
 	TargetContentType    string    `json:"targetContentType" bson:"targetContentType"`
 	TargetContentSummary string    `json:"targetContentSummary" bson:"targetContentSummary"`
+	DisplaySubAccountId  string    `json:"displaySubAccountId" bson:"displaySubAccountId"`
+	DisplayName          string    `json:"displayName" bson:"displayName"`
+	DisplayAvatarUrl     string    `json:"displayAvatarUrl" bson:"displayAvatarUrl"`
+	DisplayUserRouteId   string    `json:"displayUserRouteId" bson:"displayUserRouteId"`
+	PrimaryText          string    `json:"primaryText" bson:"primaryText"`
+	ContextText          string    `json:"contextText" bson:"contextText"`
+	PreviewMediaKind     string    `json:"previewMediaKind" bson:"previewMediaKind"`
+	PreviewImageUrl      string    `json:"previewImageUrl" bson:"previewImageUrl"`
+	PreviewText          string    `json:"previewText" bson:"previewText"`
+	PreviewUnavailable   bool      `json:"previewUnavailable" bson:"previewUnavailable"`
+	PreviewObjectId      string    `json:"previewObjectId" bson:"previewObjectId"`
+	PreviewRouteId       string    `json:"previewRouteId" bson:"previewRouteId"`
+	FilterKeys           []string  `json:"filterKeys" bson:"filterKeys"`
 	CreatedAt            time.Time `json:"createdAt" bson:"createdAt"`
 }

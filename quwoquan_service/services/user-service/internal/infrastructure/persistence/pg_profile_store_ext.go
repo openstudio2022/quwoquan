@@ -124,6 +124,7 @@ func scanUserProfileRow(rows pgx.Rows) (*model.UserProfile, error) {
 		&e.AvatarAssetID,
 		&e.AvatarVersion,
 		&e.Bio,
+		&e.IdentityTags,
 		&e.Gender,
 		&e.BirthDate,
 		&e.Region,

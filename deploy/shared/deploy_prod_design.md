@@ -32,7 +32,7 @@
 |------|------|
 | **背景** | 现网为单机共享 ECS 的 rootless 四平面发布；gray/full 共享同一台 host，随用户增长才扩展副本与滚动阶段 |
 | **阶段划分** | **初始灰度**（Stage 1）+ **Carry-on 滚动**（Stage 2+） |
-| **Stage 1 初始灰度** | 全自动；当前映射到 `gray-initial` 命名空间（`STEP=5`），deploy → `health/inspect/doctor` → SLO → continue/pause/rollback |
+| **Stage 1 初始灰度** | 全自动；当前映射到 `gray-initial` 命名空间（`STEP=5`），deploy → `health/inspect/doctor` → hosted 页面 smoke → SLO → continue/pause/rollback |
 | **Stage 2 Carry-on** | 视策略推进更大放量；当前最终落到 `full`（`STEP=100`），需人工审批后执行 deploy → `health/inspect/doctor` → SLO |
 | **扩展** | 副本增加后（如 4、8 pod），可增加中间阶段（如 1→2→4），每阶段是否审批可配置 |
 
@@ -134,6 +134,7 @@ stages:
    - `deploy_to_prod.sh` 按平面账号 `prod-<plane>-svc` 自登录 prod ECS，`podman compose -p quwoquan-<plane>-<instance>` 拉起本平面 governedWorkloads。
    - rollout 等待以 compose healthcheck 为真相源；失败按 `PREVIOUS_IMAGE_VERSION` 回滚本平面。
    - `gray-initial` 走灰度实例命名空间（`-gray`），`full` 走正式实例（`-prod`）。
+   - `gray-initial` 发布后必须执行 `stackctl verify --target prod-hosted --kind topology --tier t4`，页面 smoke 覆盖首页、我的、他人主页、记录列表、视频流；失败视为 post-deploy failure，不得推进 `carry-on/full`。
 3. **gray-rollout-state**：执行 `make config-gray-rollout SERVICE=... FROM_IMAGE=... TO_IMAGE=... FROM_CONFIG=... TO_CONFIG=... STEP=...`，更新 `state/release`。
 4. **slo-gate**：执行 `make config-slo-gate ERROR_RATE=... P95_MS=... REDIS_ERROR_RATE=...`。
    - continue：job 成功，输出「本步通过，可进行下一步」。

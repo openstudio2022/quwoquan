@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -121,5 +125,63 @@ void main() {
       find.byKey(const ValueKey('work-browser-entry-error')),
       findsNothing,
     );
+  });
+
+  testWidgets('直达入口：失效内容会展示可理解提示并可安全返回首页', (tester) async {
+    final repo = MockContentRepository();
+    final router = GoRouter(
+      initialLocation: AppRoutePaths.workBrowser(
+        workId: 'definitely-missing-post-id',
+        source: 'deep-link-test',
+      ),
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoutePaths.home,
+          builder: (_, _) => const Scaffold(
+            body: Center(child: Text('HOME')),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutePaths.workBrowserPathTemplate.replaceAll(
+            '{workId}',
+            ':workId',
+          ),
+          builder: (context, state) => WorkBrowserEntryPage(
+            workId: state.pathParameters['workId'] ?? '',
+            source: state.uri.queryParameters['source'] ?? 'workBrowser',
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, _) => MaterialApp.router(
+            routerConfig: router,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text(UITextConstants.contentUnavailable), findsOneWidget);
+    expect(
+      find.text(
+        ContentErrorMessages.zh[ContentErrorCode.postNotFound]!,
+      ),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.back), findsOneWidget);
+
+    await tester.tap(find.text(UITextConstants.back));
+    await tester.pumpAndSettle();
+
+    expect(find.text('HOME'), findsOneWidget);
   });
 }

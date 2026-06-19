@@ -570,7 +570,6 @@ func main() {
 	feedCategoryToType, appTabToCategory := buildDiscoveryMappings(contentTypes)
 	feedRoute := findRoute(service.APIRoutes, "GetFeed")
 	getPostRoute := findRoute(service.APIRoutes, "GetPost")
-	recommendRoute := findRoute(service.APIRoutes, "GetRecommendation")
 	feedDefaultLimit := paginationLimitDefault(shared, 20)
 	writableFields := findWritableFields(service.APIRoutes, "CreatePost")
 	likeRoutes := buildMutationRoutes(service.APIRoutes,
@@ -585,7 +584,6 @@ func main() {
 		appTabToCategory,
 		feedRoute,
 		getPostRoute,
-		recommendRoute,
 		feedDefaultLimit,
 		writableFields,
 		likeRoutes,
@@ -858,6 +856,9 @@ func main() {
 		exitErr(err)
 	}
 	if err := writeRtcSignalPayloads(appDir, metadataDir); err != nil {
+		exitErr(err)
+	}
+	if err := writeRecommendationFeedPatches(appDir, metadataDir); err != nil {
 		exitErr(err)
 	}
 	if err := writeRtcRequestWires(appDir, metadataDir); err != nil {
@@ -1808,7 +1809,6 @@ func renderContentMetadataDart(
 	appTabToCategory map[string]string,
 	feedRoute routeDef,
 	getPostRoute routeDef,
-	recommendRoute routeDef,
 	feedDefaultLimit int,
 	writableFields []string,
 	likeRoutes map[string]string,
@@ -1844,8 +1844,7 @@ func renderContentMetadataDart(
 
 	b.WriteString(fmt.Sprintf("  static const int feedDefaultLimit = %d;\n\n", feedDefaultLimit))
 	b.WriteString(fmt.Sprintf("  static const String feedPath = '%s';\n", nonEmpty(feedRoute.Path, "/v1/content/feed")))
-	b.WriteString(fmt.Sprintf("  static const String postDetailPathTemplate = '%s';\n", nonEmpty(getPostRoute.Path, "/v1/content/posts/{postId}")))
-	b.WriteString(fmt.Sprintf("  static const String recommendPath = '%s';\n\n", nonEmpty(recommendRoute.Path, "/v1/content/recommend")))
+	b.WriteString(fmt.Sprintf("  static const String postDetailPathTemplate = '%s';\n\n", nonEmpty(getPostRoute.Path, "/v1/content/posts/{postId}")))
 
 	b.WriteString("  static const List<String> feedQueryParams = <String>[\n")
 	for _, key := range feedRoute.QueryParams {

@@ -70,6 +70,36 @@ exposureGovernance:
     softFallbackMinFillPct: 80
 `
 
+func TestValidateOpsIntervention(t *testing.T) {
+	base := mustParse(t, testPolicyYAML)
+	base.OpsIntervention = OpsInterventionConfig{Enabled: true, Interventions: []OpsIntervention{
+		{ID: "1", Action: OpsActionDemote, TargetType: OpsTargetAuthor, Target: "auth1", Weight: 0.5},
+		{ID: "2", Action: OpsActionPin, TargetType: OpsTargetContent, Target: "c1", Weight: 3},
+		{ID: "3", Action: OpsActionBlock, TargetType: OpsTargetTag, Target: "Topic/x"},
+	}}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid ops intervention config rejected: %v", err)
+	}
+
+	invalid := map[string]OpsInterventionConfig{
+		"empty id":        {Enabled: true, Interventions: []OpsIntervention{{ID: "", Action: "block", TargetType: "content", Target: "a"}}},
+		"bad action":      {Enabled: true, Interventions: []OpsIntervention{{ID: "1", Action: "boost", TargetType: "content", Target: "a"}}},
+		"bad target type": {Enabled: true, Interventions: []OpsIntervention{{ID: "1", Action: "block", TargetType: "foo", Target: "a"}}},
+		"empty target":    {Enabled: true, Interventions: []OpsIntervention{{ID: "1", Action: "block", TargetType: "content", Target: ""}}},
+		"demote oob":      {Enabled: true, Interventions: []OpsIntervention{{ID: "1", Action: "demote", TargetType: "content", Target: "a", Weight: 1.5}}},
+		"pin negative":    {Enabled: true, Interventions: []OpsIntervention{{ID: "1", Action: "pin", TargetType: "content", Target: "a", Weight: -1}}},
+		"duplicate id": {Enabled: true, Interventions: []OpsIntervention{
+			{ID: "d", Action: "block", TargetType: "content", Target: "a"},
+			{ID: "d", Action: "pin", TargetType: "content", Target: "b"},
+		}},
+	}
+	for name, cfg := range invalid {
+		if err := validateOpsIntervention(cfg); err == nil {
+			t.Errorf("case %q: expected validation error, got nil", name)
+		}
+	}
+}
+
 func mustParse(t *testing.T, raw string) *RecPolicy {
 	t.Helper()
 	p, err := Parse([]byte(raw))

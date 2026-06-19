@@ -2,10 +2,16 @@ import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 class ProfileSloganCard extends StatelessWidget {
-  const ProfileSloganCard({super.key, required this.isDark, required this.bio});
+  const ProfileSloganCard({
+    super.key,
+    required this.isDark,
+    required this.bio,
+    this.onTap,
+  });
 
   final bool isDark;
   final String? bio;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -13,18 +19,15 @@ class ProfileSloganCard extends StatelessWidget {
     if (text.isEmpty) {
       return const SizedBox.shrink();
     }
-    final surface = isDark
-        ? AppColors.iosFill(context).withValues(alpha: 0.62)
-        : AppColors.iosFill(context).withValues(alpha: 0.54);
-    final border = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.16 : 0.08);
-    return Container(
+    final accent = AppColors.iosAccent(context);
+    final surface = accent.withValues(alpha: isDark ? 0.16 : 0.07);
+    final border = accent.withValues(alpha: isDark ? 0.16 : 0.08);
+    final card = Container(
       key: const ValueKey<String>('profile-slogan-card'),
       width: double.infinity,
       padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerMd,
-        vertical: AppSpacing.containerSm,
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.containerXs,
       ),
       decoration: BoxDecoration(
         color: surface,
@@ -40,9 +43,9 @@ class ProfileSloganCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: AppTypography.iosFootnote,
-                height: AppSpacing.textLineHeightBody,
-                color: AppColors.iosLabel(context).withValues(alpha: 0.86),
+                fontSize: AppTypography.iosSubheadline,
+                height: AppSpacing.textLineHeightFootnote,
+                color: accent.withValues(alpha: isDark ? 0.92 : 0.88),
                 letterSpacing: -0.08,
               ),
             ),
@@ -51,10 +54,19 @@ class ProfileSloganCard extends StatelessWidget {
           Icon(
             CupertinoIcons.sparkles,
             size: AppSpacing.iconSmall,
-            color: AppColors.iosAccent(context),
+            color: accent.withValues(alpha: isDark ? 0.88 : 0.78),
           ),
         ],
       ),
+    );
+    if (onTap == null) {
+      return card;
+    }
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: card,
     );
   }
 }

@@ -182,149 +182,122 @@ extension _CircleShellBuilders on _CircleShellState {
     );
   }
 
+  /// 圈子影响卡（架构基线 v2 §21.5 D 面）：接入统一交互子契约 + 四槽 + 传播视图，
+  /// 与「我的影响力」（[AuthorImpactCard]）同源（解决 G4 圈子影响表达不一致）。
   Widget _buildCircleImpactCard(
     BuildContext context, {
     required bool isDark,
     required CircleState state,
   }) {
     final asyncImpact = ref.watch(circleImpactProvider(widget.circleId));
-    final rows = asyncImpact.maybeWhen(
+    final items = asyncImpact.maybeWhen(
       data: (summary) => summary.items
           .where((item) => item.primaryText.trim().isNotEmpty)
           .take(3)
-          .map(
-            (item) => _CircleImpactRowData(
-              icon: _circleImpactIcon(item.helpType),
-              text: item.primaryText.trim(),
-              source: item.source.trim(),
-              count: item.count,
-            ),
-          )
           .toList(growable: false),
-      orElse: () => const <_CircleImpactRowData>[],
+      orElse: () => const <CircleImpactItem>[],
     );
-    if (rows.isEmpty) {
+    if (items.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Padding(
-      padding: EdgeInsets.only(top: AppSpacing.sm),
-      child: _SectionSurface(
-        isDark: isDark,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              UITextConstants.circleImpactTitle,
-              style: TextStyle(
-                fontSize: AppTypography.iosSubheadline,
-                fontWeight: AppTypography.semiBold,
-                color: AppColors.iosLabel(context),
-              ),
+    final navigator = _circleImpactNavigator();
+    return IntersectionStatementCard(
+      topDivider: true,
+      title: UITextConstants.circleImpactTitle,
+      items: <IntersectionStatementItem>[
+        for (final item in items)
+          IntersectionStatementItem(
+            primaryText: item.primaryText.trim(),
+            subtitleText: item.subtitleText.trim().isNotEmpty
+                ? item.subtitleText.trim()
+                : item.source.trim(),
+            spans: item.primarySpans,
+            visuals: item.sampleVisuals,
+            iconKey: item.iconKey,
+            sourceRef: item.source,
+            dimension: item.intersectionDimension,
+            propagationPath: item.propagationPath,
+            onSpanTap: (span) =>
+                _onCircleImpactSpanTap(context, navigator, item, span),
+            onVisualTap: (visual) => navigator.open(
+              context,
+              visual.target,
+              attribution: _circleImpactAttribution(item),
             ),
-            SizedBox(height: AppSpacing.containerSm),
-            for (var i = 0; i < rows.length; i++) ...<Widget>[
-              if (i > 0)
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    vertical: AppSpacing.intraGroupSm,
-                  ),
-                  child: Container(
-                    height: AppSpacing.hairline,
-                    color: AppColors.iosSeparator(
-                      context,
-                    ).withValues(alpha: isDark ? 0.18 : 0.12),
-                  ),
-                ),
-              CupertinoButton(
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(
-                  AppSpacing.minInteractiveSize,
-                  AppSpacing.minInteractiveSize,
-                ),
-                onPressed: () =>
-                    _showCircleImpactEvidence(context, rows[i], isDark),
-                child: Row(
-                  children: <Widget>[
-                    Container(
-                      width: AppSpacing.buttonHeightMd,
-                      height: AppSpacing.buttonHeightMd,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.radiusNinetyNine,
-                        ),
-                      ),
-                      child: Icon(
-                        rows[i].icon,
-                        size: AppSpacing.iconSmall,
-                        color: AppColors.primaryColor,
-                      ),
-                    ),
-                    SizedBox(width: AppSpacing.containerSm),
-                    Expanded(
-                      child: Text(
-                        rows[i].text,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosSubheadline,
-                          color: AppColors.iosLabel(context),
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      CupertinoIcons.chevron_forward,
-                      size: AppSpacing.iconXSmall,
-                      color: AppColors.iosTertiaryLabel(context),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+            onPropagationTap: () => _showCircleImpactEvidence(context, item),
+            onTap: () => _showCircleImpactEvidence(context, item),
+          ),
+      ],
     );
   }
 
-  IconData _circleImpactIcon(String helpType) {
-    switch (helpType.trim()) {
-      case 'relationship':
-        return CupertinoIcons.person_2_fill;
-      case 'community':
-        return CupertinoIcons.chat_bubble_2_fill;
-      case 'spread':
-        return CupertinoIcons.arrowshape_turn_up_right_fill;
-      case 'knowledge':
-        return CupertinoIcons.lightbulb_fill;
-      case 'decision':
-        return CupertinoIcons.check_mark_circled_solid;
-      default:
-        return CupertinoIcons.link;
+  IntersectionTargetNavigator _circleImpactNavigator() =>
+      IntersectionTargetNavigator(
+        onTrack: (target, attribution) {
+          final id = target.objectId.trim();
+          if (id.isEmpty) {
+            return;
+          }
+          ref
+              .read(contentBehaviorTrackerProvider)
+              .trackClick(
+                id,
+                referralSource: ReferralSource.circlePost,
+                intersectionDimension: attribution.dimension,
+                intersectionSourceRef: attribution.sourceRef,
+                intersectionTagRefs: attribution.tagRefs,
+                intersectionEvidenceId: attribution.evidenceId,
+              );
+        },
+      );
+
+  IntersectionNavAttribution _circleImpactAttribution(CircleImpactItem item) {
+    final tagRef = item.tagRef.trim();
+    return IntersectionNavAttribution(
+      dimension: item.intersectionDimension,
+      sourceRef: item.source,
+      evidenceId: item.evidenceSnapshotId,
+      tagRefs: tagRef.isEmpty ? const <String>[] : <String>[tagRef],
+    );
+  }
+
+  void _onCircleImpactSpanTap(
+    BuildContext context,
+    IntersectionTargetNavigator navigator,
+    CircleImpactItem item,
+    IntersectionTextSpan span,
+  ) {
+    // 数字片段进影响明细（展示来源摘要）；名字 / 对象片段进对应主页。
+    if (span.role == 'count') {
+      _showCircleImpactEvidence(context, item);
+      return;
     }
+    navigator.open(
+      context,
+      span.target,
+      attribution: _circleImpactAttribution(item),
+    );
   }
 
   Future<void> _showCircleImpactEvidence(
     BuildContext context,
-    _CircleImpactRowData row,
-    bool isDark,
+    CircleImpactItem item,
   ) {
     return showAppActionSheet<void>(
       context,
-      title: row.text,
-      message: _circleImpactEvidenceMessage(row),
+      title: item.primaryText.trim(),
+      message: _circleImpactEvidenceMessage(item),
       sections: const <AppActionSheetSection<void>>[],
       cancelLabel: UITextConstants.confirm,
     );
   }
 
-  String _circleImpactEvidenceMessage(_CircleImpactRowData row) {
-    final source = row.source.isEmpty
+  String _circleImpactEvidenceMessage(CircleImpactItem item) {
+    final source = item.source.trim().isEmpty
         ? UITextConstants.circleImpactTitle
-        : row.source;
-    if (row.count > 0) {
-      return '${UITextConstants.impactEnumerableHintCircle}\n$source · ${row.count}';
+        : item.source.trim();
+    if (item.count > 0) {
+      return '${UITextConstants.impactEnumerableHintCircle}\n$source · ${item.count}';
     }
     return '${UITextConstants.impactEnumerableHintCircle}\n$source';
   }
@@ -684,16 +657,3 @@ extension _CircleShellBuilders on _CircleShellState {
   }
 }
 
-class _CircleImpactRowData {
-  const _CircleImpactRowData({
-    required this.icon,
-    required this.text,
-    required this.source,
-    required this.count,
-  });
-
-  final IconData icon;
-  final String text;
-  final String source;
-  final int count;
-}

@@ -64,6 +64,7 @@ def _apply_writing_intent_override(brief, override):
     for field in (
         "writingIntent",
         "baseSourceRef",
+        "baseSourceReusePolicy",
         "carrier",
         "sourceCollectionId",
         "assetRefs",
@@ -90,8 +91,9 @@ def _assign_base_draft(task_id: str, batch_id: str, ref: str, brief):
     declared = str(brief.get("baseSourceRef") or "").strip()
     if brief.get("_contentPlanBaseSourceLocked") and declared:
         ledger = load_base_draft_ledger(task_id, batch_id)
+        reuse_policy = str(brief.get("baseSourceReusePolicy") or "").strip()
         taken = occupied_source_refs(ledger, exclude_post=ref)
-        if declared in taken:
+        if declared in taken and reuse_policy != "multi_intent_source_bundle":
             raise RuntimeError(
                 f"{ref}: content_plan baseSourceRef already assigned to another ref: {declared}"
             )
@@ -100,7 +102,18 @@ def _assign_base_draft(task_id: str, batch_id: str, ref: str, brief):
             for source, post in dict(ledger.get("assignments") or {}).items()
             if post != ref
         }
-        assignments[declared] = ref
+        if reuse_policy == "multi_intent_source_bundle":
+            existing = assignments.get(declared)
+            users = (
+                [str(item) for item in existing if str(item).strip()]
+                if isinstance(existing, list)
+                else ([str(existing)] if str(existing or "").strip() else [])
+            )
+            if ref not in users:
+                users.append(ref)
+            assignments[declared] = users
+        else:
+            assignments[declared] = ref
         ledger["assignments"] = assignments
         save_base_draft_ledger(task_id, batch_id, ledger)
         return brief, None

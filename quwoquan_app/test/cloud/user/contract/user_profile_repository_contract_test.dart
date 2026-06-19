@@ -1,7 +1,9 @@
 import 'package:test/test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_create_request_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_update_request_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_bundle_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 
 const _fixtureCurrentUserId = 'fixture_user_current';
@@ -187,9 +189,57 @@ void main() {
       await expectLater(repo.activatePersona('persona_anon'), completes);
     });
 
-    test('接口包含全部 18 个 service.yaml API 方法', () {
+    // ── 主页首屏聚合（homepage-bundle，锁定决策 #1）─────────────────────────
+
+    test('getUserHomepageBundle 本人态：聚合身份域真相且不下发关系能力', () async {
+      final bundle = await repo.getUserHomepageBundle(_fixtureCurrentUserId);
+      expect(bundle.profile.subAccountId, _fixtureCurrentUserId);
+      expect(bundle.viewerContext.isOwner, isTrue);
+      expect(bundle.viewerContext.isGuest, isFalse);
+      expect(bundle.viewerContext.relationToTarget, 'self');
+      // 本人态无需关系动作能力（关注/打招呼等），不下发。
+      expect(bundle.relationshipCapability, isNull);
+      expect(bundle.cacheVersion, isNotEmpty);
+    });
+
+    test('getUserHomepageBundle tabCounts 与 stats 同源（works/likes/circles）', () async {
+      final bundle = await repo.getUserHomepageBundle(_fixtureProfileUserId);
+      expect(bundle.tabCounts.worksCount, bundle.stats.postCount);
+      expect(bundle.tabCounts.likesCount, bundle.stats.likeCount);
+      expect(bundle.tabCounts.circlesCount, bundle.stats.circleCount);
+      // collections 属 content 域，user 域不造假，置 0 待端覆盖。
+      expect(bundle.tabCounts.collectionsCount, 0);
+    });
+
+    test('getUserHomepageBundle 他人态：下发关系能力且非本人', () async {
+      final bundle = await repo.getUserHomepageBundle(_fixtureProfileUserId);
+      expect(bundle.viewerContext.isOwner, isFalse);
+      expect(bundle.relationshipCapability, isNotNull);
+      expect(
+        bundle.relationshipCapability!.targetSubAccountId,
+        _fixtureProfileUserId,
+      );
+      // 未关注时可关注、不可取关（与关系态同源）。
+      expect(
+        bundle.relationshipCapability!.canFollow ||
+            bundle.relationshipCapability!.canUnfollow,
+        isTrue,
+      );
+    });
+
+    test('getUserHomepageBundle profileWithStats 计数与 stats 一致', () async {
+      final bundle = await repo.getUserHomepageBundle(_fixtureProfileUserId);
+      final merged = bundle.profileWithStats;
+      expect(merged.followerCount, bundle.stats.followerCount);
+      expect(merged.followingCount, bundle.stats.followingCount);
+      expect(merged.likeCount, bundle.stats.likeCount);
+      expect(merged.circleCount, bundle.stats.circleCount);
+      expect(merged.postCount, bundle.stats.postCount);
+    });
+
+    test('接口包含全部 19 个 service.yaml API 方法', () {
       final methods = <String>[
-        'getUserProfile', 'updateProfile',
+        'getUserProfile', 'getUserHomepageBundle', 'updateProfile',
         'listUserPosts', 'listUserWorks', 'listUserLifeItems',
         'listUserCircles', 'getUserStats',
         'followUser', 'unfollowUser',
@@ -197,7 +247,7 @@ void main() {
         'listPersonas', 'createPersona', 'updatePersona',
         'deletePersona', 'activatePersona',
       ];
-      expect(methods.length, 18);
+      expect(methods.length, 19);
       expect(
         repo.runtimeType.toString(),
         contains('MockUserProfileRepository'),
@@ -352,6 +402,86 @@ void main() {
         cursor: 'some_cursor',
       );
       expect(list, isList);
+    });
+  });
+
+  // ── homepage-bundle wire 解码与回退（Remote 解码路径）─────────────────────
+
+  group('UserHomepageBundleViewData — wire 解码与回退', () {
+    test('fromMap 解析顶层 bundle（含嵌套 profile/viewerContext/relationshipCapability）', () {
+      final wire = UserHomepageBundleWireDto.fromMap(<String, dynamic>{
+        'profile': <String, dynamic>{
+          'subAccountId': 'u_remote',
+          'displayName': '远端用户',
+        },
+        'stats': <String, dynamic>{
+          'postCount': 7,
+          'likeCount': 88,
+          'circleCount': 3,
+          'followerCount': 100,
+          'followingCount': 20,
+        },
+        'tabCounts': <String, dynamic>{
+          'worksCount': 7,
+          'likesCount': 88,
+          'circlesCount': 3,
+          'collectionsCount': 0,
+        },
+        'viewerContext': <String, dynamic>{
+          'viewerSubAccountId': 'viewer_1',
+          'isOwner': false,
+          'isGuest': false,
+          'relationToTarget': 'following',
+          'canViewFullProfile': true,
+        },
+        'relationshipCapability': <String, dynamic>{
+          'viewerSubAccountId': 'viewer_1',
+          'targetSubAccountId': 'u_remote',
+          'relationState': 'following',
+          'canFollow': false,
+          'canUnfollow': true,
+        },
+        'cacheVersion': 'abc123',
+      });
+      final bundle = UserHomepageBundleViewData.fromUserHomepageBundleWire(wire);
+      expect(bundle.profile.subAccountId, 'u_remote');
+      expect(bundle.stats.postCount, 7);
+      expect(bundle.tabCounts.likesCount, 88);
+      expect(bundle.viewerContext.relationToTarget, 'following');
+      expect(bundle.relationshipCapability, isNotNull);
+      expect(bundle.relationshipCapability!.canUnfollow, isTrue);
+      expect(bundle.cacheVersion, 'abc123');
+    });
+
+    test('stats/tabCounts/viewerContext 缺失时同源回退（不造假）', () {
+      final wire = UserHomepageBundleWireDto.fromMap(<String, dynamic>{
+        'profile': <String, dynamic>{
+          'subAccountId': 'u_min',
+          'postCount': 4,
+          'likeCount': 9,
+          'circleCount': 1,
+        },
+        'cacheVersion': 'v',
+      });
+      final bundle = UserHomepageBundleViewData.fromUserHomepageBundleWire(wire);
+      // stats 缺失 → 由 profile 同源推导。
+      expect(bundle.stats.postCount, 4);
+      // tabCounts 缺失 → 由 stats 推导，collections 归 0。
+      expect(bundle.tabCounts.worksCount, 4);
+      expect(bundle.tabCounts.collectionsCount, 0);
+      // viewerContext 缺失 → 游客保守回退。
+      expect(bundle.viewerContext.isGuest, isTrue);
+      expect(bundle.relationshipCapability, isNull);
+    });
+
+    test('profile 缺失时抛 FormatException（契约破坏不静默）', () {
+      final wire = UserHomepageBundleWireDto.fromMap(<String, dynamic>{
+        'cacheVersion': 'v',
+      });
+      expect(
+        () => UserHomepageBundleViewData.fromUserHomepageBundleWire(wire),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 }

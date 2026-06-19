@@ -23,8 +23,6 @@ String _contentLabelForKey(String labelKey) {
       return UITextConstants.creationFilterWork;
     case 'profile_tab_creations':
       return UITextConstants.profileTabCreations;
-    case 'profile_tab_circles':
-      return UITextConstants.profileTabCircles;
     case 'profile_tab_interaction':
       return UITextConstants.profileTabInteraction;
     case 'profile_tab_lifestyle':
@@ -79,6 +77,8 @@ String _contentLabelForKey(String labelKey) {
       return UITextConstants.creationSubArticle;
     case 'creation_sub_text':
       return UITextConstants.creationSubText;
+    case 'interaction_sub_all':
+      return UITextConstants.interactionSubAll;
     case 'interaction_sub_likes':
       return UITextConstants.interactionSubLikes;
     case 'interaction_sub_comments':

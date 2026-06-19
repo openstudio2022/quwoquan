@@ -307,6 +307,42 @@ groups:
           summary: "推荐曝光过滤 SMembers 回退率 > 1%"
           description: "曝光过滤应使用候选 membership 点查或等价批量点查；SMembers 回退说明容量路径退化。"
 
+      - alert: RecommendationClickThroughRateLow
+        expr: |
+          sum(rate(recommendation_feed_engagement_total{action="click"}[30m]))
+          / (sum(rate(recommendation_feed_impressed_total[30m])) + 0.001) < 0.05
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐 CTR < 5%"
+          description: "七态 click / impressed 点击率 {{ $value | humanizePercentage }}，低于商用成熟度 SLO（click_through_rate>=0.05），排查召回/排序/曝光质量。"
+
+      - alert: RecommendationCompletionRateLow
+        expr: |
+          sum(rate(recommendation_feed_completion_total[1h]))
+          / (sum(rate(recommendation_feed_impressed_total[1h])) + 0.001) < 0.35
+        for: 1h
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐内容完成率 < 35%"
+          description: "深度消费/播放完成 / impressed 完成率 {{ $value | humanizePercentage }}，低于 SLO（completion_rate>=0.35），可能存在内容质量或曝光-内容匹配问题。"
+
+      - alert: RecommendationNegativeFeedbackRateHigh
+        expr: |
+          sum(rate(recommendation_feed_negative_feedback_total[1h]))
+          / (sum(rate(recommendation_feed_impressed_total[1h])) + 0.001) > 0.08
+        for: 1h
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐负反馈率 > 8%"
+          description: "dislike/report/hide 等负反馈 / impressed 占比 {{ $value | humanizePercentage }}，超出 SLO（negative_feedback_rate<=0.08）。"
+
   - name: quwoquan_search
     # 搜索 SLO 告警（SLI/SLO 真相源：quwoquan_service/services/search-service/
     # configs/observability/search_slo.yaml）。延迟用 histogram 取分位数，按 AB
@@ -443,6 +479,17 @@ groups:
         annotations:
           summary: "交集展示不完备率 > 10%"
           description: "Feed 候选因缺 primaryText/头像被空窗治理过滤占比 {{ $value | humanizePercentage }}，超出 SLO（display_incomplete_rate<=0.10），Explain 管线或读模型数据缺口。"
+
+      - alert: IntersectionRedisDegradedHigh
+        expr: |
+          sum(rate(intersection_redis_degraded_total[5m])) by (op) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "交集 Redis 降级速率偏高（op={{ $labels.op }}）"
+          description: "交集 Redis 降级速率 {{ $value }}/s（op={{ $labels.op }}）超出 SLO（redis_degraded_rate<=0.05）。Redis 可能不可用——读位已由 rm_intersection_watermark 持久兜底、主请求未阻断，但应尽快恢复 Redis 以回到热路径。"
 
   - name: quwoquan_l4_infrastructure
     rules:

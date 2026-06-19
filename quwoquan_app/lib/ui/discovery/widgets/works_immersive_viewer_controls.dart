@@ -332,7 +332,7 @@ class _WorksIntersectionDetailSheet extends StatelessWidget {
             Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
               child: Text(
-                UITextConstants.intersectionDetailTitle,
+                DiscoveryFeedText.intersectionDetailTitle,
                 style: TextStyle(
                   fontSize: AppTypography.lg,
                   fontWeight: AppTypography.semiBold,

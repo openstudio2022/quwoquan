@@ -87,6 +87,30 @@ Cursor 只允许三类执行面：
 - 重试预算必须显式定义：对象失败只回灌对象本身，批次失败只回灌共享前置，不允许全局锁回滚整批。
 - 人工介入阈值必须显式定义：图片 unsafe、草稿风格不合规、事实证据缺口等问题分别进入 repair 或人工复核，不可混为“待观察”。
 
+### 1.3.1 网站维度内容供给线（site-supply）
+
+网站线是实体线的上游补给模式，不是第二套内容工厂：
+
+- 工作区固定为 `runtime/site_supply/{vertical}/{siteId}/{batch}`，不得写入实体线 `runtime/tasks/**` 的候选池、队列状态或临时文件。
+- 唯一站点真相源仍是垂类 `source_registry.yaml` 的 `siteCrawlProfile`；`fetchable=false` 或 `crawlAllowed=false` 的站点不得进入批量抓取。
+- `controlledTrial.allowed=true` 只允许站点作为受控验证源进入 `site-supply trial --admission-mode controlled_trial`，用于验证 DAG、并发、lane mix、stage evidence、repair/gate 和 readiness；它不代表真实批量抓取授权，不允许 raw fetch，也不得把平台素材标记为可发布资产。
+- 前半段只产出 `site_frontier_packet`、`site_candidate_packet`、`site_score_packet`、`site_map_packet` 与 `site_rollup_report`；发布主线只接受 `content_plan_packet` 之后的标准对象。
+- 队列分片键为 `vertical|siteId|dateBucket|lane|candidateRef|stage`，`mutexKey` 默认取 `canonicalUrl` 或 `sourceCollectionId`，防止同源重复派生。
+- 百级/千级结构试跑使用 `site-supply trial` 生成受控候选并执行 `frontier→candidate→score→map→rollup`，再以 `verify site-scale-readiness --mode trial` 验结构、吞吐、TokenLedger 和 `contentPlanHandoffLaneCounts`。
+- 携程/马蜂窝首批 controlled trial 判断门为每站至少 `500 article / 100 image / 50 video`，万级放量按同一 lane mix 放大并以 `--min-article-count / --min-image-count / --min-video-count` 验证全批 handoff 数。
+- 万级及以上商业准出必须跑 `python3 quwoquan_data/scripts/cli.py verify site-scale-readiness --mode commercial --vertical <vertical> --batch <batch> --daily-target <N>`，同时证明站点漏斗、吞吐、TokenLedger、release/import、搜索可见和推荐反馈证据。
+- trial 模式不得冒充发布准出；缺少 release/import/search/recommendation 只允许作为 warning 留痕，commercial 模式必须硬阻断。
+
+标准站点线阶段：
+
+| 阶段 | 输出 | 准出 |
+|---|---|---|
+| `site_frontier` | `site_frontier_packet.json` | registry/profile/robots/terms/两年窗口/queue 门 |
+| `site_extract` | `site_candidate_packet.json` | URL 归属、正文/资产可读、发布时间、sourceRef 门 |
+| `site_score` | `site_score_packet.json` | 质量、权利、去重、低质阻断 |
+| `site_map` | `site_map_packet.json` | 只输出 mention_only，handoff 到 content_plan |
+| `site_rollup` | `site_rollup_report.json` | 站点漏斗、稳定性、吞吐、E2E 证据 |
+
 ### 1.4 统一 packet 与 repair packet
 
 `qwq-data data` 的每一步都必须产出结构化 packet，至少包含：

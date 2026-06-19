@@ -236,6 +236,16 @@ scenarios:
       - strong feedback affects only future window after cursor
       - future window keeps no duplicate guarantee
 
+  - name: get_feed_issues_server_feed_request_id
+    operation: GetFeed
+    go_func: TestFeedIssuesServerFeedRequestID
+    command: GetFeed (sort=recommend) issues server-authoritative feedRequestId
+    seed: [fixture.NewPosts(count=10, contentType=image)]
+    assertions:
+      - response envelope feedRequestId is server-issued with frq_ prefix
+      - response envelope carries rankingVersion + reasonVersion
+      - echoing feedRequestId on next page keeps the same attribution id
+
   # ── 行为上报场景 ──────────────────────────────────────────────────
   - name: behavior_batch_report
     operation: ReportBehaviors
@@ -369,11 +379,6 @@ scenarios:
     go_func: TestGetHelperReadContract
     status: pending
     command: GetHelperRead
-  - name: get_recommendation_contract
-    operation: GetRecommendation
-    go_func: TestGetRecommendationContract
-    status: pending
-    command: GetRecommendation
   - name: update_post_settings_contract
     operation: UpdatePostSettings
     go_func: TestUpdatePostSettingsContract

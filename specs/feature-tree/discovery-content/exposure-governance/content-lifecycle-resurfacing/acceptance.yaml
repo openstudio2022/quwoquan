@@ -18,7 +18,7 @@ gwt_acceptance:
   GWT1:
     title: 内容复活 GWT
     given:
-      - 一篇老内容处于 dormant 状态，但历史完成率高，且当前季节或社交事件命中。
+      - 一篇老内容处于 dormant 状态，但过往完成率高，且当前季节或社交事件命中。
     when:
       - 用户请求推荐 feed。
     then:

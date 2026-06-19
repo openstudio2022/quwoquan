@@ -3,6 +3,8 @@
 
 import 'intersection_point.g.dart';
 import 'intersection_dimension_tally.g.dart';
+import 'intersection_text_span.g.dart';
+import 'intersection_visual.g.dart';
 
 class IntersectionReason {
   final String dimension;
@@ -33,10 +35,21 @@ class IntersectionReason {
   final List<IntersectionDimensionTally> dimensionPointSummary;
   final String pointClassLabel;
   final String connectionSummary;
-  final String recommendationTraceId;
   final String lastRecommendedAt;
   final String seenAt;
   final String rankState;
+  final List<IntersectionTextSpan> primarySpans;
+  final List<IntersectionVisual> sampleVisuals;
+  final String lifecycleState;
+  final double previousStrength;
+  final double strengthDelta;
+  final double edgeWeight;
+  final String iconKey;
+  final IntersectionVisual? objectVisual;
+  final String timeBucket;
+  final String dedupeKey;
+  final double anchorUserWeight;
+  final int mutualCount;
 
   IntersectionReason({
     this.dimension = '',
@@ -67,10 +80,21 @@ class IntersectionReason {
     this.dimensionPointSummary = const <IntersectionDimensionTally>[],
     this.pointClassLabel = '',
     this.connectionSummary = '',
-    this.recommendationTraceId = '',
     this.lastRecommendedAt = '',
     this.seenAt = '',
     this.rankState = 'fresh',
+    this.primarySpans = const <IntersectionTextSpan>[],
+    this.sampleVisuals = const <IntersectionVisual>[],
+    this.lifecycleState = '',
+    this.previousStrength = 0.0,
+    this.strengthDelta = 0.0,
+    this.edgeWeight = 0.0,
+    this.iconKey = '',
+    this.objectVisual,
+    this.timeBucket = '',
+    this.dedupeKey = '',
+    this.anchorUserWeight = 0.0,
+    this.mutualCount = 0,
   });
 
   factory IntersectionReason.fromMap(Map<String, dynamic> m) {
@@ -80,13 +104,13 @@ class IntersectionReason {
       relationKind: m['relationKind']?.toString() ?? '',
       objectKind: m['objectKind']?.toString() ?? '',
       relationObjectId: m['relationObjectId']?.toString() ?? '',
-      strength: (m['strength'] as num?)?.toDouble() ?? 0.0,
+      strength: (m['strength'] as num?)?.toDouble() ?? (m['strengthScore'] as num?)?.toDouble() ?? 0.0,
       primaryText: m['primaryText']?.toString() ?? '',
       secondaryText: m['secondaryText']?.toString() ?? '',
       weightTier: m['weightTier']?.toString() ?? '',
       actionType: m['actionType']?.toString() ?? '',
       actionTargetId: m['actionTargetId']?.toString() ?? '',
-      source: m['source']?.toString() ?? '',
+      source: m['source']?.toString() ?? m['sourceRef']?.toString() ?? '',
       intersectionId: m['intersectionId']?.toString() ?? '',
       intersectionClass: m['intersectionClass']?.toString() ?? 'fact',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
@@ -96,17 +120,28 @@ class IntersectionReason {
       freshAt: m['freshAt']?.toString() ?? '',
       expiresAt: m['expiresAt']?.toString() ?? '',
       intersectionPoints: _parseProjectionDtoList(m['intersectionPoints'], IntersectionPoint.fromMap),
-      pointSummarySnapshotId: m['pointSummarySnapshotId']?.toString() ?? m['recommendationTraceId']?.toString() ?? '',
+      pointSummarySnapshotId: m['pointSummarySnapshotId']?.toString() ?? '',
       factPointCount: (m['factPointCount'] as num?)?.toInt() ?? 0,
       recommendedPointCount: (m['recommendedPointCount'] as num?)?.toInt() ?? 0,
       totalPointCount: (m['totalPointCount'] as num?)?.toInt() ?? 0,
       dimensionPointSummary: _parseProjectionDtoList(m['dimensionPointSummary'], IntersectionDimensionTally.fromMap),
       pointClassLabel: m['pointClassLabel']?.toString() ?? '',
       connectionSummary: m['connectionSummary']?.toString() ?? '',
-      recommendationTraceId: m['recommendationTraceId']?.toString() ?? '',
       lastRecommendedAt: m['lastRecommendedAt']?.toString() ?? '',
       seenAt: m['seenAt']?.toString() ?? '',
       rankState: m['rankState']?.toString() ?? 'fresh',
+      primarySpans: _parseProjectionDtoList(m['primarySpans'], IntersectionTextSpan.fromMap),
+      sampleVisuals: _parseProjectionDtoList(m['sampleVisuals'], IntersectionVisual.fromMap),
+      lifecycleState: m['lifecycleState']?.toString() ?? '',
+      previousStrength: (m['previousStrength'] as num?)?.toDouble() ?? 0.0,
+      strengthDelta: (m['strengthDelta'] as num?)?.toDouble() ?? 0.0,
+      edgeWeight: (m['edgeWeight'] as num?)?.toDouble() ?? 0.0,
+      iconKey: m['iconKey']?.toString() ?? '',
+      objectVisual: m['objectVisual'] == null ? null : IntersectionVisual.fromMap(_parseStringKeyMap(m['objectVisual'])!),
+      timeBucket: m['timeBucket']?.toString() ?? '',
+      dedupeKey: m['dedupeKey']?.toString() ?? '',
+      anchorUserWeight: (m['anchorUserWeight'] as num?)?.toDouble() ?? 0.0,
+      mutualCount: (m['mutualCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -140,10 +175,21 @@ class IntersectionReason {
       'dimensionPointSummary': dimensionPointSummary,
       'pointClassLabel': pointClassLabel,
       'connectionSummary': connectionSummary,
-      'recommendationTraceId': recommendationTraceId,
       'lastRecommendedAt': lastRecommendedAt,
       'seenAt': seenAt,
       'rankState': rankState,
+      'primarySpans': primarySpans,
+      'sampleVisuals': sampleVisuals,
+      'lifecycleState': lifecycleState,
+      'previousStrength': previousStrength,
+      'strengthDelta': strengthDelta,
+      'edgeWeight': edgeWeight,
+      'iconKey': iconKey,
+      'objectVisual': objectVisual,
+      'timeBucket': timeBucket,
+      'dedupeKey': dedupeKey,
+      'anchorUserWeight': anchorUserWeight,
+      'mutualCount': mutualCount,
     };
   }
 
@@ -176,10 +222,21 @@ class IntersectionReason {
     List<IntersectionDimensionTally>? dimensionPointSummary,
     String? pointClassLabel,
     String? connectionSummary,
-    String? recommendationTraceId,
     String? lastRecommendedAt,
     String? seenAt,
     String? rankState,
+    List<IntersectionTextSpan>? primarySpans,
+    List<IntersectionVisual>? sampleVisuals,
+    String? lifecycleState,
+    double? previousStrength,
+    double? strengthDelta,
+    double? edgeWeight,
+    String? iconKey,
+    IntersectionVisual? objectVisual,
+    String? timeBucket,
+    String? dedupeKey,
+    double? anchorUserWeight,
+    int? mutualCount,
   }) {
     return IntersectionReason(
       dimension: dimension ?? this.dimension,
@@ -210,10 +267,21 @@ class IntersectionReason {
       dimensionPointSummary: dimensionPointSummary ?? this.dimensionPointSummary,
       pointClassLabel: pointClassLabel ?? this.pointClassLabel,
       connectionSummary: connectionSummary ?? this.connectionSummary,
-      recommendationTraceId: recommendationTraceId ?? this.recommendationTraceId,
       lastRecommendedAt: lastRecommendedAt ?? this.lastRecommendedAt,
       seenAt: seenAt ?? this.seenAt,
       rankState: rankState ?? this.rankState,
+      primarySpans: primarySpans ?? this.primarySpans,
+      sampleVisuals: sampleVisuals ?? this.sampleVisuals,
+      lifecycleState: lifecycleState ?? this.lifecycleState,
+      previousStrength: previousStrength ?? this.previousStrength,
+      strengthDelta: strengthDelta ?? this.strengthDelta,
+      edgeWeight: edgeWeight ?? this.edgeWeight,
+      iconKey: iconKey ?? this.iconKey,
+      objectVisual: objectVisual ?? this.objectVisual,
+      timeBucket: timeBucket ?? this.timeBucket,
+      dedupeKey: dedupeKey ?? this.dedupeKey,
+      anchorUserWeight: anchorUserWeight ?? this.anchorUserWeight,
+      mutualCount: mutualCount ?? this.mutualCount,
     );
   }
 }
@@ -240,3 +308,14 @@ List<T> _parseProjectionDtoList<T>(
   return out;
 }
 
+
+Map<String, dynamic>? _parseStringKeyMap(dynamic v) {
+  if (v == null) return null;
+  if (v is Map<String, dynamic>) return v;
+  if (v is Map) {
+    return Map<String, dynamic>.from(
+      v.map((k, val) => MapEntry(k.toString(), val)),
+    );
+  }
+  return null;
+}

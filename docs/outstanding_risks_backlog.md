@@ -258,9 +258,10 @@
   - 原因: 当前 `MongoIntersectionSource.AffinityReasons` 用「圈子热看 / 关注的人在看」启发式按近度返回内容，未经 `/v1/score` 模型打分；`affinityIntersectionScore` 特征字段尚未真实填充。
   - 正确设计: 不得在 summary/list/feed 读路径同步调用 `/v1/score`（会破坏 WP-2 确立的事实读模型零打分、并对读路径引入模型服务硬依赖与尾延迟）。应由异步评分作业（或 challenger/shadow 离线管线）对 affinity 候选打分后，把 `affinityIntersectionScore` 与排序写入 `rm_viewer_object_intersection` 的 affinity 段，读路径仍零计算消费。
   - 已收口（2026-06-16 WP-F 不变量固化）: 读路径「零同步打分 + affinity 分数直出不重算」已固化为契约测试 `quwoquan_service/services/content-service/internal/application/intersection_readpath_invariant_test.go::TestIntersectionService_ReadPathZeroSynchronousScoring`——断言 `Feed` 对 `FactReasons/AffinityReasons` 各恰好拉取一次（无 per-candidate 重复打分循环）、不触达 `ObjectReasons`，预物化 `Strength`/`modelReasonBucket` 原样直出；`Summary/List` 只走事实通道。`IntersectionSource` 接口方法签名本身不含 scorer 参数，从类型层面保证读路径无模型服务硬依赖。该不变量防止未来回归到把 `/v1/score` 拉进读路径的错误设计。
-  - 影响: 未做异步物化前概率分通道仍是启发式近度排序，`affinityIntersectionScore` 恒为 0；事实通道（已回流）不受影响，融合与排序主链路安全。读路径零同步打分已被契约测试锁定，异步评分作业落地后只需写 affinity 段即可，读路径无需改动。
-  - 涉及文件: `quwoquan_service/services/content-service/internal/infrastructure/recommendation/intersection_source.go`、`viewer_object_intersection_store.go`、`runtime/recommendation/scorer.go`(RemoteModelScorer)、`internal/application/intersection_readpath_invariant_test.go`(不变量契约)、异步评分作业。
-  - 状态: 待办（读路径零同步打分不变量已固化为契约测试；剩余为异步评分作业把模型分写入 affinity 段——平台级会话）
+  - 影响: 事实通道（已回流）不受影响，融合与排序主链路安全。读路径零同步打分已被契约测试锁定。
+  - 进展（2026-06-19，切片⑥ 部分前移，见 R-ID06）: affinity 通道已从「裸 count 启发式」升级为确定性 Graph 边权真算（`edgeWeight = relationStrength × interactionFrequency × recencyDecay`，在 `ReadModelIntersectionSource.AffinityReasons` 物化，纯算术、零评分服务调用），`affinityIntersectionScore`（edgeWeight）不再恒 0；读路径零同步打分不变量保持。**剩余**：真正的 `/v1/score` 模型概率分（深排多任务）写入 affinity 段，属深排平台轨（与 R-IX03 合并推进），非确定性图权可替代。
+  - 涉及文件: `quwoquan_service/services/content-service/internal/infrastructure/recommendation/intersection_source.go`、`read_model_intersection_source.go`(affinity 边权真算)、`intersection_graph_materializer.go`、`viewer_object_intersection_store.go`、`runtime/recommendation/scorer.go`(RemoteModelScorer)、`internal/application/intersection_readpath_invariant_test.go`(不变量契约)、异步评分作业。
+  - 状态: 待办（读路径零同步打分不变量已固化；affinity 确定性图权真算已落地[R-ID06]；剩余 `/v1/score` 模型概率分异步写入 affinity 段——并入深排平台轨 R-IX03）
 - [ ] R-IX02 viewer×object 关系交集 per-candidate 信号物化（P1 kind + 关系级精排融合的前置）
   - 区域: Service
   - 域: `recommendation` → `content`
@@ -304,12 +305,115 @@
   - 影响: 搜索结果页交集理由/连接态的客户端合成已去除（第二真相源风险闭合）；剩余 R-008 跟踪的一般搜索 demo 回退（空集 fallback、硬编码实体置顶）与术语退场逐页核对。
   - 涉及文件: `quwoquan_app/lib/ui/search/**`、`quwoquan_app/lib/components/object_page/**`、`quwoquan_app/lib/ui/{user,circle,entity}/widgets/*`（术语）。
   - 状态: 待办（搜索交集 Tab 本地拼装去除已解决 R-003；剩余术语逐页核对 + R-008 一般 demo 回退 + R-S06/R-S07 端云读模型联动）
-- [ ] R-IX07 交集统一端到端验收：T3/T4 + 观测/SLO/灰度 + 全量 make gate（WP-8）
+- [x] R-IX07 交集统一端到端验收：T3/T4 + 观测/SLO/灰度 + 全量 make gate（WP-8）— 四环境 stackctl 分层验证闭环（真机 patrol 巡检归 CI 设备矩阵）
   - 区域: App / Service / Ops
   - 域: `recommendation` / `search` / 多域
   - 原因: 服务端推荐/交集引擎（WP-0~5）的 T1（契约/静态）与 T2（模块/单测）证据已绿（content-service 全量 `go test`、`runtime/recommendation`、`runtime/recpolicy`、`verify-metadata`、`verify-ml-features`）。端云一体 T3（端云集成）、T4（用户旅程）、`make codegen-app` + 全量 `make gate` 需在客户端切片（R-IX05/R-IX06）与各域服务一并落地后统一验收。
+  - 收口证据（2026-06-19 四环境 stackctl 分层验证，开发机实测）:
+    - `stackctl verify --env {alpha,beta,gamma,prod} --kind all` 四环境各 10 checks 全绿（topology+config+packaging 契约/纯度/URL 隔离）。
+    - `stackctl verify --env {alpha,beta,gamma,prod} --tier {t1,t2,t3}` 四环境逐层全绿（T1=10 / T2=12 / T3=11 checks，含端云集成）。
+    - T4 用户旅程（widget 级）：端侧 `flutter test test/ui/user/journeys/{my_profile,other_profile,profile_tab_navigation}_journey_test.dart` + `my_intersection_inbox_page_test.dart` = 22 测全绿。
+    - T4 真机巡检（`environment-page-smoke` → `run_environment_patrol_smoke.py`）接线验证：四环境 `STACKCTL_PAGE_SMOKE_DRY_RUN=1 stackctl verify --tier t4` 各 12 checks 全绿（命令构造 / dart-define 注入 / 拓扑 URL / token 接线正确）。真机执行（patrol CLI + 连接的 iOS/Android 设备）归 self-hosted 设备矩阵 CI `.github/workflows/app-env-device-matrix-self-hosted.yml`，开发机无设备无 patrol CLI，不在本地真实执行。
+    - 顺手修复（零技术债）: `quwoquan_app/lib/core/media/avatar_image_url.dart` 的 `_isArchivedSeedAvatarObjectKey` 误把真实 `archived-avatar/user/user_<id>` 头像纳入 mock 种子回退重写，破坏 HEAD 既有契约 `chat_avatar_url_resolution_test.dart`（alpha tier T4 阻断）；删除该错误分支（仅 `s/mock/**` 与 `archived-avatar/seed/**` 回退），`avatar_image_url_test`/`content_media_url_test`/chat 头像/cached image 共 37 测全绿，alpha tier=all 转绿（15 checks）。
   - 已收口（2026-06-16 WP-E 观测）: 交集业务 SLI 漏斗指标已落地——`intersection_feed_candidates_total{channel,class,rank_state}`、`intersection_feed_filtered_total{channel,reason}`、`intersection_cooldown_exposure_reported_total`、`intersection_inbox_visit_total{dimension}`、`intersection_inbox_filtered_total{reason}`（DDD-clean：recorder 接口在 application、Prometheus 实现在 `infrastructure/intersectionmetrics`、main.go 注入），funnel 发射有单测 `intersection_metrics_test.go`。HTTP 延迟/错误/可用性走 `runtime/observability` http_server_* 中间件按 route 过滤。SLO 声明 `configs/observability/intersection_slo.yaml`（P95/可用性/重复曝光率/保鲜过滤率/展示完备率/事实占比/清零量 + 三级回滚分层），告警组 `deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_intersection`（4 条）。端侧曝光/点击/转化归因字段在 `content_behavior_tracker.dart` + `intersection_attribution_test.dart`（T2 绿）。
   - 影响: 观测/SLO/告警/回滚分层已定义并有真实指标源；剩余 gamma 真实采样需 R-IX05 拓扑/鉴权 seed；T4 用户旅程与全量 `make gate` 待客户端切片合流。
   - 本轮 gate 实测（2026-06-16 三 scope 复跑）: **三 scope gate 全绿** —— `bash agent_ops/gate/gate_repo.sh --scope service` → `[gate] OK`（`/tmp/gate_service_next.log`）；`--scope data` → `[gate] OK`（`agent-tools` 输出末行 `[gate] OK`），本轮修复 `quwoquan_data/tests/verify/test_directory_evidence_gate.py` 两个 happy-path fixture（`test_gate_entity_homepage_writes_review_sidecars`、`test_gate_passes_clean_object`）补齐实体主页 `2.quality/quality_analysis.json` + 百科底稿 + asset `sourceRef/sourceAssetRef/termsUrl`，与本轮收紧的 `build/homepage.py` 实体主页证据校验（quality sidecar + 图片权利链）对齐，`directory evidence gate tests passed (18)`；`--scope app` → `[gate] OK` / `APP_GATE_EXIT=0`（`/tmp/gate_app_next.log`）。**此前 R-IX07 把全量 `make gate` 阻断归因到仓库级术语门禁的描述已失效**：`python3 quwoquan_app/scripts/runtime/verify_retired_terms_zero.py` → `OK`、`python3 quwoquan_app/scripts/runtime/verify_concept_naming.py` → `[concept-naming] OK`，两处此前红灯均已转绿（上一轮 allowlist + 改词收口）。**全量 `make gate` 已绿**：`make gate`（部署/拓扑验证器 + global increment + agent context + 三 scope + portal 构建）→ `[gate] OK` / `FULL_GATE_EXIT=0`（`/tmp/gate_full_next.log`，4945 行；日志内两处 `download Gate FAILED`/`task run FAILED` 系负路径测试 `test_handle_download_blocks_unsafe_images_before_persist` 等的预期断言输出，非真实门禁失败）。
   - 涉及文件: `specs/feature-tree/object-homepage-network/intersection-unified-experience/acceptance.yaml`、`specs/feature-tree/global-search-experience/.../acceptance.yaml`、各域 T3/T4 测试、`quwoquan_data/tests/verify/test_directory_evidence_gate.py`、`quwoquan_data/scripts/build/homepage.py`、`quwoquan_service/services/content-service/configs/observability/intersection_slo.yaml`、`deploy/monitoring/alerts/quwoquan_alerts.yaml`。
-  - 状态: 待办（服务端 T1/T2 与观测/SLO/告警已绿；app/service/data 三 scope gate 与仓库级术语门禁均绿；剩余为端到端 T3/T4（gamma entity/circle 拓扑 + viewer 鉴权 seed）与 T4 用户旅程，详见 R-IX05/gamma-homepages 与 intersection-t4 工作包）
+  - 状态: 已解决（2026-06-19；四环境 `stackctl verify --kind all` + `--tier t1/t2/t3` 全绿，端侧 T4 旅程 widget 测试 22 测绿，T4 真机巡检接线 dry-run 四环境绿；observability/SLO/告警/三 scope `make gate` 此前已绿）。唯一非本地可执行项：T4 真机 patrol 巡检需 self-hosted Mac runner + 连接设备 + patrol CLI，归设备矩阵 CI 执行（非业务缺口，开发机环境前置缺失，不在本地伪装执行）。
+
+## 交集定义与应用 Phase 0（intersection-definition-and-application）
+
+> 真相源 spec：`specs/product/intersection-definition-and-application.md`。交集契约对齐（A–E）的 Phase 0 已落地；以下为用户确认后登记的两项「交集漂移」延后事项，均不阻塞 A–E 端侧契约与 UI 实现，附精确交接坐标，按独立排期推进。
+
+- [ ] R-ID01 交集漂移 a：content-service reason 级 Label/DisplayText/SharedCount 未移除
+  - 区域: Service
+  - 域: `content`
+  - 事项: content-service 的 Go `IntersectionReasonView` 仍保留已被契约（§18.1）删除的 `Label/DisplayText/SharedCount` 三个 reason 级字段，Explain 管线仍依赖它们做计数聚合（如 followeeVisited）。
+  - 原因: 移除需改 `followeeVisitedReason` 计数语义（`SharedCount=n` → 单聚合点 `Count=n`）+ `anchorAggregateCount` bridge 分支 + 4 个 Go 测试（含 `viewer_object_intersection_store_contract_test.go` 直接断言 `r.SharedCount`）；Phase 0 为避免半成品破坏 `go test` 而诚实延后。
+  - 影响: 纯服务端内部清理；端侧 Dart DTO 已无这些字段，不影响 A–E 任何端侧契约与 UI 实现；属技术债，可独立排期。
+  - 验证证据/交接: 精确改动集见 `specs/product/intersection-definition-and-application.md` §20.6。
+  - 状态: 待办（未排期；2026-06-17 登记）
+- [ ] R-ID02 交集漂移 e：4 个交集 operation 缺 response_body schema
+  - 区域: Service
+  - 域: `content`
+  - 事项: 保留的 4 个交集 operation（`GetMyIntersectionSummary` / `ListMyIntersections` / `MarkIntersectionsVisited` / `GetObjectIntersections`）未在 metadata 显式声明 `response_body` schema。
+  - 原因: 当前仓库 metadata 全仓无 `response_body` 能力（`rg response_body contracts/metadata` 零命中），responses 由 Go handler 隐式承载，需先做 metadata 框架增强而非单点引入。
+  - 影响: 不阻塞 A–E——projection consumers + 描述已声明 `read_model`，端侧 Remote 已按 `read_model` 正确解析；属契约显式化的框架级增强，需统一排期。
+  - 验证证据/交接: 见 `specs/product/intersection-definition-and-application.md` §20.5。
+  - 状态: 待办（未排期；2026-06-17 登记）
+- [x] R-ID03 我的影响力完整分页明细 API 缺失
+  - 区域: App / Service
+  - 域: `content` / `recommendation` / `user`
+  - 事项: `listAuthorImpactEvidence` 完整分页影响明细 API 尚未实现；当前「我的影响力」明细只能展示云侧 `AuthorImpactItem.sampleVisuals` 样本。
+  - 原因: 本轮我的主页交集重构只冻结了可交互结论句、样本视觉与 `evidenceSnapshotId`，未新增完整 evidence 分页 operation、服务端读模型与端侧分页列表。
+  - 影响: 用户可点击影响力数字打开样本明细，但暂时不能查看全量影响来源名单；端侧必须继续保持「只展示云侧样本，不编造全量」的降级语义。
+  - 正确设计: metadata-first 新增 `listAuthorImpactEvidence` operation + 强类型 evidence read model，服务端按 `evidenceSnapshotId`/`impactId` 分页返回真实影响来源；端侧明细 sheet/page 只读该 API，仍复用 `IntersectionTarget` / `IntersectionVisual` / `InteractiveIntersectionText`。
+  - 涉及文件: `quwoquan_service/contracts/metadata/content/post/projections/author_impact_evidence_item.yaml`、`author_impact_evidence_page.yaml`、`quwoquan_service/contracts/metadata/content/post/service.yaml`、`quwoquan_service/services/content-service/internal/infrastructure/persistence/author_impact_evidence_store.go`、`internal/application/author_impact_evidence_view.go`、`internal/adapters/http/content_handler.go`、`runtime/impact/explain.go`、`quwoquan_app/lib/cloud/runtime/generated/content/author_impact_evidence_{item,page}.g.dart`
+  - 证据: metadata-first 冻结 `AuthorImpactEvidenceItem`/`AuthorImpactEvidencePage` projection + `ListAuthorImpactEvidence` operation（`GET /v1/content/sub-accounts/{subAccountId}/author-impact/evidence?impactId=&evidenceSnapshotId=&cursor=&limit=`）；云侧 `rm_author_impact_evidence`（Mongo，`sourceEventId` 唯一索引保证幂等）+ cursor 分页；`StableImpactID`(SHA1) 对齐 summary `AuthorImpactItem.impactId`；读路径 hydrate 内容标题/封面，结论句经 `runtime/impact.EvidenceText` 隐私安全直出（「有人…」，不泄露 actorId）。T3 集成测试 `author_impact_evidence_contract_test.go` 全绿：契约/隐私（"有人"前缀且无 actorId 泄露）/幂等（同 clientEventId 重放不重复计数）/分页触底（hasMore=false）/空态（未知 impactId 返回空不编造）/summary-evidence count 一致性。`make verify-metadata` + `make codegen-app` 绿，Dart DTO（typed 嵌套 IntersectionVisual/IntersectionTarget）已生成。
+  - 状态: 已解决（2026-06-19；③⑤ 切片闭环，T3 契约/幂等/隐私/分页/空态/一致性全绿）
+
+- [x] R-ID04 主页首屏聚合 user homepage-bundle（决策 #1）端云冻结
+  - 区域: App / Service
+  - 域: `user`
+  - 事项: 主页首屏从「串行多请求」收敛为「一次聚合 + 并发补充」的 `GetUserHomepageBundle` 端云能力。
+  - 正确设计: metadata-first 冻结 `UserHomepageBundleWire`（嵌套 `SubAccountProfileWire`/`UserProfileStatsWire`/`RelationshipCapabilityWire` + 新增 `UserHomepageTabCountsWire`/`UserHomepageViewerContextWire` + `cacheVersion`）；`GET /v1/user/sub-accounts/{subAccountId}/homepage-bundle`（auth=optional，游客可读公开档案）。红线：user 域只聚合身份域真相，交集卡与影响力 evidence 仍由 content 域端侧并发拉取，user 域不做 content 事实第二真相源。
+  - 涉及文件: `quwoquan_service/contracts/metadata/user/user_profile/projections/user_homepage_{bundle,tab_counts,viewer_context}_wire.yaml`、`service.yaml`、`quwoquan_service/services/user-service/internal/adapters/http/homepage_bundle_handler.go`、`quwoquan_app/lib/cloud/runtime/generated/user/user_homepage_*_wire_dto.g.dart`
+  - 证据（云侧已闭环）: `make verify-metadata` + `make codegen-app` 绿（typed 嵌套 DTO 已生成，path builder `getUserHomepageBundlePath`）；T3 契约测试 `homepage_bundle_contract_test.go` 全绿：本人态（isOwner/relationToTarget=self + stats/tabCounts 等于身份域计数真相）/游客态（isGuest=true 且不下发 relationshipCapability，不造假）/陌生态（relationToTarget=not_following + canFollow=true）/strict 隔离 404/架构红线（bundle 不携带 intersections/authorImpact/evidence/feed 等 content 事实）。
+  - 证据（端侧已闭环，切片⑦）: repository 三层（Abstract/Mock/Remote，Mock 用 contract fixture，Remote 走 `getUserHomepageBundlePath` + `CloudResponseDecoder`）+ 强类型 `UserHomepageBundleViewData`（新增 `UserHomepageTabCountsViewData`/`UserHomepageViewerContextViewData`；关系能力**单源化复用既有 `RelationshipCapabilityDto`**，删除冗余 `RelationshipCapabilityViewData` 第二真相源，R24）；provider 经 `appDataSourceModeProvider` 透明切换；`ProfileNotifier.loadProfile` 用 `Future.wait` 一次聚合身份域真相 + 作品/帖子并发补充，**bundle 关系能力 seed 免首屏额外 `getCapability` 串行**；首屏聚合失败保留 `rawError` 经 `runtimeErrorSemantic` 渲染结构化 `AppPageErrorState`+重试（不被乐观壳层静默吞掉，R17/R20）。T1/T2 全绿：`user_profile_repository_contract_test.dart`(46) + `profile_state_provider_test.dart`(4，含「bundle 提供关系能力后不再串行 getCapability」与「失败进入结构化错误态」) + `profile_shell_widget_test.dart`(24，含「首屏聚合失败渲染结构化错误态并提供重试」)；`make verify-app-mock-isolation` / `make verify-app-page-horizontal-quality` / `make codegen-app`（端侧无漂移）全绿。
+  - 状态: 已解决（2026-06-18；云侧 metadata+handler+T3 + 端侧 ProfileShell 三层接入，homepage-bundle 端云回路闭环，T1/T2 全绿；T3 端云联调与 T4 旅程随切片⑧四环境验证）
+
+- [x] R-ID05 user-service 基线既有红测（与主页/交集任务无关域，源自基线提交 35f8a75b）— 已全部零技术债修绿
+  - 区域: Service
+  - 域: `user`（auth / follow / greeting / migration）
+  - 事项: `services/user-service/tests` 在干净检出上存在 7 个既有失败测试，均不在主页/交集任务改动集，单独运行（非全包污染）同样失败：
+    1. `TestLogin_CreatesOwnerAccountOnFirstUse` / `TestLogin_ExistingCredentialReturnsOwner`：测试打已废弃的通用端点 `POST /v1/auth/login`（404）；基线 35f8a75b 已重构为 method-specific 路由（`/v1/auth/login/phone|wechat|...`）但未更新该 stale 测试。
+    2. `TestManagedMigrationsAreIdempotent`：测试硬编码期望 15 个迁移，实际 16（基线已新增 `016_consent_records`，测试常量 stale）。
+    3. `TestFollow_Idempotent`：重复 follow 后 `follower_count=2`（期望 1）+ 缺 `follow_duplicate_request_count` 计数——follow 命令幂等性既有缺陷。
+    4. `TestGreeting_IgnoreAndCancel`：ignore 后 resend 返回 500（期望 201）——greeting 状态机 resend 既有缺陷。
+    5. `TestBlockCascade_ClearsFollowAndPendingGreeting`：互关用户发 greeting 被 `already_contact` 409（测试 setup 与「互关直达私信」新语义冲突，stale）。
+    6. `TestListFollowing_PaginationFillsVisibleItemsAfterFiltering`：过滤后分页补齐既有缺陷。
+  - 根因定性: 全部由基线提交 `35f8a75b 收敛当前产品与交付基线`（login 路由重构 + 016 迁移）与更早 `13672eb3` 遗留，均在本会话前已存在于 HEAD；本任务 build/vet 与改动文件与之无交集（`git status` 仅命中本任务新增 bundle/handler/test 与 fixture）。
+  - 本任务顺手收口（profile 读取域，零技术债）: 已修复并转绿 2 项 —— (a) `scanUserProfileRow` 漏绑 `&e.IdentityTags`（query 选 26 列 scan 仅 25 dest，致 `TestSearchSocialRelations_DoesNotExposeOwnerUserID` 500）；(b) 共享 fixture `createTestProfile` 漏插 `identity_tags`（NULL 无法 scan 进非空 `*string`，致 `TestSubAccountView_GetSubAccountProfile` 等 500）。
+  - 影响: 属 auth/follow/greeting/migration 域的提交态 stale 测试与既有逻辑缺陷；不阻塞主页 homepage-bundle/交集/影响力 evidence 端云能力（其 T3 已绿）。
+  - 解决（2026-06-19，逐个 root-cause + 零技术债修绿，含 2 个真实生产缺陷 + 2 个测试基建缺陷 + stale 修正）:
+    1. **migration（stale → 真相源对齐）**: `migration_runner.go` 新增只读导出 `ManagedMigrationFilenames()`；测试改为断言 ledger 行数 == 磁盘受管迁移数（不再硬编码，防再 stale）。
+    2. **login×2（废弃端点）**: 统一 `/v1/auth/login` 已重构为 method-specific 路由；凭证直登语义迁移到 typed credential 端点 `POST /v1/auth/login/apple`（`LoginWithCredential` 首登建号/已存在返回 owner），测试同步迁移、credential_type 校验改 apple。
+    3. **follow 幂等（测试基建缺陷）**: `cleanAll` 用 `Drop` 删除 mongo 集合连带删除唯一索引 `idx_follow_unique`，导致首个 follow 测试后所有后续测试幂等失效（insert 不再触发 duplicate key）。改为 `DeleteMany` 清文档、保留 testmain 建立的索引。
+    4. **listfollowing 分页（真实生产缺陷，2 处）**: (a) `listEdges` 用 `createdAt $lt` 单键 cursor，bulk follow 同毫秒 createdAt 被整体跳过 → 改 `(createdAt, followerId, followeeId)` 复合 keyset；(b) cursor 选取 off-by-one——以 overfetch 的 limit+1-th 元素作 cursor 又被下一页 `$lt` 排除，每翻页丢 1 条 → 改为最后返回元素作 cursor。
+    5. **greeting resend（真实生产缺陷，metadata→codegen）**: `idx_gr_unique_pending` 命名为「仅 pending 唯一」但实际全状态唯一，ignored 旧行挡住 resend（500）。根因：metadata 用 `where:` 键、codegen `IndexDef` tag 为 `condition`，偏条件被静默丢弃。按全仓约定改 greeting storage.yaml `where:` → `condition:`，`make codegen-storage` 重生 014 迁移含 `WHERE status='pending'` 偏唯一索引。
+    6. **block cascade（测试前提矛盾 + 断言补强）**: setup 建互关后发 greeting 被正确以 `already_contact` 拒绝（与互关直达私信语义一致）。改为单向 follow（可建 pending greeting），并补「block 级联清 follow 边」断言（GetRelationship.isFollowing=false），honor 测试名 ClearsFollow。
+  - 顺手修复连带基建缺陷: `createTestProfile` 的 phone 取 `userID[:16]` 前缀截断，共享前缀 userID（`filtered_target_a/b/c`）碰撞唯一约束 → 改为 `xxhash` 派生紧凑唯一 phone。
+  - 验证证据: `go build ./... && go vet ./internal/... ./tests/...` 全绿；`go test ./tests/...` 全包绿（`ok ... 36.5s`，0 失败）；codegen 重生仅影响 greeting 014 迁移（无其他迁移 drift）。
+  - 涉及文件: `tests/{credential_contract_test.go,migration_idempotent_test.go,follow_contract_test.go,greeting_request_state_machine_test.go,block_cascade_contract_test.go,helpers_test.go}`、`internal/infrastructure/persistence/{migration_runner.go,mongo_follow_store_ext.go}`、`contracts/metadata/user/greeting_request/storage.yaml`、`internal/infrastructure/migration/014_greeting_requests.up.sql`（codegen 产物）
+  - 状态: 已解决（7/7 红测转绿 + 全包绿；2 真实生产缺陷[follow 分页 keyset / greeting 偏唯一索引]、2 测试基建缺陷[cleanAll Drop / phone 碰撞]、3 stale 修正均零技术债收口）
+
+- [x] R-ID06 交集 Graph 边权 / Lifecycle 弱标 / Propagation 多跳异步物化真算（切片⑥）
+  - 区域: Service
+  - 域: `recommendation` → `content`
+  - 事项: `IntersectionReasonView` 的 `edgeWeight`/`lifecycleState`/`previousStrength`/`strengthDelta` 字段此前为占位（metadata 注释「云侧逻辑后置/本期默认 0」），读路径直出恒 0；Graph 边权未真算、生命周期弱标无来源、Propagation 多跳证据未参与加权。
+  - 正确设计（读路径零同步打分不变量 R-IX01 保持）: 在 `ReadModelIntersectionSource` 写/刷新路径做确定性异步物化——`edgeWeight = relationStrength × interactionFrequency × recencyDecay`（三因子全部源自理由自身真实信号，纯算术、零评分服务调用）；Lifecycle 状态机以上一次物化快照为增量基线对 edgeWeight 比对落 `new|strengthened|stable|weakened|reactivated` 弱标并回填 previousStrength/strengthDelta；Propagation 多跳由交集点携带的绝对计数（共同好友/共同圈子等可追溯证据）经指数饱和派生 interactionFrequency；affinity 通道复用同一边权真算替换原裸 count 启发式（`affinityIntersectionScore` 不再恒 0）。读路径热命中仅消费快照、零计算、零同步打分。
+  - 涉及文件: `quwoquan_service/services/content-service/internal/infrastructure/recommendation/intersection_graph_materializer.go`（新增物化器）、`read_model_intersection_source.go`（写路径接入 + affinity/object 边权真算）、`intersection_graph_materializer_test.go`/`read_model_intersection_source_test.go`（白盒单测）、`tests/viewer_object_intersection_store_contract_test.go`（T3 物化持久化）、`contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml`（注释同步：字段已由异步物化真算填充）
+  - 证据: 白盒单测覆盖三因子边权乘积/recency 半衰期衰减+floor/Propagation 绝对计数单调饱和/evidenceCount 取点和/Lifecycle 五态（new→strengthened→stable→weakened→reactivated）/边权确定性有界/identity key 稳定匹配 + 跨重算物化（首读 new→TTL 内 fresh 命中零回算消费已物化字段→过 TTL 重算 strengthened 且 previousStrength=上次 edgeWeight）；T3 真实 Mongo `TestViewerObjectIntersectionMaterialization_PersistsGraphLifecycle` 证明经读模型写路径物化 edgeWeight>0+lifecycle 并精确固化；`go test ./internal/...`（含 recommendation/application）+ `go test ./tests/...` 全包绿；R-IX01 不变量契约测试保持绿（读路径零同步打分未回归）。
+  - 状态: 已解决（2026-06-19；切片⑥ 确定性 Graph/Lifecycle/Propagation 物化真算闭环，读路径零计算消费，R-IX01 保持）
+
+- [x] R-ID07 Redis 不可用降级 + 已读水位持久兜底（切片 D）
+  - 区域: Service
+  - 域: `content`（intersection）
+  - 事项: 交集写路径（`ReportExposure` 冷却记忆窗、`MarkVisited` 已读水位）在 Redis 失败时硬向上抛错，会拖垮主请求；已读水位仅存 Redis（ix:watermark，90d TTL），Redis flush/宕机将丢失用户清零状态（红点回弹为未读），无持久兜底。
+  - 正确设计: ①写降级不阻断——`ReportExposure`（尽力而为去重信号）Redis 失败仅记降级指标+结构化 warn 日志后返回 nil；②已读水位持久兜底——新增 `WatermarkStore` 接口 + Mongo `rm_intersection_watermark`（`$max` 逐维度单调推进 upsert）作为耐久真相源，Redis 退化为加速读缓存；`MarkVisited` 先写耐久（真相源，仅耐久写失败才向上抛错）、再尽力回写 Redis（失败仅降级）；`watermarks` 读优先 Redis（热路径），失败/缺失回落耐久并尽力回暖 Redis（flush/宕机后读位不丢）；③可观测——新增 `intersection_redis_degraded_total{op}` 指标 + SLO `redis_degraded_rate`/`watermark_durability_fallback_rate` SLI + 告警 `IntersectionRedisDegradedHigh`。
+  - 涉及文件: `internal/application/intersection_service.go`（WatermarkStore 接口 + 三方法降级/兜底重写 + logger/store 选项）、`intersection_metrics.go`（ObserveRedisDegraded）、`internal/infrastructure/recommendation/watermark_store.go`（新增 MongoWatermarkStore）、`internal/infrastructure/intersectionmetrics/metrics.go`、`cmd/api/main.go`（注入耐久 store+logger）、`configs/observability/intersection_slo.yaml`、`deploy/monitoring/alerts/quwoquan_alerts.yaml`、`intersection_service_test.go`/`intersection_watermark_store_contract_test.go`（T2/T3）
+  - 证据: T2 应用层单测 —— Redis 宕机时 `MarkVisited` 降级返回 nil 且耐久持久化+发 `watermark_write` 降级指标；`watermarks` Redis 故障回落耐久读位+发 `watermark_read`；Redis flush（可用但空）从耐久恢复并回暖 Redis（再读命中 Redis、不再触达耐久）；`ReportExposure` Redis 宕机降级返回 nil+发 `exposure_write`；耐久写真失败（Mongo down）仍向上抛错（真相源不静默丢失）。T3 `TestIntersectionWatermarkStore_RoundTripAndMonotonic` 真实 Mongo 往返 + `$max` 单调（旧时间戳被拒不回退）。`go test ./internal/...`+`./tests/...` 全包绿；告警/SLO YAML 语法校验绿。
+  - 状态: 已解决（2026-06-19；切片 D 写降级不阻断 + watermark 持久兜底 + 可观测闭环）
+
+- [x] R-ID08 切片⑧全量 gate 暴露的基线既有红测/契约缺口（与主页/交集任务无关域，顺手零技术债修绿）
+  - 区域: Service
+  - 域: `rtc` / `recommendation`(runtime) / `content`(feed)
+  - 事项: 跑服务侧全量 `make gate` + `go test ./runtime/...` + user-service 全量时，暴露 5 处基线既有失败/缺口，均非本任务（交集/主页）回归，但阻断「全量 gate 全绿」：
+    - ① RTC 错误码 HTTP 映射漂移：`runtime/errors.HTTPStatusFromError` 是按 code 第三段（`Code.Reason`）枚举的硬编码 switch，而 RTC 码用描述性第三段（`already_in_call`/`call_full`/`cannot_answer`/`invalid_call_action`/`screen_share_conflict`/`call_ended`/`not_participant`/`not_mutual`/`blocked`/`recording_not_allowed`）与 `errors.yaml` 声明的 `http_status` 漂移，全部 fall through 到默认 500。`TestContract_InitiateCall_ConflictWhenActive` 期望 409 实得 500。
+    - ② RTC 测试用废弃 callType：`one_to_one_relationship_gate_test.go` 用 `CallType:"voice"`，但域有效类型仅 `audio`/`video`，`TestInitiateCall_OneToOne_AllowsMutual` 因 `invalid call type` 失败（另两测因 mutual/blocked gate 在类型校验前拦截才偶然通过）。
+    - ③ 推荐七态漏斗重构后的 3 处陈旧测试：`runtime/registry TestGetEnum`（ContentType 漏 `review`，HEAD 已加该枚举值但测试未同步）、`runtime/redis TestRecAdapter_HotPathIntegration` 与 `runtime/context TestPageContextManager_ForwardsUserActionsToHotPath`（均编码重构前「like→exposed/ExposedIDs」旧语义，新漏斗 like→interaction、`SessionState.ExposedIDs` 有意恒 nil、曝光仅由 feed 下发 `RecordServed` 标记）。
+    - ④ feed `feedRequestId` 服务端权威化契约缺测：`contract.yaml` 已声明 scenario `get_feed_issues_server_feed_request_id`（go_func `TestFeedIssuesServerFeedRequestID`，非 pending）但无对应 Go 测试，G11 门禁 BLOCK。
+  - 正确设计/修复（零技术债，对齐唯一真相源）: ①把 RTC 全部 reason 段按 `errors.yaml` 声明的 http_status 补进 `HTTPStatusFromError`（conflict→409、call_ended→410、forbidden 组→403），与 metadata SSOT 对齐，并加 `TestHTTPStatusFromErrorSupportsMetadataUserSubKinds` RTC 子用例锁定防回退；②RTC 测试改用有效 `audio`；③3 处陈旧测试重写对齐新七态漏斗 SSOT（`observability_funnel_test.go`）——registry 期望集补 `review`、HotPath 集成测试改为「`RecordServed` 标记曝光 + like 驱动 interaction 标签权重 + 断言 ExposedIDs 恒空」、context 转发测试改用会话标签权重验证转发；④补 `TestFeedIssuesServerFeedRequestID`（首刷 `frq_` 前缀 + rankingVersion/reasonVersion + 回显归因 id 连续）。
+  - 涉及文件: `runtime/errors/errors.go`、`runtime/errors/errors_test.go`、`runtime/registry/registry_test.go`、`runtime/redis/adapter_test.go`、`runtime/context/context_test.go`、`services/rtc-service/tests/one_to_one_relationship_gate_test.go`、`services/content-service/tests/post_feed_contract_test.go`
+  - 证据: `make gate`（服务侧 scripts/gate.sh）→ `[gate] OK`（assistant/content 17.5s/rtc/product-ops/tag/recommendation python/ML + 元数据/特性树一致性全绿）；`go test ./runtime/...` 全包绿（OVERALL_EXIT=0）；`go test ./services/user-service/...` 全包绿（USER_EXIT=0，确认共享 errors.go 改动无回归）；`go test ./services/rtc-service/...` 全包绿（含两个原失败测试）。
+  - 状态: 已解决（2026-06-19；切片⑧服务侧全量 gate 闭环，5 处基线红测/缺口零技术债修绿）

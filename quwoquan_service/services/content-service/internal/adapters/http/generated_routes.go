@@ -54,13 +54,11 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetAppConfig":
 		h.handleNotImplemented(w, r, operation)
 	case "GetAuthorImpact":
-		h.handleNotImplemented(w, r, operation)
+		h.handleGetAuthorImpact(w, r)
 	case "GetCounters":
 		h.handleNotImplemented(w, r, operation)
 	case "GetFeed":
 		h.handleGetFeed(w, r)
-	case "GetFeedIntersections":
-		h.handleGetFeedIntersections(w, r)
 	case "GetHelperRead":
 		h.handleNotImplemented(w, r, operation)
 	case "GetMediaAsset":
@@ -75,12 +73,12 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGetPost(w, r)
 	case "GetReactionState":
 		h.handleNotImplemented(w, r, operation)
-	case "GetRecommendation":
-		h.handleGetRecommendation(w, r)
 	case "InitMediaUpload":
 		h.handleNotImplemented(w, r, operation)
 	case "LikePost":
 		h.handleNotImplemented(w, r, operation)
+	case "ListAuthorImpactEvidence":
+		h.handleListAuthorImpactEvidence(w, r)
 	case "ListCommentReplies":
 		h.handleNotImplemented(w, r, operation)
 	case "ListComments":
@@ -109,8 +107,6 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "ReportBehaviors":
 		h.handleReportBehaviors(w, r)
-	case "ReportIntersectionExposure":
-		h.handleReportIntersectionExposure(w, r)
 	case "RepostToCircle":
 		h.handleNotImplemented(w, r, operation)
 	case "RequestOriginalImageAccess":
@@ -145,11 +141,9 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/media:bind", operation: "BindMediaAssetsToComment"},
 	{method: "POST", pathTemplate: "/v1/content/comments/{commentId}/reaction", operation: "ReactToComment"},
 	{method: "GET", pathTemplate: "/v1/content/feed", operation: "GetFeed"},
-	{method: "GET", pathTemplate: "/v1/content/feed/intersections", operation: "GetFeedIntersections"},
 	{method: "GET", pathTemplate: "/v1/content/footprint", operation: "GetMyFootprint"},
 	{method: "GET", pathTemplate: "/v1/content/helper-read/{contentId}", operation: "GetHelperRead"},
 	{method: "GET", pathTemplate: "/v1/content/intersections", operation: "ListMyIntersections"},
-	{method: "POST", pathTemplate: "/v1/content/intersections/exposure", operation: "ReportIntersectionExposure"},
 	{method: "GET", pathTemplate: "/v1/content/intersections/object", operation: "GetObjectIntersections"},
 	{method: "GET", pathTemplate: "/v1/content/intersections/summary", operation: "GetMyIntersectionSummary"},
 	{method: "POST", pathTemplate: "/v1/content/intersections/visit", operation: "MarkIntersectionsVisited"},
@@ -182,8 +176,8 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/share", operation: "UnsharePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/share", operation: "SharePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
-	{method: "POST", pathTemplate: "/v1/content/recommend", operation: "GetRecommendation"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/author-impact", operation: "GetAuthorImpact"},
+	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/author-impact/evidence", operation: "ListAuthorImpactEvidence"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/received", operation: "ListProfileInteractionActivitiesReceived"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/sent", operation: "ListProfileInteractionActivitiesSent"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/posts", operation: "ListUserPosts"},
@@ -253,12 +247,13 @@ func generatedSplitPath(raw string) []string {
 }
 
 type GeneratedGetFeedParams struct {
-	Identity    string
-	Type        string
-	Sort        string
-	Cursor      string
-	SubCategory string
-	Limit       int
+	Identity      string
+	Type          string
+	Sort          string
+	Cursor        string
+	SubCategory   string
+	FeedRequestId string
+	Limit         int
 }
 
 func BindGeneratedGetFeedParams(r *http.Request, defaultLimit int) GeneratedGetFeedParams {
@@ -269,6 +264,7 @@ func BindGeneratedGetFeedParams(r *http.Request, defaultLimit int) GeneratedGetF
 	out.Sort = strings.TrimSpace(q.Get("sort"))
 	out.Cursor = strings.TrimSpace(q.Get("cursor"))
 	out.SubCategory = strings.TrimSpace(q.Get("subCategory"))
+	out.FeedRequestId = strings.TrimSpace(q.Get("feedRequestId"))
 	rawLimit := strings.TrimSpace(q.Get("limit"))
 	if rawLimit != "" {
 		if parsed, err := strconv.Atoi(rawLimit); err == nil {

@@ -22,6 +22,9 @@ fields:
   - { name: authorNickname,        type: string, description: 作者昵称（反范式） }
   - { name: authorAvatarUrl,       type: string, description: 作者头像（反范式） }
   - { name: authorBackgroundUrl,   type: string, nullable: true, description: 作者主页背景图（反范式，null 表示未配置） }
+  - { name: authorRoleLabel,       type: string, description: 作者角色短标签（反范式，如「旅行创作者」） }
+  - { name: authorIdentityTags,    type: "[]string", description: 作者身份标签（反范式，首页卡片最多展示 2 个） }
+  - { name: authorVerified,        type: bool, description: 作者认证标记（反范式，驱动卡片认证角标） }
   - { name: title,                 type: string, description: 文章标题 }
   - { name: body,           type: string, description: 文章摘要或正文 }
   - { name: coverUrl,       type: string, description: 封面图 URL }
@@ -104,6 +107,30 @@ client_projection:
       aliases: [authorBackgroundUrl]
       default: "null"
       description: "作者主页背景图（反范式）；null 时 UI 显示默认渐变背景"
+
+    - name: authorRoleLabel
+      dart_type: String
+      nullable: false
+      source: authorRoleLabel
+      aliases: [authorRoleLabel, roleLabel, authorRole]
+      default: "''"
+      description: "作者角色短标签（反范式），首页推荐卡顶部展示"
+
+    - name: authorIdentityTags
+      dart_type: List<String>
+      nullable: false
+      source: authorIdentityTags
+      aliases: [authorIdentityTags, identityTags, authorTags]
+      default: "<String>[]"
+      description: "作者身份标签（反范式），首页推荐卡顶部最多展示 2 个"
+
+    - name: authorVerified
+      dart_type: bool
+      nullable: false
+      source: authorVerified
+      aliases: [authorVerified, verified, isVerified]
+      default: "false"
+      description: "作者认证标记（反范式），驱动卡片认证角标"
 
     - name: title
       dart_type: String

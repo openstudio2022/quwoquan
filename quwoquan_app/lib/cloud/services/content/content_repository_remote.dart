@@ -31,7 +31,7 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? identity,
     String? type,
@@ -82,16 +82,23 @@ class RemoteContentRepository implements ContentRepository {
       uri,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.getFeed),
     );
-    final rawPage = CloudResponseDecoder.asCursorPage(
+    final obj = CloudResponseDecoder.asObject(
       decoded,
+      context: ContentRequestPageIds.getFeed,
+    );
+    final rawPage = CloudResponseDecoder.asCursorPage(
+      obj,
       context: ContentRequestPageIds.getFeed,
     );
     final dtoItems = rawPage.items
         .map(postBaseDtoFromMap)
         .toList(growable: false);
-    return CursorPage<PostBaseDto>(
+    return DiscoveryFeedPage(
       items: dtoItems,
       nextCursor: rawPage.nextCursor,
+      feedRequestId: obj['feedRequestId']?.toString(),
+      rankingVersion: obj['rankingVersion']?.toString(),
+      reasonVersion: obj['reasonVersion']?.toString(),
     );
   }
 
@@ -729,31 +736,6 @@ class RemoteContentRepository implements ContentRepository {
       CloudResponseDecoder.asObject(
         decoded,
         context: ContentRequestPageIds.generateArticleSummary,
-      ),
-    );
-  }
-
-  @override
-  Future<ContentRecommendationResponseDto> getRecommendation({
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final uri = _uri(ContentApiMetadata.getRecommendationPath);
-    final body = <String, dynamic>{'limit': limit};
-    if (cursor != null && cursor.isNotEmpty) {
-      body['cursor'] = cursor;
-    }
-    final decoded = await _httpClient.postJson(
-      uri,
-      headers: CloudRequestHeaders.forPage(
-        ContentRequestPageIds.getRecommendation,
-      ),
-      body: body,
-    );
-    return ContentRecommendationResponseDto.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: ContentRequestPageIds.getRecommendation,
       ),
     );
   }

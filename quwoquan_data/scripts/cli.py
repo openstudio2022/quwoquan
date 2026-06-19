@@ -53,11 +53,13 @@ def main() -> None:
     from data.handler import register_parser as reg_data
     from governance.handler import register_parser as reg_governance
     from audit.handler import register_parser as reg_audit
+    from site_supply.handler import register_parser as reg_site_supply
     from task.object_queue import register_object_queue_parser as reg_object_queue
 
     reg_audit(subparsers)
     reg_env(subparsers)
     reg_data(subparsers)
+    reg_site_supply(subparsers)
     reg_object_queue(subparsers)
     reg_media(subparsers)
     reg_template(subparsers)

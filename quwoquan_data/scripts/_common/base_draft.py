@@ -85,7 +85,12 @@ def occupied_source_refs(ledger: Mapping[str, Any], *, exclude_post: str = "") -
     """已被（其它篇目）占用的 sourceRef 集合。exclude_post 用于幂等重跑同一篇。"""
     out: set[str] = set()
     for source_ref, post_ref in (ledger.get("assignments") or {}).items():
-        if exclude_post and str(post_ref) == exclude_post:
+        post_refs = (
+            [str(item) for item in post_ref if str(item).strip()]
+            if isinstance(post_ref, list)
+            else [str(post_ref)]
+        )
+        if exclude_post and all(ref == exclude_post for ref in post_refs):
             continue
         out.add(str(source_ref))
     return out

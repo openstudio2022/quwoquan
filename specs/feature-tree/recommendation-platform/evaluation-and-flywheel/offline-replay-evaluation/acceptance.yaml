@@ -16,7 +16,7 @@ gwt_acceptance:
   GWT1:
     title: 离线 replay 评估 GWT
     given:
-      - 存在历史请求、候选、曝光和反馈样本。
+      - 存在过往请求、候选、曝光和反馈样本。
     when:
       - 新推荐策略准备进入线上 AB。
     then:

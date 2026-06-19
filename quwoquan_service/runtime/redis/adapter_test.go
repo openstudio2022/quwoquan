@@ -130,6 +130,12 @@ func TestRecAdapter_HotPathIntegration(t *testing.T) {
 	hp := recommendation.NewHotPath(rec)
 	ctx := context.Background()
 
+	// 七态漏斗：曝光（served）由 feed 下发路径写入，不由行为信号派生。
+	if err := hp.RecordServed(ctx, "u1", []recommendation.FeedItem{{ContentID: "p1"}}, time.Now().UTC()); err != nil {
+		t.Fatalf("RecordServed: %v", err)
+	}
+
+	// like 是 interaction 态（与 served/impressed/click 分离），驱动会话标签权重。
 	signal := recommendation.BehaviorSignal{
 		UserID:    "u1",
 		SessionID: "s1",
@@ -137,14 +143,13 @@ func TestRecAdapter_HotPathIntegration(t *testing.T) {
 		Action:    "like",
 		Tags:      []string{"travel"},
 	}
-
 	if err := hp.ProcessSignal(ctx, signal); err != nil {
 		t.Fatalf("ProcessSignal: %v", err)
 	}
 
 	exposed, _ := hp.IsExposed(ctx, "u1", "s1", "p1")
 	if !exposed {
-		t.Error("p1 should be exposed after like signal")
+		t.Error("p1 should be exposed after being served")
 	}
 
 	state, err := hp.GetSessionState(ctx, "u1", "s1")
@@ -154,8 +159,10 @@ func TestRecAdapter_HotPathIntegration(t *testing.T) {
 	if state == nil {
 		t.Fatal("session state should not be nil")
 	}
-	if len(state.ExposedIDs) != 1 {
-		t.Errorf("expected 1 exposed ID, got %d", len(state.ExposedIDs))
+	// 新七态漏斗有意不在会话态回传 ExposedIDs（曝光过滤走候选点查 ExposureFilter），
+	// 避免 feed 请求路径上拉取长窗口 SMembers。
+	if len(state.ExposedIDs) != 0 {
+		t.Errorf("session state must not carry exposed IDs in the new funnel, got %d", len(state.ExposedIDs))
 	}
 	if state.TagWeights["travel"] <= 0 {
 		t.Error("travel tag weight should be positive after like")

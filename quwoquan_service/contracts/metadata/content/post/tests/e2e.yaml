@@ -44,6 +44,9 @@ scenarios:
       - app renders cards within 300ms of response
       - no hardcoded contentType strings in request path
       - ContentUIConfig.discoveryTabs[0].contentType used for request
+      - response envelope carries server-issued feedRequestId (frq_ prefix) + rankingVersion
+      - app does not generate feedRequestId client-side; it adopts the server-issued id
+      - pagination echoes the server feedRequestId and behavior events reuse the same id
 
   - name: like_post_realtime
     description: 点赞 → 计数实时更新 → 错误 UI 正确展示

@@ -16,6 +16,7 @@ const (
 	PrefixDeviceContext         Prefix = "dcx_"
 	PrefixToolUse               Prefix = "tu_"
 	PrefixAppMessage            Prefix = "msg_"
+	PrefixFeedRequest           Prefix = "frq_"
 )
 
 var prefixPattern = regexp.MustCompile(`^[a-z][a-z0-9]{1,15}_$`)
@@ -84,4 +85,5 @@ func init() {
 	DefaultRegistry.MustRegister(PrefixDeviceContext, "DeviceContext")
 	DefaultRegistry.MustRegister(PrefixToolUse, "ToolUse")
 	DefaultRegistry.MustRegister(PrefixAppMessage, "AppMessage")
+	DefaultRegistry.MustRegister(PrefixFeedRequest, "FeedRequest")
 }

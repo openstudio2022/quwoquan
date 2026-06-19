@@ -33,6 +33,7 @@ class UserRequestPageIds {
     'GetRelationship': 'user.relationship',
     'GetRelationshipCapability': 'user.get.relationship.capability',
     'GetSubAccountProfile': 'user.get.sub.account.profile',
+    'GetUserHomepageBundle': 'user.get.user.homepage.bundle',
     'GetUserInterestProfile': 'user.get.user.interest.profile',
     'GetUserProfile': 'user.profile',
     'IgnoreGreetingRequest': 'user.ignore.greeting.request',
@@ -110,6 +111,7 @@ class UserRequestPageIds {
   static const String getRelationship = 'user.relationship';
   static const String getRelationshipCapability = 'user.get.relationship.capability';
   static const String getSubAccountProfile = 'user.get.sub.account.profile';
+  static const String getUserHomepageBundle = 'user.get.user.homepage.bundle';
   static const String getUserInterestProfile = 'user.get.user.interest.profile';
   static const String getUserProfile = 'user.profile';
   static const String ignoreGreetingRequest = 'user.ignore.greeting.request';

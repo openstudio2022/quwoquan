@@ -78,7 +78,7 @@ class CreateActionSheet extends StatelessWidget {
       _SheetActionSpec(
         label: UITextConstants.createActionResumeDraft,
         labelKey: TestKeys.createActionContinueFromDraft,
-        icon: FluentIcons.folder_arrow_right_24_regular,
+        icon: FluentIcons.document_text_clock_24_regular,
         iconColor: draftActionColor,
         haloColor: draftHaloColor,
         onPressed: onContinueFromDraft,
@@ -103,7 +103,7 @@ class CreateActionSheet extends StatelessWidget {
       if (onCreateCircle != null)
         _SheetActionSpec(
           label: UITextConstants.createActionCreateCircleShort,
-          icon: FluentIcons.people_community_add_24_regular,
+          icon: FluentIcons.people_add_24_regular,
           iconColor: actionColor,
           haloColor: actionHaloColor,
           onPressed: onCreateCircle!,

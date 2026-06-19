@@ -44,6 +44,7 @@ scene_routing:
       requirements: 读多写少、TTL 较长、延迟容忍度更高
       key_prefixes:
         - "cache:"
+        - "ix:"
         - "events.search."
         - "page_ctx:"
         - "content_analysis:"
@@ -170,13 +171,17 @@ key_patterns:
     type: hash
     description: 助手当前页面上下文（多模态理解输入）
 
-  - pattern: "cache:viewer_intersections:{userId}"
+  - pattern: "ix:watermark:{<userId>}"
     redis_scene: general
-    ttl_seconds: 900
-    type: string
+    ttl_seconds: 7776000
+    type: hash
+    hash_tag: userId
     description: |
-      「我的交集」事实读模型聚合缓存（viewer_object_intersections 物化结果的 summary/list 快照）。
-      请求期命中缓存即返回，避免重复聚合；事实更新或保鲜重算时主动失效。
+      「我的交集」收件箱 per-dimension 已读水位（HSet field=dimension, value=已读 unix 秒）。
+      MarkVisited 写入对应维度水位，Summary/List 读路径据此把 ≤ 水位的事实判为已读。
+      D1 修复：原 cache:viewer_intersections（string 快照语义）被误作 hash 使用，造成类型/语义
+      冲突；水位迁出到独立 hash key（ix: 前缀走 general scene），与读模型聚合快照彻底分离。
+      hash_tag {userId} 保证同用户水位落同一 slot；TTL 90 天覆盖长周期已读状态。
 
   - pattern: "content_analysis:{postId}"
     redis_scene: general

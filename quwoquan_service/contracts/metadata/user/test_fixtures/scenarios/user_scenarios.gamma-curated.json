@@ -174,7 +174,9 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_photo",
@@ -330,7 +332,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel",
@@ -486,7 +490,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_video",
@@ -648,7 +654,9 @@
             "cityWalk",
             "photography",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_article",
@@ -752,7 +760,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_friend",
@@ -909,7 +919,9 @@
             "coffee",
             "food",
             "designWriting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_weekend_1",
@@ -1073,7 +1085,9 @@
             "lifestyle",
             "coffee",
             "parenting"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_weekend_2",
@@ -1241,7 +1255,9 @@
             "food",
             "coffee",
             "lifestyle"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_owner",
@@ -1392,7 +1408,9 @@
             "photography",
             "travel",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel_owner",
@@ -1544,7 +1562,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_commenter",
@@ -1659,7 +1679,9 @@
             "designWriting",
             "tech",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_travel_01",
@@ -1812,7 +1834,9 @@
             "travel",
             "photography",
             "outdoor"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_citywalk_01",
@@ -1973,7 +1997,9 @@
             "cityWalk",
             "photography",
             "coffee"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_outdoor_01",
@@ -2129,7 +2155,9 @@
             "outdoor",
             "travel",
             "fitness"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         },
         {
           "userId": "fixture_user_tech_01",
@@ -2290,7 +2318,9 @@
             "tech",
             "designWriting",
             "cityWalk"
-          ]
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
         }
       ]
     },

@@ -1,4 +1,5 @@
 // ignore_for_file: prefer_single_quotes
+import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
@@ -54,22 +55,57 @@ class ContentMockData {
     'journal_plain_body_only': ['c2'],
   };
 
+  static Map<String, dynamic> _normalizeArchivedSeedMediaMap(
+    Map<String, dynamic> item,
+  ) {
+    return _normalizeArchivedSeedMediaValue(item) as Map<String, dynamic>;
+  }
+
+  static Object? _normalizeArchivedSeedMediaValue(Object? value) {
+    if (value is String) {
+      return _normalizeArchivedSeedMediaKey(value);
+    }
+    if (value is List) {
+      return value
+          .map(_normalizeArchivedSeedMediaValue)
+          .toList(growable: false);
+    }
+    if (value is Map) {
+      return <String, dynamic>{
+        for (final entry in value.entries)
+          entry.key.toString(): _normalizeArchivedSeedMediaValue(entry.value),
+      };
+    }
+    return value;
+  }
+
+  static String _normalizeArchivedSeedMediaKey(String value) {
+    return value
+        .replaceFirst('media/image/s/mock/', 'media/image/s/archived-image/')
+        .replaceFirst('media/video/s/mock/', 'media/video/s/archived-video/')
+        .replaceFirst(
+          'media/avatar/s/mock/',
+          'media/avatar/s/archived-avatar/',
+        );
+  }
+
   static List<FeedItemDto> _withCircleContext(
     List<Map<String, dynamic>> items,
   ) {
     return items
         .map((item) {
+          final normalizedItem = _normalizeArchivedSeedMediaMap(item);
           final postId = item['postId']?.toString() ?? '';
           final configuredCircleIds = _circleIdsByPostId[postId];
           if (configuredCircleIds == null || configuredCircleIds.isEmpty) {
-            return FeedItemDto.fromMap(item);
+            return FeedItemDto.fromMap(normalizedItem);
           }
           final circleNames = configuredCircleIds
               .map((id) => _circleNameById[id] ?? '')
               .where((name) => name.isNotEmpty)
               .toList(growable: false);
           return FeedItemDto.fromMap(<String, dynamic>{
-            ...item,
+            ...normalizedItem,
             'circleIds': configuredCircleIds,
             'circleNames': circleNames,
             'circleSummaries': [
@@ -118,26 +154,57 @@ class ContentMockData {
     return List<FeedItemDto>.unmodifiable(expanded);
   }
 
+  /// alpha showcase 全样式样本：唯一真相源为 contract seed `home_showcase_core`
+  /// （content_scenarios[.lite|.gamma-curated].json），四环境同源 archived 媒体。
+  /// MockRepository 与发现区 wire 查找均消费本 getter，端侧不再维护第二套样本列表。
+  static List<FeedItemDto> get seededShowcaseFeedItems {
+    final seed = ContractFixtureRuntimeLoader.contentSeedSet(
+      'home_showcase_core',
+    );
+    final posts = seed?['posts'];
+    if (posts is! List) {
+      return const <FeedItemDto>[];
+    }
+    return posts
+        .whereType<Map>()
+        .map((item) => FeedItemDto.fromMap(item.cast<String, dynamic>()))
+        .toList(growable: false);
+  }
+
   static String _buildLongformMockArticleMarkdown({
     required String title,
     required String summary,
     required String template,
     required String fontPreset,
     required String coverUrl,
+    List<String> imageUrls = const <String>[],
   }) {
     final normalizedTitle = title.trim().isEmpty ? '无题长文' : title.trim();
     final normalizedSummary = summary.trim().isEmpty
         ? '这是一段用于精品沉浸翻页的长文样本。'
         : summary.trim();
+    final resolvedImages = imageUrls.where((url) => url.trim().isNotEmpty);
+    final figureUrls = resolvedImages.isEmpty && coverUrl.trim().isNotEmpty
+        ? <String>[coverUrl.trim()]
+        : resolvedImages.toList(growable: false);
     final repeatedParagraph = [
       normalizedSummary,
       '为了保证首页精品与文章浏览入口都能稳定验证翻页，这里把摘要扩展为更长的连续正文。',
       '正文继续补充场景、细节、人物动作与环境变化，让排版在窄屏沉浸视口中稳定切出第二页、第三页。',
       '当用户在首页精品中停留到文章卡时，应该能像真实长文一样完成前翻、后翻，而不是停留在单页摘要。',
     ].join('\n\n');
-    final figure = coverUrl.trim().isEmpty
+    final figures = figureUrls.isEmpty
         ? ''
-        : '\n:::figure id="cover_${normalizedTitle.hashCode}" layout="fullWidth" caption="精品长文封面"\n$coverUrl\n:::\n';
+        : figureUrls.indexed
+              .map((entry) {
+                final index = entry.$1 + 1;
+                final url = entry.$2;
+                final caption = figureUrls.length > 1
+                    ? '精品长文配图 $index'
+                    : '精品长文封面';
+                return ':::figure id="image_${normalizedTitle.hashCode}_$index" layout="fullWidth" caption="$caption"\n$url\n:::\n';
+              })
+              .join('\n');
     return '---\n'
         'title: $normalizedTitle\n'
         'summary: $normalizedSummary\n'
@@ -146,7 +213,7 @@ class ContentMockData {
         '---\n\n'
         '# $normalizedTitle\n\n'
         '$normalizedSummary\n'
-        '$figure\n'
+        '$figures\n'
         '## 开篇\n\n'
         '$repeatedParagraph\n\n'
         '## 展开\n\n'
@@ -208,15 +275,23 @@ class ContentMockData {
     final trimmed = id.trim();
     if (trimmed.isEmpty) return null;
     try {
-      final row = discoveryArticleData.firstWhere((a) => a.id == trimmed);
+      final row = <FeedItemDto>[
+        ...discoveryArticleData,
+        ...seededShowcaseFeedItems.where((item) => item.type == 'article'),
+      ].firstWhere((a) => a.id == trimmed);
       final title = row.title ?? '';
       final summary = row.summary ?? row.body ?? '';
+      final imageUrls = row.imageUrls
+          .map((url) => url.trim())
+          .where((url) => url.isNotEmpty)
+          .toList(growable: false);
       final markdown = _buildLongformMockArticleMarkdown(
         title: title,
         summary: summary,
         template: row.articleTemplate ?? 'journal',
         fontPreset: row.articleFontPreset ?? 'clean',
         coverUrl: row.coverUrl,
+        imageUrls: imageUrls,
       );
       return <String, dynamic>{
         ...row.toDiscoveryWireMap(),
@@ -251,8 +326,19 @@ class ContentMockData {
     required int shareCount,
     required String createdAt,
     String coverUrl = '',
+    List<String> mediaUrls = const <String>[],
+    List<Map<String, dynamic>> intersectionReasons =
+        const <Map<String, dynamic>>[],
   }) {
     final normalizedCoverUrl = coverUrl.trim();
+    final normalizedMediaUrls = mediaUrls
+        .map((url) => url.trim())
+        .where((url) => url.isNotEmpty)
+        .toList(growable: false);
+    final articleMediaUrls =
+        normalizedMediaUrls.isEmpty && normalizedCoverUrl.isNotEmpty
+        ? <String>[normalizedCoverUrl]
+        : normalizedMediaUrls;
     return <String, dynamic>{
       'postId': postId,
       'contentType': 'article',
@@ -266,8 +352,7 @@ class ContentMockData {
       'summary': summary,
       if (normalizedCoverUrl.isNotEmpty) 'coverUrl': normalizedCoverUrl,
       if (normalizedCoverUrl.isNotEmpty) 'thumbnailUrl': normalizedCoverUrl,
-      if (normalizedCoverUrl.isNotEmpty)
-        'mediaUrls': <String>[normalizedCoverUrl],
+      if (articleMediaUrls.isNotEmpty) 'mediaUrls': articleMediaUrls,
       'articleTemplate': articleTemplate,
       'articleFontPreset': articleFontPreset,
       'articlePresentationVersion': 1,
@@ -284,6 +369,8 @@ class ContentMockData {
       'commentCount': commentCount,
       'shareCount': shareCount,
       'createdAt': createdAt,
+      if (intersectionReasons.isNotEmpty)
+        'intersectionReasons': intersectionReasons,
     };
   }
 
@@ -300,16 +387,16 @@ class ContentMockData {
         'authorId': 'nature_photographer',
         'displayName': '自然摄影师',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+            'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
+            'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1518152006812-edab29b069ac?w=800',
+            'media/image/s/mock/seed/p_1518152006812-edab29b069ac/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1518152006812-edab29b069ac?w=800',
+            'media/image/s/mock/seed/p_1518152006812-edab29b069ac/v1/image.jpg',
         'mediaUrls': [
-          'https://images.unsplash.com/photo-1518152006812-edab29b069ac?w=800',
-          'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800',
+          'media/image/s/mock/seed/p_1518152006812-edab29b069ac/v1/image.jpg',
+          'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
         ],
         'width': 960,
         'height': 800,
@@ -324,15 +411,15 @@ class ContentMockData {
         'authorId': 'travel_photographer',
         'displayName': '旅行摄影师',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+            'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1200',
+            'media/image/s/mock/seed/p_1539635278303-d4002c07eae3/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+            'media/image/s/mock/seed/p_1523275335684-37898b6baf30/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+            'media/image/s/mock/seed/p_1523275335684-37898b6baf30/v1/image.jpg',
         'mediaUrls': [
-          'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+          'media/image/s/mock/seed/p_1523275335684-37898b6baf30/v1/image.jpg',
         ],
         'width': 640,
         'height': 800,
@@ -347,17 +434,17 @@ class ContentMockData {
         'authorId': 'street_photo',
         'displayName': '街头摄影',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+            'media/avatar/s/mock/seed/u_1472099645785-5658abf4ff4e/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1200',
+            'media/image/s/mock/seed/p_1477959858617-67f85cf4f1df/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800',
+            'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800',
+            'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
         'mediaUrls': [
-          'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800',
-          'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800',
-          'https://images.unsplash.com/photo-1534067783941-51c9c23ecefd?w=800',
+          'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
+          'media/image/s/mock/seed/p_1470071459604-3b5ec3a7fe05/v1/image.jpg',
+          'media/image/s/mock/seed/p_1534067783941-51c9c23ecefd/v1/image.jpg',
         ],
         'width': 800,
         'height': 800,
@@ -372,15 +459,15 @@ class ContentMockData {
         'authorId': 'nature_photographer',
         'displayName': '自然摄影师',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+            'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
+            'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800',
+            'media/image/s/mock/seed/p_1470071459604-3b5ec3a7fe05/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800',
+            'media/image/s/mock/seed/p_1470071459604-3b5ec3a7fe05/v1/image.jpg',
         'mediaUrls': [
-          'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800',
+          'media/image/s/mock/seed/p_1470071459604-3b5ec3a7fe05/v1/image.jpg',
         ],
         'width': 1200,
         'height': 800,
@@ -395,15 +482,15 @@ class ContentMockData {
         'authorId': 'travel_photographer',
         'displayName': '旅行摄影师',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+            'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1200',
+            'media/image/s/mock/seed/p_1539635278303-d4002c07eae3/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1534067783941-51c9c23ecefd?w=800',
+            'media/image/s/mock/seed/p_1534067783941-51c9c23ecefd/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1534067783941-51c9c23ecefd?w=800',
+            'media/image/s/mock/seed/p_1534067783941-51c9c23ecefd/v1/image.jpg',
         'mediaUrls': [
-          'https://images.unsplash.com/photo-1534067783941-51c9c23ecefd?w=800',
+          'media/image/s/mock/seed/p_1534067783941-51c9c23ecefd/v1/image.jpg',
         ],
         'width': 800,
         'height': 1067,
@@ -418,15 +505,15 @@ class ContentMockData {
         'authorId': 'street_photo',
         'displayName': '街头摄影',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+            'media/avatar/s/mock/seed/u_1472099645785-5658abf4ff4e/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1200',
+            'media/image/s/mock/seed/p_1477959858617-67f85cf4f1df/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1500673922987-e212871fec22?w=800',
+            'media/image/s/mock/seed/p_1500673922987-e212871fec22/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1500673922987-e212871fec22?w=800',
+            'media/image/s/mock/seed/p_1500673922987-e212871fec22/v1/image.jpg',
         'mediaUrls': [
-          'https://images.unsplash.com/photo-1500673922987-e212871fec22?w=800',
+          'media/image/s/mock/seed/p_1500673922987-e212871fec22/v1/image.jpg',
         ],
         'width': 1200,
         'height': 800,
@@ -441,15 +528,15 @@ class ContentMockData {
         'authorId': 'nature_photographer',
         'displayName': '自然摄影师',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+            'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
+            'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?w=800',
+            'media/image/s/mock/seed/p_1493863641943-9b68992a8d07/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?w=800',
+            'media/image/s/mock/seed/p_1493863641943-9b68992a8d07/v1/image.jpg',
         'mediaUrls': [
-          'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?w=800',
+          'media/image/s/mock/seed/p_1493863641943-9b68992a8d07/v1/image.jpg',
         ],
         'width': 800,
         'height': 534,
@@ -464,15 +551,15 @@ class ContentMockData {
         'authorId': 'travel_photographer',
         'displayName': '旅行摄影师',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+            'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1200',
+            'media/image/s/mock/seed/p_1539635278303-d4002c07eae3/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1504198458649-3128b932f49e?w=800',
+            'media/image/s/mock/seed/p_1504198458649-3128b932f49e/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1504198458649-3128b932f49e?w=800',
+            'media/image/s/mock/seed/p_1504198458649-3128b932f49e/v1/image.jpg',
         'mediaUrls': [
-          'https://images.unsplash.com/photo-1504198458649-3128b932f49e?w=800',
+          'media/image/s/mock/seed/p_1504198458649-3128b932f49e/v1/image.jpg',
         ],
         'width': 800,
         'height': 600,
@@ -487,15 +574,15 @@ class ContentMockData {
         'authorId': 'street_photo',
         'displayName': '街头摄影',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+            'media/avatar/s/mock/seed/u_1472099645785-5658abf4ff4e/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1200',
+            'media/image/s/mock/seed/p_1477959858617-67f85cf4f1df/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
+            'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
+            'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
         'mediaUrls': [
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
+          'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
         ],
         'width': 800,
         'height': 534,
@@ -510,15 +597,15 @@ class ContentMockData {
         'authorId': 'nature_photographer',
         'displayName': '自然摄影师',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+            'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200',
+            'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=800',
+            'media/image/s/mock/seed/p_1447752875215-b2761acb3c5d/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=800',
+            'media/image/s/mock/seed/p_1447752875215-b2761acb3c5d/v1/image.jpg',
         'mediaUrls': [
-          'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=800',
+          'media/image/s/mock/seed/p_1447752875215-b2761acb3c5d/v1/image.jpg',
         ],
         'width': 1200,
         'height': 800,
@@ -544,14 +631,14 @@ class ContentMockData {
         'authorId': 'a1',
         'displayName': '楹语小筑',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
+            'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200',
+            'media/image/s/mock/seed/p_1536440136628-849c177e76a1/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800',
+            'media/image/s/mock/seed/p_1536440136628-849c177e76a1/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800',
-        'videoUrl': 'https://example.com/mock/v1.mp4',
+            'media/image/s/mock/seed/p_1536440136628-849c177e76a1/v1/image.jpg',
+        'videoUrl': 'media/video/s/mock/example/0ebb6c7e7d9e/v1/video.mp4',
         'body': '东京凌晨两点的街道，有一种难以言喻的孤独美。#治愈系 #东京之夜 #氛围感',
         'width': 1080,
         'height': 1920,
@@ -568,14 +655,14 @@ class ContentMockData {
         'authorId': 'a2',
         'displayName': '自然摄影师',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1534067783941-51c9c23ecefd?w=100',
+            'media/avatar/s/mock/seed/u_1534067783941-51c9c23ecefd/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1440342359743-84fcb8c21f21?w=1200',
+            'media/image/s/mock/seed/p_1440342359743-84fcb8c21f21/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=800',
+            'media/image/s/mock/seed/p_1492691527719-9d1e07e534b4/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=800',
-        'videoUrl': 'https://example.com/mock/v2.mp4',
+            'media/image/s/mock/seed/p_1492691527719-9d1e07e534b4/v1/image.jpg',
+        'videoUrl': 'media/video/s/mock/example/e35d8f8b3109/v1/video.mp4',
         'body': '在大自然中找回内心的平静。🌲✨ #森林漫步 #自然景观 #心灵治愈',
         'width': 1080,
         'height': 1920,
@@ -592,14 +679,14 @@ class ContentMockData {
         'authorId': 'a3',
         'displayName': '未来科技',
         'authorAvatarUrl':
-            'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100',
+            'media/avatar/s/mock/seed/u_1523275335684-37898b6baf30/v1/avatar.jpg',
         'authorBackgroundUrl':
-            'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200',
+            'media/image/s/mock/seed/p_1451187580459-43490279c0fa/v1/image.jpg',
         'coverUrl':
-            'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800',
+            'media/image/s/mock/seed/p_1516321318423-f06f85e504b3/v1/image.jpg',
         'thumbnailUrl':
-            'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800',
-        'videoUrl': 'https://example.com/mock/v3.mp4',
+            'media/image/s/mock/seed/p_1516321318423-f06f85e504b3/v1/image.jpg',
+        'videoUrl': 'media/video/s/mock/example/c4680e6bf605/v1/video.mp4',
         'body': '2026年，我们的生活将如何被AI改变？一分钟带你了解。#科技趋势 #未来已来',
         'width': 1920,
         'height': 1080,
@@ -624,9 +711,9 @@ class ContentMockData {
       'authorId': 'u4',
       'displayName': '李想',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
+          'media/avatar/s/mock/seed/u_1472099645785-5658abf4ff4e/v1/avatar.jpg',
       'authorBackgroundUrl':
-          'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200',
+          'media/image/s/mock/seed/p_1451187580459-43490279c0fa/v1/image.jpg',
       'body':
           '看他飞奔下车的样子，真帅！如果谁能联系上车主，能不能帮我转告一下，我可不可以去请他吃个饭？ //@理想汽车:点赞每一份挺身而出的勇气！',
       'likeCount': 1581,
@@ -640,13 +727,13 @@ class ContentMockData {
       'authorId': 'u1',
       'displayName': '你的皮炎有点辣',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100',
+          'media/avatar/s/mock/seed/u_1599566150163-29194dcaad36/v1/avatar.jpg',
       'authorBackgroundUrl':
-          'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=1200',
+          'media/image/s/mock/seed/p_1497215728101-856f4ea42174/v1/image.jpg',
       'body': '左边是董宇辉的办公室，右边是俞敏洪的办公室，说明什么？',
       'mediaUrls': [
-        'https://images.unsplash.com/photo-1566699270403-3f7e3f340664?w=600',
-        'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=600',
+        'media/image/s/mock/seed/p_1566699270403-3f7e3f340664/v1/image.jpg',
+        'media/image/s/mock/seed/p_1497215728101-856f4ea42174/v1/image.jpg',
       ],
       'likeCount': 234,
       'commentCount': 36,
@@ -687,14 +774,14 @@ class ContentMockData {
       'authorId': 'u2',
       'displayName': '仅分组可见',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
+          'media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg',
       'authorBackgroundUrl':
-          'https://images.unsplash.com/photo-1432888498266-38ffec3eaf0a?w=1200',
+          'media/image/s/mock/seed/p_1432888498266-38ffec3eaf0a/v1/image.jpg',
       'body': '最害怕的事情还是发生了，船过去了船夫没赶上……',
       'coverUrl':
-          'https://images.unsplash.com/photo-1736171545084-301185012571?w=450',
+          'media/image/s/mock/seed/p_1736171545084-301185012571/v1/image.jpg',
       'videoUrl':
-          'https://images.unsplash.com/photo-1736171545084-301185012571?w=450',
+          'media/image/s/mock/seed/p_1736171545084-301185012571/v1/image.jpg',
       'durationMs': 15000,
       'likeCount': 452,
       'commentCount': 18,
@@ -722,15 +809,15 @@ class ContentMockData {
       'authorId': 'u3',
       'displayName': '原价帝吧',
       'authorAvatarUrl':
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+          'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
       'authorBackgroundUrl':
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200',
+          'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       'body':
           '只要我不尴尬，尴尬的就是别人——投资金银的侃爷Kanye West和妻子比安卡 Bianca Censori 出镜混剪📷 #金银V型反转##黄金#',
       'mediaUrls': List<String>.generate(
         9,
         (i) =>
-            'https://images.unsplash.com/photo-1762343290960-74b50d205fb8?w=300&q=80&sig=$i',
+            'media/image/s/mock/seed/p_1762343290960-74b50d205fb8/v1/image.jpg',
       ),
       'likeCount': 1560,
       'commentCount': 420,
@@ -763,9 +850,9 @@ class ContentMockData {
         authorId: 'tech_daily',
         displayName: 'TechDaily',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=100',
+            'media/avatar/s/mock/seed/u_1531427186611-ecfd6d936c79/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200',
+            'media/image/s/mock/seed/p_1518770660439-4636190af475/v1/image.jpg',
         title: '2024年现代Web开发趋势：从服务端组件到边缘计算',
         summary: '服务端组件把获取数据前移，Edge Runtime 让首屏和交互都更轻更快。',
         articleTemplate: 'tech',
@@ -777,12 +864,12 @@ class ContentMockData {
           sectionBody: '当数据和组件在同一侧拼装，团队就能把耗时工作前移到响应流之前。',
           conclusion: '真正的竞争力不是概念堆叠，而是把复杂性稳定地收敛在交付链路里。',
           imageUrl:
-              'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800',
+              'media/image/s/mock/seed/p_1518770660439-4636190af475/v1/image.jpg',
           imageLayout: 'wrapRight',
           caption: '边缘节点覆盖图',
         ),
         coverUrl:
-            'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800',
+            'media/image/s/mock/seed/p_1555066931-4365d14bab8c/v1/image.jpg',
         likeCount: 1240,
         commentCount: 56,
         shareCount: 89,
@@ -793,9 +880,9 @@ class ContentMockData {
         authorId: 'mo_yun',
         displayName: '墨韵',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1545996124-0501eb296251?w=100',
+            'media/avatar/s/mock/seed/u_1545996124-0501eb296251/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=1200',
+            'media/image/s/mock/seed/p_1507003211169-0a1dd7228f2d/v1/image.jpg',
         title: '墨韵流芳：汉字书法中的空间美学与精神寄托',
         summary: '在黑与白的克制之间，真正被书写出来的是节奏、呼吸与精神张力。',
         articleTemplate: 'ritual',
@@ -807,12 +894,12 @@ class ContentMockData {
           sectionBody: '提按顿挫里的停留感，决定了一幅作品是否拥有“气口”和韵律。',
           conclusion: '当代排版若能保留这种呼吸，传统精神便会自然落进今天的阅读里。',
           imageUrl:
-              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800',
+              'media/image/s/mock/seed/p_1507003211169-0a1dd7228f2d/v1/image.jpg',
           imageLayout: 'wrapLeft',
           caption: '纸墨细节',
         ),
         coverUrl:
-            'https://images.unsplash.com/photo-1545996124-0501eb296251?w=800',
+            'media/image/s/mock/seed/p_1545996124-0501eb296251/v1/image.jpg',
         likeCount: 892,
         commentCount: 34,
         shareCount: 12,
@@ -823,9 +910,9 @@ class ContentMockData {
         authorId: 'chef_mario',
         displayName: 'Chef Mario',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1583394293214-28ded15ee548?w=100',
+            'media/avatar/s/mock/seed/u_1583394293214-28ded15ee548/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1498579150354-977475b7ea0b?w=1200',
+            'media/image/s/mock/seed/p_1498579150354-977475b7ea0b/v1/image.jpg',
         title: '意式风情：三种经典酱汁的制作秘籍',
         summary: '从红酱到白酱，决定一盘面条记忆点的，是火候与节奏的控制。',
         articleTemplate: 'gentle',
@@ -837,12 +924,12 @@ class ContentMockData {
           sectionBody: '慢炖让番茄的尖锐酸感被柔化，奶香与香草会在最后阶段完成收口。',
           conclusion: '家庭厨房最值得守住的是“不过度”，让每一种味道都留有余地。',
           imageUrl:
-              'https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=800',
+              'media/image/s/mock/seed/p_1466637574441-749b8f19452f/v1/image.jpg',
           imageLayout: 'fullWidth',
           caption: '装盘示意',
         ),
         coverUrl:
-            'https://images.unsplash.com/photo-1498579150354-977475b7ea0b?w=800',
+            'media/image/s/mock/seed/p_1498579150354-977475b7ea0b/v1/image.jpg',
         likeCount: 2105,
         commentCount: 142,
         shareCount: 304,
@@ -853,9 +940,9 @@ class ContentMockData {
         authorId: 'design_guru',
         displayName: 'DesignGuru',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
+            'media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=1200',
+            'media/image/s/mock/seed/p_1561070791-2526d30994b5/v1/image.jpg',
         title: 'UI设计的心理学原理：色彩、布局与用户认知',
         summary: '视觉系统不是装饰，色彩和留白本质上都在影响用户的决策速度。',
         articleTemplate: 'diffuse',
@@ -867,12 +954,12 @@ class ContentMockData {
           sectionBody: '高饱和冷色常被感知为理性和科技，暖色则更容易制造行动冲动。',
           conclusion: '一套有效的视觉语言，关键不在堆叠细节，而在让路径更容易被理解。',
           imageUrl:
-              'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=800',
+              'media/image/s/mock/seed/p_1467232004584-a241de8bcf5d/v1/image.jpg',
           imageLayout: 'wrapLeft',
           caption: '设计评审样例',
         ),
         coverUrl:
-            'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800',
+            'media/image/s/mock/seed/p_1561070791-2526d30994b5/v1/image.jpg',
         likeCount: 3200,
         commentCount: 120,
         shareCount: 450,
@@ -883,9 +970,9 @@ class ContentMockData {
         authorId: 'travel_note',
         displayName: '山川手账',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
+            'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200',
+            'media/image/s/mock/seed/p_1500530855697-b586d89ba3ee/v1/image.jpg',
         title: '一座山的晨雾：把徒步记成一本可以翻页的手账',
         summary: '旅行不是景点清单，而是一连串被光线、气味和脚步慢慢浸透的感受。',
         articleTemplate: 'journal',
@@ -897,12 +984,12 @@ class ContentMockData {
           sectionBody: '把票据、路线、海拔和一句突然冒出的心情都贴进同一页，旅程就有了体温。',
           conclusion: '好的手账从不追求完整，它只保留那些会在很久之后再次把人带回去的瞬间。',
           imageUrl:
-              'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800',
+              'media/image/s/mock/seed/p_1500530855697-b586d89ba3ee/v1/image.jpg',
           imageLayout: 'wrapRight',
           caption: '晨雾扉页',
         ),
         coverUrl:
-            'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800',
+            'media/image/s/mock/seed/p_1500530855697-b586d89ba3ee/v1/image.jpg',
         likeCount: 1460,
         commentCount: 61,
         shareCount: 88,
@@ -913,9 +1000,9 @@ class ContentMockData {
         authorId: 'infra_log',
         displayName: 'InfraLog',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
+            'media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200',
+            'media/image/s/mock/seed/p_1451187580459-43490279c0fa/v1/image.jpg',
         title: '从日志到观测：团队如何为真实故障建立共同语言',
         summary: '真正有效的观测不是面板越多越好，而是每个角色都能找到自己的判断入口。',
         articleTemplate: 'tech',
@@ -927,7 +1014,7 @@ class ContentMockData {
           sectionBody: '把日志、指标和 tracing 串在同一语义下，排障链路才不会被多套命名撕裂。',
           conclusion: '观测最终服务的是决策速度，而不是仪表盘本身的复杂程度。',
           imageUrl:
-              'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800',
+              'media/image/s/mock/seed/p_1516321318423-f06f85e504b3/v1/image.jpg',
           imageLayout: 'wrapRight',
           caption: '监控面板草图',
         ),
@@ -941,9 +1028,9 @@ class ContentMockData {
         authorId: 'ink_house',
         displayName: '纸上居',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=100',
+            'media/avatar/s/mock/seed/u_1455390582262-044cdead277a/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1500534623283-312aade485b7?w=1200',
+            'media/image/s/mock/seed/p_1500534623283-312aade485b7/v1/image.jpg',
         title: '雨夜读帖：为什么东方手卷总能让人慢下来',
         summary: '慢不是效率的反义词，而是一种把注意力重新还给阅读对象的方式。',
         articleTemplate: 'ritual',
@@ -955,7 +1042,7 @@ class ContentMockData {
           sectionBody: '纸张纹理、行距和墨色密度一起把阅读的呼吸感重新带了回来。',
           conclusion: '当媒介本身参与叙事，阅读就不只是理解信息，而是进入一种状态。',
           imageUrl:
-              'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=800',
+              'media/image/s/mock/seed/p_1455390582262-044cdead277a/v1/image.jpg',
           imageLayout: 'wrapLeft',
           caption: '卷页细节',
         ),
@@ -969,9 +1056,9 @@ class ContentMockData {
         authorId: 'home_writer',
         displayName: '慢慢生活',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1511988617509-a57c8a288659?w=100',
+            'media/avatar/s/mock/seed/u_1511988617509-a57c8a288659/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=1200',
+            'media/image/s/mock/seed/p_1505693416388-ac5ce068fe85/v1/image.jpg',
         title: '把周末过成一页柔软的家居笔记',
         summary: '家并不需要每天焕新，真正改变气氛的是一些安静但持续的微调。',
         articleTemplate: 'gentle',
@@ -983,7 +1070,7 @@ class ContentMockData {
           sectionBody: '靠枕、香气、桌面杂物和灯光色温的微调，比一次性大改造更能改变居住体感。',
           conclusion: '生活质感不总来自昂贵物件，更多时候来自对日常节奏的认真照顾。',
           imageUrl:
-              'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=800',
+              'media/image/s/mock/seed/p_1505693416388-ac5ce068fe85/v1/image.jpg',
           imageLayout: 'wrapLeft',
           caption: '窗边一角',
         ),
@@ -997,9 +1084,9 @@ class ContentMockData {
         authorId: 'visual_lab',
         displayName: '视觉实验室',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=100',
+            'media/avatar/s/mock/seed/u_1498050108023-c5249f4df085/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200',
+            'media/image/s/mock/seed/p_1498050108023-c5249f4df085/v1/image.jpg',
         title: '把留白做成节奏：信息界面里的“呼吸设计”',
         summary: '所谓高级感并不是更空，而是让信息的停顿和推进都变得可预测。',
         articleTemplate: 'diffuse',
@@ -1011,7 +1098,7 @@ class ContentMockData {
           sectionBody: '留白不只是空着，它和字号、段落密度、卡片间距一起决定了浏览阻力。',
           conclusion: '界面一旦会呼吸，用户就更容易把注意力留在信息本身，而不是控件噪音上。',
           imageUrl:
-              'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=800',
+              'media/image/s/mock/seed/p_1467232004584-a241de8bcf5d/v1/image.jpg',
           imageLayout: 'wrapRight',
           caption: '版式网格',
         ),
@@ -1025,9 +1112,9 @@ class ContentMockData {
         authorId: 'field_notes',
         displayName: '田野笔记',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=100',
+            'media/avatar/s/mock/seed/u_1524504388940-b1c1722653e1/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200',
+            'media/image/s/mock/seed/p_1470071459604-3b5ec3a7fe05/v1/image.jpg',
         title: '城市散步的边角料，如何变成一本值得反复翻的小册子',
         summary: '真正让人想保存下来的，不是完整纪实，而是那些被贴在边角里的细小瞬间。',
         articleTemplate: 'journal',
@@ -1039,7 +1126,7 @@ class ContentMockData {
           sectionBody: '当票据、时间、天气和一句突然冒出的感受被并排放下，城市会重新长出层次。',
           conclusion: '好的手账不负责证明你去了哪里，它负责提醒你当时为什么会想停下来。',
           imageUrl:
-              'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800',
+              'media/image/s/mock/seed/p_1470071459604-3b5ec3a7fe05/v1/image.jpg',
           imageLayout: 'wrapRight',
           caption: '散步拾片',
         ),
@@ -1053,9 +1140,9 @@ class ContentMockData {
         authorId: 'signal_notes',
         displayName: '信号边角',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100',
+            'media/avatar/s/mock/seed/u_1506794778202-cad84cf45f1d/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=1200',
+            'media/image/s/mock/seed/p_1497366754035-f200968a6e72/v1/image.jpg',
         title: '',
         summary: '把路线、风向和停留时间直接写进正文里，封面负责情绪，正文负责把人带回现场。',
         articleTemplate: 'diffuse',
@@ -1067,12 +1154,12 @@ class ContentMockData {
           sectionBody: '当标题被故意留白，读者会更快进入那一段真正有质感的叙述。',
           conclusion: '对这类分发样本来说，封面先建立气氛，正文再慢慢交代发生了什么。',
           imageUrl:
-              'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=800',
+              'media/image/s/mock/seed/p_1497366754035-f200968a6e72/v1/image.jpg',
           imageLayout: 'wrapRight',
           caption: '暮色记录',
         ),
         coverUrl:
-            'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=800',
+            'media/image/s/mock/seed/p_1497366754035-f200968a6e72/v1/image.jpg',
         likeCount: 613,
         commentCount: 28,
         shareCount: 35,
@@ -1083,9 +1170,9 @@ class ContentMockData {
         authorId: 'late_walk',
         displayName: '慢走备忘',
         authorAvatarUrl:
-            'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100',
+            'media/avatar/s/mock/seed/u_1544005313-94ddf0286df2/v1/avatar.jpg',
         authorBackgroundUrl:
-            'https://images.unsplash.com/photo-1517081052940-3619a36f1a53?w=1200',
+            'media/image/s/mock/seed/p_1517081052940-3619a36f1a53/v1/image.jpg',
         title: '',
         summary: '没有标题也没有封面，只留下一段完整正文，让内容自己决定这一页该从哪里开始。',
         articleTemplate: 'journal',

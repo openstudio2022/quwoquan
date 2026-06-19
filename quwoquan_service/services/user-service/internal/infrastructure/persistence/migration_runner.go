@@ -112,6 +112,26 @@ func RunManagedMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	return nil
 }
 
+// ManagedMigrationFilenames returns the sorted managed migration filenames
+// discovered on disk (the same set RunManagedMigrations applies). Exposed so
+// idempotency tests assert the ledger row count against the real migration set
+// instead of hardcoding a number that goes stale whenever a migration is added.
+func ManagedMigrationFilenames() ([]string, error) {
+	dir := resolveManagedMigrationDir()
+	if dir == "" {
+		return nil, fmt.Errorf("migration directory not found")
+	}
+	files, err := readMigrationFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(files))
+	for _, file := range files {
+		names = append(names, file.Name)
+	}
+	return names, nil
+}
+
 func resolveManagedMigrationDir() string {
 	candidates := []string{
 		findMigrationDir(),

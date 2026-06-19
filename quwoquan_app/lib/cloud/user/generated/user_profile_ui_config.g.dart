@@ -67,7 +67,6 @@ class UserProfileUIConfig {
 
   static const List<UserProfileTabConfig> profileTabs = <UserProfileTabConfig>[
     UserProfileTabConfig(id: "creations", labelKey: "profile_tab_creations", isDefault: true),
-    UserProfileTabConfig(id: "circles", labelKey: "profile_tab_circles", isDefault: false),
     UserProfileTabConfig(id: "interaction", labelKey: "profile_tab_interaction", isDefault: false),
   ];
 
@@ -84,8 +83,9 @@ class UserProfileUIConfig {
   };
 
   static const List<UserProfileSubTabConfig> interactionSubTabs = <UserProfileSubTabConfig>[
-    UserProfileSubTabConfig(id: "likes", labelKey: "interaction_sub_likes", contentType: null, lifeCategory: null),
+    UserProfileSubTabConfig(id: "all", labelKey: "interaction_sub_all", contentType: null, lifeCategory: null),
     UserProfileSubTabConfig(id: "comments", labelKey: "interaction_sub_comments", contentType: null, lifeCategory: null),
+    UserProfileSubTabConfig(id: "likes", labelKey: "interaction_sub_likes", contentType: null, lifeCategory: null),
     UserProfileSubTabConfig(id: "shares", labelKey: "interaction_sub_shares", contentType: null, lifeCategory: null),
   ];
 

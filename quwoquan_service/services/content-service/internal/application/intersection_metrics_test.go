@@ -12,6 +12,7 @@ type captureMetrics struct {
 	exposure       int
 	inboxVisit     map[string]int // dimension
 	inboxFiltered  map[string]int // reason
+	redisDegraded  map[string]int // op
 }
 
 func newCaptureMetrics() *captureMetrics {
@@ -20,6 +21,7 @@ func newCaptureMetrics() *captureMetrics {
 		feedFiltered:   map[string]int{},
 		inboxVisit:     map[string]int{},
 		inboxFiltered:  map[string]int{},
+		redisDegraded:  map[string]int{},
 	}
 }
 
@@ -30,6 +32,7 @@ func (c *captureMetrics) ObserveFeedFiltered(_, reason string) { c.feedFiltered[
 func (c *captureMetrics) ObserveExposureReported(count int)    { c.exposure += count }
 func (c *captureMetrics) ObserveInboxVisit(dimension string)   { c.inboxVisit[dimension]++ }
 func (c *captureMetrics) ObserveInboxFiltered(reason string)   { c.inboxFiltered[reason]++ }
+func (c *captureMetrics) ObserveRedisDegraded(op string)       { c.redisDegraded[op]++ }
 
 // TestIntersectionService_FunnelMetrics 验证业务 SLI 漏斗信号在真实分支上发射：
 // Feed 候选/保鲜过滤/展示不完备过滤、ReportExposure 冷却写入、MarkVisited 清零。
@@ -46,9 +49,8 @@ func TestIntersectionService_FunnelMetrics(t *testing.T) {
 				Dimension:         "relationship",
 				IntersectionClass: "fact",
 				FreshAt:           fresh,
-				SharedCount:       3,
 				IntersectionPoints: []IntersectionPointView{
-					{PointID: "pf", SourceRef: "sharedFollowees", Visibility: "public"},
+					{PointID: "pf", SourceRef: "sharedFollowees", Count: 3, Visibility: "public"},
 				},
 			},
 			// 展示不完备：未登记 kind → primaryText 空 → display_incomplete。

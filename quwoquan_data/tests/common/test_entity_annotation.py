@@ -144,6 +144,31 @@ def test_parse_entity_links():
     ]
 
 
+def test_entity_links_allow_balanced_parentheses_in_entity_name():
+    ref = "/entity/地点/景区/黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)"
+    article = f"[黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)]({ref}) 的水声很集中。"
+
+    assert parse_entity_links(article) == [
+        ("黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)", ref)
+    ]
+    assert annotation_publish_issues(article, [ref]) == []
+
+
+def test_annotate_inline_does_not_nest_inside_parenthesized_entity_link():
+    ref = "/entity/地点/景区/黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)"
+    article = (
+        f"[黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)]({ref}) 已经标注，"
+        "后文再次提到黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)可以不重复。"
+    )
+    new_article, annotated = annotate_inline(
+        article,
+        {"黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)": ref},
+    )
+
+    assert new_article == article
+    assert annotated == {ref}
+
+
 def _run_all() -> None:
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

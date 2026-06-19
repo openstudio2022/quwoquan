@@ -8,9 +8,11 @@ source cannot be discovered from registered public endpoints.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import math
+import os
 import re
 import subprocess
 import time
@@ -23,10 +25,12 @@ from typing import Any, Callable, Mapping
 import yaml
 
 from _common.io import read_json, write_json
-from _common.paths import STAGE_DOWNLOAD, batch_root
+from _common.paths import STAGE_DOWNLOAD, batch_root, relative_batch_ref
 from _common.source_catalog import platform_category, vertical_from_task_id
+from _common.source_plan_contract import source_plan_rule_signature
 from _common.source_unit import resolve_entity_object_dir
 from download.prepare import prepare_source_plan
+from vertical.license import validate_image_rights
 
 _USER_AGENT = "quwoquan-data/1.0 (+https://github.com/quwoquan; contact: data-ops@quwoquan.example)"
 _AUTO_DISCOVERY_REPORT = "auto_research_plan.json"
@@ -56,6 +60,18 @@ _OPENVERSE_API = "https://api.openverse.org/v1/images/"
 _QUNAR_SEARCH_API = "https://touch.travel.qunar.com/search"
 _TRAVEL_SOURCE_REGISTRY = Path(__file__).resolve().parents[2] / "verticals" / "travel" / "sources" / "source_registry.yaml"
 _HOMEPAGE_CORE_SOURCE_LIMIT = 5
+_AUTO_RESEARCH_CURL_TIMEOUT_SECONDS = max(
+    3,
+    int(os.environ.get("QWQ_AUTO_RESEARCH_CURL_TIMEOUT_SECONDS", "12")),
+)
+_AUTO_RESEARCH_CURL_RETRIES = max(
+    0,
+    int(os.environ.get("QWQ_AUTO_RESEARCH_CURL_RETRIES", "0")),
+)
+_DOWNLOAD_REJECT_MEMORY_BATCH_LIMIT = max(
+    1,
+    int(os.environ.get("QWQ_DOWNLOAD_REJECT_MEMORY_BATCH_LIMIT", "8")),
+)
 
 
 def _now_iso() -> str:
@@ -95,11 +111,12 @@ def _write_auto_research_progress(
 
 
 def _curl_json(url: str, *, timeout: int = 25) -> dict[str, Any]:
+    effective_timeout = max(3, min(int(timeout or _AUTO_RESEARCH_CURL_TIMEOUT_SECONDS), _AUTO_RESEARCH_CURL_TIMEOUT_SECONDS))
     proc = subprocess.run(
         [
             "curl", "-sS", "-L", "-A", _USER_AGENT,
-            "--retry", "2", "--retry-delay", "1", "--retry-all-errors",
-            "--max-time", str(timeout),
+            "--retry", str(_AUTO_RESEARCH_CURL_RETRIES), "--retry-delay", "1", "--retry-all-errors",
+            "--max-time", str(effective_timeout),
             url,
         ],
         capture_output=True,
@@ -128,6 +145,85 @@ def _wiki_api(host: str, params: dict[str, str | int]) -> dict[str, Any]:
 
 def _normalized_title(value: str) -> str:
     return re.sub(r"[\s_（）()《》〈〉·•,，。:：;；-]+", "", str(value or "")).lower()
+
+
+def _dedupe_terms(values: list[str] | tuple[str, ...], *, limit: int = 12) -> list[str]:
+    out: list[str] = []
+    for raw in values:
+        value = str(raw or "").strip()
+        if not value:
+            continue
+        key = _normalized_title(value)
+        if not key or any(_normalized_title(existing) == key for existing in out):
+            continue
+        out.append(value)
+        if len(out) >= limit:
+            break
+    return out
+
+
+_EN_ALIAS_SUFFIX_RE = re.compile(
+    r"\b(?:scenic\s+area|scenic\s+zone|tourist\s+area|tourist\s+zone|national\s+park|"
+    r"national\s+geopark|geo\s+park|geopark|mountains?|park|area|reserve)\b.*$",
+    re.I,
+)
+
+
+def _expanded_entity_aliases(values: list[str] | tuple[str, ...], *, limit: int = 24) -> list[str]:
+    expanded: list[str] = []
+    for raw in values:
+        value = str(raw or "").strip()
+        if not value:
+            continue
+        expanded.append(value)
+        if re.search(r"[A-Za-z]", value):
+            stripped = _EN_ALIAS_SUFFIX_RE.sub("", value).strip(" ,;:-()")
+            if stripped and stripped != value and len(_normalized_title(stripped)) >= 4:
+                expanded.append(stripped)
+    return _dedupe_terms(expanded, limit=limit)
+
+
+def _entity_name_variants(entity_id: str) -> list[str]:
+    """Conservative aliases for official scenic-area names.
+
+    National scenic-area names often carry administrative prefixes, suffixes,
+    or multiple sub-sites. Discovery should search those names, while the later
+    candidate and asset gates still enforce entity relevance and rights.
+    """
+    raw = str(entity_id or "").strip()
+    if not raw:
+        return []
+    variants: list[str] = [raw]
+    cleaned = re.sub(r"[（(].*?[）)]", "", raw).strip()
+    if cleaned and cleaned != raw:
+        variants.append(cleaned)
+    suffixes = (
+        "旅游度假区",
+        "文化旅游区",
+        "风景名胜区",
+        "风景旅游区",
+        "旅游景区",
+        "风景区",
+        "景区",
+        "公园",
+        "旅游区",
+    )
+    for base in list(variants):
+        for suffix in suffixes:
+            if base.endswith(suffix) and len(base) > len(suffix) + 1:
+                stripped = base[: -len(suffix)].strip(" -—－·")
+                if stripped:
+                    variants.append(stripped)
+    split_pattern = r"[—－–\-、,，/]|及周围|及|·"
+    for base in list(variants):
+        for part in re.split(split_pattern, base):
+            part = part.strip(" -—－·")
+            if len(_normalized_title(part)) >= 3:
+                variants.append(part)
+    admin_prefix = re.match(r"^([\u4e00-\u9fa5]{2,8}(?:市|区|县|旗|州|盟))(.{3,})$", cleaned)
+    if admin_prefix:
+        variants.append(admin_prefix.group(2).strip())
+    return _expanded_entity_aliases(variants, limit=12)
 
 
 def _title_matches_entity(title: str, entity_id: str) -> bool:
@@ -174,6 +270,18 @@ _WIKI_TITLE_BLOCKED_SUBSTITUTES = (
     "大学",
     "公司",
 )
+_WIKI_TITLE_ALLOWED_ALIAS_EXACT_2CHAR = {
+    "太湖",
+    "西湖",
+    "泰山",
+    "华山",
+    "黄山",
+    "嵩山",
+    "衡山",
+    "恒山",
+    "庐山",
+    "崂山",
+}
 
 
 def _wiki_title_matches_entity(title: str, entity_id: str) -> bool:
@@ -200,6 +308,42 @@ def _wiki_title_matches_entity(title: str, entity_id: str) -> bool:
     return False
 
 
+def _wiki_resolved_title_matches_entity(
+    title: str,
+    entity_id: str,
+    *,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+) -> bool:
+    """Validate a resolved wiki title against the canonical entity.
+
+    Short aliases are useful for discovery, but homepage resolution must not let
+    generic aliases drift to another object, for example 北京奥林匹克公园 -> 悉尼奥林匹克公园.
+    """
+    if _wiki_title_matches_entity(title, entity_id):
+        return True
+    title_key = _normalized_title(title)
+    entity_key = _normalized_title(entity_id)
+    if not title_key or not entity_key:
+        return False
+    allowed_suffixes = {_normalized_title(item) for item in _WIKI_TITLE_ALLOWED_SUFFIXES}
+    allowed_suffixes.update({"遗址", "遺址", "故里", "古镇", "古鎮", "湿地", "濕地"})
+    for alias in entity_aliases:
+        alias_key = _normalized_title(alias)
+        if not alias_key or alias_key == entity_key or alias_key not in entity_key:
+            continue
+        if len(alias_key) < 3 and alias_key not in _WIKI_TITLE_ALLOWED_ALIAS_EXACT_2CHAR:
+            continue
+        if title_key == alias_key:
+            return True
+        if title_key.startswith(alias_key):
+            suffix = title_key[len(alias_key):]
+            if suffix in allowed_suffixes:
+                return True
+            if any(marker in suffix for marker in _WIKI_TITLE_BLOCKED_SUBSTITUTES):
+                return False
+    return False
+
+
 def _text_mentions_entity(
     value: str,
     entity_id: str,
@@ -216,6 +360,166 @@ def _text_mentions_entity(
         if alias_key and (alias_key in text_key or _title_matches_entity(text, alias)):
             return True
     return False
+
+
+_HOMEPAGE_JSON_API_RE = re.compile(
+    r'^\s*[\[{].{0,240}"(?:code|data|rows|result|success|message|msg|list|total)"',
+    re.S,
+)
+_HOMEPAGE_REDIRECT_MARKERS = (
+    "簡繁重定向",
+    "简繁重定向",
+    "本重定向",
+    "重定向用来",
+    "重定向用來",
+    "redirect page",
+)
+_HOMEPAGE_DISAMBIG_MARKERS = (
+    "可以指",
+    "可指",
+    "可能指",
+    "指的是",
+    "下列",
+    "消歧义",
+    "消歧義",
+    "disambiguation",
+)
+_HOMEPAGE_FACT_MARKERS = (
+    "位于",
+    "位於",
+    "坐落",
+    "地处",
+    "地處",
+    "始建",
+    "建于",
+    "建於",
+    "建成",
+    "开放",
+    "開放",
+    "占地",
+    "面積",
+    "面积",
+    "海拔",
+    "全长",
+    "全長",
+    "长度",
+    "长度",
+    "宽度",
+    "包括",
+    "包含",
+    "核心",
+    "主要",
+    "属于",
+    "屬於",
+    "国家级",
+    "國家級",
+    "AAAAA",
+    "5A",
+    "世界遗产",
+    "世界遺產",
+    "文化遗产",
+    "自然遗产",
+    "门票",
+    "門票",
+    "预约",
+    "預約",
+    "开放时间",
+    "開放時間",
+    "交通",
+    "游览",
+    "遊覽",
+)
+_HOMEPAGE_FACT_UNIT_RE = re.compile(
+    r"(\d{3,4}年|\d+(?:\.\d+)?\s*(?:平方公里|公顷|亩|米|公里|千米|米|万平方米|万人次|亿元|级|A))"
+)
+_HOMEPAGE_DISAMBIG_LINE_RE = re.compile(
+    r"^\s*(?:[-*#\d.、]+\s*)?[^。\n]{1,42}[：:][^。\n]{0,120}(?:位于|位於|位在|坐落|地处|地處)",
+    re.M,
+)
+_HOMEPAGE_PAREN_LOCATION_LINE_RE = re.compile(
+    r"[\(（][^)）]{1,16}[\)）][，,]?(?:位于|位於|位在|坐落|地处|地處)"
+)
+_HOMEPAGE_INSECT_CONTEXT_RE = re.compile(r"(学名|學名|胡蜂|黄蜂|黃蜂|昆虫|昆蟲|本属包括|本屬包括|下属物种|下屬物種)")
+_HOMEPAGE_STATION_CONTEXT_RE = re.compile(r"(地铁|地鐵|车站|車站|站台|出入口|接驳交通)")
+_HOMEPAGE_NAVIGATION_MARKERS = (
+    "登录",
+    "註冊",
+    "注册",
+    "上一页",
+    "下一页",
+    "扫一扫",
+    "版权所有",
+    "网站地图",
+    "分享到",
+    "返回首页",
+)
+
+
+def _homepage_entity_tokens(entity_id: str) -> list[str]:
+    tokens = _dedupe_terms([entity_id, *_entity_name_variants(entity_id)], limit=16)
+    out: list[str] = []
+    for token in tokens:
+        key = _normalized_title(token)
+        if key and len(key) >= 2 and key not in out:
+            out.append(key)
+    return out
+
+
+def _homepage_fact_signal_count(text: str, entity_id: str) -> int:
+    tokens = _homepage_entity_tokens(entity_id)
+    seen: set[str] = set()
+    count = 0
+    for raw in re.split(r"[。！？!?；;\n]+", str(text or "")):
+        sentence = re.sub(r"\s+", " ", raw).strip()
+        if len(sentence) < 8 or len(sentence) > 260:
+            continue
+        if any(marker in sentence for marker in _HOMEPAGE_NAVIGATION_MARKERS):
+            continue
+        key = _normalized_title(sentence)
+        if key in seen:
+            continue
+        mentions_entity = any(token and token in key for token in tokens)
+        has_signal = any(marker in sentence for marker in _HOMEPAGE_FACT_MARKERS) or bool(
+            _HOMEPAGE_FACT_UNIT_RE.search(sentence)
+        )
+        if mentions_entity or has_signal:
+            seen.add(key)
+            count += 1
+    return count
+
+
+def _homepage_text_quality_issue(
+    text: str,
+    entity_id: str,
+    *,
+    require_fact_ready: bool,
+) -> str:
+    """Return a blocking reason when homepage text cannot support a base draft."""
+    body = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not body:
+        return "empty_homepage_text"
+    if require_fact_ready and len(body) < 80:
+        return "homepage_text_too_short"
+    head = body[:1800]
+    if _HOMEPAGE_JSON_API_RE.search(head):
+        return "raw_json_api_homepage"
+    if any(marker.lower() in head.lower() for marker in _HOMEPAGE_REDIRECT_MARKERS):
+        return "redirect_homepage"
+    disambig_hits = len(_HOMEPAGE_DISAMBIG_LINE_RE.findall(str(text or "")[:5000]))
+    parenthesized_location_hits = len(_HOMEPAGE_PAREN_LOCATION_LINE_RE.findall(str(text or "")[:5000]))
+    location_mentions = len(re.findall(r"(?:位于|位於|位在|坐落|地处|地處)", head))
+    if disambig_hits >= 3 or (
+        any(marker in head for marker in _HOMEPAGE_DISAMBIG_MARKERS)
+        and (disambig_hits >= 1 or parenthesized_location_hits >= 2 or location_mentions >= 3)
+    ):
+        return "disambiguation_homepage"
+    if require_fact_ready and _HOMEPAGE_INSECT_CONTEXT_RE.search(head) and "蜂" not in entity_id:
+        return "wrong_entity_context"
+    if require_fact_ready and _HOMEPAGE_STATION_CONTEXT_RE.search(head) and not entity_id.endswith("站"):
+        return "wrong_entity_context"
+    if require_fact_ready and _homepage_fact_signal_count(body[:5000], entity_id) < 4:
+        return "insufficient_homepage_facts"
+    return ""
 
 
 def _image_mentions_entity(
@@ -259,7 +563,14 @@ def _wiki_title(host: str, entity_id: str) -> str:
         )
         pages = (extract.get("query") or {}).get("pages") or {}
         for page in pages.values():
-            if isinstance(page, dict) and str(page.get("extract") or "").strip():
+            if not isinstance(page, dict):
+                continue
+            extract_text = str(page.get("extract") or "").strip()
+            if extract_text and not _homepage_text_quality_issue(
+                extract_text,
+                entity_id,
+                require_fact_ready=False,
+            ):
                 return str(page.get("title") or title)
         return ""
 
@@ -290,6 +601,63 @@ def _wiki_title(host: str, entity_id: str) -> str:
         if usable:
             return usable
     return ""
+
+
+def _wiki_title_for_entity(
+    host: str,
+    entity_id: str,
+    *,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+    limit: int = 10,
+) -> str:
+    """Resolve an entity wiki title through canonical name, short names and aliases."""
+    terms = _dedupe_terms(
+        [*_entity_name_variants(entity_id), *entity_aliases],
+        limit=limit,
+    )
+    validation_aliases = _dedupe_terms([*terms, *entity_aliases], limit=limit + len(entity_aliases))
+    for term in terms:
+        title = _wiki_title(host, term)
+        if not title:
+            continue
+        if _wiki_resolved_title_matches_entity(
+            title,
+            entity_id,
+            entity_aliases=validation_aliases,
+        ):
+            return title
+    return ""
+
+
+def _wiki_related_titles_for_entity(
+    host: str,
+    entity_id: str,
+    *,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+    limit: int = 3,
+) -> list[str]:
+    """Resolve related wiki pages through aliases while preserving entity grounding."""
+    found: list[str] = []
+    seen: set[str] = set()
+    terms = _dedupe_terms(
+        [*_entity_name_variants(entity_id), *entity_aliases],
+        limit=max(limit * 2, 8),
+    )
+    for term in terms:
+        for title in _wiki_related_titles(host, term, limit=limit):
+            key = _normalized_title(title)
+            if not key or key in seen:
+                continue
+            if not (
+                _text_mentions_entity(title, entity_id, entity_aliases=entity_aliases)
+                or _text_mentions_entity(title, term, entity_aliases=entity_aliases)
+            ):
+                continue
+            seen.add(key)
+            found.append(title)
+            if len(found) >= limit:
+                return found
+    return found
 
 
 _RELATED_WIKI_SUFFIXES: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -393,31 +761,37 @@ def _wikidata_item_for_entity_search(entity_id: str) -> str:
     """
     if not entity_id:
         return ""
-    data = _curl_json(
-        "https://www.wikidata.org/w/api.php?"
-        + urllib.parse.urlencode(
-            {
-                "action": "wbsearchentities",
-                "search": entity_id,
-                "language": "zh",
-                "uselang": "zh",
-                "limit": 5,
-                "format": "json",
-            }
-        ),
-        timeout=20,
-    )
-    rows = data.get("search") if isinstance(data.get("search"), list) else []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        labels = [str(row.get("label") or ""), str(row.get("match", {}).get("text") or "")]
-        aliases = row.get("aliases") if isinstance(row.get("aliases"), list) else []
-        labels.extend(str(item) for item in aliases)
-        if any(_title_matches_entity(label, entity_id) for label in labels if label):
-            qid = str(row.get("id") or "")
-            if qid.startswith("Q"):
-                return qid
+    for term in _dedupe_terms(_entity_name_variants(entity_id), limit=5):
+        data = _curl_json(
+            "https://www.wikidata.org/w/api.php?"
+            + urllib.parse.urlencode(
+                {
+                    "action": "wbsearchentities",
+                    "search": term,
+                    "language": "zh",
+                    "uselang": "zh",
+                    "limit": 5,
+                    "format": "json",
+                }
+            ),
+            timeout=20,
+        )
+        rows = data.get("search") if isinstance(data.get("search"), list) else []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            labels = [str(row.get("label") or ""), str(row.get("match", {}).get("text") or "")]
+            aliases = row.get("aliases") if isinstance(row.get("aliases"), list) else []
+            labels.extend(str(item) for item in aliases)
+            if any(
+                _title_matches_entity(label, entity_id)
+                or _title_matches_entity(label, term)
+                for label in labels
+                if label
+            ):
+                qid = str(row.get("id") or "")
+                if qid.startswith("Q"):
+                    return qid
     return ""
 
 
@@ -545,6 +919,82 @@ def _known_homepage_support_websites(entity_id: str) -> list[dict[str, str]]:
     return rows
 
 
+def _travel_registry_url_fetchable(url: str) -> bool:
+    if not _TRAVEL_SOURCE_REGISTRY.is_file():
+        return False
+    try:
+        data = yaml.safe_load(_TRAVEL_SOURCE_REGISTRY.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return False
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    if not host:
+        return False
+    for site in data.get("sites") or []:
+        if not isinstance(site, dict):
+            continue
+        domains = [str(item).lower() for item in (site.get("domains") or []) if str(item).strip()]
+        if not domains:
+            continue
+        if any(host == domain or host.endswith(f".{domain}") for domain in domains):
+            return bool(site.get("fetchable"))
+    return False
+
+
+def _known_article_sources(entity_id: str) -> list[dict[str, str]]:
+    """Curated article-lane seed sources from the travel source registry."""
+    if not _TRAVEL_SOURCE_REGISTRY.is_file():
+        return []
+    try:
+        data = yaml.safe_load(_TRAVEL_SOURCE_REGISTRY.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    rows: list[dict[str, str]] = []
+    for index, row in enumerate(data.get("knownArticleSources") or [], start=1):
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("entity") or "").strip() != entity_id:
+            continue
+        url = str(row.get("url") or "").strip()
+        if not url.startswith(("http://", "https://")):
+            continue
+        explicit_fetchable = row.get("fetchable")
+        if explicit_fetchable is not None:
+            if not bool(explicit_fetchable):
+                continue
+        elif not _travel_registry_url_fetchable(url):
+            continue
+        rows.append(
+            {
+                "source_id": str(row.get("sourceId") or f"article_registry_base_{index}").strip(),
+                "platform": str(row.get("platform") or "垂类专业站").strip(),
+                "url": url,
+                "category": str(row.get("category") or "travelogue").strip(),
+                "title": str(row.get("title") or "").strip(),
+                "fetchable": bool(row.get("fetchable")),
+            }
+        )
+    return rows
+
+
+def _known_entity_aliases(entity_id: str) -> list[str]:
+    """Curated entity aliases that are valid across source discovery lanes."""
+    if not _TRAVEL_SOURCE_REGISTRY.is_file():
+        return []
+    try:
+        data = yaml.safe_load(_TRAVEL_SOURCE_REGISTRY.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    aliases: list[str] = []
+    for row in data.get("knownEntityAliases") or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("entity") or "").strip() != entity_id:
+            continue
+        values = row.get("aliases") if isinstance(row.get("aliases"), list) else []
+        aliases.extend(str(value).strip() for value in values if str(value).strip())
+    return _dedupe_terms(aliases, limit=16)
+
+
 _TRUSTED_EXTERNAL_DOMAINS: tuple[str, ...] = (
     "gov.cn",
     "people.com.cn",
@@ -561,6 +1011,15 @@ _TRUSTED_EXTERNAL_DOMAINS: tuple[str, ...] = (
     "yading.cn",
     "yadingtour.com",
     "sxd.cn",
+    "ctrip.com",
+    "trip.com",
+    "mafengwo.cn",
+    "mafengwo.com",
+    "qyer.com",
+    "tripadvisor.cn",
+    "tripadvisor.com",
+    "lonelyplanet.com",
+    "nationalgeographic.com",
 )
 
 
@@ -603,11 +1062,72 @@ def _trusted_external_links(title: str, *, limit: int = 4) -> list[str]:
 
 def _external_platform(url: str) -> str:
     host = (urllib.parse.urlparse(url).hostname or "").lower()
+    if "ctrip.com" in host or "trip.com" in host:
+        return "携程攻略"
+    if "mafengwo." in host:
+        return "马蜂窝"
+    if "qyer.com" in host:
+        return "穷游"
+    if "tripadvisor." in host:
+        return "Tripadvisor"
+    if "lonelyplanet.com" in host:
+        return "Lonely Planet"
+    if "nationalgeographic.com" in host:
+        return "National Geographic"
+    if "people.com.cn" in host:
+        return "人民网"
+    if "news.cn" in host or "xinhuanet.com" in host:
+        return "新华网"
+    if "chinanews.com" in host:
+        return "中国新闻网"
+    if "cctv.com" in host:
+        return "央视网"
+    if "gmw.cn" in host:
+        return "光明网"
+    if "whc.unesco.org" in host:
+        return "UNESCO"
     if host.endswith("gov.cn") or host.endswith("mnr.gov.cn"):
         return "文旅局"
     if "dujiangyan.com.cn" in host or "yading" in host:
         return "景区官网"
     return "权威媒体"
+
+
+def _url_looks_like_article(url: str) -> bool:
+    parsed = urllib.parse.urlparse(url)
+    path = (parsed.path or "").lower()
+    if not path or path in {"/", ""}:
+        return False
+    basename = path.rsplit("/", 1)[-1]
+    if basename in {"index.html", "index.htm", "default.html", "default.htm"}:
+        return False
+    article_patterns = (
+        r"/n\d+/\d{4}/\d{4}/",
+        r"/\d{4}/\d{2}/\d{2}/",
+        r"/\d{4}-\d{2}/\d{2}/",
+        r"/c_\d+",
+        r"/arti[a-z0-9]+",
+        r"userobject\d+ai\d+",
+    )
+    if any(re.search(pattern, path) for pattern in article_patterns):
+        return True
+    return bool(re.search(r"\.(shtml|html|htm)$", path) and re.search(r"\d{4,}", path))
+
+
+def _external_article_category(url: str, platform: str) -> str:
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    platform_text = platform.casefold()
+    if any(marker in host for marker in ("ctrip.com", "trip.com", "mafengwo.", "qyer.com", "tripadvisor.")):
+        return "travelogue"
+    if "lonelyplanet.com" in host or "nationalgeographic.com" in host or "whc.unesco.org" in host:
+        return "vertical_professional"
+    if host.endswith("gov.cn") or host.endswith("mnr.gov.cn") or platform in {"文旅局", "景区官网"}:
+        return "official_article" if _url_looks_like_article(url) else "official"
+    if any(marker in host for marker in ("people.com.cn", "news.cn", "xinhuanet.com", "chinanews.com", "cctv.com", "gmw.cn")):
+        return "media_article" if _url_looks_like_article(url) else "authoritative_reference"
+    if any(marker in platform_text for marker in ("人民网", "新华", "中国新闻网", "央视", "光明", "media")):
+        return "media_article" if _url_looks_like_article(url) else "authoritative_reference"
+    return "authoritative_reference"
 
 
 def _license_allows_app_publish(license_name: str, license_url: str = "") -> bool:
@@ -616,6 +1136,8 @@ def _license_allows_app_publish(license_name: str, license_url: str = "") -> boo
         return False
     if any(token in value for token in ("nc", "noncommercial", "nd", "noderivatives", "igo")):
         return False
+    if any(token in value for token in ("cc0", "publicdomain", "public domain")):
+        return True
     if re.search(r"\b1\.0\b", value) and (
         "creativecommons" in value
         or "cc by" in value
@@ -623,7 +1145,7 @@ def _license_allows_app_publish(license_name: str, license_url: str = "") -> boo
         or "/by" in value
     ):
         return False
-    return any(token in value for token in ("cc0", "publicdomain", "public domain", "pd", "by-sa", "by/sa", "by/", " by"))
+    return any(token in value for token in ("pd", "by-sa", "by/sa", "by/", " by"))
 
 
 def _evidence_reason(entity_id: str, lane: str, provider: str, category: str) -> str:
@@ -632,6 +1154,8 @@ def _evidence_reason(entity_id: str, lane: str, provider: str, category: str) ->
 
 
 def _source_category(platform: str, fallback: str = "") -> str:
+    if fallback in _ARTICLE_BASE_CATEGORIES:
+        return fallback
     return platform_category(platform) or fallback
 
 
@@ -659,6 +1183,37 @@ def _homepage_plan_sort_key(source: Mapping[str, Any]) -> tuple[int, int, str]:
 def _homepage_core_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Homepage core evidence: encyclopedia/knowledge/official first, capped."""
     return sorted(sources, key=_homepage_plan_sort_key)[:_HOMEPAGE_CORE_SOURCE_LIMIT]
+
+
+_HOMEPAGE_PRIMARY_SOURCE_MARKERS = (
+    "维基百科",
+    "wikipedia",
+    "百度百科",
+    "搜狗百科",
+    "字节百科",
+    "百科",
+    "景区官网",
+    "官网",
+    "官方",
+)
+_HOMEPAGE_SUPPORT_ONLY_SOURCE_MARKERS = ("政府", "文旅", "政务", "gov.cn", "权威媒体", "媒体")
+_HOMEPAGE_NON_HOMEPAGE_SOURCE_MARKERS = ("攻略", "游记", "评论", "点评", "小红书", "摄影")
+
+
+def _homepage_can_seed_base_draft(source: Mapping[str, Any]) -> bool:
+    text = " ".join(
+        str(source.get(field) or "")
+        for field in ("platform", "category", "source_id", "discoveryProvider", "url")
+    ).strip()
+    lowered = text.casefold()
+    if any(marker.casefold() in lowered for marker in _HOMEPAGE_NON_HOMEPAGE_SOURCE_MARKERS):
+        return False
+    if any(marker.casefold() in lowered for marker in _HOMEPAGE_SUPPORT_ONLY_SOURCE_MARKERS):
+        return False
+    category = str(source.get("category") or "").casefold()
+    if category in {"encyclopedia", "official_site"}:
+        return True
+    return any(marker.casefold() in lowered for marker in _HOMEPAGE_PRIMARY_SOURCE_MARKERS)
 
 
 def _candidate_gate(
@@ -698,17 +1253,9 @@ def _candidate_gate(
             )
         if category in _SUPPORTING_ONLY_CATEGORIES:
             issues.append(f"{category} can only be supportingEvidence for article lane")
-        images = source.get("imageUrls") if isinstance(source.get("imageUrls"), list) else []
-        if not images:
-            issues.append("article base source must provide same-source or authorized image candidates")
-        if str(source.get("imageEvidenceMode") or "") not in {
-            "same_source",
-            "same_authorized_collection",
-        }:
-            issues.append("article base source imageEvidenceMode must be same_source or same_authorized_collection")
     image_warnings: list[str] = []
     valid_images: list[dict[str, Any]] = []
-    image_issues_block_source = lane != "article" or role == "base"
+    image_issues_block_source = lane == "image"
     for index, image in enumerate(source.get("imageUrls") or [], start=1):
         image_issues: list[str] = []
         if not isinstance(image, dict):
@@ -743,7 +1290,7 @@ def _candidate_gate(
                 image_warnings.extend(image_issues)
         else:
             valid_images.append(image)
-    if lane == "article" and role != "base" and "imageUrls" in source:
+    if lane != "image" and "imageUrls" in source:
         if valid_images:
             source["imageUrls"] = valid_images
         else:
@@ -759,16 +1306,111 @@ def _candidate_gate(
     }
 
 
+def _collection_image_spec(collection: Mapping[str, Any], image: Mapping[str, Any]) -> dict[str, Any]:
+    spec: dict[str, Any] = {}
+    for field in (
+        "sourceCollectionId",
+        "creator",
+        "credit",
+        "collectionPageUrl",
+        "platform",
+        "license",
+        "termsUrl",
+        "licenseSnapshot",
+        "authorizationProof",
+        "usageScope",
+        "sourceUrl",
+    ):
+        value = image.get(field) or collection.get(field)
+        if value not in ("", None):
+            spec[field] = value
+    for field in (
+        "url",
+        "caption",
+        "relevance",
+        "title",
+        "width",
+        "height",
+        "modelReleaseRequired",
+        "modelReleaseStatus",
+        "generationModel",
+        "generationPromptHash",
+        "generatedAt",
+        "syntheticDisclosure",
+    ):
+        value = image.get(field)
+        if value not in ("", None):
+            spec[field] = value
+    if not spec.get("sourceUrl"):
+        spec["sourceUrl"] = (
+            spec.get("collectionPageUrl")
+            or spec.get("authorizationProof")
+            or spec.get("url")
+            or ""
+        )
+    if not spec.get("credit") and spec.get("creator"):
+        spec["credit"] = spec["creator"]
+    if not spec.get("creator") and spec.get("credit"):
+        spec["creator"] = spec["credit"]
+    return spec
+
+
+def _collection_publishable_image_urls(
+    collections: list[dict[str, Any]],
+    *,
+    entity_id: str,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+    vertical: str = "travel",
+) -> set[str]:
+    urls: set[str] = set()
+    for collection in collections:
+        if not isinstance(collection, dict):
+            continue
+        verdict = _collection_gate(
+            collection,
+            entity_id=entity_id,
+            entity_aliases=entity_aliases,
+            vertical=vertical,
+        )
+        if not verdict["passed"]:
+            continue
+        for image in collection.get("images") or []:
+            if not isinstance(image, dict):
+                continue
+            spec = _collection_image_spec(collection, image)
+            url = str(spec.get("url") or "").strip()
+            if not url:
+                continue
+            if validate_image_rights(spec, vertical=vertical):
+                continue
+            if not _license_allows_app_publish(
+                str(spec.get("license") or ""),
+                str(spec.get("termsUrl") or ""),
+            ):
+                continue
+            if not _image_mentions_entity(spec, entity_id, entity_aliases=entity_aliases):
+                continue
+            urls.add(url)
+    return urls
+
+
 def _collection_gate(
     collection: dict[str, Any],
     *,
     entity_id: str,
     entity_aliases: list[str] | tuple[str, ...] = (),
+    allow_verified_collection_id_match: bool = False,
+    vertical: str = "travel",
 ) -> dict[str, Any]:
     issues: list[str] = []
     collection_id = str(collection.get("sourceCollectionId") or "").strip()
     if not collection_id:
         issues.append("sourceCollectionId missing")
+    verified_collection_entity_match = (
+        allow_verified_collection_id_match
+        and collection_id
+        and _text_mentions_entity(collection_id, entity_id, entity_aliases=entity_aliases)
+    )
     images = collection.get("images") if isinstance(collection.get("images"), list) else []
     if not images:
         issues.append("no rights-compatible images in collection")
@@ -777,7 +1419,8 @@ def _collection_gate(
         if not isinstance(image, dict):
             issues.append(f"image[{index}] must be object")
             continue
-        creator = str(image.get("creator") or image.get("credit") or collection.get("creator") or "").strip()
+        spec = _collection_image_spec(collection, image)
+        creator = str(spec.get("creator") or spec.get("credit") or "").strip()
         if creator:
             creators.add(creator)
         missing = [
@@ -791,14 +1434,26 @@ def _collection_gate(
                 "termsUrl",
                 "authorizationProof",
             )
-            if not str(image.get(field) or collection.get(field) or "").strip()
+            if not str(spec.get(field) or "").strip()
         ]
         if missing:
             issues.append(f"image[{index}] missing collection rights {missing}")
-        if entity_id and not _image_mentions_entity(
-            image,
-            entity_id,
-            entity_aliases=entity_aliases,
+        rights_issues = validate_image_rights(spec, vertical=vertical)
+        if rights_issues:
+            issues.extend(f"image[{index}]: {issue}" for issue in rights_issues)
+        elif not _license_allows_app_publish(
+            str(spec.get("license") or ""),
+            str(spec.get("termsUrl") or ""),
+        ):
+            issues.append(f"image[{index}]: imageRights unsupported license {spec.get('license')}")
+        if (
+            entity_id
+            and not verified_collection_entity_match
+            and not _image_mentions_entity(
+                spec,
+                entity_id,
+                entity_aliases=entity_aliases,
+            )
         ):
             issues.append(f"image[{index}] relevance does not strongly mention entity")
     if len(creators) > 1:
@@ -806,71 +1461,94 @@ def _collection_gate(
     return {"passed": not issues, "issues": issues}
 
 
-def _commons_images(entity_id: str, *, limit: int = 8) -> list[dict[str, Any]]:
-    data = _wiki_api(
-        "commons.wikimedia.org",
-        {
-            "action": "query",
-            "generator": "search",
-            "gsrnamespace": 6,
-            "gsrsearch": entity_id,
-            "gsrlimit": limit,
-            "prop": "imageinfo",
-            "iiprop": "url|size|extmetadata",
-            "format": "json",
-        },
-    )
-    pages = (data.get("query") or {}).get("pages") or {}
+def _image_search_terms(
+    entity_id: str,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+    *,
+    limit: int = 4,
+) -> list[str]:
+    return _dedupe_terms([*_entity_name_variants(entity_id), *entity_aliases], limit=limit)
+
+
+def _commons_images(
+    entity_id: str,
+    *,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+    limit: int = 8,
+) -> list[dict[str, Any]]:
     images: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for page in pages.values():
-        if not isinstance(page, dict):
-            continue
-        info = ((page.get("imageinfo") or [{}])[0] or {})
-        url = str(info.get("url") or "")
-        if not url or url in seen:
-            continue
-        if not re.search(r"\.(?:jpe?g|png|webp)(?:$|\?)", url, re.I):
-            continue
-        seen.add(url)
-        meta = info.get("extmetadata") or {}
-        license_name = _strip_html(((meta.get("LicenseShortName") or {}).get("value") or ""))
-        license_url = _strip_html(((meta.get("LicenseUrl") or {}).get("value") or ""))
-        if not license_url or not _license_allows_app_publish(license_name, license_url):
-            continue
-        width = int(info.get("width") or 0)
-        height = int(info.get("height") or 0)
-        if width < 640 or height < 426 or max(width, height) < 800:
-            continue
-        credit = _strip_html(
-            ((meta.get("Artist") or {}).get("value") or "")
-            or ((meta.get("Credit") or {}).get("value") or "")
-            or "Wikimedia Commons contributor"
-        )
-        description = _strip_html(
-            ((meta.get("ImageDescription") or {}).get("value") or "")
-            or str(page.get("title") or "")
-        )
-        source_url = str(info.get("descriptionurl") or info.get("descriptionshorturl") or url)
-        images.append(
+    for term in _image_search_terms(entity_id, entity_aliases, limit=4):
+        data = _wiki_api(
+            "commons.wikimedia.org",
             {
-                "url": url,
-                "platform": "Wikimedia Commons",
-                "license": license_name,
-                "credit": credit,
-                "sourceUrl": source_url,
-                "termsUrl": license_url,
-                "licenseSnapshot": f"{license_name} recorded on Wikimedia Commons file page",
-                "authorizationProof": source_url,
-                "usageScope": "app_publish",
-                "width": width,
-                "height": height,
-                "caption": description[:120] or f"{entity_id} Wikimedia Commons image",
-                "relevance": description[:120] or source_url,
-                "creator": credit,
-                "collectionPageUrl": source_url,
-            }
+                "action": "query",
+                "generator": "search",
+                "gsrnamespace": 6,
+                "gsrsearch": term,
+                "gsrlimit": limit,
+                "prop": "imageinfo",
+                "iiprop": "url|size|extmetadata",
+                "format": "json",
+            },
         )
+        pages = (data.get("query") or {}).get("pages") or {}
+        for page in pages.values():
+            if not isinstance(page, dict):
+                continue
+            info = ((page.get("imageinfo") or [{}])[0] or {})
+            url = str(info.get("url") or "")
+            if not url or url in seen:
+                continue
+            if not re.search(r"\.(?:jpe?g|png|webp)(?:$|\?)", url, re.I):
+                continue
+            meta = info.get("extmetadata") or {}
+            license_name = _strip_html(((meta.get("LicenseShortName") or {}).get("value") or ""))
+            license_url = _strip_html(((meta.get("LicenseUrl") or {}).get("value") or ""))
+            if not license_url or not _license_allows_app_publish(license_name, license_url):
+                continue
+            width = int(info.get("width") or 0)
+            height = int(info.get("height") or 0)
+            if width < 640 or height < 426 or max(width, height) < 800:
+                continue
+            credit = _strip_html(
+                ((meta.get("Artist") or {}).get("value") or "")
+                or ((meta.get("Credit") or {}).get("value") or "")
+                or "Wikimedia Commons contributor"
+            )
+            description = _strip_html(
+                ((meta.get("ImageDescription") or {}).get("value") or "")
+                or str(page.get("title") or "")
+            )
+            source_url = str(info.get("descriptionurl") or info.get("descriptionshorturl") or url)
+            if entity_id and not _text_mentions_entity(
+                f"{description} {page.get('title') or ''} {source_url}",
+                entity_id,
+                entity_aliases=entity_aliases,
+            ):
+                continue
+            seen.add(url)
+            images.append(
+                {
+                    "url": url,
+                    "platform": "Wikimedia Commons",
+                    "license": license_name,
+                    "credit": credit,
+                    "sourceUrl": source_url,
+                    "termsUrl": license_url,
+                    "licenseSnapshot": f"{license_name} recorded on Wikimedia Commons file page",
+                    "authorizationProof": source_url,
+                    "usageScope": "app_publish",
+                    "width": width,
+                    "height": height,
+                    "caption": description[:120] or f"{entity_id} Wikimedia Commons image",
+                    "relevance": description[:120] or source_url,
+                    "creator": credit,
+                    "collectionPageUrl": source_url,
+                }
+            )
+            if len(images) >= limit:
+                return images
     return images
 
 
@@ -1038,147 +1716,166 @@ def _wikidata_commons_images(
     return images[:limit]
 
 
-def _openverse_images(entity_id: str, *, limit: int = 12) -> list[dict[str, Any]]:
+def _openverse_images(
+    entity_id: str,
+    *,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+    limit: int = 12,
+) -> list[dict[str, Any]]:
     """Discover rights-compatible image candidates via Openverse.
 
     Openverse is a discovery index, so the source proof remains the original
     landing page plus the license URL. We reject NC/ND and undersized images
     here before a candidate can enter any source plan.
     """
-    params = urllib.parse.urlencode({"q": entity_id, "page_size": min(max(limit * 3, 5), 50)})
-    data = _curl_json(f"{_OPENVERSE_API}?{params}", timeout=25)
-    rows = data.get("results") if isinstance(data.get("results"), list) else []
     images: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        url = str(row.get("url") or "").strip()
-        landing = str(row.get("foreign_landing_url") or row.get("detail_url") or "").strip()
-        license_slug = str(row.get("license") or "").strip()
-        license_version = str(row.get("license_version") or "").strip()
-        license_url = str(row.get("license_url") or "").strip()
-        title = _strip_html(str(row.get("title") or ""))
-        if not url or url in seen or not landing:
-            continue
-        if not _license_allows_app_publish(license_slug, license_url):
-            continue
-        if bool(row.get("mature")):
-            continue
-        width = int(row.get("width") or 0)
-        height = int(row.get("height") or 0)
-        if width < 640 or height < 426 or max(width, height) < 800:
-            continue
-        if not (_title_matches_entity(title, entity_id) or entity_id in str(row.get("attribution") or "")):
-            continue
-        creator = _strip_html(str(row.get("creator") or "")) or f"{row.get('provider') or 'Openverse'} contributor"
-        provider = _strip_html(str(row.get("provider") or row.get("source") or "openverse"))
-        license_name = f"CC {license_slug.upper()} {license_version}".strip()
-        collection_id = f"openverse:{provider}:{row.get('id') or _normalized_title(url)[:24]}"
-        seen.add(url)
-        images.append(
-            {
-                "url": url,
-                "platform": "Openverse",
-                "license": license_name,
-                "credit": creator,
-                "sourceUrl": landing,
-                "termsUrl": license_url,
-                "licenseSnapshot": (
-                    f"{license_name} indexed by Openverse; verify on original landing page before publish"
-                ),
-                "authorizationProof": landing,
-                "usageScope": "app_publish",
-                "width": width,
-                "height": height,
-                "caption": title[:120] or f"{entity_id} Openverse image",
-                "relevance": title[:120] or landing,
-                "creator": creator,
-                "collectionPageUrl": landing,
-                "sourceCollectionId": collection_id,
-                "openverseId": str(row.get("id") or ""),
-                "openverseProvider": provider,
-            }
-        )
-        if len(images) >= limit:
-            break
+    for term in _image_search_terms(entity_id, entity_aliases, limit=4):
+        params = urllib.parse.urlencode({"q": term, "page_size": min(max(limit * 3, 5), 50)})
+        data = _curl_json(f"{_OPENVERSE_API}?{params}", timeout=25)
+        rows = data.get("results") if isinstance(data.get("results"), list) else []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            url = str(row.get("url") or "").strip()
+            landing = str(row.get("foreign_landing_url") or row.get("detail_url") or "").strip()
+            license_slug = str(row.get("license") or "").strip()
+            license_version = str(row.get("license_version") or "").strip()
+            license_url = str(row.get("license_url") or "").strip()
+            title = _strip_html(str(row.get("title") or ""))
+            attribution = str(row.get("attribution") or "")
+            if not url or url in seen or not landing:
+                continue
+            if not _license_allows_app_publish(license_slug, license_url):
+                continue
+            if bool(row.get("mature")):
+                continue
+            width = int(row.get("width") or 0)
+            height = int(row.get("height") or 0)
+            if width < 640 or height < 426 or max(width, height) < 800:
+                continue
+            if not _text_mentions_entity(
+                f"{title} {attribution} {landing}",
+                entity_id,
+                entity_aliases=entity_aliases,
+            ):
+                continue
+            creator = _strip_html(str(row.get("creator") or "")) or f"{row.get('provider') or 'Openverse'} contributor"
+            provider = _strip_html(str(row.get("provider") or row.get("source") or "openverse"))
+            license_name = f"CC {license_slug.upper()} {license_version}".strip()
+            collection_id = f"openverse:{provider}:{row.get('id') or _normalized_title(url)[:24]}"
+            seen.add(url)
+            images.append(
+                {
+                    "url": url,
+                    "platform": "Openverse",
+                    "license": license_name,
+                    "credit": creator,
+                    "sourceUrl": landing,
+                    "termsUrl": license_url,
+                    "licenseSnapshot": (
+                        f"{license_name} indexed by Openverse; verify on original landing page before publish"
+                    ),
+                    "authorizationProof": landing,
+                    "usageScope": "app_publish",
+                    "width": width,
+                    "height": height,
+                    "caption": title[:120] or f"{entity_id} Openverse image",
+                    "relevance": title[:120] or landing,
+                    "creator": creator,
+                    "collectionPageUrl": landing,
+                    "sourceCollectionId": collection_id,
+                    "openverseId": str(row.get("id") or ""),
+                    "openverseProvider": provider,
+                }
+            )
+            if len(images) >= limit:
+                return images
     return images
 
 
 def _qunar_travelogue_sources(
     entity_id: str,
     *,
+    entity_aliases: list[str] | tuple[str, ...] = (),
     authorized_images: list[dict[str, Any]],
     limit: int = 4,
 ) -> list[dict[str, Any]]:
-    """Discover fetchable Qunar travelogue pages for article base evidence."""
-    if not authorized_images:
-        return []
+    """Discover fetchable Qunar travelogue pages for article text evidence."""
     sources: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     image_index = 0
-    for page in range(1, 5):
-        encoded_q = urllib.parse.quote(entity_id)
-        data: dict[str, Any] = {}
-        for attempt in range(3):
-            for url in (
-                f"{_QUNAR_SEARCH_API}?_json&q={encoded_q}&page={page}",
-                f"{_QUNAR_SEARCH_API}?_json=&q={encoded_q}&page={page}",
-            ):
-                data = _curl_json(url, timeout=20)
+    # Composite scenic areas often have official operation names while UGC uses
+    # sub-site or short destination names. Keep enough alias budget to reach
+    # curated registry aliases without lowering the downstream entity gate.
+    search_terms = _dedupe_terms([*_entity_name_variants(entity_id), *entity_aliases], limit=8)
+    match_terms = _dedupe_terms([entity_id, *search_terms, *entity_aliases], limit=12)
+    for term in search_terms:
+        for page in range(1, 3):
+            encoded_q = urllib.parse.quote(term)
+            data: dict[str, Any] = {}
+            for attempt in range(2):
+                for url in (
+                    f"{_QUNAR_SEARCH_API}?_json&q={encoded_q}&page={page}",
+                    f"{_QUNAR_SEARCH_API}?_json=&q={encoded_q}&page={page}",
+                ):
+                    data = _curl_json(url, timeout=20)
+                    if data.get("ret") is True:
+                        break
                 if data.get("ret") is True:
                     break
-            if data.get("ret") is True:
+                time.sleep(0.35 * (attempt + 1))
+            payload = data.get("data") if isinstance(data.get("data"), dict) else {}
+            rows = payload.get("bookList") if isinstance(payload.get("bookList"), list) else []
+            if not rows:
                 break
-            time.sleep(0.35 * (attempt + 1))
-        payload = data.get("data") if isinstance(data.get("data"), dict) else {}
-        rows = payload.get("bookList") if isinstance(payload.get("bookList"), list) else []
-        if not rows:
-            break
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            raw_id = str(row.get("id") or "").strip()
-            if not raw_id or raw_id in seen_ids:
-                continue
-            title = _strip_html(str(row.get("title") or ""))
-            route = [str(item) for item in (row.get("travelRoute") or []) if str(item).strip()]
-            city = _strip_html(str(row.get("cityName") or ""))
-            route_hit = any(_title_matches_entity(item, entity_id) for item in route)
-            title_hit = _title_matches_entity(title, entity_id)
-            if not (title_hit or route_hit):
-                continue
-            images = _image_window(authorized_images, image_index, count=1)
-            if not images:
-                continue
-            image_index += 1
-            seen_ids.add(raw_id)
-            source = _source(
-                source_id=f"article_qunar_base_{len(sources) + 1}",
-                platform="去哪儿攻略",
-                url=f"https://touch.travel.qunar.com/youji/{raw_id}",
-                category="travelogue",
-                discovery_provider="qunar_touch_search_json",
-                match_confidence=0.94 if title_hit else 0.86,
-                evidence_reason=(
-                    f"去哪儿攻略游记搜索命中 {entity_id}；"
-                    f"title={title[:60]} route={','.join(route[:6])} city={city}"
-                ),
-                source_role="base",
-                images=images,
-                image_evidence_mode="same_authorized_collection",
-            )
-            source["title"] = title
-            source["authorName"] = _strip_html(str(row.get("userName") or ""))
-            source["routeDays"] = row.get("routeDays") or ""
-            source["travelRoute"] = route[:20]
-            source["viewCount"] = row.get("viewCount") or 0
-            source["sourceUseMode"] = "factual_reference_only"
-            sources.append(source)
-            if len(sources) >= limit:
-                return sources
-        if not payload.get("more"):
-            break
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                raw_id = str(row.get("id") or "").strip()
+                if not raw_id or raw_id in seen_ids:
+                    continue
+                title = _strip_html(str(row.get("title") or ""))
+                route = [str(item) for item in (row.get("travelRoute") or []) if str(item).strip()]
+                city = _strip_html(str(row.get("cityName") or ""))
+                route_hit = any(
+                    _title_matches_entity(item, match_term)
+                    for item in route
+                    for match_term in match_terms
+                )
+                title_hit = any(_title_matches_entity(title, match_term) for match_term in match_terms)
+                if not (title_hit or route_hit):
+                    continue
+                images = _image_window(authorized_images, image_index, count=1)
+                if images:
+                    image_index += 1
+                seen_ids.add(raw_id)
+                source = _source(
+                    source_id=f"article_qunar_base_{len(sources) + 1}",
+                    platform="去哪儿攻略",
+                    url=f"https://touch.travel.qunar.com/youji/{raw_id}",
+                    category="travelogue",
+                    discovery_provider="qunar_touch_search_json",
+                    match_confidence=0.94 if title_hit else 0.86,
+                    evidence_reason=(
+                        f"去哪儿攻略游记搜索命中 {entity_id}；query={term}; "
+                        f"title={title[:60]} route={','.join(route[:6])} city={city}"
+                    ),
+                    source_role="base",
+                    images=images,
+                    image_evidence_mode="same_authorized_collection" if images else "",
+                )
+                source["title"] = title
+                source["authorName"] = _strip_html(str(row.get("userName") or ""))
+                source["routeDays"] = row.get("routeDays") or ""
+                source["travelRoute"] = route[:20]
+                source["viewCount"] = row.get("viewCount") or 0
+                source["sourceUseMode"] = "factual_reference_only"
+                sources.append(source)
+                if len(sources) >= limit:
+                    return sources
+            if not payload.get("more"):
+                break
     return sources
 
 
@@ -1240,16 +1937,18 @@ def _select_article_plan_sources(
 
 
 def _qunar_review_support_source(entity_id: str) -> dict[str, Any]:
-    return _source(
+    source = _source(
         source_id="article_qunar_review_support",
         platform="去哪儿景点点评",
         url=f"https://touch.travel.qunar.com/search?q={urllib.parse.quote(entity_id)}",
-        category="review",
+        category="review_note",
         discovery_provider="qunar_touch_search_page",
         match_confidence=0.86,
-        evidence_reason=f"去哪儿搜索页提供 {entity_id} 景点标签、游记列表、热度与点评线索，仅作事实参考",
-        source_role="supporting",
+        evidence_reason=f"去哪儿搜索页提供 {entity_id} 景点标签、游记列表、热度与点评线索，可作多意图事实参考底稿",
+        source_role="base",
     )
+    source["category"] = "review_note"
+    return source
 
 
 def _mediawiki_page_images(
@@ -1357,7 +2056,8 @@ def _mediawiki_page_images(
 def _safe_collection_id(prefix: str, entity_id: str, ref: str) -> str:
     raw = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", str(ref or "").lower())[:60]
     raw = raw or _normalized_title(entity_id) or "source"
-    return f"{prefix}:{entity_id}:{raw}"
+    digest = hashlib.sha1(str(ref or raw).encode("utf-8")).hexdigest()[:10]
+    return f"{prefix}:{entity_id}:{raw}:{digest}"
 
 
 def _image_at(images: list[dict[str, Any]], index: int) -> dict[str, Any] | None:
@@ -1407,6 +2107,7 @@ def _source(
     evidence_reason: str = "",
     source_role: str = "supporting",
     image_evidence_mode: str = "",
+    fetchable_override: bool | None = None,
 ) -> dict[str, Any]:
     source_category = _source_category(platform, category)
     row: dict[str, Any] = {
@@ -1422,6 +2123,9 @@ def _source(
         "imageEvidenceMode": image_evidence_mode,
         "entityMatch": "strong" if match_confidence >= 0.72 else "weak",
     }
+    if fetchable_override is True:
+        row["fetchable"] = True
+        row["fetchableOverride"] = True
     candidates: list[dict[str, Any]] = []
     if images:
         candidates.extend(dict(item) for item in images if isinstance(item, dict))
@@ -1473,6 +2177,69 @@ def _accept_source(
     return source if verdict["passed"] else None
 
 
+def _reject_source_candidate(
+    report: dict[str, Any],
+    source: dict[str, Any],
+    *,
+    entity_id: str,
+    lane: str,
+    reason: str,
+) -> None:
+    verdict = {
+        "passed": False,
+        "issues": [reason],
+        "warnings": [],
+        "category": source.get("category") or "",
+        "matchConfidence": source.get("matchConfidence") or 0,
+        "role": source.get("sourceRole") or "supporting",
+    }
+    source["candidateGate"] = verdict
+    report.setdefault("candidates", []).append(
+        {
+            "entityId": entity_id,
+            "lane": lane,
+            "source_id": source.get("source_id") or "",
+            "platform": source.get("platform") or "",
+            "url": source.get("url") or "",
+            "category": verdict.get("category") or "",
+            "discoveryProvider": source.get("discoveryProvider") or "",
+            "matchConfidence": verdict.get("matchConfidence"),
+            "evidenceReason": source.get("evidenceReason") or "",
+            "passed": False,
+            "issues": [reason],
+            "warnings": [],
+        }
+    )
+
+
+def _accept_source_with_reject_memory(
+    report: dict[str, Any],
+    source: dict[str, Any],
+    *,
+    entity_id: str,
+    lane: str,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+    rejected_source_urls: set[str] | None = None,
+) -> dict[str, Any] | None:
+    url = str(source.get("url") or "").strip()
+    if rejected_source_urls and _url_in_memory(url, rejected_source_urls):
+        _reject_source_candidate(
+            report,
+            source,
+            entity_id=entity_id,
+            lane=lane,
+            reason="source URL previously rejected by download/source_screen gate",
+        )
+        return None
+    return _accept_source(
+        report,
+        source,
+        entity_id=entity_id,
+        lane=lane,
+        entity_aliases=entity_aliases,
+    )
+
+
 def _record_unavailable(
     report: dict[str, Any],
     *,
@@ -1520,8 +2287,512 @@ def _write_lane(path: Path, lane: str, payload_update: dict[str, Any], *, force:
     payload = dict(plan.get("payload") or {})
     payload.update(payload_update)
     plan["payload"] = payload
+    task_id = str(plan.get("taskId") or "")
+    entity_id = str(plan.get("ref") or payload.get("entityId") or "").strip()
+    if task_id and entity_id:
+        plan["sourceRuleSignature"] = source_plan_rule_signature(
+            vertical_from_task_id(task_id),
+            entity_id,
+        )
     write_json(path, plan)
     return True
+
+
+def _collections_from_image_plan(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    try:
+        plan = read_json(path)
+    except Exception:  # noqa: BLE001
+        return []
+    payload = plan.get("payload") if isinstance(plan.get("payload"), dict) else {}
+    rows = payload.get("collections") or plan.get("collections") or []
+    return [dict(row) for row in rows if isinstance(row, dict)]
+
+
+def _url_memory_keys(url: str) -> set[str]:
+    raw = str(url or "").strip()
+    if not raw:
+        return set()
+    keys = {raw}
+    try:
+        unquoted = urllib.parse.unquote(raw)
+    except Exception:  # noqa: BLE001
+        unquoted = raw
+    if unquoted:
+        keys.add(unquoted)
+    parsed = urllib.parse.urlparse(raw)
+    if parsed.scheme and parsed.netloc:
+        normalized = urllib.parse.urlunparse(
+            (
+                parsed.scheme.lower(),
+                parsed.netloc.lower(),
+                parsed.path,
+                "",
+                parsed.query,
+                "",
+            )
+        )
+        keys.add(normalized)
+        try:
+            keys.add(urllib.parse.unquote(normalized))
+        except Exception:  # noqa: BLE001
+            pass
+    return {key for key in keys if key}
+
+
+def _url_in_memory(url: str, memory: set[str]) -> bool:
+    if not memory:
+        return False
+    return bool(_url_memory_keys(url) & memory)
+
+
+def _add_url_memory(memory: set[str], url: str) -> None:
+    memory.update(_url_memory_keys(url))
+
+
+def _urls_from_issue_text(text: str) -> list[str]:
+    urls: list[str] = []
+    for match in re.finditer(r"https?://[^)\]\s\"']+", str(text or "")):
+        url = match.group(0).rstrip("。；;,，")
+        if url:
+            urls.append(url)
+    return urls
+
+
+def _entity_download_dirs_for_history(
+    task_id: str,
+    batch_id: str,
+    entity_id: str,
+    *,
+    entity_type: str,
+) -> list[Path]:
+    root = batch_root(task_id, batch_id)
+    task_batches_dir = root.parent
+    etype = str(entity_type or "景区").strip().split("/")[-1] or "景区"
+    dirs: list[Path] = [
+        root / "entities" / "地点" / etype / entity_id / STAGE_DOWNLOAD,
+    ]
+    if task_batches_dir.is_dir():
+        batches = sorted(
+            [path for path in task_batches_dir.iterdir() if path.is_dir()],
+            key=lambda path: path.stat().st_mtime if path.exists() else 0,
+            reverse=True,
+        )
+        for batch_dir in batches[:_DOWNLOAD_REJECT_MEMORY_BATCH_LIMIT]:
+            dl = batch_dir / "entities" / "地点" / etype / entity_id / STAGE_DOWNLOAD
+            if dl not in dirs:
+                dirs.append(dl)
+    return dirs
+
+
+def _download_reject_memory(
+    task_id: str,
+    batch_id: str,
+    entity_id: str,
+    *,
+    entity_type: str,
+) -> dict[str, set[str]]:
+    """Return source/image URLs proven bad by prior fetch and screen gates.
+
+    Source planning can reuse known-good pools, but it must also remember known
+    bad URLs. Otherwise a repair loop keeps selecting pages/images that the
+    deterministic fetch and source_screen stages have already rejected.
+    """
+
+    source_urls: set[str] = set()
+    image_urls: set[str] = set()
+    root = batch_root(task_id, batch_id)
+    for dl in _entity_download_dirs_for_history(
+        task_id,
+        batch_id,
+        entity_id,
+        entity_type=entity_type,
+    ):
+        rejected_root = dl / "rejected_sources"
+        if rejected_root.is_dir():
+            for quality_path in sorted(rejected_root.glob("*/source.quality.json")):
+                try:
+                    quality = read_json(quality_path)
+                except Exception:  # noqa: BLE001
+                    continue
+                try:
+                    meta = read_json(quality_path.parent / "meta.json")
+                except Exception:  # noqa: BLE001
+                    meta = {}
+                homepage_fetch_retry_blocked = (
+                    str(meta.get("researchLane") or "") == "homepage"
+                    and str(meta.get("platform") or "") in {"百度百科", "搜狗百科"}
+                    and not bool(quality.get("fetchSucceeded"))
+                    and int(quality.get("statusCode") or 0) == 0
+                )
+                if not (_source_reject_should_enter_memory(quality) or homepage_fetch_retry_blocked):
+                    continue
+                _add_url_memory(source_urls, str(quality.get("url") or ""))
+
+    task_batches_dir = root.parent
+    batch_dirs = [root]
+    if task_batches_dir.is_dir():
+        batch_dirs.extend(
+            path for path in sorted(
+                [p for p in task_batches_dir.iterdir() if p.is_dir()],
+                key=lambda path: path.stat().st_mtime if path.exists() else 0,
+                reverse=True,
+            )[:_DOWNLOAD_REJECT_MEMORY_BATCH_LIMIT]
+            if path != root
+        )
+    for batch_dir in batch_dirs:
+        gate_path = (
+            batch_dir
+            / "task_download"
+            / "results"
+            / "image_fetch_gate"
+            / f"{entity_id}.json"
+        )
+        if not gate_path.is_file():
+            continue
+        try:
+            gate = read_json(gate_path)
+        except Exception:  # noqa: BLE001
+            continue
+        payload = gate.get("payload") if isinstance(gate.get("payload"), dict) else gate
+        evidence = payload.get("evidenceSummary") or payload.get("evidence_summary") or {}
+        for item in evidence.get("rejectedForQuality") or []:
+            text = str(item or "")
+            hard_reject = any(
+                marker in text
+                for marker in (
+                    "imageSafety",
+                    "watermark",
+                    "imagePixels",
+                    "imageRelevance",
+                    "unsupported license",
+                    "missing image rights",
+                    "rights",
+                )
+            )
+            if not hard_reject:
+                continue
+            for url in _urls_from_issue_text(str(item)):
+                _add_url_memory(image_urls, url)
+    return {"sourceUrls": source_urls, "imageUrls": image_urls}
+
+
+def _source_reject_should_enter_memory(quality: dict[str, Any]) -> bool:
+    """Only hard source rejects enter planning memory.
+
+    A network/policy soft failure has no page body and no quality reasons. If a
+    registry policy or fetch strategy is fixed later, planning must be able to
+    retry that URL instead of carrying a stale "bad source" forever.
+    """
+
+    if bool(quality.get("fetchSucceeded")):
+        return True
+    try:
+        status_code = int(quality.get("statusCode") or 0)
+    except (TypeError, ValueError):
+        status_code = 0
+    if status_code >= 400:
+        return True
+    reasons = quality.get("reasons") if isinstance(quality.get("reasons"), list) else []
+    try:
+        score = int(quality.get("score") or 0)
+    except (TypeError, ValueError):
+        score = 0
+    return bool(reasons) or score > 0
+
+
+def _filter_rejected_images(
+    images: list[dict[str, Any]],
+    rejected_image_urls: set[str],
+) -> list[dict[str, Any]]:
+    if not rejected_image_urls:
+        return images
+    filtered: list[dict[str, Any]] = []
+    for image in images:
+        url = str(image.get("url") or "").strip()
+        source_url = str(image.get("sourceUrl") or "").strip()
+        proof = str(image.get("authorizationProof") or "").strip()
+        if (
+            _url_in_memory(url, rejected_image_urls)
+            or _url_in_memory(source_url, rejected_image_urls)
+            or _url_in_memory(proof, rejected_image_urls)
+        ):
+            continue
+        filtered.append(image)
+    return filtered
+
+
+def _normalize_collection_for_reuse(collection: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(collection)
+    collection_id = str(normalized.get("sourceCollectionId") or "").strip()
+    normalized_images: list[dict[str, Any]] = []
+    for image in normalized.get("images") or []:
+        if not isinstance(image, dict):
+            continue
+        item = dict(image)
+        if collection_id and not item.get("sourceCollectionId"):
+            item["sourceCollectionId"] = collection_id
+        if normalized.get("creator") and not item.get("creator"):
+            item["creator"] = normalized.get("creator")
+        if normalized.get("collectionPageUrl") and not item.get("collectionPageUrl"):
+            item["collectionPageUrl"] = normalized.get("collectionPageUrl")
+        for field in ("license", "termsUrl", "authorizationProof", "licenseSnapshot", "usageScope"):
+            if normalized.get(field) and not item.get(field):
+                item[field] = normalized.get(field)
+        normalized_images.append(item)
+    normalized["images"] = normalized_images
+    normalized["discoveryProvider"] = "verified_source_pool_reuse"
+    return normalized
+
+
+def _verified_image_collections_from_prior_plans(
+    task_id: str,
+    batch_id: str,
+    entity_id: str,
+    *,
+    entity_type: str,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+    rejected_image_urls: set[str] | None = None,
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    """Reuse already verified image collections from the current task.
+
+    External visual discovery is intentionally broad but can be unstable across
+    retries. Reusing previous source plans keeps retries deterministic while
+    still re-running the asset-level collection gate before publishability.
+    """
+    root = batch_root(task_id, batch_id)
+    task_batches_dir = root.parent
+    etype = str(entity_type or "景区").strip().split("/")[-1] or "景区"
+    current = root / "entities" / "地点" / etype / entity_id / STAGE_DOWNLOAD / "image_source_plan.json"
+    candidate_paths: list[Path] = [current]
+    if task_batches_dir.is_dir():
+        batches = sorted(
+            [path for path in task_batches_dir.iterdir() if path.is_dir()],
+            key=lambda path: path.stat().st_mtime if path.exists() else 0,
+            reverse=True,
+        )
+        for batch_dir in batches:
+            plan = batch_dir / "entities" / "地点" / etype / entity_id / STAGE_DOWNLOAD / "image_source_plan.json"
+            if plan != current:
+                candidate_paths.append(plan)
+    collections: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for path in candidate_paths:
+        for raw_collection in _collections_from_image_plan(path):
+            collection = _normalize_collection_for_reuse(raw_collection)
+            if rejected_image_urls:
+                collection["images"] = _filter_rejected_images(
+                    list(collection.get("images") or []),
+                    rejected_image_urls,
+                )
+            collection_id = str(collection.get("sourceCollectionId") or "").strip()
+            if not collection_id or collection_id in seen:
+                continue
+            verdict = _collection_gate(
+                collection,
+                entity_id=entity_id,
+                entity_aliases=entity_aliases,
+                allow_verified_collection_id_match=False,
+            )
+            if not verdict["passed"]:
+                continue
+            collection["reuseSourcePlan"] = str(path.relative_to(task_batches_dir.parent))
+            collections.append(collection)
+            seen.add(collection_id)
+            if len(collections) >= limit:
+                return collections
+    return collections
+
+
+def _images_from_collections(collections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    images: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for collection in collections:
+        collection_id = str(collection.get("sourceCollectionId") or "").strip()
+        for image in collection.get("images") or []:
+            if not isinstance(image, dict):
+                continue
+            item = dict(image)
+            url = str(item.get("url") or "").strip()
+            if not url or url in seen:
+                continue
+            if collection_id and not item.get("sourceCollectionId"):
+                item["sourceCollectionId"] = collection_id
+            seen.add(url)
+            images.append(item)
+    return images
+
+
+def _sources_from_article_plan(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    try:
+        plan = read_json(path)
+    except Exception:  # noqa: BLE001
+        return []
+    payload = plan.get("payload") if isinstance(plan.get("payload"), dict) else {}
+    rows = payload.get("sources") or plan.get("sources") or []
+    return [dict(row) for row in rows if isinstance(row, dict)]
+
+
+def _homepage_urls_from_current_plan(
+    task_id: str,
+    batch_id: str,
+    entity_id: str,
+    *,
+    entity_type: str,
+) -> set[str]:
+    etype = str(entity_type or "景区").strip().split("/")[-1] or "景区"
+    path = (
+        batch_root(task_id, batch_id)
+        / "entities"
+        / "地点"
+        / etype
+        / entity_id
+        / STAGE_DOWNLOAD
+        / "homepage_source_plan.json"
+    )
+    return {
+        str(source.get("url") or "").strip()
+        for source in _sources_from_article_plan(path)
+        if str(source.get("url") or "").strip()
+    }
+
+
+def _verified_homepage_sources_from_source_units(
+    task_id: str,
+    batch_id: str,
+    entity_id: str,
+    *,
+    entity_type: str,
+    rejected_source_urls: set[str] | None = None,
+    limit: int = _HOMEPAGE_CORE_SOURCE_LIMIT,
+) -> list[dict[str, Any]]:
+    """Reuse homepage source units that already passed source_screen.
+
+    Source repair should not discard a working wiki/official source while
+    retrying a failed Baidu/Sogou candidate. This keeps the repair loop
+    monotonic and prevents the planner from cycling over known-bad URLs.
+    """
+    from _common.source_unit import iter_source_units
+
+    obj = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
+    sources: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for unit in iter_source_units(obj):
+        meta_path = unit / "meta.json"
+        quality_path = unit / "source.quality.json"
+        if not meta_path.is_file() or not quality_path.is_file():
+            continue
+        try:
+            meta = read_json(meta_path)
+            quality = read_json(quality_path)
+        except Exception:  # noqa: BLE001
+            continue
+        if str(meta.get("researchLane") or "") != "homepage":
+            continue
+        if str(quality.get("quality") or "") == "Reject":
+            continue
+        text_path = unit / "source.clean.md"
+        if not text_path.is_file():
+            text_path = unit / "source.md"
+        if not text_path.is_file():
+            continue
+        try:
+            source_text = text_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:  # noqa: BLE001
+            continue
+        issue = _homepage_text_quality_issue(
+            source_text,
+            entity_id,
+            require_fact_ready=True,
+        )
+        if issue:
+            continue
+        url = str(meta.get("url") or quality.get("url") or "").strip()
+        if not url or url in seen_urls:
+            continue
+        if rejected_source_urls and _url_in_memory(url, rejected_source_urls):
+            continue
+        source_id = str(meta.get("sourceId") or unit.name.split(".", 1)[-1] or "home_verified").strip()
+        platform = str(meta.get("platform") or meta.get("sourceKind") or "百科").strip()
+        category = str(meta.get("category") or meta.get("sourceKind") or "").strip()
+        sources.append(
+            {
+                "source_id": source_id,
+                "platform": platform,
+                "url": url,
+                "sourceUseMode": str(meta.get("sourceUseMode") or "factual_reference_only"),
+                "category": _source_category(platform, category),
+                "discoveryProvider": "verified_homepage_source_unit_reuse",
+                "matchConfidence": 0.97,
+                "evidenceReason": f"reuse retained homepage source unit {unit.name}",
+                "sourceRole": "primary" if not sources else "supporting",
+                "imageEvidenceMode": "",
+                "entityMatch": "strong",
+                "reuseSourceUnit": relative_batch_ref(unit / "source.md", task_id, batch_id),
+            }
+        )
+        seen_urls.add(url)
+        if len(sources) >= limit:
+            break
+    return sources
+
+
+def _verified_article_sources_from_prior_plans(
+    task_id: str,
+    batch_id: str,
+    entity_id: str,
+    *,
+    entity_type: str,
+    rejected_source_urls: set[str] | None = None,
+    limit: int = 24,
+) -> list[dict[str, Any]]:
+    root = batch_root(task_id, batch_id)
+    task_batches_dir = root.parent
+    etype = str(entity_type or "景区").strip().split("/")[-1] or "景区"
+    current = root / "entities" / "地点" / etype / entity_id / STAGE_DOWNLOAD / "article_source_plan.json"
+    candidate_paths: list[Path] = [current]
+    if task_batches_dir.is_dir():
+        batches = sorted(
+            [path for path in task_batches_dir.iterdir() if path.is_dir()],
+            key=lambda path: path.stat().st_mtime if path.exists() else 0,
+            reverse=True,
+        )
+        for batch_dir in batches:
+            plan = batch_dir / "entities" / "地点" / etype / entity_id / STAGE_DOWNLOAD / "article_source_plan.json"
+            if plan != current:
+                candidate_paths.append(plan)
+    sources: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for path in candidate_paths:
+        for raw_source in _sources_from_article_plan(path):
+            url = str(raw_source.get("url") or "").strip()
+            if not url or url in seen_urls:
+                continue
+            if rejected_source_urls and _url_in_memory(url, rejected_source_urls):
+                continue
+            gate = raw_source.get("candidateGate") if isinstance(raw_source.get("candidateGate"), dict) else {}
+            if gate and gate.get("passed") is False:
+                continue
+            category = str(raw_source.get("category") or "").strip()
+            source = dict(raw_source)
+            original_id = str(source.get("source_id") or "article_source").strip()
+            source["originalSourceId"] = original_id
+            source["source_id"] = f"article_reused_{len(sources) + 1}_{_normalized_title(original_id)[:24]}"
+            source["discoveryProvider"] = "verified_source_pool_reuse"
+            source["reuseSourcePlan"] = str(path.relative_to(task_batches_dir.parent))
+            if category in _ARTICLE_BASE_CATEGORIES and not source.get("sourceRole"):
+                source["sourceRole"] = "base"
+            if not source.get("matchConfidence"):
+                source["matchConfidence"] = (gate.get("matchConfidence") if gate else 0.86) or 0.86
+            sources.append(source)
+            seen_urls.add(url)
+            if len(sources) >= limit:
+                return sources
+    return sources
 
 
 def _write_auto_research_plans_impl(
@@ -1558,19 +2829,55 @@ def _write_auto_research_plans_impl(
     quotas = _task_content_quotas(task_id)
     required_article_bases = max(1, quotas["entityArticlesPerTarget"] or 1)
     required_image_works = max(1, quotas["imageWorksPerTarget"] or 1)
+    try:
+        from download.gate import download_requirements
+
+        required_publishable_images = max(
+            required_image_works,
+            int(download_requirements(task_id).get("minImages") or 0),
+        )
+    except Exception:  # noqa: BLE001
+        required_publishable_images = required_image_works
     for entity_id in entity_ids:
         obj = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
         dl = obj / STAGE_DOWNLOAD
-        wiki_title = _wiki_title("zh.wikipedia.org", entity_id)
+        initial_aliases = _entity_name_variants(entity_id)
+        wiki_title = _wiki_title_for_entity(
+            "zh.wikipedia.org",
+            entity_id,
+            entity_aliases=initial_aliases,
+        )
+        qid = _wikidata_item_for_zhwiki(wiki_title) or _wikidata_item_for_entity_search(entity_id)
+        entity_aliases = _expanded_entity_aliases(
+            [
+                *_entity_name_variants(entity_id),
+                *_known_entity_aliases(entity_id),
+                wiki_title,
+                *_wikidata_entity_aliases(qid),
+            ],
+            limit=24,
+        )
+        if not wiki_title:
+            wiki_title = _wiki_title_for_entity(
+                "zh.wikipedia.org",
+                entity_id,
+                entity_aliases=entity_aliases,
+            )
         related_wiki_titles = [
-            title for title in _wiki_related_titles("zh.wikipedia.org", entity_id)
+            title for title in _wiki_related_titles_for_entity(
+                "zh.wikipedia.org",
+                entity_id,
+                entity_aliases=entity_aliases,
+            )
             if title and title != wiki_title
         ]
-        voyage_title = _wiki_title("zh.wikivoyage.org", entity_id)
+        voyage_title = _wiki_title_for_entity(
+            "zh.wikivoyage.org",
+            entity_id,
+            entity_aliases=entity_aliases,
+        )
         wiki_url = _wiki_url("zh.wikipedia.org", wiki_title)
         voyage_url = _wiki_url("zh.wikivoyage.org", voyage_title)
-        qid = _wikidata_item_for_zhwiki(wiki_title) or _wikidata_item_for_entity_search(entity_id)
-        entity_aliases = _wikidata_entity_aliases(qid)
         registry_official_url = _known_official_website(entity_id)
         official_url = registry_official_url or _official_website(qid)
         official_provider = (
@@ -1583,44 +2890,111 @@ def _write_auto_research_plans_impl(
             if registry_official_url
             else "Wikidata official website"
         )
-        commons = _commons_images(entity_id, limit=10)
-        wikidata_commons = _wikidata_commons_images(
+        reject_memory = _download_reject_memory(
+            task_id,
+            batch_id,
+            entity_id,
+            entity_type=entity_type,
+        )
+        rejected_source_urls = reject_memory["sourceUrls"]
+        rejected_image_urls = reject_memory["imageUrls"]
+        prior_image_collections = _verified_image_collections_from_prior_plans(
+            task_id,
+            batch_id,
+            entity_id,
+            entity_type=entity_type,
+            entity_aliases=entity_aliases,
+            rejected_image_urls=rejected_image_urls,
+            limit=max(required_image_works, 8),
+        )
+        prior_image_pool = _images_from_collections(prior_image_collections)
+        prior_article_sources = _verified_article_sources_from_prior_plans(
+            task_id,
+            batch_id,
+            entity_id,
+            entity_type=entity_type,
+            rejected_source_urls=rejected_source_urls,
+            limit=_article_base_candidate_limit(required_article_bases),
+        )
+        prior_homepage_sources = _verified_homepage_sources_from_source_units(
+            task_id,
+            batch_id,
+            entity_id,
+            entity_type=entity_type,
+            rejected_source_urls=rejected_source_urls,
+        )
+        commons = _filter_rejected_images(
+            _commons_images(entity_id, entity_aliases=entity_aliases, limit=14),
+            rejected_image_urls,
+        )
+        wikidata_commons = _filter_rejected_images(
+            _wikidata_commons_images(
             qid,
             entity_id=entity_id,
             entity_aliases=entity_aliases,
-            limit=10,
+            limit=14,
+            ),
+            rejected_image_urls,
         )
-        openverse = _openverse_images(entity_id, limit=12)
-        wiki_page_images = _mediawiki_page_images(
-            "zh.wikipedia.org", wiki_title, entity_id=entity_id, limit=6
+        openverse = _filter_rejected_images(
+            _openverse_images(entity_id, entity_aliases=entity_aliases, limit=16),
+            rejected_image_urls,
         )
-        voyage_page_images = _mediawiki_page_images(
-            "zh.wikivoyage.org", voyage_title, entity_id=entity_id, limit=6
+        wiki_page_images = _filter_rejected_images(
+            _mediawiki_page_images(
+                "zh.wikipedia.org", wiki_title, entity_id=entity_id, limit=10
+            ),
+            rejected_image_urls,
         )
-        authorized_image_pool = openverse + commons + wikidata_commons + wiki_page_images + voyage_page_images
+        voyage_page_images = _filter_rejected_images(
+            _mediawiki_page_images(
+                "zh.wikivoyage.org", voyage_title, entity_id=entity_id, limit=10
+            ),
+            rejected_image_urls,
+        )
+        authorized_image_pool = prior_image_pool + openverse + commons + wikidata_commons + wiki_page_images + voyage_page_images
         homepage_image_pool = wiki_page_images or commons or wikidata_commons or openverse
         homepage_image_urls = {
             str(image.get("url") or "")
             for image in homepage_image_pool
             if str(image.get("url") or "").strip()
         }
-        external_links = _trusted_external_links(wiki_title, limit=4)
+        external_links = _trusted_external_links(
+            wiki_title,
+            limit=max(4, min(12, required_article_bases * 2)),
+        )
         if not authorized_image_pool:
             issues.append(f"{entity_id}: no rights-compatible open-license images discovered")
-            _record_unavailable(
-                report,
-                entity_id=entity_id,
-                lane="image",
-                reason="no rights-compatible Openverse/Wikimedia images discovered",
-                next_action="manual_authorized_gallery_or_target_replacement",
-            )
+            if "image" in selected_lanes:
+                _record_unavailable(
+                    report,
+                    entity_id=entity_id,
+                    lane="image",
+                    reason="no rights-compatible Openverse/Wikimedia images discovered",
+                    next_action="manual_authorized_gallery_or_target_replacement",
+                )
 
         homepage_sources: list[dict[str, Any]] = []
         baidu_url = f"https://baike.baidu.com/item/{urllib.parse.quote(entity_id)}"
         if "homepage" in selected_lanes:
-            if official_url:
-                accepted = _accept_source(
+            def _accept_homepage_source(source: dict[str, Any]) -> dict[str, Any] | None:
+                return _accept_source_with_reject_memory(
                     report,
+                    source,
+                    entity_id=entity_id,
+                    lane="homepage",
+                    entity_aliases=entity_aliases,
+                    rejected_source_urls=rejected_source_urls,
+                )
+
+            for prior_source in prior_homepage_sources:
+                if len(homepage_sources) >= _HOMEPAGE_CORE_SOURCE_LIMIT:
+                    break
+                accepted = _accept_homepage_source(dict(prior_source))
+                if accepted:
+                    homepage_sources.append(accepted)
+            if official_url:
+                accepted = _accept_homepage_source(
                     _source(
                         source_id="home_official",
                         platform="景区官网",
@@ -1632,16 +3006,12 @@ def _write_auto_research_plans_impl(
                             entity_id, "homepage", official_reason_provider, "official"
                         ),
                         source_role="primary",
-                    ),
-                    entity_id=entity_id,
-                    lane="homepage",
-                    entity_aliases=entity_aliases,
+                    )
                 )
                 if accepted:
                     homepage_sources.append(accepted)
             if wiki_url:
-                accepted = _accept_source(
-                    report,
+                accepted = _accept_homepage_source(
                     _source(
                         source_id="home_wikipedia",
                         platform="维基百科",
@@ -1655,18 +3025,14 @@ def _write_auto_research_plans_impl(
                         source_role="primary" if not homepage_sources else "supporting",
                         images=_image_window(homepage_image_pool, 0, count=3),
                         image_evidence_mode="same_source" if wiki_page_images else "same_authorized_collection",
-                    ),
-                    entity_id=entity_id,
-                    lane="homepage",
-                    entity_aliases=entity_aliases,
+                    )
                 )
                 if accepted:
                     homepage_sources.append(accepted)
             for support_index, support in enumerate(_known_homepage_support_websites(entity_id), start=1):
                 if len(homepage_sources) >= _HOMEPAGE_CORE_SOURCE_LIMIT:
                     break
-                accepted = _accept_source(
-                    report,
+                accepted = _accept_homepage_source(
                     _source(
                         source_id=support["source_id"] or f"home_official_support_{support_index}",
                         platform=support["platform"] or "景区官网",
@@ -1683,15 +3049,11 @@ def _write_auto_research_plans_impl(
                         source_role="supporting",
                         images=_image_window(homepage_image_pool, 1 + support_index, count=2),
                         image_evidence_mode="same_authorized_collection" if homepage_image_pool else "",
-                    ),
-                    entity_id=entity_id,
-                    lane="homepage",
-                    entity_aliases=entity_aliases,
+                    )
                 )
                 if accepted:
                     homepage_sources.append(accepted)
-            accepted = _accept_source(
-                report,
+            accepted = _accept_homepage_source(
                 _source(
                     source_id="home_baidu_baike",
                     platform="百度百科",
@@ -1705,10 +3067,7 @@ def _write_auto_research_plans_impl(
                     source_role="supporting",
                     images=_image_window(homepage_image_pool, 0, count=3),
                     image_evidence_mode="same_authorized_collection" if homepage_image_pool else "",
-                ),
-                entity_id=entity_id,
-                lane="homepage",
-                entity_aliases=entity_aliases,
+                )
             )
             if accepted:
                 homepage_sources.append(accepted)
@@ -1725,8 +3084,7 @@ def _write_auto_research_plans_impl(
                     limit=3,
                 )
                 related_pool = related_images or authorized_image_pool
-                accepted = _accept_source(
-                    report,
+                accepted = _accept_homepage_source(
                     _source(
                         source_id=f"home_related_encyclopedia_support_{related_index}",
                         platform="维基百科",
@@ -1743,16 +3101,12 @@ def _write_auto_research_plans_impl(
                         image_evidence_mode=(
                             "same_source" if related_images else "same_authorized_collection"
                         ) if related_pool else "",
-                    ),
-                    entity_id=entity_id,
-                    lane="homepage",
-                    entity_aliases=entity_aliases,
+                    )
                 )
                 if accepted:
                     homepage_sources.append(accepted)
             if len(homepage_sources) < 2:
-                accepted = _accept_source(
-                    report,
+                accepted = _accept_homepage_source(
                     _source(
                         source_id="home_sogou_baike",
                         platform="搜狗百科",
@@ -1766,23 +3120,21 @@ def _write_auto_research_plans_impl(
                         source_role="supporting",
                         images=_image_window(homepage_image_pool, 1, count=3),
                         image_evidence_mode="same_authorized_collection" if homepage_image_pool else "",
-                    ),
-                    entity_id=entity_id,
-                    lane="homepage",
-                    entity_aliases=entity_aliases,
+                    )
                 )
                 if accepted:
                     homepage_sources.append(accepted)
+            homepage_core_sources = _homepage_core_sources(homepage_sources)
             if _write_lane(
                 dl / "homepage_source_plan.json",
                 "homepage",
                 {
                     "primaryEvidenceRef": (
-                        _homepage_core_sources(homepage_sources)[0]["source_id"]
-                        if homepage_sources
+                        homepage_core_sources[0]["source_id"]
+                        if homepage_core_sources
                         else ""
                     ),
-                    "sources": _homepage_core_sources(homepage_sources),
+                    "sources": homepage_core_sources,
                 },
                 force=force,
             ):
@@ -1790,29 +3142,26 @@ def _write_auto_research_plans_impl(
                     {
                         "entityId": entity_id,
                         "lane": "homepage",
-                        "sources": len(_homepage_core_sources(homepage_sources)),
+                        "sources": len(homepage_core_sources),
                     }
                 )
-            if len(homepage_sources) < 2:
+            homepage_seed_sources = [
+                source for source in homepage_core_sources if _homepage_can_seed_base_draft(source)
+            ]
+            if not homepage_seed_sources:
                 _record_unavailable(
                     report,
                     entity_id=entity_id,
                     lane="homepage",
-                    reason=f"homepage accepted sources {len(homepage_sources)} < 2",
-                )
-            if not homepage_image_pool:
-                _record_unavailable(
-                    report,
-                    entity_id=entity_id,
-                    lane="homepage",
-                    reason="homepage research needs >=1 rights-cleared source image",
-                    next_action="manual_authorized_gallery_or_target_replacement",
+                    reason="homepage has no encyclopedia/official seed source for baseDraft",
+                    next_action="manual_homepage_seed_source_or_target_replacement",
                 )
 
         article_sources: list[dict[str, Any]] = []
         if "article" in selected_lanes:
             for source in _qunar_travelogue_sources(
                 entity_id,
+                entity_aliases=entity_aliases,
                 authorized_images=authorized_image_pool,
                 limit=_article_base_candidate_limit(required_article_bases),
             ):
@@ -1890,12 +3239,19 @@ def _write_auto_research_plans_impl(
                 if accepted:
                     article_sources.append(accepted)
             for index, link in enumerate(external_links, start=1):
+                if _url_in_memory(link, rejected_source_urls):
+                    continue
                 platform = _external_platform(link)
-                category = _source_category(platform, "authoritative_reference")
+                category = _external_article_category(link, platform)
+                source_role = "base" if category in _ARTICLE_BASE_CATEGORIES else "supporting"
                 accepted = _accept_source(
                     report,
                     _source(
-                        source_id=f"article_authoritative_support_{index}",
+                        source_id=(
+                            f"article_external_base_{index}"
+                            if source_role == "base"
+                            else f"article_authoritative_support_{index}"
+                        ),
                         platform=platform,
                         url=link,
                         category=category,
@@ -1904,7 +3260,7 @@ def _write_auto_research_plans_impl(
                         evidence_reason=_evidence_reason(
                             entity_id, "article", "Wikipedia trusted external links", category
                         ),
-                        source_role="supporting",
+                        source_role=source_role,
                         images=_image_window(commons, 4 + index, count=3),
                         image_evidence_mode="same_authorized_collection" if commons else "",
                     ),
@@ -1913,6 +3269,39 @@ def _write_auto_research_plans_impl(
                     entity_aliases=entity_aliases,
                 )
                 if accepted:
+                    article_sources.append(accepted)
+            for index, known in enumerate(_known_article_sources(entity_id), start=1):
+                if _url_in_memory(str(known.get("url") or ""), rejected_source_urls):
+                    continue
+                category = str(known.get("category") or "travelogue").strip()
+                source_role = "base" if category in _ARTICLE_BASE_CATEGORIES else "supporting"
+                accepted = _accept_source(
+                    report,
+                    _source(
+                        source_id=known["source_id"] or f"article_registry_base_{index}",
+                        platform=known["platform"] or "垂类专业站",
+                        url=known["url"],
+                        category=category,
+                        discovery_provider="travel_source_registry",
+                        match_confidence=0.88,
+                        evidence_reason=_evidence_reason(
+                            entity_id,
+                            "article",
+                            "Travel source registry known article source",
+                            category,
+                        ),
+                        source_role=source_role,
+                        images=_image_window(authorized_image_pool, 2 + index, count=3),
+                        image_evidence_mode="same_authorized_collection" if authorized_image_pool else "",
+                        fetchable_override=bool(known.get("fetchable")),
+                    ),
+                    entity_id=entity_id,
+                    lane="article",
+                    entity_aliases=entity_aliases,
+                )
+                if accepted:
+                    if known.get("title"):
+                        accepted["title"] = known["title"]
                     article_sources.append(accepted)
             commons_visual = _image_at(commons, 5)
             open_visual = _image_at(openverse, 0)
@@ -1940,6 +3329,40 @@ def _write_auto_research_plans_impl(
                 )
                 if accepted:
                     article_sources.append(accepted)
+            seen_article_urls = {
+                str(source.get("url") or "").strip()
+                for source in article_sources
+                if str(source.get("url") or "").strip()
+            }
+            homepage_urls = {
+                str(source.get("url") or "").strip()
+                for source in homepage_sources
+                if str(source.get("url") or "").strip()
+            }
+            homepage_urls.update(
+                _homepage_urls_from_current_plan(
+                    task_id,
+                    batch_id,
+                    entity_id,
+                    entity_type=entity_type,
+                )
+            )
+            for source in prior_article_sources:
+                url = str(source.get("url") or "").strip()
+                if not url or url in seen_article_urls or url in homepage_urls:
+                    continue
+                if _url_in_memory(url, rejected_source_urls):
+                    continue
+                accepted = _accept_source(
+                    report,
+                    source,
+                    entity_id=entity_id,
+                    lane="article",
+                    entity_aliases=entity_aliases,
+                )
+                if accepted:
+                    article_sources.append(accepted)
+                    seen_article_urls.add(url)
             base_count = sum(1 for source in article_sources if source.get("sourceRole") == "base")
             if base_count < required_article_bases:
                 issues.append(
@@ -1950,17 +3373,13 @@ def _write_auto_research_plans_impl(
                     entity_id=entity_id,
                     lane="article",
                     reason=f"article base sources={base_count} need>={required_article_bases}",
-                    next_action="agent_repair_or_manual_fetchable_travelogue_provider",
+                    next_action="agent_repair_or_manual_fetchable_article_provider",
                 )
-            if len(article_sources) < 4:
-                issues.append(f"{entity_id}: article auto plan has {len(article_sources)} source(s), need >=4")
-            article_categories = {
-                str(source.get("category") or "")
-                for source in article_sources
-                if str(source.get("category") or "").strip()
-            }
-            if len(article_categories) < 3:
-                issues.append(f"{entity_id}: article categories={len(article_categories)} need>=3")
+            if len(article_sources) < required_article_bases:
+                issues.append(
+                    f"{entity_id}: article auto plan has {len(article_sources)} "
+                    f"source(s), need >={required_article_bases}"
+                )
             article_plan_sources = _select_article_plan_sources(
                 article_sources,
                 required_article_bases=required_article_bases,
@@ -1982,23 +3401,51 @@ def _write_auto_research_plans_impl(
         if "image" in selected_lanes:
             collections: list[dict[str, Any]] = []
             desired_image_collections = max(
-                required_image_works,
-                min(8, required_image_works + required_article_bases),
+                required_publishable_images + 3,
+                min(12, required_publishable_images + required_article_bases + 3),
             )
+            used_collection_ids: set[str] = set()
+            for collection in prior_image_collections:
+                collection_id = str(collection.get("sourceCollectionId") or "").strip()
+                if not collection_id or collection_id in used_collection_ids:
+                    continue
+                collection_verdict = _collection_gate(
+                    collection,
+                    entity_id=entity_id,
+                    entity_aliases=entity_aliases,
+                    vertical=vertical,
+                )
+                report.setdefault("imageCollections", []).append(
+                    {
+                        "entityId": entity_id,
+                        "sourceCollectionId": collection_id,
+                        "platform": collection.get("platform") or "",
+                        "imageCount": len(collection.get("images") or []),
+                        "passed": bool(collection_verdict.get("passed")),
+                        "issues": list(collection_verdict.get("issues") or []),
+                        "discoveryProvider": "verified_source_pool_reuse",
+                    }
+                )
+                if not collection_verdict["passed"]:
+                    continue
+                used_collection_ids.add(collection_id)
+                collections.append(collection)
+                if len(collections) >= desired_image_collections:
+                    break
             first_image = (
-                _image_at(openverse, 0)
+                _image_at(prior_image_pool, 0)
+                or _image_at(openverse, 0)
                 or _image_at(commons, 0)
                 or _image_at(wikidata_commons, 0)
                 or _image_at(wiki_page_images, 0)
                 or _image_at(voyage_page_images, 0)
             )
-            if first_image:
+            if first_image and len(collections) < desired_image_collections:
                 collection_candidates = openverse + commons + wikidata_commons + wiki_page_images + voyage_page_images
                 collection_candidates = sorted(
                     collection_candidates,
                     key=lambda item: str(item.get("url") or "") in homepage_image_urls,
                 )
-                used_collection_ids: set[str] = set()
                 for raw_item in collection_candidates:
                     item = dict(raw_item)
                     collection_id = _safe_collection_id(
@@ -2034,6 +3481,7 @@ def _write_auto_research_plans_impl(
                         collection,
                         entity_id=entity_id,
                         entity_aliases=entity_aliases,
+                        vertical=vertical,
                     )
                     report.setdefault("imageCollections", []).append(
                         {
@@ -2065,6 +3513,26 @@ def _write_auto_research_plans_impl(
                     reason=f"image collections={len(collections)} need>={required_image_works}",
                     next_action="manual_authorized_gallery_or_target_replacement",
                 )
+            else:
+                unique_publishable_images = len(
+                    _collection_publishable_image_urls(
+                        collections,
+                        entity_id=entity_id,
+                        entity_aliases=entity_aliases,
+                        vertical=vertical,
+                    )
+                )
+                if unique_publishable_images < required_publishable_images:
+                    _record_unavailable(
+                        report,
+                        entity_id=entity_id,
+                        lane="image",
+                        reason=(
+                            f"unique publishable images={unique_publishable_images} "
+                            f"need>={required_publishable_images}"
+                        ),
+                        next_action="manual_authorized_gallery_or_target_replacement",
+                    )
             if _write_lane(
                 dl / "image_source_plan.json",
                 "image",

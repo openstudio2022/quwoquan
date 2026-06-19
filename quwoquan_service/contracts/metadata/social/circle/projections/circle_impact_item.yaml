@@ -14,6 +14,12 @@ client_projection:
   dart_class: CircleImpactItem
   base_class: ""
   output_path: cloud/runtime/generated/circle/circle_impact_item.g.dart
+  # 复用 recommendation 域统一交互子契约值对象（§20.7 / §21），跨域引用走相对路径。
+  dart_imports:
+    - ../recommendation/intersection_text_span.g.dart
+    - ../recommendation/intersection_visual.g.dart
+    - ../recommendation/intersection_target.g.dart
+    - ../recommendation/intersection_propagation_path.g.dart
   fields:
     - name: helpType
       dart_type: String
@@ -56,4 +62,64 @@ client_projection:
       nullable: false
       source: primaryText
       aliases: [primaryText]
+      default: "''"
+    # 架构基线 v2（§21.8 解决 G4：补统一交互子契约，与 AuthorImpactItem 同源）：
+    #   subtitleText 影响来源摘要（端只读直出）；impactId 稳定 id；
+    #   primarySpans 是 primaryText 结构化切分，join(spans.text)==primaryText（不变量）；
+    #   sampleVisuals 受影响样本视觉；countTarget 数字下钻目标（可空）；
+    #   evidenceSnapshotId 证据快照 id；countObjectKind 被计数对象类型；
+    #   propagationPath 传播视图（§21.4 守红线）；iconKey 影响类型图标语义键（§21.5.2）。
+    - name: subtitleText
+      dart_type: String
+      nullable: false
+      source: subtitleText
+      aliases: [subtitleText]
+      default: "''"
+    - name: impactId
+      dart_type: String
+      nullable: false
+      source: impactId
+      aliases: [impactId]
+      default: "''"
+    - name: primarySpans
+      dart_type: List<IntersectionTextSpan>
+      nullable: false
+      source: primarySpans
+      aliases: [primarySpans]
+      list_element_dart_class: IntersectionTextSpan
+    - name: sampleVisuals
+      dart_type: List<IntersectionVisual>
+      nullable: false
+      source: sampleVisuals
+      aliases: [sampleVisuals]
+      list_element_dart_class: IntersectionVisual
+    - name: countTarget
+      dart_type: IntersectionTarget
+      nullable: true
+      source: countTarget
+      aliases: [countTarget]
+      map_from_string_key_class: IntersectionTarget
+    - name: evidenceSnapshotId
+      dart_type: String
+      nullable: false
+      source: evidenceSnapshotId
+      aliases: [evidenceSnapshotId]
+      default: "''"
+    - name: countObjectKind
+      dart_type: String
+      nullable: false
+      source: countObjectKind
+      aliases: [countObjectKind]
+      default: "''"
+    - name: propagationPath
+      dart_type: IntersectionPropagationPath
+      nullable: true
+      source: propagationPath
+      aliases: [propagationPath]
+      map_from_string_key_class: IntersectionPropagationPath
+    - name: iconKey
+      dart_type: String
+      nullable: false
+      source: iconKey
+      aliases: [iconKey]
       default: "''"

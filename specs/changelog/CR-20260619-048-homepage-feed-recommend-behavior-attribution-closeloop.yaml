@@ -1,0 +1,86 @@
+id: CR-20260619-048-homepage-feed-recommend-behavior-attribution-closeloop
+title: 首页推荐商用化·阶段五（行为反馈与归因闭环：七态漏斗强类型 + channelId/rankingVersion 全事件归因 + served/impressed 双轨）
+slug: homepage-feed-recommend-behavior-attribution-closeloop
+revision: 1
+status: implemented
+
+affected_nodes:
+  - quwoquan_service/contracts/metadata/content/post/behaviors.yaml
+  - quwoquan_app/lib/cloud/services/behavior/behavior_repository.dart
+  - quwoquan_app/lib/core/trackers/content_behavior_tracker.dart
+  - quwoquan_app/lib/core/providers/feed_session_provider.dart
+  - quwoquan_app/lib/ui/discovery/providers/discovery_feed_provider.dart
+  - quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart
+  - quwoquan_service/services/content-service/internal/application/behavior_service.go
+  - quwoquan_service/services/content-service/internal/infrastructure/persistence/behavior_event_store.go
+  - quwoquan_service/services/content-service/internal/infrastructure/recommendation/recommend_feature.go
+  - quwoquan_service/runtime/recommendation/hotpath.go
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling
+
+entries:
+  - timestamp: "2026-06-19T01:00:00+08:00"
+    summary: |
+      把行为反馈/归因事件契约冻结为「七态漏斗强类型 + 全事件归因 common_fields」，并端到端打通
+      feed → 曝光 → 点击 → 停留 → 互动 → 负反馈的 feedRequestId / channelId / rankingVersion 归因。
+
+      契约（metadata-first）—— content/post/behaviors.yaml wire_schema.common_fields：
+      - 七态漏斗闭集 state ∈ {served, visible, impressed, click, dwell, interaction, negative}：
+        served 由云侧 feed 下发侧记账（HotPath 曝光过滤），visible/impressed/click/dwell/interaction/
+        negative 由端侧上报。click 为独立漏斗态（CTR = click / impressed），与 interaction 深度互动分离。
+      - 全事件携带 feedRequestId / referralSource / position / channelId / rankingVersion（单一真相源，
+        事件级 payload_fields 不再重复列举通用归因字段）；channelId/rankingVersion 由服务端实际消费，
+        不再「事件侧声明却被静默丢弃」。
+      - 交集点击/转化事件携带 intersectionId / intersectionDimension / intersectionClass /
+        intersectionSourceRef / intersectionEvidenceId / intersectionTagRefs；评论事件携带 commentLength；
+        点赞/分享/关注/进圈/加联系人统一可转 BehaviorSignal / BehaviorBatchReported。
+
+      App（端侧强类型）：
+      - BehaviorEvent 增 channelId/rankingVersion（toJson 空值不写入，_behaviorEventFromJson 回读，
+        入队重试 roundtrip 不丢归因）；reportSingle 透传新字段；统一走 CloudHttpClient。
+      - ContentBehaviorTracker 全 track* 方法透传 channelId/rankingVersion，_withClientEventId 重建事件
+        时复制新字段；trackQualifiedImpression 以可见面积≥0.5 + 停留≥1000ms 区分 impressed 与 visible。
+      - FeedSessionNotifier.adoptServerFeedRequestId 同步采纳服务端 rankingVersion；discovery_feed_provider
+        两处采纳点回传 page.rankingVersion；home_multi_form_feed 修复曝光 feedRequestId 断点并补
+        channelId/rankingVersion。
+
+      Go（服务端消费）：
+      - BehaviorEventInput / BehaviorSignal / RawBehaviorEvent 增 ChannelID/RankingVersion，
+        ProcessBatch 贯穿持久化 + projectedEvents + HotPath。
+      - recommend_feature.onBehaviorBatch 改七态记账：typeImpressions 仅计 impressed/dwell（弱 visible 不计入，
+        避免稀释曝光分母），click 独立计入 typeEngagements（CTR 分子）；served 仅在曝光过滤侧记账。
+    reason: |
+      阶段一已把 feedRequestId 提升为服务端权威并在端侧曝光/点击/打开复用同一 id，但行为事件此前
+      未区分 served/visible/impressed，且 channelId/rankingVersion 未贯穿端云，特征宽表把所有可见
+      事件混算 impression、点击未独立计 CTR 分子，无法支撑后续推荐治理/可观测/AB 的稳定归因。
+      本阶段作为归因地基，必须把七态漏斗强类型化、全事件归因字段端云一一对应、served/impressed
+      双轨记账打通，避免阶段六引擎治理在弱类型事件与割裂归因上反复返工。
+    change_type:
+      - metadata
+      - codegen
+      - feature-implementation
+      - acceptance
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/content/post/behaviors.yaml
+        sections:
+          - common_fields 增 channelId / rankingVersion（全事件携带，服务端实际消费）
+          - state 七态闭集语义与 state_derivation 冻结（served/visible/impressed/click/dwell/interaction/negative）
+          - 修正 wire_schema 注释：channelId/rankingVersion 不再「事件侧声明却被静默丢弃」
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling/acceptance.yaml
+        sections:
+          - in_scope 增「全事件 referralSource/position/channelId/rankingVersion + served/impressed 双轨」
+          - GWT1 补 click 漏斗态、impressed/visible 严格区分与 typeImpressions/typeEngagements 口径
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 归因主键：feedRequestId 唯一锚定一次 feed 下发；channelId/rankingVersion 全事件自描述携带，离线 replay/AB 可直接按频道与精排版本分桶，无需回 join 有 TTL 的下发记录。
+      - served/impressed 双轨：served 仅由云侧 feed 下发侧（HotPath 曝光过滤）记账、不进 behavior 上报通道；impressed 由端侧达可见面积+停留阈值上报。阶段六引擎治理消费此双轨做曝光去重与位置偏置校正的接口已在 BehaviorSignal/RawBehaviorEvent/特征宽表打通数据通路。
+      - 特征宽表本阶段物化范围：typeImpressions（impressed/dwell）与 typeEngagements（click/interaction/深度≥2）按 contentType 聚合；channelId/rankingVersion 已落库与进 HotPath，按频道/精排版本的分桶物化随阶段六引擎治理落地。
+      - ContentEngagementTracker（详情页深度互动）不冗余携带 channelId/rankingVersion：feedRequestId 为规范 join key，详情页事件归因经服务端按 feedRequestId join 首发记录即可还原，避免多路导航/深链透传的脏数据。
+      - 验证：metadata 校验通过；content-service go build/test 全绿（含 TestBehaviorEventInputDecodesAttributionFields、TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick）；runtime/recommendation go test 全绿；App flutter analyze 受影响目录无新增告警/错误，behavior contract + tracker 测试 50 项全绿（含 channelId/rankingVersion 透传与七态 visible/impressed 区分）；门禁 mock 隔离 / verify_dart_semantic / behavior-error-stack / ui-map-literal-budget 全绿。

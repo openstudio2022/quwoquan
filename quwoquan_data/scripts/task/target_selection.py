@@ -7,8 +7,9 @@ import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from _common.entity_extract import require_domain_etype
 from _common.io import read_json, write_json, write_ndjson
-from _common.paths import batch_root, task_catalog
+from _common.paths import batch_entity_page_input_path, batch_root, task_catalog
 from task import store
 
 
@@ -32,7 +33,15 @@ def _failed_object_entity(raw: Any) -> str:
 
 def _workflow_failure_lane(raw: Any) -> str:
     text = str(raw or "").casefold()
-    if "article source unit" in text or "article base draft" in text:
+    if (
+        "article source unit" in text
+        or "article base draft" in text
+        or "article research" in text
+        or "text-qualified base source" in text
+        or "article base source" in text
+        or "article sources=" in text
+        or "usable article base sources" in text
+    ):
         return "article"
     if "image research" in text or "image gate" in text or "image fetch" in text:
         return "image"
@@ -44,7 +53,7 @@ def _workflow_failure_lane(raw: Any) -> str:
 def _workflow_failure_items(state: Mapping[str, Any]) -> list[dict[str, Any]]:
     status = str(state.get("status") or "").strip()
     failed_objects = [str(item) for item in state.get("failedObjects") or [] if str(item).strip()]
-    if status in ("", "succeeded"):
+    if status in ("", "succeeded", "stopped_at_until"):
         return []
     items: list[dict[str, Any]] = []
     for raw in failed_objects:
@@ -79,14 +88,47 @@ def _partition_targets(partitions: Iterable[Mapping[str, Any]]) -> dict[str, dic
     by_name: dict[str, dict[str, str]] = {}
     for part in partitions:
         region = str(part.get("key") or "").strip()
-        for leaf in part.get("leaves") or []:
-            if not isinstance(leaf, Mapping):
-                continue
-            name = str(leaf.get("name") or "").strip()
+        for leaf in _ordered_partition_leaves(part):
+            source_name = str(leaf.get("name") or "").strip()
+            name = _leaf_selection_name(leaf)
             etype = str(leaf.get("entityType") or "地点/景区").strip()
             if name and name not in by_name:
-                by_name[name] = {"name": name, "entityType": etype, "region": region}
+                by_name[name] = {
+                    "name": name,
+                    "entityType": etype,
+                    "region": region,
+                    "sourceName": source_name,
+                }
     return by_name
+
+
+def _leaf_selection_name(leaf: Mapping[str, Any]) -> str:
+    source_name = str(leaf.get("name") or "").strip()
+    return str(leaf.get("canonicalName") or source_name).strip()
+
+
+def _leaf_selection_priority(leaf: Mapping[str, Any]) -> float | None:
+    if "selectionPriority" not in leaf:
+        return None
+    try:
+        return float(leaf.get("selectionPriority"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _ordered_partition_leaves(part: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    leaves = [leaf for leaf in (part.get("leaves") or []) if isinstance(leaf, Mapping)]
+    if not any(_leaf_selection_priority(leaf) is not None for leaf in leaves):
+        return leaves
+    return sorted(
+        leaves,
+        key=lambda leaf: (
+            _leaf_selection_priority(leaf)
+            if _leaf_selection_priority(leaf) is not None
+            else float("inf"),
+            _leaf_selection_name(leaf),
+        ),
+    )
 
 
 def ineligible_targets_from_batch(task_id: str, batch_id: str) -> set[str]:
@@ -207,11 +249,11 @@ def select_targets(
     while len(selected) < limit:
         scanned_any = False
         for part in partitions:
-            leaves = [leaf for leaf in (part.get("leaves") or []) if isinstance(leaf, Mapping)]
+            leaves = _ordered_partition_leaves(part)
             if depth >= len(leaves):
                 continue
             scanned_any = True
-            name = str(leaves[depth].get("name") or "").strip()
+            name = _leaf_selection_name(leaves[depth])
             add(name)
             if len(selected) >= limit:
                 break
@@ -227,10 +269,8 @@ def select_targets(
     reserve_count = max(0, int(round(limit * max(0.0, float(reserve_ratio or 0.0)))))
     if reserve_count:
         for part in partitions:
-            for leaf in part.get("leaves") or []:
-                if not isinstance(leaf, Mapping):
-                    continue
-                name = str(leaf.get("name") or "").strip()
+            for leaf in _ordered_partition_leaves(part):
+                name = _leaf_selection_name(leaf)
                 if not name or name in seen or name in excluded:
                     continue
                 row = by_name.get(name)
@@ -425,10 +465,12 @@ def audit_managed_batch(
     from download.source_inputs import curated_images_for_entity
     from task.run import (
         PipelineContext,
+        _active_spec,
         _coverage_entity_ids,
         _coverage_entity_type,
         _download_research_lane_issues,
     )
+    from build.homepage import validate_entity_page_inputs
 
     spec = store.load_spec(task_id)
     state_path = batch_root(task_id, batch_id) / "_shared" / "task_workflow_state.json"
@@ -488,7 +530,60 @@ def audit_managed_batch(
             "collections": collections,
             "workCapacity": sum(min(count, 2) for count in collections.values()),
         }
-    failed.extend(_workflow_failure_items(state))
+    active_spec = _active_spec(ctx)
+    has_homepage_inputs = False
+    for target in (active_spec.get("scope") or {}).get("coverageTargets") or []:
+        name = str(target.get("name") or "").strip()
+        if not name:
+            continue
+        domain, target_type = require_domain_etype(
+            target.get("entityType"),
+            context=f"coverageTargets[{name}]",
+        )
+        if batch_entity_page_input_path(task_id, batch_id, domain, target_type, name).is_file():
+            has_homepage_inputs = True
+            break
+    if has_homepage_inputs:
+        input_issues_by_entity: dict[str, list[str]] = {}
+        for issue in validate_entity_page_inputs(task_id, batch_id, active_spec):
+            label = str(issue).split(":", 1)[0]
+            entity = label.split("/")[-1] if label else "__batch__"
+            input_issues_by_entity.setdefault(entity, []).append(str(issue))
+        for entity, issues in input_issues_by_entity.items():
+            existing = next(
+                (
+                    item for item in failed
+                    if str(item.get("entity") or "") == entity
+                    and str(item.get("lane") or "") == "homepage"
+                ),
+                None,
+            )
+            if existing is None:
+                failed.append({"entity": entity, "lane": "homepage", "issues": issues})
+            else:
+                current = existing.setdefault("issues", [])
+                for issue in issues:
+                    if issue not in current:
+                        current.append(issue)
+    failed_index = {
+        (str(item.get("entity") or ""), str(item.get("lane") or "")): item
+        for item in failed
+    }
+    for item in _workflow_failure_items(state):
+        key = (str(item.get("entity") or ""), str(item.get("lane") or ""))
+        lane = key[1]
+        entity = key[0]
+        if lane in passed_entities and entity in passed_entities[lane]:
+            continue
+        existing = failed_index.get(key)
+        if existing is not None:
+            issues = existing.setdefault("issues", [])
+            for issue in item.get("issues") or []:
+                if issue not in issues:
+                    issues.append(issue)
+            continue
+        failed.append(item)
+        failed_index[key] = item
     for item in failed:
         lane = str(item.get("lane") or "")
         entity = str(item.get("entity") or "")
@@ -585,18 +680,18 @@ def handle_audit_batch(args: argparse.Namespace) -> None:
         print(f"[task audit-batch] wrote {out}")
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
-        return
-    print(
-        f"[task audit-batch] {args.task} / {args.batch}: "
-        f"targets={report['targetCount']} failedLanes={report['failedLaneCount']}"
-    )
-    print(f"  lanePassed={report['lanePassed']}")
-    state = report.get("workflowState") or {}
-    print(f"  status={state.get('status')} checkpoint={state.get('waitingCheckpoint')}")
-    for item in (report.get("failedLanes") or [])[:50]:
+    else:
         print(
-            f"  - {item['entity']} {item['lane']}: "
-            + "; ".join(str(issue) for issue in item.get("issues") or [])[:240]
+            f"[task audit-batch] {args.task} / {args.batch}: "
+            f"targets={report['targetCount']} failedLanes={report['failedLaneCount']}"
         )
+        print(f"  lanePassed={report['lanePassed']}")
+        state = report.get("workflowState") or {}
+        print(f"  status={state.get('status')} checkpoint={state.get('waitingCheckpoint')}")
+        for item in (report.get("failedLanes") or [])[:50]:
+            print(
+                f"  - {item['entity']} {item['lane']}: "
+                + "; ".join(str(issue) for issue in item.get("issues") or [])[:240]
+            )
     if getattr(args, "strict", False) and int(report.get("failedLaneCount") or 0) > 0:
         raise SystemExit(1)

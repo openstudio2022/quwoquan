@@ -198,10 +198,17 @@ def _base_draft_issues(
     assignments = ledger.get("assignments") if isinstance(ledger, Mapping) else {}
     if not isinstance(assignments, Mapping) or not assignments:
         issues.append(f"{release_id}: base_draft_ledger.assignments missing")
-    elif base_source and str(assignments.get(base_source) or "") != topic_id:
-        issues.append(
-            f"{post_rel}: base draft ledger does not map {base_source} to topicId {topic_id}"
+    else:
+        assigned = assignments.get(base_source) if base_source else None
+        assigned_refs = (
+            [str(item) for item in assigned if str(item).strip()]
+            if isinstance(assigned, list)
+            else ([str(assigned)] if str(assigned or "").strip() else [])
         )
+        if base_source and topic_id not in assigned_refs:
+            issues.append(
+                f"{post_rel}: base draft ledger does not map {base_source} to topicId {topic_id}"
+            )
     base_text = str(writing_pack.get("baseDraftText") or "")
     effective_len = len(re.sub(r"\s+", "", base_text))
     if effective_len < MIN_ARTICLE_BASE_DRAFT_CHARS:
@@ -240,14 +247,9 @@ def _article_asset_source_issues(
     source_ref = str(asset.get("sourceRef") or "").strip()
     source_asset_ref = str(asset.get("sourceAssetRef") or "").strip()
     issues: list[str] = []
-    if base_source and source_ref and source_ref != base_source:
+    if source_ref and source_asset_ref and not _same_source_unit(source_ref, source_asset_ref):
         issues.append(
-            f"{post_rel}: {asset_label} sourceRef must match article baseSourceRef "
-            f"({source_ref} != {base_source})"
-        )
-    if base_source and source_asset_ref and not _same_source_unit(base_source, source_asset_ref):
-        issues.append(
-            f"{post_rel}: {asset_label} sourceAssetRef must come from article base draft source unit"
+            f"{post_rel}: {asset_label} sourceAssetRef must belong to its declared sourceRef unit"
         )
     return issues
 

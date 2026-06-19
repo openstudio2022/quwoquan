@@ -249,6 +249,59 @@ type ExposureGovernanceConfig struct {
 	CollaborativeRecall CollaborativeRecallConfig   `yaml:"collaborativeRecall" json:"collaborativeRecall"`
 }
 
+// Ops intervention action / target-type closed sets (single source; the engine
+// applier and validation both consume these constants).
+const (
+	OpsActionPin    = "pin"
+	OpsActionDemote = "demote"
+	OpsActionBlock  = "block"
+
+	OpsTargetContent = "content"
+	OpsTargetAuthor  = "author"
+	OpsTargetTag     = "tag"
+)
+
+// OpsIntervention is one manual operational intervention applied to the ranked
+// feed: pin (force to top with a score boost), demote (scale score down), or
+// block (remove from feed). It is the config truth source for运营 governance and
+// takes effect via hot-reload without any UI. Each applied intervention is
+// audited via recommendation_feed_ops_intervention_audit_total.
+type OpsIntervention struct {
+	ID         string  `yaml:"id" json:"id"`
+	Action     string  `yaml:"action" json:"action"`
+	TargetType string  `yaml:"targetType" json:"targetType"`
+	Target     string  `yaml:"target" json:"target"`
+	Scenario   string  `yaml:"scenario" json:"scenario"`
+	Weight     float64 `yaml:"weight" json:"weight"`
+	Reason     string  `yaml:"reason" json:"reason"`
+	ExpiresAt  string  `yaml:"expiresAt" json:"expiresAt"`
+}
+
+// OpsInterventionConfig groups the manual运营 intervention rules. Empty +
+// disabled is a zero-cost no-op on the main ranking path.
+type OpsInterventionConfig struct {
+	Enabled       bool              `yaml:"enabled" json:"enabled"`
+	Interventions []OpsIntervention `yaml:"interventions" json:"interventions"`
+}
+
+func validOpsAction(a string) bool {
+	switch a {
+	case OpsActionPin, OpsActionDemote, OpsActionBlock:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOpsTargetType(t string) bool {
+	switch t {
+	case OpsTargetContent, OpsTargetAuthor, OpsTargetTag:
+		return true
+	default:
+		return false
+	}
+}
+
 // Guardrail is a KPI floor for a policy change relative to a baseline preset.
 // action is always suggest_only: advisors emit findings, humans approve.
 type Guardrail struct {
@@ -277,6 +330,8 @@ type RecPolicy struct {
 	Guardrails         []Guardrail              `yaml:"guardrails" json:"guardrails"`
 	Intersection       IntersectionConfig       `yaml:"intersection" json:"intersection"`
 	ExposureGovernance ExposureGovernanceConfig `yaml:"exposureGovernance" json:"exposureGovernance"`
+	OpsIntervention    OpsInterventionConfig    `yaml:"opsIntervention" json:"opsIntervention"`
+	ABAdmission        ABAdmissionConfig        `yaml:"abAdmission" json:"abAdmission"`
 }
 
 // ResolvedPolicy is the per-request resolved scoring configuration for a user
@@ -410,6 +465,99 @@ func (p *RecPolicy) Validate() error {
 	}
 	if err := validateExposureGovernance(p.ExposureGovernance); err != nil {
 		return err
+	}
+	if err := validateOpsIntervention(p.OpsIntervention); err != nil {
+		return err
+	}
+	if err := validateABAdmission(p.ABAdmission); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ABRollbackConfig declares the rollback guard for an online experiment: when the
+// challenger's primary metric drops below regressionRatio × control, the bucket is
+// a rollback candidate. autoRollback gates whether the rollback is automatic
+// (true) or advisory/human-approved (false, default — same governance posture as
+// Guardrail.action=suggest_only).
+type ABRollbackConfig struct {
+	RegressionRatio float64 `yaml:"regressionRatio" json:"regressionRatio"`
+	AutoRollback    bool    `yaml:"autoRollback" json:"autoRollback"`
+}
+
+// ABAdmissionConfig is the single source of truth for online AB admission: an
+// experiment bucket may only inform promotion/rollback decisions once it clears
+// minSamplesPerBucket, the bucket split is within maxBucketSkewPct of design, and
+// the primary metric effect clears minDetectableEffect at significanceLevel.
+// Consumed by the admission validator (RecordABExperimentValidity feeds SLI
+// ab_experiment_validity); the experiment definitions themselves live in
+// RecPolicy.Experiments.
+type ABAdmissionConfig struct {
+	MinSamplesPerBucket int              `yaml:"minSamplesPerBucket" json:"minSamplesPerBucket"`
+	SignificanceLevel   float64          `yaml:"significanceLevel" json:"significanceLevel"`
+	MinDetectableEffect float64          `yaml:"minDetectableEffect" json:"minDetectableEffect"`
+	MaxBucketSkewPct    float64          `yaml:"maxBucketSkewPct" json:"maxBucketSkewPct"`
+	PrimaryMetric       string           `yaml:"primaryMetric" json:"primaryMetric"`
+	Rollback            ABRollbackConfig `yaml:"rollback" json:"rollback"`
+}
+
+func validateABAdmission(cfg ABAdmissionConfig) error {
+	// Zero-value (unconfigured) admission is permitted: it disables admission
+	// gating rather than forcing every deployment to declare experiment stats.
+	zero := ABAdmissionConfig{}
+	if cfg == zero {
+		return nil
+	}
+	if cfg.MinSamplesPerBucket <= 0 {
+		return errors.New("recpolicy: abAdmission.minSamplesPerBucket must be > 0")
+	}
+	if cfg.SignificanceLevel <= 0 || cfg.SignificanceLevel >= 1 {
+		return errors.New("recpolicy: abAdmission.significanceLevel must be in (0,1)")
+	}
+	if cfg.MinDetectableEffect <= 0 {
+		return errors.New("recpolicy: abAdmission.minDetectableEffect must be > 0")
+	}
+	if cfg.MaxBucketSkewPct < 0 || cfg.MaxBucketSkewPct > 100 {
+		return errors.New("recpolicy: abAdmission.maxBucketSkewPct must be in [0,100]")
+	}
+	if cfg.PrimaryMetric == "" {
+		return errors.New("recpolicy: abAdmission.primaryMetric required")
+	}
+	if cfg.Rollback.RegressionRatio <= 0 || cfg.Rollback.RegressionRatio > 1 {
+		return errors.New("recpolicy: abAdmission.rollback.regressionRatio must be in (0,1]")
+	}
+	return nil
+}
+
+func validateOpsIntervention(cfg OpsInterventionConfig) error {
+	seen := make(map[string]struct{}, len(cfg.Interventions))
+	for i, iv := range cfg.Interventions {
+		if iv.ID == "" {
+			return fmt.Errorf("recpolicy: opsIntervention[%d] id required (audit key)", i)
+		}
+		if _, dup := seen[iv.ID]; dup {
+			return fmt.Errorf("recpolicy: opsIntervention duplicate id %q", iv.ID)
+		}
+		seen[iv.ID] = struct{}{}
+		if !validOpsAction(iv.Action) {
+			return fmt.Errorf("recpolicy: opsIntervention %s action %q invalid (pin|demote|block)", iv.ID, iv.Action)
+		}
+		if !validOpsTargetType(iv.TargetType) {
+			return fmt.Errorf("recpolicy: opsIntervention %s targetType %q invalid (content|author|tag)", iv.ID, iv.TargetType)
+		}
+		if iv.Target == "" {
+			return fmt.Errorf("recpolicy: opsIntervention %s target required", iv.ID)
+		}
+		switch iv.Action {
+		case OpsActionDemote:
+			if iv.Weight < 0 || iv.Weight >= 1 {
+				return fmt.Errorf("recpolicy: opsIntervention %s demote weight must be in [0,1)", iv.ID)
+			}
+		case OpsActionPin:
+			if iv.Weight < 0 {
+				return fmt.Errorf("recpolicy: opsIntervention %s pin weight (boost) must be >= 0", iv.ID)
+			}
+		}
 	}
 	return nil
 }

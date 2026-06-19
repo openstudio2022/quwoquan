@@ -49,21 +49,14 @@ class HomeFeedLayoutPolicy {
           contentCardPolicy: 'richRelation',
         );
       case 'intersection_rail_masonry':
-        return const HomeFeedLayoutPolicy(
-          layoutTemplate: 'dualColumnDiscovery',
-          phoneColumns: 2,
-          supportsFullSpanModules: true,
-          intersectionModulePolicy: 'spotlightSegment',
-          contentCardPolicy: 'compactVisual',
-        );
       case 'masonry_recommend':
       default:
         return const HomeFeedLayoutPolicy(
-          layoutTemplate: 'dualColumnDiscovery',
-          phoneColumns: 2,
-          supportsFullSpanModules: true,
-          intersectionModulePolicy: 'segmentInsert',
-          contentCardPolicy: 'compactVisual',
+          layoutTemplate: 'singleColumnMultiForm',
+          phoneColumns: 1,
+          supportsFullSpanModules: false,
+          intersectionModulePolicy: 'inlineOnly',
+          contentCardPolicy: 'richMultiForm',
         );
     }
   }
@@ -74,16 +67,9 @@ class HomeFeedLayoutPolicy {
       contentCardPolicy == 'compactVisual' ||
       layoutTemplate == 'dualColumnDiscovery';
 
-  bool get hasIntersectionSpotlight =>
-      supportsFullSpanModules &&
-      intersectionModulePolicy != 'none' &&
-      intersectionModulePolicy != 'inlineOnly';
+  bool get hasIntersectionSpotlight => false;
 
-  bool get insertsSegmentCards =>
-      supportsFullSpanModules &&
-      (intersectionModulePolicy == 'spotlightSegment' ||
-          intersectionModulePolicy == 'campusSpotlight' ||
-          intersectionModulePolicy == 'segmentInsert');
+  bool get insertsSegmentCards => false;
 
   int columnsFor(BuildContext context) {
     if (isSingleColumnRelations) return 1;

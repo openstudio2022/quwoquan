@@ -1465,9 +1465,22 @@ def _build_route_assets(
             )
         ]
         candidates.sort(key=lambda row: str(row.get("sourceAssetRef") or row.get("path") or ""))
+        if declared_refs:
+            matched_refs = {str(candidate.get("sourceAssetRef") or "") for candidate in candidates}
+            missing_refs = sorted(declared_refs - matched_refs)
+            if missing_refs:
+                raise RuntimeError(
+                    f"{ref}: image assetRefs missing source assets {len(missing_refs)}/{len(declared_refs)}: "
+                    f"{missing_refs[:3]}"
+                )
+        blocked_by_safety: list[str] = []
         for position, candidate in enumerate(candidates[:20]):
             verdict = assess_image(candidate["path"])
             if verdict.status == STATUS_UNSAFE:
+                blocked_by_safety.append(
+                    f"{candidate.get('sourceAssetRef') or candidate.get('path')}:"
+                    f"{'/'.join(verdict.reasons) or verdict.status}"
+                )
                 continue
             chosen.append(candidate["path"])
             assets.append(
@@ -1484,6 +1497,11 @@ def _build_route_assets(
                 )
             )
         if declared_refs and len(assets) != len(declared_refs):
+            if blocked_by_safety:
+                raise RuntimeError(
+                    f"{ref}: image assetRefs blocked by image safety gate "
+                    f"{len(blocked_by_safety)}/{len(declared_refs)}: {blocked_by_safety[:3]}"
+                )
             raise RuntimeError(
                 f"{ref}: image assetRefs resolved {len(assets)}/{len(declared_refs)}"
             )

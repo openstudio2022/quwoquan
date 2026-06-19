@@ -2,7 +2,7 @@ import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart'
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 /// 一级 Tab — 与 user_profile/ui_config.yaml profile_tabs 对齐
-enum ProfileTab { creations, circles, interaction }
+enum ProfileTab { creations, interaction }
 
 /// 作品二级内容形式筛选：全部 / 图片 / 视频 / 文字。
 enum CreationSubTab { all, image, video, article }
@@ -14,7 +14,7 @@ enum CreationWorkFormat { all, image, video, note }
 enum CreationVisibility { all, public_, private_ }
 
 /// 互动子维度。
-enum InteractionSubTab { likes, comments, shares }
+enum InteractionSubTab { all, comments, likes, shares }
 
 /// 互动方向。
 enum InteractionDirection { received, sent }
@@ -22,7 +22,6 @@ enum InteractionDirection { received, sent }
 extension ProfileTabMetadata on ProfileTab {
   String get id => switch (this) {
     ProfileTab.creations => 'creations',
-    ProfileTab.circles => 'circles',
     ProfileTab.interaction => 'interaction',
   };
 }
@@ -38,8 +37,9 @@ extension CreationSubTabMetadata on CreationSubTab {
 
 extension InteractionSubTabMetadata on InteractionSubTab {
   String get id => switch (this) {
-    InteractionSubTab.likes => 'likes',
+    InteractionSubTab.all => 'all',
     InteractionSubTab.comments => 'comments',
+    InteractionSubTab.likes => 'likes',
     InteractionSubTab.shares => 'shares',
   };
 }
@@ -47,7 +47,6 @@ extension InteractionSubTabMetadata on InteractionSubTab {
 ProfileTab? profileTabFromId(String id) {
   return switch (id) {
     'creations' => ProfileTab.creations,
-    'circles' => ProfileTab.circles,
     'interaction' => ProfileTab.interaction,
     _ => null,
   };
@@ -65,8 +64,9 @@ CreationSubTab creationSubTabFromId(String id) {
 InteractionSubTab interactionSubTabFromId(String id) {
   return switch (id) {
     'comments' => InteractionSubTab.comments,
+    'likes' => InteractionSubTab.likes,
     'shares' => InteractionSubTab.shares,
-    _ => InteractionSubTab.likes,
+    _ => InteractionSubTab.all,
   };
 }
 

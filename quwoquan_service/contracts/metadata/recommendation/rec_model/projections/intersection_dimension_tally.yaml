@@ -17,6 +17,9 @@ client_projection:
   dart_class: IntersectionDimensionTally
   base_class: ""
   output_path: cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart
+  dart_imports:
+    - intersection_text_span.g.dart
+    - intersection_visual.g.dart
   fields:
     - name: dimension
       dart_type: String
@@ -53,4 +56,54 @@ client_projection:
       nullable: false
       source: subtitleText
       aliases: [subtitleText]
+      default: "''"
+    # 统一交互子契约（§20.7，只附加）：
+    #   briefSpans 是 briefText 的结构化富文本切分，join(spans.text)==briefText（契约不变量）；
+    #   名字 span 进对应对象主页，数字 span 进 dimension(+sourceRef) 下钻列表。
+    #   sampleVisuals 为该维度证据样本视觉簇；sourceRef 为数字下钻的证据组 kind（注册表标准名）；
+    #   countObjectKind 为被计数对象类型（数字下钻列表对象，注册表 countObjectKind）。
+    - name: briefSpans
+      dart_type: List<IntersectionTextSpan>
+      nullable: false
+      source: briefSpans
+      aliases: [briefSpans]
+      list_element_dart_class: IntersectionTextSpan
+    - name: sampleVisuals
+      dart_type: List<IntersectionVisual>
+      nullable: false
+      source: sampleVisuals
+      aliases: [sampleVisuals]
+      list_element_dart_class: IntersectionVisual
+    - name: sourceRef
+      dart_type: String
+      nullable: false
+      source: sourceRef
+      aliases: [sourceRef]
+      default: "''"
+    - name: countObjectKind
+      dart_type: String
+      nullable: false
+      source: countObjectKind
+      aliases: [countObjectKind]
+      default: "''"
+    # 架构基线 v2（§21.3 lifecycle 分桶 + §21.5.2 iconKey，草案/未冻结）：
+    #   strengthenedCount/reactivatedCount 为该维度内「增强 / 重新活跃」态计数（弱标分桶，不进 briefText）；
+    #   iconKey 维度类型图标语义键（缺省回退 dimension 推导）。
+    - name: strengthenedCount
+      dart_type: int
+      nullable: false
+      source: strengthenedCount
+      aliases: [strengthenedCount]
+      default: "0"
+    - name: reactivatedCount
+      dart_type: int
+      nullable: false
+      source: reactivatedCount
+      aliases: [reactivatedCount]
+      default: "0"
+    - name: iconKey
+      dart_type: String
+      nullable: false
+      source: iconKey
+      aliases: [iconKey]
       default: "''"

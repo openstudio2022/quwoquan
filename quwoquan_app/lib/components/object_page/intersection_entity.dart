@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -59,7 +59,7 @@ class IntersectionEntity extends StatelessWidget {
       final confidence = reason.confidenceLabel.trim();
       return confidence.isNotEmpty
           ? confidence
-          : UITextConstants.intersectionAffinityLabel;
+          : DiscoveryFeedText.intersectionAffinityLabel;
     }
     return '';
   }
@@ -71,6 +71,15 @@ class IntersectionEntity extends StatelessWidget {
     if (age.isNegative || age.inHours < 24) return '新';
     if (age.inDays < 7) return '本周';
     return '';
+  }
+
+  /// §21.3 生命周期弱标（真相源 = 服务端 lifecycleState）：new/strengthened/reactivated
+  /// 才出标；stable/weakened/未知返回空。缺省时由 [_freshLabel] 时间派生回退（向后兼容）。
+  String get _lifecycleLabel {
+    const visible = <String>{'new', 'strengthened', 'reactivated'};
+    final state = reason.lifecycleState.trim();
+    if (!visible.contains(state)) return '';
+    return DiscoveryFeedText.intersectionLifecycleLabel(state);
   }
 
   @override
@@ -261,7 +270,7 @@ class IntersectionEntity extends StatelessWidget {
   List<Widget> _chips(BuildContext context) {
     final chips = <Widget>[
       _Chip(
-        label: UITextConstants.intersectionDimensionShortLabel(
+        label: DiscoveryFeedText.intersectionDimensionShortLabel(
           reason.dimension,
         ),
         tone: _ChipTone.dimension,
@@ -285,15 +294,21 @@ class IntersectionEntity extends StatelessWidget {
     final total = reason.totalPointCount;
     if (total <= 0) return '';
     if (reason.recommendedPointCount > 0 && reason.factPointCount == 0) {
-      return UITextConstants.intersectionRecommendedPointCountChip(total);
+      return DiscoveryFeedText.intersectionRecommendedPointCountChip(total);
     }
-    return UITextConstants.intersectionPointCountChip(total);
+    return DiscoveryFeedText.intersectionPointCountChip(total);
   }
 
   List<String> _statusLabels() {
     final labels = <String>[];
-    final fresh = _freshLabel;
-    if (fresh.isNotEmpty) labels.add(fresh);
+    // 生命周期弱标优先（服务端真相源）；缺省回退时间派生 freshness。
+    final lifecycle = _lifecycleLabel;
+    if (lifecycle.isNotEmpty) {
+      labels.add(lifecycle);
+    } else {
+      final fresh = _freshLabel;
+      if (fresh.isNotEmpty) labels.add(fresh);
+    }
     if (_isAffinity) labels.add(_classLabel);
     return labels;
   }

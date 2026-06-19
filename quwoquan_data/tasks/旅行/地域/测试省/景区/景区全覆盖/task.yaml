@@ -16,7 +16,7 @@ scope:
   - entityType: 地点/景区
     name: 测试景区甲
 provenance:
-  createdAt: '2026-06-16T16:58:22.284783+00:00'
+  createdAt: '2026-06-18T23:16:12.767443+00:00'
   createdBy: test
 content:
   modalityContract: separated_research

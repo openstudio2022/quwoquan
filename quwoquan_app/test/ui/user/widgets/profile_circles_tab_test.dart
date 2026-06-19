@@ -5,14 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
-import '../../../support/harness/profile_shell_scroll_utils.dart';
-
-/// 圈子 Tab：切换后经 Repository 取数渲染 ProfileCirclesTab，展示 mock 圈子。
+/// 圈子已从主页一级 Tab 收口到统计区入口。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
 
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -61,17 +59,15 @@ void main() {
     HttpOverrides.global = _NoNetworkHttpOverrides();
   });
 
-  testWidgets('切换到圈子 Tab 渲染 ProfileCirclesTab 并展示圈子', (tester) async {
+  testWidgets('主页不再渲染圈子一级 Tab，统计区展示圈子入口', (tester) async {
     _setPhoneSize(tester);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(_scopedApp());
     await _pumpFrames(tester);
-    await tapProfilePrimaryTab(tester, '圈子');
-    await _pumpFrames(tester);
 
-    expect(find.byType(ProfileCirclesTab), findsOneWidget);
-    expect(find.text('极简摄影俱乐部'), findsOneWidget);
+    expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
+    expect(find.text('极简摄影俱乐部'), findsNothing);
   });
 }

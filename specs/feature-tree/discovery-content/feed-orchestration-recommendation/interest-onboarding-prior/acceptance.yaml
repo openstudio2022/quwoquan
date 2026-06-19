@@ -17,7 +17,7 @@ gwt_acceptance:
   GWT1:
     title: 新用户兴趣先验 GWT
     given:
-      - 新用户首次进入发现页，尚无行为历史。
+      - 新用户首次进入发现页，尚无过往行为。
     when:
       - 用户选择兴趣或跳过兴趣采集。
     then:

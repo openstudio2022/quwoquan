@@ -1,24 +1,26 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
-import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 
-/// 交集统一体验 · Mock 契约（T1/T2）：
-/// - 我的交集聚合摘要：总数 / 5 维度 / 自上次新增（freshAt > 已读水位）。
-/// - 打开列表（visit）即推进已读水位 → 该维度（或全部）未读清零。
-/// - campus/travel 频道有专属交集；事实优先 + 概率补充。
-/// - 曝光上报写跨会话冷却集 → 同对象不再下发（推荐窗口）。
-/// - 事实 vs 概率分通道：interest affinity 标 intersectionClass=affinity + confidenceLabel。
+/// 交集统一体验 · Mock 契约（T1/T2）。
+///
+/// 范围已对齐统一交互子契约冻结后的 [IntersectionRepository]：
+///   - 我的交集聚合摘要 / 分维度列表 / 已读水位清零；
+///   - G2 单通道不变量：`*Spans` 只能是结论句（briefText / primaryText）的结构化富文本切分，
+///     契约断言 `join(spans.text) == briefText/primaryText`；
+///   - 禁止 reason 级 displayText / label / sharedCount / recommendationTraceId 回归。
+///
+/// 频道交集（GetFeedIntersections）与曝光上报（ReportIntersectionExposure）已移出
+/// 本仓库契约（service.yaml 同步下线），不再在此断言。
 void main() {
   group('MockIntersectionRepository 我的交集摘要/清零', () {
     test('摘要含 5 维度，初始全部计入未读新增', () async {
       final repo = MockIntersectionRepository();
       final summary = await repo.getMyIntersectionSummary();
 
-      // fixture 六类母表达样本（含 sharedCircle / sharedTagSample）共 8 条。
       expect(summary.totalCount, 8);
       expect(summary.dimensions.length, 5);
-      // 无已读水位时，所有带 freshAt 的交集都算新增。
       expect(summary.totalNewCount, greaterThan(0));
       expect(summary.totalNewCount, summary.totalCount);
     });
@@ -66,87 +68,71 @@ void main() {
     });
   });
 
-  group('MockIntersectionRepository 频道交集（campus/travel）', () {
-    test('campus 频道有专属交集（事实 + 概率）', () async {
-      final repo = MockIntersectionRepository();
-      final items = await repo.getFeedIntersections(channel: 'campus');
-      expect(items, isNotEmpty);
-      final names = items.map((r) => r.displayName).toList();
-      expect(names, contains('苏黎'));
-      expect(items.any((r) => r.intersectionClass == 'fact'), isTrue);
-      expect(items.any((r) => r.intersectionClass == 'affinity'), isTrue);
-    });
+  group('交集统一交互子契约 · G2 单通道不变量', () {
+    String joinSpans(List<IntersectionTextSpan> spans) =>
+        spans.map((s) => s.text).join();
 
-    test('travel 频道有专属交集', () async {
+    test('维度简报 join(briefSpans.text) == briefText（端不拼装结论句）', () async {
       final repo = MockIntersectionRepository();
-      final items = await repo.getFeedIntersections(channel: 'travel');
-      expect(items.map((r) => r.displayName), contains('大理'));
-    });
+      final summary = await repo.getMyIntersectionSummary();
 
-    test('实体类频道交集的目标 ID 可被主页仓库直接打开', () async {
-      final repo = MockIntersectionRepository();
-      final homepageRepo = MockHomepageRepository();
-      final items = await repo.getFeedIntersections(channel: 'recommend');
-      final entityItems = items.where((reason) {
-        return reason.objectKind == 'school' || reason.objectKind == 'place';
-      });
+      // 至少一个维度真实下发了结构化 spans（非空覆盖，而非纯空集放行）。
+      final withSpans = summary.dimensions
+          .where((t) => t.briefSpans.isNotEmpty)
+          .toList(growable: false);
+      expect(withSpans, isNotEmpty, reason: 'mock 应模拟云侧下发 briefSpans');
 
-      for (final reason in entityItems) {
-        final targetId = reason.relationObjectId.trim().isNotEmpty
-            ? reason.relationObjectId.trim()
-            : reason.actionTargetId.trim();
-        final detail = await homepageRepo.getHomepageDetail(targetId);
-        expect(detail.id, isNotEmpty, reason: '实体交集目标必须可达: $targetId');
+      for (final tally in summary.dimensions) {
+        if (tally.briefSpans.isEmpty) {
+          continue; // 降级链：spans 为空时回落 briefText，允许。
+        }
+        expect(
+          joinSpans(tally.briefSpans),
+          tally.briefText,
+          reason: '${tally.dimension} 的 briefSpans 必须无损拼回 briefText',
+        );
       }
     });
 
-    test('未知频道回退 recommend 池', () async {
+    test('交集理由 join(primarySpans.text) == primaryText（非空时无损拼回）', () async {
       final repo = MockIntersectionRepository();
-      final items = await repo.getFeedIntersections(channel: 'unknown_x');
-      expect(items, isNotEmpty);
+      final reasons = await repo.listMyIntersections();
+      for (final reason in reasons) {
+        if (reason.primarySpans.isEmpty) {
+          continue; // 降级链：spans 缺省回落 primaryText。
+        }
+        expect(joinSpans(reason.primarySpans), reason.primaryText);
+      }
     });
 
-    test('feed 交集全部带交集点列表，事实与推荐都可直接展示', () async {
+    test('count 片段进 myIntersections 下钻、object 片段进对象主页（target 角色分流）', () async {
       final repo = MockIntersectionRepository();
-      final items = await repo.getFeedIntersections(channel: 'travel');
-      expect(items, isNotEmpty);
-      expect(items.every((r) => r.primaryText.trim().isNotEmpty), isTrue);
-      expect(items.every((r) => r.intersectionPoints.isNotEmpty), isTrue);
-      final affinity = items.firstWhere(
-        (r) => r.intersectionClass == 'affinity',
-      );
-      expect(
-        affinity.recommendedPointCount,
-        affinity.intersectionPoints.length,
-      );
-      expect(affinity.pointClassLabel, '推荐交集');
-    });
-  });
+      final summary = await repo.getMyIntersectionSummary();
+      final spans = summary.dimensions
+          .expand((t) => t.briefSpans)
+          .toList(growable: false);
 
-  group('MockIntersectionRepository 曝光保留 / 分通道', () {
-    test('曝光上报后同对象仍保留但降权为 seen', () async {
-      final repo = MockIntersectionRepository();
-      final before = await repo.getFeedIntersections(channel: 'campus');
-      expect(before.map((r) => r.actionTargetId), contains('fixture_user_su'));
-
-      await repo.reportExposure(objectIds: <String>['fixture_user_su']);
-
-      final after = await repo.getFeedIntersections(channel: 'campus');
-      expect(after.map((r) => r.actionTargetId), contains('fixture_user_su'));
-      expect(after.last.actionTargetId, 'fixture_user_su');
-      expect(after.last.rankState, 'seen');
-      expect(after.last.seenAt, isNotEmpty);
+      final counts = spans.where((s) => s.role == 'count');
+      expect(counts, isNotEmpty, reason: '简报应含可下钻的数字片段');
+      for (final count in counts) {
+        expect(
+          count.target?.routeId,
+          'myIntersections',
+          reason: '数字片段必须携带维度下钻 target',
+        );
+      }
+      for (final object in spans.where((s) => s.role == 'object')) {
+        expect(object.target, isNotNull, reason: 'object 片段必须可达对象');
+        expect(object.target!.routeId, isNot('myIntersections'));
+      }
     });
 
-    test('概率交集标 affinity + confidenceLabel；事实交集为 fact', () async {
-      final repo = MockIntersectionRepository();
-      final items = await repo.getFeedIntersections(channel: 'campus');
-      final affinity = items.firstWhere(
-        (r) => r.intersectionClass == 'affinity',
-        orElse: () => IntersectionReason(),
-      );
-      expect(affinity.intersectionClass, 'affinity');
-      expect(affinity.confidenceLabel.isNotEmpty, isTrue);
+    test('禁止 reason 级 displayText/label/sharedCount/recommendationTraceId 回归', () {
+      final map = IntersectionReason().toMap();
+      expect(map.containsKey('displayText'), isFalse);
+      expect(map.containsKey('label'), isFalse);
+      expect(map.containsKey('sharedCount'), isFalse);
+      expect(map.containsKey('recommendationTraceId'), isFalse);
     });
   });
 }

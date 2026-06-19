@@ -22,7 +22,6 @@ import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_card.dart';
@@ -114,9 +113,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     ProfileNotifier notifier,
     ProfileState state,
   ) {
-    if (_activeTabId == 'circles') {
-      return false;
-    }
     if (_activeTabId == 'interaction') {
       if (!_isSecondaryTabVisible(_interactionSecondaryTabKey)) {
         return false;
@@ -188,7 +184,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       context,
       const TextStyle(
         fontSize: AppTypography.iosNavTitle,
-        fontWeight: AppTypography.semiBold,
+        fontWeight: AppTypography.regular,
       ),
     );
     final adaptiveHeight = titleHeight + (AppSpacing.intraGroupSm * 2);
@@ -204,11 +200,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         fontWeight: AppTypography.primaryTabSelectedWeight,
       ),
     );
-    final adaptiveHeight =
-        labelHeight + (AppSpacing.intraGroupSm * 2) + AppSpacing.intraGroupXs;
-    return adaptiveHeight > AppSpacing.tabNavigationHeight
-        ? adaptiveHeight
-        : AppSpacing.tabNavigationHeight;
+    final adaptiveHeight = labelHeight + (AppSpacing.intraGroupSm * 2);
+    final minHeight = AppSpacing.buttonHeightSm;
+    return adaptiveHeight > minHeight ? adaptiveHeight : minHeight;
   }
 
   double _toolbarExtent(BuildContext context) {
@@ -316,6 +310,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
             ProfileHeader.avatarOuterDiameter - ProfileHeader.avatarOverlapPx,
         summaryTrackerKey: const ValueKey<String>('profile-shell-summary-card'),
         onSwipe: _handleTabSwipeDragEnd,
+        surfaceBridgeOverride: AppSpacing.containerSm,
         backgroundBuilder: (c, pull) => _buildBackgroundLayer(
           c,
           backgroundUrl: backgroundUrl,
@@ -347,7 +342,11 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         ),
         tabBodyBuilder: (c) => Padding(
           padding: EdgeInsets.only(bottom: bottomPadding),
-          child: _buildInlineTabContent(c, isDark),
+          // 首屏聚合失败且无可展示档案时，渲染结构化可见错误态（重试），不让
+          // 乐观壳层静默吞掉失败（R17/R20）。已有档案则保留乐观渲染。
+          child: state.hasLoadError && profile == null
+              ? _buildFirstScreenError(c, state)
+              : _buildInlineTabContent(c, isDark),
         ),
       ),
     );

@@ -89,7 +89,7 @@ def test_scale_readiness_blocks_manual_required_batch():
             "status": "manual_required",
             "waitingCheckpoint": "download_plan",
             "failedObjects": [
-                "九寨沟: download_repair required: only 0 article source unit(s) with images",
+                "九寨沟: download_repair required: article research needs >= 4 text-qualified base sources",
             ],
         },
     )
@@ -357,6 +357,69 @@ def test_scale_readiness_trial_allows_replaced_abandoned_entity():
         target_selection.audit_managed_batch = original
         scale_readiness.scan_runtime_batch_integrity = original_integrity
     assert report["passed"], report["blockers"]
+    assert report["replacementClosure"]["closed"] is True
+
+
+def test_scale_readiness_trial_closes_by_active_targets_not_replacement_history_count():
+    _save_spec()
+    spec = store.load_spec(TASK)
+    spec["scope"]["reserveCoverageTargets"] = [
+        {"entityType": "地点/景区", "name": "都江堰"},
+        {"entityType": "地点/景区", "name": "青城山"},
+    ]
+    store.save_spec(spec)
+    root = batch_root(TASK, "trial_replacement_history")
+    _write_env_ready("trial_replacement_history")
+    write_json(
+        root / "_shared" / "task_workflow_state.json",
+        {
+            "status": "succeeded",
+            "throughput": {"objectsPerHour": 500},
+            "quality": {"firstPassRate": 0.82},
+        },
+    )
+    write_json(root / "_shared" / "token_ledger.json", {"summary": {"unitCost": 1}})
+    write_json(root / "_shared" / "gamma_import_report.json", {"status": "passed"})
+    write_json(
+        release_root("trial_replacement_history_release") / "release_manifest.json",
+        {"releaseId": "trial_replacement_history_release"},
+    )
+
+    import task.target_selection as target_selection
+    import verify.scale_readiness as scale_readiness
+
+    original = target_selection.audit_managed_batch
+    original_integrity = scale_readiness.scan_runtime_batch_integrity
+    try:
+        target_selection.audit_managed_batch = lambda task_id, batch_id: {
+            "targetCount": 1,
+            "lanePassed": {"homepage": 1, "article": 1, "image": 1},
+            "failedLaneCount": 0,
+            "failedLanes": [],
+            "abandonedCount": 2,
+            "abandonedContentCount": 0,
+            "replacementCount": 1,
+            "replacementObjects": [{"entityId": "青城山", "status": "active"}],
+        }
+        scale_readiness.scan_runtime_batch_integrity = lambda task_id, batch_id: {
+            "passed": True,
+            "stats": {"postCount": 5, "articleCount": 4, "imageCount": 1, "assetCount": 5},
+            "issues": [],
+        }
+        report = build_scale_readiness_report(
+            TASK,
+            "trial_replacement_history",
+            daily_target=10_000,
+            release_id="trial_replacement_history_release",
+            require_import=True,
+            mode="trial",
+        )
+    finally:
+        target_selection.audit_managed_batch = original
+        scale_readiness.scan_runtime_batch_integrity = original_integrity
+    assert report["passed"], report["blockers"]
+    assert report["replacementClosure"]["activeTargetCount"] == 1
+    assert report["replacementClosure"]["requiredActiveTargets"] == 1
     assert report["replacementClosure"]["closed"] is True
 
 

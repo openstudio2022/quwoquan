@@ -1,0 +1,279 @@
+"""Site-dimensional scale readiness gate tests."""
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+SCRIPTS_ROOT = DATA_ROOT / "scripts"
+_TMP = Path(tempfile.mkdtemp(prefix="site_scale_readiness_"))
+os.environ["QWQ_RUNTIME_ROOT"] = str(_TMP / "runtime")
+for _path in (DATA_ROOT, SCRIPTS_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
+from site_supply import handler as ss  # noqa: E402
+from verify.site_scale_readiness import build_site_scale_readiness_report  # noqa: E402
+
+
+ARTICLE_TEXT = (
+    "这是一篇用于网站规模化准出测试的正文，覆盖路线、时间、地点、体验判断和证据映射。"
+    "它需要足够长，以便通过候选抽取和评分门，并进入 content_plan handoff。"
+)
+
+
+def _make_site_batch(
+    batch: str,
+    *,
+    objects_per_hour: float,
+    token_ledger_count: int = 1,
+    first_pass_rate: float = 0.82,
+    release_verified: bool = True,
+    import_verified: bool = True,
+    search_visible: bool = True,
+    recommendation_feedback_ready: bool = True,
+) -> None:
+    frontier = ss.build_site_frontier_packet(
+        vertical="travel",
+        site_id="qunar_guide",
+        batch_id=batch,
+        daily_target=100_000,
+        queue_backend="reliabletask",
+        end_date="2026-06-19",
+    )
+    assert frontier["gate"]["passed"], frontier["gate"]
+    ss.write_site_frontier_packet(frontier)
+    candidate = ss.build_site_candidate_packet(
+        vertical="travel",
+        site_id="qunar_guide",
+        batch_id=batch,
+        url=f"https://touch.travel.qunar.com/travelbook/note/{batch}",
+        lane="article",
+        title=f"{batch} 候选",
+        text=ARTICLE_TEXT,
+        published_at="2026-06-01",
+        entity_mentions=["地点/景区/九寨沟"],
+    )
+    assert candidate["gate"]["passed"], candidate["gate"]
+    ss.write_site_candidate_packet(candidate)
+    score = ss.build_site_score_packet(candidate)
+    assert score["productionEligible"], score
+    ss.write_site_score_packet(score)
+    mapped = ss.build_site_map_packet(candidate, score)
+    assert mapped["gate"]["passed"], mapped
+    ss.write_site_map_packet(mapped)
+    rollup = ss.build_site_rollup_report(
+        vertical="travel",
+        site_id="qunar_guide",
+        batch_id=batch,
+        objects_per_hour=objects_per_hour,
+        first_pass_rate=first_pass_rate,
+        token_ledger_count=token_ledger_count,
+        release_verified=release_verified,
+        import_verified=import_verified,
+        search_visible=search_visible,
+        recommendation_feedback_ready=recommendation_feedback_ready,
+    )
+    assert rollup["passed"], rollup
+    ss.write_site_rollup_report(rollup)
+
+
+def test_site_scale_readiness_passes_with_complete_100k_evidence():
+    _make_site_batch("green", objects_per_hour=5000)
+    report = build_site_scale_readiness_report(vertical="travel", batch_id="green", daily_target=100_000)
+    assert report["passed"], report["blockers"]
+    assert report["aggregate"]["siteCount"] == 1
+    assert report["aggregate"]["measuredThroughputObjectsPerHour"] == 5000
+    assert report["requiredThroughputPerHour"] == 4166.6667
+
+
+def test_site_scale_readiness_blocks_low_throughput_and_missing_e2e():
+    _make_site_batch(
+        "blocked",
+        objects_per_hour=100,
+        token_ledger_count=0,
+        release_verified=False,
+        import_verified=False,
+        search_visible=False,
+        recommendation_feedback_ready=False,
+    )
+    report = build_site_scale_readiness_report(vertical="travel", batch_id="blocked", daily_target=100_000)
+    text = "\n".join(report["blockers"])
+    assert not report["passed"]
+    assert "TokenLedger evidence missing" in text
+    assert "release verification evidence missing" in text
+    assert "import evidence missing" in text
+    assert "search visibility evidence missing" in text
+    assert "recommendation feedback evidence missing" in text
+    assert "measured site throughput 100.0000 objects/hour < required 4166.6667 objects/hour" in text
+
+
+def test_site_scale_readiness_trial_mode_allows_missing_commercial_e2e_but_warns():
+    _make_site_batch(
+        "trial_mode",
+        objects_per_hour=500,
+        release_verified=False,
+        import_verified=False,
+        search_visible=False,
+        recommendation_feedback_ready=False,
+    )
+    report = build_site_scale_readiness_report(
+        vertical="travel",
+        batch_id="trial_mode",
+        daily_target=1_000,
+        mode="trial",
+    )
+    assert report["passed"], report["blockers"]
+    warnings = "\n".join(report["warnings"])
+    assert "trial mode: release verification evidence missing" in warnings
+    assert "trial mode: search visibility evidence missing" in warnings
+
+
+def test_site_scale_readiness_commercial_mode_requires_e2e_evidence():
+    _make_site_batch(
+        "commercial_missing",
+        objects_per_hour=500,
+        release_verified=False,
+        import_verified=False,
+        search_visible=False,
+        recommendation_feedback_ready=False,
+    )
+    report = build_site_scale_readiness_report(
+        vertical="travel",
+        batch_id="commercial_missing",
+        daily_target=1_000,
+        mode="commercial",
+    )
+    text = "\n".join(report["blockers"])
+    assert not report["passed"]
+    assert "release verification evidence missing" in text
+    assert "recommendation feedback evidence missing" in text
+
+
+def test_site_scale_readiness_requires_site_rollup():
+    report = build_site_scale_readiness_report(vertical="travel", batch_id="missing", daily_target=100_000)
+    assert not report["passed"]
+    assert "no site_supply rollup found" in "\n".join(report["blockers"])
+
+
+def test_site_scale_readiness_stops_at_frontier_when_source_is_not_crawl_allowed():
+    batch = "frontier_blocked"
+    frontier = ss.build_site_frontier_packet(
+        vertical="travel",
+        site_id="ctrip_travelogue",
+        batch_id=batch,
+        daily_target=10_000,
+        queue_backend="reliabletask",
+        end_date="2026-06-19",
+    )
+    assert not frontier["gate"]["passed"], frontier["gate"]
+    ss.write_site_frontier_packet(frontier)
+
+    report = build_site_scale_readiness_report(
+        vertical="travel",
+        batch_id=batch,
+        daily_target=10_000,
+        mode="trial",
+    )
+    blockers = "\n".join(report["blockers"])
+    warnings = "\n".join(report["warnings"])
+    assert not report["passed"]
+    assert "ctrip_travelogue: site_frontier gate did not pass" in blockers
+    assert "fetchable=false sites cannot enter batch site crawl" in blockers
+    assert "measured site throughput" not in blockers
+    assert "no content_plan handoff" not in blockers
+    assert "TokenLedger evidence missing" not in blockers
+    assert "downstream scale readiness was not evaluated" in warnings
+
+
+def test_site_scale_readiness_accepts_controlled_trial_lane_minimums():
+    batch = "controlled_lane_minimums"
+    frontier = ss.build_site_frontier_packet(
+        vertical="travel",
+        site_id="ctrip_travelogue",
+        batch_id=batch,
+        daily_target=10_000,
+        queue_backend="reliabletask",
+        end_date="2026-06-19",
+        admission_mode="controlled_trial",
+    )
+    assert frontier["gate"]["passed"], frontier["gate"]
+    ss.write_site_frontier_packet(frontier)
+    for lane, count in {"article": 5, "image": 2, "video": 1}.items():
+        for idx in range(1, count + 1):
+            url = f"https://you.ctrip.com/site-trial/{lane}/{idx:03d}.html"
+            assets = []
+            if lane in {"image", "video"}:
+                assets = [{
+                    "assetId": f"{lane}_{idx}",
+                    "url": f"{url}#asset",
+                    "license": "validation_only_not_for_publish",
+                    "credit": "携程攻略 controlled trial",
+                    "sourceUrl": url,
+                    "termsUrl": "https://pages.ctrip.com/webhome/purehtml/cn/memberCenter/regTerm.html",
+                    "usageScope": "site_supply_controlled_trial_only",
+                    "modelReleaseStatus": "not_required",
+                }]
+            candidate = ss.build_site_candidate_packet(
+                vertical="travel",
+                site_id="ctrip_travelogue",
+                batch_id=batch,
+                url=url,
+                lane=lane,
+                title=f"{lane} controlled {idx}",
+                text=ARTICLE_TEXT if lane == "article" else "",
+                published_at="2026-06-01",
+                assets=assets,
+                entity_mentions=["地点/景区/九寨沟"],
+            )
+            assert candidate["gate"]["passed"], candidate["gate"]
+            ss.write_site_candidate_packet(candidate)
+            score = ss.build_site_score_packet(candidate)
+            assert score["productionEligible"], score
+            ss.write_site_score_packet(score)
+            mapped = ss.build_site_map_packet(candidate, score)
+            assert mapped["gate"]["passed"], mapped
+            ss.write_site_map_packet(mapped)
+    rollup = ss.build_site_rollup_report(
+        vertical="travel",
+        site_id="ctrip_travelogue",
+        batch_id=batch,
+        objects_per_hour=500,
+        first_pass_rate=0.82,
+        token_ledger_count=8,
+    )
+    assert rollup["passed"], rollup
+    ss.write_site_rollup_report(rollup)
+
+    report = build_site_scale_readiness_report(
+        vertical="travel",
+        batch_id=batch,
+        daily_target=1_000,
+        mode="trial",
+        min_lane_counts={"article": 5, "image": 2, "video": 1},
+    )
+    assert report["passed"], report["blockers"]
+    assert report["aggregate"]["contentPlanHandoffLaneCounts"] == {"article": 5, "image": 2, "video": 1}
+
+    blocked = build_site_scale_readiness_report(
+        vertical="travel",
+        batch_id=batch,
+        daily_target=1_000,
+        mode="trial",
+        min_lane_counts={"article": 6, "image": 2, "video": 1},
+    )
+    assert not blocked["passed"]
+    assert "contentPlanHandoffLaneCounts.article 5 < required 6" in "\n".join(blocked["blockers"])
+
+
+def _run_all() -> None:
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            fn()
+            print(f"PASS {name}")
+
+
+if __name__ == "__main__":
+    _run_all()

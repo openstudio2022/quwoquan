@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -19,6 +20,13 @@ APP_RUNTIME_KEYS = {
     "mediaVideoCdnBaseUrl": ("publicBases", "mediaVideo"),
     "mediaUploadBaseUrl": ("publicBases", "mediaUpload"),
 }
+DART_RUNTIME_DEFAULT_KEYS = (
+    "gatewayBaseUrl",
+    "mediaAvatarCdnBaseUrl",
+    "mediaImageCdnBaseUrl",
+    "mediaVideoCdnBaseUrl",
+    "mediaUploadBaseUrl",
+)
 ALLOWED_SERVICE_PUBLIC_KEYS = {"mediaAvatar", "mediaImage", "mediaVideo", "mediaUpload"}
 
 
@@ -37,6 +45,21 @@ def parse_runtime_yaml(path: Path) -> dict[str, str]:
             continue
         key, value = stripped.split(":", 1)
         values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def parse_cloud_runtime_defaults(path: Path) -> dict[str, str]:
+    text = path.read_text(encoding="utf-8")
+    values: dict[str, str] = {}
+    for key in DART_RUNTIME_DEFAULT_KEYS:
+        match = re.search(
+            rf"static const String {re.escape(key)} = String\.fromEnvironment\(\s*"
+            rf"'[^']+',\s*defaultValue: '([^']+)'",
+            text,
+            re.MULTILINE,
+        )
+        if match:
+            values[key] = match.group(1).strip()
     return values
 
 
@@ -65,6 +88,18 @@ def main() -> int:
                 issues.append(
                     f"{runtime_path.relative_to(ROOT)}: {runtime_key} mismatch, expected {expected}, got {actual}"
                 )
+
+    default_runtime_path = ROOT / "quwoquan_app" / "configs" / "default" / "app_runtime.yaml"
+    default_runtime_values = parse_runtime_yaml(default_runtime_path)
+    cloud_runtime_path = ROOT / "quwoquan_app" / "lib" / "cloud" / "runtime" / "cloud_runtime_config.dart"
+    cloud_runtime_defaults = parse_cloud_runtime_defaults(cloud_runtime_path)
+    for key in DART_RUNTIME_DEFAULT_KEYS:
+        expected = str(default_runtime_values.get(key, "")).strip()
+        actual = str(cloud_runtime_defaults.get(key, "")).strip()
+        if actual != expected:
+            issues.append(
+                f"{cloud_runtime_path.relative_to(ROOT)}: {key} default mismatch, expected {expected}, got {actual}"
+            )
 
     service_configs = sorted(
         ROOT.glob("quwoquan_service/services/*/configs/*/config.yaml")

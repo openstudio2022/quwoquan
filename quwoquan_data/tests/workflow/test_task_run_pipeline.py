@@ -22,12 +22,15 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 import argparse
+import copy
 import hashlib
 import importlib
 import inspect
 import os
+import struct
 import sys
 import tempfile
+import zlib
 from io import BytesIO
 from pathlib import Path
 
@@ -51,6 +54,8 @@ from _common.paths import (  # noqa: E402
     STAGE_DOWNLOAD,
     batch_command_root,
     batch_inputs_dir,
+    batch_assistant_task,
+    batch_entity_page_input_path,
     ensure_batch_layout,
     release_root,
     task_baseline_freeze_packet_path,
@@ -68,6 +73,33 @@ from task import store  # noqa: E402
 _EID = "测试景区甲"
 
 
+def test_prepare_entity_pages_prunes_stale_inactive_inputs():
+    from build.homepage import prepare_entity_pages
+
+    task_id = "workflow_prepare_homepage_prune"
+    batch_id = "batch"
+    active = "当前有效景区"
+    stale = "已放弃景区"
+    stale_input = batch_entity_page_input_path(task_id, batch_id, "地点", "景区", stale)
+    write_json(stale_input, {"payload": {"name": stale}})
+
+    spec = {
+        "scope": {
+            "coverageTargets": [
+                {"entityType": "地点/景区", "name": active},
+            ],
+        },
+    }
+
+    prepare_entity_pages(task_id, batch_id, spec)
+
+    active_input = batch_entity_page_input_path(task_id, batch_id, "地点", "景区", active)
+    assert active_input.is_file()
+    assert not stale_input.exists()
+    manifest = read_json(batch_assistant_task(task_id, batch_id, "build", "entity_page"))
+    assert manifest["refs"] == ["地点__景区__当前有效景区"]
+
+
 def _real_jpeg(seed: int) -> bytes:
     from PIL import Image
 
@@ -82,6 +114,23 @@ def _real_jpeg(seed: int) -> bytes:
     buf = BytesIO()
     img.save(buf, format="JPEG", quality=92)
     return buf.getvalue()
+
+
+def _png_chunk(kind: bytes, data: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + kind
+        + data
+        + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+    )
+
+
+def _oversized_png_header(width: int = 9000, height: int = 6000) -> bytes:
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + _png_chunk(b"IEND", b"")
+    )
 
 
 def _make_task(*, workflow_policy: dict | None = None) -> str:
@@ -211,6 +260,49 @@ def test_cursor_callback_token_factory_never_starts_with_dash():
     factory = run_mod._cursor_safe_auth_token_factory(lambda: next(calls))
     assert factory() == "qwq_bad-token"
     assert factory() == "ok-token"
+
+
+def test_managed_lane_limits_are_configurable():
+    assert run_mod._parse_managed_lane_limits("article:8,image=5,homepage:2") == {
+        "homepage": 2,
+        "article": 8,
+        "image": 5,
+    }
+    assert run_mod._parse_managed_lane_limits("article:not-a-number,unknown:9") == {
+        "homepage": 3,
+        "article": 3,
+        "image": 4,
+    }
+
+
+def test_recover_stale_agent_scheduler_clears_orphaned_waiting_state(monkeypatch):
+    task_id = _make_task()
+    batch_id = "stale_scheduler_recovery"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state.update(
+        {
+            "status": "waiting_agent",
+            "waitingCheckpoint": "produce_author",
+            "heartbeatAt": "2000-01-01T00:00:00+00:00",
+            "activeAgentScheduler": {
+                "stage": "produce_author",
+                "runtime": "local",
+                "promptCount": 10,
+                "startedAt": "2000-01-01T00:00:00+00:00",
+            },
+        }
+    )
+    monkeypatch.setattr(run_mod, "MANAGED_SCHEDULER_STALE_SECONDS", 60)
+    monkeypatch.setattr(run_mod, "_managed_agent_process_alive", lambda _ctx: False)
+
+    assert run_mod._recover_stale_agent_scheduler(ctx, state) is True
+
+    recovered = run_mod.load_workflow_state(task_id, batch_id)
+    assert recovered["status"] == "running"
+    assert "activeAgentScheduler" not in recovered
+    assert recovered["waitingCheckpoint"] == "produce_author"
+    assert recovered["schedulerRecoveryActions"][-1]["stage"] == "produce_author"
 
 
 def _seed_source_plan(task_id: str, batch_id: str) -> None:
@@ -378,17 +470,22 @@ def _run_pipeline_with_fake_download(ctx: run_mod.PipelineContext) -> int:
             "sha256": _h.sha256(body).hexdigest(),
         }
 
-    def _fake_source_fetch(url: str):
+    def _fake_source_fetch(url: str, **_kwargs):
+        fetched_text = "\n\n".join(
+            [
+                f"{_EID}位于测试省山地森林地带，适合安排半日到一日游。",
+                f"{_EID}景区开放时间、门票、观光车与交通接驳信息需要在出发前确认，节假日还要关注预约和限流。",
+                f"{_EID}主景段和栈道段体验差异明显，核心停留点之间需要一定徒步时间，清晨进入能减少排队。",
+                f"{_EID}如果遇到雨天，路况会更湿滑，返程和补给都要预留冗余，亲子和老人同行要控制强度。",
+                f"{_EID}的游览决策应结合门票费用、开放时段、交通耗时、现场停留、海拔起伏和应急路线。",
+            ]
+            * 3
+        )
         return {
             "url": url,
             "statusCode": 200,
             "htmlBytes": b"<html></html>",
-            "text": (
-                f"{_EID} 位于测试省山地森林地带，适合安排半日到一日游。"
-                f"景区开放时间、门票、观光车与交通接驳信息需要在出发前确认，"
-                f"主景段和栈道段体验差异明显。清晨徒步更舒服，午后返程更容易排队，"
-                f"如遇雨天，路况湿滑，应预留补给和返程时间。"
-            ),
+            "text": fetched_text,
             "sha256": "sha-source",
         }
 
@@ -726,14 +823,29 @@ def test_resume_advances_after_source_plan():
     task_id = _make_task()
     run_mod.run_pipeline(_ctx(task_id, "b2"))  # pause at download_plan
     _seed_source_plan(task_id, "b2")
-    code = _run_pipeline_with_fake_download(_ctx(task_id, "b2"))  # resume
-    assert code == 10, f"expected next-checkpoint pause(10), got {code}"
+    ctx = _ctx(task_id, "b2")
+    ctx.until = "build_prepare"
+    code = _run_pipeline_with_fake_download(ctx)  # resume
+    assert code == 0, f"expected stopped-at-until success(0), got {code}"
     state = run_mod.load_workflow_state(task_id, "b2")
-    # download_plan/fetch/build_prepare 应已完成，停在 build_homepage
+    # download_plan/fetch/build_prepare 应已完成，并在 build_prepare 截止点停住。
     assert "download_plan" in state["completed"]
     assert "download_fetch" in state["completed"]
     assert "build_prepare" in state["completed"]
-    assert state["waitingCheckpoint"] == "build_homepage"
+    assert "build_homepage" not in state["completed"]
+    assert state["status"] == "stopped_at_until"
+    assert state["stoppedAtStage"] == "build_prepare"
+
+
+def test_build_prepare_blocks_missing_homepage_base_draft():
+    task_id = _make_task()
+    ctx = _ctx(task_id, "build_prepare_missing_homepage")
+
+    result = run_mod._run_build_prepare(ctx)
+
+    assert result.status == "failed"
+    assert result.fallback_stage == "download_plan"
+    assert any("baseDraft.sourceRef is empty" in issue for issue in result.issues), result.issues
 
 
 def test_rewind_drops_target_and_subsequent():
@@ -780,6 +892,83 @@ def test_until_stops_early():
     state = run_mod.load_workflow_state(task_id, "b3")
     assert "download_fetch" in state["completed"]
     assert "build_homepage" not in state["completed"]
+    assert state["status"] == "stopped_at_until"
+    assert state["stoppedAtStage"] == "download_fetch"
+
+
+def test_until_completed_checkpoint_stops_without_downstream(monkeypatch):
+    task_id = _make_task()
+    batch_id = "until_completed_download_plan"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["completed"] = ["download_plan"]
+    run_mod.save_workflow_state(state)
+    ctx.until = "download_plan"
+
+    monkeypatch.setattr("task.run._source_plan_filled", lambda _ctx: (True, []))
+    monkeypatch.setattr("task.run._stale_source_plan_entities", lambda _ctx, entity_ids: [])
+
+    code = run_mod.run_pipeline(ctx)
+
+    assert code == 0
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["status"] == "stopped_at_until"
+    assert state["stoppedAtStage"] == "download_plan"
+    assert "download_fetch" not in state["completed"]
+
+
+def test_until_completed_checkpoint_revalidates_before_downstream(monkeypatch):
+    task_id = _make_task()
+    batch_id = "until_revalidate_download_plan"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["completed"] = ["download_plan"]
+    run_mod.save_workflow_state(state)
+    ctx.until = "download_plan"
+
+    monkeypatch.setattr(
+        "task.run._source_plan_filled",
+        lambda _ctx: (False, ["article sources=1 need>=2"]),
+    )
+    monkeypatch.setenv("QWQ_DOWNLOAD_AUTO_RESEARCH", "0")
+
+    code = run_mod.run_pipeline(ctx)
+
+    assert code == 10
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["waitingCheckpoint"] == "download_plan"
+    assert "download_plan" not in state["completed"]
+    assert "download_fetch" not in state["completed"]
+    assert any("article sources=0 need>=2" in item for item in state["failedObjects"])
+    assert not any("article sources=1 need>=2" in item for item in state["failedObjects"])
+
+
+def test_waiting_checkpoint_replaces_stale_failed_objects(monkeypatch):
+    task_id = _make_task()
+    batch_id = "waiting_replaces_stale_failed_objects"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["failedObjects"] = ["旧景区: article sources=1 need>=2"]
+    run_mod.save_workflow_state(state)
+
+    monkeypatch.setattr(
+        "task.run._source_plan_filled",
+        lambda _ctx: (False, ["新景区: image collections=1 need>=2"]),
+    )
+    monkeypatch.setattr(
+        "task.run._download_plan_unresolved_entities",
+        lambda _ctx: {_EID: {"image": ["image collections=1 need>=2"]}},
+    )
+    monkeypatch.setenv("QWQ_DOWNLOAD_AUTO_RESEARCH", "0")
+
+    code = run_mod.run_pipeline(ctx)
+
+    assert code == 10
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["waitingCheckpoint"] == "download_plan"
+    assert state["failedObjects"] == [
+        f"{_EID}: source_plan: image: image collections=1 need>=2"
+    ]
 
 
 def test_author_checkpoint_only_reads_packaged_drafts():
@@ -1160,7 +1349,7 @@ def test_managed_download_infra_failure_cannot_abandon_strict_task(monkeypatch):
         run_mod.save_workflow_state(state)
         return False
 
-    unresolved = {_EID: {"article": ["article research needs >=3 source categories"]}}
+    unresolved = {_EID: {"article": ["article research needs >= 4 text-qualified base sources"]}}
     monkeypatch.setattr("task.run.run_pipeline", _fake_pipeline)
     monkeypatch.setattr("task.run._run_managed_checkpoint", _fake_checkpoint)
     monkeypatch.setattr("task.run._checkpoint_is_done", lambda _ctx, stage: (False, []))
@@ -1207,7 +1396,7 @@ def test_managed_download_infra_failure_can_fast_fail_partial_task(monkeypatch):
         run_mod.save_workflow_state(state)
         return False
 
-    unresolved = {_EID: {"article": ["article research needs >=3 source categories"]}}
+    unresolved = {_EID: {"article": ["article research needs >= 4 text-qualified base sources"]}}
     monkeypatch.setattr("task.run.run_pipeline", _fake_pipeline)
     monkeypatch.setattr("task.run._run_managed_checkpoint", _fake_checkpoint)
     monkeypatch.setattr("task.run._checkpoint_is_done", lambda _ctx, stage: (False, []))
@@ -1282,6 +1471,321 @@ def test_download_plan_deterministic_license_failure_activates_reserve(monkeypat
     assert availability["readyTargets"] == ["替补景区乙"]
 
 
+def test_download_plan_auto_research_repeats_replacement_waves(monkeypatch):
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    spec = store.load_spec(task_id)
+    spec["scope"]["reserveCoverageTargets"] = [
+        {"entityType": "地点/景区", "name": "替补景区乙"},
+        {"entityType": "地点/景区", "name": "替补景区丙"},
+    ]
+    store.save_spec(spec)
+    batch_id = "download_plan_auto_research_replacement_waves"
+    ctx = _ctx(task_id, batch_id)
+    monkeypatch.setattr(
+        "download.prepare.prepare_source_plan",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def _filled(current_ctx):
+        if "替补景区丙" in current_ctx.entity_ids:
+            return True, []
+        return False, ["image research needs enough rights-cleared source collections for 2 image work(s)"]
+
+    def _report_for(entity_id: str) -> dict:
+        if entity_id == "替补景区丙":
+            return {
+                "sourceAvailability": {
+                    "readyTargets": ["替补景区丙"],
+                    "ineligibleTargets": [],
+                }
+            }
+        return {
+            "sourceAvailability": {
+                "readyTargets": [],
+                "ineligibleTargets": [
+                    {
+                        "entityId": entity_id,
+                        "issues": [f"{entity_id}: no rights-compatible open-license images discovered"],
+                        "blockers": [
+                            {
+                                "lane": "image",
+                                "reason": "no single-author/single-file rights-cleared image collection",
+                                "nextAction": "manual_authorized_gallery_or_target_replacement",
+                            }
+                        ],
+                        "nextActions": ["manual_authorized_gallery_or_target_replacement"],
+                    }
+                ],
+            }
+        }
+
+    calls: list[list[str]] = []
+
+    def _auto(current_ctx, entity_ids, *, entity_type, force=False, scope="primary"):
+        del entity_type, force, scope
+        calls.append(list(entity_ids))
+        return _report_for(entity_ids[0])
+
+    monkeypatch.setattr("task.run._source_plan_filled", _filled)
+    monkeypatch.setattr("task.run._run_download_auto_research", _auto)
+
+    result = run_mod._checkpoint_download_plan(ctx)
+
+    assert result.status == "done"
+    assert calls == [[_EID], ["替补景区乙"], ["替补景区丙"]]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert [item["entityId"] for item in state["abandonedObjects"]] == [_EID, "替补景区乙"]
+    assert [
+        item["entityId"]
+        for item in state["replacementObjects"]
+        if item.get("status") == "active"
+    ] == ["替补景区丙"]
+    assert [
+        item["entityId"]
+        for item in state["replacementObjects"]
+        if item.get("status") == "rejected"
+    ] == ["替补景区乙"]
+
+
+def test_auto_research_replacement_wave_stops_without_new_target(monkeypatch):
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    spec = store.load_spec(task_id)
+    spec["scope"]["coverageTargets"] = [
+        {"entityType": "地点/景区", "name": _EID},
+        {"entityType": "地点/景区", "name": "稳定景区乙"},
+    ]
+    spec["scope"]["reserveCoverageTargets"] = []
+    store.save_spec(spec)
+    batch_id = "download_plan_replacement_no_new_target"
+    ctx = _ctx(task_id, batch_id)
+
+    primary = {
+        "sourceAvailability": {
+            "readyTargets": [],
+            "ineligibleTargets": [
+                {
+                    "entityId": _EID,
+                    "issues": [f"{_EID}: no rights-compatible open-license images discovered"],
+                    "blockers": [
+                        {
+                            "lane": "image",
+                            "reason": "no single-author/single-file rights-cleared image collection",
+                            "nextAction": "manual_authorized_gallery_or_target_replacement",
+                        }
+                    ],
+                    "nextActions": ["manual_authorized_gallery_or_target_replacement"],
+                }
+            ],
+        }
+    }
+    calls: list[list[str]] = []
+
+    def _auto(current_ctx, entity_ids, *, entity_type, force=False, scope="primary"):
+        del current_ctx, entity_type, force, scope
+        calls.append(list(entity_ids))
+        return primary
+
+    monkeypatch.setattr("task.run._run_download_auto_research", _auto)
+    monkeypatch.setattr("task.run._source_plan_filled", lambda _ctx: (False, ["still missing source"]))
+    monkeypatch.setattr("task.run._download_plan_unresolved_entities", lambda _ctx: {_EID: {"image": ["still missing source"]}})
+
+    ok, abandoned, missing, _report = run_mod._rerun_auto_research_with_replacements(
+        ctx,
+        primary,
+        entity_type="地点/景区",
+        reason_prefix="source_unavailable_after_auto_research",
+    )
+
+    assert ok is False
+    assert abandoned == [_EID]
+    assert missing == ["still missing source"]
+    assert calls == []
+
+
+def test_download_plan_repairable_source_gap_does_not_screen_replacements(monkeypatch):
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    spec = store.load_spec(task_id)
+    spec["scope"]["reserveCoverageTargets"] = [
+        {"entityType": "地点/景区", "name": "替补景区乙"},
+    ]
+    store.save_spec(spec)
+    batch_id = "download_plan_repairable_gap_no_replacement"
+    ctx = _ctx(task_id, batch_id)
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr("download.prepare.prepare_source_plan", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "task.run._source_plan_filled",
+        lambda _ctx: (
+            False,
+            [f"{_EID}: download_repair required: {_EID}: missing core source categories ['encyclopedia']"],
+        ),
+    )
+    monkeypatch.setattr(
+        "task.run._stale_source_plan_entities",
+        lambda _ctx, entity_ids: [],
+    )
+
+    def _auto(current_ctx, entity_ids, *, entity_type, force=False, scope="primary"):
+        del current_ctx, entity_type, force, scope
+        calls.append(list(entity_ids))
+        return {
+            "sourceAvailability": {
+                "readyTargets": [],
+                "ineligibleTargets": [
+                    {
+                        "entityId": _EID,
+                        "status": "repairable",
+                        "lanes": ["homepage"],
+                        "issues": [
+                            f"homepage: download_repair required: {_EID}: missing core source categories ['encyclopedia']"
+                        ],
+                        "nextActions": ["source_repair"],
+                        "deterministic": False,
+                    }
+                ],
+            }
+        }
+
+    monkeypatch.setattr("task.run._run_download_auto_research", _auto)
+
+    result = run_mod._checkpoint_download_plan(ctx)
+
+    assert result.status == "waiting"
+    assert calls == [[_EID]]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert not state.get("replacementObjects")
+
+
+def test_stale_source_plan_uses_entity_scoped_signature(monkeypatch):
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec["scope"]["coverageTargets"] = [
+        {"entityType": "地点/景区", "name": _EID},
+        {"entityType": "地点/景区", "name": "稳定景区乙"},
+    ]
+    store.save_spec(spec)
+    batch_id = "download_plan_signature_scoped_stale"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "稳定景区乙"]
+    etype = "地点/景区"
+    for entity_id in ctx.entity_ids:
+        dl = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=etype) / STAGE_DOWNLOAD
+        dl.mkdir(parents=True, exist_ok=True)
+        signature_hash = "old" if entity_id == _EID else "current"
+        for lane in ("homepage", "article", "image"):
+            write_json(
+                dl / f"{lane}_source_plan.json",
+                {
+                    "taskId": task_id,
+                    "batchId": batch_id,
+                    "ref": entity_id,
+                    "sourceRuleSignature": {"hash": signature_hash},
+                    "payload": {"entityId": entity_id, "researchLane": lane},
+                },
+            )
+
+    monkeypatch.setattr(
+        "task.run.source_plan_rule_signature",
+        lambda _vertical, entity_id: {"hash": "old" if entity_id == "unrelated" else "current"},
+    )
+
+    stale = run_mod._stale_source_plan_entities(ctx, entity_ids=ctx.entity_ids)
+    assert [item["entityId"] for item in stale] == [_EID]
+    assert stale[0]["sourcePlanRuleState"] == "signature_stale"
+
+
+def test_auto_research_replacement_wave_preserves_primary_report():
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    batch_id = "auto_research_wave_report"
+    ctx = _ctx(task_id, batch_id)
+    primary = {
+        "schemaVersion": "quwoquan.download.auto_research_plan",
+        "taskId": task_id,
+        "batchId": batch_id,
+        "updated": [{"entityId": _EID, "lane": "article"}],
+        "issues": [f"{_EID}: article base sources=1 need>=2"],
+        "sourceUnavailable": [{"entityId": _EID, "lane": "article"}],
+        "sourceAvailability": {
+            "readyTargets": [],
+            "readyTargetCount": 0,
+            "ineligibleTargets": [{"entityId": _EID}],
+            "ineligibleTargetCount": 1,
+        },
+        "throughput": {"maxWorkers": 8, "entityCount": 2, "elapsedSeconds": 20, "entitiesPerMinute": 6},
+    }
+    replacement = {
+        "schemaVersion": "quwoquan.download.auto_research_plan",
+        "taskId": task_id,
+        "batchId": batch_id,
+        "updated": [{"entityId": "替补景区乙", "lane": "article"}],
+        "issues": [],
+        "sourceUnavailable": [],
+        "sourceAvailability": {
+            "readyTargets": ["替补景区乙"],
+            "readyTargetCount": 1,
+            "ineligibleTargets": [],
+            "ineligibleTargetCount": 0,
+        },
+        "throughput": {"maxWorkers": 8, "entityCount": 1, "elapsedSeconds": 10, "entitiesPerMinute": 6},
+    }
+
+    run_mod._write_auto_research_report(ctx, primary, scope="primary", entity_ids=[_EID, "缺图景区乙"])
+    run_mod._write_auto_research_report(
+        ctx,
+        replacement,
+        scope="replacement_wave_1",
+        entity_ids=["替补景区乙"],
+    )
+    availability = {
+        "readyTargets": [_EID, "替补景区乙"],
+        "readyTargetCount": 2,
+        "ineligibleTargets": [],
+        "ineligibleTargetCount": 0,
+    }
+    run_mod._sync_auto_research_availability(ctx, availability)
+
+    report = read_json(batch_root(task_id, batch_id) / "_shared" / "auto_research_plan.json")
+    assert report["waveCount"] == 2
+    assert [wave["scope"] for wave in report["waves"]] == ["primary", "replacement_wave_1"]
+    assert len(report["updated"]) == 2
+    assert report["issues"] == [f"{_EID}: article base sources=1 need>=2"]
+    assert report["sourceAvailability"]["readyTargetCount"] == 2
+    assert report["latestWaveSourceAvailability"]["readyTargetCount"] == 1
+    assert report["throughput"]["entityCount"] == 3
+    assert report["throughput"]["elapsedSeconds"] == 30
+
+
+def test_download_plan_hint_uses_full_unresolved_entities(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_plan_full_unresolved_hint"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "额外景区乙"]
+
+    monkeypatch.setenv("QWQ_DOWNLOAD_AUTO_RESEARCH", "0")
+    monkeypatch.setattr("download.prepare.prepare_source_plan", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "task.run._source_plan_filled",
+        lambda _ctx: (False, [f"{_EID}: article sources=1 need>=2"]),
+    )
+    monkeypatch.setattr("task.run._stale_source_plan_entities", lambda _ctx, entity_ids: [])
+    monkeypatch.setattr(
+        "task.run._download_plan_unresolved_entities",
+        lambda _ctx: {
+            _EID: {"article": ["article sources=1 need>=2"]},
+            "额外景区乙": {"article": ["article sources=0 need>=2"]},
+        },
+    )
+
+    result = run_mod._checkpoint_download_plan(ctx)
+
+    assert result.status == "waiting"
+    assert _EID in result.checkpoint_hint
+    assert "额外景区乙" in result.checkpoint_hint
+    availability = read_json(batch_root(task_id, batch_id) / "_shared" / "source_unavailable_targets.json")
+    assert availability["ineligibleTargetCount"] == 2
+
+
 def test_real_local_cursor_runner_defaults_to_serial_bridge_workers(monkeypatch):
     task_id = _make_task()
     ctx = _ctx(task_id, "managed_cursor_workers")
@@ -1312,14 +1816,18 @@ def test_managed_download_job_must_satisfy_lane_gate():
     ctx.max_workers = 1
     ok = run_mod._run_managed_checkpoint(ctx, "download_plan")
     assert ok is False
-    assert len(calls) == 3
+    assert calls
     state = run_mod.load_workflow_state(task_id, batch_id)
     assert state["status"] == "repairing"
-    assert state["lastAgentRun"]["plannedJobCount"] == 3
-    assert state["lastAgentRun"]["jobCount"] == 3
-    for outcome in state["lastAgentRun"]["outcomes"]:
+    assert state["lastAgentRun"]["plannedJobCount"] == len(calls)
+    assert state["lastAgentRun"]["jobCount"] == len(calls)
+    failed_outcomes = [
+        outcome for outcome in state["lastAgentRun"]["outcomes"]
+        if outcome.get("status") == "error"
+    ]
+    assert failed_outcomes
+    for outcome in failed_outcomes:
         assert outcome["started"] is True
-        assert outcome["status"] == "error"
         assert "checkpoint lane gate still fails" in outcome["error"]
         assert outcome["gateIssues"]
 
@@ -1374,6 +1882,65 @@ def test_mark_abandoned_entities_records_fast_fail_state():
     assert state["abandonedObjects"][0]["reason"] == "source_unavailable"
 
 
+def test_download_fast_fail_classifies_duplicate_limited_images(monkeypatch):
+    task_id = _make_task()
+    ctx = _ctx(task_id, "download_fast_fail_duplicate_images")
+    monkeypatch.setattr("download.gate.download_requirements", lambda _task_id: {"minImages": 3})
+    monkeypatch.setattr(
+        "_common.download_diagnostics.entity_download_diagnostics",
+        lambda _root, _entity_id: {
+            "downloadedImages": 2,
+            "rejectedByCategory": {
+                "duplicate": 1,
+                "rights": 0,
+                "safety_or_watermark": 0,
+                "fetch_or_non_image": 0,
+            },
+        },
+    )
+
+    reasons = run_mod._download_fast_fail_reasons(
+        ctx,
+        [f"{_EID}: only 2 unique publishable images (need >= 3)"],
+    )
+
+    assert _EID in reasons
+    assert "need >= 3" in reasons[_EID]
+
+
+def test_download_fast_fail_does_not_abandon_when_replacement_capacity_insufficient(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "deliveryMode": "partial_with_replacement_report",
+        }
+    )
+    ctx = _ctx(task_id, "download_fast_fail_no_reserve")
+    monkeypatch.setattr("download.gate.download_requirements", lambda _task_id: {"minImages": 3})
+    monkeypatch.setattr(
+        "_common.download_diagnostics.entity_download_diagnostics",
+        lambda _root, _entity_id: {
+            "downloadedImages": 2,
+            "rejectedByCategory": {
+                "duplicate": 1,
+                "rights": 0,
+                "safety_or_watermark": 0,
+                "fetch_or_non_image": 0,
+            },
+        },
+    )
+
+    issues = run_mod._apply_download_fast_fail(
+        ctx,
+        [f"{_EID}: only 2 unique publishable images (need >= 3)"],
+    )
+
+    assert len(issues) == 1
+    assert "replacement capacity exhausted" in issues[0]
+    state = run_mod.load_workflow_state(task_id, ctx.batch_id)
+    assert run_mod._abandoned_entity_ids(state) == set()
+
+
 def test_run_pipeline_preserves_stage_state_deltas(monkeypatch):
     task_id = _make_task()
     batch_id = "preserve_state_deltas"
@@ -1426,6 +1993,625 @@ def test_content_plan_strict_source_unavailable_fails_before_agent(monkeypatch):
     assert result.fallback_stage == "download_plan"
 
 
+def test_content_plan_source_shortfall_activates_replacement(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "deliveryMode": "partial_with_replacement_report",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec["scope"]["reserveCoverageTargets"] = [{"entityType": "地点/景区", "name": "替补景区乙"}]
+    store.save_spec(spec)
+    batch_id = "content_plan_source_shortfall_replacement"
+    ctx = _ctx(task_id, batch_id)
+    write_json(
+        batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json",
+        {
+            "schemaVersion": "quwoquan_data.content_plan_source_diagnostics/1",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "targets": {
+                _EID: {
+                    "rawArticleBaseSources": 3,
+                    "qualifiedArticleBaseSources": 1,
+                    "pickedArticleBaseSources": 1,
+                    "pickedImageSources": 2,
+                    "articleRejects": {"text_too_short": 2},
+                }
+            },
+        },
+    )
+    issue = (
+        f"{_EID}_route_transport: source_unavailable: usable article base sources "
+        "1 < 2; missing writingIntent=route_transport; "
+        "workflowPolicy.allowContentQuotaShortfall is not true"
+    )
+
+    def _screen(current_ctx, *, entity_type, reason, needed, scope):
+        del entity_type, reason, needed, scope
+        run_mod._append_replacement_row(
+            current_ctx,
+            entity_id="替补景区乙",
+            entity_type="地点/景区",
+            status="active",
+            reason="test replacement passed",
+            source_gate_status="passed",
+        )
+        if "替补景区乙" not in current_ctx.entity_ids:
+            current_ctx.entity_ids.append("替补景区乙")
+        return ["替补景区乙"], [], {}
+
+    monkeypatch.setattr("task.run._content_plan_done", lambda _ctx: (False, ["missing packet"]))
+    monkeypatch.setattr("task.run._auto_content_plan", lambda _ctx, _spec: [issue])
+    monkeypatch.setattr("task.run._screen_replacement_targets", _screen)
+
+    result = run_mod._checkpoint_content_plan(ctx)
+
+    assert result.status == "failed"
+    assert result.fallback_stage == "download_plan"
+    assert "源短缺实体已快速放弃" in result.message
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert [item["entityId"] for item in state["abandonedObjects"]] == [_EID]
+    assert [
+        item["entityId"]
+        for item in state["replacementObjects"]
+        if item.get("status") == "active"
+    ] == ["替补景区乙"]
+
+
+def test_content_plan_source_shortfall_continues_replacement_waves(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "deliveryMode": "partial_with_replacement_report",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec["scope"]["reserveCoverageTargets"] = [
+        {"entityType": "地点/景区", "name": "替补景区乙"},
+        {"entityType": "地点/景区", "name": "替补景区丙"},
+    ]
+    store.save_spec(spec)
+    batch_id = "content_plan_source_shortfall_replacement_waves"
+    ctx = _ctx(task_id, batch_id)
+    write_json(
+        batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json",
+        {
+            "schemaVersion": "quwoquan_data.content_plan_source_diagnostics/1",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "targets": {
+                _EID: {
+                    "rawArticleBaseSources": 3,
+                    "qualifiedArticleBaseSources": 1,
+                    "pickedArticleBaseSources": 1,
+                    "pickedImageSources": 2,
+                    "articleRejects": {"text_too_short": 2},
+                }
+            },
+        },
+    )
+    issue = (
+        f"{_EID}_route_transport: source_unavailable: usable article base sources "
+        "1 < 2; missing writingIntent=route_transport; "
+        "workflowPolicy.allowContentQuotaShortfall is not true"
+    )
+    calls: list[str] = []
+
+    def _screen(current_ctx, *, entity_type, reason, needed, scope):
+        del entity_type, reason, needed
+        calls.append(scope)
+        if len(calls) == 1:
+            run_mod._append_replacement_row(
+                current_ctx,
+                entity_id="替补景区乙",
+                entity_type="地点/景区",
+                status="rejected",
+                reason="test replacement rejected",
+                source_gate_status="failed",
+                issues=["image research needs enough rights-cleared source collections"],
+            )
+            run_mod.mark_abandoned_entities(
+                task_id,
+                batch_id,
+                ["替补景区乙"],
+                stage="download_plan",
+                reason="test replacement rejected",
+            )
+            return [], ["替补景区乙"], {}
+        run_mod._append_replacement_row(
+            current_ctx,
+            entity_id="替补景区丙",
+            entity_type="地点/景区",
+            status="active",
+            reason="test replacement passed",
+            source_gate_status="passed",
+        )
+        if "替补景区丙" not in current_ctx.entity_ids:
+            current_ctx.entity_ids.append("替补景区丙")
+        return ["替补景区丙"], [], {}
+
+    monkeypatch.setattr("task.run._content_plan_done", lambda _ctx: (False, ["missing packet"]))
+    monkeypatch.setattr("task.run._auto_content_plan", lambda _ctx, _spec: [issue])
+    monkeypatch.setattr("task.run._screen_replacement_targets", _screen)
+
+    result = run_mod._checkpoint_content_plan(ctx)
+
+    assert result.status == "failed"
+    assert result.fallback_stage == "download_plan"
+    assert calls == ["content_plan_source_shortfall_1", "content_plan_source_shortfall_2"]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert [item["entityId"] for item in state["abandonedObjects"]] == ["替补景区乙", _EID]
+    assert [
+        (item["entityId"], item.get("status"))
+        for item in state["replacementObjects"]
+    ] == [("替补景区乙", "rejected"), ("替补景区丙", "active")]
+
+
+def test_download_retained_source_shortfall_fast_fails_after_repair_rewind():
+    task_id = _make_task()
+    batch_id = "download_retained_shortfall_fast_fail"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["reactRewinds"] = {"download_fetch": run_mod.MAX_REACT_REWINDS - 1}
+    run_mod.save_workflow_state(state)
+
+    reasons = run_mod._download_fast_fail_reasons(
+        ctx,
+        [
+            (
+                f"地点/景区/{_EID}/1.download/sources: "
+                "article retained sources=3 need>=4"
+            )
+        ],
+    )
+
+    assert _EID in reasons
+    assert "retained-source shortfall survived repair" in reasons[_EID]
+
+
+def test_download_retained_source_shortfall_repairs_before_fast_fail():
+    task_id = _make_task()
+    batch_id = "download_retained_shortfall_repair_first"
+    ctx = _ctx(task_id, batch_id)
+    reasons = run_mod._download_fast_fail_reasons(
+        ctx,
+        [
+            (
+                f"地点/景区/{_EID}/1.download/sources: "
+                "article retained sources=3 need>=4"
+            )
+        ],
+    )
+
+    assert reasons == {}
+
+
+def test_download_homepage_base_ready_shortfall_fast_fails_after_repair_rewind():
+    task_id = _make_task()
+    batch_id = "download_homepage_base_ready_fast_fail"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["reactRewinds"] = {"download_fetch": run_mod.MAX_REACT_REWINDS - 1}
+    run_mod.save_workflow_state(state)
+
+    reasons = run_mod._download_fast_fail_reasons(
+        ctx,
+        [
+            (
+                f"地点/景区/{_EID}/1.download/sources: "
+                "homepage baseDraft-ready sources=0 need>=1"
+            )
+        ],
+    )
+
+    assert _EID in reasons
+    assert "retained-source shortfall survived repair" in reasons[_EID]
+
+
+def test_auto_content_plan_article_sources_are_deduped_by_source_ref_not_image_sha():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 4
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 0
+    spec.setdefault("acceptance", {})["requiredAngles"] = [
+        "planning_consultation",
+        "decision_experience",
+        "route_transport",
+        "seasonal_timing",
+    ]
+    store.save_spec(spec)
+    batch_id = "content_plan_article_dedupe_by_source_ref"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
+    repeated_body = "\n".join(
+        [
+            f"{_EID}是测试省核心景区，行前需要核对开放时间、门票预约、交通接驳和天气情况。",
+            f"{_EID}的主要游览点之间有步行距离，建议安排半日到一日，携带饮水并预留返程时间。",
+            f"{_EID}在不同季节体验差异明显，春夏看植被，秋季看层林，雨天需要注意路面湿滑。",
+            f"{_EID}适合把入口动线、核心观景点、返程交通和周边餐饮拆开记录，避免只写百科式介绍。",
+            f"{_EID}的体验判断需要结合现场排队、道路坡度、休息点密度、遮阴条件和亲子老人同行成本。",
+            f"{_EID}如果遇到节假日，应提前确认分时预约、停车饱和、公共交通末班和临时限流通知。",
+            f"{_EID}的文章底稿要能支持规划咨询、决策体验、路线交通和季节时机四种不同写作角度。",
+            f"{_EID}的事实引用应保留来源边界，不能把同一段文字轻改成多篇，也不能混用图片发布权利。",
+            f"{_EID}的游览建议需要说明适合人群、体力消耗、避峰时间和恶劣天气下的替代安排。",
+            f"{_EID}的内容生产应优先形成可追溯的底稿，再由 agent 基于写作契约生成非模板化正文。",
+        ]
+        * 8
+    )
+    for index in range(1, 5):
+        source_dir = sources_dir / f"{index:02d}.article_fixture_{index}"
+        (source_dir / "assets").mkdir(parents=True, exist_ok=True)
+        write_json(
+            source_dir / "meta.json",
+            {
+                "sourceId": f"article_fixture_{index}",
+                "researchLane": "article",
+                "sourceRole": "base",
+                "sourceUseMode": "factual_reference_only",
+                "category": "travelogue",
+                "title": f"测试底稿 {index}",
+                "sourceQualityScore": 0.9,
+            },
+        )
+        (source_dir / "source.md").write_text(repeated_body, encoding="utf-8")
+        write_json(
+            source_dir / "assets" / "index.json",
+            {
+                "assets": [
+                    {
+                        "fileName": "shared.jpg",
+                        "sha256": f"sha256:article-image-sha-{index}",
+                        "sourceCollectionId": f"article-collection-{index}",
+                        "caption": f"{_EID} 共享测试图",
+                        "license": "reference_only",
+                        "credit": "测试来源",
+                        "sourceUrl": f"https://example.test/{index}",
+                        "termsUrl": "https://example.test/terms",
+                        "usageScope": "factual_reference_only",
+                    }
+                ]
+            },
+        )
+
+    issues = run_mod._auto_content_plan(ctx, spec)
+
+    assert issues == []
+    packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
+    article_items = [item for item in packet["items"] if item["carrier"] == "article"]
+    assert [item["writingIntent"] for item in article_items] == spec["acceptance"]["requiredAngles"]
+    assert len({item["baseSourceRef"] for item in article_items}) == 4
+
+
+def test_auto_content_plan_image_work_skips_article_source_asset_reuse():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 1
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 1
+    spec.setdefault("acceptance", {})["requiredAngles"] = ["planning_consultation", "image"]
+    store.save_spec(spec)
+    batch_id = "content_plan_image_avoids_article_asset"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
+    article_image = _real_jpeg(211)
+    article_digest = hashlib.sha256(article_image).hexdigest()
+    article_dir = sources_dir / "01.article_base"
+    (article_dir / "assets").mkdir(parents=True, exist_ok=True)
+    (article_dir / "source.md").write_text(
+        "\n".join(
+            [
+                f"{_EID}行前需要核对开放时间、门票预约、交通接驳和天气情况，并把停车、接驳车、返程末班都写入计划。",
+                f"{_EID}适合把入口动线、核心观景点、返程交通和周边餐饮拆开记录，亲子或老人同行时还要降低坡道路段强度。",
+                f"{_EID}不同季节体验差异明显，需要结合现场排队、道路坡度、遮阴条件和雨天湿滑风险来判断值不值得去。",
+            ]
+            * 90
+        ),
+        encoding="utf-8",
+    )
+    write_json(
+        article_dir / "meta.json",
+        {
+            "sourceId": "article_base",
+            "researchLane": "article",
+            "sourceRole": "base",
+            "sourceUseMode": "factual_reference_only",
+            "category": "travelogue",
+            "title": "有图文章底稿",
+            "sourceQualityScore": 0.9,
+        },
+    )
+    (article_dir / "assets" / "article.jpg").write_bytes(article_image)
+    write_json(
+        article_dir / "assets" / "index.json",
+        {
+            "assets": [
+                {
+                    "fileName": "article.jpg",
+                    "sha256": f"sha256:{article_digest}",
+                    "sourceCollectionId": "article:collection",
+                    "caption": f"{_EID} 文章源图",
+                    "license": "CC-BY-SA 4.0",
+                    "credit": "测试作者",
+                    "sourceUrl": "https://example.test/article-image",
+                    "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                    "usageScope": "factual_reference_only",
+                }
+            ]
+        },
+    )
+    for index, (source_name, image_bytes, collection_id) in enumerate(
+        [
+            ("02.image_reused", article_image, "article:collection"),
+            ("03.image_safe", _real_jpeg(212), "image:collection:safe"),
+        ],
+        start=2,
+    ):
+        source_dir = sources_dir / source_name
+        assets_dir = source_dir / "assets"
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        asset_name = "image.jpg"
+        (source_dir / "source.md").write_text(f"# {_EID} 图片 {index}", encoding="utf-8")
+        (assets_dir / asset_name).write_bytes(image_bytes)
+        digest = hashlib.sha256(image_bytes).hexdigest()
+        write_json(
+            source_dir / "meta.json",
+            {
+                "sourceId": source_name,
+                "researchLane": "image",
+                "title": f"图片 {index}",
+                "sourceCollectionId": collection_id,
+            },
+        )
+        write_json(
+            assets_dir / "index.json",
+            {
+                "assets": [
+                    {
+                        "fileName": asset_name,
+                        "sha256": f"sha256:{digest}",
+                        "sourceCollectionId": collection_id,
+                        "caption": f"{_EID} 图片 {index}",
+                        "license": "CC-BY-SA 4.0",
+                        "credit": "测试摄影师",
+                        "sourceUrl": f"https://example.test/image/{index}",
+                        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                        "usageScope": "app_publish",
+                    }
+                ]
+            },
+        )
+
+    issues = run_mod._auto_content_plan(ctx, spec)
+
+    assert issues == []
+    packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
+    image_items = [item for item in packet["items"] if item["carrier"] == "image"]
+    assert len(image_items) == 1
+    assert image_items[0]["sourceCollectionId"] == "image:collection:safe"
+    diagnostics = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json")
+    assert diagnostics["targets"][_EID]["imageRejects"]["source_asset_reused"] == 1
+
+
+def test_auto_content_plan_skips_article_base_without_source_assets():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 1
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 0
+    spec.setdefault("acceptance", {})["requiredAngles"] = ["planning_consultation"]
+    store.save_spec(spec)
+    batch_id = "content_plan_article_requires_source_asset"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
+    repeated_body = "\n".join(
+        [
+            f"{_EID}行前需要核对开放时间、门票预约、交通接驳和天气情况，并把停车、接驳车、返程末班都写入计划。",
+            f"{_EID}核心游览点之间有步行距离，需要预留返程时间，同时说明亲子、老人同行时哪些路段应该降低强度。",
+            f"{_EID}不同季节体验差异明显，雨天要注意路面湿滑，晴天则更适合把观景点和补给点拆成两段安排。",
+            f"{_EID}文章底稿必须同时具备文字和可追溯源图，源图不是装饰，而是支撑现场判断和图文闭环的底稿证据。",
+        ]
+        * 90
+    )
+    for index, (source_id, has_asset, quality) in enumerate(
+        [
+            ("article_without_image", False, 1.0),
+            ("article_with_image", True, 0.8),
+        ],
+        start=1,
+    ):
+        source_dir = sources_dir / f"{index:02d}.{source_id}"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        write_json(
+            source_dir / "meta.json",
+            {
+                "sourceId": source_id,
+                "researchLane": "article",
+                "sourceRole": "base",
+                "sourceUseMode": "factual_reference_only",
+                "category": "travelogue",
+                "title": f"测试底稿 {index}",
+                "sourceQualityScore": quality,
+            },
+        )
+        (source_dir / "source.md").write_text(repeated_body, encoding="utf-8")
+        if has_asset:
+            assets_dir = source_dir / "assets"
+            assets_dir.mkdir(parents=True, exist_ok=True)
+            asset_name = "source.jpg"
+            data = _real_jpeg(120 + index)
+            (assets_dir / asset_name).write_bytes(data)
+            write_json(
+                assets_dir / "index.json",
+                {
+                    "assets": [
+                        {
+                            "fileName": asset_name,
+                            "sha256": "sha256:" + hashlib.sha256(data).hexdigest(),
+                            "sourceCollectionId": "article-source-with-image",
+                            "caption": f"{_EID} 图文底稿配图",
+                            "license": "CC-BY-SA 4.0",
+                            "credit": "测试摄影师",
+                            "sourceUrl": "https://example.test/source-image",
+                            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                            "usageScope": "app_publish",
+                        }
+                    ]
+                },
+            )
+
+    issues = run_mod._auto_content_plan(ctx, spec)
+
+    assert issues == []
+    packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
+    article_items = [item for item in packet["items"] if item["carrier"] == "article"]
+    assert len(article_items) == 1
+    assert "article_with_image" in article_items[0]["baseSourceRef"]
+    diagnostics = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json")
+    assert diagnostics["targets"][_EID]["articleRejects"]["no_source_assets"] == 1
+
+
+def test_auto_content_plan_disambiguates_duplicate_image_captions():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 0
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 2
+    spec.setdefault("acceptance", {})["requiredAngles"] = ["image"]
+    store.save_spec(spec)
+    batch_id = "content_plan_duplicate_image_caption_titles"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
+    shared_caption_prefix = "共享景观" * 16
+    for index in range(1, 3):
+        source_dir = sources_dir / f"{index:02d}.image_fixture_{index}"
+        assets_dir = source_dir / "assets"
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        asset_name = f"image_{index}.jpg"
+        asset_bytes = _real_jpeg(80 + index)
+        (assets_dir / asset_name).write_bytes(asset_bytes)
+        digest = hashlib.sha256(asset_bytes).hexdigest()
+        write_json(
+            source_dir / "meta.json",
+            {
+                "sourceId": f"image_fixture_{index}",
+                "researchLane": "image",
+                "title": "共享景观",
+                "sourceCollectionId": f"fixture:image:{index}",
+            },
+        )
+        (source_dir / "source.md").write_text(f"# {_EID} 共享景观图 {index}", encoding="utf-8")
+        write_json(
+            assets_dir / "index.json",
+            {
+                "assets": [
+                    {
+                        "fileName": asset_name,
+                        "sha256": f"sha256:{digest}",
+                        "sourceCollectionId": f"fixture:image:{index}",
+                        "caption": f"{shared_caption_prefix}{index}",
+                        "license": "CC-BY-SA 4.0",
+                        "credit": f"测试摄影师{index}",
+                        "sourceUrl": f"https://example.test/image/{index}",
+                        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                        "usageScope": "app_publish",
+                    }
+                ]
+            },
+        )
+
+    issues = run_mod._auto_content_plan(ctx, spec)
+
+    assert issues == []
+    packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
+    image_items = [item for item in packet["items"] if item["carrier"] == "image"]
+    title_prefix = shared_caption_prefix[:60]
+    assert [item["title"] for item in image_items] == [
+        f"{_EID}·{title_prefix}·视角1",
+        f"{_EID}·{title_prefix}·视角2",
+    ]
+
+
+def test_auto_content_plan_skips_image_assets_blocked_by_safety_gate():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 0
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 1
+    spec.setdefault("acceptance", {})["requiredAngles"] = ["image"]
+    store.save_spec(spec)
+    batch_id = "content_plan_image_safety_prefilter"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
+    fixtures = [
+        (
+            "01.image_bad",
+            "oversized.png",
+            _oversized_png_header(),
+            "fixture:image:z_bad",
+            "超大原图",
+        ),
+        (
+            "02.image_safe",
+            "safe.jpg",
+            _real_jpeg(311),
+            "fixture:image:a_safe",
+            "合格视角",
+        ),
+    ]
+    for index, (source_name, asset_name, asset_bytes, collection_id, caption) in enumerate(fixtures, start=1):
+        source_dir = sources_dir / source_name
+        assets_dir = source_dir / "assets"
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "source.md").write_text(f"# {_EID} {caption}", encoding="utf-8")
+        (assets_dir / asset_name).write_bytes(asset_bytes)
+        digest = hashlib.sha256(asset_bytes).hexdigest()
+        write_json(
+            source_dir / "meta.json",
+            {
+                "sourceId": source_name,
+                "researchLane": "image",
+                "title": caption,
+                "sourceCollectionId": collection_id,
+            },
+        )
+        write_json(
+            assets_dir / "index.json",
+            {
+                "assets": [
+                    {
+                        "fileName": asset_name,
+                        "sha256": f"sha256:{digest}",
+                        "sourceCollectionId": collection_id,
+                        "caption": caption,
+                        "license": "CC-BY-SA 4.0",
+                        "credit": f"测试摄影师{index}",
+                        "sourceUrl": f"https://example.test/image/{index}",
+                        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                        "usageScope": "app_publish",
+                    }
+                ]
+            },
+        )
+
+    issues = run_mod._auto_content_plan(ctx, spec)
+
+    assert issues == []
+    packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
+    image_items = [item for item in packet["items"] if item["carrier"] == "image"]
+    assert len(image_items) == 1
+    assert image_items[0]["sourceCollectionId"] == "fixture:image:a_safe"
+    assert image_items[0]["assetRefs"][0].endswith("/safe.jpg")
+    diagnostics = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json")
+    target_diag = diagnostics["targets"][_EID]
+    assert target_diag["rawImageAssets"] == 2
+    assert target_diag["qualifiedImageAssets"] == 1
+    assert target_diag["imageRejects"]["image_safety_blocked"] == 1
+    assert "image_pixels_too_large" in target_diag["imageRejectExamples"]["image_safety_blocked"][0]
+
+
 def test_source_availability_fast_fails_unrecoverable_subset():
     names = ["可用景区甲", "缺图景区乙"]
     spec = store.scaffold_spec(
@@ -1455,6 +2641,7 @@ def test_source_availability_fast_fails_unrecoverable_subset():
         },
         created_by="test",
     )
+    spec["workflowPolicy"] = {"allowPartialContent": True}
     ctx = run_mod.PipelineContext(
         task_id=spec["taskId"],
         batch_id="source_availability_fast_fail",
@@ -1493,6 +2680,151 @@ def test_source_availability_fast_fails_unrecoverable_subset():
     state = run_mod.load_workflow_state(ctx.task_id, ctx.batch_id)
     assert run_mod._abandoned_entity_ids(state) == {"缺图景区乙"}
     assert "source_unavailable_after_auto_research" in state["abandonedObjects"][0]["reason"]
+
+
+def test_source_availability_does_not_fast_fail_strict_task():
+    names = ["可用景区甲", "缺图景区乙"]
+    spec = store.scaffold_spec(
+        vertical="travel",
+        organize_by="地域",
+        key="测试省",
+        name="source availability strict",
+        category="景区",
+        scope={
+            "region": "测试省",
+            "entityTypes": ["地点/景区"],
+            "coverageTargets": [
+                {"entityType": "地点/景区", "name": name}
+                for name in names
+            ],
+        },
+        content={
+            "modalityContract": "separated_research",
+            "research": {"lanes": ["homepage", "article", "image"]},
+            "carriers": ["article", "image"],
+            "quotas": {
+                "entityArticlesPerTarget": 1,
+                "imageWorksPerTarget": 1,
+                "entityHomepagesPerTarget": 1,
+                "routeArticles": 0,
+            },
+        },
+        created_by="test",
+    )
+    ctx = run_mod.PipelineContext(
+        task_id=spec["taskId"],
+        batch_id="source_availability_strict",
+        entity_ids=names,
+        spec=spec,
+        baseline_packet={},
+        baseline_packet_path=Path("/tmp/nonexistent-baseline.json"),
+    )
+    report = {
+        "sourceAvailability": {
+            "readyTargets": ["可用景区甲"],
+            "ineligibleTargets": [
+                {
+                    "entityId": "缺图景区乙",
+                    "issues": ["缺图景区乙: no rights-compatible open-license images discovered"],
+                    "blockers": [
+                        {
+                            "lane": "image",
+                            "reason": "no single-author/single-file rights-cleared image collection",
+                            "nextAction": "manual_authorized_gallery_or_target_replacement",
+                        }
+                    ],
+                    "nextActions": ["manual_authorized_gallery_or_target_replacement"],
+                }
+            ],
+        }
+    }
+
+    added = run_mod._abandon_source_unavailable_entities(
+        ctx,
+        report,
+        reason_prefix="source_unavailable_after_auto_research",
+    )
+
+    assert added == []
+    state = run_mod.load_workflow_state(ctx.task_id, ctx.batch_id)
+    assert run_mod._abandoned_entity_ids(state) == set()
+
+
+def test_source_availability_does_not_fast_fail_when_replacement_capacity_insufficient():
+    names = ["可用景区甲", "缺图景区乙", "缺图景区丙"]
+    spec = store.scaffold_spec(
+        vertical="travel",
+        organize_by="地域",
+        key="测试省",
+        name="source availability reserve shortage",
+        category="景区",
+        scope={
+            "region": "测试省",
+            "entityTypes": ["地点/景区"],
+            "coverageTargets": [
+                {"entityType": "地点/景区", "name": name}
+                for name in names
+            ],
+            "reserveCoverageTargets": [
+                {"entityType": "地点/景区", "name": "替补景区丁"},
+            ],
+        },
+        content={
+            "modalityContract": "separated_research",
+            "research": {"lanes": ["homepage", "article", "image"]},
+            "carriers": ["article", "image"],
+            "quotas": {
+                "entityArticlesPerTarget": 1,
+                "imageWorksPerTarget": 1,
+                "entityHomepagesPerTarget": 1,
+                "routeArticles": 0,
+            },
+        },
+        acceptance={"minEntities": 3},
+        created_by="test",
+    )
+    spec["workflowPolicy"] = {
+        "allowPartialContent": True,
+        "deliveryMode": "partial_with_replacement_report",
+    }
+    ctx = run_mod.PipelineContext(
+        task_id=spec["taskId"],
+        batch_id="source_availability_reserve_shortage",
+        entity_ids=names,
+        spec=spec,
+        baseline_packet={},
+        baseline_packet_path=Path("/tmp/nonexistent-baseline.json"),
+    )
+    report = {
+        "sourceAvailability": {
+            "readyTargets": ["可用景区甲"],
+            "ineligibleTargets": [
+                {
+                    "entityId": entity,
+                    "issues": [f"{entity}: no rights-compatible open-license images discovered"],
+                    "blockers": [
+                        {
+                            "lane": "image",
+                            "reason": "no single-author/single-file rights-cleared image collection",
+                            "nextAction": "manual_authorized_gallery_or_target_replacement",
+                        }
+                    ],
+                    "nextActions": ["manual_authorized_gallery_or_target_replacement"],
+                }
+                for entity in ("缺图景区乙", "缺图景区丙")
+            ],
+        }
+    }
+
+    added = run_mod._abandon_source_unavailable_entities(
+        ctx,
+        report,
+        reason_prefix="source_unavailable_after_auto_research",
+    )
+
+    assert added == []
+    state = run_mod.load_workflow_state(ctx.task_id, ctx.batch_id)
+    assert run_mod._abandoned_entity_ids(state) == set()
 
 
 def test_reset_stage_retries_records_infra_recovery():
@@ -1841,6 +3173,26 @@ def test_download_plan_allows_recoverable_compressed_article_source_image():
     assert run_mod._source_plan_filled(ctx)[0] is True
 
 
+def test_download_plan_allows_single_authoritative_homepage_source():
+    task_id = _make_task()
+    batch_id = "download_plan_single_authoritative_homepage"
+    _seed_source_plan(task_id, batch_id)
+    ctx = _ctx(task_id, batch_id)
+    plan_path = (
+        resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+        / STAGE_DOWNLOAD
+        / "homepage_source_plan.json"
+    )
+    plan = read_json(plan_path)
+    plan["payload"]["sources"] = plan["payload"]["sources"][:1]
+    plan["payload"]["sources"][0]["category"] = "official"
+    write_json(plan_path, plan)
+
+    ok, issues = run_mod._source_plan_filled(ctx)
+    assert ok is True
+    assert not any("homepage sources=" in issue for issue in issues), issues
+
+
 def test_download_plan_blocks_travelogue_as_homepage_source():
     task_id = _make_task()
     batch_id = "download_plan_homepage_travelogue"
@@ -1889,6 +3241,12 @@ def test_download_repair_requires_source_plan_update_before_resume():
     ok, issues = run_mod._source_plan_filled(ctx)
     assert ok is False
     assert any("download_repair required" in issue for issue in issues), issues
+    availability = run_mod._write_download_plan_availability(ctx, {})
+    assert availability["readyTargets"] == []
+    assert availability["ineligibleTargets"][0]["entityId"] == _EID
+    assert "image" in availability["ineligibleTargets"][0]["lanes"]
+    persisted = read_json(batch_root(task_id, batch_id) / "_shared" / "source_unavailable_targets.json")
+    assert persisted["ineligibleTargets"][0]["entityId"] == _EID
 
     plan_path = (
         resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
@@ -1998,7 +3356,7 @@ def test_download_fetch_preserves_nonzero_handler_stage_gate_failure(monkeypatch
     )
 
     monkeypatch.setattr("task.run._download_retry_entity_ids", lambda _ctx: [_EID])
-    monkeypatch.setattr("download.gate.gate_download", lambda _task, _batch: [])
+    monkeypatch.setattr("download.gate.gate_download", lambda *_args, **_kwargs: [])
 
     def _raise_nonzero(_args):
         raise SystemExit(1)
@@ -2011,6 +3369,350 @@ def test_download_fetch_preserves_nonzero_handler_stage_gate_failure(monkeypatch
     repair = read_json(run_mod._download_repair_path(ctx))
     assert repair["entities"][0]["entityId"] == _EID
     assert "imageCount: only 1 publishable image" in repair["entities"][0]["issues"][0]
+
+
+def test_download_repair_records_only_entity_scoped_issues():
+    task_id = _make_task()
+    batch_id = "download_repair_entity_scoped"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "无关景区乙"]
+    issues = [
+        f"{_EID}: imageCount: {_EID} 仅下到 2 张合格去重图（规模化任务要求 ≥3）",
+        "batch diagnostic: source_screen worker completed",
+    ]
+
+    path = run_mod._record_download_repair(ctx, issues)
+    repair = read_json(path)
+    assert [row["entityId"] for row in repair["entities"]] == [_EID]
+    assert repair["entities"][0]["issues"] == [issues[0]]
+
+
+def test_pending_download_repair_ignores_stale_cross_entity_issues():
+    task_id = _make_task()
+    batch_id = "download_repair_stale_cross_entity"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "无关景区乙"]
+    write_json(
+        run_mod._download_repair_path(ctx),
+        {
+            "schemaVersion": "quwoquan.download_repair",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "entities": [
+                {
+                    "entityId": "无关景区乙",
+                    "issues": [
+                        f"{_EID}: imageCount: {_EID} 仅下到 1 张合格图（要求 ≥2）"
+                    ],
+                    "sourcePlanMtimeNs": 0,
+                    "imageRepairHints": [{"lane": "image", "issue": "stale cross entity"}],
+                }
+            ],
+        },
+    )
+
+    assert run_mod._pending_download_repair_unresolved(ctx) == {}
+
+
+def test_pending_download_repair_ignores_stale_source_category_rule_issue():
+    task_id = _make_task()
+    batch_id = "download_repair_stale_source_category_rule"
+    _seed_source_plan(task_id, batch_id)
+    ctx = _ctx(task_id, batch_id)
+    plan_paths = run_mod._source_plan_lane_paths(ctx, _EID, "地点/景区")
+    write_json(
+        run_mod._download_repair_path(ctx),
+        {
+            "schemaVersion": "quwoquan.download_repair",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "entities": [
+                {
+                    "entityId": _EID,
+                    "issues": [
+                        f"{_EID}: missing core source categories ['travelogue']"
+                    ],
+                    "sourcePlanPaths": [str(path) for path in plan_paths],
+                    "sourcePlanMtimeNs": max(
+                        run_mod._source_plan_mtime_ns(path) for path in plan_paths
+                    ),
+                    "imageRepairHints": [
+                        {
+                            "lane": "article",
+                            "entityId": _EID,
+                            "issue": f"{_EID}: missing core source categories ['travelogue']",
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    assert run_mod._pending_download_repair_unresolved(ctx) == {}
+    prompts = run_mod._checkpoint_prompts(ctx, "download_plan")
+    assert not any("download_repair" in prompt for prompt in prompts)
+
+
+def test_source_plan_filled_ignores_stale_cross_entity_download_repair(monkeypatch):
+    task_id = _make_task()
+    batch_id = "source_plan_ignores_stale_cross_repair"
+    _seed_source_plan(task_id, batch_id)
+    ctx = _ctx(task_id, batch_id)
+    plan_paths = run_mod._source_plan_lane_paths(ctx, _EID, "地点/景区")
+    write_json(
+        run_mod._download_repair_path(ctx),
+        {
+            "schemaVersion": "quwoquan.download_repair",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "entities": [
+                {
+                    "entityId": _EID,
+                    "issues": [
+                        "无关景区乙: imageCount: 无关景区乙 仅下到 1 张合格图（要求 ≥2）"
+                    ],
+                    "sourcePlanPaths": [str(path) for path in plan_paths],
+                    "sourcePlanMtimeNs": max(
+                        run_mod._source_plan_mtime_ns(path) for path in plan_paths
+                    ),
+                    "imageRepairHints": [
+                        {
+                            "lane": "image",
+                            "entityId": _EID,
+                            "issue": "无关景区乙: imageCount: 无关景区乙 仅下到 1 张合格图（要求 ≥2）",
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        "download.gate.gate_download",
+        lambda *_args, **_kwargs: ["无关景区乙: imageCount: 无关景区乙 仅下到 1 张合格图（要求 ≥2）"],
+    )
+
+    ok, issues = run_mod._source_plan_filled(ctx)
+
+    assert ok is True
+    assert issues == []
+
+
+def test_pending_download_repair_is_scoped_to_context_entities():
+    task_id = _make_task()
+    batch_id = "download_repair_scoped_to_context"
+    _seed_source_plan(task_id, batch_id)
+    ctx = _ctx(task_id, batch_id)
+    plan_paths = run_mod._source_plan_lane_paths(ctx, _EID, "地点/景区")
+    write_json(
+        run_mod._download_repair_path(ctx),
+        {
+            "schemaVersion": "quwoquan.download_repair",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "entities": [
+                {
+                    "entityId": _EID,
+                    "issues": [
+                        f"{_EID}: missing core source categories ['encyclopedia']"
+                    ],
+                    "sourcePlanPaths": [str(path) for path in plan_paths],
+                    "sourcePlanMtimeNs": max(
+                        run_mod._source_plan_mtime_ns(path) for path in plan_paths
+                    ),
+                    "imageRepairHints": [
+                        {
+                            "lane": "homepage",
+                            "entityId": _EID,
+                            "issue": f"{_EID}: missing core source categories ['encyclopedia']",
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    scoped = copy.copy(ctx)
+    scoped.entity_ids = ["替补候选景区"]
+    assert run_mod._pending_download_repair_unresolved(scoped) == {}
+
+
+def test_download_fetch_passes_ctx_max_workers_to_handler(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_fetch_workers"
+    ctx = _ctx(task_id, batch_id)
+    ctx.max_workers = 7
+    captured: dict[str, int] = {}
+
+    monkeypatch.setattr("task.run._download_retry_entity_ids", lambda _ctx: [_EID])
+    monkeypatch.setattr("download.gate.gate_download", lambda *_args, **_kwargs: [])
+
+    def _fake_download(args):
+        captured["max_workers"] = int(args.max_workers)
+
+    monkeypatch.setattr("download.handler.handle_download", _fake_download)
+
+    result = run_mod._run_download_fetch(ctx)
+    assert result.status == "done"
+    assert captured["max_workers"] == 7
+
+
+def test_download_fetch_scopes_single_lane_pending_repair(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_fetch_lane_scope"
+    ctx = _ctx(task_id, batch_id)
+    captured: dict[str, str] = {}
+
+    monkeypatch.setattr("task.run._download_retry_entity_ids", lambda _ctx: [_EID])
+    monkeypatch.setattr(
+        "task.run._pending_download_repair_unresolved",
+        lambda _ctx: {_EID: {"homepage": ["homepage retained sources=0 need>=1"]}},
+    )
+    monkeypatch.setattr("download.gate.gate_download", lambda *_args, **_kwargs: [])
+
+    def _fake_download(args):
+        captured["lane"] = str(args.lane)
+
+    monkeypatch.setattr("download.handler.handle_download", _fake_download)
+
+    result = run_mod._run_download_fetch(ctx)
+    assert result.status == "done"
+    assert captured["lane"] == "homepage"
+
+
+def test_download_stage_gate_issues_are_scoped_to_current_entities():
+    task_id = _make_task()
+    batch_id = "download_stage_gate_scope"
+    ctx = _ctx(task_id, batch_id)
+    result_dir = batch_root(task_id, batch_id) / "task_download" / "results" / "source_plan_gate"
+    write_json(
+        result_dir / f"{_EID}.json",
+        {"payload": {"passed": False, "ref": _EID, "issues": ["imageCount: only 2 images"]}},
+    )
+    write_json(
+        result_dir / "无关景区乙.json",
+        {"payload": {"passed": False, "ref": "无关景区乙", "issues": ["old stale issue"]}},
+    )
+
+    issues = run_mod._download_stage_gate_issues(ctx, entity_ids=[_EID])
+
+    assert issues == [f"{_EID}: imageCount: only 2 images"]
+
+
+def test_download_plan_auto_research_uses_download_repair_scope(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_plan_repair_scope"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "额外景区乙"]
+    captured: dict[str, list[str]] = {}
+    checks = iter([(False, ["download_repair required"]), (True, [])])
+
+    monkeypatch.setattr("task.run._source_plan_filled", lambda _ctx: next(checks))
+    monkeypatch.setattr("task.run._download_plan_unresolved_entities", lambda _ctx: {})
+    monkeypatch.setattr("task.run._download_retry_entity_ids", lambda _ctx: [_EID])
+    monkeypatch.setattr("task.run._stale_source_plan_entities", lambda _ctx, entity_ids: [])
+
+    def _fake_auto_research(_ctx, entity_ids, *, entity_type, force=False, scope="primary"):
+        _ = (entity_type, force, scope)
+        captured["entity_ids"] = list(entity_ids)
+        return {
+            "sourceAvailability": {
+                "readyTargets": list(entity_ids),
+                "ineligibleTargets": [],
+            }
+        }
+
+    monkeypatch.setattr("task.run._run_download_auto_research", _fake_auto_research)
+
+    result = run_mod._checkpoint_download_plan(ctx)
+    assert result.status == "done"
+    assert captured["entity_ids"] == [_EID]
+
+
+def test_download_plan_auto_research_prefers_current_unresolved_lane_scope(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_plan_current_unresolved_scope"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "当前文章不足景区", "旧fetch失败景区"]
+    captured: dict[str, object] = {}
+    checks = iter([(False, ["article research needs >= 4 text-qualified base sources"]), (True, [])])
+
+    monkeypatch.setattr("task.run._source_plan_filled", lambda _ctx: next(checks))
+    monkeypatch.setattr(
+        "task.run._download_plan_unresolved_entities",
+        lambda _ctx: {"当前文章不足景区": {"article": ["article sources=2 need>=4"]}},
+    )
+    monkeypatch.setattr("task.run._download_retry_entity_ids", lambda _ctx: ["旧fetch失败景区"])
+    monkeypatch.setattr("task.run._stale_source_plan_entities", lambda _ctx, entity_ids: [])
+
+    def _fake_auto_research(_ctx, entity_ids, *, entity_type, force=False, scope="primary"):
+        _ = (entity_type, scope)
+        captured["entity_ids"] = list(entity_ids)
+        captured["force"] = force
+        return {
+            "sourceAvailability": {
+                "readyTargets": list(entity_ids),
+                "ineligibleTargets": [],
+            }
+        }
+
+    monkeypatch.setattr("task.run._run_download_auto_research", _fake_auto_research)
+
+    result = run_mod._checkpoint_download_plan(ctx)
+    assert result.status == "done"
+    assert captured == {"entity_ids": ["当前文章不足景区"], "force": True}
+
+
+def test_download_plan_checkpoint_does_not_full_refresh_ready_batch_on_rule_mtime(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_plan_ready_batch_no_global_stale_refresh"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "额外景区乙"]
+    calls: dict[str, object] = {}
+
+    monkeypatch.setattr("task.run._source_plan_filled", lambda _ctx: (True, []))
+    monkeypatch.setattr("task.run._download_plan_unresolved_entities", lambda _ctx: {})
+    monkeypatch.setattr("task.run._download_retry_entity_ids", lambda _ctx: [])
+
+    def _fake_stale(_ctx, *, entity_ids):
+        calls["stale_entity_ids"] = list(entity_ids)
+        return [{"entityId": entity_ids[0]}]
+
+    monkeypatch.setattr("task.run._stale_source_plan_entities", _fake_stale)
+
+    result = run_mod._checkpoint_download_plan(ctx)
+    assert result.status == "done"
+    assert calls == {}
+
+
+def test_download_plan_repairs_build_prepare_homepage_base_draft_scope(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_plan_build_prepare_homepage_scope"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "额外景区乙"]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["failedObjects"] = [
+        f"地点/景区/{_EID}: homepage baseDraft 可用事实不足",
+    ]
+    run_mod.save_workflow_state(state)
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr("task.run._source_plan_filled", lambda _ctx: (True, []))
+    monkeypatch.setattr("task.run._download_plan_unresolved_entities", lambda _ctx: {})
+    monkeypatch.setattr("task.run._download_retry_entity_ids", lambda _ctx: [])
+    monkeypatch.setattr("task.run._stale_source_plan_entities", lambda _ctx, entity_ids: [])
+    monkeypatch.setattr("download.prepare.prepare_source_plan", lambda *_args, **_kwargs: None)
+
+    def _fake_auto_research(_ctx, entity_ids, *, entity_type, force=False, scope="primary"):
+        _ = (entity_type, scope)
+        captured["entity_ids"] = list(entity_ids)
+        captured["force"] = force
+        return {"issues": [], "sourceUnavailable": []}
+
+    monkeypatch.setattr("task.run._run_download_auto_research", _fake_auto_research)
+
+    result = run_mod._checkpoint_download_plan(ctx)
+    assert result.status == "done"
+    assert captured == {"entity_ids": [_EID], "force": True}
 
 
 def test_legacy_non_actionable_download_repair_does_not_block_static_valid_plan():
@@ -2356,7 +4058,7 @@ def test_download_repair_classifies_independent_image_fetch_hint_as_image_lane()
 def test_download_repair_lanes_are_driven_by_failure_summary_not_extra_hints():
     repair = {
         "issues": [
-            "地点/景区/测试景区甲/1.download/sources: only 3 article source unit(s) with images"
+            "地点/景区/测试景区甲/1.download/sources: article research needs >= 4 text-qualified base sources"
         ],
         "researchLaneIssues": {},
         "imageRepairHints": [
@@ -2380,6 +4082,26 @@ def test_download_repair_lanes_recognize_image_fetch_summary():
     }
 
     assert run_mod._download_repair_lanes(repair) == {"image"}
+
+
+def test_download_repair_lanes_route_encyclopedia_core_gap_to_homepage():
+    repair = {
+        "issues": [
+            "天下第一泉景区: missing core source categories ['encyclopedia']"
+        ],
+        "researchLaneIssues": {},
+        "imageRepairHints": [
+            {"lane": "article", "issue": "sourceImage:article_a failed"},
+        ],
+    }
+
+    assert run_mod._download_repair_lanes(repair) == {"homepage"}
+    hints = run_mod._download_issue_repair_hints(
+        repair["issues"],
+        entity_id="天下第一泉景区",
+    )
+    assert hints[0]["lane"] == "homepage"
+    assert hints[0]["action"] == "add_or_replace_homepage_encyclopedia_or_official_seed_source"
 
 
 def test_download_issue_repair_hints_classify_image_gate_failure():
@@ -2420,8 +4142,7 @@ def test_download_plan_prompt_includes_repair_only_article_lane():
                 {
                     "entityId": _EID,
                     "issues": [
-                        f"{_EID}: only 3 article source unit(s) with images "
-                        "(need >= 4; article base draft must be text+source images)"
+                        f"{_EID}: article research needs >= 4 text-qualified base sources"
                     ],
                     "sourcePlanPath": str(plan_paths[0]),
                     "sourcePlanPaths": [str(path) for path in plan_paths],
@@ -2455,7 +4176,7 @@ def test_download_plan_prompt_includes_repair_only_article_lane():
     article_prompts = [prompt for prompt in prompts if "[AGENT_LANE:article]" in prompt]
     assert article_prompts
     assert "download_repair" in article_prompts[0]
-    assert "only 3 article source unit" in article_prompts[0]
+    assert "text-qualified base sources" in article_prompts[0]
     assert "replace_unfetchable_or_low_quality_image" in article_prompts[0]
 
 
@@ -2558,6 +4279,142 @@ def test_download_plan_checkpoint_forces_auto_research_for_stale_source_rules():
     assert state["activeAutoResearch"]["completedCount"] == 1
     assert "download_plan auto_research 1/1" in state["nextAction"]
     assert "过期 source_plan" in result.message
+
+
+def test_download_plan_stale_source_rules_override_pending_repair(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_plan_stale_over_repair"
+    ctx = _ctx(task_id, batch_id)
+    captured: dict[str, object] = {}
+    checks = iter([(False, ["download_repair required: old source_plan_gate"]), (True, [])])
+    stale_checks = iter([
+        [{"entityId": _EID, "sourcePlanMtimeNs": 1, "sourceRuleMtimeNs": 2}],
+        [],
+    ])
+
+    monkeypatch.setattr("task.run._source_plan_filled", lambda _ctx: next(checks))
+    monkeypatch.setattr("task.run._download_retry_entity_ids", lambda _ctx: [_EID])
+    monkeypatch.setattr(
+        "task.run._stale_source_plan_entities",
+        lambda _ctx, entity_ids: next(stale_checks),
+    )
+
+    def _fake_auto_research(_ctx, entity_ids, *, entity_type, force=False, scope="primary"):
+        _ = (entity_type, scope)
+        captured["entity_ids"] = list(entity_ids)
+        captured["force"] = force
+        return {"issues": [], "sourceUnavailable": []}
+
+    monkeypatch.setattr("task.run._run_download_auto_research", _fake_auto_research)
+
+    result = run_mod._checkpoint_download_plan(ctx)
+    assert result.status == "done"
+    assert captured == {"entity_ids": [_EID], "force": True}
+    assert "过期 source_plan" in result.message
+
+
+def test_download_fetch_refreshes_stale_source_plan_before_retry(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_fetch_stale_source_plan_refresh"
+    ctx = _ctx(task_id, batch_id)
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr("task.run._download_retry_entity_ids", lambda _ctx: [_EID])
+    monkeypatch.setattr("task.run._download_fetch_stale_entity_ids", lambda _ctx: [])
+    monkeypatch.setattr("task.run._content_plan_source_shortfall_entity_ids", lambda _ctx: [])
+    monkeypatch.setattr(
+        "task.run._stale_source_plan_entities",
+        lambda _ctx, entity_ids: [{"entityId": _EID}] if list(entity_ids) == [_EID] else [],
+    )
+
+    def _fake_prepare_source_plan(_task_id, _batch_id, entities, **_kwargs):
+        captured["prepared_entities"] = [entity["entityId"] for entity in entities]
+
+    def _fake_auto_research(_ctx, entity_ids, *, entity_type, force=False, scope="primary"):
+        captured["auto_entity_ids"] = list(entity_ids)
+        captured["auto_force"] = force
+        captured["auto_scope"] = scope
+        captured["entity_type"] = entity_type
+        return {"issues": [], "sourceUnavailable": []}
+
+    def _fake_handle_download(ns):
+        captured["download_entity_ids"] = ns.entity_ids
+
+    monkeypatch.setattr("download.prepare.prepare_source_plan", _fake_prepare_source_plan)
+    monkeypatch.setattr("task.run._run_download_auto_research", _fake_auto_research)
+    monkeypatch.setattr("download.handler.handle_download", _fake_handle_download)
+    monkeypatch.setattr("download.gate.gate_download", lambda *_args, **_kwargs: [])
+
+    result = run_mod._run_download_fetch(ctx)
+    assert result.status == "done"
+    assert captured["prepared_entities"] == [_EID]
+    assert captured["auto_entity_ids"] == [_EID]
+    assert captured["auto_force"] is True
+    assert captured["auto_scope"] == "download_fetch_stale_source_plan"
+    assert captured["download_entity_ids"] == _EID
+
+
+def test_download_fetch_does_not_auto_research_fetch_stale_only_entities(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_fetch_stale_only_no_research"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "额外景区乙"]
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr("task.run._download_retry_entity_ids", lambda _ctx: [])
+    monkeypatch.setattr("task.run._download_fetch_stale_entity_ids", lambda _ctx: [_EID, "额外景区乙"])
+    monkeypatch.setattr("task.run._content_plan_source_shortfall_entity_ids", lambda _ctx: [])
+
+    def _unexpected_stale_source_plan_check(*_args, **_kwargs):
+        raise AssertionError("fetch-stale-only entities must not be sent back to source-plan refresh")
+
+    def _unexpected_auto_research(*_args, **_kwargs):
+        raise AssertionError("fetch-stale-only entities must not trigger auto research")
+
+    def _fake_handle_download(ns):
+        captured["download_entity_ids"] = ns.entity_ids
+        captured["download_lane"] = ns.lane
+
+    monkeypatch.setattr("task.run._stale_source_plan_entities", _unexpected_stale_source_plan_check)
+    monkeypatch.setattr("task.run._run_download_auto_research", _unexpected_auto_research)
+    monkeypatch.setattr("download.handler.handle_download", _fake_handle_download)
+    monkeypatch.setattr("download.gate.gate_download", lambda *_args, **_kwargs: [])
+
+    result = run_mod._run_download_fetch(ctx)
+    assert result.status == "done"
+    assert captured["download_entity_ids"] == f"{_EID},额外景区乙"
+    assert captured["download_lane"] == "all"
+
+
+def test_download_stage_gate_issues_scopes_source_screen_by_payload_entity():
+    task_id = _make_task()
+    batch_id = "download_source_screen_scope"
+    ctx = _ctx(task_id, batch_id)
+    write_gate_report(
+        task_id=task_id,
+        batch_id=batch_id,
+        command="download",
+        step="source_screen",
+        ref="测试景区甲__article_qunar_base_1",
+        passed=False,
+        issues=["sourceScreen: source scored Reject"],
+        evidence_summary={"entityId": _EID, "sourceId": "article_qunar_base_1"},
+    )
+    write_gate_report(
+        task_id=task_id,
+        batch_id=batch_id,
+        command="download",
+        step="source_screen",
+        ref="无关景区乙__article_qunar_base_1",
+        passed=False,
+        issues=["sourceScreen: source scored Reject"],
+        evidence_summary={"entityId": "无关景区乙", "sourceId": "article_qunar_base_1"},
+    )
+
+    issues = run_mod._download_stage_gate_issues(ctx, entity_ids=[_EID])
+    assert issues == [
+        "测试景区甲__article_qunar_base_1: sourceScreen: source scored Reject"
+    ]
 
 
 def test_managed_preflight_rejects_missing_key_without_creating_batch():

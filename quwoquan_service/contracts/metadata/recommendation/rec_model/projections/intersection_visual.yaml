@@ -1,0 +1,46 @@
+version: 1
+read_model: IntersectionVisual
+description: |
+  交集样本视觉标识（统一交互子契约 · A–E 横切复用值对象，Phase 0 §20.7 冻结）。
+  按 assetKind 渲染头像簇 / 圈子封面 / 校徽 / logo / 缩略图等对象级视觉信号，
+  禁用用户头像冒充非用户对象（与 §20.4 数字与视觉标识约束对齐）。
+  可点击进 target（对象主页）。R1/R2 人级 kind 必带结构化 sampleVisuals
+  （注册表 sampleVisualsRequired=true），取代裸 sampleAvatarUrls 字符串簇。
+
+  闭集枚举（端按字符串解析，未知 assetKind 走通用占位）：
+    assetKind: avatar | circleAvatar | cover | emblem | logo | thumbnail | coverImage | icon
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: IntersectionVisual
+  base_class: ""
+  output_path: cloud/runtime/generated/recommendation/intersection_visual.g.dart
+  dart_imports:
+    - intersection_target.g.dart
+  fields:
+    - name: assetKind
+      dart_type: String
+      nullable: false
+      source: assetKind
+      aliases: [assetKind]
+      default: "''"
+    - name: imageUrl
+      dart_type: String
+      nullable: false
+      source: imageUrl
+      aliases: [imageUrl]
+      default: "''"
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName]
+      default: "''"
+    - name: target
+      dart_type: IntersectionTarget
+      nullable: true
+      source: target
+      aliases: [target]
+      map_from_string_key_class: IntersectionTarget

@@ -103,3 +103,43 @@
 | ObjectIntersection projection | **删除**，统一 IntersectionReason |
 | 搜索 connectionState | **零过渡**，provider 未回灌则不展示 |
 | 算法范围 | **本会话契约完备** + 实现会话落地 rec-model/fusion/explain |
+
+---
+
+## 6. v2 三层架构 · 五面应用定义（2026-06-18 新基线分工）
+
+> 真相源：`intersection-definition-and-application.md` §21（端到端统一：采集 → 算法 → 投影）。
+> 本轮交付端侧四槽视觉模型 + lifecycle 弱标 + 传播视图共享件 + Mock 原型；契约为「草案/未冻结」。
+> 与第 1 节六场景一一对应（A=S2b、B=S2a、C=S3、D=S4、E=S1），五面是 v2 具象化展示口径。
+
+### 6.1 五面 × 四槽/lifecycle/传播 应用矩阵（§21.5.4）
+
+| 面 | 主表达 | 槽①类型图标 | 槽②句内头像 | 槽③对象封面 | 槽④lifecycle | 传播视图 | 落地路径 |
+|---|---|---|---|---|---|---|---|
+| A 我的主页 | 我的连接 + 我的影响力 | ✓ iconKey/dimension | ✓ 人名前 | ✓ 对象 | ✓ 分桶弱标(新/增强/重新活跃) | ✓ author_impact 路径节点 + 再传播 | `lib/ui/user/widgets/my_intersection_inbox_card.dart` / `author_impact_card.dart` |
+| B 用户主页(他人) | 为什么推荐TA + TA帮助了很多人 | ✓ | ✓ | ✓ | ✓ 证据组叠 | ○ TA 影响力 | `lib/components/object_page/intersection_entity.dart` / `object_page/**` |
+| C 实体主页 | 为什么推荐这里 + 记录流单句 | ✓ | ○ | ✓ 封面缩略 | ○ | — | 复用 B 的 `IntersectionEntity` / ObjectIntersectionSection |
+| D 圈子主页 | 为什么推荐这个圈子 + 圈子帮助了很多人 | ✓ | ✓ | ✓ | ○ | ✓ circle_impact 接统一三件套(解决 G4) | `lib/ui/circle/widgets/circle_shell_builders.dart` |
+| E 首页 post | post 卡内单句 chip | ○ | ○ | — | 仅「新」红点 | — | post chip / `home_multi_form_feed`（紧凑面，不复活 spotlight） |
+
+图例：✓ 本轮原型已接线；○ 数据具备时按同一组件渲染；— 该面不适用。
+
+### 6.2 端侧共享件（A–E 唯一来源，禁各面分叉）
+
+| 槽/视图 | 组件 | 真相源字段 |
+|---|---|---|
+| 槽① 类型图标 | `IntersectionTypeIcon` + `IntersectionIconResolver` | `iconKey` →（回退）`sourceRef` → `dimension` |
+| 槽② 句内头像 | `InteractiveIntersectionText`（WidgetSpan 注入） | `IntersectionTextSpan.visual` |
+| 槽③ 对象封面 | `IntersectionObjectCover` | `IntersectionReason.objectVisual` |
+| 槽④ lifecycle 弱标 | `IntersectionLifecycleBadge` | `lifecycleState` / `strengthDelta` |
+| 传播视图 | `IntersectionPropagationView` | `IntersectionPropagationPath` |
+| 统一三件套(既有) | `InteractiveIntersectionText` / `IntersectionVisualCluster` / `IntersectionTargetNavigator` | `primarySpans` / `sampleVisuals` / `target` |
+
+### 6.3 v2 出口自检（每面在正式 UI 落地会话补齐）
+
+- [ ] 四槽组件只消费契约字段，禁页面硬编码 `switch(sourceRef)` 图标 / 本地拼结论句（G2）。
+- [ ] `join(spans.text)==primaryText/briefText` 不变量在含槽②头像时仍成立（WidgetSpan 不贡献字符）。
+- [ ] lifecycle 弱标不进结论句、不变蓝、不堆叠；紧凑面仅「新」。
+- [ ] 传播视图只展示可证绝对计数 + 路径节点，禁百分比/漏斗/增长率；`reach/conversion` 不进 DTO。
+- [ ] `coLiked`（赞）排序最末（T4）、禁请求期全量求交、`like` 图标仅无更高价值交集时露出。
+- [ ] 端 widget 测试：`intersection_four_slot_primitives_test.dart` + `interactive_intersection_text_test.dart`（槽②不变量）绿。

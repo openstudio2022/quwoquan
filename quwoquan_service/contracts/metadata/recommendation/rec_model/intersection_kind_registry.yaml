@@ -1,0 +1,655 @@
+version: 1
+registry: IntersectionKindRegistry
+description: |
+  交集 kind 机器可读唯一注册表（Phase 0 漂移收口 §20d；架构基线 v2 §21）。
+
+  这是全仓交集 kind（IntersectionPoint.sourceRef / 证据组 kind）的唯一真相源，
+  取代此前「specs markdown 表 + Go switch」双源。规则：
+
+  - 只有标准名，零兼容别名；契约 / Go / Dart / fixture / mock / 测试一次性迁移到标准名。
+  - 任何 kind 必须先在本表登记，才能在云侧产出或在 fixtures 铺设。
+  - 未登记 kind 在云侧排序落兜底 rank（evidenceRank=500，不丢弃，便于灰度发现漂移），
+    但禁止新增未登记 kind 的产出。
+  - 与人类可读说明对齐：specs/product/intersection-definition-and-application.md §5.4 / §7 / §20 / §21。
+  - 与策略对齐：recommendation/rec_model/policy.yaml `intersection` 块（factWeight/affinityWeight/
+    maxAffinityPerSurface/cooldownDays/freshnessTtlDaysByDimension/graphWeights/lifecycleWeights/propagation）。
+
+  字段语义：
+    kind             标准 sourceRef（唯一 id）。
+    entry            §7 词典条目编号。
+    level            sharedFact 共同型 / bridgeFact 桥接型 / impactFact 影响型 / affinity 概率。
+    intersectionClass fact | affinity（affinity 必须标注「推荐」，不得伪装事实）。
+    dimensions       五维闭集子集：identity | location | content | interest | relationship。
+    objectKind       主对象品牌角标闭集：person | circle | school | place | enterprise。
+    countObjectKind  被计数对象类型（数字下钻列表对象）：person | circle | content | place | entity | tag。
+    valueTier        产品价值层级 T1(最高) > T2 > T3 > T4，用于选择得分 valueWeight。
+    computability    可计算性 R1(最易/最可靠) → R4(暂不可算/概率)，用于实现排期与门槛。
+    confidenceThreshold affinity 入选最低置信；fact 恒为 0（达数量门槛即可产出）。
+    privacyScope     public | contactVisible | mutualVisible（commonContact 必须先过可见性）。
+    dedupeKey        去重主键模板（同 viewer 同窗口内同主键只保留一条最强证据）。
+    timeWindowDays   保鲜窗口天数（与 policy.freshnessTtlDaysByDimension 对齐）。
+    evidenceRank     云侧 evidenceKindRank 排序键（值越小越靠前；与 intersection_service.go 对齐）。
+    sampleVisualsRequired 是否要求结构化 sampleVisuals（R1/R2 人级 kind 必填，禁头像冒充非人对象）。
+    iconKey          端侧类型图标语义键（§21.5.2 闭集，IntersectionIconResolver 消费，禁端硬编码 switch）：
+                     place | circle | people | alumni | work | discussion | share | like | interest。
+    propagationRole  传播图角色（§21.4）：none(共同型，自身不传播) | bridge(桥接型) | source(影响源)。
+    lifecycleApplicable 该交集是否适用 Lifecycle 状态机弱标（§21.3）：
+                     静态身份(同校/同司/校友在此)为 false，动态连接/行为/关注为 true。
+    status           active | deferred（deferred = 已登记但当前无数据源，不得产出）。
+
+  Graph 加权元数据（§21.2，edgeWeight = relationStrength × interactionFrequency × recencyDecay）：
+    本期数值真算后置；派生口径单一真相源、零逐条占位（避免 27×未实现技术债）：
+    - relationStrengthBase    由 valueTier 派生（= valueTierWeights[tier]）。
+    - interactionFrequencyKey 由 computability/level 指向行为源（R1=关系边 / R2=行为边 / R3=身份·标签）。
+    - recencyHalfLifeDays     由 timeWindowDays 派生（默认 = timeWindowDays），供 recencyDecay。
+    数值化在云侧算法会话落地（policy.intersection.graphWeights 配置位）；本表只登记口径。
+
+valueTierWeights:
+  # 选择得分 score = valueWeight(tier) × freshness(decay) × confidence × diversityPenalty × cooldownGate
+  T1: 1.0
+  T2: 0.75
+  T3: 0.5
+  T4: 0.3
+
+computabilityLegend:
+  R1: 关系边集合直接求交（follow_edges / circle_members），最易、最可靠、可请求期算。
+  R2: 行为边集合求交（rm_behavior_events 行为边真相源），需扫描+求交，请求期或预投影。
+  R3: 身份/通讯录/标签维度（需 profile / contact 映射 / 实体标签），成本与隐私约束更高。
+  R4: 当前无稳定数据源或为概率推断（coCreatedContent / coWishlistedEntity / affinity），暂不产出 fact。
+
+iconKeyLegend:
+  # §21.5.2 交集 iconKey 语义闭集（端 IntersectionIconResolver 真相源）
+  place: 共同地点 / 关注的人去过 / 共同想去（coVisitedEntity / followeeVisited / coWishlistedEntity）
+  circle: 共同圈子 / 同圈成员（sharedCircle / coMemberCircle）
+  people: 共同关注的人 / 共同联系人 / 关注的人在此（sharedFollowees / commonFollower / commonContact / followeeInObject / followeeViewing）
+  alumni: 校友 / 同校 / 同专业（sameSchool / sameMajor / sameCohort / alumni / alumniHere）
+  work: 同公司 / 同团队 / 同行业 / 同事在此 / 共创（sameCompany / sameTeam / sameIndustry / colleagueHere / coCreatedContent）
+  discussion: 共同讨论 / 都评论过 / 关注的人讨论（sharedDiscussion / coCommented / followeeDiscussedThis）
+  share: 共同传播（coSharedContent）
+  like: 共同点赞（coLiked，T4 最低权重，§21.9 恢复）
+  interest: 共同兴趣 / 共同关注对象（sharedTagSample / sharedEntityAttention）
+
+kinds:
+  # ---- A. 人与人：共同型事实 ----
+  - kind: sharedFollowees
+    entry: A1
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [relationship]
+    objectKind: person
+    countObjectKind: person
+    valueTier: T1
+    computability: R1
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sharedFollowees:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 10
+    sampleVisualsRequired: true
+    iconKey: people
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+
+  - kind: commonFollower
+    entry: A2
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [relationship]
+    objectKind: person
+    countObjectKind: person
+    valueTier: T2
+    computability: R1
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "commonFollower:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 10
+    sampleVisualsRequired: true
+    iconKey: people
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+
+  - kind: commonContact
+    entry: A3
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [relationship]
+    objectKind: person
+    countObjectKind: person
+    valueTier: T1
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: contactVisible
+    dedupeKey: "commonContact:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 10
+    sampleVisualsRequired: true
+    iconKey: people
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+
+  - kind: sameSchool
+    entry: A4
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [identity]
+    objectKind: school
+    countObjectKind: person
+    valueTier: T2
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sameSchool:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 50
+    sampleVisualsRequired: false
+    iconKey: alumni
+    propagationRole: none
+    lifecycleApplicable: false
+    status: active
+  - kind: sameDepartment
+    entry: A4
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [identity]
+    objectKind: school
+    countObjectKind: person
+    valueTier: T2
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sameDepartment:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 50
+    sampleVisualsRequired: false
+    iconKey: alumni
+    propagationRole: none
+    lifecycleApplicable: false
+    status: active
+  - kind: sameMajor
+    entry: A4
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [identity]
+    objectKind: school
+    countObjectKind: person
+    valueTier: T2
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sameMajor:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 50
+    sampleVisualsRequired: false
+    iconKey: alumni
+    propagationRole: none
+    lifecycleApplicable: false
+    status: active
+  - kind: sameCohort
+    entry: A4
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [identity]
+    objectKind: school
+    countObjectKind: person
+    valueTier: T2
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sameCohort:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 50
+    sampleVisualsRequired: false
+    iconKey: alumni
+    propagationRole: none
+    lifecycleApplicable: false
+    status: active
+  - kind: alumni
+    entry: A4
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [identity]
+    objectKind: school
+    countObjectKind: person
+    valueTier: T2
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "alumni:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 50
+    sampleVisualsRequired: false
+    iconKey: alumni
+    propagationRole: none
+    lifecycleApplicable: false
+    status: active
+
+  - kind: sameCompany
+    entry: A5
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [identity]
+    objectKind: enterprise
+    countObjectKind: person
+    valueTier: T2
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sameCompany:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 20
+    sampleVisualsRequired: false
+    iconKey: work
+    propagationRole: none
+    lifecycleApplicable: false
+    status: active
+  - kind: sameTeam
+    entry: A5
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [identity]
+    objectKind: enterprise
+    countObjectKind: person
+    valueTier: T2
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sameTeam:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 20
+    sampleVisualsRequired: false
+    iconKey: work
+    propagationRole: none
+    lifecycleApplicable: false
+    status: active
+  - kind: sameIndustry
+    entry: A5
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [identity]
+    objectKind: enterprise
+    countObjectKind: person
+    valueTier: T3
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sameIndustry:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 20
+    sampleVisualsRequired: false
+    iconKey: work
+    propagationRole: none
+    lifecycleApplicable: false
+    status: active
+
+  # ---- B. 人与圈子 / 讨论：共同参与事实 ----
+  - kind: sharedCircle
+    entry: B1
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [relationship, interest]
+    objectKind: circle
+    countObjectKind: circle
+    valueTier: T1
+    computability: R1
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sharedCircle:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 20
+    sampleVisualsRequired: false
+    iconKey: circle
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+
+  - kind: sharedDiscussion
+    entry: B2
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [relationship, content]
+    objectKind: circle
+    countObjectKind: content
+    valueTier: T2
+    computability: R2
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sharedDiscussion:{objectId}"
+    timeWindowDays: 7
+    evidenceRank: 40
+    sampleVisualsRequired: false
+    iconKey: discussion
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+
+  - kind: coMemberCircle
+    entry: B3
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [interest]
+    objectKind: circle
+    countObjectKind: circle
+    valueTier: T3
+    computability: R1
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "coMemberCircle:{objectId}"
+    timeWindowDays: 7
+    evidenceRank: 20
+    sampleVisualsRequired: false
+    iconKey: circle
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+
+  # ---- C. 人与内容：连接型内容行为事实 ----
+  - kind: coCommented
+    entry: C1
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [content]
+    objectKind: person
+    countObjectKind: content
+    valueTier: T2
+    computability: R2
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "coCommented:{objectId}"
+    timeWindowDays: 7
+    evidenceRank: 40
+    sampleVisualsRequired: false
+    iconKey: discussion
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+
+  - kind: coSharedContent
+    entry: C2
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [content]
+    objectKind: person
+    countObjectKind: content
+    valueTier: T3
+    computability: R2
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "coSharedContent:{objectId}"
+    timeWindowDays: 7
+    evidenceRank: 40
+    sampleVisualsRequired: false
+    iconKey: share
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+
+  - kind: coCreatedContent
+    entry: C3
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [content]
+    objectKind: person
+    countObjectKind: content
+    valueTier: T4
+    computability: R4
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "coCreatedContent:{objectId}"
+    timeWindowDays: 7
+    evidenceRank: 40
+    sampleVisualsRequired: false
+    iconKey: work
+    propagationRole: none
+    lifecycleApplicable: true
+    status: deferred
+    deferredReason: 当前无协作/共创数据源（用户已确认不存在共同协作创建），登记占位、禁止产出。
+
+  - kind: coLiked
+    entry: C4
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [content]
+    objectKind: person
+    countObjectKind: content
+    valueTier: T4
+    computability: R2
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "coLiked:{objectId}"
+    timeWindowDays: 7
+    evidenceRank: 70
+    sampleVisualsRequired: false
+    iconKey: like
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+    note: §21.9 赞红线恢复（2026-06-18）；T4 最低权重、evidenceRank 最末；§21.7 禁请求期全量求交，云侧预投影/采样/上限就位后产出（本期端 Mock 原型先行）。
+
+  # ---- D. 人与地点 / 对象：共同对象事实 ----
+  - kind: coVisitedEntity
+    entry: D1
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [location]
+    objectKind: place
+    countObjectKind: place
+    valueTier: T2
+    computability: R2
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "coVisitedEntity:{objectId}"
+    timeWindowDays: 14
+    evidenceRank: 30
+    sampleVisualsRequired: false
+    iconKey: place
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+
+  - kind: sharedEntityAttention
+    entry: D2
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [interest, identity]
+    objectKind: place
+    countObjectKind: entity
+    valueTier: T3
+    computability: R2
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sharedEntityAttention:{objectId}"
+    timeWindowDays: 14
+    evidenceRank: 20
+    sampleVisualsRequired: false
+    iconKey: interest
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+
+  - kind: coWishlistedEntity
+    entry: D3
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [location]
+    objectKind: place
+    countObjectKind: place
+    valueTier: T4
+    computability: R4
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "coWishlistedEntity:{objectId}"
+    timeWindowDays: 14
+    evidenceRank: 20
+    sampleVisualsRequired: false
+    iconKey: place
+    propagationRole: none
+    lifecycleApplicable: true
+    status: deferred
+    deferredReason: 「共同想去/愿望」是对象级意图，当前无稳定意图行为采集（用户已确认偏理想），登记占位、禁止产出。
+
+  - kind: sharedTagSample
+    entry: 共同兴趣
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [interest]
+    objectKind: circle
+    countObjectKind: tag
+    valueTier: T3
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "sharedTagSample:{objectId}"
+    timeWindowDays: 7
+    evidenceRank: 60
+    sampleVisualsRequired: false
+    iconKey: interest
+    propagationRole: none
+    lifecycleApplicable: true
+    status: active
+
+  # ---- E. 桥接型交集（第三方桥接） ----
+  - kind: followeeInObject
+    entry: E1
+    level: bridgeFact
+    intersectionClass: fact
+    dimensions: [relationship]
+    objectKind: person
+    countObjectKind: person
+    valueTier: T1
+    computability: R2
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "followeeInObject:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 10
+    sampleVisualsRequired: true
+    iconKey: people
+    propagationRole: bridge
+    lifecycleApplicable: true
+    status: active
+
+  - kind: followeeVisited
+    entry: E2
+    level: bridgeFact
+    intersectionClass: fact
+    dimensions: [relationship, location]
+    objectKind: person
+    countObjectKind: person
+    valueTier: T1
+    computability: R2
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "followeeVisited:{objectId}"
+    timeWindowDays: 14
+    evidenceRank: 10
+    sampleVisualsRequired: true
+    iconKey: place
+    propagationRole: bridge
+    lifecycleApplicable: true
+    status: active
+
+  - kind: followeeViewing
+    entry: E2
+    level: bridgeFact
+    intersectionClass: fact
+    dimensions: [relationship, content]
+    objectKind: person
+    countObjectKind: person
+    valueTier: T2
+    computability: R2
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "followeeViewing:{objectId}"
+    timeWindowDays: 7
+    evidenceRank: 10
+    sampleVisualsRequired: true
+    iconKey: people
+    propagationRole: bridge
+    lifecycleApplicable: true
+    status: active
+
+  - kind: alumniHere
+    entry: E3
+    level: bridgeFact
+    intersectionClass: fact
+    dimensions: [identity]
+    objectKind: school
+    countObjectKind: person
+    valueTier: T2
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "alumniHere:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 50
+    sampleVisualsRequired: true
+    iconKey: alumni
+    propagationRole: bridge
+    lifecycleApplicable: false
+    status: active
+  - kind: colleagueHere
+    entry: E3
+    level: bridgeFact
+    intersectionClass: fact
+    dimensions: [identity]
+    objectKind: enterprise
+    countObjectKind: person
+    valueTier: T2
+    computability: R3
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "colleagueHere:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 50
+    sampleVisualsRequired: true
+    iconKey: work
+    propagationRole: bridge
+    lifecycleApplicable: false
+    status: active
+
+  - kind: followeeDiscussedThis
+    entry: E4
+    level: bridgeFact
+    intersectionClass: fact
+    dimensions: [relationship, content]
+    objectKind: person
+    countObjectKind: person
+    valueTier: T2
+    computability: R2
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "followeeDiscussedThis:{objectId}"
+    timeWindowDays: 7
+    evidenceRank: 10
+    sampleVisualsRequired: true
+    iconKey: discussion
+    propagationRole: bridge
+    lifecycleApplicable: true
+    status: active
+
+# 一次性迁移映射（旧名 → 标准名，迁移后旧名零残留；与 §5.4 对齐）。
+migrations:
+  mutualFriend: sharedFollowees
+  commonFollow: sharedFollowees
+  friendInCircle: followeeInObject
+  contactInCircle: followeeInObject
+  friendActiveHere: followeeInObject
+  friendVisited: followeeVisited
+  contactVisited: followeeVisited
+  friendJoinedRelatedCircle: followeeInObject
+  coCollectedEntity: coWishlistedEntity
+  coCity: coVisitedEntity
+  coCohort: sameCohort
+  sameOrg: sameCompany
+  sameBrand: sharedEntityAttention
+  # coLiked 已于 §21.9（2026-06-18）恢复为 T4 轻量交集，移出废弃迁移；见 kinds.coLiked。
+  coFavorited: ""    # 废弃：内容无长期动作（收藏退场 §14A 不翻转）
+  coFollowedContent: ""
+  followeeFollowedContent: ""
+  friendFavorited: ""
+  coEra: ""
+  youInteracted: ""

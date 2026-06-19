@@ -1,0 +1,915 @@
+{
+  "schemaVersion": "quwoquan_data.target_selection",
+  "strategy": "mandatory targets plus deterministic round-robin regional coverage",
+  "discoveryPath": "quwoquan_data/tasks/旅行/地域/中国/景区/国家5A景区精选/discovery_china_5a_20260617.json",
+  "limit": 100,
+  "reserveRatio": 0.5,
+  "mandatory": [],
+  "excluded": [],
+  "targets": [
+    {
+      "name": "北京（通州）大运河文化旅游景区",
+      "entityType": "地点/景区",
+      "region": "北京",
+      "sourceName": "北京（通州）大运河文化旅游景区"
+    },
+    {
+      "name": "盘山风景名胜区",
+      "entityType": "地点/景区",
+      "region": "天津",
+      "sourceName": "盘山风景名胜区"
+    },
+    {
+      "name": "衡水湖旅游景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "衡水湖旅游景区"
+    },
+    {
+      "name": "乔家大院景区",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "乔家大院景区"
+    },
+    {
+      "name": "老牛湾黄河大峡谷旅游区",
+      "entityType": "地点/景区",
+      "region": "内蒙古",
+      "sourceName": "老牛湾黄河大峡谷旅游区"
+    },
+    {
+      "name": "五女山景区",
+      "entityType": "地点/景区",
+      "region": "辽宁",
+      "sourceName": "五女山景区"
+    },
+    {
+      "name": "大安嫩江湾旅游区",
+      "entityType": "地点/景区",
+      "region": "吉林",
+      "sourceName": "大安嫩江湾旅游区"
+    },
+    {
+      "name": "扎龙生态旅游区",
+      "entityType": "地点/景区",
+      "region": "黑龙江",
+      "sourceName": "扎龙生态旅游区"
+    },
+    {
+      "name": "西沙明珠湖景区",
+      "entityType": "地点/景区",
+      "region": "上海",
+      "sourceName": "西沙明珠湖景区"
+    },
+    {
+      "name": "连岛景区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "连岛景区"
+    },
+    {
+      "name": "双龙风景旅游区",
+      "entityType": "地点/景区",
+      "region": "浙江",
+      "sourceName": "双龙风景旅游区"
+    },
+    {
+      "name": "琅琊山景区",
+      "entityType": "地点/景区",
+      "region": "安徽",
+      "sourceName": "琅琊山景区"
+    },
+    {
+      "name": "冠豸山景区",
+      "entityType": "地点/景区",
+      "region": "福建",
+      "sourceName": "冠豸山景区"
+    },
+    {
+      "name": "篁岭景区",
+      "entityType": "地点/景区",
+      "region": "江西",
+      "sourceName": "篁岭景区"
+    },
+    {
+      "name": "周村古商城景区",
+      "entityType": "地点/景区",
+      "region": "山东",
+      "sourceName": "周村古商城景区"
+    },
+    {
+      "name": "宝泉旅游区",
+      "entityType": "地点/景区",
+      "region": "河南",
+      "sourceName": "宝泉旅游区"
+    },
+    {
+      "name": "麻城龟峰山景区",
+      "entityType": "地点/景区",
+      "region": "湖北",
+      "sourceName": "麻城龟峰山景区"
+    },
+    {
+      "name": "凤凰古城旅游区",
+      "entityType": "地点/景区",
+      "region": "湖南",
+      "sourceName": "凤凰古城旅游区"
+    },
+    {
+      "name": "万绿湖风景区",
+      "entityType": "地点/景区",
+      "region": "广东",
+      "sourceName": "万绿湖风景区"
+    },
+    {
+      "name": "花山岩画景区",
+      "entityType": "地点/景区",
+      "region": "广西",
+      "sourceName": "花山岩画景区"
+    },
+    {
+      "name": "三亚市天涯海角游览区",
+      "entityType": "地点/景区",
+      "region": "海南",
+      "sourceName": "三亚市天涯海角游览区"
+    },
+    {
+      "name": "武陵山大裂谷景区",
+      "entityType": "地点/景区",
+      "region": "重庆",
+      "sourceName": "武陵山大裂谷景区"
+    },
+    {
+      "name": "成都市天台山景区",
+      "entityType": "地点/景区",
+      "region": "四川",
+      "sourceName": "成都市天台山景区"
+    },
+    {
+      "name": "万峰林景区",
+      "entityType": "地点/景区",
+      "region": "贵州",
+      "sourceName": "万峰林景区"
+    },
+    {
+      "name": "和顺古镇景区",
+      "entityType": "地点/景区",
+      "region": "云南",
+      "sourceName": "和顺古镇景区"
+    },
+    {
+      "name": "雅鲁藏布大峡谷景区",
+      "entityType": "地点/景区",
+      "region": "西藏",
+      "sourceName": "雅鲁藏布大峡谷景区"
+    },
+    {
+      "name": "乾陵景区",
+      "entityType": "地点/景区",
+      "region": "陕西",
+      "sourceName": "乾陵景区"
+    },
+    {
+      "name": "冶力关旅游区",
+      "entityType": "地点/景区",
+      "region": "甘肃",
+      "sourceName": "冶力关旅游区"
+    },
+    {
+      "name": "阿咪东索景区",
+      "entityType": "地点/景区",
+      "region": "青海",
+      "sourceName": "阿咪东索景区"
+    },
+    {
+      "name": "六盘山红军长征旅游区",
+      "entityType": "地点/景区",
+      "region": "宁夏",
+      "sourceName": "六盘山红军长征旅游区"
+    },
+    {
+      "name": "天山托木尔景区",
+      "entityType": "地点/景区",
+      "region": "新疆",
+      "sourceName": "天山托木尔景区"
+    },
+    {
+      "name": "塔克拉玛干·三五九旅文化旅游区",
+      "entityType": "地点/景区",
+      "region": "兵团",
+      "sourceName": "塔克拉玛干·三五九旅文化旅游区"
+    },
+    {
+      "name": "圆明园遗址公园景区",
+      "entityType": "地点/景区",
+      "region": "北京",
+      "sourceName": "圆明园遗址公园景区"
+    },
+    {
+      "name": "天津古文化街旅游区（津门故里）",
+      "entityType": "地点/景区",
+      "region": "天津",
+      "sourceName": "天津古文化街旅游区（津门故里）"
+    },
+    {
+      "name": "南湖·开滦旅游景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "南湖·开滦旅游景区"
+    },
+    {
+      "name": "晋祠天龙山景区",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "晋祠天龙山景区"
+    },
+    {
+      "name": "呼伦贝尔大草原·莫尔格勒河景区",
+      "entityType": "地点/景区",
+      "region": "内蒙古",
+      "sourceName": "呼伦贝尔大草原·莫尔格勒河景区"
+    },
+    {
+      "name": "红海滩风景廊道景区",
+      "entityType": "地点/景区",
+      "region": "辽宁",
+      "sourceName": "红海滩风景廊道景区"
+    },
+    {
+      "name": "前郭查干湖景区",
+      "entityType": "地点/景区",
+      "region": "吉林",
+      "sourceName": "前郭查干湖景区"
+    },
+    {
+      "name": "虎头旅游景区",
+      "entityType": "地点/景区",
+      "region": "黑龙江",
+      "sourceName": "虎头旅游景区"
+    },
+    {
+      "name": "中国共产党一大·二大·四大纪念馆景区",
+      "entityType": "地点/景区",
+      "region": "上海",
+      "sourceName": "中国共产党一大·二大·四大纪念馆景区"
+    },
+    {
+      "name": "洪泽湖湿地景区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "洪泽湖湿地景区"
+    },
+    {
+      "name": "云和梯田景区",
+      "entityType": "地点/景区",
+      "region": "浙江",
+      "sourceName": "云和梯田景区"
+    },
+    {
+      "name": "长江采石矶文化生态旅游区",
+      "entityType": "地点/景区",
+      "region": "安徽",
+      "sourceName": "长江采石矶文化生态旅游区"
+    },
+    {
+      "name": "厦门园林植物园景区",
+      "entityType": "地点/景区",
+      "region": "福建",
+      "sourceName": "厦门园林植物园景区"
+    },
+    {
+      "name": "三百山景区",
+      "entityType": "地点/景区",
+      "region": "江西",
+      "sourceName": "三百山景区"
+    },
+    {
+      "name": "奥帆海洋文化旅游区",
+      "entityType": "地点/景区",
+      "region": "山东",
+      "sourceName": "奥帆海洋文化旅游区"
+    },
+    {
+      "name": "太昊伏羲陵文化旅游区",
+      "entityType": "地点/景区",
+      "region": "河南",
+      "sourceName": "太昊伏羲陵文化旅游区"
+    },
+    {
+      "name": "明显陵文化旅游景区",
+      "entityType": "地点/景区",
+      "region": "湖北",
+      "sourceName": "明显陵文化旅游景区"
+    },
+    {
+      "name": "吉首市矮寨·十八洞·德夯大峡谷景区",
+      "entityType": "地点/景区",
+      "region": "湖南",
+      "sourceName": "吉首市矮寨·十八洞·德夯大峡谷景区"
+    },
+    {
+      "name": "开平碉楼文化旅游区",
+      "entityType": "地点/景区",
+      "region": "广东",
+      "sourceName": "开平碉楼文化旅游区"
+    },
+    {
+      "name": "程阳八寨景区",
+      "entityType": "地点/景区",
+      "region": "广西",
+      "sourceName": "程阳八寨景区"
+    },
+    {
+      "name": "蜈支洲岛旅游区",
+      "entityType": "地点/景区",
+      "region": "海南",
+      "sourceName": "蜈支洲岛旅游区"
+    },
+    {
+      "name": "白帝城·瞿塘峡景区",
+      "entityType": "地点/景区",
+      "region": "重庆",
+      "sourceName": "白帝城·瞿塘峡景区"
+    },
+    {
+      "name": "四姑娘山景区",
+      "entityType": "地点/景区",
+      "region": "四川",
+      "sourceName": "四姑娘山景区"
+    },
+    {
+      "name": "织金洞景区",
+      "entityType": "地点/景区",
+      "region": "贵州",
+      "sourceName": "织金洞景区"
+    },
+    {
+      "name": "普者黑旅游景区",
+      "entityType": "地点/景区",
+      "region": "云南",
+      "sourceName": "普者黑旅游景区"
+    },
+    {
+      "name": "扎什伦布寺景区",
+      "entityType": "地点/景区",
+      "region": "西藏",
+      "sourceName": "扎什伦布寺景区"
+    },
+    {
+      "name": "延川黄河乾坤湾景区",
+      "entityType": "地点/景区",
+      "region": "陕西",
+      "sourceName": "延川黄河乾坤湾景区"
+    },
+    {
+      "name": "官鹅沟景区",
+      "entityType": "地点/景区",
+      "region": "甘肃",
+      "sourceName": "官鹅沟景区"
+    },
+    {
+      "name": "互助土族故土园旅游区",
+      "entityType": "地点/景区",
+      "region": "青海",
+      "sourceName": "互助土族故土园旅游区"
+    },
+    {
+      "name": "青铜峡黄河大峡谷旅游区",
+      "entityType": "地点/景区",
+      "region": "宁夏",
+      "sourceName": "青铜峡黄河大峡谷旅游区"
+    },
+    {
+      "name": "江布拉克景区",
+      "entityType": "地点/景区",
+      "region": "新疆",
+      "sourceName": "江布拉克景区"
+    },
+    {
+      "name": "兵团十师185团白沙湖景区（阿勒泰地区）",
+      "entityType": "地点/景区",
+      "region": "兵团",
+      "sourceName": "兵团十师185团白沙湖景区（阿勒泰地区）"
+    },
+    {
+      "name": "北京奥林匹克公园",
+      "entityType": "地点/景区",
+      "region": "北京",
+      "sourceName": "北京奥林匹克公园"
+    },
+    {
+      "name": "金山岭长城景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "金山岭长城景区"
+    },
+    {
+      "name": "黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)"
+    },
+    {
+      "name": "胡杨林旅游区",
+      "entityType": "地点/景区",
+      "region": "内蒙古",
+      "sourceName": "胡杨林旅游区"
+    },
+    {
+      "name": "千山景区",
+      "entityType": "地点/景区",
+      "region": "辽宁",
+      "sourceName": "千山景区"
+    },
+    {
+      "name": "高句丽文物古迹旅游景区",
+      "entityType": "地点/景区",
+      "region": "吉林",
+      "sourceName": "高句丽文物古迹旅游景区"
+    },
+    {
+      "name": "北极村旅游景区",
+      "entityType": "地点/景区",
+      "region": "黑龙江",
+      "sourceName": "北极村旅游景区"
+    },
+    {
+      "name": "上海科技馆",
+      "entityType": "地点/景区",
+      "region": "上海",
+      "sourceName": "上海科技馆"
+    },
+    {
+      "name": "惠山古镇景区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "惠山古镇景区"
+    },
+    {
+      "name": "府城文化旅游区",
+      "entityType": "地点/景区",
+      "region": "浙江",
+      "sourceName": "府城文化旅游区"
+    },
+    {
+      "name": "万佛湖风景区",
+      "entityType": "地点/景区",
+      "region": "安徽",
+      "sourceName": "万佛湖风景区"
+    },
+    {
+      "name": "湄洲岛妈祖文化旅游区",
+      "entityType": "地点/景区",
+      "region": "福建",
+      "sourceName": "湄洲岛妈祖文化旅游区"
+    },
+    {
+      "name": "永修县庐山西海景区",
+      "entityType": "地点/景区",
+      "region": "江西",
+      "sourceName": "永修县庐山西海景区"
+    },
+    {
+      "name": "微山湖旅游区",
+      "entityType": "地点/景区",
+      "region": "山东",
+      "sourceName": "微山湖旅游区"
+    },
+    {
+      "name": "鸡公山景区",
+      "entityType": "地点/景区",
+      "region": "河南",
+      "sourceName": "鸡公山景区"
+    },
+    {
+      "name": "三峡大瀑布景区",
+      "entityType": "地点/景区",
+      "region": "湖北",
+      "sourceName": "三峡大瀑布景区"
+    },
+    {
+      "name": "桃花源旅游区",
+      "entityType": "地点/景区",
+      "region": "湖南",
+      "sourceName": "桃花源旅游区"
+    },
+    {
+      "name": "区星湖旅游景区",
+      "entityType": "地点/景区",
+      "region": "广东",
+      "sourceName": "区星湖旅游景区"
+    },
+    {
+      "name": "黄姚古镇景区",
+      "entityType": "地点/景区",
+      "region": "广西",
+      "sourceName": "黄姚古镇景区"
+    },
+    {
+      "name": "保亭县海南槟榔谷黎苗文化旅游区",
+      "entityType": "地点/景区",
+      "region": "海南",
+      "sourceName": "保亭县海南槟榔谷黎苗文化旅游区"
+    },
+    {
+      "name": "濯水景区",
+      "entityType": "地点/景区",
+      "region": "重庆",
+      "sourceName": "濯水景区"
+    },
+    {
+      "name": "安仁古镇景区",
+      "entityType": "地点/景区",
+      "region": "四川",
+      "sourceName": "安仁古镇景区"
+    },
+    {
+      "name": "赤水丹霞旅游区",
+      "entityType": "地点/景区",
+      "region": "贵州",
+      "sourceName": "赤水丹霞旅游区"
+    },
+    {
+      "name": "火山热海旅游区",
+      "entityType": "地点/景区",
+      "region": "云南",
+      "sourceName": "火山热海旅游区"
+    },
+    {
+      "name": "巴松措景区",
+      "entityType": "地点/景区",
+      "region": "西藏",
+      "sourceName": "巴松措景区"
+    },
+    {
+      "name": "炳灵寺世界文化遗产旅游区",
+      "entityType": "地点/景区",
+      "region": "甘肃",
+      "sourceName": "炳灵寺世界文化遗产旅游区"
+    },
+    {
+      "name": "塔尔寺景区",
+      "entityType": "地点/景区",
+      "region": "青海",
+      "sourceName": "塔尔寺景区"
+    },
+    {
+      "name": "水洞沟旅游区",
+      "entityType": "地点/景区",
+      "region": "宁夏",
+      "sourceName": "水洞沟旅游区"
+    },
+    {
+      "name": "赛里木湖景区",
+      "entityType": "地点/景区",
+      "region": "新疆",
+      "sourceName": "赛里木湖景区"
+    },
+    {
+      "name": "恭王府景区",
+      "entityType": "地点/景区",
+      "region": "北京",
+      "sourceName": "恭王府景区"
+    },
+    {
+      "name": "清西陵景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "清西陵景区"
+    },
+    {
+      "name": "云丘山景区",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "云丘山景区"
+    },
+    {
+      "name": "阿斯哈图石林景区",
+      "entityType": "地点/景区",
+      "region": "内蒙古",
+      "sourceName": "阿斯哈图石林景区"
+    },
+    {
+      "name": "本溪水洞景区",
+      "entityType": "地点/景区",
+      "region": "辽宁",
+      "sourceName": "本溪水洞景区"
+    },
+    {
+      "name": "世界雕塑公园景区",
+      "entityType": "地点/景区",
+      "region": "吉林",
+      "sourceName": "世界雕塑公园景区"
+    },
+    {
+      "name": "林海奇石景区",
+      "entityType": "地点/景区",
+      "region": "黑龙江",
+      "sourceName": "林海奇石景区"
+    }
+  ],
+  "reserveTargets": [
+    {
+      "name": "明十三陵景区",
+      "entityType": "地点/景区",
+      "region": "北京",
+      "sourceName": "明十三陵景区"
+    },
+    {
+      "name": "八达岭—慕田峪长城旅游区",
+      "entityType": "地点/景区",
+      "region": "北京",
+      "sourceName": "八达岭—慕田峪长城旅游区"
+    },
+    {
+      "name": "颐和园",
+      "entityType": "地点/景区",
+      "region": "北京",
+      "sourceName": "颐和园"
+    },
+    {
+      "name": "天坛公园",
+      "entityType": "地点/景区",
+      "region": "北京",
+      "sourceName": "天坛公园"
+    },
+    {
+      "name": "故宫博物院",
+      "entityType": "地点/景区",
+      "region": "北京",
+      "sourceName": "故宫博物院"
+    },
+    {
+      "name": "山海关景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "山海关景区"
+    },
+    {
+      "name": "白石山景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "白石山景区"
+    },
+    {
+      "name": "广府古城景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "广府古城景区"
+    },
+    {
+      "name": "娲皇宫景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "娲皇宫景区"
+    },
+    {
+      "name": "清东陵景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "清东陵景区"
+    },
+    {
+      "name": "西柏坡景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "西柏坡景区"
+    },
+    {
+      "name": "野三坡景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "野三坡景区"
+    },
+    {
+      "name": "白洋淀景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "白洋淀景区"
+    },
+    {
+      "name": "承德避暑山庄及周围寺庙景区",
+      "entityType": "地点/景区",
+      "region": "河北",
+      "sourceName": "承德避暑山庄及周围寺庙景区"
+    },
+    {
+      "name": "太行山大峡谷八泉峡景区",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "太行山大峡谷八泉峡景区"
+    },
+    {
+      "name": "洪洞大槐树寻根祭祖园旅游景区",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "洪洞大槐树寻根祭祖园旅游景区"
+    },
+    {
+      "name": "雁门关景区",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "雁门关景区"
+    },
+    {
+      "name": "平遥古城景区",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "平遥古城景区"
+    },
+    {
+      "name": "绵山风景区",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "绵山风景区"
+    },
+    {
+      "name": "皇城相府生态文化旅游区",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "皇城相府生态文化旅游区"
+    },
+    {
+      "name": "五台山风景名胜区",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "五台山风景名胜区"
+    },
+    {
+      "name": "云冈石窟景区",
+      "entityType": "地点/景区",
+      "region": "山西",
+      "sourceName": "云冈石窟景区"
+    },
+    {
+      "name": "阿尔山-柴河旅游景区",
+      "entityType": "地点/景区",
+      "region": "内蒙古",
+      "sourceName": "阿尔山-柴河旅游景区"
+    },
+    {
+      "name": "中俄边境旅游区",
+      "entityType": "地点/景区",
+      "region": "内蒙古",
+      "sourceName": "中俄边境旅游区"
+    },
+    {
+      "name": "成吉思汗陵旅游区",
+      "entityType": "地点/景区",
+      "region": "内蒙古",
+      "sourceName": "成吉思汗陵旅游区"
+    },
+    {
+      "name": "响沙湾旅游景区",
+      "entityType": "地点/景区",
+      "region": "内蒙古",
+      "sourceName": "响沙湾旅游景区"
+    },
+    {
+      "name": "金石滩景区",
+      "entityType": "地点/景区",
+      "region": "辽宁",
+      "sourceName": "金石滩景区"
+    },
+    {
+      "name": "老虎滩海洋公园—老虎滩极地馆",
+      "entityType": "地点/景区",
+      "region": "辽宁",
+      "sourceName": "老虎滩海洋公园—老虎滩极地馆"
+    },
+    {
+      "name": "沈阳市沈阳植物园",
+      "entityType": "地点/景区",
+      "region": "辽宁",
+      "sourceName": "沈阳市沈阳植物园"
+    },
+    {
+      "name": "六鼎山文化旅游区",
+      "entityType": "地点/景区",
+      "region": "吉林",
+      "sourceName": "六鼎山文化旅游区"
+    },
+    {
+      "name": "长影世纪城景区",
+      "entityType": "地点/景区",
+      "region": "吉林",
+      "sourceName": "长影世纪城景区"
+    },
+    {
+      "name": "净月潭景区",
+      "entityType": "地点/景区",
+      "region": "吉林",
+      "sourceName": "净月潭景区"
+    },
+    {
+      "name": "伪满皇宫博物馆",
+      "entityType": "地点/景区",
+      "region": "吉林",
+      "sourceName": "伪满皇宫博物馆"
+    },
+    {
+      "name": "长白山景区",
+      "entityType": "地点/景区",
+      "region": "吉林",
+      "sourceName": "长白山景区"
+    },
+    {
+      "name": "镜泊湖景区",
+      "entityType": "地点/景区",
+      "region": "黑龙江",
+      "sourceName": "镜泊湖景区"
+    },
+    {
+      "name": "五大连池景区",
+      "entityType": "地点/景区",
+      "region": "黑龙江",
+      "sourceName": "五大连池景区"
+    },
+    {
+      "name": "太阳岛景区",
+      "entityType": "地点/景区",
+      "region": "黑龙江",
+      "sourceName": "太阳岛景区"
+    },
+    {
+      "name": "上海野生动物园",
+      "entityType": "地点/景区",
+      "region": "上海",
+      "sourceName": "上海野生动物园"
+    },
+    {
+      "name": "东方明珠广播电视塔",
+      "entityType": "地点/景区",
+      "region": "上海",
+      "sourceName": "东方明珠广播电视塔"
+    },
+    {
+      "name": "春秋淹城旅游区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "春秋淹城旅游区"
+    },
+    {
+      "name": "花果山景区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "花果山景区"
+    },
+    {
+      "name": "云龙湖景区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "云龙湖景区"
+    },
+    {
+      "name": "中华麋鹿园景区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "中华麋鹿园景区"
+    },
+    {
+      "name": "周恩来故里景区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "周恩来故里景区"
+    },
+    {
+      "name": "茅山景区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "茅山景区"
+    },
+    {
+      "name": "天目湖景区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "天目湖景区"
+    },
+    {
+      "name": "沙家浜－虞山尚湖旅游区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "沙家浜－虞山尚湖旅游区"
+    },
+    {
+      "name": "太湖旅游区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "太湖旅游区"
+    },
+    {
+      "name": "鼋头渚旅游风景区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "鼋头渚旅游风景区"
+    },
+    {
+      "name": "金山·焦山·北固山风景区",
+      "entityType": "地点/景区",
+      "region": "江苏",
+      "sourceName": "金山·焦山·北固山风景区"
+    }
+  ],
+  "sourceTaskId": "旅行/地域/四川省/景区/景区精选",
+  "taskId": "旅行/地域/中国/景区/全国5A景区百级源就绪预筛试跑v2"
+}

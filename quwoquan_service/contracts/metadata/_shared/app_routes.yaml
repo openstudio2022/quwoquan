@@ -84,10 +84,10 @@ routes:
     path: /profile/comments
   - id: profileStats
     path: /profile/stats
-    query_params: [type]
+    query_params: [type, userId]
   - id: myIntersections
     path: /profile/intersections
-    query_params: [dimension]
+    query_params: [dimension, sourceRef, filter, timeBucket, intersectionId]
   - id: objectIntersections
     path: /object/intersections
     query_params: [objectId, objectType, title]

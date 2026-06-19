@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
-import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/services/cache/cached_content_repository.dart';
 import 'package:quwoquan_app/core/services/cache/cache_management_service.dart';
@@ -110,7 +109,7 @@ class _CountingContentRepository extends Fake implements ContentRepository {
   int detailRequestCount = 0;
 
   @override
-  Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? identity,
     String? type,
@@ -122,9 +121,12 @@ class _CountingContentRepository extends Fake implements ContentRepository {
     String? feedRequestId,
   }) async {
     feedRequestCount += 1;
-    return CursorPage<PostBaseDto>(
+    return DiscoveryFeedPage(
       items: <PostBaseDto>[post],
       nextCursor: null,
+      feedRequestId: feedRequestId?.trim().isNotEmpty == true
+          ? feedRequestId!.trim()
+          : 'frq_mock_${DateTime.now().microsecondsSinceEpoch}',
     );
   }
 

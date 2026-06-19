@@ -19,7 +19,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
       query: query,
       title: UITextConstants.profileWhyRecommendTitle,
       isDark: isDark,
-      bottomPadding: AppSpacing.md,
+      bottomPadding: AppSpacing.zero,
     );
   }
 
@@ -30,13 +30,10 @@ extension _ProfileShellBuilders on _ProfileShellState {
   Widget _buildAuthorImpactCard(bool isDark) {
     final impact = ref.watch(authorImpactProvider(widget.userId));
     return impact.when(
-      data: (summary) => Padding(
-        padding: EdgeInsets.only(bottom: AppSpacing.md),
-        child: AuthorImpactCard(
-          summary: summary,
-          isDark: isDark,
-          isMine: widget.mode == ProfileMode.mine,
-        ),
+      data: (summary) => AuthorImpactCard(
+        summary: summary,
+        isDark: isDark,
+        isMine: widget.mode == ProfileMode.mine,
       ),
       loading: () => const SizedBox.shrink(),
       error: (_, _) => const SizedBox.shrink(),
@@ -142,81 +139,119 @@ extension _ProfileShellBuilders on _ProfileShellState {
         SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
     final displayCapability = state.displayCapability;
     final summaryShadow = isDark
-        ? AppColors.black.withValues(alpha: 0.18)
-        : AppColors.black.withValues(alpha: 0.05);
-    return Container(
+        ? AppColors.black.withValues(alpha: 0.10)
+        : AppColors.black.withValues(alpha: 0.025);
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: summarySurface,
-        borderRadius: BorderRadius.circular(
-          _ProfileShellState._profileCardRadius,
-        ),
-        border: Border.all(color: summaryBorder, width: AppSpacing.hairline),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: summaryShadow,
-            blurRadius: AppSpacing.twenty,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: SettingsSemanticConstants.conversationSheetPanelBackground(
+          isDark,
+        ).withValues(alpha: isDark ? 0.98 : 0.96),
       ),
       child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.feedContentHorizontal(context),
-          0,
-          AppSpacing.feedContentHorizontal(context),
-          AppSpacing.containerLg,
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.feedContentHorizontal(context),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ProfileHeader(
-              isDark: isDark,
-              avatarUrl: avatarUrl,
-              displayName: displayName,
-              identityTags: state.profile?.identityTags ?? const <String>[],
-              verified: state.profile?.verified ?? false,
-              showEdit: widget.mode == ProfileMode.mine,
-              onEdit: () => context.push(AppRoutePaths.profileEdit),
+            Container(
+              key: const ValueKey<String>('profile-shell-profile-card'),
+              decoration: BoxDecoration(
+                color: summarySurface,
+                borderRadius: BorderRadius.circular(
+                  _ProfileShellState._profileCardRadius,
+                ),
+                border: Border.all(
+                  color: summaryBorder.withValues(alpha: isDark ? 0.75 : 0.55),
+                  width: AppSpacing.hairline,
+                ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: summaryShadow,
+                    blurRadius: AppSpacing.fourteen,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.containerMd,
+                  0,
+                  AppSpacing.containerMd,
+                  AppSpacing.containerMd,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ProfileHeader(
+                      isDark: isDark,
+                      avatarUrl: avatarUrl,
+                      displayName: displayName,
+                      identityTags:
+                          state.profile?.identityTags ?? const <String>[],
+                      verified: state.profile?.verified ?? false,
+                      showEdit: widget.mode == ProfileMode.mine,
+                      onEdit: () => context.push(AppRoutePaths.profileEdit),
+                    ),
+                    if (bio != null && bio.trim().isNotEmpty) ...[
+                      SizedBox(height: AppSpacing.interGroupSm),
+                      ProfileSloganCard(
+                        isDark: isDark,
+                        bio: bio,
+                        onTap: widget.mode == ProfileMode.mine
+                            ? () => context.push(AppRoutePaths.profileEdit)
+                            : null,
+                      ),
+                    ],
+                    if (widget.mode == ProfileMode.mine &&
+                        (state.profile?.profileCompleteness ?? 100) < 100) ...[
+                      SizedBox(height: AppSpacing.intraGroupMd),
+                      ProfileCompletenessCard(
+                        percent: state.profile?.profileCompleteness ?? 100,
+                        missingItems:
+                            state.profile?.profileCompletenessMissingItems ??
+                            const <String>[],
+                        onTap: () => context.push(AppRoutePaths.profileEdit),
+                      ),
+                    ],
+                    SizedBox(height: AppSpacing.interGroupSm),
+                    ProfileStatsRow(
+                      isDark: isDark,
+                      profile: state.profile,
+                      onStatTap: (type) =>
+                          _handleProfileStatTap(context, type, state),
+                    ),
+                    if (widget.mode == ProfileMode.other) ...[
+                      SizedBox(height: AppSpacing.interGroupSm),
+                      ProfileActionBar(
+                        mode: widget.mode,
+                        isDark: isDark,
+                        isFollowing:
+                            displayCapability?.viewerFollowsTarget ??
+                            state.isFollowing,
+                        capability: displayCapability,
+                        onEditProfile: () =>
+                            context.push(AppRoutePaths.profileEdit),
+                        onShareProfile: () => AppToast.show(
+                          context,
+                          UITextConstants.shareComingSoon,
+                        ),
+                        onFollow: () => _gatedToggleFollow(context, notifier),
+                        onMessage: () =>
+                            unawaited(_gatedOpenMessage(context, notifier)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
-            SizedBox(height: AppSpacing.intraGroupSm),
-            ProfileSloganCard(isDark: isDark, bio: bio),
-            if (widget.mode == ProfileMode.mine &&
-                (state.profile?.profileCompleteness ?? 100) < 100) ...[
-              SizedBox(height: AppSpacing.intraGroupSm),
-              ProfileCompletenessCard(
-                percent: state.profile?.profileCompleteness ?? 100,
-                missingItems:
-                    state.profile?.profileCompletenessMissingItems ??
-                    const <String>[],
-                onTap: () => context.push(AppRoutePaths.profileEdit),
-              ),
-            ],
-            SizedBox(height: AppSpacing.md),
-            ProfileStatsRow(isDark: isDark, profile: state.profile),
-            SizedBox(height: AppSpacing.md),
-            if (widget.mode == ProfileMode.other) ...[
-              ProfileActionBar(
-                mode: widget.mode,
-                isDark: isDark,
-                isFollowing:
-                    displayCapability?.viewerFollowsTarget ?? state.isFollowing,
-                capability: displayCapability,
-                onEditProfile: () => context.push(AppRoutePaths.profileEdit),
-                onShareProfile: () =>
-                    AppToast.show(context, UITextConstants.shareComingSoon),
-                onFollow: () => _gatedToggleFollow(context, notifier),
-                onMessage: () =>
-                    unawaited(_gatedOpenMessage(context, notifier)),
-              ),
-              SizedBox(height: AppSpacing.md),
-            ],
             if (widget.mode == ProfileMode.mine) ...[
               MyIntersectionInboxCard(isDark: isDark),
-              SizedBox(height: AppSpacing.md),
             ] else ...[
               _buildIntersectionCard(isDark),
             ],
             _buildAuthorImpactCard(isDark),
+            SizedBox(height: _ProfileShellState._profileSurfaceBridge),
           ],
         ),
       ),
@@ -282,8 +317,11 @@ extension _ProfileShellBuilders on _ProfileShellState {
       MediaQuery.viewPaddingOf(context).top,
       context,
     );
+    final hasLeadingAction =
+        widget.mode == ProfileMode.other || widget.onBack != null;
     final sideSlotWidth =
         AppSpacing.appChromeActionButtonSize + AppSpacing.containerXs;
+    final leadingSlotWidth = hasLeadingAction ? sideSlotWidth : 0.0;
     final trailingSlotWidth = widget.mode == ProfileMode.mine
         ? AppSpacing.appChromeActionButtonSize * 4 +
               AppSpacing.intraGroupXs * 3 +
@@ -338,29 +376,26 @@ extension _ProfileShellBuilders on _ProfileShellState {
                     height: _compactToolbarHeight(context),
                     child: Row(
                       children: [
-                        SizedBox(
-                          width: sideSlotWidth,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child:
-                                (widget.mode == ProfileMode.other ||
-                                    widget.onBack != null)
-                                ? ProfileIosIconButton(
-                                    icon: CupertinoIcons.back,
-                                    onPressed:
-                                        widget.onBack ?? () => context.pop(),
-                                    backgroundColor: actionBackground,
-                                    foregroundColor: compactForeground,
-                                  )
-                                : const SizedBox.shrink(),
+                        if (hasLeadingAction)
+                          SizedBox(
+                            width: leadingSlotWidth,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: ProfileIosIconButton(
+                                icon: CupertinoIcons.back,
+                                onPressed: widget.onBack ?? () => context.pop(),
+                                backgroundColor: actionBackground,
+                                foregroundColor: compactForeground,
+                              ),
+                            ),
                           ),
-                        ),
                         Expanded(
                           child: Opacity(
                             opacity: opacity,
                             child: LayoutBuilder(
                               builder: (context, constraints) {
-                                return Center(
+                                return Align(
+                                  alignment: Alignment.centerLeft,
                                   child: ConstrainedBox(
                                     constraints: BoxConstraints(
                                       maxWidth: constraints.maxWidth,
@@ -411,11 +446,11 @@ extension _ProfileShellBuilders on _ProfileShellState {
                                             displayName,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            textAlign: TextAlign.center,
+                                            textAlign: TextAlign.start,
                                             style: TextStyle(
                                               fontSize:
                                                   AppTypography.iosNavTitle,
-                                              fontWeight: AppTypography.medium,
+                                              fontWeight: AppTypography.regular,
                                               color: compactForeground,
                                               letterSpacing: -0.24,
                                             ),
@@ -443,7 +478,8 @@ extension _ProfileShellBuilders on _ProfileShellState {
                                       ),
                                       SizedBox(width: AppSpacing.intraGroupXs),
                                       ProfileIosIconButton(
-                                        icon: CupertinoIcons.share,
+                                        icon: CupertinoIcons
+                                            .arrowshape_turn_up_right,
                                         onPressed: () => AppToast.show(
                                           context,
                                           UITextConstants.shareComingSoon,
@@ -508,6 +544,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
           onHorizontalDragEnd: _handleTabSwipeDragEnd,
           transparentBackground: true,
           excludeUnderlineTabIds: tabs.map((tab) => tab.id).toList(),
+          selectedLabelColor: AppColors.iosAccent(context),
         ),
       ),
     );
@@ -524,14 +561,55 @@ extension _ProfileShellBuilders on _ProfileShellState {
     return profileTabLabelForId(tabId);
   }
 
+  void _handleProfileStatTap(
+    BuildContext context,
+    String type,
+    ProfileState state,
+  ) {
+    final subjectUserId = state.profile?.subAccountId.trim().isNotEmpty == true
+        ? state.profile!.subAccountId
+        : widget.userId;
+    switch (type) {
+      case 'fans':
+      case 'following':
+      case 'circles':
+        context.push(
+          AppRoutePaths.profileStats(type: type, userId: subjectUserId),
+        );
+      case 'likes':
+        ref
+            .read(profileNotifierProvider(widget.userId).notifier)
+            .setInteractionSubTab(InteractionSubTab.likes);
+        _onPrimaryTabChange('interaction');
+      default:
+        break;
+    }
+  }
+
+  /// 首屏聚合失败错误态：结构化 [UiErrorSemantic] + 重试（重新 loadProfile）。
+  /// 仅在无可展示档案时渲染，保持壳层几何稳定、错误对用户可见。
+  Widget _buildFirstScreenError(BuildContext context, ProfileState state) {
+    return AppPageErrorState(
+      semantic: runtimeErrorSemantic(
+        // hasLoadError ⟺ rawError != null（调用点已保证），此处直接消费原始错误。
+        context,
+        error: state.rawError!,
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.page,
+      ),
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.retry ||
+            action.type == UiErrorActionType.resubmit) {
+          await ref
+              .read(profileNotifierProvider(widget.userId).notifier)
+              .loadProfile();
+        }
+      },
+    );
+  }
+
   Widget _buildInlineTabContent(BuildContext context, bool isDark) {
     final content = switch (_activeTabId) {
-      'circles' => ProfileCirclesTab(
-        mode: widget.mode,
-        userId: widget.userId,
-        isDark: isDark,
-        inlineScroll: true,
-      ),
       'interaction' => ProfileInteractionTab(
         mode: widget.mode,
         userId: widget.userId,
@@ -565,7 +643,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
             AppActionSheetItem<_ProfileMoreAction>(
               value: _ProfileMoreAction.share,
               label: UITextConstants.share,
-              icon: CupertinoIcons.share,
+              icon: CupertinoIcons.arrowshape_turn_up_right,
             ),
           ],
         ),

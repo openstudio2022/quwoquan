@@ -69,6 +69,18 @@ var (
 		Name:      "filtered_total",
 		Help:      "My-intersection inbox intersections filtered by reason(stale).",
 	}, []string{"reason"})
+
+	// redisDegraded counts Redis-unavailable degradations: write fast-paths that
+	// soft-fail without breaking the request, and watermark reads that fall back
+	// to the durable store. This is the measurement source for the Redis
+	// availability/degradation SLI (Redis outage must not fail the homepage and
+	// must not lose read positions).
+	redisDegraded = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "redis",
+		Name:      "degraded_total",
+		Help:      "Intersection Redis degradations by op(exposure_write|watermark_write|watermark_read).",
+	}, []string{"op"})
 )
 
 // Recorder is the Prometheus-backed implementation of
@@ -113,4 +125,9 @@ func (*Recorder) ObserveInboxVisit(dimension string) {
 // ObserveInboxFiltered implements application.IntersectionMetricsRecorder.
 func (*Recorder) ObserveInboxFiltered(reason string) {
 	inboxFiltered.WithLabelValues(norm(reason, "unknown")).Inc()
+}
+
+// ObserveRedisDegraded implements application.IntersectionMetricsRecorder.
+func (*Recorder) ObserveRedisDegraded(op string) {
+	redisDegraded.WithLabelValues(norm(op, "unknown")).Inc()
 }

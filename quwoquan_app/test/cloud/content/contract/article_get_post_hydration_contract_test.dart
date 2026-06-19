@@ -70,6 +70,34 @@ void main() {
       );
     });
 
+    test('Mock getPost 覆盖上文下三图文章详情', () async {
+      final mockRepo = MockContentRepository();
+      final detail = await mockRepo.getPost(
+        postId: 'alpha_article_top_three_images',
+      );
+      final view = projectArticleDetailViewFromPayload(
+        detail,
+        fallbackArticleId: 'alpha_article_top_three_images',
+      );
+      final imageNodes = view.document.nodes
+          .where((node) => node.isFigure)
+          .toList(growable: false);
+
+      expect(imageNodes, hasLength(3));
+      expect(
+        imageNodes.every(
+          (node) =>
+              node.imageUrl.startsWith('http://') ||
+              node.imageUrl.startsWith('https://'),
+        ),
+        isTrue,
+      );
+      expect(
+        view.contentBlocks.where((block) => block.type == 'image'),
+        isNotEmpty,
+      );
+    });
+
     test('summary snapshot 在 hydration 后切到 canonical articleMarkdown', () {
       const summaryRaw = <String, dynamic>{
         'postId': 'article_hydration_switch',

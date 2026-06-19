@@ -69,9 +69,14 @@ metrics:
 
   # P0 已接入真实 emitter 的业务指标：runtime/recommendation/observability.go。
   # 未接入的 P1/P2 指标仍保留 objective_only/observe_only，不得据此宣称已触发告警。
-  feed_requests_total: recommendation_feed_requests_total
-  feed_empty_total: recommendation_feed_empty_total
-  feed_fallback_total: recommendation_feed_fallback_total
+  # 管线请求/空结果/模型回退口径由 rec_pipeline_* 真实 emitter 承载（observability.go
+  # RecordPipelineResult/RecordModelTimeoutMetric），与 quwoquan_alerts.yaml 同名，不再
+  # 引用不存在的 recommendation_feed_requests/empty/fallback_total。
+  feed_requests_total: rec_pipeline_requests_total
+  feed_empty_total: rec_pipeline_empty_results_total
+  feed_model_hits_total: rec_pipeline_model_hits_total
+  feed_rule_hits_total: rec_pipeline_rule_hits_total
+  feed_model_timeouts_total: rec_pipeline_model_timeouts_total
   feed_served_total: recommendation_feed_served_total
   feed_impressed_total: recommendation_feed_impressed_total
   feed_duplicate_exposure_total: recommendation_feed_duplicate_exposure_total
@@ -86,8 +91,7 @@ metrics:
   feed_collaborative_recall_total: recommendation_feed_collaborative_recall_total
   feed_quality_score_missing_total: recommendation_feed_quality_score_missing_total
   feed_cold_start_requests_total: recommendation_feed_cold_start_requests_total
-  feed_ab_valid_experiments_total: recommendation_feed_ab_valid_experiments_total
-  feed_ab_invalid_experiments_total: recommendation_feed_ab_invalid_experiments_total
+  feed_ab_experiment_validity_total: recommendation_feed_ab_experiment_validity_total
   feed_policy_takedown_ejection_seconds: recommendation_feed_policy_takedown_ejection_seconds
   feed_ops_intervention_audit_total: recommendation_feed_ops_intervention_audit_total
   offline_eval_metric_value: recommendation_offline_eval_metric_value
@@ -144,22 +148,22 @@ slis:
       p95_ms: 100
 
   - id: empty_feed_rate
-    description: feed 空结果率。业务指标接入前为 objective_only。
-    source: recommendation_feed_empty_total / recommendation_feed_requests_total
+    description: feed 空结果率。真实 emitter rec_pipeline_*，与 RecEmptyFeedRateHigh 告警同名。
+    source: rec_pipeline_empty_results_total / rec_pipeline_requests_total
     objective_max: 0.001
-    objective_only: true
+    measured: true
 
   - id: model_fallback_rate
-    description: 模型 scorer 超时或失败后回退 RuleScorer 的比例。
-    source: recommendation_feed_fallback_total / recommendation_feed_requests_total
+    description: 模型 scorer 不可用时回退 RuleScorer 的请求占比（rule 路径 / 总请求）。
+    source: rec_pipeline_rule_hits_total / rec_pipeline_requests_total
     objective_max: 0.05
-    objective_only: true
+    measured: true
 
   - id: repeat_exposure_rate
-    description: served/impressed 窗口内重复曝光占比；用于曝光治理 P0/P1。
+    description: served/impressed 窗口内重复曝光占比；曝光过滤拦截量喂 duplicate_exposure_total。
     source: recommendation_feed_duplicate_exposure_total / recommendation_feed_served_total
     objective_max: 0.01
-    observe_only: true
+    measured: true
 
   - id: content_coverage_rate
     description: 推荐窗口覆盖的可推荐内容占比，避免少数内容过度集中。
@@ -230,8 +234,8 @@ slis:
     objective_min: 0.30
 
   - id: ab_experiment_validity
-    description: 在线 AB 实验样本量、分桶稳定性和显著性口径是否达标。
-    source: recommendation_feed_ab_valid_experiments_total / (recommendation_feed_ab_valid_experiments_total + recommendation_feed_ab_invalid_experiments_total)
+    description: 在线 AB 实验样本量、分桶稳定性（SRM）和显著性口径是否达标；准入校验由 EvaluateABAdmission 喂 recommendation_feed_ab_experiment_validity_total{result}。
+    source: recommendation_feed_ab_experiment_validity_total{result="valid"} / sum(recommendation_feed_ab_experiment_validity_total)
     objective_only: true
     objective_min: 0.95
 
@@ -261,14 +265,16 @@ slis:
     objective_min: 0.95
 
   - id: click_through_rate
-    description: feed 点击率，按 channel/segment/recall_path 可切分。
+    description: feed 点击率，七态 click 作为分子；按 channel/segment/recall_path 可切分。
     source: recommendation_feed_engagement_total{action="click"} / recommendation_feed_impressed_total
-    observe_only: true
+    objective_min: 0.05
+    measured: true
 
   - id: completion_rate
-    description: 内容完成率或深度停留达标率，按 content_type/channel 可切分。
+    description: 内容完成率或深度停留达标率（content_depth L3+ 或播放 >=90%），按 content_type/channel 可切分。
     source: recommendation_feed_completion_total / recommendation_feed_impressed_total
-    observe_only: true
+    objective_min: 0.35
+    measured: true
 
   - id: negative_feedback_rate
     description: dislike/report/hide_author/hide_content_type 等负反馈占比。
@@ -290,7 +296,7 @@ slis:
 
   - id: exposure_filter_smembers_fallback_rate
     description: 曝光过滤回退到全量 SMembers 的占比；商用容量下应趋零，主路径走 membership 点查或 Bloom。
-    source: recommendation_exposure_filter_smembers_fallback_total / recommendation_feed_requests_total
+    source: recommendation_exposure_filter_smembers_fallback_total / rec_pipeline_requests_total
     objective_max: 0.01
     measured: true
 

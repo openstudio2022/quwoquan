@@ -9,6 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
@@ -16,6 +17,7 @@ import 'package:quwoquan_app/components/object_page/object_intersection_provider
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
@@ -23,7 +25,6 @@ import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
 import '../../../support/harness/profile_shell_scroll_utils.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_circles_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 
 /// 在 UI 测试中使 capability 保持 null（current 关注/私信 布局）
@@ -60,19 +61,30 @@ class _StaticCapabilityRepository extends RelationshipCapabilityRepository {
   }
 }
 
+/// 首屏聚合失败仓库：getUserHomepageBundle 抛错，用于验证 ProfileShell 结构化错误态。
+class _FailingHomepageBundleRepository extends MockUserProfileRepository {
+  const _FailingHomepageBundleRepository();
+
+  @override
+  Future<UserHomepageBundleViewData> getUserHomepageBundle(
+    String subAccountId,
+  ) async {
+    throw Exception('homepage-bundle 加载失败（测试）');
+  }
+}
+
 Widget _scopedApp({
   required ProfileMode mode,
   String userId = 'nature_photographer',
   ThemeMode themeMode = ThemeMode.light,
   double textScaleFactor = 1.0,
   RelationshipCapabilityRepository? capabilityRepository,
+  UserProfileRepository userProfileRepository = const MockUserProfileRepository(),
   List overrides = const [],
 }) {
   return ProviderScope(
     overrides: [
-      userProfileRepositoryProvider.overrideWithValue(
-        const MockUserProfileRepository(),
-      ),
+      userProfileRepositoryProvider.overrideWithValue(userProfileRepository),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         capabilityRepository ?? _ThrowingCapabilityRepository(),
       ),
@@ -185,7 +197,7 @@ void main() {
       expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
     });
 
-    testWidgets('渲染三个主 Tab', (tester) async {
+    testWidgets('渲染两个主 Tab，圈子进入统计区', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -198,9 +210,10 @@ void main() {
         _inlinePrimaryTab(UITextConstants.profileTabCreations),
         findsOneWidget,
       );
-      expect(_inlinePrimaryTab('圈子'), findsOneWidget);
       expect(_inlinePrimaryTab('互动'), findsOneWidget);
+      expect(_inlinePrimaryTab('圈子'), findsNothing);
       expect(_inlinePrimaryTab('生活'), findsNothing);
+      expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
     });
 
     testWidgets('mine 模式四段式文案不串入 other 口径', (tester) async {
@@ -211,7 +224,7 @@ void main() {
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
 
-      expect(find.text(UITextConstants.myIntersectionsTitle), findsWidgets);
+      expect(find.text(DiscoveryFeedText.myIntersectionsTitle), findsWidgets);
       expect(find.text(UITextConstants.profileImpactTitleMine), findsOneWidget);
       expect(find.text(UITextConstants.profileWhyRecommendTitle), findsNothing);
       expect(find.text(UITextConstants.profileImpactTitleOther), findsNothing);
@@ -270,7 +283,7 @@ void main() {
         find.text(UITextConstants.profileImpactTitleOther),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.myIntersectionsTitle), findsNothing);
+      expect(find.text(DiscoveryFeedText.myIntersectionsTitle), findsNothing);
       expect(find.text(UITextConstants.profileImpactTitleMine), findsNothing);
     });
 
@@ -425,16 +438,16 @@ void main() {
   });
 
   group('ProfileShell — 交互契约', () {
-    testWidgets('切换到圈子 Tab 渲染 ProfileCirclesTab', (tester) async {
+    testWidgets('圈子不再作为一级 Tab 渲染', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      await tapProfilePrimaryTab(tester, '圈子');
-      await _pumpFrames(tester, count: 20);
-      expect(find.byType(ProfileCirclesTab), findsOneWidget);
+      await revealProfilePrimaryTabs(tester);
+      expect(_inlinePrimaryTab('圈子'), findsNothing);
+      expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
     });
 
     testWidgets('切换到互动 Tab 渲染 ProfileInteractionTab', (tester) async {
@@ -528,7 +541,7 @@ void main() {
           warnIfMissed: false,
         );
         await tester.pumpAndSettle();
-        expect(find.byType(ProfileCirclesTab), findsNothing);
+        expect(find.byType(ProfileInteractionTab), findsNothing);
       }
 
       await tester.fling(
@@ -539,10 +552,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(ProfileCirclesTab), findsOneWidget);
+      expect(find.byType(ProfileInteractionTab), findsOneWidget);
     });
 
-    testWidgets('一级 tab 吸顶后切换圈子与互动不会把整页重置到 tab 下方', (tester) async {
+    testWidgets('一级 tab 吸顶后切换创作与互动不会把整页重置到 tab 下方', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -558,24 +571,30 @@ void main() {
       );
 
       final summaryBefore = tester.getTopLeft(summaryFinder).dy;
-      final circlesTab = _pinnedPrimaryTab('圈子').evaluate().isNotEmpty
-          ? _pinnedPrimaryTab('圈子')
-          : _inlinePrimaryTab('圈子');
       final interactionTab = _pinnedPrimaryTab('互动').evaluate().isNotEmpty
           ? _pinnedPrimaryTab('互动')
           : _inlinePrimaryTab('互动');
-
-      await tester.tap(circlesTab);
-      await tester.pumpAndSettle();
-      final summaryAfterCircles = tester.getTopLeft(summaryFinder).dy;
-      expect(summaryAfterCircles, closeTo(summaryBefore, 8));
-      expect(find.text('极简摄影俱乐部'), findsOneWidget);
+      final creationsTab =
+          _pinnedPrimaryTab(
+            UITextConstants.profileTabCreations,
+          ).evaluate().isNotEmpty
+          ? _pinnedPrimaryTab(UITextConstants.profileTabCreations)
+          : _inlinePrimaryTab(UITextConstants.profileTabCreations);
 
       await tester.tap(interactionTab);
       await tester.pumpAndSettle();
       final summaryAfterInteraction = tester.getTopLeft(summaryFinder).dy;
       expect(summaryAfterInteraction, closeTo(summaryBefore, 8));
       expect(find.byType(ProfileInteractionTab), findsOneWidget);
+
+      await tester.tap(creationsTab);
+      await tester.pumpAndSettle();
+      final summaryAfterCreations = tester.getTopLeft(summaryFinder).dy;
+      expect(summaryAfterCreations, closeTo(summaryBefore, 8));
+      expect(
+        find.byKey(const ValueKey<String>('profile-works-grid')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('创作二级 tab 与列表首屏之间没有异常大留白', (tester) async {
@@ -669,6 +688,24 @@ void main() {
         _inlinePrimaryTab(UITextConstants.profileTabCreations),
         findsOneWidget,
       );
+    });
+
+    testWidgets('首屏聚合失败渲染结构化错误态并提供重试', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          userId: 'stranger_failing',
+          userProfileRepository: const _FailingHomepageBundleRepository(),
+        ),
+      );
+      await _pumpFrames(tester);
+
+      // 首屏失败不被乐观壳层静默吞掉：结构化错误态可见 + 重试入口（R17/R20）。
+      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
     });
   });
 }

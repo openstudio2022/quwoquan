@@ -177,6 +177,48 @@ def test_gallery_compose_brief_uses_structural_image_contract():
     assert review["generator"] == "image_evidence_pack"
 
 
+def test_declared_image_asset_ref_reports_safety_block_separately_from_missing_asset():
+    _seed()
+    target = ENTITIES[0]
+    candidate = RW._entity_image_candidates(TASK, BATCH, target, f"/entity/地点/景区/{target}")[0]
+    brief = {
+        **_gallery_brief(),
+        "carrier": "image",
+        "entityRefs": [f"/entity/地点/景区/{target}"],
+        "sourceCollectionId": candidate["sourceCollectionId"],
+        "assetRefs": [candidate["sourceAssetRef"]],
+    }
+    quality = {
+        "routeNodes": [],
+        "evidenceBundle": {
+            "routeNodes": [
+                {"entityName": target, "entityRef": f"/entity/地点/景区/{target}"}
+            ]
+        },
+    }
+
+    class _UnsafeVerdict:
+        status = RW.STATUS_UNSAFE
+        reasons = ("watermark_or_platform_text",)
+        text_area_ratio = 0.0
+        is_text_heavy = False
+
+    original = RW.assess_image
+    try:
+        RW.assess_image = lambda _path: _UnsafeVerdict()
+        try:
+            RW._build_route_assets(TASK, BATCH, "安全门归因测试", brief, quality["evidenceBundle"])
+        except RuntimeError as exc:
+            message = str(exc)
+        else:  # pragma: no cover - explicit assertion keeps direct script runner useful
+            raise AssertionError("expected image safety gate failure")
+    finally:
+        RW.assess_image = original
+
+    assert "blocked by image safety gate" in message
+    assert candidate["sourceAssetRef"] in message
+
+
 def _run_all() -> None:
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

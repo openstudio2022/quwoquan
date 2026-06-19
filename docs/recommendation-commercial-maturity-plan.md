@@ -22,7 +22,7 @@ H2 负反馈即时抑制已经完成，`dislike`、`hide_author`、`hide_content
 
 - `phase1-exposure-p0p1` 与 `phase3-exposure-p2p3`：动态曝光治理必须前移，不能只作为远期能力。它是“不要重复刷、优质内容能复活、曝光随反馈自适应”的商用体验底座。
 - `phase2-collab-recall`：未上深度学习时，itemCF/swing i2i 与 u2i 是提升相关性的关键非深度召回。
-- `phase2-calibration-time`：排序分校准和统计量时间衰减决定混排阈值、曝光预算和长期内容是否被历史均值钉死。
+- `phase2-calibration-time`：排序分校准和统计量时间衰减决定混排阈值、曝光预算和长期内容是否被过往均值钉死。
 - `phase2-offline-eval`：没有 replay、NDCG、Recall@K、覆盖率和多样性指标，就无法证明“越用越准”。
 - `phase2-business-kpi`、`phase2-exposure-obs`：CTR、停留、完成率、负反馈率、重复曝光率、覆盖率、曝光基尼必须可观测。
 - `phase2-ops-intervention`：商用推荐必须支持人工加权、置顶、精品、热点、违规下架实时剔除。

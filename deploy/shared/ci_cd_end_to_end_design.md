@@ -95,6 +95,7 @@ Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`），全部针对 
 - Patrol full UI profile（全量 UI 旅程）
 - gamma assistant 设备矩阵（`nightly_full` profile）
 - gamma chat-avatar 设备矩阵（`nightly_full` profile）
+- gamma environment-smoke 页面矩阵（首页 / 我的 / 他人主页 / 记录列表 / 视频流，`nightly_full` profile）
 - `stackctl inspect --target gamma-local --scope all` 报告归档到 nightly artifact。
 
 ## 5. 依赖与前置
@@ -105,6 +106,7 @@ Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`），全部针对 
 |------|------|
 | `secrets.PROD_EDGE_SSH_KEY` / `PROD_MEDIA_SSH_KEY` / `PROD_SERVICE_SSH_KEY` | prod-hosted 发布三平面读写 SSH 私钥（`07` 使用） |
 | `GAMMA_TEST_AUTH_TOKEN` | local-gamma / self-hosted 链路鉴权 |
+| `PROD_TEST_AUTH_TOKEN` | prod-hosted `gray-initial` 页面 smoke 固定测试身份 |
 | `gamma_base_url` workflow input / 本地环境变量覆盖 | 仅在需要覆盖 topology `gamma-local.publicBases.api` 时使用 |
 | `vars.MEDIA_AVATAR_CDN_BASE_URL` | chat-avatar 媒体基址 |
 | `vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX` | 控制 PR 是否启用 self-hosted 设备矩阵 |
@@ -116,24 +118,24 @@ Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`），全部针对 
 - 统一使用当前开发机注册的 `self-hosted` + `macOS` runner。
 - 设备发现通过 `flutter devices --machine` 动态完成。
 - PR 默认允许缺席平台跳过（`pr_light`）；nightly/release 要求全平台通过。
-- artifact 必须包含设备清单、原始日志、命令清单与截图/失败截图。
+- artifact 必须包含设备清单、原始日志、命令清单、页面 smoke JSON 报告与截图/失败截图。
 
 ### 5.3 local-gamma 活性
 
 - gamma 仅本地（local-gamma mirror），无远端共享 gamma 需要长期维护。
 - PR `04` 在 runner 内对 local-gamma 做 readiness 探针；起栈失败即快速失败并发出修复信号。
-- 真实远端可用性在 prod `gray-initial` rollout stage 通过 `stackctl health/inspect/doctor` 复验。
+- 真实远端可用性在 prod `gray-initial` rollout stage 通过 `stackctl health/inspect/doctor` 与 hosted 页面 smoke 复验。
 
 ## 6. 验证清单
 
 1. `main` 分支保护中 required checks 配置为 `03`、`04`、`05`。
 2. `04` 默认轻量探针 local-gamma：readiness 阻断，smoke 仅告警。
 3. `05` PR 默认 alpha/beta `pr_light` profile，允许缺席平台跳过。
-4. 远端真实集成 / curated 媒体路由复验由 `07` 在 prod `gray-initial` 承接（远端 gamma 已退役）。
+4. 远端真实集成 / curated 媒体路由 / 页面级基本可用性复验由 `07` 在 prod `gray-initial` 承接（远端 gamma 已退役）。
 5. `09` nightly 22:00 自动执行全量验证（local-gamma full semantic + Patrol UI + 全设备矩阵）。
 6. `deploy/shared/gamma_validation_suites.json` 是 profile/suite 唯一真相源。
 7. 门禁脚本 `verify_gamma_validation_profiles.py`、`verify_ci_profile_consistency.py`、`verify_environment_topology_manifest.py`、`verify_local_env_port_manifest.py`、`verify_public_vs_upstream_url_contract.py`、`verify_environment_packaging_contract.py`、`verify_env_artifact_isolation.py`、`verify_prod_package_purity.py` 已串联 `make gate` 或 `stackctl verify`。
-8. T1~T4 证据均可从 `artifacts/stackctl/**`、`artifacts/local-gamma/**`、workflow artifact 回放。
+8. T1~T4 证据均可从 `artifacts/stackctl/**`、`artifacts/local-gamma/**`、`artifacts/device-matrix/environment-smoke/**`、workflow artifact 回放。
 
 ## 7. 参考
 

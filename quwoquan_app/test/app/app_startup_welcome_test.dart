@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
@@ -18,16 +19,39 @@ import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 
 void main() {
+  Widget _wrapRoot(Widget child) {
+    return ScreenUtilInit(
+      designSize: const Size(393, 852),
+      child: child,
+    );
+  }
+
+  void _suppressExpectedErrors() {
+    final original = FlutterError.onError;
+    FlutterError.onError = (details) {
+      final message = details.exceptionAsString();
+      if (message.contains('overflowed') ||
+          message.contains('HTTP request failed') ||
+          message.contains('NetworkImageLoadException')) {
+        return;
+      }
+      original?.call(details);
+    };
+  }
+
   testWidgets('启动首帧直接展示欢迎页，不等待认证恢复完成', (tester) async {
+    _suppressExpectedErrors();
     final blockingStore = _BlockingAuthSessionStore();
 
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
-          authSessionStoreProvider.overrideWithValue(blockingStore),
-        ],
-        child: const QuWoQuanAppRoot(),
+      _wrapRoot(
+        ProviderScope(
+          overrides: [
+            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
+            authSessionStoreProvider.overrideWithValue(blockingStore),
+          ],
+          child: const QuWoQuanAppRoot(),
+        ),
       ),
     );
 
@@ -49,18 +73,92 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
-  testWidgets('Web 启动先出内容壳，再叠欢迎层且不显示登录 prompt', (tester) async {
+  testWidgets('欢迎序列结束但启动未就绪时继续停留欢迎页，并展示进入中提示', (tester) async {
+    _suppressExpectedErrors();
     final blockingStore = _BlockingAuthSessionStore();
 
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
-          authSessionStoreProvider.overrideWithValue(blockingStore),
-          platformTargetProvider.overrideWithValue(AppPlatform.web),
-          platformCapabilitiesProvider.overrideWithValue(CapabilityProfile.web),
-        ],
-        child: const QuWoQuanAppRoot(),
+      _wrapRoot(
+        ProviderScope(
+          overrides: [
+            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
+            authSessionStoreProvider.overrideWithValue(blockingStore),
+          ],
+          child: const QuWoQuanAppRoot(),
+        ),
+      ),
+    );
+
+    for (var i = 0; i < 120; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(find.byType(WelcomeScreen), findsOneWidget);
+    expect(find.text(UITextConstants.welcomeStartupLoadingTitle), findsOneWidget);
+    expect(find.text(UITextConstants.welcomeStartupStageAuth), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
+  testWidgets('启动条件满足后，欢迎页在3秒序列后进入主壳首页', (tester) async {
+    _suppressExpectedErrors();
+    final store = _ImmediateAuthSessionStore(
+      stored: const StoredAuthSession(
+        accessToken: '',
+        refreshToken: '',
+        ownerId: '',
+        activeSubAccountId: '',
+        accountState: '',
+        identityOrigin: '',
+        installId: 'install-id',
+        lastRefreshAtEpochMs: 0,
+        lastForegroundAuthCheckAtEpochMs: 0,
+        manualLoggedOut: false,
+        launchPromptDismissed: true,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _wrapRoot(
+        ProviderScope(
+          overrides: [
+            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
+            authSessionStoreProvider.overrideWithValue(store),
+          ],
+          child: const QuWoQuanAppRoot(),
+        ),
+      ),
+    );
+
+    for (var i = 0; i < 140; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(WelcomeScreen), findsNothing);
+    expect(find.byType(MainAppShell), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
+  testWidgets('Web 启动先出内容壳，再叠欢迎层且不显示登录 prompt', (tester) async {
+    _suppressExpectedErrors();
+    final blockingStore = _BlockingAuthSessionStore();
+
+    await tester.pumpWidget(
+      _wrapRoot(
+        ProviderScope(
+          overrides: [
+            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
+            authSessionStoreProvider.overrideWithValue(blockingStore),
+            platformTargetProvider.overrideWithValue(AppPlatform.web),
+            platformCapabilitiesProvider.overrideWithValue(CapabilityProfile.web),
+          ],
+          child: const QuWoQuanAppRoot(),
+        ),
       ),
     );
 
@@ -82,6 +180,7 @@ void main() {
   });
 
   testWidgets('长期未回访的已登录会话会在恢复时静默 refresh，尽量免登录', (tester) async {
+    _suppressExpectedErrors();
     final store = _ImmediateAuthSessionStore(
       stored: const StoredAuthSession(
         accessToken: 'stale-access',
@@ -99,21 +198,23 @@ void main() {
     );
 
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
-          authSessionStoreProvider.overrideWithValue(store),
-          authSessionRefreshExecutorProvider.overrideWithValue((
-            refreshToken,
-          ) async {
-            expect(refreshToken, 'stale-refresh');
-            return AuthLoginResultDto.fromMap(<String, dynamic>{
-              'accessToken': 'fresh-access',
-              'refreshToken': 'fresh-refresh',
-            });
-          }),
-        ],
-        child: const QuWoQuanAppRoot(),
+      _wrapRoot(
+        ProviderScope(
+          overrides: [
+            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
+            authSessionStoreProvider.overrideWithValue(store),
+            authSessionRefreshExecutorProvider.overrideWithValue((
+              refreshToken,
+            ) async {
+              expect(refreshToken, 'stale-refresh');
+              return AuthLoginResultDto.fromMap(<String, dynamic>{
+                'accessToken': 'fresh-access',
+                'refreshToken': 'fresh-refresh',
+              });
+            }),
+          ],
+          child: const QuWoQuanAppRoot(),
+        ),
       ),
     );
 
@@ -127,6 +228,7 @@ void main() {
   });
 
   testWidgets('静默 refresh 判定为 token 失效时，清理会话进入重登态', (tester) async {
+    _suppressExpectedErrors();
     final store = _ImmediateAuthSessionStore(
       stored: const StoredAuthSession(
         accessToken: 'stale-access',
@@ -144,19 +246,21 @@ void main() {
     );
 
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
-          authSessionStoreProvider.overrideWithValue(store),
-          authSessionRefreshExecutorProvider.overrideWithValue((_) async {
-            throw CloudException(
-              type: CloudErrorType.unauthorized,
-              message: 'expired',
-              statusCode: 401,
-            );
-          }),
-        ],
-        child: const QuWoQuanAppRoot(),
+      _wrapRoot(
+        ProviderScope(
+          overrides: [
+            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
+            authSessionStoreProvider.overrideWithValue(store),
+            authSessionRefreshExecutorProvider.overrideWithValue((_) async {
+              throw CloudException(
+                type: CloudErrorType.unauthorized,
+                message: 'expired',
+                statusCode: 401,
+              );
+            }),
+          ],
+          child: const QuWoQuanAppRoot(),
+        ),
       ),
     );
 

@@ -1704,15 +1704,15 @@ func (s *PostService) ListProfileInteractionActivities(
 			} else if actorID != profileSubjectID {
 				continue
 			}
-			items = append(items, buildProfileInteractionActivityView(
-				fmt.Sprintf("like:%s:%s", postID, actorID),
-				"like",
-				direction,
-				actorID,
-				post.AuthorId,
-				post,
-				post.UpdatedAt,
-			))
+			items = append(items, buildProfileInteractionActivityView(profileInteractionProjectionInput{
+				ActivityID:         fmt.Sprintf("like:%s:%s", postID, actorID),
+				ActivityType:       "like",
+				Direction:          direction,
+				ActorID:            actorID,
+				TargetSubAccountID: post.AuthorId,
+				Post:               post,
+				CreatedAt:          post.UpdatedAt,
+			}))
 		}
 	}
 
@@ -1733,15 +1733,16 @@ func (s *PostService) ListProfileInteractionActivities(
 			} else if actorID != profileSubjectID {
 				continue
 			}
-			items = append(items, buildProfileInteractionActivityView(
-				fmt.Sprintf("comment:%s", stringValue(comment["_id"])),
-				"comment",
-				direction,
-				actorID,
-				post.AuthorId,
-				post,
-				parseActivityTime(comment["createdAt"]),
-			))
+			items = append(items, buildProfileInteractionActivityView(profileInteractionProjectionInput{
+				ActivityID:         fmt.Sprintf("comment:%s", stringValue(comment["_id"])),
+				ActivityType:       "comment",
+				Direction:          direction,
+				ActorID:            actorID,
+				TargetSubAccountID: post.AuthorId,
+				Post:               post,
+				Comment:            comment,
+				CreatedAt:          parseActivityTime(comment["createdAt"]),
+			}))
 		}
 	}
 
@@ -1765,15 +1766,15 @@ func (s *PostService) ListProfileInteractionActivities(
 			} else if actorID != profileSubjectID {
 				continue
 			}
-			items = append(items, buildProfileInteractionActivityView(
-				fmt.Sprintf("share:%s:%s", postID, actorID),
-				"share",
-				direction,
-				actorID,
-				post.AuthorId,
-				post,
-				post.UpdatedAt,
-			))
+			items = append(items, buildProfileInteractionActivityView(profileInteractionProjectionInput{
+				ActivityID:         fmt.Sprintf("share:%s:%s", postID, actorID),
+				ActivityType:       "share",
+				Direction:          direction,
+				ActorID:            actorID,
+				TargetSubAccountID: post.AuthorId,
+				Post:               post,
+				CreatedAt:          post.UpdatedAt,
+			}))
 		}
 	}
 
@@ -1784,58 +1785,6 @@ func (s *PostService) ListProfileInteractionActivities(
 		items = items[:limit]
 	}
 	return items, nil
-}
-
-func buildProfileInteractionActivityView(
-	activityID string,
-	activityType string,
-	direction string,
-	actorID string,
-	targetSubAccountID string,
-	post *postmodel.Post,
-	createdAt time.Time,
-) postmodel.ProfileInteractionActivityView {
-	summary := ""
-	contentType := ""
-	targetContentID := ""
-	if post != nil {
-		summary = summarizeInteractionTarget(post)
-		contentType = post.ContentType
-		targetContentID = post.ID
-	}
-	if createdAt.IsZero() {
-		createdAt = time.Now().UTC()
-	}
-	return postmodel.ProfileInteractionActivityView{
-		ActivityId:           activityID,
-		ActivityType:         activityType,
-		Direction:            direction,
-		ActorSubAccountId:    actorID,
-		ActorDisplayName:     actorID,
-		ActorAvatarUrl:       "",
-		TargetSubAccountId:   targetSubAccountID,
-		TargetContentId:      targetContentID,
-		TargetContentType:    contentType,
-		TargetContentSummary: summary,
-		CreatedAt:            createdAt,
-	}
-}
-
-func summarizeInteractionTarget(post *postmodel.Post) string {
-	if post == nil {
-		return ""
-	}
-	if summary := strings.TrimSpace(post.Summary); summary != "" {
-		return summary
-	}
-	if title := strings.TrimSpace(post.Title); title != "" {
-		return title
-	}
-	body := strings.TrimSpace(post.Body)
-	if len(body) > 60 {
-		return body[:60]
-	}
-	return body
 }
 
 func parseActivityTime(raw any) time.Time {
@@ -2848,7 +2797,7 @@ func (s *PostService) ListCommentsForPostAuthor(ctx context.Context, userID, cur
 
 func (s *PostService) GetAppConfig() map[string]any {
 	runtimeConfig := normalizeStoryRuntimeConfig(s.storyRuntime)
-	canaryMatrix := make([]map[string]any, 0, len(runtimeConfig.CanaryMatrix))
+	canaryMatrix := make([]any, 0, len(runtimeConfig.CanaryMatrix))
 	for _, stage := range runtimeConfig.CanaryMatrix {
 		canaryMatrix = append(canaryMatrix, map[string]any{
 			"stage":          stage.Stage,
@@ -3006,13 +2955,6 @@ func (s *PostService) SearchPosts(
 				continue
 			}
 		}
-		primaryCircleID := strings.TrimSpace(post.CircleId)
-		if primaryCircleID == "" {
-			circleIDs := asStringSlice(post.CircleIds)
-			if len(circleIDs) > 0 {
-				primaryCircleID = strings.TrimSpace(circleIDs[0])
-			}
-		}
 		summary := strings.TrimSpace(post.Summary)
 		if summary == "" {
 			summary = strings.TrimSpace(post.Body)
@@ -3041,14 +2983,12 @@ func (s *PostService) SearchPosts(
 			ObjectType:   rtsearch.ObjectTypeContentPost,
 			ObjectID:     post.ID,
 			Title:        post.Title,
-			Summary:      summary,
+			Summary:      strings.TrimSpace(post.Summary),
 			Body:         post.Body,
 			SourceDomain: "content",
 			ContentType:  post.ContentType,
 			Visibility:   visibility,
 			BadgeLabel:   "内容",
-			Tags:         asStringSlice(post.TagRefs),
-			Entities:     asStringSlice(post.EntityRefs),
 			Popularity:   float64(post.LikeCount + post.CommentCount + post.ShareCount),
 			Freshness:    post.PublishedAt,
 			Fields: map[string]string{
@@ -3056,9 +2996,6 @@ func (s *PostService) SearchPosts(
 				"entityRefs":        strings.Join(asStringSlice(post.EntityRefs), " "),
 				"authorDisplayName": post.AuthorDisplayNameSnapshot,
 				"locationName":      post.LocationName,
-				"categoryId":        categoryID,
-				"subCategory":       subCategory,
-				"circleId":          primaryCircleID,
 			},
 		})
 	}

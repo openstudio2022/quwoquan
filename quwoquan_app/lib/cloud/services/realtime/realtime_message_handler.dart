@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:riverpod/misc.dart' show ProviderListenable;
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
 
 /// 与 [Ref.read] / [WidgetRef.read] 兼容，避免 `Ref` 与 `WidgetRef` 类型分裂。
 typedef ChatProviderRead = T Function<T>(ProviderListenable<T> listenable);
@@ -28,6 +31,12 @@ class RealtimeMessageHandler {
     final eventType = event['type'] as String? ?? '';
     final conversationId = event['conversationId'] as String? ?? '';
     final payload = event['payload'] as Map<String, dynamic>? ?? event;
+
+    // 推荐实时 patch（以 schema_version 标识，与 chat 事件的 `type` 分流）：
+    // 解析为强类型后交给 discovery patch 安全消费者；schema 不符则前向兼容忽略。
+    if (_routeFeedRealtimePatch(event, payload)) {
+      return;
+    }
 
     switch (eventType) {
       case 'MessageSent':
@@ -127,6 +136,45 @@ class RealtimeMessageHandler {
       default:
         return;
     }
+  }
+
+  /// 识别并路由推荐实时 patch。返回 true 表示该事件已被识别为 feed patch
+  /// （命中后不再落入 chat 事件 switch），无论是否成功解析。
+  bool _routeFeedRealtimePatch(
+    Map<String, dynamic> event,
+    Map<String, dynamic> payload,
+  ) {
+    final candidate = _feedPatchCandidate(event, payload);
+    if (candidate == null) {
+      return false;
+    }
+    final patch = parseFeedRealtimePatch(candidate);
+    if (patch == null) {
+      // schema 不符 / 未来版本：结构化记录后忽略（不解析未知 schema）。
+      developer.log(
+        'ignored feed realtime patch with unsupported schema_version',
+        name: 'RealtimeMessageHandler',
+      );
+      return true;
+    }
+    _read(feedRealtimePatchProvider.notifier).applyPatch(patch);
+    return true;
+  }
+
+  /// feed patch 候选载荷：顶层或 payload 内带 `feed_patch*` schema 标识。
+  Map<String, dynamic>? _feedPatchCandidate(
+    Map<String, dynamic> event,
+    Map<String, dynamic> payload,
+  ) {
+    final topSchema = event['schemaVersion'];
+    if (topSchema is String && topSchema.startsWith('feed_patch')) {
+      return event;
+    }
+    final payloadSchema = payload['schemaVersion'];
+    if (payloadSchema is String && payloadSchema.startsWith('feed_patch')) {
+      return payload;
+    }
+    return null;
   }
 
   /// WS 新消息 → 同步更新会话列表缓存的 lastMessage / unreadCount

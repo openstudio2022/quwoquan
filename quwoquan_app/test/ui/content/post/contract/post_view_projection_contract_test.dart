@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
@@ -21,11 +22,11 @@ void main() {
     'contentType': 'image',
     'authorId': 'auth1',
     'displayName': '摄影师',
-    'authorAvatarUrl': 'https://example.com/avatar.jpg',
-    'coverUrl': 'https://example.com/cover.jpg',
+    'authorAvatarUrl': 'media/avatar/s/test/content/ph1/v1/avatar.jpg',
+    'coverUrl': 'media/image/s/test/content/ph1/v1/cover.jpg',
     'mediaUrls': [
-      'https://example.com/img1.jpg',
-      'https://example.com/img2.jpg',
+      'media/image/s/test/content/ph1/v1/img1.jpg',
+      'media/image/s/test/content/ph1/v1/img2.jpg',
     ],
     'width': 1200,
     'height': 900,
@@ -40,9 +41,9 @@ void main() {
     'contentType': 'video',
     'authorId': 'vauth1',
     'displayName': '视频创作者',
-    'authorAvatarUrl': 'https://example.com/vavatar.jpg',
-    'videoUrl': 'https://example.com/video.mp4',
-    'thumbnailUrl': 'https://example.com/thumb.jpg',
+    'authorAvatarUrl': 'media/avatar/s/test/content/vd1/v1/avatar.jpg',
+    'videoUrl': 'media/video/s/test/content/vd1/v1/video.mp4',
+    'thumbnailUrl': 'media/image/s/test/content/vd1/v1/thumb.jpg',
     'width': 1080,
     'height': 1920,
     'durationMs': 45000,
@@ -57,10 +58,10 @@ void main() {
     'contentType': 'article',
     'authorId': 'writer1',
     'displayName': '技术作者',
-    'authorAvatarUrl': 'https://example.com/wavatar.jpg',
+    'authorAvatarUrl': 'media/avatar/s/test/content/art1/v1/avatar.jpg',
     'title': '2026年技术趋势',
     'body': '这是文章内容，包含多段落...',
-    'coverUrl': 'https://example.com/cover3.jpg',
+    'coverUrl': 'media/image/s/test/content/art1/v1/cover.jpg',
     'likeCount': 1000,
     'commentCount': 90,
     'shareCount': 150,
@@ -91,15 +92,22 @@ void main() {
     test('author.displayName / avatarUrl 来自 DTO', () {
       final r = surfaceOf(minPhoto);
       expect(r.author.displayName, equals('摄影师'));
-      expect(r.author.avatarUrl, equals('https://example.com/avatar.jpg'));
+      expect(
+        r.author.avatarUrl,
+        equals(
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/avatar/s/test/content/ph1/v1/avatar.jpg',
+        ),
+      );
     });
 
     test('authorBackgroundUrl 投射到 author.backgroundUrl', () {
       final raw = Map<String, dynamic>.from(minPhoto)
-        ..['authorBackgroundUrl'] = 'https://example.com/bg.jpg';
+        ..['authorBackgroundUrl'] = 'media/image/s/test/content/ph1/v1/bg.jpg';
       expect(
         surfaceOf(raw).author.backgroundUrl,
-        equals('https://example.com/bg.jpg'),
+        equals(
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/content/ph1/v1/bg.jpg',
+        ),
       );
     });
 
@@ -182,14 +190,29 @@ void main() {
 
     test('photo cover / aspectRatio 来自 DTO', () {
       final r = surfaceOf(minPhoto);
-      expect(r.cover?.url, equals('https://example.com/cover.jpg'));
+      expect(
+        r.cover?.url,
+        equals(
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/content/ph1/v1/cover.jpg',
+        ),
+      );
       expect(r.cover?.aspectRatio, closeTo(1200 / 900, 0.001));
     });
 
     test('video.url / thumbnailUrl / durationMs 来自 DTO', () {
       final r = surfaceOf(minVideo);
-      expect(r.video?.url, equals('https://example.com/video.mp4'));
-      expect(r.video?.thumbnailUrl, equals('https://example.com/thumb.jpg'));
+      expect(
+        r.video?.url,
+        equals(
+          '${CloudRuntimeConfig.mediaVideoCdnBaseUrl}/media/video/s/test/content/vd1/v1/video.mp4',
+        ),
+      );
+      expect(
+        r.video?.thumbnailUrl,
+        equals(
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/content/vd1/v1/thumb.jpg',
+        ),
+      );
       expect(r.video?.durationMs, equals(45000));
     });
 
@@ -271,7 +294,12 @@ void main() {
     test('images 非空（article 至少回退 [coverUrl]）', () {
       final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
       expect(r.images, isNotEmpty);
-      expect(r.images.first, equals('https://example.com/cover3.jpg'));
+      expect(
+        r.images.first,
+        equals(
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/content/art1/v1/cover.jpg',
+        ),
+      );
     });
 
     test('无 markdown 时文章视为空文档（不再有 body/blocks/cards 竞争源）', () {
@@ -281,62 +309,86 @@ void main() {
       expect(r.pages.single.body, isEmpty);
     });
 
-    test(
-      'Markdown asset:// refs are resolved through articleAssetManifest',
-      () {
-        final raw = Map<String, dynamic>.from(minArticle)
-          ..['articleMarkdown'] =
-              '---\n'
-              'title: Manifest 标题\n'
-              'cover_asset_id: cover\n'
-              '---\n\n'
-              '# Manifest 标题\n\n'
-              ':::figure id="cover" layout="fullWidth" caption="封面"\n'
-              'asset://cover\n'
-              ':::\n\n'
-              '首段正文。\n\n'
-              ':::figure id="fig1" layout="wrapLeft" caption="配图"\n'
-              'asset://fig1\n'
-              ':::\n';
-        raw['articleAssetManifest'] = <String, dynamic>{
-          'schemaVersion': 1,
-          'assets': <Map<String, dynamic>>[
-            {
-              'assetId': 'cover',
-              'cdnUrl': 'https://cdn.example.com/cover.jpg',
-              'role': 'cover',
-            },
-            {
-              'assetId': 'fig1',
-              'cdnUrl': 'https://cdn.example.com/fig1.jpg',
-              'role': 'figure',
-            },
-          ],
-        };
+    test('Markdown asset:// refs are resolved through articleAssetManifest', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..['articleMarkdown'] =
+            '---\n'
+            'title: Manifest 标题\n'
+            'cover_asset_id: cover\n'
+            '---\n\n'
+            '# Manifest 标题\n\n'
+            ':::figure id="cover" layout="fullWidth" caption="封面"\n'
+            'asset://cover\n'
+            ':::\n\n'
+            '首段正文。\n\n'
+            ':::figure id="fig1" layout="wrapLeft" caption="配图"\n'
+            'asset://fig1\n'
+            ':::\n';
+      raw['articleAssetManifest'] = <String, dynamic>{
+        'schemaVersion': 1,
+        'assets': <Map<String, dynamic>>[
+          {
+            'assetId': 'cover',
+            'objectKey': 'media/image/s/test/article/manifest/v1/cover.jpg',
+            'role': 'cover',
+          },
+          {
+            'assetId': 'fig1',
+            'objectKey': 'media/image/s/test/article/manifest/v1/fig1.jpg',
+            'role': 'figure',
+          },
+        ],
+      };
 
-        final r = projectArticleDetailView(
-          raw,
-          fallbackArticleId: 'fb_manifest',
-        );
-        final imageNodes = r.document.nodes
-            .where((node) => node.isFigure)
-            .toList();
-        expect(
-          imageNodes.map((node) => node.imageUrl),
-          contains('https://cdn.example.com/cover.jpg'),
-        );
-        expect(
-          imageNodes.map((node) => node.imageUrl),
-          contains('https://cdn.example.com/fig1.jpg'),
-        );
-        expect(
-          r.pages.first.fragments
-              .where((fragment) => fragment.asset != null)
-              .map((fragment) => fragment.asset!.imageUrl),
-          contains('https://cdn.example.com/cover.jpg'),
-        );
-      },
-    );
+      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_manifest');
+      final imageNodes = r.document.nodes
+          .where((node) => node.isFigure)
+          .toList();
+      expect(
+        imageNodes.map((node) => node.imageUrl),
+        contains(
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/article/manifest/v1/cover.jpg',
+        ),
+      );
+      expect(
+        imageNodes.map((node) => node.imageUrl),
+        contains(
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/article/manifest/v1/fig1.jpg',
+        ),
+      );
+      expect(
+        r.pages.first.fragments
+            .where((fragment) => fragment.asset != null)
+            .map((fragment) => fragment.asset!.imageUrl),
+        contains(
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/article/manifest/v1/cover.jpg',
+        ),
+      );
+    });
+
+    test('Markdown figure 直接媒体 key 可投射为可加载图片 URL', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..['articleMarkdown'] =
+            '---\n'
+            'title: 直接媒体图\n'
+            '---\n\n'
+            '# 直接媒体图\n\n'
+            '正文先读。\n\n'
+            ':::figure id="inline1" layout="fullWidth" caption="配图"\n'
+            'media/image/s/test/article/direct/v1/fig1.jpg\n'
+            ':::\n';
+
+      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_direct');
+      final figures = r.document.nodes
+          .where((node) => node.isFigure)
+          .toList(growable: false);
+
+      expect(figures, hasLength(1));
+      expect(
+        figures.single.imageUrl,
+        '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/article/direct/v1/fig1.jpg',
+      );
+    });
 
     test('articleMarkdown canonical 优先投射为连续内容块与分页首页', () {
       final raw = Map<String, dynamic>.from(minArticle)
@@ -346,7 +398,10 @@ void main() {
             '---\ntitle: 连续文档标题\ntemplate: journal\nfontPreset: clean\n---\n\n# 连续文档标题\n\n## 章节一\n\n图旁正文\n\n:::figure id="hero" layout="wrapRight" caption="文档配图"\nasset://hero\n:::\n'
         ..['articleAssetManifest'] = <String, dynamic>{
           'assets': <Map<String, dynamic>>[
-            {'assetId': 'hero', 'objectKey': 'https://example.com/doc.jpg'},
+            {
+              'assetId': 'hero',
+              'objectKey': 'media/image/s/test/article/document/v1/doc.jpg',
+            },
           ],
         }
         ..['articleRenderProfile'] = <String, dynamic>{
@@ -362,7 +417,8 @@ void main() {
         r.contentBlocks.any(
           (block) =>
               block.type == 'wrapped_paragraph' &&
-              block.imageUrl == 'https://example.com/doc.jpg',
+              block.imageUrl ==
+                  '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/article/document/v1/doc.jpg',
         ),
         isTrue,
       );
@@ -404,7 +460,8 @@ void main() {
                   'data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg',
               'kind': 'image',
               'scope': 'cold_start',
-              'objectKey': 'media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
+              'objectKey':
+                  'media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
               'caption': '封面',
             },
             {
@@ -438,7 +495,7 @@ void main() {
             .where((node) => node.isFigure)
             .map((node) => node.imageUrl),
         contains(
-          'https://127.0.0.1:17100/media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
+          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
         ),
       );
       expect(r.pages, isNotEmpty);
@@ -455,11 +512,11 @@ void main() {
       'contentType': 'micro',
       'authorId': 'u99',
       'authorNickname': '小趣',
-      'authorAvatarUrl': 'https://example.com/avatar.jpg',
+      'authorAvatarUrl': 'media/avatar/s/test/content/moment_01/v1/avatar.jpg',
       'body': '今天天气真好 ☀️',
       'mediaUrls': [
-        'https://example.com/img1.jpg',
-        'https://example.com/img2.jpg',
+        'media/image/s/test/content/moment_01/v1/img1.jpg',
+        'media/image/s/test/content/moment_01/v1/img2.jpg',
       ],
       'likeCount': 5,
       'commentCount': 2,
@@ -472,10 +529,10 @@ void main() {
       'contentType': 'micro',
       'authorId': 'u88',
       'authorNickname': '视频君',
-      'authorAvatarUrl': 'https://example.com/avatar2.jpg',
+      'authorAvatarUrl': 'media/avatar/s/test/content/moment_02/v1/avatar.jpg',
       'body': '短视频时刻',
       'mediaUrls': <String>[],
-      'videoUrl': 'https://example.com/moment_video.mp4',
+      'videoUrl': 'media/video/s/test/content/moment_02/v1/moment_video.mp4',
       'durationMs': 8000,
       'likeCount': 12,
       'commentCount': 3,
@@ -512,7 +569,10 @@ void main() {
 
     test('moment videoUrl projected correctly', () {
       final dto = postBaseDtoFromMap(momentWithVideo) as MicroPostDto;
-      expect(dto.videoUrl, equals('https://example.com/moment_video.mp4'));
+      expect(
+        dto.videoUrl,
+        equals('media/video/s/test/content/moment_02/v1/moment_video.mp4'),
+      );
       expect(dto.durationMs, equals(8000));
     });
 

@@ -7,7 +7,8 @@ version: 1
 coveragePolicy:
   travel:
     minCategoriesPerEntity: 3
-    coreCategories: [encyclopedia, travelogue, official]
+    coreCategories: [encyclopedia]
+    preferredCategories: [travelogue, official, map_geo, authoritative_reference]
   campus:
     minCategoriesPerEntity: 2
     coreCategories: [school_official, forum]

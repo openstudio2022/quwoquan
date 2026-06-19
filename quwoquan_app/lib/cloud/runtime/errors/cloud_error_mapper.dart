@@ -288,8 +288,50 @@ class CloudErrorMapper {
   static String? parsedUserMessage(String? body) {
     final parsed = _readRuntimeErrorResponse(body);
     final userMessage = parsed?.userMessage.trim() ?? '';
-    return userMessage.isEmpty ? null : userMessage;
+    if (userMessage.isNotEmpty) {
+      return userMessage;
+    }
+    if (body == null || body.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+      final direct = _firstNonEmptyString(decoded, const <String>[
+        'userMessage',
+        'user_message',
+        'message',
+        'reasonMessage',
+      ]);
+      if (direct != null) {
+        return direct;
+      }
+      final error = decoded['error'];
+      if (error is Map<String, dynamic>) {
+        return _firstNonEmptyString(error, const <String>[
+          'userMessage',
+          'user_message',
+          'message',
+          'reasonMessage',
+        ]);
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
   }
+}
+
+String? _firstNonEmptyString(Map<String, dynamic> map, List<String> keys) {
+  for (final key in keys) {
+    final value = map[key];
+    if (value is String && value.trim().isNotEmpty) {
+      return value.trim();
+    }
+  }
+  return null;
 }
 
 RuntimeFailure _localFailure({

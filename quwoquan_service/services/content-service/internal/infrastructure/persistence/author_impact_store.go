@@ -43,6 +43,7 @@ type AuthorImpactSummary struct {
 }
 
 type AuthorImpactItem struct {
+	ImpactID              string    `json:"impactId" bson:"-"` // 稳定下钻锚点（端侧点数字 → ListAuthorImpactEvidence?impactId=）
 	HelpType              string    `json:"helpType" bson:"helpType"`
 	Action                string    `json:"action" bson:"action"`
 	IntersectionDimension string    `json:"intersectionDimension" bson:"intersectionDimension"`
@@ -106,7 +107,7 @@ func (s *AuthorImpactStore) Record(ctx context.Context, event AuthorImpactEvent)
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	tagRefs := normalizeImpactTags(event.IntersectionTagRefs)
+	tagRefs := NormalizeImpactTags(event.IntersectionTagRefs)
 	if len(tagRefs) == 0 {
 		tagRefs = []string{""}
 	}
@@ -181,6 +182,7 @@ func (s *AuthorImpactStore) GetSummary(ctx context.Context, authorID string, lim
 		}
 		summary.Total += doc.Count
 		summary.Items = append(summary.Items, AuthorImpactItem{
+			ImpactID:              StableImpactID(summary.AuthorID, doc.HelpType, doc.Action, doc.IntersectionDimension, doc.TagRef, doc.Source),
 			HelpType:              doc.HelpType,
 			Action:                doc.Action,
 			IntersectionDimension: doc.IntersectionDimension,
@@ -193,7 +195,10 @@ func (s *AuthorImpactStore) GetSummary(ctx context.Context, authorID string, lim
 	return summary, cursor.Err()
 }
 
-func normalizeImpactTags(tags []string) []string {
+// NormalizeImpactTags trims, de-duplicates and drops empty intersection tag
+// refs. Shared by rm_author_impact (summary) and rm_author_impact_evidence so
+// the per-tag impactId drill-down anchor stays consistent across both.
+func NormalizeImpactTags(tags []string) []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(tags))
 	for _, tag := range tags {

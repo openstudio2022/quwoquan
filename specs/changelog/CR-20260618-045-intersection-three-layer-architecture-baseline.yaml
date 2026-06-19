@@ -1,0 +1,122 @@
+id: CR-20260618-045-intersection-three-layer-architecture-baseline
+title: 交集三层架构新基线 v2（采集→算法→投影：Graph/Lifecycle/Propagation/Projection + 端四槽 UI 原型）
+slug: intersection-three-layer-architecture-baseline
+revision: 1
+status: partially_implemented_p0
+
+affected_nodes:
+  - specs/product/intersection-definition-and-application.md
+  - specs/product/intersection-unification-dispatch-index.md
+  - specs/product/intersection-contract-freeze-checklist.md
+  - docs/intersection-unification-plan.md
+  - specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md
+  - specs/feature-tree/object-homepage-network/intersection-unified-experience/design.md
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_text_span.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_visual.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_propagation_path.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_dimension_tally.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_inbox_summary.yaml
+  - quwoquan_service/contracts/metadata/content/post/projections/author_impact_item.yaml
+  - quwoquan_service/contracts/metadata/social/circle/projections/circle_impact_item.yaml
+
+entries:
+  - timestamp: "2026-06-18T15:30:00+08:00"
+    summary: |
+      把「交集」统一为一条「采集→算法→投影」端到端管线上的加权社交图谱边，其边被依次赋予
+      Graph(结构) / Lifecycle(变化) / Propagation(扩散) / Projection(表达) 四属性（§21）。本轮按
+      「UI 原型优先、云侧算法后置」推进：先写清原理与端到端统一模型，补全端侧展示统一要求
+      （四槽视觉模型 + iconKey 语义闭集 + 每 surface 密度上限 + 降级链 + 五面 A–E 矩阵），落性能/
+      容量弹性设计（冷热三档 + coLiked 高频红线），并以 metadata-first「草案/未冻结」契约 codegen 出
+      端 DTO，最后用 Mock 驱动敲定五面 UI 原型。
+      契约草案新增：kind_registry 每 kind Graph 元数据(relationStrengthBase/interactionFrequencyKey/
+      recencyHalfLifeDays/lifecycleApplicable/propagationRole/iconKey)；intersection_reason 增
+      lifecycleState/previousStrength/strengthDelta/edgeWeight/iconKey/objectVisual；intersection_text_span
+      增 visual(句内头像)；tally/inbox 增 strengthened/reactivated 分桶计数 + iconKey；author_impact 增
+      propagationPath/hopCount/secondarySpreadCount/iconKey；circle_impact 补统一交互子契约 + propagationPath +
+      iconKey(解决端 G4)；新增 intersection_propagation_path 值对象；policy intersection 块增
+      graphWeights/lifecycleWeights/propagation 配置位。
+      端侧新建四槽共享件 IntersectionTypeIcon/IntersectionIconResolver(槽①)、InteractiveIntersectionText
+      句内头像(槽②)、IntersectionObjectCover(槽③)、IntersectionLifecycleBadge(槽④)、
+      IntersectionPropagationView(传播)；circle_impact 卡接统一三件套 + 传播视图；my_home 四槽样板；
+      IntersectionEntity 弱标真相源切换为服务端 lifecycleState；Mock/fixture 补 lifecycle/传播/inline 头像样本。
+      §21.9 赞红线翻转：coLiked 恢复为 T4 最低权重轻量交集（只翻赞、不恢复收藏）。
+    reason: |
+      旧「交集」是社交图谱、生命周期、传播三套并行模型，缺统一原理与端侧具象化展示口径：
+      单行交集卡只有一句话纯文本，缺类型图标 / 句内头像 / 对象封面 / lifecycle 弱标 / 传播视图，
+      circle_impact 还未接统一交互子契约(端 G4)。先沉淀端到端统一模型 + 四槽共享件 + 五面矩阵，
+      用 Mock 原型敲定展示，再冻结契约进入云侧真算，避免 A–E 各面二次分叉与契约反复。
+    change_type:
+      - planning
+      - metadata
+      - codegen
+      - feature-implementation
+      - acceptance
+    changed_documents:
+      - path: specs/product/intersection-definition-and-application.md
+        sections:
+          - 21 端到端统一模型（采集→算法→投影 + 四属性 + 统一血缘）
+          - 21.3 Lifecycle 弱标
+          - 21.4 Propagation 传播视图
+          - 21.5 端侧展示统一要求（四槽 / iconKey 闭集 / 密度 / 降级链 / 五面矩阵）
+          - 21.6 统一选择得分（公式 + policy 配置位）
+          - 21.7 性能与容量弹性（冷热三档 / coLiked 高频红线）
+          - 21.8 契约映射（草案新增字段一览）
+          - 21.9 赞红线修订（coLiked 恢复，只翻赞）
+          - 21.10 实现分期与边界
+      - path: specs/product/intersection-unification-dispatch-index.md
+        sections:
+          - 6 v2 三层架构 · 五面应用定义（四槽/lifecycle/传播矩阵 + 共享件 + 出口自检）
+      - path: specs/product/intersection-contract-freeze-checklist.md
+        sections:
+          - 8 v2 三层架构草案字段（未冻结）
+          - 8.1 端侧四槽视觉模型组件
+      - path: docs/intersection-unification-plan.md
+        sections:
+          - v2 三层架构新基线（本轮完成 + 验证证据 + 明确后置）
+      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml
+        sections:
+          - 每 kind Graph 元数据 + iconKey + lifecycleApplicable + propagationRole
+          - coLiked 恢复（status=active，从 migrations 移除）
+      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
+        sections:
+          - lifecycleState / previousStrength / strengthDelta / edgeWeight / iconKey / objectVisual（只附加）
+      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_text_span.yaml
+        sections:
+          - visual（句内 inline 头像，只附加）
+      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_propagation_path.yaml
+        sections:
+          - 新增传播链值对象（pathKind/hopCount/secondarySpreadCount/summaryText/summaryTarget/nodes）
+      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_dimension_tally.yaml
+        sections:
+          - strengthenedCount / reactivatedCount / iconKey（只附加）
+      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_inbox_summary.yaml
+        sections:
+          - totalStrengthenedCount / totalReactivatedCount（只附加）
+      - path: quwoquan_service/contracts/metadata/content/post/projections/author_impact_item.yaml
+        sections:
+          - propagationPath / hopCount / secondarySpreadCount / iconKey（只附加）
+      - path: quwoquan_service/contracts/metadata/social/circle/projections/circle_impact_item.yaml
+        sections:
+          - impactId / primarySpans / sampleVisuals / countTarget / evidenceSnapshotId / countObjectKind / propagationPath / iconKey（统一交互子契约 + 传播，解决端 G4）
+      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+        sections:
+          - intersection.graphWeights / lifecycleWeights / propagation 配置位
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+      rollout_impact: low
+      breaking_contract: false
+    notes:
+      - 契约本轮标「草案/未冻结」，由 A–E UI 原型反推定稿；定稿后并入 freeze-checklist 第 1 节冻结清单。
+      - 只附加策略：reason/tally/inbox/author_impact/circle_impact 已冻结字段位置不动，旁挂新子类型与 lifecycle/传播字段；Go 侧新字段为只附加可选投影，云端未产出时端侧降级（spans→primaryText→隐藏、objectVisual 空回退占位、lifecycle stable/weakened 不渲染）。
+      - 单通道不变量保持：join(spans.text)==primaryText/briefText；槽②句内头像由 WidgetSpan 承载、不贡献字符，契约/widget 测试强制（interactive_intersection_text_test.dart）。
+      - G2 不破：lifecycle 弱标不进结论句、不变蓝、不堆叠；端 iconKey 由 IntersectionIconResolver 语义映射，禁页面硬编码 switch(sourceRef)。
+      - 传播红线（§21.4）：端只展示可证绝对计数 + 路径节点视觉；reach/conversion 仅云侧内部排序因子、不进 DTO；禁百分比/漏斗/增长率。
+      - coLiked（赞）§21.9 恢复为 T4 最低权重：排序永远在 T1–T3 之后、like 图标仅无更高价值交集时露出、禁请求期全量求交（§21.7 走预投影/采样/上限）；本次只翻赞，§14A 收藏/稍后看/关注内容保持退场。
+      - 云侧数据源采集、Lifecycle 状态机（需历史强度时间序列）、多跳 Propagation、Graph 加权真算、coLiked 预投影、Selection 数值化、Remote 填充全部后置；需用户确认后登记 docs/outstanding_risks_backlog.md。

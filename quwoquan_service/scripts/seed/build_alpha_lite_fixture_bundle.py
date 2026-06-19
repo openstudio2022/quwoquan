@@ -17,6 +17,7 @@ LITE_REFS: dict[str, list[str]] = {
     ],
     "content/test_fixtures/scenarios/content_scenarios.json": [
         "content_discovery_core",
+        "home_showcase_core",
     ],
     "social/circle/test_fixtures/scenarios/circle_scenarios.json": [
         "circle_core",

@@ -198,6 +198,11 @@ def test_trial_review_classifies_source_sufficiency_blocker():
             "targetCount": 2,
             "lanePassed": {"homepage": 1, "article": 0, "image": 1},
             "failedLaneCount": 3,
+            "failedLanes": [
+                {"entity": "景区甲", "lane": "article", "issues": ["article sources=0 need>=4"]},
+                {"entity": "景区乙", "lane": "article", "issues": ["article sources=0 need>=4"]},
+                {"entity": "景区乙", "lane": "image", "issues": ["image collection missing"]},
+            ],
             "abandonedCount": 0,
         },
     )
@@ -206,12 +211,97 @@ def test_trial_review_classifies_source_sufficiency_blocker():
 
     assert report["terminalCause"]["category"] == "source_sufficiency_blocker"
     assert report["nextTrialStrategy"]["mode"] == "source_ready_repair_or_replace"
-    assert "--lane all --force" in report["nextTrialStrategy"]["commands"][0]
+    assert "task audit-batch" in report["nextTrialStrategy"]["commands"][0]
+    assert "task select-targets" in report["nextTrialStrategy"]["commands"][1]
+    assert report["evidence"]["sourceReadiness"]["status"] == "blocked"
+    assert report["evidence"]["sourceReadiness"]["allLaneReadyTargetCount"] == 0
+    assert report["evidence"]["sourceReadiness"]["laneCoverage"]["article"]["passed"] == 0
     assert any(
         "managed batch failed lanes=3" in item
         for item in report["scaleLadder"]["levels"][0]["requiredBeforeGo"]
     )
-    assert report["terminalCause"]["stage"] == "content_plan"
+    assert report["terminalCause"]["stage"] == "download_plan"
+
+
+def test_trial_review_prefers_auto_research_availability_over_stale_audit():
+    task_id = _make_task("来源可用性优先")
+    shared = batch_shared_dir(task_id, "run_auto_availability")
+    write_json(
+        shared / "task_workflow_state.json",
+        {
+            "status": "waiting_agent",
+            "waitingCheckpoint": "download_plan",
+            "failedObjects": ["景区乙: article sources=1 need>=4"],
+        },
+    )
+    write_json(
+        shared / "managed_batch_audit.json",
+        {
+            "targetCount": 2,
+            "lanePassed": {"homepage": 2, "article": 2, "image": 2},
+            "failedLaneCount": 0,
+            "failedLanes": [],
+        },
+    )
+    write_json(
+        shared / "auto_research_plan.json",
+        {
+            "sourceAvailability": {
+                "readyTargets": ["景区甲"],
+                "ineligibleTargets": [
+                    {
+                        "entityId": "景区乙",
+                        "lanes": ["article"],
+                        "issues": ["article sources=1 need>=4"],
+                    }
+                ],
+            },
+            "sourceUnavailable": [{"entityId": "景区乙", "lane": "article"}],
+        },
+    )
+
+    report = build_trial_review(task_id, "run_auto_availability", env={"CURSOR_API_KEY": "present"})
+
+    readiness = report["evidence"]["sourceReadiness"]
+    assert readiness["status"] == "blocked"
+    assert readiness["allLaneReadyTargetCount"] == 1
+    assert readiness["laneCoverage"]["article"]["passed"] == 1
+    assert readiness["laneCoverage"]["homepage"]["passed"] == 2
+    blockers = report["qualityAndScaleGate"]["blockers"]
+    assert "source-ready targets 1/2" in blockers
+    assert "source-ready targets 2/2" not in blockers
+    assert report["terminalCause"]["reason"].startswith("source availability ready 1/2")
+
+
+def test_trial_review_uses_active_scheduler_when_interrupted_before_last_agent_record():
+    task_id = _make_task("中断并发证据")
+    shared = batch_shared_dir(task_id, "run_interrupted")
+    write_json(
+        shared / "task_workflow_state.json",
+        {
+            "status": "manual_required",
+            "waitingCheckpoint": "download_plan",
+            "failedObjects": ["download_plan: interrupted; cancelled queued managed agent jobs"],
+            "activeAgentScheduler": {
+                "stage": "download_plan",
+                "requestedMaxWorkers": 8,
+                "effectiveWorkerCount": 8,
+                "localCursorMaxWorkers": 8,
+                "runtime": "local",
+                "promptCount": 171,
+                "estimatedMinWaves": 22,
+                "startedAt": "s1",
+            },
+        },
+    )
+
+    report = build_trial_review(task_id, "run_interrupted", env={"CURSOR_API_KEY": "present"})
+
+    assert report["workflow"]["activeAgentScheduler"]["effectiveWorkerCount"] == 8
+    assert report["efficiency"]["batchScheduler"]["promptCount"] == 171
+    assert report["efficiency"]["batchScheduler"]["effectiveWorkerCount"] == 8
+    assert not any("worker cap is 1" in issue for issue in report["efficiency"]["issues"])
+    assert any("171 prompts" in issue for issue in report["efficiency"]["issues"])
 
 
 def test_trial_review_prefers_batch_env_ready_evidence_over_current_shell():

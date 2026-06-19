@@ -15,6 +15,7 @@ ref 闭环：标注的每个 /entity/ 引用必须
 from __future__ import annotations
 
 import re
+from urllib.parse import unquote
 from typing import Any, Mapping
 
 from _common.entity_extract import (
@@ -30,9 +31,56 @@ _MD_LINK_RE = re.compile(r"!?\[[^\]\n]*\]\([^)\n]*\)")
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n", re.S)
 
 
+def _iter_markdown_links(text: str) -> list[tuple[int, int, str, str]]:
+    """Return markdown inline links, allowing balanced parentheses in hrefs."""
+    out: list[tuple[int, int, str, str]] = []
+    i = 0
+    size = len(text)
+    while i < size:
+        start = text.find("[", i)
+        if start < 0:
+            break
+        if start > 0 and text[start - 1] == "!":
+            link_start = start - 1
+        else:
+            link_start = start
+        close = text.find("](", start + 1)
+        if close < 0:
+            i = start + 1
+            continue
+        label = text[start + 1:close]
+        if "\n" in label:
+            i = start + 1
+            continue
+        href_start = close + 2
+        depth = 1
+        pos = href_start
+        while pos < size:
+            char = text[pos]
+            if char == "\n":
+                break
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    href = text[href_start:pos]
+                    if not any(ch.isspace() for ch in href):
+                        out.append((link_start, pos + 1, label, href))
+                    i = pos + 1
+                    break
+            pos += 1
+        else:
+            i = start + 1
+            continue
+        if pos >= size or (pos < size and text[pos] == "\n"):
+            i = start + 1
+    return out
+
+
 def normalize_link_ref(ref: str) -> str:
     """把 entity 引用统一为 /entity/{domain}/{type}/{name}（容忍带或不带 /entity/ 前缀）。"""
-    parts = [p for p in str(ref).strip().strip("/").split("/") if p]
+    parts = [p for p in unquote(str(ref).strip()).strip("/").split("/") if p]
     if parts and parts[0] == "entity":
         parts = parts[1:]
     return "/entity/" + "/".join(parts) if parts else ""
@@ -41,8 +89,9 @@ def normalize_link_ref(ref: str) -> str:
 def parse_entity_links(article: str) -> list[tuple[str, str]]:
     """解析正文里所有 inline 实体链接 → [(显示文本, 规范化 ref)]。"""
     out: list[tuple[str, str]] = []
-    for match in ENTITY_LINK_RE.finditer(article):
-        out.append((match.group(1), normalize_link_ref(match.group(2))))
+    for _start, _end, label, href in _iter_markdown_links(article):
+        if href.startswith("/entity/"):
+            out.append((label, normalize_link_ref(href)))
     return out
 
 
@@ -54,7 +103,10 @@ def _split_frontmatter(article: str) -> tuple[str, str]:
 
 
 def _link_spans(body: str) -> list[tuple[int, int]]:
-    return [(m.start(), m.end()) for m in _MD_LINK_RE.finditer(body)]
+    spans = [(start, end) for start, end, _label, _href in _iter_markdown_links(body)]
+    # Keep the legacy regex as a safety net for malformed non-entity links.
+    spans.extend((m.start(), m.end()) for m in _MD_LINK_RE.finditer(body))
+    return sorted(set(spans))
 
 
 def build_entity_dictionary(

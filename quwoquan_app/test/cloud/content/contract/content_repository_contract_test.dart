@@ -28,9 +28,153 @@ void main() {
       expect(works.every((post) => post.displayFormat == 'note'), isTrue);
     });
 
+    test('alpha 首页推荐稳定返回全样式 showcase 顺序', () async {
+      const expectedIds = <String>[
+        'alpha_moment_grid_1',
+        'alpha_moment_grid_2',
+        'alpha_moment_grid_3',
+        'alpha_moment_grid_4',
+        'alpha_moment_grid_5',
+        'alpha_moment_grid_6',
+        'alpha_moment_grid_7',
+        'alpha_moment_grid_8',
+        'alpha_moment_grid_10',
+        'alpha_photo_landscape_single',
+        'alpha_photo_landscape_carousel',
+        'alpha_photo_portrait_single',
+        'alpha_photo_portrait_carousel',
+        'alpha_photo_extreme_ratio_guard',
+        'alpha_video_portrait_playable',
+        'alpha_video_landscape_playable',
+        'alpha_article_text_short',
+        'alpha_article_text_long',
+        'alpha_article_top_image',
+        'alpha_article_side_image',
+        'alpha_article_top_three_images',
+      ];
+
+      final recommend = await repo.listDiscoveryFeed(
+        category: 'micro',
+        identity: 'moment',
+        limit: 0,
+      );
+      final explicitRecommend = await repo.listDiscoveryFeed(
+        category: 'recommend',
+        limit: 0,
+      );
+      final moment = await repo.listDiscoveryFeed(
+        category: 'moment',
+        identity: 'moment',
+        limit: 0,
+      );
+
+      expect(recommend.map((post) => post.id).toList(), expectedIds);
+      expect(explicitRecommend.map((post) => post.id).toList(), expectedIds);
+      expect(moment.map((post) => post.id).toList(), expectedIds);
+      expect(recommend.length, expectedIds.length);
+
+      PostBaseDto byId(String id) =>
+          recommend.firstWhere((post) => post.id == id);
+
+      expect(byId('alpha_moment_grid_1').mediaImageUrls, hasLength(1));
+      expect(byId('alpha_moment_grid_2').mediaImageUrls, hasLength(2));
+      expect(byId('alpha_moment_grid_3').mediaImageUrls, hasLength(3));
+      expect(byId('alpha_moment_grid_4').mediaImageUrls, hasLength(4));
+      expect(byId('alpha_moment_grid_5').mediaImageUrls, hasLength(5));
+      expect(byId('alpha_moment_grid_6').mediaImageUrls, hasLength(6));
+      expect(byId('alpha_moment_grid_7').mediaImageUrls, hasLength(7));
+      expect(byId('alpha_moment_grid_8').mediaImageUrls, hasLength(8));
+      expect(
+        byId('alpha_moment_grid_10').mediaImageUrls.length,
+        greaterThan(9),
+      );
+
+      expect(byId('alpha_photo_landscape_single').mediaImageUrls, hasLength(1));
+      expect(byId('alpha_photo_landscape_single').aspectRatio, greaterThan(1));
+      expect(byId('alpha_photo_landscape_carousel').mediaImageUrls.length, 7);
+      expect(byId('alpha_photo_portrait_single').mediaImageUrls, hasLength(1));
+      expect(byId('alpha_photo_portrait_single').aspectRatio, lessThan(1));
+      expect(byId('alpha_photo_portrait_carousel').mediaImageUrls.length, 5);
+      expect(byId('alpha_photo_portrait_carousel').aspectRatio, lessThan(1));
+      expect(
+        byId('alpha_photo_extreme_ratio_guard').aspectRatio,
+        greaterThan(4),
+      );
+
+      expect(byId('alpha_video_portrait_playable').identity, 'moment');
+      expect(byId('alpha_video_portrait_playable').normalizedTitle, isEmpty);
+      expect(byId('alpha_video_portrait_playable').hasVideo, isTrue);
+      expect(byId('alpha_video_portrait_playable').aspectRatio, lessThan(1));
+      expect(byId('alpha_video_landscape_playable').hasVideo, isTrue);
+      expect(
+        byId('alpha_video_landscape_playable').aspectRatio,
+        greaterThan(1),
+      );
+      expect(byId('alpha_video_landscape_playable').durationMs, isNotNull);
+
+      expect(byId('alpha_article_text_short').mediaCoverUrl, isEmpty);
+      expect(byId('alpha_article_text_long').mediaCoverUrl, isEmpty);
+      expect(byId('alpha_article_top_image').mediaCoverUrl, isNotEmpty);
+      expect(byId('alpha_article_side_image').mediaCoverUrl, isNotEmpty);
+      expect(byId('alpha_article_top_three_images').mediaCoverUrl, isNotEmpty);
+      expect(
+        recommend.every((post) => post.intersectionReasons?.isNotEmpty == true),
+        isTrue,
+      );
+    });
+
     test('listDiscoveryFeedPage 返回带游标的分页结果', () async {
       final page = await repo.listDiscoveryFeedPage(category: 'all');
       expect(page.items, isNotEmpty);
+    });
+
+    test('listDiscoveryFeedPage envelope 携带服务端权威 feedRequestId', () async {
+      final page = await repo.listDiscoveryFeedPage(category: 'all');
+      expect(page.feedRequestId, isNotNull);
+      expect(page.feedRequestId, isNotEmpty);
+      expect(page.rankingVersion, isNotEmpty);
+      expect(page.reasonVersion, isNotEmpty);
+    });
+
+    test('listDiscoveryFeedPage 回显端侧传入的 feedRequestId', () async {
+      final page = await repo.listDiscoveryFeedPage(
+        category: 'all',
+        feedRequestId: 'frq_echo_001',
+      );
+      expect(page.feedRequestId, 'frq_echo_001');
+    });
+
+    test('alpha/discovery mock 媒体输出与 contract seed archived 家族同源', () async {
+      final posts = await repo.listDiscoveryFeed(category: 'all', limit: 0);
+      final mediaUrls = posts
+          .expand(
+            (post) => <String>[
+              post.avatarUrl,
+              post.authorBackgroundUrl ?? '',
+              post.mediaCoverUrl,
+              post.mediaThumbnailUrl,
+              post.mediaVideoUrl,
+              ...post.mediaImageUrls,
+            ],
+          )
+          .map((url) => url.trim())
+          .where((url) => url.isNotEmpty)
+          .toList(growable: false);
+
+      expect(mediaUrls, isNotEmpty);
+      expect(mediaUrls.any((url) => url.contains('/s/mock/')), isFalse);
+      expect(
+        mediaUrls.any((url) => url.contains('media/image/s/archived-image/')),
+        isTrue,
+      );
+      expect(
+        mediaUrls.any((url) => url.contains('media/video/s/archived-video/')),
+        isTrue,
+      );
+      expect(
+        mediaUrls.any((url) => url.contains('media/avatar/s/archived-avatar/')),
+        isTrue,
+      );
     });
 
     test('getPost 不存在的 ID 抛出异常', () async {

@@ -4,8 +4,8 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_stats_row.dart';
 
-/// 统计行单行三项（粉丝/关注/获赞）：值取自 profile；
-/// 粉丝/关注点击经 onStatTap 分发对应 type，获赞为静态格不可点。
+/// 统计行单行四项（粉丝/关注/获赞/圈子）：值取自 profile；
+/// 四项点击经 onStatTap 分发对应 type。
 SubAccountProfileViewData _profile() {
   return const SubAccountProfileViewData(
     subAccountId: 'sa1',
@@ -31,7 +31,7 @@ SubAccountProfileViewData _profile() {
 }
 
 void main() {
-  testWidgets('渲染单行三项统计值与同源标签，不展示记录数', (tester) async {
+  testWidgets('渲染单行四项统计值与同源标签，不展示记录数', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -44,14 +44,16 @@ void main() {
     expect(find.text('12'), findsOneWidget);
     expect(find.text('30'), findsOneWidget);
     expect(find.text('256'), findsOneWidget);
+    expect(find.text('8'), findsOneWidget);
     expect(find.text('5'), findsNothing);
     expect(find.text(UITextConstants.profileStatRecords), findsNothing);
     expect(find.text(UITextConstants.profileStatFollowers), findsOneWidget);
     expect(find.text(UITextConstants.follow), findsOneWidget);
     expect(find.text(UITextConstants.circleLikes), findsOneWidget);
+    expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
   });
 
-  testWidgets('点击统计栏分发对应 type；获赞为静态格不分发', (tester) async {
+  testWidgets('点击统计栏分发对应 type', (tester) async {
     final tapped = <String>[];
     await tester.pumpWidget(
       MaterialApp(
@@ -68,12 +70,10 @@ void main() {
 
     await tester.tap(find.text(UITextConstants.profileStatFollowers));
     await tester.tap(find.text(UITextConstants.follow));
-    await tester.tap(
-      find.text(UITextConstants.circleLikes),
-      warnIfMissed: false,
-    );
+    await tester.tap(find.text(UITextConstants.circleLikes));
+    await tester.tap(find.text(UITextConstants.contactsTabCircles));
     await tester.pump();
 
-    expect(tapped, <String>['fans', 'following']);
+    expect(tapped, <String>['fans', 'following', 'likes', 'circles']);
   });
 }

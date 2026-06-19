@@ -1,19 +1,16 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show TextBox;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
-import 'package:flutter/services.dart' show TextSelection;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
@@ -25,6 +22,7 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -324,7 +322,7 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
   }
 
   @override
-  Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? identity,
     String? type,
@@ -355,9 +353,12 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
       await Future<void>.delayed(appendDelay);
     }
     final end = (offset + pageSize).clamp(0, posts.length);
-    return CursorPage<PostBaseDto>(
+    return DiscoveryFeedPage(
       items: posts.sublist(offset, end),
       nextCursor: end < posts.length ? '$end' : null,
+      feedRequestId: feedRequestId?.trim().isNotEmpty == true
+          ? feedRequestId!.trim()
+          : 'frq_mock_${DateTime.now().microsecondsSinceEpoch}',
     );
   }
 
@@ -392,7 +393,7 @@ class _RemoteModeNotifier extends AppDataSourceModeNotifier {
 }
 
 PhotoPostDto _photoPost({
-  List<String> imageUrls = const ['https://example.com/photo.jpg'],
+  List<String> imageUrls = const ['media/image/s/fixture/photo.jpg'],
   int? width,
   int? height,
 }) {
@@ -404,8 +405,11 @@ PhotoPostDto _photoPost({
     authorId: 'author-1',
     displayName: '摄影师',
     avatarUrl: 'https://example.com/avatar.jpg',
+    authorRoleLabel: '',
+    authorIdentityTags: const <String>[],
+    authorVerified: false,
     body: 'dto body',
-    coverUrl: 'https://example.com/photo.jpg',
+    coverUrl: 'media/image/s/fixture/photo.jpg',
     imageUrls: imageUrls,
     width: width,
     height: height,
@@ -425,6 +429,9 @@ VideoPostDto _videoPost({int? width, int? height}) {
     authorId: 'author-video',
     displayName: '视频作者',
     avatarUrl: 'https://example.com/avatar-video.jpg',
+    authorRoleLabel: '',
+    authorIdentityTags: const <String>[],
+    authorVerified: false,
     body: 'video body',
     videoUrl: 'https://example.com/video.mp4',
     thumbnailUrl: 'https://example.com/video.jpg',
@@ -446,6 +453,9 @@ ArticlePostDto _articlePost() {
     authorId: 'author-3',
     displayName: '写作者',
     avatarUrl: 'https://example.com/avatar-3.jpg',
+    authorRoleLabel: '',
+    authorIdentityTags: const <String>[],
+    authorVerified: false,
     title: '图文翻页',
     body: '文章摘要',
     summary: '文章摘要',
@@ -555,6 +565,9 @@ MicroPostDto _textMoment({List<IntersectionReason>? intersectionReasons}) {
     authorId: 'author-2',
     displayName: '圈友',
     avatarUrl: 'https://example.com/avatar-2.jpg',
+    authorRoleLabel: '',
+    authorIdentityTags: const <String>[],
+    authorVerified: false,
     body: '今天风有点大，大家从南门集合。',
     imageUrls: const <String>[],
     likeCount: 0,
@@ -891,7 +904,7 @@ void main() {
     tester,
   ) async {
     final post = _photoPost(
-      imageUrls: const ['https://example.com/photo-regression.jpg'],
+      imageUrls: const ['media/image/s/fixture/photo-regression.jpg'],
     );
     final container = ProviderContainer();
 
@@ -1038,14 +1051,14 @@ void main() {
   testWidgets('photo post 在 unified viewer 中展示 raw title/body', (tester) async {
     final post = _photoPost(
       imageUrls: const [
-        'https://example.com/photo.jpg',
-        'https://example.com/photo-2.jpg',
-        'https://example.com/photo-3.jpg',
-        'https://example.com/photo-4.jpg',
-        'https://example.com/photo-5.jpg',
-        'https://example.com/photo-6.jpg',
-        'https://example.com/photo-7.jpg',
-        'https://example.com/photo-8.jpg',
+        'media/image/s/fixture/photo.jpg',
+        'media/image/s/fixture/photo-2.jpg',
+        'media/image/s/fixture/photo-3.jpg',
+        'media/image/s/fixture/photo-4.jpg',
+        'media/image/s/fixture/photo-5.jpg',
+        'media/image/s/fixture/photo-6.jpg',
+        'media/image/s/fixture/photo-7.jpg',
+        'media/image/s/fixture/photo-8.jpg',
       ],
     );
     await tester.pumpWidget(
@@ -1107,6 +1120,48 @@ void main() {
     expect(find.text('测试圈子A'), findsNothing);
     expect(find.text('测试圈子B'), findsNothing);
     expect(find.byType(MediaBlurCaptionOverlay), findsNothing);
+  });
+
+  testWidgets('首页进入沉浸浏览器后上下滑动不切换推荐流并提示返回首页继续浏览', (tester) async {
+    final first = _photoPost(
+      imageUrls: const ['media/image/s/fixture/home-first.jpg'],
+    );
+    final second = _photoPost(
+      imageUrls: const ['media/image/s/fixture/home-second.jpg'],
+    ).copyWith(id: 'photo-2', body: 'second body');
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [first, second],
+          externalPostViews: [
+            ContentSurfaceViewMapper.fromDto(first),
+            ContentSurfaceViewMapper.fromDto(second),
+          ],
+          source: 'home_feed',
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final viewer = find.byType(WorksImmersiveViewer);
+    await tester.drag(viewer, const Offset(0, -360));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('dto body'), findsOneWidget);
+    expect(find.text('second body'), findsNothing);
+    expect(
+      find.text(DiscoveryFeedText.homeFeedVerticalSwitchUnavailable),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('精品页竖向图片按宽高比铺入状态栏', (tester) async {
@@ -1199,7 +1254,7 @@ void main() {
     });
 
     final post = _photoPost(
-      imageUrls: const ['https://example.com/photo-wide.jpg'],
+      imageUrls: const ['media/image/s/fixture/photo-wide.jpg'],
     );
     await tester.pumpWidget(
       _wrap(
@@ -1308,7 +1363,7 @@ void main() {
     });
 
     final post = _photoPost(
-      imageUrls: const ['https://example.com/photo-gap.jpg'],
+      imageUrls: const ['media/image/s/fixture/photo-gap.jpg'],
     );
     await tester.pumpWidget(
       _wrap(
@@ -1471,7 +1526,7 @@ void main() {
     final entry = find.byKey(const ValueKey('immersive-intersection-entry'));
     expect(entry, findsOneWidget);
     expect(
-      find.text(UITextConstants.intersectionEntrySummary(1)),
+      find.text(DiscoveryFeedText.intersectionEntrySummary(1)),
       findsOneWidget,
     );
     expect(find.text('你和 TA 都来自同一校园'), findsNothing);
@@ -1485,7 +1540,7 @@ void main() {
     );
     expect(find.text('你和 TA 都来自同一校园'), findsOneWidget);
     // V1.0：详情 sheet 为「为什么推荐给你」+ ✓ 证据列表。
-    expect(find.text(UITextConstants.intersectionDetailTitle), findsOneWidget);
+    expect(find.text(DiscoveryFeedText.intersectionDetailTitle), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('works-intersection-check')),
       findsOneWidget,
@@ -1706,8 +1761,8 @@ void main() {
   testWidgets('图片滑到边界后从内容区继续横滑不会切换主 tab', (tester) async {
     final post = _photoPost(
       imageUrls: const [
-        'https://example.com/photo.jpg',
-        'https://example.com/photo-2.jpg',
+        'media/image/s/fixture/photo.jpg',
+        'media/image/s/fixture/photo-2.jpg',
       ],
     );
     var switchedToCircles = false;
@@ -1743,8 +1798,8 @@ void main() {
   testWidgets('图片首图从内容区继续横滑时会出现回弹并恢复原位', (tester) async {
     final post = _photoPost(
       imageUrls: const [
-        'https://example.com/photo.jpg',
-        'https://example.com/photo-2.jpg',
+        'media/image/s/fixture/photo.jpg',
+        'media/image/s/fixture/photo-2.jpg',
       ],
     );
     var dismissed = false;
@@ -1802,8 +1857,8 @@ void main() {
   testWidgets('图片末图从内容区继续横滑时会出现回弹并恢复原位', (tester) async {
     final post = _photoPost(
       imageUrls: const [
-        'https://example.com/photo.jpg',
-        'https://example.com/photo-2.jpg',
+        'media/image/s/fixture/photo.jpg',
+        'media/image/s/fixture/photo-2.jpg',
       ],
     );
     var dismissed = false;
@@ -2173,8 +2228,8 @@ void main() {
   testWidgets('Android 下图片左边缘横滑会退出当前沉浸页', (tester) async {
     final post = _photoPost(
       imageUrls: const [
-        'https://example.com/photo.jpg',
-        'https://example.com/photo-2.jpg',
+        'media/image/s/fixture/photo.jpg',
+        'media/image/s/fixture/photo-2.jpg',
       ],
     );
     var dismissed = false;
@@ -2250,7 +2305,7 @@ void main() {
 
   testWidgets('iOS 下右边缘横滑不会触发沉浸式返回', (tester) async {
     final post = _photoPost(
-      imageUrls: const ['https://example.com/photo-only.jpg'],
+      imageUrls: const ['media/image/s/fixture/photo-only.jpg'],
     );
     var dismissed = false;
     final container = ProviderContainer();

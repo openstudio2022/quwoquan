@@ -140,10 +140,19 @@ type BehaviorSignal struct {
 	FeedRequestID   string    `json:"feedRequestId,omitempty"`
 	Position        int       `json:"position,omitempty"`
 	CommentLength   int       `json:"commentLength,omitempty"`
+	// 阶段五归因：feed 下发频道与精排版本，全事件携带，使 HotPath / served-impressed 双轨记账与
+	// 特征投影可按频道与精排版本分桶（AB / replay）。与 App BehaviorEvent.channelId/rankingVersion 对齐。
+	ChannelID      string `json:"channelId,omitempty"`
+	RankingVersion string `json:"rankingVersion,omitempty"`
 	// 交集转化归因（S6）：触发该行为的交集维度（identity/location/content/interest/relationship）
 	// 与路径制 tagRef 锚点（唯一真相源 publish/v1/tags），供推荐回流与交集转化漏斗按维度/tagRef 下钻。
 	IntersectionDimension string   `json:"intersectionDimension,omitempty"`
 	IntersectionTagRefs   []string `json:"intersectionTagRefs,omitempty"`
+	// 交集漏斗归因（曝光/点击/转化）：交集稳定标识 IntersectionID 与类别 IntersectionClass
+	// （fact|affinity）。与 App BehaviorEvent.intersectionId/intersectionClass 字段对齐（R08
+	// 端云一致性），使「交集曝光 → 点击 → 转化」可按同一 intersectionId 与事实/概率类别下钻。
+	IntersectionID    string `json:"intersectionId,omitempty"`
+	IntersectionClass string `json:"intersectionClass,omitempty"`
 }
 
 // EffectiveSessionID returns the feed-scoped session ID for recommendation
@@ -292,7 +301,11 @@ func normalizeFeedbackState(signal BehaviorSignal) string {
 		return "dwell"
 	case "dislike", "hide_author", "hide_content_type", "report":
 		return "negative"
-	case "click", "like", "share", "comment", "follow", "join_circle", "add_contact", "author_view", "entity_page_view", "tag_click", "play_progress", "content_depth":
+	// click 是独立漏斗态（七态：served/visible/impressed/click/dwell/interaction/negative）：
+	// CTR = click / impressed 直接由此态分离，区别于点赞/评论/分享等深度互动（interaction）。
+	case "click":
+		return "click"
+	case "like", "share", "comment", "follow", "join_circle", "add_contact", "author_view", "entity_page_view", "tag_click", "play_progress", "content_depth":
 		return "interaction"
 	default:
 		return ""
@@ -520,6 +533,19 @@ func (h *HotPath) RecordNegative(ctx context.Context, userID, contentID string) 
 	return h.redis.Expire(ctx, key, negativeTTL)
 }
 
+// NegativeContentIDs returns the user's accumulated explicit-negative content
+// set (dislike / hide / report). Feed paths that bypass the recall pipeline
+// (repository fallback) read this so explicit negative feedback is honored on
+// every feed path, not only inside engine recall. The set is per-user (not
+// day-bucketed) and stays small by product semantics, so a single SMembers off
+// the hot recall path is acceptable.
+func (h *HotPath) NegativeContentIDs(ctx context.Context, userID string) ([]string, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, nil
+	}
+	return h.redis.SMembers(ctx, negativeKeyPrefix+userScopedKey(userID))
+}
+
 func (h *HotPath) AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error) {
 	clientEventID := strings.TrimSpace(signal.ClientEventID)
 	if clientEventID == "" {
@@ -540,6 +566,11 @@ func (h *HotPath) FilterCandidates(ctx context.Context, userID string, candidate
 	servedDays := dayKeys(userID, at, int(servedTTL/(24*time.Hour)))
 	impressedDays := dayKeys(userID, at, int(impressedTTL/(24*time.Hour)))
 	negativeKey := negativeKeyPrefix + userScopedKey(userID)
+	// 重复曝光拦截度量：被 served/impressed 命中即「若不过滤就会再次曝光」的候选。
+	// served/impressed 双轨分开计数，喂 recommendation_feed_duplicate_exposure_total，
+	// 让重复曝光率 SLO（repeat_exposure_rate <= 0.01）可度量而非 objective_only。
+	// negative 命中走显式负反馈语义，不计入重复曝光。
+	dupServed, dupImpressed := 0, 0
 	for _, c := range candidates {
 		contentID := strings.TrimSpace(c.ContentID)
 		if contentID == "" {
@@ -555,15 +586,19 @@ func (h *HotPath) FilterCandidates(ctx context.Context, userID string, candidate
 		if served, err := h.memberOfAny(ctx, servedKeyPrefix, servedDays, contentID); err != nil {
 			return nil, err
 		} else if served {
+			dupServed++
 			continue
 		}
 		if impressed, err := h.memberOfAny(ctx, impressedKeyPrefix, impressedDays, contentID); err != nil {
 			return nil, err
 		} else if impressed {
+			dupImpressed++
 			continue
 		}
 		filtered = append(filtered, c)
 	}
+	RecordDuplicateExposureFiltered("served", dupServed)
+	RecordDuplicateExposureFiltered("impressed", dupImpressed)
 	return filtered, nil
 }
 

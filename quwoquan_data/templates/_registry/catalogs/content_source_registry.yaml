@@ -26,6 +26,22 @@ allowedValues:
     - commercial_license_required
     - creator_authorization_required
     - reference_only
+  siteCrawlProfileFields:
+    - siteId
+    - domains
+    - allowedPaths
+    - timeWindowDays
+    - contentLanes
+    - fetchMode
+    - extractor
+    - rateLimit
+    - rightsPolicy
+    - robotsPolicy
+    - loginPolicy
+    - watermarkPolicy
+    - maxDepth
+    - maxPagesPerDay
+    - crawlAllowed
 
 lanePolicies:
   homepage:
@@ -85,6 +101,20 @@ lanePolicies:
     promptFacts:
       - 视频广泛检索通用视频平台、素材库、官方账号和垂类视频源。
       - 视频能否发布由标题、描述、字幕、账号身份、音乐版权、画面水印、转载痕迹和授权声明逐条判断。
+
+siteCrawlProfilePolicy:
+  workspaceRoot: runtime/site_supply/{vertical}/{siteId}/{batch}
+  defaultTimeWindowDays: 730
+  scaleQueueBackend: reliabletask
+  crawlerTruthSource: vertical source_registry.yaml
+  promptFacts:
+    - 网站维度供给线只负责发现、抓取、抽取、评分和映射候选，不直接发布内容。
+    - fetchable=false 或 crawlAllowed=false 的站点不得进入批量抓取，只能作为 discovery/reference。
+    - controlledTrial.allowed=true 仅代表可做受控 DAG/并发/门禁验证；validationOnly 必须为 true，rawFetchAllowed 和 publishableAssetsAllowed 必须为 false。
+    - 受控试跑候选只能作为 content_plan handoff 结构验证，不代表真实抓取授权，也不得把平台素材作为可发布资产。
+    - 发布主线只接受 content_plan_packet 之后的标准对象，不直接消费 site crawl 产物。
+    - 平台发现图不能自动变发布图；逐资产缺 license、credit、sourceUrl、termsUrl、usageScope 即不可发布。
+    - 日产 10 万级必须提供站点漏斗、TokenLedger、release/import、搜索可见和推荐反馈证据。
 
 common:
   entity:

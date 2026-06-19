@@ -228,16 +228,23 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 		source := strVal(ev, "referralSource")
 		action := strVal(ev, "action")
 		contentType := strVal(ev, "contentType")
+		state := strVal(ev, "state")
 
 		if kind := strVal(ev, "intersectionSourceRef"); kind != "" && isIntersectionEngagementAction(action, depth) {
 			intersectionKindCounts[kind]++
 		}
 
 		if contentType != "" {
-			if action == "impression" || action == "dwell" {
+			// 七态漏斗：仅「真实曝光 impressed / 停留 dwell」计入 typeImpressions（served/impressed
+			// 双轨的 impressed 侧）；弱可见 visible 不计入，避免稀释曝光分母与 CTR；未带 state 的上报按
+			// impression 兜底。served（仅下发未可见）不会进入 behavior 事件，只在 HotPath 曝光过滤中记账。
+			if state == "impressed" || state == "dwell" || action == "dwell" ||
+				(state == "" && action == "impression") {
 				typeImpressions[contentType]++
 			}
-			if depth >= 2 || action == "like" || action == "share" || action == "comment" {
+			// 点击（click）与显式互动（like/share/comment）及深度≥2 计入 typeEngagements（CTR / 互动率分子）。
+			if action == "click" || state == "interaction" || depth >= 2 ||
+				action == "like" || action == "share" || action == "comment" {
 				typeEngagements[contentType]++
 			}
 		}

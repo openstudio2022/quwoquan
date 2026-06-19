@@ -39,7 +39,7 @@ func TestInitiateCall_OneToOne_RequiresMutual(t *testing.T) {
 
 	_, err := orchestrator.InitiateCall(context.Background(), application.InitiateCallRequest{
 		InitiatorID: "caller_a",
-		CallType:    "voice",
+		CallType:    "audio",
 		InviteeIDs:  []string{"caller_b"},
 	})
 	if err == nil {
@@ -58,7 +58,7 @@ func TestInitiateCall_OneToOne_Blocked(t *testing.T) {
 
 	_, err := orchestrator.InitiateCall(context.Background(), application.InitiateCallRequest{
 		InitiatorID: "caller_c",
-		CallType:    "voice",
+		CallType:    "audio",
 		InviteeIDs:  []string{"caller_d"},
 	})
 	if err == nil {
@@ -77,7 +77,7 @@ func TestInitiateCall_OneToOne_AllowsMutual(t *testing.T) {
 
 	resp, err := orchestrator.InitiateCall(context.Background(), application.InitiateCallRequest{
 		InitiatorID: "caller_ok",
-		CallType:    "voice",
+		CallType:    "audio",
 		InviteeIDs:  []string{"peer_ok"},
 	})
 	if err != nil {

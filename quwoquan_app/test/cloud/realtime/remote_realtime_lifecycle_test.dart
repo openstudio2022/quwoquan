@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
 import 'package:quwoquan_app/cloud/services/realtime/remote_realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
@@ -90,7 +91,8 @@ void main() {
       [
         'longpoll:start:user-42',
         'longpoll:dispose:user-42',
-        'ws:connect:user-42:inbox,conversation/conv_001',
+        'ws:connect:user-42:inbox,conversation/conv_001,'
+            '${feedRealtimePatchChannelFor('user-42')}',
       ],
     );
   });
@@ -141,9 +143,62 @@ void main() {
       [
         'longpoll:start:user-42',
         'longpoll:dispose:user-42',
-        'ws:connect:user-42:inbox,conversation/conv_001',
+        'ws:connect:user-42:inbox,conversation/conv_001,'
+            '${feedRealtimePatchChannelFor('user-42')}',
         'ws:dispose:user-42',
       ],
+    );
+  });
+
+  test('guest (empty resolver) does not subscribe to feed patch channel', () async {
+    final log = <String>[];
+    final delegate = RemoteRealtimeConnectionDelegate(
+      read: _unsupportedRead,
+      currentUserIdResolver: () => '',
+      config: const RealtimeConfig(
+        wsUrl: 'ws://127.0.0.1:18080/v1/realtime/ws',
+        gatewayBaseUrl: 'http://127.0.0.1:17000',
+        longPollHoldSec: 1,
+      ),
+      longPollFactory: ({required config, required userId, required onEvents}) {
+        return _RecordingLongPollTransport(
+          config: config,
+          userId: userId,
+          onEvents: onEvents,
+          log: log,
+        );
+      },
+      webSocketFactory: ({
+        required config,
+        required userId,
+        required onEvent,
+        required onDisconnect,
+      }) {
+        return _RecordingWebSocketTransport(
+          config: config,
+          userId: userId,
+          onEvent: onEvent,
+          onDisconnect: onDisconnect,
+          log: log,
+        );
+      },
+    );
+
+    delegate.onAppForeground();
+    delegate.onEnterChatDetail('conv_001');
+    await Future<void>.delayed(Duration.zero);
+
+    // 游客 resolver 返回空 → WS 仅订阅会话相关 topic，无 feed patch 通道。
+    expect(
+      log.any((entry) => entry.contains('rt:rec:feed:user:')),
+      isFalse,
+    );
+    expect(
+      log.any(
+        (entry) => entry.startsWith('ws:connect:') &&
+            entry.endsWith('inbox,conversation/conv_001'),
+      ),
+      isTrue,
     );
   });
 }

@@ -510,6 +510,68 @@ func TestGetFeedFutureWindowFiltersHiddenAuthorAndContentType(t *testing.T) {
 	}
 }
 
+// TestFeedIssuesServerFeedRequestID verifies the feed envelope carries a
+// server-authoritative feedRequestId (frq_ prefix) plus ranking/reason pipeline
+// versions on first load, and that echoing the id on the next page keeps the
+// same attribution id (a single feed session keeps one feedRequestId).
+// contract.yaml: get_feed_issues_server_feed_request_id / go_func: TestFeedIssuesServerFeedRequestID
+func TestFeedIssuesServerFeedRequestID(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	for i := range 10 {
+		createPost(t, fmt.Sprintf(
+			`{"contentType":"image","title":"FRQ post %d","body":"content %d","mediaUrls":["https://example.com/frq%d.jpg"]}`, i, i, i,
+		))
+	}
+
+	type feedEnvelope struct {
+		Items          []map[string]any `json:"items"`
+		NextCursor     string           `json:"nextCursor"`
+		FeedRequestID  string           `json:"feedRequestId"`
+		RankingVersion string           `json:"rankingVersion"`
+		ReasonVersion  string           `json:"reasonVersion"`
+	}
+
+	// First load: no echoed id — server must mint a fresh frq_ id and attach versions.
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?sort=recommend&limit=5", nil)
+	rec1 := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("first page: expected 200, got %d: %s", rec1.Code, rec1.Body.String())
+	}
+	var page1 feedEnvelope
+	if err := json.Unmarshal(rec1.Body.Bytes(), &page1); err != nil {
+		t.Fatalf("first page decode: %v", err)
+	}
+	if !strings.HasPrefix(page1.FeedRequestID, "frq_") {
+		t.Fatalf("feedRequestId must be server-issued with frq_ prefix, got %q", page1.FeedRequestID)
+	}
+	if page1.RankingVersion == "" || page1.ReasonVersion == "" {
+		t.Fatalf("feed envelope must carry rankingVersion + reasonVersion, got ranking=%q reason=%q",
+			page1.RankingVersion, page1.ReasonVersion)
+	}
+
+	// Next page: echo the feedRequestId — server must keep the same attribution id.
+	nextURL := fmt.Sprintf("/v1/content/feed?sort=recommend&limit=5&feedRequestId=%s", url.QueryEscape(page1.FeedRequestID))
+	if page1.NextCursor != "" {
+		nextURL += "&cursor=" + url.QueryEscape(page1.NextCursor)
+	}
+	req2 := httptest.NewRequest(http.MethodGet, nextURL, nil)
+	rec2 := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("second page: expected 200, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+	var page2 feedEnvelope
+	if err := json.Unmarshal(rec2.Body.Bytes(), &page2); err != nil {
+		t.Fatalf("second page decode: %v", err)
+	}
+	if page2.FeedRequestID != page1.FeedRequestID {
+		t.Fatalf("echoing feedRequestId must keep the same attribution id: page1=%q page2=%q",
+			page1.FeedRequestID, page2.FeedRequestID)
+	}
+}
+
 // TestListFeedWithPagination creates image posts then verifies GET /v1/content/feed
 // returns 200 with items array, and that a second page call also succeeds.
 func TestListFeedWithPagination(t *testing.T) {

@@ -68,3 +68,40 @@ func actorPronoun(perspective ActorPerspective) string {
 	}
 	return "TA"
 }
+
+// EvidenceText instantiates the cloud-side conclusion sentence for a single
+// impact evidence fact (drill-down detail row). It is content-anchored and
+// privacy-safe: it never names the user who produced the impact ("有人").
+// App surfaces render this value directly (global acceptance G2).
+func EvidenceText(helpType string, action string, contentTitle string, perspective ActorPerspective) string {
+	pronoun := actorPronoun(perspective)
+	titleClause := ""
+	if title := strings.TrimSpace(contentTitle); title != "" {
+		titleClause = "《" + title + "》"
+	}
+	switch strings.TrimSpace(helpType) {
+	case HelpRelationship:
+		return "有人通过" + pronoun + "建立了新连接"
+	case HelpCommunity:
+		return "有人加入了相关圈子"
+	case HelpDecision:
+		if titleClause != "" {
+			return "有人收藏了" + pronoun + "的" + titleClause
+		}
+		return "有人收藏了" + pronoun + "的内容"
+	case HelpKnowledge:
+		return "有人因" + pronoun + "的分享有所收获"
+	case HelpSpread:
+		if titleClause != "" {
+			return "有人转发了" + pronoun + "的" + titleClause
+		}
+		return "有人转发了" + pronoun + "的内容"
+	case HelpAudience:
+		if titleClause != "" {
+			return "有人看过" + pronoun + "的" + titleClause
+		}
+		return "有人看过" + pronoun + "的内容"
+	default:
+		return ""
+	}
+}

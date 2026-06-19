@@ -27,7 +27,6 @@ class ContentApiMetadata {
     'GetAuthorImpact': '/v1/content/sub-accounts/{subAccountId}/author-impact',
     'GetCounters': '/v1/content/posts/{postId}/counters',
     'GetFeed': '/v1/content/feed',
-    'GetFeedIntersections': '/v1/content/feed/intersections',
     'GetHelperRead': '/v1/content/helper-read/{contentId}',
     'GetMediaAsset': '/v1/content/media/{mediaId}',
     'GetMyFootprint': '/v1/content/footprint',
@@ -35,10 +34,10 @@ class ContentApiMetadata {
     'GetObjectIntersections': '/v1/content/intersections/object',
     'GetPost': '/v1/content/posts/{postId}',
     'GetReactionState': '/v1/content/posts/{postId}/reactions',
-    'GetRecommendation': '/v1/content/recommend',
     'GetReport': '/v1/content/reports/{reportId}',
     'InitMediaUpload': '/v1/content/media/uploads:init',
     'LikePost': '/v1/content/posts/{postId}/like',
+    'ListAuthorImpactEvidence': '/v1/content/sub-accounts/{subAccountId}/author-impact/evidence',
     'ListCommentReplies': '/v1/content/posts/{postId}/comments/{commentId}/replies',
     'ListComments': '/v1/content/posts/{postId}/comments',
     'ListCommentsByAuthor': '/v1/content/users/me/comments',
@@ -53,7 +52,6 @@ class ContentApiMetadata {
     'QuoteToCircle': '/v1/content/posts/{postId}/quote',
     'ReactToComment': '/v1/content/comments/{commentId}/reaction',
     'ReportBehaviors': '/v1/content/behaviors',
-    'ReportIntersectionExposure': '/v1/content/intersections/exposure',
     'RepostToCircle': '/v1/content/posts/{postId}/repost',
     'RequestOriginalImageAccess': '/v1/content/media/{mediaId}/original:access',
     'ResolveReport': '/v1/content/reports/{reportId}',
@@ -83,7 +81,6 @@ class ContentApiMetadata {
     'GetAuthorImpact': 'GET',
     'GetCounters': 'GET',
     'GetFeed': 'GET',
-    'GetFeedIntersections': 'GET',
     'GetHelperRead': 'GET',
     'GetMediaAsset': 'GET',
     'GetMyFootprint': 'GET',
@@ -91,10 +88,10 @@ class ContentApiMetadata {
     'GetObjectIntersections': 'GET',
     'GetPost': 'GET',
     'GetReactionState': 'GET',
-    'GetRecommendation': 'POST',
     'GetReport': 'GET',
     'InitMediaUpload': 'POST',
     'LikePost': 'POST',
+    'ListAuthorImpactEvidence': 'GET',
     'ListCommentReplies': 'GET',
     'ListComments': 'GET',
     'ListCommentsByAuthor': 'GET',
@@ -109,7 +106,6 @@ class ContentApiMetadata {
     'QuoteToCircle': 'POST',
     'ReactToComment': 'POST',
     'ReportBehaviors': 'POST',
-    'ReportIntersectionExposure': 'POST',
     'RepostToCircle': 'POST',
     'RequestOriginalImageAccess': 'POST',
     'ResolveReport': 'PATCH',
@@ -140,7 +136,6 @@ class ContentApiMetadata {
     'GetAuthorImpact': 'required',
     'GetCounters': 'public',
     'GetFeed': 'optional',
-    'GetFeedIntersections': 'optional',
     'GetHelperRead': 'public',
     'GetMediaAsset': 'public',
     'GetMyFootprint': 'required',
@@ -148,10 +143,10 @@ class ContentApiMetadata {
     'GetObjectIntersections': 'required',
     'GetPost': 'public',
     'GetReactionState': 'optional',
-    'GetRecommendation': 'public',
     'GetReport': 'public',
     'InitMediaUpload': 'required',
     'LikePost': 'optional',
+    'ListAuthorImpactEvidence': 'required',
     'ListCommentReplies': 'public',
     'ListComments': 'public',
     'ListCommentsByAuthor': 'required',
@@ -166,7 +161,6 @@ class ContentApiMetadata {
     'QuoteToCircle': 'required',
     'ReactToComment': 'required',
     'ReportBehaviors': 'public',
-    'ReportIntersectionExposure': 'required',
     'RepostToCircle': 'required',
     'RequestOriginalImageAccess': 'required',
     'ResolveReport': 'public',
@@ -195,7 +189,6 @@ class ContentApiMetadata {
   static const String getAuthorImpactOperation = 'GetAuthorImpact';
   static const String getCountersOperation = 'GetCounters';
   static const String getFeedOperation = 'GetFeed';
-  static const String getFeedIntersectionsOperation = 'GetFeedIntersections';
   static const String getHelperReadOperation = 'GetHelperRead';
   static const String getMediaAssetOperation = 'GetMediaAsset';
   static const String getMyFootprintOperation = 'GetMyFootprint';
@@ -203,10 +196,10 @@ class ContentApiMetadata {
   static const String getObjectIntersectionsOperation = 'GetObjectIntersections';
   static const String getPostOperation = 'GetPost';
   static const String getReactionStateOperation = 'GetReactionState';
-  static const String getRecommendationOperation = 'GetRecommendation';
   static const String getReportOperation = 'GetReport';
   static const String initMediaUploadOperation = 'InitMediaUpload';
   static const String likePostOperation = 'LikePost';
+  static const String listAuthorImpactEvidenceOperation = 'ListAuthorImpactEvidence';
   static const String listCommentRepliesOperation = 'ListCommentReplies';
   static const String listCommentsOperation = 'ListComments';
   static const String listCommentsByAuthorOperation = 'ListCommentsByAuthor';
@@ -221,7 +214,6 @@ class ContentApiMetadata {
   static const String quoteToCircleOperation = 'QuoteToCircle';
   static const String reactToCommentOperation = 'ReactToComment';
   static const String reportBehaviorsOperation = 'ReportBehaviors';
-  static const String reportIntersectionExposureOperation = 'ReportIntersectionExposure';
   static const String repostToCircleOperation = 'RepostToCircle';
   static const String requestOriginalImageAccessOperation = 'RequestOriginalImageAccess';
   static const String resolveReportOperation = 'ResolveReport';
@@ -295,7 +287,6 @@ class ContentApiMetadata {
     });
   }
   static const String getFeedPath = '/v1/content/feed';
-  static const String getFeedIntersectionsPath = '/v1/content/feed/intersections';
   static const String getHelperReadPathTemplate = '/v1/content/helper-read/{contentId}';
   static String getHelperReadPath({required String contentId}) {
     return _fillPath(getHelperReadPathTemplate, <String, String>{
@@ -323,7 +314,6 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
-  static const String getRecommendationPath = '/v1/content/recommend';
   static const String getReportPathTemplate = '/v1/content/reports/{reportId}';
   static String getReportPath({required String reportId}) {
     return _fillPath(getReportPathTemplate, <String, String>{
@@ -335,6 +325,12 @@ class ContentApiMetadata {
   static String likePostPath({required String postId}) {
     return _fillPath(likePostPathTemplate, <String, String>{
       'postId': postId,
+    });
+  }
+  static const String listAuthorImpactEvidencePathTemplate = '/v1/content/sub-accounts/{subAccountId}/author-impact/evidence';
+  static String listAuthorImpactEvidencePath({required String subAccountId}) {
+    return _fillPath(listAuthorImpactEvidencePathTemplate, <String, String>{
+      'subAccountId': subAccountId,
     });
   }
   static const String listCommentRepliesPathTemplate = '/v1/content/posts/{postId}/comments/{commentId}/replies';
@@ -397,7 +393,6 @@ class ContentApiMetadata {
     });
   }
   static const String reportBehaviorsPath = '/v1/content/behaviors';
-  static const String reportIntersectionExposurePath = '/v1/content/intersections/exposure';
   static const String repostToCirclePathTemplate = '/v1/content/posts/{postId}/repost';
   static String repostToCirclePath({required String postId}) {
     return _fillPath(repostToCirclePathTemplate, <String, String>{

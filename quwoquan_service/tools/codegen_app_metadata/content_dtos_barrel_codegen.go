@@ -31,7 +31,6 @@ export 'content_media_complete_upload_response_dto.g.dart';
 export 'content_media_asset_wire_dto.g.dart';
 export 'content_video_cover_selection_wire_dto.g.dart';
 export 'content_article_summary_generate_response_dto.g.dart';
-export 'content_recommendation_response_dto.g.dart';
 
 import 'package:quwoquan_app/cloud/runtime/generated/content/photo_post_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/video_post_dto.g.dart';

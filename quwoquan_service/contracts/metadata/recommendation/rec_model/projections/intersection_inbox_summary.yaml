@@ -46,3 +46,17 @@ client_projection:
       source: generatedAt
       aliases: [generatedAt]
       default: "''"
+    # 架构基线 v2（§21.3 lifecycle 全局分桶，草案/未冻结）：跨维度「增强 / 重新活跃」态总计数，
+    #   供我的主页聚合入口弱标聚合（不进结论句、不变蓝）。
+    - name: totalStrengthenedCount
+      dart_type: int
+      nullable: false
+      source: totalStrengthenedCount
+      aliases: [totalStrengthenedCount]
+      default: "0"
+    - name: totalReactivatedCount
+      dart_type: int
+      nullable: false
+      source: totalReactivatedCount
+      aliases: [totalReactivatedCount]
+      default: "0"

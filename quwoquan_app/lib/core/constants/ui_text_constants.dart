@@ -76,7 +76,6 @@ class UITextConstants {
   static const String followingSubjectEmptyTitle = '还没有关注的人、圈子或地点';
   static const String followingSubjectEmptySubtitle =
       '去推荐、校园、旅行里关注感兴趣的对象，回来这里查看它们的新动态。';
-
   static String homeObjectActionLabel(String actionType) {
     switch (actionType) {
       case 'follow':
@@ -100,7 +99,6 @@ class UITextConstants {
 
   static const String globalXiaoquSearchHint = '搜内容、圈子、讨论';
   static const String globalXiaoquSearchAsk = '找小趣';
-
   // ==================== PC Web 宽屏壳 ====================
   static const String webPcBrandName = '趣我圈';
   static const String webPcPrimaryHome = home;
@@ -524,6 +522,21 @@ class UITextConstants {
 
   static const String welcomeMainSlogan = '遇见同趣，绽放热爱';
   static const String welcomeButtonLabel = '开启发现之旅';
+  static const String welcomeStartupLoadingTitle = '正在进入趣我圈';
+  static const String welcomeStartupStageAuth = '恢复账号状态';
+  static const String welcomeStartupStageCloud = '连接云端并同步配置';
+  static const String welcomeStartupStageHome = '准备首页内容';
+  static const String welcomeStartupPreparingAuth =
+      '确认账号状态后，就能直接接上你的首页、消息和推荐。';
+  static const String welcomeStartupPreparingCloud =
+      '正在初始化连接与配置，让进入首页后的内容和入口一次到位。';
+  static const String welcomeStartupPreparingHome =
+      '正在把首页首屏内容准备好，进入应用后会更顺滑。';
+  static const String welcomeStartupSlowHint =
+      '当前网络比平时慢一些，我们还在继续准备首页。';
+  static const String welcomeStartupRetryHint =
+      '首页准备遇到一点波动，重新准备后会继续留在欢迎页等待就绪。';
+  static const String welcomeStartupRetry = '重新准备';
   static const String welcomeLoginPromptTitle = '登录后，趣我圈更懂你的热爱';
   static const String welcomeLoginPromptSubtitle = '也可以先看看，稍后在「未登录」页面继续登录。';
   static String welcomeLoginSkipWithCountdown(int seconds) =>
@@ -581,10 +594,15 @@ class UITextConstants {
   static const String appendSoftFailed = '后面的内容暂时没拉到，上拉再试。';
   static const String appendTapToRetry = '加载更多没成功，轻点重试';
   static const String tryAgain = '再试一次';
+  static const String videoPlaybackFailed = '视频暂时没加载出来';
+  static const String back = '返回';
   static const String gotIt = '我知道了';
   static const String loginToContinue = '登录后继续';
   static const String contentUnavailable = '内容不可用了';
   static const String contentUnavailableReason = '可能已被删除或暂时无法查看。';
+  static const String homepageInfoUnavailableTitle = '主页暂不可用';
+  static const String userInfoUnavailableTitle = '用户暂不可用';
+  static const String conversationInfoUnavailableTitle = '会话暂不可用';
   static const String report = '举报';
   static const String profileBlockUser = '拉黑';
   static const String profileBlockConfirmTitle = '确认拉黑该用户？';
@@ -677,21 +695,13 @@ class UITextConstants {
   /// 实体主页头部关注计数（如「1.2万 关注」，数量由调用方格式化）。
   static String entityFollowerCountLabel(String formattedCount) =>
       '$formattedCount $follow';
-  static const String intersectionMoreLabel = '全部连接';
-  // Work Browser 作者区交集入口与详情解释层（V1.0：N 个交集 › → 弹出推荐解释）
-  static String intersectionEntrySummary(int count) => '$count 个交集';
-  static const String intersectionDetailTitle = '为什么推荐给你';
   // Work Browser 视频集进度（时间轴下方、标题上方）
   static String videoSeriesProgress(int current, int total) =>
       '视频集 · $current/$total';
   // Work Browser 文章页码（正文下方、作者工具栏上方）
   static String workArticlePageProgress(int current, int total) =>
       '$current / $total';
-  static const String myIntersectionsTitle = '我的连接';
-  static const String myIntersectionsSubtitle = '最近谁和你有了新的共同点';
   static const String profileStatementFallbackSubtitle = '新的连接正在生成';
-  static const String intersectionExpandMore = '展开更多';
-  static const String intersectionCollapse = '收起';
   static const String objectIntersectionCtaFollowAuthor = '关注作者';
   static const String objectIntersectionCtaJoinCircle = '加入圈子';
   static const String objectIntersectionCtaAddContact = '加为联系人';
@@ -746,56 +756,6 @@ class UITextConstants {
   static const String homepageSubCampusLife = '校园生活';
   static const String objectIntroMoreLabel = '查看更多';
   static String objectIntroTitle(String objectName) => '认识$objectName';
-  static const String myIntersectionsEmpty = '还没有新的连接，去发现更多同频的人和圈子';
-  static const String intersectionNewBadgeSuffix = '条新增';
-  static const String intersectionAffinityLabel = '推荐';
-  // 交集维度短标签（端展示用，真相源仍为服务端 dimension 枚举）
-  static const Map<String, String> intersectionDimensionShortLabels =
-      <String, String>{
-        'identity': '身份',
-        'location': '足迹',
-        'content': '内容',
-        'relationship': '关系',
-        'interest': '兴趣',
-      };
-
-  static String intersectionDimensionShortLabel(String dimension) =>
-      intersectionDimensionShortLabels[dimension] ?? dimension;
-
-  /// 共同点安静 chip：「N 共同点」。
-  static String intersectionSharedChip(int count) => '$count 共同点';
-
-  /// 共同点计数安静 chip：「N 个共同点」（事实通道）。
-  static String intersectionPointCountChip(int count) => '$count 个共同点';
-
-  /// 推荐共同点计数安静 chip：「N 个推荐共同点」（affinity 通道，明示推荐）。
-  static String intersectionRecommendedPointCountChip(int count) =>
-      '$count 个推荐共同点';
-
-  /// 首页/频道交集模块头：「N 位与你有交集」（N 为红色数字，文案不含数字）。
-  static const String intersectionSpotlightHeaderPrefix = '个对象与你有关';
-
-  /// 首页/频道交集模块安静轻提示（不含数量，等高封面卡上方一行）。
-  static const String intersectionSpotlightSubtitle = '这些人和地方与你有关';
-
-  /// 首页/频道交集推荐「换一批」入口（候选窗内轮转，强调保鲜）。
-  static const String intersectionShuffle = '换一批';
-
-  /// 交集对象类型统一品牌蓝角标文字（闭集 person|circle|school|place|enterprise）。
-  static const Map<String, String> intersectionObjectKindBadgeLabels =
-      <String, String>{
-        'person': '人',
-        'circle': '圈',
-        'school': '校',
-        'place': '地',
-        'enterprise': '企',
-      };
-
-  static String intersectionObjectKindBadgeLabel(String objectKindName) =>
-      intersectionObjectKindBadgeLabels[objectKindName] ?? '';
-  static const String intersectionRecommendSpotlightTitle = '与你有关的新对象';
-  static const String intersectionCampusSpotlightTitle = '校园里与你有关的人和圈子';
-  static const String intersectionTravelSpotlightTitle = '和你有相同足迹的人与地点';
 
   // ==================== 我的主页 ====================
   static const String editProfile = '编辑资料';
@@ -1405,9 +1365,19 @@ class UITextConstants {
   static const String profileCreationEmptyVideoOther = 'TA还没有视频内容';
   static const String profileCreationEmptyTextMine = '还没有文字内容';
   static const String profileCreationEmptyTextOther = 'TA还没有文字内容';
+  static const String interactionSubAll = '全部';
   static const String interactionSubLikes = '赞';
   static const String interactionSubComments = '评论';
   static const String interactionSubShares = '转发';
+  static const String profileInteractionDirectionTitle = '互动方向';
+  static const String profileInteractionDirectionReceived = '收到';
+  static const String profileInteractionDirectionSent = '发出';
+  static const String profileInteractionOriginalUnavailable = '原文已失效';
+  static const String profileInteractionPreviewUnavailable = '无法预览';
+  static const String profileInteractionEmpty = '暂无互动';
+  static const String profileInteractionEmptyLikes = '暂无点赞记录';
+  static const String profileInteractionEmptyComments = '暂无评论记录';
+  static const String profileInteractionEmptyShares = '暂无转发记录';
   static const String profileGreet = '打招呼';
   static const String profileSubAccountManagement = '子账号管理';
   static const String profileSubAccountDeleteTitle = '删除子账号';
@@ -1428,7 +1398,6 @@ class UITextConstants {
   static const String profileSubAccountSemiDescription = '半隐私 · 仅联系人可发现';
   static const String profileSubAccountOpenDescription = '公开 · 可被通讯录发现';
   static const String operationFailed = '操作失败';
-
   // ==================== 创作页（1:1 对应 CreatePage.tsx + MomentEditorCard.tsx） ====================
   static const String momentPlaceholder = '这一刻的想法...';
   static const String drafts = '草稿箱';

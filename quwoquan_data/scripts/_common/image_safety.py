@@ -16,6 +16,7 @@ import os
 import re
 import shutil
 import struct
+import warnings
 import zlib
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -69,12 +70,24 @@ WATERMARK_TERMS: tuple[str, ...] = PLATFORM_TERMS + (
     "水印",
     "copyright",
     "all rights reserved",
-    "©",
-    "(c)",
-    "摄于",
     "图虫",
     "视觉中国",
     "id:",
+)
+COPYRIGHT_SYMBOL_TERMS: tuple[str, ...] = ("©", "(c)")
+RIGHTS_CONTEXT_TERMS: tuple[str, ...] = (
+    "copyright",
+    "all rights reserved",
+    "版权所有",
+    "禁止转载",
+    "保留所有权利",
+    "未经授权",
+    "转载",
+    "授权",
+    "作者",
+    "摄影",
+    "photo by",
+    "photographer",
 )
 _HANDLE_RE = re.compile(r"@[\w\u4e00-\u9fff][\w\u4e00-\u9fff\-_.]{1,30}")
 
@@ -84,8 +97,10 @@ NEAR_DUP_HAMMING = 5  # pHash 海明距离 <= 此值视为近重复
 _OCR_MIN_CONF = 45
 _PLACEHOLDER_MAX_EDGE_DELTA = 7.0
 OCR_TIMEOUT_SECONDS = max(2, int(os.environ.get("QWQ_IMAGE_OCR_TIMEOUT_SECONDS", "8")))
+MAX_ASSESS_PIXELS = max(1_000_000, int(os.environ.get("QWQ_IMAGE_MAX_ASSESS_PIXELS", "50000000")))
+OCR_MAX_PIXELS = max(300_000, int(os.environ.get("QWQ_IMAGE_OCR_MAX_PIXELS", "2000000")))
 
-_ASSESS_CACHE: dict[tuple[str, bool], ImageVerdict] = {}
+_ASSESS_CACHE: dict[tuple[str, bool, tuple[str, ...], int, int], ImageVerdict] = {}
 
 
 STATUS_SAFE = "safe"
@@ -173,6 +188,18 @@ def _detect_faces(path: Path) -> int:
     return confirmed
 
 
+def _image_dimensions(path: Path) -> tuple[int, int] | None:
+    if not _HASH_OK:
+        return None
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", Image.DecompressionBombWarning)
+            with Image.open(path) as im:
+                return int(im.width), int(im.height)
+    except Exception:
+        return None
+
+
 def _ocr_text_and_ratio(path: Path) -> tuple[str, float, bool]:
     """返回 (ocr_text, text_area_ratio, ocr_ran)。ocr_ran=False 表示未能跑 OCR。"""
     if not _ocr_available() or not _CV_OK:
@@ -183,6 +210,15 @@ def _ocr_text_and_ratio(path: Path) -> tuple[str, float, bool]:
     if img is None:
         return "", 0.0, False
     h, w = img.shape[:2]
+    total_pixels = max(1, h * w)
+    if total_pixels > OCR_MAX_PIXELS:
+        scale = (float(OCR_MAX_PIXELS) / float(total_pixels)) ** 0.5
+        img = cv2.resize(
+            img,
+            (max(1, int(w * scale)), max(1, int(h * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+        h, w = img.shape[:2]
     total = float(max(1, h * w))
     rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     try:
@@ -230,6 +266,13 @@ def _has_watermark(ocr_text: str) -> bool:
     for term in WATERMARK_TERMS:
         if term.lower() in lowered:
             return True
+    # OCR often misreads scenic signboards, exhibit plaques, currency marks, or
+    # punctuation as a bare copyright symbol. A symbol alone is not a publish
+    # blocker; it becomes a watermark/copyright signal only with rights context.
+    if any(term in lowered for term in COPYRIGHT_SYMBOL_TERMS) and any(
+        term.lower() in lowered for term in RIGHTS_CONTEXT_TERMS
+    ):
+        return True
     return bool(_HANDLE_RE.search(ocr_text))
 
 
@@ -327,11 +370,41 @@ def assess_image(path: str | Path, *, require_ocr: bool = True) -> ImageVerdict:
         content_hash = hashlib.sha256(p.read_bytes()).hexdigest()
     except Exception:
         content_hash = ""
-    cache_key = (content_hash, bool(require_ocr))
+    reasons: list[str] = []
+    cache_key = (content_hash, bool(require_ocr), backends, int(MAX_ASSESS_PIXELS), int(OCR_MAX_PIXELS))
     if content_hash and cache_key in _ASSESS_CACHE:
         return replace(_ASSESS_CACHE[cache_key], path=str(p))
 
-    reasons: list[str] = []
+    dims = _image_dimensions(p)
+    if dims is None:
+        verdict = ImageVerdict(
+            path=str(p),
+            status=STATUS_NEEDS_REVIEW,
+            faces=-1,
+            has_watermark=False,
+            text_area_ratio=0.0,
+            reasons=("image_dimensions_unreadable",),
+            backends=backends,
+        )
+        if content_hash:
+            _ASSESS_CACHE[cache_key] = verdict
+        return verdict
+    width, height = dims
+    pixels = width * height
+    if pixels > MAX_ASSESS_PIXELS:
+        verdict = ImageVerdict(
+            path=str(p),
+            status=STATUS_UNSAFE,
+            faces=0,
+            has_watermark=False,
+            text_area_ratio=0.0,
+            reasons=(f"image_pixels_too_large:{pixels}>{MAX_ASSESS_PIXELS}",),
+            backends=backends,
+        )
+        if content_hash:
+            _ASSESS_CACHE[cache_key] = verdict
+        return verdict
+
     if _low_texture_placeholder(p):
         reasons.append("low_texture_placeholder_graphic")
     faces = _detect_faces(p)
@@ -378,6 +451,70 @@ def assess_image(path: str | Path, *, require_ocr: bool = True) -> ImageVerdict:
     if content_hash:
         _ASSESS_CACHE[cache_key] = verdict
     return verdict
+
+
+def assess_image_publish_prefilter(path: str | Path) -> ImageVerdict:
+    """Fast structural gate for source candidate planning.
+
+    This intentionally avoids OCR and face detection. Heavy checks run later on
+    selected assets during compose/review/media gates. The prefilter only blocks
+    conditions that are cheap and never publishable: missing/unreadable files,
+    oversized originals, and obvious placeholder graphics.
+    """
+    p = Path(path)
+    backends = _active_backends()
+    if not p.is_file():
+        return ImageVerdict(
+            path=str(p),
+            status=STATUS_NEEDS_REVIEW,
+            faces=-1,
+            has_watermark=False,
+            text_area_ratio=0.0,
+            reasons=("file_missing",),
+            backends=backends,
+        )
+    dims = _image_dimensions(p)
+    if dims is None:
+        return ImageVerdict(
+            path=str(p),
+            status=STATUS_NEEDS_REVIEW,
+            faces=-1,
+            has_watermark=False,
+            text_area_ratio=0.0,
+            reasons=("image_dimensions_unreadable",),
+            backends=backends,
+        )
+    width, height = dims
+    pixels = width * height
+    if pixels > MAX_ASSESS_PIXELS:
+        return ImageVerdict(
+            path=str(p),
+            status=STATUS_UNSAFE,
+            faces=0,
+            has_watermark=False,
+            text_area_ratio=0.0,
+            reasons=(f"image_pixels_too_large:{pixels}>{MAX_ASSESS_PIXELS}",),
+            backends=backends,
+        )
+    if _low_texture_placeholder(p):
+        return ImageVerdict(
+            path=str(p),
+            status=STATUS_UNSAFE,
+            faces=0,
+            has_watermark=False,
+            text_area_ratio=0.0,
+            reasons=("low_texture_placeholder_graphic",),
+            backends=backends,
+        )
+    return ImageVerdict(
+        path=str(p),
+        status=STATUS_SAFE,
+        faces=0,
+        has_watermark=False,
+        text_area_ratio=0.0,
+        reasons=(),
+        backends=backends,
+    )
 
 
 # ─── 近重复 ────────────────────────────────────────────────────────

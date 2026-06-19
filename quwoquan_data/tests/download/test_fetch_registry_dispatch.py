@@ -47,6 +47,25 @@ def test_fetch_source_payload_blocks_non_fetchable_registry_site():
     raise AssertionError("expected RuntimeError for non-fetchable travelogue site")
 
 
+def test_fetch_source_payload_allows_source_level_fetchable_override():
+    orig_http = fetch_mod._http_get_bytes
+    try:
+        fetch_mod._http_get_bytes = lambda url, timeout=20, max_redirects=4, max_retries=4: (
+            200,
+            "<html><body>沈阳世博园 游记 正文 门票 开放 交通 徒步 转场 返程</body></html>".encode("utf-8"),
+            "",
+        )
+        payload = fetch_mod.fetch_source_payload(
+            "https://you.ctrip.com/travels/shenyang155/4062166.html",
+            source={"fetchable": True},
+        )
+    finally:
+        fetch_mod._http_get_bytes = orig_http
+    assert payload["statusCode"] == 200
+    assert payload["runtime"]["sourceFetchableOverride"] is True
+    assert "沈阳世博园" in payload["text"]
+
+
 def test_static_official_plaintext_reads_ems517_api_payload():
     payload = {
         "code": 0,
@@ -125,6 +144,40 @@ def test_static_official_plaintext_reads_public_spa_bundle_copy():
     assert "蜀南竹海景区全年开放" in text
     assert "竹文化和山水游憩" in text
     assert "観光地概況" not in text
+
+
+def test_static_official_plaintext_reads_commented_meta_description():
+    shell = """
+    <html><head>
+    <!-- <meta name="description" content="金华双龙风景旅游区位于浙江省金华市北郊的金华山麓，是国家首批AAAA级旅游景区、国家级风景名胜区和国家森林公园。"> -->
+    </head><body>景区公告</body></html>
+    """
+
+    orig_curl = fetch_mod._curl_get_text
+    try:
+        fetch_mod._curl_get_text = lambda url, timeout=90: shell
+        text = fetch_mod._static_official_plaintext("http://www.shuanglongdong.com/")
+    finally:
+        fetch_mod._curl_get_text = orig_curl
+    assert "金华双龙风景旅游区位于浙江省金华市北郊" in text
+    assert "国家级风景名胜区" in text
+
+
+def test_wikipedia_api_plaintext_follows_redirects():
+    seen: dict[str, str] = {}
+
+    def fake_curl(url: str, timeout: int = 90) -> str:
+        seen["url"] = url
+        return '{"query":{"pages":{"1":{"extract":"惠山古镇位于江苏省无锡市梁溪区。"}}}}'
+
+    orig_curl = fetch_mod._curl_get_text
+    try:
+        fetch_mod._curl_get_text = fake_curl
+        text = fetch_mod._wikipedia_api_plaintext("https://zh.wikipedia.org/wiki/惠山古镇")
+    finally:
+        fetch_mod._curl_get_text = orig_curl
+    assert "惠山古镇位于江苏省无锡市梁溪区" in text
+    assert "redirects=1" in seen["url"]
 
 
 def _run_all() -> None:

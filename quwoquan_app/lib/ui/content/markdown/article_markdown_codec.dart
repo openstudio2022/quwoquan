@@ -311,14 +311,28 @@ class ArticleMarkdownCodec {
     Map<String, String> assetsById,
   ) {
     final assetId = ref.assetId.trim();
+    final resolvedImageUrl = assetsById[assetId] ?? _directMediaUrlFor(assetId);
     return ArticleDocumentNode(
       id: blockId.isNotEmpty ? blockId : assetId,
       type: ArticleDocumentNodeType.figure,
       assetId: assetId,
-      imageUrl: assetsById[assetId] ?? 'asset://$assetId',
+      imageUrl: resolvedImageUrl.isNotEmpty
+          ? resolvedImageUrl
+          : 'asset://$assetId',
       imageLayout: ref.layout.name,
       caption: ref.caption,
     );
+  }
+
+  static String _directMediaUrlFor(String assetId) {
+    final candidates = resolveContentMediaUrlCandidates(assetId);
+    if (candidates.isEmpty) {
+      return '';
+    }
+    final first = candidates.first;
+    return first.startsWith('http://') || first.startsWith('https://')
+        ? first
+        : '';
   }
 
   static String _assetIdForNode(ArticleDocumentNode node) {

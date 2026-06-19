@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
+import 'package:quwoquan_app/cloud/circle/generated/circle_errors.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
+import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/rtc/generated/rtc_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';
@@ -135,6 +137,7 @@ class UiErrorSemanticResolver {
     );
     final fallbackMessage = _fallbackMessage(
       context,
+      error: error,
       category: category,
       failure: failure,
       authGateReason: authGateReason,
@@ -143,6 +146,7 @@ class UiErrorSemanticResolver {
     final message = domainMessage ?? fallbackMessage;
     final sourceCode = _sourceCode(error, failure);
     final title = _title(
+      error: error,
       category: category,
       message: message,
       authGateReason: authGateReason,
@@ -350,44 +354,93 @@ class UiErrorSemanticResolver {
       }
       if (code.startsWith('CONTENT.')) {
         final contentError = ContentErrorCode.fromCode(code);
-        if (contentError != ContentErrorCode.unknown && l10n != null) {
-          return _localizedContentMessage(l10n, contentError);
+        if (contentError != ContentErrorCode.unknown) {
+          if (l10n != null) {
+            return _localizedContentMessage(l10n, contentError);
+          }
+          return ContentErrorMessages.zh[contentError] ??
+              UITextConstants.contentUnavailableReason;
+        }
+      }
+      if (code.startsWith('ENTITY.')) {
+        final entityError = EntityErrorCode.fromCode(code);
+        if (entityError != EntityErrorCode.unknown) {
+          if (l10n != null) {
+            return _localizedDefaultMessage(
+              l10n,
+              zh:
+                  EntityErrorMessages.zh[entityError] ?? entityError.defaultMessage,
+              en:
+                  EntityErrorMessages.en[entityError] ?? entityError.defaultMessage,
+            );
+          }
+          return EntityErrorMessages.zh[entityError] ??
+              entityError.defaultMessage;
+        }
+      }
+      if (code.startsWith('CIRCLE.')) {
+        final circleError = CircleErrorCode.fromCode(code);
+        if (circleError != CircleErrorCode.unknown) {
+          if (l10n != null) {
+            return _localizedDefaultMessage(
+              l10n,
+              zh:
+                  CircleErrorMessages.zh[circleError] ?? circleError.defaultMessage,
+              en:
+                  CircleErrorMessages.en[circleError] ?? circleError.defaultMessage,
+            );
+          }
+          return CircleErrorMessages.zh[circleError] ??
+              circleError.defaultMessage;
         }
       }
       if (code.startsWith('CHAT.')) {
         final chatError = ChatErrorCode.fromCode(code);
-        if (chatError != ChatErrorCode.unknown && l10n != null) {
-          return _localizedDefaultMessage(
-            l10n,
-            zh: chatError.defaultMessage,
-            en: chatError.defaultMessage,
-          );
+        if (chatError != ChatErrorCode.unknown) {
+          if (l10n != null) {
+            return _localizedDefaultMessage(
+              l10n,
+              zh: chatError.defaultMessage,
+              en: chatError.defaultMessage,
+            );
+          }
+          return chatError.defaultMessage;
         }
       }
       if (code.startsWith('USER.')) {
         final userError = UserErrorCode.fromCode(code);
-        if (userError != null && l10n != null) {
-          return _localizedDefaultMessage(
-            l10n,
-            zh: userError.defaultMessage,
-            en: userError.defaultMessage,
-          );
+        if (userError != null) {
+          if (l10n != null) {
+            return _localizedDefaultMessage(
+              l10n,
+              zh: userError.defaultMessage,
+              en: userError.defaultMessage,
+            );
+          }
+          return userError.defaultMessage;
         }
       }
       if (code.startsWith('RTC.')) {
         final rtcError = RtcErrorCode.fromCode(code);
-        if (rtcError != null && l10n != null) {
-          return _localizedDefaultMessage(
-            l10n,
-            zh: rtcError.defaultMessage,
-            en: rtcError.defaultMessage,
-          );
+        if (rtcError != null) {
+          if (l10n != null) {
+            return _localizedDefaultMessage(
+              l10n,
+              zh: rtcError.defaultMessage,
+              en: rtcError.defaultMessage,
+            );
+          }
+          return rtcError.defaultMessage;
         }
       }
       if (code.startsWith('INTEGRATION.')) {
         final integrationError = IntegrationLocationErrorCode.fromCode(code);
-        if (integrationError != IntegrationLocationErrorCode.unknown && l10n != null) {
-          return integrationError.toDisplayMessage(l10n);
+        if (integrationError != IntegrationLocationErrorCode.unknown) {
+          if (l10n != null) {
+            return integrationError.toDisplayMessage(l10n);
+          }
+          return IntegrationLocationErrorMessages.zh[integrationError] ??
+              UITextConstants.contentLoadSoftFailed;
         }
       }
     }
@@ -396,12 +449,14 @@ class UiErrorSemanticResolver {
 
   static String _fallbackMessage(
     BuildContext context, {
+    required Object error,
     required UiErrorCategory category,
     required RuntimeFailureBase? failure,
     AuthGateReason? authGateReason,
     required bool allowOpenSettings,
   }) {
     final l10n = _maybeL10n(context);
+    final failureKind = _effectiveFailureKind(error, failure);
     if (category == UiErrorCategory.authRequired && authGateReason != null) {
       return authGateReason.prompt;
     }
@@ -411,7 +466,7 @@ class UiErrorSemanticResolver {
       return UITextConstants.authPermissionDenied;
     }
     return switch (category) {
-      UiErrorCategory.pageLoad || UiErrorCategory.sectionLoad => switch (failure?.kind) {
+      UiErrorCategory.pageLoad || UiErrorCategory.sectionLoad => switch (failureKind) {
           RuntimeFailureKind.auth => UITextConstants.needLogin,
           RuntimeFailureKind.notFound => UITextConstants.contentUnavailableReason,
           RuntimeFailureKind.network ||
@@ -436,12 +491,14 @@ class UiErrorSemanticResolver {
   }
 
   static String _title({
+    required Object error,
     required UiErrorCategory category,
     required String message,
     required AuthGateReason? authGateReason,
     required RuntimeFailureBase? failure,
     required bool allowOpenSettings,
   }) {
+    final failureKind = _effectiveFailureKind(error, failure);
     if (category == UiErrorCategory.authRequired && authGateReason != null) {
       return authGateReason.title;
     }
@@ -451,8 +508,8 @@ class UiErrorSemanticResolver {
       return '需要开启权限';
     }
     return switch (category) {
-      UiErrorCategory.pageLoad => switch (failure?.kind) {
-          RuntimeFailureKind.notFound => UITextConstants.contentUnavailable,
+      UiErrorCategory.pageLoad => switch (failureKind) {
+          RuntimeFailureKind.notFound => _notFoundTitle(error, failure),
           RuntimeFailureKind.network ||
           RuntimeFailureKind.timeout ||
           RuntimeFailureKind.unavailable => UITextConstants.temporarilyUnavailable,
@@ -468,6 +525,23 @@ class UiErrorSemanticResolver {
       UiErrorCategory.rateLimited => '请稍后再试',
       UiErrorCategory.backgroundAction => UITextConstants.operationFailed,
     };
+  }
+
+  static String _notFoundTitle(Object error, RuntimeFailureBase? failure) {
+    final code = _sourceCode(error, failure) ?? '';
+    if (code.startsWith('ENTITY.')) {
+      return UITextConstants.homepageInfoUnavailableTitle;
+    }
+    if (code.startsWith('CIRCLE.')) {
+      return UITextConstants.circleInfoUnavailableTitle;
+    }
+    if (code.startsWith('USER.')) {
+      return UITextConstants.userInfoUnavailableTitle;
+    }
+    if (code.startsWith('CHAT.')) {
+      return UITextConstants.conversationInfoUnavailableTitle;
+    }
+    return UITextConstants.contentUnavailable;
   }
 
   static String? _secondaryMessage({
@@ -591,6 +665,28 @@ class UiErrorSemanticResolver {
       return error;
     }
     return null;
+  }
+
+  static RuntimeFailureKind? _effectiveFailureKind(
+    Object error,
+    RuntimeFailureBase? failure,
+  ) {
+    if (failure != null) {
+      return failure.kind;
+    }
+    if (error is! CloudException) {
+      return null;
+    }
+    return switch (error.type) {
+      CloudErrorType.timeout => RuntimeFailureKind.timeout,
+      CloudErrorType.network => RuntimeFailureKind.network,
+      CloudErrorType.unauthorized => RuntimeFailureKind.auth,
+      CloudErrorType.forbidden => RuntimeFailureKind.permission,
+      CloudErrorType.notFound => RuntimeFailureKind.notFound,
+      CloudErrorType.invalidResponse => RuntimeFailureKind.contract,
+      CloudErrorType.server => RuntimeFailureKind.unavailable,
+      CloudErrorType.unknown => RuntimeFailureKind.internal,
+    };
   }
 }
 

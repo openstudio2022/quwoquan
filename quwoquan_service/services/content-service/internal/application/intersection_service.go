@@ -2,7 +2,7 @@ package application
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,83 +11,9 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 )
 
-// IntersectionReasonView 是交集理由的服务端视图，与 recommendation/rec_model
-// projections/intersection_reason.yaml 字段对齐（端只读、不本地拼装）。
-type IntersectionReasonView struct {
-	IntersectionID         string                           `json:"intersectionId"`
-	IntersectionClass      string                           `json:"intersectionClass"` // fact | affinity
-	Dimension              string                           `json:"dimension"`
-	DisplayName            string                           `json:"displayName"`
-	AvatarURL              string                           `json:"avatarUrl"`
-	Label                  string                           `json:"label"`
-	DisplayText            string                           `json:"displayText"`
-	PrimaryText            string                           `json:"primaryText"`   // 主交集结论句（蓝色，云侧产出，端只读直出）
-	SecondaryText          string                           `json:"secondaryText"` // 副交集辅助说明（灰色；缺省端不展示）
-	WeightTier             string                           `json:"weightTier"`    // light | heavy（内容卡交集轻重等级，云侧离散产出）
-	ObjectKind             string                           `json:"objectKind"`    // person | circle | school | place | enterprise
-	SharedCount            int                              `json:"sharedCount"`
-	Strength               float64                          `json:"strength"`
-	ConfidenceLabel        string                           `json:"confidenceLabel"`
-	ModelReasonBucket      string                           `json:"modelReasonBucket"`
-	RelationKind           string                           `json:"relationKind"`
-	RelationObjectID       string                           `json:"relationObjectId"`
-	ActionType             string                           `json:"actionType"`
-	ActionTargetID         string                           `json:"actionTargetId"`
-	Source                 string                           `json:"source"`
-	TagRefs                []string                         `json:"tagRefs"`
-	FreshAt                string                           `json:"freshAt"`
-	ExpiresAt              string                           `json:"expiresAt"`
-	IntersectionPoints     []IntersectionPointView          `json:"intersectionPoints"`
-	PointSummarySnapshotID string                           `json:"pointSummarySnapshotId"`
-	FactPointCount         int                              `json:"factPointCount"`
-	RecommendedPointCount  int                              `json:"recommendedPointCount"`
-	TotalPointCount        int                              `json:"totalPointCount"`
-	DimensionPointSummary  []IntersectionDimensionTallyView `json:"dimensionPointSummary"`
-	PointClassLabel        string                           `json:"pointClassLabel"`
-	ConnectionSummary      string                           `json:"connectionSummary"`
-	RecommendationTraceID  string                           `json:"recommendationTraceId"`
-	LastRecommendedAt      string                           `json:"lastRecommendedAt"`
-	SeenAt                 string                           `json:"seenAt"`
-	RankState              string                           `json:"rankState"`
-}
-
-// IntersectionPointView 是用户可见交集点列表；摘要数字只能由同一批点派生。
-type IntersectionPointView struct {
-	PointID          string   `json:"pointId"`
-	PointClass       string   `json:"pointClass"` // fact | recommended
-	Dimension        string   `json:"dimension"`
-	Label            string   `json:"label"`
-	DisplayText      string   `json:"displayText"`
-	SourceRef        string   `json:"sourceRef"`
-	Visibility       string   `json:"visibility"`
-	Count            int      `json:"count"`            // 证据组聚合条数（如「共同好友 4」中的 4）
-	SampleText       string   `json:"sampleText"`       // 实例化样本（某好友名/地点名/内容标题）
-	SampleAvatarURLs []string `json:"sampleAvatarUrls"` // 头像簇（≤3）
-}
-
-func (v IntersectionReasonView) coolKey() string {
-	if strings.TrimSpace(v.ActionTargetID) != "" {
-		return v.ActionTargetID
-	}
-	return v.RelationObjectID
-}
-
-// IntersectionDimensionTallyView 单维度计数（与 intersection_dimension_tally.yaml 对齐）。
-type IntersectionDimensionTallyView struct {
-	Dimension string `json:"dimension"`
-	Label     string `json:"label"`
-	Count     int    `json:"count"`
-	NewCount  int    `json:"newCount"`
-	BriefText string `json:"briefText"` // 云侧实例化动态简报句（缺省端回落 label+newCount）
-}
-
-// IntersectionInboxSummaryView 我的交集聚合摘要（与 intersection_inbox_summary.yaml 对齐）。
-type IntersectionInboxSummaryView struct {
-	TotalCount    int                              `json:"totalCount"`
-	TotalNewCount int                              `json:"totalNewCount"`
-	Dimensions    []IntersectionDimensionTallyView `json:"dimensions"`
-	GeneratedAt   string                           `json:"generatedAt"`
-}
+// 交集视图值对象（IntersectionReasonView / PointView / TargetView / TextSpanView /
+// VisualView / DimensionTallyView / InboxSummaryView 及 coolKey）见 intersection_views.go
+// （同 application 包拆分，R03 行数预算）。
 
 // IntersectionSource 提供事实与概率两通道的交集理由。
 // 事实通道（FactReasons）为可向用户说明的真实交集（请求期查询/读模型，不打分）；
@@ -119,6 +45,18 @@ type intersectionRedis interface {
 	ForKey(key string) rtredis.Client
 }
 
+// WatermarkStore 是「我的交集」已读水位（per-dimension）的持久兜底存储。
+// Redis（ix:watermark hash）是加速读缓存；本接口（Mongo rm_intersection_watermark）
+// 是耐久真相源——Redis flush/宕机后读位不丢，写降级也不阻断主请求。
+// 应用层只依赖该接口（DDD：domain<-application，禁止 import infrastructure），
+// Mongo 实现落在 infrastructure/recommendation，由 main.go 注入。
+type WatermarkStore interface {
+	// LoadWatermarks 返回 userID 的 per-dimension 已读水位（unix 秒）。无记录返回空 map。
+	LoadWatermarks(ctx context.Context, userID string) (map[string]int64, error)
+	// SaveWatermarks 以 upsert 合并写入若干维度水位（耐久，单调推进语义由调用方保证）。
+	SaveWatermarks(ctx context.Context, userID string, dims map[string]int64) error
+}
+
 const (
 	// defaultIntersectionCooldownDays 跨会话推荐冷却窗口默认天数。
 	// 唯一 TTL 真相源同时登记在 contracts/metadata/_shared/redis_keyspace.yaml: rec:icool。
@@ -141,10 +79,12 @@ var intersectionDimensionLabels = map[string]string{
 type IntersectionService struct {
 	source             IntersectionSource
 	redis              intersectionRedis
+	watermarkStore     WatermarkStore
 	cooldownDays       int
 	maxCandidateWindow int
 	now                func() time.Time
 	metrics            IntersectionMetricsRecorder
+	logger             *slog.Logger
 }
 
 // IntersectionServiceOption 配置项。
@@ -177,11 +117,30 @@ func WithIntersectionMaxCandidateWindow(limit int) IntersectionServiceOption {
 	}
 }
 
-// WithIntersectionMetrics 注入业务 SLI 观测 recorder（漏斗/冷却/保鲜/清零）。
+// WithIntersectionMetrics 注入业务 SLI 观测 recorder（漏斗/冷却/保鲜/清零/Redis 降级）。
 func WithIntersectionMetrics(m IntersectionMetricsRecorder) IntersectionServiceOption {
 	return func(svc *IntersectionService) {
 		if m != nil {
 			svc.metrics = m
+		}
+	}
+}
+
+// WithIntersectionWatermarkStore 注入已读水位持久兜底存储（Mongo）。注入后 Redis 退化为
+// 加速缓存：写以耐久存储为准、Redis 失败不阻断主请求；读优先 Redis、缺失/失败回落耐久并回暖。
+func WithIntersectionWatermarkStore(store WatermarkStore) IntersectionServiceOption {
+	return func(svc *IntersectionService) {
+		if store != nil {
+			svc.watermarkStore = store
+		}
+	}
+}
+
+// WithIntersectionLogger 注入结构化日志器（Redis 降级等需可观测，禁止静默吞错）。
+func WithIntersectionLogger(l *slog.Logger) IntersectionServiceOption {
+	return func(svc *IntersectionService) {
+		if l != nil {
+			svc.logger = l
 		}
 	}
 }
@@ -195,6 +154,7 @@ func NewIntersectionService(router intersectionRedis, opts ...IntersectionServic
 		maxCandidateWindow: defaultIntersectionMaxCandidateWindow,
 		now:                time.Now,
 		metrics:            noopIntersectionMetrics{},
+		logger:             slog.Default(),
 	}
 	for _, opt := range opts {
 		opt(svc)
@@ -202,10 +162,17 @@ func NewIntersectionService(router intersectionRedis, opts ...IntersectionServic
 	return svc
 }
 
-func cooldownKey(userID string) string  { return "rec:icool:{" + userID + "}" }
-func watermarkKey(userID string) string { return "cache:viewer_intersections:" + userID }
+func cooldownKey(userID string) string { return "rec:icool:{" + userID + "}" }
+
+// watermarkKey 是「我的交集」收件箱 per-dimension 已读水位 hash（D1 修复后独立于读模型
+// 聚合快照）。唯一类型/TTL 真相源登记在 contracts/metadata/_shared/redis_keyspace.yaml:
+// ix:watermark（hash，hash_tag userId，TTL 90 天，general scene）。
+func watermarkKey(userID string) string { return "ix:watermark:{" + userID + "}" }
 
 // ReportExposure 记录已曝光对象；Feed 后续保留对象但施加 seen penalty。
+//
+// 跨会话冷却记忆窗是「尽力而为」的 feed 去重信号：Redis 不可用时降级——记录降级指标 +
+// 结构化告警日志，不向上抛错拖垮主请求（最坏只是本轮缺少 seen 降权，不影响首页可用）。
 func (s *IntersectionService) ReportExposure(ctx context.Context, userID string, objectIDs []string) error {
 	if s.redis == nil || strings.TrimSpace(userID) == "" || len(objectIDs) == 0 {
 		return nil
@@ -220,14 +187,26 @@ func (s *IntersectionService) ReportExposure(ctx context.Context, userID string,
 			continue
 		}
 		if err := client.ZAdd(ctx, key, expireScore, id); err != nil {
-			return err
+			s.degradeRedis("exposure_write", err, "userId", userID)
+			return nil
 		}
 		written++
 	}
 	if written > 0 {
 		s.metrics.ObserveExposureReported(written)
 	}
-	return client.Expire(ctx, key, intersectionCooldownTTL)
+	if err := client.Expire(ctx, key, intersectionCooldownTTL); err != nil {
+		s.degradeRedis("exposure_write", err, "userId", userID)
+	}
+	return nil
+}
+
+// degradeRedis 统一记录一次 Redis 降级：发降级指标 + 结构化 warn 日志（禁止静默吞错）。
+func (s *IntersectionService) degradeRedis(op string, err error, kv ...any) {
+	s.metrics.ObserveRedisDegraded(op)
+	if s.logger != nil {
+		s.logger.Warn("intersection redis degraded", append([]any{"op", op, "error", err}, kv...)...)
+	}
 }
 
 // seenKeys 返回仍在记忆窗口内的已曝光对象集合（score = 过期时刻 > now）。
@@ -249,383 +228,115 @@ func (s *IntersectionService) seenKeys(ctx context.Context, userID string) map[s
 }
 
 // MarkVisited 推进已读水位并清零未读。dimension 为空表示全部维度。
+//
+// 持久兜底语义：已读水位是用户感知的耐久状态（清零后不应因 Redis flush/宕机回弹为未读）。
+//   - 注入了 watermarkStore 时：先写耐久存储（真相源）；耐久写失败才视为真错误向上抛。
+//     随后尽力回写 Redis 缓存，Redis 失败仅降级（指标+日志），不阻断主请求。
+//   - 未注入 watermarkStore 时（如纯单测）：退化为 Redis-only，Redis 失败同样降级返回 nil，
+//     不拖垮主请求（最坏本次清零未生效，符合「降级不阻断」要求）。
 func (s *IntersectionService) MarkVisited(ctx context.Context, userID, dimension string) error {
-	if s.redis == nil || strings.TrimSpace(userID) == "" {
+	if strings.TrimSpace(userID) == "" {
 		return nil
 	}
-	key := watermarkKey(userID)
-	client := s.redis.ForKey(key)
-	nowUnix := strconv.FormatInt(s.now().Unix(), 10)
+	nowTs := s.now().Unix()
 	dims := []string{dimension}
 	if strings.TrimSpace(dimension) == "" {
 		dims = []string{"identity", "location", "content", "interest", "relationship"}
 	}
-	for _, d := range dims {
-		if err := client.HSet(ctx, key, "wm:"+d, nowUnix); err != nil {
+
+	// 1) 耐久写（真相源）。
+	if s.watermarkStore != nil {
+		durable := make(map[string]int64, len(dims))
+		for _, d := range dims {
+			durable[d] = nowTs
+		}
+		if err := s.watermarkStore.SaveWatermarks(ctx, userID, durable); err != nil {
 			return err
 		}
+	}
+	for _, d := range dims {
 		s.metrics.ObserveInboxVisit(d)
 	}
-	return client.Expire(ctx, key, watermarkCacheTTL)
+
+	// 2) 回写 Redis 缓存（尽力而为；有耐久兜底时 Redis 失败仅降级）。
+	if s.redis == nil {
+		return nil
+	}
+	key := watermarkKey(userID)
+	client := s.redis.ForKey(key)
+	nowUnix := strconv.FormatInt(nowTs, 10)
+	for _, d := range dims {
+		if err := client.HSet(ctx, key, "wm:"+d, nowUnix); err != nil {
+			s.degradeRedis("watermark_write", err, "userId", userID)
+			return nil
+		}
+	}
+	if err := client.Expire(ctx, key, watermarkCacheTTL); err != nil {
+		s.degradeRedis("watermark_write", err, "userId", userID)
+	}
+	return nil
 }
 
+// watermarks 读取 per-dimension 已读水位：Redis 优先（热路径）；Redis 失败或缺失时回落耐久兜底
+// 存储并尽力回暖 Redis（Redis flush/宕机后读位不丢）。任一路径都不向上抛错——读位缺失只会让
+// 红点偏多（全部视为未读），不阻断主请求。
 func (s *IntersectionService) watermarks(ctx context.Context, userID string) map[string]int64 {
 	out := map[string]int64{}
-	if s.redis == nil || strings.TrimSpace(userID) == "" {
+	if strings.TrimSpace(userID) == "" {
 		return out
 	}
 	key := watermarkKey(userID)
-	all, err := s.redis.ForKey(key).HGetAll(ctx, key)
-	if err != nil {
+
+	redisErr := false
+	if s.redis != nil {
+		all, err := s.redis.ForKey(key).HGetAll(ctx, key)
+		if err != nil {
+			redisErr = true
+			s.degradeRedis("watermark_read", err, "userId", userID)
+		} else {
+			for field, v := range all {
+				if !strings.HasPrefix(field, "wm:") {
+					continue
+				}
+				if ts, perr := strconv.ParseInt(v, 10, 64); perr == nil {
+					out[strings.TrimPrefix(field, "wm:")] = ts
+				}
+			}
+			if len(out) > 0 {
+				return out // Redis 命中，热路径直出。
+			}
+		}
+	}
+
+	// Redis 未命中（缓存冷/被 flush）或 Redis 故障：回落耐久兜底。
+	if s.watermarkStore == nil {
 		return out
 	}
-	for field, v := range all {
-		if !strings.HasPrefix(field, "wm:") {
-			continue
+	durable, err := s.watermarkStore.LoadWatermarks(ctx, userID)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("intersection watermark durable load failed", "userId", userID, "error", err)
 		}
-		if ts, perr := strconv.ParseInt(v, 10, 64); perr == nil {
-			out[strings.TrimPrefix(field, "wm:")] = ts
-		}
+		return out
 	}
-	return out
+	if len(durable) == 0 {
+		return out
+	}
+	// 尽力回暖 Redis（仅当 Redis 可用且本轮非故障读）。
+	if s.redis != nil && !redisErr {
+		client := s.redis.ForKey(key)
+		for d, ts := range durable {
+			if herr := client.HSet(ctx, key, "wm:"+d, strconv.FormatInt(ts, 10)); herr != nil {
+				s.degradeRedis("watermark_write", herr, "userId", userID)
+				break
+			}
+		}
+		_ = client.Expire(ctx, key, watermarkCacheTTL)
+	}
+	return durable
 }
 
 // isFresh 判断交集是否在保鲜期内（expiresAt 为空视为长期有效）。
-func (s *IntersectionService) isFresh(r IntersectionReasonView) bool {
-	if strings.TrimSpace(r.ExpiresAt) == "" {
-		return true
-	}
-	exp, err := time.Parse(time.RFC3339, r.ExpiresAt)
-	if err != nil {
-		return true
-	}
-	return exp.After(s.now())
-}
-
-func freshUnix(r IntersectionReasonView) int64 {
-	if strings.TrimSpace(r.FreshAt) == "" {
-		return 0
-	}
-	t, err := time.Parse(time.RFC3339, r.FreshAt)
-	if err != nil {
-		return 0
-	}
-	return t.Unix()
-}
-
-func pointClassForReason(r IntersectionReasonView) string {
-	if r.IntersectionClass == "affinity" {
-		return "recommended"
-	}
-	return "fact"
-}
-
-func pointLabelForReason(r IntersectionReasonView) string {
-	if strings.TrimSpace(r.DisplayText) != "" {
-		return r.DisplayText
-	}
-	if strings.TrimSpace(r.Label) != "" {
-		return r.Label
-	}
-	if strings.TrimSpace(r.DisplayName) != "" {
-		return r.DisplayName
-	}
-	if strings.TrimSpace(r.IntersectionID) != "" {
-		return r.IntersectionID
-	}
-	return r.coolKey()
-}
-
-func visibleIntersectionPoints(r IntersectionReasonView) []IntersectionPointView {
-	points := make([]IntersectionPointView, 0, len(r.IntersectionPoints))
-	for _, p := range r.IntersectionPoints {
-		if p.Visibility == "hidden" {
-			continue
-		}
-		points = append(points, p)
-	}
-	if len(points) > 0 {
-		return points
-	}
-	label := pointLabelForReason(r)
-	if strings.TrimSpace(label) == "" {
-		return nil
-	}
-	pointID := r.IntersectionID
-	if pointID == "" {
-		pointID = r.coolKey()
-	}
-	return []IntersectionPointView{{
-		PointID:     pointID,
-		PointClass:  pointClassForReason(r),
-		Dimension:   r.Dimension,
-		Label:       r.Label,
-		DisplayText: label,
-		SourceRef:   r.Source,
-		Visibility:  "public",
-	}}
-}
-
-func hydratePointSummary(r IntersectionReasonView) IntersectionReasonView {
-	points := visibleIntersectionPoints(r)
-	r.IntersectionPoints = points
-	byDimension := map[string]*IntersectionDimensionTallyView{}
-	order := []string{}
-	fact := 0
-	recommended := 0
-	for _, p := range points {
-		switch p.PointClass {
-		case "recommended":
-			recommended++
-		default:
-			fact++
-		}
-		dim := p.Dimension
-		if dim == "" {
-			dim = r.Dimension
-		}
-		tally, ok := byDimension[dim]
-		if !ok {
-			tally = &IntersectionDimensionTallyView{
-				Dimension: dim,
-				Label:     intersectionDimensionLabels[dim],
-			}
-			byDimension[dim] = tally
-			order = append(order, dim)
-		}
-		tally.Count++
-	}
-	summary := make([]IntersectionDimensionTallyView, 0, len(order))
-	for _, dim := range order {
-		summary = append(summary, *byDimension[dim])
-	}
-	r.FactPointCount = fact
-	r.RecommendedPointCount = recommended
-	r.TotalPointCount = fact + recommended
-	r.DimensionPointSummary = summary
-	if r.PointSummarySnapshotID == "" {
-		if r.RecommendationTraceID != "" {
-			r.PointSummarySnapshotID = r.RecommendationTraceID
-		} else {
-			r.PointSummarySnapshotID = r.IntersectionID
-		}
-	}
-	if r.PointClassLabel == "" {
-		if recommended > 0 && fact == 0 {
-			r.PointClassLabel = "推荐交集"
-		} else {
-			r.PointClassLabel = "事实交集"
-		}
-	}
-	if r.RankState == "" {
-		r.RankState = "fresh"
-	}
-	return hydrateExplain(r)
-}
-
-// hydrateExplain 是云侧交集 Explain 管线（§17.1 主谓宾模板 + §5.4 kind 注册表 + 实例样本）：
-// 由结构化证据点（kind + count + 维度 + 关系态）实例化 primaryText / secondaryText /
-// connectionSummary；affinity 分通道补 confidenceLabel / modelReasonBucket；并按
-// strength + intersectionClass 离散化 weightTier。
-//
-// G2：primaryText 唯一产出归属在此，禁止回退旧 displayText/label 作结论句来源；已预置
-// primaryText（如未来读模型预物化）则尊重不覆盖。kind 未登记且无预置 primaryText 时按
-// §18.1「无 primaryText → 不展示」留空，由候选窗完备性过滤优雅降级（不写死闭集、不造假）。
-func hydrateExplain(r IntersectionReasonView) IntersectionReasonView {
-	anchor, hasAnchor := explainAnchorPoint(r)
-	if strings.TrimSpace(r.PrimaryText) == "" && hasAnchor {
-		r.PrimaryText = explainPrimaryText(r, anchor)
-	}
-	if strings.TrimSpace(r.SecondaryText) == "" {
-		r.SecondaryText = explainSecondaryText(r, anchor)
-	}
-	if strings.TrimSpace(r.ConnectionSummary) == "" {
-		r.ConnectionSummary = explainConnectionSummary(r)
-	}
-	if r.IntersectionClass == "affinity" {
-		if strings.TrimSpace(r.ConfidenceLabel) == "" {
-			r.ConfidenceLabel = affinityConfidenceLabel(r)
-		}
-		if strings.TrimSpace(r.ModelReasonBucket) == "" {
-			r.ModelReasonBucket = affinityModelReasonBucket(r)
-		}
-	}
-	if strings.TrimSpace(r.WeightTier) == "" {
-		if r.IntersectionClass == "fact" && r.Strength >= 0.8 {
-			r.WeightTier = "heavy"
-		} else {
-			r.WeightTier = "light"
-		}
-	}
-	return r
-}
-
-// explainAnchorPoint 取结论句锚点：可见点中挖掘强度最高者（§9.8 evidenceKindRank）。
-// hydratePointSummary 已先把 r.IntersectionPoints 收敛为可见点，这里直接择强。
-func explainAnchorPoint(r IntersectionReasonView) (IntersectionPointView, bool) {
-	best := IntersectionPointView{}
-	bestRank := 1 << 30
-	found := false
-	for _, p := range r.IntersectionPoints {
-		if p.Visibility == "hidden" {
-			continue
-		}
-		rank := evidenceKindRank(p.SourceRef, p.PointClass)
-		if !found || rank < bestRank {
-			best = p
-			bestRank = rank
-			found = true
-		}
-	}
-	return best, found
-}
-
-// anchorAggregateCount 取锚点对应的可枚举计数：逐条桥接型（一点一人）用 reason 级
-// SharedCount，聚合型（单点携带计数）用 point.Count。
-func anchorAggregateCount(r IntersectionReasonView, anchor IntersectionPointView) int {
-	switch anchor.SourceRef {
-	case "followeeVisited", "followeeInObject", "followeeViewing":
-		if r.SharedCount > 0 {
-			return r.SharedCount
-		}
-		c := 0
-		for _, p := range r.IntersectionPoints {
-			if p.SourceRef == anchor.SourceRef {
-				c++
-			}
-		}
-		if c > 0 {
-			return c
-		}
-		return 1
-	default:
-		if anchor.Count > 0 {
-			return anchor.Count
-		}
-		return 1
-	}
-}
-
-// explainPrimaryText 按 §17.1「主语[数量+关系限定] + 谓语 + 宾语」实例化事实结论句；
-// affinity 走概率通道分支。kind 取 §5.4 注册表标准名；未登记 kind 返回空（不造假）。
-func explainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) string {
-	if r.IntersectionClass == "affinity" {
-		return affinityPrimaryText(r, anchor)
-	}
-	n := anchorAggregateCount(r, anchor)
-	switch anchor.SourceRef {
-	case "sharedFollowees", "commonFollower":
-		return fmt.Sprintf("你们有%d位共同关注的人", n)
-	case "commonContact":
-		return fmt.Sprintf("你们有%d位共同联系人", n)
-	case "sharedCircle", "coMemberCircle":
-		return fmt.Sprintf("你们共同加入了%d个圈子", n)
-	case "coCommented", "sharedDiscussion":
-		return fmt.Sprintf("你们都讨论过%d篇相同内容", n)
-	case "coSharedContent":
-		return fmt.Sprintf("你们都分享过%d篇相同内容", n)
-	case "coCreatedContent":
-		return "你们都创作过相关内容"
-	case "coVisitedEntity":
-		return fmt.Sprintf("你们都去过%d个相同的地方", n)
-	case "coWishlistedEntity":
-		return fmt.Sprintf("你们都想去%d个相同的地方", n)
-	case "sharedEntityAttention":
-		return fmt.Sprintf("你和%d人共同关注了这里", n)
-	case "followeeVisited":
-		return fmt.Sprintf("%d位你关注的人来过这里", n)
-	case "followeeInObject":
-		return fmt.Sprintf("%d位你关注的人在这里", n)
-	case "followeeViewing":
-		return "你关注的人最近看过这些内容"
-	case "followeeDiscussedThis":
-		return "你关注的人也在讨论这些主题"
-	case "sharedTagSample":
-		if r.Source == "circleTag" {
-			return "你在圈子里常看这些主题"
-		}
-		return "你们都关注这些主题"
-	default:
-		return ""
-	}
-}
-
-// affinityPrimaryText 概率通道结论句（必须配 confidenceLabel 标注「推荐」，§17.5/§3.4）。
-func affinityPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) string {
-	src := strings.ToLower(r.Source)
-	switch {
-	case anchor.SourceRef == "sharedCircle" || strings.Contains(src, "circle"):
-		return "你的圈子里最近在看这些"
-	case anchor.SourceRef == "followeeViewing" || strings.Contains(src, "friend") || strings.Contains(src, "follow"):
-		return "你关注的人最近在看这些"
-	default:
-		return "为你推荐的相关内容"
-	}
-}
-
-// affinityConfidenceLabel 概率通道置信标注（端只对 affinity 展示「推荐」语义）。
-func affinityConfidenceLabel(r IntersectionReasonView) string {
-	switch r.Dimension {
-	case "relationship", "identity":
-		return "推荐认识"
-	default:
-		return "可能感兴趣"
-	}
-}
-
-// affinityModelReasonBucket 概率通道模型理由桶（埋点/灰度用，端不展示原文）。
-func affinityModelReasonBucket(r IntersectionReasonView) string {
-	src := strings.TrimSpace(r.Source)
-	if src == "" {
-		src = strings.TrimSpace(r.Dimension)
-	}
-	if src == "" {
-		src = "general"
-	}
-	return "affinity:" + src
-}
-
-// explainSecondaryText 列表入口灰色辅助说明（§17.2，≤2 项）：罗列锚点之外的其它
-// 维度证据组名词，跨 kind 取样（同 kind 兄弟点不重复罗列）。紧凑 surface 不展示。
-func explainSecondaryText(r IntersectionReasonView, anchor IntersectionPointView) string {
-	parts := make([]string, 0, 2)
-	for _, p := range r.IntersectionPoints {
-		if p.PointID == anchor.PointID || p.SourceRef == anchor.SourceRef {
-			continue
-		}
-		label := strings.TrimSpace(p.Label)
-		if label == "" {
-			label = strings.TrimSpace(p.DisplayText)
-		}
-		if label == "" {
-			continue
-		}
-		if p.Count > 1 {
-			parts = append(parts, fmt.Sprintf("%s %d", label, p.Count))
-		} else {
-			parts = append(parts, label)
-		}
-		if len(parts) >= 2 {
-			break
-		}
-	}
-	return strings.Join(parts, " · ")
-}
-
-// explainConnectionSummary 对象页「连接说明」（仅 viewer↔对象关系类 reason、且共同点≥2 时产出）。
-func explainConnectionSummary(r IntersectionReasonView) string {
-	switch r.RelationKind {
-	case "mutual", "following", "followed_by", "none":
-	default:
-		return ""
-	}
-	if r.TotalPointCount < 2 {
-		return ""
-	}
-	return fmt.Sprintf("你们已有%d个共同点", r.TotalPointCount)
-}
-
-// Summary 我的主页聚合摘要：各维度计数 + 自上次查看未读数。
 func (s *IntersectionService) Summary(ctx context.Context, userID string) (IntersectionInboxSummaryView, error) {
 	reasons, err := s.source.FactReasons(ctx, userID, "")
 	if err != nil {
@@ -806,8 +517,10 @@ func isSpotlightDisplayComplete(r IntersectionReasonView) bool {
 
 // evidenceKindRank 证据组 kind 的挖掘强度（§9.8）：值越小越靠前；
 // 人物 > 事物 > 地点 > 内容 > 身份 > 兴趣fact > recommended。
-// kind 取值集合 = 交集词典 §5.4 唯一注册表标准名（云侧唯一真相源，端侧不解析语义）。
-// 未知 kind 落中段，保证未来新增维度优雅降级（不写死闭集，缺省排在已知 fact 之后、recommended 之前）。
+// kind 取值集合与 rank 真相源 = 机器可读注册表
+// contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml 的 evidenceRank 字段
+// （取代「§5.4 markdown 表 + 本 switch」双源；本 switch 必须与注册表逐项对齐）。
+// 未知 kind 落中段（500），保证未来新增维度优雅降级（不写死闭集，缺省排在已知 fact 之后、recommended 之前）。
 func evidenceKindRank(kind, pointClass string) int {
 	if pointClass == "recommended" {
 		return 900

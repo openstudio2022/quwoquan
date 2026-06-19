@@ -165,10 +165,9 @@ def build_scale_readiness_report(
     abandoned_count = _safe_int(audit.get("abandonedCount"))
     abandoned_content_count = _safe_int(audit.get("abandonedContentCount"))
     replacement_count = _safe_int(audit.get("replacementCount"))
-    replacement_closed = (
-        targets >= base_target_count
-        and (not abandoned_count or replacement_count >= abandoned_count)
-    )
+    acceptance = spec.get("acceptance") if isinstance(spec.get("acceptance"), Mapping) else {}
+    required_active_targets = max(base_target_count, _safe_int((acceptance or {}).get("minEntities")))
+    replacement_closed = targets >= required_active_targets
     runtime_integrity = scan_runtime_batch_integrity(task_id, batch_id)
     runtime_stats = runtime_integrity.get("stats") if isinstance(runtime_integrity, Mapping) else {}
     token_ledgers = _token_ledger_paths(root)
@@ -204,7 +203,8 @@ def build_scale_readiness_report(
     elif abandoned_count and not replacement_closed:
         blockers.append(
             f"abandoned entities require replacement closure; abandoned={abandoned_count} "
-            f"replacement={replacement_count} activeTargets={targets} baseTargets={base_target_count}"
+            f"replacement={replacement_count} activeTargets={targets} "
+            f"requiredActiveTargets={required_active_targets}"
         )
     if abandoned_content_count and mode == "commercial":
         blockers.append(f"scale readiness requires zero abandoned content objects; got {abandoned_content_count}")
@@ -279,6 +279,7 @@ def build_scale_readiness_report(
         },
         "replacementClosure": {
             "baseTargetCount": base_target_count,
+            "requiredActiveTargets": required_active_targets,
             "activeTargetCount": targets,
             "replacementCount": replacement_count,
             "closed": bool(replacement_closed),

@@ -16,7 +16,7 @@ repository_content:
       读模型已 PostBaseDto / CommentDto / PostSearchItemView / ContentPostDetailPayload；
       写模型已 *RequestWire。getAppConfig → ContentAppConfigWire；`content` 子树由
       ContentAppConfigClientParsed（metadata SSOT：content_app_config_client.yaml + Go 模板生成）解析。
-      initMediaUpload / completeMediaUpload / getMediaAsset / 封面与摘要 / getRecommendation 等为生成 DTO；
+      initMediaUpload / completeMediaUpload / getMediaAsset / 封面与摘要 等为生成 DTO；
       getMediaAsset 的 derivatives 在投影中为 List<Map<String,dynamic>> 上限类型（对齐 OpenAPI additionalProperties）。
       reportBehaviors(events) 为行为埋点非 Post 实体，仍为 intentional Map/契约 DTO 批次。
 

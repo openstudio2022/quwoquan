@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// Profile header with left-aligned avatar that intrudes 1/3 into the
@@ -44,7 +45,8 @@ class ProfileHeader extends StatelessWidget {
   static double get avatarIntrusion => avatarOverlapPx;
 
   Widget _buildAvatar(BuildContext context, Color bg, Color fgSecondary) {
-    final hasAvatar = avatarUrl != null && avatarUrl!.isNotEmpty;
+    final resolvedAvatarUrl = resolveAvatarImageUrl(avatarUrl);
+    final hasAvatar = resolvedAvatarUrl.isNotEmpty;
     return Container(
       key: const ValueKey<String>('profile-header-avatar'),
       decoration: BoxDecoration(
@@ -62,7 +64,7 @@ class ProfileHeader extends StatelessWidget {
           ? CircleAvatar(
               radius: avatarRadius,
               backgroundColor: AppColors.iosSecondaryFill(context),
-              backgroundImage: NetworkImage(avatarUrl!),
+              backgroundImage: NetworkImage(resolvedAvatarUrl),
               onBackgroundImageError: (e, s) {},
             )
           : CircleAvatar(
@@ -105,10 +107,11 @@ class ProfileHeader extends StatelessWidget {
                     child: Text(
                       displayName ?? '',
                       style: TextStyle(
-                        fontSize: AppTypography.iosNavTitle,
-                        fontWeight: AppTypography.medium,
+                        fontSize: AppTypography.iosTitle3,
+                        fontWeight: AppTypography.regular,
                         color: fg.withValues(alpha: 0.94),
-                        letterSpacing: -0.16,
+                        letterSpacing: -0.24,
+                        height: AppSpacing.textLineHeightDense,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -127,13 +130,19 @@ class ProfileHeader extends StatelessWidget {
                     SizedBox(width: AppSpacing.intraGroupXs),
                     CupertinoButton(
                       key: const ValueKey<String>('profile-header-edit'),
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.square(AppSpacing.minInteractiveSize),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.intraGroupXs,
+                        vertical: AppSpacing.intraGroupXs,
+                      ),
+                      minimumSize: const Size(
+                        AppSpacing.buttonHeightSm,
+                        AppSpacing.buttonHeightSm,
+                      ),
                       onPressed: onEdit,
                       child: Icon(
-                        CupertinoIcons.pencil,
-                        size: AppSpacing.iconSmall,
-                        color: fg.withValues(alpha: 0.78),
+                        CupertinoIcons.square_pencil,
+                        size: AppSpacing.iconMedium,
+                        color: fg.withValues(alpha: 0.88),
                       ),
                     ),
                   ],

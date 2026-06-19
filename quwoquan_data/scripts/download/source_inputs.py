@@ -148,6 +148,8 @@ def curated_sources_for_entity(
                     "entityMatch": src.get("entityMatch") or "",
                     "candidateGate": src.get("candidateGate") if isinstance(src.get("candidateGate"), dict) else {},
                     "researchLane": lane,
+                    "fetchable": src.get("fetchable"),
+                    "fetchableOverride": src.get("fetchableOverride"),
                     "imageUrls": _normalize_image_specs(src.get("imageUrls") or []),
                 }
             )
@@ -201,28 +203,37 @@ def _normalize_image_specs(raw: Any) -> list[dict[str, Any]]:
 
 
 def curated_images_for_entity(
-    task_id: str, batch_id: str, entity_id: str, entity_type: str = ""
+    task_id: str,
+    batch_id: str,
+    entity_id: str,
+    entity_type: str = "",
+    *,
+    research_lane: str | None = None,
 ) -> list[dict[str, Any]]:
     """读 source_plan 中实体级 imageUrls（顶层/payload）+ 各 source 的 imageUrls，去重合并。
 
     每项规范化为 {url, license, credit}。Agent 在 source_plan 输入里给出真实可用图（CC/PD/授权），
     download 据此下图到来源单元 assets/，供 produce 选图与 imageGate 体检。
     """
-    files = _source_plan_files(
-        task_id, batch_id, entity_id, entity_type, lanes=("image",)
-    )
-    obj = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
-    legacy = obj / STAGE_DOWNLOAD / "source_plan.json"
-    if (
-        (not files or not any(_plan_has_payload(path) for _lane, path in files))
-        and legacy.is_file()
-        and _plan_has_payload(legacy)
-    ):
-        files = [("legacy", legacy)] if legacy.is_file() else []
-    if not files:
+    selected_lane = str(research_lane or "").strip() or None
+    if selected_lane not in {None, "homepage", "image"}:
         return []
+    files: list[tuple[str, Path]] = []
+    if selected_lane in {None, "image"}:
+        files = _source_plan_files(
+            task_id, batch_id, entity_id, entity_type, lanes=("image",)
+        )
+        obj = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
+        legacy = obj / STAGE_DOWNLOAD / "source_plan.json"
+        if (
+            selected_lane is None
+            and (not files or not any(_plan_has_payload(path) for _lane, path in files))
+            and legacy.is_file()
+            and _plan_has_payload(legacy)
+        ):
+            files = [("legacy", legacy)] if legacy.is_file() else []
     specs: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     for lane_name, plan_file in files:
         data = read_json(plan_file)
         if not isinstance(data, dict):
@@ -277,56 +288,57 @@ def curated_images_for_entity(
                 if key not in seen:
                     seen.add(key)
                     specs.append(extra)
-    # Homepage imagery is sourced from the homepage evidence itself, not from
-    # the image-work research lane. Keep it distinguishable so downstream
-    # selection cannot accidentally publish it as an image work.
-    for source in curated_sources_for_entity(
-        task_id,
-        batch_id,
-        entity_id,
-        entity_type,
-        research_lane="homepage",
-    ):
-        plan_files = _source_plan_files(
+    if selected_lane in {None, "homepage"}:
+        # Homepage imagery is sourced from the homepage evidence itself, not from
+        # the image-work research lane. Keep it distinguishable so downstream
+        # selection cannot accidentally publish it as an image work.
+        for source in curated_sources_for_entity(
             task_id,
             batch_id,
             entity_id,
             entity_type,
-            lanes=("homepage",),
-        )
-        for _lane, plan_file in plan_files:
-            data = read_json(plan_file)
-            for raw_source in _extract_sources(data):
-                raw_id = str(
-                    raw_source.get("source_id")
-                    or raw_source.get("sourceId")
-                    or raw_source.get("id")
-                    or ""
-                )
-                if raw_id != str(source.get("source_id") or ""):
-                    continue
-                inherited = {
-                    "sourceCollectionId": f"homepage:{raw_id}",
-                    "creator": raw_source.get("credit") or raw_source.get("creator") or "",
-                    "collectionPageUrl": raw_source.get("url") or "",
-                    "license": raw_source.get("license") or "",
-                    "termsUrl": raw_source.get("termsUrl") or "",
-                    "licenseSnapshot": raw_source.get("licenseSnapshot") or "",
-                    "authorizationProof": raw_source.get("authorizationProof") or "",
-                    "usageScope": raw_source.get("usageScope") or "",
-                    "platform": raw_source.get("platform") or "",
-                    "researchLane": "homepage",
-                    "sourceId": raw_id,
-                }
-                for extra in _normalize_image_specs(raw_source.get("imageUrls") or []):
-                    merged = {
-                        **inherited,
-                        **{k: v for k, v in extra.items() if v not in ("", None)},
+            research_lane="homepage",
+        ):
+            plan_files = _source_plan_files(
+                task_id,
+                batch_id,
+                entity_id,
+                entity_type,
+                lanes=("homepage",),
+            )
+            for _lane, plan_file in plan_files:
+                data = read_json(plan_file)
+                for raw_source in _extract_sources(data):
+                    raw_id = str(
+                        raw_source.get("source_id")
+                        or raw_source.get("sourceId")
+                        or raw_source.get("id")
+                        or ""
+                    )
+                    if raw_id != str(source.get("source_id") or ""):
+                        continue
+                    inherited = {
+                        "sourceCollectionId": f"homepage:{raw_id}",
+                        "creator": raw_source.get("credit") or raw_source.get("creator") or "",
+                        "collectionPageUrl": raw_source.get("url") or "",
+                        "license": raw_source.get("license") or "",
+                        "termsUrl": raw_source.get("termsUrl") or "",
+                        "licenseSnapshot": raw_source.get("licenseSnapshot") or "",
+                        "authorizationProof": raw_source.get("authorizationProof") or "",
+                        "usageScope": raw_source.get("usageScope") or "",
+                        "platform": raw_source.get("platform") or "",
+                        "researchLane": "homepage",
+                        "sourceId": raw_id,
                     }
-                    key = ("homepage", merged["url"])
-                    if key not in seen:
-                        seen.add(key)
-                        specs.append(merged)
+                    for extra in _normalize_image_specs(raw_source.get("imageUrls") or []):
+                        merged = {
+                            **inherited,
+                            **{k: v for k, v in extra.items() if v not in ("", None)},
+                        }
+                        key = ("homepage", merged["url"])
+                        if key not in seen:
+                            seen.add(key)
+                            specs.append(merged)
     for spec in specs:
         spec.setdefault("researchLane", "image")
     return specs

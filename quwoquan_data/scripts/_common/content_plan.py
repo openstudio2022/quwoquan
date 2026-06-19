@@ -12,6 +12,7 @@ from typing import Any, Mapping
 from _common.base_draft import load_base_draft_text
 from _common.content_object import BRIEF_FILE, content_object_stage_dir, load_index
 from _common.io import read_json
+from _common.image_safety import assess_image_publish_prefilter
 from _common.paths import (
     STAGE_COMPOSE,
     batch_content_plan_packet_path,
@@ -24,7 +25,20 @@ from _common.quality_gates import WRITING_INTENTS, writing_intent_issues
 CONTENT_PLAN_SCHEMA = "quwoquan_data.content_plan_packet"
 ARTICLE_MIN_BASE_DRAFT_CHARS = 600
 ARTICLE_BASE_SOURCE_ROLES = {"base"}
-ARTICLE_BASE_SOURCE_CATEGORIES = {"travelogue", "guidebook", "travel_guide", "wikivoyage"}
+ARTICLE_BASE_SOURCE_CATEGORIES = {
+    "travelogue",
+    "guidebook",
+    "travel_guide",
+    "wikivoyage",
+    "official_article",
+    "vertical_professional",
+    "ugc_longform",
+    "community_post",
+    "media_article",
+    "platform_article",
+    "forum_thread",
+    "review_note",
+}
 ARTICLE_SUPPORTING_ONLY_CATEGORIES = {
     "authoritative_reference",
     "official",
@@ -309,6 +323,13 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             expected_briefs.add((content_object_stage_dir(task_id, batch_id, ref, STAGE_COMPOSE) / BRIEF_FILE).resolve())
         except (KeyError, OSError, ValueError):
             continue
+    for ref in abandoned_refs:
+        if ref not in index:
+            continue
+        try:
+            expected_briefs.add((content_object_stage_dir(task_id, batch_id, ref, STAGE_COMPOSE) / BRIEF_FILE).resolve())
+        except (KeyError, OSError, ValueError):
+            continue
     actual_briefs = {
         path.resolve()
         for path in (root / "posts").glob(f"*/*/*/*/{STAGE_COMPOSE}/{BRIEF_FILE}")
@@ -431,6 +452,13 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                         issues.append(
                             f"item[{ref}]: asset {asset_ref} crosses sourceCollectionId"
                         )
+                    verdict = assess_image_publish_prefilter(asset_path)
+                    if verdict.blocks_image_publish:
+                        reason = "/".join(verdict.reasons) or verdict.status
+                        issues.append(
+                            f"item[{ref}]: image asset blocked by image safety gate: "
+                            f"{asset_ref}:{reason}"
+                        )
                     source_meta_path = asset_path.parent.parent / "meta.json"
                     if not source_meta_path.is_file():
                         issues.append(f"item[{ref}]: image asset source meta missing: {asset_ref}")
@@ -545,19 +573,31 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                     f"item[{ref}]: baseSourceRef usable text too short "
                     f"({base_text_len} < {ARTICLE_MIN_BASE_DRAFT_CHARS})"
                 )
+            reuse_policy = str(item.get("baseSourceReusePolicy") or "").strip()
+            if strict_rights_mode and reuse_policy:
+                issues.append(
+                    f"item[{ref}]: baseSourceReusePolicy is not allowed for scaled separated_research; "
+                    "article baseSourceRef must be one-source-one-work"
+                )
             previous = base_source_owners.get(base_source_ref)
-            if previous and previous != ref:
+            if previous and previous != ref and (
+                strict_rights_mode or reuse_policy != "multi_intent_source_bundle"
+            ):
                 issues.append(
                     f"item[{ref}]: baseSourceRef reused by {previous}; main evidence must be one-source-one-work"
                 )
-            base_source_owners[base_source_ref] = ref
+            base_source_owners.setdefault(base_source_ref, ref)
             asset_rows = _source_asset_rows(root, base_source_ref)
             if strict_rights_mode and not asset_rows:
                 issues.append(
-                    f"item[{ref}]: article baseSourceRef must be a text+image source unit; "
-                    f"no assets found under {base_source_ref}"
+                    f"item[{ref}]: article baseSourceRef must include at least one source asset"
                 )
             for asset in asset_rows:
+                source_asset_ref = _source_asset_ref(task_id, batch_id, root, base_source_ref, asset)
+                if source_asset_ref:
+                    _claim_asset(ref, source_asset_ref)
+                _claim_asset_sha(ref, str(asset.get("sha256") or ""))
+                _claim_collection(ref, str(asset.get("sourceCollectionId") or ""))
                 missing_asset_fields = [
                     field
                     for field in ("license", "credit", "sourceUrl", "termsUrl", "usageScope")
@@ -568,10 +608,6 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                         f"item[{ref}]: baseSourceRef asset {asset.get('fileName') or '?'} "
                         f"missing rights fields {missing_asset_fields}"
                     )
-                asset_ref = _source_asset_ref(task_id, batch_id, root, base_source_ref, asset)
-                _claim_asset(ref, asset_ref)
-                _claim_asset_sha(ref, str(asset.get("sha256") or ""))
-                _claim_collection(ref, str(asset.get("sourceCollectionId") or ""))
         if carrier != "image":
             for msg in writing_intent_issues(item.get("writingIntent")):
                 issues.append(f"item[{ref}]: {msg}")
@@ -679,6 +715,7 @@ def load_writing_intent_overrides(task_id: str, batch_id: str) -> dict[str, dict
         for field in (
             "writingIntent",
             "baseSourceRef",
+            "baseSourceReusePolicy",
             "carrier",
             "sourceCollectionId",
             "assetRefs",

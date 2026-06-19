@@ -47,14 +47,16 @@ func WithFeedIntersectionProvider(provider feedIntersectionProvider) FeedService
 }
 
 type ListFeedRequest struct {
-	UserID          string
-	SessionID       string
-	Identity        string
-	Type            string
-	Sort            string
-	SubCategory     string
-	Cursor          string
-	Limit           int
+	UserID      string
+	SessionID   string
+	Identity    string
+	Type        string
+	Sort        string
+	SubCategory string
+	Cursor      string
+	Limit       int
+	// FeedRequestID 客户端回显的归因 id：首刷为空，分页/继续加载回显服务端首刷下发的 id。
+	FeedRequestID   string
 	BlockedUserIDs  []string
 	BlockedKeywords []string
 }
@@ -89,6 +91,11 @@ type ListFeedResponse struct {
 	Items      []FeedItemView `json:"items"`
 	NextCursor string         `json:"nextCursor,omitempty"`
 	Cursor     string         `json:"cursor,omitempty"`
+	// FeedRequestID 服务端权威下发的归因 id（frq_ 前缀 ULID）；端侧回显 + 透传行为事件。
+	FeedRequestID string `json:"feedRequestId"`
+	// RankingVersion / ReasonVersion 本次结果的排序与理由管线版本。
+	RankingVersion string `json:"rankingVersion,omitempty"`
+	ReasonVersion  string `json:"reasonVersion,omitempty"`
 }
 
 // feedTimeOrEmpty 把零值时间渲染为空串（配合 json omitempty 省略），
@@ -112,6 +119,13 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		limit = 20
 	}
 	req.UserID = normalizeAnonymousSubAccountID(req.UserID)
+	// feedRequestId 服务端权威化：首刷（无回显 id）生成新的 frq_ ULID；
+	// 分页/继续加载时客户端回显原 id，这里复用以保持同一 feed 会话归因连续。
+	// 该 id 既写入响应 envelope，也作为 recall 归因下传给 engine。
+	feedRequestID := strings.TrimSpace(req.FeedRequestID)
+	if feedRequestID == "" {
+		feedRequestID = rtrec.NewFeedRequestID()
+	}
 	views := make([]FeedItemView, 0, limit)
 	requestedIdentity := normalizeRequestedIdentity(req.Identity)
 	requestedType := normalizeRequestType(req.Type)
@@ -123,6 +137,10 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	cursor := requestedCursor
 	nextCursor := ""
 	seenPostIDs := map[string]struct{}{}
+	// 强负反馈（dislike / 隐藏作者 / 隐藏内容类型）是产品硬规则：必须在所有 feed 路径生效，
+	// 包括绕过推荐召回的 repository fallback 兜底。来源与召回过滤同一真相源（hotpath 负反馈/
+	// 隐藏集），不引入 served/impressed 重复曝光治理（那是召回管线内部职责，避免误伤兜底分页）。
+	feedbackExclusions := s.engine.LoadFeedbackExclusions(ctx, req.UserID, req.SessionID)
 	_, cursorIsPostID := s.postReader.GetByID(ctx, repositoryCursor)
 	useRepositoryPagination := cursorIsPostID || requestedType != "" || requestedIdentity != ""
 	appendPost := func(post *postmodel.Post) bool {
@@ -133,6 +151,15 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			return false
 		}
 		if _, blocked := blockedUsers[strings.ToLower(strings.TrimSpace(post.AuthorId))]; blocked {
+			return false
+		}
+		if feedbackExclusions.NegativeContentIDs[strings.TrimSpace(post.ID)] {
+			return false
+		}
+		if feedbackExclusions.HiddenAuthors[strings.TrimSpace(post.AuthorId)] {
+			return false
+		}
+		if feedbackExclusions.HiddenContentTypes[strings.TrimSpace(post.ContentType)] {
 			return false
 		}
 		if containsBlockedKeyword(post, blockedKeywords) {
@@ -173,12 +200,13 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	}
 	for attempt := 0; !useRepositoryPagination && attempt < 4 && len(views) < limit; attempt++ {
 		recResp, err := s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
-			UserID:    req.UserID,
-			SessionID: req.SessionID,
-			FeedType:  rtrec.FeedDiscovery,
-			Sort:      normalizeFeedSort(req.Sort),
-			Cursor:    cursor,
-			Limit:     limit,
+			UserID:        req.UserID,
+			SessionID:     req.SessionID,
+			FeedType:      rtrec.FeedDiscovery,
+			Sort:          normalizeFeedSort(req.Sort),
+			Cursor:        cursor,
+			Limit:         limit,
+			FeedRequestID: feedRequestID,
 		})
 		if err != nil {
 			return nil, err
@@ -226,7 +254,14 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			attachFeedIntersections(views, reasons, req.UserID)
 		}
 	}
-	return &ListFeedResponse{Items: views, NextCursor: nextCursor, Cursor: nextCursor}, nil
+	return &ListFeedResponse{
+		Items:          views,
+		NextCursor:     nextCursor,
+		Cursor:         nextCursor,
+		FeedRequestID:  feedRequestID,
+		RankingVersion: rtrec.RankingVersion,
+		ReasonVersion:  rtrec.ReasonVersion,
+	}, nil
 }
 
 func encodeRepositoryFeedCursor(postID string) string {
@@ -251,30 +286,6 @@ func decodeRepositoryFeedCursor(cursor string) string {
 
 func (s *FeedService) GetPost(ctx context.Context, id string) (*postmodel.Post, bool) {
 	return s.postReader.GetByID(ctx, id)
-}
-
-type RecommendRequest struct {
-	UserID    string `json:"userId"`
-	SessionID string `json:"sessionId"`
-	Cursor    string `json:"cursor"`
-	Limit     int    `json:"limit"`
-}
-
-func (s *FeedService) Recommend(ctx context.Context, req RecommendRequest) (*rtrec.FeedResponse, error) {
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 20
-	}
-	userID := strings.TrimSpace(req.UserID)
-	userID = normalizeAnonymousSubAccountID(userID)
-	return s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
-		UserID:    userID,
-		SessionID: strings.TrimSpace(req.SessionID),
-		FeedType:  rtrec.FeedDiscovery,
-		Sort:      rtrec.FeedSortRecommend,
-		Cursor:    strings.TrimSpace(req.Cursor),
-		Limit:     limit,
-	})
 }
 
 func normalizeFeedSort(sortValue string) string {

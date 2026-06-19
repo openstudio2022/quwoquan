@@ -15,7 +15,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -45,7 +44,7 @@ class _ErrorContentRepository extends MockContentRepository {
   final String _errorMessage;
 
   @override
-  Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? identity,
     String? type,
@@ -77,7 +76,7 @@ class _RecordingContentRepository extends MockContentRepository {
   String? lastFeedRequestId;
 
   @override
-  Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? identity,
     String? type,
@@ -158,27 +157,34 @@ void main() {
       expect(feed.error, isNull);
     });
 
-    testWidgets('旅程 A3：feed load 透传 sessionId / feedRequestId 到 repository', (
-      tester,
-    ) async {
-      final repo = _RecordingContentRepository();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+    testWidgets(
+      '旅程 A3：feed 首刷不自造 feedRequestId，采纳服务端下发并透传 sessionId',
+      (tester) async {
+        final repo = _RecordingContentRepository();
+        await tester.pumpWidget(_scopedApp(mock: repo));
 
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(MaterialApp)),
-      );
-      final feedSession = container.read(feedSessionProvider.notifier);
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(MaterialApp)),
+        );
+        final feedSession = container.read(feedSessionProvider.notifier);
 
-      await container.read(discoveryFeedMapProvider.notifier).load('photo');
-      await tester.pump();
+        await container.read(discoveryFeedMapProvider.notifier).load('photo');
+        await tester.pump();
 
-      expect(repo.lastCategory, 'photo');
-      expect(repo.lastIdentity, 'work');
-      expect(repo.lastType, 'image');
-      expect(repo.lastSessionId, feedSession.sessionId);
-      expect(repo.lastFeedRequestId, isNotNull);
-      expect(repo.lastFeedRequestId, feedSession.currentFeedRequestId);
-    });
+        expect(repo.lastCategory, 'photo');
+        expect(repo.lastIdentity, 'work');
+        expect(repo.lastType, 'image');
+        expect(repo.lastSessionId, feedSession.sessionId);
+        // 首刷：App 不再客户端自造 feedRequestId 塞 query（服务端权威生成）。
+        expect(repo.lastFeedRequestId, isNull);
+        // feed 状态承载服务端下发的归因 id，且被 feedSession 采纳供后续行为事件复用。
+        final feed = container.read(discoveryFeedMapProvider)['photo']?.value;
+        expect(feed, isNotNull);
+        expect(feed!.feedRequestId, isNotNull);
+        expect(feed.feedRequestId, isNotEmpty);
+        expect(feedSession.currentFeedRequestId, feed.feedRequestId);
+      },
+    );
   });
 
   // ──────────────────────────────────────────────────────────────────

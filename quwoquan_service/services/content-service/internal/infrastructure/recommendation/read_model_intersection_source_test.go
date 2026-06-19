@@ -177,3 +177,104 @@ func TestReadModelSource_AffinityAndObjectDelegateToCompute(t *testing.T) {
 		t.Fatalf("object must delegate to compute: %+v err=%v", obj, err)
 	}
 }
+
+// factReasonsForGen 让 fakeIntersectionCompute 在每次重算返回不同代的理由，
+// 用于断言 lifecycle 跨快照的增量真算。
+type genCompute struct {
+	calls int
+	gens  [][]app.IntersectionReasonView
+}
+
+func (g *genCompute) FactReasons(context.Context, string, string) ([]app.IntersectionReasonView, error) {
+	idx := g.calls
+	if idx >= len(g.gens) {
+		idx = len(g.gens) - 1
+	}
+	g.calls++
+	// 返回深拷贝，避免物化原地写回污染下一代输入。
+	src := g.gens[idx]
+	out := make([]app.IntersectionReasonView, len(src))
+	copy(out, src)
+	return out, nil
+}
+func (g *genCompute) AffinityReasons(context.Context, string, string) ([]app.IntersectionReasonView, error) {
+	return nil, nil
+}
+func (g *genCompute) ObjectReasons(context.Context, string, string, string) ([]app.IntersectionReasonView, error) {
+	return nil, nil
+}
+
+// TestReadModelSource_MaterializesEdgeWeightAndLifecycleAcrossRecompute 是切片⑥的端内
+// 物化证据：经 ReadModelIntersectionSource 写路径，edgeWeight 与 lifecycle 弱标必须被真算
+// 并随快照固化；fresh 命中读路径零回算地消费已物化字段（R-IX01 不变量）。
+func TestReadModelSource_MaterializesEdgeWeightAndLifecycleAcrossRecompute(t *testing.T) {
+	now := time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
+	mk := func(strength float64, pts int) app.IntersectionReasonView {
+		points := make([]app.IntersectionPointView, pts)
+		for i := range points {
+			points[i] = app.IntersectionPointView{Count: 1}
+		}
+		return app.IntersectionReasonView{
+			IntersectionID:     "edge-1",
+			IntersectionClass:  "fact",
+			Dimension:          "relationship",
+			Strength:           strength,
+			FreshAt:            now.Format(time.RFC3339),
+			IntersectionPoints: points,
+		}
+	}
+	compute := &genCompute{gens: [][]app.IntersectionReasonView{
+		{mk(0.6, 1)},  // 第 1 代：弱边
+		{mk(1.0, 12)}, // 第 2 代：显著增强
+	}}
+	store := newMemViewerStore()
+	src := newSourceAt(compute, store, &now, map[string]int{"relationship": 7})
+
+	// 第一次读：真算物化，edgeWeight>0，lifecycle=new。
+	gen1, err := src.FactReasons(context.Background(), "v", "")
+	if err != nil {
+		t.Fatalf("gen1: %v", err)
+	}
+	if gen1[0].EdgeWeight <= 0 {
+		t.Fatalf("edgeWeight must be materialized >0, got %.4f", gen1[0].EdgeWeight)
+	}
+	if gen1[0].LifecycleState != "new" {
+		t.Fatalf("first materialization lifecycle must be new, got %q", gen1[0].LifecycleState)
+	}
+	// 已固化进快照。
+	if doc, ok, _ := store.Load(context.Background(), "v"); !ok || doc.Reasons[0].EdgeWeight <= 0 {
+		t.Fatalf("snapshot must persist materialized edgeWeight: %+v", doc)
+	}
+
+	// fresh 命中（TTL 内）：零回算，消费已物化字段。
+	now = now.Add(2 * 24 * time.Hour)
+	hit, err := src.FactReasons(context.Background(), "v", "")
+	if err != nil {
+		t.Fatalf("fresh hit: %v", err)
+	}
+	if compute.calls != 1 {
+		t.Fatalf("fresh hit must not recompute; calls=%d", compute.calls)
+	}
+	if hit[0].LifecycleState != "new" || hit[0].EdgeWeight != gen1[0].EdgeWeight {
+		t.Fatalf("fresh hit must serve materialized snapshot verbatim: %+v", hit[0])
+	}
+
+	// 过 TTL 后重算：lifecycle 基于上一次快照增量 → strengthened，previousStrength = 上一次 edgeWeight。
+	now = now.Add(8 * 24 * time.Hour)
+	gen2, err := src.FactReasons(context.Background(), "v", "")
+	if err != nil {
+		t.Fatalf("gen2: %v", err)
+	}
+	if compute.calls != 2 {
+		t.Fatalf("expired snapshot must recompute; calls=%d", compute.calls)
+	}
+	if gen2[0].LifecycleState != "strengthened" {
+		t.Fatalf("rising edge across recompute must be strengthened, got %q (delta=%.4f)", gen2[0].LifecycleState, gen2[0].StrengthDelta)
+	}
+	if gen2[0].PreviousStrength != gen1[0].EdgeWeight {
+		t.Fatalf("previousStrength must equal prior materialized edgeWeight: got %.4f want %.4f", gen2[0].PreviousStrength, gen1[0].EdgeWeight)
+	}
+	if gen2[0].EdgeWeight <= gen1[0].EdgeWeight {
+		t.Fatalf("strengthened edge must have higher edgeWeight: gen1=%.4f gen2=%.4f", gen1[0].EdgeWeight, gen2[0].EdgeWeight)
+	}
+}

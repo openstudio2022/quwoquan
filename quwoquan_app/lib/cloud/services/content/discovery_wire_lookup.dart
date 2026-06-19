@@ -8,8 +8,10 @@ List<Map<String, dynamic>> aggregateDiscoveryWireSlices({
   required List<FeedItemDto> video,
   required List<FeedItemDto> article,
   required List<FeedItemDto> moment,
+  List<FeedItemDto> showcase = const <FeedItemDto>[],
 }) {
   return <Map<String, dynamic>>[
+    ...showcase.map((e) => e.toDiscoveryWireMap()),
     ...photo.map((e) => e.toDiscoveryWireMap()),
     ...video.map((e) => e.toDiscoveryWireMap()),
     ...article.map((e) => e.toDiscoveryWireMap()),
@@ -45,6 +47,7 @@ Map<String, dynamic>? lookupCanonicalDiscoveryWireRowByPostId(String postId) {
       video: ContentMockData.discoveryVideoData,
       article: ContentMockData.discoveryArticleData,
       moment: ContentMockData.discoveryMomentData,
+      showcase: ContentMockData.seededShowcaseFeedItems,
     ),
   );
   if ((row?['contentType']?.toString() ?? '') == 'article') {

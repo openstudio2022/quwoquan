@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -175,7 +174,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.legalUserAgreement,
         pageBuilder: (context, state) => CupertinoPage<void>(
           key: state.pageKey,
-          child: const LegalDocumentPage(
+          child: LegalDocumentPage(
             title: UITextConstants.userAgreement,
             url: AuthLegalConfig.userAgreementUrl,
           ),
@@ -185,7 +184,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.legalPrivacyPolicy,
         pageBuilder: (context, state) => CupertinoPage<void>(
           key: state.pageKey,
-          child: const LegalDocumentPage(
+          child: LegalDocumentPage(
             title: UITextConstants.privacyPolicy,
             url: AuthLegalConfig.privacyPolicyUrl,
           ),
@@ -780,9 +779,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.myIntersectionsPathTemplate,
         pageBuilder: (context, state) => appRoutePage<void>(
           state: state,
-          child: MyIntersectionInboxPage(
-            dimension: state.uri.queryParameters['dimension'] ?? '',
-          ),
+          child: MyIntersectionInboxPage.fromQuery(state.uri.queryParameters),
         ),
       ),
       GoRoute(

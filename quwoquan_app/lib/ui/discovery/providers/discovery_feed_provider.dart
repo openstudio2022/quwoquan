@@ -15,6 +15,7 @@ class DiscoveryFeedState {
     this.items = const [],
     this.seenItemIds = const [],
     this.nextCursor,
+    this.feedRequestId,
     this.isLoading = false,
     this.blockingError,
     this.staleDataError,
@@ -24,6 +25,9 @@ class DiscoveryFeedState {
   final List<PostBaseDto> items;
   final List<String> seenItemIds;
   final String? nextCursor;
+
+  /// 服务端权威下发的归因 id（frq_ 前缀）；分页回显、行为事件透传。
+  final String? feedRequestId;
   final bool isLoading;
   final Object? blockingError;
   final Object? staleDataError;
@@ -51,6 +55,7 @@ class DiscoveryFeedState {
     List<PostBaseDto>? items,
     List<String>? seenItemIds,
     Object? nextCursor = _unset,
+    Object? feedRequestId = _unset,
     bool? isLoading,
     Object? blockingError = _unset,
     Object? staleDataError = _unset,
@@ -62,6 +67,9 @@ class DiscoveryFeedState {
       nextCursor: identical(nextCursor, _unset)
           ? this.nextCursor
           : nextCursor as String?,
+      feedRequestId: identical(feedRequestId, _unset)
+          ? this.feedRequestId
+          : feedRequestId as String?,
       isLoading: isLoading ?? this.isLoading,
       blockingError: identical(blockingError, _unset)
           ? this.blockingError
@@ -133,9 +141,9 @@ class DiscoveryFeedMapNotifier
     final query = _resolveQuery(channelId);
     final feedSession = ref.read(feedSessionProvider.notifier);
     final sessionId = feedSession.sessionId;
-    final feedRequestId = feedSession.newFeedRequestId();
     state = {...state, channelId: const AsyncLoading()};
     try {
+      // 首刷不传 feedRequestId：由服务端权威生成并随 envelope 下发。
       final page = await repo.listDiscoveryFeedPage(
         category: query.category,
         identity: query.identity,
@@ -144,7 +152,12 @@ class DiscoveryFeedMapNotifier
         limit: 20,
         cursor: null,
         sessionId: sessionId,
-        feedRequestId: feedRequestId,
+        feedRequestId: null,
+      );
+      // 采纳服务端下发的归因 id，使后续曝光/点击/打开复用同一 feedRequestId。
+      feedSession.adoptServerFeedRequestId(
+        page.feedRequestId,
+        rankingVersion: page.rankingVersion,
       );
       ref
           .read(postInteractionStateProvider.notifier)
@@ -160,6 +173,7 @@ class DiscoveryFeedMapNotifier
             items: page.items,
             seenItemIds: seen,
             nextCursor: page.nextCursor,
+            feedRequestId: page.feedRequestId,
           ),
         ),
       };
@@ -211,7 +225,7 @@ class DiscoveryFeedMapNotifier
       final query = _resolveQuery(channelId);
       final feedSession = ref.read(feedSessionProvider.notifier);
       final sessionId = feedSession.sessionId;
-      final feedRequestId = feedSession.newFeedRequestId();
+      // 分页回显首刷服务端下发的 feedRequestId，保持同一 feed 会话归因连续。
       final page = await repo.listDiscoveryFeedPage(
         category: query.category,
         identity: query.identity,
@@ -220,7 +234,11 @@ class DiscoveryFeedMapNotifier
         limit: 20,
         cursor: value.nextCursor,
         sessionId: sessionId,
-        feedRequestId: feedRequestId,
+        feedRequestId: value.feedRequestId,
+      );
+      feedSession.adoptServerFeedRequestId(
+        page.feedRequestId,
+        rankingVersion: page.rankingVersion,
       );
       ref
           .read(postInteractionStateProvider.notifier)
@@ -241,6 +259,7 @@ class DiscoveryFeedMapNotifier
             items: merged,
             seenItemIds: mergedSeen,
             nextCursor: page.nextCursor,
+            feedRequestId: page.feedRequestId ?? value.feedRequestId,
             isLoading: false,
             appendError: null,
             staleDataError: null,

@@ -32,6 +32,9 @@ abstract class PostBaseDto {
 
   /// 作者主页背景图 URL；null 表示未配置，UI 显示默认渐变背景。
   String? get authorBackgroundUrl;
+  String get authorRoleLabel => '';
+  List<String> get authorIdentityTags => const <String>[];
+  bool get authorVerified => false;
   String get assistantUsePolicy;
   int get likeCount;
   int get commentCount;

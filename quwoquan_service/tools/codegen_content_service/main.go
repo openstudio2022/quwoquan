@@ -342,20 +342,18 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleUpdatePost(w, r)
 		{{- else if eq . "ReportBehaviors" }}
 		h.handleReportBehaviors(w, r)
-		{{- else if eq . "GetRecommendation" }}
-		h.handleGetRecommendation(w, r)
 		{{- else if eq . "GetMyIntersectionSummary" }}
 		h.handleGetMyIntersectionSummary(w, r)
 		{{- else if eq . "ListMyIntersections" }}
 		h.handleListMyIntersections(w, r)
 		{{- else if eq . "MarkIntersectionsVisited" }}
 		h.handleMarkIntersectionsVisited(w, r)
-		{{- else if eq . "GetFeedIntersections" }}
-		h.handleGetFeedIntersections(w, r)
-		{{- else if eq . "ReportIntersectionExposure" }}
-		h.handleReportIntersectionExposure(w, r)
 		{{- else if eq . "GetObjectIntersections" }}
 		h.handleGetObjectIntersections(w, r)
+		{{- else if eq . "GetAuthorImpact" }}
+		h.handleGetAuthorImpact(w, r)
+		{{- else if eq . "ListAuthorImpactEvidence" }}
+		h.handleListAuthorImpactEvidence(w, r)
 		{{- else }}
 		h.handleNotImplemented(w, r, operation)
 		{{- end }}

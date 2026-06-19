@@ -67,6 +67,7 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
         patterns = [str(x).strip() for x in (site.get("urlPatterns") or []) if str(x).strip()]
         domains = [str(x).strip() for x in (site.get("domains") or []) if str(x).strip()]
         fetchable = site.get("fetchable")
+        site_crawl_profile = site.get("siteCrawlProfile")
 
         if not site_id:
             issues.append(f"{prefix}: missing siteId")
@@ -107,6 +108,53 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
             issues.append(f"{prefix}: map_geo source should not be marked fetchable=true for正文抓取")
         if not domains and category in {"encyclopedia", "travelogue", "map_geo"}:
             issues.append(f"{prefix}: domains should not be empty for {category} source")
+        if site_crawl_profile is not None:
+            if not isinstance(site_crawl_profile, dict):
+                issues.append(f"{prefix}: siteCrawlProfile must be an object")
+            else:
+                crawl_allowed = site_crawl_profile.get("crawlAllowed")
+                allowed_paths = [str(x).strip() for x in (site_crawl_profile.get("allowedPaths") or []) if str(x).strip()]
+                content_lanes = [str(x).strip() for x in (site_crawl_profile.get("contentLanes") or []) if str(x).strip()]
+                rights_policy = str(site_crawl_profile.get("rightsPolicy") or license_policy or "").strip()
+                robots_policy = str(site_crawl_profile.get("robotsPolicy") or "").strip()
+                login_policy = str(site_crawl_profile.get("loginPolicy") or "").strip()
+                controlled_trial = site_crawl_profile.get("controlledTrial")
+                if crawl_allowed not in (True, False):
+                    issues.append(f"{prefix}: siteCrawlProfile.crawlAllowed must be boolean")
+                if crawl_allowed is True and fetchable is not True:
+                    issues.append(f"{prefix}: siteCrawlProfile.crawlAllowed=true requires fetchable=true")
+                if crawl_allowed is True and not allowed_paths:
+                    issues.append(f"{prefix}: siteCrawlProfile.allowedPaths must not be empty when crawlAllowed=true")
+                if crawl_allowed is True and not content_lanes:
+                    issues.append(f"{prefix}: siteCrawlProfile.contentLanes must not be empty when crawlAllowed=true")
+                if rights_policy and rights_policy not in license_policies:
+                    issues.append(f"{prefix}: siteCrawlProfile.rightsPolicy {rights_policy!r} not declared in licensePolicies")
+                if robots_policy in {"ignore", "bypass"}:
+                    issues.append(f"{prefix}: siteCrawlProfile.robotsPolicy cannot bypass robots/terms")
+                if login_policy and login_policy not in {"public_only", "manual_authorization_required"}:
+                    issues.append(f"{prefix}: siteCrawlProfile.loginPolicy must be public_only or manual_authorization_required")
+                if controlled_trial is not None:
+                    if not isinstance(controlled_trial, dict):
+                        issues.append(f"{prefix}: siteCrawlProfile.controlledTrial must be an object")
+                    else:
+                        if controlled_trial.get("allowed") not in (True, False):
+                            issues.append(f"{prefix}: siteCrawlProfile.controlledTrial.allowed must be boolean")
+                        if controlled_trial.get("allowed") is True:
+                            if controlled_trial.get("validationOnly") is not True:
+                                issues.append(f"{prefix}: controlledTrial.validationOnly must be true")
+                            if controlled_trial.get("rawFetchAllowed") is True:
+                                issues.append(f"{prefix}: controlledTrial.rawFetchAllowed cannot be true")
+                            if controlled_trial.get("publishableAssetsAllowed") is True:
+                                issues.append(f"{prefix}: controlledTrial.publishableAssetsAllowed cannot be true")
+                            lane_minimums = controlled_trial.get("minimumLaneCounts") or {}
+                            if not isinstance(lane_minimums, dict):
+                                issues.append(f"{prefix}: controlledTrial.minimumLaneCounts must be an object")
+                            else:
+                                for lane in ("article", "image", "video"):
+                                    if int(lane_minimums.get(lane) or 0) <= 0:
+                                        issues.append(f"{prefix}: controlledTrial.minimumLaneCounts.{lane} must be > 0")
+                                    if lane not in content_lanes:
+                                        issues.append(f"{prefix}: controlledTrial lane {lane!r} must be listed in contentLanes")
     return issues
 
 

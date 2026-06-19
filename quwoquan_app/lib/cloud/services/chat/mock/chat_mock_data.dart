@@ -13,10 +13,10 @@ class ChatMockData {
 
   /// Mock 用户头像池 — 保证所有页面（列表、详情、设置、主页）引用同一 URL
   static String avatarFor(String userId) =>
-      'https://i.pravatar.cc/150?u=$userId';
+      'media/avatar/s/mock/user/$userId/v1/avatar.png';
 
   static String groupAvatarFor(String conversationId, {int version = 1}) =>
-      'https://example.com/media/avatar/s/archived-avatar/conversation/$conversationId/v$version/mock.png';
+      'media/avatar/s/archived-avatar/conversation/$conversationId/v$version/mock.png';
 
   static String _relativeIso({
     required int daysAgo,
@@ -1096,7 +1096,7 @@ class ChatMockData {
       'id': 'circle_1',
       'displayName': '风光摄影圈',
       'avatarUrl':
-          'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
+          'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       'subtitle': '1.2k',
     },
     {
@@ -1104,7 +1104,7 @@ class ChatMockData {
       'id': 'circle_2',
       'displayName': '人像摄影圈',
       'avatarUrl':
-          'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400',
+          'media/image/s/mock/seed/p_1531746020798-e6953c6e8e04/v1/image.jpg',
       'subtitle': '890',
     },
   ];
@@ -1116,7 +1116,7 @@ class ChatMockData {
       'id': 'conv_group_photo',
       'displayName': '摄影交流群',
       'avatarUrl':
-          'https://images.unsplash.com/photo-1452457807411-4979b707c5be?w=400',
+          'media/image/s/mock/seed/p_1452457807411-4979b707c5be/v1/image.jpg',
       'subtitle': '128',
     },
   ];

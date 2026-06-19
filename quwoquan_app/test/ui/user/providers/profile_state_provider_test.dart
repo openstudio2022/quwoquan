@@ -88,6 +88,28 @@ class _TestRelationshipCapabilityRepository
   }
 }
 
+/// 统计 getCapability 调用次数：验证 homepage-bundle 提供首屏关系能力后不再串行补拉。
+class _CountingRelationshipCapabilityRepository
+    extends _TestRelationshipCapabilityRepository {
+  int getCapabilityCalls = 0;
+
+  @override
+  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+    getCapabilityCalls += 1;
+    return super.getCapability(targetUserId);
+  }
+}
+
+/// 首屏聚合失败仓库：getUserHomepageBundle 抛错，用于验证结构化错误态。
+class _FailingUserProfileRepository extends MockUserProfileRepository {
+  @override
+  Future<UserHomepageBundleViewData> getUserHomepageBundle(
+    String subAccountId,
+  ) async {
+    throw Exception('homepage-bundle 加载失败');
+  }
+}
+
 void main() {
   late Directory tempDir;
 
@@ -197,5 +219,55 @@ void main() {
     expect(profileState.isFollowing, isTrue);
     expect(profileState.displayCapability?.relationState, 'following');
     expect(profileState.capability?.relationState, 'not_following');
+  });
+
+  test('loadProfile 一次聚合 bundle：提供关系能力后不再串行 getCapability', () async {
+    final capRepo = _CountingRelationshipCapabilityRepository();
+    final container = ProviderContainer(
+      overrides: [
+        userProfileRepositoryProvider.overrideWithValue(
+          _TestUserProfileRepository(),
+        ),
+        relationshipCapabilityRepositoryProvider.overrideWithValue(capRepo),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(profileNotifierProvider('profile-1').notifier);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+
+    final s = container.read(profileNotifierProvider('profile-1'));
+    expect(s.isLoading, isFalse);
+    expect(s.hasLoadError, isFalse);
+    expect(s.profile, isNotNull);
+    // bundle 自带首屏关系能力，capability 非空。
+    expect(s.capability, isNotNull);
+    // 首屏不再串行补拉 getCapability（性能闭环：消除额外请求）。
+    expect(capRepo.getCapabilityCalls, 0);
+  });
+
+  test('loadProfile 失败进入结构化错误态：errorMessage 非空且不静默', () async {
+    final container = ProviderContainer(
+      overrides: [
+        userProfileRepositoryProvider.overrideWithValue(
+          _FailingUserProfileRepository(),
+        ),
+        relationshipCapabilityRepositoryProvider.overrideWithValue(
+          _TestRelationshipCapabilityRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(profileNotifierProvider('profile-err').notifier);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+
+    final s = container.read(profileNotifierProvider('profile-err'));
+    expect(s.isLoading, isFalse);
+    expect(s.hasLoadError, isTrue);
+    expect(s.errorMessage, isNotNull);
+    expect(s.errorMessage, isNotEmpty);
   });
 }

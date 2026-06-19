@@ -1,0 +1,43 @@
+version: 1
+read_model: UserHomepageTabCountsWire
+
+description: |
+  用户主页 / 我的主页 Tab 计数 wire（homepage-bundle 子对象）。承载主页 Tab 导航角标计数：
+  作品 / 获赞 / 圈子 / 收藏。仅身份域可直接计数的真相，交集与影响力的下钻计数不在此聚合
+  （仍由 content 域接口提供，避免 user 域成为内容事实的第二真相源）。
+
+source_entities:
+  - UserProfile
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: UserHomepageTabCountsWireDto
+  base_class: ""
+  output_path: cloud/runtime/generated/user/user_homepage_tab_counts_wire_dto.g.dart
+  fields:
+    - name: worksCount
+      dart_type: int
+      nullable: false
+      source: worksCount
+      aliases: [worksCount, postCount]
+      default: "0"
+    - name: likesCount
+      dart_type: int
+      nullable: false
+      source: likesCount
+      aliases: [likesCount, likeCount]
+      default: "0"
+    - name: circlesCount
+      dart_type: int
+      nullable: false
+      source: circlesCount
+      aliases: [circlesCount, circleCount]
+      default: "0"
+    - name: collectionsCount
+      dart_type: int
+      nullable: false
+      source: collectionsCount
+      aliases: [collectionsCount]
+      default: "0"

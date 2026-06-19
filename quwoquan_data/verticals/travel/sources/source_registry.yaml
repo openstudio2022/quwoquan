@@ -64,7 +64,7 @@ sites:
   - siteId: scenic_official
     platform: 景区官网
     category: official
-    domains: [ems517.com, sxd.cn, jiuzhai.com, dujiangyan.com.cn, bipenggou.net, snzh.cn, bifengxia.com, djy517.com]
+    domains: [ems517.com, sxd.cn, jiuzhai.com, dujiangyan.com.cn, bipenggou.net, snzh.cn, bifengxia.com, djy517.com, njfzm.net, hhhkpb.com, hukouwaterfall.com, shuanglongdong.com, zjshenxianju.com, tongli.net, xitang.com.cn, gthyjng.cn, wyhl.cc, chinaguyao.com, ixsw.cn, dzskyjy.cn, hnzjj.com]
     urlPatterns:
       - http://www.ems517.com/new/*
       - https://www.ems517.com/new/*
@@ -79,6 +79,21 @@ sites:
       - http://www.bifengxia.com/*
       - https://www.djy517.com/*
       - http://www.djy517.com/*
+      - http://www.njfzm.net/*
+      - https://www.njfzm.net/*
+      - http://www.hhhkpb.com/*
+      - http://www.hukouwaterfall.com/*
+      - http://www.shuanglongdong.com/*
+      - https://www.zjshenxianju.com/*
+      - http://www.tongli.net/*
+      - http://www.xitang.com.cn/*
+      - http://www.gthyjng.cn/*
+      - https://www.wyhl.cc/*
+      - http://www.chinaguyao.com/*
+      - https://www.ixsw.cn/*
+      - https://www.dzskyjy.cn/*
+      - https://www.hnzjj.com/*
+      - http://www.hnzjj.com/*
     fetchable: true
     extractor: static_official_html
     licensePolicy: official_terms_required
@@ -109,6 +124,7 @@ sites:
       - scol.com.cn
       - newssc.org
       - whc.unesco.org
+      - redtourism.com.cn
     urlPatterns:
       - http://*.people.com.cn/*
       - https://*.people.com.cn/*
@@ -127,6 +143,8 @@ sites:
       - http://*.newssc.org/*
       - https://*.newssc.org/*
       - https://whc.unesco.org/*
+      - http://*.redtourism.com.cn/*
+      - https://*.redtourism.com.cn/*
     fetchable: true
     extractor: static_official_html
     licensePolicy: factual_citation_only
@@ -154,7 +172,32 @@ sites:
     extractor: generic_html
     licensePolicy: factual_citation_only
     qualityTier: C
-    notes: 当前常见反爬探针页，不允许当稳定可抓正文源；仅保留为 coverage 候选，抓不到即 Reject。
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [article, image, video]
+      allowedPaths:
+        - https://www.mafengwo.cn/i/*
+      fetchMode: platform_reference
+      extractor: generic_html
+      rightsPolicy: factual_citation_only
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://bigfile.mafengwo.net/s18/M00/91/9E/CoUBYGCbqRKABoiVAALoDVTSgVE139.pdf
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          article: 500
+          image: 100
+          video: 50
+        notes: 仅用于站点维度 DAG、门禁、并发与准出稳定性验证；不声明真实批量抓取授权，不发布平台素材。
+      notes: 当前常见反爬探针页，不具备站点级稳定正文抽取条件；真实 batch crawl 禁止，controlled trial 仅验证 DAG/门禁/准出稳定性。
+    notes: 当前常见反爬探针页，不允许当稳定可抓正文源；真实抓取抓不到即 Reject，受控试跑不发布平台素材。
   - siteId: ctrip_travelogue
     platform: 携程攻略
     category: travelogue
@@ -165,7 +208,32 @@ sites:
     extractor: generic_html
     licensePolicy: factual_citation_only
     qualityTier: C
-    notes: 当前未实现专用抽取器，未验证前不得当稳定正文源。
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [article, image, video]
+      allowedPaths:
+        - https://you.ctrip.com/*
+      fetchMode: platform_reference
+      extractor: generic_html
+      rightsPolicy: factual_citation_only
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://pages.ctrip.com/webhome/purehtml/cn/memberCenter/regTerm.html
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          article: 500
+          image: 100
+          video: 50
+        notes: 仅用于站点维度 DAG、门禁、并发与准出稳定性验证；不声明真实批量抓取授权，不发布平台素材。
+      notes: 未实现专用抽取器与站点级稳定正文准入前，只可作为 discovery/reference；controlled trial 仅验证 DAG/门禁/准出稳定性。
+    notes: 当前未实现专用抽取器，站点级不作为稳定正文源；已逐条验证的 knownArticleSources 可显式 fetchable=true 进入 source_screen，受控试跑不发布平台素材。
   - siteId: qunar_guide
     platform: 去哪儿攻略
     category: travelogue
@@ -177,6 +245,27 @@ sites:
     extractor: qunar_html
     licensePolicy: factual_citation_only
     qualityTier: B
+    siteCrawlProfile:
+      crawlAllowed: true
+      contentLanes: [article, image]
+      allowedPaths:
+        - https://touch.travel.qunar.com/*
+        - https://travel.qunar.com/*
+      fetchMode: html
+      extractor: qunar_html
+      rightsPolicy: factual_citation_only
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://touch.travel.qunar.com/
+      rateLimit:
+        mode: conservative
+        maxRequestsPerSecond: 0.2
+        backoffOnStatus: [403, 429]
+      maxDepth: 3
+      maxPagesPerDay: 5000
+      timeWindowDays: 730
+      notes: v1 网站维度受控试点站点；站点线仅产出候选与证据，正文仍走 content_plan/produce/review。
     notes: 去哪儿攻略静态页可稳定抓取，用于路线/门票/避坑类社区攻略证据。
 knownOfficialSites:
   - entity: 三星堆博物馆
@@ -203,7 +292,92 @@ knownOfficialSites:
     url: https://www.djy517.com/
     platform: 都江堰旅游官网
     category: official
+  - entity: 南京市夫子庙－秦淮风光带
+    url: http://www.njfzm.net/brc/40.htm
+    platform: 景区官网
+    category: official
+  - entity: 黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)
+    url: http://www.hhhkpb.com/
+    platform: 景区官网
+    category: official
+  - entity: 同里古镇景区
+    url: http://www.tongli.net/
+    platform: 景区官网
+    category: official
+  - entity: 西塘古镇旅游景区
+    url: http://www.xitang.com.cn/
+    platform: 景区官网
+    category: official
+  - entity: 古田旅游区
+    url: http://www.gthyjng.cn/
+    platform: 景区官网
+    category: official
+  - entity: 景德镇市昌江区古窑民俗博览区
+    url: http://www.chinaguyao.com/index.html
+    platform: 景区官网
+    category: official
+  - entity: 篁岭景区
+    url: https://www.wyhl.cc/
+    platform: 景区官网
+    category: official
+  - entity: 响沙湾旅游景区
+    url: https://www.ixsw.cn/
+    platform: 景区官网
+    category: official
+  - entity: 大足石刻景区
+    url: https://www.dzskyjy.cn/
+    platform: 景区官网
+    category: official
+  - entity: 武陵源－天门山旅游区
+    url: http://www.hnzjj.com/index.php/Product/list/9.html
+    platform: 景区官网
+    category: official
 knownHomepageSupportSites:
+  - entity: 南京市夫子庙－秦淮风光带
+    sourceId: home_wikipedia_fuzimiao
+    url: https://zh.wikipedia.org/wiki/%E5%A4%AB%E5%AD%90%E5%BA%99
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 三峡大坝－屈原故里文化旅游区
+    sourceId: home_wikipedia_three_gorges_dam
+    url: https://zh.wikipedia.org/wiki/%E4%B8%89%E5%B3%A1%E5%A4%A7%E5%9D%9D
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 响沙湾旅游景区
+    sourceId: home_official_xiangshawan_about
+    url: https://www.ixsw.cn/xsw/about/about-142.html
+    platform: 景区官网
+    category: official
+  - entity: 大足石刻景区
+    sourceId: home_wikipedia_dazu_rock_carvings
+    url: https://zh.wikipedia.org/wiki/%E5%A4%A7%E8%B6%B3%E7%9F%B3%E5%88%BB
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 大足石刻景区
+    sourceId: home_xinhua_dazu_rock_carvings
+    url: https://www.xinhuanet.com/shuhua/20231104/f5f69ebe1f054091bfe0c254888c7c57/c.html?page=6
+    platform: 权威媒体
+    category: authoritative_reference
+  - entity: 小三峡－小小三峡旅游区
+    sourceId: home_chongqing_lesser_three_gorges
+    url: https://www.cq.gov.cn/zjcq/cycq/zmjd/zqaaaaajjq/202606/t20260604_15729063.html
+    platform: 文旅局
+    category: official
+  - entity: 小三峡－小小三峡旅游区
+    sourceId: home_xinhua_lesser_three_gorges
+    url: https://www.xinhuanet.com/photo/2021-03/30/c_1127272393.htm
+    platform: 权威媒体
+    category: authoritative_reference
+  - entity: 武陵源－天门山旅游区
+    sourceId: home_wikipedia_wulingyuan
+    url: https://zh.wikipedia.org/wiki/%E6%AD%A6%E9%99%B5%E6%BA%90
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 武陵源－天门山旅游区
+    sourceId: home_wikipedia_tianmen_mountain
+    url: https://zh.wikipedia.org/wiki/%E5%A4%A9%E9%97%A8%E5%B1%B1_(%E5%BC%A0%E5%AE%B6%E7%95%8C)
+    platform: 维基百科
+    category: encyclopedia
   - entity: 乐山大佛
     sourceId: home_official_leshan_committee
     url: https://www.leshan.gov.cn/lsswszf/bmdt/92337825/3e865b0e7eee473a94ee6972e.html
@@ -219,3 +393,272 @@ knownHomepageSupportSites:
     url: http://www.bifengxia.com/info?crid=77&lan=cn&ckey=jqgk_dxmjd
     platform: 景区官网
     category: official
+  - entity: 黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)
+    sourceId: home_wikipedia_hukou_waterfall
+    url: https://zh.wikipedia.org/wiki/%E5%A3%B6%E5%8F%A3%E7%80%91%E5%B8%83
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)
+    sourceId: home_official_hukou_shanxi
+    url: http://www.hukouwaterfall.com/
+    platform: 景区官网
+    category: official
+  - entity: 北京奥林匹克公园
+    sourceId: home_visitbeijing_olympic_park
+    url: https://s.visitbeijing.com.cn/index.php/attraction/118019
+    platform: 北京旅游网
+    category: official_site
+  - entity: 南山景区
+    sourceId: home_official_nanshan_intro
+    url: https://www.nanshan.com/nanshan/jqjj.html
+    platform: 景区官网
+    category: official
+  - entity: 双龙风景旅游区
+    sourceId: home_official_shuanglongdong
+    url: http://www.shuanglongdong.com/
+    platform: 景区官网
+    category: official
+  - entity: 惠山古镇景区
+    sourceId: home_wikipedia_huishan_town_ancestral_halls
+    url: https://zh.wikipedia.org/wiki/%E6%83%A0%E5%B1%B1%E5%8F%A4%E9%95%87
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 虎头旅游景区
+    sourceId: home_wikipedia_hutou_fortress
+    url: https://zh.wikipedia.org/wiki/%E8%99%8E%E5%A4%B4%E8%A6%81%E5%A1%9E
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 神仙居景区
+    sourceId: home_official_shenxianju_spots
+    url: https://www.zjshenxianju.com/spot_list.jspx?id=99
+    platform: 景区官网
+    category: official
+  - entity: 天下第一泉景区
+    sourceId: home_official_tianxia_diyiquan
+    url: http://www.txdyq.cn/
+    platform: 景区官网
+    category: official
+  - entity: 天下第一泉景区
+    sourceId: home_wikipedia_baotu_spring
+    url: https://zh.wikipedia.org/wiki/%E8%B6%B5%E7%AA%81%E6%B3%89
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 天下第一泉景区
+    sourceId: home_wikipedia_daming_lake
+    url: https://zh.wikipedia.org/wiki/%E5%A4%A7%E6%98%8E%E6%B9%96
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 天津古文化街旅游区（津门故里）
+    sourceId: home_wikipedia_tianjin_ancient_culture_street
+    url: https://zh.wikipedia.org/wiki/%E5%8F%A4%E6%96%87%E5%8C%96%E8%A1%97
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 春秋淹城旅游区
+    sourceId: home_official_yancheng
+    url: https://www.yclyq.com/
+    platform: 景区官网
+    category: official
+  - entity: 沙湖旅游景区
+    sourceId: home_official_shahu
+    url: https://www.nxshahu.com/scene
+    platform: 景区官网
+    category: official
+  - entity: 白云山景区
+    sourceId: home_wikipedia_baiyun_guangzhou
+    url: https://zh.wikipedia.org/wiki/%E7%99%BD%E4%BA%91%E5%B1%B1_(%E5%B9%BF%E5%B7%9E%E5%B8%82)
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 白云山景区
+    sourceId: home_official_baiyunshan
+    url: https://www.baiyunshan.com.cn/
+    platform: 景区官网
+    category: official
+  - entity: 花果山景区
+    sourceId: home_wikipedia_huaguoshan_jiangsu
+    url: https://zh.wikipedia.org/wiki/%E8%8A%B1%E6%9E%9C%E5%B1%B1_(%E6%B1%9F%E8%8B%8F)
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 花果山景区
+    sourceId: home_official_huaguoshan
+    url: https://www.lyghgs.cn/
+    platform: 景区官网
+    category: official
+  - entity: 西溪湿地旅游区
+    sourceId: home_wikipedia_xixi_wetland
+    url: https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%BA%AA%E6%BF%95%E5%9C%B0
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 同里古镇景区
+    sourceId: home_wikipedia_tongli_town
+    url: https://zh.wikipedia.org/wiki/%E5%90%8C%E9%87%8C%E9%95%87
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 同里古镇景区
+    sourceId: home_wikipedia_tuisi_garden
+    url: https://zh.wikipedia.org/wiki/%E9%80%80%E6%80%9D%E5%9B%AD
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 南浔古镇景区
+    sourceId: home_wikipedia_nanxun_town
+    url: https://zh.wikipedia.org/wiki/%E5%8D%97%E6%B5%94%E9%95%87
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 南浔古镇景区
+    sourceId: home_xinhua_nanxun
+    url: https://www.news.cn/culture/20240819/5c6ede28ef074a9abb81a335883d9024/c.html
+    platform: 权威媒体
+    category: authoritative_reference
+  - entity: 西塘古镇旅游景区
+    sourceId: home_wikipedia_xitang_town
+    url: https://zh.wikipedia.org/wiki/%E8%A5%BF%E5%A1%98%E9%95%87_(%E5%98%89%E5%96%84%E5%8E%BF)
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 西塘古镇旅游景区
+    sourceId: home_xinhua_xitang
+    url: https://www.news.cn/culture/20240429/d516271275b64555838f1bed5b73c121/c.html
+    platform: 权威媒体
+    category: authoritative_reference
+  - entity: 缙云仙都景区
+    sourceId: home_wikipedia_xiandu
+    url: https://zh.wikipedia.org/wiki/%E4%BB%99%E9%83%BD
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 缙云仙都景区
+    sourceId: home_xinhua_xiandu
+    url: https://www.news.cn/travel/20220908/51dd6e7d400c46b3bb4cfaf25bcba610/c.html
+    platform: 权威媒体
+    category: authoritative_reference
+  - entity: 三河古镇景区
+    sourceId: home_wikipedia_sanhe_town
+    url: https://zh.wikipedia.org/wiki/%E4%B8%89%E6%B2%B3%E9%95%87_(%E8%82%A5%E8%A5%BF%E5%8E%BF)
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 三河古镇景区
+    sourceId: home_xinhua_sanhe
+    url: https://www.news.cn/politics/20260109/4ec88382bb3748c89eed631000baa45a/c.html
+    platform: 权威媒体
+    category: authoritative_reference
+  - entity: 古田旅游区
+    sourceId: home_wikipedia_gutian_memorial
+    url: https://zh.wikipedia.org/wiki/%E5%8F%A4%E7%94%B0%E4%BC%9A%E8%AE%AE%E7%BA%AA%E5%BF%B5%E9%A6%86
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 古田旅游区
+    sourceId: home_redtourism_gutian
+    url: https://www.redtourism.com.cn/content/2020-01/18/content_70422.html
+    platform: 权威媒体
+    category: authoritative_reference
+  - entity: 婺源县江湾景区
+    sourceId: home_wikipedia_jiangwan_town
+    url: https://zh.wikipedia.org/wiki/%E6%B1%9F%E6%B9%BE%E9%95%87_%28%E5%A9%BA%E6%BA%90%E5%8E%BF%29
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 婺源县江湾景区
+    sourceId: home_xinhua_jiangwan
+    url: https://www.xinhuanet.com/travel/20210715/cf8e8437833f4539a03b019e9c6fcd03/c.html
+    platform: 权威媒体
+    category: authoritative_reference
+  - entity: 景德镇市昌江区古窑民俗博览区
+    sourceId: home_wikipedia_guyao
+    url: https://zh.wikipedia.org/wiki/%E6%99%AF%E5%BE%B7%E9%95%87%E5%8F%A4%E7%AA%91%E6%B0%91%E4%BF%97%E5%8D%9A%E8%A7%88%E5%8C%BA
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 篁岭景区
+    sourceId: home_xinhua_huangling_village
+    url: https://www.news.cn/20241208/69ad6fdf9b10488b8d47e25efa16ad61/c.html
+    platform: 权威媒体
+    category: authoritative_reference
+knownEntityAliases:
+  - entity: 世界雕塑公园景区
+    aliases:
+      - 长春世界雕塑公园
+      - 长春世界雕塑园
+      - 世界雕塑园
+  - entity: 沈阳市沈阳植物园
+    aliases:
+      - 沈阳世博园
+      - 沈阳世界园艺博览园
+  - entity: 天下第一泉景区
+    aliases:
+      - 济南天下第一泉
+      - 趵突泉
+      - 大明湖
+      - 五龙潭
+  - entity: 春秋淹城旅游区
+    aliases:
+      - 常州淹城
+      - 淹城春秋乐园
+      - 淹城遗址
+      - 淹城春秋
+  - entity: 洪泽湖湿地景区
+    aliases:
+      - 泗洪洪泽湖湿地
+      - 洪泽湖湿地公园
+      - 泗洪洪泽湖湿地公园
+      - 洪泽湖
+      - 泗洪湿地
+  - entity: 湄洲岛妈祖文化旅游区
+    aliases:
+      - 湄洲岛
+      - 莆田湄洲岛
+      - 湄洲妈祖祖庙
+      - 妈祖祖庙
+knownArticleSources:
+  - entity: 南京市夫子庙－秦淮风光带
+    sourceId: article_registry_fuzimiao_qinhuai_route
+    url: http://www.njfzm.net/brc/53.htm
+    platform: 景区官网
+    category: official_article
+    title: 线路推介 - 南京夫子庙秦淮风光带官方网站
+    fetchable: true
+  - entity: 沈阳市沈阳植物园
+    sourceId: article_ctrip_shenyang_botanical_1
+    url: https://you.ctrip.com/travels/shenyang155/4062166.html
+    platform: 携程攻略
+    category: travelogue
+    title: 盛夏游沈阳世博园
+    fetchable: true
+  - entity: 沈阳市沈阳植物园
+    sourceId: article_ctrip_shenyang_botanical_2
+    url: https://you.ctrip.com/travels/shenyang155/4024813.html
+    platform: 携程攻略
+    category: travelogue
+    title: 五月踏青沈阳植物园
+    fetchable: true
+  - entity: 沈阳市沈阳植物园
+    sourceId: article_ctrip_shenyang_botanical_3
+    url: https://you.ctrip.com/travels/shenyang155/3781732.html
+    platform: 携程攻略
+    category: travelogue
+    title: 沈阳世博园游记
+    fetchable: true
+  - entity: 井冈山市井冈山风景旅游区
+    sourceId: article_ctrip_jinggangshan_1
+    url: https://you.ctrip.com/travels/jinggangshan171/4136828.html
+    platform: 携程攻略
+    category: travelogue
+    title: 井冈山自驾游记
+  - entity: 井冈山市井冈山风景旅游区
+    sourceId: article_ctrip_jinggangshan_2
+    url: https://you.ctrip.com/travels/jinggangshan171/4083367.html
+    platform: 携程攻略
+    category: travelogue
+    title: 井冈山红色之旅
+  - entity: 井冈山市井冈山风景旅游区
+    sourceId: article_ctrip_jinggangshan_3
+    url: https://you.ctrip.com/travels/jinggangshan171/3952519.html
+    platform: 携程攻略
+    category: travelogue
+    title: 井冈山旅行笔记
+  - entity: 南京市夫子庙－秦淮风光带
+    sourceId: article_ctrip_fuzimiao_qinhuai_1
+    url: https://you.ctrip.com/travels/nanjing9/4012183.html
+    platform: 携程攻略
+    category: travelogue
+    title: 夫子庙秦淮风光带夜游
+  - entity: 南京市夫子庙－秦淮风光带
+    sourceId: article_ctrip_fuzimiao_qinhuai_2
+    url: https://you.ctrip.com/travels/nanjing9/4113951.html
+    platform: 携程攻略
+    category: travelogue
+    title: 南京夫子庙秦淮河游记

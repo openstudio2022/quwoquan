@@ -7,6 +7,2187 @@
     "gamma": "remote"
   },
   "seedSets": {
+    "home_showcase_core": {
+      "description": "首页推荐 alpha showcase 全样式样本：文章四态 / 图片横竖单多图 / 个人记录九宫格 / 视频横竖可播 + 交集理由，四环境同源 archived 媒体。",
+      "posts": [
+        {
+          "postId": "alpha_moment_grid_1",
+          "id": "alpha_moment_grid_1",
+          "contentType": "micro",
+          "type": "micro",
+          "contentIdentity": "moment",
+          "identity": "moment",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_moment_author",
+          "displayName": "晨间记录者",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "生活记录",
+          "authorIdentityTags": [
+            "晨光",
+            "城市"
+          ],
+          "authorVerified": true,
+          "body": "早晨只拍了一张窗边光线，记录留白和空气感。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
+          ],
+          "likeCount": 261,
+          "commentCount": 19,
+          "shareCount": 7,
+          "createdAt": "2026-06-18T08:00:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "relationship",
+              "tagRefs": [
+                "alpha/showcase/relationship"
+              ],
+              "relationKind": "person",
+              "objectKind": "person",
+              "relationObjectId": "fixture_user_lin",
+              "strength": 0.86,
+              "primaryText": "你与林清越等 3 位都来这里互动过",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_moment_grid_1",
+              "intersectionClass": "fact",
+              "displayName": "林清越",
+              "connectionSummary": "3 位都来这里互动过",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "林清越",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "3",
+                  "role": "count",
+                  "target": {
+                    "objectId": "relationship",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都来这里互动过",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_moment_grid_2",
+          "id": "alpha_moment_grid_2",
+          "contentType": "micro",
+          "type": "micro",
+          "contentIdentity": "moment",
+          "identity": "moment",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_moment_author",
+          "displayName": "晨间记录者",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "生活记录",
+          "authorIdentityTags": [
+            "晨光",
+            "城市"
+          ],
+          "authorVerified": true,
+          "body": "两张图刚好能讲清楚一段路：出门时的影子，和回来时的风。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png"
+          ],
+          "likeCount": 262,
+          "commentCount": 20,
+          "shareCount": 8,
+          "createdAt": "2026-06-18T07:50:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "relationship",
+              "tagRefs": [
+                "alpha/showcase/relationship"
+              ],
+              "relationKind": "person",
+              "objectKind": "person",
+              "relationObjectId": "fixture_user_lin",
+              "strength": 0.86,
+              "primaryText": "你与林清越等 4 位都来这里互动过",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_moment_grid_2",
+              "intersectionClass": "fact",
+              "displayName": "林清越",
+              "connectionSummary": "4 位都来这里互动过",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "林清越",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "4",
+                  "role": "count",
+                  "target": {
+                    "objectId": "relationship",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都来这里互动过",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_moment_grid_3",
+          "id": "alpha_moment_grid_3",
+          "contentType": "micro",
+          "type": "micro",
+          "contentIdentity": "moment",
+          "identity": "moment",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_moment_author",
+          "displayName": "晨间记录者",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "生活记录",
+          "authorIdentityTags": [
+            "晨光",
+            "城市"
+          ],
+          "authorVerified": true,
+          "body": "三张图形成一组完整记录，验证标准三宫格的边界。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg"
+          ],
+          "likeCount": 263,
+          "commentCount": 21,
+          "shareCount": 9,
+          "createdAt": "2026-06-18T07:45:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "relationship",
+              "tagRefs": [
+                "alpha/showcase/relationship"
+              ],
+              "relationKind": "person",
+              "objectKind": "person",
+              "relationObjectId": "fixture_user_lin",
+              "strength": 0.86,
+              "primaryText": "你与林清越等 5 位都来这里互动过",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_moment_grid_3",
+              "intersectionClass": "fact",
+              "displayName": "林清越",
+              "connectionSummary": "5 位都来这里互动过",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "林清越",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "5",
+                  "role": "count",
+                  "target": {
+                    "objectId": "relationship",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都来这里互动过",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_moment_grid_4",
+          "id": "alpha_moment_grid_4",
+          "contentType": "micro",
+          "type": "micro",
+          "contentIdentity": "moment",
+          "identity": "moment",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_moment_author",
+          "displayName": "晨间记录者",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "生活记录",
+          "authorIdentityTags": [
+            "晨光",
+            "城市"
+          ],
+          "authorVerified": true,
+          "body": "四张记录进入 2x2，避免只露三格时误以为还有内容被裁掉。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png"
+          ],
+          "likeCount": 264,
+          "commentCount": 22,
+          "shareCount": 10,
+          "createdAt": "2026-06-18T07:40:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "relationship",
+              "tagRefs": [
+                "alpha/showcase/relationship"
+              ],
+              "relationKind": "person",
+              "objectKind": "person",
+              "relationObjectId": "fixture_user_lin",
+              "strength": 0.86,
+              "primaryText": "你与林清越等 6 位都来这里互动过",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_moment_grid_4",
+              "intersectionClass": "fact",
+              "displayName": "林清越",
+              "connectionSummary": "6 位都来这里互动过",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "林清越",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "6",
+                  "role": "count",
+                  "target": {
+                    "objectId": "relationship",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都来这里互动过",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_moment_grid_5",
+          "id": "alpha_moment_grid_5",
+          "contentType": "micro",
+          "type": "micro",
+          "contentIdentity": "moment",
+          "identity": "moment",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_moment_author",
+          "displayName": "晨间记录者",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "生活记录",
+          "authorIdentityTags": [
+            "晨光",
+            "城市"
+          ],
+          "authorVerified": true,
+          "body": "五张记录进入三列两行，最后一格留白由内容自然决定。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png"
+          ],
+          "likeCount": 265,
+          "commentCount": 23,
+          "shareCount": 11,
+          "createdAt": "2026-06-18T07:38:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "relationship",
+              "tagRefs": [
+                "alpha/showcase/relationship"
+              ],
+              "relationKind": "person",
+              "objectKind": "person",
+              "relationObjectId": "fixture_user_lin",
+              "strength": 0.86,
+              "primaryText": "你与林清越等 7 位都来这里互动过",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_moment_grid_5",
+              "intersectionClass": "fact",
+              "displayName": "林清越",
+              "connectionSummary": "7 位都来这里互动过",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "林清越",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "7",
+                  "role": "count",
+                  "target": {
+                    "objectId": "relationship",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都来这里互动过",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_moment_grid_6",
+          "id": "alpha_moment_grid_6",
+          "contentType": "micro",
+          "type": "micro",
+          "contentIdentity": "moment",
+          "identity": "moment",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_moment_author",
+          "displayName": "晨间记录者",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "生活记录",
+          "authorIdentityTags": [
+            "晨光",
+            "城市"
+          ],
+          "authorVerified": true,
+          "body": "六张记录进入完整六宫格，用于验收 5/6 图记录的稳定节奏。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+          ],
+          "likeCount": 266,
+          "commentCount": 24,
+          "shareCount": 12,
+          "createdAt": "2026-06-18T07:35:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "relationship",
+              "tagRefs": [
+                "alpha/showcase/relationship"
+              ],
+              "relationKind": "person",
+              "objectKind": "person",
+              "relationObjectId": "fixture_user_lin",
+              "strength": 0.86,
+              "primaryText": "你与林清越等 8 位都来这里互动过",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_moment_grid_6",
+              "intersectionClass": "fact",
+              "displayName": "林清越",
+              "connectionSummary": "8 位都来这里互动过",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "林清越",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "8",
+                  "role": "count",
+                  "target": {
+                    "objectId": "relationship",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都来这里互动过",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_moment_grid_7",
+          "id": "alpha_moment_grid_7",
+          "contentType": "micro",
+          "type": "micro",
+          "contentIdentity": "moment",
+          "identity": "moment",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_moment_author",
+          "displayName": "晨间记录者",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "生活记录",
+          "authorIdentityTags": [
+            "晨光",
+            "城市"
+          ],
+          "authorVerified": true,
+          "body": "七张记录显示六格，末格提示还有一张可继续沉浸浏览。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg"
+          ],
+          "likeCount": 267,
+          "commentCount": 25,
+          "shareCount": 13,
+          "createdAt": "2026-06-18T07:32:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "relationship",
+              "tagRefs": [
+                "alpha/showcase/relationship"
+              ],
+              "relationKind": "person",
+              "objectKind": "person",
+              "relationObjectId": "fixture_user_lin",
+              "strength": 0.86,
+              "primaryText": "你与林清越等 9 位都来这里互动过",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_moment_grid_7",
+              "intersectionClass": "fact",
+              "displayName": "林清越",
+              "connectionSummary": "9 位都来这里互动过",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "林清越",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "9",
+                  "role": "count",
+                  "target": {
+                    "objectId": "relationship",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都来这里互动过",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_moment_grid_8",
+          "id": "alpha_moment_grid_8",
+          "contentType": "micro",
+          "type": "micro",
+          "contentIdentity": "moment",
+          "identity": "moment",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_moment_author",
+          "displayName": "晨间记录者",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "生活记录",
+          "authorIdentityTags": [
+            "晨光",
+            "城市"
+          ],
+          "authorVerified": true,
+          "body": "八张记录进入六宫格，保留更多日常碎片的浏览节奏。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png"
+          ],
+          "likeCount": 268,
+          "commentCount": 26,
+          "shareCount": 14,
+          "createdAt": "2026-06-18T07:30:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "relationship",
+              "tagRefs": [
+                "alpha/showcase/relationship"
+              ],
+              "relationKind": "person",
+              "objectKind": "person",
+              "relationObjectId": "fixture_user_lin",
+              "strength": 0.86,
+              "primaryText": "你与林清越等 10 位都来这里互动过",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_moment_grid_8",
+              "intersectionClass": "fact",
+              "displayName": "林清越",
+              "connectionSummary": "10 位都来这里互动过",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "林清越",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "10",
+                  "role": "count",
+                  "target": {
+                    "objectId": "relationship",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都来这里互动过",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_moment_grid_10",
+          "id": "alpha_moment_grid_10",
+          "contentType": "micro",
+          "type": "micro",
+          "contentIdentity": "moment",
+          "identity": "moment",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_moment_author",
+          "displayName": "晨间记录者",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "生活记录",
+          "authorIdentityTags": [
+            "晨光",
+            "城市"
+          ],
+          "authorVerified": true,
+          "body": "十张以上进入九宫格，末格聚合剩余内容，点击仍可进沉浸浏览。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png"
+          ],
+          "likeCount": 270,
+          "commentCount": 28,
+          "shareCount": 16,
+          "createdAt": "2026-06-18T07:20:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "relationship",
+              "tagRefs": [
+                "alpha/showcase/relationship"
+              ],
+              "relationKind": "person",
+              "objectKind": "person",
+              "relationObjectId": "fixture_user_lin",
+              "strength": 0.86,
+              "primaryText": "你与林清越等 12 位都来这里互动过",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_moment_grid_10",
+              "intersectionClass": "fact",
+              "displayName": "林清越",
+              "connectionSummary": "12 位都来这里互动过",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "林清越",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "12",
+                  "role": "count",
+                  "target": {
+                    "objectId": "relationship",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都来这里互动过",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_photo_landscape_single",
+          "id": "alpha_photo_landscape_single",
+          "contentType": "image",
+          "type": "image",
+          "contentIdentity": "work",
+          "identity": "work",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_photo_author",
+          "displayName": "横竖影像馆",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "摄影作品",
+          "authorIdentityTags": [
+            "胶片",
+            "旅拍"
+          ],
+          "authorVerified": true,
+          "body": "单张横图满宽展示，圆角收敛后更像内容预览而不是大卡片。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
+          ],
+          "width": 1920,
+          "height": 1080,
+          "likeCount": 980,
+          "commentCount": 64,
+          "shareCount": 31,
+          "createdAt": "2026-06-18T07:15:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "photo_work",
+              "tagRefs": [
+                "alpha/showcase/photo_work"
+              ],
+              "relationKind": "place",
+              "objectKind": "place",
+              "relationObjectId": "homepage_sight_west_lake",
+              "strength": 0.86,
+              "primaryText": "你与山川手账等 7 位都关注同一组取景地",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_photo_landscape_single",
+              "intersectionClass": "fact",
+              "displayName": "山川手账",
+              "connectionSummary": "7 位都关注同一组取景地",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "山川手账",
+                  "role": "object",
+                  "target": {
+                    "objectId": "homepage_sight_west_lake",
+                    "objectKind": "place",
+                    "routeId": "entityObjectPage"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "7",
+                  "role": "count",
+                  "target": {
+                    "objectId": "photo_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都关注同一组取景地",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "山川手账",
+                  "target": {
+                    "objectId": "homepage_sight_west_lake",
+                    "objectKind": "place",
+                    "routeId": "entityObjectPage"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_photo_landscape_carousel",
+          "id": "alpha_photo_landscape_carousel",
+          "contentType": "image",
+          "type": "image",
+          "contentIdentity": "work",
+          "identity": "work",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_photo_author",
+          "displayName": "横竖影像馆",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "摄影作品",
+          "authorIdentityTags": [
+            "胶片",
+            "旅拍"
+          ],
+          "authorVerified": true,
+          "body": "横屏作品横滑展示，点状指示器最多六个。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png",
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg"
+          ],
+          "width": 1920,
+          "height": 1080,
+          "likeCount": 980,
+          "commentCount": 64,
+          "shareCount": 31,
+          "createdAt": "2026-06-18T07:10:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "photo_work",
+              "tagRefs": [
+                "alpha/showcase/photo_work"
+              ],
+              "relationKind": "place",
+              "objectKind": "place",
+              "relationObjectId": "homepage_sight_west_lake",
+              "strength": 0.86,
+              "primaryText": "你与山川手账等 7 位都关注同一组取景地",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_photo_landscape_carousel",
+              "intersectionClass": "fact",
+              "displayName": "山川手账",
+              "connectionSummary": "7 位都关注同一组取景地",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "山川手账",
+                  "role": "object",
+                  "target": {
+                    "objectId": "homepage_sight_west_lake",
+                    "objectKind": "place",
+                    "routeId": "entityObjectPage"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "7",
+                  "role": "count",
+                  "target": {
+                    "objectId": "photo_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都关注同一组取景地",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "山川手账",
+                  "target": {
+                    "objectId": "homepage_sight_west_lake",
+                    "objectKind": "place",
+                    "routeId": "entityObjectPage"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_photo_portrait_single",
+          "id": "alpha_photo_portrait_single",
+          "contentType": "image",
+          "type": "image",
+          "contentIdentity": "work",
+          "identity": "work",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_photo_author",
+          "displayName": "横竖影像馆",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "摄影作品",
+          "authorIdentityTags": [
+            "胶片",
+            "旅拍"
+          ],
+          "authorVerified": true,
+          "body": "单张竖图保持安全宽高比，不撑爆首页信息流。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png"
+          ],
+          "width": 1080,
+          "height": 1620,
+          "likeCount": 980,
+          "commentCount": 64,
+          "shareCount": 31,
+          "createdAt": "2026-06-18T07:00:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "photo_work",
+              "tagRefs": [
+                "alpha/showcase/photo_work"
+              ],
+              "relationKind": "place",
+              "objectKind": "place",
+              "relationObjectId": "homepage_sight_west_lake",
+              "strength": 0.86,
+              "primaryText": "你与山川手账等 7 位都关注同一组取景地",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_photo_portrait_single",
+              "intersectionClass": "fact",
+              "displayName": "山川手账",
+              "connectionSummary": "7 位都关注同一组取景地",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "山川手账",
+                  "role": "object",
+                  "target": {
+                    "objectId": "homepage_sight_west_lake",
+                    "objectKind": "place",
+                    "routeId": "entityObjectPage"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "7",
+                  "role": "count",
+                  "target": {
+                    "objectId": "photo_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都关注同一组取景地",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "山川手账",
+                  "target": {
+                    "objectId": "homepage_sight_west_lake",
+                    "objectKind": "place",
+                    "routeId": "entityObjectPage"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_photo_portrait_carousel",
+          "id": "alpha_photo_portrait_carousel",
+          "contentType": "image",
+          "type": "image",
+          "contentIdentity": "work",
+          "identity": "work",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_photo_author",
+          "displayName": "横竖影像馆",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "摄影作品",
+          "authorIdentityTags": [
+            "胶片",
+            "旅拍"
+          ],
+          "authorVerified": true,
+          "body": "竖屏多图作品横滑展示，连续人像和细节图保持同一竖向比例。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
+            "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
+            "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+          ],
+          "width": 1080,
+          "height": 1620,
+          "likeCount": 980,
+          "commentCount": 64,
+          "shareCount": 31,
+          "createdAt": "2026-06-18T06:58:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "photo_work",
+              "tagRefs": [
+                "alpha/showcase/photo_work"
+              ],
+              "relationKind": "place",
+              "objectKind": "place",
+              "relationObjectId": "homepage_sight_west_lake",
+              "strength": 0.86,
+              "primaryText": "你与山川手账等 7 位都关注同一组取景地",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_photo_portrait_carousel",
+              "intersectionClass": "fact",
+              "displayName": "山川手账",
+              "connectionSummary": "7 位都关注同一组取景地",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "山川手账",
+                  "role": "object",
+                  "target": {
+                    "objectId": "homepage_sight_west_lake",
+                    "objectKind": "place",
+                    "routeId": "entityObjectPage"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "7",
+                  "role": "count",
+                  "target": {
+                    "objectId": "photo_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都关注同一组取景地",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "山川手账",
+                  "target": {
+                    "objectId": "homepage_sight_west_lake",
+                    "objectKind": "place",
+                    "routeId": "entityObjectPage"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_photo_extreme_ratio_guard",
+          "id": "alpha_photo_extreme_ratio_guard",
+          "contentType": "image",
+          "type": "image",
+          "contentIdentity": "work",
+          "identity": "work",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_photo_author",
+          "displayName": "横竖影像馆",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "摄影作品",
+          "authorIdentityTags": [
+            "胶片",
+            "旅拍"
+          ],
+          "authorVerified": true,
+          "body": "极端横幅素材通过宽高比保护进入首页，不会把信息流拉成长条。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_post_citywalk_001/v1/cover.jpg"
+          ],
+          "width": 4096,
+          "height": 768,
+          "likeCount": 980,
+          "commentCount": 64,
+          "shareCount": 31,
+          "createdAt": "2026-06-18T06:55:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "photo_work",
+              "tagRefs": [
+                "alpha/showcase/photo_work"
+              ],
+              "relationKind": "place",
+              "objectKind": "place",
+              "relationObjectId": "homepage_sight_west_lake",
+              "strength": 0.86,
+              "primaryText": "你与山川手账等 7 位都关注同一组取景地",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_photo_extreme_ratio_guard",
+              "intersectionClass": "fact",
+              "displayName": "山川手账",
+              "connectionSummary": "7 位都关注同一组取景地",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "山川手账",
+                  "role": "object",
+                  "target": {
+                    "objectId": "homepage_sight_west_lake",
+                    "objectKind": "place",
+                    "routeId": "entityObjectPage"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "7",
+                  "role": "count",
+                  "target": {
+                    "objectId": "photo_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都关注同一组取景地",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "山川手账",
+                  "target": {
+                    "objectId": "homepage_sight_west_lake",
+                    "objectKind": "place",
+                    "routeId": "entityObjectPage"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_video_portrait_playable",
+          "id": "alpha_video_portrait_playable",
+          "contentType": "video",
+          "type": "video",
+          "contentIdentity": "moment",
+          "identity": "moment",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_video_author",
+          "displayName": "个人视频记录",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "生活视频",
+          "authorIdentityTags": [
+            "记录",
+            "竖屏"
+          ],
+          "authorVerified": true,
+          "body": "只有配文的个人竖屏视频，进入焦点后自动播放，离开焦点后暂停。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+          "videoUrl": "media/video/s/archived-video/beta-sample.mp4",
+          "mediaUrls": [],
+          "imageUrls": [],
+          "durationMs": 15000,
+          "width": 1080,
+          "height": 1920,
+          "likeCount": 1600,
+          "commentCount": 118,
+          "shareCount": 72,
+          "createdAt": "2026-06-18T06:50:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "video_work",
+              "tagRefs": [
+                "alpha/showcase/video_work"
+              ],
+              "relationKind": "person",
+              "objectKind": "person",
+              "relationObjectId": "fixture_user_video_peer",
+              "strength": 0.86,
+              "primaryText": "你与影像同路人等 5 位都看过同一条影像路线",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_video_portrait_playable",
+              "intersectionClass": "fact",
+              "displayName": "影像同路人",
+              "connectionSummary": "5 位都看过同一条影像路线",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "影像同路人",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_user_video_peer",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "5",
+                  "role": "count",
+                  "target": {
+                    "objectId": "video_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都看过同一条影像路线",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "影像同路人",
+                  "target": {
+                    "objectId": "fixture_user_video_peer",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_video_landscape_playable",
+          "id": "alpha_video_landscape_playable",
+          "contentType": "video",
+          "type": "video",
+          "contentIdentity": "work",
+          "identity": "work",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_video_author",
+          "displayName": "可播视频样本",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
+          "authorRoleLabel": "旅行视频",
+          "authorIdentityTags": [
+            "可播放",
+            "Alpha"
+          ],
+          "authorVerified": true,
+          "body": "横屏视频满宽展示，仍复用同一播放器组件。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+          "videoUrl": "media/video/s/archived-video/beta-sample.mp4",
+          "mediaUrls": [],
+          "imageUrls": [],
+          "durationMs": 15000,
+          "width": 1920,
+          "height": 1080,
+          "likeCount": 1600,
+          "commentCount": 118,
+          "shareCount": 72,
+          "createdAt": "2026-06-18T06:40:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+          "intersectionReasons": [
+            {
+              "dimension": "video_work",
+              "tagRefs": [
+                "alpha/showcase/video_work"
+              ],
+              "relationKind": "person",
+              "objectKind": "person",
+              "relationObjectId": "fixture_user_video_peer",
+              "strength": 0.86,
+              "primaryText": "你与影像同路人等 5 位都看过同一条影像路线",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_video_landscape_playable",
+              "intersectionClass": "fact",
+              "displayName": "影像同路人",
+              "connectionSummary": "5 位都看过同一条影像路线",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "影像同路人",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_user_video_peer",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "5",
+                  "role": "count",
+                  "target": {
+                    "objectId": "video_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都看过同一条影像路线",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "影像同路人",
+                  "target": {
+                    "objectId": "fixture_user_video_peer",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "postId": "alpha_article_text_short",
+          "id": "alpha_article_text_short",
+          "contentType": "article",
+          "type": "article",
+          "contentIdentity": "work",
+          "identity": "work",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_article_author",
+          "displayName": "Alpha 长文",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "authorVerified": false,
+          "title": "三行内短文",
+          "body": "这是一段三行内能读完的短文章摘要，首页不展示全文入口。",
+          "summary": "这是一段三行内能读完的短文章摘要，首页不展示全文入口。",
+          "coverUrl": "",
+          "thumbnailUrl": "",
+          "mediaUrls": [],
+          "imageUrls": [],
+          "likeCount": 720,
+          "commentCount": 48,
+          "shareCount": 16,
+          "createdAt": "2026-06-18T06:30:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+          "articleTemplate": "journal",
+          "articleFontPreset": "clean",
+          "articlePresentationVersion": 1,
+          "intersectionReasons": [
+            {
+              "dimension": "article_work",
+              "tagRefs": [
+                "alpha/showcase/article_work"
+              ],
+              "relationKind": "tag",
+              "objectKind": "tag",
+              "relationObjectId": "article_work",
+              "strength": 0.86,
+              "primaryText": "你与同读者等 9 位都读过相近主题的长文",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_article_text_short",
+              "intersectionClass": "fact",
+              "displayName": "同读者",
+              "connectionSummary": "9 位都读过相近主题的长文",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "同读者",
+                  "role": "object",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "9",
+                  "role": "count",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都读过相近主题的长文",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "同读者",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                }
+              ]
+            }
+          ],
+          "articleMarkdown": "---\ntitle: 三行内短文\nsummary: 这是一段三行内能读完的短文章摘要，首页不展示全文入口。\ntemplate: journal\nfontPreset: clean\n---\n\n# 三行内短文\n\n这是一段三行内能读完的短文章摘要，首页不展示全文入口。\n",
+          "articleRenderProfile": {
+            "template": "journal",
+            "fontPreset": "clean",
+            "paperThemeMode": "system",
+            "paperTexture": "warmBlack",
+            "contentVertical": "lifestyle",
+            "layoutPolicy": {
+              "wrapDowngrade": "compactWidthToFullWidth",
+              "galleryDowngrade": "singleColumn"
+            }
+          }
+        },
+        {
+          "postId": "alpha_article_text_long",
+          "id": "alpha_article_text_long",
+          "contentType": "article",
+          "type": "article",
+          "contentIdentity": "work",
+          "identity": "work",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_article_author",
+          "displayName": "Alpha 长文",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "authorVerified": false,
+          "title": "无图长文摘要",
+          "body": "这是一段刻意写长的无图文章摘要，用来验证首页文章卡在超过三行时才展示全文入口。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。",
+          "summary": "这是一段刻意写长的无图文章摘要，用来验证首页文章卡在超过三行时才展示全文入口。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。",
+          "coverUrl": "",
+          "thumbnailUrl": "",
+          "mediaUrls": [],
+          "imageUrls": [],
+          "likeCount": 720,
+          "commentCount": 48,
+          "shareCount": 16,
+          "createdAt": "2026-06-18T06:20:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+          "articleTemplate": "journal",
+          "articleFontPreset": "clean",
+          "articlePresentationVersion": 1,
+          "intersectionReasons": [
+            {
+              "dimension": "article_work",
+              "tagRefs": [
+                "alpha/showcase/article_work"
+              ],
+              "relationKind": "tag",
+              "objectKind": "tag",
+              "relationObjectId": "article_work",
+              "strength": 0.86,
+              "primaryText": "你与同读者等 9 位都读过相近主题的长文",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_article_text_long",
+              "intersectionClass": "fact",
+              "displayName": "同读者",
+              "connectionSummary": "9 位都读过相近主题的长文",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "同读者",
+                  "role": "object",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "9",
+                  "role": "count",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都读过相近主题的长文",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "同读者",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                }
+              ]
+            }
+          ],
+          "articleMarkdown": "---\ntitle: 无图长文摘要\nsummary: 这是一段刻意写长的无图文章摘要，用来验证首页文章卡在超过三行时才展示全文入口。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。\ntemplate: journal\nfontPreset: clean\n---\n\n# 无图长文摘要\n\n这是一段刻意写长的无图文章摘要，用来验证首页文章卡在超过三行时才展示全文入口。它继续补充场景、人物和路线，让文本在手机宽度下自然溢出第三行，并且点击整卡或全文入口都进入同一篇文章浏览器。\n",
+          "articleRenderProfile": {
+            "template": "journal",
+            "fontPreset": "clean",
+            "paperThemeMode": "system",
+            "paperTexture": "warmBlack",
+            "contentVertical": "lifestyle",
+            "layoutPolicy": {
+              "wrapDowngrade": "compactWidthToFullWidth",
+              "galleryDowngrade": "singleColumn"
+            }
+          }
+        },
+        {
+          "postId": "alpha_article_top_image",
+          "id": "alpha_article_top_image",
+          "contentType": "article",
+          "type": "article",
+          "contentIdentity": "work",
+          "identity": "work",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_article_author",
+          "displayName": "Alpha 长文",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "authorVerified": false,
+          "title": "上文下图长文",
+          "body": "有图长文在摘要较长时采用上文下图，让图片承担情绪收束，正文先交代推荐理由和阅读入口。",
+          "summary": "有图长文在摘要较长时采用上文下图，让图片承担情绪收束，正文先交代推荐理由和阅读入口。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg"
+          ],
+          "likeCount": 720,
+          "commentCount": 48,
+          "shareCount": 16,
+          "createdAt": "2026-06-18T06:10:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+          "articleTemplate": "journal",
+          "articleFontPreset": "clean",
+          "articlePresentationVersion": 1,
+          "intersectionReasons": [
+            {
+              "dimension": "article_work",
+              "tagRefs": [
+                "alpha/showcase/article_work"
+              ],
+              "relationKind": "tag",
+              "objectKind": "tag",
+              "relationObjectId": "article_work",
+              "strength": 0.86,
+              "primaryText": "你与同读者等 9 位都读过相近主题的长文",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_article_top_image",
+              "intersectionClass": "fact",
+              "displayName": "同读者",
+              "connectionSummary": "9 位都读过相近主题的长文",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "同读者",
+                  "role": "object",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "9",
+                  "role": "count",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都读过相近主题的长文",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "同读者",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                }
+              ]
+            }
+          ],
+          "articleMarkdown": "---\ntitle: 上文下图长文\nsummary: 有图长文在摘要较长时采用上文下图，让图片承担情绪收束，正文先交代推荐理由和阅读入口。\ntemplate: journal\nfontPreset: clean\n---\n\n# 上文下图长文\n\n有图长文在摘要较长时采用上文下图，让图片承担情绪收束，正文先交代推荐理由和阅读入口。\n\n![上文下图长文](media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg)\n",
+          "articleRenderProfile": {
+            "template": "journal",
+            "fontPreset": "clean",
+            "paperThemeMode": "system",
+            "paperTexture": "warmBlack",
+            "contentVertical": "lifestyle",
+            "layoutPolicy": {
+              "wrapDowngrade": "compactWidthToFullWidth",
+              "galleryDowngrade": "singleColumn"
+            }
+          }
+        },
+        {
+          "postId": "alpha_article_side_image",
+          "id": "alpha_article_side_image",
+          "contentType": "article",
+          "type": "article",
+          "contentIdentity": "work",
+          "identity": "work",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_article_author",
+          "displayName": "Alpha 长文",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "authorVerified": false,
+          "title": "左文右图短文",
+          "body": "短图文保持左文右图，快速扫读也能看到封面。",
+          "summary": "短图文保持左文右图，快速扫读也能看到封面。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png"
+          ],
+          "likeCount": 720,
+          "commentCount": 48,
+          "shareCount": 16,
+          "createdAt": "2026-06-18T06:00:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+          "articleTemplate": "journal",
+          "articleFontPreset": "clean",
+          "articlePresentationVersion": 1,
+          "intersectionReasons": [
+            {
+              "dimension": "article_work",
+              "tagRefs": [
+                "alpha/showcase/article_work"
+              ],
+              "relationKind": "tag",
+              "objectKind": "tag",
+              "relationObjectId": "article_work",
+              "strength": 0.86,
+              "primaryText": "你与同读者等 9 位都读过相近主题的长文",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_article_side_image",
+              "intersectionClass": "fact",
+              "displayName": "同读者",
+              "connectionSummary": "9 位都读过相近主题的长文",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "同读者",
+                  "role": "object",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "9",
+                  "role": "count",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都读过相近主题的长文",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "同读者",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                }
+              ]
+            }
+          ],
+          "articleMarkdown": "---\ntitle: 左文右图短文\nsummary: 短图文保持左文右图，快速扫读也能看到封面。\ntemplate: journal\nfontPreset: clean\n---\n\n# 左文右图短文\n\n短图文保持左文右图，快速扫读也能看到封面。\n\n![左文右图短文](media/image/s/archived-image/post/fixture_article_001/v1/cover.png)\n",
+          "articleRenderProfile": {
+            "template": "journal",
+            "fontPreset": "clean",
+            "paperThemeMode": "system",
+            "paperTexture": "warmBlack",
+            "contentVertical": "lifestyle",
+            "layoutPolicy": {
+              "wrapDowngrade": "compactWidthToFullWidth",
+              "galleryDowngrade": "singleColumn"
+            }
+          }
+        },
+        {
+          "postId": "alpha_article_top_three_images",
+          "id": "alpha_article_top_three_images",
+          "contentType": "article",
+          "type": "article",
+          "contentIdentity": "work",
+          "identity": "work",
+          "assistantUsePolicy": "inherit",
+          "authorId": "alpha_article_author",
+          "displayName": "Alpha 长文",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "authorVerified": false,
+          "title": "上文下三图长文",
+          "body": "先用一段正文建立阅读情绪，再连续展示三张图片，让文章卡和阅读器都覆盖上文下三图场景。",
+          "summary": "先用一段正文建立阅读情绪，再连续展示三张图片，让文章卡和阅读器都覆盖上文下三图场景。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+          "mediaUrls": [
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png"
+          ],
+          "imageUrls": [
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png"
+          ],
+          "likeCount": 720,
+          "commentCount": 48,
+          "shareCount": 16,
+          "createdAt": "2026-06-18T05:50:00.000Z",
+          "authorBackgroundUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
+          "articleTemplate": "journal",
+          "articleFontPreset": "clean",
+          "articlePresentationVersion": 1,
+          "intersectionReasons": [
+            {
+              "dimension": "article_work",
+              "tagRefs": [
+                "alpha/showcase/article_work"
+              ],
+              "relationKind": "tag",
+              "objectKind": "tag",
+              "relationObjectId": "article_work",
+              "strength": 0.86,
+              "primaryText": "你与同读者等 9 位都读过相近主题的长文",
+              "source": "alpha_showcase",
+              "intersectionId": "alpha_ix_alpha_article_top_three_images",
+              "intersectionClass": "fact",
+              "displayName": "同读者",
+              "connectionSummary": "9 位都读过相近主题的长文",
+              "rankState": "fresh",
+              "primarySpans": [
+                {
+                  "text": "你与",
+                  "role": "plain"
+                },
+                {
+                  "text": "同读者",
+                  "role": "object",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": "等 ",
+                  "role": "plain"
+                },
+                {
+                  "text": "9",
+                  "role": "count",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                },
+                {
+                  "text": " 位都读过相近主题的长文",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
+                  "displayName": "同读者",
+                  "target": {
+                    "objectId": "article_work",
+                    "objectKind": "tag",
+                    "routeId": "myIntersections"
+                  }
+                }
+              ]
+            }
+          ],
+          "articleMarkdown": "---\ntitle: 上文下三图长文\nsummary: 先用一段正文建立阅读情绪，再连续展示三张图片，让文章卡和阅读器都覆盖上文下三图场景。\ntemplate: journal\nfontPreset: clean\n---\n\n# 上文下三图长文\n\n先用一段正文建立阅读情绪，再连续展示三张图片，让文章卡和阅读器都覆盖上文下三图场景。\n\n![上文下三图长文](media/image/s/archived-image/post/fixture_article_001/v1/cover.png)\n\n![上文下三图长文](media/image/s/archived-image/post/fixture_photo_002/v1/cover.png)\n\n![上文下三图长文](media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png)\n",
+          "articleRenderProfile": {
+            "template": "journal",
+            "fontPreset": "clean",
+            "paperThemeMode": "system",
+            "paperTexture": "warmBlack",
+            "contentVertical": "lifestyle",
+            "layoutPolicy": {
+              "wrapDowngrade": "compactWidthToFullWidth",
+              "galleryDowngrade": "singleColumn"
+            }
+          }
+        }
+      ]
+    },
     "content_discovery_core": {
       "description": "发现流、详情与搜索共享真实图片主样本。",
       "posts": [
@@ -37281,6 +39462,10 @@
           "modelReasonBucket": "",
           "freshAgoHours": 10,
           "sourceRef": "sameSchool",
+          "iconKey": "alumni",
+          "lifecycleState": "strengthened",
+          "previousStrength": 0.7,
+          "strengthDelta": 0.12,
           "intersectionPoints": [
             {
               "pointId": "ix_id_1_p0",
@@ -37317,6 +39502,8 @@
           "modelReasonBucket": "",
           "freshAgoHours": 30,
           "sourceRef": "coCommented",
+          "iconKey": "discussion",
+          "lifecycleState": "reactivated",
           "intersectionPoints": [
             {
               "pointId": "ix_ct_1_p0",
@@ -37785,7 +39972,76 @@
               "source": "circle",
               "count": 23,
               "primaryText": "23人因你的分享加入了相关圈子",
-              "subtitleText": "来自 AI 产品圈、摄影爱好者圈"
+              "subtitleText": "来自 AI 产品圈、摄影爱好者圈",
+              "impactId": "impact_current_community_join",
+              "countObjectKind": "person",
+              "evidenceSnapshotId": "impact_snap_current_community",
+              "iconKey": "circle",
+              "primarySpans": [
+                {
+                  "text": "23",
+                  "role": "count"
+                },
+                {
+                  "text": "人因你的分享加入了相关圈子",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+                  "displayName": "周屿",
+                  "target": {
+                    "objectId": "fixture_user_zhou",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
+                  "displayName": "苏黎"
+                }
+              ],
+              "propagationPath": {
+                "pathKind": "personToCircle",
+                "hopCount": 1,
+                "secondarySpreadCount": 6,
+                "summaryText": "经 AI 产品圈、摄影爱好者圈持续扩散",
+                "nodes": [
+                  {
+                    "assetKind": "circleAvatar",
+                    "imageUrl": "media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg",
+                    "displayName": "AI 产品圈",
+                    "target": {
+                      "objectId": "fixture_circle_ai",
+                      "objectKind": "circle",
+                      "routeId": "circleDetail"
+                    }
+                  },
+                  {
+                    "assetKind": "circleAvatar",
+                    "imageUrl": "media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg",
+                    "displayName": "摄影爱好者圈",
+                    "target": {
+                      "objectId": "fixture_circle_photo",
+                      "objectKind": "circle",
+                      "routeId": "circleDetail"
+                    }
+                  }
+                ]
+              }
             },
             {
               "helpType": "decision",
@@ -37795,7 +40051,43 @@
               "source": "post",
               "count": 12,
               "primaryText": "12人通过你的内容关注了相关实体",
-              "subtitleText": "关注了 AI 产品、Claude Code 等实体"
+              "subtitleText": "关注了 AI 产品、Claude Code 等实体",
+              "impactId": "impact_current_decision_follow_entity",
+              "countObjectKind": "person",
+              "evidenceSnapshotId": "impact_snap_current_decision",
+              "iconKey": "connect",
+              "primarySpans": [
+                {
+                  "text": "12",
+                  "role": "count"
+                },
+                {
+                  "text": "人通过你的内容关注了相关实体",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+                  "displayName": "周屿",
+                  "target": {
+                    "objectId": "fixture_user_zhou",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
             },
             {
               "helpType": "relationship",
@@ -37805,7 +40097,61 @@
               "source": "profile",
               "count": 8,
               "primaryText": "8人通过你的内容建立了新连接",
-              "subtitleText": "因你的内容建立了连接"
+              "subtitleText": "因你的内容建立了连接",
+              "impactId": "impact_current_relationship_new",
+              "countObjectKind": "person",
+              "evidenceSnapshotId": "impact_snap_current_relationship",
+              "iconKey": "connect",
+              "primarySpans": [
+                {
+                  "text": "8",
+                  "role": "count"
+                },
+                {
+                  "text": "人通过你的内容建立了新连接",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ],
+              "propagationPath": {
+                "pathKind": "personToPerson",
+                "hopCount": 1,
+                "secondarySpreadCount": 3,
+                "summaryText": "其中 3 人继续带来了新连接",
+                "nodes": [
+                  {
+                    "assetKind": "avatar",
+                    "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+                    "displayName": "林清越",
+                    "target": {
+                      "objectId": "fixture_user_lin",
+                      "objectKind": "person",
+                      "routeId": "userProfile"
+                    }
+                  },
+                  {
+                    "assetKind": "avatar",
+                    "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+                    "displayName": "周屿",
+                    "target": {
+                      "objectId": "fixture_user_zhou",
+                      "objectKind": "person",
+                      "routeId": "userProfile"
+                    }
+                  }
+                ]
+              }
             }
           ]
         },
@@ -37821,7 +40167,37 @@
               "source": "circle",
               "count": 16,
               "primaryText": "16人通过TA加入了相关圈子",
-              "subtitleText": "来自 AI 产品圈、摄影爱好者圈"
+              "subtitleText": "来自 AI 产品圈、摄影爱好者圈",
+              "impactId": "impact_photographer_community_join",
+              "countObjectKind": "person",
+              "evidenceSnapshotId": "impact_snap_photographer_community",
+              "primarySpans": [
+                {
+                  "text": "16",
+                  "role": "count"
+                },
+                {
+                  "text": "人通过TA加入了相关圈子",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+                  "displayName": "周屿",
+                  "target": {
+                    "objectId": "fixture_user_zhou",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                },
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
+                  "displayName": "苏黎"
+                }
+              ]
             },
             {
               "helpType": "decision",
@@ -37831,7 +40207,32 @@
               "source": "post",
               "count": 10,
               "primaryText": "10人通过TA的内容关注了相关实体",
-              "subtitleText": "关注了 AI 产品、Claude Code 等实体"
+              "subtitleText": "关注了 AI 产品、Claude Code 等实体",
+              "impactId": "impact_photographer_decision_follow_entity",
+              "countObjectKind": "person",
+              "evidenceSnapshotId": "impact_snap_photographer_decision",
+              "primarySpans": [
+                {
+                  "text": "10",
+                  "role": "count"
+                },
+                {
+                  "text": "人通过TA的内容关注了相关实体",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+                  "displayName": "林清越",
+                  "target": {
+                    "objectId": "fixture_user_lin",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
             },
             {
               "helpType": "relationship",
@@ -37841,7 +40242,32 @@
               "source": "profile",
               "count": 5,
               "primaryText": "5人通过TA建立了新连接",
-              "subtitleText": "因你的内容建立了连接"
+              "subtitleText": "因你的内容建立了连接",
+              "impactId": "impact_photographer_relationship_new",
+              "countObjectKind": "person",
+              "evidenceSnapshotId": "impact_snap_photographer_relationship",
+              "primarySpans": [
+                {
+                  "text": "5",
+                  "role": "count"
+                },
+                {
+                  "text": "人通过TA建立了新连接",
+                  "role": "plain"
+                }
+              ],
+              "sampleVisuals": [
+                {
+                  "assetKind": "avatar",
+                  "imageUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+                  "displayName": "周屿",
+                  "target": {
+                    "objectId": "fixture_user_zhou",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
+                  }
+                }
+              ]
             }
           ]
         }

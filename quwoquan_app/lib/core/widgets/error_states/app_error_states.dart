@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -26,6 +29,7 @@ class AppPageErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final resolvedSemantic = _withSafePageExit(context, semantic);
     final fallbackStyle = TextStyle(
       color: AppColors.iosLabel(context),
       fontSize: AppTypography.iosBody,
@@ -43,7 +47,7 @@ class AppPageErrorState extends StatelessWidget {
                 maxWidth: AppSpacing.feedMaxContentWidth,
               ),
               child: _ErrorEmptyPageBody(
-                semantic: semantic,
+                semantic: resolvedSemantic,
                 onAction: onAction,
               ),
             ),
@@ -456,9 +460,11 @@ class _ErrorActionRow extends StatelessWidget {
               horizontal: compact ? AppSpacing.sm : AppSpacing.containerMd,
               vertical: compact ? AppSpacing.xs : AppSpacing.sm,
             ),
-            onPressed: onAction == null
-                ? null
-                : () => unawaited(onAction!(semantic.secondaryAction!)),
+            onPressed: _canDispatch(semantic.secondaryAction!)
+                ? () => unawaited(
+                    _dispatchAction(context, semantic.secondaryAction!),
+                  )
+                : null,
             child: Text(semantic.secondaryAction!.label),
           ),
         if (semantic.primaryAction != null)
@@ -479,9 +485,11 @@ class _ErrorActionRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(
               AppSpacing.circularBorderRadius,
             ),
-            onPressed: onAction == null
-                ? null
-                : () => unawaited(onAction!(semantic.primaryAction!)),
+            onPressed: _canDispatch(semantic.primaryAction!)
+                ? () => unawaited(
+                    _dispatchAction(context, semantic.primaryAction!),
+                  )
+                : null,
             child: Text(
               semantic.primaryAction!.label,
               style: TextStyle(
@@ -492,6 +500,21 @@ class _ErrorActionRow extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  Future<void> _dispatchAction(BuildContext context, UiErrorAction action) async {
+    if (action.type == UiErrorActionType.back) {
+      _popOrGoHome(context);
+      return;
+    }
+    if (onAction == null) {
+      return;
+    }
+    await onAction!(action);
+  }
+
+  bool _canDispatch(UiErrorAction action) {
+    return action.type == UiErrorActionType.back || onAction != null;
   }
 }
 
@@ -587,4 +610,72 @@ Color _toneAccentColor(BuildContext context, UiErrorTone tone) {
     UiErrorTone.critical => AppColors.iosDestructive(context),
     UiErrorTone.neutral => AppColors.iosSecondaryLabel(context),
   };
+}
+
+UiErrorSemantic _withSafePageExit(
+  BuildContext context,
+  UiErrorSemantic semantic,
+) {
+  if (semantic.scope != UiErrorScope.page) {
+    return semantic;
+  }
+  final backAction = UiErrorAction(
+    type: UiErrorActionType.back,
+    label: UITextConstants.back,
+  );
+  final primary = semantic.primaryAction;
+  final secondary = semantic.secondaryAction;
+  if (primary == null && secondary == null) {
+    return UiErrorSemantic(
+      category: semantic.category,
+      scope: semantic.scope,
+      title: semantic.title,
+      message: semantic.message,
+      secondaryMessage: semantic.secondaryMessage,
+      primaryAction: backAction,
+      secondaryAction: null,
+      dismissible: semantic.dismissible,
+      sourceCode: semantic.sourceCode,
+      failureKind: semantic.failureKind,
+      recoveryAction: semantic.recoveryAction,
+      presentation: semantic.presentation,
+      tone: semantic.tone,
+    );
+  }
+  final shouldAppendBack =
+      secondary == null &&
+      primary != null &&
+      primary.type != UiErrorActionType.back &&
+      primary.type != UiErrorActionType.login &&
+      primary.type != UiErrorActionType.openSettings;
+  if (!shouldAppendBack) {
+    return semantic;
+  }
+  return UiErrorSemantic(
+    category: semantic.category,
+    scope: semantic.scope,
+    title: semantic.title,
+    message: semantic.message,
+    secondaryMessage: semantic.secondaryMessage,
+    primaryAction: primary,
+    secondaryAction: backAction,
+    dismissible: semantic.dismissible,
+    sourceCode: semantic.sourceCode,
+    failureKind: semantic.failureKind,
+    recoveryAction: semantic.recoveryAction,
+    presentation: semantic.presentation,
+    tone: semantic.tone,
+  );
+}
+
+void _popOrGoHome(BuildContext context) {
+  final navigator = Navigator.maybeOf(context);
+  if (navigator != null && navigator.canPop()) {
+    navigator.pop();
+    return;
+  }
+  final router = GoRouter.maybeOf(context);
+  if (router != null) {
+    router.go(AppRoutePaths.home);
+  }
 }

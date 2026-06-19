@@ -2,12 +2,70 @@ package application
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
 )
+
+// failingRedisClient 包裹一个 Redis client，使受 D（Redis 不可用降级/兜底）覆盖的命令全部
+// 返回错误，用于模拟 Redis 宕机。仅覆盖交集服务实际触达的命令；其余命令不应被调用。
+type failingRedisClient struct {
+	rtredis.Client
+	err error
+}
+
+func (f failingRedisClient) ZAdd(context.Context, string, float64, string) error { return f.err }
+func (f failingRedisClient) HSet(context.Context, string, string, string) error  { return f.err }
+func (f failingRedisClient) Expire(context.Context, string, time.Duration) error { return f.err }
+func (f failingRedisClient) HGetAll(context.Context, string) (map[string]string, error) {
+	return nil, f.err
+}
+func (f failingRedisClient) ZRangeByScore(context.Context, string, float64, float64, int) ([]string, error) {
+	return nil, f.err
+}
+
+// failingRedisRouter 满足 intersectionRedis，所有 key 都路由到失败 client。
+type failingRedisRouter struct{ err error }
+
+func (r failingRedisRouter) ForKey(string) rtredis.Client {
+	return failingRedisClient{err: r.err}
+}
+
+// memWatermarkStore 是内存耐久兜底，避免单测依赖 Mongo。
+type memWatermarkStore struct {
+	docs      map[string]map[string]int64
+	loadCalls int
+	saveCalls int
+}
+
+func newMemWatermarkStore() *memWatermarkStore {
+	return &memWatermarkStore{docs: map[string]map[string]int64{}}
+}
+
+func (m *memWatermarkStore) LoadWatermarks(_ context.Context, userID string) (map[string]int64, error) {
+	m.loadCalls++
+	out := map[string]int64{}
+	for d, ts := range m.docs[userID] {
+		out[d] = ts
+	}
+	return out, nil
+}
+
+func (m *memWatermarkStore) SaveWatermarks(_ context.Context, userID string, dims map[string]int64) error {
+	m.saveCalls++
+	if m.docs[userID] == nil {
+		m.docs[userID] = map[string]int64{}
+	}
+	for d, ts := range dims {
+		if ts > m.docs[userID][d] { // 单调推进
+			m.docs[userID][d] = ts
+		}
+	}
+	return nil
+}
 
 type stubSource struct {
 	facts      []IntersectionReasonView
@@ -341,6 +399,139 @@ func TestEvidenceKindRank_MatchesWP1AppendixA(t *testing.T) {
 	}
 }
 
+// ── D：Redis 不可用降级 / 持久兜底 ───────────────────────────────────────────
+
+// TestIntersectionService_MarkVisited_RedisDownPersistsDurable 验证 Redis 宕机时
+// 清零仍写入耐久兜底、不向上抛错、发降级指标（写降级不阻断主请求 + 读位不丢）。
+func TestIntersectionService_MarkVisited_RedisDownPersistsDurable(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store := newMemWatermarkStore()
+	metrics := newCaptureMetrics()
+	svc := NewIntersectionService(
+		failingRedisRouter{err: errors.New("redis down")},
+		WithIntersectionSource(stubSource{}),
+		WithIntersectionWatermarkStore(store),
+		WithIntersectionMetrics(metrics),
+	)
+	fixedNow(svc, now)
+
+	if err := svc.MarkVisited(context.Background(), "viewer1", "identity"); err != nil {
+		t.Fatalf("Redis 宕机时清零必须降级返回 nil，得到 %v", err)
+	}
+	if store.docs["viewer1"]["identity"] != now.Unix() {
+		t.Fatalf("清零必须持久到耐久兜底，got %+v", store.docs["viewer1"])
+	}
+	if metrics.redisDegraded["watermark_write"] == 0 {
+		t.Fatalf("Redis 写失败必须发降级指标 watermark_write，got %+v", metrics.redisDegraded)
+	}
+}
+
+// TestIntersectionService_Watermarks_RedisDownFallsBackToDurable 验证 Redis 读失败时
+// 回落耐久兜底（已读位不丢），并发降级指标。
+func TestIntersectionService_Watermarks_RedisDownFallsBackToDurable(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store := newMemWatermarkStore()
+	store.docs["viewer1"] = map[string]int64{"identity": now.Add(-time.Hour).Unix()}
+	metrics := newCaptureMetrics()
+	svc := NewIntersectionService(
+		failingRedisRouter{err: errors.New("redis down")},
+		WithIntersectionSource(stubSource{}),
+		WithIntersectionWatermarkStore(store),
+		WithIntersectionMetrics(metrics),
+	)
+	fixedNow(svc, now)
+
+	wm := svc.watermarks(context.Background(), "viewer1")
+	if wm["identity"] != now.Add(-time.Hour).Unix() {
+		t.Fatalf("Redis 故障必须回落耐久兜底读位，got %+v", wm)
+	}
+	if metrics.redisDegraded["watermark_read"] == 0 {
+		t.Fatalf("Redis 读失败必须发降级指标 watermark_read，got %+v", metrics.redisDegraded)
+	}
+}
+
+// TestIntersectionService_Watermarks_RedisFlushRecoversAndWarms 验证 Redis 被 flush
+// （可用但为空）时从耐久兜底恢复读位，并回暖 Redis（后续读命中 Redis）。
+func TestIntersectionService_Watermarks_RedisFlushRecoversAndWarms(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	router := newTestRouter(t)
+	store := newMemWatermarkStore()
+	store.docs["viewer1"] = map[string]int64{"content": now.Add(-2 * time.Hour).Unix()}
+	svc := NewIntersectionService(
+		router,
+		WithIntersectionSource(stubSource{}),
+		WithIntersectionWatermarkStore(store),
+	)
+	fixedNow(svc, now)
+	ctx := context.Background()
+
+	wm := svc.watermarks(ctx, "viewer1")
+	if wm["content"] != now.Add(-2*time.Hour).Unix() {
+		t.Fatalf("Redis flush 后必须从耐久兜底恢复读位，got %+v", wm)
+	}
+	// 回暖：直接查 Redis 应已有该字段（后续热路径命中、不再回落耐久）。
+	key := watermarkKey("viewer1")
+	all, err := router.ForKey(key).HGetAll(ctx, key)
+	if err != nil {
+		t.Fatalf("redis hgetall: %v", err)
+	}
+	if all["wm:content"] == "" {
+		t.Fatalf("耐久恢复后必须回暖 Redis 缓存，got %+v", all)
+	}
+	store.loadCalls = 0
+	if wm2 := svc.watermarks(ctx, "viewer1"); wm2["content"] != now.Add(-2*time.Hour).Unix() {
+		t.Fatalf("回暖后再读应命中 Redis，got %+v", wm2)
+	}
+	if store.loadCalls != 0 {
+		t.Fatalf("回暖后再读不应再触达耐久兜底，loadCalls=%d", store.loadCalls)
+	}
+}
+
+// TestIntersectionService_ReportExposure_RedisDownDegrades 验证曝光上报在 Redis 宕机时
+// 降级返回 nil（不拖垮 feed），并发降级指标。
+func TestIntersectionService_ReportExposure_RedisDownDegrades(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	metrics := newCaptureMetrics()
+	svc := NewIntersectionService(
+		failingRedisRouter{err: errors.New("redis down")},
+		WithIntersectionSource(stubSource{}),
+		WithIntersectionMetrics(metrics),
+	)
+	fixedNow(svc, now)
+
+	if err := svc.ReportExposure(context.Background(), "viewer1", []string{"u1", "u2"}); err != nil {
+		t.Fatalf("Redis 宕机时曝光上报必须降级返回 nil，得到 %v", err)
+	}
+	if metrics.redisDegraded["exposure_write"] == 0 {
+		t.Fatalf("Redis 写失败必须发降级指标 exposure_write，got %+v", metrics.redisDegraded)
+	}
+}
+
+// TestIntersectionService_MarkVisited_DurableErrorSurfaces 验证耐久写失败（真正不可用）
+// 仍向上抛错——耐久是真相源，不能静默丢读位。
+func TestIntersectionService_MarkVisited_DurableErrorSurfaces(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	svc := NewIntersectionService(
+		newTestRouter(t),
+		WithIntersectionSource(stubSource{}),
+		WithIntersectionWatermarkStore(errWatermarkStore{err: errors.New("mongo down")}),
+	)
+	fixedNow(svc, now)
+	if err := svc.MarkVisited(context.Background(), "viewer1", "identity"); err == nil {
+		t.Fatalf("耐久兜底写失败必须向上抛错（真相源不可静默丢失）")
+	}
+}
+
+// errWatermarkStore 让耐久写恒失败。
+type errWatermarkStore struct{ err error }
+
+func (e errWatermarkStore) LoadWatermarks(context.Context, string) (map[string]int64, error) {
+	return map[string]int64{}, nil
+}
+func (e errWatermarkStore) SaveWatermarks(context.Context, string, map[string]int64) error {
+	return e.err
+}
+
 // TestIntersectionService_ExplainPipelineInstantiatesPrimaryText（WP1·T2）：
 // 云侧 Explain 管线按 §17.1 主谓宾模板由结构化 kind+count 实例化 primaryText，
 // 禁止回退旧 displayText；secondaryText 罗列跨 kind 辅助说明；连接说明按共同点产出。
@@ -350,8 +541,7 @@ func TestIntersectionService_ExplainPipelineInstantiatesPrimaryText(t *testing.T
 		{
 			IntersectionID: "rel", IntersectionClass: "fact", Dimension: "relationship",
 			Strength: 0.9, ActionTargetID: "u1", RelationKind: "none",
-			// 旧 displayText 不应成为结论句来源：primaryText 必须由 kind+count 模板化。
-			DisplayText: "共同关注的人",
+			// R-ID01：reason 级 displayText 已零兼容删除；primaryText 必须由 kind+count 模板化产出。
 			IntersectionPoints: []IntersectionPointView{
 				{PointID: "p1", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", Count: 3, Visibility: "public"},
 				{PointID: "p2", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedCircle", Label: "共同圈子", Count: 2, Visibility: "public"},

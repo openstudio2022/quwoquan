@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "quwoquan_data/schema/site_supply/site_map_packet.schema.json",
+  "title": "Site Map Packet",
+  "type": "object",
+  "required": ["schemaVersion", "vertical", "siteId", "batchId", "candidateRef", "targetContentType", "contentPlanHandoff", "semanticMentions", "knowledgeGaps", "gate"],
+  "properties": {
+    "schemaVersion": {"const": "quwoquan.site_supply.site_map_packet/1"},
+    "vertical": {"type": "string"},
+    "siteId": {"type": "string"},
+    "batchId": {"type": "string"},
+    "candidateRef": {"type": "string"},
+    "canonicalUrl": {"type": "string"},
+    "targetContentType": {"enum": ["homepage", "article", "imagePost", "videoPost", "knowledgeCard"]},
+    "contentPlanHandoff": {
+      "type": "object",
+      "required": ["eligible", "evidenceRefs", "baseSourceRef", "oneSourceOneWork", "assetReusePolicy"],
+      "properties": {
+        "eligible": {"type": "boolean"},
+        "evidenceRefs": {"type": "array", "items": {"type": "string"}},
+        "baseSourceRef": {"type": "string"},
+        "oneSourceOneWork": {"type": "boolean"},
+        "assetReusePolicy": {"const": "one_work_only"}
+      },
+      "additionalProperties": true
+    },
+    "semanticMentions": {
+      "type": "object",
+      "required": ["entities", "tags", "state"],
+      "properties": {
+        "entities": {"type": "array", "items": {"type": "string"}},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "state": {"const": "mention_only"}
+      },
+      "additionalProperties": false
+    },
+    "knowledgeGaps": {"type": "object"},
+    "gate": {"type": "object"}
+  },
+  "additionalProperties": true
+}

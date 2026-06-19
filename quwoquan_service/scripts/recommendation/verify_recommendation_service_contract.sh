@@ -36,4 +36,11 @@ for kw in "VALID_APP_ENVS" "EXPECTED_SERVICE_NAME" "APP_ENV" "SERVICE_NAME" "CON
   fi
 done
 
+# 交集 kind 注册表单一真相源（Phase 0 §20d）：注册表结构 + Go evidenceKindRank 对齐。
+if command -v python3 >/dev/null 2>&1; then
+  python3 "$ROOT/quwoquan_service/scripts/recommendation/verify_intersection_kind_registry.py" || exit 1
+else
+  echo "[verify] WARN: python3 not found — skipping verify_intersection_kind_registry.py"
+fi
+
 echo "[verify] OK: recommendation-service contract checked"

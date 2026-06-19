@@ -16,8 +16,6 @@ routes:
   my_intersections_list: /v1/content/intersections
   my_intersection_summary: /v1/content/intersections/summary
   mark_visited: /v1/content/intersections/visit
-  report_exposure: /v1/content/intersections/exposure
-  feed_intersections: /v1/content/feed/intersections
 
 # 指标真相源（Prometheus，promauto 默认注册表，/metrics 暴露）
 metrics:
@@ -29,18 +27,19 @@ metrics:
   cooldown_exposure_total: intersection_cooldown_exposure_reported_total
   inbox_visit_total: intersection_inbox_visit_total          # labels: dimension
   inbox_filtered_total: intersection_inbox_filtered_total    # labels: reason(stale)
+  redis_degraded_total: intersection_redis_degraded_total    # labels: op(exposure_write|watermark_write|watermark_read)
 
 slis:
   # ---- HTTP 边界（用户感知延迟与可用性）----
   - id: intersection_api_latency
     description: 交集相关读路由的用户感知延迟，分位数取自 http_server histogram
-    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route=~"/v1/content/intersections.*|/v1/content/feed/intersections"}[5m])) by (le))
+    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="content-service", route=~"/v1/content/intersections.*"}[5m])) by (le))
     objectives:
       p50_ms: 60
       p95_ms: 300
   - id: intersection_api_availability
     description: 交集读路由可用性 = 1 - 5xx 错误率（status 以 5 开头）
-    sli: 1 - sum(rate(http_server_requests_total{service="content-service", route=~"/v1/content/intersections.*|/v1/content/feed/intersections", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="content-service", route=~"/v1/content/intersections.*|/v1/content/feed/intersections"}[5m]))
+    sli: 1 - sum(rate(http_server_requests_total{service="content-service", route=~"/v1/content/intersections.*", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="content-service", route=~"/v1/content/intersections.*"}[5m]))
     objective: 0.995
 
   # ---- 业务漏斗（推荐质量与新鲜度）----
@@ -63,6 +62,17 @@ slis:
   - id: inbox_clear_volume
     description: 我的交集清零（水位推进）速率，按维度可切分；用于验证红点闭环活跃度
     sli: sum(rate(intersection_inbox_visit_total[1h])) by (dimension)
+    objective_observe_only: true
+
+  # ---- Redis 降级 / 持久兜底（韧性）----
+  - id: redis_degraded_rate
+    description: 交集 Redis 降级速率（写降级 / 读回落耐久兜底）；持续 >0 说明 Redis 不可用，
+                 但读位由 rm_intersection_watermark 持久兜底、主请求不阻断（韧性负向 SLI）
+    sli: sum(rate(intersection_redis_degraded_total[5m])) by (op)
+    objective_max: 0.05
+  - id: watermark_durability_fallback_rate
+    description: 已读水位读路径回落耐久兜底的速率；用于验证 Redis flush/宕机后读位恢复链路活跃可用
+    sli: sum(rate(intersection_redis_degraded_total{op="watermark_read"}[30m]))
     objective_observe_only: true
 
 # 灰度/回滚分层（与 acceptance §回滚一致）：

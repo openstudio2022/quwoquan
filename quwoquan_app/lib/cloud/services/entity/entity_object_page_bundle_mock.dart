@@ -188,7 +188,6 @@ IntersectionReason _mockReasonWithPoint(
       ),
     ],
     pointClassLabel: isRecommended ? '推荐交集' : '事实交集',
-    recommendationTraceId: reason.actionTargetId,
     rankState: 'fresh',
   );
 }

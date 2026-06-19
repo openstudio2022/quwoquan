@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 
@@ -125,6 +127,36 @@ void main() {
     );
 
     expect(semantic.presentation, UiErrorPresentation.transientNotice);
+    expect(semantic.primaryAction, isNull);
+  });
+
+  testWidgets('无本地化上下文时也按错误码给出可理解的失效页文案', (tester) async {
+    late BuildContext capturedContext;
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Builder(
+          builder: (context) {
+            capturedContext = context;
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    final semantic = UiErrorSemanticResolver.resolve(
+      capturedContext,
+      error: CloudException(
+        type: CloudErrorType.notFound,
+        message: 'Not found',
+        code: EntityErrorCode.homepageNotFound.code,
+      ),
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+      allowRetry: false,
+    );
+
+    expect(semantic.title, UITextConstants.homepageInfoUnavailableTitle);
+    expect(semantic.message, '主页不存在或已下线');
     expect(semantic.primaryAction, isNull);
   });
 }

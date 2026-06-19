@@ -179,6 +179,8 @@ jobs:
               shutil.copy2(src, dst)
           PY
       - name: Deploy via stackctl
+        env:
+          PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
         run: |
           python3 agent_ops/deploy/stackctl.py deploy \
             --target prod-hosted \

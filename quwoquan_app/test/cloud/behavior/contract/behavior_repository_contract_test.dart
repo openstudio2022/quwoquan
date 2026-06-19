@@ -134,6 +134,34 @@ void main() {
       expect(json['feedRequestId'], 'req-uuid-123');
     });
 
+    test('channelId / rankingVersion / position 透传到 JSON（阶段五归因 common_fields）', () {
+      final json = BehaviorEvent(
+        contentId: 'post_1',
+        action: BehaviorAction.click,
+        feedRequestId: 'frq_01H',
+        referralSource: ReferralSource.organicFeed,
+        position: 7,
+        channelId: 'following',
+        rankingVersion: 'rank-v3',
+      ).toJson();
+      expect(json['feedRequestId'], 'frq_01H');
+      expect(json['referralSource'], 'organic_feed');
+      expect(json['position'], 7);
+      expect(json['channelId'], 'following');
+      expect(json['rankingVersion'], 'rank-v3');
+    });
+
+    test('空 channelId / rankingVersion 不写入 JSON（避免脏空串污染归因）', () {
+      final json = BehaviorEvent(
+        contentId: 'post_1',
+        action: BehaviorAction.impression,
+        channelId: '',
+        rankingVersion: '',
+      ).toJson();
+      expect(json.containsKey('channelId'), isFalse);
+      expect(json.containsKey('rankingVersion'), isFalse);
+    });
+
     test('hide_author / hide_content_type 透传 authorId 与 contentType', () {
       final hideAuthorJson = BehaviorEvent(
         contentId: 'post_1',

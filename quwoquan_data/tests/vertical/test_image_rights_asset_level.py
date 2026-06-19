@@ -44,6 +44,38 @@ def test_discovery_platform_still_fails_without_asset_rights():
     assert not any("发现源只能作为灵感" in issue for issue in issues)
 
 
+def test_creative_commons_jurisdiction_suffix_normalizes_to_allowed_kind():
+    issues = validate_image_rights(
+        {
+            "platform": "Wikimedia Commons",
+            "license": "CC BY-SA 2.5 nl",
+            "credit": "Creator",
+            "sourceUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/2.5/nl/deed.en",
+            "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+            "usageScope": "app_publish",
+        },
+        vertical="travel",
+    )
+    assert issues == []
+
+
+def test_creative_commons_1_0_remains_blocked():
+    issues = validate_image_rights(
+        {
+            "platform": "Wikimedia Commons",
+            "license": "CC BY-SA 1.0",
+            "credit": "Creator",
+            "sourceUrl": "https://commons.wikimedia.org/wiki/File:Old.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/1.0/",
+            "authorizationProof": "https://commons.wikimedia.org/wiki/File:Old.jpg",
+            "usageScope": "app_publish",
+        },
+        vertical="travel",
+    )
+    assert any("unsupported license CC BY-SA 1.0" in issue for issue in issues)
+
+
 def _run_all() -> None:
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:
