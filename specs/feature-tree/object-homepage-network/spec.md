@@ -110,7 +110,7 @@
 
 - 不在本节点内新增交易、预约、支付、团购闭环。
 - 不以本节点替代 user/circle/entity 各自的主档、权限、治理和生命周期归属。
-- 不新增第二套标签枚举；标签真相源仍为数据工程 `publish/v1/tags` 与 metadata 中的 `tagRef`。
+- 不新增第二套标签枚举；标签真相源仍为数据工程 `publish/tags` 与 metadata 中的 `tagRef`。
 - 不允许为了兼容旧 UI 保留并行主页分支；本轮按新架构替换。
 
 ## 验收重点
@@ -120,4 +120,4 @@
 - A3：交集卡、推荐理由、小艺解释、行为回流消费同一对象关系契约。
 - A4：四项上线硬债关闭，且 metadata/codegen/fixture 不漂移。
 - A5：灰度、埋点、实时推荐、小艺主动服务和回滚看板形成闭环。
-- A6：页面横向质量 P1-P8、Mock 隔离、语义 token、弱类型预算、runtime error、T1-T4 全部满足。
+- A6：页面横向质量 P1-P8、Mock 隔离、语义 token、弱类型预算、runtime error、local_contract-user_acceptance 全部满足。

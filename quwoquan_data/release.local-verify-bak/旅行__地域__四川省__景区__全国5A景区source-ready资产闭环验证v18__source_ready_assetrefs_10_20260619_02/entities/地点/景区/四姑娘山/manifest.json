@@ -1,0 +1,23 @@
+{
+  "entityRef": "/entity/地点/景区/四姑娘山",
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "sourceRefs": [
+    "entities/地点/景区/四姑娘山/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/四姑娘山/1.download/sources/01.home_wikipedia/source.md"
+  ],
+  "assets": [
+    {
+      "assetId": "001_home_wikipedia_1.jpg",
+      "fileName": "001_home_wikipedia_1.jpg",
+      "caption": "Mount Siguniang encompasses four peaks (with Feng 峰 meaning 'peak'): Daguniang Feng 大姑娘峰 (Big Peak or 1st peak), Ergunia",
+      "license": "CC BY-SA 3.0",
+      "credit": "Johannes Böckh",
+      "relevance": "Mount Siguniang encompasses four peaks (with Feng 峰 meaning 'peak'): Daguniang Feng 大姑娘峰 (Big Peak or 1st peak), Ergunia",
+      "sourceRef": "entities/地点/景区/四姑娘山/1.download/sources/01.home_wikipedia/source.md",
+      "sourceAssetRef": "entities/地点/景区/四姑娘山/1.download/sources/01.home_wikipedia/assets/001_home_wikipedia_1.jpg",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:Mount_Siguniang_2.jpg"
+    }
+  ],
+  "generator": "deterministic_homepage_builder"
+}

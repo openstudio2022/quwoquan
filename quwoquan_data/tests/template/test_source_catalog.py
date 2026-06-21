@@ -40,6 +40,7 @@ def test_platform_category_maps_vertical_sources():
     assert platform_category("安营") == "camping"  # 床车营地
     assert platform_category("高德地图") == "map_geo"
     assert platform_category("景区官网") == "official"
+    assert platform_category("官方文章") == "official"
     assert platform_category("web") is None  # 通用兜底不计类别
     assert platform_category("某不存在平台xyz") is None
 

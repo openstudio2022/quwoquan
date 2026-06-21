@@ -223,7 +223,17 @@ key_patterns:
     redis_scene: general
     ttl_seconds: null
     type: string
-    description: 热点内容计数缓冲（异步回写 MongoDB）
+    description: |
+      热点内容计数缓冲（异步回写 MongoDB）。type=comment 时承载帖级评论数
+      （counter:{postId}:comment），由 RedisCommentStore 读穿 + 写失效，权威值来自
+      Mongo comments 集合 CountDocuments（含二级、排除软删）。
+
+  # 评论排行 ZSet（comment_hot / comment_recommended）、赞踩集合镜像
+  # （comment_like / comment_dislike）与 per-comment 读穿计数器
+  # （counter:comment:{commentId}:like|dislike）已删除：均为只写不读写放大，
+  # 且 per-comment 计数器读穿回填存在 stale-backfill 竞态。评论排序读路径直接
+  # 走 Mongo 复合索引 keyset 分页，赞踩计数由 comment_reactions 集合权威派生。
+  # 详见 contracts/metadata/content/post/storage.yaml 与 R-CMT01 回写。
 
   - pattern: "reaction:{userId}:{postId}"
     redis_scene: general

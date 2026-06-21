@@ -16,13 +16,17 @@ documented_keys:
   - comment
   - comment.max_length
   - comment.reply_preview_count
+  - comment.reply_first_expand_page_size
   - comment.reply_expand_page_size
   - comment.fold_line_count
   - comment.sort.default
   - comment.attachment.max_images
 comment_defaults:
   max_length: 500
+  # 二级回复随列表默认回显条数（对标小红书「默认 1 条」）。
   reply_preview_count: 1
+  # 首次点击「展开 N 条回复」最多加载条数；后续展开用 reply_expand_page_size。
+  reply_first_expand_page_size: 5
   reply_expand_page_size: 10
   fold_line_count: 3
   sort:

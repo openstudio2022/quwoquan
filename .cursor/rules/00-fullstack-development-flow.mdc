@@ -24,7 +24,7 @@ AppRoot -> L1_domain_service -> L2_business_capability -> L3_story
 - AppRoot Journey/Scenario 是否受影响。
 - `L1_domain_service / L2_business_capability / L3_story` 分别是什么。
 - 验收意图：UAT / SIT / GWT / contract。
-- 测试证据：T1 / T2 / T3 / T4。
+- 测试证据：`local_contract / api_integration / user_acceptance`。
 - 是否触发 metadata-first、env-seed-first、mock 隔离、页面质量、runtime error 等横切规则。
 
 缺任一关键项：`GATE_BLOCK`，先补规格、验收、设计或测试方案。
@@ -44,10 +44,10 @@ AppRoot -> L1_domain_service -> L2_business_capability -> L3_story
 
 ## 测试映射
 
-- AppRoot UAT：主证据 `T4`，辅以 `T3`。
-- 领域服务：主证据 `T1/T3`，必要时 `T4`。
-- 业务能力 SIT：主证据 `T2/T3`。
-- Story GWT/contract：主证据 `T1/T2`，涉及远端补 `T3`。
+- AppRoot UAT：主证据 `user_acceptance`，辅以 `api_integration`。
+- 领域服务：主证据 `api_integration/local_contract`，必要时 `user_acceptance`。
+- 业务能力 SIT：主证据 `api_integration`，辅以 `local_contract`。
+- Story GWT/contract：主证据 `local_contract`，涉及远端补 `api_integration`，涉及页面补 `user_acceptance`。
 
 ## 完成后复盘
 

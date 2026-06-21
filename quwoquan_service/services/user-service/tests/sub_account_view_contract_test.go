@@ -16,6 +16,21 @@ func TestSubAccountView_GetMeProfileUsesActiveSubAccount(t *testing.T) {
 	if _, err := pgPool.Exec(context.Background(), `UPDATE personas SET user_handle = $1 WHERE sub_account_id = $2`, "photo_me", "sa_me_profile"); err != nil {
 		t.Fatalf("seed user_handle: %v", err)
 	}
+	if _, err := pgPool.Exec(context.Background(), `UPDATE user_profiles SET nickname_customized = true WHERE user_id = $1`, "owner_me_profile"); err != nil {
+		t.Fatalf("seed owner nickname_customized: %v", err)
+	}
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles SET avatar_url = $1, avatar_version = $2 WHERE user_id = $3`,
+		"https://cdn.example.com/persona-avatar-me.png",
+		7,
+		"owner_me_profile",
+	); err != nil {
+		t.Fatalf("seed owner avatar version: %v", err)
+	}
+	if _, err := pgPool.Exec(context.Background(), `UPDATE personas SET background_url = $1 WHERE sub_account_id = $2`, "https://cdn.example.com/persona-cover-me.png", "sa_me_profile"); err != nil {
+		t.Fatalf("seed persona background: %v", err)
+	}
 
 	rec := doRequest(t, http.MethodGet, "/v1/me", "", authHeaders("owner_me_profile"))
 	if rec.Code != http.StatusOK {
@@ -35,6 +50,18 @@ func TestSubAccountView_GetMeProfileUsesActiveSubAccount(t *testing.T) {
 	if body["displayName"] != "摄影分身" {
 		t.Fatalf("expected displayName=摄影分身, got %v", body["displayName"])
 	}
+	if body["nicknameCustomized"] != true {
+		t.Fatalf("expected nicknameCustomized=true for customized active persona, got %#v", body["nicknameCustomized"])
+	}
+	if body["backgroundUrl"] != "https://cdn.example.com/persona-cover-me.png" {
+		t.Fatalf("expected inherited/overridden backgroundUrl, got %#v", body["backgroundUrl"])
+	}
+	if body["avatarUrl"] != "https://cdn.example.com/persona-avatar-me.png?v=7" {
+		t.Fatalf("expected versioned avatarUrl, got %#v", body["avatarUrl"])
+	}
+	if body["avatarVersion"] != float64(7) {
+		t.Fatalf("expected avatarVersion=7, got %#v", body["avatarVersion"])
+	}
 	if body["userHandle"] != "photo_me" || body["username"] != "photo_me" {
 		t.Fatalf("expected userHandle/username=photo_me, got %#v", body)
 	}
@@ -49,6 +76,21 @@ func TestSubAccountView_GetSubAccountProfile(t *testing.T) {
 	createTestPersonaFull(t, "persona_public", "owner_public_profile", "sa_public_profile", "公开分身", "open", true, true)
 	if _, err := pgPool.Exec(context.Background(), `UPDATE personas SET user_handle = $1 WHERE sub_account_id = $2`, "public_view", "sa_public_profile"); err != nil {
 		t.Fatalf("seed user_handle: %v", err)
+	}
+	if _, err := pgPool.Exec(context.Background(), `UPDATE user_profiles SET nickname_customized = true WHERE user_id = $1`, "owner_public_profile"); err != nil {
+		t.Fatalf("seed public owner nickname_customized: %v", err)
+	}
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles SET avatar_url = $1, avatar_version = $2 WHERE user_id = $3`,
+		"https://cdn.example.com/persona-avatar-public.png",
+		9,
+		"owner_public_profile",
+	); err != nil {
+		t.Fatalf("seed public owner avatar version: %v", err)
+	}
+	if _, err := pgPool.Exec(context.Background(), `UPDATE personas SET background_url = $1 WHERE sub_account_id = $2`, "https://cdn.example.com/persona-cover-public.png", "sa_public_profile"); err != nil {
+		t.Fatalf("seed public persona background: %v", err)
 	}
 
 	rec := doRequest(t, http.MethodGet, "/v1/user/public_view", "", authHeaders("viewer_subject"))
@@ -66,8 +108,56 @@ func TestSubAccountView_GetSubAccountProfile(t *testing.T) {
 	if body["displayName"] != "公开分身" {
 		t.Fatalf("expected displayName=公开分身, got %v", body["displayName"])
 	}
+	if body["nicknameCustomized"] != true {
+		t.Fatalf("expected nicknameCustomized=true for public persona custom display name, got %#v", body["nicknameCustomized"])
+	}
+	if body["backgroundUrl"] != "https://cdn.example.com/persona-cover-public.png" {
+		t.Fatalf("expected backgroundUrl to expose public persona cover, got %#v", body["backgroundUrl"])
+	}
+	if body["avatarUrl"] != "https://cdn.example.com/persona-avatar-public.png?v=9" {
+		t.Fatalf("expected versioned public avatarUrl, got %#v", body["avatarUrl"])
+	}
+	if body["avatarVersion"] != float64(9) {
+		t.Fatalf("expected public avatarVersion=9, got %#v", body["avatarVersion"])
+	}
 	if _, ok := body["ownerUserId"]; ok {
 		t.Fatalf("public profile should not expose ownerUserId, got %#v", body)
+	}
+}
+
+func TestSubAccountView_PersonaAvatarVersionOverridesOwner(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "owner_persona_avatar", "owner_persona_avatar")
+	createTestPersonaFull(t, "persona_avatar_override", "owner_persona_avatar", "sa_persona_avatar", "头像分身", "open", true, true)
+	if _, err := pgPool.Exec(context.Background(), `UPDATE personas SET user_handle = $1, avatar_url = $2, avatar_version = $3 WHERE sub_account_id = $4`,
+		"persona_avatar_handle",
+		"https://cdn.example.com/persona-avatar-override.png",
+		4,
+		"sa_persona_avatar",
+	); err != nil {
+		t.Fatalf("seed persona avatar version: %v", err)
+	}
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles SET avatar_url = $1, avatar_version = $2 WHERE user_id = $3`,
+		"https://cdn.example.com/owner-avatar-fallback.png",
+		9,
+		"owner_persona_avatar",
+	); err != nil {
+		t.Fatalf("seed owner avatar version: %v", err)
+	}
+
+	rec := doRequest(t, http.MethodGet, "/v1/user/persona_avatar_handle", "", authHeaders("viewer_subject"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get persona profile: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := parseJSON(t, rec)
+	if body["avatarUrl"] != "https://cdn.example.com/persona-avatar-override.png?v=4" {
+		t.Fatalf("expected persona avatarUrl to use persona version, got %#v", body["avatarUrl"])
+	}
+	if body["avatarVersion"] != float64(4) {
+		t.Fatalf("expected persona avatarVersion=4, got %#v", body["avatarVersion"])
 	}
 }
 
@@ -168,6 +258,15 @@ func TestSearchSocialRelations_DoesNotExposeOwnerUserID(t *testing.T) {
 	); err != nil {
 		t.Fatalf("seed search persona handle: %v", err)
 	}
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles SET avatar_url = $1, avatar_version = $2 WHERE user_id = $3`,
+		"https://cdn.example.com/search-target-avatar.png",
+		4,
+		"search_owner_profile",
+	); err != nil {
+		t.Fatalf("seed search avatar version: %v", err)
+	}
 	blockRec := doRequest(
 		t,
 		http.MethodPost,
@@ -204,6 +303,12 @@ func TestSearchSocialRelations_DoesNotExposeOwnerUserID(t *testing.T) {
 	}
 	if first["subAccountId"] != "ps_search_target" {
 		t.Fatalf("expected persona subAccountId, got %#v", first)
+	}
+	if first["avatarUrl"] != "https://cdn.example.com/search-target-avatar.png?v=4" {
+		t.Fatalf("expected versioned search avatarUrl, got %#v", first["avatarUrl"])
+	}
+	if first["avatarVersion"] != float64(4) {
+		t.Fatalf("expected search avatarVersion=4, got %#v", first["avatarVersion"])
 	}
 	snapshot := followtelemetry.Collector().Snapshot()
 	if snapshot[followtelemetry.MetricRelationshipCapabilityMismatch] <= 0 {

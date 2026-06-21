@@ -1,0 +1,17 @@
+{
+  "checkA_envelope_feedRequestId": "PASS",
+  "checkA_envelope_rankingVersion": "PASS",
+  "checkA_envelope_intersectionReasons": "GAP(no_intersection_seed_data_in_gamma)",
+  "checkB_hide_author_future_window": "PASS",
+  "checkB_hide_content_type_future_window": "PASS",
+  "checkB_dislike_single_post_removal": "GAP(fallback_path_not_enforced)",
+  "checkC_realtime_patch_emitted_metric_delta": 3.0,
+  "checkC_realtime_patch_status": "PASS(server-side emit metric +3)",
+  "checkC_external_ws_or_redis_subscribe": "GAP(realtime-gateway unimplemented; realtime redis scene in-memory)",
+  "patch_emitted_after": {
+    "recommendation_feed_patch_emitted_total{patch_type=\"negative_feedback_removal\",reason=\"negative_dislike\"}": 2.0,
+    "recommendation_feed_patch_emitted_total{patch_type=\"negative_feedback_removal\",reason=\"negative_hide_author\"}": 2.0,
+    "recommendation_feed_patch_emitted_total{patch_type=\"negative_feedback_removal\",reason=\"negative_hide_content_type\"}": 1.0,
+    "recommendation_feed_patch_emitted_total{patch_type=\"refresh_suggestion\",reason=\"session_fatigue\"}": 1.0
+  }
+}

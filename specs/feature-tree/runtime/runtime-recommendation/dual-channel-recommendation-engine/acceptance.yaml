@@ -25,7 +25,8 @@ gwt_acceptance:
     then:
     - SessionState 更新；已曝光与 negative 内容被过滤；正向兴趣影响排序；模型失败时 fallback 到 RuleScorer；重排保持多样性。
     done_when:
-    - Engine 端到端、HotPath、CascadeScorer、FeatureProvider、PreRanker、MMR/UCB、并发与可观测测试均有 recorded 证据。
+    - Engine 端到端、HotPath、CascadeScorer、FeatureProvider、PreRanker、MMR/UCB、并发与可观测测试均有
+      recorded 证据。
     edge_cases:
     - 召回源超时不阻塞整体结果。
     - 模型 scorer 超时或错误时回退规则分。
@@ -36,24 +37,40 @@ gwt_acceptance:
     performance_points:
     - HotPath 行为生效延迟 < 100ms。
     - Feed P95 <= 200ms，P99 <= 400ms。
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T3_app_api_integration
     tests:
       planned: []
       recorded:
-      - quwoquan_service/runtime/recommendation/engine_test.go
-      - quwoquan_service/runtime/recommendation/bench_test.go
-      - quwoquan_service/runtime/recommendation/feed_type_contract_test.go
-      - quwoquan_service/runtime/recommendation/engagement_depth_test.go
-      - quwoquan_service/runtime/recommendation/intersection_fusion_test.go
-      - quwoquan_service/runtime/recommendation/rerank_mmr_test.go
-      - quwoquan_service/runtime/recommendation/social_recall_test.go
-      - quwoquan_service/runtime/recommendation/ucb_explore_test.go
+      - file: quwoquan_service/runtime/recommendation/engine_test.go
+      - file: quwoquan_service/runtime/recommendation/bench_test.go
+      - file: quwoquan_service/runtime/recommendation/feed_type_contract_test.go
+      - file: quwoquan_service/runtime/recommendation/engagement_depth_test.go
+      - file: quwoquan_service/runtime/recommendation/intersection_fusion_test.go
+      - file: quwoquan_service/runtime/recommendation/rerank_mmr_test.go
+      - file: quwoquan_service/runtime/recommendation/social_recall_test.go
+      - file: quwoquan_service/runtime/recommendation/ucb_explore_test.go
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.runtime_recommendation.dual_channel_recommendation_engine.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.runtime.runtime_recommendation.dual_channel_recommendation_engine.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.runtime.runtime_recommendation.dual_channel_recommendation_engine.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

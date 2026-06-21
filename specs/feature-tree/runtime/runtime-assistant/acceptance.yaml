@@ -17,30 +17,46 @@ sit_acceptance:
     done_when:
     - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
     tests:
       planned:
-      - quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
-      - quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
-      - quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_feedback_test.dart
-      - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+      - file: quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
+      - file: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
       recorded:
-      - quwoquan_service/services/assistant-service/internal/application/chat_mention_service_test.go
-      - quwoquan_service/services/assistant-service/internal/application/service_test.go
-      - quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
-      - quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
-      - quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
-      - quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
-      - quwoquan_app/test/ui/assistant/widgets/assistant_half_sheet_personalization_provider_test.dart
-      - quwoquan_service/scripts/contract/verify_assistant_context_contract.py
-      - quwoquan_service/scripts/contract/verify_assistant_security_contract.py
-      - specs/feature-tree/assistant-run-learning/commercial_slo_observability.md
+      - file: quwoquan_service/services/assistant-service/internal/application/chat_mention_service_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/service_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
+      - file: quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
+      - file: quwoquan_app/test/ui/assistant/widgets/assistant_half_sheet_personalization_provider_test.dart
+      - file: quwoquan_service/scripts/contract/verify_assistant_context_contract.py
+      - file: quwoquan_service/scripts/contract/verify_assistant_security_contract.py
+      - file: specs/feature-tree/assistant-run-learning/commercial_slo_observability.md
     status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.runtime.runtime_assistant.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.runtime.runtime_assistant.sit1.sit1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.runtime.runtime_assistant.sit1.sit1_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_feedback_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

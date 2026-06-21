@@ -6,7 +6,7 @@
 - 一棵树归属。
 - 用户可见症状和运营指标。
 - SLI/SLO、告警阈值、采样、保留周期。
-- T1 配置静态、T2 模块埋点、T3 端云链路、T4 旅程观测证据。
+- local_contract 配置静态、local_contract 模块埋点、api_integration 端云链路、user_acceptance 旅程观测证据。
 
 不产出正式树内计划文档。
 

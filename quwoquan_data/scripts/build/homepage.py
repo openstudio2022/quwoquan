@@ -107,6 +107,10 @@ _HOMEPAGE_HISTORY_MARKERS = (
     "朝",
     "世纪",
 )
+_HOMEPAGE_HISTORY_DATE_RE = re.compile(
+    r"(\d{3,4}\s*年|公元|清代|明代|唐代|宋代|元代|汉代|秦代|民国|"
+    r"新中国成立|上世纪|本世纪|[一二三四五六七八九十]{1,3}世纪)"
+)
 _HOMEPAGE_FACT_SIGNAL_MARKERS = (
     "位于",
     "位於",
@@ -815,9 +819,6 @@ def _pick_homepage_asset(task_id: str, batch_id: str, domain: str, etype: str, n
     obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
     candidates = []
     for image in object_image_candidates(obj, task_id, batch_id):
-        lane = str(image.get("researchLane") or "")
-        if lane not in {"homepage", "homepage_image"}:
-            continue
         if not str(image.get("sourceRef") or "").endswith("/source.md"):
             continue
         if not str(image.get("sourceAssetRef") or ""):
@@ -829,7 +830,7 @@ def _pick_homepage_asset(task_id: str, batch_id: str, domain: str, etype: str, n
         return {}
     candidates.sort(
         key=lambda item: (
-            0 if str(item.get("researchLane") or "") == "homepage" else 1,
+            0 if str(item.get("researchLane") or "") in {"homepage", "homepage_image"} else 1,
             str(item.get("sourceKind") or ""),
             str(item.get("sourceAssetRef") or ""),
         )
@@ -873,7 +874,11 @@ def _render_homepage_markdown(name: str, facts: list[str], asset_id: str, captio
     summary = _homepage_summary(name, facts)
     overview = "。".join(f.rstrip("。") for f in facts[:4]).rstrip("。") + "。"
     spatial = "。".join(f.rstrip("。") for f in facts[4:8]).rstrip("。") + "。"
-    history_facts = [f for f in facts if any(token in f for token in _HOMEPAGE_HISTORY_MARKERS)]
+    history_facts = [
+        f for f in facts
+        if any(token in f for token in _HOMEPAGE_HISTORY_MARKERS)
+        and _HOMEPAGE_HISTORY_DATE_RE.search(f)
+    ]
     has_history = bool(history_facts)
     history_title = "历史沿革" if has_history else "背景信息"
     history = (

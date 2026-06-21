@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "海螺沟_route_transport",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:8f6d909ccfaad36a605a5dd8558471ebd919ecaef9bfa3b7976ba7a2783dbc8c",
+  "finalSha256": "sha256:f68fa2374cbdbc94d902db622276d236c129198991dda46121634715dc11d4e8",
+  "draftBodySha256": "sha256:8f6d909ccfaad36a605a5dd8558471ebd919ecaef9bfa3b7976ba7a2783dbc8c",
+  "finalBodySha256": "sha256:8f6d909ccfaad36a605a5dd8558471ebd919ecaef9bfa3b7976ba7a2783dbc8c",
+  "composeSnapshotSha256": "sha256:8f6d909ccfaad36a605a5dd8558471ebd919ecaef9bfa3b7976ba7a2783dbc8c",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

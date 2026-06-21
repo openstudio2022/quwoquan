@@ -20,19 +20,29 @@ gwt_acceptance:
     then:
     - 当前环境集合的 schema、端口 profile、public/upstream URL 契约与 prod 包纯度均满足约束。
     done_when:
-    - "`stackctl verify` 与 `make gate` 能自动阻断跨环境污染与非法环境枚举。"
+    - '`stackctl verify` 与 `make gate` 能自动阻断跨环境污染与非法环境枚举。'
     edge_cases: []
     contract_refs: []
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
       planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.runtime_config.environment_topology_and_packaging.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.runtime.runtime_config.environment_topology_and_packaging.gwt1_local_contract
+        envs: *id001
+      supporting: []
+    notes: []
 execution:
   local_gate:
   - python3 agent_ops/gate/verify_environment_topology_manifest.py

@@ -1,8 +1,7 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_list_view_data.dart';
 import 'package:quwoquan_app/ui/circle/services/circle_stats_row_wire.dart';
 
@@ -112,8 +111,19 @@ class _SectionMembersState extends ConsumerState<SectionMembers> {
 
     return Column(
       children: _members
-          .map(
-            (member) => Container(
+          .map((member) {
+            final avatarUrl = member.avatarUrl.trim();
+            final fallbackAvatar = Center(
+              child: Text(
+                member.name.isEmpty ? '?' : member.name.substring(0, 1),
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  fontWeight: AppTypography.semiBold,
+                  color: fgPrimary,
+                ),
+              ),
+            );
+            return Container(
               padding: EdgeInsets.symmetric(
                 horizontal: AppSpacing.containerSm,
                 vertical: AppSpacing.sm,
@@ -128,24 +138,29 @@ class _SectionMembersState extends ConsumerState<SectionMembers> {
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: AppSpacing.md,
-                    backgroundImage: member.avatarUrl.trim().isEmpty
-                        ? null
-                        : NetworkImage(member.avatarUrl),
-                    onBackgroundImageError: (_, _) {},
-                    child: member.avatarUrl.trim().isEmpty
-                        ? Text(
-                            member.name.isEmpty
-                                ? '?'
-                                : member.name.substring(0, 1),
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              fontWeight: AppTypography.semiBold,
-                              color: fgPrimary,
+                  SizedBox.square(
+                    dimension: AppSpacing.md * 2,
+                    child: ClipOval(
+                      child: avatarUrl.isEmpty
+                          ? ColoredBox(
+                              color: AppColorsFunctional.getColor(
+                                widget.isDark,
+                                ColorType.backgroundSecondary,
+                              ),
+                              child: fallbackAvatar,
+                            )
+                          : AppAvatarImage(
+                              imageUrl: avatarUrl,
+                              size: AppSpacing.md * 2,
+                              errorWidget: ColoredBox(
+                                color: AppColorsFunctional.getColor(
+                                  widget.isDark,
+                                  ColorType.backgroundSecondary,
+                                ),
+                                child: fallbackAvatar,
+                              ),
                             ),
-                          )
-                        : null,
+                    ),
                   ),
                   SizedBox(width: AppSpacing.sm),
                   Expanded(
@@ -177,8 +192,8 @@ class _SectionMembersState extends ConsumerState<SectionMembers> {
                   ),
                 ],
               ),
-            ),
-          )
+            );
+          })
           .toList(growable: false),
     );
   }

@@ -9,127 +9,172 @@ node:
 scope:
   summary: 圈子主页沿用他人主页同壳同口径重做交集卡、价值卡、记录流与头部。
   in_scope:
-    - 交集卡标题「为什么推荐这个圈子」列表入口（主谓宾单句）。
-    - 价值卡「这个圈子帮助了很多人」AuthorImpactCard 同构、去好友化/去收藏。
-    - 一级 tab 内容改记录；记录流去胶囊改右侧过滤、双列瀑布、卡内交集句。
-    - 头部头像簇 + N 成员单计数；圈子独立头像字段契约预留 + alpha mock。
-    - 用户语言禁词清理（实体/Entity/Circle/交集/影响力/兴趣圈）。
+  - 交集卡标题「为什么推荐这个圈子」列表入口（主谓宾单句）。
+  - 价值卡「这个圈子帮助了很多人」AuthorImpactCard 同构、去好友化/去收藏。
+  - 一级 tab 内容改记录；记录流去胶囊改右侧过滤、双列瀑布、卡内交集句。
+  - 头部头像簇 + N 成员单计数；圈子独立头像字段契约预留 + alpha mock。
+  - 用户语言禁词清理（实体/Entity/Circle/交集/影响力/兴趣圈）。
   out_of_scope:
-    - 云侧 Circle 服务/排序/图谱实现。
-    - 圈子私信 1v1 链路改造。
+  - 云侧 Circle 服务/排序/图谱实现。
+  - 圈子私信 1v1 链路改造。
 gwt_acceptance:
   GWT1:
     title: 为什么推荐这个圈子列表入口 GWT
     given:
-      - alpha mock circle fixtures 含主谓宾 primaryText 与辅助说明。
+    - alpha mock circle fixtures 含主谓宾 primaryText 与辅助说明。
     when:
-      - 渲染圈子主页交集卡。
+    - 渲染圈子主页交集卡。
     then:
-      - 交集卡标题为「为什么推荐这个圈子」，每行单结论句 + 至多一条辅助说明 + 查看更多。
+    - 交集卡标题为「为什么推荐这个圈子」，每行单结论句 + 至多一条辅助说明 + 查看更多。
     done_when:
-      - 与 ObjectIntersectionSection 同口径。
+    - 与 ObjectIntersectionSection 同口径。
     edge_cases:
-      - 无交集事实时三态降级不占位。
+    - 无交集事实时三态降级不占位。
     contract_refs:
-      - recommendation/rec_model/projections/intersection_reason.yaml
+    - recommendation/rec_model/projections/intersection_reason.yaml
     performance_points: []
-    evidence:
-      primary:
-        - T2_module_interaction
-      supporting:
-        - T1_contract
     tests:
       planned:
-        - quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
-      recorded:
-        - "T2 quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（「为什么推荐这个圈子」交集卡：单结论句 + 辅助说明 + 查看更多，无交集三态降级，2026-06-16 green）"
-        - "PENDING T3：gamma circle bundle 真实 intersectionReasons 拉取链路待 WP-D。"
+      - file: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.circle_homepage_intersection_redesign.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.circle_homepage_intersection_redesign.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（「为什么推荐这个圈子」交集卡：单结论句
+      + 辅助说明 + 查看更多，无交集三态降级，2026-06-16 green）'
+    - '[migrated_from_recorded] PENDING api_integration：gamma circle bundle 真实 intersectionReasons
+      拉取链路待 WP-D。'
   GWT2:
     title: 圈子价值卡与去好友化 GWT
     given:
-      - alpha mock 提供圈子影响力数据。
+    - alpha mock 提供圈子影响力数据。
     when:
-      - 渲染「这个圈子帮助了很多人」价值卡。
+    - 渲染「这个圈子帮助了很多人」价值卡。
     then:
-      - 卡片与 AuthorImpactCard 同构，文案为「建立了新连接」，无「认识了新朋友」/收藏文案。
+    - 卡片与 AuthorImpactCard 同构，文案为「建立了新连接」，无「认识了新朋友」/收藏文案。
     done_when:
-      - 文案口径与 intersection-definition §17 一致。
+    - 文案口径与 intersection-definition §17 一致。
     edge_cases:
-      - 无影响力事实时不展示价值项。
+    - 无影响力事实时不展示价值项。
     contract_refs:
-      - content/post/projections/author_impact_item.yaml
+    - content/post/projections/author_impact_item.yaml
     performance_points: []
-    evidence:
-      primary:
-        - T2_module_interaction
-      supporting:
-        - T1_contract
     tests:
       planned:
-        - quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
-      recorded:
-        - "T2 quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（圈子价值卡与 AuthorImpactCard 同构，文案「建立了新连接」，无好友化/收藏文案，2026-06-16 green）"
-        - "PENDING T3：gamma /v1/circles/{id}/impact 真实链路待 WP-D。"
+      - file: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.circle_homepage_intersection_redesign.gwt2_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.circle_homepage_intersection_redesign.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（圈子价值卡与
+      AuthorImpactCard 同构，文案「建立了新连接」，无好友化/收藏文案，2026-06-16 green）'
+    - '[migrated_from_recorded] PENDING api_integration：gamma /v1/circles/{id}/impact
+      真实链路待 WP-D。'
   GWT3:
     title: 记录流双列瀑布与卡内交集句 GWT
     given:
-      - 圈子主页记录 tab 渲染完成。
+    - 圈子主页记录 tab 渲染完成。
     when:
-      - 查看一级 tab、二级过滤与记录流卡片。
+    - 查看一级 tab、二级过滤与记录流卡片。
     then:
-      - 一级 tab 显示「记录」；二级过滤在最右侧、非胶囊；记录流双列瀑布；每卡有且仅一条交集句。
+    - 一级 tab 显示「记录」；二级过滤在最右侧、非胶囊；记录流双列瀑布；每卡有且仅一条交集句。
     done_when:
-      - 二级过滤与用户主页同一实现模式。
+    - 二级过滤与用户主页同一实现模式。
     edge_cases:
-      - 卡片无 intersectionReasons 时不展示交集句、不占位。
+    - 卡片无 intersectionReasons 时不展示交集句、不占位。
     contract_refs:
-      - social/circle/ui_config.yaml
+    - social/circle/ui_config.yaml
     performance_points: []
-    evidence:
-      primary:
-        - T2_module_interaction
-      supporting:
-        - T1_contract
     tests:
       planned:
-        - quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart
-      recorded:
-        - "T2 quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart（记录流双列瀑布、二级过滤右侧非胶囊、每卡至多一条交集句，无 reasons 不占位，2026-06-16 green）"
-        - "PENDING T3：gamma circle 记录流真实卡片 intersectionReasons 待 WP-D。"
+      - file: quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart
+      recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.circle_homepage_intersection_redesign.gwt3_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.circle_homepage_intersection_redesign.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart（记录流双列瀑布、二级过滤右侧非胶囊、每卡至多一条交集句，无
+      reasons 不占位，2026-06-16 green）'
+    - '[migrated_from_recorded] PENDING api_integration：gamma circle 记录流真实卡片 intersectionReasons
+      待 WP-D。'
   GWT4:
     title: 头部头像簇单计数与独立头像 GWT
     given:
-      - alpha mock circle fixtures 含成员头像簇与 iconUrl。
+    - alpha mock circle fixtures 含成员头像簇与 iconUrl。
     when:
-      - 渲染圈子主页头部。
+    - 渲染圈子主页头部。
     then:
-      - 头部展示头像簇 +「N 成员」单计数与圈子独立头像（缺省回退封面）；无禁用术语外露。
+    - 头部展示头像簇 +「N 成员」单计数与圈子独立头像（缺省回退封面）；无禁用术语外露。
     done_when:
-      - 头部不挂 4 列统计行。
+    - 头部不挂 4 列统计行。
     edge_cases:
-      - iconUrl 缺省时回退 coverUrl。
+    - iconUrl 缺省时回退 coverUrl。
     contract_refs:
-      - social/circle/fields.yaml
+    - social/circle/fields.yaml
     performance_points: []
-    evidence:
-      primary:
-        - T2_module_interaction
-      supporting:
-        - T1_contract
     tests:
       planned:
-        - quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
-      recorded:
-        - "T2 quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（头部头像簇 +「N 成员」单计数 + 独立头像缺省回退封面，无禁用术语外露，2026-06-16 green）"
-        - "PENDING T3：gamma circle fields iconUrl/成员计数真实链路待 WP-D。"
+      - file: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.circle_homepage_intersection_redesign.gwt4_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.circle_homepage_intersection_redesign.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（头部头像簇
+      +「N 成员」单计数 + 独立头像缺省回退封面，无禁用术语外露，2026-06-16 green）'
+    - '[migrated_from_recorded] PENDING api_integration：gamma circle fields iconUrl/成员计数真实链路待
+      WP-D。'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
-    - make verify-app-page-horizontal-quality
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - make verify-app-page-horizontal-quality
   full_gate:
-    - make gate
+  - make gate

@@ -19,11 +19,13 @@ gwt_acceptance:
   GWT1:
     title: 读写分离 + 多读切片灌数（各域 indexer → quwoquan_objects，ES 主 + native 回退）
     given:
-    - 各域写时 Projector + Backfill 已就绪；search-service 装配 FallbackBackend(Primary=ES, Fallback=native)。
+    - 各域写时 Projector + Backfill 已就绪；search-service 装配 FallbackBackend(Primary=ES,
+      Fallback=native)。
     when:
     - 各域发布/更新/下线事件触发写时投影，或 backfill 全量重建灌入 quwoquan_objects。
     then:
-    - content.post/entity.homepage/circle.circle/circle.group/user.profile + location.place 进统一索引，读路径零扫描业务主集合。
+    - content.post/entity.homepage/circle.circle/circle.group/user.profile + location.place
+      进统一索引，读路径零扫描业务主集合。
     - ES 故障整体降级 native，不阻塞主写/读路径；读模型可重建/回放。
     done_when:
     - 搜索读请求只走 metadata 只读 API + 注入 CloudRequestHeaders 审计；多读切片按 objectType 独立弹性。
@@ -36,70 +38,111 @@ gwt_acceptance:
     performance_points:
     - 读写分离避免高并发搜索流量长期扫描业务主集合。
     - 多读切片支持独立副本数/缓存/限流/弹性。
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T3_integration
     tests:
       planned: []
       recorded:
-      - quwoquan_service/runtime/search/es/indexer_test.go
-      - quwoquan_service/runtime/search/es/query_builder_test.go
-      - quwoquan_service/runtime/search/backend_switch_test.go
-      - quwoquan_service/services/content-service/internal/infrastructure/placeindex/backfill_test.go
-      - quwoquan_service/services/content-service/internal/infrastructure/placeindex/projector_test.go
-    status: passed
+      - file: quwoquan_service/runtime/search/es/indexer_test.go
+      - file: quwoquan_service/runtime/search/es/query_builder_test.go
+      - file: quwoquan_service/runtime/search/backend_switch_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/placeindex/backfill_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/placeindex/projector_test.go
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: integration
+        cases:
+        - api_integration.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.integration
+        envs: &id002
+        - beta
+        - gamma
+    notes: []
   GWT2:
-    title: search-service + ES 端到端冒烟（stackctl gamma：package/up/health/verify + /v1/search 200 + feedback 202）
+    title: search-service + ES 端到端冒烟（stackctl gamma：package/up/health/verify + /v1/search
+      200 + feedback 202）
     given:
     - local-gamma 已通过 stackctl 实例化 search-service（容器 search-service:18095，ES quwoquan_objects）。
     when:
-    - stackctl package --env gamma --include-services；up --env gamma --skip-app（含 backfill）；health --target gamma-local --scope full；verify --env gamma --kind all --tier all。
+    - stackctl package --env gamma --include-services；up --env gamma --skip-app（含
+      backfill）；health --target gamma-local --scope full；verify --env gamma --kind
+      all --tier all。
     - 经 Caddy 网关 POST /v1/search 与 POST /v1/search/feedback。
     then:
-    - up 阶段 quwoquan_objects backfill 完成（total/indexed），places 投影完成；health 全 healthy（search-service -> 200）；verify 全 checks passed。
-    - /v1/search 返回 200，信封含 requestId/rankingVersion/experimentBucket 与 hit 级 rankReasons/rankPosition；/v1/search/feedback 返回 202 accepted。
+    - up 阶段 quwoquan_objects backfill 完成（total/indexed），places 投影完成；health 全 healthy（search-service
+      -> 200）；verify 全 checks passed。
+    - /v1/search 返回 200，信封含 requestId/rankingVersion/experimentBucket 与 hit 级 rankReasons/rankPosition；/v1/search/feedback
+      返回 202 accepted。
     done_when:
-    - 搜索 T3 真实链路证据齐全（artifacts/local-gamma/search_smoke_report.json + artifacts/stackctl/gamma/**）。
+    - 搜索 api_integration 真实链路证据齐全（artifacts/local-gamma/search_smoke_report.json +
+      artifacts/stackctl/gamma/**）。
     edge_cases:
     - 空 query 返回结构化 400；纯 ES 无 fallback 时诚实 503；ES-down + native fallback 退化 200。
     contract_refs:
     - contracts/metadata/_shared/search_contract.yaml
     performance_points:
     - local-gamma 为 linux/amd64 模拟 ES，性能不代表真集群（R-S06-S-1）。
-    evidence:
-      primary:
-      - T3_integration
-      supporting:
-      - T1_contract
     tests:
-      planned:
-      - 'T3 长稳：写时投影常驻增量 + ES 重启后索引一致性与补偿恢复（R-S06-S-2 / WP-E）。'
-      - 'T3 真集群：原生镜像/托管集群 batch 与启动 SLA 重校准（R-S06-S-1 / WP-E）。'
-      - 'CI：search-service 独立 Go module go.mod/go.sum 依赖图可复现构建验证 —— 阻塞于版本控制：services/search-service/ 整体 git untracked，待用户提交后方可在干净检出上验证（R-S06-S-3 / WP-E）。'
+      planned: []
       recorded:
-      - quwoquan_service/services/search-service/tests/search_contract_test.go
-      - quwoquan_service/services/search-service/tests/storage_ttl_contract_test.go
-      - quwoquan_service/services/search-service/internal/infrastructure/searchsignals/stream_publisher_test.go
-      - quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
-      - artifacts/local-gamma/search_signal_t3_report.json
+      - file: quwoquan_service/services/search-service/tests/search_contract_test.go
+      - file: quwoquan_service/services/search-service/tests/storage_ttl_contract_test.go
+      - file: quwoquan_service/services/search-service/internal/infrastructure/searchsignals/stream_publisher_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
+      - artifact: artifacts/local-gamma/search_signal_t3_report.json
     status: implemented
     notes:
-    - 端到端冒烟（R-S06-S）已绿；推荐信号双服务 T3（R-S07-5）已补真实链路证据（发布+消费+投影闭环，见 search_signal_t3_report.json）。
-    - 仍 planned：长稳 / 真集群（R-S06-S-1/2 / WP-E）；go module 可复现（R-S06-S-3）阻塞于 services/search-service/ 整体 git untracked，待用户 git 提交后方可在干净检出验证。
+    - 端到端冒烟（R-S06-S）已绿；推荐信号双服务 api_integration（R-S07-5）已补真实链路证据（发布+消费+投影闭环，见 search_signal_t3_report.json）。
+    - 仍 planned：长稳 / 真集群（R-S06-S-1/2 / WP-E）；go module 可复现（R-S06-S-3）阻塞于 services/search-service/
+      整体 git untracked，待用户 git 提交后方可在干净检出验证。
+    - '[migrated_from_planned] api_integration 长稳：写时投影常驻增量 + ES 重启后索引一致性与补偿恢复（R-S06-S-2
+      / WP-E）。'
+    - '[migrated_from_planned] api_integration 真集群：原生镜像/托管集群 batch 与启动 SLA 重校准（R-S06-S-1
+      / WP-E）。'
+    - '[migrated_from_planned] CI：search-service 独立 Go module go.mod/go.sum 依赖图可复现构建验证
+      —— 阻塞于版本控制：services/search-service/ 整体 git untracked，待用户提交后方可在干净检出上验证（R-S06-S-3
+      / WP-E）。'
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: integration
+        cases:
+        - api_integration.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.integration
+        envs: *id002
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.contract
+        envs: *id001
   GWT3:
     title: 真集群高并发容量、稳定性与可重复性准出（R-S06-S-1）
     given:
-    - search_slo.yaml#load_model 已定义 suggest/result/feedback/indexing 的 baseline/peak/spike 目标。
-    - search-service 已具备 in-flight 背压、timeout、热点 relatedTerms cache、ES stable sort/tie-break 与 AB sticky。
+    - search_slo.yaml#load_model 已定义 suggest/result/feedback/indexing 的 baseline/peak/spike
+      目标。
+    - search-service 已具备 in-flight 背压、timeout、热点 relatedTerms cache、ES stable sort/tie-break
+      与 AB sticky。
     when:
-    - 在 prod-sim 或原生 ES/OpenSearch 真集群执行 warm/cold cache、热点/长尾、混合读写、backfill 并发、ES restart、Redis delay、突刺与长稳压测。
-    - 在多副本环境对同 viewer/session/query/filter 连续重复查询，覆盖 refresh、replica 切换与 cold/warm cache。
+    - 在 prod-sim 或原生 ES/OpenSearch 真集群执行 warm/cold cache、热点/长尾、混合读写、backfill 并发、ES
+      restart、Redis delay、突刺与长稳压测。
+    - 在多副本环境对同 viewer/session/query/filter 连续重复查询，覆盖 refresh、replica 切换与 cold/warm
+      cache。
     then:
-    - 回填 measured RPS/P95/P99、错误率、degrade rate、cache hit、ES heap/GC/threadpool queue、Redis lag、index freshness、饱和点与扩容阈值。
-    - TopN objectType+objectId 序列在稳定数据和同 rankingVersion/policyVersion/indexVersion 下不跳变；合法变化可解释。
+    - 回填 measured RPS/P95/P99、错误率、degrade rate、cache hit、ES heap/GC/threadpool queue、Redis
+      lag、index freshness、饱和点与扩容阈值。
+    - TopN objectType+objectId 序列在稳定数据和同 rankingVersion/policyVersion/indexVersion
+      下不跳变；合法变化可解释。
     - 未达 SLO 自动 NO-GO，不得用 local-gamma 单节点结果替代。
     done_when:
     - R-S06-S-1 backlog 状态可更新为已解决，并附真集群报告。
@@ -109,42 +152,61 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/services/search-service/configs/observability/search_slo.yaml
     performance_points:
-    - result 首批 P95/P99、错误率、degrade rate、cache hit、ES queue/heap/GC、Redis lag 与 index freshness 必须由真集群压测报告给出。
+    - result 首批 P95/P99、错误率、degrade rate、cache hit、ES queue/heap/GC、Redis lag 与 index
+      freshness 必须由真集群压测报告给出。
     - 同 query 多副本 repeatability 必须证明 TopN 不跳变，未达标自动 NO-GO。
-    evidence:
-      primary:
-      - T3_integration
-      supporting:
-      - T1_contract
-      - T2_module_interaction
     tests:
       planned:
-      - artifacts/search-load/prod-sim/search_capacity_report.json
-      - artifacts/search-load/prod-sim/search_repeatability_multi_replica_report.json
-      - artifacts/stackctl/prod/search_release_verify_report.json
+      - artifact: artifacts/search-load/prod-sim/search_capacity_report.json
+      - artifact: artifacts/search-load/prod-sim/search_repeatability_multi_replica_report.json
+      - artifact: artifacts/stackctl/prod/search_release_verify_report.json
       recorded:
-      - quwoquan_service/runtime/search/sort_stable_test.go
-      - quwoquan_service/runtime/search/es/query_builder_test.go
-      - quwoquan_service/scripts/search/verify_search_local_gamma_capacity.py
-      - artifacts/local-gamma/search_repeatability_golden_diff.json
-      - artifacts/local-gamma/search_r_s06_s1_local_gamma_report.json
-      - artifacts/search-load/search_load_analysis.md
-      - artifacts/search-load/search_e2e_hotpath_profile.md
+      - file: quwoquan_service/runtime/search/sort_stable_test.go
+      - file: quwoquan_service/runtime/search/es/query_builder_test.go
+      - file: quwoquan_service/scripts/search/verify_search_local_gamma_capacity.py
+      - artifact: artifacts/local-gamma/search_repeatability_golden_diff.json
+      - artifact: artifacts/local-gamma/search_r_s06_s1_local_gamma_report.json
+      - artifact: artifacts/search-load/search_load_analysis.md
+      - artifact: artifacts/search-load/search_e2e_hotpath_profile.md
     status: partial
     notes:
-    - local 单节点重复查询 0 跳变、高并发方法学、压测工具链与 `verify_search_local_gamma_capacity.py` local-gamma 聚合报告已 recorded；脚本显式输出 `r_s06_s1_closed_by_local_gamma=false`，真集群 measured 值和多副本 preference 验证仍是发布前阻断。
+    - local 单节点重复查询 0 跳变、高并发方法学、压测工具链与 `verify_search_local_gamma_capacity.py` local-gamma
+      聚合报告已 recorded；脚本显式输出 `r_s06_s1_closed_by_local_gamma=false`，真集群 measured 值和多副本
+      preference 验证仍是发布前阻断。
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: integration
+        cases:
+        - api_integration.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.integration
+        envs: *id002
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.gwt3_local_contract
+        envs: *id001
   GWT4:
     title: 搜索词热力、相关搜索词与推荐 Feed 排序闭环
     given:
-    - /v1/search query log、/v1/search/feedback、queryheat、Redis Stream、content-service consumer、FeatureStore 与 RuleScorer 已装配。
+    - /v1/search query log、/v1/search/feedback、queryheat、Redis Stream、content-service
+      consumer、FeatureStore 与 RuleScorer 已装配。
     when:
-    - 用户搜索并点击结果，search-service 记录 query/feedback，queryheat 生成 relatedTerms/termHeat，搜索信号发布到 Redis，content-service 消费并写入 rm_recommend_feature。
+    - 用户搜索并点击结果，search-service 记录 query/feedback，queryheat 生成 relatedTerms/termHeat，搜索信号发布到
+      Redis，content-service 消费并写入 rm_recommend_feature。
     then:
     - 搜索结果页排序可消费 termHeat 并输出 rankReasons/rankingVersion/experimentBucket。
-    - 推荐 Feed scorer 可读取 searchTermAffinity/searchTermHeat/searchTopObjectAffinity 并影响候选得分。
+    - 推荐 Feed scorer 可读取 searchTermAffinity/searchTermHeat/searchTopObjectAffinity
+      并影响候选得分。
     - AB bucket 可按 control/term_heat 查询；线上收益显著性作为发布后观察项。
     done_when:
-    - 搜索 → 推荐特征 → Feed 排序消费链路有 T2/T3 证据；运营报告包含请求量、错误率、degrade、cache、AB bucket、特征 freshness。
+    - 搜索 → 推荐特征 → Feed 排序消费链路有 local_contract/api_integration 证据；运营报告包含请求量、错误率、degrade、cache、AB
+      bucket、特征 freshness。
     edge_cases:
     - Redis 不可用时 result 主路径继续返回；信号 publish best-effort 并暴露错误/lag 指标。
     - 空 userId 不写推荐特征，验证时必须带稳定 X-User-Id 或 session。
@@ -156,26 +218,38 @@ gwt_acceptance:
     performance_points:
     - queryheat / relatedTerms 读取必须有缓存与 TTL；Redis publish 不进入用户感知延迟预算。
     - AB bucket 查询、特征 freshness、Feed scorer 命中率必须可运营观测。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_integration
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - artifacts/search-obs/prod-observation/search_ab_benefit_report.md
+      - artifact: artifacts/search-obs/prod-observation/search_ab_benefit_report.md
       recorded:
-      - quwoquan_service/services/search-service/internal/application/queryheat
-      - quwoquan_service/services/search-service/tests/storage_ttl_contract_test.go
-      - quwoquan_service/services/search-service/internal/infrastructure/searchsignals/stream_publisher_test.go
-      - quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
-      - quwoquan_service/runtime/recommendation
-      - artifacts/local-gamma/search_signal_t3_report.json
-      - artifacts/search-obs/search_observability_ab_recommendation_report.md
-    status: passed
+      - file: quwoquan_service/services/search-service/internal/application/queryheat
+      - file: quwoquan_service/services/search-service/tests/storage_ttl_contract_test.go
+      - file: quwoquan_service/services/search-service/internal/infrastructure/searchsignals/stream_publisher_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
+      - file: quwoquan_service/runtime/recommendation
+      - artifact: artifacts/local-gamma/search_signal_t3_report.json
+      - artifact: artifacts/search-obs/search_observability_ab_recommendation_report.md
+    status: completed
     notes:
     - 链路可消费性已完成；线上 AB 收益显著性不阻断稳定性准出，但需发布后观察。
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.gwt4_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: integration
+        cases:
+        - api_integration.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.integration
+        envs: *id002
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_storage_topology_and_elasticity.contract
+        envs: *id001
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

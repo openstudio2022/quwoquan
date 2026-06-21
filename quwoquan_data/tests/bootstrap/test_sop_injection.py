@@ -91,41 +91,46 @@ def test_render_prompt_without_sop_does_not_crash():
     assert "## 必须覆盖的事实" in prompt
 
 
-def test_render_prompt_factual_reference_uses_independent_expression():
+def test_render_prompt_unauthorized_base_uses_moderate_polish_retention():
+    """版权风险全面放开：未授权底稿与授权底稿统一走「以底稿为基础适度润色、大面积保留」。
+
+    不再有「事实参考材料 / 独立表达」分叉；贴合度门对所有来源生效。
+    """
     pack = _build(
         {
             "titleHint": "峨眉山",
             "baseSourceRef": "entities/地点/景区/峨眉山/1.download/sources/01.base/source.md",
         },
-        ref="entity-factual-reference",
+        ref="entity-unauthorized-base",
     )
     pack["baseDraftText"] = "# 底稿\n\n这是一段底稿正文。"
     prompt = render_prompt_md(pack)
-    assert f"{int(FIDELITY_MIN * 100)}%~{int(FIDELITY_MAX * 100)}%" not in prompt
-    assert "授权底稿" not in prompt
-    assert "事实参考材料" in prompt
-    assert "独立表达" in prompt
+    assert f"{int(FIDELITY_MIN * 100)}%~{int(FIDELITY_MAX * 100)}%" in prompt
+    assert "适度润色" in prompt
+    assert "大面积保留" in prompt
+    # 旧 factual 范式词汇必须消失
+    assert "事实参考材料" not in prompt
+    assert "独立表达" not in prompt
     assert "`draft.article.md`" in prompt
 
 
-def test_factual_reference_sanitizes_adaptation_markers_from_sop_fewshot():
+def test_sop_fewshot_passthrough_unchanged_for_all_sources():
+    """全面放开后 few-shot 不再按来源模式降噪，example/guide 原样透传。"""
     pack = _build(
         {
             "titleHint": "峨眉山",
             "baseSourceRef": "entities/地点/景区/峨眉山/1.download/sources/01.base/source.md",
         },
-        ref="entity-factual-sop",
+        ref="entity-fewshot-passthrough",
     )
-    pack["baseDraftText"] = "# 事实材料\n\n这是一段事实材料。"
+    pack["baseDraftText"] = "# 底稿\n\n这是一段底稿正文。"
     pack["sopFewshot"] = {
         "example": "以百科底稿为基础适度加工（轻改）。",
-        "guide": "授权底稿来源，可在许可范围内改编；贴合度控制；以下方授权底稿为基底；轻改。",
+        "guide": "保留必要事实，去语病与错字，私人信息脱敏替代。",
     }
     prompt = render_prompt_md(pack)
-    for marker in ("轻改", "授权底稿来源", "可在许可范围内改编", "以下方授权底稿为基底", "贴合度控制"):
-        assert marker not in prompt
-    assert "事实参考来源" in prompt
-    assert "独立表达" in prompt
+    assert "以百科底稿为基础适度加工（轻改）。" in prompt
+    assert "保留必要事实，去语病与错字，私人信息脱敏替代。" in prompt
 
 
 def test_render_prompt_licensed_adaptation_uses_runtime_fidelity_range_and_draft_filename():

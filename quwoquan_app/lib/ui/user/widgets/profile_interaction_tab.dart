@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,13 +8,22 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/comment_observability.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/design_system/spacing/discovery_feed_spacing.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
+
+part 'profile_interaction_tab_widgets.dart';
+part 'profile_interaction_tab_inline_actions.dart';
 
 class ProfileInteractionTab extends ConsumerStatefulWidget {
   const ProfileInteractionTab({
@@ -37,11 +48,18 @@ class ProfileInteractionTab extends ConsumerStatefulWidget {
       _ProfileInteractionTabState();
 }
 
-class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
+class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
+    with _ProfileInlineActionsMixin {
+  static const double _previewAspectRatio =
+      DiscoveryFeedSpacing.homeFeedArticleSideThumbAspectRatio;
+  static const double _visitorFollowButtonWidth = 72.0;
+
   List<UserProfileSubTabConfig> get _interactionFilters =>
       UserProfileUIConfig.interactionSubTabs;
 
   List<ProfileInteractionActivityViewData>? _items;
+  final Map<String, bool> _visitorFollowingByUserId = <String, bool>{};
+  final Set<String> _visitorRelationshipLoading = <String>{};
   bool _loading = true;
   InteractionSubTab? _loadedSubTab;
   InteractionDirection? _loadedDirection;
@@ -62,7 +80,11 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
     _loadedDirection = direction;
     _loadedSubTab = subTab;
     final repo = ref.read(userProfileRepositoryProvider);
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _replyingActivityId = null;
+      _replySubmitting = false;
+    });
     try {
       final list = direction == InteractionDirection.received
           ? await repo.listProfileInteractionReceivedView(widget.userId)
@@ -107,143 +129,32 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
     final state = ref.watch(profileNotifierProvider(widget.userId));
     final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
     _scheduleReloadIfNeeded(state);
-    final fg = AppColorsFunctional.getColor(
-      widget.isDark,
-      ColorType.foregroundPrimary,
-    );
     final fgSecondary = AppColors.iosSecondaryLabel(context);
-    final activeIndex = _interactionFilters.indexWhere(
-      (filter) => _interactionSubTabForId(filter.id) == state.interactionSubTab,
-    );
+    final selectedFilterId = _interactionFilters
+        .firstWhere(
+          (filter) =>
+              _interactionSubTabForId(filter.id) == state.interactionSubTab,
+          orElse: () => _interactionFilters.first,
+        )
+        .id;
 
-    final header = Container(
+    final header = KeyedSubtree(
       key: const ValueKey<String>('profile-interaction-secondary-tabs'),
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.containerMd,
-        AppSpacing.intraGroupXs,
-        AppSpacing.containerMd,
-        AppSpacing.intraGroupXs,
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
-              child: SingleChildScrollView(
-                key: widget.secondaryTabBarKey,
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                child: Row(
-                  children: List<Widget>.generate(_interactionFilters.length, (
-                    index,
-                  ) {
-                    final selected =
-                        (activeIndex < 0 ? 0 : activeIndex) == index;
-                    final label = UITextConstants.contentLabelForKey(
-                      _interactionFilters[index].labelKey,
-                    );
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        right: index == _interactionFilters.length - 1
-                            ? AppSpacing.zero
-                            : AppSpacing.intraGroupSm,
-                      ),
-                      child: CupertinoButton(
-                        minimumSize: const Size(
-                          AppSpacing.minInteractiveSize,
-                          AppSpacing.minInteractiveSize,
-                        ),
-                        padding: EdgeInsets.zero,
-                        onPressed: () {
-                          notifier.setInteractionSubTab(
-                            _interactionSubTabForId(
-                              _interactionFilters[index].id,
-                            ),
-                          );
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeOutCubic,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.containerSm,
-                            vertical: AppSpacing.intraGroupXs,
-                          ),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? AppColors.iosTintedFill(context)
-                                : AppColors.transparent,
-                            borderRadius: BorderRadius.circular(
-                              AppSpacing.radiusNinetyNine,
-                            ),
-                            border: selected
-                                ? Border.all(
-                                    color: AppColors.iosAccent(context)
-                                        .withValues(
-                                          alpha: widget.isDark ? 0.34 : 0.20,
-                                        ),
-                                    width: AppSpacing.hairline,
-                                  )
-                                : null,
-                          ),
-                          child: Text(
-                            label,
-                            style: TextStyle(
-                              fontSize: AppTypography.iosCaption1,
-                              fontWeight: selected
-                                  ? AppTypography.semiBold
-                                  : AppTypography.medium,
-                              color: selected
-                                  ? AppColors.iosAccent(context)
-                                  : fgSecondary,
-                              letterSpacing: -0.08,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                ),
+      child: ProfileSecondaryTabBar(
+        tabs: _interactionFilters
+            .map(
+              (filter) => ProfileSecondaryTabItem(
+                id: filter.id,
+                label: _secondaryTabLabel(filter, state.interactionDirection),
               ),
-            ),
-          ),
-          if (widget.mode == ProfileMode.mine)
-            CupertinoButton(
-              key: const ValueKey<String>(
-                'profile-interaction-direction-entry',
-              ),
-              minimumSize: const Size(
-                AppSpacing.minInteractiveSize,
-                AppSpacing.minInteractiveSize,
-              ),
-              padding: EdgeInsets.only(left: AppSpacing.containerSm),
-              onPressed: () => _showDirectionSheet(
-                context,
-                state.interactionDirection,
-                notifier,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    _directionLabel(state.interactionDirection),
-                    style: TextStyle(
-                      fontSize: AppTypography.iosCaption1,
-                      fontWeight: AppTypography.semiBold,
-                      color: fg,
-                      letterSpacing: -0.08,
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.intraGroupXs),
-                  Icon(
-                    CupertinoIcons.chevron_down,
-                    size: AppSpacing.iconSmall,
-                    color: fgSecondary,
-                  ),
-                ],
-              ),
-            ),
-        ],
+            )
+            .toList(growable: false),
+        selectedId: selectedFilterId,
+        onSelected: (id) =>
+            notifier.setInteractionSubTab(_interactionSubTabForId(id)),
+        isDark: widget.isDark,
+        scrollKey: widget.secondaryTabBarKey,
+        onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
       ),
     );
 
@@ -282,11 +193,24 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
               bottom: AppSpacing.containerMd,
             ),
             itemCount: _items!.length,
-            itemBuilder: (context, i) => _buildInteractionRow(
-              context,
-              _items![i],
-              isLast: i == _items!.length - 1,
-            ),
+            itemBuilder: (context, i) {
+              final item = _items![i];
+              final showVisitorRow =
+                  state.interactionSubTab == InteractionSubTab.views &&
+                  state.interactionDirection == InteractionDirection.received;
+              return showVisitorRow
+                  ? _buildVisitorRow(
+                      context,
+                      item,
+                      isLast: i == _items!.length - 1,
+                    )
+                  : _buildInteractionRow(
+                      context,
+                      item,
+                      direction: state.interactionDirection,
+                      isLast: i == _items!.length - 1,
+                    );
+            },
           );
 
     if (widget.inlineScroll) {
@@ -308,9 +232,22 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
     );
   }
 
+  String _secondaryTabLabel(
+    UserProfileSubTabConfig filter,
+    InteractionDirection direction,
+  ) {
+    if (filter.id == InteractionSubTab.views.id) {
+      return direction == InteractionDirection.received
+          ? UITextConstants.interactionSubVisitors
+          : UITextConstants.profileBrowseHistory;
+    }
+    return UITextConstants.contentLabelForKey(filter.labelKey);
+  }
+
   Widget _buildInteractionRow(
     BuildContext context,
     ProfileInteractionActivityViewData item, {
+    required InteractionDirection direction,
     required bool isLast,
   }) {
     final displayUserId = item.displaySubAccountId;
@@ -339,8 +276,15 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                     AppSpacing.minInteractiveSize,
                     AppSpacing.minInteractiveSize,
                   ),
+                  // 评论类互动：行主体点击深链进入评论详情并定位高亮目标评论；
+                  // 其它互动（点赞/转发等）维持进入对方主页。
                   onPressed: () {
-                    _pushDisplayUser(context, item, avatarUrl);
+                    if (_isCommentActivity(item) &&
+                        _previewObjectEnabled(item)) {
+                      _pushPreviewObject(context, item);
+                    } else {
+                      _pushDisplayUser(context, item, avatarUrl);
+                    }
                   },
                   child: Padding(
                     padding: EdgeInsets.symmetric(
@@ -349,18 +293,29 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        CircleAvatar(
-                          radius: AppSpacing.avatarUserMd / 2,
-                          backgroundImage: avatarUrl.isNotEmpty
-                              ? NetworkImage(avatarUrl)
-                              : null,
-                          backgroundColor: AppColors.iosFill(context),
-                          child: avatarUrl.isEmpty
-                              ? Icon(
-                                  CupertinoIcons.person_crop_circle_fill,
-                                  color: fgSecondary,
-                                )
-                              : null,
+                        SizedBox.square(
+                          dimension: AppSpacing.avatarUserMd,
+                          child: ClipOval(
+                            child: avatarUrl.isEmpty
+                                ? ColoredBox(
+                                    color: AppColors.iosFill(context),
+                                    child: Icon(
+                                      CupertinoIcons.person_crop_circle_fill,
+                                      color: fgSecondary,
+                                    ),
+                                  )
+                                : AppAvatarImage(
+                                    imageUrl: avatarUrl,
+                                    size: AppSpacing.avatarUserMd,
+                                    errorWidget: ColoredBox(
+                                      color: AppColors.iosFill(context),
+                                      child: Icon(
+                                        CupertinoIcons.person_crop_circle_fill,
+                                        color: fgSecondary,
+                                      ),
+                                    ),
+                                  ),
+                          ),
                         ),
                         SizedBox(width: AppSpacing.containerSm),
                         Expanded(
@@ -375,7 +330,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: AppTypography.iosSubheadline,
-                                  fontWeight: AppTypography.semiBold,
+                                  fontWeight: AppTypography.regular,
                                   color: fg,
                                   letterSpacing: -0.18,
                                 ),
@@ -386,6 +341,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                                   item.primaryText,
                                   style: TextStyle(
                                     fontSize: AppTypography.iosFootnote,
+                                    fontWeight: AppTypography.regular,
                                     color: fg,
                                   ),
                                   maxLines: 1,
@@ -432,6 +388,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
             ],
           ),
         ),
+        ..._buildInlineActionArea(context, item, direction: direction),
         if (!isLast)
           Padding(
             padding: EdgeInsets.only(
@@ -451,6 +408,209 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
     );
   }
 
+  Widget _buildVisitorRow(
+    BuildContext context,
+    ProfileInteractionActivityViewData item, {
+    required bool isLast,
+  }) {
+    final displayUserId = item.displaySubAccountId;
+    final displayName = item.displayName;
+    final avatarUrl = resolveAvatarImageUrl(item.displayAvatarUrl);
+    final fg = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
+    final separator = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: widget.isDark ? 0.24 : 0.14);
+    final following = _visitorFollowingByUserId[displayUserId] ?? false;
+    _scheduleVisitorRelationshipLoad(displayUserId);
+
+    return Column(
+      children: <Widget>[
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Expanded(
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(
+                    AppSpacing.minInteractiveSize,
+                    AppSpacing.minInteractiveSize,
+                  ),
+                  onPressed: () => _pushDisplayUser(context, item, avatarUrl),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      vertical: AppSpacing.containerSm,
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        SizedBox.square(
+                          dimension: AppSpacing.avatarUserMd,
+                          child: ClipOval(
+                            child: avatarUrl.isEmpty
+                                ? ColoredBox(
+                                    color: AppColors.iosFill(context),
+                                    child: Icon(
+                                      CupertinoIcons.person_crop_circle_fill,
+                                      color: fgSecondary,
+                                    ),
+                                  )
+                                : AppAvatarImage(
+                                    imageUrl: avatarUrl,
+                                    size: AppSpacing.avatarUserMd,
+                                    errorWidget: ColoredBox(
+                                      color: AppColors.iosFill(context),
+                                      child: Icon(
+                                        CupertinoIcons.person_crop_circle_fill,
+                                        color: fgSecondary,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        SizedBox(width: AppSpacing.containerSm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                displayName.isNotEmpty
+                                    ? displayName
+                                    : displayUserId,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: AppTypography.iosSubheadline,
+                                  fontWeight: AppTypography.regular,
+                                  color: fg,
+                                  letterSpacing: -0.18,
+                                ),
+                              ),
+                              SizedBox(height: AppSpacing.intraGroupXs),
+                              Text(
+                                UITextConstants
+                                    .profileInteractionViewReceivedText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: AppTypography.iosFootnote,
+                                  fontWeight: AppTypography.regular,
+                                  color: fgSecondary,
+                                ),
+                              ),
+                              if (item.createdAt != null) ...<Widget>[
+                                SizedBox(height: AppSpacing.intraGroupXs),
+                                Text(
+                                  _formatInteractionTime(item.createdAt!),
+                                  style: TextStyle(
+                                    fontSize: AppTypography.iosCaption2,
+                                    color: AppColors.iosTertiaryLabel(context),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: AppSpacing.containerSm),
+              _VisitorFollowButton(
+                width: _visitorFollowButtonWidth,
+                following: following,
+                isDark: widget.isDark,
+                onPressed: displayUserId.isEmpty
+                    ? null
+                    : () => _toggleVisitorFollow(displayUserId),
+              ),
+            ],
+          ),
+        ),
+        if (!isLast)
+          Padding(
+            padding: EdgeInsets.only(
+              left:
+                  AppSpacing.containerMd +
+                  AppSpacing.avatarUserMd +
+                  AppSpacing.containerSm,
+              right: AppSpacing.containerMd,
+            ),
+            child: Divider(
+              height: AppSpacing.hairline,
+              thickness: AppSpacing.hairline,
+              color: separator,
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _scheduleVisitorRelationshipLoad(String userId) {
+    if (userId.isEmpty ||
+        _visitorFollowingByUserId.containsKey(userId) ||
+        _visitorRelationshipLoading.contains(userId)) {
+      return;
+    }
+    _visitorRelationshipLoading.add(userId);
+    Future<void>.microtask(() async {
+      try {
+        final relation = await ref
+            .read(userProfileRepositoryProvider)
+            .getRelationship(userId);
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _visitorFollowingByUserId[userId] = relation.isFollowing;
+          _visitorRelationshipLoading.remove(userId);
+        });
+      } catch (error, stackTrace) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            library: 'profile interaction tab',
+            context: ErrorDescription('loading visitor relationship'),
+          ),
+        );
+        _visitorRelationshipLoading.remove(userId);
+      }
+    });
+  }
+
+  Future<void> _toggleVisitorFollow(String userId) async {
+    final repo = ref.read(userProfileRepositoryProvider);
+    final current = _visitorFollowingByUserId[userId] ?? false;
+    setState(() => _visitorFollowingByUserId[userId] = !current);
+    try {
+      if (current) {
+        await repo.unfollowUser(userId);
+      } else {
+        await repo.followUser(userId);
+      }
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'profile interaction tab',
+          context: ErrorDescription('toggling visitor follow'),
+        ),
+      );
+      if (mounted) {
+        setState(() => _visitorFollowingByUserId[userId] = current);
+      }
+    }
+  }
+
   InteractionSubTab _interactionSubTabForId(String id) =>
       interactionSubTabFromId(id);
 
@@ -464,60 +624,28 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
         return CupertinoIcons.chat_bubble;
       case InteractionSubTab.shares:
         return CupertinoIcons.arrowshape_turn_up_right;
+      case InteractionSubTab.views:
+        return CupertinoIcons.eye;
     }
   }
 
   String _emptyStateTitle(InteractionSubTab subTab) {
+    final direction = ref
+        .read(profileNotifierProvider(widget.userId))
+        .interactionDirection;
     switch (subTab) {
       case InteractionSubTab.all:
-        return UITextConstants.profileInteractionEmpty;
+        return UITextConstants.profileInteractionEmptyGuidance;
       case InteractionSubTab.likes:
         return UITextConstants.profileInteractionEmptyLikes;
       case InteractionSubTab.comments:
         return UITextConstants.profileInteractionEmptyComments;
       case InteractionSubTab.shares:
         return UITextConstants.profileInteractionEmptyShares;
-    }
-  }
-
-  String _directionLabel(InteractionDirection direction) {
-    switch (direction) {
-      case InteractionDirection.received:
-        return UITextConstants.profileInteractionDirectionReceived;
-      case InteractionDirection.sent:
-        return UITextConstants.profileInteractionDirectionSent;
-    }
-  }
-
-  Future<void> _showDirectionSheet(
-    BuildContext context,
-    InteractionDirection current,
-    ProfileNotifier notifier,
-  ) async {
-    final selected = await showAppActionSheet<InteractionDirection>(
-      context,
-      title: UITextConstants.profileInteractionDirectionTitle,
-      sections: <AppActionSheetSection<InteractionDirection>>[
-        AppActionSheetSection<InteractionDirection>(
-          items: <AppActionSheetItem<InteractionDirection>>[
-            AppActionSheetItem<InteractionDirection>(
-              label: UITextConstants.profileInteractionDirectionReceived,
-              value: InteractionDirection.received,
-              icon: CupertinoIcons.tray_arrow_down,
-              isSelected: current == InteractionDirection.received,
-            ),
-            AppActionSheetItem<InteractionDirection>(
-              label: UITextConstants.profileInteractionDirectionSent,
-              value: InteractionDirection.sent,
-              icon: CupertinoIcons.paperplane,
-              isSelected: current == InteractionDirection.sent,
-            ),
-          ],
-        ),
-      ],
-    );
-    if (selected != null) {
-      notifier.setInteractionDirection(selected);
+      case InteractionSubTab.views:
+        return direction == InteractionDirection.received
+            ? UITextConstants.profileInteractionEmptyVisitors
+            : UITextConstants.profileInteractionEmptyBrowseHistory;
     }
   }
 
@@ -525,99 +653,18 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
     BuildContext context,
     ProfileInteractionActivityViewData item,
   ) {
-    final fg = AppColorsFunctional.getColor(
-      widget.isDark,
-      ColorType.foregroundPrimary,
-    );
-    final fgSecondary = AppColors.iosSecondaryLabel(context);
     final borderColor =
         SettingsSemanticConstants.conversationSheetCardBorderColor(
           widget.isDark,
         );
     final fill = AppColors.iosSecondaryFill(context);
-    final previewKind = item.previewMediaKind.trim().toLowerCase();
-    final imageUrl = resolveContentMediaUrl(item.previewImageUrl);
-    final previewText = item.previewText.trim();
-    final previewEnabled =
-        !item.previewUnavailable &&
-        item.previewRouteId == AppLinkTemplates.postRouteId &&
-        item.previewObjectId.trim().isNotEmpty;
-    final previewChild = item.previewUnavailable
-        ? _buildPreviewPlaceholder(
-            context,
-            CupertinoIcons.doc_text,
-            UITextConstants.profileInteractionOriginalUnavailable,
-          )
-        : (previewKind == 'image' || previewKind == 'video') &&
-              imageUrl.isNotEmpty
-        ? Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, error, stackTrace) =>
-                    _buildPreviewPlaceholder(
-                      context,
-                      CupertinoIcons.photo,
-                      UITextConstants.profileInteractionPreviewUnavailable,
-                    ),
-              ),
-              if (previewKind == 'video')
-                Center(
-                  child: Icon(
-                    CupertinoIcons.play_circle_fill,
-                    size: AppSpacing.iconMedium,
-                    color: AppColors.white.withValues(alpha: 0.92),
-                  ),
-                ),
-            ],
-          )
-        : previewKind == 'video'
-        ? Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              _buildPreviewPlaceholder(
-                context,
-                CupertinoIcons.play_rectangle,
-                UITextConstants.profileInteractionPreviewUnavailable,
-              ),
-              Center(
-                child: Icon(
-                  CupertinoIcons.play_circle_fill,
-                  size: AppSpacing.iconMedium,
-                  color: fgSecondary,
-                ),
-              ),
-            ],
-          )
-        : previewText.isNotEmpty
-        ? Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.intraGroupSm,
-                vertical: AppSpacing.intraGroupXs,
-              ),
-              child: Text(
-                previewText,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.iosCaption2,
-                  color: fg,
-                  height: AppTypography.lineHeightTight,
-                ),
-              ),
-            ),
-          )
-        : _buildPreviewPlaceholder(
-            context,
-            CupertinoIcons.doc_text,
-            UITextConstants.profileInteractionPreviewUnavailable,
-          );
+    final previewEnabled = _previewObjectEnabled(item);
+    final previewHeight = _interactionPreviewHeight(context, item);
 
     return CupertinoButton(
+      key: ValueKey<String>(
+        'profile-interaction-preview-button-${item.activityId}',
+      ),
       padding: EdgeInsets.zero,
       minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
       onPressed: previewEnabled
@@ -628,8 +675,8 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
           AppSpacing.contentPreviewCornerRadius,
         ),
         child: Container(
-          width: AppSpacing.avatarUserXl,
-          height: AppSpacing.avatarUserLg,
+          width: previewHeight * _previewAspectRatio,
+          height: previewHeight,
           decoration: BoxDecoration(
             color: fill,
             border: Border.all(color: borderColor, width: AppSpacing.hairline),
@@ -637,39 +684,44 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
               AppSpacing.contentPreviewCornerRadius,
             ),
           ),
-          child: previewChild,
+          child: _ProfileInteractionPreviewTile(
+            item: item,
+            isDark: widget.isDark,
+            backgroundColor: fill,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildPreviewPlaceholder(
+  double _interactionPreviewHeight(
     BuildContext context,
-    IconData icon,
-    String label,
+    ProfileInteractionActivityViewData item,
   ) {
-    final fgSecondary = AppColors.iosSecondaryLabel(context);
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.intraGroupSm),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Icon(icon, size: AppSpacing.iconSmall, color: fgSecondary),
-          SizedBox(height: AppSpacing.intraGroupXs),
-          Text(
-            label,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption2,
-              color: fgSecondary,
-              height: AppTypography.lineHeightTight,
-            ),
-          ),
-        ],
-      ),
-    );
+    final textDirection = Directionality.of(context);
+    double lineHeight(double fontSize) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: 'Hg',
+          style: TextStyle(fontSize: fontSize),
+        ),
+        textDirection: textDirection,
+        maxLines: 1,
+      )..layout();
+      return painter.height;
+    }
+
+    var height = lineHeight(AppTypography.iosSubheadline);
+    if (item.primaryText.isNotEmpty) {
+      height += AppSpacing.intraGroupXs + lineHeight(AppTypography.iosFootnote);
+    }
+    if (item.contextText.isNotEmpty) {
+      height += AppSpacing.intraGroupXs + lineHeight(AppTypography.iosCaption1);
+    }
+    if (item.createdAt != null) {
+      height += AppSpacing.intraGroupXs + lineHeight(AppTypography.iosCaption2);
+    }
+    return height.clamp(AppSpacing.avatarUserLg, AppSpacing.avatarUserLg);
   }
 
   void _pushDisplayUser(
@@ -701,12 +753,64 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
         objectId.isEmpty) {
       return;
     }
-    context.push(
-      AppRoutePaths.workBrowser(
-        workId: objectId,
-        source: 'profile-interaction',
-      ),
+    final baseRoute = AppRoutePaths.workBrowser(
+      workId: objectId,
+      filter: _previewFilterFor(item),
+      source: 'profile-interaction',
     );
+    // 评论类互动：深链进入内容评论区并携带评论标识，
+    // 落地后由分屏定位到「回复我的」那条（回复场景用父评论行高亮）。
+    if (_isCommentActivity(item)) {
+      final commentId = item.commentId.trim();
+      final parentCommentId = item.parentCommentId.trim();
+      final isReply = parentCommentId.isNotEmpty;
+      final uri = Uri.parse(baseRoute);
+      final route = uri
+          .replace(
+            queryParameters: <String, String>{
+              ...uri.queryParameters,
+              ...MediaViewerCommentContext.buildDeepLinkQuery(
+                entrySource:
+                    MediaViewerCommentContext.entrySourceProfileInteraction,
+                targetParentCommentId: isReply ? parentCommentId : null,
+                targetReplyId: isReply ? commentId : null,
+                targetCommentId: isReply ? null : commentId,
+              ),
+            },
+          )
+          .toString();
+      ref
+          .read(commentObservabilityProvider)
+          .trackAction(
+            eventName: CommentEventNames.deeplinkOpened,
+            postId: objectId,
+            commentId: commentId.isNotEmpty ? commentId : null,
+            entrySource:
+                MediaViewerCommentContext.entrySourceProfileInteraction,
+            result: 'initiated',
+          );
+      context.push(route);
+      return;
+    }
+    context.push(baseRoute);
+  }
+
+  /// 该活动是否可深链进入内容（评论详情）：被评论内容存在且为 post 路由。
+  bool _previewObjectEnabled(ProfileInteractionActivityViewData item) {
+    return !item.previewUnavailable &&
+        item.previewRouteId == AppLinkTemplates.postRouteId &&
+        item.previewObjectId.trim().isNotEmpty;
+  }
+
+  String _previewFilterFor(ProfileInteractionActivityViewData item) {
+    final kind = _normalizedPreviewKind(item);
+    if (kind == _ProfilePreviewKind.video) {
+      return 'video';
+    }
+    if (kind == _ProfilePreviewKind.article) {
+      return 'article';
+    }
+    return 'image';
   }
 
   String _formatInteractionTime(DateTime value) {

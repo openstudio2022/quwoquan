@@ -667,26 +667,26 @@ codegen 必须统一生成：
 
 ### 8.1 候选校验链路
 
-T1：
+local_contract：
 - metadata schema 校验
 - route/surface/operation/object_type 唯一性校验
 - `sys.*` / `ops.*` 前缀与 kind 一致性校验
 - workflow 与 audit 关联完整性校验
 
-T2：
+local_contract：
 - 门户菜单渲染
 - 对象跳转可达性
 - 危险动作确认与审批提示
 - 全局搜索、通知、工作台入口验证
 - dashboard 卡片、图表、空态、下钻与时间窗切换验证
 
-T3：
+api_integration：
 - 各领域 plane capability 声明完整性
 - Go / Python / App / Web codegen 产物存在性
 - `domain-plane -> process` 映射完整性
 - `seed-box` 同 Pod 与独立 Pod 契约一致性
 
-T4：
+user_acceptance：
 - 生产前统一门户冒烟
 - 典型高危动作审计回放
 - 账号恢复双签链路

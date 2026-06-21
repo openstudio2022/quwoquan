@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -21,6 +20,8 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
@@ -126,8 +127,9 @@ class _SearchNetworkResultsPageState
     }
     _didTrackPageImpression = true;
     _behaviorTracker = ref.read(contentBehaviorTrackerProvider);
-    _feedRequestIdAtEnter =
-        ref.read(feedSessionProvider.notifier).currentFeedRequestId;
+    _feedRequestIdAtEnter = ref
+        .read(feedSessionProvider.notifier)
+        .currentFeedRequestId;
     _behaviorTracker!.trackImpression(
       'search_network_results',
       contentType: 'search_page',
@@ -374,9 +376,16 @@ class _SearchNetworkResultsPageState
         ),
         SizedBox(height: AppSpacing.containerMd),
         if (_isLoading)
-          _StatusMessage(text: '小趣正在整理搜索方向', isDark: isDark, loading: true)
+          _StatusMessage(
+            text: UITextConstants.searchXiaoquLoading,
+            isDark: isDark,
+            loading: true,
+          )
         else if ((_xiaoquResult?.citations?.length ?? 0) == 0)
-          _StatusMessage(text: '暂时没有找到可引用的网络结果', isDark: isDark)
+          _StatusMessage(
+            text: UITextConstants.searchNoNetworkReferences,
+            isDark: isDark,
+          )
         else
           ..._buildXiaoquCitationTiles(
             isDark: isDark,
@@ -408,12 +417,12 @@ class _SearchNetworkResultsPageState
     return withDegradeBanner(<Widget>[
       if (_isLoading)
         _StatusMessage(
-          text: '正在加载${activeTab.label}结果',
+          text: UITextConstants.pageLoadingA11y('${activeTab.label}结果'),
           isDark: isDark,
           loading: true,
         )
       else if (contentItems.isEmpty)
-        _StatusMessage(text: '没有找到相关${activeTab.label}结果', isDark: isDark)
+        _StatusMessage(text: UITextConstants.searchEmptyResult, isDark: isDark)
       else
         ..._buildContentMasonryTiles(
           isDark: isDark,
@@ -459,18 +468,14 @@ class _SearchNetworkResultsPageState
     if (_degradeSignals.isEmpty || _hasRenderableResultsForActiveTab) {
       return null;
     }
-    final message = _degradeSignals
-        .map((signal) => signal.message.trim())
-        .firstWhere(
-          (value) => value.isNotEmpty,
-          orElse: () => '部分结果暂时不可用，请稍后重试。',
-        );
+    const friendlyMessage = UITextConstants.searchPartialGroupFailed;
     return AppTransientErrorNotice(
       semantic: UiErrorSemantic(
         category: UiErrorCategory.sectionLoad,
         scope: UiErrorScope.section,
-        title: message,
-        message: message,
+        title: friendlyMessage,
+        message: friendlyMessage,
+        copyKey: 'searchPartialGroupFailed',
         presentation: UiErrorPresentation.transientNotice,
         tone: UiErrorTone.caution,
       ),
@@ -484,7 +489,11 @@ class _SearchNetworkResultsPageState
   }) {
     if (_isLoading) {
       return <Widget>[
-        _StatusMessage(text: '正在加载应用内结果', isDark: isDark, loading: true),
+        _StatusMessage(
+          text: UITextConstants.pageLoadingA11y('应用内结果'),
+          isDark: isDark,
+          loading: true,
+        ),
       ];
     }
 
@@ -521,7 +530,10 @@ class _SearchNetworkResultsPageState
           count: 0,
           isDark: isDark,
         ),
-        _StatusMessage(text: '没有找到相关应用内结果', isDark: isDark),
+        _StatusMessage(
+          text: UITextConstants.searchNoAppResults,
+          isDark: isDark,
+        ),
       ];
     }
     return sections;
@@ -638,7 +650,12 @@ class _SearchNetworkResultsPageState
     }
 
     if (sections.isEmpty) {
-      return <Widget>[_StatusMessage(text: '还没有找到和你相关的交集', isDark: isDark)];
+      return <Widget>[
+        _StatusMessage(
+          text: UITextConstants.searchNoIntersectionResults,
+          isDark: isDark,
+        ),
+      ];
     }
     return sections;
   }
@@ -756,7 +773,8 @@ class _SearchNetworkResultsPageState
       final isVideo = item.contentType == 'video';
       final isArticle = item.contentType == 'article';
       // §3：发现/交集线索区的交集句只来自云侧 primaryText；无 primaryText 不拼装。
-      final intersectionSentence = item.intersectionReason?.primaryText.trim() ?? '';
+      final intersectionSentence =
+          item.intersectionReason?.primaryText.trim() ?? '';
       models.add(
         _IntersectionCardModel(
           targetType: _IntersectionTargetType.post,
@@ -994,7 +1012,17 @@ class _SearchNetworkResultsPageState
 
   Future<void> _loadResults() async {
     final token = ++_requestToken;
+    final stopwatch = Stopwatch()..start();
     final trimmedQuery = _query.trim();
+    ref
+        .read(pageLifecycleObservabilityProvider)
+        .recordPageState(
+          pageName: 'search_network_results',
+          route: AppRoutePaths.globalSearch,
+          surface: _activeTabId,
+          phase: 'onlineLoading',
+          copyKey: 'pageLoadingA11y',
+        );
     setState(() {
       _isLoading = true;
       _errorSemantic = null;
@@ -1021,6 +1049,16 @@ class _SearchNetworkResultsPageState
           _xiaoquResult = result;
           _isLoading = false;
         });
+        ref
+            .read(pageLifecycleObservabilityProvider)
+            .recordPageState(
+              pageName: 'search_network_results',
+              route: AppRoutePaths.globalSearch,
+              surface: _activeTabId,
+              phase: 'onlineSuccess',
+              durationMs: stopwatch.elapsedMilliseconds,
+              itemCount: result.citations?.length ?? 0,
+            );
         return;
       }
 
@@ -1032,6 +1070,16 @@ class _SearchNetworkResultsPageState
           setState(() {
             _isLoading = false;
           });
+          ref
+              .read(pageLifecycleObservabilityProvider)
+              .recordPageState(
+                pageName: 'search_network_results',
+                route: AppRoutePaths.globalSearch,
+                surface: _activeTabId,
+                phase: 'emptySuccess',
+                durationMs: stopwatch.elapsedMilliseconds,
+                itemCount: 0,
+              );
           return;
         }
         if (_activeTabId == _tabAll) {
@@ -1054,6 +1102,18 @@ class _SearchNetworkResultsPageState
             ]);
             _isLoading = false;
           });
+          ref
+              .read(pageLifecycleObservabilityProvider)
+              .recordPageState(
+                pageName: 'search_network_results',
+                route: AppRoutePaths.globalSearch,
+                surface: _activeTabId,
+                phase: _contentResults.isEmpty && _locationResults.isEmpty
+                    ? 'emptySuccess'
+                    : 'onlineSuccess',
+                durationMs: stopwatch.elapsedMilliseconds,
+                itemCount: _contentResults.length + _locationResults.length,
+              );
           return;
         }
         final groupResponse = await _guardedSearchResponse(
@@ -1079,6 +1139,24 @@ class _SearchNetworkResultsPageState
           ]);
           _isLoading = false;
         });
+        ref
+            .read(pageLifecycleObservabilityProvider)
+            .recordPageState(
+              pageName: 'search_network_results',
+              route: AppRoutePaths.globalSearch,
+              surface: _activeTabId,
+              phase:
+                  _contentResults.isEmpty &&
+                      _locationResults.isEmpty &&
+                      _groupResults.isEmpty
+                  ? 'emptySuccess'
+                  : 'onlineSuccess',
+              durationMs: stopwatch.elapsedMilliseconds,
+              itemCount:
+                  _contentResults.length +
+                  _locationResults.length +
+                  _groupResults.length,
+            );
         return;
       }
 
@@ -1094,22 +1172,60 @@ class _SearchNetworkResultsPageState
       setState(() {
         _contentResults = items;
         _relatedTerms = response?.relatedTerms ?? const <String>[];
-        _degradeSignals = response?.degradeSignals ?? const <SearchDegradeSignal>[];
+        _degradeSignals =
+            response?.degradeSignals ?? const <SearchDegradeSignal>[];
         _isLoading = false;
       });
+      ref
+          .read(pageLifecycleObservabilityProvider)
+          .recordPageState(
+            pageName: 'search_network_results',
+            route: AppRoutePaths.globalSearch,
+            surface: _activeTabId,
+            phase: items.isEmpty ? 'emptySuccess' : 'onlineSuccess',
+            durationMs: stopwatch.elapsedMilliseconds,
+            itemCount: items.length,
+          );
     } catch (error) {
       if (!mounted || token != _requestToken) {
         return;
       }
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.page,
+      );
       setState(() {
-        _errorSemantic = runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.pageLoad,
-          scope: UiErrorScope.page,
+        _errorSemantic = UiErrorSemantic(
+          category: resolved.category,
+          scope: resolved.scope,
+          title: UITextConstants.searchUnavailableTitle,
+          message: UITextConstants.searchUnavailableMessage,
+          secondaryMessage: resolved.secondaryMessage,
+          primaryAction: resolved.primaryAction,
+          secondaryAction: resolved.secondaryAction,
+          dismissible: resolved.dismissible,
+          sourceCode: resolved.sourceCode,
+          failureKind: resolved.failureKind,
+          copyKey: 'searchUnavailableTitle',
+          recoveryAction: resolved.recoveryAction,
+          presentation: resolved.presentation,
+          tone: resolved.tone,
         );
         _isLoading = false;
       });
+      ref
+          .read(pageLifecycleObservabilityProvider)
+          .recordPageState(
+            pageName: 'search_network_results',
+            route: AppRoutePaths.globalSearch,
+            surface: _activeTabId,
+            phase: 'blockingFailure',
+            copyKey: 'searchUnavailableTitle',
+            error: error,
+            durationMs: stopwatch.elapsedMilliseconds,
+          );
     }
   }
 
@@ -1124,8 +1240,8 @@ class _SearchNetworkResultsPageState
         sections: const <SearchSection>[],
         degradeSignals: <SearchDegradeSignal>[
           SearchDegradeSignal(
-            code: 'search_domain_failed',
-            message: '部分搜索分组加载失败，已继续展示其它结果。',
+            code: '',
+            message: UITextConstants.searchPartialGroupFailed,
           ),
         ],
       );
@@ -1487,7 +1603,7 @@ class _SearchNetworkResultsPageState
       semantic: UiErrorSemantic(
         category: resolved.category,
         scope: resolved.scope,
-        title: '内容暂时打不开',
+        title: UITextConstants.workOpenFailedTitle,
         message: resolved.message,
         secondaryMessage: resolved.secondaryMessage,
         primaryAction:
@@ -1500,6 +1616,7 @@ class _SearchNetworkResultsPageState
         dismissible: true,
         sourceCode: resolved.sourceCode,
         failureKind: resolved.failureKind,
+        copyKey: 'workOpenFailedTitle',
         recoveryAction: resolved.recoveryAction,
       ),
     );
@@ -1906,17 +2023,16 @@ class _IntersectionCard extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     if (hasCover)
-                      CachedNetworkImage(
+                      AppCachedNetworkImage(
                         imageUrl: model.coverUrl,
                         fit: BoxFit.cover,
-                        placeholder: (context, url) =>
-                            _IntersectionCardPlaceholder(
-                              icon: model.categoryIcon,
-                            ),
-                        errorWidget: (context, url, error) =>
-                            _IntersectionCardPlaceholder(
-                              icon: model.categoryIcon,
-                            ),
+                        cdnPreset: CdnImagePreset.cover,
+                        placeholder: _IntersectionCardPlaceholder(
+                          icon: model.categoryIcon,
+                        ),
+                        errorWidget: _IntersectionCardPlaceholder(
+                          icon: model.categoryIcon,
+                        ),
                       )
                     else
                       _IntersectionCardPlaceholder(icon: model.categoryIcon),
@@ -2225,7 +2341,7 @@ class _RelatedSearchCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '相关搜索',
+              UITextConstants.searchRelatedTitle,
               style: TextStyle(
                 fontSize: _SearchResultTokens.cardTitleSize,
                 fontWeight: _SearchResultTokens.sectionTitleWeight,
@@ -2261,7 +2377,7 @@ class _RelatedSearchCard extends StatelessWidget {
               ),
             if (card.terms.isEmpty)
               Text(
-                '暂无相关搜索词',
+                UITextConstants.searchRelatedEmpty,
                 style: TextStyle(
                   fontSize: _SearchResultTokens.captionSize,
                   color: fgSecondary,

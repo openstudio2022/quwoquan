@@ -24,6 +24,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	rtimpact "quwoquan_service/runtime/impact"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/content-service/internal/application"
@@ -419,11 +420,11 @@ func TestBehaviorBatchIntersectionConversionsUpdateMetricsAndAuthorImpact(t *tes
 	for _, item := range summary.Items {
 		byHelp[item.HelpType] += item.Count
 	}
-	if byHelp[persistence.AuthorImpactHelpRelationship] != 2 {
-		t.Fatalf("relationship help = %d, want 2; items=%+v", byHelp[persistence.AuthorImpactHelpRelationship], summary.Items)
+	if byHelp[rtimpact.HelpRelationship] != 2 {
+		t.Fatalf("relationship help = %d, want 2; items=%+v", byHelp[rtimpact.HelpRelationship], summary.Items)
 	}
-	if byHelp[persistence.AuthorImpactHelpCommunity] != 1 {
-		t.Fatalf("community help = %d, want 1; items=%+v", byHelp[persistence.AuthorImpactHelpCommunity], summary.Items)
+	if byHelp[rtimpact.HelpCommunity] != 1 {
+		t.Fatalf("community help = %d, want 1; items=%+v", byHelp[rtimpact.HelpCommunity], summary.Items)
 	}
 }
 
@@ -474,8 +475,88 @@ func TestGetAuthorImpactReturnsBehaviorAggregation(t *testing.T) {
 	if body.AuthorID != authorID || body.Total != 1 || len(body.Items) == 0 {
 		t.Fatalf("unexpected author impact body: %+v", body)
 	}
-	if body.Items[0].HelpType != persistence.AuthorImpactHelpRelationship || body.Items[0].Action != "follow" || body.Items[0].Count != 1 {
+	if body.Items[0].HelpType != rtimpact.HelpRelationship || body.Items[0].Action != "follow" || body.Items[0].Count != 1 {
 		t.Fatalf("unexpected author impact item: %+v", body.Items[0])
+	}
+}
+
+// TestAuthorImpactTravelCountTargetFromBehaviorAggregation 端到端验证 WS3 旅行影响力真算：
+// 真实行为聚合（viewer 在旅行 tag 内容上的 decision 行为）→ rm_author_impact 聚合 → 云侧
+// DecorateAuthorImpact 按 tagRef 派生下钻目标对象 route/photo_spot（§22.5），被计数对象 person。
+func TestAuthorImpactTravelCountTargetFromBehaviorAggregation(t *testing.T) {
+	ctx := context.Background()
+	authorID := "author_travel_impact_realcompute_001"
+	if _, err := mongoDB.Collection("rm_author_impact").DeleteMany(ctx, bson.M{"authorId": authorID}); err != nil {
+		t.Fatalf("clean author impact: %v", err)
+	}
+	behaviorService := application.NewBehaviorService(
+		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
+		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
+		application.WithAuthorImpactStore(persistence.NewAuthorImpactStore(mongoDB, nilLogger())),
+	)
+
+	// viewer 在作者旅行攻略上的真实 decision 行为（entity_page_view → decision），
+	// 携带旅行 tagRef；两条同 route tag 聚合为 count=2。
+	if err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
+		{
+			UserID:                "viewer_travel_impact_001",
+			ContentID:             "post_travel_route_001",
+			Action:                "entity_page_view",
+			AuthorID:              authorID,
+			IntersectionDimension: "location",
+			IntersectionTagRefs:   []string{"tag/travel/route"},
+		},
+		{
+			UserID:                "viewer_travel_impact_002",
+			ContentID:             "post_travel_route_001",
+			Action:                "entity_page_view",
+			AuthorID:              authorID,
+			IntersectionDimension: "location",
+			IntersectionTagRefs:   []string{"tag/travel/route"},
+		},
+		{
+			UserID:                "viewer_travel_impact_003",
+			ContentID:             "post_travel_spot_001",
+			Action:                "entity_page_view",
+			AuthorID:              authorID,
+			IntersectionDimension: "location",
+			IntersectionTagRefs:   []string{"tag/travel/photo_spot"},
+		},
+	}); err != nil {
+		t.Fatalf("process travel behaviors: %v", err)
+	}
+
+	store := persistence.NewAuthorImpactStore(mongoDB, nilLogger())
+	summary, err := store.GetSummary(ctx, authorID, 10)
+	if err != nil {
+		t.Fatalf("get author impact summary: %v", err)
+	}
+	// 云侧装饰（与 handler 同路径）后派生旅行下钻目标。
+	decorated := application.DecorateAuthorImpact(summary, false)
+
+	byTag := map[string]persistence.AuthorImpactItem{}
+	for _, item := range decorated.Items {
+		byTag[item.TagRef] = item
+	}
+	route, ok := byTag["tag/travel/route"]
+	if !ok {
+		t.Fatalf("missing route impact; items=%+v", decorated.Items)
+	}
+	if route.Count != 2 {
+		t.Fatalf("route impact count = %d, want 2 (aggregated)", route.Count)
+	}
+	if route.CountTarget == nil || route.CountTarget.ObjectKind != "route" || route.CountTarget.RouteID != "homepageDetail" {
+		t.Fatalf("route impact countTarget = %+v, want objectKind=route routeId=homepageDetail", route.CountTarget)
+	}
+	if route.CountObjectKind != "person" {
+		t.Fatalf("route impact countObjectKind = %q, want person", route.CountObjectKind)
+	}
+	spot, ok := byTag["tag/travel/photo_spot"]
+	if !ok {
+		t.Fatalf("missing photo_spot impact; items=%+v", decorated.Items)
+	}
+	if spot.CountTarget == nil || spot.CountTarget.ObjectKind != "photo_spot" {
+		t.Fatalf("spot impact countTarget = %+v, want objectKind=photo_spot", spot.CountTarget)
 	}
 }
 

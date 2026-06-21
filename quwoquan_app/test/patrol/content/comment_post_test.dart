@@ -8,8 +8,8 @@
 ///   - commentCount +1
 ///   - rate limit 触发时：error toast 可见 + 输入框重新 enabled
 ///
-/// 注：App 已由 test/patrol/patrol_test_main.dart 的 app.main() 启动，
-///     本 test 直接与已运行的 App 交互，不需要 pumpWidget。
+/// 注：每个用例自启动 App（launchPatrolAppOnce），对齐已绿的
+///     home_recommendation_journey_test，不依赖 patrol_test_main 预启动。
 library;
 
 import 'dart:convert';
@@ -89,7 +89,9 @@ void main() {
     skip: !kRunPatrolT4,
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 10)),
     ($) async {
-      // ── App 已运行，等待发现页并导航到帖子详情 ──────────────────────
+      await launchPatrolAppOnce($);
+
+      // ── 等待发现页并导航到帖子详情 ──────────────────────────────────
       await $(
         TestKeys.photoPostCard,
       ).waitUntilVisible(timeout: const Duration(seconds: 20));
@@ -153,6 +155,8 @@ void main() {
     tags: ['t4', 'content', 'comment', 'flaky'],
     skip: !kRunPatrolT4,
     ($) async {
+      await launchPatrolAppOnce($);
+
       // 此场景依赖 staging rate limit 触发，标记 flaky，允许 retry
       await $(
         TestKeys.photoPostCard,

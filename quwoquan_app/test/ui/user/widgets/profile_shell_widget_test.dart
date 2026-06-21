@@ -9,16 +9,20 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
@@ -73,18 +77,71 @@ class _FailingHomepageBundleRepository extends MockUserProfileRepository {
   }
 }
 
+/// 默认昵称态（未编辑）本人档案：昵称即默认用户名、未自定义、无头像/封面/简介/标签。
+/// 用于验证我的主页空态引导与「改名画笔」，并断言不再回退到「探索者 / 趣我圈号」占位。
+class _DefaultNicknameProfileRepository extends MockUserProfileRepository {
+  const _DefaultNicknameProfileRepository();
+
+  static const String defaultNickname = '新同学_2606000000001';
+
+  @override
+  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
+    return SubAccountProfileViewData.fromSubAccountProfileWire(
+      SubAccountProfileWireDto(
+        subAccountId: userId,
+        ownerUserId: userId,
+        userHandle: userId,
+        username: userId,
+        displayName: defaultNickname,
+        nickname: defaultNickname,
+        nicknameCustomized: false,
+        avatarUrl: '',
+        backgroundUrl: '',
+        bio: '',
+        identityTags: const <String>[],
+      ),
+    );
+  }
+}
+
+/// 已自定义昵称的本人档案：nicknameCustomized=true，用于断言改名画笔隐藏。
+class _CustomizedNicknameProfileRepository extends MockUserProfileRepository {
+  const _CustomizedNicknameProfileRepository();
+
+  @override
+  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
+    return SubAccountProfileViewData.fromSubAccountProfileWire(
+      SubAccountProfileWireDto(
+        subAccountId: userId,
+        ownerUserId: userId,
+        userHandle: userId,
+        username: userId,
+        displayName: '我的专属昵称',
+        nickname: '我的专属昵称',
+        nicknameCustomized: true,
+        avatarUrl: '',
+        backgroundUrl: '',
+        bio: '',
+        identityTags: const <String>[],
+      ),
+    );
+  }
+}
+
 Widget _scopedApp({
   required ProfileMode mode,
   String userId = 'nature_photographer',
   ThemeMode themeMode = ThemeMode.light,
   double textScaleFactor = 1.0,
   RelationshipCapabilityRepository? capabilityRepository,
-  UserProfileRepository userProfileRepository = const MockUserProfileRepository(),
+  UserProfileRepository userProfileRepository =
+      const MockUserProfileRepository(),
   List overrides = const [],
 }) {
   return ProviderScope(
     overrides: [
       userProfileRepositoryProvider.overrideWithValue(userProfileRepository),
+      contentRepositoryProvider.overrideWithValue(MockContentRepository()),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         capabilityRepository ?? _ThrowingCapabilityRepository(),
       ),
@@ -154,9 +211,68 @@ void main() {
       await _pumpFrames(tester);
 
       expect(find.text(UITextConstants.profilePersonasLabel), findsNothing);
+      expect(find.text(UITextConstants.personaSwitchProfile), findsNothing);
+      expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
+    });
+
+    testWidgets('默认昵称态展示头像/封面/简介/标签引导与改名画笔，且不出现探索者/趣我圈号', (
+      tester,
+    ) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.mine,
+          userId: 'fixture_user_current',
+          userProfileRepository: const _DefaultNicknameProfileRepository(),
+        ),
+      );
+      await _pumpFrames(tester);
+
+      // 默认昵称（云侧「前缀_YYMM9位随机数」）直接展示，不再回退到「探索者」占位。
+      expect(
+        find.text(_DefaultNicknameProfileRepository.defaultNickname),
+        findsWidgets,
+      );
+      // 内部用户号 / 趣我圈号 / 探索者 等占位身份对 UI 完全不可见。
+      expect(find.textContaining('趣我圈号'), findsNothing);
+      expect(find.textContaining('探索者'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('profile-header-handle')),
+        findsNothing,
+      );
+      // 空态引导：头像 / 封面 / 简介 / 标签。
+      expect(find.text(UITextConstants.profileUploadAvatar), findsWidgets);
+      expect(find.text(UITextConstants.profileUploadCover), findsOneWidget);
+      expect(find.text(UITextConstants.profileEmptyBioPrompt), findsWidgets);
+      expect(find.text(UITextConstants.profileEmptyTagsPrompt), findsOneWidget);
+      // 默认昵称（未自定义改名）时展示改名画笔；改名后应隐藏。
       expect(
         find.byKey(const ValueKey<String>('profile-header-edit')),
         findsOneWidget,
+      );
+    });
+
+    testWidgets('改过昵称（nicknameCustomized）后我的主页不再展示改名画笔', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.mine,
+          userId: 'fixture_user_current',
+          userProfileRepository: const _CustomizedNicknameProfileRepository(),
+        ),
+      );
+      await _pumpFrames(tester);
+
+      expect(find.text('我的专属昵称'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey<String>('profile-header-edit')),
+        findsNothing,
       );
     });
 
@@ -197,7 +313,7 @@ void main() {
       expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
     });
 
-    testWidgets('渲染两个主 Tab，圈子进入统计区', (tester) async {
+    testWidgets('渲染记录、互动主 Tab，圈子进入统计区', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -211,6 +327,10 @@ void main() {
         findsOneWidget,
       );
       expect(_inlinePrimaryTab('互动'), findsOneWidget);
+      expect(
+        _inlinePrimaryTab(UITextConstants.profileTabFootprint),
+        findsNothing,
+      );
       expect(_inlinePrimaryTab('圈子'), findsNothing);
       expect(_inlinePrimaryTab('生活'), findsNothing);
       expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
@@ -310,6 +430,46 @@ void main() {
         SettingsSemanticConstants.conversationSheetCardSurface(isDark),
       );
       expect(tabsDecoration.border, isNull);
+    });
+
+    testWidgets('一级 Tab 吸顶态保留与顶部工具栏的分隔轮廓', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
+      await _pumpFrames(tester, count: 20);
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+      await _pumpFrames(tester, count: 12);
+
+      final pinnedTabsSurface = tester.widget<Container>(
+        find.byKey(const ValueKey<String>('profile-shell-primary-tabs-pinned')),
+      );
+      final pinnedDecoration = pinnedTabsSurface.decoration! as BoxDecoration;
+
+      expect(pinnedDecoration.border, isNotNull);
+    });
+
+    testWidgets('浅色吸顶态搜索按钮跟随工具栏前景色保持可见', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
+      await _pumpFrames(tester, count: 20);
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+      await _pumpFrames(tester, count: 12);
+
+      final searchIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(TestKeys.globalSearchLauncherButton),
+          matching: find.byIcon(CupertinoIcons.search),
+        ),
+      );
+
+      expect(searchIcon.color, isNot(CupertinoColors.white));
     });
 
     testWidgets('窄屏大字号下保持自适应不溢出', (tester) async {
@@ -435,6 +595,78 @@ void main() {
       expect(afterSummaryTop, greaterThan(beforeSummaryTop));
       expect(afterTabsTop, greaterThan(beforeTabsTop));
     });
+
+    testWidgets('我的主页四大板块左右齐屏，内容 surface 不再内缩', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
+      await _pumpFrames(tester, count: 20);
+
+      final screenWidth =
+          tester.view.physicalSize.width / tester.view.devicePixelRatio;
+      final profileCard = find.byKey(
+        const ValueKey<String>('profile-shell-profile-card'),
+      );
+      final intersectionCard = find.byKey(
+        const ValueKey<String>('my-intersection-inbox-card'),
+      );
+      final impactCard = find.byKey(
+        const ValueKey<String>('author-impact-card'),
+      );
+      for (final finder in <Finder>[
+        profileCard,
+        intersectionCard,
+        impactCard,
+      ]) {
+        expect(finder, findsOneWidget);
+        expect(tester.getTopLeft(finder).dx, closeTo(0, AppSpacing.hairline));
+        expect(
+          tester.getTopRight(finder).dx,
+          closeTo(screenWidth, AppSpacing.hairline),
+        );
+      }
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -520));
+      await tester.pumpAndSettle();
+      final tabSurface = find.byKey(
+        const ValueKey<String>('profile-shell-tab-surface'),
+      );
+      expect(tabSurface, findsOneWidget);
+      expect(tester.getTopLeft(tabSurface).dx, closeTo(0, AppSpacing.hairline));
+      expect(
+        tester.getTopRight(tabSurface).dx,
+        closeTo(screenWidth, AppSpacing.hairline),
+      );
+    });
+
+    testWidgets('上滑时封面随内容上移，下拉仍保持顶边固定拉伸', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
+      await _pumpFrames(tester, count: 20);
+
+      final backgroundFinder = find.byKey(
+        const ValueKey<String>('profile-shell-background-layer'),
+        skipOffstage: false,
+      );
+      final beforeTop = tester.getTopLeft(backgroundFinder).dy;
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -320));
+      await tester.pump();
+      final afterScrollTop = tester.getTopLeft(backgroundFinder).dy;
+      expect(afterScrollTop, lessThan(beforeTop));
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 420));
+      await tester.pump();
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 180));
+      await tester.pump();
+      final afterPullTop = tester.getTopLeft(backgroundFinder).dy;
+      expect(afterPullTop, closeTo(beforeTop, 0.5));
+    });
   });
 
   group('ProfileShell — 交互契约', () {
@@ -457,9 +689,43 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
+      expect(
+        find.byKey(
+          const ValueKey<String>('profile-interaction-direction-switch'),
+        ),
+        findsNothing,
+      );
       await tapProfilePrimaryTab(tester, '互动');
       await _pumpFrames(tester, count: 20);
       expect(find.byType(ProfileInteractionTab), findsOneWidget);
+      final primaryTabs = find.byKey(
+        const ValueKey<String>('profile-shell-primary-tabs-inline'),
+      );
+      expect(
+        find.descendant(
+          of: primaryTabs,
+          matching: find.byKey(
+            const ValueKey<String>('profile-interaction-direction-switch'),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: primaryTabs,
+          matching: find.text(
+            UITextConstants.profileInteractionDirectionReceived,
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: primaryTabs,
+          matching: find.text(UITextConstants.profileInteractionDirectionSent),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('other 模式更多按钮打开统一底部动作面板', (tester) async {
@@ -501,17 +767,17 @@ void main() {
         of: find.byKey(
           const ValueKey<String>('profile-interaction-secondary-tabs'),
         ),
-        matching: find.text('赞'),
+        matching: find.text(UITextConstants.interactionSubLikes),
       );
       final before = tester.getTopLeft(subTabFinder);
 
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester, count: 12);
       final afterScrollUp = tester.getTopLeft(subTabFinder);
       expect(afterScrollUp.dy, lessThan(before.dy));
 
       await tester.drag(find.byType(CustomScrollView), const Offset(0, 260));
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester, count: 12);
       final afterScrollBack = tester.getTopLeft(subTabFinder);
       expect(afterScrollBack.dy, greaterThan(afterScrollUp.dy));
     });
@@ -533,24 +799,18 @@ void main() {
         const ValueKey<String>('profile-works-grid'),
       );
 
+      Future<void> flingVisibleWorksGridLeft() async {
+        final origin = tester.getTopLeft(swipeSurface) + const Offset(48, 32);
+        await tester.flingFrom(origin, const Offset(-420, 0), 1200);
+        await _pumpFrames(tester, count: 12);
+      }
+
       for (var i = 0; i < UserProfileUIConfig.creationSubTabs.length - 1; i++) {
-        await tester.fling(
-          swipeSurface,
-          const Offset(-420, 0),
-          1200,
-          warnIfMissed: false,
-        );
-        await tester.pumpAndSettle();
+        await flingVisibleWorksGridLeft();
         expect(find.byType(ProfileInteractionTab), findsNothing);
       }
 
-      await tester.fling(
-        swipeSurface,
-        const Offset(-420, 0),
-        1200,
-        warnIfMissed: false,
-      );
-      await tester.pumpAndSettle();
+      await flingVisibleWorksGridLeft();
 
       expect(find.byType(ProfileInteractionTab), findsOneWidget);
     });
@@ -564,7 +824,7 @@ void main() {
       await _pumpFrames(tester, count: 20);
 
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester, count: 12);
 
       final summaryFinder = find.byKey(
         const ValueKey<String>('profile-shell-summary-card'),
@@ -582,13 +842,13 @@ void main() {
           : _inlinePrimaryTab(UITextConstants.profileTabCreations);
 
       await tester.tap(interactionTab);
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester, count: 12);
       final summaryAfterInteraction = tester.getTopLeft(summaryFinder).dy;
       expect(summaryAfterInteraction, closeTo(summaryBefore, 8));
       expect(find.byType(ProfileInteractionTab), findsOneWidget);
 
       await tester.tap(creationsTab);
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester, count: 12);
       final summaryAfterCreations = tester.getTopLeft(summaryFinder).dy;
       expect(summaryAfterCreations, closeTo(summaryBefore, 8));
       expect(

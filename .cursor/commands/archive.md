@@ -5,7 +5,7 @@
 归档内容：
 - 一棵树归属。
 - UAT/SIT/GWT/contract 状态。
-- T1/T2/T3/T4 证据。
+- local_contract/api_integration/user_acceptance 证据。
 - CR、门禁命令、SLO/回滚证据。
 
 禁止：用归档补写未完成验收。

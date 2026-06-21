@@ -1126,6 +1126,73 @@ func TestSessionCache_Invalidate(t *testing.T) {
 	}
 }
 
+// compile-time guarantee: SessionCache must satisfy NegativeFeedbackReader so
+// Engine.LoadFeedbackExclusions (production wiring wraps HotPath in SessionCache)
+// can honor dislike/not_interested on the repository fallback feed path.
+var _ NegativeFeedbackReader = (*SessionCache)(nil)
+
+func TestSessionCache_NegativeContentIDs_ForwardsToInner(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentID: "c_disliked", Action: "dislike",
+	})
+
+	cache := NewSessionCache(hp, 5*time.Second, 100)
+	ids, err := cache.NegativeContentIDs(ctx, "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(ids, "c_disliked") {
+		t.Fatalf("SessionCache should forward negative content from inner HotPath, got %+v", ids)
+	}
+}
+
+// TestEngine_LoadFeedbackExclusions_FallbackPath reproduces the T3 dislike gap:
+// the production engine wraps *HotPath in *SessionCache, and the repository
+// fallback feed path relies on LoadFeedbackExclusions.NegativeContentIDs. Before
+// the fix, *SessionCache did not implement NegativeFeedbackReader, so disliked
+// content leaked through the fallback path even though rec:negative:{user} held
+// it. This asserts the fallback exclusion truth source is now populated.
+func TestEngine_LoadFeedbackExclusions_FallbackPath(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentID: "c_disliked", Action: "dislike",
+	})
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentID: "c_reported", Action: "report",
+	})
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", AuthorID: "a_hidden", Action: "hide_author",
+	})
+	hp.ProcessSignal(ctx, BehaviorSignal{
+		UserID: "u1", SessionID: "s1", ContentType: "video", Action: "hide_content_type",
+	})
+
+	// Production wiring: engine reads sessions through SessionCache wrapping HotPath.
+	cache := NewSessionCache(hp, 5*time.Second, 100)
+	engine := NewEngine(cache, []CandidateSource{&mockCandidateSource{}}, WithExposureGovernance(cache, cache))
+
+	excl := engine.LoadFeedbackExclusions(ctx, "u1", "s1")
+	if !excl.NegativeContentIDs["c_disliked"] {
+		t.Errorf("fallback exclusions must contain disliked content, got %+v", excl.NegativeContentIDs)
+	}
+	if !excl.NegativeContentIDs["c_reported"] {
+		t.Errorf("fallback exclusions must contain reported content, got %+v", excl.NegativeContentIDs)
+	}
+	if !excl.HiddenAuthors["a_hidden"] {
+		t.Errorf("fallback exclusions must contain hidden author, got %+v", excl.HiddenAuthors)
+	}
+	if !excl.HiddenContentTypes["video"] {
+		t.Errorf("fallback exclusions must contain hidden content type, got %+v", excl.HiddenContentTypes)
+	}
+}
+
 func TestBufferedHotPath_AsyncWrite(t *testing.T) {
 	redis := newMockRedis()
 	hp := NewHotPath(redis)

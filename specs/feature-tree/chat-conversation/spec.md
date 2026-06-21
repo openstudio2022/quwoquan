@@ -12,9 +12,9 @@
 
 | # | 可量化标准 | 验证方式 |
 |---|-----------|---------|
-| A14 | 消息 seq 严格递增，100 并发 seq 无间隔；clientMsgId 幂等（3 次 → DB 1 条）；2min 内撤回成功，超时拒绝 | T3-L2 契约测试 |
-| A15 | SyncMessages(lastSeq=0) → 完整返回 500 条；lastSeq=250 → 后 250 条；lastSeq=500 → 空 | T3-L2 契约测试 |
-| A21 | 1000 并发 SendMessage p99 <100ms；10K 消息 SyncMessages <3s；50 人 AddMembers <500ms | T3-L2 benchmark |
+| A14 | 消息 seq 严格递增，100 并发 seq 无间隔；clientMsgId 幂等（3 次 → DB 1 条）；2min 内撤回成功，超时拒绝 | api_integration-L2 契约测试 |
+| A15 | SyncMessages(lastSeq=0) → 完整返回 500 条；lastSeq=250 → 后 250 条；lastSeq=500 → 空 | api_integration-L2 契约测试 |
+| A21 | 1000 并发 SendMessage p99 <100ms；10K 消息 SyncMessages <3s；50 人 AddMembers <500ms | api_integration-L2 benchmark |
 
 ## 1. 背景
 
@@ -203,11 +203,11 @@
 - runtime-redis cluster 模式就绪（seq 分配 + 幂等去重的可靠性保障）
 - user-service social graph 可用（联系人 ListContacts/SearchContacts 的数据源）
 
-## 9. 验收重点（T1~T4 四层测试金字塔映射）
+## 9. 验收重点（三层测试 四层测试金字塔映射）
 
 > 详细验收标准见 `acceptance.yaml`（A1~A25）。以下为各层验收重点概览。
 
-### T1 契约与静态层（L1a + 静态校验）
+### local_contract 契约与静态层（L1a + 静态校验）
 
 | 维度 | 内容 |
 |------|------|
@@ -217,7 +217,7 @@
 | metadata 一致性 | fields.yaml → codegen → Go struct / Dart DTO 字段零偏差 |
 | 目录迁移 | `lib/features/chat/` 清空，所有代码在 `lib/ui/chat/` 下 |
 
-### T2 模块与交互层（L1b + 部分 L1c）
+### local_contract 模块与交互层（L1b + 部分 L1c）
 
 | 维度 | 内容 |
 |------|------|
@@ -229,7 +229,7 @@
 | mock/remote | ProviderScope 分别注入 Mock/Remote → 行为一致 |
 | 已读回执 | ≤50 人群显示回执状态，>50 人群隐藏 |
 
-### T3 端云集成层（L2 + L3）
+### api_integration 端云集成层（L2 + L3）
 
 | 维度 | 内容 |
 |------|------|
@@ -243,7 +243,7 @@
 | HTTP 契约 | 端侧 staging 17 API 三维度（协议/结构/语义） |
 | 基准性能 | 1000 并发 p99 <100ms、10K 离线同步 <3s |
 
-### T4 端到端旅程层（L1c 主旅程 + Patrol L4）
+### user_acceptance 端到端旅程层（L1c 主旅程 + Patrol L4）
 
 | 维度 | 内容 |
 |------|------|
@@ -261,43 +261,43 @@
 test/
 ├── cloud/chat/
 │   ├── contract/
-│   │   ├── chat_repository_contract_test.dart        # T1: Repository 契约
-│   │   └── chat_error_code_contract_test.dart        # T1: 错误码契约
+│   │   ├── chat_repository_contract_test.dart        # local_contract: Repository 契约
+│   │   └── chat_error_code_contract_test.dart        # local_contract: 错误码契约
 │   ├── dto/contract/
-│   │   ├── conversation_dto_contract_test.dart       # T1: DTO 契约
-│   │   ├── message_dto_contract_test.dart            # T1: DTO 契约
-│   │   ├── member_dto_contract_test.dart             # T1: DTO 契约
-│   │   └── user_state_dto_contract_test.dart         # T1: DTO 契约
-│   └── api_contract_runner.dart                      # T3: gamma HTTP 契约
+│   │   ├── conversation_dto_contract_test.dart       # local_contract: DTO 契约
+│   │   ├── message_dto_contract_test.dart            # local_contract: DTO 契约
+│   │   ├── member_dto_contract_test.dart             # local_contract: DTO 契约
+│   │   └── user_state_dto_contract_test.dart         # local_contract: DTO 契约
+│   └── api_contract_runner.dart                      # api_integration: gamma HTTP 契约
 ├── ui/chat/
 │   ├── widgets/
-│   │   ├── chat_page_widget_test.dart                # T2: ChatPage 渲染
-│   │   ├── chat_detail_page_widget_test.dart         # T2: ChatDetailPage 交互
-│   │   ├── chat_settings_page_widget_test.dart       # T2: ChatSettingsPage 操作
-│   │   ├── chat_message_bubble_widget_test.dart      # T2: 消息气泡类型
-│   │   └── chat_assistant_ui_widget_test.dart        # T2: 助手 UI 组件
+│   │   ├── chat_page_widget_test.dart                # local_contract: ChatPage 渲染
+│   │   ├── chat_detail_page_widget_test.dart         # local_contract: ChatDetailPage 交互
+│   │   ├── chat_settings_page_widget_test.dart       # local_contract: ChatSettingsPage 操作
+│   │   ├── chat_message_bubble_widget_test.dart      # local_contract: 消息气泡类型
+│   │   └── chat_assistant_ui_widget_test.dart        # local_contract: 助手 UI 组件
 │   └── journeys/
-│       ├── chat_conversation_list_journey_test.dart   # T4: 会话列表旅程
-│       ├── chat_message_send_journey_test.dart        # T4: 发消息旅程
-│       ├── chat_group_management_journey_test.dart    # T4: 群管理旅程
-│       └── chat_assistant_journey_test.dart           # T4: 助手旅程
+│       ├── chat_conversation_list_journey_test.dart   # user_acceptance: 会话列表旅程
+│       ├── chat_message_send_journey_test.dart        # user_acceptance: 发消息旅程
+│       ├── chat_group_management_journey_test.dart    # user_acceptance: 群管理旅程
+│       └── chat_assistant_journey_test.dart           # user_acceptance: 助手旅程
 └── patrol/chat/
-    ├── chat_realtime_delivery_test.dart               # T4: 实时投递 Patrol
-    ├── chat_ime_input_test.dart                       # T4: 真实设备 Patrol
-    └── chat_adaptive_transport_test.dart              # T4: 自适应传输 Patrol
+    ├── chat_realtime_delivery_test.dart               # user_acceptance: 实时投递 Patrol
+    ├── chat_ime_input_test.dart                       # user_acceptance: 真实设备 Patrol
+    └── chat_adaptive_transport_test.dart              # user_acceptance: 自适应传输 Patrol
 
 # 云侧
 services/chat-service/tests/
-├── conversation_crud_contract_test.go                 # T3: 会话 CRUD
-├── message_crud_contract_test.go                      # T3: 消息核心链路
-├── message_sync_contract_test.go                      # T3: 离线同步
-├── member_management_contract_test.go                 # T3: 成员管理
-├── event_publish_contract_test.go                     # T3: 域事件发布
-├── inbox_projection_contract_test.go                  # T3: ChatInbox 投影
-├── conversation_settings_contract_test.go             # T3: 已读回执 + 设置
-├── conversation_error_contract_test.go                # T3: 错误路径
-├── conversation_compat_contract_test.go               # T3: 兼容性
-└── benchmark_test.go                                  # T3: 基准性能
+├── conversation_crud_contract_test.go                 # api_integration: 会话 CRUD
+├── message_crud_contract_test.go                      # api_integration: 消息核心链路
+├── message_sync_contract_test.go                      # api_integration: 离线同步
+├── member_management_contract_test.go                 # api_integration: 成员管理
+├── event_publish_contract_test.go                     # api_integration: 域事件发布
+├── inbox_projection_contract_test.go                  # api_integration: ChatInbox 投影
+├── conversation_settings_contract_test.go             # api_integration: 已读回执 + 设置
+├── conversation_error_contract_test.go                # api_integration: 错误路径
+├── conversation_compat_contract_test.go               # api_integration: 兼容性
+└── benchmark_test.go                                  # api_integration: 基准性能
 ```
 
 ## 10. 跨特性依赖

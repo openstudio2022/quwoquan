@@ -51,10 +51,9 @@ required_master_terms = [
     "SIT",
     "GWT",
     "contract",
-    "T1",
-    "T2",
-    "T3",
-    "T4",
+    "local_contract",
+    "api_integration",
+    "user_acceptance",
 ]
 master = (root / "specs/00_MASTER_DEVELOPMENT_FLOW.md").read_text(encoding="utf-8")
 for term in required_master_terms:

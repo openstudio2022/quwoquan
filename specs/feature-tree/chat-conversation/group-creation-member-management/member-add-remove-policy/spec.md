@@ -80,18 +80,18 @@
 
 ## 8. 验收重点
 
-### T1
+### local_contract
 
 - 加人 contract、解散 contract、错误码语义冻结
 
-### T2
+### local_contract
 
 - 聊天信息页继续加人、互关筛选、圈子群隐藏解散入口
 
-### T3
+### api_integration
 
 - 私建群解散后消息列表移除；圈子群解散请求被服务端拒绝
 
-### T4
+### user_acceptance
 
 - 真机完成“创建群 -> 继续加人 -> 返回 -> 解散私建群”的闭环旅程

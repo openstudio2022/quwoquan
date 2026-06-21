@@ -7,13 +7,13 @@ node:
   parent_domain_service: product-ops-growth
   parent_business_capability: feedback-optimization-loop
 scope:
-  summary: >-
-    行为反馈归一为画像与人群信号：content 派生 interestProfile/segments（MatchSegments 单一计算源）→
+  summary: 行为反馈归一为画像与人群信号：content 派生 interestProfile/segments（MatchSegments 单一计算源）→
     UserInterestRecomputed 事件投影 user 域 rm_user_profile_view → segments 同步回写 rm_recommend_feature。
   in_scope:
   - HotPath 行为信号归一到 rm_recommend_feature.userFeatures + 半衰期衰减作业
   - InterestProfileAggregator 派生 interestProfile + MatchSegments 匹配人群
-  - 两路 CQRS 投影：UserInterestRecomputed→user 域；segments $set 回 rm_recommend_feature 顶层
+  - 两路 CQRS 投影：UserInterestRecomputed→user 域；segments $set 回 rm_recommend_feature
+    顶层
   out_of_scope:
   - 端侧埋点采集与上报（属 app 客户端 + content 上报契约）
   - 策略评估/发布（见 optimization-evaluation-and-release）
@@ -41,20 +41,36 @@ gwt_acceptance:
     - contracts/metadata/user/user_profile/projections/user_profile_view.yaml
     performance_points:
     - 人群匹配为纯函数（无 IO），可在派生路径内同步完成。
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T3_app_api_integration
     tests:
       planned: []
       recorded:
-      - services/content-service/internal/infrastructure/recommendation/interest_profile_test.go
-      - services/content-service/internal/infrastructure/recommendation/segment_test.go
-      - services/user-service/internal/infrastructure/projection/interest_profile_projector_test.go
-      - quwoquan_service/tools/verify_metadata/main_test.go
-    status: implemented
+      - file: services/content-service/internal/infrastructure/recommendation/interest_profile_test.go
+      - file: services/content-service/internal/infrastructure/recommendation/segment_test.go
+      - file: services/user-service/internal/infrastructure/projection/interest_profile_projector_test.go
+      - file: quwoquan_service/tools/verify_metadata/main_test.go
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.product_ops_growth.feedback_optimization_loop.feedback_collection_unification.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.product_ops_growth.feedback_optimization_loop.feedback_collection_unification.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.product_ops_growth.feedback_optimization_loop.feedback_collection_unification.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

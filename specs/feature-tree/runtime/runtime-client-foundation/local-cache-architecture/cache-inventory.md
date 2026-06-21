@@ -46,8 +46,8 @@
 3. 新增 `PostObjectCacheService` 与 `ContentQuerySnapshotStore`。
 4. 收口头像/封面/正文图入口到统一 wrapper。
 5. 增加 `CacheManagementService`，先实现空间估算与资源清理。
-6. 增加 T2 请求数、命中、清理保护测试。
-7. 增加 T4 真机冷启动、滚动、离线、清理缓存证据。
+6. 增加 local_contract 请求数、命中、清理保护测试。
+7. 增加 user_acceptance 真机冷启动、滚动、离线、清理缓存证据。
 
 ## 风险与约束
 

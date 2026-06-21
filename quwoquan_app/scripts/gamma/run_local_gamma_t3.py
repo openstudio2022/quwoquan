@@ -636,8 +636,8 @@ def main() -> int:
                 setup = setup_comment_thread(args.base_url)
                 report["runtimeSetup"] = setup
                 runtime_refs = {
-                    "fixture_comment_v2_parent_001": str(setup.get("parentCommentId") or ""),
-                    "fixture_comment_v2_reply_001": str(setup.get("replyCommentId") or ""),
+                    "fixture_comment_parent_001": str(setup.get("parentCommentId") or ""),
+                    "fixture_comment_reply_001": str(setup.get("replyCommentId") or ""),
                 }
                 if not args.skip_seed and "circle" in enabled_domains:
                     circle_seed = seed_circle()

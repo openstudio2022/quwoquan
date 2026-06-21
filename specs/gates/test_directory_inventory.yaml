@@ -1,0 +1,2064 @@
+version: 1
+generated_by: python3 agent_ops/scaffold/generate_test_directory_inventory.py
+areas:
+  app:
+    legacy_count: 377
+    entries:
+    - current_path: quwoquan_app/test/app/app_startup_welcome_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
+    - current_path: quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
+    - current_path: quwoquan_app/test/app/navigation/native_back_navigation_policy_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/navigation/native_back_navigation_policy__local_contract_test.dart
+    - current_path: quwoquan_app/test/app/providers/appearance_settings_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/providers/appearance_settings_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/app/shell/active_call_shell_mount_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/shell/active_call_shell_mount__local_contract_test.dart
+    - current_path: quwoquan_app/test/app/shell/main_app_shell_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/shell/main_app_shell_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/app/shell/web_auth_entry_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/shell/web_auth_entry_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/app/shell/web_chat_frame_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/shell/web_chat_frame__local_contract_test.dart
+    - current_path: quwoquan_app/test/app/shell/web_create_groups_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/shell/web_create_groups__local_contract_test.dart
+    - current_path: quwoquan_app/test/app/shell/web_featured_no_queue_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/shell/web_featured_no_queue__local_contract_test.dart
+    - current_path: quwoquan_app/test/app/shell/web_feed_post_tap_viewer_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/shell/web_feed_post_tap_viewer__local_contract_test.dart
+    - current_path: quwoquan_app/test/app/shell/web_page_max_width_frame_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/app/shell/web_page_max_width_frame__local_contract_test.dart
+    - current_path: quwoquan_app/test/assistant/contracts/run_artifacts_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/assistant/contracts/run_artifacts_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/assistant/observability/logging/app_exception_telemetry_service_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/assistant/observability/logging/app_exception_telemetry_service__local_contract_test.dart
+    - current_path: quwoquan_app/test/assistant/observability/logging/app_log_service_web_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/assistant/observability/logging/app_log_service_web__local_contract_test.dart
+    - current_path: quwoquan_app/test/assistant/observability/logging/app_perf_probe_web_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/assistant/observability/logging/app_perf_probe_web__local_contract_test.dart
+    - current_path: quwoquan_app/test/beta/personal_assistant_beta_weather_ui_test.dart
+      layer: api_integration
+      target_path: quwoquan_app/test/api_integration/beta/personal_assistant_beta_weather_ui__api_integration_test.dart
+    - current_path: quwoquan_app/test/beta/personal_assistant_huawei_cloud_official_sources_test.dart
+      layer: api_integration
+      target_path: quwoquan_app/test/api_integration/beta/personal_assistant_huawei_cloud_official_sources__api_integration_test.dart
+    - current_path: quwoquan_app/test/cloud/assistant_learning_ops_fixture_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/assistant_learning_ops_fixture__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/behavior/contract/behavior_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/behavior/contract/behavior_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/chat/chat_avatar_url_resolution_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/chat_avatar_url_resolution__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/chat/chat_message_snapshot_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/chat_message_snapshot_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/chat/contract/chat_error_code_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/contract/chat_error_code_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/chat/contract/chat_inbox_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/contract/chat_inbox_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/chat/contract/chat_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/contract/chat_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/chat/dto/contract/conversation_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/dto/contract/conversation_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/chat/dto/contract/member_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/dto/contract/member_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/chat/dto/contract/message_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/dto/contract/message_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/chat/dto/contract/user_state_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/dto/contract/user_state_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/chat/message/contract/message_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/message/contract/message_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/chat/message/contract/send_message_request_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/message/contract/send_message_request_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/circle/circle_write_wire_ssot_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/circle/circle_write_wire_ssot__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/circle/contract/circle_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/circle/contract/circle_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/circle/contract/circle_group_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/circle/contract/circle_group_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/circle/contract/circle_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/circle/contract/circle_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/content_behavior_tracker_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/content_behavior_tracker__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/content_interaction_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/content_interaction_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/content_repository_delete_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/content_repository_delete_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/contract/article_get_post_hydration_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/contract/article_get_post_hydration_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/contract/comment_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/contract/content_reaction_and_counters_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/contract/content_reaction_and_counters__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/contract/content_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/contract/content_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/footprint_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/footprint_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/keyword_block_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/keyword_block_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/location/contract/error_permission_l10n_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/location/contract/error_permission_l10n_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/moment_post_intersection_reasons_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/moment_post_intersection_reasons__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/post/contract/post_behavior_tracker_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/post/contract/post_behavior_tracker_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/post/contract/post_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/post/contract/post_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/post/contract/post_error_code_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/post/contract/post_error_code_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/content/post/contract/post_feed_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/content/post/contract/post_feed_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/entity/contract/homepage_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/entity/contract/homepage_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/integration/intersection_response_body_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/integration/intersection_response_body_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/integration/location/contract/location_poi_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/integration/location/contract/location_poi_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/integration/remote_api_path_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/integration/remote_api_path_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/media/contract/media_asset_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/media/contract/media_asset_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/media/contract/upload_policy_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/media/contract/upload_policy_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/media/media_download_cache_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/media/media_download_cache__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/media/media_upload_manager_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/media/media_upload_manager__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/notification/notification_metadata_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/notification/notification_metadata_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/realtime/feed_realtime_patch_handler_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/realtime/feed_realtime_patch_handler__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/realtime/mock_realtime_delegate_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/realtime/mock_realtime_delegate__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/realtime/realtime_avatar_sync_handler_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/realtime/realtime_avatar_sync_handler__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/realtime/realtime_lifecycle_mapping_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/realtime/realtime_lifecycle_mapping__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/realtime/realtime_member_joined_handler_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/realtime/realtime_member_joined_handler__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/realtime/realtime_provider_mode_switch_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/realtime/realtime_provider_mode_switch__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/realtime/realtime_root_startup_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/realtime/realtime_root_startup__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/realtime/realtime_roster_updated_handler_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/realtime/realtime_roster_updated_handler__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/realtime/realtime_transport_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/realtime/remote_realtime_lifecycle_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/realtime/remote_realtime_lifecycle__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/recommendation/intersection_reason_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/recommendation/intersection_reason__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/rtc/call_session_dto_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/rtc/call_session_dto__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/rtc/incoming_call_coordinator_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/rtc/incoming_call_coordinator__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/rtc/rtc_call_ringing_payload_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/rtc/rtc_call_ringing_payload_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/rtc/rtc_errors_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/rtc/rtc_errors__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/rtc/rtc_golden_list_calls_parse_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/rtc/rtc_golden_list_calls_parse__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/rtc/rtc_metadata_api_paths_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/rtc/rtc_metadata_api_paths_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/rtc/rtc_mock_data_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/rtc/rtc_mock_data_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/rtc/rtc_repository_mock_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/rtc/rtc_repository_mock__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/rtc/rtc_repository_remote_wire_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/rtc/rtc_repository_remote_wire__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/rtc/rtc_signaling_wire_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/rtc/rtc_signaling_wire__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/rtc/rtc_ws_payload_parse_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/rtc/rtc_ws_payload_parse__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/runtime/cloud_http_client_refresh_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/runtime/cloud_http_client_refresh__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/runtime/cloud_runtime_config_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/runtime/cloud_runtime_config__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/runtime/codec/cloud_response_decoder_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/runtime/codec/cloud_response_decoder__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/runtime/comment_remote_config_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/runtime/comment_remote_config__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/runtime/content_app_config_client_parsed_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/runtime/content_app_config_client_parsed__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/runtime/errors/cloud_error_mapper_runtime_failure_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/runtime/errors/cloud_error_mapper_runtime_failure__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/runtime/home_channels_remote_override_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/runtime/home_channels_remote_override__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/runtime/recommendation/intersection_action_keys_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/runtime/recommendation/intersection_action_keys__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/assistant/assistant_creation_suggest_repository_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/assistant/assistant_creation_suggest_repository__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/business_beta_remote_repository_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/business_beta_remote_repository__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/content/comment_counts_delta_mock_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/content/comment_counts_delta_mock__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/content/comment_counts_delta_remote_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/content/comment_counts_delta_remote__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/content/comment_sort_consistency_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/content/comment_sort_consistency__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/content/discovery_wire_lookup_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/content/discovery_wire_lookup__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/content/intersection_inbox_synthesis_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/content/intersection_inbox_synthesis__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/content/intersection_object_evidence_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/content/intersection_object_evidence__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/content/mock_comment_seed_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/content/mock_comment_seed__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/content_repository_subinterfaces_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/content_repository_subinterfaces_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/contract_seeded_mock_repository_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/services/notification/app_message_navigation_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/notification/app_message_navigation__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/tag/tag_repository_consistency_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/tag/tag_repository_consistency__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/author_impact_evidence_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/author_impact_evidence_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/block_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/block_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/following_subject_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/following_subject_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/greeting_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/greeting_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/relationship_capability_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/relationship_capability_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/user_error_code_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/user_error_code_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/user_life_item_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/user_life_item_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/user_profile_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/user_profile_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/user_profile_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/user_profile_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/user_profile_wire_dto_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/user_profile_wire_dto_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/cloud/user/contract/user_repository_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/user/contract/user_repository_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/common/assistant/assistant_environment_smoke_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/common/assistant/assistant_environment_smoke__local_contract_test.dart
+    - current_path: quwoquan_app/test/common/assistant/personal_assistant_multiturn_beta_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/common/assistant/personal_assistant_multiturn_beta__local_contract_test.dart
+    - current_path: quwoquan_app/test/common/assistant/protocol/assistant_answer_protocol_leak_regression_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/common/assistant/protocol/assistant_answer_protocol_leak_regression__local_contract_test.dart
+    - current_path: quwoquan_app/test/common/pageflip/pageflip_diagnostics_visual_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/common/pageflip/pageflip_diagnostics_visual__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/avatar/conversation_avatar_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/avatar/conversation_avatar__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/avatar/rounded_square_avatar_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/avatar/rounded_square_avatar__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/comment_system/comment_counts_delta_notice_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/comment_system/comment_counts_delta_notice__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/comment_system/comment_input_overlay_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/comment_system/comment_input_overlay__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/comment_system/comment_sort_menu_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/comment_system/comment_sort_menu_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/content/post/comment_input_bar_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/content/post/comment_input_bar_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/content/post/post_card_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/content/post/post_card_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/content/post/video_post_card_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/content/post/video_post_card_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/conversation/conversation_link_action_sheet_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/conversation/conversation_link_action_sheet__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/conversation/message_action_menu_overlay_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/conversation/message_action_menu_overlay__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/conversation/message_bubble_frame_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/conversation/message_bubble_frame__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/input/customizable_chat_input_bar__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/media/shared/toolbar/immersive_engagement_bar_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/media/shared/toolbar/immersive_engagement_bar_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/object_page/interactive_intersection_text_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/object_page/interactive_intersection_text__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/object_page/intersection_four_slot_primitives_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/object_page/intersection_four_slot_primitives__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/object_page/intersection_target_navigator_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/object_page/intersection_target_navigator__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/object_page/intersection_visual_cluster_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/object_page/intersection_visual_cluster__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/object_page/object_intersection_card_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/object_page/object_intersection_section_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/object_page/object_intersection_section__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/object_page/object_page_shell_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/object_page/object_page_shell__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/pageflip/backward_partition_evidence_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/pageflip/backward_partition_evidence__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/pageflip/backward_partition_pixel_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/pageflip/backward_partition_pixel__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/pageflip/backward_sheet_partition_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/pageflip/backward_sheet_partition_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/pageflip/pageflip_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/pageflip/pageflip_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/pageflip/pageflip_forward_baseline_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/pageflip/pageflip_forward_baseline__local_contract_test.dart
+    - current_path: quwoquan_app/test/components/pageflip/pageflip_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/pageflip/pageflip_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/app_content_prototype_bundle_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/app_content_prototype_bundle__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/app_content_repository_remote_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/app_content_repository_remote__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/auth/auth_continuation_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/auth/auth_continuation__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/auth/auth_gate_matrix_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/auth/auth_session_controller_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/auth/auth_session_controller__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/auth/auth_session_store_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/auth/required_route_gate_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/auth/required_route_gate__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/auth/run_when_logged_in_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/auth/run_when_logged_in__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/design_system/providers/appearance_runtime_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/design_system/providers/appearance_runtime__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/errors/ui_error_semantics_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/errors/ui_error_semantics__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/links/app_public_content_links_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/links/app_public_content_links__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/links/share_attribution_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/links/share_attribution__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/media/asset_url_resolver_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/media/asset_url_resolver__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/media/avatar_image_url_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/media/avatar_image_url__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/media/avatar_version_projection_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/media/avatar_version_projection_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/media/content_media_url_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/media/content_media_url__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/media/media_aspect_ratio_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/media/media_aspect_ratio__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/models/media_viewer_comment_context_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/models/media_viewer_comment_context__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/models/media_viewer_post_wire_row_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/models/media_viewer_post_wire_row__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/models/search_launch_context_equality_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/models/search_launch_context_equality__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/platform/app_font_families_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/platform/app_font_families__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/platform/native_auth_bridge_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/platform/native_auth_bridge__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/platform/platform_capabilities_incoming_call_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/platform/platform_capabilities_incoming_call__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/platform/platform_capabilities_profile_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/platform/platform_capabilities_profile__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/providers/app_remote_config_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/providers/app_remote_config_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/providers/client_state_sync_providers_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/providers/client_state_sync_providers__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/providers/resource_cache_profile_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/providers/resource_cache_profile_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/services/analytics_service_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/services/analytics_service__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/services/app_content_repository_lookup_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/services/app_content_repository_lookup__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/services/content_cache_services_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/services/content_cache_services__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/services/conversation_avatar_sync_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/services/conversation_avatar_sync_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/services/local_chat_search_store_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/services/local_chat_search_store__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/services/local_chat_search_sync_service_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/services/local_chat_search_sync_service__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/services/local_circle_group_snapshot_store_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/services/local_circle_group_snapshot_store__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/services/ops_event_repository_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/services/ops_event_repository__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/services/visit_recorder_service_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/services/visit_recorder_service__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/trackers/feed_performance_observability_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/trackers/feed_performance_observability__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/trackers/intersection_attribution_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/trackers/intersection_attribution__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/widgets/app_cached_network_image_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/widgets/app_cached_network_image__local_contract_test.dart
+    - current_path: quwoquan_app/test/core/widgets/error_states/app_error_states_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/widgets/error_states/app_error_states__local_contract_test.dart
+    - current_path: quwoquan_app/test/filter/image_editor_filter_models_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/filter/image_editor_filter_models__local_contract_test.dart
+    - current_path: quwoquan_app/test/filter/image_editor_filter_repository_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/filter/image_editor_filter_repository__local_contract_test.dart
+    - current_path: quwoquan_app/test/gamma/assistant_alpha_beta_simulator_test.dart
+      layer: api_integration
+      target_path: quwoquan_app/test/api_integration/gamma/assistant_alpha_beta_simulator__api_integration_test.dart
+    - current_path: quwoquan_app/test/gamma/assistant_skill_comparison_test.dart
+      layer: api_integration
+      target_path: quwoquan_app/test/api_integration/gamma/assistant_skill_comparison__api_integration_test.dart
+    - current_path: quwoquan_app/test/patrol/chat/chat_ime_input_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/chat/chat_ime_input__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/chat/chat_notification_entry_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/chat/chat_notification_entry__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/chat/chat_orientation_stability_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/chat/chat_orientation_stability__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/chat/group_avatar_sync_e2e_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/chat/group_avatar_sync_e2e__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/content/comment_post_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/content/content_draft_preservation_e2e_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/content/content_draft_preservation_e2e__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/content/create_entry_start_actions_e2e_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/content/create_entry_start_actions_e2e__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/content/error_empty_state_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/content/error_empty_state__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/content/like_post_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/content/like_post__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/discovery/feed_load_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/discovery/home_recommendation_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/discovery/home_recommendation_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/environment/basic_viability_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/ops/event_ingestion_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/ops/event_ingestion_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/patrol/ops/event_reliability_replay_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/patrol/ops/event_reliability_replay__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/smoke/app_bootstrap_smoke_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/smoke/app_bootstrap_smoke__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/assistant/assistant_context_scope_read_view_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/assistant/assistant_context_scope_read_view__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/assistant/assistant_management_page_consent_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/assistant/assistant_structured_run_response_read_view_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/assistant/assistant_structured_run_response_read_view__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/assistant/assistant_transcript_bubble_envelope_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/assistant/assistant_transcript_bubble_envelope__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/assistant/assistant_turn_message_resolver_transcript_row_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/assistant/assistant_turn_message_resolver_transcript_row__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/assistant/contract/assistant_message_history_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/assistant/contract/assistant_message_history_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/assistant/pages/assistant_skill_center_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/assistant/pages/assistant_skill_center_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/assistant/personal_content_access_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/assistant/personal_content_access_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/assistant/widgets/assistant_half_sheet_personalization_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/assistant/widgets/assistant_half_sheet_personalization_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/assistant_process_drawer_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/assistant_process_drawer__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/chat/journeys/chat_assistant_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/chat/journeys/chat_conversation_list_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/chat/journeys/chat_conversation_list_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/chat/journeys/chat_group_management_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/chat/journeys/chat_group_management_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/chat/journeys/chat_message_send_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/chat/journeys/chat_message_send_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/chat/journeys/chat_search_navigation_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/chat/journeys/chat_search_navigation_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/chat/pages/chat_conversation_page_composer_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/pages/chat_conversation_page_composer__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/pages/chat_conversation_page_realtime_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/chat/pages/chat_conversation_page_realtime_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/chat/pages/chat_display_fallbacks_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/pages/chat_display_fallbacks__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/providers/chat_contacts_rows_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/providers/chat_contacts_rows_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/providers/chat_inbox_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/providers/chat_inbox_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/providers/chat_message_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/providers/chat_message_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/providers/group_home_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/providers/group_home_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/providers/message_home_rows_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/providers/message_home_rows_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/providers/voice_offline_queue_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/providers/voice_offline_queue__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/providers/voice_player_manager__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/providers/voice_send_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/chat_assistant_ui_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/chat_assistant_ui_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/chat_detail_page_assistant_ui_regression__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/chat_detail_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/chat_detail_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/chat_message_bubble_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/chat_mock_remote_consistency_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/chat_mock_remote_consistency__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/chat_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/chat_receipt_ui_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/chat_receipt_ui_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/chat_settings_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/chat_settings_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/group_admins_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/group_admins_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/group_manage_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/group_manage_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/start_group_chat_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/chat/widgets/transfer_ownership_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/chat/widgets/transfer_ownership_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/circle/circle_content_identity_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/circle/circle_content_identity_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/circle/journeys/circle_detail_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/circle/journeys/circle_navigation_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/circle/journeys/circle_navigation_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/circle/pages/circle_edit_settings_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/circle/pages/circle_edit_settings_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/circle/pages/home_circles_hub_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/circle/pages/home_circles_hub_page__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/circle/widgets/circle_action_bar_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/circle/widgets/circle_action_bar_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/circle/widgets/circle_detail_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/circle/widgets/circle_detail_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/circle/widgets/circle_header_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/circle/widgets/circle_header_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/circle/widgets/circles_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/circle/widgets/circles_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/circle/widgets/media_viewer_result_absorb_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/circle/widgets/media_viewer_result_absorb__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/article_document_models_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_document_models__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/article_flow_layout_engine_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_flow_layout_engine__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/article_pagination_engine_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_pagination_engine__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/article_presentation_models_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_presentation_models__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/article_reader/article_reader_architecture_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_reader/article_reader_architecture__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/article_wrap_geometry_consistency_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_wrap_geometry_consistency__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/article_edit_preview_chrome_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/article_edit_preview_chrome_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/article_editor_wysiwyg_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/article_editor_wysiwyg_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/article_typography_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/article_typography_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/contract/location_circle_services_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/contract/location_circle_services_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/contract/publish_payload_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/contract/publish_payload_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/create_entry_information_architecture_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/create_entry_information_architecture_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/create_entry_runtime_flag_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/create_entry_runtime_flag__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/create_publish_confirm_sheet_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/create_publish_confirm_sheet_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/draft_recovery_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/draft_recovery_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/journeys/entry_location_error_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/entry_location_error_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/models/create_editor_models_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/models/create_editor_models__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/models/creation_template_track_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/models/creation_template_track__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/providers/article_gap_materialization_regression_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/providers/article_gap_materialization_regression__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/providers/create_editor_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/providers/create_editor_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/publish_circle_select_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/publish_circle_select_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/publish_draft_projection_bridge_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/publish_draft_projection_bridge__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/publish_identity_confirmation_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/publish_identity_confirmation_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/publish_settings_parse_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/publish_settings_parse__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/unified_editor_mode_switch_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/unified_editor_mode_switch_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/unified_editor_runtime_flag_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/unified_editor_runtime_flag__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/widgets/article_wrap_alignment_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/widgets/article_wrap_alignment__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/widgets/article_wrap_paragraph_editor_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/widgets/article_wrap_paragraph_editor__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/widgets/create_entry_sheet_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/entry/widgets/location_selector_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/entry/widgets/location_selector_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/guest_device_interaction_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/guest_device_interaction__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/markdown/article_markdown_codec_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/markdown/article_markdown_codec__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/markdown/qwq_markdown_generated_package_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/markdown/qwq_markdown_generated_package__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/markdown/qwq_markdown_pagination_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/markdown/qwq_markdown_pagination__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/markdown/qwq_markdown_parser_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/markdown/qwq_markdown_parser__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/models/content_surface_view_mapper_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/models/content_surface_view_mapper__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/models/content_time_label_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/models/content_time_label__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/pageflip/curl_renderer_root_cause_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/pageflip/curl_renderer_root_cause__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/pageflip/pageflip_core_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/pageflip/pageflip_core__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/pageflip/release_policy_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/pageflip/release_policy__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/pages/work_browser_entry_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/pages/work_browser_entry_page__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/post/contract/content_runtime_config_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/post/contract/content_runtime_config_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/post/contract/post_ui_config_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/post/contract/post_ui_config_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/post/contract/post_view_projection_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/post/contract/post_view_projection_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/post_read_ui_bundle_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/post_read_ui_bundle__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/seo/markdown_seo_html_renderer_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/seo/markdown_seo_html_renderer__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/share/content_share_template_public_link_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/share/content_share_template_public_link__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/share/share_template_by_identity_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/share/share_template_by_identity_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/share/share_unified_surface_parity_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/share/share_unified_surface_parity__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/content/widgets/intersection_reason_chip_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/widgets/intersection_reason_chip_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/discovery_content_identity_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/discovery_content_identity_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/following_subject_strip_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/following_subject_strip__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/home_channel_template_routing_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/home_channel_template_routing__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/home_feed_layout_policy_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/home_feed_layout_policy__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/home_feed_video_autoplay_policy_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/home_feed_video_autoplay_policy__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/home_feed_video_focus_coordinator_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/home_feed_video_focus_coordinator__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/home_intersection_object_nav_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/home_intersection_object_nav__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/home_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/home_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/post/contract/discovery_feed_query_contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/post/contract/discovery_feed_query_contract__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/discovery/post/journeys/discovery_post_feed_load_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_interaction_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/discovery/post/journeys/discovery_post_interaction_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/post/widgets/discovery_post_feed_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/post/widgets/discovery_post_feed_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/providers/feed_realtime_patch_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/providers/feed_realtime_patch_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/entity/pages/homepage_introduction_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/entity/pages/homepage_introduction_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/entity/pages/homepage_maintenance_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/entity/pages/homepage_maintenance_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/entity/pages/homepage_picker_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/entity/pages/homepage_picker_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/entity/pages/suggest_homepage_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/entity/pages/suggest_homepage_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/intersection/pages/object_intersection_list_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/intersection/pages/object_intersection_list_page__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/rtc/models/call_summary_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/rtc/models/call_summary__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/rtc/providers/call_session_provider_lifecycle_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/rtc/providers/call_session_provider_lifecycle__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/rtc/widgets/active_call_bar_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/rtc/widgets/active_call_bar__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/rtc/widgets/call_controls_bar_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/rtc/widgets/call_controls_bar__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/rtc/widgets/call_participant_picker_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/rtc/widgets/call_permission_card_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/rtc/widgets/call_permission_card__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/rtc/widgets/call_quality_indicator_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/rtc/widgets/call_quality_indicator__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/rtc/widgets/outgoing_call_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/rtc/widgets/outgoing_call_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/rtc/widgets/pip_call_overlay_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/rtc/widgets/pip_call_overlay__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/rtc/widgets/speaker_highlight_layout_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/rtc/widgets/speaker_highlight_layout__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/rtc/widgets/video_grid_layout_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/rtc/widgets/video_grid_layout__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/search/journeys/cross_domain_search_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/search/pages/location_place_landing_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/search/pages/location_place_landing_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/search/retrieve_request_mapper_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/search/retrieve_request_mapper__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/search/search_repository_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/search/search_repository__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/author_impact_card_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/author_impact_card__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/journeys/edit_profile_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/user/journeys/edit_profile_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/user/journeys/my_profile_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/user/journeys/my_profile_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/user/journeys/other_profile_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/user/journeys/other_profile_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/user/journeys/persona_management_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/user/journeys/persona_management_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/user/journeys/profile_tab_navigation_journey_test.dart
+      layer: user_acceptance
+      target_path: quwoquan_app/test/user_acceptance/ui/user/journeys/profile_tab_navigation_journey__user_acceptance_test.dart
+    - current_path: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/pages/lin_mo_travel_intersection_acceptance__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/pages/my_footprint_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/pages/my_footprint_page__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/pages/my_intersection_inbox_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/pages/my_intersection_inbox_page__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/pages/other_profile_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/pages/other_profile_page__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/pages/profile_comments_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/pages/profile_comments_page__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/pages/profile_stats_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/pages/profile_stats_page__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/profile_content_identity_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/profile_content_identity_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/providers/intersection_provider_cache_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/providers/intersection_provider_cache__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/providers/persona_management_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/providers/persona_management_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/providers/profile_state_provider_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/providers/profile_state_provider__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/author_impact_evidence_sheet_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/author_impact_evidence_sheet__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/my_intersection_inbox_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/persona_management_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/persona_management_page__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/profile_action_bar_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/profile_action_bar_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/profile_circles_tab_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/profile_circles_tab__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/profile_creations_tab_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/profile_creations_tab__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/profile_interaction_tab_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/profile_intersection_card_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/profile_intersection_card__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/profile_lifestyle_tab_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/profile_lifestyle_tab__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/profile_slogan_card_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/profile_slogan_card__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/user/widgets/profile_stats_row_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/widgets/profile_stats_row__local_contract_test.dart
+    - current_path: quwoquan_app/test/ui/welcome/welcome_screen_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
+    - current_path: quwoquan_app/test/widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/widget__local_contract_test.dart
+  service:
+    legacy_count: 198
+    entries:
+    - current_path: quwoquan_service/services/assistant-service/cmd/api/main_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/cmd/api/main__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/adapters/http/handler_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/adapters/http/handler__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/agent_loop_emerged_tags_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/agent_loop_emerged_tags__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/agent_loop_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/agent_loop__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/app_message_service_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/app_message_service__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/chat_mention_service_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/chat_mention_service__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/intersection_reminder_service_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/intersection_reminder_service__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/m11_local_scenario_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/m11_local_scenario__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/proactive_interest_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/proactive_interest__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/reasoning/react_planner_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/reasoning/react_planner__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/runtime_foundation_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/runtime_foundation__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/service_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/service__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/simulator/runner_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/simulator/runner__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/skill_subscription_service__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/tool/registry_retrieve_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/tool/registry_retrieve_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/application/tool_coordinator__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/domain/assistant/metadata_wire_roundtrip_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/domain/assistant/metadata_wire_roundtrip__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/infrastructure/chatclient/client__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/infrastructure/persistence/app_message_bson_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/infrastructure/persistence/app_message_bson__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/internal/infrastructure/userprofile/interest_profile_client_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/internal/infrastructure/userprofile/interest_profile_client__local_contract_test.go
+    - current_path: quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/assistant-service/tests/assistant_mentioned_chat_integration__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/internal/adapters/http/social_contact_resolver_client_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/internal/adapters/http/social_contact_resolver_client__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/internal/application/group_avatar_support_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/internal/application/group_avatar_support__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/internal/application/runtime_media_status_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/internal/application/runtime_media_status__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/assistant_mentioned_stream_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/benchmark_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/benchmark__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/contract_fixture_seed_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/contract_fixture_seed_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/contract_fixture_seed_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/contract_fixture_seed__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/conversation_compat_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/conversation_compat_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/conversation_crud_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/conversation_crud_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/conversation_error_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/conversation_error_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/conversation_settings_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/conversation_settings_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/direct_conversation_relationship_gate_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/direct_conversation_relationship_gate__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/event_publish_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/event_publish_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/group_avatar_async_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/group_avatar_async_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/group_avatar_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/group_avatar_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/group_avatar_sync_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/group_avatar_sync_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/group_avatar_user_avatar_update_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/group_avatar_user_avatar_update_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/group_lifecycle_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/group_lifecycle_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/helpers_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/helpers__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/inbox_projection_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/inbox_projection_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/media_upload_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/media_upload_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/member_management_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/member_management_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/message_audio_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/message_audio_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/message_crud_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/message_sync_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/message_sync_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/message_unread_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/message_unread_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/send_message_relationship_gate_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/send_message_relationship_gate__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/social_contacts_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/social_contacts_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/chat-service/tests/testmain_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/chat-service/tests/testmain__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/cmd/api/config_sync_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/cmd/api/config_sync__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/internal/application/circle_impact_service_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/internal/application/circle_impact_service__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/internal/infrastructure/messaging/content_post_consumer_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/internal/infrastructure/messaging/content_post_consumer__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/internal/infrastructure/searchindex/backfill_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/internal/infrastructure/searchindex/backfill__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/internal/infrastructure/searchindex/projector_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/internal/infrastructure/searchindex/projector__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/tests/circle_crud_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/tests/circle_crud_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/tests/circle_error_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/tests/circle_error_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/tests/circle_feed_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/tests/circle_feed_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/tests/circle_file_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/tests/circle_file_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/tests/circle_member_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/tests/circle_member_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/tests/circle_search_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/tests/circle_search_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/tests/circle_section_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/tests/circle_section_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/tests/contract_fixture_seed_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/tests/contract_fixture_seed_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/tests/contract_fixture_seed_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/tests/contract_fixture_seed__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/tests/helpers_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/tests/helpers__local_contract_test.go
+    - current_path: quwoquan_service/services/circle-service/tests/testmain_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/circle-service/tests/testmain__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/cmd/api/main_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/cmd/api/main__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/cmd/import/loader_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/cmd/import/loader__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/cmd/import/mongo_import_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/cmd/import/mongo_import__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/adapters/http/content_handler_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/adapters/http/content_handler__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/author_impact_travel_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/author_impact_travel__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/behavior_feed_patch_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/behavior_feed_patch__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/bulk_import_service_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/bulk_import_service__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/comment_display_fields_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/comment_display_fields__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/comment_sort_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/comment_sort_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/create_semantic_projection_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/create_semantic_projection__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/feed_service_negative_fallback_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/feed_service_negative_fallback__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/intersection_hydration_vertical_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/intersection_hydration_vertical__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/intersection_metrics_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/intersection_metrics__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/intersection_readpath_invariant_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/intersection_readpath_invariant__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/intersection_service_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/intersection_service__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/media_upload_url_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/media_upload_url_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/place_search_projection_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/place_search_projection__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/post_object_anchor_normalization_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/post_object_anchor_normalization__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/post_retrieve_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/post_retrieve__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/profile_interaction_activity_view_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/profile_interaction_activity_view__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/reaction_device_actor_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/reaction_device_actor__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/semantic_mentions_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/application/semantic_mentions__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/domain/post/semantic/mentions_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/domain/post/semantic/mentions__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/persistence/comment_keyset_delta_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/persistence/comment_keyset_delta__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/persistence/comment_memory_store_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/persistence/comment_memory_store__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/placeindex/backfill_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/placeindex/backfill__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/placeindex/projector_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/placeindex/projector__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/cluster_adapter_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/recommendation/cluster_adapter__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/http_model_client_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/recommendation/http_model_client__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/interest_profile_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/recommendation/interest_profile__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/intersection_feature_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/recommendation/intersection_feature__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/intersection_graph_materializer_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/recommendation/intersection_graph_materializer__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/recommendation/read_model_intersection_source__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/recommendation/search_signal_consumer__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/segment_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/recommendation/segment__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/searchindex/backfill_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/searchindex/backfill__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/searchindex/projector_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/internal/infrastructure/searchindex/projector__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/author_impact_evidence_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/author_impact_evidence_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/comment_keyset_explain_bench_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/comment_keyset_explain_bench__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/comment_persistence_migration_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/comment_persistence_migration_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/contract_fixture_seed_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/contract_fixture_seed_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/contract_fixture_seed_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/contract_fixture_seed__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/helpers_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/helpers__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/intersection_source_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/intersection_source_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/intersection_watermark_store_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/intersection_watermark_store_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_behavior_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_cache_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_cache_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_comment_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_compat_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_compat_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_crud_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_crud_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_error_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_error_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_event_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_event_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_feed_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_feed_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_identity_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_identity_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_markdown_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_markdown_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_profile_interaction_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_profile_interaction_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_projection_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_projection_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_reaction_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_reaction_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_search_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_search_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/post_user_list_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/post_user_list_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/redis_router_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/redis_router_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/report_crud_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/report_crud_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/testmain_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/testmain__local_contract_test.go
+    - current_path: quwoquan_service/services/content-service/tests/viewer_object_intersection_store_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/content-service/tests/viewer_object_intersection_store_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/entity-service/internal/application/content_service_intersection_client_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/entity-service/internal/application/content_service_intersection_client__local_contract_test.go
+    - current_path: quwoquan_service/services/entity-service/internal/application/homepage_canonical_entity_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/entity-service/internal/application/homepage_canonical_entity__local_contract_test.go
+    - current_path: quwoquan_service/services/entity-service/internal/application/homepage_search_projection_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/entity-service/internal/application/homepage_search_projection__local_contract_test.go
+    - current_path: quwoquan_service/services/entity-service/internal/infrastructure/searchindex/backfill_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/entity-service/internal/infrastructure/searchindex/backfill__local_contract_test.go
+    - current_path: quwoquan_service/services/entity-service/internal/infrastructure/searchindex/projector_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/entity-service/internal/infrastructure/searchindex/projector__local_contract_test.go
+    - current_path: quwoquan_service/services/entity-service/tests/contract_fixture_seed_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/entity-service/tests/contract_fixture_seed__local_contract_test.go
+    - current_path: quwoquan_service/services/entity-service/tests/homepage_handler_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/entity-service/tests/homepage_handler__local_contract_test.go
+    - current_path: quwoquan_service/services/entity-service/tests/homepage_search_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/entity-service/tests/homepage_search_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/integration-service/internal/adapters/http/location_fixture_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/integration-service/internal/adapters/http/location_fixture_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/integration-service/internal/adapters/http/location_handler_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/integration-service/internal/adapters/http/location_handler__local_contract_test.go
+    - current_path: quwoquan_service/services/integration-service/internal/application/location_service_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/integration-service/internal/application/location_service__local_contract_test.go
+    - current_path: quwoquan_service/services/platform-ops-service/cmd/api/main_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/platform-ops-service/cmd/api/main__local_contract_test.go
+    - current_path: quwoquan_service/services/product-ops-service/cmd/api/config_sync_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/product-ops-service/cmd/api/config_sync__local_contract_test.go
+    - current_path: quwoquan_service/services/product-ops-service/cmd/api/main_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/product-ops-service/cmd/api/main__local_contract_test.go
+    - current_path: quwoquan_service/services/product-ops-service/tests/visit_event_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/product-ops-service/tests/visit_event_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/rtc-service/internal/adapters/ws/signal_handler_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/rtc-service/internal/adapters/ws/signal_handler__local_contract_test.go
+    - current_path: quwoquan_service/services/rtc-service/internal/application/signal_wire_type_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/rtc-service/internal/application/signal_wire_type__local_contract_test.go
+    - current_path: quwoquan_service/services/rtc-service/tests/call_lifecycle_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/rtc-service/tests/call_lifecycle_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/rtc-service/tests/contract_fixture_seed_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/rtc-service/tests/contract_fixture_seed__local_contract_test.go
+    - current_path: quwoquan_service/services/rtc-service/tests/helpers_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/rtc-service/tests/helpers__local_contract_test.go
+    - current_path: quwoquan_service/services/rtc-service/tests/one_to_one_relationship_gate_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/rtc-service/tests/one_to_one_relationship_gate__local_contract_test.go
+    - current_path: quwoquan_service/services/rtc-service/tests/room_management_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/rtc-service/tests/room_management_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/rtc-service/tests/testmain_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/rtc-service/tests/testmain__local_contract_test.go
+    - current_path: quwoquan_service/services/search-service/internal/adapters/http/middleware_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/search-service/internal/adapters/http/middleware__local_contract_test.go
+    - current_path: quwoquan_service/services/search-service/internal/adapters/http/subject_key_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/search-service/internal/adapters/http/subject_key__local_contract_test.go
+    - current_path: quwoquan_service/services/search-service/internal/application/cached_term_heat_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/search-service/internal/application/cached_term_heat__local_contract_test.go
+    - current_path: quwoquan_service/services/search-service/internal/application/experiments_repeatability_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/search-service/internal/application/experiments_repeatability__local_contract_test.go
+    - current_path: quwoquan_service/services/search-service/internal/application/queryheat/heat_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/search-service/internal/application/queryheat/heat__local_contract_test.go
+    - current_path: quwoquan_service/services/search-service/internal/application/ranking_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/search-service/internal/application/ranking__local_contract_test.go
+    - current_path: quwoquan_service/services/search-service/internal/infrastructure/searchsignals/stream_publisher_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/search-service/internal/infrastructure/searchsignals/stream_publisher__local_contract_test.go
+    - current_path: quwoquan_service/services/search-service/tests/search_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/search-service/tests/search_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/search-service/tests/search_signal_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/search-service/tests/search_signal_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/search-service/tests/storage_ttl_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/search-service/tests/storage_ttl_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/tag-service/internal/application/tag_service_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/tag-service/internal/application/tag_service__local_contract_test.go
+    - current_path: quwoquan_service/services/tag-service/tests/tag_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/tag-service/tests/tag_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/tag-service/tests/testmain_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/tag-service/tests/testmain__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/cmd/api/main_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/cmd/api/main__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/internal/adapters/http/interest_profile_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/internal/adapters/http/interest_profile_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/internal/application/otp_challenge_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/internal/application/otp_challenge__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/internal/application/sandbox_allowlist_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/internal/application/sandbox_allowlist__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/internal/application/shard_directory_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/internal/application/shard_directory__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/internal/domain/user/telemetry/persona_rollout_metrics_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/internal/domain/user/telemetry/persona_rollout_metrics__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/internal/infrastructure/integration/external_auth_provider_client_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/internal/infrastructure/integration/external_auth_provider_client__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/internal/infrastructure/projection/interest_profile_projector_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/internal/infrastructure/projection/interest_profile_projector__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/internal/infrastructure/searchindex/backfill_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/internal/infrastructure/searchindex/backfill__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/internal/infrastructure/searchindex/projector_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/internal/infrastructure/searchindex/projector__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/active_persona_context_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/active_persona_context_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/auth_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/auth_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/block_cascade_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/block_cascade_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/block_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/block_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/contact_discovery_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/contact_discovery_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/credential_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/credential_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/error_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/error_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/follow_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/follow_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/greeting_request_state_machine_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/greeting_request_state_machine__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/helpers_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/helpers__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/homepage_bundle_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/homepage_bundle_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/invite_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/invite_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/migration_idempotent_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/migration_idempotent__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/persona_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/persona_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/pg_setup_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/pg_setup__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/profile_crud_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/profile_crud_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/profile_sync_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/profile_sync_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/settings_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/settings_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/sub_account_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/sub_account_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/sub_account_view_contract_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/sub_account_view_contract__local_contract_test.go
+    - current_path: quwoquan_service/services/user-service/tests/testmain_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/services/tests/local_contract/user-service/tests/testmain__local_contract_test.go
+  data:
+    legacy_count: 100
+    entries:
+    - current_path: quwoquan_data/tests/annotate/test_annotate_publish_filter.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/annotate/test_annotate_publish_filter__local_contract_test.py
+    - current_path: quwoquan_data/tests/bootstrap/test_phase0_reverify.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/bootstrap/test_phase0_reverify__local_contract_test.py
+    - current_path: quwoquan_data/tests/bootstrap/test_sop_injection.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/bootstrap/test_sop_injection__local_contract_test.py
+    - current_path: quwoquan_data/tests/build/test_build_homepage.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/build/test_build_homepage__local_contract_test.py
+    - current_path: quwoquan_data/tests/build/test_entity_object_stages.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/build/test_entity_object_stages__local_contract_test.py
+    - current_path: quwoquan_data/tests/cli/test_cli.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/cli/test_cli__local_contract_test.py
+    - current_path: quwoquan_data/tests/cli/test_data_cli.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/cli/test_data_cli__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_agent_executor_contract.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_agent_executor_contract__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_asset_id_stability.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_asset_id_stability__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_asset_refs.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_asset_refs__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_batch_asset_registry.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_batch_asset_registry__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_batch_asset_stability.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_batch_asset_stability__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_batch_object_paths.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_batch_object_paths__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_batch_orchestration.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_batch_orchestration__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_batch_shared_artifacts.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_batch_shared_artifacts__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_content_drift.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_content_drift__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_content_object_router.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_content_object_router__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_content_plan_source_reject.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_content_plan_source_reject__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_content_quality_anchor_gate.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_content_quality_anchor_gate__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_content_source_registry.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_content_source_registry__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_creator_manifest_contract.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_creator_manifest_contract__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_entity_annotation.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_entity_annotation__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_global_batch_seq.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_global_batch_seq__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_handoff.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_handoff__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_image_asset_strategy.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_image_asset_strategy__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_intersection_signal.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_intersection_signal__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_provenance.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_provenance__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_quality_gates.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_quality_gates__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_rubric_judge.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_rubric_judge__local_contract_test.py
+    - current_path: quwoquan_data/tests/common/test_source_unit_evidence_chain.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/common/test_source_unit_evidence_chain__local_contract_test.py
+    - current_path: quwoquan_data/tests/download/test_download_gate.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/download/test_download_gate__local_contract_test.py
+    - current_path: quwoquan_data/tests/download/test_download_images.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/download/test_download_images__local_contract_test.py
+    - current_path: quwoquan_data/tests/download/test_download_source_plan.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/download/test_download_source_plan__local_contract_test.py
+    - current_path: quwoquan_data/tests/download/test_fetch_registry_dispatch.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/download/test_fetch_registry_dispatch__local_contract_test.py
+    - current_path: quwoquan_data/tests/download/test_image_download_gates.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/download/test_image_download_gates__local_contract_test.py
+    - current_path: quwoquan_data/tests/download/test_source_plan_guidance.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/download/test_source_plan_guidance__local_contract_test.py
+    - current_path: quwoquan_data/tests/explore/test_prepare_validate.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/explore/test_prepare_validate__local_contract_test.py
+    - current_path: quwoquan_data/tests/governance/test_candidate_governance.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/governance/test_candidate_governance__local_contract_test.py
+    - current_path: quwoquan_data/tests/governance/test_entity_candidate_intake.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/governance/test_entity_candidate_intake__local_contract_test.py
+    - current_path: quwoquan_data/tests/governance/test_governance_schemas.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/governance/test_governance_schemas__local_contract_test.py
+    - current_path: quwoquan_data/tests/governance/test_semantic_mentions.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/governance/test_semantic_mentions__local_contract_test.py
+    - current_path: quwoquan_data/tests/governance/test_tag_candidate_merge.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/governance/test_tag_candidate_merge__local_contract_test.py
+    - current_path: quwoquan_data/tests/homepage_assets/test_homepage_assets.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/homepage_assets/test_homepage_assets__local_contract_test.py
+    - current_path: quwoquan_data/tests/integration/test_hitl_autopass.py
+      layer: api_integration
+      target_path: quwoquan_data/tests/api_integration/integration/test_hitl_autopass__api_integration_test.py
+    - current_path: quwoquan_data/tests/integration/test_hitl_pipeline.py
+      layer: api_integration
+      target_path: quwoquan_data/tests/api_integration/integration/test_hitl_pipeline__api_integration_test.py
+    - current_path: quwoquan_data/tests/integration/test_review_ledger_state_machine.py
+      layer: api_integration
+      target_path: quwoquan_data/tests/api_integration/integration/test_review_ledger_state_machine__api_integration_test.py
+    - current_path: quwoquan_data/tests/integration/test_verify_pilot_gwt.py
+      layer: api_integration
+      target_path: quwoquan_data/tests/api_integration/integration/test_verify_pilot_gwt__api_integration_test.py
+    - current_path: quwoquan_data/tests/media/test_media_asset_url.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/media/test_media_asset_url__local_contract_test.py
+    - current_path: quwoquan_data/tests/orchestrate/test_fanout_dispatch.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/orchestrate/test_fanout_dispatch__local_contract_test.py
+    - current_path: quwoquan_data/tests/orchestrate/test_fanout_plan.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/orchestrate/test_fanout_plan__local_contract_test.py
+    - current_path: quwoquan_data/tests/orchestrate/test_fanout_runner.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/orchestrate/test_fanout_runner__local_contract_test.py
+    - current_path: quwoquan_data/tests/orchestrate/test_fanout_strategies.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/orchestrate/test_fanout_strategies__local_contract_test.py
+    - current_path: quwoquan_data/tests/orchestrate/test_mode_single_fanout_equivalence.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/orchestrate/test_mode_single_fanout_equivalence__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_article_markdown_contract.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_article_markdown_contract__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_creative_autonomy_gate.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_creative_autonomy_gate__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_entity_composer.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_entity_composer__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_gallery_carrier.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_gallery_carrier__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_homepage_introduction_seed.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_homepage_introduction_seed__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_image_post_contract.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_image_post_contract__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_materialize_semantic_mentions.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_materialize_semantic_mentions__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_mixed_layout_gate.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_mixed_layout_gate__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_post_dir_layout.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_post_dir_layout__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_review_image_gate.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_review_image_gate__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_route_assets_layout.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_route_assets_layout__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_route_brief_and_evidence.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_route_brief_and_evidence__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_style_gates.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_style_gates__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_travelogue_density.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_travelogue_density__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_works_classifier.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_works_classifier__local_contract_test.py
+    - current_path: quwoquan_data/tests/produce/test_works_gate.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/produce/test_works_gate__local_contract_test.py
+    - current_path: quwoquan_data/tests/publish/test_tag_link_targets.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/publish/test_tag_link_targets__local_contract_test.py
+    - current_path: quwoquan_data/tests/quality/test_dirty_data_cleanup.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/quality/test_dirty_data_cleanup__local_contract_test.py
+    - current_path: quwoquan_data/tests/quality/test_image_safety_gate.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/quality/test_image_safety_gate__local_contract_test.py
+    - current_path: quwoquan_data/tests/ship/test_data_release_consistency.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/ship/test_data_release_consistency__local_contract_test.py
+    - current_path: quwoquan_data/tests/ship/test_ship_sampling.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/ship/test_ship_sampling__local_contract_test.py
+    - current_path: quwoquan_data/tests/site_supply/test_site_supply_contract.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/site_supply/test_site_supply_contract__local_contract_test.py
+    - current_path: quwoquan_data/tests/task/test_content_plan_quality_sort.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/task/test_content_plan_quality_sort__local_contract_test.py
+    - current_path: quwoquan_data/tests/task/test_content_supply.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/task/test_content_supply__local_contract_test.py
+    - current_path: quwoquan_data/tests/task/test_harness_hooks.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/task/test_harness_hooks__local_contract_test.py
+    - current_path: quwoquan_data/tests/task/test_image_scale_proof.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/task/test_image_scale_proof__local_contract_test.py
+    - current_path: quwoquan_data/tests/task/test_object_queue.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/task/test_object_queue__local_contract_test.py
+    - current_path: quwoquan_data/tests/task/test_target_selection.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/task/test_target_selection__local_contract_test.py
+    - current_path: quwoquan_data/tests/task/test_task_cli.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/task/test_task_cli__local_contract_test.py
+    - current_path: quwoquan_data/tests/task/test_trial_review.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py
+    - current_path: quwoquan_data/tests/template/test_creator_match.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/template/test_creator_match__local_contract_test.py
+    - current_path: quwoquan_data/tests/template/test_source_catalog.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/template/test_source_catalog__local_contract_test.py
+    - current_path: quwoquan_data/tests/template/test_style_catalog.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/template/test_style_catalog__local_contract_test.py
+    - current_path: quwoquan_data/tests/template/test_template_cli.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/template/test_template_cli__local_contract_test.py
+    - current_path: quwoquan_data/tests/verify/test_content_semantics_progression.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/verify/test_content_semantics_progression__local_contract_test.py
+    - current_path: quwoquan_data/tests/verify/test_directory_evidence_gate.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/verify/test_directory_evidence_gate__local_contract_test.py
+    - current_path: quwoquan_data/tests/verify/test_flat_root_structure_gate.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/verify/test_flat_root_structure_gate__local_contract_test.py
+    - current_path: quwoquan_data/tests/verify/test_no_runtime_draft_kit.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/verify/test_no_runtime_draft_kit__local_contract_test.py
+    - current_path: quwoquan_data/tests/verify/test_release_integrity_gate.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/verify/test_release_integrity_gate__local_contract_test.py
+    - current_path: quwoquan_data/tests/verify/test_scale_readiness.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/verify/test_scale_readiness__local_contract_test.py
+    - current_path: quwoquan_data/tests/verify/test_site_scale_readiness.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/verify/test_site_scale_readiness__local_contract_test.py
+    - current_path: quwoquan_data/tests/verify/test_verify_scope_semantics.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/verify/test_verify_scope_semantics__local_contract_test.py
+    - current_path: quwoquan_data/tests/verify/test_vertical_source_registry_verify.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/verify/test_vertical_source_registry_verify__local_contract_test.py
+    - current_path: quwoquan_data/tests/vertical/test_image_rights_asset_level.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/vertical/test_image_rights_asset_level__local_contract_test.py
+    - current_path: quwoquan_data/tests/vertical/test_travel_source_registry.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/vertical/test_travel_source_registry__local_contract_test.py
+    - current_path: quwoquan_data/tests/vertical/test_vertical_maturity.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/vertical/test_vertical_maturity__local_contract_test.py
+    - current_path: quwoquan_data/tests/workflow/test_task_run_pipeline.py
+      layer: local_contract
+      target_path: quwoquan_data/tests/local_contract/workflow/test_task_run_pipeline__local_contract_test.py
+  agent_ops:
+    legacy_count: 8
+    entries:
+    - current_path: agent_ops/tests/test_check_device_matrix_gate.py
+      layer: local_contract
+      target_path: agent_ops/tests/local_contract/test_check_device_matrix_gate__local_contract_test.py
+    - current_path: agent_ops/tests/test_detect_ci_impacted_scopes.py
+      layer: local_contract
+      target_path: agent_ops/tests/local_contract/test_detect_ci_impacted_scopes__local_contract_test.py
+    - current_path: agent_ops/tests/test_dev_up.py
+      layer: local_contract
+      target_path: agent_ops/tests/local_contract/test_dev_up__local_contract_test.py
+    - current_path: agent_ops/tests/test_prod_deploy_contract.py
+      layer: api_integration
+      target_path: agent_ops/tests/api_integration/test_prod_deploy_contract__api_integration_test.py
+    - current_path: agent_ops/tests/test_prod_plane_access_isolation.py
+      layer: local_contract
+      target_path: agent_ops/tests/local_contract/test_prod_plane_access_isolation__local_contract_test.py
+    - current_path: agent_ops/tests/test_prod_plane_runtime_stack.py
+      layer: api_integration
+      target_path: agent_ops/tests/api_integration/test_prod_plane_runtime_stack__api_integration_test.py
+    - current_path: agent_ops/tests/test_prod_plane_ssh_setup.py
+      layer: local_contract
+      target_path: agent_ops/tests/local_contract/test_prod_plane_ssh_setup__local_contract_test.py
+    - current_path: agent_ops/tests/test_stackctl_up_runtime.py
+      layer: api_integration
+      target_path: agent_ops/tests/api_integration/test_stackctl_up_runtime__api_integration_test.py

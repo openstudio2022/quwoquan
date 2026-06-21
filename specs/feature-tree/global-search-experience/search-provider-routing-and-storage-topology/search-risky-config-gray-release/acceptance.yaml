@@ -27,7 +27,8 @@ gwt_acceptance:
     - release config 不含真实 endpoints/password/token；端点凭据由环境 secret 注入。
     - config release version mapping、image compatibility、config PR policy 全绿。
     done_when:
-    - "`verify_config_release_version_mapping.sh`、`verify_config_image_compat.sh`、`verify_config_pr_policy.sh` 全部通过。"
+    - '`verify_config_release_version_mapping.sh`、`verify_config_image_compat.sh`、`verify_config_pr_policy.sh`
+      全部通过。'
     edge_cases:
     - 只改文档不改服务配置时不要求 release config。
     - 高风险 key 变更但无本 story acceptance/spec 更新时必须 fail。
@@ -37,20 +38,31 @@ gwt_acceptance:
     - quwoquan_service/services/search-service/configs/gamma/config.yaml
     performance_points:
     - release config 只冻结配置合同，不代表真集群 measured 性能；性能准出仍归 R-S06-S-1。
-    evidence:
-      primary:
-      - T1_contract
-      supporting:
-      - T3_integration
     tests:
       planned:
-      - artifacts/stackctl/prod/search_config_gray_release_report.json
+      - artifact: artifacts/stackctl/prod/search_config_gray_release_report.json
       recorded:
-      - releases/config/search-service/v2026.06.16.0.yaml
-      - artifacts/stackctl/gamma/search_rollback_rehearsal.md
+      - file: releases/config/search-service/v2026.06.16.0.yaml
+      - artifact: artifacts/stackctl/gamma/search_rollback_rehearsal.md
     status: partial
     notes:
     - 本地 release config 与风险灰度文档已补齐；真实 prod-hosted rollout 需用户确认后执行。
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_risky_config_gray_release.contract
+        envs:
+        - local
+      supporting:
+      - layer: api_integration
+        suite: integration
+        cases:
+        - api_integration.global_search_experience.search_provider_routing_and_storage_topology.search_risky_config_gray_release.integration
+        envs:
+        - beta
+        - gamma
 execution:
   local_gate:
   - bash quwoquan_service/scripts/deploy/verify_config_release_version_mapping.sh

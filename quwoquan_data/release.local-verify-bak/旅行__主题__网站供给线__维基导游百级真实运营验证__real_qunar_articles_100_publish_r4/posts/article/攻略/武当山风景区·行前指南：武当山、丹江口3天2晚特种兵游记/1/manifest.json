@@ -1,0 +1,130 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_ad23e62c8aaa7533",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/武当山风景区"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:武当山风景区"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/武当山风景区",
+      "reason": "no_condition_profile; uses region/season menu"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7865478",
+    "https://touch.travel.qunar.com/youji/7868051"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/武当山风景区/1.download/sources/78.qunar_guide_candidate_ad23e62c8aaa7533/source.md",
+    "entities/地点/景区/武当山风景区/1.download/sources/91.qunar_guide_candidate_ce4c6e3256f795f4/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "武当山风景区·行前指南：武当山、丹江口3天2晚特种兵游记",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "武当山风景区",
+    "routeEntities": [
+      "武当山风景区"
+    ],
+    "beats": [
+      "先从 武当山风景区 进入主线。",
+      "武当山景区景交车很方便，对于大多数游客来说，都会选择索道上金顶，然后步行下山；或者体力很好，喜欢爬山的游人，亦可选择景区南岩宫终点下，步行上山至金顶",
+      "很多游人都是爬一会就停下来休息，中途会停留两到三次，爬山本来就是于自己战斗的过程，途中会腿发酸，呼吸急促，感觉很累，但每完成一段上行，就会距离终点近一点"
+    ],
+    "sourceNote": "武当山、丹江口3天2晚特种兵游记,2026丹江口游记,丹江口旅游/自助游/自由行/游玩攻略-【去哪儿攻略】\nroy 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n武当山、丹江口3天2晚特种兵游记\nroy\n2024/08/24出发\n人物\n家庭\n玩法\n徒步\n人均\n1000元\n第一天\n武当山风景区\n8月23日10点50分从汉口乘坐G68",
+    "relatedTopics": [
+      "武当山风景区",
+      "武当山景区景交车很方便，对于大多数游客来说，都会选择索道上金顶，然后步行下山；或者体力很好，喜欢爬山的游人，亦可选择景区南岩宫终点下，步行上山至金顶",
+      "很多游人都是爬一会就停下来休息，中途会停留两到三次，爬山本来就是于自己战斗的过程，途中会腿发酸，呼吸急促，感觉很累，但每完成一段上行，就会距离终点近一点"
+    ],
+    "mustIncludeFacts": [
+      "武当山风景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-19T22:36:43.677605+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:武当山风景区"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_a837bbac1735a7a4",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "武当山风景区",
+      "sourceEntityRef": "/entity/地点/景区/武当山风景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_ad23e62c8aaa7533",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 17
+    }
+  ],
+  "articleMarkdownDigest": "sha256:106284f18d23abf5f10a3e9246012050f7150862ba10953dfb5687bdbf35c2a6"
+}

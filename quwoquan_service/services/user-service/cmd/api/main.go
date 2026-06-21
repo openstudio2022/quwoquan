@@ -330,6 +330,7 @@ func main() {
 		application.WithExternalAuthProviderClient(socialProviderClient),
 		application.WithOneTapPhoneResolver(oneTapResolverImpl),
 		application.WithAccessTokenSigner(accessSigner),
+		application.WithDefaultNicknamePrefix(getenvOrDefault("USER_DEFAULT_NICKNAME_PREFIX", "新同学")),
 	)
 	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
 	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)

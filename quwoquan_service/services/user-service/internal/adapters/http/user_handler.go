@@ -194,10 +194,6 @@ func (h *UserHandler) handleUpdateProfile(w http.ResponseWriter, r *http.Request
 			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if hasUserErrorCode(err, "USER.USER.nickname_taken") {
-			writeHTTPError(w, r, err)
-			return
-		}
 		writeHTTPError(w, r, err)
 		return
 	}
@@ -788,6 +784,7 @@ func (h *UserHandler) buildFollowListItems(
 			"username":          view["username"],
 			"displayName":       view["displayName"],
 			"avatarUrl":         view["avatarUrl"],
+			"avatarVersion":     view["avatarVersion"],
 			"profileVisibility": view["profileVisibility"],
 			"followedAt":        edges[i].CreatedAt.Format(time.RFC3339),
 		}

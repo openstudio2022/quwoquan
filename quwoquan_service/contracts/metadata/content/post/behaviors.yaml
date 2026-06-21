@@ -33,12 +33,14 @@ wire_schema:
         同一个 feedRequestId，禁止点击时重生，确保召回 → 下发 → 曝光 → 互动漏斗可对齐。
     - name: referralSource
       type: enum
-      enum: [organic_feed, friend_share, chat_link, circle_post, author_profile, entity_page, search, push_notification, deep_link]
+      enum: [organic_feed, friend_share, chat_link, circle_post, author_profile, entity_page, search, push_notification, deep_link, my_intersections]
       required: false
       description: |
         用户到达内容的来源渠道。曝光/点击/停留/互动/负反馈全事件回传，供推荐侧按来源加权
         （runtime/recommendation.ReferralSourceMultiplier）与归因下钻。端侧 ReferralSource 枚举与
         云侧 ReferralSourceMultiplier 键必须与本闭集一一对应（R08 端云对齐）。
+        my_intersections 表示用户在「我的交集 / 我的影响力」中心主动点击交集对象（强关系探索意图，
+        非推荐流曝光），区别于 organic_feed，避免污染推荐流来源归因。
     - name: position
       type: int
       required: false
@@ -225,7 +227,7 @@ behavior_events:
     notes: |
       交集转化归因（S6）：intersectionDimension（identity/location/content/interest/relationship
       五维之一）+ intersectionSourceRef（§5.4 标准 kind，与曝光/点击/展开同名）+ intersectionTagRefs
-      （路径制 tagRef，唯一真相源 publish/v1/tags）随关注上报，使「交集曝光 → 点击 → 转化」整条漏斗
+      （路径制 tagRef，唯一真相源 publish/tags）随关注上报，使「交集曝光 → 点击 → 转化」整条漏斗
       可按同一 sourceRef 下钻，供推荐回流与「交集转化率」北极星指标按维度/kind/tagRef 切分。
 
   - type: join_circle

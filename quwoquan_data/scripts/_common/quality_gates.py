@@ -522,6 +522,10 @@ def simhash64(text: str) -> int:
 
 def simhash_similarity(a: str, b: str) -> float:
     ha, hb = simhash64(a), simhash64(b)
+    return simhash_similarity_from_hashes(ha, hb)
+
+
+def simhash_similarity_from_hashes(ha: int, hb: int) -> float:
     if ha == 0 or hb == 0:
         return 0.0
     hamming = bin(ha ^ hb).count("1")
@@ -533,12 +537,17 @@ def semantic_duplicate_issues(
     peers: Iterable[str],
     *,
     threshold: float = SEMANTIC_DUP_SIMHASH,
+    article_hash: int | None = None,
+    peer_hashes: Iterable[int] | None = None,
 ) -> list[str]:
     """SimHash 语义去重：与任一 peer 相似度 >= 阈值即判语义重复（换名同骨架）。"""
-    for peer in peers:
-        if not peer:
-            continue
-        sim = simhash_similarity(article, peer)
+    ha = simhash64(article) if article_hash is None else article_hash
+    if peer_hashes is None:
+        peer_hash_iter = (simhash64(peer) for peer in peers if peer)
+    else:
+        peer_hash_iter = (int(peer_hash or 0) for peer_hash in peer_hashes)
+    for hb in peer_hash_iter:
+        sim = simhash_similarity_from_hashes(ha, hb)
         if sim >= threshold:
             return [f"semanticDuplicate: simhash similarity to a peer too high ({sim:.2f} >= {threshold})"]
     return []

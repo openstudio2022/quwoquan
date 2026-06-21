@@ -50,6 +50,8 @@ REQUIRED_CREATOR_FIELDS = [
     "voiceStyle",
     "expertiseClaims",
     "mustNotClaim",
+    "coverageScope",
+    "carrierAffinity",
 ]
 
 

@@ -27,12 +27,132 @@ from _common.article_package import (
 from _common.batch_asset_registry import allocate_post_asset_id, load_batch_asset_registry
 from _common.batch_manifest import load_batch_manifest
 from _common.paths import DATA_ROOT, RUNTIME_ROOT, batch_root, relative_batch_ref
-from _common.io import write_json
+from _common.io import read_json, write_json
+from _common.review_ledger import entities_path
 from _common.draft_io import is_placeholder, read_draft_article, read_draft_meta, read_writing_pack
 from _common.post_evidence_chain import build_finalization_report, build_source_refs_snapshot
 from _common.provenance import build_provenance
 from _common.intersection_signal import build_intersection_hints
 from _common.entity_annotation import annotate_inline, normalize_link_ref
+
+
+def _resolve_semantic_mentions(
+    task_id: str,
+    batch_id: str,
+    ref: str,
+    compose_payload: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """合并 review 阶段 entities sidecar 的 semanticMentions 与 compose payload 内联 mention。
+
+    sidecar（build_entities_sidecar 产出）是实体/标签 mention 的治理真相源（含 offset/status/
+    candidateId/targetRef）；compose payload 内联 mention 作补充。按 mentionId 去重，sidecar 优先。
+    manifest 存全量 mention（含 pending_review）；active entityRefs/tagRefs 由端云按
+    semanticMentions.published_only 投影，不在此过滤（与服务侧 importer/contract 对齐）。
+    """
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _absorb(rows: Any) -> None:
+        if not isinstance(rows, (list, tuple)):
+            return
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            mention_id = str(row.get("mentionId") or "")
+            key = mention_id or json.dumps(row, ensure_ascii=False, sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(dict(row))
+
+    try:
+        sidecar_path: Path | None = entities_path(task_id, batch_id, ref)
+    except KeyError:
+        sidecar_path = None
+    if sidecar_path is not None and sidecar_path.is_file():
+        try:
+            sidecar = read_json(sidecar_path)
+        except (OSError, ValueError):
+            sidecar = {}
+        if isinstance(sidecar, Mapping):
+            _absorb(sidecar.get("semanticMentions"))
+    _absorb(compose_payload.get("semanticMentions"))
+    return merged
+
+
+def _semantic_mention_id(source_ref: str, kind: str, target_ref: str) -> str:
+    digest = hashlib.sha1(f"{source_ref}|{kind}|{target_ref}|manifest".encode("utf-8")).hexdigest()[:24]
+    return f"mention_{digest}"
+
+
+def _semantic_surface_from_ref(target_ref: str) -> str:
+    text = str(target_ref or "").strip().strip("/")
+    if not text:
+        return ""
+    if ":" in text and "/" not in text:
+        return text.split(":")[-1]
+    return text.split("/")[-1]
+
+
+def _published_semantic_targets(mentions: list[dict[str, Any]], kind: str) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for row in mentions:
+        if str(row.get("kind") or "") != kind:
+            continue
+        if str(row.get("status") or "") != "published":
+            continue
+        target = str(row.get("targetRef") or "").strip()
+        if not target or target in seen:
+            continue
+        seen.add(target)
+        out.append(target)
+    return out
+
+
+def _ensure_published_manifest_mentions(
+    mentions: list[dict[str, Any]],
+    ref: str,
+    *,
+    entity_refs: list[str],
+    tag_refs: list[str],
+) -> list[dict[str, Any]]:
+    """Active refs are compatibility projections; semanticMentions is the source.
+
+    Some refs come from brief/tag taxonomy rather than inline extraction.  Publish
+    them as manifest-level semantic mentions so importer read-only projection
+    checks can derive the same active entityRefs/tagRefs without trusting the
+    compatibility fields.
+    """
+    merged = [dict(row) for row in mentions]
+    existing = {
+        (str(row.get("kind") or ""), str(row.get("status") or ""), str(row.get("targetRef") or ""))
+        for row in merged
+    }
+
+    def _append(kind: str, target_ref: str) -> None:
+        target = str(target_ref or "").strip()
+        if not target or (kind, "published", target) in existing:
+            return
+        existing.add((kind, "published", target))
+        merged.append(
+            {
+                "mentionId": _semantic_mention_id(ref, kind, target),
+                "sourceRef": ref,
+                "targetRef": target,
+                "kind": kind,
+                "surface": _semantic_surface_from_ref(target),
+                "location": "manifest",
+                "occurrence": 0,
+                "status": "published",
+            }
+        )
+
+    for entity_ref in entity_refs:
+        _append("entity", normalize_link_ref(str(entity_ref)))
+    for tag_ref in tag_refs:
+        _append("tag", str(tag_ref))
+    return merged
 
 
 def _resolve_entity_download_dir(
@@ -361,6 +481,33 @@ def _image_source_contract(
     return resolved
 
 
+def _image_source_import_aliases(image_source: Mapping[str, Any]) -> dict[str, Any]:
+    """Write the same rights facts under publish-gate and service-importer keys."""
+
+    page = image_source.get("collectionPageUrl")
+    terms_url = image_source.get("termsUrl")
+    proof_url = image_source.get("authorizationProof")
+    license_value = image_source.get("license")
+    aliases: dict[str, Any] = {}
+    if page not in (None, "", {}):
+        aliases["page"] = page
+        if isinstance(page, str):
+            aliases["sourceCollectionUrl"] = page
+    proof: dict[str, Any] = {}
+    if license_value not in (None, "", {}):
+        proof["license"] = license_value
+    if terms_url not in (None, "", {}):
+        proof["termsUrl"] = terms_url
+    if proof_url not in (None, "", {}):
+        proof["proofUrl"] = proof_url
+    if proof:
+        aliases["licenseProof"] = proof
+        ref_value = proof_url if proof_url not in (None, "", {}) else terms_url
+        if isinstance(ref_value, str) and ref_value.strip():
+            aliases["licenseProofRef"] = ref_value.strip()
+    return aliases
+
+
 def _resolve_materialized_article(
     task_id: str,
     batch_id: str,
@@ -500,6 +647,12 @@ def materialize_posts(
         tag_refs = compose_payload.get("tagRefs", [])
         source_urls = compose_payload.get("sourceUrls", [])
         source_paths = compose_payload.get("sourcePaths", [])
+        semantic_mentions = _ensure_published_manifest_mentions(
+            _resolve_semantic_mentions(task_id, batch_id, ref, compose_payload),
+            ref,
+            entity_refs=entity_refs if isinstance(entity_refs, list) else [],
+            tag_refs=tag_refs if isinstance(tag_refs, list) else [],
+        )
         article_md = ""
         normalization_actions: list[str] = []
         if not is_image:
@@ -591,7 +744,8 @@ def materialize_posts(
             "entityRefs": entity_refs,
             "normalizedEntityRefs": normalized_entity_refs,
             "tagRefs": tag_refs,
-            "semanticMentions": list(compose_payload.get("semanticMentions") or []),
+            "semanticMentions": semantic_mentions,
+            "publishMediaMode": compose_payload.get("publishMediaMode"),
             "authorId": compose_payload.get("authorId") or creator_payload.get("authorId"),
             "creatorProfileId": compose_payload.get("creatorProfileId") or creator_payload.get("creatorProfileId"),
             "creatorArchetype": compose_payload.get("creatorArchetype") or creator_payload.get("creatorArchetype"),
@@ -652,6 +806,7 @@ def materialize_posts(
                     "title": title,
                     "caption": caption,
                     **image_source,
+                    **_image_source_import_aliases(image_source),
                 }
             )
         else:

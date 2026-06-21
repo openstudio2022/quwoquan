@@ -54,6 +54,8 @@ BATCH = "b1"
 REF = "川西大环线慢游_跟团_夏"
 ENTITIES = ["九寨沟", "稻城亚丁", "色达", "新都桥"]
 MINED = "洛绒牛场"
+TAG_LABEL = "晨雾"
+TAG_DIMENSION = "摄影"
 
 SOURCE_TEXT = """---
 url: https://example.com/a
@@ -139,6 +141,7 @@ def _run_pipeline() -> Path:
     byline = public_byline_label(str(brief.get("templateId")), brief.get("creator") or {})
     article = route_article(brief["titleHint"], byline, ENTITIES, pack.get("mustIncludeFacts") or [])
     article += f"\n\n返程前经过{MINED}，这里作为沿途自然景观只做短暂停留。\n"
+    article += f"\n清晨适合拍{TAG_LABEL}，光线柔和层次分明。\n"
     write_agent_draft(
         TASK,
         BATCH,
@@ -148,6 +151,7 @@ def _run_pipeline() -> Path:
         cited_source_paths=quality.get("sourcePaths") or [],
         covered_facts=pack.get("mustIncludeFacts") or [],
         extracted_entities=[{"name": MINED, "type": "自然景观", "evidenceRef": "curated_story"}],
+        extracted_tags=[{"label": TAG_LABEL, "dimensionId": TAG_DIMENSION}],
         agent_run_id="run-hitl",
         agent_id="agent-hitl",
     )
@@ -212,6 +216,39 @@ def test_mined_entity_enters_review_without_placeholder_homepage():
     # 未经人审不得在 batch 实体对象根生成占位主页。
     obj = find_entity_object_dir(TASK, ent["domain"], ent["type"], MINED, batch_id=BATCH)
     assert obj is None or not (obj / "page.md").is_file()
+
+
+def test_manifest_backfills_entity_and_tag_semantic_mentions_from_sidecar():
+    """端到端：sidecar 的实体/标签 semanticMentions 全链路回填 manifest（生产侧 draft → review sidecar → materialize）。"""
+    post_dir = _run_pipeline()
+    manifest = read_json(post_dir / "manifest.json")
+    sidecar = read_json(post_dir / "5.review" / "review_entities.json")
+
+    manifest_mentions = manifest.get("semanticMentions") or []
+    assert manifest_mentions, "manifest 必须回填 semanticMentions（实体/标签 grounding 源头）"
+
+    # sidecar 是治理真相源；manifest 必须包含 sidecar 的全部 mentionId（不丢失）。
+    sidecar_ids = {row["mentionId"] for row in (sidecar.get("semanticMentions") or [])}
+    manifest_ids = {row["mentionId"] for row in manifest_mentions}
+    assert sidecar_ids, "sidecar 应产出 semanticMentions"
+    assert sidecar_ids <= manifest_ids, "sidecar mention 必须全部进入 manifest"
+
+    # 实体 mention（挖掘出的专有实体，pending_review）。
+    entity_mentions = [m for m in manifest_mentions if m.get("kind") == "entity"]
+    assert any(m.get("surface") == MINED for m in entity_mentions), "应回填实体 mention"
+
+    # 标签 mention（生产侧 extractedTags → review sidecar → manifest，端到端打通）。
+    tag_mentions = [m for m in manifest_mentions if m.get("kind") == "tag"]
+    assert tag_mentions, "extractedTags 必须端到端产出 tag semantic mention"
+    tag = next(m for m in tag_mentions if m.get("surface") == TAG_LABEL)
+    assert tag["targetRef"].endswith(TAG_LABEL)
+    assert tag["status"] in {"published", "pending_review"}
+    assert tag["startUtf16"] >= 0 and tag["endUtf16"] > tag["startUtf16"]
+
+    # sidecar.tags 结构体同源记录该标签及其 mentionIds。
+    sidecar_tags = {t["label"]: t for t in (sidecar.get("tags") or [])}
+    assert TAG_LABEL in sidecar_tags, "sidecar 应记录结构化 tag 条目"
+    assert tag["mentionId"] in sidecar_tags[TAG_LABEL]["mentionIds"]
 
 
 def _run_all() -> None:

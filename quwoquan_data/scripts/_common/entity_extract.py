@@ -23,6 +23,7 @@ from _common.semantic_mentions import (
     build_semantic_mentions,
 )
 from governance.candidate_store import CandidateRepository, candidate_id_for
+from template.registry import tag_exists
 
 # 抽取实体的中文类型 → (domain, etype)
 TYPE_TO_DOMAIN_ETYPE: dict[str, tuple[str, str]] = {
@@ -327,6 +328,47 @@ def build_entities_sidecar(
             }
         )
 
+    # 标签 mention：草稿 extractedTags（{label, dimensionId}）→ tag mention（kind=tag）。
+    # 已发布标签（命中 publish/tags 主线）→ published 可点击；未发布 → pending_review 待治理，
+    # 不直接派生 active tagRef（与实体 pending 同构；候选 intake 由 tag_candidate_merge 独立负责）。
+    out_tags: list[dict[str, Any]] = []
+    extracted_tags: Sequence[Mapping[str, Any]] = []
+    if draft_meta:
+        extracted_tags = draft_meta.get("extractedTags") or draft_meta.get("extractedTagCandidates") or []
+    seen_tags: set[str] = set()
+    for tag in extracted_tags:
+        if not isinstance(tag, Mapping):
+            continue
+        label = str(tag.get("label") or tag.get("name") or "").strip()
+        if not label:
+            continue
+        dimension = str(tag.get("dimensionId") or tag.get("dimension") or "").strip().strip("/")
+        target_ref = "/".join(part for part in (dimension, label) if part)
+        if not target_ref or target_ref in seen_tags:
+            continue
+        if len(seen_tags) >= DEFAULT_MAX_CANDIDATES:
+            break
+        seen_tags.add(target_ref)
+        published = tag_exists(target_ref)
+        tag_status = STATUS_PUBLISHED if published else STATUS_PENDING_REVIEW
+        mention_targets.append(
+            {
+                "targetRef": target_ref,
+                "surface": label,
+                "status": tag_status,
+                "kind": "tag",
+            }
+        )
+        out_tags.append(
+            {
+                "label": label,
+                "dimensionId": dimension,
+                "ref": target_ref,
+                "published": published,
+                "governanceStatus": tag_status,
+            }
+        )
+
     semantic_mentions = build_semantic_mentions(
         article_text,
         source_ref=ref,
@@ -337,11 +379,14 @@ def build_entities_sidecar(
         mention_ids_by_ref.setdefault(str(mention["targetRef"]), []).append(str(mention["mentionId"]))
     for entity in out_entities:
         entity["mentionIds"] = mention_ids_by_ref.get(str(entity["ref"]), [])
+    for tag_entry in out_tags:
+        tag_entry["mentionIds"] = mention_ids_by_ref.get(str(tag_entry["ref"]), [])
 
     sidecar = {
         "schemaVersion": "quwoquan_data.review_entities",
         "ref": ref,
         "entities": out_entities,
+        "tags": out_tags,
         "semanticMentions": semantic_mentions,
     }
     write_json(entities_path(task_id, batch_id, ref), sidecar)

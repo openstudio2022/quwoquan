@@ -9,67 +9,89 @@ node:
 scope:
   summary: 交集句主谓宾一句话统一表达与统一组件收敛（端只读 primaryText）。
   in_scope:
-    - 端侧统一交集句组件收敛（IntersectionReasonChip 单句主谓宾、蓝色、单行省略）。
-    - 两类 surface 句式层次（紧凑严格单句；列表入口结论句 + 至多一条辅助说明）。
-    - 事实通道概念合规（无朋友/好友/收藏/同趣），affinity 明确标注推荐。
+  - 端侧统一交集句组件收敛（IntersectionReasonChip 单句主谓宾、蓝色、单行省略）。
+  - 两类 surface 句式层次（紧凑严格单句；列表入口结论句 + 至多一条辅助说明）。
+  - 事实通道概念合规（无朋友/好友/收藏/同趣），affinity 明确标注推荐。
   out_of_scope:
-    - 云侧排序 / 语义压缩 / 埋点回流。
-    - 端侧本地拼接交集文案。
+  - 云侧排序 / 语义压缩 / 埋点回流。
+  - 端侧本地拼接交集文案。
 gwt_acceptance:
   GWT1:
     title: 紧凑 surface 交集句单条约束 GWT
     given:
-      - IntersectionReason 列表非空且 primaryText 为主谓宾整句。
+    - IntersectionReason 列表非空且 primaryText 为主谓宾整句。
     when:
-      - 在首页内容卡 / spotlight 卡渲染交集句。
+    - 在首页内容卡 / spotlight 卡渲染交集句。
     then:
-      - 有且仅展示一条蓝色主谓宾结论句，单行省略，无副句 / 无标签列表 / 无浮层。
+    - 有且仅展示一条蓝色主谓宾结论句，单行省略，无副句 / 无标签列表 / 无浮层。
     done_when:
-      - 统一组件成为四口径唯一消费入口。
+    - 统一组件成为四口径唯一消费入口。
     edge_cases:
-      - 无来源 / 无结论句时不展示、不占位。
+    - 无来源 / 无结论句时不展示、不占位。
     contract_refs:
-      - recommendation/rec_model/projections/intersection_reason.yaml
+    - recommendation/rec_model/projections/intersection_reason.yaml
     performance_points: []
-    evidence:
-      primary:
-        - T1_contract
-        - T2_module_interaction
-      supporting: []
     tests:
       planned:
-        - quwoquan_app/test/ui/content/widgets/intersection_reason_chip_widget_test.dart
-      recorded:
-        - "T2 quwoquan_app/test/ui/content/widgets/intersection_reason_chip_widget_test.dart（统一 IntersectionReasonChip 单条蓝色主谓宾句、单行省略、weightTier 轻重分化、无来源不占位、双主题只读，2026-06-16 green）"
+      - file: quwoquan_app/test/ui/content/widgets/intersection_reason_chip_widget_test.dart
+      recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.gwt1_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/content/widgets/intersection_reason_chip_widget_test.dart（统一
+      IntersectionReasonChip 单条蓝色主谓宾句、单行省略、weightTier 轻重分化、无来源不占位、双主题只读，2026-06-16
+      green）'
   GWT2:
     title: 事实通道文案合规 GWT
     given:
-      - alpha mock 交集句 fixture。
+    - alpha mock 交集句 fixture。
     when:
-      - 校验事实交集通道展示文案。
+    - 校验事实交集通道展示文案。
     then:
-      - 不出现朋友 / 好友 / 收藏 / 同趣等违禁词；affinity 明确标注推荐。
+    - 不出现朋友 / 好友 / 收藏 / 同趣等违禁词；affinity 明确标注推荐。
     done_when:
-      - mock 与展示口径与 intersection-definition §17 一致。
+    - mock 与展示口径与 intersection-definition §17 一致。
     edge_cases: []
     contract_refs:
-      - content/test_fixtures/scenarios/content_scenarios.json
+    - content/test_fixtures/scenarios/content_scenarios.json
     performance_points: []
-    evidence:
-      primary:
-        - T1_contract
-      supporting:
-        - T2_module_interaction
     tests:
       planned:
-        - quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart
-      recorded:
-        - "T1 quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart（事实交集句无朋友/好友/收藏/同趣违禁词，affinity 明确标注推荐，口径对齐 §17，2026-06-16 green）"
+      - file: quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart
+      recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.gwt2_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart（事实交集句无朋友/好友/收藏/同趣违禁词，affinity
+      明确标注推荐，口径对齐 §17，2026-06-16 green）'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

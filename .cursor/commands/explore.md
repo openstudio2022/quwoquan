@@ -3,7 +3,7 @@
 目标：只读澄清增量归属，不写代码。
 
 准入：
-- 用户需求尚未明确一棵树归属、验收意图、证据层或触发规则。
+- 用户需求尚未明确一棵树归属、验收意图、三层测试证据或触发规则。
 - 只读探索，不改代码、不改文档、不运行破坏性命令。
 
 执行：
@@ -17,7 +17,7 @@
 - `L2_business_capability`：`<capability>`
 - `L3_story`：`<story 或需新建>`
 - 验收意图：UAT / SIT / GWT / contract
-- 测试证据：T1 / T2 / T3 / T4
+- 测试证据：local_contract / api_integration / user_acceptance
 - metadata、seed、mock、页面质量、runtime error、发布风险
 
 出口：

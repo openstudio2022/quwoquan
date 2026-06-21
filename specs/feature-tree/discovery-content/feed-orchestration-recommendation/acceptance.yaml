@@ -30,42 +30,65 @@ sit_acceptance:
     - Feed 首屏、翻页、刷新与续接语义清晰，端侧只透传 cursor，不解析 token。
     - 首页频道按 metadata layout policy 呈现：关注单列、精品侵入式、推荐/校园/旅行/摄影手机双列发现流，文章/口碑/强交集解释可 full-span。
     - 同一个 PostBaseDto / ContentSurfaceView / IntersectionReason 支持单列、双列、侵入式和对象页承接，不新增第二套首页业务列表。
-    - 交集模块从 feed intersectionReasons 或 tag-service shared-tags 同源派生，用户行动回流 intersectionDimension / intersectionTagRefs。
+    - 交集模块从 feed intersectionReasons 或 tag-service shared-tags 同源派生，用户行动回流 intersectionDimension
+      / intersectionTagRefs。
     - 关注频道登录后展示关注对象顶部列表，覆盖用户、圈子、地点和事物主页；上次访问后变化以红点提示，点击对象并进入主页后可消红点。
     - 行为上报（impression/click/dwell/like/favorite/share/dislike/report）可进入统一行为契约，强负反馈只影响未来窗口。
-    - 端侧反馈经单一 BehaviorReporter 通道分级上报（强信号即时、弱信号采样合并），clientEventId 幂等、feedRequestId 归因闭环，不双通道重复上报。
+    - 端侧反馈经单一 BehaviorReporter 通道分级上报（强信号即时、弱信号采样合并），clientEventId 幂等、feedRequestId
+      归因闭环，不双通道重复上报。
     - 推荐 SLO/KPI 有真相源，至少覆盖 feed 延迟、空结果率、fallback 率、重复曝光率、CTR、停留、完成率与负反馈率。
     - 曝光记忆、动态曝光预算、生命周期复活和活跃度自适应只引用 exposure-governance 规格，不在本节点维护第二套规则。
     performance_points:
     - Feed P95 <= 200ms、P99 <= 400ms（模型超时可降级）。
     - 同 session 跨页重复率 < 1%；空 feed 率 < 0.1%。
     - 行为上报到 HotPath 生效延迟 < 100ms。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
-      - T4_e2e_journey
     tests:
       planned:
-      - quwoquan_app/test/patrol/discovery/feed_load_test.dart
-      - quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
+      - file: quwoquan_app/test/patrol/discovery/feed_load_test.dart
+      - file: quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
       recorded:
-      - quwoquan_app/test/ui/discovery/home_feed_layout_policy_test.dart
-      - quwoquan_app/test/ui/discovery/home_channel_template_routing_test.dart
-      - quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
-      - quwoquan_app/test/ui/discovery/following_subject_strip_test.dart
-      - quwoquan_app/test/ui/discovery/post/contract/discovery_feed_query_contract_test.dart
-      - quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
-      - quwoquan_app/test/cloud/behavior/contract/behavior_repository_contract_test.dart
-      - quwoquan_app/test/cloud/content/content_behavior_tracker_test.dart
-      - quwoquan_app/test/cloud/content/post/contract/post_behavior_tracker_contract_test.dart
-      - quwoquan_service/runtime/recommendation/engine_test.go
-      - quwoquan_service/runtime/recommendation/intersection_fusion_test.go
-      - quwoquan_service/runtime/recommendation/rerank_mmr_test.go
-      - quwoquan_service/runtime/recommendation/ucb_explore_test.go
+      - file: quwoquan_app/test/ui/discovery/home_feed_layout_policy_test.dart
+      - file: quwoquan_app/test/ui/discovery/home_channel_template_routing_test.dart
+      - file: quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
+      - file: quwoquan_app/test/ui/discovery/following_subject_strip_test.dart
+      - file: quwoquan_app/test/ui/discovery/post/contract/discovery_feed_query_contract_test.dart
+      - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
+      - file: quwoquan_app/test/cloud/behavior/contract/behavior_repository_contract_test.dart
+      - file: quwoquan_app/test/cloud/content/content_behavior_tracker_test.dart
+      - file: quwoquan_app/test/cloud/content/post/contract/post_behavior_tracker_contract_test.dart
+      - file: quwoquan_service/runtime/recommendation/engine_test.go
+      - file: quwoquan_service/runtime/recommendation/intersection_fusion_test.go
+      - file: quwoquan_service/runtime/recommendation/rerank_mmr_test.go
+      - file: quwoquan_service/runtime/recommendation/ucb_explore_test.go
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.discovery_content.feed_orchestration_recommendation.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.discovery_content.feed_orchestration_recommendation.sit1.sit1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.discovery_content.feed_orchestration_recommendation.sit1.sit1_local_contract
+        envs: *id001
+      - layer: user_acceptance
+        suite: e2e_journey
+        cases:
+        - user_acceptance.discovery_content.feed_orchestration_recommendation.sit1.e2e_journey
+        envs:
+        - gamma
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

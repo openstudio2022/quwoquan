@@ -47,6 +47,10 @@ def handle_verify(args: argparse.Namespace) -> None:
 
         content_supply_gate_main()
         return
+    if cmd == "works-classification":
+        from verify.verify_works_classification import main as works_classification_main
+
+        raise SystemExit(works_classification_main())
     if cmd == "release-integrity":
         from _common.release_integrity import scan_release_integrity
 
@@ -81,6 +85,7 @@ def handle_verify(args: argparse.Namespace) -> None:
         report = build_site_scale_readiness_report(
             vertical=str(args.vertical),
             batch_id=str(args.batch),
+            batch_ids=[str(x).strip() for x in str(getattr(args, "batches", "") or "").split(",") if str(x).strip()] or None,
             site_id=getattr(args, "site_id", None),
             daily_target=int(args.daily_target),
             require_import=not bool(getattr(args, "allow_missing_import", False)),
@@ -313,6 +318,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("data-role-gate", help="校验数据工程七角色准出清单与文档/门禁接线")
     sub.add_parser("single-contract-source", help="校验内容供给生产契约只有一个无版本真源")
     sub.add_parser("content-supply-production", help="校验生产级内容供给 current 契约与队列/envelope/账本闭环")
+    sub.add_parser("works-classification", help="校验作品 vs 随记判定 schema/config/registry 一致性 + 判定 smoke")
     pri = sub.add_parser("release-integrity", help="校验 release 级证据链、一稿一用和跨作品资产独占")
     pri.add_argument("--release", required=True, help="Release ID under release/")
     psr = sub.add_parser("scale-readiness", help="校验批次是否具备日产万级/商用放量证据")
@@ -327,12 +333,13 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pss.add_argument("--vertical", default="travel", help="垂类，默认 travel")
     pss.add_argument("--site-id", help="可选：只校验单个 siteId；不传则聚合同垂类该 batch 全部站点")
     pss.add_argument("--batch", required=True, help="site_supply batch ID")
+    pss.add_argument("--batches", help="逗号分隔多个 site_supply batchId；用于同垂类多站点真实放量聚合")
     pss.add_argument("--daily-target", type=int, default=100000, help="目标日产内容对象数，默认 100000")
     pss.add_argument("--mode", choices=["trial", "commercial"], default="commercial", help="trial 只验结构/吞吐/账本，commercial 要求 release/import/search/rec 证据")
     pss.add_argument("--allow-missing-import", action="store_true", help="仅本地试跑时允许缺少 import 证据")
-    pss.add_argument("--min-article-count", type=int, default=0, help="trial/commercial 均可选：全批 content_plan handoff 文章最低数")
-    pss.add_argument("--min-image-count", type=int, default=0, help="trial/commercial 均可选：全批 content_plan handoff 图片作品最低数")
-    pss.add_argument("--min-video-count", type=int, default=0, help="trial/commercial 均可选：全批 content_plan handoff 视频作品最低数")
+    pss.add_argument("--min-article-count", type=int, default=0, help="可选：trial 按 content_plan handoff，commercial 按已 release/import postRefs 统计文章最低数")
+    pss.add_argument("--min-image-count", type=int, default=0, help="可选：trial 按 content_plan handoff，commercial 按已 release/import postRefs 统计图片作品最低数")
+    pss.add_argument("--min-video-count", type=int, default=0, help="可选：trial 按 content_plan handoff，commercial 按已 release/import postRefs 统计视频作品最低数")
     pss.add_argument("--report-out", help="可选：写出 readiness JSON 报告")
 
     p.set_defaults(handler=handle_verify)

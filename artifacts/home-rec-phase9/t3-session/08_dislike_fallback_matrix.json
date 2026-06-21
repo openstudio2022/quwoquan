@@ -1,0 +1,9 @@
+{
+  "image": "localhost/quwoquan_service_content-service:latest (sha256:af8610ba3c0d…)",
+  "disliked_post": "alpha_video_landscape_playable",
+  "behaviors_http": 204,
+  "rec_negative_contains_disliked_post": true,
+  "dislike_single_post_removal_fallback_path": "PASS",
+  "negative_feedback_removal_patch_metric_delta": 1.0,
+  "capturedAt": "2026-06-19T03:07:50Z"
+}

@@ -327,28 +327,28 @@ make codegen-app
 
 ## TDD / ATDD 策略
 
-### T1
+### local_contract
 
 - metadata 字段与 patch schema 契约测试
 - objectKey / URL builder contract
 - sourceHash contract
 
-### T2
+### local_contract
 
 - 群头像展示组件与默认图标降级
 - sync patch handler
 
-### T3
+### api_integration
 
 - 用户头像变更 -> 群头像重算 -> patch -> 客户端刷新
 - 成员加入离开 -> 群头像重算 -> 客户端刷新
 
-### T4
+### user_acceptance
 
 - 双设备 / 双账号会话列表群头像一致性
 - 弱网下旧图保留 + 最终一致刷新
 
-### T4 受控演练入口
+### user_acceptance 受控演练入口
 
 若本轮仍不引入全自动真机链路，至少需要保留一套固定、可复演的预发准出步骤：
 
@@ -376,9 +376,9 @@ make codegen-app
 - `make gate-runtime-media` 用于本地高频回归；
 - `make gate-runtime-media-full` 必须结合真实 `RUNTIME_MEDIA_T4_EVIDENCE` 一起执行，不能用空模板替代已执行证据。
 
-## plan slice 与 T1~T4 证据矩阵映射
+## plan slice 与 三层测试 证据矩阵映射
 
-| Slice | 目标 | T1 | T2 | T3 | T4 |
+| Slice | 目标 | local_contract | local_contract | api_integration | user_acceptance |
 |------|------|----|----|----|----|
 | M0 | metadata/codegen 设计基线 | ✓ | | | |
 | M1 | runtime media 资产与 URL 规范 | ✓ | | ✓ | |

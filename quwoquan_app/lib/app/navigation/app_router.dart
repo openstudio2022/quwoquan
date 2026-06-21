@@ -146,7 +146,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           key: state.pageKey,
           child: Consumer(
             builder: (context, ref, _) => WelcomeScreen(
-              loginPrompt: _welcomeLoginPromptConfig(context, ref),
               onFinish: () {
                 _completeWelcome(ref);
               },
@@ -986,43 +985,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
-
-WelcomeLoginPromptConfig? _welcomeLoginPromptConfig(
-  BuildContext context,
-  WidgetRef ref,
-) {
-  final auth = ref.read(authSessionControllerProvider);
-  final reason = auth.promptReason;
-  if (auth.status != AuthSessionStatus.guest ||
-      reason == null ||
-      reason == AuthPromptReason.actionRequired ||
-      reason == AuthPromptReason.sessionExpired) {
-    return null;
-  }
-  return WelcomeLoginPromptConfig(
-    title: UITextConstants.welcomeLoginPromptTitle,
-    subtitle: UITextConstants.welcomeLoginPromptSubtitle,
-    onLogin: () {
-      _completeWelcome(ref);
-      if (!context.mounted) {
-        return;
-      }
-      openLoginPage(
-        context,
-        reasonName: reason.name,
-        replace: true,
-        allowGuestDismissPop: false,
-      );
-    },
-    onContinueAsGuest: () async {
-      await ref.read(authSessionControllerProvider.notifier).continueAsGuest();
-      if (!context.mounted) {
-        return;
-      }
-      _completeWelcome(ref);
-    },
-  );
-}
 
 void _completeWelcome(WidgetRef ref) {
   ref.read(welcomeCompletedProvider.notifier).setCompleted(true);

@@ -13,10 +13,7 @@ import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 enum WelcomeStartupStageStatus { pending, running, complete, failed }
 
 class WelcomeStartupStageState {
-  const WelcomeStartupStageState({
-    required this.label,
-    required this.status,
-  });
+  const WelcomeStartupStageState({required this.label, required this.status});
 
   final String label;
   final WelcomeStartupStageStatus status;
@@ -50,36 +47,18 @@ class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({
     super.key,
     required this.onFinish,
-    this.loginPrompt,
     this.deferSequenceStart = false,
     this.onSequenceComplete,
     this.startupLoading,
   });
 
   final VoidCallback onFinish;
-  final WelcomeLoginPromptConfig? loginPrompt;
   final bool deferSequenceStart;
   final VoidCallback? onSequenceComplete;
   final WelcomeStartupLoadingState? startupLoading;
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
-}
-
-class WelcomeLoginPromptConfig {
-  const WelcomeLoginPromptConfig({
-    required this.title,
-    required this.subtitle,
-    required this.onLogin,
-    required this.onContinueAsGuest,
-    this.countdownSeconds = 5,
-  });
-
-  final String title;
-  final String subtitle;
-  final FutureOr<void> Function() onLogin;
-  final FutureOr<void> Function() onContinueAsGuest;
-  final int countdownSeconds;
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen>
@@ -97,12 +76,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   late List<AnimationController> _petalControllers;
   late AnimationController _textController;
   final Set<Timer> _sequenceTimers = <Timer>{};
-  Timer? _loginPromptTimer;
-  bool _showLoginPrompt = false;
   bool _finishHandled = false;
-  bool _promptActionInFlight = false;
   bool _sequenceCompletionDispatched = false;
-  int _loginPromptRemainingSeconds = 5;
 
   @override
   void initState() {
@@ -140,7 +115,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         microseconds:
             (_petalStagger.inMicroseconds * _petalCount) +
             _postBloomPause.inMicroseconds +
-            (_textDuration.inMicroseconds * (1 - _initialTextProgress)).round() +
+            (_textDuration.inMicroseconds * (1 - _initialTextProgress))
+                .round() +
             _finalPause.inMicroseconds,
       );
       if (awaitedBeforeFloor < _minimumSequenceDuration) {
@@ -165,23 +141,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   void didUpdateWidget(covariant WelcomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_showLoginPrompt &&
-        oldWidget.loginPrompt != null &&
-        widget.loginPrompt == null &&
-        mounted) {
-      setState(() => _showLoginPrompt = false);
-    }
-    if (_sequenceCompletionDispatched &&
-        !_showLoginPrompt &&
-        oldWidget.loginPrompt == null &&
-        widget.loginPrompt != null &&
-        !_promptActionInFlight &&
-        !_finishHandled) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _showLoginChoice();
-      });
-    }
   }
 
   @override
@@ -190,7 +149,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       timer.cancel();
     }
     _sequenceTimers.clear();
-    _loginPromptTimer?.cancel();
     for (final c in _petalControllers) {
       c.dispose();
     }
@@ -216,10 +174,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           children: [
             _buildBackground(appearance),
             _buildMainContent(appearance),
-            if (_showLoginPrompt)
-              _buildWelcomeLoginPrompt(appearance)
-            else if (_shouldShowStartupLoading)
-              _buildStartupLoadingPanel(appearance)
+            if (_shouldShowStartupLoading)
+              _buildStartupInlineHint(appearance)
             else
               _buildAssistantWhisper(appearance),
           ],
@@ -229,9 +185,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   bool get _shouldShowStartupLoading =>
-      _sequenceCompletionDispatched &&
-      !_showLoginPrompt &&
-      widget.startupLoading != null;
+      _sequenceCompletionDispatched && widget.startupLoading != null;
 
   Widget _buildBackground(WelcomeAppearance appearance) {
     return Positioned.fill(
@@ -454,322 +408,40 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  Widget _buildWelcomeLoginPrompt(WelcomeAppearance appearance) {
-    final prompt = widget.loginPrompt;
-    if (prompt == null) {
-      return const SizedBox.shrink();
-    }
-    return Positioned(
-      left: AppSpacing.lg,
-      right: AppSpacing.lg,
-      bottom: AppSpacing.xl,
-      child: SafeArea(
-        top: false,
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-          opacity: _showLoginPrompt ? 1 : 0,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.black.withValues(alpha: 0.18),
-                  blurRadius: AppSpacing.thirtySix,
-                  offset: const Offset(AppSpacing.zero, AppSpacing.ten),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(AppSpacing.containerLg),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    prompt.title,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosTitle3,
-                      fontWeight: AppTypography.bold,
-                      color: AppColors.iosLabel(context),
-                      height: AppTypography.lineHeightCompact,
-                      decoration: TextDecoration.none,
-                    ),
-                  ),
-                  SizedBox(height: AppSpacing.intraGroupSm),
-                  Text(
-                    prompt.subtitle,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosFootnote,
-                      color: AppColors.iosSecondaryLabel(context),
-                      height: AppSpacing.textLineHeightBody,
-                      decoration: TextDecoration.none,
-                    ),
-                  ),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  CupertinoButton(
-                    color: AppColors.primaryColor,
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.radiusTwenty,
-                    ),
-                    minimumSize: const Size(
-                      AppSpacing.minInteractiveSize,
-                      AppSpacing.buttonHeightLg,
-                    ),
-                    onPressed: _handleLoginTap,
-                    child: Text(
-                      UITextConstants.login,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosBody,
-                        fontWeight: AppTypography.semiBold,
-                        color: AppColors.white,
-                        decoration: TextDecoration.none,
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: AppSpacing.intraGroupXs),
-                  CupertinoButton(
-                    minimumSize: const Size(
-                      AppSpacing.minInteractiveSize,
-                      AppSpacing.minInteractiveSize,
-                    ),
-                    onPressed: _handleContinueAsGuest,
-                    child: Text(
-                      UITextConstants.welcomeLoginSkipWithCountdown(
-                        _loginPromptRemainingSeconds,
-                      ),
-                      style: TextStyle(
-                        fontSize: AppTypography.iosCallout,
-                        fontWeight: AppTypography.medium,
-                        color: AppColors.iosSecondaryLabel(context),
-                        decoration: TextDecoration.none,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStartupLoadingPanel(WelcomeAppearance appearance) {
+  Widget _buildStartupInlineHint(WelcomeAppearance appearance) {
     final loading = widget.startupLoading;
     if (loading == null) {
       return const SizedBox.shrink();
     }
+    final hint = (loading.hint?.trim().isNotEmpty ?? false)
+        ? loading.hint!.trim()
+        : UITextConstants.startupStillStartingInline;
     return Positioned(
-      left: AppSpacing.lg,
-      right: AppSpacing.lg,
-      bottom: AppSpacing.xl,
+      left: AppSpacing.containerLg,
+      right: AppSpacing.containerLg,
+      bottom: AppSpacing.xl + MediaQuery.of(context).padding.bottom,
       child: SafeArea(
         top: false,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.black.withValues(alpha: 0.14),
-                blurRadius: AppSpacing.thirtySix,
-                offset: const Offset(AppSpacing.zero, AppSpacing.ten),
+        child: Center(
+          child: SizedBox(
+            height: AppSpacing.radiusTwentyFour,
+            child: Text(
+              hint,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppTypography.xs,
+                fontWeight: AppTypography.medium,
+                color: appearance.foregroundMuted.withValues(alpha: 0.82),
+                height: AppTypography.lineHeightCompact,
+                decoration: TextDecoration.none,
               ),
-            ],
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(AppSpacing.containerLg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.only(top: AppSpacing.xs),
-                      child: loading.isError
-                          ? Icon(
-                              CupertinoIcons.arrow_clockwise,
-                              size: AppSpacing.iconMedium,
-                              color: AppColors.warning,
-                            )
-                          : const CupertinoActivityIndicator(),
-                    ),
-                    SizedBox(width: AppSpacing.intraGroupSm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            loading.title,
-                            style: TextStyle(
-                              fontSize: AppTypography.iosTitle3,
-                              fontWeight: AppTypography.bold,
-                              color: AppColors.iosLabel(context),
-                              height: AppTypography.lineHeightCompact,
-                              decoration: TextDecoration.none,
-                            ),
-                          ),
-                          SizedBox(height: AppSpacing.xs),
-                          Text(
-                            loading.subtitle,
-                            style: TextStyle(
-                              fontSize: AppTypography.iosFootnote,
-                              color: AppColors.iosSecondaryLabel(context),
-                              height: AppSpacing.textLineHeightBody,
-                              decoration: TextDecoration.none,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                if (loading.stages.isNotEmpty) ...[
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  for (final stage in loading.stages) ...[
-                    _buildStartupStageRow(stage),
-                    SizedBox(height: AppSpacing.intraGroupXs),
-                  ],
-                ],
-                if (loading.hint != null && loading.hint!.trim().isNotEmpty) ...[
-                  SizedBox(height: AppSpacing.intraGroupXs),
-                  Text(
-                    loading.hint!,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosFootnote,
-                      color: loading.isError
-                          ? AppColors.warning
-                          : AppColors.iosSecondaryLabel(context),
-                      height: AppSpacing.textLineHeightBody,
-                      decoration: TextDecoration.none,
-                    ),
-                  ),
-                ],
-                if (loading.actionLabel != null && loading.onAction != null) ...[
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(
-                      AppSpacing.minInteractiveSize,
-                      AppSpacing.buttonHeight,
-                    ),
-                    onPressed: () => loading.onAction!.call(),
-                    child: Text(
-                      loading.actionLabel!,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosCallout,
-                        fontWeight: AppTypography.semiBold,
-                        color: AppColors.primaryColor,
-                        decoration: TextDecoration.none,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
             ),
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildStartupStageRow(WelcomeStartupStageState stage) {
-    final (IconData icon, Color color, Widget? trailing) = switch (stage.status) {
-      WelcomeStartupStageStatus.complete => (
-        CupertinoIcons.check_mark_circled_solid,
-        AppColors.success,
-        null,
-      ),
-      WelcomeStartupStageStatus.failed => (
-        CupertinoIcons.arrow_clockwise,
-        AppColors.warning,
-        null,
-      ),
-      WelcomeStartupStageStatus.running => (
-        CupertinoIcons.circle_fill,
-        AppColors.primaryColor.withValues(alpha: 0.32),
-        const CupertinoActivityIndicator(radius: AppSpacing.contentSpacingSm),
-      ),
-      WelcomeStartupStageStatus.pending => (
-        CupertinoIcons.circle,
-        AppColors.iosSecondaryLabel(context),
-        null,
-      ),
-    };
-    return Row(
-      children: [
-        Icon(icon, size: AppSpacing.iconSmall, color: color),
-        SizedBox(width: AppSpacing.intraGroupSm),
-        Expanded(
-          child: Text(
-            stage.label,
-            style: TextStyle(
-              fontSize: AppTypography.iosFootnote,
-              fontWeight: stage.status == WelcomeStartupStageStatus.complete
-                  ? AppTypography.medium
-                  : AppTypography.regular,
-              color: AppColors.iosLabel(context),
-              decoration: TextDecoration.none,
-            ),
-          ),
-        ),
-        if (trailing != null) trailing,
-      ],
-    );
-  }
-
-  void _showLoginChoice() {
-    final prompt = widget.loginPrompt;
-    if (prompt == null || _promptActionInFlight || _finishHandled) {
-      return;
-    }
-    setState(() {
-      _showLoginPrompt = true;
-      _loginPromptRemainingSeconds = prompt.countdownSeconds;
-    });
-    _loginPromptTimer?.cancel();
-    _loginPromptTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted || _finishHandled || _promptActionInFlight) {
-        timer.cancel();
-        return;
-      }
-      if (_loginPromptRemainingSeconds <= 1) {
-        timer.cancel();
-        unawaited(_handleContinueAsGuest());
-        return;
-      }
-      setState(() => _loginPromptRemainingSeconds--);
-    });
-  }
-
-  Future<void> _handleLoginTap() async {
-    final prompt = widget.loginPrompt;
-    if (prompt == null || _promptActionInFlight || _finishHandled) {
-      return;
-    }
-    _promptActionInFlight = true;
-    _loginPromptTimer?.cancel();
-    await prompt.onLogin();
-  }
-
-  Future<void> _handleContinueAsGuest() async {
-    final prompt = widget.loginPrompt;
-    if (prompt == null || _promptActionInFlight || _finishHandled) {
-      return;
-    }
-    _promptActionInFlight = true;
-    _loginPromptTimer?.cancel();
-    await prompt.onContinueAsGuest();
-    if (!mounted) {
-      return;
-    }
-    setState(() => _showLoginPrompt = false);
   }
 
   void _finishWelcome() {
@@ -788,10 +460,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       setState(() => _sequenceCompletionDispatched = true);
     } else {
       _sequenceCompletionDispatched = true;
-    }
-    if (widget.loginPrompt != null) {
-      _showLoginChoice();
-      return;
     }
     if (widget.onSequenceComplete != null) {
       widget.onSequenceComplete!.call();

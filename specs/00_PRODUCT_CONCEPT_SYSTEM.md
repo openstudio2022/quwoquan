@@ -700,7 +700,7 @@ baseline 至少承接：
 
 - 北极星：冻结 `交集`（四条件 / 五来源）与差异化引擎三角 `小趣 × 实时推荐 × 交集`
 - 首发尖刀：冻结 `校园 + 旅游出行`，首屏利益话 `看见你和同学、和远方的交集`
-- 标签：冻结路径制 taxonomy（`publish/v1/tags`）为唯一标签真相源，废弃扁平 `tag_taxonomy.yaml`
+- 标签：冻结路径制 taxonomy（`publish/tags`）为唯一标签真相源，废弃扁平 `tag_taxonomy.yaml`
 - 身份：冻结 `OwnerAccount / SubAccount` 双层主体边界
 - 用户语言对象：冻结前台 `人 / 地点和事物 / 圈子 / 组织 / 群 / 内容 / 会话`；`个人主页 / 共享主页 / 关系主页` 降为内部分层
 - 共享主页（内部分层，前台为“地点和事物”）：仅做 `车型 / 酒店民宿 / 餐厅 / 景点`
@@ -740,7 +740,7 @@ baseline 至少承接：
 
 ### 18.1 唯一标签真相源
 
-全 App 的标签唯一真相源是数据工程汇总的**路径制 taxonomy**（`quwoquan_data/publish/v1/tags/`）：
+全 App 的标签唯一真相源是数据工程汇总的**路径制 taxonomy**（`quwoquan_data/publish/tags/`）：
 
 - 四分组 `Topic / Audience / Format / Entity`，`tagId = 目录路径`（如 `Entity/机构/学校/北京大学`、`Topic/地理/中国/四川省/成都市`、`Topic/旅行/自驾`）。
 - 含层级（父子 = 目录）、别名 `aliases`、来源 `sourceRefs`、共现图谱与反向索引。

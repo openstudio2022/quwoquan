@@ -7,6 +7,7 @@ class SocialRelationSearchItemWireDto {
   final String userHandle;
   final String displayName;
   final String? avatarUrl;
+  final int avatarVersion;
   final String? headline;
   final bool chatAvailable;
   final Map<String, dynamic>? relationshipCapability;
@@ -17,6 +18,7 @@ class SocialRelationSearchItemWireDto {
     this.userHandle = '',
     this.displayName = '',
     this.avatarUrl,
+    this.avatarVersion = 0,
     this.headline,
     this.chatAvailable = false,
     this.relationshipCapability,
@@ -29,6 +31,7 @@ class SocialRelationSearchItemWireDto {
       userHandle: m['userHandle']?.toString() ?? m['username']?.toString() ?? m['subAccountId']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? null,
+      avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
       headline: m['headline']?.toString() ?? m['bio']?.toString() ?? null,
       chatAvailable: m['chatAvailable'] as bool? ?? false,
       relationshipCapability: _parseStringKeyMap(m['relationshipCapability']) ?? null,
@@ -42,6 +45,7 @@ class SocialRelationSearchItemWireDto {
       'userHandle': userHandle,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
+      'avatarVersion': avatarVersion,
       'headline': headline,
       'chatAvailable': chatAvailable,
       'relationshipCapability': relationshipCapability,
@@ -54,6 +58,7 @@ class SocialRelationSearchItemWireDto {
     String? userHandle,
     String? displayName,
     String? avatarUrl,
+    int? avatarVersion,
     String? headline,
     bool? chatAvailable,
     Map<String, dynamic>? relationshipCapability,
@@ -64,6 +69,7 @@ class SocialRelationSearchItemWireDto {
       userHandle: userHandle ?? this.userHandle,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarVersion: avatarVersion ?? this.avatarVersion,
       headline: headline ?? this.headline,
       chatAvailable: chatAvailable ?? this.chatAvailable,
       relationshipCapability: relationshipCapability ?? this.relationshipCapability,

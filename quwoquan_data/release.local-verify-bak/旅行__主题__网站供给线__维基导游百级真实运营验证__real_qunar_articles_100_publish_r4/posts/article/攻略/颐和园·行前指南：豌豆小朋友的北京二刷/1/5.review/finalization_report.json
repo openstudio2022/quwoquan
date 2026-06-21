@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "candidate_59ec8a6352ccac02",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:a52ac69d1e9dab12b7914b7316b5ddaa188af2b69b38b33484b3f634fb8af48c",
+  "finalSha256": "sha256:e66d507c0c6a41128f59a649a9bf15871e76a962e5421fde74315ea64345e7ac",
+  "draftBodySha256": "sha256:a52ac69d1e9dab12b7914b7316b5ddaa188af2b69b38b33484b3f634fb8af48c",
+  "finalBodySha256": "sha256:a52ac69d1e9dab12b7914b7316b5ddaa188af2b69b38b33484b3f634fb8af48c",
+  "composeSnapshotSha256": "sha256:a52ac69d1e9dab12b7914b7316b5ddaa188af2b69b38b33484b3f634fb8af48c",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

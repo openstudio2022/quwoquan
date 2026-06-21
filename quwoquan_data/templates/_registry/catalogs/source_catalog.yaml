@@ -14,7 +14,7 @@ coveragePolicy:
     coreCategories: [school_official, forum]
   photography:
     minCategoriesPerEntity: 2
-    coreCategories: [open_license, photographer_site_authorized]
+    coreCategories: [open_license, photography_platform]
 categories:
   - id: encyclopedia
     label: 百科词条
@@ -27,7 +27,7 @@ categories:
     verticals: [travel]
     description: 景区官网 / 文旅局 / 官方公众号，门票/开放时间/预约/公告的一手来源。
     evidenceFocus: [fact, season]
-    examplePlatforms: [官网, 文旅, 文旅局, 景区官网, 官方公众号, gov, 官方网站]
+    examplePlatforms: [官网, 文旅, 文旅局, 景区官网, 官方公众号, 官方文章, gov, 官方网站]
   - id: travelogue
     label: 社区游记/旅行指南
     verticals: [travel]
@@ -111,25 +111,25 @@ categories:
     verticals: [photography]
     description: 明确 CC/PD/开放商用许可的图片来源，必须记录 license 与 termsUrl。
     evidenceFocus: [license, visual]
-    examplePlatforms: [Wikimedia Commons, Unsplash, Pexels, Pixabay, CC Search, Openverse]
-  - id: photographer_site_authorized
-    label: 摄影师网站授权
+    examplePlatforms: [Wikimedia Commons, Unsplash, Pexels, Pixabay, CC Search, Openverse, Rawpixel, Vecteezy, 泼辣有图, 摄图网免费]
+  - id: photography_platform
+    label: 摄影作品平台/社区
     verticals: [photography]
-    description: 摄影师个人站或作品集，只有取得授权或页面明确许可后可下载入库。
+    description: 知名摄影社区与作品平台（图虫、500px、Flickr、Behance 等），按平台授权条款逐图取得授权后入库；明确排除摄影师个人独立站点/个人博客/不可控作品集（授权与稳定性不可控、不可规模化）。
     evidenceFocus: [license, credit, provenance]
-    examplePlatforms: [摄影师官网, photographer site, portfolio, 个人作品站]
+    examplePlatforms: [图虫, 500px, Flickr, Behance, 视觉中国摄影师, tuchong, flickr, behance]
   - id: stock_authorized
     label: 授权图库
     verticals: [photography]
     description: 购买或平台授权图库，必须记录授权凭证与 usageScope。
     evidenceFocus: [license, proof]
-    examplePlatforms: [Getty Images, Adobe Stock, Shutterstock, 视觉中国授权, 图虫授权]
+    examplePlatforms: [Getty Images, Adobe Stock, Shutterstock, 视觉中国授权, 图虫授权, Depositphotos, Dreamstime, 123RF, Stocksy, Envato Elements, 摄图网]
   - id: museum_archive
     label: 博物馆/档案开放图像
     verticals: [photography]
     description: 博物馆、档案馆开放图像；须记录开放条款和机构署名。
     evidenceFocus: [license, archive]
-    examplePlatforms: [The Met, Rijksmuseum, Library of Congress, Europeana, 博物馆开放影像]
+    examplePlatforms: [The Met, Rijksmuseum, Library of Congress, Europeana, Smithsonian Open Access, 博物馆开放影像]
   - id: editorial_reference_only
     label: 仅编辑参考
     verticals: [photography]
@@ -154,3 +154,15 @@ platformAliases:
   pexels: open_license
   pixabay: open_license
   openverse: open_license
+  rawpixel: open_license
+  vecteezy: open_license
+  泼辣有图: open_license
+  tuchong: photography_platform
+  500px: photography_platform
+  behance: photography_platform
+  flickr: photography_platform
+  depositphotos: stock_authorized
+  dreamstime: stock_authorized
+  123rf: stock_authorized
+  stocksy: stock_authorized
+  摄图网: stock_authorized

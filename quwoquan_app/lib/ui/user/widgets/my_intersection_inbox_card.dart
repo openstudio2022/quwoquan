@@ -9,6 +9,7 @@ import 'package:quwoquan_app/components/object_page/interactive_intersection_tex
 import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -17,7 +18,7 @@ import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.da
 
 /// 我的主页「我的交集」预览卡（高保版）。
 ///
-/// 只展示真实 fact 交集 item：蓝色线性图标 + 单行主文案 + chevron。
+/// 只展示真实 fact 交集 item：低饱和语义图标 + 单行主文案。
 /// 端侧只读 [IntersectionReason.primaryText]/[IntersectionReason.primarySpans]，
 /// 不渲染 secondaryText、样本头像、胶囊解释或 affinity 推荐。
 class MyIntersectionInboxCard extends ConsumerStatefulWidget {
@@ -52,7 +53,7 @@ class _MyIntersectionInboxCardState
           .read(contentBehaviorTrackerProvider)
           .trackClick(
             id,
-            referralSource: ReferralSource.organicFeed,
+            referralSource: ReferralSource.myIntersections,
             intersectionDimension: attribution.dimension,
             intersectionSourceRef: attribution.sourceRef,
             intersectionClass: attribution.intersectionClass,
@@ -158,9 +159,8 @@ class _ProfileInsightSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final border = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.14 : 0.07);
+    final separator = AppColors.iosSeparator(context);
+    final border = separator.withValues(alpha: isDark ? 0.14 : 0.07);
     final shadow = AppColors.black.withValues(alpha: isDark ? 0.10 : 0.018);
     return Padding(
       padding: EdgeInsets.only(top: topPadding ? AppSpacing.interGroupSm : 0),
@@ -195,7 +195,11 @@ class _ProfileInsightSectionCard extends StatelessWidget {
                     width: AppSpacing.xs / 2,
                     height: AppSpacing.iconSmall,
                     decoration: BoxDecoration(
-                      color: AppColors.iosAccent(context),
+                      color:
+                          (isDark
+                                  ? AppColors.profileSloganAccentDark
+                                  : AppColors.profileSloganAccentLight)
+                              .withValues(alpha: isDark ? 0.80 : 0.56),
                       borderRadius: BorderRadius.circular(AppSpacing.xs / 2),
                     ),
                   ),
@@ -210,40 +214,105 @@ class _ProfileInsightSectionCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size(
-                      AppSpacing.minInteractiveSize,
-                      AppSpacing.buttonHeightSm,
-                    ),
-                    onPressed: onAction,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Text(
-                          actionLabel,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosFootnote,
-                            color: AppColors.iosAccent(context),
-                          ),
-                        ),
-                        SizedBox(width: AppSpacing.intraGroupXs / 2),
-                        Icon(
-                          CupertinoIcons.chevron_forward,
-                          size: AppSpacing.iconXSmall,
-                          color: AppColors.iosAccent(context),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
             _InsightDivider(),
             child,
+            _InsightDivider(),
+            _InsightFooterAction(label: actionLabel, onTap: onAction),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _InsightFooterAction extends StatelessWidget {
+  const _InsightFooterAction({required this.label, this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final surface = isDark
+        ? AppColors.iosSecondaryFill(context)
+        : AppColors.iosSystemBackground(context);
+    final ink = AppColors.iosLabel(context);
+    final ornament = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.26 : 0.18);
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.intraGroupSm,
+      ),
+      minimumSize: Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.buttonHeightMd,
+      ),
+      onPressed: onTap,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Expanded(child: _InsightFooterLine(color: ornament)),
+          SizedBox(width: AppSpacing.intraGroupSm),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: surface.withValues(alpha: isDark ? 0.32 : 0.68),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+              border: Border.all(color: ornament, width: AppSpacing.hairline),
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.containerSm,
+                vertical: AppSpacing.intraGroupXs,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      fontWeight: AppTypography.regular,
+                      color: ink,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(width: AppSpacing.intraGroupSm),
+          Expanded(child: _InsightFooterLine(color: ornament, reverse: true)),
+        ],
+      ),
+    );
+  }
+}
+
+class _InsightFooterLine extends StatelessWidget {
+  const _InsightFooterLine({required this.color, this.reverse = false});
+
+  final Color color;
+  final bool reverse;
+
+  @override
+  Widget build(BuildContext context) {
+    final dot = Container(
+      width: AppSpacing.xs,
+      height: AppSpacing.xs,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+    final line = Expanded(
+      child: Container(height: AppSpacing.hairline, color: color),
+    );
+    return Row(
+      children: reverse
+          ? <Widget>[dot, SizedBox(width: AppSpacing.intraGroupXs), line]
+          : <Widget>[line, SizedBox(width: AppSpacing.intraGroupXs), dot],
     );
   }
 }
@@ -268,7 +337,7 @@ class _MyIntersectionPreviewRow extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: AppSpacing.containerSm,
-          vertical: AppSpacing.containerXs,
+          vertical: AppSpacing.containerSm,
         ),
         child: Row(
           children: <Widget>[
@@ -294,12 +363,6 @@ class _MyIntersectionPreviewRow extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(width: AppSpacing.intraGroupSm),
-            Icon(
-              CupertinoIcons.chevron_forward,
-              size: AppSpacing.iconXSmall,
-              color: AppColors.iosQuaternaryLabel(context),
-            ),
           ],
         ),
       ),
@@ -316,9 +379,10 @@ class _MyIntersectionEmptyState extends StatelessWidget {
         vertical: AppSpacing.containerMd,
       ),
       child: Text(
-        DiscoveryFeedText.myIntersectionsEmpty,
+        UITextConstants.profileIntersectionEmptyGuidance,
         style: TextStyle(
           fontSize: AppTypography.iosSubheadline,
+          height: AppSpacing.textLineHeightFootnote,
           color: AppColors.iosSecondaryLabel(context),
         ),
       ),

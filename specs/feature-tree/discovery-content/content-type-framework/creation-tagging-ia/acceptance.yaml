@@ -7,10 +7,8 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: content-type-framework
 scope:
-  summary: >-
-    冻结创作侧打标 IA：各类型编辑页内联打标区，打标全类型可选、不强制，由自动打标（转发识别+内容识别）辅助，
-    手动 UI 作确认/修正层。首发芯片集来自 tag_ref_migration launch 子集，搜索补充在 C2 后 flag 灰度。
-    tagRefs 经 CreatePost 注入，使「打标→content.tagRefs→交集归因」可还原。
+  summary: 冻结创作侧打标 IA：各类型编辑页内联打标区，打标全类型可选、不强制，由自动打标（转发识别+内容识别）辅助， 手动 UI 作确认/修正层。首发芯片集来自
+    tag_ref_migration launch 子集，搜索补充在 C2 后 flag 灰度。 tagRefs 经 CreatePost 注入，使「打标→content.tagRefs→交集归因」可还原。
   in_scope:
   - 各类型编辑页内联打标区（图文/视频/口碑），打标可选不拦截发布
   - 自动打标建议 suggestedTagRefs 消费 + 可编辑/可删除芯片（确认/修正层）
@@ -19,7 +17,7 @@ scope:
   - tagRefs 经 CreatePost/UpdatePost writable_fields 注入（已通）
   out_of_scope:
   - 自动打标模型/管线（转发识别、内容识别）实现（属 ML/数据工程）
-  - publish/v1/tags 真相源发布（属 C2）
+  - publish/tags 真相源发布（属 C2）
   - 标签运营后台/治理
   - pageflip 受控文件
 gwt_acceptance:
@@ -37,15 +35,21 @@ gwt_acceptance:
     - 自动建议拉取超时时只显首发子集芯片，不阻断发布。
     contract_refs: []
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart'
   GWT2:
     title: 芯片集来自首发 launch 子集 + 自动建议，多选上限 5
     given:
@@ -61,15 +65,20 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/contracts/metadata/_shared/tag_ref_migration.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt2_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart'
   GWT3:
     title: 自动建议芯片可勾选/取消/删除，修正后 tagRefs 正确
     given:
@@ -84,15 +93,20 @@ gwt_acceptance:
     - 自动建议为空时打标区仍可手动从首发子集选。
     contract_refs: []
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt3_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart'
   GWT4:
     title: 选定 tagRefs 经 CreatePost 注入，发布后 content.tagRefs 一致
     given:
@@ -107,16 +121,25 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/contracts/metadata/content/post/service.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_tagging_ia.contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt4_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart'
   GWT5:
     title: tagRefs 进召回与交集归因，打标→交集可还原
     given:
@@ -130,38 +153,54 @@ gwt_acceptance:
     edge_cases: []
     contract_refs: []
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_integration
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt5_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt5_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: integration
+        cases:
+        - api_integration.discovery_content.content_type_framework.creation_tagging_ia.integration
+        envs:
+        - beta
+        - gamma
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart'
   GWT6:
-    title: 搜索补充由 flag 灰度（C2 后），检索源唯一 publish/v1/tags
+    title: 搜索补充由 flag 灰度（C2 后），检索源唯一 publish/tags
     given:
     - 搜索补充 feature flag 关闭（C2 未发布）。
     when:
     - 渲染打标区。
     then:
-    - 不渲染搜索入口；仅首发子集 + 自动建议芯片。flag 开启后检索源唯一 publish/v1/tags。
+    - 不渲染搜索入口；仅首发子集 + 自动建议芯片。flag 开启后检索源唯一 publish/tags。
     done_when:
     - flag 开关两态 widget 测试通过。
     edge_cases: []
     contract_refs: []
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt6_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_tagging_ia.gwt6_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

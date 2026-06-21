@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
-/// 一级 Tab — 与 user_profile/ui_config.yaml profile_tabs 对齐
+/// 一级 Tab — 与 user_profile/ui_config.yaml profile_tabs 对齐。
 enum ProfileTab { creations, interaction }
 
 /// 作品二级内容形式筛选：全部 / 图片 / 视频 / 文字。
@@ -14,7 +14,7 @@ enum CreationWorkFormat { all, image, video, note }
 enum CreationVisibility { all, public_, private_ }
 
 /// 互动子维度。
-enum InteractionSubTab { all, comments, likes, shares }
+enum InteractionSubTab { all, comments, likes, shares, views }
 
 /// 互动方向。
 enum InteractionDirection { received, sent }
@@ -41,6 +41,7 @@ extension InteractionSubTabMetadata on InteractionSubTab {
     InteractionSubTab.comments => 'comments',
     InteractionSubTab.likes => 'likes',
     InteractionSubTab.shares => 'shares',
+    InteractionSubTab.views => 'views',
   };
 }
 
@@ -66,6 +67,7 @@ InteractionSubTab interactionSubTabFromId(String id) {
     'comments' => InteractionSubTab.comments,
     'likes' => InteractionSubTab.likes,
     'shares' => InteractionSubTab.shares,
+    'views' => InteractionSubTab.views,
     _ => InteractionSubTab.all,
   };
 }

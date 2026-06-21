@@ -48,11 +48,18 @@ void main() {
       expect(dto.backgroundUrl, 'https://bg.example/x.jpg');
     });
 
+    test('avatarVersion 稳定解码', () {
+      final dto = SubAccountProfileWireDto.fromMap(<String, dynamic>{
+        'userId': 'u1',
+        'avatarVersion': 7,
+      });
+      expect(dto.avatarVersion, 7);
+    });
+
     test('toMap round-trip 稳定', () {
       final dto = SubAccountProfileWireDto.fromMap(<String, dynamic>{
         'subAccountId': 'ps1',
         'ownerUserId': 'o1',
-        'subAccountId': '',
         'userHandle': 'handle_1',
         'nickname': 'n',
         'displayName': 'd',
@@ -93,6 +100,19 @@ void main() {
       expect(view.userHandle, 'only_id');
       expect(view.subjectType, 'user');
     });
+
+    test('avatarVersion 进入头像 URL 以驱动缓存失效', () {
+      final view = SubAccountProfileViewData.fromSubAccountProfileWire(
+        SubAccountProfileWireDto.fromMap(<String, dynamic>{
+          'subAccountId': 'u_avatar',
+          'avatarUrl':
+              'media/avatar/s/archived-avatar/user/u_avatar/v1/profile.png',
+          'avatarVersion': 6,
+        }),
+      );
+      expect(view.avatarVersion, 6);
+      expect(view.avatarUrl, contains('?v=6'));
+    });
   });
 
   group('ProfileSocialRelationRowWireDto', () {
@@ -101,10 +121,12 @@ void main() {
         'userId': 'rel_1',
         'nickname': '朋友',
         'avatarUrl': 'https://a.test/1.jpg',
+        'avatarVersion': 4,
         'isFollowing': true,
       });
       expect(dto.subAccountId, 'rel_1');
       expect(dto.displayName, '朋友');
+      expect(dto.avatarVersion, 4);
       expect(dto.isFollowing, isTrue);
     });
   });
@@ -117,10 +139,28 @@ void main() {
         'coverUrl': 'https://c.test/x.jpg',
         'likerNickname': '赞过',
         'likerAvatarUrl': 'https://a.test/y.jpg',
+        'likerAvatarVersion': 6,
         'likedAt': '2026-01-01T00:00:00Z',
       });
       expect(dto.postId, 'p9');
+      expect(dto.likerAvatarVersion, 6);
       expect(dto.likedAt, isNotNull);
+    });
+
+    test('view data 把 likerAvatarVersion 注入缓存 URL', () {
+      final view = ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
+        ProfileUserLikeRowWireDto.fromMap(<String, dynamic>{
+          'postId': 'p9',
+          'title': '标题',
+          'coverUrl': 'https://c.test/x.jpg',
+          'likerNickname': '赞过',
+          'likerAvatarUrl': 'media/avatar/s/mock/seed/test_liker/v1/avatar.jpg',
+          'likerAvatarVersion': 6,
+        }),
+      );
+      expect(view.likerAvatarVersion, 6);
+      expect(view.likerAvatarUrl, isNotEmpty);
+      expect(view.likerAvatarUrl, contains('v=6'));
     });
   });
 
@@ -131,6 +171,7 @@ void main() {
         'userId': 'actor_sub',
         'nickname': '小明',
         'avatarUrl': 'https://av.test/z.jpg',
+        'avatarVersion': 8,
         'activityType': 'like',
         'targetUserId': 'tgt_sub',
         'postId': 'post_99',
@@ -142,9 +183,28 @@ void main() {
       expect(dto.actorSubAccountId, 'actor_sub');
       expect(dto.actorDisplayName, '小明');
       expect(dto.actorAvatarUrl, 'https://av.test/z.jpg');
+      expect(dto.actorAvatarVersion, 8);
       expect(dto.targetSubAccountId, 'tgt_sub');
       expect(dto.targetContentId, 'post_99');
       expect(dto.targetContentSummary, '摘要');
+      expect(dto.displayAvatarVersion, 8);
+      // 默认无评论标识。
+      expect(dto.commentId, '');
+      expect(dto.parentCommentId, '');
+    });
+
+    test('评论标识 commentId / parentCommentId 解析（深链精确定位）', () {
+      final dto = ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
+        'activityId': 'comment_reply_9',
+        'activityType': 'comment',
+        'commentKind': 'reply',
+        'commentId': 'comment_reply_9',
+        'parentCommentId': 'comment_top_1',
+        'actorSubAccountId': 'u_a',
+      });
+      expect(dto.commentKind, 'reply');
+      expect(dto.commentId, 'comment_reply_9');
+      expect(dto.parentCommentId, 'comment_top_1');
     });
   });
 
@@ -160,6 +220,44 @@ void main() {
           );
       expect(view.activityId, 'comment:u_x');
     });
+
+    test('评论标识透传到 ViewData 供深链消费', () {
+      final view =
+          ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+            ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
+              'activityId': 'comment_reply_9',
+              'activityType': 'comment',
+              'commentKind': 'reply',
+              'commentId': 'comment_reply_9',
+              'parentCommentId': 'comment_top_1',
+              'actorSubAccountId': 'u_a',
+            }),
+          );
+      expect(view.commentId, 'comment_reply_9');
+      expect(view.parentCommentId, 'comment_top_1');
+    });
+
+    test('头像版本驱动 actor/display 缓存 URL，display 缺省时复用 actor 版本', () {
+      final view =
+          ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+            ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
+              'activityId': 'activity_1',
+              'activityType': 'like',
+              'actorSubAccountId': 'u_a',
+              'actorDisplayName': '某人',
+              'actorAvatarUrl':
+                  'media/avatar/s/mock/seed/test_actor/v1/avatar.jpg',
+              'actorAvatarVersion': 7,
+              'displayName': '某人',
+            }),
+          );
+      expect(view.actorAvatarVersion, 7);
+      expect(view.actorAvatarUrl, isNotEmpty);
+      expect(view.actorAvatarUrl, contains('v=7'));
+      expect(view.displayAvatarVersion, 7);
+      expect(view.displayAvatarUrl, isNotEmpty);
+      expect(view.displayAvatarUrl, contains('v=7'));
+    });
   });
 
   group('PersonaManagementItemWireDto', () {
@@ -170,6 +268,8 @@ void main() {
         'userHandle': 'persona_handle',
         'phone': '13800000000',
         'email': 'persona@example.com',
+        'avatarUrl': 'https://a.test/persona.jpg',
+        'avatarVersion': 5,
         'inheritsFromOwner': false,
         'overriddenProfileFields': <String>['email'],
       });
@@ -178,6 +278,7 @@ void main() {
       expect(dto.userHandle, 'persona_handle');
       expect(dto.phone, '13800000000');
       expect(dto.email, 'persona@example.com');
+      expect(dto.avatarVersion, 5);
       expect(dto.inheritsProfileFromOwner, isFalse);
       expect(dto.overriddenProfileFields, <String>['email']);
     });
@@ -204,6 +305,20 @@ void main() {
       expect(view.subAccountId, '');
       expect(view.subjectType, 'user');
     });
+
+    test('avatarVersion 驱动管理行头像缓存 URL', () {
+      final view = PersonaManagementItemViewData.fromPersonaManagementItemWire(
+        PersonaManagementItemWireDto.fromMap(<String, dynamic>{
+          'subAccountId': 'per_1',
+          'displayName': '分身名',
+          'avatarUrl': 'media/avatar/s/mock/seed/test_persona/v1/avatar.jpg',
+          'avatarVersion': 5,
+        }),
+      );
+      expect(view.avatarVersion, 5);
+      expect(view.avatarUrl, isNotEmpty);
+      expect(view.avatarUrl, contains('v=5'));
+    });
   });
 
   group('PersonaManagementQuotaViewData — Wire 映射', () {
@@ -224,6 +339,7 @@ void main() {
       final dto = ActivePersonaContextWireDto.fromMap(<String, dynamic>{
         'subAccountId': 'persona_main',
         'ownerUserId': 'user_main',
+        'avatarVersion': 9,
         'contextVersion': 3,
         'personaSnapshotVersion': 2,
         'sourceSurfaceId': 'notification_center',
@@ -231,6 +347,7 @@ void main() {
       });
       expect(dto.subAccountId, 'persona_main');
       expect(dto.ownerUserId, 'user_main');
+      expect(dto.avatarVersion, 9);
       expect(dto.personaContextVersion, '3');
       expect(dto.personaSnapshotVersion, 2);
       expect(dto.sourceSurfaceId, 'notification_center');
@@ -242,10 +359,15 @@ void main() {
         ActivePersonaContextWireDto.fromMap(<String, dynamic>{
           'subAccountId': 'persona_photo',
           'ownerUserId': 'user_owner',
+          'avatarUrl':
+              'media/avatar/s/archived-avatar/user/persona_photo/v1/profile.png',
+          'avatarVersion': 5,
           'contextVersion': 5,
         }),
       );
       expect(view.subAccountId, 'persona_photo');
+      expect(view.avatarVersion, 5);
+      expect(view.avatarUrl, contains('?v=5'));
       expect(view.contextVersion, '5');
       expect(
         view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
@@ -275,8 +397,26 @@ void main() {
         'subAccountId': '',
         'userId': 'search_u1',
         'nickname': 'n',
+        'avatarVersion': 8,
       });
       expect(dto.subAccountId, 'search_u1');
+      expect(dto.avatarVersion, 8);
+    });
+
+    test('view 使用 avatarVersion 生成稳定头像缓存键', () {
+      final view = SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
+        SocialRelationSearchItemWireDto.fromMap(<String, dynamic>{
+          'subAccountId': 'search_u2',
+          'displayName': '搜索用户',
+          'avatarUrl':
+              'media/avatar/s/archived-avatar/user/search_u2/v1/profile.png',
+          'avatarVersion': 3,
+          'chatAvailable': true,
+        }),
+        <String, dynamic>{},
+      );
+      expect(view.avatarVersion, 3);
+      expect(view.avatarUrl, contains('?v=3'));
     });
   });
 
@@ -366,10 +506,7 @@ void main() {
       final dto = PersonaManagementSummaryWireDto.fromMap(<String, dynamic>{
         'items': <Map<String, dynamic>>[],
         'subAccounts': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'subAccountId': 's1',
-            'displayName': 'A',
-          },
+          <String, dynamic>{'subAccountId': 's1', 'displayName': 'A'},
         ],
         'quota': <String, dynamic>{'maxSubAccounts': 5, 'usedSubAccounts': 1},
       });

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "quwoquan_data.stage_envelope",
+  "taskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "batchId": "real_qunar_articles_100_publish_r4",
+  "step": "media_check",
+  "ref": "candidate_10ce762a8ae4d92a",
+  "payload": {
+    "verdicts": [],
+    "unsafe": [],
+    "needsReview": [],
+    "textHeavy": [],
+    "duplicateGroups": [],
+    "backends": {
+      "cv": true,
+      "hash": true,
+      "ocr": true
+    },
+    "summary": {
+      "total": 0,
+      "unsafe": 0,
+      "needsReview": 0,
+      "textHeavy": 0,
+      "duplicateGroups": 0
+    }
+  }
+}

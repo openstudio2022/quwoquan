@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/attribute"
@@ -49,11 +50,12 @@ func (s *PersonaService) Create(ctx context.Context, userID string, data map[str
 		p.DisplayName = v
 	}
 	if v, ok := data["avatarUrl"].(string); ok {
-		p.AvatarURL = v
+		p.AvatarURL = strings.TrimSpace(v)
 	}
 	if v, ok := data["isPrivate"].(bool); ok {
 		p.IsPrivate = v
 	}
+	normalizePersonaPersistence(p)
 	if err := s.personas.Create(ctx, p); err != nil {
 		return nil, err
 	}
@@ -77,11 +79,23 @@ func (s *PersonaService) Update(ctx context.Context, personaID string, data map[
 		p.DisplayName = v
 	}
 	if v, ok := data["avatarUrl"].(string); ok {
-		p.AvatarURL = v
+		nextAvatarURL := strings.TrimSpace(v)
+		if nextAvatarURL != strings.TrimSpace(p.AvatarURL) {
+			p.AvatarURL = nextAvatarURL
+			if nextAvatarURL == "" {
+				p.AvatarVersion = 0
+			} else {
+				p.AvatarVersion++
+				if p.AvatarVersion <= 0 {
+					p.AvatarVersion = 1
+				}
+			}
+		}
 	}
 	if v, ok := data["isPrivate"].(bool); ok {
 		p.IsPrivate = v
 	}
+	normalizePersonaPersistence(p)
 	if err := s.personas.Update(ctx, p); err != nil {
 		return nil, err
 	}

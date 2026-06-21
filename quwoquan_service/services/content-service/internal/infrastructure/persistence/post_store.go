@@ -58,6 +58,32 @@ func (s *PostStore) FindByID(_ context.Context, id string) (*postmodel.Post, boo
 	return &cp, true
 }
 
+func (s *PostStore) AdjustCommentCount(_ context.Context, id string, delta int64) (int64, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	post, ok := s.posts[id]
+	if !ok {
+		return 0, false, nil
+	}
+	post.CommentCount += delta
+	post.UpdatedAt = time.Now().UTC()
+	s.posts[id] = post
+	return post.CommentCount, true, nil
+}
+
+func (s *PostStore) SetCommentCount(_ context.Context, id string, count int64) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	post, ok := s.posts[id]
+	if !ok {
+		return false, nil
+	}
+	post.CommentCount = count
+	post.UpdatedAt = time.Now().UTC()
+	s.posts[id] = post
+	return true, nil
+}
+
 func (s *PostStore) ListAll(_ context.Context) []postmodel.Post {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

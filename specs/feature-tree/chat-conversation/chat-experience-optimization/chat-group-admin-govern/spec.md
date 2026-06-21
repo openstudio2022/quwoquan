@@ -212,12 +212,12 @@ groupSettings:
 
 ## 10. 验收重点
 
-### T1
+### local_contract
 - `PATCH /conversations/{id}/settings` 响应结构契约
 - `PATCH /conversations/{id}/owner` 响应结构契约
 - `PUT /conversations/{id}/admins` 响应结构契约
 
-### T2
+### local_contract
 - 群管理页仅群主/管理员可见
 - 群主转让后角色正确切换
 - 管理员最多选 3 人，超出时禁用选中并提示
@@ -225,10 +225,10 @@ groupSettings:
 - 非管理员隐私屏障为 disabled
 - 确认弹窗屏幕居中
 
-### T3
+### api_integration
 - 端侧群设置变更后云端同步
 - 群主转让后端侧和云端角色一致
 - WebSocket 事件正确触发缓存更新
 
-### T4
+### user_acceptance
 - 真机旅程：群主完成转让 → 管理员设置 → 群名称权限切换 → 普通成员验证权限受限

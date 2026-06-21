@@ -41,6 +41,8 @@ def build_execution_contract(
     *,
     inputs: list[str] | None = None,
     permissions: list[str] | None = None,
+    completion_conditions: list[str] | None = None,
+    output_paths: list[str] | None = None,
     max_wall_clock_seconds: int = 1200,
     max_attempts: int = 2,
     stuck_threshold: int = 3,
@@ -54,12 +56,12 @@ def build_execution_contract(
             "stuckThreshold": int(stuck_threshold),
         },
         "permissions": list(permissions) if permissions is not None else list(DEFAULT_AUTHOR_PERMISSIONS),
-        "completionConditions": [
+        "completionConditions": list(completion_conditions) if completion_conditions is not None else [
             "4.draft/draft.article.md 已写且非占位",
             "4.draft/author_self_check.json 存在",
             "ref_review_gate.passed == true (reviewDecision == approved)",
         ],
-        "outputPaths": [
+        "outputPaths": list(output_paths) if output_paths is not None else [
             "4.draft/draft.article.md",
             "4.draft/author_self_check.json",
             "5.review/ref_review_gate.json",
@@ -92,13 +94,28 @@ def build_author_job_packet(
     prompt_rel: str,
     content_object_rel: str | None = None,
 ) -> dict[str, Any]:
+    carrier = writing_pack.get("carrier") or brief.get("carrier")
+    is_image = str(carrier or "") in ("image", "gallery")
+    assets = [
+        {
+            "assetId": a.get("assetId"),
+            "entityName": a.get("entityName"),
+            "imageLayout": a.get("imageLayout"),
+            "caption": a.get("caption"),
+            "sourceCollectionId": a.get("sourceCollectionId"),
+            "creator": a.get("creator"),
+            "license": a.get("license"),
+        }
+        for a in (writing_pack.get("assets") or [])
+        if a.get("assetId")
+    ]
     return {
-        "schemaVersion": "quwoquan_data.author_job_packet/1",
+        "schemaVersion": "quwoquan_data.author_job_packet",
         "ref": ref,
         "writingIntent": writing_pack.get("writingIntent") or brief.get("writingIntent"),
         "baseSourceRef": writing_pack.get("baseSourceRef") or brief.get("baseSourceRef"),
         "title": writing_pack.get("title") or brief.get("titleHint"),
-        "carrier": writing_pack.get("carrier") or brief.get("carrier"),
+        "carrier": carrier,
         "contentObjectDir": content_object_rel,
         "promptRef": prompt_rel,
         "writingPackRef": "3.compose/writing_pack.json",
@@ -106,21 +123,46 @@ def build_author_job_packet(
         "sourceUrls": list(writing_pack.get("sourceUrls") or []),
         "mustIncludeFacts": list(writing_pack.get("mustIncludeFacts") or []),
         "bannedRegisterTerms": list(writing_pack.get("bannedRegisterTerms") or []),
-        "assets": [
-            {"assetId": a.get("assetId"), "entityName": a.get("entityName"), "imageLayout": a.get("imageLayout")}
-            for a in (writing_pack.get("assets") or [])
-            if a.get("assetId")
-        ],
+        "creativeBrief": writing_pack.get("creativeBrief") or {},
+        "captionPolicy": writing_pack.get("captionPolicy") or ({"titleMaxChars": 80, "captionMaxChars": 300} if is_image else {}),
+        "assets": assets,
         "exitGates": [
-            "writingIntentConsistency",
-            "imageReferenceClosure",
-            "skeletonSimilarity",
-            "registerMismatch",
-            "sourceRejectBlock",
-            "contactInfo",
-            "mechanicalHeading",
+            *(
+                [
+                    "imageCarrierContract",
+                    "imageSourceScope",
+                    "imageGate",
+                    "galleryCaption",
+                ]
+                if is_image
+                else [
+                    "writingIntentConsistency",
+                    "imageReferenceClosure",
+                    "skeletonSimilarity",
+                    "registerMismatch",
+                    "sourceRejectBlock",
+                    "contactInfo",
+                    "mechanicalHeading",
+                    "creativeGovernance",
+                ]
+            ),
         ],
-        "executionContract": build_execution_contract(),
+        "executionContract": build_execution_contract(
+            inputs=["4.draft/author_job_packet.json", "4.draft/prompt.md", "5.review/repair_report.json"]
+            if is_image
+            else None,
+            completion_conditions=[
+                "4.draft/draft.article.md 不存在",
+                "4.draft/draft_meta.json.generator == image_evidence_pack",
+                "ref_review_gate.passed == true (reviewDecision == approved)",
+            ]
+            if is_image
+            else None,
+            output_paths=["4.draft/draft_meta.json", "5.review/ref_review_gate.json"]
+            if is_image
+            else None,
+            max_wall_clock_seconds=420 if is_image else 1200,
+        ),
         "isolation": "single-ref: 只读本 ref 的 packet/SOP/source，禁止读取同批其它文章正文作为底稿",
     }
 
@@ -155,7 +197,7 @@ def build_ref_review_gate(
         gate_issues.append("exitGate: author_self_check.json missing (subagent must self-check, not just declare done)")
     passed = not gate_issues and review_decision == "approved"
     return {
-        "schemaVersion": "quwoquan_data.ref_review_gate/1",
+        "schemaVersion": "quwoquan_data.ref_review_gate",
         "ref": ref,
         "passed": passed,
         "reviewDecision": review_decision,
@@ -211,7 +253,7 @@ def build_batch_reducer_gate(refs_payload: list[Mapping[str, Any]]) -> dict[str,
         image_coverage[str(p.get("ref"))] = len(qg._ASSET_REF_RE.findall(str(p.get("article") or "")))
 
     return {
-        "schemaVersion": "quwoquan_data.batch_reducer_gate/1",
+        "schemaVersion": "quwoquan_data.batch_reducer_gate",
         "passed": not issues,
         "issues": issues,
         "affectedRefs": sorted(affected),

@@ -102,6 +102,23 @@ def _is_image_post(manifest: Mapping[str, Any]) -> bool:
     return carrier in {"image", "gallery"}
 
 
+def _is_video_post(manifest: Mapping[str, Any]) -> bool:
+    carrier = str(manifest.get("carrier") or manifest.get("contentType") or "")
+    return carrier == "video"
+
+
+def _is_text_only_article(manifest: Mapping[str, Any], runtime_post: Path | None = None) -> bool:
+    if _is_image_post(manifest) or _is_video_post(manifest):
+        return False
+    if str(manifest.get("publishMediaMode") or "").strip() == "text_only":
+        return True
+    if runtime_post is not None:
+        pack = _json(runtime_post / "3.compose" / "writing_pack.json")
+        if str(pack.get("publishMediaMode") or "").strip() == "text_only":
+            return True
+    return False
+
+
 def _post_entity_name(manifest: Mapping[str, Any]) -> str:
     refs = [str(ref) for ref in (manifest.get("entityRefs") or [])]
     for ref in refs:
@@ -328,6 +345,7 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
         "postCount": 0,
         "articleCount": 0,
         "imageCount": 0,
+        "videoCount": 0,
         "assetCount": 0,
     }
     if not root.is_dir():
@@ -367,12 +385,15 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
         manifest = _payload(manifest_path)
         stats["postCount"] += 1
         is_image = _is_image_post(manifest)
+        is_video = _is_video_post(manifest)
         if is_image:
             stats["imageCount"] += 1
+        elif is_video:
+            stats["videoCount"] += 1
         else:
             stats["articleCount"] += 1
         runtime_post = (runtime_batch / post_rel) if runtime_batch and runtime_batch.is_dir() else None
-        if not is_image and runtime_post is not None:
+        if not is_image and not is_video and runtime_post is not None:
             issues.extend(
                 _base_draft_issues(
                     release_id=release_id,
@@ -385,7 +406,9 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
             issues.extend(_review_gate_issues(post_rel, runtime_post))
 
         assets = manifest.get("assets") if isinstance(manifest.get("assets"), list) else []
-        if not is_image and not assets:
+        if is_video and not assets:
+            issues.append(f"{post_rel}: video must include at least one sourced video asset")
+        if not is_image and not is_video and not assets and not _is_text_only_article(manifest, runtime_post):
             issues.append(f"{post_rel}: article must include at least one sourced image asset from its base draft")
         for index, asset in enumerate(assets):
             if not isinstance(asset, Mapping):
@@ -474,6 +497,7 @@ def scan_runtime_batch_integrity(
         "postCount": 0,
         "articleCount": 0,
         "imageCount": 0,
+        "videoCount": 0,
         "assetCount": 0,
     }
     if not root.is_dir():
@@ -521,8 +545,11 @@ def scan_runtime_batch_integrity(
         manifest = _payload(manifest_path)
         stats["postCount"] += 1
         is_image = _is_image_post(manifest)
+        is_video = _is_video_post(manifest)
         if is_image:
             stats["imageCount"] += 1
+        elif is_video:
+            stats["videoCount"] += 1
         else:
             stats["articleCount"] += 1
             runtime_post = root / post_rel
@@ -538,7 +565,9 @@ def scan_runtime_batch_integrity(
             issues.extend(_review_gate_issues(post_rel, runtime_post))
 
         assets = manifest.get("assets") if isinstance(manifest.get("assets"), list) else []
-        if not is_image and not assets:
+        if is_video and not assets:
+            issues.append(f"{post_rel}: video must include at least one sourced video asset")
+        if not is_image and not is_video and not assets and not _is_text_only_article(manifest, root / post_rel):
             issues.append(f"{post_rel}: article must include at least one sourced image asset from its base draft")
         for index, asset in enumerate(assets):
             if not isinstance(asset, Mapping):

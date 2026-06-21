@@ -618,7 +618,7 @@ func (s *CircleService) GetCircleImpact(ctx context.Context, circleID string) (_
 	items := make([]map[string]any, 0, 3)
 	if c.MemberCount > 0 {
 		items = append(items, map[string]any{
-			"helpType":              "relationship",
+			"helpType":              rtimpact.HelpRelationship,
 			"action":                "establish_connection",
 			"intersectionDimension": "relationship",
 			"tagRef":                "",
@@ -629,7 +629,7 @@ func (s *CircleService) GetCircleImpact(ctx context.Context, circleID string) (_
 	}
 	if c.PostCount > 0 {
 		items = append(items, map[string]any{
-			"helpType":              "community",
+			"helpType":              rtimpact.HelpCommunity,
 			"action":                "start_discussion",
 			"intersectionDimension": "content",
 			"tagRef":                "",
@@ -640,7 +640,7 @@ func (s *CircleService) GetCircleImpact(ctx context.Context, circleID string) (_
 	}
 	if c.WeeklyActiveCount > 0 {
 		items = append(items, map[string]any{
-			"helpType":              "spread",
+			"helpType":              rtimpact.HelpSpread,
 			"action":                "active_participation",
 			"intersectionDimension": "interest",
 			"tagRef":                "",

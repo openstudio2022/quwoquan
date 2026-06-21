@@ -96,7 +96,7 @@ specs/feature-tree/
 - 层级、范围、状态和执行门禁。
 - UAT / SIT / GWT / contract 的验收意图。
 - `done_when`、边界条件、证据层与测试文件或命令。
-- 统一测试证据层：`T1`、`T2`、`T3`、`T4`。
+- 统一测试证据层：`local_contract`、`local_contract`、`api_integration`、`user_acceptance`。
 
 ---
 
@@ -104,17 +104,17 @@ specs/feature-tree/
 
 | 层级 | 验收主语 | 验收标准 | 主要证据 |
 |---|---|---|---|
-| 应用根 | 用户需求与完整 Journey | UAT | `T4`，辅以 `T3`、SLO/KPI、灰度和回滚 |
-| `L1_domain_service` | 领域边界与服务治理 | 领域服务验收 | `T1/T3`，必要时 `T4` |
-| `L2_business_capability` | 能力内多 Story 组合 | SIT | `T2/T3` |
-| `L3_story` | 最小价值点 | GWT + 接口契约 | `T1/T2`，涉及远端边界时补 `T3` |
+| 应用根 | 用户需求与完整 Journey | UAT | `user_acceptance`，辅以 `api_integration`、SLO/KPI、灰度和回滚 |
+| `L1_domain_service` | 领域边界与服务治理 | 领域服务验收 | `local_contract/api_integration`，必要时 `user_acceptance` |
+| `L2_business_capability` | 能力内多 Story 组合 | SIT | `local_contract/api_integration` |
+| `L3_story` | 最小价值点 | GWT + 接口契约 | `local_contract`，涉及远端边界时补 `api_integration` |
 
 测试层只表达验证方式，不表达特性树层级：
 
-- `T1`：契约与静态校验。
-- `T2`：模块与交互验证。
-- `T3`：端云集成验证。
-- `T4`：端到端旅程验证。
+- `local_contract`：契约与静态校验。
+- `local_contract`：模块与交互验证。
+- `api_integration`：端云集成验证。
+- `user_acceptance`：端到端旅程验证。
 
 ---
 

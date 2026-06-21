@@ -316,7 +316,9 @@ class MarkdownSeoHtmlRenderer {
     if (trimmed.isEmpty) return false;
     if (trimmed.startsWith('/')) return true;
     final uri = Uri.tryParse(trimmed);
-    return uri != null && uri.scheme == 'https';
+    // 媒体 CDN base 随环境而定（prod 为 https 域名，alpha/本地联调为 http loopback
+    // CDN）；只放行 http/https，仍拦截 javascript:/data:/vbscript: 等不安全 scheme。
+    return uri != null && (uri.scheme == 'https' || uri.scheme == 'http');
   }
 
   String _escape(String value) {

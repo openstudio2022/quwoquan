@@ -1,7 +1,7 @@
 {
   "schemaVersion": "gamma-local-media-origin",
-  "generatedAt": "2026-06-16T16:35:41.916409Z",
-  "bindHost": "127.0.0.1",
+  "generatedAt": "2026-06-19T17:06:44.478682Z",
+  "bindHost": "0.0.0.0",
   "port": 19110,
   "registryPath": "/Users/zhaoyuxi/Projects/quwoquan/deploy/shared/media_slice_registry.json",
   "publicBaseUrl": "",

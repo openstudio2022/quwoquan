@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "稻城亚丁_planning_consultation",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:936779d1fc8000280527291cfc5cfdd367690e34354800a16ad951c7a82544d3",
+  "finalSha256": "sha256:cba028319b621e17744cb50f6426c0e737ea34299d1bef0e122428c9aa225361",
+  "draftBodySha256": "sha256:936779d1fc8000280527291cfc5cfdd367690e34354800a16ad951c7a82544d3",
+  "finalBodySha256": "sha256:936779d1fc8000280527291cfc5cfdd367690e34354800a16ad951c7a82544d3",
+  "composeSnapshotSha256": "sha256:936779d1fc8000280527291cfc5cfdd367690e34354800a16ad951c7a82544d3",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

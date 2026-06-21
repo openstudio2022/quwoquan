@@ -29,6 +29,10 @@ CIRCLE_SCENARIOS = METADATA / "social" / "circle" / "test_fixtures" / "scenarios
 CHAT_SCENARIOS = METADATA / "messages" / "chat" / "test_fixtures" / "scenarios" / "chat_scenarios.json"
 GROUP_RENDER_PACKAGE = "./cmd/render-group-avatar"
 BETA_VIDEO_OBJECT_KEY = "media/video/s/archived-video/beta-sample.mp4"
+# 真实可播放样例视频源（CC0, H.264/AAC, faststart），随仓库提交，供服务端样例
+# 视频对象拷贝；远大于历史 24B ftyp 占位桩，用于拦截占位桩回退。
+BETA_VIDEO_SOURCE_FILENAME = "beta_sample_video.mp4"
+BETA_VIDEO_MIN_BYTES = 4096
 
 ROLE_ORDER = [
     "leadAuthor",
@@ -474,10 +478,25 @@ def render_group_composite(output_key: str, input_paths: list[Path]) -> dict[str
 
 
 def ensure_beta_sample_video() -> None:
+    # 服务端样例视频必须是真实可播放的 H.264/AAC MP4（faststart）。
+    # 历史实现写入 24B 的 ftyp 占位桩（无 moov/mdat、无音视频轨），导致端侧
+    # 聚焦后只能持续「加载中…」且无法播放；这里改为从受控真实源拷贝，并禁止
+    # 回退占位桩。真实源随仓库提交在 original_media 下。
+    source = ORIGINAL_ROOT / BETA_VIDEO_SOURCE_FILENAME
+    if not source.is_file() or source.stat().st_size < BETA_VIDEO_MIN_BYTES:
+        raise SystemExit(
+            "missing playable beta sample video source: "
+            f"{source.relative_to(ROOT)}（禁止回退为不可播放的占位桩）"
+        )
     path = MEDIA_ROOT / canonical_media_object_key(BETA_VIDEO_OBJECT_KEY)
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
-        path.write_bytes(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
+    needs_copy = (
+        not path.is_file()
+        or path.stat().st_size != source.stat().st_size
+        or path.read_bytes() != source.read_bytes()
+    )
+    if needs_copy:
+        shutil.copyfile(source, path)
 
 
 def load_catalogs() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -1405,6 +1424,193 @@ def content_row(post: dict[str, Any], circles_by_id: dict[str, dict[str, Any]]) 
     return row
 
 
+def build_comment_thread_core_seed() -> dict[str, Any]:
+    """评论二级线程统一种子（单一版本，无 v1/v2）。
+
+    覆盖 0 / 1 / 5 / 10 / 50 / 100+ 条回复磁度，含置顶、作者赞过、IP 属地与图片回复，
+    供端云「列表 + 排序 + 二级展开」契约同源验证。所有回复均为真实记录，
+    `replyCount` 由实际回复条数派生，保证换排序不换集合、计数与条目一致。
+    """
+    post_id = "fixture_photo_001"
+
+    def avatar(uid: str) -> str:
+        return f"media/avatar/s/archived-avatar/user/{uid}/v1/avatar.png"
+
+    repliers = [
+        ("fixture_user_friend", "契约好友"),
+        ("fixture_user_photo", "契约摄影师"),
+        ("fixture_user_commenter", "契约评论者"),
+        ("fixture_user_current", "契约当前用户"),
+    ]
+    comments: list[dict[str, Any]] = []
+
+    def add_comment(
+        comment_id: str,
+        author_id: str,
+        author_name: str,
+        content: str,
+        offset_minutes: int,
+        **extra: Any,
+    ) -> None:
+        base = datetime(2026, 6, 5, 12, 0, 0)
+        created_at = (base + timedelta(minutes=offset_minutes)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+        row: dict[str, Any] = {
+            "commentId": comment_id,
+            "_id": comment_id,
+            "postId": post_id,
+            "authorId": author_id,
+            "authorDisplayNameSnapshot": author_name,
+            "authorAvatarObjectKeySnapshot": avatar(author_id),
+            "authorAvatarUrlSnapshot": avatar(author_id),
+            "content": content,
+            "createdAt": created_at,
+        }
+        row.update(extra)
+        comments.append(row)
+
+    def add_replies(
+        parent_id: str,
+        parent_author_id: str,
+        parent_author_name: str,
+        total: int,
+        base_offset: int,
+        image_on_first: bool = False,
+    ) -> None:
+        for i in range(total):
+            replier_id, replier_name = repliers[i % len(repliers)]
+            reply_id = f"{parent_id}_r{i + 1:03d}"
+            extra: dict[str, Any] = {
+                "parentCommentId": parent_id,
+                "replyToCommentId": parent_id,
+                "replyToUserId": parent_author_id,
+                "replyToDisplayName": parent_author_name,
+            }
+            if image_on_first and i == 0:
+                extra["attachmentMediaIds"] = [f"{reply_id}_media"]
+                extra["attachments"] = [
+                    {
+                        "mediaId": f"{reply_id}_media",
+                        "type": "image",
+                        "url": "media/comment/s/archived-comment/"
+                        f"{reply_id}/v1/comment.png",
+                        "width": 1200,
+                        "height": 900,
+                    }
+                ]
+            add_comment(
+                reply_id,
+                replier_id,
+                replier_name,
+                f"回复样本 #{i + 1}",
+                base_offset + i + 1,
+                **extra,
+            )
+
+    # 1 条回复（置顶 + 作者赞过 + IP 属地）：保留契约稳定 ID，供 seed manifest 端点引用。
+    add_comment(
+        "fixture_comment_parent_001",
+        "fixture_user_current",
+        "契约当前用户",
+        "主评论示例",
+        0,
+        ipLocation="浙江",
+        isPinned=True,
+        pinnedAt="2026-06-05T12:30:00Z",
+        authorLiked=True,
+        likeCount=128,
+        recommendedScore=128.0,
+    )
+    add_comment(
+        "fixture_comment_reply_001",
+        "fixture_user_commenter",
+        "契约评论者",
+        "回复示例",
+        5,
+        ipLocation="广东",
+        parentCommentId="fixture_comment_parent_001",
+        replyToCommentId="fixture_comment_parent_001",
+        replyToUserId="fixture_user_current",
+        replyToDisplayName="契约当前用户",
+    )
+
+    # 0 条回复。
+    add_comment(
+        "fixture_comment_thread_empty",
+        "fixture_user_friend",
+        "契约好友",
+        "零回复评论示例",
+        10,
+        ipLocation="北京",
+        likeCount=3,
+        recommendedScore=3.0,
+    )
+    # 5 条回复（首次展开即加载完毕）。
+    add_comment(
+        "fixture_comment_thread_five",
+        "fixture_user_photo",
+        "契约摄影师",
+        "五条回复评论示例",
+        20,
+        ipLocation="上海",
+        likeCount=12,
+        recommendedScore=12.0,
+    )
+    add_replies("fixture_comment_thread_five", "fixture_user_photo", "契约摄影师", 5, 100)
+    # 10 条回复（演示 1→5→10 三段展开 + 图片回复）。
+    add_comment(
+        "fixture_comment_thread_ten",
+        "fixture_user_commenter",
+        "契约评论者",
+        "十条回复评论示例",
+        30,
+        ipLocation="江苏",
+        likeCount=24,
+        recommendedScore=24.0,
+    )
+    add_replies(
+        "fixture_comment_thread_ten",
+        "fixture_user_commenter",
+        "契约评论者",
+        10,
+        200,
+        image_on_first=True,
+    )
+    # 50 条回复（多次「展开更多回复」）。
+    add_comment(
+        "fixture_comment_thread_fifty",
+        "fixture_user_friend",
+        "契约好友",
+        "五十条回复评论示例",
+        40,
+        ipLocation="四川",
+        likeCount=56,
+        recommendedScore=56.0,
+    )
+    add_replies("fixture_comment_thread_fifty", "fixture_user_friend", "契约好友", 50, 400)
+    # 110 条回复（100+ 大磁度）。
+    add_comment(
+        "fixture_comment_thread_hundred",
+        "fixture_user_photo",
+        "契约摄影师",
+        "上百条回复评论示例",
+        50,
+        ipLocation="广东",
+        likeCount=210,
+        recommendedScore=210.0,
+    )
+    add_replies("fixture_comment_thread_hundred", "fixture_user_photo", "契约摄影师", 110, 1000)
+
+    return {
+        "description": "评论二级线程统一种子：覆盖 0/1/5/10/50/100+ 回复、置顶、作者赞过、IP 属地与图片回复。",
+        "comments": comments,
+    }
+
+
+COMMENT_THREAD_CORE_COMMENT_COUNT = 6 + 1 + 5 + 10 + 50 + 110
+
+
 def build_content_doc(posts: list[dict[str, Any]], circles: list[dict[str, Any]], users: list[dict[str, Any]]) -> dict[str, Any]:
     circles_by_id = circle_index(circles)
     users_by_id = user_index(users)
@@ -1415,6 +1621,9 @@ def build_content_doc(posts: list[dict[str, Any]], circles: list[dict[str, Any]]
     reactions = []
     comment_authors = ["fixture_user_commenter", "fixture_user_friend", "fixture_user_current"]
     for idx, row in enumerate(post_rows[:48]):
+        if row["id"] == "fixture_photo_001":
+            row["commentCount"] = COMMENT_THREAD_CORE_COMMENT_COUNT
+            continue
         comment_id = "fixture_comment_photo_001" if row["id"] == "fixture_photo_001" else f"fixture_comment_{row['id']}"
         author_id = comment_authors[idx % len(comment_authors)]
         comments.append({
@@ -1436,13 +1645,13 @@ def build_content_doc(posts: list[dict[str, Any]], circles: list[dict[str, Any]]
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
             "content_discovery_core": {"description": "发现流、详情与搜索共享真实图片主样本。", "posts": post_rows, "reactions": reactions, "comments": comments},
-            "comment_thread_v2_core": {"description": "评论线程与回复测试种子。", "comments": [{"commentId": "fixture_comment_v2_parent_001", "_id": "fixture_comment_v2_parent_001", "postId": "fixture_photo_001", "authorId": "fixture_user_current", "authorDisplayNameSnapshot": "契约当前用户", "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png", "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png", "content": "主评论示例", "replyCount": 1, "createdAt": "2026-06-05T12:00:00Z"}, {"commentId": "fixture_comment_v2_reply_001", "_id": "fixture_comment_v2_reply_001", "postId": "fixture_photo_001", "authorId": "fixture_user_commenter", "authorDisplayNameSnapshot": "契约评论者", "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png", "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png", "content": "回复示例", "parentCommentId": "fixture_comment_v2_parent_001", "replyToCommentId": "fixture_comment_v2_parent_001", "replyToUserId": "fixture_user_current", "replyToDisplayName": "契约当前用户", "createdAt": "2026-06-05T12:05:00Z"}]},
+            "comment_thread_core": build_comment_thread_core_seed(),
             "home_feed_core": {"description": "首页关注、精选与群组三个入口的组合内容种子。", "followingFeedPostIds": current_posts[:24] or post_ids[:24], "featuredFeedPostIds": post_ids[:40], "groupFeedPostIds": [row["id"] for row in post_rows if row["circleId"] == "fixture_circle_photo"][:12]},
             "content_detail_core": {"description": "内容详情、评论、reaction 与分享主样本。", "postIds": ["fixture_photo_001", "fixture_article_001", "fixture_video_001"], "commentIds": ["fixture_comment_photo_001"], "reactionPostIds": ["fixture_photo_001"], "shareTargets": [{"id": "fixture_share_chat_group", "type": "chat_conversation", "title": "契约周末群"}]},
             "search_core": {"description": "全局搜索与网络结果页可打开的内容种子。", "history": ["西湖晨光", "契约旅行", "城市漫步"], "resultPostIds": ["fixture_photo_001", "fixture_article_001", "fixture_video_001", "fixture_moment_001"], "networkResults": [{"id": "fixture_search_web_001", "title": "契约搜索网络结果", "url": "https://example.com"}]},
             "publish_core": {"description": "创作入口发布设置、草稿、可选圈子和主页。", "drafts": [{"id": "fixture_draft_photo", "type": "image", "body": "契约草稿内容"}], "selectableCircleIds": ["fixture_circle_photo", "fixture_circle_travel", "fixture_circle_life"], "selectableHomepageIds": ["fixture_homepage_author", "fixture_homepage_poi"]},
         },
-        "scenarios": [{"id": "content_discovery_feed_basic", "title": "发现流契约种子基础加载", "type": "content_feed", "domainId": "content", "seedRefs": ["content_discovery_core", "home_feed_core", "content_detail_core", "search_core", "publish_core"], "uiExpectations": {"postIds": ["fixture_photo_001", "fixture_video_001", "fixture_article_001", "fixture_moment_001"], "textFragments": ["契约摄影师", "契约驱动的发现页文章"]}, "remoteExpectations": {"postIds": ["fixture_photo_001", "fixture_video_001", "fixture_article_001", "fixture_moment_001"], "detailPostId": "fixture_photo_001", "commentIds": ["fixture_comment_photo_001"]}, "environments": {"alpha": {"enabled": True, "repository": "mock"}, "beta": {"enabled": True, "repository": "remote", "requiresSeedReset": True}, "gamma": {"enabled": True, "repository": "remote", "requiresSeedReset": True}}}],
+        "scenarios": [{"id": "content_discovery_feed_basic", "title": "发现流契约种子基础加载", "type": "content_feed", "domainId": "content", "seedRefs": ["content_discovery_core", "home_feed_core", "content_detail_core", "search_core", "publish_core"], "uiExpectations": {"postIds": ["fixture_photo_001", "fixture_video_001", "fixture_article_001", "fixture_moment_001"], "textFragments": ["契约摄影师", "契约驱动的发现页文章"]}, "remoteExpectations": {"postIds": ["fixture_photo_001", "fixture_video_001", "fixture_article_001", "fixture_moment_001"], "detailPostId": "fixture_photo_001", "commentIds": ["fixture_comment_parent_001"]}, "environments": {"alpha": {"enabled": True, "repository": "mock"}, "beta": {"enabled": True, "repository": "remote", "requiresSeedReset": True}, "gamma": {"enabled": True, "repository": "remote", "requiresSeedReset": True}}}],
     }
 
 

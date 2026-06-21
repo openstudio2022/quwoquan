@@ -398,6 +398,10 @@ verify-app-page-abc-governance-enforce-c:
 verify-app-page-abc-governance-enforce-all:
 	@python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-a --enforce-b --enforce-c
 
+# user_profile 头像 projection：凡暴露 avatar URL，必须显式带版本字段。
+verify-app-user-profile-avatar-projection-versions:
+	@python3 quwoquan_app/scripts/runtime/verify_user_profile_avatar_projection_versions.py
+
 # UI 层 Map<String,dynamic> 字面量防回退（见 specs/gates/ui_map_literal_budget.json）
 verify-app-ui-map-literal-budget:
 	@python3 quwoquan_app/scripts/runtime/verify_ui_map_literal_budget.py
@@ -482,6 +486,8 @@ run-chat-avatar-commercial-matrix-local:
 verify:
 	@$(MAKE) verify-global-increment-constraints
 	@$(MAKE) verify-agent-context-contract
+	@$(MAKE) verify-test-specs
+	@$(MAKE) verify-test-directory-layout
 	@bash agent_ops/scaffold/verify_feature_traceability.sh
 	@bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
 	@bash agent_ops/scaffold/verify_acceptance_standard.sh
@@ -566,13 +572,40 @@ config-slo-gate:
 	@bash agent_ops/deploy/prod/config_release_slo_gate.sh --error-rate "$(ERROR_RATE)" --p95-ms "$(P95_MS)" --redis-error-rate "$(REDIS_ERROR_RATE)"
 
 .PHONY: l2-content gate-full test-api-contract test-api-contract-chat
+.PHONY: verify-test-specs verify-test-no-fake verify-test-coverage-map verify-test-directory-layout
+.PHONY: generate-test-directory-inventory generate-app-canonical-test-wrappers
+.PHONY: test-local-contract test-api-integration test-user-acceptance
 
 # 本地 L2 契约测试（content-service，需 MongoDB 在 localhost:27017）
 # 提交前运行以避免 CI 失败。详见 .cursor/rules/03-testing.mdc §2.1
 l2-content:
 	@bash quwoquan_app/scripts/content/run_l2_content_tests.sh
 
-# L3：按统一环境名解析 HTTP 基址。API_CONTRACT_ENV 默认为 gamma。
+verify-test-specs:
+	@python3 agent_ops/scaffold/verify_test_specs.py
+
+verify-test-no-fake:
+	@python3 agent_ops/scaffold/verify_test_specs.py
+
+verify-test-coverage-map:
+	@python3 agent_ops/scaffold/verify_test_specs.py
+
+verify-test-directory-layout:
+	@python3 agent_ops/scaffold/verify_test_directory_inventory.py
+
+generate-test-directory-inventory:
+	@python3 agent_ops/scaffold/generate_test_directory_inventory.py
+
+generate-app-canonical-test-wrappers:
+	@python3 agent_ops/scaffold/generate_app_canonical_test_wrappers.py
+
+test-local-contract:
+	@$(MAKE) verify-test-specs
+	@$(MAKE) verify-test-directory-layout
+	@bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
+	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/
+
+# api_integration：按统一环境名解析 HTTP 基址。API_CONTRACT_ENV 默认为 gamma。
 # 变量格式：{ALPHA|BETA|GAMMA|PROD}_BASE_URL 与 *_PRODUCT_OPS_BASE_URL。
 test-api-contract:
 	@ENV_NAME="$${API_CONTRACT_ENV:-gamma}"; \
@@ -614,7 +647,29 @@ test-api-contract-chat:
 		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN
 
-# gate-full: L1+L2+L3（daily CI / pre-release）
+test-api-integration:
+	@$(MAKE) verify-test-directory-layout
+	@cd quwoquan_service && go test ./services/user-service/tests/api_integration -count=1
+	@cd quwoquan_service && go test ./services/content-service/tests/api_integration -count=1
+	@cd quwoquan_service && go test ./services/chat-service/tests/api_integration -count=1
+	@$(MAKE) test-api-contract API_CONTRACT_ENV="$${ENV:-gamma}"
+	@$(MAKE) test-api-contract-chat API_CONTRACT_ENV="$${ENV:-gamma}"
+
+test-user-acceptance:
+	@TARGET_NAME="$${TARGET:-gamma-local}"; \
+	case "$$TARGET_NAME" in \
+		local) python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/user_acceptance/ ;; \
+		gamma-local) $(MAKE) gate-local-gamma LOCAL_GAMMA_SKIP_GATE=1 ;; \
+		prod-hosted) \
+			if [ -z "$${PROD_BASE_URL:-}" ] || [ -z "$${PROD_PRODUCT_OPS_BASE_URL:-}" ]; then \
+				echo "[user_acceptance] FAIL: PROD_BASE_URL and PROD_PRODUCT_OPS_BASE_URL are required for prod-hosted"; \
+				exit 2; \
+			fi; \
+			$(MAKE) test-api-integration ENV=prod ;; \
+		*) echo "[user_acceptance] FAIL: TARGET must be local, gamma-local or prod-hosted, got $$TARGET_NAME"; exit 2 ;; \
+	esac
+
+# gate-full: local_contract + api_integration + user_acceptance（daily CI / pre-release）
 # PR 日常开发用 make gate；pre-release 用 make gate-full。
 gate-full:
 	@bash agent_ops/gate/gate_repo.sh
@@ -622,7 +677,7 @@ gate-full:
 		echo "[gate-full] PROD_* set; running prod remote API contract (remote gamma retired)"; \
 		$(MAKE) test-api-contract API_CONTRACT_ENV=prod; \
 	else \
-		echo "[gate-full] PROD_* not set; running local gamma T3/T4 mirror gate"; \
+		echo "[gate-full] PROD_* not set; running local gamma api_integration/user_acceptance mirror gate"; \
 		$(MAKE) gate-local-gamma LOCAL_GAMMA_SKIP_GATE=1; \
 	fi
 

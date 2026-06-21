@@ -44,7 +44,7 @@ func TestUpdateProfile_Success(t *testing.T) {
 	createTestProfile(t, "user_002", "bob")
 
 	rec := doRequest(t, http.MethodPatch, "/v1/user/profile",
-		`{"nickname":"bob_updated","bio":"hello world"}`,
+		`{"nickname":"bob_updated","bio":"hello world","backgroundUrl":"https://cdn.example.com/bg-user-002.png"}`,
 		authHeaders("user_002"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -57,9 +57,15 @@ func TestUpdateProfile_Success(t *testing.T) {
 	if pv < 2 {
 		t.Errorf("expected profileVersion >= 2, got %v", pv)
 	}
+	if result["nicknameCustomized"] != true {
+		t.Errorf("expected nicknameCustomized=true after explicit rename, got %v", result["nicknameCustomized"])
+	}
+	if result["backgroundUrl"] != "https://cdn.example.com/bg-user-002.png" {
+		t.Errorf("expected backgroundUrl to round-trip, got %v", result["backgroundUrl"])
+	}
 }
 
-func TestUpdateProfile_NicknameTaken(t *testing.T) {
+func TestUpdateProfile_DuplicateNicknameAllowed(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "user_003", "charlie")
 	createTestProfile(t, "user_004", "david")
@@ -67,8 +73,15 @@ func TestUpdateProfile_NicknameTaken(t *testing.T) {
 	rec := doRequest(t, http.MethodPatch, "/v1/user/profile",
 		`{"nickname":"charlie"}`,
 		authHeaders("user_004"))
-	if rec.Code != http.StatusInternalServerError && rec.Code != http.StatusConflict {
-		t.Logf("expected 409 or 500 for nickname conflict, got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("duplicate nickname should be allowed, got %d: %s", rec.Code, rec.Body.String())
+	}
+	result := parseJSON(t, rec)
+	if result["nickname"] != "charlie" {
+		t.Fatalf("expected duplicate nickname to persist, got %v", result["nickname"])
+	}
+	if result["nicknameCustomized"] != true {
+		t.Fatalf("expected nicknameCustomized=true after rename, got %v", result["nicknameCustomized"])
 	}
 }
 

@@ -37,11 +37,17 @@ def test_lane_prompt_is_rendered_from_registry_policy():
         per_target_articles=3,
         article_intents=["planning_consultation", "decision_experience", "route_transport"],
     )
-    image_prompt = render_lane_source_prompt("image", vertical="travel", per_target_image_works=2)
+    image_prompt = render_lane_source_prompt(
+        "image",
+        vertical="travel",
+        per_target_image_works=2,
+        image_asset_strategy="ai_generated_original",
+    )
     homepage_prompt = render_lane_source_prompt("homepage", vertical="travel")
     assert "不得因 UGC/垂类专业/平台文章类别天然升降级" in article_prompt
     assert "去哪儿攻略" in article_prompt and "马蜂窝" in article_prompt
     assert "Pinterest" in image_prompt and "图虫" in image_prompt
+    assert "imageAssetStrategy=ai_generated_original" in image_prompt
     assert "逐图授权链" in image_prompt
     assert "最多保留 5 个核心来源" in homepage_prompt
 

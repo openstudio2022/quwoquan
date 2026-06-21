@@ -1,0 +1,15 @@
+{
+  "decision": "approved",
+  "issues": [],
+  "fallbackStage": null,
+  "checks": {
+    "entityPageQuality": {
+      "passed": true,
+      "issues": []
+    },
+    "sourceReadiness": {
+      "passed": true,
+      "issues": []
+    }
+  }
+}

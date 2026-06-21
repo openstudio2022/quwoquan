@@ -394,7 +394,7 @@ Topic/旅行/住宿/               → 话题角度（旅行中怎么讲住宿�
 
 ### 回填与索引重建
 
-批量回填实体或 posts 后，先重建 `publish/v1/index/`，再跑总门禁与专项门禁：
+批量回填实体或 posts 后，先重建 `publish/index/`（去版本化单一主线，无 `v{N}`），再跑总门禁与专项门禁：
 
 更完整的步骤和语义边界说明见 `docs/backfill_and_index_rebuild.md`。
 
@@ -435,6 +435,8 @@ python3 verticals/campus/verify/verify_campus_taxonomy.py
 通过 Tag Service API 支持，详见 `contracts/metadata/tag/service.yaml`。
 
 平台级内容供给的 Agent 组织模型、AI 自主创作边界、角色职责、交接契约和质量门，见 `docs/agent_content_supply_operating_model.md`。
+
+日产十万级商用化总蓝图（三个关键决策、三层 Agent 协同、作品 vs 随记准入、两种工作流、标签实体治理、任务清单与验收标准），见 [`docs/content_supply_commercialization_plan.md`](docs/content_supply_commercialization_plan.md)。两种工作流的百 / 千 / 万级端到端验证提示词：站点维度（携程 / Pinterest）见 [`docs/content_supply_site_scale_prompts.md`](docs/content_supply_site_scale_prompts.md)，指令维度（旅行垂类）见 [`docs/content_supply_instruction_scale_prompts.md`](docs/content_supply_instruction_scale_prompts.md)。
 
 ## 快速验证
 

@@ -62,14 +62,14 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
 
 ### 四层测试
 
-11. **T1 契约与静态层**：
+11. **local_contract 契约与静态层**：
     - 云侧：创作→投影一致性契约测试、评论 CRUD 契约测试、计数器一致性契约测试、缓存命中/失效契约测试
     - 端侧：ContentRepository Remote 方法契约测试（HTTP 请求/响应结构）
-12. **T2 模块与交互层**：
+12. **local_contract 模块与交互层**：
     - 端侧：创作页 4 类型 widget test、发现页 Feed 加载 widget test、评论列表交互 widget test
-13. **T3 端云集成层**：
+13. **api_integration 端云集成层**：
     - content-service 端到端集成测试（HTTP → MongoDB → Redis → 事件 → 投影）
-14. **T4 端到端旅程层**：
+14. **user_acceptance 端到端旅程层**：
     - Patrol E2E：创作微趣→发现流可见旅程、创作美图→发现流可见旅程、评论全旅程
 
 ## 不做什么（Out of Scope）
@@ -128,7 +128,7 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
 | API 完整性 | 云侧 0 个 handleNotImplemented；端侧 Remote 方法全覆盖 |
 | 部署就绪 | Kustomize 3 环境 + HPA + PDB + 探针 |
 | CI 覆盖 | content-service 契约测试入 Pipeline |
-| 四层测试 | T1 契约 + T2 组件 + T3 集成 + T4 E2E 覆盖核心旅程 |
+| 四层测试 | local_contract 契约 + local_contract 组件 + api_integration 集成 + user_acceptance E2E 覆盖核心旅程 |
 | 治理能力 | 限流/熔断/可观测接入 |
 
 ## 子节点规划（L3，在 /design 阶段细化）
@@ -139,4 +139,4 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
 | `missing-api-completion` | 6 个 handleNotImplemented 端点实现 | storage-cache-event-enablement |
 | `client-api-alignment` | 端侧 15 个方法补齐 + FeedItemDto 清理 | missing-api-completion |
 | `deployment-ci-readiness` | Kustomize + CI Pipeline + 配置管理 | storage-cache-event-enablement |
-| `production-test-coverage` | 四层测试补全（T1-T4） | 以上所有 |
+| `production-test-coverage` | 四层测试补全（local_contract-user_acceptance） | 以上所有 |

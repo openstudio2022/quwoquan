@@ -126,6 +126,21 @@ func (sc *SessionCache) RecordNegative(ctx context.Context, userID, contentID st
 	return nil
 }
 
+// NegativeContentIDs forwards to the inner reader when it tracks explicit
+// negative feedback (e.g. *HotPath), so feed paths that bypass recall
+// (content-service repository fallback) honor dislike/not_interested through
+// the same rec:negative:{userId} source of truth as the recall-side
+// ExposureFilter. Without this forwarding, Engine.LoadFeedbackExclusions sees
+// *SessionCache (not a NegativeFeedbackReader) and the fallback path leaks
+// disliked content. When the inner reader does not track negatives, returns
+// nothing and recall-side filtering stays the enforcement point.
+func (sc *SessionCache) NegativeContentIDs(ctx context.Context, userID string) ([]string, error) {
+	if r, ok := sc.inner.(NegativeFeedbackReader); ok {
+		return r.NegativeContentIDs(ctx, userID)
+	}
+	return nil, nil
+}
+
 func (sc *SessionCache) AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error) {
 	if i, ok := sc.inner.(FeedbackIngestor); ok {
 		return i.AcceptEvent(ctx, signal)

@@ -1,6 +1,6 @@
 # 特性树层级定义与分解规范
 
-> **权威**：本文定义仓库特性树唯一正式目录层级。测试层级只使用 `T1~T4`；Journey / Scenario 只在应用根编排，不作为目录层。
+> **权威**：本文定义仓库特性树唯一正式目录层级。测试工程层只使用 `local_contract`、`api_integration`、`user_acceptance`；Journey / Scenario 只在应用根编排，不作为目录层。
 
 ---
 
@@ -26,7 +26,7 @@
 
 - 树层级只表达交付对象和责任归属。
 - 验收层级表达 UAT / SIT / GWT / contract。
-- 测试层级只表达验证方式：`T1/T2/T3/T4`。
+- 测试工程层只表达验证方式：`local_contract`、`api_integration`、`user_acceptance`。
 - 技术切面（schema、policy、guard、report、model）应写入对应层级文档，不再新增目录层。
 
 ---
@@ -128,10 +128,10 @@
 
 | 来源 | 落点 | 验收语言 | 测试证据 |
 |---|---|---|---|
-| 用户需求 | 应用根 Journey / Scenario | UAT | `T4`，辅以 `T3` |
-| 领域边界与治理 | `L1_domain_service` | 领域服务验收 | `T1/T3`，必要时 `T4` |
-| 能力组合 | `L2_business_capability` | SIT | `T2/T3` |
-| 最小价值点 | `L3_story` | GWT + contract | `T1/T2`，必要时 `T3` |
+| 用户需求 | 应用根 Journey / Scenario | UAT | `user_acceptance`，辅以 `api_integration` |
+| 领域边界与治理 | `L1_domain_service` | 领域服务验收 | `api_integration/local_contract`，必要时 `user_acceptance` |
+| 能力组合 | `L2_business_capability` | SIT | `api_integration`，辅以 `local_contract` |
+| 最小价值点 | `L3_story` | GWT + contract | `local_contract`，必要时 `api_integration/user_acceptance` |
 
 ---
 
@@ -143,7 +143,7 @@
 | `/prd` | 创建或更新 `spec.md` 与 `acceptance.yaml`，必要时更新应用根 registry 与 CR |
 | `/design` | 只更新应用根、领域服务、业务能力三层 `design.md`；Story 不产生 `design.md` |
 | `/dev` | 从 Story `acceptance.yaml`、变更范围和会话 todo 派生执行动作 |
-| `/verify` | 验证 Story、业务能力 SIT、受影响 UAT 和 `T1~T4` 证据 |
+| `/verify` | 验证 Story、业务能力 SIT、受影响 UAT 和三层测试证据 |
 | `/commit` | 提交已完成 Story、相关能力/领域文档和 CR 范围 |
 
 ---

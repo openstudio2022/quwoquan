@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "蜀南竹海_image",
+  "final": {
+    "contentType": "image",
+    "publishTitle": "蜀南竹海·P1030387",
+    "publishSeq": 1,
+    "generator": "image_evidence_pack",
+    "model": null,
+    "agentRunId": null,
+    "agentId": null,
+    "sessionTrace": null,
+    "styleFamily": "",
+    "openingStrategy": null,
+    "entityRefs": [
+      "/entity/地点/景区/蜀南竹海"
+    ],
+    "assetDigest": "sha256:34458bc7009d47e4d9a106eab1a491ce90f5714ca8900757fa49653568494995",
+    "sourceCollectionId": "open_license_file:蜀南竹海:httpscommonswikimediaorgwikifilee89c80e58d97e7abb9e6b5b7p103:7ca6c532c3",
+    "creator": "郭 敏",
+    "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E8%9C%80%E5%8D%97%E7%AB%B9%E6%B5%B7_P1030387_(12607284444).jpg",
+    "license": "CC BY 2.0",
+    "termsUrl": "https://creativecommons.org/licenses/by/2.0",
+    "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E8%9C%80%E5%8D%97%E7%AB%B9%E6%B5%B7_P1030387_(12607284444).jpg"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "蜀南竹海·P1030387",
+    "styleFamily": "",
+    "promptSha256": null,
+    "writingPackSha256": null,
+    "sourceBundleSha256": null,
+    "draftSha256": null
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/22.image_open_license_file_蜀南竹海_httpscommonswikimediaorgwikifilee89c80e58d97e7abb9e6b5b7p103_7ca6c532c3/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E8%9C%80%E5%8D%97%E7%AB%B9%E6%B5%B7_P1030387_(12607284444).jpg",
+      "sourceCollectionId": "open_license_file:蜀南竹海:httpscommonswikimediaorgwikifilee89c80e58d97e7abb9e6b5b7p103:7ca6c532c3",
+      "creator": "郭 敏",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E8%9C%80%E5%8D%97%E7%AB%B9%E6%B5%B7_P1030387_(12607284444).jpg",
+      "license": "CC BY 2.0",
+      "termsUrl": "https://creativecommons.org/licenses/by/2.0",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E8%9C%80%E5%8D%97%E7%AB%B9%E6%B5%B7_P1030387_(12607284444).jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "carrierConsistency": true,
+      "imageGate": true,
+      "imageSourceScope": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/蜀南竹海/1.download/sources/22.image_open_license_file_蜀南竹海_httpscommonswikimediaorgwikifilee89c80e58d97e7abb9e6b5b7p103_7ca6c532c3/source.md"
+  ]
+}

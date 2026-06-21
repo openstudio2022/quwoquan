@@ -2,7 +2,7 @@
 
 ## 目标
 
-端侧测试入口统一放在 `quwoquan_app/test/` 下，按 `common`、`alpha`、`beta`、`gamma` 与 `patrol` 分层。`integration_test/` 不再作为测试分层概念保留。
+端侧测试入口统一放在 `quwoquan_app/test/` 下，新增测试按 `local_contract`、`api_integration`、`user_acceptance` 三层分层。`integration_test/` 不再作为测试分层概念保留。
 
 ## 迁移结果
 
@@ -21,11 +21,12 @@
 
 ## 规则
 
-- 新增端侧环境测试只能放在 `quwoquan_app/test/common`、`test/alpha`、`test/beta`、`test/gamma` 或 `test/patrol`。
-- 是否跑设备/模拟器由 runner 的 `-d <device>` 参数决定，不通过目录名表达。
+- 新增端侧测试只能放在 `quwoquan_app/test/local_contract`、`test/api_integration` 或 `test/user_acceptance`。
+- 存量 `common`、`alpha`、`beta`、`gamma`、`patrol` 目录只作为迁移映射，不作为新增目录标准。
+- 是否跑设备/模拟器由 runner 的 `-d <device>` 参数和 `APP_RUNTIME_ENV` 决定，不通过目录名表达。
 - alpha/beta/gamma 的业务对象和断言数据必须来自 `contracts/metadata/**/test_fixtures`。
 - `quwoquan_app/pubspec.yaml` 不得挂载 contracts `test_fixtures` 为生产 assets。
 - `app-alpha` 可随包携带 seed manifest allowlist 中的精简 fixture；`app-beta/app-gamma` 只能通过 remote/gateway 读取云侧 seed 数据。
 - App 只构建 `alpha/beta/gamma/prod` 四类环境包；生产灰度不通过独立 App 包承载。
 - 人工 beta 数据必须来自 `app_beta_seed_manifest.json`，不得在启动脚本或数据库中临时造数。
-- 环境包、seed manifest 与 gateway smoke 使用统一命令面：`make build-app-env`、`make verify-app-seed-manifest`、`make test-app-alpha-seed`、`make test-app-beta-seed`。
+- 环境包、seed manifest 与 gateway smoke 使用统一命令面：`make build-app-env`、`make verify-app-seed-manifest`、`make test-local-contract`、`make test-api-integration`、`make test-user-acceptance`。

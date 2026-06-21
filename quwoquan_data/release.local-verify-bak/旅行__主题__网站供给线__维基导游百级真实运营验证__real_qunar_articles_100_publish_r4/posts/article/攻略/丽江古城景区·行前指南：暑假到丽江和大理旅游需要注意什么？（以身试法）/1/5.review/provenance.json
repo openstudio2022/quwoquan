@@ -1,0 +1,109 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_22b4b94419960d1e",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "丽江古城景区·行前指南：暑假到丽江和大理旅游需要注意什么？（以身试法）",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "claude-4.6-opus-max",
+    "agentRunId": "run-25020110-b237-44df-8d24-8657af181149",
+    "agentId": "agent-aea9406a-db64-4504-acd4-8d029e05aaa8",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/丽江古城景区"
+    ],
+    "articleDigest": "sha256:0111db9b463d3afe37e92ac572b2cb4a0aeee49dcc6f9db5138a9acd87bda69e"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "丽江古城景区·行前指南：暑假到丽江和大理旅游需要注意什么？（以身试法）",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:f59f38d40ba7815586b8052d59ab6939b389387a73bfcddf18379904d7c1e3d2",
+    "writingPackSha256": "sha256:968f4e7fe77bd3439de4deffcb4cd4cab3d717729fee97a414e1d7e1c156914a",
+    "sourceBundleSha256": "sha256:f21c94db0c92e54bd143f1df246016ec86e5be0cc30fcfac974845cb4c6a44b9",
+    "draftSha256": "sha256:856eda89fd68d84f1b36361f8793c05e013cef9796331de9db7bbce2970f88f2"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/13.qunar_guide_candidate_22b4b94419960d1e/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7887403"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/20.qunar_guide_candidate_2a456a91d9ea2b07/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7888717"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/29.qunar_guide_candidate_3e593d5a76a5c07f/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7887808"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/30.qunar_guide_candidate_3f01fae41752ef2b/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7892987"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/38.qunar_guide_candidate_560818300902415d/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7887023"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/40.qunar_guide_candidate_58c9159f130915aa/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7894575"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/60.qunar_guide_candidate_806df858fd591c17/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7898540"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/68.qunar_guide_candidate_9bef923505c6b829/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7892157"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/69.qunar_guide_candidate_9cb2b641ec136d20/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7900676"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/72.qunar_guide_candidate_a4b7d4a72e72e8d0/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7890210"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/74.qunar_guide_candidate_aa87f50bbf3edac5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7890266"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/77.qunar_guide_candidate_ac7ec95172f87e5a/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7891080"
+    },
+    {
+      "path": "entities/地点/景区/丽江古城景区/1.download/sources/87.qunar_guide_candidate_c3db900bffa32feb/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7887863"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/丽江古城景区/1.download/sources/13.qunar_guide_candidate_22b4b94419960d1e/source.md"
+  ]
+}

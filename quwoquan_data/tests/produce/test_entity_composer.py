@@ -46,6 +46,7 @@ from _common.base_draft import save_base_draft_ledger  # noqa: E402
 from _common.draft_io import read_writing_pack, write_agent_draft  # noqa: E402
 from _common.post_verify import verify_scope  # noqa: E402
 from _common.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
+from _common.stage_reports import stage_result_path, write_repair_report  # noqa: E402
 from produce.route_workflow import analyze_route_ref  # noqa: E402
 from produce.entity_workflow import (  # noqa: E402
     build_entity_writing_pack,
@@ -262,6 +263,29 @@ def test_entity_placeholder_blocks_then_agent_draft_green():
     assert review["generator"] == "agent"
 
 
+def test_entity_review_approval_clears_stale_repair_report():
+    _seed_sources()
+    brief = _entity_brief()
+    quality, _pack = _compose_entity_agent_draft(TASK, BATCH, REF, brief)
+    repair_path = write_repair_report(
+        task_id=TASK,
+        batch_id=BATCH,
+        command="produce",
+        ref=REF,
+        failed_stage="review",
+        failed_gate="contentReview",
+        issues=["old issue"],
+        fallback_stage="agent_compose",
+        rerun_chain=["agent_compose", "review", "materialize"],
+    )
+    assert repair_path.is_file()
+
+    review = review_entity_draft(TASK, BATCH, REF, brief, quality)
+
+    assert review["decision"] == "approved", review["issues"]
+    assert not stage_result_path(TASK, BATCH, "produce", "repair_report", REF).exists()
+
+
 def test_entity_e2e_materialize_verify_green():
     _seed_sources()
     brief = _entity_brief()
@@ -277,6 +301,18 @@ def test_entity_e2e_materialize_verify_green():
     mani = _json.loads((Path(str(posts[0])) / "manifest.json").read_text(encoding="utf-8"))
     assert mani["entityRefs"] == [f"/entity/地点/博物馆/{ENTITY}"], mani["entityRefs"]
     assert _parse_entity_ref(mani["entityRefs"][0]) == ("地点", "博物馆", ENTITY)
+    published_mentions = [
+        m for m in mani.get("semanticMentions", [])
+        if m.get("status") == "published"
+    ]
+    mention_refs = {
+        (m.get("kind"), m.get("targetRef"))
+        for m in published_mentions
+    }
+    for entity_ref in mani["entityRefs"]:
+        assert ("entity", entity_ref) in mention_refs
+    for tag_ref in mani["tagRefs"]:
+        assert ("tag", tag_ref) in mention_refs
     roots, issues = verify_scope(task=TASK, batch=BATCH, scope="current")
     assert roots, "verify found no posts root"
     assert not issues, "entity pilot verify must be green:\n" + "\n".join(issues[:40])
@@ -336,6 +372,77 @@ def test_compose_brief_persists_reassigned_base_source_ref():
     persisted = read_brief_object(TASK, BATCH, REF)
     assert persisted is not None
     assert persisted["baseSourceRef"].endswith("02.museum_story/source.md"), persisted["baseSourceRef"]
+
+
+def test_entity_article_falls_back_to_article_lane_visual_support_when_base_image_missing():
+    _seed_sources()
+    brief = _entity_brief()
+    obj = resolve_entity_object_dir(TASK, BATCH, ENTITY, etype_hint="地点/博物馆")
+    import shutil
+
+    for dirname in ("30.no_image_base_for_fallback", "31.article_visual_support_for_fallback"):
+        shutil.rmtree(obj / "1.download" / "sources" / dirname, ignore_errors=True)
+
+    write_source_unit(
+        obj,
+        ordinal=30,
+        source_id="no_image_base_for_fallback",
+        source_md="三星堆博物馆的参观时间、推荐动线和停留展厅信息都可核验，但该底稿无可发布图片。",
+        clean_md="三星堆博物馆的参观时间、推荐动线和停留展厅信息都可核验，但该底稿无可发布图片。",
+        quality={"sourceId": "no_image_base_for_fallback", "quality": "A-story", "score": 8},
+        platform="curated",
+        source_category="travelogue",
+        source_role="base",
+        research_lane="article",
+        url="https://example.com/no-image-base",
+        title="no image base",
+        target_ref=f"/entity/地点/博物馆/{ENTITY}",
+        relevance=f"{ENTITY} 的无图底稿",
+        images=[],
+    )
+    image_root = Path(tempfile.mkdtemp(prefix="entity_visual_support_"))
+    image_path = image_root / f"{ENTITY}_visual_support.jpg"
+    _clean_image(image_path, seed=13)
+    write_source_unit(
+        obj,
+        ordinal=31,
+        source_id="article_visual_support_for_fallback",
+        source_md="三星堆博物馆开放授权视觉支持素材。",
+        clean_md="三星堆博物馆开放授权视觉支持素材。",
+        quality={"sourceId": "article_visual_support_for_fallback", "quality": "A-image", "score": 7},
+        platform="curated",
+        source_category="vertical_professional",
+        source_role="supporting",
+        research_lane="article",
+        url="https://example.com/visual-support",
+        title="visual support",
+        target_ref=f"/entity/地点/博物馆/{ENTITY}",
+        relevance=f"{ENTITY} 的可发布视觉支持",
+        images=[
+            {
+                "sourcePath": str(image_path),
+                "caption": f"{ENTITY} 可发布视觉支持图",
+                "relevance": f"{ENTITY} 可发布视觉支持图",
+                "license": "internal-curated",
+                "credit": "Quwoquan",
+                "termsUrl": "https://example.com/terms",
+                "authorizationProof": "https://example.com/proof",
+                "usageScope": "app_publish",
+            }
+        ],
+    )
+    base_ref = "entities/地点/博物馆/三星堆博物馆/1.download/sources/30.no_image_base_for_fallback/source.md"
+    brief["baseSourceRef"] = base_ref
+
+    quality = analyze_route_ref(TASK, BATCH, REF, brief)
+    pack = build_entity_writing_pack(TASK, BATCH, REF, brief, quality)
+
+    assert pack["assets"], "article compose should recover with same-entity article-lane visual support"
+    asset = pack["assets"][0]
+    assert asset["sourceRef"].endswith("31.article_visual_support_for_fallback/source.md")
+    assert asset["sourceAssetRef"].endswith("31.article_visual_support_for_fallback/assets/001_article_visual_support_for_fallback.jpg")
+    assert asset["researchLane"] == "article"
+    assert asset["authorizationProof"] == "https://example.com/proof"
 
 
 def _run_all() -> None:

@@ -10,7 +10,8 @@ scope:
   in_scope:
   - 全局搜索领域边界、上下游依赖、工程映射与服务治理（search-service + ES + Redis）。
   - canonical search(request) 两阶段：suggest 本地、result 云侧最终结果。
-  - result 阶段云侧对象 taxonomy（content.post / entity.homepage / location.place / 相关词 / 小趣）单一真相源。
+  - result 阶段云侧对象 taxonomy（content.post / entity.homepage / location.place / 相关词 /
+    小趣）单一真相源。
   out_of_scope:
   - 业务写模型存储引擎迁移（ES 仅作派生搜索读库）。
   - 并发 intersection 重构会话负责的 quwoquan_app/lib/** 交集端侧切片。
@@ -20,49 +21,71 @@ domain_acceptance:
     title: global search experience 领域边界与商用主链路落地验收
     done_when:
     - 领域边界、上下游依赖、工程映射和服务治理清晰；search-service（domain=search，18095）为云侧 canonical 入口。
-    - 各域灌数（R-S05a~e）落地：content.post/entity.homepage/circle.circle/circle.group/user.profile + 第一方 location.place 进统一索引 quwoquan_objects。
-    - App remote /v1/search 接线（R-S06）：RemoteSearchRepository 走 CloudHttpClient + codegen path，透传商用字段，按数据源切换。
+    - 各域灌数（R-S05a~e）落地：content.post/entity.homepage/circle.circle/circle.group/user.profile
+      + 第一方 location.place 进统一索引 quwoquan_objects。
+    - App remote /v1/search 接线（R-S06）：RemoteSearchRepository 走 CloudHttpClient + codegen
+      path，透传商用字段，按数据源切换。
     - 反馈/热力/排序（R-S07）与搜索信号注入推荐 Feed（R-S07-5）落地；结果页排序 term-heat 已闭环。
-    - 端到端 /v1/search 真实冒烟（R-S06-S）：stackctl gamma 实例化 search-service，网关 /v1/search 200、/v1/search/feedback 202（证据 artifacts/local-gamma/search_smoke_report.json）。
+    - 端到端 /v1/search 真实冒烟（R-S06-S）：stackctl gamma 实例化 search-service，网关 /v1/search
+      200、/v1/search/feedback 202（证据 artifacts/local-gamma/search_smoke_report.json）。
     - 两阶段商用合同成立：suggest 本地对象即时，result 云侧最终结果不混入本地对象。
-    - 搜索准确性/可重复性/热力推荐闭环具备 T1/T2/T3/T4 证据；真集群 measured 容量和版本落盘仍作为发布阻断项跟踪。
+    - 搜索准确性/可重复性/热力推荐闭环具备 local_contract/local_contract/api_integration/user_acceptance
+      证据；真集群 measured 容量和版本落盘仍作为发布阻断项跟踪。
     boundary_points:
     - chat.* 私有对象 local_only，绝不上云做跨用户召回。
     - location.place 与 entity.homepage 互斥单源，同一地点只出现一次。
     - integration.location_poi 不作为统一 result 对象。
-    evidence:
-      primary:
-      - T1_static_contract
-      - T3_service_contract
-      supporting:
-      - T2_module_interaction
     tests:
       planned:
-      - artifacts/search-load/<prod-sim-or-real-cluster>/search_capacity_report.json
-      - artifacts/search-load/<prod-sim-or-real-cluster>/search_repeatability_multi_replica_report.json
-      - artifacts/stackctl/prod/<run-id>/search_release_verify_report.json
+      - artifact: artifacts/search-load/<prod-sim-or-real-cluster>/search_capacity_report.json
+      - artifact: artifacts/search-load/<prod-sim-or-real-cluster>/search_repeatability_multi_replica_report.json
+      - artifact: artifacts/stackctl/prod/<run-id>/search_release_verify_report.json
       recorded:
-      - quwoquan_service/runtime/search/retrieve_contract_test.go
-      - quwoquan_service/runtime/search/core_test.go
-      - quwoquan_service/runtime/search/sort_stable_test.go
-      - quwoquan_service/services/search-service/tests/search_contract_test.go
-      - quwoquan_service/services/search-service/tests/storage_ttl_contract_test.go
-      - quwoquan_service/services/content-service/internal/application/place_search_projection_test.go
-      - quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
-      - quwoquan_app/test/ui/search/retrieve_request_mapper_test.dart
-      - quwoquan_app/test/ui/search/search_repository_test.dart
-      - quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
-      - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
-      - quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
-      - artifacts/local-gamma/search_smoke_report.json
-      - artifacts/local-gamma/search_signal_t3_report.json
-      - artifacts/local-gamma/search_repeatability_golden_diff.json
-      - artifacts/stackctl/gamma/search_rollback_rehearsal.md
+      - file: quwoquan_service/runtime/search/retrieve_contract_test.go
+      - file: quwoquan_service/runtime/search/core_test.go
+      - file: quwoquan_service/runtime/search/sort_stable_test.go
+      - file: quwoquan_service/services/search-service/tests/search_contract_test.go
+      - file: quwoquan_service/services/search-service/tests/storage_ttl_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/place_search_projection_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
+      - file: quwoquan_app/test/ui/search/retrieve_request_mapper_test.dart
+      - file: quwoquan_app/test/ui/search/search_repository_test.dart
+      - file: quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
+      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - file: quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+      - artifact: artifacts/local-gamma/search_smoke_report.json
+      - artifact: artifacts/local-gamma/search_signal_t3_report.json
+      - artifact: artifacts/local-gamma/search_repeatability_golden_diff.json
+      - artifact: artifacts/stackctl/gamma/search_rollback_rehearsal.md
     status: partial
     notes:
-    - search 域 T2/T4 已 recorded：Flutter search suite 50/50；T4 journey 覆盖本地 suggest、云侧 result、本地对象不进 result、最近搜索、单域降级、整页错误重试和归因链。
-    - 推荐信号真实 Redis 双服务 T3 已证明：发布/消费/投影/RuleScorer 消费链路 recorded（`search_signal_t3_report.json` + search_signal_consumer/runtime recommendation tests）。
-    - 保持 partial 的原因不是功能链路缺口，而是商用发布阻断仍未闭合：R-S06-S-1 真集群 measured 容量、多副本 repeatability；R-S06-S-2 写时增量/backfill 长稳；R-S06-S-3 search-service module/config/backlog 版本落盘与 CI 干净检出。
+    - search 域 local_contract/user_acceptance 已 recorded：Flutter search suite 50/50；user_acceptance
+      journey 覆盖本地 suggest、云侧 result、本地对象不进 result、最近搜索、单域降级、整页错误重试和归因链。
+    - 推荐信号真实 Redis 双服务 api_integration 已证明：发布/消费/投影/RuleScorer 消费链路 recorded（`search_signal_t3_report.json`
+      + search_signal_consumer/runtime recommendation tests）。
+    - 保持 partial 的原因不是功能链路缺口，而是商用发布阻断仍未闭合：R-S06-S-1 真集群 measured 容量、多副本 repeatability；R-S06-S-2
+      写时增量/backfill 长稳；R-S06-S-3 search-service module/config/backlog 版本落盘与 CI 干净检出。
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: da1_local_contract
+        cases:
+        - local_contract.global_search_experience.domain_service.da1.da1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: da1_api_integration
+        cases:
+        - api_integration.global_search_experience.domain_service.da1.da1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: da1_local_contract
+        cases:
+        - local_contract.global_search_experience.domain_service.da1.da1_local_contract
+        envs: *id001
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -1,4 +1,4 @@
-# runtime-media T4 预发演练包
+# runtime-media user_acceptance 预发演练包
 
 ## 目标
 把 `runtime-media` 阶段 2 的“受控手工入口”收敛成可重复执行的预发演练步骤，并形成统一证据口径。

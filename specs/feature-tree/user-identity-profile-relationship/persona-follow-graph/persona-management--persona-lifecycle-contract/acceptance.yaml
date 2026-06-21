@@ -7,32 +7,70 @@ node:
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: persona-follow-graph
 scope:
-  summary: persona management  persona lifecycle contract 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 分身删除/退役守卫、生命周期限制与错误语义的一致性验收范围。
+  in_scope:
+  - lifecycle guard 对 primary / active / last persona / 有历史 persona 的决策
+  - 有归因历史的 persona 只能 retire 不能 delete-empty
+  - retire 后状态、retiredAt 与 isActive 落库一致
+  - retired persona 不可再 activate 或 update
+  out_of_scope:
+  - 分身管理列表的一般编辑与同步建议（归属 `persona-management`）
+  - 群聊、内容、通知等历史归因的大规模压测
 gwt_acceptance:
   GWT1:
-    title: persona management  persona lifecycle contract GWT
+    title: 分身生命周期守卫与退役语义稳定
     given:
-    - 前置条件明确。
+    - 用户至少拥有主分身与一个辅助分身。
+    - 辅助分身可能存在内容、消息、通知或邀请等归因历史。
     when:
-    - 用户或系统动作发生。
+    - 客户端请求 lifecycle guard、delete-empty、retire、activate 或 update。
     then:
-    - 可观察结果符合预期。
+    - primary persona 被 delete/retire 守卫阻断。
+    - 有历史 persona 返回 `retire_instead_of_delete`，delete-empty 返回 conflict。
+    - retire 成功后 persona 进入 retired 态并禁止再次 activate/update。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
+    - user-service lifecycle guard / retire / delete-empty 契约测试通过。
+    - App local_contract 至少验证 retired persona 的管理页呈现与删除按钮抑制。
+    edge_cases:
+    - pg-backed 历史与 mongo fallback 历史都能命中同一守卫语义。
+    - primary guard 优先级高于 active successor guard。
+    - retired persona 再次变更返回结构化错误，不允许静默成功。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
+    performance_points:
+    - lifecycle guard 读取不依赖端侧二次拼装；服务端一次返回 delete/retire 所需决策。
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - 'command: go test ./services/user-service/tests -run Test(GetPersonaLifecycleGuard_HistoryCoverageBySource|GetPersonaLifecycleGuard_ActivePersonaRequiresSuccessor|GetPersonaLifecycleGuard_HistoryRequiresRetire|RetirePersona_PersistsRetiredStatus|DeleteEmptyPersona_HistoryRequiresRetireConflict|RetiredPersona_CannotBeActivatedOrUpdated) -count=1'
+      - quwoquan_app/test/ui/user/widgets/persona_management_page_test.dart
+    status: completed
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: persona_lifecycle
+        cases:
+        - api_integration.user.persona_lifecycle.guard_history_retire_instead_of_delete
+        - api_integration.user.persona_lifecycle.primary_guard
+        - api_integration.user.persona_lifecycle.retire_persists_retired_status
+        - api_integration.user.persona_lifecycle.delete_empty_conflict_when_history_exists
+        - api_integration.user.persona_lifecycle.retired_persona_cannot_activate_or_update
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: persona_management_page
+        cases:
+        - local_contract.user.persona_lifecycle.retired_persona_hides_delete_action
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: persona_lifecycle_metrics
+        cases:
+        - api_integration.user.persona_lifecycle.mongo_history_fallback_metric
+        envs: *id001
+    notes:
+    - 本 story 关注 delete/retire contract；不把一般分身编辑能力混入生命周期守卫范围。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

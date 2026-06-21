@@ -24,6 +24,10 @@ from task.store import (
     resolve_spec,
 )
 from _common.entity_extract import normalize_domain_etype_path
+from _common.image_asset_strategy import (
+    image_asset_strategy_scale_issues,
+    validate_image_asset_strategy,
+)
 from _common.quality_gates import WRITING_INTENTS
 
 # 历史已用但不在 sop/主页 的实体类型（海外/特殊），允许其作为 entityType
@@ -204,6 +208,8 @@ def _content_contract_errors(spec: dict[str, Any], tid: str) -> list[str]:
             )
         if image_angles and per_target_images < 1:
             errors.append("acceptance.requiredAngles 含 image，但 imageWorksPerTarget < 1")
+    errors.extend(validate_image_asset_strategy(effective))
+    errors.extend(image_asset_strategy_scale_issues(effective))
     return errors
 
 

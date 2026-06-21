@@ -57,7 +57,7 @@
   - `03/04/05` 名称与 required-check 语义必须保持稳定。
   - `stackctl` 是环境自动化唯一入口；workflow 只编排，不复制第二套环境逻辑。
   - `prod` 灰度是 `prod` 语义下的 rollout stage，不得再引入独立环境枚举。
-  - `mainline_auto_prod` 只保留高信号阻断链：beta 设备矩阵、gamma readiness/T3/high-signal probes、prod 初始灰度后的只读集成探针。
+  - `mainline_auto_prod` 只保留高信号阻断链：beta 设备矩阵、gamma readiness/api_integration/high-signal probes、prod 初始灰度后的只读集成探针。
   - 自动升 `prod full` 的前提是 auto rollback、SLO gate、stage evidence 与 release-state 一致性先落地。
 
 ## 与父/子节点关系
@@ -76,7 +76,7 @@
 - A1：`main` push 触发单一 workflow，按固定顺序执行 `repo verify/package -> alpha-local -> beta-local -> prod gray-initial -> prod checks -> prod full`（无 `gamma-hosted` 阶段）。
 - A2：`alpha-local` 阶段必须完成环境包、启动与 `stackctl health --scope full`，并落证据产物。
 - A3：`beta-local` 阶段必须完成 `stackctl up/health/inspect` 与 self-hosted beta 设备矩阵，通过后才能进入 gamma。
-- A4：旧 `gamma-hosted` 阶段已退役；其 hosted deploy、readiness、T3 API contract、assistant protocol smoke、chat avatar probe 由 prod `gray-initial` rollout stage 承接，并由 `mainline_auto_prod` 单源描述。
+- A4：旧 `gamma-hosted` 阶段已退役；其 hosted deploy、readiness、api_integration API contract、assistant protocol smoke、chat avatar probe 由 prod `gray-initial` rollout stage 承接，并由 `mainline_auto_prod` 单源描述。
 - A5：`prod initial -> prod checks -> prod full` 默认全自动，不再依赖人工 approval。
 - A6：`prod checks` 或 `prod full` 失败时，workflow 必须自动回滚到上一稳定 `image/config` 并恢复 ready 状态。
 - A7：每个阶段都能输出 `report.json`、`summary.md`、stdout/diagnostics，支持人工排障与 workflow 复用。

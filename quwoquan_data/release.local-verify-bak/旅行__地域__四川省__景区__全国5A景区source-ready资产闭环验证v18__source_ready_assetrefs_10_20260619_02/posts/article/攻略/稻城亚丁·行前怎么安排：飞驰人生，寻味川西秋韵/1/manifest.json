@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "稻城亚丁_planning_consultation",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/稻城亚丁"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:稻城亚丁"
+  ],
+  "tagRefs": [
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "conditionContext": {
+    "region": {
+      "name": "四川省",
+      "label": "四川省"
+    },
+    "entityProfile": {
+      "entityRef": "/entity/地点/景区/稻城亚丁",
+      "regions": [
+        "高原"
+      ],
+      "seasons": [
+        "夏"
+      ],
+      "altitudeMeters": null,
+      "notes": null,
+      "conditionSource": "entityConditionProfile"
+    },
+    "season": {
+      "name": "夏",
+      "label": "夏",
+      "source": "entityProfile"
+    }
+  },
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E7%A8%BB%E5%9F%8E%E4%BA%9A%E4%B8%81",
+    "https://touch.travel.qunar.com/youji/7900763",
+    "https://touch.travel.qunar.com/youji/7868435",
+    "https://touch.travel.qunar.com/youji/7804787",
+    "https://touch.travel.qunar.com/youji/7802584",
+    "https://touch.travel.qunar.com/youji/7751549",
+    "https://touch.travel.qunar.com/youji/7747452",
+    "https://touch.travel.qunar.com/youji/7727639",
+    "https://touch.travel.qunar.com/youji/7709722",
+    "https://touch.travel.qunar.com/youji/7709705",
+    "https://touch.travel.qunar.com/youji/7707732",
+    "https://touch.travel.qunar.com/youji/7702145",
+    "https://touch.travel.qunar.com/youji/7694564",
+    "https://touch.travel.qunar.com/youji/7692230",
+    "https://touch.travel.qunar.com/youji/7690200",
+    "https://touch.travel.qunar.com/youji/7683302",
+    "https://touch.travel.qunar.com/youji/7682462",
+    "https://commons.wikimedia.org/wiki/File:DCY_Airport.jpg",
+    "https://commons.wikimedia.org/wiki/File:DCY_China_Southern.jpg",
+    "https://commons.wikimedia.org/wiki/File:%E4%BB%99%E4%B9%83%E6%97%A5%E5%B3%B0_2016_%E7%A8%BB%E5%9F%8E%E4%BA%9A%E4%B8%81_%E5%88%98%E7%A5%96%E8%B5%9B_-_panoramio.jpg"
+  ],
+  "assets": [
+    {
+      "assetId": "稻城亚丁_cover_3_2796748b",
+      "fileName": "稻城亚丁_cover_3_2796748b.jpg",
+      "caption": "仙乃日峰 2016 稻城亚丁 刘祖赛",
+      "imageLayout": "fullWidth",
+      "sha256": "sha256:0f3fb3db9b4a2fff8c208ed10b9f7d890d1afcacb667283e8077ddd1fe8e8c5a",
+      "sourceAssetRef": "entities/地点/景区/稻城亚丁/1.download/sources/13.article_qunar_base_11/assets/001_article_qunar_base_11_1.jpg",
+      "sourceRef": "entities/地点/景区/稻城亚丁/1.download/sources/13.article_qunar_base_11/source.md",
+      "alignmentEvidence": "仙乃日峰 2016 稻城亚丁 刘祖赛",
+      "sourceCollectionId": "source_image:稻城亚丁:20c912d2df44cf8f",
+      "creator": "liuzusai刘祖赛",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E4%BB%99%E4%B9%83%E6%97%A5%E5%B3%B0_2016_%E7%A8%BB%E5%9F%8E%E4%BA%9A%E4%B8%81_%E5%88%98%E7%A5%96%E8%B5%9B_-_panoramio.jpg",
+      "license": "CC BY 3.0",
+      "termsUrl": "https://creativecommons.org/licenses/by/3.0",
+      "licenseSnapshot": "CC BY 3.0 recorded on Wikimedia Commons file page",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E4%BB%99%E4%B9%83%E6%97%A5%E5%B3%B0_2016_%E7%A8%BB%E5%9F%8E%E4%BA%9A%E4%B8%81_%E5%88%98%E7%A5%96%E8%B5%9B_-_panoramio.jpg",
+      "usageScope": "app_publish"
+    }
+  ],
+  "template": "journal",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/稻城亚丁/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/稻城亚丁/1.download/sources/13.article_qunar_base_11/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "稻城亚丁·行前怎么安排：飞驰人生，寻味川西秋韵",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "稻城亚丁",
+    "routeEntities": [
+      "稻城亚丁"
+    ],
+    "beats": [
+      "先从 稻城亚丁 进入主线。",
+      "顺便说一下，卡子拉山旅游服务区是沿路最好的观景台，虽然收费10元，但里面的服务设施齐全方便，价有所值",
+      "“此生必驾318”，沿路的旅游地名标和车贴告诉驴友们，G318沿路的风景，是人生中最值得自驾游的线路",
+      "2026年4月，稻城亚丁因摆渡车线路不科学、价格不合理、排队时间长、服务态度差等问题，被中华人民共和国文化和旅游部批评",
+      "直接到了香格里拉镇，弄得大家都好累"
+    ],
+    "sourceNote": "稻城亞丁景区（藏語：འདབ་པའི་ཉི་བརྟེན་མཛེས་ལྗོངས་ཁུལ་，威利转写：'dab pa Nyi brten mdzes ljongs khul），常被称为稻城亚丁，其中亚丁为藏語，意為「向陽之地」，是位於中國四川省甘孜藏族自治州稻城县的自然风景区。主體部分是坐落理塘河上游贡嘎银沟两岸、三座完全隔開，呈「品」字形排列的雪峰，三座雪峰分號。",
+    "relatedTopics": [
+      "稻城亚丁",
+      "顺便说一下，卡子拉山旅游服务区是沿路最好的观景台，虽然收费10元，但里面的服务设施齐全方便，价有所值",
+      "“此生必驾318”，沿路的旅游地名标和车贴告诉驴友们，G318沿路的风景，是人生中最值得自驾游的线路",
+      "2026年4月，稻城亚丁因摆渡车线路不科学、价格不合理、排队时间长、服务态度差等问题，被中华人民共和国文化和旅游部批评",
+      "直接到了香格里拉镇，弄得大家都好累"
+    ],
+    "mustIncludeFacts": [
+      "稻城亚丁 来源提及 行前怎么安排",
+      "稻城亚丁 图文底稿来自 飞驰人生，寻味川西秋韵；文章源图必须来自同一底稿并且全批独占"
+    ]
+  },
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "sourceBatchId": "source_ready_assetrefs_10_20260619_02",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "journal",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T21:09:02.020353+00:00",
+  "updatedAt": "2026-06-19T21:55:26.589324+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:稻城亚丁"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "四川省"
+    }
+  ],
+  "articleMarkdownDigest": "sha256:cba028319b621e17744cb50f6426c0e737ea34299d1bef0e122428c9aa225361"
+}

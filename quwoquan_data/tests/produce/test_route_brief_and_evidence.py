@@ -89,6 +89,26 @@ def test_extract_source_evidence_recognizes_scenic_appreciation_as_like():
     assert any("风景秀丽" in sentence or "峨眉天下秀" in sentence for sentence in likes)
 
 
+def test_extract_source_evidence_uses_scenic_alias_for_mainline():
+    evidence = extract_source_evidence(
+        "五台山国家公园位于忻州五台县东北隅。五台山属有华北屋脊之称的太行山系北端山峰群。",
+        entity_name="五台山风景名胜区",
+    )
+
+    assert evidence["mainlineEvidence"]
+    assert any("五台山国家公园" in sentence for sentence in evidence["mainlineEvidence"])
+
+
+def test_extract_source_evidence_folds_common_zh_variants_for_mainline():
+    evidence = extract_source_evidence(
+        "雲台山位於河南焦作修武，地處太行山南麓，是以峽谷地貌與水體景觀為特色的景區。",
+        entity_name="云台山－神农山－青天河风景区",
+    )
+
+    assert evidence["mainlineEvidence"]
+    assert any("雲台山" in sentence for sentence in evidence["mainlineEvidence"])
+
+
 def test_route_workflow_generates_real_review_green():
     task_id = "route_workflow_test"
     batch_id = "pilot"

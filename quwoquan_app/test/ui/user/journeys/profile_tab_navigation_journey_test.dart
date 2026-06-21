@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
@@ -15,13 +16,16 @@ import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/pages/my_intersection_inbox_page.dart';
+import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
@@ -133,6 +137,7 @@ class _JourneyIntersectionRepository implements IntersectionRepository {
     String? filter,
     String? sourceRef,
     String? timeBucket,
+    String? cursor,
     int limit = 50,
   }) async {
     return <IntersectionReason>[
@@ -140,7 +145,6 @@ class _JourneyIntersectionRepository implements IntersectionRepository {
         dimension: 'relationship',
         intersectionClass: 'fact',
         intersectionId: 'ix_journey_rel',
-        relationKind: 'person',
         objectKind: 'person',
         displayName: '林清越',
         primaryText: '你和林清越等4位用户都关注「黄金投资圈」',
@@ -163,7 +167,10 @@ class _JourneyIntersectionRepository implements IntersectionRepository {
   }) async => const <IntersectionReason>[];
 }
 
-Widget _scopedApp({ProfileMode mode = ProfileMode.mine}) {
+Widget _scopedApp({
+  ProfileMode mode = ProfileMode.mine,
+  List<Override> extraOverrides = const <Override>[],
+}) {
   return ProviderScope(
     overrides: [
       userProfileRepositoryProvider.overrideWithValue(
@@ -173,6 +180,7 @@ Widget _scopedApp({ProfileMode mode = ProfileMode.mine}) {
         _NotFollowingRelationshipCapability(),
       ),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
+      ...extraOverrides,
     ],
     child: MaterialApp(
       builder: (context, child) =>
@@ -227,7 +235,12 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester, count: 20);
-      expect(find.text(UITextConstants.profileTabCreations), findsOneWidget);
+      // 摘要区变高后一级 Tab 为首屏外 lazy sliver，先滚动构建再断言。
+      await revealProfilePrimaryTabs(tester);
+      expect(
+        _profileSegment(UITextConstants.profileTabCreations),
+        findsOneWidget,
+      );
     });
 
     testWidgets('旅程 A2：圈子进入统计区而非一级 Tab', (tester) async {
@@ -250,42 +263,39 @@ void main() {
       await _pumpFrames(tester);
       await tapProfilePrimaryTab(tester, '互动');
       await _pumpFrames(tester, count: 20);
+
+      // 方向切换收敛到一级 Tab 右侧：两个选项同时可见，直接点选即可切换，
+      // 不再挤占互动二级分类，也不再弹出底部工具栏。
       expect(
         find.text(UITextConstants.profileInteractionDirectionReceived),
         findsOneWidget,
       );
-
-      await tester.tap(
-        find.byKey(
-          const ValueKey<String>('profile-interaction-direction-entry'),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(
-        find.text(UITextConstants.profileInteractionDirectionSent).last,
-      );
-      await _pumpFrames(tester, count: 10);
       expect(
         find.text(UITextConstants.profileInteractionDirectionSent),
         findsOneWidget,
       );
 
+      InteractionDirection currentDirection() {
+        return ProviderScope.containerOf(
+              tester.element(find.byType(ProfileShell)),
+            )
+            .read(profileNotifierProvider('nature_photographer'))
+            .interactionDirection;
+      }
+
+      expect(currentDirection(), InteractionDirection.received);
+
       await tester.tap(
-        find.byKey(
-          const ValueKey<String>('profile-interaction-direction-entry'),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(
-        find.text(UITextConstants.profileInteractionDirectionReceived).last,
+        find.text(UITextConstants.profileInteractionDirectionSent),
       );
       await _pumpFrames(tester, count: 10);
-      expect(
+      expect(currentDirection(), InteractionDirection.sent);
+
+      await tester.tap(
         find.text(UITextConstants.profileInteractionDirectionReceived),
-        findsOneWidget,
       );
+      await _pumpFrames(tester, count: 10);
+      expect(currentDirection(), InteractionDirection.received);
     });
   });
 
@@ -344,15 +354,24 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_scopedApp());
-      await tester.pumpAndSettle(const Duration(seconds: 5));
-      // 摘要区变高后创作内容不再保证首屏，滚动至作品标题可见再断言。
-      await tester.scrollUntilVisible(
-        find.text('光影的节奏'),
-        160,
-        scrollable: find.byType(Scrollable).first,
-        maxScrolls: 40,
+      // 内容查询快照默认走 SharedPreferences 持久化，widget 测试无 SP mock 时
+      // ensureHydrated 永不收敛，会卡死 loadProfile 的并发拉取；本用例需要真实创作
+      // 数据，单独关闭该缓存的持久化以让 Repository 帖子可加载。
+      await tester.pumpWidget(
+        _scopedApp(
+          extraOverrides: <Override>[
+            contentQuerySnapshotStoreProvider.overrideWithValue(
+              ContentQuerySnapshotStore(persistToPreferences: false),
+            ),
+          ],
+        ),
       );
+      // 图片占位动画会让 pumpAndSettle 永不收敛，统一用定帧泵帧。
+      await _pumpFrames(tester, count: 20);
+      // 创作为默认一级 Tab；摘要区变高后内容首屏外，先滚动构建一级 Tab 与其下
+      // 创作内容（与 E3 互动同源的 reveal 模式），再断言 Repository 帖子可见。
+      await revealProfilePrimaryTabs(tester);
+      await _pumpFrames(tester, count: 20);
       expect(find.text('光影的节奏'), findsAtLeastNWidgets(1));
     });
 
@@ -365,7 +384,13 @@ void main() {
       await _pumpFrames(tester);
       await tester.tap(find.text(UITextConstants.circleLikes));
       await _pumpFrames(tester, count: 20);
-      expect(find.text('赞'), findsAtLeastNWidgets(1));
+      // 切到互动后，一级 Tab 与互动内容仍为首屏外 lazy sliver，滚动构建再断言。
+      await revealProfilePrimaryTabs(tester);
+      await _pumpFrames(tester, count: 10);
+      expect(
+        find.text(UITextConstants.interactionSubLikes),
+        findsAtLeastNWidgets(1),
+      );
       expect(
         find.text(UITextConstants.profileInteractionDirectionReceived),
         findsOneWidget,
@@ -391,6 +416,10 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester, count: 20);
+      // 一级 Tab 为首屏外 lazy sliver，先滚动构建；摘要区为整段 sliver 仍同时构建，
+      // 滚动后仍可测量各模块相对纵向次序。
+      await revealProfilePrimaryTabs(tester);
+      await _pumpFrames(tester, count: 5);
       expect(
         find.byKey(const ValueKey<String>('profile-shell-profile-card')),
         findsOneWidget,
@@ -532,7 +561,12 @@ void main() {
 
       await tester.pumpWidget(_scopedApp());
       await _pumpFrames(tester, count: 20);
-      expect(find.text(UITextConstants.profileTabCreations), findsOneWidget);
+      // 摘要区变高后一级 Tab 为首屏外 lazy sliver，先滚动构建再断言。
+      await revealProfilePrimaryTabs(tester);
+      expect(
+        _profileSegment(UITextConstants.profileTabCreations),
+        findsOneWidget,
+      );
     });
 
     testWidgets('旅程 F3：一级 tab 吸顶后切换不会把整页头部重置回内容区', (tester) async {
@@ -544,7 +578,7 @@ void main() {
       await _pumpFrames(tester, count: 20);
 
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester, count: 12);
 
       final summaryFinder = find.byKey(
         const ValueKey<String>('profile-shell-summary-card'),
@@ -555,9 +589,21 @@ void main() {
           ? _pinnedProfileSegment('互动')
           : _profileSegment('互动');
       await tester.tap(interactionTab);
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester, count: 12);
+      final primaryTabs = _pinnedProfileSegment('互动').evaluate().isNotEmpty
+          ? find.byKey(
+              const ValueKey<String>('profile-shell-primary-tabs-pinned'),
+            )
+          : find.byKey(
+              const ValueKey<String>('profile-shell-primary-tabs-inline'),
+            );
       expect(
-        find.text(UITextConstants.profileInteractionDirectionReceived),
+        find.descendant(
+          of: primaryTabs,
+          matching: find.text(
+            UITextConstants.profileInteractionDirectionReceived,
+          ),
+        ),
         findsOneWidget,
       );
       expect(tester.getTopLeft(summaryFinder).dy, closeTo(summaryBefore, 8));
@@ -586,7 +632,12 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
-      expect(find.text(UITextConstants.profileTabCreations), findsOneWidget);
+      // 空用户数据下仍应正常渲染：滚动构建首屏外一级 Tab 并断言不崩溃。
+      await revealProfilePrimaryTabs(tester);
+      expect(
+        _profileSegment(UITextConstants.profileTabCreations),
+        findsOneWidget,
+      );
     });
   });
 

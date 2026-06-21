@@ -35,16 +35,26 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/content/post/projections/work_browser_item.yaml
     - quwoquan_service/contracts/metadata/content/post/ui_config.yaml#article_dark_paper_themes
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer_article_magazine_cover.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer_article_magazine_cover.contract
+        envs: *id001
+    notes: []
   GWT2:
     title: 翻书动画纸张材质同源
     given:
@@ -61,17 +71,26 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - make verify-app-pageflip-back-mainline
-      - flutter test test/ui/content/article_reader
+      - command: make verify-app-pageflip-back-mainline
+      - command: flutter test test/ui/content/article_reader
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer_article_magazine_cover.gwt2_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer_article_magazine_cover.contract
+        envs: *id001
+    notes: []
   GWT3:
     title: Markdown 实体标签进入实体主页
     given:
@@ -80,7 +99,7 @@ gwt_acceptance:
     - 用户点击正文实体标签。
     then:
     - 标签以行内样式显示。
-    - "点击进入 `AppRoutePaths.homepageDetail(id: 'homepage_sight_west_lake')`。"
+    - '点击进入 `AppRoutePaths.homepageDetail(id: ''homepage_sight_west_lake'')`。'
     done_when:
     - codec 与 widget/navigation 测试通过。
     edge_cases:
@@ -89,17 +108,26 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/content/post/fields.yaml#entityRefs
     - quwoquan_service/contracts/metadata/_shared/app_routes.yaml#homepageDetail
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
       planned:
-      - flutter test test/ui/content/markdown/article_markdown_codec_test.dart
-      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - command: flutter test test/ui/content/markdown/article_markdown_codec_test.dart
+      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer_article_magazine_cover.contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer_article_magazine_cover.gwt3_local_contract
+        envs: *id001
+      supporting: []
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -118,7 +118,7 @@ class UITextConstants {
   static const String webPcSearchHintFeatured = '搜索精品作品、视频、图文';
   static const String webPcSearchHintCreate = '搜索素材、草稿、发布模板';
   static const String webPcSearchHintMessages = '搜索联系人、讨论、消息';
-  static const String webPcSearchHintProfile = '搜索我的内容、足迹、互动';
+  static const String webPcSearchHintProfile = '搜索我的内容、浏览、互动';
   static const String webPcWelcomeLogin = '登录';
   static const String webPcWelcomePublish = '发布作品';
   static const String webPcWelcomeHeadline = '以兴趣为半径，画出我们的交集。';
@@ -522,25 +522,7 @@ class UITextConstants {
 
   static const String welcomeMainSlogan = '遇见同趣，绽放热爱';
   static const String welcomeButtonLabel = '开启发现之旅';
-  static const String welcomeStartupLoadingTitle = '正在进入趣我圈';
-  static const String welcomeStartupStageAuth = '恢复账号状态';
-  static const String welcomeStartupStageCloud = '连接云端并同步配置';
-  static const String welcomeStartupStageHome = '准备首页内容';
-  static const String welcomeStartupPreparingAuth =
-      '确认账号状态后，就能直接接上你的首页、消息和推荐。';
-  static const String welcomeStartupPreparingCloud =
-      '正在初始化连接与配置，让进入首页后的内容和入口一次到位。';
-  static const String welcomeStartupPreparingHome =
-      '正在把首页首屏内容准备好，进入应用后会更顺滑。';
-  static const String welcomeStartupSlowHint =
-      '当前网络比平时慢一些，我们还在继续准备首页。';
-  static const String welcomeStartupRetryHint =
-      '首页准备遇到一点波动，重新准备后会继续留在欢迎页等待就绪。';
-  static const String welcomeStartupRetry = '重新准备';
-  static const String welcomeLoginPromptTitle = '登录后，趣我圈更懂你的热爱';
-  static const String welcomeLoginPromptSubtitle = '也可以先看看，稍后在「未登录」页面继续登录。';
-  static String welcomeLoginSkipWithCountdown(int seconds) =>
-      '先不登录 · $seconds秒后进入';
+  static const String startupStillStartingInline = '启动中，马上进入';
 
   static const String assistantWhisperSignature = '小趣';
 
@@ -585,24 +567,65 @@ class UITextConstants {
   static const String shareTargetMoments = '朋友圈';
   static const String loadFailed = '加载失败';
   static const String temporarilyUnavailable = '暂时连不上';
-  static const String contentTemporarilyUnavailable = '内容暂时打不开';
+  static const String contentTemporarilyUnavailable = workOpenFailedTitle;
   static const String contentNotLoadedYet = '这里还没加载出来';
   static const String checkNetworkAndTryAgain = '检查网络后再试一次，或稍后回来看看。';
   static const String contentLoadSoftFailed = '服务暂时不可用，稍后自动恢复后再试';
-  static const String refreshSoftFailed = '网络不太稳定，刚刚没有刷新成功。';
+  static const String refreshSoftFailed = refreshFailedRetained;
   static const String refreshTimeoutSoftFailed = '这次刷新有点慢，稍后再试。';
-  static const String appendSoftFailed = '后面的内容暂时没拉到，上拉再试。';
+  static const String appendSoftFailed = appendFailedRetry;
   static const String appendTapToRetry = '加载更多没成功，轻点重试';
+  static String pageLoadingA11y(String surface) => '正在加载$surface';
+  static const String homeCacheFallback = '网络不太稳，先看看上次刷到的首页。';
+  static const String profileCacheFallback = '网络不太稳，先显示上次看到的主页。';
+  static const String chatListCacheFallback = '网络不太稳，先显示本机最近的聊天。';
+  static const String chatListLoadFailedTitle = '聊天列表没加载出来';
+  static const String chatListLoadFailedMessage = '检查网络后再试一次。';
+  static const String refreshFailedRetained = '这次刷新没成功，页面先保持不变。';
+  static const String appendFailedRetry = '后面的内容没加载出来，点一下再试。';
+  static const String appendFailedTitle = '后面没加载出来';
+  static const String pageLoadFailedTitle = '这页没加载出来';
+  static const String pageLoadFailedMessage = '检查网络后再试一次。';
+  static const String searchUnavailableTitle = '搜索没连上';
+  static const String searchUnavailableMessage = '请稍后再搜一次。';
+  static const String searchEmptyResult = '没有找到相关结果';
+  static const String searchXiaoquLoading = '小趣正在整理搜索方向';
+  static const String searchNoNetworkReferences = '暂时没有找到可引用的网络结果';
+  static const String searchNoAppResults = '没有找到相关应用内结果';
+  static const String searchNoIntersectionResults = '还没有找到和你相关的交集';
+  static const String searchRelatedTitle = '相关搜索';
+  static const String searchRelatedEmpty = '暂无相关搜索词';
+  static const String searchPartialGroupFailed = '部分搜索结果没加载出来，已继续展示其它结果。';
+  static const String commentLoadFailedTitle = '评论没加载出来';
+  static const String commentDeeplinkTargetMissing = '没找到这条评论，可能已被删除';
+  static String sectionLoadFailedTitle(String section) => '$section没加载出来';
+  static const String sectionLoadFailedTitleDefault = '这里没加载出来';
+  static const String circleDiscussionLoadFailedTitle = '讨论没加载出来';
+  static const String imageLoadFailed = '图片没加载出来';
+  static const String videoLoadFailed = '视频没加载出来';
+  static const String workOpenFailedTitle = '这个作品打不开';
+  static const String chatOpenFailedTitle = '这个聊天打不开';
+  static const String chatOpenFailedMessage = '可能已被删除，或你暂时不能查看。';
+  static const String userProfileLoadFailedTitle = '用户资料没加载出来';
+  static const String homepageLoadFailedTitle = '主页没加载出来';
+  static const String circleLoadFailedTitle = '圈子没加载出来';
+  static const String permissionRequiredTitle = '需要开启权限';
+  static const String validationCheckFields = '请检查填写内容后重试';
+  static const String loginThenRetry = '请先登录后再试';
+  static const String rateLimitedRetryLater = '操作太频繁，请稍后重试';
+  static const String operationFailedRetry = '操作失败，请稍后重试';
+  static const String submitNotCompleted = '提交未完成';
+  static const String checkFieldsTitle = '请检查填写内容';
   static const String tryAgain = '再试一次';
-  static const String videoPlaybackFailed = '视频暂时没加载出来';
+  static const String videoPlaybackFailed = videoLoadFailed;
   static const String back = '返回';
   static const String gotIt = '我知道了';
   static const String loginToContinue = '登录后继续';
-  static const String contentUnavailable = '内容不可用了';
-  static const String contentUnavailableReason = '可能已被删除或暂时无法查看。';
+  static const String contentUnavailable = '这个作品不可用了';
+  static const String contentUnavailableReason = '可能已被删除或暂时打不开。';
   static const String homepageInfoUnavailableTitle = '主页暂不可用';
   static const String userInfoUnavailableTitle = '用户暂不可用';
-  static const String conversationInfoUnavailableTitle = '会话暂不可用';
+  static const String conversationInfoUnavailableTitle = chatOpenFailedTitle;
   static const String report = '举报';
   static const String profileBlockUser = '拉黑';
   static const String profileBlockConfirmTitle = '确认拉黑该用户？';
@@ -619,7 +642,7 @@ class UITextConstants {
   static const String profileImpactTitleOther = 'TA帮助了很多人';
   static const String profileImpactSubtitleMine = '我的内容真实帮到了谁';
   static const String profileImpactSubtitleOther = 'TA的内容真实帮到了谁';
-  static const String profileImpactEmptyMine = '发布内容后，这里会显示我帮到了谁';
+  static const String profileImpactEmptyMine = profileInteractionEmptyGuidance;
   static const String profileShareHomepage = '分享主页';
   static const String shareComingSoon = '主页分享暂不可用';
   static const String notInterested = '不感兴趣';
@@ -650,19 +673,36 @@ class UITextConstants {
   static const String noComment = '暂无评论';
   static const String replyAction = '回复';
   static const String commentAuthorBadge = '作者';
-  static const String commentSortRecommended = '默认';
+  static const String commentPinnedBadge = '置顶';
+  static const String commentAuthorLikedBadge = '作者赞过';
+  static const String commentPinAction = '置顶';
+  static const String commentUnpinAction = '取消置顶';
+  static const String commentPinnedToast = '已置顶';
+  static const String commentUnpinnedToast = '已取消置顶';
+  static const String commentPinForbidden = '仅内容作者可置顶评论';
+  static const String commentSortRecommended = '综合';
   static const String commentSortMostLiked = '最多赞';
+  static const String commentSortMenuSemanticLabel = '评论排序方式';
   static const String commentDislike = '点踩';
   static const String commentExpandMoreReplies = '展开更多回复';
   static const String commentAttachImage = '图片';
   static const String commentAttachmentLimitReachedTemplate = '最多添加 %s 张图片';
   static const String commentMention = '@';
   static const String commentNewCommentsNotice = '有新评论，点击刷新';
+
+  /// 评论计数可解释增量通知（较进入时）：仅新增 / 仅删除 / 同时变化。
+  /// 第一个 %s = 新增条数，第二个 %s = 删除条数；末尾「点击刷新」与通用通知一致。
+  static const String commentCountsDeltaCreatedNoticeTemplate =
+      '较进入时新增 %s 条评论，点击刷新';
+  static const String commentCountsDeltaDeletedNoticeTemplate =
+      '较进入时删除 %s 条评论，点击刷新';
+  static const String commentCountsDeltaBothNoticeTemplate =
+      '较进入时新增 %s 条 / 删除 %s 条评论，点击刷新';
   static const String profileCommentsTabSent = '我发出的';
   static const String profileCommentsTabReceived = '我收到的';
   static const String profileCommentViewOriginal = '查看原内容';
   static const String profileCommentReplyInContext = '继续回复';
-  static const String profileCommentOriginalUnavailable = '原内容暂不可见';
+  static const String profileCommentOriginalUnavailable = '原作品暂时看不了';
   static const String commentReportSubmitted = '举报已提交';
 
   /// 评论区标题：共 N 条评论。
@@ -1290,6 +1330,8 @@ class UITextConstants {
 
   /// 身份/分身（1:1 对应 PersonaSwitcher.tsx）
   static const String personaManage = '管理分身';
+  static const String personaSwitchProfile = '切换分身';
+  static const String personaDefaultOnlyHint = '为不同兴趣创建分身，记录和互动会更清晰';
   static const String personaPrimary = '主分身';
   static const String personaCreate = '新增分身';
   static const String personaCreateTitle = '创建分身';
@@ -1328,8 +1370,38 @@ class UITextConstants {
   /// 我的主页统计与子页（关注数用 follow，此处为统计栏标题）
   static const String profileEditLabel = '编辑资料';
   static const String profilePersonasLabel = '分身管理';
+  static const String profileUploadAvatar = '上传头像';
+  static const String profileUploadCover = '添加封面';
+  static const String profileChangeAvatar = '更换头像';
+  static const String profileChangeCover = '更换封面';
+  static const String profileAvatarNoun = '头像';
+  static const String profileCoverNoun = '封面';
+  static const String profileEmptyBioPrompt = '添加一句简介，让同好更快认识你并关注你';
+  static const String profileEmptyTagsPrompt = '添加身份标签，让同好更快找到你';
+
+  /// 编辑资料页（与我的主页空态文案保持一致）。
+  static const String editProfileMediaSectionHeader = '头像与封面';
+  static const String editProfileInfoSectionHeader = '个人资料';
+  static const String editProfileNicknameLabel = '昵称';
+  static const String editProfileNicknamePlaceholder = '填写昵称';
+  static const String editProfileBioLabel = '简介';
+  static const String editProfileSaveAction = '保存';
+  static const String editProfileCancelAction = '取消';
+  static const String editProfileSavedToast = '资料已更新';
+  static const String editProfileSaveFailedTitle = '资料保存未完成';
+  static const String editProfileDiscardTitle = '放弃修改？';
+  static const String editProfileDiscardMessage = '你有尚未保存的改动，离开后将不会保存。';
+  static const String editProfileDiscardConfirm = '放弃修改';
+  static const String editProfileKeepEditing = '继续编辑';
+  static const String profileIntersectionEmptyGuidance =
+      '多关注感兴趣的人、圈子和地点，系统会帮你发现更多真实交集';
+  static const String profileInteractionEmptyGuidance = '发布记录、点赞和评论，会让更多同好看见你';
+  static const String profileBrowseHistory = '浏览历史';
   static const String profileDirectMessage = '私信';
   static const String profileTabCreations = '记录';
+  static const String profileIntersectionImpactTitle = '交集与影响力';
+  static const String profileTabIntersection = '交集';
+  static const String profileTabImpact = '影响力';
 
   /// 主页统计行列名（记录 / 粉丝）。关注复用 [follow]，获赞复用 [circleLikes]。
   static const String profileStatRecords = '记录';
@@ -1340,6 +1412,7 @@ class UITextConstants {
   static String profileRecordsTotal(int count) => '共有 $count 条记录';
   static const String profileTabCircles = '圈子';
   static const String profileTabInteraction = '互动';
+  static const String profileTabFootprint = myFootprint;
   static const String profileTabLifestyle = '生活';
   static const String lifestyleSubFootprint = '足迹';
   static const String lifestyleSubSoul = '书影音';
@@ -1366,18 +1439,49 @@ class UITextConstants {
   static const String profileCreationEmptyTextMine = '还没有文字内容';
   static const String profileCreationEmptyTextOther = 'TA还没有文字内容';
   static const String interactionSubAll = '全部';
-  static const String interactionSubLikes = '赞';
+  static const String interactionSubLikes = '点赞';
   static const String interactionSubComments = '评论';
   static const String interactionSubShares = '转发';
+  static const String interactionSubViews = '浏览';
+  static const String interactionSubVisitors = '访客';
+  static const String profileInteractionViewReceivedText = '看过你的主页';
+  static const String profileInteractionViewSentText = '你看过这个主页';
+  static const String profileInteractionEmptyVisitors = '还没有访客，发布记录后会更容易被同好发现';
+  static const String profileInteractionEmptyBrowseHistory =
+      '你看过的主页会出现在这里，方便回访';
   static const String profileInteractionDirectionTitle = '互动方向';
   static const String profileInteractionDirectionReceived = '收到';
-  static const String profileInteractionDirectionSent = '发出';
+  static const String profileInteractionDirectionSent = '发起';
   static const String profileInteractionOriginalUnavailable = '原文已失效';
   static const String profileInteractionPreviewUnavailable = '无法预览';
+  static const String profileInteractionPreviewLoading = '加载中';
+  static const String profileInteractionPreviewLoadFailed = '封面加载失败';
   static const String profileInteractionEmpty = '暂无互动';
   static const String profileInteractionEmptyLikes = '暂无点赞记录';
   static const String profileInteractionEmptyComments = '暂无评论记录';
   static const String profileInteractionEmptyShares = '暂无转发记录';
+  static const String profileInteractionEmptyViews = '暂无浏览记录';
+
+  // 我的主页·互动（received）小红书式内联动作：
+  // 点赞类活动 → 谢谢 / 私信；评论类活动 → 赞 / 回复评论。
+  static const String profileInteractionThank = '谢谢';
+  static const String profileInteractionThanked = '已感谢';
+  static const String profileInteractionLikeComment = '赞';
+  static const String profileInteractionCommentLiked = '已赞';
+  static const String profileInteractionReplyComment = '回复评论';
+  static const String profileInteractionReplyHint = '回复这条评论…';
+  static const String profileInteractionReplySubmit = '回复';
+
+  /// 私信入口预置感谢私信内容（私信「谢谢点赞」）。
+  static const String profileInteractionThanksLikeMessage = '谢谢点赞🙏';
+
+  /// 内联动作反馈（toast）。
+  static const String profileInteractionThanksAcknowledged = '已表达感谢';
+  static const String profileInteractionDirectMessageSent = '私信已发送';
+  static const String profileInteractionDirectMessageFailed = '私信发送失败，请稍后再试';
+  static const String profileInteractionReplySentToast = '回复已发送';
+  static const String profileInteractionReplyFailed = '回复发送失败，请稍后再试';
+  static const String profileInteractionLikeFailed = '操作失败，请稍后再试';
   static const String profileGreet = '打招呼';
   static const String profileSubAccountManagement = '子账号管理';
   static const String profileSubAccountDeleteTitle = '删除子账号';

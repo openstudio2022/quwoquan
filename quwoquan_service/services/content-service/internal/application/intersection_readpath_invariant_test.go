@@ -103,7 +103,7 @@ func TestIntersectionService_ReadPathZeroSynchronousScoring(t *testing.T) {
 	if _, err := svc.Summary(ctx, "viewer1"); err != nil {
 		t.Fatalf("summary: %v", err)
 	}
-	if _, err := svc.List(ctx, "viewer1", "", 10); err != nil {
+	if _, _, _, err := svc.List(ctx, "viewer1", IntersectionListQuery{Limit: 10}); err != nil {
 		t.Fatalf("list: %v", err)
 	}
 	if got := atomic.LoadInt32(&src.affinityCalls); got != 1 {

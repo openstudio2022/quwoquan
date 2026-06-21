@@ -3662,6 +3662,24 @@ abstract class AppLocalizations {
   /// **'展开 {count} 条回复'**
   String expandRepliesTemplate(int count);
 
+  /// Expand more replies button text after the first reply expansion
+  ///
+  /// In zh, this message translates to:
+  /// **'展开更多回复'**
+  String get expandMoreReplies;
+
+  /// Show the full text of a folded long comment
+  ///
+  /// In zh, this message translates to:
+  /// **'展开全文'**
+  String get expandFullText;
+
+  /// Collapse expanded replies back to preview in comment thread
+  ///
+  /// In zh, this message translates to:
+  /// **'收起'**
+  String get collapseReplies;
+
   /// Reply-to prefix between usernames in comment thread (with spaces)
   ///
   /// In zh, this message translates to:

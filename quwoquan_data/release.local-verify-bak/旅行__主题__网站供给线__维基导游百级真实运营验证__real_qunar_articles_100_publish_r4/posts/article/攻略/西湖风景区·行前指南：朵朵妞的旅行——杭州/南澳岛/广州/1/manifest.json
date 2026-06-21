@@ -1,0 +1,155 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_5bd05175c8101c11",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/西湖风景区"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:西湖风景区"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/西湖风景区",
+      "reason": "no_condition_profile; uses region/season menu"
+    },
+    "region": {
+      "name": "沿海/海岛",
+      "label": "沿海/海岛",
+      "source": "site_candidate_evidence",
+      "evidenceTerms": [
+        "台风"
+      ],
+      "evidenceRef": "entities/地点/景区/西湖风景区/1.download/sources/44.qunar_guide_candidate_5bd05175c8101c11/source.md"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7872890",
+    "https://touch.travel.qunar.com/youji/7885058",
+    "https://touch.travel.qunar.com/youji/7874868",
+    "https://touch.travel.qunar.com/youji/7879641",
+    "https://touch.travel.qunar.com/youji/7871883",
+    "https://touch.travel.qunar.com/youji/7904227",
+    "https://touch.travel.qunar.com/youji/7898781",
+    "https://touch.travel.qunar.com/youji/7880186"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "claude-4.6-opus-high-thinking",
+  "citedSourceRefs": [
+    "entities/地点/景区/西湖风景区/1.download/sources/44.qunar_guide_candidate_5bd05175c8101c11/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "西湖风景区·行前指南：朵朵妞的旅行——杭州/南澳岛/广州",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "西湖风景区",
+    "routeEntities": [
+      "西湖风景区"
+    ],
+    "beats": [
+      "先从 西湖风景区 进入主线。",
+      "所以建议提前值机，我们时间刚好，最后都没有位置了，两个人分开坐了",
+      "这个灯光秀，周末有两场，包括周五是8点和9点半，我一直以为是8:30 ，哎错过了，然后等到了9:30 ，真的值得一看，满山都布置了灯光，随着潮汕的民宿音乐变化，边上一个10个月大的宝宝也跟着手舞足蹈的",
+      "和湖光山色相伴，自然也不会觉得累",
+      "西湖游，重点在休闲，所以不用一天赶十个景点，也不用走的多快，走走停停的才有休闲的感觉"
+    ],
+    "sourceNote": "用周末48小时去潮汕吧,2026汕头游记,汕头旅游/自助游/自由行/游玩攻略-【去哪儿攻略】\n翠翠... 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n用周末48小时去潮汕吧\n翠翠与闰...\n2024/11/11出发\n人物\n情侣\n玩法\n人均\n2850元\n前言\n说说这次旅行\n潮汕，11月份随手看了下机票，好便宜，去一趟吧。印象里，潮",
+    "relatedTopics": [
+      "西湖风景区",
+      "所以建议提前值机，我们时间刚好，最后都没有位置了，两个人分开坐了",
+      "这个灯光秀，周末有两场，包括周五是8点和9点半，我一直以为是8:30 ，哎错过了，然后等到了9:30 ，真的值得一看，满山都布置了灯光，随着潮汕的民宿音乐变化，边上一个10个月大的宝宝也跟着手舞足蹈的",
+      "和湖光山色相伴，自然也不会觉得累",
+      "西湖游，重点在休闲，所以不用一天赶十个景点，也不用走的多快，走走停停的才有休闲的感觉"
+    ],
+    "mustIncludeFacts": [
+      "西湖风景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-19T22:36:43.588382+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:西湖风景区"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "沿海/海岛"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_18930cdbaf06e7b4",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "西湖风景区",
+      "sourceEntityRef": "/entity/地点/景区/西湖风景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_5bd05175c8101c11",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 16
+    }
+  ],
+  "articleMarkdownDigest": "sha256:ccb7c58dffc1eeda611645bc5485442bf3f897a769a90dc8ccf7127697605d4b"
+}

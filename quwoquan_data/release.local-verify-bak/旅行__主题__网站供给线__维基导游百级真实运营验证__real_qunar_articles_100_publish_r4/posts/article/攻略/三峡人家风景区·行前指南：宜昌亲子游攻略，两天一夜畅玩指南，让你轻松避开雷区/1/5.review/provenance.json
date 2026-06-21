@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_6b67e4b329ecd9d9",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "三峡人家风景区·行前指南：宜昌亲子游攻略，两天一夜畅玩指南，让你轻松避开雷区",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5",
+    "agentRunId": "run-692960ce-8f79-4797-aa43-72d183b3f37f",
+    "agentId": "agent-2f8006b5-2c88-4295-998d-68afbf121dda",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/三峡人家风景区"
+    ],
+    "articleDigest": "sha256:50c242cf57dde29930cb88dd05b641dfe15c70b2e51c08c728e116c4163d009f"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "三峡人家风景区·行前指南：宜昌亲子游攻略，两天一夜畅玩指南，让你轻松避开雷区",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:ac399d591c23b1f3e28279bf2a2b2ce88d3d5264831ba09cb52b4901f1a74c90",
+    "writingPackSha256": "sha256:62d2e88a35f17e6f6c81006c9304aec9a486ec4dc2f70bce41c26f50749ebe7f",
+    "sourceBundleSha256": "sha256:6fa61b0054eefe9649d885de21830c8f0713c1c64c4093d37424539e9cc95ac1",
+    "draftSha256": "sha256:ebe83b8fc34ddad3962ea66a940af4f85141303945426d7b01e30a98a96a7399"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/三峡人家风景区/1.download/sources/47.qunar_guide_candidate_6271941730dd5d74/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7873367"
+    },
+    {
+      "path": "entities/地点/景区/三峡人家风景区/1.download/sources/52.qunar_guide_candidate_6b67e4b329ecd9d9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7855857"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/三峡人家风景区/1.download/sources/47.qunar_guide_candidate_6271941730dd5d74/source.md",
+    "entities/地点/景区/三峡人家风景区/1.download/sources/52.qunar_guide_candidate_6b67e4b329ecd9d9/source.md"
+  ]
+}

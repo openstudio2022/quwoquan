@@ -25,6 +25,7 @@ def test_author_job_packet_isolation_and_exit_gates():
         "bannedRegisterTerms": ["看展"],
     }
     packet = handoff.build_author_job_packet(ref="r1", brief=brief, writing_pack=pack, prompt_rel="4.draft/prompt.md")
+    assert packet["schemaVersion"] == "quwoquan_data.author_job_packet"
     assert packet["ref"] == "r1"
     assert packet["writingIntent"] == "planning_consultation"
     assert packet["baseSourceRef"] == "sources/a.md"
@@ -34,6 +35,33 @@ def test_author_job_packet_isolation_and_exit_gates():
     # 执行合约 5 要素必须随 packet 下发
     assert handoff.execution_contract_issues(packet.get("executionContract")) == []
     assert "5.review/repair_report.json" in packet["executionContract"]["inputs"]
+
+
+def test_image_author_job_packet_is_compact_and_image_scoped():
+    brief = {"carrier": "image", "titleHint": "湖面晨光"}
+    pack = {
+        "title": "湖面晨光",
+        "carrier": "image",
+        "creativeBrief": {"readerPromise": "看清这一组图的光线重点"},
+        "captionPolicy": {"titleMaxChars": 80, "captionMaxChars": 300},
+        "sourcePaths": ["sources/image/source.md"],
+        "assets": [
+            {
+                "assetId": "img1",
+                "caption": "晨光照在湖面",
+                "sourceCollectionId": "collection-a",
+                "creator": "摄影师",
+                "license": "CC BY 4.0",
+            }
+        ],
+    }
+    packet = handoff.build_author_job_packet(ref="r_img", brief=brief, writing_pack=pack, prompt_rel="4.draft/prompt.md")
+    assert packet["schemaVersion"] == "quwoquan_data.author_job_packet"
+    assert packet["captionPolicy"]["captionMaxChars"] == 300
+    assert "imageGate" in packet["exitGates"]
+    assert "writingIntentConsistency" not in packet["exitGates"]
+    assert packet["executionContract"]["budget"]["maxWallClockSeconds"] == 420
+    assert "3.compose/writing_pack.json" not in packet["executionContract"]["inputs"]
 
 
 def test_execution_contract_requires_five_elements():

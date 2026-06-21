@@ -7,32 +7,79 @@ node:
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: auth-profile-snapshot
 scope:
-  summary: profile read update 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 用户资料读取与编辑保存闭环验收范围。
+  in_scope:
+  - 首次创建资料后的默认昵称、用户号与 nicknameCustomized 语义
+  - App 我的主页进入编辑资料、修改昵称/简介、保存后主页刷新
+  - 聊天消息记录快照继续消费历史 senderDisplayName/avatar snapshot，不被资料更新回写历史消息
+  out_of_scope:
+  - 真实图片上传链路的对象存储端到端验证
+  - 群成员列表异步 fan-out/reconciliation 全链路压测
 gwt_acceptance:
   GWT1:
-    title: profile read update GWT
+    title: 资料读取、编辑保存与聊天快照一致
     given:
-    - 前置条件明确。
+    - 用户首次登录并创建 owner/profile/subAccount。
+    - 用户在 App 我的主页进入编辑资料页。
+    - 聊天消息已有发送者名称与头像记录快照。
     when:
-    - 用户或系统动作发生。
+    - 云侧生成默认昵称与 ownerId。
+    - 用户修改昵称和简介并保存。
+    - App 回到我的主页，并消费聊天消息 DTO。
     then:
-    - 可观察结果符合预期。
+    - 默认昵称满足「新同学_YYMM9位随机数」云侧格式，nicknameCustomized=false。
+    - 编辑资料保存后主页展示新昵称，简介长度按 UI 契约截断。
+    - 历史聊天消息继续优先展示 senderDisplayNameSnapshot 和 senderAvatarUrlSnapshot。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
+    - 服务端默认昵称契约测试通过。
+    - App local_contract 聚合测试覆盖编辑资料 Mock/Widget 行为与聊天消息快照 DTO。
+    - App user_acceptance 聚合测试覆盖我的主页浏览、编辑资料保存与聊天快照读取。
+    edge_cases:
+    - 昵称允许重复但首次创建 nicknameCustomized=false。
+    - 简介超过 200 字时 UI 截断并显示计数。
+    - 历史消息快照不被资料更新反向改写。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    - quwoquan_service/contracts/metadata/user/user_profile/fields.yaml
+    - quwoquan_service/contracts/metadata/messages/chat/fields.yaml
+    performance_points:
+    - 编辑资料保存后主页刷新不阻塞首屏可交互。
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - command: go test ./services/user-service/tests -run TestAuth_FirstLogin_UsesCloudDefaultNicknamePattern
+          -count=1
+      - file: quwoquan_app/test/local_contract/user/profile_identity_sync/profile_creation_update__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/profile_identity_sync/create_update_chat_sync__user_acceptance_test.dart
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: profile_identity_sync
+        cases:
+        - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_identity_sync
+        envs:
+        - local
+      - layer: api_integration
+        suite: user_profile_creation
+        cases:
+        - api_integration.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.user_profile_creation
+        envs:
+        - local
+      - layer: user_acceptance
+        suite: profile_identity_sync
+        cases:
+        - user_acceptance.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_identity_sync
+        envs:
+        - local
+      supporting:
+      - layer: local_contract
+        suite: chat_message_snapshot
+        cases:
+        - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.chat_message_snapshot
+        envs:
+        - local
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

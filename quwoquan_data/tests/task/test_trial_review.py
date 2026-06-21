@@ -41,7 +41,11 @@ from task import store  # noqa: E402
 from task.trial_review import build_trial_review  # noqa: E402
 
 
-def _make_task(name: str = "试跑复盘") -> str:
+def _make_task(name: str = "试跑复盘", *, target_count: int = 2) -> str:
+    targets = [
+        {"entityType": "地点/景区", "name": f"景区{i:03d}"}
+        for i in range(1, target_count + 1)
+    ]
     spec = store.scaffold_spec(
         vertical="travel",
         organize_by="地域",
@@ -51,10 +55,7 @@ def _make_task(name: str = "试跑复盘") -> str:
         scope={
             "region": "测试省",
             "entityTypes": ["地点/景区"],
-            "coverageTargets": [
-                {"entityType": "地点/景区", "name": "景区甲"},
-                {"entityType": "地点/景区", "name": "景区乙"},
-            ],
+            "coverageTargets": targets,
         },
         content={
             "modalityContract": "separated_research",
@@ -74,7 +75,10 @@ def _make_task(name: str = "试跑复盘") -> str:
     write_json(task_shared_dir(spec["taskId"]) / "baseline_report.json", {"status": "passed"})
     catalog = task_catalog(spec["taskId"])
     catalog.parent.mkdir(parents=True, exist_ok=True)
-    catalog.write_text('{"name":"景区甲"}\n{"name":"景区乙"}\n', encoding="utf-8")
+    catalog.write_text(
+        "".join(f'{{"name":"{target["name"]}"}}\n' for target in targets),
+        encoding="utf-8",
+    )
     return spec["taskId"]
 
 
@@ -181,6 +185,40 @@ def test_trial_review_uses_batch_scheduler_worker_cap_before_shell_default():
     assert not any("worker cap is 1" in issue for issue in report["efficiency"]["issues"])
 
 
+def test_trial_review_accepts_uncapped_local_cursor_worker_config(monkeypatch):
+    task_id = _make_task("本地并发未封顶")
+    shared = batch_shared_dir(task_id, "run_uncapped")
+    write_json(
+        shared / "task_workflow_state.json",
+        {
+            "status": "succeeded",
+            "lastAgentRun": {
+                "stage": "produce_author",
+                "plannedJobCount": 12,
+                "jobCount": 12,
+                "startedCount": 12,
+                "finishedCount": 12,
+                "infrastructureFailures": 0,
+                "scheduler": {
+                    "promptCount": 12,
+                    "requestedMaxWorkers": 4,
+                    "effectiveWorkerCount": 4,
+                    "localCursorMaxWorkers": None,
+                    "elapsedSeconds": 180,
+                    "startedAt": "s1",
+                },
+                "finishedAt": "t1",
+            },
+        },
+    )
+    monkeypatch.setattr("task.run.MANAGED_LOCAL_CURSOR_MAX_WORKERS", None)
+
+    report = build_trial_review(task_id, "run_uncapped", env={"CURSOR_API_KEY": "present"})
+
+    assert report["efficiency"]["managedRuntime"]["localCursorMaxWorkers"] is None
+    assert not any("worker cap is 1" in issue for issue in report["efficiency"]["issues"])
+
+
 def test_trial_review_classifies_source_sufficiency_blocker():
     task_id = _make_task("来源不足")
     shared = batch_shared_dir(task_id, "run_source")
@@ -209,18 +247,76 @@ def test_trial_review_classifies_source_sufficiency_blocker():
 
     report = build_trial_review(task_id, "run_source", env={"CURSOR_API_KEY": "present"})
 
-    assert report["terminalCause"]["category"] == "source_sufficiency_blocker"
-    assert report["nextTrialStrategy"]["mode"] == "source_ready_repair_or_replace"
+    assert report["terminalCause"]["category"] == "partial_delivery_checkpoint_waiting"
+    assert report["nextTrialStrategy"]["mode"] == "resume_partial_delivery_from_checkpoint"
     assert "task audit-batch" in report["nextTrialStrategy"]["commands"][0]
-    assert "task select-targets" in report["nextTrialStrategy"]["commands"][1]
+    assert "task run" in report["nextTrialStrategy"]["commands"][1]
     assert report["evidence"]["sourceReadiness"]["status"] == "blocked"
     assert report["evidence"]["sourceReadiness"]["allLaneReadyTargetCount"] == 0
     assert report["evidence"]["sourceReadiness"]["laneCoverage"]["article"]["passed"] == 0
-    assert any(
-        "managed batch failed lanes=3" in item
-        for item in report["scaleLadder"]["levels"][0]["requiredBeforeGo"]
-    )
+    assert any("partial failed lanes=3" in item for item in report["qualityAndScaleGate"]["warnings"])
     assert report["terminalCause"]["stage"] == "download_plan"
+
+
+def test_trial_review_classifies_open_license_scale_blocker_before_runtime():
+    task_id = _make_task("开放版权百级无预筛池", target_count=100)
+    spec = store.load_spec(task_id)
+    spec["workflowPolicy"] = {"allowPartialContent": False}
+    store.save_spec(spec)
+    shared = batch_shared_dir(task_id, "run_asset_strategy")
+    write_json(
+        shared / "open_license_scale_proof.json",
+        {
+            "passed": False,
+            "requiredEntityCount": 100,
+            "requiredPublishableImageAssets": 200,
+            "failedEntityCount": 13,
+            "proof": {
+                "preScreenedEntityCount": 87,
+                "publishableImageAssets": 175,
+            },
+        },
+    )
+
+    report = build_trial_review(task_id, "run_asset_strategy", env={"CURSOR_API_KEY": "present"})
+
+    assert report["terminalCause"]["category"] == "image_asset_strategy_blocker"
+    assert report["terminalCause"]["stage"] == "task_preflight"
+    assert "entities 87/100" in report["terminalCause"]["reason"]
+    assert report["evidence"]["imageAssetStrategy"]["strategy"] == "open_license_publish"
+    assert report["evidence"]["imageAssetStrategy"]["scaleIssues"]
+    assert report["evidence"]["imageAssetStrategy"]["batchOpenLicenseProof"]["publishableImageAssets"] == 175
+    assert any(
+        "batch open-license proof failed: entities 87/100, assets 175/200" in item
+        for item in report["qualityAndScaleGate"]["blockers"]
+    )
+    assert report["nextTrialStrategy"]["mode"] == "asset_strategy_provider_or_prescreened_pool_required"
+    assert report["nextTrialStrategy"]["stopAfter"] == "task_preflight"
+    assert any(
+        "imageAssetStrategy.scaleIssues is empty" in item
+        for item in report["nextTrialStrategy"]["successCriteria"]
+    )
+
+
+def test_trial_review_classifies_interrupted_workflow_before_scale_strategy():
+    task_id = _make_task("中断优先归因", target_count=100)
+    shared = batch_shared_dir(task_id, "run_interrupted_download")
+    write_json(
+        shared / "task_workflow_state.json",
+        {
+            "status": "manual_required",
+            "waitingCheckpoint": "download_plan",
+            "nextAction": "download_plan: interrupted; rerun workflow to revalidate checkpoint",
+            "failedObjects": ["download_plan: interrupted; workflow stopped before checkpoint completion"],
+        },
+    )
+
+    report = build_trial_review(task_id, "run_interrupted_download", env={"CURSOR_API_KEY": "present"})
+
+    assert report["terminalCause"]["category"] == "workflow_interrupted"
+    assert report["terminalCause"]["stage"] == "download_plan"
+    assert report["nextTrialStrategy"]["mode"] == "rerun_interrupted_checkpoint_from_clean_batch"
+    assert any("openLicenseScaleProof" in item for item in report["qualityAndScaleGate"]["warnings"])
 
 
 def test_trial_review_prefers_auto_research_availability_over_stale_audit():
@@ -267,9 +363,9 @@ def test_trial_review_prefers_auto_research_availability_over_stale_audit():
     assert readiness["allLaneReadyTargetCount"] == 1
     assert readiness["laneCoverage"]["article"]["passed"] == 1
     assert readiness["laneCoverage"]["homepage"]["passed"] == 2
-    blockers = report["qualityAndScaleGate"]["blockers"]
-    assert "source-ready targets 1/2" in blockers
-    assert "source-ready targets 2/2" not in blockers
+    warnings = report["qualityAndScaleGate"]["warnings"]
+    assert "partial source-ready targets 1/2" in warnings
+    assert "partial source-ready targets 2/2" not in warnings
     assert report["terminalCause"]["reason"].startswith("source availability ready 1/2")
 
 
@@ -323,7 +419,8 @@ def test_trial_review_prefers_batch_env_ready_evidence_over_current_shell():
 
     blockers = report["qualityAndScaleGate"]["blockers"]
     assert "CURSOR_API_KEY missing; real managed Cursor SDK trial cannot run" not in blockers
-    assert report["terminalCause"]["category"] == "source_sufficiency_blocker"
+    assert report["terminalCause"]["category"] == "partial_delivery_manual_required"
+    assert report["nextTrialStrategy"]["mode"] == "resume_partial_delivery_from_checkpoint"
     assert report["scaleLadder"]["currentObjectCount"] == 14
     assert report["scaleLadder"]["entityBatchLevels"][0]["entityCount"] == 10
     assert report["scaleLadder"]["entityBatchLevels"][0]["articlesPerEntity"] == 4

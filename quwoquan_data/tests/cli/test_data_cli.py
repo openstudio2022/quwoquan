@@ -348,6 +348,42 @@ def test_baseline_freezes_bundle_and_enforces_catalog_config_pair():
     assert report["issues"] == []
 
 
+def test_baseline_allows_dynamic_site_supply_task_without_catalog():
+    task_id = _make_task("旅行/主题/网站供给线/百级动态验证", with_baseline=False)
+    spec = store.load_spec(task_id)
+    spec["taskArchetype"] = "theme_collection"
+    spec["organizeBy"] = "主题"
+    spec["key"] = "网站供给线"
+    spec.setdefault("scope", {})["theme"] = "百级动态验证"
+    spec.setdefault("workflowPolicy", {})["siteSupplyDynamicContentPlan"] = True
+    store.save_spec(spec)
+
+    handle_baseline(
+        argparse.Namespace(
+            task=task_id,
+            catalog=None,
+            spec_doc=None,
+            design_doc=None,
+            acceptance_doc=None,
+            workflow_doc=None,
+            command_matrix_doc=None,
+            catalog_config=None,
+            naming_rules=None,
+            geo_band_rules=None,
+            schema_files=[],
+            config_files=[],
+            output=None,
+        )
+    )
+
+    packet = read_json(task_baseline_freeze_packet_path(task_id))
+    report = read_json(task_shared_dir(task_id) / "baseline_report.json")
+    assert report["status"] == "passed"
+    assert report["issues"] == []
+    assert packet["summary"]["siteSupplyDynamicContentPlan"] is True
+    assert packet["summary"]["catalogRequired"] is False
+
+
 def test_workflow_run_requires_baseline_packet():
     task_id = _make_task(with_baseline=False)
     try:
@@ -386,7 +422,9 @@ def test_workflow_run_records_baseline_packet_when_present():
     assert code == 10, code
     state = run_mod.load_workflow_state(task_id, "b1")
     assert state["baselinePacketPath"].endswith("baseline_freeze_packet.json")
-    assert state["waitingCheckpoint"] == "download_plan"
+    # download_plan 由 CLI auto_research 自动完成、build_homepage 由确定性 builder 自动物化，
+    # 首个需 Agent 语义介入的暂停点是 content_plan。
+    assert state["waitingCheckpoint"] == "content_plan"
 
 
 def test_task_new_persists_explicit_content_quotas():
@@ -444,7 +482,9 @@ def test_task_scaled_e2e_prepare_enters_standard_checkpointed_workflow():
         raise AssertionError("scaled-e2e prepare should stop at standard workflow checkpoint")
     state = run_mod.load_workflow_state(task_id, "se1")
     assert state["baselinePacketPath"].endswith("baseline_freeze_packet.json"), state
-    assert state["waitingCheckpoint"] == "download_plan", state
+    # scaled-e2e prepare 走标准 DAG：download_plan/build_homepage 已被 CLI 自动化，
+    # prepare 在首个 Agent 语义 checkpoint content_plan 处暂停（不写正文）。
+    assert state["waitingCheckpoint"] == "content_plan", state
     packet = read_json(task_explore_packet_path(task_id))
     assert packet["command"] == "data explore"
 

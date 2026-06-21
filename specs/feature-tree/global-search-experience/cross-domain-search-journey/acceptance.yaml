@@ -37,28 +37,48 @@ sit_acceptance:
     - suggest 本地检索即时返回且不等待云侧；连续输入只保留最新 query，旧响应不得覆盖新 query。
     - result 首批分组 P95 ≤ 1.5s；P99/错误率/degrade 由 search_slo.yaml#load_model 约束。
     - 各 Tab 分域加载互不阻塞；单域超时按 objectType 降级。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
     tests:
       planned: []
       recorded:
-      - quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
-      - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
-      - quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
-      - quwoquan_app/test/ui/search/retrieve_request_mapper_test.dart
-      - quwoquan_app/test/ui/search/search_repository_test.dart
-      - quwoquan_service/runtime/search/retrieve_test.go
-      - quwoquan_service/services/search-service/tests/search_contract_test.go
-    status: passed
+      - file: quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
+      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - file: quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+      - file: quwoquan_app/test/ui/search/retrieve_request_mapper_test.dart
+      - file: quwoquan_app/test/ui/search/search_repository_test.dart
+      - file: quwoquan_service/runtime/search/retrieve_test.go
+      - file: quwoquan_service/services/search-service/tests/search_contract_test.go
+    status: completed
     notes:
-    - WP-B 已闭合：降级横幅（R-002）、inspiration 清债（R-005）、mock 术语（R-006）、埋点归因链（R-007）、demo 回退删除（R-008）；widget T2 已 recorded。
+    - WP-B 已闭合：降级横幅（R-002）、inspiration 清债（R-005）、mock 术语（R-006）、埋点归因链（R-007）、demo
+      回退删除（R-008）；widget local_contract 已 recorded。
     - 交集 Tab 端侧单源收口归 WP-C / R-IX06。
-    - T4 journey 已 recorded：cross_domain_search_journey_test.dart 覆盖 suggest 本地两阶段、result 云侧固定 Tab、本地对象不进 result、最近搜索水合、单域降级不阻塞整页、整页错误态可重试、默认页/结果页 referralSource=search + feedRequestId 归因链。
-    - T3 远端集成：local-gamma `/v1/search` 冒烟 + search-service contract test + runtime retrieve test 已 recorded；故障/回滚演练已 recorded（`artifacts/stackctl/gamma/search_rollback_rehearsal.md`）。真集群容量/性能为 WP-G/SLO 与 R-S06-S-1 发布前阻断，不阻塞本能力 SIT。
+    - user_acceptance journey 已 recorded：cross_domain_search_journey_test.dart 覆盖
+      suggest 本地两阶段、result 云侧固定 Tab、本地对象不进 result、最近搜索水合、单域降级不阻塞整页、整页错误态可重试、默认页/结果页
+      referralSource=search + feedRequestId 归因链。
+    - api_integration 远端集成：local-gamma `/v1/search` 冒烟 + search-service contract test
+      + runtime retrieve test 已 recorded；故障/回滚演练已 recorded（`artifacts/stackctl/gamma/search_rollback_rehearsal.md`）。真集群容量/性能为
+      WP-G/SLO 与 R-S06-S-1 发布前阻断，不阻塞本能力 SIT。
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.global_search_experience.cross_domain_search_journey.sit1.sit1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.sit1.sit1_local_contract
+        envs: *id001
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

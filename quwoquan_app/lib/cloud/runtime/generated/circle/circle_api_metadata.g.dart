@@ -118,6 +118,14 @@ class CircleApiMetadata {
     'UpdateMemberRole': 'public',
   };
 
+  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  static const Map<String, String> operationToResponseModel = <String, String>{
+  };
+
+  /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
+  static const Map<String, String> operationToResponseKind = <String, String>{
+  };
+
   static const String applyJoinCircleGroupOperation = 'ApplyJoinCircleGroup';
   static const String approveCircleGroupMemberOperation = 'ApproveCircleGroupMember';
   static const String archiveCircleOperation = 'ArchiveCircle';

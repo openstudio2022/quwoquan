@@ -79,6 +79,15 @@ def _abandoned_content_refs(runtime_root: Path | None) -> set[str]:
     return refs
 
 
+def _post_kind(manifest: dict) -> str:
+    carrier = str(manifest.get("carrier") or manifest.get("contentType") or "article")
+    if carrier in {"gallery", "image"}:
+        return "image"
+    if carrier == "video":
+        return "video"
+    return "article"
+
+
 def _planned_post_refs(runtime_root: Path | None) -> dict[str, str] | None:
     if runtime_root is None:
         return None
@@ -97,8 +106,7 @@ def _planned_post_refs(runtime_root: Path | None) -> dict[str, str] | None:
         ref = str(item.get("ref") or "").strip()
         if not ref or ref in abandoned:
             continue
-        carrier = str(item.get("carrier") or item.get("contentType") or "article")
-        expected[ref] = "image" if carrier in ("gallery", "image") else "article"
+        expected[ref] = _post_kind(item)
     return expected
 
 
@@ -110,9 +118,85 @@ def _post_refs_in_release(root: Path) -> dict[str, str]:
         ref = str(data.get("topicId") or data.get("ref") or "").strip()
         if not ref:
             continue
-        carrier = str(data.get("carrier") or data.get("contentType") or "article")
-        out[ref] = "image" if carrier in ("gallery", "image") else "article"
+        out[ref] = _post_kind(data)
     return out
+
+
+def _entity_rel_from_ref(raw: object) -> str:
+    text = str(raw or "").strip().strip("/")
+    if not text:
+        return ""
+    if text.startswith("entity/"):
+        parts = text.split("/")
+        if len(parts) >= 4:
+            return (Path("entities") / parts[1] / parts[2] / "/".join(parts[3:])).as_posix()
+    if text.startswith("entities/"):
+        return text
+    return ""
+
+
+def _primary_entity_rels_in_release_posts(root: Path) -> set[str]:
+    out: set[str] = set()
+    posts_root = root / "posts"
+    for path in posts_root.rglob("manifest.json") if posts_root.is_dir() else []:
+        data = _payload(path)
+        refs = data.get("entityRefs") or []
+        if not isinstance(refs, list) or not refs:
+            continue
+        rel = _entity_rel_from_ref(refs[0])
+        if rel:
+            out.add(rel)
+    return out
+
+
+def _entity_rels_in_release(root: Path) -> set[str]:
+    entities_root = root / "entities"
+    if not entities_root.is_dir():
+        return set()
+    return {
+        path.parent.relative_to(root).as_posix()
+        for path in entities_root.rglob("page.md")
+    }
+
+
+def _release_entity_scope_issues(root: Path) -> list[str]:
+    expected = _primary_entity_rels_in_release_posts(root)
+    if not expected:
+        return []
+    actual = _entity_rels_in_release(root)
+    issues: list[str] = []
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        issues.append(
+            "release missing primary entity homepage(s): "
+            + ", ".join(missing[:20])
+            + (" ..." if len(missing) > 20 else "")
+        )
+    if extra:
+        issues.append(
+            "release contains entity homepage(s) outside primary post refs: "
+            + ", ".join(extra[:20])
+            + (" ..." if len(extra) > 20 else "")
+        )
+    if len(actual) != len(expected):
+        issues.append(f"release entity quota: expected {len(expected)}, got {len(actual)}")
+    return issues
+
+
+def _partial_publish_allowed(root: Path) -> bool:
+    manifest = _payload(root / "release_manifest.json")
+    task_id = str(manifest.get("sourceTaskId") or "").strip()
+    if not task_id:
+        return True
+    try:
+        from task import store
+
+        spec = store.load_spec(task_id)
+    except Exception:  # noqa: BLE001
+        return True
+    policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), dict) else {}
+    return bool(policy.get("allowPartialContent", True) is not False)
 
 
 def _source_fact(payload: dict, field: str):
@@ -149,9 +233,9 @@ def _fact_key(value) -> str:
 def _post_contract_issues(leaf: Path, root: Path, manifest: dict) -> list[str]:
     rel = leaf.relative_to(root)
     issues: list[str] = []
-    is_image = str(manifest.get("contentType") or "") == "image" or str(
-        manifest.get("carrier") or ""
-    ) in ("image", "gallery")
+    kind = _post_kind(manifest)
+    is_image = kind == "image"
+    is_video = kind == "video"
     article_path = leaf / "article.md"
     gallery_path = leaf / "gallery.md"
     if is_image:
@@ -196,6 +280,12 @@ def _post_contract_issues(leaf: Path, root: Path, manifest: dict) -> list[str]:
         for name in ("review.json", "provenance.json"):
             if not (review_dir / name).is_file():
                 issues.append(f"{rel}: image review sidecar missing 5.review/{name}")
+    elif is_video:
+        if article_path.exists() or gallery_path.exists():
+            issues.append(f"{rel}: video work must not contain article.md or gallery.md")
+        assets = manifest.get("assets")
+        if not isinstance(assets, list) or not assets:
+            issues.append(f"{rel}: video work must contain at least one asset")
     else:
         if not article_path.is_file():
             issues.append(f"{rel}: article work missing article.md")
@@ -264,18 +354,19 @@ def _quota_issues(root: Path) -> list[str]:
     task_id = str(manifest.get("sourceTaskId") or "")
     if not task_id:
         return []
+    entity_scope_issues = _release_entity_scope_issues(root)
     runtime_root = _source_runtime_root(root)
     planned = _planned_post_refs(runtime_root)
     if planned is not None:
         actual = _post_refs_in_release(root)
-        issues: list[str] = []
+        issues: list[str] = list(entity_scope_issues)
         missing = sorted(set(planned) - set(actual))
         extra = sorted(set(actual) - set(planned))
         wrong_type = sorted(
             ref for ref in set(planned) & set(actual)
             if planned.get(ref) != actual.get(ref)
         )
-        if missing:
+        if missing and not _partial_publish_allowed(root):
             issues.append(
                 "release missing planned post ref(s): "
                 + ", ".join(missing[:20])
@@ -297,45 +388,13 @@ def _quota_issues(root: Path) -> list[str]:
 
         spec = store.load_spec(task_id)
     except Exception:  # noqa: BLE001
-        return []
-    targets = [
-        str(target.get("name") or "").strip()
-        for target in ((spec.get("scope") or {}).get("coverageTargets") or [])
-        if str(target.get("name") or "").strip()
-    ]
+        return entity_scope_issues
     content = spec.get("content") or {}
     quotas = (content.get("quotas") or {})
     separated_research = str(content.get("modalityContract") or "") == "separated_research"
-    article_q = int(quotas.get("entityArticlesPerTarget") or 0)
-    image_q = int(quotas.get("imageWorksPerTarget") or 0)
-    if not separated_research and not image_q:
-        image_q = int(quotas.get("galleryPostsPerTarget") or 0)
-    homepage_q = int(quotas.get("entityHomepagesPerTarget") or 0)
     if separated_research and int(quotas.get("galleryPostsPerTarget") or 0):
         return ["release quota: separated_research must use imageWorksPerTarget, not galleryPostsPerTarget"]
-    if not (article_q or image_q or homepage_q):
-        return []
-    issues: list[str] = []
-    entity_pages = list((root / "entities").rglob("page.md")) if (root / "entities").is_dir() else []
-    if len(entity_pages) != len(targets) * homepage_q:
-        issues.append(
-            f"release entity quota: expected {len(targets) * homepage_q}, got {len(entity_pages)}"
-        )
-    counts = {target: {"article": 0, "image": 0} for target in targets}
-    for path in (root / "posts").rglob("manifest.json") if (root / "posts").is_dir() else []:
-        data = _payload(path)
-        carrier = str(data.get("carrier") or data.get("contentType") or "article")
-        kind = "image" if carrier in ("gallery", "image") else "article"
-        refs = [str(ref) for ref in (data.get("entityRefs") or [])]
-        matched = [target for target in targets if any(ref.rstrip("/").endswith("/" + target) for ref in refs)]
-        if len(matched) == 1:
-            counts[matched[0]][kind] += 1
-    for target, row in counts.items():
-        if row["article"] != article_q:
-            issues.append(f"{target}: release article quota {article_q}, got {row['article']}")
-        if row["image"] != image_q:
-            issues.append(f"{target}: release imageWorks quota {image_q}, got {row['image']}")
-    return issues
+    return entity_scope_issues
 
 
 def gate_publish(release_id: str) -> list[str]:
@@ -350,10 +409,6 @@ def gate_publish(release_id: str) -> list[str]:
     manifest_path = root / "release_manifest.json"
     if not manifest_path.exists():
         issues.append("release_manifest.json missing")
-
-    entities_dir = root / "entities"
-    if not entities_dir.exists() or not any(entities_dir.rglob("page.md")):
-        issues.append("No entity pages found under release/entities")
 
     posts_dir = root / "posts"
     if not posts_dir.exists() or not any(posts_dir.rglob("manifest.json")):

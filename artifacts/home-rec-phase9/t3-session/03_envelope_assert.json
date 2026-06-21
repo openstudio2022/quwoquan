@@ -1,0 +1,22 @@
+{
+  "guest_envelope": {
+    "feedRequestId": "frq_01KVEWCA4BEQ9WS9WMDEH34WSQ",
+    "rankingVersion": "rec-v1",
+    "reasonVersion": "reason-v1"
+  },
+  "session_envelope": {
+    "feedRequestId": "frq_01KVEWCA5EAWVW6ZW8MYC7TK6Z",
+    "rankingVersion": "rec-v1",
+    "reasonVersion": "reason-v1"
+  },
+  "session_item_count": 20,
+  "session_feedRequestId_present": true,
+  "session_rankingVersion_present": true,
+  "session_intersectionReasons_present": false,
+  "session_authors_sample": [
+    "alpha_article_author",
+    "alpha_moment_author",
+    "alpha_photo_author",
+    "alpha_video_author"
+  ]
+}

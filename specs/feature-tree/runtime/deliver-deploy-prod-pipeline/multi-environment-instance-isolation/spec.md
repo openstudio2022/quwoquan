@@ -14,7 +14,7 @@
 - beta 单套服务生命周期：启动前 stop 旧栈、回收固定端口、清理失效 pid。
 - gamma 单套部署/本地 mirror 切换语义：清理历史实例后重启，不扩展为多套并行。
 - 环境矩阵、业务数据清单、runbook 与报告字段的单套/多实例口径。
-- `T1 -> T4` 中与端侧多模拟器并行、beta/gamma 单套切换相关的验证路径。
+- `local_contract -> user_acceptance` 中与端侧多模拟器并行、beta/gamma 单套切换相关的验证路径。
 
 ## Out of Scope
 
@@ -59,7 +59,7 @@
 - A3：端侧启动入口支持按 `env + device-id` 启动、停止、列举实例，并记录诊断信息。
 - A4：beta 启动链路在启动新栈前会停止旧栈、回收固定端口并清理残留子进程。
 - A5：gamma 部署 / local-gamma mirror 切换遵循单套清理后重启语义，不出现第二套并行栈。
-- A6：至少一条 `T4` 验证覆盖 alpha / beta / gamma 三个端侧实例分别运行在不同模拟器。
+- A6：至少一条 `user_acceptance` 验证覆盖 alpha / beta / gamma 三个端侧实例分别运行在不同模拟器。
 
 ## A3 一键入口口径
 

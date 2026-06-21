@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "武侯祠_route_transport",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:85fff327bff4f8b966b7c00fa70b61f6c216ac2a2452a13e9d39afba7a5d7b20",
+  "finalSha256": "sha256:8536fc1e4b75f7d4d93ac5a4d32529536aa20042741bddfd0983f7a490c6f7a5",
+  "draftBodySha256": "sha256:85fff327bff4f8b966b7c00fa70b61f6c216ac2a2452a13e9d39afba7a5d7b20",
+  "finalBodySha256": "sha256:85fff327bff4f8b966b7c00fa70b61f6c216ac2a2452a13e9d39afba7a5d7b20",
+  "composeSnapshotSha256": "sha256:85fff327bff4f8b966b7c00fa70b61f6c216ac2a2452a13e9d39afba7a5d7b20",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

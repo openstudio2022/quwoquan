@@ -41,19 +41,40 @@ gwt_acceptance:
     performance_points:
     - first prompt appears <= 100ms after gesture begins
     - guard window is deterministic and testable
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T3_route_integration
-      - T4_user_journey
     tests:
-      planned:
-      - quwoquan_app/test/app/navigation/home_edge_swipe_exit_guard_test.dart
-      - quwoquan_app/test/patrol/edge_swipe_navigation_e2e_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.native_edge_gesture_navigation.home_edge_swipe_exit_guard.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt_home_exit_guard_local_contract
+        cases:
+        - local_contract.runtime.native_edge_gesture_navigation.home_edge_swipe_exit_guard.gwt_home_exit_guard_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: route_integration
+        cases:
+        - api_integration.runtime.native_edge_gesture_navigation.home_edge_swipe_exit_guard.route_integration
+        envs:
+        - beta
+        - gamma
+      - layer: user_acceptance
+        suite: user_journey
+        cases:
+        - user_acceptance.runtime.native_edge_gesture_navigation.home_edge_swipe_exit_guard.user_journey
+        envs:
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/app/navigation/home_edge_swipe_exit_guard_test.dart'
+    - '[migrated_from_planned] quwoquan_app/test/patrol/edge_swipe_navigation_e2e_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

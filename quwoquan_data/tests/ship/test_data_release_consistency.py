@@ -78,6 +78,41 @@ def test_release_contract_and_consistency_pass_for_closed_refs():
     assert contract["counts"]["actions"] == 2
 
 
+def test_post_write_consistency_accepts_ship_import_report_name():
+    root = _publish_root()
+    posts = [
+        {
+            "postRef": "posts/article/体验/甲居藏寨体验/1",
+            "contentType": "article",
+            "angle": "体验",
+            "entityRefs": ["地点/景区/甲居藏寨"],
+            "tagRefs": ["Topic/旅行"],
+        }
+    ]
+    entities = [{"entityRef": "地点/景区/甲居藏寨", "domain": "地点", "etype": "景区"}]
+    bundle = build_sample_bundle("gamma", MANIFEST, posts, entities)
+    contract = build_release_contract(
+        env="gamma",
+        bundle=bundle,
+        posts=posts,
+        entities=entities,
+        release_id="rel_gamma_import_001",
+    )
+    write_json(
+        root / "env_releases" / "rel_gamma_import_001" / "import-gamma.json",
+        {"status": "active", "releaseId": "rel_gamma_import_001"},
+    )
+
+    report = scan_release_contract(
+        contract,
+        publish_root=root,
+        phase="post-write-pre-activation",
+    )
+
+    assert report["status"] == "passed", report
+    assert report["observability"]["importReport"].endswith("/import-gamma.json")
+
+
 def test_release_consistency_blocks_media_manifest_issues():
     root = _publish_root()
     write_json(

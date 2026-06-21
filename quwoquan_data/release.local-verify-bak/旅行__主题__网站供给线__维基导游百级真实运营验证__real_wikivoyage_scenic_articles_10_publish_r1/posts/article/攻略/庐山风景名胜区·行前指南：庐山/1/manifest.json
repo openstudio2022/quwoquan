@@ -1,0 +1,130 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_baf63a68d9f3687a",
+  "contentType": "article",
+  "entityRefs": [],
+  "normalizedEntityRefs": [],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/庐山风景名胜区",
+      "reason": "no_condition_profile; uses region/season menu"
+    },
+    "region": {
+      "name": "高原/高海拔",
+      "label": "高原/高海拔",
+      "source": "site_candidate_evidence",
+      "evidenceTerms": [
+        "海拔",
+        "热带"
+      ],
+      "evidenceRef": "entities/地点/景区/庐山风景名胜区/1.download/sources/03.wikivoyage_zh_candidate_baf63a68d9f3687a/source.md"
+    }
+  },
+  "sourceUrls": [
+    "https://zh.wikivoyage.org/wiki/%E5%BA%90%E5%B1%B1"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "gpt-5-codex",
+  "citedSourceRefs": [
+    "entities/地点/景区/庐山风景名胜区/1.download/sources/03.wikivoyage_zh_candidate_baf63a68d9f3687a/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "庐山风景名胜区·行前指南：庐山",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "庐山风景名胜区",
+    "routeEntities": [
+      "庐山风景名胜区"
+    ],
+    "beats": [
+      "先从 庐山风景名胜区 进入主线。"
+    ],
+    "sourceNote": "庐山位于中国江西省九江市，是世界文化遗产和世界地质公园，主峰汉阳峰海拔1474米。\n\n\n== 了解 ==\n\n\n=== 历史 ===\n\n\n=== 风景 ===\n\n\n=== 动植物群落 ===\n\n\n=== 气候 ===\n\n\n== 抵达 ==\n\n\n=== 铁路 ===\n离庐山最近的较大火车站为九江站，远一点的有南昌站，九江和南昌均有班车到达庐山牯岭镇。\n另外庐山站",
+    "relatedTopics": [
+      "庐山风景名胜区"
+    ],
+    "mustIncludeFacts": [
+      "庐山风景名胜区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_wikivoyage_scenic_articles_10_publish_r1",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-20T03:21:31.837202+00:00",
+  "updatedAt": "2026-06-20T03:21:31.837202+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "高原/高海拔"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_eda81f165d81f255",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "庐山风景名胜区",
+      "sourceEntityRef": "/entity/地点/景区/庐山风景名胜区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_baf63a68d9f3687a",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 18
+    }
+  ],
+  "articleMarkdownDigest": "sha256:61d8b3f30f964ab63e2945f3a08d3cbf363bcea4bd25736d824d94f2b797f641"
+}

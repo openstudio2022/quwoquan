@@ -320,6 +320,22 @@ func (m *memoryClient) SAdd(_ context.Context, key string, members ...string) er
 	return nil
 }
 
+func (m *memoryClient) SRem(_ context.Context, key string, members ...string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.sets[key]
+	if !ok {
+		return nil
+	}
+	for _, mb := range members {
+		delete(s, mb)
+	}
+	if len(s) == 0 {
+		delete(m.sets, key)
+	}
+	return nil
+}
+
 func (m *memoryClient) SMembers(_ context.Context, key string) ([]string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

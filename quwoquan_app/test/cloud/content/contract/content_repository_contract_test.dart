@@ -269,6 +269,29 @@ void main() {
       expect(page.items.every((post) => post.identity == 'work'), isTrue);
     });
 
+    test('listUserPosts 为用户主页 mock 记录补齐长文类型', () async {
+      final page = await repo.listUserPosts(userId: 'nature_photographer');
+      final articleTitles = page.items
+          .where((post) => post.isArticleLike)
+          .map((post) => post.normalizedTitle)
+          .toList(growable: false);
+
+      expect(articleTitles, contains('极简摄影的真谛'));
+    });
+
+    test('getPost 支持用户主页互动 targetContentId 关联内容', () async {
+      final image = await repo.getPost(postId: 'nature_photographer_p1');
+      final video = await repo.getPost(postId: 'nature_photographer_v2');
+      final article = await repo.getPost(postId: 'nature_photographer_a2');
+
+      expect(image.post.id, 'nature_photographer_p1');
+      expect(image.post.displayFormat, 'image');
+      expect(video.post.id, 'nature_photographer_v2');
+      expect(video.post.isVideoLike, isTrue);
+      expect(article.post.id, 'nature_photographer_a2');
+      expect(article.post.isArticleLike, isTrue);
+    });
+
     test('likePost / unlikePost 不崩溃', () async {
       await repo.likePost(postId: 'test');
       await repo.unlikePost(postId: 'test');

@@ -10,6 +10,10 @@ import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from _common.image_asset_strategy import (
+    image_asset_strategy,
+    image_asset_strategy_scale_issues,
+)
 from _common.io import read_json, read_ndjson, write_json
 from _common.paths import (
     batch_root,
@@ -87,6 +91,7 @@ def _trial_scope(spec: Mapping[str, Any]) -> dict[str, Any]:
     quotas = content.get("quotas") or {}
     if not isinstance(quotas, Mapping):
         quotas = {}
+    workflow_policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
     target_count = len(names)
     article_per_target = _quota_int(quotas, "entityArticlesPerTarget", default=0)
     image_per_target = _quota_int(quotas, "imageWorksPerTarget", default=0)
@@ -120,6 +125,8 @@ def _trial_scope(spec: Mapping[str, Any]) -> dict[str, Any]:
             "queueBackend": str(queue_policy.get("backend") or ""),
             "maxConcurrency": _quota_int(research, "maxConcurrency", default=0),
             "laneConcurrency": dict(research.get("laneConcurrency") or {}),
+            "allowPartialContent": bool(workflow_policy.get("allowPartialContent", True) is not False),
+            "deliveryMode": str(workflow_policy.get("deliveryMode") or ""),
         },
     }
 
@@ -127,8 +134,10 @@ def _trial_scope(spec: Mapping[str, Any]) -> dict[str, Any]:
 def _managed_runtime_config() -> dict[str, Any]:
     from task import run as run_mod
 
+    raw_local_cap = getattr(run_mod, "MANAGED_LOCAL_CURSOR_MAX_WORKERS", None)
+    local_cursor_max_workers = None if raw_local_cap in (None, "") else int(raw_local_cap)
     return {
-        "localCursorMaxWorkers": int(getattr(run_mod, "MANAGED_LOCAL_CURSOR_MAX_WORKERS", 1)),
+        "localCursorMaxWorkers": local_cursor_max_workers,
         "agentTimeoutSeconds": int(getattr(run_mod, "MANAGED_AGENT_TIMEOUT_SECONDS", 240)),
         "futureGraceSeconds": int(getattr(run_mod, "MANAGED_AGENT_FUTURE_GRACE_SECONDS", 15)),
         "laneLimits": dict(getattr(run_mod, "MANAGED_LANE_LIMITS", {})),
@@ -323,8 +332,9 @@ def _source_readiness_summary(
     }
 
 
-def _artifact_evidence(task_id: str, batch_id: str) -> dict[str, Any]:
+def _artifact_evidence(task_id: str, batch_id: str, spec: Mapping[str, Any] | None = None) -> dict[str, Any]:
     shared = batch_shared_dir(task_id, batch_id)
+    spec = spec if isinstance(spec, Mapping) else store.load_spec(task_id)
     baseline_report = _load_json_if_exists(task_shared_dir(task_id) / "baseline_report.json")
     auto_research = _load_json_if_exists(shared / "auto_research_plan.json")
     managed_env = _load_json_if_exists(shared / "managed_env_ready.json")
@@ -332,6 +342,7 @@ def _artifact_evidence(task_id: str, batch_id: str) -> dict[str, Any]:
     token_ledger = _load_json_if_exists(shared / "token_ledger.json")
     managed_audit = _load_json_if_exists(shared / "managed_batch_audit.json")
     content_plan_diag = _load_json_if_exists(shared / "content_plan_source_diagnostics.json")
+    open_license_proof = _load_json_if_exists(shared / "open_license_scale_proof.json")
     release_id = ""
     for candidate in (shared / "release_report.json", shared / "publish_report.json"):
         report = _load_json_if_exists(candidate)
@@ -383,6 +394,38 @@ def _artifact_evidence(task_id: str, batch_id: str) -> dict[str, Any]:
             "abandonedCount": managed_audit.get("abandonedCount"),
         },
         "sourceReadiness": _source_readiness_summary(auto_research, managed_audit),
+        "imageAssetStrategy": {
+            "strategy": image_asset_strategy(spec),
+            "scaleIssues": image_asset_strategy_scale_issues(spec),
+            "batchOpenLicenseProofExists": bool(open_license_proof),
+            "batchOpenLicenseProof": {
+                "passed": bool(open_license_proof.get("passed")),
+                "desiredPassed": bool(open_license_proof.get("desiredPassed")),
+                "preScreenedEntityCount": int(
+                    ((open_license_proof.get("proof") or {}).get("preScreenedEntityCount") or 0)
+                ),
+                "scoredEntityCount": int(
+                    ((open_license_proof.get("proof") or {}).get("scoredEntityCount") or 0)
+                ),
+                "requiredEntityCount": int(open_license_proof.get("requiredEntityCount") or 0),
+                "publishableImageAssets": int(
+                    ((open_license_proof.get("proof") or {}).get("publishableImageAssets") or 0)
+                ),
+                "requiredPublishableImageAssets": int(
+                    open_license_proof.get("requiredPublishableImageAssets") or 0
+                ),
+                "desiredPublishableImageAssets": int(
+                    open_license_proof.get("desiredPublishableImageAssets") or 0
+                ),
+                "minimumPublishableImageAssets": int(
+                    open_license_proof.get("minimumPublishableImageAssets") or 0
+                ),
+                "averageImageCountScore": float(open_license_proof.get("averageImageCountScore") or 0.0),
+                "averageCompositeScore": float(open_license_proof.get("averageCompositeScore") or 0.0),
+                "failedEntityCount": int(open_license_proof.get("failedEntityCount") or 0),
+                "belowDesiredEntityCount": int(open_license_proof.get("belowDesiredEntityCount") or 0),
+            } if open_license_proof else {},
+        },
         "contentPlanSourceDiagnosticsExists": bool(content_plan_diag),
         "contentPlanSourceDiagnostics": {
             target: {
@@ -510,6 +553,8 @@ def _blockers_and_warnings(
 ) -> tuple[list[str], list[str]]:
     blockers: list[str] = []
     warnings: list[str] = []
+    execution_policy = scope.get("executionPolicy") if isinstance(scope.get("executionPolicy"), Mapping) else {}
+    allow_partial = bool(execution_policy.get("allowPartialContent", True) is not False)
     if not evidence.get("baselinePacketExists"):
         blockers.append("baseline freeze packet missing")
     if not workflow.get("batchRootExists"):
@@ -552,16 +597,47 @@ def _blockers_and_warnings(
             )
     audit = evidence.get("managedBatchAudit") or {}
     if isinstance(audit, Mapping) and int(audit.get("failedLaneCount") or 0):
-        blockers.append(f"managed batch failed lanes={audit.get('failedLaneCount')}")
+        message = (
+            f"managed batch partial failed lanes={audit.get('failedLaneCount')}; "
+            "successful objects may continue to publish"
+        )
+        if allow_partial:
+            warnings.append(message)
+        else:
+            blockers.append(f"managed batch failed lanes={audit.get('failedLaneCount')}")
     readiness = evidence.get("sourceReadiness") or {}
     if isinstance(readiness, Mapping) and readiness.get("status") == "blocked":
         target_count = int(readiness.get("targetCount") or 0)
         ready_count = int(readiness.get("allLaneReadyTargetCount") or 0)
         missing = str(readiness.get("missingSummary") or "").strip()
-        if target_count:
-            blockers.append(f"source-ready targets {ready_count}/{target_count}")
-        if missing:
-            blockers.append(f"source lane coverage below target: {missing}")
+        if allow_partial:
+            if target_count:
+                warnings.append(f"partial source-ready targets {ready_count}/{target_count}")
+            if missing:
+                warnings.append(f"partial source lane coverage below target: {missing}")
+        else:
+            if target_count:
+                blockers.append(f"source-ready targets {ready_count}/{target_count}")
+            if missing:
+                blockers.append(f"source lane coverage below target: {missing}")
+    image_strategy = evidence.get("imageAssetStrategy") or {}
+    if isinstance(image_strategy, Mapping):
+        batch_proof = image_strategy.get("batchOpenLicenseProof")
+        if isinstance(batch_proof, Mapping) and batch_proof and not bool(batch_proof.get("passed")):
+            message = (
+                "batch open-license proof failed: "
+                f"entities {batch_proof.get('preScreenedEntityCount')}/{batch_proof.get('requiredEntityCount')}, "
+                f"assets {batch_proof.get('publishableImageAssets')}/{batch_proof.get('requiredPublishableImageAssets')}"
+            )
+            if allow_partial:
+                warnings.append(message)
+            else:
+                blockers.append(message)
+        image_scale_issues = [str(item) for item in (image_strategy.get("scaleIssues") or []) if str(item).strip()]
+        if allow_partial:
+            warnings.extend(image_scale_issues)
+        else:
+            blockers.extend(image_scale_issues)
     env_ready = evidence.get("envReady") if evidence.get("envReadyReportExists") else evidence.get("managedEnvReady")
     if env_ready is not True and not env.get("CURSOR_API_KEY"):
         blockers.append("CURSOR_API_KEY missing; real managed Cursor SDK trial cannot run")
@@ -578,11 +654,14 @@ def _blockers_and_warnings(
 
 def _terminal_cause(
     *,
+    scope: Mapping[str, Any],
     workflow: Mapping[str, Any],
     evidence: Mapping[str, Any],
     blockers: Sequence[str],
     env: Mapping[str, str],
 ) -> dict[str, Any]:
+    execution_policy = scope.get("executionPolicy") if isinstance(scope.get("executionPolicy"), Mapping) else {}
+    allow_partial = bool(execution_policy.get("allowPartialContent", True) is not False)
     env_ready = evidence.get("envReady") if evidence.get("envReadyReportExists") else evidence.get("managedEnvReady")
     last_agent = workflow.get("lastAgentRun") or {}
     if isinstance(last_agent, Mapping) and int(last_agent.get("infrastructureFailures") or 0):
@@ -592,8 +671,42 @@ def _terminal_cause(
             "reason": f"infrastructureFailures={last_agent.get('infrastructureFailures')}",
             "retryClass": "infra_retry_then_manual",
         }
+    state = workflow.get("workflowState") or {}
+    if isinstance(state, Mapping):
+        failed = state.get("failedObjects") or []
+        next_action = str(state.get("nextAction") or "")
+        joined_failed = "\n".join(str(item) for item in failed) if isinstance(failed, list) else str(failed)
+        if "interrupted" in joined_failed.casefold() or "interrupted" in next_action.casefold():
+            return {
+                "category": "workflow_interrupted",
+                "stage": str(state.get("waitingCheckpoint") or "workflow"),
+                "reason": next_action or "workflow interrupted before checkpoint completion",
+                "retryClass": "rerun_from_clean_batch_or_same_checkpoint",
+            }
+    image_strategy = evidence.get("imageAssetStrategy") or {}
+    if isinstance(image_strategy, Mapping):
+        batch_proof = image_strategy.get("batchOpenLicenseProof")
+        if isinstance(batch_proof, Mapping) and batch_proof and not bool(batch_proof.get("passed")) and not allow_partial:
+            return {
+                "category": "image_asset_strategy_blocker",
+                "stage": "task_preflight",
+                "reason": (
+                    "batch open-license proof failed: "
+                    f"entities {batch_proof.get('preScreenedEntityCount')}/{batch_proof.get('requiredEntityCount')}, "
+                    f"assets {batch_proof.get('publishableImageAssets')}/{batch_proof.get('requiredPublishableImageAssets')}"
+                ),
+                "retryClass": "configure_asset_provider_or_prescreened_pool",
+            }
+        scale_issues = [str(item) for item in (image_strategy.get("scaleIssues") or []) if str(item).strip()]
+        if scale_issues and not allow_partial:
+            return {
+                "category": "image_asset_strategy_blocker",
+                "stage": "task_preflight",
+                "reason": scale_issues[0],
+                "retryClass": "configure_asset_provider_or_prescreened_pool",
+            }
     readiness = evidence.get("sourceReadiness") or {}
-    if isinstance(readiness, Mapping) and readiness.get("status") == "blocked":
+    if isinstance(readiness, Mapping) and readiness.get("status") == "blocked" and not allow_partial:
         reason = str(readiness.get("missingSummary") or "").strip()
         if not reason:
             reason = f"source-ready targets {readiness.get('allLaneReadyTargetCount')}/{readiness.get('targetCount')}"
@@ -604,7 +717,7 @@ def _terminal_cause(
             "retryClass": "source_ready_or_target_replacement",
         }
     audit = evidence.get("managedBatchAudit") or {}
-    if isinstance(audit, Mapping) and int(audit.get("failedLaneCount") or 0):
+    if isinstance(audit, Mapping) and int(audit.get("failedLaneCount") or 0) and not allow_partial:
         return {
             "category": "source_sufficiency_blocker",
             "stage": "download_plan",
@@ -618,12 +731,18 @@ def _terminal_cause(
             "reason": "CURSOR_API_KEY missing; managed Cursor SDK authoring cannot start",
             "retryClass": "operator_action_required",
         }
-    state = workflow.get("workflowState") or {}
     if isinstance(state, Mapping):
         failed = state.get("failedObjects") or []
         next_action = str(state.get("nextAction") or "")
         joined_failed = "\n".join(str(item) for item in failed) if isinstance(failed, list) else str(failed)
         if "source_unavailable" in joined_failed or "source-unavailable" in next_action:
+            if allow_partial:
+                return {
+                    "category": "partial_delivery_manual_required",
+                    "stage": str(state.get("waitingCheckpoint") or "content_plan"),
+                    "reason": next_action or "content plan has source_unavailable failed objects",
+                    "retryClass": "resume_successful_objects_and_abandon_failed_lanes",
+                }
             return {
                 "category": "source_sufficiency_blocker",
                 "stage": "download_plan",
@@ -645,6 +764,17 @@ def _terminal_cause(
             "retryClass": "run_workflow",
         }
     if isinstance(state, Mapping) and state.get("waitingCheckpoint"):
+        readiness = evidence.get("sourceReadiness") or {}
+        if allow_partial and isinstance(readiness, Mapping) and readiness.get("status") == "blocked":
+            return {
+                "category": "partial_delivery_checkpoint_waiting",
+                "stage": str(state.get("waitingCheckpoint") or ""),
+                "reason": (
+                    str(readiness.get("missingSummary") or "").strip()
+                    or str(state.get("nextAction") or "workflow waits while partial lanes can continue")
+                ),
+                "retryClass": "resume_successful_objects_and_abandon_failed_lanes",
+            }
         return {
             "category": "checkpoint_waiting",
             "stage": str(state.get("waitingCheckpoint") or ""),
@@ -719,15 +849,26 @@ def _efficiency_assessment(scope: Mapping[str, Any], workflow: Mapping[str, Any]
         scheduler = {}
     author_jobs = int(((scope.get("agentCallPlan") or {}).get("creativeAuthorJobs") or 0))
     target_count = int(scope.get("targetCount") or 0)
-    configured_local_max = int(config.get("localCursorMaxWorkers") or 1)
+
+    def _positive_int(value: Any) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return 0
+        return parsed if parsed > 0 else 0
+
+    configured_local_max = _positive_int(config.get("localCursorMaxWorkers"))
     prompt_count = int(scheduler.get("promptCount") or 0)
-    effective_workers = int(scheduler.get("effectiveWorkerCount") or configured_local_max or 1)
-    scheduler_local_max = int(scheduler.get("localCursorMaxWorkers") or configured_local_max or 1)
-    observed_local_max = max(configured_local_max, scheduler_local_max, effective_workers)
-    local_max = observed_local_max if prompt_count <= 1 else max(scheduler_local_max, effective_workers)
-    requested_workers = int(scheduler.get("requestedMaxWorkers") or local_max)
+    requested_workers = _positive_int(scheduler.get("requestedMaxWorkers"))
+    effective_workers = _positive_int(scheduler.get("effectiveWorkerCount")) or requested_workers or configured_local_max or 1
+    scheduler_local_max = _positive_int(scheduler.get("localCursorMaxWorkers")) or configured_local_max
+    observed_local_max = max(configured_local_max, scheduler_local_max, effective_workers, requested_workers)
+    local_max = observed_local_max or 1
+    if prompt_count > 1:
+        local_max = max(scheduler_local_max, effective_workers, requested_workers, 1)
+    requested_workers = requested_workers or local_max
     issues: list[str] = []
-    if observed_local_max <= 1:
+    if configured_local_max == 1 or (scheduler_local_max == 1 and requested_workers <= 1 and effective_workers <= 1):
         issues.append("local managed worker cap is 1, so startup-heavy agent jobs cannot parallelize effectively")
     if prompt_count >= requested_workers and requested_workers > effective_workers:
         issues.append(
@@ -796,6 +937,20 @@ def _trial_strategy(
                 f"--task '{task_id}' --batch {clean_batch} --compare {batch_id} --write"
             ),
         ]
+    elif category == "image_asset_strategy_blocker":
+        mode = "asset_strategy_provider_or_prescreened_pool_required"
+        commands = [
+            f"python3 quwoquan_data/scripts/cli.py task lint '{task_id}'",
+            (
+                "python3 quwoquan_data/scripts/cli.py task run "
+                f"--task '{task_id}' --batch {clean_batch} --managed --runtime local "
+                "--release-only --max-workers 2"
+            ),
+            (
+                "python3 quwoquan_data/scripts/cli.py task trial-review "
+                f"--task '{task_id}' --batch {clean_batch} --compare {batch_id} --write"
+            ),
+        ]
     elif category == "source_sufficiency_blocker":
         mode = "source_ready_repair_or_replace"
         limit = int(scope.get("targetCount") or 100)
@@ -811,6 +966,23 @@ def _trial_strategy(
                 f"--name '{replacement_task_name}' --write"
             ),
         ]
+    elif category in {"partial_delivery_checkpoint_waiting", "partial_delivery_manual_required"}:
+        mode = "resume_partial_delivery_from_checkpoint"
+        commands = [
+            (
+                "python3 quwoquan_data/scripts/cli.py task audit-batch "
+                f"--task '{task_id}' --batch {batch_id} --json --write"
+            ),
+            (
+                "python3 quwoquan_data/scripts/cli.py task run "
+                f"--task '{task_id}' --batch {batch_id} --managed --runtime local "
+                "--release-only --max-workers 2"
+            ),
+            (
+                "python3 quwoquan_data/scripts/cli.py verify scale-readiness "
+                f"--task '{task_id}' --batch {batch_id} --daily-target 100 --mode trial --allow-missing-import"
+            ),
+        ]
     elif category == "cursor_sdk_infra_failure":
         mode = "managed_author_retry_after_infra_recovery"
         commands = [
@@ -822,6 +994,22 @@ def _trial_strategy(
             (
                 "python3 quwoquan_data/scripts/cli.py task run "
                 f"--task '{task_id}' --batch {batch_id} --managed --runtime local --release-only --max-workers 2"
+            ),
+        ]
+    elif category == "workflow_interrupted":
+        mode = "rerun_interrupted_checkpoint_from_clean_batch"
+        commands = [
+            (
+                "python3 quwoquan_data/scripts/cli.py task audit-batch "
+                f"--task '{task_id}' --batch {batch_id} --json --write"
+            ),
+            (
+                "python3 quwoquan_data/scripts/cli.py task run "
+                f"--task '{task_id}' --batch {clean_batch} --reset-state --until {terminal_cause.get('stage') or 'download_plan'}"
+            ),
+            (
+                "python3 quwoquan_data/scripts/cli.py task trial-review "
+                f"--task '{task_id}' --batch {clean_batch} --compare {batch_id} --write"
             ),
         ]
     else:
@@ -836,13 +1024,21 @@ def _trial_strategy(
                 f"--task '{task_id}' --batch {clean_batch} --daily-target 100 --mode trial --allow-missing-import"
             ),
         ]
+    stop_after = "publish"
+    if mode == "asset_strategy_provider_or_prescreened_pool_required":
+        stop_after = "task_preflight"
+    elif mode == "deterministic_until_content_plan":
+        stop_after = "content_plan"
+    elif mode == "rerun_interrupted_checkpoint_from_clean_batch":
+        stop_after = str(terminal_cause.get("stage") or "download_plan")
     return {
         "mode": mode,
         "recommendedBatchId": clean_batch,
-        "stopAfter": "content_plan" if mode == "deterministic_until_content_plan" else "publish",
+        "stopAfter": stop_after,
         "commands": commands,
         "successCriteria": [
-            "lanePassed homepage/article/image equals targetCount",
+            "imageAssetStrategy.scaleIssues is empty before managed run",
+            "lanePassed homepage/article/image is recorded as fulfillment evidence, not a release quota blocker",
             "workflowState exists and terminal cause is not environment/workflow bootstrap",
             "TokenLedger appears after author stage",
             "release/import/smoke evidence appears before scale",
@@ -1004,9 +1200,10 @@ def build_trial_review(
     env: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     spec = store.load_spec(task_id)
+    env_map = env if env is not None else os.environ
     scope = _trial_scope(spec)
     workflow = _workflow_snapshot(task_id, batch_id)
-    evidence = _artifact_evidence(task_id, batch_id)
+    evidence = _artifact_evidence(task_id, batch_id, spec)
     current_score = _failure_score(workflow, evidence)
     comparisons = _compare_scores(compare_runs or [])
     convergence = _convergence(current_score, workflow, comparisons)
@@ -1014,14 +1211,15 @@ def build_trial_review(
         scope=scope,
         workflow=workflow,
         evidence=evidence,
-        env=env or os.environ,
+        env=env_map,
     )
     efficiency = _efficiency_assessment(scope, workflow)
     terminal_cause = _terminal_cause(
+        scope=scope,
         workflow=workflow,
         evidence=evidence,
         blockers=blockers,
-        env=env or os.environ,
+        env=env_map,
     )
     return {
         "schemaVersion": SCHEMA_VERSION,

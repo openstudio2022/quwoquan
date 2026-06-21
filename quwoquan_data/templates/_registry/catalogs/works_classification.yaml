@@ -1,0 +1,92 @@
+schemaVersion: quwoquan.works_classification.v1
+# 作品 vs 随记判定的版本化配置（唯一真相源）。
+# version 写入每条 WorksClassificationVerdict.thresholdsVersion，可审计、可回滚。
+# 改判定行为：改本文件 version + 阈值，再跑判定与门禁；禁止在代码里散落魔数阈值。
+version: 1
+
+# ── 来源专业度分层权重（与 content_source_registry.yaml: sourceTierSignals 同源）──
+# 综合作品度得分中"来源先验"部分的权重贡献。
+tierWeights:
+  tier1_authoritative: 1.00
+  tier2_professional: 0.85
+  tier3_quality_ugc: 0.55
+  tier4_casual: 0.25
+  tier5_reject: 0.00
+
+# 来源类别的"作品倾向"先验权重。
+affinityWeights:
+  work_strong: 1.00
+  work: 0.80
+  neutral: 0.50
+  moment: 0.20
+  reject: 0.00
+
+# 综合作品度得分 = tierWeights * tierWeight + affinityWeights * affinityWeight + contentSignal * contentWeight
+scoreWeights:
+  tier: 0.45
+  affinity: 0.25
+  content: 0.30
+
+# ── 内容实测信号阈值（与 _common/content_evidence.score_source_markdown 对接）──
+contentSignals:
+  # 文本质量等级 ∈ {A-story, B-fact, C-context, Reject}
+  rejectQualityTier: Reject
+  workMinSourceScore: 4          # 低于此分（C-context 及以下）丧失作品资格
+  # 内容自证：实测质量达此级且有结构/足够篇幅 → 直接判作品，不被低来源先验拖累。
+  # 对齐 article lanePolicy.noIntrinsicPriorityBySourceClass（文章只看内容质量，不按来源类别天然升降级）。
+  selfProveQualityTiers: [A-story, B-fact]
+  # 真实站点抓取的正文常是纯文本而非 Markdown。以下结构标记只作为“小节存在”
+  # 的证据，仍需 B-fact/A-story 的质量分共同满足才可内容自证。
+  plainTextSectionMarkers:
+    - 前言
+    - 说说这次旅行
+    - 行程
+    - 路线
+    - 交通
+    - 住宿
+    - 门票
+    - 费用
+    - 美食
+    - 实用提醒
+    - 注意事项
+  plainTextSectionPatterns:
+    - '第\s*[0-9一二三四五六七八九十]+\s*天'
+    - '\bDay\s*[0-9]+\b'
+  # 内容实测子分（structure/factDensity/narrative/image 归一后加权）
+  structureWeight: 0.35
+  factDensityWeight: 0.30
+  narrativeWeight: 0.20
+  imageWeight: 0.15
+
+# ── 随记(moment)启发式：命中即强烈倾向 moment（不生产）──
+# 仅列真碎片流来源（即时社交/微博/短视频流）；社区帖子(community_post)等的碎片性
+# 由内容信号(too_short/no_section)判定，不靠来源类别先验拉黑其长经验帖。
+casualHeuristics:
+  maxCharsForCasual: 180         # 去空白后正文/底稿极短 → 随记
+  requireSectionForLongform: true
+  casualAffinitySourceClasses: [social_feed, microblog, short_video_feed]
+
+# ── 综合 score → decision 分档（半开区间，band 间不重叠）──
+decisionBands:
+  workMinScore: 0.50             # >= 0.50 → work
+  abandonedMaxScore: 0.20        # < 0.20 → abandoned(low_professionalism)
+  # [0.20, 0.50) → moment
+
+# ── 载体判定阈值（decision=work 时）──
+carrierRules:
+  minNarrativeForArticle: 2      # 叙事证据点 >= 此值优先 article
+  minImagesForImageWork: 4       # 可发布图 >= 此值且叙事稀薄 → image 作品
+  lowNarrativeForImage: 1        # 叙事证据点 <= 此值视为叙事稀薄
+
+# ── 三形态配额（continuous supply / 站点全量分类入库的形态约束）──
+carrierQuotas:
+  homepage: { minPerEntity: 1 }
+  article: { weight: 0.50 }
+  image: { weight: 0.30 }
+  video: { weight: 0.20, deferred: true }   # video 作品后置（Phase 5）
+
+# ── 抽检采样率（门禁分层执行模型：软门抽检比例）──
+samplingRates:
+  softGateSampleRatio: 0.15
+  batchGateSampleRatio: 0.05
+  worksDecisionAuditRatio: 0.10

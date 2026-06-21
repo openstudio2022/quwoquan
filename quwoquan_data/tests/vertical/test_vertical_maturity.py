@@ -39,10 +39,25 @@ def test_vertical_script_governance_passes_with_campus_wrappers():
     assert verify_vertical_script_governance() == []
 
 
-def test_photography_image_rights_blocks_pinterest_and_missing_license():
+def test_photography_image_rights_are_asset_level_not_platform_name_level():
     issues = validate_image_rights({"url": "https://example.com/a.jpg", "platform": "Pinterest"}, vertical="photography")
-    assert any("Pinterest" in issue for issue in issues)
     assert any("missing required field license" in issue for issue in issues)
+    assert not any("Pinterest" in issue for issue in issues)
+
+    authorized = validate_image_rights(
+        {
+            "url": "https://example.com/a.jpg",
+            "platform": "Pinterest",
+            "license": "Unsplash License",
+            "credit": "Original Creator",
+            "sourceUrl": "https://example.com/original",
+            "termsUrl": "https://unsplash.com/license",
+            "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
+        },
+        vertical="photography",
+    )
+    assert authorized == []
 
 
 def test_photography_image_rights_accepts_authorized_payload():
@@ -62,7 +77,7 @@ def test_photography_image_rights_accepts_authorized_payload():
     assert issues == []
 
 
-def test_travel_image_rights_blocks_discovery_platform_and_accepts_authorized_payload():
+def test_travel_image_rights_are_asset_level_and_accept_authorized_payload():
     policy = load_travel_license_policy()
     assert policy["vertical"] == "travel"
     issues = validate_image_rights(
@@ -72,7 +87,8 @@ def test_travel_image_rights_blocks_discovery_platform_and_accepts_authorized_pa
         },
         vertical="travel",
     )
-    assert any("灵感或参考" in issue for issue in issues), issues
+    assert any("missing required field license" in issue for issue in issues), issues
+    assert not any("灵感或参考" in issue for issue in issues), issues
     allowed = validate_image_rights(
         {
             "url": "https://example.com/t2.jpg",

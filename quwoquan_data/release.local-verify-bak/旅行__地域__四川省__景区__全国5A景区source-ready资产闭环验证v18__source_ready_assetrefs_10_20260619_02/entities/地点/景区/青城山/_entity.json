@@ -1,0 +1,52 @@
+{
+  "label": "青城山",
+  "domain": "地点",
+  "type": "景区",
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "entityRef": "/entity/地点/景区/青城山",
+  "summary": "青城山是著名的中国历史名山和国家重点风景名胜区，并于2000年同都江堰共同作为一项世界文化遗产被列入世界遗产名录。",
+  "conditionProfile": {
+    "regions": [
+      "高原",
+      "平原都市"
+    ],
+    "seasons": [
+      "春",
+      "秋"
+    ],
+    "evidenceRefs": [
+      {
+        "field": "regions",
+        "value": "高原",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "青城山 主页正文概况与空间特征归纳"
+      },
+      {
+        "field": "regions",
+        "value": "平原都市",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "青城山 主页正文概况与空间特征归纳"
+      },
+      {
+        "field": "seasons",
+        "value": "春",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "青城山 主页正文季节与游览信息归纳"
+      },
+      {
+        "field": "seasons",
+        "value": "秋",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "青城山 主页正文季节与游览信息归纳"
+      }
+    ]
+  },
+  "sourceRefs": [
+    "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md"
+  ]
+}

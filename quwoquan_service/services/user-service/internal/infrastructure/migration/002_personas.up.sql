@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS personas (
     phone                    VARCHAR(20),
     email                    VARCHAR(128),
     avatar_url               TEXT,
+    avatar_version           INTEGER NOT NULL DEFAULT 0,
+    background_url           TEXT,
     caller_ringtone_id       VARCHAR(64),
     theme_mode_override      VARCHAR(16),
     font_size_preset_override VARCHAR(16),

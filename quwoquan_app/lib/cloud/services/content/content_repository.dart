@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_dto.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_error_code_ext.dart';
@@ -14,7 +16,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 export 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_dto.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/content/comment_dto.g.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/content/post_search_item_view_dto.g.dart';
+export 'package:quwoquan_app/cloud/runtime/models/comment_counts_delta.dart'
+    show CommentCountsDelta;
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/models/comment_counts_delta.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_reaction_state.dart';
@@ -49,5 +54,7 @@ export 'package:quwoquan_cloud_contracts/content_repository.dart'
         kFeedSortRecommend;
 
 part 'content_repository_mock.dart';
+part 'content_repository_mock_comment_logic.dart';
+part 'content_repository_mock_posts.dart';
 part 'content_repository_mock_search.dart';
 part 'content_repository_remote.dart';

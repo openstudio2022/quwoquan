@@ -25,7 +25,7 @@ entries:
       S0 基线冻结：建 session6-arch-growth-closure 分支，冻结 A 代码残留 / B git 分支 / C 同源缺口
       三类清单 + V6 验收基线（G1–G9 + 军规零违规门）。
       S1 标签真同源：物理删除扁平 tag_taxonomy.yaml + tag_ref_migration.yaml；domain_taxonomy.yaml
-      user_tag_ref 切路径制 tagRef（唯一真相源 quwoquan_data/publish/v1/tags）；重写
+      user_tag_ref 切路径制 tagRef（唯一真相源 quwoquan_data/publish/tags）；重写
       verify_tag_ref_source_of_truth.py（C1 强制物理删除 / C3 no_legacy_ids 校验可解析）+ 同步
       verify_contract_metadata.sh。
       S2 内容投影单轨：删 PostReadProjectionFacade，3 处调用内联 PostReadPresentation.fromPostBase；

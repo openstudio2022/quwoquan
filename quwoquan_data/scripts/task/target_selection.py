@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -305,7 +306,11 @@ def build_multimodal_spec(
     targets: list[dict[str, str]],
     created_by: str,
     reserve_targets: list[dict[str, str]] | None = None,
+    entity_articles_per_target: int = 4,
+    image_works_per_target: int = 1,
 ) -> dict[str, Any]:
+    entity_articles_per_target = max(0, int(entity_articles_per_target))
+    image_works_per_target = max(0, int(image_works_per_target))
     spec = store.scaffold_spec(
         vertical="travel",
         organize_by="地域",
@@ -331,33 +336,41 @@ def build_multimodal_spec(
                 "lanes": ["homepage", "article", "image"],
                 "maxConcurrency": 10,
                 "laneConcurrency": {"homepage": 3, "article": 3, "image": 4},
+                "imageAssetStrategy": "open_license_publish",
+                "imageCountPolicy": "score_bonus",
                 "allowAiImages": False,
             },
             "carriers": ["article", "image"],
             "quotas": {
-                "entityArticlesPerTarget": 4,
-                "imageWorksPerTarget": 2,
+                "entityArticlesPerTarget": entity_articles_per_target,
+                "imageWorksPerTarget": image_works_per_target,
                 "entityHomepagesPerTarget": 1,
                 "routeArticles": 0,
             },
         },
         acceptance={
             "minEntities": len(targets),
-            "minPostsPerEntity": 6,
+            "minPostsPerEntity": entity_articles_per_target,
             "requiredAngles": [
                 "planning_consultation",
                 "decision_experience",
                 "route_transport",
                 "seasonal_timing",
-                "image",
             ],
+            "scoredAngles": (["image"] if image_works_per_target else []),
         },
         created_by=created_by,
     )
     spec["status"] = "active"
+    reserve_count = len(reserve_targets or [])
+    replacement_candidates_per_wave = max(8, min(50, int(math.ceil(max(len(targets), 1) * 0.25))))
+    replacement_waves = max(3, int(math.ceil(max(reserve_count, 1) / replacement_candidates_per_wave)))
     spec["workflowPolicy"] = {
         "allowPartialContent": True,
         "deliveryMode": "partial_with_replacement_report",
+        "maxReplacementWaves": replacement_waves,
+        "maxReplacementCandidatesPerWave": replacement_candidates_per_wave,
+        "maxReplacementScreenedPerRun": max(reserve_count, replacement_candidates_per_wave),
     }
     spec["queuePolicy"] = {
         "backend": "reliabletask",
@@ -584,6 +597,29 @@ def audit_managed_batch(
             continue
         failed.append(item)
         failed_index[key] = item
+    from _common.entity_artifacts import inactive_entity_artifact_rows
+
+    inactive_artifacts = inactive_entity_artifact_rows(
+        task_id,
+        batch_id,
+        active_entity_names=ctx.entity_ids,
+    )
+    for row in inactive_artifacts:
+        entity = str(row.get("entity") or "")
+        key = (entity, "homepage")
+        issue = (
+            "inactive entity has generated homepage artifact(s) outside active target set: "
+            + ", ".join(str(item) for item in (row.get("artifacts") or [])[:8])
+        )
+        existing = failed_index.get(key)
+        if existing is not None:
+            issues = existing.setdefault("issues", [])
+            if issue not in issues:
+                issues.append(issue)
+            continue
+        item = {"entity": entity, "lane": "homepage", "issues": [issue]}
+        failed.append(item)
+        failed_index[key] = item
     for item in failed:
         lane = str(item.get("lane") or "")
         entity = str(item.get("entity") or "")
@@ -602,6 +638,8 @@ def audit_managed_batch(
         "replacementObjects": state.get("replacementObjects") or [],
         "abandonedContentCount": len(abandoned_content_rows),
         "abandonedContentObjects": abandoned_content_rows,
+        "inactiveEntityArtifactCount": len(inactive_artifacts),
+        "inactiveEntityArtifacts": inactive_artifacts,
         "lanePassed": passed,
         "failedLaneCount": len(failed),
         "failedLanes": failed,
@@ -660,9 +698,12 @@ def handle_select_targets(args: argparse.Namespace) -> None:
         targets=targets,
         reserve_targets=report.get("reserveTargets") or [],
         created_by=args.owner or "task select-targets",
+        entity_articles_per_target=int(getattr(args, "entity_articles_per_target", 4) or 0),
+        image_works_per_target=int(getattr(args, "image_works_per_target", 1) or 0),
     )
     report["sourceTaskId"] = source_task
     report["taskId"] = spec["taskId"]
+    report["quotas"] = (spec.get("content") or {}).get("quotas") or {}
     if args.write:
         path = write_selected_task(spec, report, force=bool(args.force))
         print(f"[task select-targets] wrote {spec['taskId']}")

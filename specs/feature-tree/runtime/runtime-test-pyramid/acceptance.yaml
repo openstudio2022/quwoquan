@@ -17,16 +17,33 @@ sit_acceptance:
     done_when:
     - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
     tests:
       planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.runtime.runtime_test_pyramid.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.runtime.runtime_test_pyramid.sit1.sit1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.runtime.runtime_test_pyramid.sit1.sit1_local_contract
+        envs: *id001
+    notes:
+    - '2026-06-21 migration baseline: acceptance.yaml normalized (153 files); verify-test-specs + verify-test-directory-layout gates green; App 377 canonical wrappers under test/{local_contract,api_integration,user_acceptance}; Service canonical roots bridged for user/content/chat (inventory local_contract + legacy runner api_integration); legacy inventory locked in specs/gates/test_directory_inventory.yaml (App 377 / Service 198 / Data 100 / agent_ops 8); R-TST01/02/03 registered in docs/outstanding_risks_backlog.md.'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -19,15 +19,27 @@ domain_acceptance:
       - domain-owned objects are explicit
       - upstream and downstream dependencies are explicit
       - app, metadata, service, deploy and test mappings are registered
-    evidence:
+    test_evidence:
       primary:
-        - T1_static_contract
-        - T3_service_contract
+        - layer: local_contract
+          suite: domain_boundary_local_contract
+          cases:
+            - local_contract.domain.boundary.static_contract
+          envs: [local]
+        - layer: api_integration
+          suite: domain_boundary_api_integration
+          cases:
+            - api_integration.domain.service.contract
+          envs: [beta, gamma]
       supporting:
-        - T4_affected_user_journey
+        - layer: user_acceptance
+          suite: domain_user_acceptance
+          cases:
+            - user_acceptance.journey-id.scenario-id.domain_effect
+          envs: [gamma]
     tests:
       planned:
-        - domain contract or gate check
+        - command: replace-with-real-domain-gate-or-test-command
       recorded: []
     status: pending
 

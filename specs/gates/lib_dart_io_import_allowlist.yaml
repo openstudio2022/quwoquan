@@ -18,6 +18,7 @@ allowed:
   - cloud/runtime/http/cloud_http_client.dart
   - cloud/runtime/http/retry_http_client.dart
   - cloud/services/behavior/behavior_repository.dart
+  - components/media/app_media_image.dart
   - components/media/image/editor/filter/image_editor_filter_repository.dart
   - components/media/image/editor/image_editor_page.dart
   - components/media/picker/create_media_picker_page.dart
@@ -26,7 +27,6 @@ allowed:
   - core/services/cache/local_circle_group_snapshot_store.dart
   - ui/chat/pages/chat_conversation_page.dart
   - ui/chat/widgets/voice/voice_recorder.dart
-  - ui/circle/widgets/circle_media_image.dart
   - ui/content/article_image_intrinsic_registry.dart
   - ui/content/entry/pages/create_page.dart
   - ui/content/entry/pages/video_editor_page.dart

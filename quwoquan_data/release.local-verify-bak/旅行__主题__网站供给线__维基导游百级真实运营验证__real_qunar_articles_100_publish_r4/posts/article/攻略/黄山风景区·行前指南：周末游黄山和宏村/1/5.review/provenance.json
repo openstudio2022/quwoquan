@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_3663a00c83a4f1ad",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "黄山风景区·行前指南：周末游黄山和宏村",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-ab51e873-0138-49f0-95ba-d3ae9a3c99d7",
+    "agentId": "agent-1882cc6e-5b0f-43a2-8466-4ef0249c2847",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/黄山风景区"
+    ],
+    "articleDigest": "sha256:e8aedcc1b61e676aec8e3b9a453e4887eeeed1eb5b0329d900333baf4898c061"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "黄山风景区·行前指南：周末游黄山和宏村",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:8f1091bfecbf580ffbf622d2a3d63200bce4dd38d969e239b30c5f863d7084ea",
+    "writingPackSha256": "sha256:5aa342868993dc765ff0f75e1d18af1af92926a8a78aa6a4bdf99cd16d7dbe11",
+    "sourceBundleSha256": "sha256:a4919e926a1688a9161a1719a9de271056cee5327d454cd103a34716c14894e1",
+    "draftSha256": "sha256:0cf6049d7da3316079d363e48140a1b69377c78dd5daed557fc4335954d21b35"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/04.qunar_guide_candidate_0d96b9b9ae750ba0/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7896321"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/25.qunar_guide_candidate_3663a00c83a4f1ad/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7891068"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/54.qunar_guide_candidate_7128a2ec11884ba0/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7902694"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/57.qunar_guide_candidate_78a02fc8ebb3615c/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7901394"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/64.qunar_guide_candidate_8bfee6dfa70c54e2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7899260"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/93.qunar_guide_candidate_d1dce837ab623b65/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7860188"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/98.qunar_guide_candidate_e170b25063065cf8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7893555"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/黄山风景区/1.download/sources/25.qunar_guide_candidate_3663a00c83a4f1ad/source.md",
+    "entities/地点/景区/黄山风景区/1.download/sources/04.qunar_guide_candidate_0d96b9b9ae750ba0/source.md",
+    "entities/地点/景区/黄山风景区/1.download/sources/54.qunar_guide_candidate_7128a2ec11884ba0/source.md"
+  ]
+}

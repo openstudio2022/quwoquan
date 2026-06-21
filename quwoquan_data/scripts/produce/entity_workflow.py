@@ -27,7 +27,7 @@ from _common.draft_io import (
     write_writing_pack,
 )
 from _common.content_tags import resolved_content_tag_refs
-from _common.stage_reports import write_gate_report, write_repair_report, write_stage_result
+from _common.stage_reports import clear_repair_report, write_gate_report, write_repair_report, write_stage_result
 from _common.template_fingerprints import template_fingerprint_issues
 from _common.writing_pack import build_writing_pack, render_prompt_md
 from produce.route_workflow import (
@@ -529,6 +529,8 @@ def review_entity_draft(
             fallback_stage=fallback,
             rerun_chain=rerun_chain,
         )
+    else:
+        clear_repair_report(task_id=task_id, batch_id=batch_id, command="produce", ref=ref)
     return payload
 
 

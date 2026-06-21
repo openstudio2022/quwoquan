@@ -7,11 +7,15 @@ description: |
   挂载点共用同一结构：feed item、对象推荐卡、对象页交集卡（你和这里的交集 / 你们的交集）、内容卡交集线索。
 
   闭集枚举（端按字符串解析）：
+    kind:      §23 一等字段，交集 kind 真相源（registry.kinds.kind，如 sharedFollowees / sameSchool / coVisitedEntity）；
+               端查 IntersectionKindMetadata 表得 iconKey/objectKind/dimensions/actionHints/tone/vertical，禁止端再 intersectionKindOf 推导。
+               兼容期 alias sourceRef（旧数据把 kind 放在 sourceRef）。
+    vertical:  §23.4 垂类正交标注（general | travel_photography | campus，缺省 general）；与 kind 注册表 vertical 对齐。
     dimension: identity | location | content | interest | relationship（5 源闭集，稳定用户语言来源）
     source:    tagRef | geoTagRef | entityRef | followEdge | contact
     actionType: follow | join | add_contact | view_object
     relationKind: follow | contact | mutual（relationship 维度无标签锚点时使用；禁止再承载对象类型语义）
-    objectKind: person | circle | school | place | enterprise（对象类型闭集，统一品牌蓝角标「人/圈/校/地/企」真相源）
+    objectKind: person | circle | school | place | enterprise | route | photo_spot | gear（对象类型闭集，统一品牌蓝角标真相源；§22.2 旅行摄影扩展）
     intersectionClass: fact | affinity（fact = 可向用户说明的事实交集；affinity = 算法概率推荐，不伪装事实）
     weightTier: light | heavy（内容卡交集轻/重等级，云侧离散产出；无 reason 即无交集，承载 70/20/10 频率契约）
 
@@ -50,7 +54,21 @@ client_projection:
     - intersection_dimension_tally.g.dart
     - intersection_text_span.g.dart
     - intersection_visual.g.dart
+    - intersection_representative_actor.g.dart
+    - intersection_action_hint.g.dart
   fields:
+    - name: kind
+      dart_type: String
+      nullable: false
+      source: kind
+      aliases: [kind, sourceRef]
+      default: "''"
+    - name: vertical
+      dart_type: String
+      nullable: false
+      source: vertical
+      aliases: [vertical]
+      default: "'general'"
     - name: dimension
       dart_type: String
       nullable: false
@@ -251,6 +269,21 @@ client_projection:
       source: sampleVisuals
       aliases: [sampleVisuals]
       list_element_dart_class: IntersectionVisual
+    # 代表人锚点 + 行动建议（§17.1.1 / §21.5.3）：
+    #   representativeActor 是人数句数字前的人物锚点，必须来自同一 pointSummarySnapshotId。
+    #   actionHints 是云侧按 kind/helpType 下发的下一步建议；端只渲染，不按 kind 猜测。
+    - name: representativeActor
+      dart_type: IntersectionRepresentativeActor
+      nullable: true
+      source: representativeActor
+      aliases: [representativeActor]
+      map_from_string_key_class: IntersectionRepresentativeActor
+    - name: actionHints
+      dart_type: List<IntersectionActionHint>
+      nullable: false
+      source: actionHints
+      aliases: [actionHints]
+      list_element_dart_class: IntersectionActionHint
     # 架构基线 v2（§21）：以下字段由 content-service 交集异步物化投影真算填充
     #   （ReadModelIntersectionSource 写/刷新路径 + intersection_graph_materializer，
     #    读路径热命中零计算零同步打分消费，R-IX01 不变量保持；缺省仍走默认值兜底）。

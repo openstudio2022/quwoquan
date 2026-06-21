@@ -189,8 +189,8 @@ def test_download_requirements_follow_separated_image_and_homepage_quota():
     store.save_spec(one_work)
     store.save_spec(two_works)
 
-    assert download_requirements(one_work["taskId"])["minImages"] == 2
-    assert download_requirements(two_works["taskId"])["minImages"] == 3
+    assert download_requirements(one_work["taskId"])["minImages"] == 0
+    assert download_requirements(two_works["taskId"])["minImages"] == 0
     assert download_requirements(one_work["taskId"])["minArticleBaseSources"] == 4
     assert download_requirements(two_works["taskId"])["minArticleBaseSources"] == 2
 
@@ -466,6 +466,8 @@ def test_lane_scoped_homepage_download_preserves_other_lanes():
                 f"{_EID} 景区由雪山、海子、草甸和游客中心组成，游览前需要确认门票预约。"
                 f"核心线路通常围绕冲古寺、洛绒牛场、牛奶海和五色海展开。"
                 f"景区海拔变化明显，徒步时要注意补给、保暖、防晒和返程时间。"
+                f"开放时间为每日8:00-17:00，旺季建议提前在线购票。"
+                f"{_EID} 位于四川省甘孜藏族自治州，最佳游览季节为秋季，建议预留两天徒步时间。"
             ),
             "sha256": "sha-source",
         }

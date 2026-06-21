@@ -97,6 +97,48 @@ void main() {
       expect(actualWireValues.length, expectedWireValues.length);
     });
 
+    // ── N10：ReferralSource 闭集与云侧 behaviors.yaml enum / ReferralSourceMultiplier 键对齐 ──
+    test('ReferralSource.value 闭集与 metadata enum 一一对应（含 my_intersections）', () {
+      final values = ReferralSource.values.map((s) => s.value).toSet();
+      expect(values, <String>{
+        'organic_feed',
+        'friend_share',
+        'chat_link',
+        'circle_post',
+        'author_profile',
+        'entity_page',
+        'search',
+        'push_notification',
+        'deep_link',
+        'my_intersections',
+      });
+    });
+
+    test('referralSourceForObjectType 按对象面精确映射（去 organicFeed 一刀切）', () {
+      expect(
+        referralSourceForObjectType('user'),
+        ReferralSource.authorProfile,
+      );
+      expect(
+        referralSourceForObjectType('circle'),
+        ReferralSource.circlePost,
+      );
+      expect(
+        referralSourceForObjectType('entity'),
+        ReferralSource.entityPage,
+      );
+      expect(
+        referralSourceForObjectType('homepage'),
+        ReferralSource.entityPage,
+      );
+      // 未知 / 缺省对象面回退作者主页（最近邻，非推荐流）。
+      expect(referralSourceForObjectType(''), ReferralSource.authorProfile);
+      expect(
+        referralSourceForObjectType('  circle  '),
+        ReferralSource.circlePost,
+      );
+    });
+
     test('toJson 使用 wireValue 而非 enum name', () {
       final event = BehaviorEvent(
         contentId: 'post_1',

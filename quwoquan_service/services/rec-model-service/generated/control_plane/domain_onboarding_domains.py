@@ -893,7 +893,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     "replication": {
       "copy_notes": [
         "只读标签服务；复用 codegen_storage manifest 模式生成 domain/store/migrator。",
-        "标签真相源为数据工程 publish/v1/tags，tag-service 只读消费导入产物，不写不产事件。"
+        "标签真相源为数据工程 publish/tags，tag-service 只读消费导入产物，不写不产事件。"
       ],
       "next_copy_targets": [],
       "source_template": "entity"

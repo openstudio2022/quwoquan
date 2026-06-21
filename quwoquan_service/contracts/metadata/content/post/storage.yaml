@@ -44,18 +44,30 @@ collections:
   comments:
     entity: Comment
     indexes:
-      - { name: idx_comments_post_created, keys: { postId: 1, createdAt: -1 } }
-      - { name: idx_comments_author, keys: { authorId: 1, createdAt: -1 } }
+      # 一级列表/扁平列表 keyset 复合索引均把 _id 纳入排序尾键：(排序键..., createdAt, _id)
+      # 全量覆盖 ListTopLevel/ListReplies 的稳定排序，消除 _id tiebreak 触发的阻塞内存 SORT。
+      - { name: idx_comments_post_created, keys: { postId: 1, createdAt: -1, _id: -1 }, description: "一级 latest keyset：(createdAt,_id) 倒序 seek" }
+      - { name: idx_comments_author, keys: { authorId: 1, createdAt: -1, _id: -1 }, description: "我的评论 keyset" }
       - { name: idx_comments_reply, keys: { replyToCommentId: 1 }, sparse: true }
-      - { name: idx_comments_parent_created, keys: { postId: 1, parentCommentId: 1, createdAt: 1 }, sparse: true, description: "二级回复展开分页索引" }
-      - { name: idx_comments_hot, keys: { postId: 1, likeCount: -1, createdAt: -1 }, description: "热评排序索引" }
-      - { name: idx_comments_recommended, keys: { postId: 1, recommendedScore: -1, createdAt: -1 }, sparse: true, description: "默认 recommended 排序索引" }
+      - { name: idx_comments_parent_created, keys: { postId: 1, parentCommentId: 1, createdAt: -1, _id: -1 }, description: "二级回复展开 keyset seek：(createdAt,_id) 倒序" }
+      - { name: idx_comments_hot, keys: { postId: 1, likeCount: -1, createdAt: -1, _id: -1 }, description: "most_liked 排序索引（非置顶段 keyset seek，全覆盖排序）" }
+      - { name: idx_comments_recommended, keys: { postId: 1, recommendedScore: -1, createdAt: -1, _id: -1 }, description: "默认 recommended 排序索引（非置顶段 keyset seek，全覆盖排序）" }
+      - { name: idx_comments_pinned, keys: { postId: 1, pinnedAt: -1, _id: -1 }, partialFilterExpression: { isPinned: true }, description: "置顶段两段查询索引：消除一级列表 {isPinned,pinnedAt} 阻塞内存 SORT，置顶按 (pinnedAt,_id) 倒序 keyset seek" }
+      - { name: idx_comments_deleted, keys: { postId: 1, deletedAt: -1 }, partialFilterExpression: { status: "deleted" }, description: "GetCommentCountsDelta 删除增量索引：status=deleted 且 deletedAt>since 计数" }
       - { name: idx_comments_homepage_created, keys: { primaryHomepageId: 1, createdAt: -1 }, sparse: true }
       - { name: idx_comments_canonical_entity, keys: { canonicalEntityId: 1, createdAt: -1 }, sparse: true }
     search_indexes:
       - name: search_comments_text
         type: text
         fields: [content]
+
+  comment_reactions:
+    entity: Comment
+    description: 评论三态反应权威成员关系（_id = commentId|userId）；评论赞/踩计数由本集合 idx_comment_reactions_comment 索引 CountDocuments 直接派生，无 Redis 镜像（消除只写不读集合与读穿计数器 stale-backfill 竞态）
+    indexes:
+      - { name: idx_comment_reactions_comment, keys: { commentId: 1, reaction: 1 }, description: "按评论聚合 like/dislike 计数派生" }
+      - { name: idx_comment_reactions_user, keys: { userId: 1, commentId: 1 }, description: "viewer 对一批评论的反应批量解析" }
+    write_pattern: upsert
 
   media_assets:
     entity: MediaAsset
@@ -122,34 +134,8 @@ redis_cache:
     type: hash
     description: 评论总结缓存
 
-  - key: "comment_hot:{postId}"
-    ttl_seconds: 300
-    type: sorted_set
-    description: 热帖热评 Top-N 缓存（score = hotScore，member = commentId）
-    invalidate_on: [CommentCreated, CommentReacted, CommentDeleted]
-
-  - key: "comment_recommended:{postId}"
-    ttl_seconds: 300
-    type: sorted_set
-    description: 默认推荐评论缓存（score = recommendedScore，member = commentId）
-    invalidate_on: [CommentCreated, CommentReacted, CommentDeleted]
-
-  - key: "comment_like:{commentId}"
-    ttl_seconds: null
-    type: set
-    description: 评论点赞用户集（SISMEMBER 去重）
-
-  - key: "comment_dislike:{commentId}"
-    ttl_seconds: null
-    type: set
-    description: 评论点踩用户集（与点赞互斥）
-
-  - key: "counter:comment:{commentId}:like"
-    ttl_seconds: null
-    type: string
-    description: 评论赞数计数器（INCR + 异步刷盘）
-
-  - key: "counter:comment:{commentId}:dislike"
-    ttl_seconds: null
-    type: string
-    description: 评论踩数计数器（INCR + 异步刷盘）
+  # 评论排行 ZSet（comment_hot / comment_recommended）已删除：旧实现只写不读
+  # （读路径直接走 Mongo 复合索引 keyset 分页），ZSet 与可变分值 + 置顶两段序的
+  # 一致性成本过高且属第二排序真相源（R24）。评论赞踩集合镜像与 per-comment 读穿
+  # 计数器（comment_like/comment_dislike/counter:comment:*）同样只写不读且存在
+  # stale-backfill 竞态，已删除：赞踩计数由 comment_reactions 集合权威派生。

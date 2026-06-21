@@ -3,12 +3,14 @@ part of 'app_providers.dart';
 class ClientStateSyncOutboxNotifier
     extends Notifier<ClientStateSyncOutboxState> {
   Timer? _flushTimer;
+  final Map<String, bool> _inFlightDesiredValues = <String, bool>{};
 
   @override
   ClientStateSyncOutboxState build() {
     unawaited(_hydratePersistedState());
     ref.onDispose(() {
       _flushTimer?.cancel();
+      _inFlightDesiredValues.clear();
     });
     return const ClientStateSyncOutboxState();
   }
@@ -17,15 +19,23 @@ class ClientStateSyncOutboxNotifier
     final raw = await _readPersistedInteractionMap(
       _clientStateSyncOutboxStorageKey,
     );
+    if (!ref.mounted) {
+      return;
+    }
     if (raw == null) {
       return;
     }
-    state = ClientStateSyncOutboxState.fromMap(raw);
+    state = state.copyWith(
+      entries: _dropResolvedEntries(
+        ClientStateSyncOutboxState.fromMap(raw).entries,
+      ),
+    );
     _scheduleNextFlush();
   }
 
   void enqueueFollow({
     required String subAccountId,
+    required bool currentFollowing,
     required bool shouldFollow,
     bool flushImmediately = false,
   }) {
@@ -33,6 +43,7 @@ class ClientStateSyncOutboxNotifier
       objectType: 'profile',
       objectId: subAccountId,
       intentType: 'follow',
+      currentBoolValue: currentFollowing,
       desiredBoolValue: shouldFollow,
       flushImmediately: flushImmediately,
     );
@@ -40,6 +51,7 @@ class ClientStateSyncOutboxNotifier
 
   void enqueuePostLike({
     required String postId,
+    required bool currentLiked,
     required bool isLiked,
     bool flushImmediately = false,
   }) {
@@ -47,6 +59,7 @@ class ClientStateSyncOutboxNotifier
       objectType: 'post',
       objectId: postId,
       intentType: 'like',
+      currentBoolValue: currentLiked,
       desiredBoolValue: isLiked,
       flushImmediately: flushImmediately,
     );
@@ -61,6 +74,7 @@ class ClientStateSyncOutboxNotifier
       objectType: 'post',
       objectId: postId,
       intentType: 'share',
+      currentBoolValue: null,
       desiredBoolValue: isShared,
       flushImmediately: flushImmediately,
     );
@@ -69,37 +83,42 @@ class ClientStateSyncOutboxNotifier
   Future<void> flushNow() async {
     final config = ref.read(contentRuntimeConfigProvider).clientStateSync;
     final now = DateTime.now();
-    final dueEntries = state.entries
-        .where((entry) => !entry.nextFlushAt.isAfter(now))
+    final dueKeys = state.entries
+        .where(
+          (entry) =>
+              !_isInFlight(entry.coalesceKey) &&
+              entry.hasPendingDelta &&
+              !entry.nextFlushAt.isAfter(now),
+        )
         .take(config.maxBatchSize)
+        .map((entry) => entry.coalesceKey)
         .toList(growable: false);
-    if (dueEntries.isEmpty) {
+    if (dueKeys.isEmpty) {
       _scheduleNextFlush();
       return;
     }
 
-    var nextEntries = List<ClientStateSyncOutboxEntry>.from(state.entries);
-    for (final entry in dueEntries) {
+    for (final coalesceKey in dueKeys) {
+      final entry = _entryForKey(coalesceKey);
+      if (entry == null ||
+          _isInFlight(coalesceKey) ||
+          !entry.hasPendingDelta ||
+          entry.nextFlushAt.isAfter(DateTime.now())) {
+        continue;
+      }
+      _inFlightDesiredValues[coalesceKey] = entry.desiredBoolValue;
       try {
         await _flushEntry(entry);
-        nextEntries.removeWhere(
-          (item) => item.coalesceKey == entry.coalesceKey,
+        _onFlushSucceeded(
+          coalesceKey: coalesceKey,
+          flushedDesiredBoolValue: entry.desiredBoolValue,
         );
       } catch (_) {
-        nextEntries = nextEntries
-            .map((item) {
-              if (item.coalesceKey != entry.coalesceKey) {
-                return item;
-              }
-              return item.copyWith(
-                retryCount: item.retryCount + 1,
-                nextFlushAt: now.add(config.retryDelay),
-              );
-            })
-            .toList(growable: false);
+        _onFlushFailed(coalesceKey: coalesceKey, config: config);
+      } finally {
+        _inFlightDesiredValues.remove(coalesceKey);
       }
     }
-    state = state.copyWith(entries: nextEntries);
     unawaited(_persistState());
     _scheduleNextFlush();
   }
@@ -150,24 +169,36 @@ class ClientStateSyncOutboxNotifier
     required String objectType,
     required String objectId,
     required String intentType,
+    required bool? currentBoolValue,
     required bool desiredBoolValue,
     required bool flushImmediately,
   }) {
     final config = ref.read(contentRuntimeConfigProvider).clientStateSync;
     final now = DateTime.now();
     final coalesceKey = '$objectType:$intentType:$objectId';
-    final entry = ClientStateSyncOutboxEntry(
-      coalesceKey: coalesceKey,
-      objectType: objectType,
-      objectId: objectId,
-      intentType: intentType,
-      desiredBoolValue: desiredBoolValue,
-      nextFlushAt: flushImmediately ? now : now.add(config.flushDelay),
+    final existingEntry = _entryForKey(coalesceKey);
+    final confirmedBoolValue =
+        existingEntry?.confirmedBoolValue ?? currentBoolValue;
+    if (!_isInFlight(coalesceKey) &&
+        confirmedBoolValue != null &&
+        confirmedBoolValue == desiredBoolValue) {
+      _removeEntry(coalesceKey);
+      unawaited(_persistState());
+      _scheduleNextFlush();
+      return;
+    }
+    _replaceEntry(
+      ClientStateSyncOutboxEntry(
+        coalesceKey: coalesceKey,
+        objectType: objectType,
+        objectId: objectId,
+        intentType: intentType,
+        desiredBoolValue: desiredBoolValue,
+        nextFlushAt: flushImmediately ? now : now.add(config.flushDelay),
+        confirmedBoolValue: confirmedBoolValue,
+        retryCount: existingEntry?.retryCount ?? 0,
+      ),
     );
-    final nextEntries = List<ClientStateSyncOutboxEntry>.from(state.entries)
-      ..removeWhere((item) => item.coalesceKey == coalesceKey)
-      ..add(entry);
-    state = state.copyWith(entries: nextEntries);
     unawaited(_persistState());
     _scheduleNextFlush();
   }
@@ -175,13 +206,95 @@ class ClientStateSyncOutboxNotifier
   void _scheduleNextFlush() {
     _flushTimer?.cancel();
     if (state.entries.isEmpty) return;
-    final nextFlushAt = state.entries
+    final wakeTimes = state.entries
+        .where(
+          (entry) => !_isInFlight(entry.coalesceKey) && entry.hasPendingDelta,
+        )
         .map((entry) => entry.nextFlushAt)
-        .reduce((a, b) => a.isBefore(b) ? a : b);
-    final delay = nextFlushAt.difference(DateTime.now());
+        .toList(growable: false);
+    if (wakeTimes.isEmpty) {
+      return;
+    }
+    final nextWakeAt = wakeTimes.reduce((a, b) => a.isBefore(b) ? a : b);
+    final delay = nextWakeAt.difference(DateTime.now());
     _flushTimer = Timer(delay.isNegative ? Duration.zero : delay, () {
       flushNow();
     });
+  }
+
+  bool _isInFlight(String coalesceKey) {
+    return _inFlightDesiredValues.containsKey(coalesceKey);
+  }
+
+  ClientStateSyncOutboxEntry? _entryForKey(String coalesceKey) {
+    for (final entry in state.entries.reversed) {
+      if (entry.coalesceKey == coalesceKey) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  void _replaceEntry(ClientStateSyncOutboxEntry entry) {
+    final nextEntries = List<ClientStateSyncOutboxEntry>.from(state.entries)
+      ..removeWhere((item) => item.coalesceKey == entry.coalesceKey)
+      ..add(entry);
+    state = state.copyWith(entries: nextEntries);
+  }
+
+  void _removeEntry(String coalesceKey) {
+    state = state.copyWith(
+      entries: state.entries
+          .where((entry) => entry.coalesceKey != coalesceKey)
+          .toList(growable: false),
+    );
+  }
+
+  void _onFlushSucceeded({
+    required String coalesceKey,
+    required bool flushedDesiredBoolValue,
+  }) {
+    final currentEntry = _entryForKey(coalesceKey);
+    if (currentEntry == null) {
+      return;
+    }
+    final reconciledEntry = currentEntry.copyWith(
+      confirmedBoolValue: flushedDesiredBoolValue,
+      retryCount: 0,
+    );
+    if (!reconciledEntry.hasPendingDelta) {
+      _removeEntry(coalesceKey);
+      return;
+    }
+    _replaceEntry(reconciledEntry);
+  }
+
+  void _onFlushFailed({
+    required String coalesceKey,
+    required ClientStateSyncConfig config,
+  }) {
+    final currentEntry = _entryForKey(coalesceKey);
+    if (currentEntry == null) {
+      return;
+    }
+    if (!currentEntry.hasPendingDelta) {
+      _removeEntry(coalesceKey);
+      return;
+    }
+    _replaceEntry(
+      currentEntry.copyWith(
+        retryCount: currentEntry.retryCount + 1,
+        nextFlushAt: DateTime.now().add(config.retryDelay),
+      ),
+    );
+  }
+
+  List<ClientStateSyncOutboxEntry> _dropResolvedEntries(
+    List<ClientStateSyncOutboxEntry> entries,
+  ) {
+    return entries
+        .where((entry) => entry.hasPendingDelta)
+        .toList(growable: false);
   }
 
   Future<void> _persistState() async {
@@ -248,6 +361,41 @@ final assistantContentIdentityIndexEnabledProvider = Provider<bool>((ref) {
   return consentGranted && featureFlag;
 });
 
+final cacheTelemetrySinkProvider = Provider<CacheTelemetrySink>((ref) {
+  return const _AppLogCacheTelemetrySink();
+});
+
+class _AppLogCacheTelemetrySink implements CacheTelemetrySink {
+  const _AppLogCacheTelemetrySink();
+
+  @override
+  void record(String eventName, Map<String, Object?> attributes) {
+    final traceStore = AppTraceContextStore.instance;
+    unawaited(
+      AppLogService.instance.writeEvent(
+        logType: AppLogType.perf,
+        level: AppLogLevel.info,
+        context: AppLogContext(
+          sessionId: traceStore.sessionId,
+          requestId: traceStore.newRequestId(),
+          sourceDomain: 'runtime',
+          component: 'local_cache',
+          target: 'cache',
+          action: eventName,
+        ),
+        payload: <String, dynamic>{
+          'kind': eventName,
+          ...attributes.map((key, value) => MapEntry(key, value)),
+        },
+        summaryPayload: <String, dynamic>{
+          'kind': eventName,
+          ...attributes.map((key, value) => MapEntry(key, value)),
+        },
+      ),
+    );
+  }
+}
+
 /// Content Repository（按业务对象组织的端侧入口）
 final contentRepositoryProvider = Provider<ContentRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
@@ -262,6 +410,7 @@ final contentRepositoryProvider = Provider<ContentRepository>((ref) {
     postCache: ref.watch(postObjectCacheProvider),
     querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
     userProfileCache: ref.watch(userProfileCacheProvider),
+    telemetrySink: ref.watch(cacheTelemetrySinkProvider),
   );
 });
 
@@ -363,15 +512,30 @@ final postObjectCacheProvider = Provider<PostObjectCacheService>((ref) {
 final contentQuerySnapshotStoreProvider = Provider<ContentQuerySnapshotStore>((
   ref,
 ) {
-  return ContentQuerySnapshotStore();
+  return ContentQuerySnapshotStore(
+    persistToPreferences: true,
+    telemetrySink: ref.watch(cacheTelemetrySinkProvider),
+  );
 });
 
 final cacheManagementServiceProvider = Provider<CacheManagementService>((ref) {
+  Future<void> clearEphemeralResources() async {
+    await AppImageCacheController.clearTemporaryImages();
+    await ref.read(mediaDownloadCacheProvider).clear();
+  }
+
+  Future<void> clearAllRebuildableResources() async {
+    await AppImageCacheController.clearAllRebuildableImages();
+    await ref.read(mediaDownloadCacheProvider).clear();
+  }
+
   return CacheManagementService(
     postCache: ref.watch(postObjectCacheProvider),
     querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
     userProfileCache: ref.watch(userProfileCacheProvider),
     conversationCache: ref.watch(conversationCacheProvider),
+    clearTemporaryImages: clearEphemeralResources,
+    clearAllRebuildableImages: clearAllRebuildableResources,
   );
 });
 
@@ -729,5 +893,7 @@ final mediaUploadManagerProvider = Provider<MediaUploadManager>((ref) {
 
 /// Media Download Cache（LRU 媒体下载缓存，默认 200MB）
 final mediaDownloadCacheProvider = Provider<MediaDownloadCache>((ref) {
-  return MediaDownloadCache();
+  return MediaDownloadCache(
+    telemetrySink: ref.watch(cacheTelemetrySinkProvider),
+  );
 });

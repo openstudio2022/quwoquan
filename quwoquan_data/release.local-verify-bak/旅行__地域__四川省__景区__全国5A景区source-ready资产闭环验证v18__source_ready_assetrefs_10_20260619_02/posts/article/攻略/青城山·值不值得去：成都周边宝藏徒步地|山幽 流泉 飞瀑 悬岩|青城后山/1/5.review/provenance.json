@@ -1,0 +1,138 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "青城山_decision_experience",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "青城山·值不值得去：成都周边宝藏徒步地|山幽 流泉 飞瀑 悬岩|青城后山",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-81f60414-9118-473a-b698-3ecb81c2ddc4",
+    "agentId": "agent-9a220aa0-f3f1-4a62-b549-13da45f774ea",
+    "sessionTrace": null,
+    "styleFamily": "客观评测风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/青城山"
+    ],
+    "articleDigest": "sha256:34ef8fd4d824bcc1b71d35727be994cf77a5f5cdf3d47312025f61e585d44059"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "青城山·值不值得去：成都周边宝藏徒步地|山幽 流泉 飞瀑 悬岩|青城后山",
+    "styleFamily": "",
+    "promptSha256": "sha256:72d3ae365bb9846552742874b55183571d241d5039eef49d361841e350038d1c",
+    "writingPackSha256": "sha256:bbe33e190dc8d69c2e61cc1434269fc7f70a11a7beb84b4baa033005644b3062",
+    "sourceBundleSha256": "sha256:4bca59789c7133ea17f1d6e42aa5ffcd569f36c7f792fffbf065b2c84bc6e4ce",
+    "draftSha256": "sha256:dd5d07b3974079264702825d7a5015c96e8d314409b2620fca69b5c648c6c599"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md",
+      "url": "https://zh.wikipedia.org/wiki/%E9%9D%92%E5%9F%8E%E5%B1%B1"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/04.article_qunar_base_1/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7884821"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/05.article_qunar_base_2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7883576"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/06.article_qunar_base_3/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7861638"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/07.article_qunar_base_4/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7783661"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/08.article_qunar_base_5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7775512"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/09.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7765650"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/10.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7739835"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/11.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7725884"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/12.article_qunar_base_9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7713724"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/13.article_qunar_base_10/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7711086"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/14.article_qunar_base_11/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7706119"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/15.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7702361"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/16.article_qunar_base_13/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7697921"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/17.article_qunar_base_14/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7697516"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/19.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7685161"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/21.article_qunar_review_support/source.md",
+      "url": "https://touch.travel.qunar.com/search?q=%E9%9D%92%E5%9F%8E%E5%B1%B1"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/23.image_open_license_file_青城山_httpscommonswikimediaorgwikifilee99d92e59f8ee5b1b19231311514_f17c449f82/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E9%9D%92%E5%9F%8E%E5%B1%B1_(92)_(31311514355).jpg"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/24.image_open_license_file_青城山_httpscommonswikimediaorgwikifilee99d92e59f8ee5b1b1e4ba91e99b_ccaaf2542f/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E9%9D%92%E5%9F%8E%E5%B1%B1%E4%BA%91%E9%9B%BE.jpg"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/25.image_open_license_file_青城山_httpscommonswikimediaorgwikifilee99d92e59f8ee5b1b1mountqingc_82d8334f91/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E9%9D%92%E5%9F%8E%E5%B1%B1_Mount_Qingcheng_2017.jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/青城山/1.download/sources/08.article_qunar_base_5/source.md"
+  ]
+}

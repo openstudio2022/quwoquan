@@ -87,6 +87,41 @@ class _InvalidAvatarPatchRepository implements UserSyncRepository {
   }
 }
 
+class _UserAvatarPatchRepository implements UserSyncRepository {
+  @override
+  Future<UserSyncPullResult> pull({
+    required int afterSeq,
+    int limit = 200,
+  }) async {
+    if (afterSeq >= 2) {
+      return const UserSyncPullResult(
+        patches: <UserSyncPatch>[],
+        latestSyncSeq: 2,
+        hasMore: false,
+        requiresResync: false,
+      );
+    }
+    return const UserSyncPullResult(
+      patches: <UserSyncPatch>[
+        UserSyncPatch(
+          syncSeq: 2,
+          type: 'user.avatar.updated',
+          userId: 'user_002',
+          payload: <String, dynamic>{
+            'userId': 'user_002',
+            'avatarUrl':
+                'media/avatar/s/archived-avatar/user/user_002/v1/profile.png',
+            'avatarVersion': 14,
+          },
+        ),
+      ],
+      latestSyncSeq: 2,
+      hasMore: false,
+      requiresResync: false,
+    );
+  }
+}
+
 class _CountingUserSyncRepository implements UserSyncRepository {
   int pullCount = 0;
 
@@ -146,6 +181,9 @@ class _FakeLocalChatSearchStore extends LocalChatSearchStore {
   final Map<String, ConversationCacheRecord> _conversations =
       <String, ConversationCacheRecord>{};
   int _lastUserSyncSeq = 0;
+  String? lastContactAvatarUserId;
+  String? lastContactAvatarUrl;
+  int? lastContactAvatarVersion;
 
   void seedConversation(Map<String, dynamic> conversation) {
     final record = ConversationCacheRecord.fromWireMap(conversation);
@@ -197,7 +235,12 @@ class _FakeLocalChatSearchStore extends LocalChatSearchStore {
     required LocalSearchNamespace namespace,
     required String userId,
     required String avatarUrl,
-  }) async {}
+    int? avatarVersion,
+  }) async {
+    lastContactAvatarUserId = userId;
+    lastContactAvatarUrl = avatarUrl;
+    lastContactAvatarVersion = avatarVersion;
+  }
 
   @override
   Future<List<ConversationCacheRecord>> listConversationRecords({
@@ -289,6 +332,52 @@ void main() {
     final stored = await store.listConversationRecords(namespace: namespace);
     expect(stored.single.avatarUrl, 'https://cdn.example.com/group.png?v=2');
     expect(stored.single.groupAvatarVersion, 2);
+  });
+
+  testWidgets('UserAvatarUpdated patch 把 avatarVersion 传入联系人头像缓存更新', (
+    tester,
+  ) async {
+    final store = _FakeLocalChatSearchStore();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          userSyncRepositoryProvider.overrideWithValue(
+            _UserAvatarPatchRepository(),
+          ),
+          localChatSearchStoreProvider.overrideWithValue(store),
+          activePersonaContextLoaderProvider.overrideWithValue(
+            () async => ActivePersonaContextViewData.fallback(
+              subAccountId: 'user_001',
+              ownerUserId: 'user_001',
+              displayName: '测试用户',
+              avatarUrl: '',
+            ),
+          ),
+        ],
+        child: Consumer(
+          builder: (context, ref, _) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              RealtimeMessageHandler(ref.read).handle(<String, dynamic>{
+                'type': 'UserAvatarUpdated',
+                'latestSyncSeq': 2,
+              });
+            });
+            return const MaterialApp(home: SizedBox());
+          },
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 220));
+
+    expect(store.lastContactAvatarUserId, 'user_002');
+    expect(
+      store.lastContactAvatarUrl,
+      'media/avatar/s/archived-avatar/user/user_002/v1/profile.png',
+    );
+    expect(store.lastContactAvatarVersion, 14);
   });
 
   testWidgets('patch gap 触发全量修复并推进游标', (tester) async {

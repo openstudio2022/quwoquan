@@ -70,7 +70,9 @@ void main() {
     expect(ids.contains('moment'), isFalse);
   });
 
-  testWidgets('创作 Tab 二级过滤收敛为右侧单一入口 + 浮层含 全部/图片/视频/长文', (tester) async {
+  testWidgets('创作 Tab 二级过滤改为内联横滑二级页签，全部/图片/视频/长文常驻可见', (
+    tester,
+  ) async {
     _setPhoneSize(tester);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -79,53 +81,44 @@ void main() {
     await _pumpFrames(tester);
     await revealProfilePrimaryTabs(tester);
 
-    // 去胶囊：二级过滤收敛为最右侧单一图标入口，
-    // 默认不展示「筛选」文字和当前过滤名，其余过滤项不再内联铺开。
+    // 二级过滤与互动页同源：四个过滤项以横滑二级页签内联铺开、常驻可见，
+    // 不再收敛为漏斗图标 + 浮层菜单。
     final subTabs = find.byKey(
       const ValueKey<String>('profile-works-secondary-tabs'),
     );
     expect(subTabs, findsOneWidget);
-    expect(
-      find.descendant(
-        of: subTabs,
-        matching: find.text(
-          UITextConstants.contentLabelForKey('creation_sub_all'),
-        ),
-      ),
-      findsNothing,
-    );
-    expect(find.text(UITextConstants.profileWorksFilterTitle), findsNothing);
-    expect(
-      find.descendant(
-        of: subTabs,
-        matching: find.text(
-          UITextConstants.contentLabelForKey('creation_sub_image'),
-        ),
-      ),
-      findsNothing,
-    );
 
-    // 点击过滤入口在按钮下方打开菜单，恰含 全部/图片/视频/长文 四项。
-    await tester.tap(
+    // 旧漏斗入口与浮层菜单不再存在。
+    expect(
       find.byKey(const ValueKey<String>('profile-works-filter-button')),
+      findsNothing,
     );
-    await tester.pumpAndSettle();
     expect(find.byType(CupertinoActionSheet), findsNothing);
 
-    for (final id in const <String>['all', 'image', 'video', 'article']) {
-      expect(
-        find.byKey(ValueKey<String>('profile-works-filter-option-$id')),
-        findsOneWidget,
-      );
-    }
     for (final key in const <String>[
       'creation_sub_all',
       'creation_sub_image',
       'creation_sub_video',
       'creation_sub_text',
     ]) {
-      expect(find.text(UITextConstants.contentLabelForKey(key)), findsWidgets);
+      expect(
+        find.descendant(
+          of: subTabs,
+          matching: find.text(UITextConstants.contentLabelForKey(key)),
+        ),
+        findsOneWidget,
+      );
     }
+
+    // 数量统计放到二级页签之下，仍可见。
+    expect(
+      find.descendant(
+        of: subTabs,
+        matching: find.textContaining('条记录'),
+      ),
+      findsOneWidget,
+    );
+
     // 无微趣残留
     expect(find.text('微趣'), findsNothing);
   });

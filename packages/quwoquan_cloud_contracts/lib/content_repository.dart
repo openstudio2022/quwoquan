@@ -2,6 +2,7 @@ import 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_d
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/comment_counts_delta.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_reaction_state.dart';
@@ -140,6 +141,17 @@ abstract class ContentCommentRepository {
     String sort = 'recommended',
     int limit = CloudApiDefaults.pageLimit,
   });
+
+  /// 评论计数可解释增量（GetCommentCountsDelta）。
+  ///
+  /// 语义为半开区间 `(since, watermark]`：`since` 为 null 视为首同步（无下界），
+  /// 用于建立基线 watermark；后续以上次返回的 watermark 作为 `since` 拉取相邻
+  /// 增量，保证不重不漏，向用户解释「较基线 新增 N / 删除 M」。
+  Future<CommentCountsDelta> getCommentCountsDelta({
+    required String postId,
+    DateTime? since,
+  });
+
   Future<CommentPage> listCommentReplies({
     required String postId,
     required String commentId,
@@ -162,6 +174,13 @@ abstract class ContentCommentRepository {
   Future<CommentDto> reactToComment({
     required String commentId,
     required String reaction,
+  });
+
+  /// 内容作者置顶/取消置顶一级评论（仅内容作者可操作，二级回复不可置顶）。
+  Future<CommentDto> setCommentPinned({
+    required String postId,
+    required String commentId,
+    required bool pinned,
   });
   Future<CommentPage> listCommentsByAuthor({
     String? cursor,
@@ -228,6 +247,8 @@ abstract class ContentRepository
 class CommentPage {
   final List<CommentDto> items;
   final String? nextCursor;
+  final int totalCount;
 
-  const CommentPage({required this.items, this.nextCursor});
+  const CommentPage({required this.items, this.nextCursor, int? totalCount})
+    : totalCount = totalCount ?? items.length;
 }

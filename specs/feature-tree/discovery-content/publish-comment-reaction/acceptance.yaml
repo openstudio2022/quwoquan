@@ -11,7 +11,8 @@ scope:
   in_scope:
   - 内容详情、沉浸式内容和个人主页评论入口组合验证。
   - 评论提交、回复、展开、赞踩与 post interaction 计数最终一致。
-  - Comment metadata、App Config、Mock/Remote、content-service contract 和 seed manifest 对齐。
+  - Comment metadata、App Config、Mock/Remote、content-service contract 和 seed manifest
+    对齐。
   out_of_scope:
   - 推荐排序模型训练。
   - 评论搜索、置顶、翻译。
@@ -30,21 +31,42 @@ sit_acceptance:
     - 评论首屏 P95 小于 800ms。
     - 评论提交云端确认 P95 小于 500ms。
     - 回复展开 P95 小于 500ms。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
-      - T4_device_journey
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/providers/comment_provider_test.dart
-      - quwoquan_app/test/components/comment_system/immersive_comment_split_sheet_test.dart
-      - quwoquan_service/services/content-service/tests/comment_thread_contract_test.go
-      - quwoquan_app/integration_test/comment_thread_journey_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.sit1.sit1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.sit1.sit1_local_contract
+        envs: *id001
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.sit1.device_journey
+        envs:
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/providers/comment_provider_test.dart'
+    - '[migrated_from_planned] quwoquan_app/test/components/comment_system/immersive_comment_split_sheet_test.dart'
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/comment_thread_contract_test.go'
+    - '[migrated_from_planned] quwoquan_app/integration_test/comment_thread_journey_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

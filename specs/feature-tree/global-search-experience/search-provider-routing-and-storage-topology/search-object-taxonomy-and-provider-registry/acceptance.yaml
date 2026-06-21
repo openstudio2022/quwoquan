@@ -13,10 +13,12 @@ scope:
   - location.place 作为复用 geo 维度的第一方对象 target 的 taxonomy 注册与检索路由。
   - location.place 与 entity.homepage 的单一真相源边界（互斥、不重复）。
   - 第一方地点快照存储的身份/去重与灌数源。
-  - location.place 命中的临时落地卡（landing card）与「提升为实体主页」CTA 归属与渲染（R-S05e-1 / WP-D，复用搜索 payload，不新建后端 operation）。
+  - location.place 命中的临时落地卡（landing card）与「提升为实体主页」CTA 归属与渲染（R-S05e-1 / WP-D，复用搜索
+    payload，不新建后端 operation）。
   out_of_scope:
   - 排序策略与存储弹性拓扑（归 search-storage-topology-and-elasticity）。
-  - 完整地点 detail 页与独立后端 detail/写 operation（落地层仅复用搜索结果 payload + suggestHomepage 既有 surface）。
+  - 完整地点 detail 页与独立后端 detail/写 operation（落地层仅复用搜索结果 payload + suggestHomepage 既有
+    surface）。
 gwt_acceptance:
   GWT1:
     title: location 作为第一方对象 target 注册进统一 taxonomy 与 retrieve 契约
@@ -37,17 +39,27 @@ gwt_acceptance:
     - contracts/metadata/_shared/search_objects.yaml
     - contracts/metadata/_shared/search_contract.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      supporting:
-      - T2_module_interaction
     tests:
       planned: []
       recorded:
-      - quwoquan_service/runtime/search/retrieve_contract_test.go::TestAITargetsMatchRuntimeAllowlist
-      - quwoquan_service/runtime/search/retrieve_location_test.go
-    status: passed
+      - file: quwoquan_service/runtime/search/retrieve_contract_test.go::TestAITargetsMatchRuntimeAllowlist
+      - file: quwoquan_service/runtime/search/retrieve_location_test.go
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.gwt1_local_contract
+        envs: *id001
+    notes: []
   GWT2:
     title: 第一方地点快照存储按地名去重、对绑定实体的地点单源排除
     given:
@@ -68,24 +80,35 @@ gwt_acceptance:
     - contracts/metadata/_shared/search_objects.yaml
     performance_points:
     - 写时投影按单帖反查引用集，增量维护避免全量扫描。
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
-      planned:
-      - T3_integration：gamma ES 灌数后 /v1/search 召回 location.place（随 search-service 集成补录）。
+      planned: []
       recorded:
-      - quwoquan_service/services/content-service/internal/application/place_search_projection_test.go
-      - quwoquan_service/services/content-service/internal/infrastructure/placeindex/projector_test.go
-      - quwoquan_service/services/content-service/internal/infrastructure/placeindex/backfill_test.go
-    status: passed
+      - file: quwoquan_service/services/content-service/internal/application/place_search_projection_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/placeindex/projector_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/placeindex/backfill_test.go
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.gwt2_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] T3_integration：gamma ES 灌数后 /v1/search 召回 location.place（随
+      search-service 集成补录）。'
   GWT3:
     title: location.place 命中落地为临时地点卡并引导提升为 entity.homepage（R-S05e-1 / WP-D）
     given:
     - search 结果页交集「已连接地点」承载 location.place 命中（未绑定 canonicalEntity）。
-    - route locationPlaceLanding 与 surface locationPlaceLanding 已 metadata-first 定义并 codegen。
+    - route locationPlaceLanding 与 surface locationPlaceLanding 已 metadata-first 定义并
+      codegen。
     when:
     - 点击 location.place 命中，进入 /locations/{placeId} 落地页；点击「提升为实体主页」CTA。
     then:
@@ -101,18 +124,28 @@ gwt_acceptance:
     - contracts/metadata/_shared/app_routes.yaml
     - contracts/metadata/_shared/ui_surfaces.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
-      planned:
-      - T3_integration：gamma 真实 location.place 召回后端云联调落地页（随 search-service 集成补录）。
+      planned: []
       recorded:
-      - quwoquan_app/test/ui/search/pages/location_place_landing_page_widget_test.dart
-      - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
-    status: passed
+      - file: quwoquan_app/test/ui/search/pages/location_place_landing_page_widget_test.dart
+      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.gwt3_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] T3_integration：gamma 真实 location.place 召回后端云联调落地页（随
+      search-service 集成补录）。'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

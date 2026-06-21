@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "乐山大佛_seasonal_timing",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:fb53f3add19946380e95bf03b89b595e710b05cfe33a96dd7020812300fe5a8e",
+  "finalSha256": "sha256:8471eda78e43a24409d40b0a309d0c9b8a66656e80fb9e8def3950f4d7298e29",
+  "draftBodySha256": "sha256:fb53f3add19946380e95bf03b89b595e710b05cfe33a96dd7020812300fe5a8e",
+  "finalBodySha256": "sha256:fb53f3add19946380e95bf03b89b595e710b05cfe33a96dd7020812300fe5a8e",
+  "composeSnapshotSha256": "sha256:fb53f3add19946380e95bf03b89b595e710b05cfe33a96dd7020812300fe5a8e",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

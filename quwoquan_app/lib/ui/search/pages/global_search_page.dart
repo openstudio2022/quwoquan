@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/ui/search/providers/search_coordinator.dart';
 
@@ -111,8 +112,9 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     }
     _didTrackPageImpression = true;
     _behaviorTracker = ref.read(contentBehaviorTrackerProvider);
-    _feedRequestIdAtEnter =
-        ref.read(feedSessionProvider.notifier).currentFeedRequestId;
+    _feedRequestIdAtEnter = ref
+        .read(feedSessionProvider.notifier)
+        .currentFeedRequestId;
     _behaviorTracker!.trackImpression(
       'global_search',
       contentType: 'search_page',
@@ -1427,10 +1429,15 @@ class _HotEntityListTile extends StatelessWidget {
                         size: AppSpacing.iconMedium,
                         color: fgSecondary,
                       )
-                    : Image.network(
-                        imageUrl,
+                    : AppCachedNetworkImage(
+                        imageUrl: imageUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Icon(
+                        width: imageSize,
+                        height: imageSize,
+                        cdnPreset: imageStyle == _HotEntityImageStyle.avatar
+                            ? CdnImagePreset.avatar
+                            : CdnImagePreset.cover,
+                        errorWidget: Icon(
                           fallbackIcon,
                           size: AppSpacing.iconMedium,
                           color: fgSecondary,
@@ -1728,19 +1735,18 @@ Widget _buildConversationLeading({
           isDark,
           ColorType.backgroundSecondary,
         ),
-        child: Image.network(
-          effectiveImageUrl,
+        child: AppAvatarImage(
+          imageUrl: effectiveImageUrl,
+          size: AppSpacing.avatarUserMd,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Icon(
-              fallbackIcon,
-              size: AppSpacing.iconMedium,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundSecondary,
-              ),
-            );
-          },
+          errorWidget: Icon(
+            fallbackIcon,
+            size: AppSpacing.iconMedium,
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.foregroundSecondary,
+            ),
+          ),
         ),
       ),
     );

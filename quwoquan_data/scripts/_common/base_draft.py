@@ -1,16 +1,19 @@
 """底稿（base draft）选取、批次级占用账本与贴合度度量。
 
-范式：以一篇真实底稿为锚做「适度加工」（轻改），而非按模板从零拼装。
+范式：以一篇真实底稿为锚做「适度润色 + 人设轻量化适配」，而非按模板从零拼装，
+也不是把底稿重写到面目全非。版权风险全面放开后，所有来源（含未授权普通网页）
+统一走「以底稿为基础适度润色、大面积保留优质原文」一条范式，贴合度门对所有来源生效。
 
 - 每篇文章/主页只认领一篇底稿（某来源单元的 source.md），一源仅一稿。
 - 批次级账本（`batches/<batch>/_shared/base_draft_ledger.json`）记录 sourceRef -> postRef
   一对一映射；已被占用的源在其它篇目里只能进 evidenceRefs 作补充材料，不得再当底稿。
 - 贴合度采用「底稿留存率」(单向 char 三连覆盖)，与成品长度无关：
   coverage = |base_trigrams ∩ article_trigrams| / |base_trigrams|
-  下限防「从零另写/换稿」(实测：从零重写≈0.24、无关文≈0.0、真实轻改≥0.7)；
-  上限防「逐句搬运/未去版权」(几乎原样照搬 coverage≈1.0；另有 ≥28 字逐字命中的反抄袭硬门兜底)。
+  下限防「从零另写/换稿」(实测：从零重写≈0.24、无关文≈0.0、真实适度润色≥0.7)；
+  上限（99.5%）只兜底「零加工整篇逐字照搬」——即没做任何去语病/错字、PII 脱敏替代或
+  人设用词语气适配。优质原文与自然段允许大面积保留，故上限放得很高。
   注意：不可用对称的 difflib.ratio——底稿(数百字)远短于成品(上千字)时，
-  对称比值上限≈2*len(base)/(len(base)+len(body))，永远摸不到 0.70，会误杀所有合规轻改。
+  对称比值上限≈2*len(base)/(len(base)+len(body))，永远摸不到 0.70，会误杀所有合规润色。
 """
 from __future__ import annotations
 
@@ -26,7 +29,7 @@ BASE_DRAFT_LEDGER = "base_draft_ledger.json"
 LEDGER_SCHEMA = "quwoquan_data.base_draft_ledger"
 
 FIDELITY_MIN = 0.55
-FIDELITY_MAX = 0.97
+FIDELITY_MAX = 0.995
 _NGRAM = 3
 _NOISE_LINE_MARKERS = (
     "登录",
@@ -305,6 +308,11 @@ def _extract_base_draft_body(text: str) -> str:
     return body or text
 
 
+def extract_base_draft_body(text: str) -> str:
+    """公共底稿正文提取入口，供站点供给与生产管线复用同一清洗规则。"""
+    return _extract_base_draft_body(text)
+
+
 _FIGURE_RE = re.compile(r"(?ms)^:::figure.*?:::")
 _ASSET_RE = re.compile(r"asset://[^\s)]+")
 _GALLERY_BASE_TARGET_CHARS = 1000
@@ -396,9 +404,12 @@ def base_draft_fidelity_issues(
     carrier: str = "article",
     source_use_mode: str = "licensed_adaptation",
 ) -> list[str]:
-    """底稿贴合度仅用于明确授权改编；普通网页只受反长句复现和事实回溯门约束。"""
-    if source_use_mode != "licensed_adaptation":
-        return []
+    """底稿贴合度门：版权风险全面放开后对所有来源生效。
+
+    下限防「脱离底稿从零另写」；上限（99.5%）只兜底「零加工整篇逐字照搬」——
+    即未做任何去语病/错字、PII 脱敏替代或人设用词语气适配。优质原文允许大面积保留。
+    `source_use_mode` 仅保留供授权快照/署名留痕，不再决定是否启用本门。
+    """
     body = _readable_body(article)
     base = _strip_source_meta(base_text, carrier=carrier, body_len=len(body))
     if not base or not body:
@@ -408,12 +419,12 @@ def base_draft_fidelity_issues(
     if sim < min_ratio:
         return [
             f"base draft fidelity {pct}% < {int(min_ratio * 100)}% "
-            "(底稿留存率过低，疑似脱离底稿/从零另写，应在底稿基础上轻改而非重写)"
+            "(底稿留存率过低，疑似脱离底稿/从零另写，应在底稿基础上适度润色而非重写)"
         ]
     if sim > max_ratio:
         return [
             f"base draft fidelity {pct}% > {int(max_ratio * 100)}% "
-            "(几乎原样照搬底稿，需进一步改写表达、去版权痕迹)"
+            "(零加工整篇逐字照搬，至少需完成去语病/错字、私人信息脱敏替代与作者人设用词语气适配)"
         ]
     return []
 
@@ -426,6 +437,7 @@ __all__ = [
     "occupied_source_refs",
     "base_draft_candidates",
     "assign_base_draft",
+    "extract_base_draft_body",
     "load_base_draft_text",
     "base_source_use_mode",
     "base_draft_similarity",

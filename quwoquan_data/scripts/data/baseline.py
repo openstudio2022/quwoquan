@@ -21,12 +21,15 @@ from _common.paths import (
     task_shared_dir,
 )
 
-DEFAULT_SPEC_DOC = Path("specs/feature-tree/runtime/runtime-data-engineering/spec.md")
-DEFAULT_DESIGN_DOC = Path("specs/feature-tree/runtime/runtime-data-engineering/design.md")
-DEFAULT_ACCEPTANCE_DOC = Path("specs/feature-tree/runtime/runtime-data-engineering/acceptance.yaml")
-DEFAULT_WORKFLOW_DOC = Path("specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/workflow.md")
-DEFAULT_COMMAND_MATRIX_DOC = Path(
-    "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/command-matrix.md"
+# 默认基线文档锚定真实仓库根（__file__ 推导），不依赖进程 cwd 或 QWQ_DATA_ROOT；
+# specs/ 是仓库级文档（位于 quwoquan_data 的父目录），相对 cwd 在非仓库根目录下会丢失。
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_SPEC_DOC = _REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/spec.md"
+DEFAULT_DESIGN_DOC = _REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/design.md"
+DEFAULT_ACCEPTANCE_DOC = _REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/acceptance.yaml"
+DEFAULT_WORKFLOW_DOC = _REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/workflow.md"
+DEFAULT_COMMAND_MATRIX_DOC = (
+    _REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/command-matrix.md"
 )
 
 
@@ -117,7 +120,6 @@ def handle_baseline(args: argparse.Namespace) -> None:
     required_files = {
         "task-spec": task_spec_path,
         "progress": progress_path,
-        "catalog": catalog_path,
         "spec-doc": spec_doc,
         "design-doc": design_doc,
         "acceptance-doc": acceptance_doc,
@@ -143,6 +145,10 @@ def handle_baseline(args: argparse.Namespace) -> None:
         except Exception as exc:
             issues.append(f"task-spec unreadable: {exc}")
             spec = {}
+    workflow_policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), dict) else {}
+    dynamic_site_supply = bool(workflow_policy.get("siteSupplyDynamicContentPlan") is True)
+    if not dynamic_site_supply or getattr(args, "catalog", None):
+        _ensure_exists(catalog_path, "catalog", issues)
     if progress_path.exists():
         try:
             progress = read_json(progress_path)
@@ -161,7 +167,7 @@ def handle_baseline(args: argparse.Namespace) -> None:
         issues.append(f"task-spec taskId mismatch: {task_spec_task_id} != {task_id}")
     if isinstance(progress, dict) and str(progress.get("taskId") or "").strip() not in ("", task_id):
         issues.append(f"progress taskId mismatch: {progress.get('taskId')} != {task_id}")
-    if not catalog_rows:
+    if not catalog_rows and not dynamic_site_supply:
         issues.append("catalog.ndjson is empty")
 
     coverage_targets = [
@@ -171,7 +177,7 @@ def handle_baseline(args: argparse.Namespace) -> None:
     ]
     catalog_topic_ids = _catalog_topic_ids(catalog_path)
     missing = sorted(set(coverage_targets) - set(catalog_topic_ids))
-    if missing:
+    if missing and not dynamic_site_supply:
         issues.append(f"catalog missing coverage targets: {missing}")
 
     packet_inputs = {
@@ -235,6 +241,8 @@ def handle_baseline(args: argparse.Namespace) -> None:
             "coverageTargetCount": len(coverage_targets),
             "taskRegion": str((spec.get("scope") or {}).get("region") or ""),
             "taskEntityTypes": [str(v) for v in (spec.get("scope") or {}).get("entityTypes") or [] if str(v)],
+            "siteSupplyDynamicContentPlan": dynamic_site_supply,
+            "catalogRequired": not dynamic_site_supply,
         },
     )
 

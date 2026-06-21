@@ -15,9 +15,7 @@ import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart'
-    as comment_models;
-
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 /// 媒体帖子卡片基类
 /// 按照Figma原型设计，包含完整的交互功能和评论显示
 abstract class MediaPostCard extends ConsumerStatefulWidget {
@@ -284,7 +282,39 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
     CommentViewer.showModal(
       context: context,
       postId: widget.post.id.isNotEmpty ? widget.post.id : 'mock_post_id',
+      onShareTap: _onShare,
     );
+  }
+
+  /// 评论底栏「转发」：乐观写入分享态并落库（游客设备态可写）。
+  Future<void> _onShare() async {
+    final postId = widget.post.id;
+    if (postId.isEmpty) return;
+    final baseline = effectivePostShareCount(
+      ref,
+      postId,
+      fallback: widget.post.shareCount,
+    );
+    try {
+      await syncPostShareIntent(
+        ref,
+        postId: postId,
+        baselineShareCount: baseline,
+      );
+    } catch (error) {
+      if (mounted) {
+        await AppActionErrorFeedback.show(
+          context,
+          semantic: runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.backgroundAction,
+            scope: UiErrorScope.global,
+            allowRetry: false,
+          ),
+        );
+      }
+    }
   }
 
   /// 构建用户信息头部 - 基于原型代码增强，支持发布者类型和关注功能
@@ -445,6 +475,10 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
 
   /// 构建交互工具栏 - 按照Figma原型设计，包含动效和数字
   Widget _buildInteractionToolbar(BuildContext context, bool isDark) {
+    // 计数单一真相源：评论页确认后写入 postInteractionState，feed 卡片同源实时刷新。
+    final commentsCount = ref
+        .watch(postInteractionStateProvider)
+        .commentCountFor(widget.post.id, fallback: _commentsCount);
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.contentSpacingMd.w, // 使用更小的内容间距
@@ -481,7 +515,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                   ? AppColors.dark.foregroundPrimary
                   : AppColors.light.foregroundPrimary,
             ),
-            count: _commentsCount,
+            count: commentsCount,
             isActive: false,
             onTap: _handleComment,
             isDark: isDark,
@@ -577,6 +611,9 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
 
   /// 构建点赞和评论数显示 - 基于原型代码新增
   Widget _buildLikesAndCommentsCount(BuildContext context, bool isDark) {
+    final commentsCount = ref
+        .watch(postInteractionStateProvider)
+        .commentCountFor(widget.post.id, fallback: _commentsCount);
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.contentSpacingMd.w, // 使用更小的内容间距
@@ -618,11 +655,11 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
             ),
 
           // 评论数显示
-          if (_commentsCount > 0)
+          if (commentsCount > 0)
             GestureDetector(
               onTap: _handleComment,
               child: Text(
-                '${AppStrings.viewAllComments} $_commentsCount ${AppStrings.comments}',
+                '${AppStrings.viewAllComments} $commentsCount ${AppStrings.comments}',
                 style: TextStyle(
                   fontSize: AppTypography.base, // 使用语义标签
                   color: isDark
@@ -685,34 +722,6 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
     return formatCompactActionCount(count);
   }
 
-  /// 处理评论添加
-  void _handleCommentAdded(String content) {
-    _showToast(UITextConstants.commentSent);
-    // TODO: 实现实际的评论添加逻辑
-  }
-
-  /// 处理评论反应
-  void _handleCommentReacted(comment_models.CommentModel comment) {
-    _showToast(AppStrings.likeSuccess);
-    // TODO: 接入评论三态反应逻辑
-  }
-
-  void _handleCommentReactedById(String commentId) {
-    _showToast(AppStrings.likeSuccess);
-    // TODO: 接入评论三态反应逻辑
-  }
-
-  /// 处理回复添加
-  void _handleReplyAdded(String commentId, String content) {
-    _showToast(AppStrings.replySent);
-    // TODO: 实现实际的回复添加逻辑
-  }
-
-  /// 处理用户点击
-  void _handleUserTapped(String userId) {
-    _showToast(AppStrings.goToUserProfile);
-    // TODO: 实现跳转到用户主页的逻辑
-  }
 
   /// 处理加载更多评论
   void _handleLoadMoreComments(String postId) {

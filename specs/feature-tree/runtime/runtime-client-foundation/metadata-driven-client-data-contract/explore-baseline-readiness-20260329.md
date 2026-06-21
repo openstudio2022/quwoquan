@@ -13,7 +13,7 @@
 | **范围 In** | 契约层、Repository 边界、页面消费目标态、缺口清单、门禁脚本、**不**承诺本会话全量改码 — **与 plan slice-1 一致**。 |
 | **范围 Out** | 一次性替换全仓库 Map、重定义 Go Registry、PA 内部 LLM 契约 — **已声明**；云 API 调用仍须 codegen。 |
 | **交付物** | spec/design/acceptance/plan、inventory YAML、verify 脚本、`gate_repo.sh` 引用、tree_index、CR — **均已存在**（CR 状态见 §5）。 |
-| **验收 A1–A7** | 文档与清单、CR 路径、tree、design 中 Mock/Remote 原则 — **可满足**；**T3/T4** 在 acceptance 中标记为 partial/deferred，**符合**「baseline 不关门实现」策略。 |
+| **验收 A1–A7** | 文档与清单、CR 路径、tree、design 中 Mock/Remote 原则 — **可满足**；**api_integration/user_acceptance** 在 acceptance 中标记为 partial/deferred，**符合**「baseline 不关门实现」策略。 |
 
 ---
 

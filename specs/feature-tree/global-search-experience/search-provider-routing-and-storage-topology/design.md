@@ -153,7 +153,7 @@ Journey 和页面只消费结果，不关心执行位置。
 - `T3_cross_service_integration`：remote provider、fallback、read model 边界
 - `T4_release_rehearsal`：高并发与降级 / 回滚演练，含 agent tool 调用限流、审计与多轮 query-first 检索验证
 
-## plan slice 与 T1~T4 证据矩阵映射
+## plan slice 与 三层测试 证据矩阵映射
 
 | Slice | 目标 | 主要证据 |
 |---|---|---|

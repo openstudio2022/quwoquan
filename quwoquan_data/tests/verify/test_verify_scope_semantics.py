@@ -57,6 +57,45 @@ def test_bulk_audit_excludes_runtime_batches():
         assert all("runtime" not in str(r) or "release" in str(r) for r in roots), roots
 
 
+def test_current_scope_filters_retired_release_schema():
+    original_release_root = post_verify.RELEASE_ROOT
+    with tempfile.TemporaryDirectory(prefix="release_scope_") as tmp:
+        release_root = Path(tmp)
+        current_posts = release_root / "current_release" / "posts" / "article" / "攻略" / "当前" / "1"
+        retired_posts = release_root / "retired_release" / "posts" / "article" / "攻略" / "旧稿" / "1"
+        current_posts.mkdir(parents=True)
+        retired_posts.mkdir(parents=True)
+        write_json(
+            current_posts / "manifest.json",
+            {
+                "schemaVersion": post_verify.CURRENT_POST_MANIFEST_SCHEMA,
+                "topicId": "current",
+                "contentType": "article",
+                "entityRefs": [],
+                "normalizedEntityRefs": [],
+                "tagRefs": ["Topic/旅行"],
+            },
+        )
+        write_json(
+            retired_posts / "manifest.json",
+            {
+                "topicId": "retired",
+                "contentType": "article",
+                "entityRefs": [],
+                "tagRefs": ["Topic/旅行"],
+            },
+        )
+        post_verify.RELEASE_ROOT = release_root
+        try:
+            current_roots = post_verify.resolve_posts_roots(scope="current")
+            all_roots = post_verify.resolve_posts_roots(scope="all")
+        finally:
+            post_verify.RELEASE_ROOT = original_release_root
+
+    assert current_roots == [current_posts.parents[3]], current_roots
+    assert set(all_roots) == {current_posts.parents[3], retired_posts.parents[3]}, all_roots
+
+
 def test_explicit_batch_still_strict():
     _seed_runtime_batch_with_defect()
     roots, issues = post_verify.verify_scope(task=TASK, batch=BATCH, scope="current")

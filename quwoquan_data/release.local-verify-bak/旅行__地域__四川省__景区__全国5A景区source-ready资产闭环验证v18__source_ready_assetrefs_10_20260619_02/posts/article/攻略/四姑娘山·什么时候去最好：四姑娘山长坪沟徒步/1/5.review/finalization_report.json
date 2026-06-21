@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "四姑娘山_seasonal_timing",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:efab3a43fa03148dd0929021fb220b016acf04fc3632b0be863c3fbcd2ec8b51",
+  "finalSha256": "sha256:b3675aba82b5d77723108fe86433e3bf466d019e3ffb018d25b2340b90ab044a",
+  "draftBodySha256": "sha256:efab3a43fa03148dd0929021fb220b016acf04fc3632b0be863c3fbcd2ec8b51",
+  "finalBodySha256": "sha256:efab3a43fa03148dd0929021fb220b016acf04fc3632b0be863c3fbcd2ec8b51",
+  "composeSnapshotSha256": "sha256:efab3a43fa03148dd0929021fb220b016acf04fc3632b0be863c3fbcd2ec8b51",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

@@ -3,11 +3,13 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_crea
 import 'package:quwoquan_app/cloud/runtime/generated/user/greeting_reply_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
     show SubAccountProfileViewData, UserHomepageBundleViewData, UserWorkItem;
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 
 class ProfileState {
@@ -57,6 +59,8 @@ class ProfileState {
 
   /// 首屏聚合是否失败（用于错误态分支：重试 / 降级提示）。
   bool get hasLoadError => rawError != null;
+
+  bool get hasCacheFallback => rawError != null && profile != null;
 
   RelationshipCapabilityDto? get displayCapability {
     final base = capability;
@@ -115,8 +119,37 @@ class ProfileNotifier extends Notifier<ProfileState> {
 
   @override
   ProfileState build() {
+    ref.listen<UserRelationshipState>(userRelationshipStateProvider, (
+      previous,
+      next,
+    ) {
+      _syncFollowStateFromShared(next);
+    });
     Future.microtask(loadProfile);
     return ProfileState(userId: _userId);
+  }
+
+  void _syncFollowStateFromShared(UserRelationshipState relationshipState) {
+    final targetSubAccountId = state.profile?.subAccountId.isNotEmpty == true
+        ? state.profile!.subAccountId
+        : _userId;
+    if (!relationshipState.hasRelationshipStateFor(targetSubAccountId)) {
+      return;
+    }
+    final sharedFollowing = relationshipState.isFollowing(targetSubAccountId);
+    final capability = state.capability;
+    final shouldOverride =
+        capability != null && capability.viewerFollowsTarget != sharedFollowing;
+    if (state.isFollowing == sharedFollowing &&
+        ((!shouldOverride && state.optimisticFollowOverride == null) ||
+            state.optimisticFollowOverride == sharedFollowing)) {
+      return;
+    }
+    state = state.copyWith(
+      isFollowing: sharedFollowing,
+      optimisticFollowOverride: shouldOverride ? sharedFollowing : null,
+      clearOptimisticFollowOverride: !shouldOverride,
+    );
   }
 
   bool? _pendingFollowIntent(String subAccountId) {
@@ -132,20 +165,31 @@ class ProfileNotifier extends Notifier<ProfileState> {
   }
 
   Future<void> loadProfile() async {
-    state = ProfileState(userId: _userId).copyWith(isLoading: true);
+    state = state.copyWith(isLoading: true, clearError: true);
+    _recordProfileState(
+      phase: 'onlineLoading',
+      source: 'online',
+      hasCache: state.profile != null,
+      itemCount: state.creations.length,
+    );
     try {
       final repo = ref.read(userProfileRepositoryProvider);
+      final contentRepo = ref.read(contentRepositoryProvider);
       // 锁定决策 #1：homepage-bundle 一次聚合身份域真相（profile/stats/关系能力/
       // viewerContext），与作品/帖子内容并发补充，消除首屏串行阻塞。
       final results = await Future.wait(<Future<Object>>[
         repo.getUserHomepageBundle(_userId),
-        repo.listUserPosts(_userId),
+        contentRepo.listUserPosts(userId: _userId),
         repo.listUserWorks(_userId),
       ]);
       final bundle = results[0] as UserHomepageBundleViewData;
-      final posts = results[1] as List<PostBaseDto>;
+      final postsPage = results[1] as CursorPage<PostBaseDto>;
+      final posts = postsPage.items;
       final works = results[2] as List<UserWorkItem>;
       final profile = bundle.profileWithStats;
+      if (!ref.mounted) {
+        return;
+      }
       ref
           .read(postInteractionStateProvider.notifier)
           .applyConfirmedPosts(posts);
@@ -175,6 +219,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
           pendingFollowIntent ??
           seededCapability?.viewerFollowsTarget ??
           sharedFollowing;
+      final fallbackError = postsPage.cacheFallbackError;
       state = state.copyWith(
         profile: profile,
         creations: posts,
@@ -183,7 +228,17 @@ class ProfileNotifier extends Notifier<ProfileState> {
         isFollowing: seededFollowing,
         capability: seededCapability,
         optimisticFollowOverride: optimisticFollowOverride,
-        clearError: true,
+        rawError: fallbackError,
+        clearError: fallbackError == null,
+      );
+      _recordProfileState(
+        phase: fallbackError == null ? 'onlineSuccess' : 'cacheFallback',
+        source: fallbackError == null ? 'online' : 'cache',
+        error: fallbackError,
+        copyKey: fallbackError == null ? null : 'profileCacheFallback',
+        hasCache: fallbackError != null,
+        cacheAgeMs: postsPage.cacheAgeMs,
+        itemCount: posts.length,
       );
       ref
           .read(userRelationshipStateProvider.notifier)
@@ -191,11 +246,46 @@ class ProfileNotifier extends Notifier<ProfileState> {
     } catch (e) {
       // 结构化错误态：保留原始错误供 UI 经 errorMessage 展示，不静默吞异常。
       state = state.copyWith(isLoading: false, rawError: e);
+      _recordProfileState(
+        phase: state.profile == null ? 'blockingFailure' : 'cacheFallback',
+        source: state.profile == null ? 'online' : 'retained',
+        error: e,
+        copyKey: state.profile == null
+            ? 'homepageLoadFailedTitle'
+            : 'profileCacheFallback',
+        hasCache: state.profile != null,
+        itemCount: state.creations.length,
+      );
     }
     // bundle 未提供关系能力（本人态 / 异常降级）时，异步精确校准（不阻塞首屏）。
     if (state.capability == null && !state.hasLoadError) {
       _loadRelationshipCapability();
     }
+  }
+
+  void _recordProfileState({
+    required String phase,
+    required String source,
+    Object? error,
+    String? copyKey,
+    bool? hasCache,
+    int? cacheAgeMs,
+    int? itemCount,
+  }) {
+    ref
+        .read(pageLifecycleObservabilityProvider)
+        .recordPageState(
+          pageName: 'profile',
+          route: '/users/$_userId',
+          surface: 'user_profile',
+          phase: phase,
+          source: source,
+          error: error,
+          copyKey: copyKey,
+          hasCache: hasCache,
+          cacheAgeMs: cacheAgeMs,
+          itemCount: itemCount,
+        );
   }
 
   Future<void> _loadRelationshipCapability() async {
@@ -209,6 +299,9 @@ class ProfileNotifier extends Notifier<ProfileState> {
       final pendingFollowIntent = _pendingFollowIntent(targetUserId);
       final capRepo = ref.read(relationshipCapabilityRepositoryProvider);
       final cap = await capRepo.getCapability(targetUserId);
+      if (!ref.mounted) {
+        return;
+      }
       final reconcileCap = ref
           .read(relationshipCapabilityRepositoryProvider)
           .reconcilesCapabilityWithSharedRelationshipState;
@@ -237,6 +330,9 @@ class ProfileNotifier extends Notifier<ProfileState> {
             effectiveFollowing == cap.viewerFollowsTarget,
       );
     } catch (_) {
+      if (!ref.mounted) {
+        return;
+      }
       final targetUserId = state.profile?.subAccountId.isNotEmpty == true
           ? state.profile!.subAccountId
           : _userId;
@@ -279,7 +375,10 @@ class ProfileNotifier extends Notifier<ProfileState> {
     final subAccountId = state.profile?.subAccountId.isNotEmpty == true
         ? state.profile!.subAccountId
         : _userId;
-    final wasFollowing = state.isFollowing;
+    final relationshipState = ref.read(userRelationshipStateProvider);
+    final wasFollowing = relationshipState.hasRelationshipStateFor(subAccountId)
+        ? relationshipState.isFollowing(subAccountId)
+        : state.isFollowing;
     final nextFollowing = !wasFollowing;
     ref
         .read(userRelationshipStateProvider.notifier)
@@ -291,8 +390,8 @@ class ProfileNotifier extends Notifier<ProfileState> {
         .read(clientStateSyncOutboxProvider.notifier)
         .enqueueFollow(
           subAccountId: subAccountId,
+          currentFollowing: wasFollowing,
           shouldFollow: nextFollowing,
-          flushImmediately: true,
         );
     state = state.copyWith(
       isFollowing: nextFollowing,
@@ -314,6 +413,9 @@ class ProfileNotifier extends Notifier<ProfileState> {
           requestMessage: requestMessage,
           source: source,
         );
+    if (!ref.mounted) {
+      return greeting;
+    }
     final capability = state.capability;
     if (capability != null) {
       state = state.copyWith(
@@ -336,7 +438,9 @@ class ProfileNotifier extends Notifier<ProfileState> {
           type: 'direct',
           initialMemberIds: <String>[targetUserId],
         );
-    _promoteFormalConversation(result.conversationId);
+    if (ref.mounted) {
+      _promoteFormalConversation(result.conversationId);
+    }
     return result;
   }
 
@@ -346,7 +450,9 @@ class ProfileNotifier extends Notifier<ProfileState> {
     final result = await ref
         .read(greetingRepositoryProvider)
         .replyGreeting(requestId);
-    _promoteFormalConversation(result.conversationId);
+    if (ref.mounted) {
+      _promoteFormalConversation(result.conversationId);
+    }
     return result;
   }
 

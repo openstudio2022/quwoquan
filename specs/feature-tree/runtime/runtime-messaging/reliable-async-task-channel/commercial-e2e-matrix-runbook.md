@@ -9,7 +9,7 @@
 | 序号 | 环境 | 含义 | 证据形态 |
 |------|------|------|----------|
 | E1 | **beta** | 对接真实 beta 网关与 chat/media/user-sync；双端（Android + iOS）Patrol | `schemaVersion=1`、`status=passed`、非 dry-run、`environment.env=beta` |
-| E2 | **local-gamma** | `start_local_gamma_mirror` + T3/T4 + Patrol；与镜像拓扑一致 | `environment.env=local-gamma`（或与脚本约定等价字段） |
+| E2 | **local-gamma** | `start_local_gamma_mirror` + api_integration/user_acceptance + Patrol；与镜像拓扑一致 | `environment.env=local-gamma`（或与脚本约定等价字段） |
 | E3 | **cloud-gamma-pre** | ECS pre + API probe + self-hosted Patrol（chat-avatar matrix） | run id / artifact URL；probe + device JSON |
 | E4 | **cloud-gamma-prod-smoke** | prod 变更后 smoke：probe + self-hosted Patrol | 同上，`environment` 标明 prod-smoke |
 
@@ -35,7 +35,7 @@ python3 agent_ops/avatar/check_avatar_commercial_matrix_prereqs.py --strict
 
 ## 3. 执行顺序（推荐）
 
-1. **Phase L — local-gamma**（可先在无 ECS 情况下推进）：启动镜像 → healthz → `run_local_gamma_t3.py` / T4 → `run_local_gamma_avatar_e2e.py` → `run_chat_avatar_device_matrix.py`（无 `--dry-run`，双端）。
+1. **Phase L — local-gamma**（可先在无 ECS 情况下推进）：启动镜像 → healthz → `run_local_gamma_t3.py` / user_acceptance → `run_local_gamma_avatar_e2e.py` → `run_chat_avatar_device_matrix.py`（无 `--dry-run`，双端）。
 2. **Phase B — beta**：beta 网关与 seed/token 就绪 → `run_chat_avatar_e2e_probe.py` → Patrol（双端）。
 3. **Phase C — cloud**：推送或 `workflow_dispatch` 触发预发/冒烟流水线；从 Actions artifact 下载 JSON，核对四条齐全。
 4. **机器校验（必选）**：将四类报告路径写入 manifest（示例：[`artifacts/commercial-matrix/chat-avatar/manifest.sample.yaml`](../../../../../artifacts/commercial-matrix/chat-avatar/manifest.sample.yaml)），运行：
@@ -51,7 +51,7 @@ python3 agent_ops/avatar/check_avatar_commercial_matrix_prereqs.py --strict
 仓库提供：
 
 ```bash
-# 仅本机 Phase L：prereqs → 路由自检 → T3 → run_local_gamma_avatar_e2e（非 dry-run）
+# 仅本机 Phase L：prereqs → 路由自检 → api_integration → run_local_gamma_avatar_e2e（非 dry-run）
 bash agent_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh
 
 # 先起 Docker 镜像栈
@@ -82,7 +82,7 @@ bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
 # Probe（非 dry-run 需可达 gateway）
 python3 agent_ops/avatar/run_chat_avatar_e2e_probe.py --help
 
-# T3（含 chat）
+# api_integration（含 chat）
 python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py
 
 # Device 矩阵（商用必须去掉 dry-run，且具备双端设备）

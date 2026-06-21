@@ -40,9 +40,6 @@ class EvidenceGroup {
   /// 展示降级排序。只用于 UI 排序，不用于拼装事实文案。
   int get rank => isRecommended ? 900 : evidenceKindRank(kind);
 
-  /// 无头像时的语义图标槽位。只用于 fallback 图标，不用于事实文案。
-  String get fallbackIconKind => fallbackIconKindFor(kind);
-
   /// 是否有可展示的有价值事实（必读要求 2 简洁：无价值不展示）。
   bool get hasMeaning =>
       label.trim().isNotEmpty || sampleText.trim().isNotEmpty;
@@ -143,43 +140,4 @@ class EvidenceGroup {
     }
   }
 
-  static String fallbackIconKindFor(String kind) {
-    switch (kind.trim()) {
-      case 'sharedFollowees':
-      case 'commonFollower':
-      case 'commonContact':
-      case 'followeeInObject':
-      case 'followeeVisited':
-      case 'followeeViewing':
-      case 'followeeDiscussedThis':
-        return 'person';
-      case 'coMemberCircle':
-      case 'sharedCircle':
-      case 'sameCompany':
-      case 'sameTeam':
-      case 'sameIndustry':
-      case 'sharedEntityAttention':
-      case 'coWishlistedEntity':
-        return 'circle';
-      case 'coVisitedEntity':
-        return 'place';
-      case 'coCommented':
-      case 'coSharedContent':
-      case 'coCreatedContent':
-      case 'sharedDiscussion':
-        return 'discussion';
-      case 'sameSchool':
-      case 'sameDepartment':
-      case 'sameMajor':
-      case 'sameCohort':
-      case 'alumni':
-      case 'alumniHere':
-      case 'colleagueHere':
-        return 'school';
-      case 'sharedTagSample':
-        return 'tag';
-      default:
-        return 'link';
-    }
-  }
 }

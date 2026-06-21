@@ -1,0 +1,147 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "蜀南竹海_planning_consultation",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "蜀南竹海·行前怎么安排：西安-神农架-重庆-蜀南竹海-阆中自驾",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer",
+    "agentRunId": "run-2fb276d9-131a-447d-9b0a-1b08779702df",
+    "agentId": "agent-92c514a3-a0cc-47ae-9ad0-338ff4b8277c",
+    "sessionTrace": null,
+    "styleFamily": "路线规划风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/蜀南竹海"
+    ],
+    "articleDigest": "sha256:a22d473f77735a6fcc5d22b22f63265a129722f2e4533341a1dd6a82e7a144fa"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "蜀南竹海·行前怎么安排：西安-神农架-重庆-蜀南竹海-阆中自驾",
+    "styleFamily": "",
+    "promptSha256": "sha256:b5a9eaf8a6c392a76b974226b34e390c353ec315c54e77931f7e4a413b4304ea",
+    "writingPackSha256": "sha256:5808d40bb93904cb9392b82df3d358587eab716decfd5676ecd033f015bfebce",
+    "sourceBundleSha256": "sha256:4c5687003990cf7c2a64cb675c577ce51ba939268acc5ab5c8cefa94534471fa",
+    "draftSha256": "sha256:f05c3b1d0a6ba2f5113fb3937d749a645ffa73221a52801bf9c0fe985e3f6135"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/01.home_wikipedia/source.md",
+      "url": "https://zh.wikipedia.org/wiki/%E8%9C%80%E5%8D%97%E7%AB%B9%E6%B5%B7"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/03.home_official/source.md",
+      "url": "https://www.snzh.cn/"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/04.article_qunar_base_1/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7902122"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/05.article_qunar_base_2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7696479"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/06.article_qunar_base_3/source.md",
+      "url": "https://touch.travel.qunar.com/youji/6823412"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/07.article_qunar_base_4/source.md",
+      "url": "https://touch.travel.qunar.com/youji/6592057"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/08.article_qunar_base_5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/6562282"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/09.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/6250393"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/10.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/5779061"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/11.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/5757391"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/12.article_qunar_base_9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7638809"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/13.article_qunar_base_10/source.md",
+      "url": "https://touch.travel.qunar.com/youji/5591207"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/14.article_qunar_base_11/source.md",
+      "url": "https://touch.travel.qunar.com/youji/5467442"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/15.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/5364003"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/16.article_qunar_base_13/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7657538"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/17.article_qunar_base_14/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7024902"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/18.article_qunar_base_15/source.md",
+      "url": "https://touch.travel.qunar.com/youji/3217292"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/19.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7717454"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/21.article_qunar_review_support/source.md",
+      "url": "https://touch.travel.qunar.com/search?q=%E8%9C%80%E5%8D%97%E7%AB%B9%E6%B5%B7"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/22.image_open_license_file_蜀南竹海_httpscommonswikimediaorgwikifilee89c80e58d97e7abb9e6b5b7p103_7ca6c532c3/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E8%9C%80%E5%8D%97%E7%AB%B9%E6%B5%B7_P1030387_(12607284444).jpg"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/23.image_open_license_file_蜀南竹海_httpscommonswikimediaorgwikifilee89c80e58d97e7abb9e6b5b7p103_bdce247032/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E8%9C%80%E5%8D%97%E7%AB%B9%E6%B5%B7_P1030383_(12605976884).jpg"
+    },
+    {
+      "path": "entities/地点/景区/蜀南竹海/1.download/sources/24.image_open_license_file_蜀南竹海_httpscommonswikimediaorgwikifileshunanzhuhainationalparkbann_f57a24e42f/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Shunan_Zhuhai_National_Park_banner.jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/蜀南竹海/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/蜀南竹海/1.download/sources/03.home_official/source.md",
+    "entities/地点/景区/蜀南竹海/1.download/sources/08.article_qunar_base_5/source.md"
+  ]
+}

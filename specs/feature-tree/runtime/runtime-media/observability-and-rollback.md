@@ -23,7 +23,7 @@
 - `quwoquan_runtime_media_sync_requires_resync_total`
 
 ### 发布级人工/外部观测项
-- 默认群图标降级比例：从 T4 演练记录或正式监控面板统计
+- 默认群图标降级比例：从 user_acceptance 演练记录或正式监控面板统计
 - hint-to-pull 延迟：从客户端埋点或预发抓样得到
 
 ## 阈值与动作
@@ -31,9 +31,9 @@
 |------|------|----------|----------|
 | 群头像重算平均耗时 | `<= 400ms` | `/metrics/runtime-media` | 先缩小灰度；持续超阈值则关闭 `chat.group_avatar_precompose_enabled` |
 | patch fanout 失败比 | `<= 1%` | `/metrics/runtime-media` + 日志 | 先观察是否可自动重试恢复；不可恢复则关闭 `runtime.avatar_patch_enabled` |
-| hint-to-pull P95 | `<= 1500ms` | 客户端埋点 / T4 抓样 | 若服务端正常优先排查客户端节流、弱网与 WS 连接状态 |
+| hint-to-pull P95 | `<= 1500ms` | 客户端埋点 / user_acceptance 抓样 | 若服务端正常优先排查客户端节流、弱网与 WS 连接状态 |
 | `requiresResync` 比例 | `<= 5%` | `/metrics/runtime-media` | 若突增，优先排查 patch TTL、客户端长离线与 Redis patch 丢失 |
-| 默认群图标降级比例 | `<= 2%` | T4 演练 / 面板统计 | 若突增，优先关闭预合成灰度并保留默认群图标主路径 |
+| 默认群图标降级比例 | `<= 2%` | user_acceptance 演练 / 面板统计 | 若突增，优先关闭预合成灰度并保留默认群图标主路径 |
 
 ## 灰度策略
 1. 先开 `chat.group_avatar_precompose_enabled`
@@ -56,4 +56,4 @@
 ## 与正式监控系统的接缝
 - 当前 `/metrics/runtime-media` 是轻量 JSON 快照，适合作为预发核查与灰度观察入口。
 - 正式发布前应把同名指标映射到统一监控系统；本文件保留指标名、阈值和动作作为单一口径。
-- 客户端类指标（默认群图标降级比例、hint-to-pull）当前仍依赖埋点或 T4 抓样，不应伪装成服务端已自动采集。
+- 客户端类指标（默认群图标降级比例、hint-to-pull）当前仍依赖埋点或 user_acceptance 抓样，不应伪装成服务端已自动采集。

@@ -40,18 +40,33 @@ gwt_acceptance:
     performance_points:
     - action-to-feedback latency <= 100ms
     - no visible jank during pop animation
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T4_user_journey
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/edge_gesture/immersive_media_edge_swipe_back_test.dart
-      - quwoquan_app/test/patrol/edge_swipe_navigation_e2e_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.native_edge_gesture_navigation.immersive_media_edge_swipe_back.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt_edge_back_local_contract
+        cases:
+        - local_contract.runtime.native_edge_gesture_navigation.immersive_media_edge_swipe_back.gwt_edge_back_local_contract
+        envs: *id001
+      supporting:
+      - layer: user_acceptance
+        suite: user_journey
+        cases:
+        - user_acceptance.runtime.native_edge_gesture_navigation.immersive_media_edge_swipe_back.user_journey
+        envs:
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/edge_gesture/immersive_media_edge_swipe_back_test.dart'
+    - '[migrated_from_planned] quwoquan_app/test/patrol/edge_swipe_navigation_e2e_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

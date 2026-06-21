@@ -106,16 +106,48 @@ void main() {
       expect(payload['assistantUsePolicy'], 'allow_summary');
     });
 
-    test('CreatePostRequestWire semanticMentions 保持可写语义', () {
+    test('CreatePostRequestWire semanticMentions 为结构化数组且不被 stringify', () {
+      // R-CS06：semanticMentions 是 []object 可写字段，wire 必须以结构化数组承载，
+      // 不得 .toString() 破坏；顶层只读投影 tagRefs/entityRefs 仍被 wire 剥离。
       final wire = CreatePostRequestWire.fromMap(<String, dynamic>{
         'type': 'article',
         'contentType': 'article',
         'summary': '摘要',
-        'semanticMentions': 'Topic/旅行/城市漫步',
+        'semanticMentions': <Map<String, dynamic>>[
+          {
+            'kind': 'tag',
+            'status': 'published',
+            'targetRef': 'Topic/旅行/城市漫步',
+          },
+          {
+            'kind': 'entity',
+            'status': 'published',
+            'targetRef': 'entity:sight:west_lake',
+          },
+        ],
+        'tagRefs': <String>['Topic/旅行/城市漫步'],
+        'entityRefs': <String>['entity:sight:west_lake'],
         'assistantUsePolicy': 'inherit',
       });
       final body = wire.toWire();
-      expect(body['semanticMentions'], 'Topic/旅行/城市漫步');
+      expect(body['semanticMentions'], isA<List>());
+      final rows = (body['semanticMentions'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(rows.length, 2);
+      expect(
+        rows.any(
+          (r) => r['kind'] == 'tag' && r['targetRef'] == 'Topic/旅行/城市漫步',
+        ),
+        isTrue,
+      );
+      expect(
+        rows.any(
+          (r) =>
+              r['kind'] == 'entity' &&
+              r['targetRef'] == 'entity:sight:west_lake',
+        ),
+        isTrue,
+      );
       expect(body.containsKey('tagRefs'), isFalse);
       expect(body.containsKey('entityRefs'), isFalse);
     });

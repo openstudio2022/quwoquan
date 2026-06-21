@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"quwoquan_service/services/content-service/internal/generated"
 )
 
 // 交集理由的纯派生/水合辅助（freshness、point/icon/target/text span 推导）
@@ -142,6 +144,28 @@ func hydratePointSummary(r IntersectionReasonView) IntersectionReasonView {
 // §18.1「无 primaryText → 不展示」留空，由候选窗完备性过滤优雅降级（不写死闭集、不造假）。
 func hydrateExplain(r IntersectionReasonView) IntersectionReasonView {
 	anchor, hasAnchor := explainAnchorPoint(r)
+	// §23 一等字段：reason.kind 真相源为锚点的 sourceRef（已登记 kind），缺省回落 reason.source；
+	// vertical 缺省 general（旅行等垂类落数据后由注册表 vertical 驱动，本轮全为 general）。
+	if strings.TrimSpace(r.Kind) == "" {
+		if hasAnchor && strings.TrimSpace(anchor.SourceRef) != "" {
+			r.Kind = strings.TrimSpace(anchor.SourceRef)
+		} else {
+			r.Kind = strings.TrimSpace(r.Source)
+		}
+	}
+	if strings.TrimSpace(r.Vertical) == "" {
+		// §23.4 三元组正交：vertical 不来自 kind（基 kind 一律 general），
+		// 由 objectKind / tagRef 真算（route/photo_spot/gear 或旅行 tag → travel_photography）。
+		r.Vertical = verticalForReason(r)
+	}
+	if strings.TrimSpace(r.LifecycleState) == "" {
+		// §21.3 状态机真算：仅在有强度变化信号（previousStrength/strengthDelta/edgeWeight）时
+		// 离散化生命周期态；无信号不造假（留空，端按 freshAt/new 红点兜底）。
+		r.LifecycleState = lifecycleStateForReason(r)
+	}
+	if r.RepresentativeActor == nil && hasAnchor {
+		r.RepresentativeActor = representativeActorForReason(r, anchor)
+	}
 	if strings.TrimSpace(r.PrimaryText) == "" && hasAnchor {
 		r.PrimaryText = explainPrimaryText(r, anchor)
 	}
@@ -177,9 +201,9 @@ func hydrateExplain(r IntersectionReasonView) IntersectionReasonView {
 }
 
 // iconKeyForReason 产出端侧类型图标语义键（§21.5.2 闭集）。真相源 =
-// recommendation/rec_model/intersection_kind_registry.yaml 的 iconKey 字段，
-// 本映射必须与该注册表逐项对齐（与 evidenceKindRank 同源约束）。anchor.SourceRef
-// 命中 kind 即用其 iconKey；未登记 kind 按维度兜底，端 IntersectionIconResolver 再做最终回退。
+// recommendation/rec_model/intersection_kind_registry.yaml（codegen generated.Intersection* 查表）。
+// anchor.SourceRef 命中 kind 即用其 iconKey；未登记 kind 按 dimension 末级回退表降级，
+// 端 IntersectionIconResolver 再做最终回退。
 func iconKeyForReason(r IntersectionReasonView) string {
 	src := ""
 	if anchor, ok := explainAnchorPoint(r); ok {
@@ -191,47 +215,13 @@ func iconKeyForReason(r IntersectionReasonView) string {
 	if key := iconKeyForKind(src); key != "" {
 		return key
 	}
-	switch r.Dimension {
-	case "location":
-		return "place"
-	case "relationship":
-		return "people"
-	case "interest":
-		return "interest"
-	case "content":
-		return "discussion"
-	case "identity":
-		return "alumni"
-	default:
-		return ""
-	}
+	return generated.IntersectionIconKeyByDimension[strings.TrimSpace(r.Dimension)]
 }
 
-// iconKeyForKind 是 kind → iconKey 的确定性映射，逐项对齐
-// intersection_kind_registry.yaml `kinds[].iconKey`。新增 kind 必须先入注册表再补此处。
+// iconKeyForKind 查 kind → iconKey（generated.IntersectionIconKeyByKind，源 registry.kinds[].iconKey）。
+// 未登记 kind 返回空串，由 iconKeyForReason 走 dimension 末级回退。
 func iconKeyForKind(kind string) string {
-	switch strings.TrimSpace(kind) {
-	case "coVisitedEntity", "followeeVisited", "coWishlistedEntity":
-		return "place"
-	case "sharedCircle", "coMemberCircle":
-		return "circle"
-	case "sharedFollowees", "commonFollower", "commonContact", "followeeInObject", "followeeViewing":
-		return "people"
-	case "sameSchool", "sameDepartment", "sameMajor", "sameCohort", "alumni", "alumniHere":
-		return "alumni"
-	case "sameCompany", "sameTeam", "sameIndustry", "colleagueHere", "coCreatedContent":
-		return "work"
-	case "sharedDiscussion", "coCommented", "followeeDiscussedThis":
-		return "discussion"
-	case "coSharedContent":
-		return "share"
-	case "coLiked":
-		return "like"
-	case "sharedTagSample", "sharedEntityAttention":
-		return "interest"
-	default:
-		return ""
-	}
+	return generated.IntersectionIconKeyByKind[strings.TrimSpace(kind)]
 }
 
 // objectVisualForReason 产出尾部对象视觉（§21.5.1 槽③）：该 reason 指向的主对象封面 /
@@ -267,6 +257,9 @@ func hydrateInteractionContract(r IntersectionReasonView) IntersectionReasonView
 	if len(r.PrimarySpans) == 0 && strings.TrimSpace(r.PrimaryText) != "" {
 		r.PrimarySpans = primarySpansForReason(r, target)
 	}
+	if len(r.ActionHints) == 0 {
+		r.ActionHints = actionHintsForReason(r, target)
+	}
 	return r
 }
 
@@ -290,32 +283,73 @@ func intersectionTargetForReason(r IntersectionReasonView) *IntersectionTargetVi
 }
 
 func routeIDForObjectKind(kind string) string {
-	switch strings.TrimSpace(kind) {
-	case "person":
-		return "userProfile"
-	case "circle":
-		return "circleDetail"
-	case "school", "place", "enterprise":
-		return "homepageDetail"
-	default:
-		return ""
-	}
+	// 真相源 = intersection_kind_registry.yaml objectKinds[].routeId
+	// （codegen generated.IntersectionRouteIDByObjectKind；端 intersectionRouteIdForObjectKind 同表）。
+	// 不可导航对象（content/tag）或未知值返回空串（map 零值）。
+	return generated.IntersectionRouteIDByObjectKind[strings.TrimSpace(kind)]
 }
 
 func assetKindForObjectKind(kind string) string {
-	switch strings.TrimSpace(kind) {
-	case "person":
-		return "avatar"
-	case "circle":
-		return "circleAvatar"
-	case "school":
-		return "emblem"
-	case "enterprise":
-		return "logo"
-	case "place":
-		return "coverImage"
+	// 真相源 = intersection_kind_registry.yaml objectKinds[].assetKind
+	// （codegen generated.IntersectionAssetKindByObjectKind；端 UnifiedObjectKind.assetKind 同表）。
+	// 未声明 assetKind 的对象（content/tag）或未知值兜底 icon。
+	if v, ok := generated.IntersectionAssetKindByObjectKind[strings.TrimSpace(kind)]; ok {
+		return v
+	}
+	return "icon"
+}
+
+// verticalForReason 三元组正交（§23.4）真算 reason 垂类：route/photo_spot/gear 主对象
+// 必属旅行摄影垂类；place 主对象或旅行 tag（travel/photo/sunset/landscape/hiking 等命名空间）
+// 命中亦归 travel_photography；其余 general。kind 不参与（基 kind 一律 general）。
+func verticalForReason(r IntersectionReasonView) string {
+	switch strings.TrimSpace(r.ObjectKind) {
+	case "route", "photo_spot", "gear":
+		return "travel_photography"
+	}
+	for _, tag := range r.TagRefs {
+		if isTravelPhotographyTag(tag) {
+			return "travel_photography"
+		}
+	}
+	return "general"
+}
+
+func isTravelPhotographyTag(tag string) bool {
+	t := strings.ToLower(strings.TrimSpace(tag))
+	if t == "" {
+		return false
+	}
+	for _, marker := range []string{"travel", "photo", "sunset", "landscape", "hiking", "scenic", "route", "spot"} {
+		if strings.Contains(t, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// lifecycleStateForReason 按 §21.3 状态机离散化交集边生命周期态。只在有强度变化信号时
+// 真算（previousStrength/strengthDelta/edgeWeight 任一非零）；无信号返回空，不造假。
+// reactivated = 低位（previousStrength≤0.5）回升；strengthened = 健康基线上升；weakened = 衰减。
+func lifecycleStateForReason(r IntersectionReasonView) string {
+	if r.PreviousStrength <= 0 && r.StrengthDelta == 0 && r.EdgeWeight == 0 {
+		return ""
+	}
+	delta := r.StrengthDelta
+	if delta == 0 && r.PreviousStrength > 0 {
+		delta = r.Strength - r.PreviousStrength
+	}
+	switch {
+	case r.PreviousStrength <= 0 && r.Strength > 0:
+		return "new"
+	case delta <= -0.05:
+		return "weakened"
+	case delta >= 0.05 && r.PreviousStrength > 0 && r.PreviousStrength <= 0.5:
+		return "reactivated"
+	case delta >= 0.05:
+		return "strengthened"
 	default:
-		return "icon"
+		return "stable"
 	}
 }
 
@@ -342,6 +376,140 @@ func primarySpansForReason(r IntersectionReasonView, target *IntersectionTargetV
 		spans = append(spans, IntersectionTextSpanView{Text: parts[1], Role: "plain"})
 	}
 	return spans
+}
+
+func representativeActorForReason(r IntersectionReasonView, anchor IntersectionPointView) *IntersectionRepresentativeActorView {
+	name := representativeActorName(r, anchor)
+	if name == "" {
+		return nil
+	}
+	target := intersectionTargetForReason(r)
+	actorID := ""
+	if target != nil && target.ObjectKind == "person" {
+		actorID = target.ObjectID
+	}
+	privacyState := "visible"
+	if strings.HasPrefix(name, "一位") {
+		privacyState = "anonymous"
+	}
+	return &IntersectionRepresentativeActorView{
+		ActorID:         actorID,
+		DisplayName:     name,
+		AvatarURL:       r.AvatarURL,
+		RelationLabel:   representativeRelationLabel(anchor.SourceRef),
+		PrivacyState:    privacyState,
+		Target:          target,
+		EvidenceRank:    evidenceKindRank(anchor.SourceRef, anchor.PointClass),
+		SnapshotVersion: r.PointSummarySnapshotID,
+	}
+}
+
+func representativeActorName(r IntersectionReasonView, anchor IntersectionPointView) string {
+	for _, v := range anchor.SampleVisuals {
+		if name := strings.TrimSpace(v.DisplayName); name != "" {
+			return name
+		}
+	}
+	if name := strings.TrimSpace(anchor.SampleText); name != "" {
+		if idx := strings.Index(name, "、"); idx > 0 {
+			return strings.TrimSpace(name[:idx])
+		}
+		if idx := strings.Index(name, ","); idx > 0 {
+			return strings.TrimSpace(name[:idx])
+		}
+		return name
+	}
+	if name := strings.TrimSpace(r.DisplayName); name != "" && r.ObjectKind == "person" {
+		return name
+	}
+	switch anchor.SourceRef {
+	case "sameSchool", "sameDepartment", "sameMajor", "sameCohort", "alumni", "alumniHere":
+		return "一位校友"
+	case "sameCompany", "sameTeam", "sameIndustry", "colleagueHere":
+		return "一位同事"
+	case "commonContact":
+		return "一位联系人"
+	default:
+		return "一位用户"
+	}
+}
+
+func representativeRelationLabel(sourceRef string) string {
+	switch sourceRef {
+	case "sharedFollowees", "commonFollower", "followeeInObject", "followeeVisited", "followeeViewing", "followeeDiscussedThis":
+		return "你关注的人"
+	case "commonContact":
+		return "共同联系人"
+	case "sameSchool", "sameDepartment", "sameMajor", "sameCohort", "alumni", "alumniHere":
+		return "校友"
+	case "sameCompany", "sameTeam", "sameIndustry", "colleagueHere":
+		return "同事"
+	case "sharedCircle", "coMemberCircle":
+		return "同圈成员"
+	default:
+		return ""
+	}
+}
+
+func representativeSubject(r IntersectionReasonView, anchor IntersectionPointView, n int) string {
+	name := representativeActorName(r, anchor)
+	if name == "" {
+		name = "一位用户"
+	}
+	if n <= 1 {
+		return name
+	}
+	return fmt.Sprintf("%s等%d人", name, n)
+}
+
+func representativeSubjectWithUnit(r IntersectionReasonView, anchor IntersectionPointView, n int, unit string) string {
+	name := representativeActorName(r, anchor)
+	if name == "" {
+		name = "一位用户"
+	}
+	if n <= 1 {
+		return name
+	}
+	return fmt.Sprintf("%s等%d%s", name, n, unit)
+}
+
+func actionHintsForReason(r IntersectionReasonView, target *IntersectionTargetView) []IntersectionActionHintView {
+	src := strings.TrimSpace(r.Source)
+	if anchor, ok := explainAnchorPoint(r); ok && strings.TrimSpace(anchor.SourceRef) != "" {
+		src = anchor.SourceRef
+	}
+	keys := actionKeysForKind(src)
+	out := make([]IntersectionActionHintView, 0, len(keys))
+	for i, key := range keys {
+		out = append(out, IntersectionActionHintView{
+			ActionKey: key,
+			Label:     actionLabelForKey(key),
+			Target:    target,
+			IsPrimary: i == 0,
+			Priority:  i + 1,
+		})
+	}
+	return out
+}
+
+// actionKeysForKind 查 kind → 行动建议 actionKey 有序列表
+// （generated.IntersectionActionKeysByKind，源 registry.actionHintsByKind）。
+// 未登记 kind 兜底 ask_assistant（端只渲染，不按 kind 猜测下一步）。
+func actionKeysForKind(kind string) []string {
+	if keys := generated.IntersectionActionKeysByKind[strings.TrimSpace(kind)]; len(keys) > 0 {
+		return keys
+	}
+	return []string{"ask_assistant"}
+}
+
+// actionLabelForKey 查 actionKey → 终端 UI 短标签
+// （generated.IntersectionActionLabelByKey，源 registry.actionLabelByKey）。
+// 未登记 key 兜底 ask_assistant 标签（解释这条交集）。
+func actionLabelForKey(key string) string {
+	if v, ok := generated.IntersectionActionLabelByKey[key]; ok {
+		return v
+	}
+	return generated.IntersectionActionLabelByKey["ask_assistant"]
 }
 
 // explainAnchorPoint 取结论句锚点：可见点中挖掘强度最高者（§9.8 evidenceKindRank）。
@@ -383,7 +551,7 @@ func anchorAggregateCount(r IntersectionReasonView, anchor IntersectionPointView
 	return 1
 }
 
-// explainPrimaryText 按 §17.1「主语[数量+关系限定] + 谓语 + 宾语」实例化事实结论句；
+// explainPrimaryText 按 §17.1「主语[代表人+数量+关系限定] + 谓语 + 宾语」实例化事实结论句；
 // affinity 走概率通道分支。kind 取 §5.4 注册表标准名；未登记 kind 返回空（不造假）。
 func explainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) string {
 	if r.IntersectionClass == "affinity" {
@@ -392,36 +560,36 @@ func explainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) 
 	n := anchorAggregateCount(r, anchor)
 	switch anchor.SourceRef {
 	case "sharedFollowees", "commonFollower":
-		return fmt.Sprintf("你们有%d位共同关注的人", n)
+		return fmt.Sprintf("你和%s共同关注了相同的人", representativeSubject(r, anchor, n))
 	case "commonContact":
-		return fmt.Sprintf("你们有%d位共同联系人", n)
+		return fmt.Sprintf("你和%s有共同联系人", representativeSubject(r, anchor, n))
 	case "sharedCircle", "coMemberCircle":
-		return fmt.Sprintf("你们共同加入了%d个圈子", n)
+		return fmt.Sprintf("你和%s共同加入了圈子", representativeSubject(r, anchor, n))
 	case "coCommented", "sharedDiscussion":
-		return fmt.Sprintf("你们都讨论过%d篇相同内容", n)
+		return fmt.Sprintf("你和%s都讨论过相同内容", representativeSubject(r, anchor, n))
 	case "coSharedContent":
-		return fmt.Sprintf("你们都分享过%d篇相同内容", n)
+		return fmt.Sprintf("你和%s都分享过相同内容", representativeSubject(r, anchor, n))
 	case "coCreatedContent":
-		return "你们都创作过相关内容"
+		return fmt.Sprintf("你和%s都创作过相关内容", representativeSubject(r, anchor, n))
 	case "coVisitedEntity":
-		return fmt.Sprintf("你们都去过%d个相同的地方", n)
+		return fmt.Sprintf("你和%s都去过相同的地方", representativeSubject(r, anchor, n))
 	case "coWishlistedEntity":
-		return fmt.Sprintf("你们都想去%d个相同的地方", n)
+		return fmt.Sprintf("你和%s都想去相同的地方", representativeSubject(r, anchor, n))
 	case "sharedEntityAttention":
-		return fmt.Sprintf("你和%d人共同关注了这里", n)
+		return fmt.Sprintf("你和%s共同关注了这里", representativeSubject(r, anchor, n))
 	case "followeeVisited":
-		return fmt.Sprintf("%d位你关注的人来过这里", n)
+		return fmt.Sprintf("%s来过这里", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"))
 	case "followeeInObject":
-		return fmt.Sprintf("%d位你关注的人在这里", n)
+		return fmt.Sprintf("%s在这里", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"))
 	case "followeeViewing":
-		return "你关注的人最近看过这些内容"
+		return fmt.Sprintf("%s最近看过这些内容", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"))
 	case "followeeDiscussedThis":
-		return "你关注的人也在讨论这些主题"
+		return fmt.Sprintf("%s也在讨论这些主题", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"))
 	case "sharedTagSample":
 		if r.Source == "circleTag" {
-			return "你在圈子里常看这些主题"
+			return fmt.Sprintf("%s在圈子里常看这些主题", representativeSubject(r, anchor, n))
 		}
-		return "你们都关注这些主题"
+		return fmt.Sprintf("你和%s都关注这些主题", representativeSubject(r, anchor, n))
 	default:
 		return ""
 	}

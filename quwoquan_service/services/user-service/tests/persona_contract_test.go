@@ -197,21 +197,28 @@ func TestUpdatePersona_ReflectsManagementFields(t *testing.T) {
 	if result["email"] != "after@example.com" {
 		t.Fatalf("expected email reflected, got %v", result["email"])
 	}
-	if result["avatarUrl"] != "https://example.com/avatar-after.png" {
+	if result["avatarUrl"] != "https://example.com/avatar-after.png?v=1" {
 		t.Fatalf("expected avatarUrl reflected, got %v", result["avatarUrl"])
+	}
+	if result["avatarVersion"] != float64(1) {
+		t.Fatalf("expected avatarVersion=1, got %v", result["avatarVersion"])
 	}
 
 	var inherits bool
+	var avatarVersion int
 	err := pgPool.QueryRow(
 		context.Background(),
-		"SELECT inherits_profile_from_owner FROM personas WHERE sub_account_id = $1",
+		"SELECT inherits_profile_from_owner, avatar_version FROM personas WHERE sub_account_id = $1",
 		"pa_edit_sa",
-	).Scan(&inherits)
+	).Scan(&inherits, &avatarVersion)
 	if err != nil {
-		t.Fatalf("query inherits_profile_from_owner: %v", err)
+		t.Fatalf("query inherits/avatar_version: %v", err)
 	}
 	if inherits {
 		t.Fatal("expected updated persona to stop inheriting owner profile")
+	}
+	if avatarVersion != 1 {
+		t.Fatalf("expected persisted avatar_version=1, got %d", avatarVersion)
 	}
 }
 

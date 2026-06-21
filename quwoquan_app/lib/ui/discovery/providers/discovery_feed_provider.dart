@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
+import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 
 /// 单类 feed 状态：items + nextCursor
 class DiscoveryFeedState {
@@ -77,7 +78,9 @@ class DiscoveryFeedState {
       staleDataError: identical(staleDataError, _unset)
           ? this.staleDataError
           : staleDataError,
-      appendError: identical(appendError, _unset) ? this.appendError : appendError,
+      appendError: identical(appendError, _unset)
+          ? this.appendError
+          : appendError,
     );
   }
 }
@@ -142,6 +145,13 @@ class DiscoveryFeedMapNotifier
     final feedSession = ref.read(feedSessionProvider.notifier);
     final sessionId = feedSession.sessionId;
     state = {...state, channelId: const AsyncLoading()};
+    _recordPageState(
+      channelId,
+      phase: 'onlineLoading',
+      source: 'online',
+      hasCache: currentValue?.items.isNotEmpty ?? false,
+      itemCount: currentValue?.items.length,
+    );
     try {
       // 首刷不传 feedRequestId：由服务端权威生成并随 envelope 下发。
       final page = await repo.listDiscoveryFeedPage(
@@ -166,6 +176,7 @@ class DiscoveryFeedMapNotifier
           .map((item) => item.id)
           .where((id) => id.isNotEmpty)
           .toList(growable: false);
+      final fallbackError = page.cacheFallbackError;
       state = {
         ...state,
         channelId: AsyncData(
@@ -174,11 +185,28 @@ class DiscoveryFeedMapNotifier
             seenItemIds: seen,
             nextCursor: page.nextCursor,
             feedRequestId: page.feedRequestId,
+            staleDataError: fallbackError,
           ),
         ),
       };
+      _recordPageState(
+        channelId,
+        phase: fallbackError == null ? 'onlineSuccess' : 'cacheFallback',
+        source: fallbackError == null ? 'online' : 'cache',
+        error: fallbackError,
+        copyKey: fallbackError == null ? null : 'homeCacheFallback',
+        hasCache: fallbackError != null,
+        cacheAgeMs: page.cacheAgeMs,
+        itemCount: page.items.length,
+        requestId: page.feedRequestId,
+      );
     } catch (e, st) {
-      developer.log('load error: $e', name: 'DiscoveryFeed', error: e, stackTrace: st);
+      developer.log(
+        'load error: $e',
+        name: 'DiscoveryFeed',
+        error: e,
+        stackTrace: st,
+      );
       if (currentValue != null && currentValue.items.isNotEmpty) {
         state = {
           ...state,
@@ -190,14 +218,30 @@ class DiscoveryFeedMapNotifier
             ),
           ),
         };
+        _recordPageState(
+          channelId,
+          phase: 'cacheFallback',
+          source: 'retained',
+          error: e,
+          copyKey: 'homeCacheFallback',
+          hasCache: true,
+          itemCount: currentValue.items.length,
+          requestId: currentValue.feedRequestId,
+        );
         return;
       }
       state = {
         ...state,
-        channelId: AsyncData(
-          DiscoveryFeedState(blockingError: e),
-        ),
+        channelId: AsyncData(DiscoveryFeedState(blockingError: e)),
       };
+      _recordPageState(
+        channelId,
+        phase: 'blockingFailure',
+        source: 'online',
+        error: e,
+        hasCache: false,
+        itemCount: 0,
+      );
     }
   }
 
@@ -220,6 +264,13 @@ class DiscoveryFeedMapNotifier
         ),
       ),
     };
+    _recordAppend(
+      channelId,
+      result: 'loading',
+      cursorPresent: true,
+      hasMore: true,
+      itemCountBefore: value.items.length,
+    );
     try {
       final repo = ref.read(contentRepositoryProvider);
       final query = _resolveQuery(channelId);
@@ -266,18 +317,88 @@ class DiscoveryFeedMapNotifier
           ),
         ),
       };
+      _recordAppend(
+        channelId,
+        result: 'success',
+        cursorPresent: true,
+        hasMore: page.nextCursor?.isNotEmpty ?? false,
+        itemCountBefore: value.items.length,
+        itemCountAfter: merged.length,
+      );
     } catch (e, st) {
-      developer.log('append error: $e', name: 'DiscoveryFeed', error: e, stackTrace: st);
+      developer.log(
+        'append error: $e',
+        name: 'DiscoveryFeed',
+        error: e,
+        stackTrace: st,
+      );
       state = {
         ...state,
-        channelId: AsyncData(
-          value.copyWith(
-            isLoading: false,
-            appendError: e,
-          ),
-        ),
+        channelId: AsyncData(value.copyWith(isLoading: false, appendError: e)),
       };
+      _recordAppend(
+        channelId,
+        result: 'failure',
+        cursorPresent: true,
+        hasMore: value.nextCursor?.isNotEmpty ?? false,
+        itemCountBefore: value.items.length,
+        itemCountAfter: value.items.length,
+        error: e,
+        copyKey: 'appendFailedRetry',
+      );
     }
+  }
+
+  void _recordPageState(
+    String channelId, {
+    required String phase,
+    required String source,
+    Object? error,
+    String? copyKey,
+    bool? hasCache,
+    int? cacheAgeMs,
+    int? itemCount,
+    String? requestId,
+  }) {
+    ref
+        .read(pageLifecycleObservabilityProvider)
+        .recordPageState(
+          pageName: 'home',
+          route: '/home',
+          surface: channelId,
+          phase: phase,
+          source: source,
+          error: error,
+          copyKey: copyKey,
+          hasCache: hasCache,
+          cacheAgeMs: cacheAgeMs,
+          itemCount: itemCount,
+          requestId: requestId,
+        );
+  }
+
+  void _recordAppend(
+    String channelId, {
+    required String result,
+    required bool cursorPresent,
+    required bool hasMore,
+    int? itemCountBefore,
+    int? itemCountAfter,
+    Object? error,
+    String? copyKey,
+  }) {
+    ref
+        .read(pageLifecycleObservabilityProvider)
+        .recordAppend(
+          pageName: 'home:$channelId',
+          result: result,
+          cursorPresent: cursorPresent,
+          hasMore: hasMore,
+          itemCountBefore: itemCountBefore,
+          itemCountAfter: itemCountAfter,
+          error: error,
+          copyKey: copyKey,
+        );
   }
 
   void removePostLocally(String postId) {

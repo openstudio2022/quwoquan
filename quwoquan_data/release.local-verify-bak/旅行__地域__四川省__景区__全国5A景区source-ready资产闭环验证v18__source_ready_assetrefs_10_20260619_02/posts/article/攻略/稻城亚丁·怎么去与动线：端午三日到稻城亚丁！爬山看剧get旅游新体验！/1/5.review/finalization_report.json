@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "稻城亚丁_route_transport",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:f1fd98cd4fccd21b787aadbb4ce0098b4c950d97bec2ebd99da7d6a54e2ca3b7",
+  "finalSha256": "sha256:68af16625ad2801ef2fc877b58ad89a11df83b4def1f4730e87de9aeb8957cae",
+  "draftBodySha256": "sha256:f1fd98cd4fccd21b787aadbb4ce0098b4c950d97bec2ebd99da7d6a54e2ca3b7",
+  "finalBodySha256": "sha256:f1fd98cd4fccd21b787aadbb4ce0098b4c950d97bec2ebd99da7d6a54e2ca3b7",
+  "composeSnapshotSha256": "sha256:f1fd98cd4fccd21b787aadbb4ce0098b4c950d97bec2ebd99da7d6a54e2ca3b7",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

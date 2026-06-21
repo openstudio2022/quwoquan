@@ -33,7 +33,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     if (source.isEmpty) {
       return const SizedBox.shrink();
     }
-    return CircleMediaImage(
+    return AppMediaImage(
       imageSource: source,
       fit: BoxFit.cover,
       placeholder: const SizedBox.shrink(),
@@ -161,7 +161,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
         if (coverUrl.isEmpty)
           fallback
         else
-          CircleMediaImage(
+          AppMediaImage(
             imageSource: coverUrl,
             fit: BoxFit.cover,
             placeholder: fallback,
@@ -374,7 +374,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                       child: SizedBox(
                         width: AppSpacing.avatarUserXl,
                         height: AppSpacing.avatarUserXl,
-                        child: CircleMediaImage(
+                        child: AppMediaImage(
                           imageSource: thumbnailUrl,
                           fit: BoxFit.cover,
                           placeholder: const SizedBox.shrink(),

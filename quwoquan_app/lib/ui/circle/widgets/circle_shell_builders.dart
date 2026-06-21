@@ -82,7 +82,7 @@ extension _CircleShellBuilders on _CircleShellState {
               tags: circle?.tags ?? const [],
               badgeLabel: _badgeLabel(state),
               metaLine: _metaLine(state),
-              memberAvatarUrls: _circleMemberClusterAvatars(),
+              memberVisuals: _circleMemberClusterVisuals(),
               onTagTap: (tag) {
                 ref
                     .read(contentEngagementTrackerProvider)
@@ -135,9 +135,11 @@ extension _CircleShellBuilders on _CircleShellState {
     );
   }
 
-  /// 头部成员头像簇：取「你 × 圈子」交集证据里的真实样本头像（圈子里你认识的人）。
-  /// 异步未就绪 / 无样本则返回空，头部不展示头像簇（G2 不造假、不占位）。
-  List<String> _circleMemberClusterAvatars() {
+  /// 头部成员视觉簇：取「你 × 圈子」交集证据里的真实样本视觉（圈子里你认识的人）。
+  /// 优先结构化 [IntersectionVisual]（含 displayName/target，统一形状/降级/可点击）；
+  /// 过渡期回退裸 `sampleAvatarUrls` 包装为 avatar 视觉（N3 fixture 化结构化 sampleVisuals
+  /// 后回退分支自然消亡）。异步未就绪 / 无样本则返回空，头部不展示视觉簇（G2 不造假、不占位）。
+  List<IntersectionVisual> _circleMemberClusterVisuals() {
     final query = ObjectIntersectionQuery(
       objectAId: ref.watch(currentUserIdProvider),
       objectAType: 'user',
@@ -148,21 +150,38 @@ extension _CircleShellBuilders on _CircleShellState {
           data: (data) => data,
           orElse: () => const <IntersectionReason>[],
         );
-    final urls = <String>[];
+    final visuals = <IntersectionVisual>[];
+    final seen = <String>{};
     for (final reason in reasons) {
       for (final point in reason.intersectionPoints) {
-        for (final url in point.sampleAvatarUrls) {
-          final trimmed = url.trim();
-          if (trimmed.isNotEmpty && !urls.contains(trimmed)) {
-            urls.add(trimmed);
+        final pointVisuals = point.sampleVisuals.isNotEmpty
+            ? point.sampleVisuals
+            : point.sampleAvatarUrls
+                .where((url) => url.trim().isNotEmpty)
+                .map(
+                  (url) => IntersectionVisual(
+                    assetKind: 'avatar',
+                    imageUrl: url.trim(),
+                    displayName: point.sampleText.trim(),
+                  ),
+                )
+                .toList(growable: false);
+        for (final visual in pointVisuals) {
+          final dedupeKey = visual.imageUrl.trim().isNotEmpty
+              ? visual.imageUrl.trim()
+              : visual.displayName.trim();
+          if (dedupeKey.isEmpty || seen.contains(dedupeKey)) {
+            continue;
           }
-          if (urls.length >= 4) {
-            return urls;
+          seen.add(dedupeKey);
+          visuals.add(visual);
+          if (visuals.length >= 4) {
+            return visuals;
           }
         }
       }
     }
-    return urls;
+    return visuals;
   }
 
   /// 圈子连接卡：当前用户 × 圈子的事实交集（relationship/identity 优先）。

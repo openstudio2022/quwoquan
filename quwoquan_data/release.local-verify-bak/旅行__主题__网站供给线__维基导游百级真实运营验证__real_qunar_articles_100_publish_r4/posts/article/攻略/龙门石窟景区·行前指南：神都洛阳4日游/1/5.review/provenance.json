@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_63cbb4d1545f2554",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "龙门石窟景区·行前指南：神都洛阳4日游",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-d8aa3489-7bcb-4607-92b4-28f6ba064b64",
+    "agentId": "agent-bba4aee6-c9de-4daf-b52a-f597ac6ea783",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/龙门石窟景区"
+    ],
+    "articleDigest": "sha256:e40bf349dad35319c90148d29cba31445c7ed434aca7e915a0c2f1e34ed91a38"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "龙门石窟景区·行前指南：神都洛阳4日游",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:7dc25816ab715bb7572a46adc02f69e87a3b841df95e5a58acf3a4d1d964f237",
+    "writingPackSha256": "sha256:1af1e1b4e6895d8764d3ce952288dfa6601172f0509409ce08e0306c9512a22d",
+    "sourceBundleSha256": "sha256:e807a2391b1d61c6d328445d6762ac79cbc81476e7af7a2cd12c6923db9121c3",
+    "draftSha256": "sha256:cb5d9d2321ccc25fbfd5e4f1061e7ca7ec46009b195edc5cc6d41a820a6e6ba1"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/08.qunar_guide_candidate_14753e465a9ec844/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7856038"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/32.qunar_guide_candidate_45efa6041fecc2ea/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7868211"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/37.qunar_guide_candidate_5289f1f877e63611/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7891074"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/42.qunar_guide_candidate_5a44d70fa512a691/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7856057"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/48.qunar_guide_candidate_63b88f2167306f57/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7868155"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/49.qunar_guide_candidate_63cbb4d1545f2554/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7863726"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/51.qunar_guide_candidate_67d4394ae29ae4b5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7875932"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/58.qunar_guide_candidate_7eea4155702e3b81/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7868516"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/59.qunar_guide_candidate_7ffa3d6135bdea87/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7855997"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/62.qunar_guide_candidate_8426eb5c98aa77b0/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7872374"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/63.qunar_guide_candidate_8906e6430a17a6ad/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7880967"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/75.qunar_guide_candidate_ac44b07bd4175359/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7855919"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/88.qunar_guide_candidate_cbbf1afbd2591f6c/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7895557"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/89.qunar_guide_candidate_cc2db762552dbdbc/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7868509"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/94.qunar_guide_candidate_d47d4e4c70098e52/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7899257"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/95.qunar_guide_candidate_db948d78c6f59507/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7896299"
+    },
+    {
+      "path": "entities/地点/景区/龙门石窟景区/1.download/sources/97.qunar_guide_candidate_e028f372ee297ae8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7886999"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/龙门石窟景区/1.download/sources/49.qunar_guide_candidate_63cbb4d1545f2554/source.md"
+  ]
+}

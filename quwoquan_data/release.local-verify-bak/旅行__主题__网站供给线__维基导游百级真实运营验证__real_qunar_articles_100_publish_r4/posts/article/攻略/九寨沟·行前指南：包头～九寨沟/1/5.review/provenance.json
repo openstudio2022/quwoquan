@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_72fa48474d4196d0",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "九寨沟·行前指南：包头～九寨沟",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "claude-4.6-opus-max-thinking",
+    "agentRunId": "run-c28e4463-825c-4312-a44a-3b18ac2cc322",
+    "agentId": "agent-7da5d1a4-80f5-4548-9fe0-7e2251d0cae5",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/九寨沟"
+    ],
+    "articleDigest": "sha256:4f89553424b3ec220cb7b836890e97513dbc6b404b5e09e4266c78f428119791"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "九寨沟·行前指南：包头～九寨沟",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:7dd946d2c3b6660847594894bbf8e6b09451f58c8efe9e0d4d855aeb6e09386e",
+    "writingPackSha256": "sha256:da632cfd520a3e5ded531fd866e9e5f6c1141fee0aeaf35fc4167db59d7b5e8e",
+    "sourceBundleSha256": "sha256:74eff64368917cdf04a3af4091c8916f374e71249165106127ea784b513e2828",
+    "draftSha256": "sha256:bc4e19a994afb0a5b0002f0338af56225bc59fceb4eaad13589e34c2c2472525"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/07.qunar_guide_candidate_135b10c9524faecc/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7858912"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/17.qunar_guide_candidate_25918b604defb9f6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7893753"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/36.qunar_guide_candidate_4ff409d56a1a7465/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7861638"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/50.qunar_guide_candidate_6650b9bfc3cad5cf/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7871161"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/55.qunar_guide_candidate_72fa48474d4196d0/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7869030"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/85.qunar_guide_candidate_c1dc413f7edbfe01/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7866343"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/九寨沟/1.download/sources/55.qunar_guide_candidate_72fa48474d4196d0/source.md"
+  ]
+}

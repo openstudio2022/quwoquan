@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "四姑娘山_seasonal_timing",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/四姑娘山"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:四姑娘山"
+  ],
+  "tagRefs": [
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "conditionContext": {
+    "region": {
+      "name": "四川省",
+      "label": "四川省"
+    },
+    "entityProfile": {
+      "entityRef": "/entity/地点/景区/四姑娘山",
+      "regions": [
+        "高原"
+      ],
+      "seasons": [
+        "春",
+        "秋"
+      ],
+      "altitudeMeters": null,
+      "notes": null,
+      "conditionSource": "entityConditionProfile"
+    },
+    "season": {
+      "name": "春",
+      "label": "春",
+      "source": "entityProfile"
+    }
+  },
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%A7%91%E5%A8%98%E5%B1%B1",
+    "https://touch.travel.qunar.com/youji/7897365",
+    "https://touch.travel.qunar.com/youji/7897284",
+    "https://touch.travel.qunar.com/youji/7875493",
+    "https://touch.travel.qunar.com/youji/7873772",
+    "https://touch.travel.qunar.com/youji/7801857",
+    "https://touch.travel.qunar.com/youji/7725887",
+    "https://touch.travel.qunar.com/youji/7719757",
+    "https://touch.travel.qunar.com/youji/7694818",
+    "https://touch.travel.qunar.com/youji/7674059",
+    "https://touch.travel.qunar.com/youji/7658795",
+    "https://touch.travel.qunar.com/youji/7649468",
+    "https://touch.travel.qunar.com/youji/7659186",
+    "https://touch.travel.qunar.com/youji/7644901",
+    "https://touch.travel.qunar.com/youji/7644810",
+    "https://touch.travel.qunar.com/search?q=%E5%9B%9B%E5%A7%91%E5%A8%98%E5%B1%B1",
+    "https://zh.wikivoyage.org/wiki/%E5%9B%9B%E5%A7%91%E5%A8%98%E5%B1%B1",
+    "http://www.gzz.gov.cn/gzzrmzf/c100008/201204/6116324b4ab443e09a0b462271d9f9f5.shtml",
+    "https://commons.wikimedia.org/wiki/File:%E5%9B%9B%E5%A7%91%E5%A8%98%E5%B1%B1%E6%99%AF%E5%8C%BA_Mount_Siguniang_Scenic_Area_03.jpg",
+    "https://commons.wikimedia.org/wiki/File:%E5%9B%9B%E5%A7%91%E5%A8%98%E5%B1%B1%E6%99%AF%E5%8C%BA_Mount_Siguniang_Scenic_Area_02.jpg",
+    "https://commons.wikimedia.org/wiki/File:%E5%9B%9B%E5%A7%91%E5%A8%98%E5%B1%B1%E6%99%AF%E5%8C%BA_Mount_Siguniang_Scenic_Area_01.jpg"
+  ],
+  "assets": [
+    {
+      "assetId": "四姑娘山_cover_3_94f82684",
+      "fileName": "四姑娘山_cover_3_94f82684.jpg",
+      "caption": "​摄于四姑娘山景区",
+      "imageLayout": "fullWidth",
+      "sha256": "sha256:12af0cfa606117e7871c27cc0828eef3ffb388c4a314065d95d638aa65988094",
+      "sourceAssetRef": "entities/地点/景区/四姑娘山/1.download/sources/05.article_qunar_base_3/assets/001_article_qunar_base_3_1.jpg",
+      "sourceRef": "entities/地点/景区/四姑娘山/1.download/sources/05.article_qunar_base_3/source.md",
+      "alignmentEvidence": "​摄于四姑娘山景区",
+      "sourceCollectionId": "source_image:四姑娘山:5e9e445c4c61fc4f",
+      "creator": "George N",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E5%9B%9B%E5%A7%91%E5%A8%98%E5%B1%B1%E6%99%AF%E5%8C%BA_Mount_Siguniang_Scenic_Area_02.jpg",
+      "license": "CC BY 2.0",
+      "termsUrl": "https://creativecommons.org/licenses/by/2.0",
+      "licenseSnapshot": "CC BY 2.0 recorded on Wikimedia Commons file page",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E5%9B%9B%E5%A7%91%E5%A8%98%E5%B1%B1%E6%99%AF%E5%8C%BA_Mount_Siguniang_Scenic_Area_02.jpg",
+      "usageScope": "app_publish"
+    }
+  ],
+  "template": "journal",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/四姑娘山/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/四姑娘山/1.download/sources/05.article_qunar_base_3/source.md",
+    "entities/地点/景区/四姑娘山/1.download/sources/06.article_qunar_base_4/source.md",
+    "entities/地点/景区/四姑娘山/1.download/sources/08.article_qunar_base_6/source.md",
+    "entities/地点/景区/四姑娘山/1.download/sources/09.article_qunar_base_7/source.md",
+    "entities/地点/景区/四姑娘山/1.download/sources/20.article_wikivoyage_base/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "四姑娘山·什么时候去最好：四姑娘山长坪沟徒步",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "四姑娘山",
+    "routeEntities": [
+      "四姑娘山"
+    ],
+    "beats": [
+      "先从 四姑娘山 进入主线。",
+      "-*茂县*：羌寨拍照（推荐牟托羌寨/坪头羌",
+      "(推荐古城入口马燕烧烤)",
+      "合景，人少免排队（门票100元，游览3h)",
+      "转观光车到喇嘛寺已经两点多，一下车有点高反我赶紧吃了一口小面包"
+    ],
+    "sourceNote": "四姑娘山（藏語：རི་བོ་སྐུ་བླ།，威利转写：ri bo sku bla，藏语拼音：riwo Gublai或སི་གོས་ལང）位于四川省阿坝藏族羌族自治州小金县四姑娘山镇境内，地处邛崃山脉中段，毗邻卧龙国家级自然保护区和米亚罗自然保护区，先后于1994年、1996年被国务院批准建立“四姑娘山国家重点风景名胜区”和“小金四姑娘山国家级自然保护区”，属。",
+    "relatedTopics": [
+      "四姑娘山",
+      "-*茂县*：羌寨拍照（推荐牟托羌寨/坪头羌",
+      "(推荐古城入口马燕烧烤)",
+      "合景，人少免排队（门票100元，游览3h)",
+      "转观光车到喇嘛寺已经两点多，一下车有点高反我赶紧吃了一口小面包"
+    ],
+    "mustIncludeFacts": [
+      "四姑娘山 来源提及 什么时候去最好",
+      "四姑娘山 图文底稿来自 四姑娘山长坪沟徒步；文章源图必须来自同一底稿并且全批独占"
+    ]
+  },
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "sourceBatchId": "source_ready_assetrefs_10_20260619_02",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "journal",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T21:09:02.020353+00:00",
+  "updatedAt": "2026-06-19T21:56:38.770152+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:四姑娘山"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "四川省"
+    }
+  ],
+  "articleMarkdownDigest": "sha256:b3675aba82b5d77723108fe86433e3bf466d019e3ffb018d25b2340b90ab044a"
+}

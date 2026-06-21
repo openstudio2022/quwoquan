@@ -25,6 +25,13 @@ from typing import Any, Callable, Mapping
 import yaml
 
 from _common.io import read_json, write_json
+from _common.image_asset_strategy import (
+    image_count_is_hard_quota,
+    image_count_policy,
+    image_asset_strategy,
+    image_strategy_requires_publishable_images,
+    minimum_publishable_images_per_target,
+)
 from _common.paths import STAGE_DOWNLOAD, batch_root, relative_batch_ref
 from _common.source_catalog import platform_category, vertical_from_task_id
 from _common.source_plan_contract import source_plan_rule_signature
@@ -62,15 +69,23 @@ _TRAVEL_SOURCE_REGISTRY = Path(__file__).resolve().parents[2] / "verticals" / "t
 _HOMEPAGE_CORE_SOURCE_LIMIT = 5
 _AUTO_RESEARCH_CURL_TIMEOUT_SECONDS = max(
     3,
-    int(os.environ.get("QWQ_AUTO_RESEARCH_CURL_TIMEOUT_SECONDS", "12")),
+    int(os.environ.get("QWQ_AUTO_RESEARCH_CURL_TIMEOUT_SECONDS", "25")),
 )
 _AUTO_RESEARCH_CURL_RETRIES = max(
-    0,
-    int(os.environ.get("QWQ_AUTO_RESEARCH_CURL_RETRIES", "0")),
+    1,
+    int(os.environ.get("QWQ_AUTO_RESEARCH_CURL_RETRIES", "1")),
 )
 _DOWNLOAD_REJECT_MEMORY_BATCH_LIMIT = max(
     1,
     int(os.environ.get("QWQ_DOWNLOAD_REJECT_MEMORY_BATCH_LIMIT", "8")),
+)
+_VERIFIED_IMAGE_PLAN_SCAN_LIMIT = max(
+    0,
+    int(os.environ.get("QWQ_VERIFIED_IMAGE_PLAN_SCAN_LIMIT", "80")),
+)
+_MAX_PUBLISHABLE_IMAGE_PIXELS = max(
+    1_000_000,
+    int(os.environ.get("QWQ_MAX_PUBLISHABLE_IMAGE_PIXELS", "80000000")),
 )
 
 
@@ -111,22 +126,23 @@ def _write_auto_research_progress(
 
 
 def _curl_json(url: str, *, timeout: int = 25) -> dict[str, Any]:
-    effective_timeout = max(3, min(int(timeout or _AUTO_RESEARCH_CURL_TIMEOUT_SECONDS), _AUTO_RESEARCH_CURL_TIMEOUT_SECONDS))
+    effective_timeout = max(3, int(timeout or _AUTO_RESEARCH_CURL_TIMEOUT_SECONDS))
+    effective_retries = max(1, int(_AUTO_RESEARCH_CURL_RETRIES))
     proc = subprocess.run(
         [
             "curl", "-sS", "-L", "-A", _USER_AGENT,
-            "--retry", str(_AUTO_RESEARCH_CURL_RETRIES), "--retry-delay", "1", "--retry-all-errors",
+            "--retry", str(effective_retries), "--retry-delay", "1", "--retry-all-errors",
             "--max-time", str(effective_timeout),
             url,
         ],
         capture_output=True,
-        text=True,
         check=False,
     )
     if proc.returncode != 0:
         return {}
+    stdout = proc.stdout.decode("utf-8", errors="replace") if isinstance(proc.stdout, bytes) else str(proc.stdout or "")
     try:
-        data = json.loads(proc.stdout or "{}")
+        data = json.loads(stdout or "{}")
     except json.JSONDecodeError:
         return {}
     return data if isinstance(data, dict) else {}
@@ -160,6 +176,23 @@ def _dedupe_terms(values: list[str] | tuple[str, ...], *, limit: int = 12) -> li
         if len(out) >= limit:
             break
     return out
+
+
+def _image_pixel_issue(spec: Mapping[str, Any]) -> str:
+    try:
+        width = int(spec.get("width") or 0)
+        height = int(spec.get("height") or 0)
+    except (TypeError, ValueError):
+        return ""
+    if width <= 0 or height <= 0:
+        return ""
+    pixels = width * height
+    if pixels > _MAX_PUBLISHABLE_IMAGE_PIXELS:
+        return (
+            f"imageRights pixelCount {pixels} exceeds "
+            f"maxPublishablePixels {_MAX_PUBLISHABLE_IMAGE_PIXELS}"
+        )
+    return ""
 
 
 _EN_ALIAS_SUFFIX_RE = re.compile(
@@ -362,6 +395,50 @@ def _text_mentions_entity(
     return False
 
 
+def _known_image_reject_terms(entity_id: str) -> list[str]:
+    """Curated cross-entity visual reject terms from the travel registry."""
+    if not _TRAVEL_SOURCE_REGISTRY.is_file():
+        return []
+    try:
+        data = yaml.safe_load(_TRAVEL_SOURCE_REGISTRY.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    terms: list[str] = []
+    for row in data.get("knownImageRejectTerms") or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("entity") or "").strip() != entity_id:
+            continue
+        values = row.get("rejectTerms") if isinstance(row.get("rejectTerms"), list) else []
+        terms.extend(str(value).strip() for value in values if str(value).strip())
+    return _dedupe_terms(terms, limit=32)
+
+
+def _image_conflicts_with_entity(image: Mapping[str, Any], entity_id: str) -> bool:
+    reject_terms = _known_image_reject_terms(entity_id)
+    if not reject_terms:
+        return False
+    fields = (
+        "caption",
+        "title",
+        "relevance",
+        "sourceUrl",
+        "collectionPageUrl",
+        "authorizationProof",
+        "url",
+    )
+    text = " ".join(str(image.get(field) or "") for field in fields)
+    text = urllib.parse.unquote(text)
+    text = re.sub(r"[_/\\\-]+", " ", text).casefold()
+    compact = _normalized_title(text).casefold()
+    for term in reject_terms:
+        raw = urllib.parse.unquote(str(term or "")).casefold()
+        normalized = _normalized_title(raw).casefold()
+        if (raw and raw in text) or (normalized and normalized in compact):
+            return True
+    return False
+
+
 _HOMEPAGE_JSON_API_RE = re.compile(
     r'^\s*[\[{].{0,240}"(?:code|data|rows|result|success|message|msg|list|total)"',
     re.S,
@@ -530,6 +607,8 @@ def _image_mentions_entity(
 ) -> bool:
     if not entity_id:
         return True
+    if _image_conflicts_with_entity(image, entity_id):
+        return False
     for field in (
         "caption",
         "title",
@@ -995,6 +1074,37 @@ def _known_entity_aliases(entity_id: str) -> list[str]:
     return _dedupe_terms(aliases, limit=16)
 
 
+def _known_image_search_hints(entity_id: str) -> dict[str, list[str]]:
+    """Curated visual-discovery hints from the travel source registry.
+
+    These are discovery inputs only. They do not bypass asset-level license,
+    entity-relevance, creator, watermark, or collection gates.
+    """
+    if not _TRAVEL_SOURCE_REGISTRY.is_file():
+        return {"aliases": [], "commonsCategories": []}
+    try:
+        data = yaml.safe_load(_TRAVEL_SOURCE_REGISTRY.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return {"aliases": [], "commonsCategories": []}
+    aliases: list[str] = []
+    categories: list[str] = []
+    for row in data.get("knownImageSearchHints") or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("entity") or "").strip() != entity_id:
+            continue
+        raw_aliases = row.get("aliases") if isinstance(row.get("aliases"), list) else []
+        raw_categories = (
+            row.get("commonsCategories") if isinstance(row.get("commonsCategories"), list) else []
+        )
+        aliases.extend(str(value).strip() for value in raw_aliases if str(value).strip())
+        categories.extend(str(value).strip() for value in raw_categories if str(value).strip())
+    return {
+        "aliases": _dedupe_terms(aliases, limit=16),
+        "commonsCategories": _dedupe_terms(categories, limit=12),
+    }
+
+
 _TRUSTED_EXTERNAL_DOMAINS: tuple[str, ...] = (
     "gov.cn",
     "people.com.cn",
@@ -1198,6 +1308,10 @@ _HOMEPAGE_PRIMARY_SOURCE_MARKERS = (
 )
 _HOMEPAGE_SUPPORT_ONLY_SOURCE_MARKERS = ("政府", "文旅", "政务", "gov.cn", "权威媒体", "媒体")
 _HOMEPAGE_NON_HOMEPAGE_SOURCE_MARKERS = ("攻略", "游记", "评论", "点评", "小红书", "摄影")
+_HOMEPAGE_TEXT_EVIDENCE_REQUIRED_DOMAINS = (
+    "baike.baidu.com",
+    "baike.sogou.com",
+)
 
 
 def _homepage_can_seed_base_draft(source: Mapping[str, Any]) -> bool:
@@ -1214,6 +1328,51 @@ def _homepage_can_seed_base_draft(source: Mapping[str, Any]) -> bool:
     if category in {"encyclopedia", "official_site"}:
         return True
     return any(marker.casefold() in lowered for marker in _HOMEPAGE_PRIMARY_SOURCE_MARKERS)
+
+
+def _homepage_requires_text_snapshot(url: str) -> bool:
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    return any(host == domain or host.endswith(f".{domain}") for domain in _HOMEPAGE_TEXT_EVIDENCE_REQUIRED_DOMAINS)
+
+
+def _source_has_text_snapshot(source: Mapping[str, Any]) -> bool:
+    for key in ("body", "text", "extractText", "sourceText", "textSnapshot"):
+        if str(source.get(key) or "").strip():
+            return True
+    return False
+
+
+def _homepage_candidate_has_fetch_evidence(source: Mapping[str, Any], url: str) -> bool:
+    """Homepage source plans must prove the source can become text evidence.
+
+    A bare search/item URL is not enough for production: download_fetch can
+    reject anti-crawled encyclopedia pages after minutes of media work. Accept
+    sources from verified/reusable providers, registry fetchable sites, or rows
+    that carry a text snapshot for deterministic materialization. A bare
+    encyclopedia URL still needs a snapshot unless the registry says it is
+    fetchable.
+    """
+    provider = str(source.get("discoveryProvider") or "")
+    if provider.startswith("mediawiki_"):
+        return True
+    if provider in {
+        "verified_homepage_source_unit_reuse",
+        "Chinese Wikipedia",
+        "English Wikipedia",
+        "Wikivoyage",
+    }:
+        return True
+    if provider.startswith("verified_homepage_source_unit"):
+        return True
+    if _source_has_text_snapshot(source):
+        return True
+    if bool(source.get("fetchable")):
+        return True
+    if _travel_registry_url_fetchable(url):
+        return True
+    if _homepage_requires_text_snapshot(url):
+        return False
+    return False
 
 
 def _candidate_gate(
@@ -1253,6 +1412,18 @@ def _candidate_gate(
             )
         if category in _SUPPORTING_ONLY_CATEGORIES:
             issues.append(f"{category} can only be supportingEvidence for article lane")
+    if lane == "homepage" and category in {
+        "encyclopedia",
+        "overview_baike",
+        "official",
+        "official_site",
+        "government",
+    }:
+        if not _homepage_candidate_has_fetch_evidence(source, url):
+            issues.append(
+                "homepage source must be registry-fetchable, verified retained source, "
+                "or carry a text snapshot before entering source plan"
+            )
     image_warnings: list[str] = []
     valid_images: list[dict[str, Any]] = []
     image_issues_block_source = lane == "image"
@@ -1446,6 +1617,9 @@ def _collection_gate(
             str(spec.get("termsUrl") or ""),
         ):
             issues.append(f"image[{index}]: imageRights unsupported license {spec.get('license')}")
+        pixel_issue = _image_pixel_issue(spec)
+        if pixel_issue:
+            issues.append(f"image[{index}]: {pixel_issue}")
         if (
             entity_id
             and not verified_collection_entity_match
@@ -1510,6 +1684,8 @@ def _commons_images(
             width = int(info.get("width") or 0)
             height = int(info.get("height") or 0)
             if width < 640 or height < 426 or max(width, height) < 800:
+                continue
+            if _image_pixel_issue({"width": width, "height": height}):
                 continue
             credit = _strip_html(
                 ((meta.get("Artist") or {}).get("value") or "")
@@ -1606,6 +1782,8 @@ def _commons_images_for_titles(
         width = int(info.get("width") or 0)
         height = int(info.get("height") or 0)
         if width < 640 or height < 426 or max(width, height) < 800:
+            continue
+        if _image_pixel_issue({"width": width, "height": height}):
             continue
         description = _strip_html(
             ((meta.get("ImageDescription") or {}).get("value") or "")
@@ -1754,6 +1932,8 @@ def _openverse_images(
             height = int(row.get("height") or 0)
             if width < 640 or height < 426 or max(width, height) < 800:
                 continue
+            if _image_pixel_issue({"width": width, "height": height}):
+                continue
             if not _text_mentions_entity(
                 f"{title} {attribution} {landing}",
                 entity_id,
@@ -1890,8 +2070,8 @@ def _article_base_candidate_limit(required_article_bases: int) -> int:
     if required <= 2:
         reserve = max(2, required)
     else:
-        reserve = min(max(6, math.ceil(required * 1.5)), 12)
-    return min(required + reserve, 24)
+        reserve = min(max(12, math.ceil(required * 2.5)), 24)
+    return min(required + reserve, 32)
 
 
 def _select_article_plan_sources(
@@ -2223,6 +2403,14 @@ def _accept_source_with_reject_memory(
 ) -> dict[str, Any] | None:
     url = str(source.get("url") or "").strip()
     if rejected_source_urls and _url_in_memory(url, rejected_source_urls):
+        if lane == "homepage" and _travel_registry_url_fetchable(url):
+            return _accept_source(
+                report,
+                source,
+                entity_id=entity_id,
+                lane=lane,
+                entity_aliases=entity_aliases,
+            )
         _reject_source_candidate(
             report,
             source,
@@ -2258,13 +2446,36 @@ def _record_unavailable(
     )
 
 
-def _task_content_quotas(task_id: str) -> dict[str, int]:
+def _source_unavailable_for_entity(
+    report: Mapping[str, Any],
+    *,
+    entity_id: str,
+    lane: str,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in report.get("sourceUnavailable") or []:
+        if not isinstance(item, Mapping):
+            continue
+        if str(item.get("entityId") or "") != entity_id:
+            continue
+        item_lane = str(item.get("lane") or "")
+        if item_lane not in {lane, "all"}:
+            continue
+        rows.append(dict(item))
+    return rows
+
+
+def _task_spec(task_id: str) -> dict[str, Any]:
     try:
         from task import store
 
-        spec = store.load_spec(task_id)
+        return store.load_spec(task_id)
     except Exception:  # noqa: BLE001
-        spec = {}
+        return {}
+
+
+def _task_content_quotas(task_id: str) -> dict[str, int]:
+    spec = _task_spec(task_id)
     quotas = ((spec.get("content") or {}).get("quotas") or {})
     return {
         "entityArticlesPerTarget": max(0, int(quotas.get("entityArticlesPerTarget") or 0)),
@@ -2425,6 +2636,7 @@ def _download_reject_memory(
                     and str(meta.get("platform") or "") in {"百度百科", "搜狗百科"}
                     and not bool(quality.get("fetchSucceeded"))
                     and int(quality.get("statusCode") or 0) == 0
+                    and not _travel_registry_url_fetchable(str(quality.get("url") or ""))
                 )
                 if not (_source_reject_should_enter_memory(quality) or homepage_fetch_retry_blocked):
                     continue
@@ -2523,6 +2735,84 @@ def _filter_rejected_images(
     return filtered
 
 
+def _discover_open_license_image_pools(
+    entity_id: str,
+    *,
+    entity_aliases: list[str] | tuple[str, ...],
+    qid: str,
+    wiki_title: str,
+    voyage_title: str,
+    rejected_image_urls: set[str],
+    commons_limit: int = 14,
+    wikidata_limit: int = 14,
+    openverse_limit: int = 16,
+    page_limit: int = 10,
+) -> dict[str, list[dict[str, Any]]]:
+    """Discover publishable open-license image candidates from primary pools."""
+
+    image_hints = _known_image_search_hints(entity_id)
+    image_aliases = _expanded_entity_aliases(
+        [*entity_aliases, *image_hints["aliases"]],
+        limit=max(24, len(entity_aliases) + len(image_hints["aliases"])),
+    )
+    commons = _filter_rejected_images(
+        _commons_images(entity_id, entity_aliases=image_aliases, limit=commons_limit),
+        rejected_image_urls,
+    )
+    wikidata_commons = _filter_rejected_images(
+        _wikidata_commons_images(
+            qid,
+            entity_id=entity_id,
+            entity_aliases=image_aliases,
+            limit=wikidata_limit,
+        ),
+        rejected_image_urls,
+    )
+    openverse = _filter_rejected_images(
+        _openverse_images(entity_id, entity_aliases=image_aliases, limit=openverse_limit),
+        rejected_image_urls,
+    )
+    wiki_page_images = _filter_rejected_images(
+        _mediawiki_page_images(
+            "zh.wikipedia.org", wiki_title, entity_id=entity_id, limit=page_limit
+        ),
+        rejected_image_urls,
+    )
+    voyage_page_images = _filter_rejected_images(
+        _mediawiki_page_images(
+            "zh.wikivoyage.org", voyage_title, entity_id=entity_id, limit=page_limit
+        ),
+        rejected_image_urls,
+    )
+    hint_commons: list[dict[str, Any]] = []
+    seen_hint_urls: set[str] = set()
+    for category in image_hints["commonsCategories"]:
+        for image in _commons_category_images(
+            category,
+            entity_id=entity_id,
+            entity_aliases=image_aliases,
+            limit=commons_limit,
+        ):
+            url = str(image.get("url") or "").strip()
+            if not url or url in seen_hint_urls:
+                continue
+            seen_hint_urls.add(url)
+            hint_commons.append(image)
+            if len(hint_commons) >= commons_limit:
+                break
+        if len(hint_commons) >= commons_limit:
+            break
+    hint_commons = _filter_rejected_images(hint_commons, rejected_image_urls)
+    return {
+        "commons": commons,
+        "hint_commons": hint_commons,
+        "wikidata_commons": wikidata_commons,
+        "openverse": openverse,
+        "wiki_page_images": wiki_page_images,
+        "voyage_page_images": voyage_page_images,
+    }
+
+
 def _normalize_collection_for_reuse(collection: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(collection)
     collection_id = str(normalized.get("sourceCollectionId") or "").strip()
@@ -2577,6 +2867,20 @@ def _verified_image_collections_from_prior_plans(
             plan = batch_dir / "entities" / "地点" / etype / entity_id / STAGE_DOWNLOAD / "image_source_plan.json"
             if plan != current:
                 candidate_paths.append(plan)
+    tasks_root = next((parent for parent in root.parents if parent.name == "tasks"), None)
+    if tasks_root and _VERIFIED_IMAGE_PLAN_SCAN_LIMIT:
+        cross_task_plans = [
+            path
+            for path in tasks_root.glob(
+                f"**/batches/*/entities/地点/{etype}/{entity_id}/{STAGE_DOWNLOAD}/image_source_plan.json"
+            )
+            if path != current and path not in candidate_paths
+        ]
+        cross_task_plans.sort(
+            key=lambda path: path.stat().st_mtime if path.exists() else 0,
+            reverse=True,
+        )
+        candidate_paths.extend(cross_task_plans[:_VERIFIED_IMAGE_PLAN_SCAN_LIMIT])
     collections: list[dict[str, Any]] = []
     seen: set[str] = set()
     for path in candidate_paths:
@@ -2598,7 +2902,17 @@ def _verified_image_collections_from_prior_plans(
             )
             if not verdict["passed"]:
                 continue
-            collection["reuseSourcePlan"] = str(path.relative_to(task_batches_dir.parent))
+            try:
+                reuse_ref = path.relative_to(task_batches_dir.parent).as_posix()
+            except ValueError:
+                if tasks_root:
+                    try:
+                        reuse_ref = path.relative_to(tasks_root).as_posix()
+                    except ValueError:
+                        reuse_ref = path.as_posix()
+                else:
+                    reuse_ref = path.as_posix()
+            collection["reuseSourcePlan"] = reuse_ref
             collections.append(collection)
             seen.add(collection_id)
             if len(collections) >= limit:
@@ -2825,19 +3139,39 @@ def _write_auto_research_plans_impl(
         "candidates": [],
         "imageCollections": [],
         "sourceUnavailable": [],
+        "rescueEvents": [],
     }
     quotas = _task_content_quotas(task_id)
+    strategy_spec = _task_spec(task_id)
+    image_strategy = image_asset_strategy(strategy_spec)
+    image_policy = image_count_policy(strategy_spec)
+    requires_publishable_images = image_strategy_requires_publishable_images(strategy_spec)
+    report["imageAssetStrategy"] = image_strategy
+    report["imageCountPolicy"] = image_policy
+    report["imagePublishableAssetsRequired"] = requires_publishable_images
     required_article_bases = max(1, quotas["entityArticlesPerTarget"] or 1)
-    required_image_works = max(1, quotas["imageWorksPerTarget"] or 1)
+    desired_image_works = max(0, quotas["imageWorksPerTarget"] or 0)
+    image_bonus_saturation_count = max(1, desired_image_works)
+    hard_image_works = (
+        image_bonus_saturation_count
+        if image_count_is_hard_quota(strategy_spec)
+        else minimum_publishable_images_per_target(strategy_spec)
+    )
     try:
         from download.gate import download_requirements
 
         required_publishable_images = max(
-            required_image_works,
+            hard_image_works,
             int(download_requirements(task_id).get("minImages") or 0),
         )
     except Exception:  # noqa: BLE001
-        required_publishable_images = required_image_works
+        required_publishable_images = hard_image_works
+    report["scoringPolicy"] = {
+        "imageCountPolicy": image_policy,
+        "imageBonusSaturationCount": image_bonus_saturation_count,
+        "minimumPublishableImagesPerTarget": hard_image_works,
+        "articleLengthPassChars": 600,
+    }
     for entity_id in entity_ids:
         obj = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
         dl = obj / STAGE_DOWNLOAD
@@ -2871,10 +3205,15 @@ def _write_auto_research_plans_impl(
             )
             if title and title != wiki_title
         ]
-        voyage_title = _wiki_title_for_entity(
-            "zh.wikivoyage.org",
-            entity_id,
-            entity_aliases=entity_aliases,
+        needs_visual_pool = bool(selected_lanes & {"article", "image"})
+        voyage_title = (
+            _wiki_title_for_entity(
+                "zh.wikivoyage.org",
+                entity_id,
+                entity_aliases=entity_aliases,
+            )
+            if needs_visual_pool
+            else ""
         )
         wiki_url = _wiki_url("zh.wikipedia.org", wiki_title)
         voyage_url = _wiki_url("zh.wikivoyage.org", voyage_title)
@@ -2898,72 +3237,129 @@ def _write_auto_research_plans_impl(
         )
         rejected_source_urls = reject_memory["sourceUrls"]
         rejected_image_urls = reject_memory["imageUrls"]
-        prior_image_collections = _verified_image_collections_from_prior_plans(
-            task_id,
-            batch_id,
-            entity_id,
-            entity_type=entity_type,
-            entity_aliases=entity_aliases,
-            rejected_image_urls=rejected_image_urls,
-            limit=max(required_image_works, 8),
+        prior_image_collections = (
+            _verified_image_collections_from_prior_plans(
+                task_id,
+                batch_id,
+                entity_id,
+                entity_type=entity_type,
+                entity_aliases=entity_aliases,
+                rejected_image_urls=rejected_image_urls,
+                limit=max(image_bonus_saturation_count, 8),
+            )
+            if needs_visual_pool
+            else []
         )
         prior_image_pool = _images_from_collections(prior_image_collections)
-        prior_article_sources = _verified_article_sources_from_prior_plans(
-            task_id,
-            batch_id,
-            entity_id,
-            entity_type=entity_type,
-            rejected_source_urls=rejected_source_urls,
-            limit=_article_base_candidate_limit(required_article_bases),
+        prior_article_sources = (
+            _verified_article_sources_from_prior_plans(
+                task_id,
+                batch_id,
+                entity_id,
+                entity_type=entity_type,
+                rejected_source_urls=rejected_source_urls,
+                limit=_article_base_candidate_limit(required_article_bases),
+            )
+            if "article" in selected_lanes
+            else []
         )
-        prior_homepage_sources = _verified_homepage_sources_from_source_units(
-            task_id,
-            batch_id,
-            entity_id,
-            entity_type=entity_type,
-            rejected_source_urls=rejected_source_urls,
+        prior_homepage_sources = (
+            _verified_homepage_sources_from_source_units(
+                task_id,
+                batch_id,
+                entity_id,
+                entity_type=entity_type,
+                rejected_source_urls=rejected_source_urls,
+            )
+            if "homepage" in selected_lanes
+            else []
         )
-        commons = _filter_rejected_images(
-            _commons_images(entity_id, entity_aliases=entity_aliases, limit=14),
-            rejected_image_urls,
+        image_pools = (
+            _discover_open_license_image_pools(
+                entity_id,
+                entity_aliases=entity_aliases,
+                qid=qid,
+                wiki_title=wiki_title,
+                voyage_title=voyage_title,
+                rejected_image_urls=rejected_image_urls,
+            )
+            if needs_visual_pool
+            else {
+                "commons": [],
+                "hint_commons": [],
+                "wikidata_commons": [],
+                "openverse": [],
+                "wiki_page_images": [],
+                "voyage_page_images": [],
+            }
         )
-        wikidata_commons = _filter_rejected_images(
-            _wikidata_commons_images(
-            qid,
-            entity_id=entity_id,
-            entity_aliases=entity_aliases,
-            limit=14,
-            ),
-            rejected_image_urls,
+        commons = image_pools["commons"]
+        hint_commons = image_pools.get("hint_commons") or []
+        wikidata_commons = image_pools["wikidata_commons"]
+        openverse = image_pools["openverse"]
+        wiki_page_images = image_pools["wiki_page_images"]
+        voyage_page_images = image_pools["voyage_page_images"]
+        authorized_image_pool = (
+            prior_image_pool
+            + openverse
+            + commons
+            + hint_commons
+            + wikidata_commons
+            + wiki_page_images
+            + voyage_page_images
         )
-        openverse = _filter_rejected_images(
-            _openverse_images(entity_id, entity_aliases=entity_aliases, limit=16),
-            rejected_image_urls,
-        )
-        wiki_page_images = _filter_rejected_images(
-            _mediawiki_page_images(
-                "zh.wikipedia.org", wiki_title, entity_id=entity_id, limit=10
-            ),
-            rejected_image_urls,
-        )
-        voyage_page_images = _filter_rejected_images(
-            _mediawiki_page_images(
-                "zh.wikivoyage.org", voyage_title, entity_id=entity_id, limit=10
-            ),
-            rejected_image_urls,
-        )
-        authorized_image_pool = prior_image_pool + openverse + commons + wikidata_commons + wiki_page_images + voyage_page_images
-        homepage_image_pool = wiki_page_images or commons or wikidata_commons or openverse
+        if needs_visual_pool and not authorized_image_pool:
+            rescue_pools = _discover_open_license_image_pools(
+                entity_id,
+                entity_aliases=entity_aliases,
+                qid=qid,
+                wiki_title=wiki_title,
+                voyage_title=voyage_title,
+                rejected_image_urls=rejected_image_urls,
+                commons_limit=20,
+                wikidata_limit=20,
+                openverse_limit=24,
+                page_limit=14,
+            )
+            rescue_pool = (
+                rescue_pools["openverse"]
+                + rescue_pools["commons"]
+                + (rescue_pools.get("hint_commons") or [])
+                + rescue_pools["wikidata_commons"]
+                + rescue_pools["wiki_page_images"]
+                + rescue_pools["voyage_page_images"]
+            )
+            if rescue_pool:
+                commons = rescue_pools["commons"]
+                hint_commons = rescue_pools.get("hint_commons") or []
+                wikidata_commons = rescue_pools["wikidata_commons"]
+                openverse = rescue_pools["openverse"]
+                wiki_page_images = rescue_pools["wiki_page_images"]
+                voyage_page_images = rescue_pools["voyage_page_images"]
+                authorized_image_pool = prior_image_pool + rescue_pool
+                report.setdefault("rescueEvents", []).append(
+                    {
+                        "entityId": entity_id,
+                        "lane": "image",
+                        "reason": "open_license_image_discovery_empty_on_first_pass",
+                        "images": len(rescue_pool),
+                    }
+                )
+        homepage_image_pool = wiki_page_images or commons or hint_commons or wikidata_commons or openverse
         homepage_image_urls = {
             str(image.get("url") or "")
             for image in homepage_image_pool
             if str(image.get("url") or "").strip()
         }
-        external_links = _trusted_external_links(
-            wiki_title,
-            limit=max(4, min(12, required_article_bases * 2)),
+        external_links = (
+            _trusted_external_links(
+                wiki_title,
+                limit=max(4, min(12, required_article_bases * 2)),
+            )
+            if "article" in selected_lanes
+            else []
         )
-        if not authorized_image_pool:
+        if needs_visual_pool and requires_publishable_images and not authorized_image_pool:
             issues.append(f"{entity_id}: no rights-compatible open-license images discovered")
             if "image" in selected_lanes:
                 _record_unavailable(
@@ -3441,7 +3837,14 @@ def _write_auto_research_plans_impl(
                 or _image_at(voyage_page_images, 0)
             )
             if first_image and len(collections) < desired_image_collections:
-                collection_candidates = openverse + commons + wikidata_commons + wiki_page_images + voyage_page_images
+                collection_candidates = (
+                    openverse
+                    + commons
+                    + hint_commons
+                    + wikidata_commons
+                    + wiki_page_images
+                    + voyage_page_images
+                )
                 collection_candidates = sorted(
                     collection_candidates,
                     key=lambda item: str(item.get("url") or "") in homepage_image_urls,
@@ -3497,7 +3900,20 @@ def _write_auto_research_plans_impl(
                         collections.append(collection)
                     if len(collections) >= desired_image_collections:
                         break
-            if not collections:
+            if not requires_publishable_images:
+                report.setdefault("imageCollections", []).append(
+                    {
+                        "entityId": entity_id,
+                        "sourceCollectionId": "",
+                        "platform": "",
+                        "imageCount": len(authorized_image_pool),
+                        "passed": True,
+                        "issues": [],
+                        "discoveryProvider": "reference_only_image_strategy",
+                        "imageAssetStrategy": image_strategy,
+                    }
+                )
+            elif hard_image_works and not collections:
                 _record_unavailable(
                     report,
                     entity_id=entity_id,
@@ -3505,12 +3921,12 @@ def _write_auto_research_plans_impl(
                     reason="no single-author/single-file rights-cleared image collection",
                     next_action="manual_authorized_gallery_or_target_replacement",
                 )
-            elif len(collections) < required_image_works:
+            elif hard_image_works and len(collections) < hard_image_works:
                 _record_unavailable(
                     report,
                     entity_id=entity_id,
                     lane="image",
-                    reason=f"image collections={len(collections)} need>={required_image_works}",
+                    reason=f"image collections={len(collections)} need>={hard_image_works}",
                     next_action="manual_authorized_gallery_or_target_replacement",
                 )
             else:
@@ -3522,7 +3938,7 @@ def _write_auto_research_plans_impl(
                         vertical=vertical,
                     )
                 )
-                if unique_publishable_images < required_publishable_images:
+                if required_publishable_images and unique_publishable_images < required_publishable_images:
                     _record_unavailable(
                         report,
                         entity_id=entity_id,
@@ -3536,7 +3952,44 @@ def _write_auto_research_plans_impl(
             if _write_lane(
                 dl / "image_source_plan.json",
                 "image",
-                {"collections": collections},
+                {
+                    "collections": collections,
+                    "imageDiscoveryDiagnostics": {
+                        "imageAssetStrategy": image_strategy,
+                        "imageCountPolicy": image_policy,
+                        "requiresPublishableImages": requires_publishable_images,
+                        "desiredImageWorks": desired_image_works,
+                        "imageBonusSaturationCount": image_bonus_saturation_count,
+                        "requiredImageWorks": hard_image_works,
+                        "requiredPublishableImages": required_publishable_images,
+                        "qid": qid,
+                        "wikiTitle": wiki_title,
+                        "voyageTitle": voyage_title,
+                        "entityAliases": entity_aliases[:24],
+                        "poolCounts": {
+                            "priorImageCollections": len(prior_image_collections),
+                            "priorImagePool": len(prior_image_pool),
+                            "commons": len(commons),
+                            "hintCommons": len(hint_commons),
+                            "wikidataCommons": len(wikidata_commons),
+                            "openverse": len(openverse),
+                            "wikiPageImages": len(wiki_page_images),
+                            "voyagePageImages": len(voyage_page_images),
+                            "authorizedImagePool": len(authorized_image_pool),
+                            "acceptedCollections": len(collections),
+                        },
+                        "sourceUnavailable": _source_unavailable_for_entity(
+                            report,
+                            entity_id=entity_id,
+                            lane="image",
+                        ),
+                    },
+                    "sourceUnavailable": _source_unavailable_for_entity(
+                        report,
+                        entity_id=entity_id,
+                        lane="image",
+                    ),
+                },
                 force=force,
             ):
                 updated.append(
@@ -3612,35 +4065,95 @@ def _source_availability_summary(report: dict[str, Any], entity_ids: list[str]) 
         text = re.sub(r"\d+", "N", text)
         return text
 
+    scoring_policy = report.get("scoringPolicy") if isinstance(report.get("scoringPolicy"), dict) else {}
+    image_saturation = int(scoring_policy.get("imageBonusSaturationCount") or 1)
+    image_counts_by_entity: dict[str, int] = {}
+    for item in report.get("imageCollections") or []:
+        if not isinstance(item, dict) or not bool(item.get("passed")):
+            continue
+        entity_id = str(item.get("entityId") or "").strip()
+        if not entity_id:
+            continue
+        image_counts_by_entity[entity_id] = image_counts_by_entity.get(entity_id, 0) + 1
+
+    def _image_count_score(entity_id: str) -> float:
+        if image_saturation <= 0:
+            return 1.0
+        return round(min(image_counts_by_entity.get(entity_id, 0) / image_saturation, 1.0), 4)
+
     ineligible: list[dict[str, Any]] = []
-    ready: list[str] = []
+    scored_targets: list[dict[str, Any]] = []
+    image_soft_warnings: list[dict[str, Any]] = []
     for entity_id in entity_ids:
         blockers = list(unavailable_by_entity.get(entity_id) or [])
         issues = issue_by_entity.get(entity_id) or []
-        if blockers or issues:
-            lanes = {
-                str(item.get("lane") or "")
-                for item in blockers
-                if item.get("lane")
-            }
-            lanes.update(lane for lane in (_lane_for_issue(issue) for issue in issues) if lane)
+        lanes = {
+            str(item.get("lane") or "")
+            for item in blockers
+            if item.get("lane")
+        }
+        lanes.update(lane for lane in (_lane_for_issue(issue) for issue in issues) if lane)
+        fatal_blockers = [item for item in blockers if str(item.get("lane") or "") != "image"]
+        fatal_issues = [issue for issue in issues if _lane_for_issue(issue) != "image"]
+        soft_blockers = [item for item in blockers if str(item.get("lane") or "") == "image"]
+        soft_issues = [issue for issue in issues if _lane_for_issue(issue) == "image"]
+        image_score = _image_count_score(entity_id)
+        eligible = not fatal_blockers and not fatal_issues
+        composite_score = round((80.0 if eligible else 0.0) + (20.0 * image_score if eligible else 0.0), 2)
+        scored_row = {
+            "entityId": entity_id,
+            "eligible": eligible,
+            "compositeScore": composite_score,
+            "minimumQualityScore": 80.0 if eligible else 0.0,
+            "imageBonusScore": round(20.0 * image_score if eligible else 0.0, 2),
+            "imageCountScore": image_score,
+            "publishableImageCollectionCount": image_counts_by_entity.get(entity_id, 0),
+            "imageBonusSaturationCount": image_saturation,
+        }
+        scored_targets.append(scored_row)
+        if soft_blockers or soft_issues:
+            image_soft_warnings.append(
+                {
+                    "entityId": entity_id,
+                    "lanes": ["image"],
+                    "issues": soft_issues,
+                    "issueReasons": sorted({_normalized_issue(issue) for issue in soft_issues}),
+                    "blockers": soft_blockers,
+                    "nextActions": sorted({str(item.get("nextAction") or "") for item in soft_blockers if item.get("nextAction")}),
+                    "scoreImpact": {
+                        "imageCountScore": image_score,
+                        "imageBonusScore": scored_row["imageBonusScore"],
+                    },
+                }
+            )
+        if not eligible:
             ineligible.append(
                 {
                     "entityId": entity_id,
                     "lanes": sorted(lanes),
-                    "issues": issues,
-                    "issueReasons": sorted({_normalized_issue(issue) for issue in issues}),
-                    "blockers": blockers,
-                    "nextActions": sorted({str(item.get("nextAction") or "") for item in blockers if item.get("nextAction")}),
+                    "issues": fatal_issues,
+                    "issueReasons": sorted({_normalized_issue(issue) for issue in fatal_issues}),
+                    "blockers": fatal_blockers,
+                    "softImageWarnings": {
+                        "issues": soft_issues,
+                        "blockers": soft_blockers,
+                    },
+                    "nextActions": sorted({str(item.get("nextAction") or "") for item in fatal_blockers if item.get("nextAction")}),
                 }
             )
-        else:
-            ready.append(entity_id)
+    ranked_targets = sorted(
+        scored_targets,
+        key=lambda row: (-float(row.get("compositeScore") or 0.0), str(row.get("entityId") or "")),
+    )
+    ready = [str(row["entityId"]) for row in ranked_targets if bool(row.get("eligible"))]
     return {
         "readyTargets": ready,
         "readyTargetCount": len(ready),
         "ineligibleTargets": ineligible,
         "ineligibleTargetCount": len(ineligible),
+        "rankedTargets": ranked_targets,
+        "imageSoftWarnings": image_soft_warnings,
+        "scoringPolicy": scoring_policy,
     }
 
 
@@ -3653,7 +4166,7 @@ def _write_auto_report_artifacts(task_id: str, batch_id: str, report: dict[str, 
 
 
 def _merge_auto_reports(base: dict[str, Any], incoming: dict[str, Any]) -> None:
-    for key in ("updated", "issues", "candidates", "imageCollections", "sourceUnavailable"):
+    for key in ("updated", "issues", "candidates", "imageCollections", "sourceUnavailable", "rescueEvents"):
         rows = incoming.get(key) if isinstance(incoming.get(key), list) else []
         base.setdefault(key, []).extend(rows)
 

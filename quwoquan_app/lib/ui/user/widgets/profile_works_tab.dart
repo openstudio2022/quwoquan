@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +12,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
@@ -42,18 +42,8 @@ class ProfileWorksTab extends ConsumerStatefulWidget {
 }
 
 class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
-  final LayerLink _filterLayerLink = LayerLink();
-  final GlobalKey _filterAnchorKey = GlobalKey();
-  OverlayEntry? _filterOverlay;
-
   List<UserProfileSubTabConfig> get _creationFilters =>
       UserProfileUIConfig.creationSubTabs;
-
-  @override
-  void dispose() {
-    _hideCreationFilterMenu();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,35 +75,41 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
               child: _buildEmptyState(
                 context,
                 title: _emptyStateTitle(state.activeSubTab),
+                icon: _emptyStateIcon(state.activeSubTab),
                 color: fgSecondary,
               ),
             )
           else
-            Padding(
+            GestureDetector(
               key: const ValueKey<String>('profile-works-grid'),
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.feedContentHorizontal(context),
-                0,
-                AppSpacing.feedContentHorizontal(context),
-                AppSpacing.interGroupLg,
-              ),
-              child: MasonryGridView.count(
-                crossAxisCount: AppSpacing.responsiveGridColumns(context),
-                mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
-                crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
-                itemCount: filtered.length,
-                shrinkWrap: true,
-                primary: false,
-                padding: EdgeInsets.zero,
-                physics: const NeverScrollableScrollPhysics(),
-                itemBuilder: (context, index) {
-                  final post = filtered[index];
-                  return _WorksPostCard(
-                    post: post,
-                    isDark: widget.isDark,
-                    onTap: () => _onPostTap(context, post),
-                  );
-                },
+              behavior: HitTestBehavior.translucent,
+              onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.feedContentHorizontal(context),
+                  0,
+                  AppSpacing.feedContentHorizontal(context),
+                  AppSpacing.interGroupLg,
+                ),
+                child: MasonryGridView.count(
+                  crossAxisCount: AppSpacing.responsiveGridColumns(context),
+                  mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                  crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                  itemCount: filtered.length,
+                  shrinkWrap: true,
+                  primary: false,
+                  padding: EdgeInsets.zero,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemBuilder: (context, index) {
+                    final post = filtered[index];
+                    return _WorksPostCard(
+                      post: post,
+                      isDark: widget.isDark,
+                      onTap: () => _onPostTap(context, post),
+                      onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
+                    );
+                  },
+                ),
               ),
             ),
         ],
@@ -135,6 +131,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                   child: _buildEmptyState(
                     context,
                     title: _emptyStateTitle(state.activeSubTab),
+                    icon: _emptyStateIcon(state.activeSubTab),
                     color: fgSecondary,
                   ),
                 )
@@ -163,6 +160,8 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                             post: post,
                             isDark: widget.isDark,
                             onTap: () => _onPostTap(context, post),
+                            onHorizontalDragEnd:
+                                widget.onSecondaryHorizontalDragEnd,
                           );
                         },
                       ),
@@ -174,206 +173,83 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     );
   }
 
-  static const Key creationFilterButtonKey = ValueKey<String>(
-    'profile-works-filter-button',
-  );
-
-  /// 二级过滤（全部/图片/视频/长文）：左侧记录总数，右侧收敛为单一图标入口，
-  /// 点击后在入口下方展示菜单；横滑切换语义保留。
+  /// 二级过滤（全部/图片/视频/长文）：与互动页同源的横滑二级页签，
+  /// 记录总数放到二级页签「下方」。
   Widget _buildCreationFilters(
     ProfileNotifier notifier,
     ProfileState state, {
     required int totalCount,
   }) {
-    return Padding(
+    final selectedFilterId = _creationFilters
+        .firstWhere(
+          (filter) => _creationSubTabForId(filter.id) == state.activeSubTab,
+          orElse: () => _creationFilters.first,
+        )
+        .id;
+
+    return Column(
       key: const ValueKey<String>('profile-works-secondary-tabs'),
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.feedContentHorizontal(context),
-        0,
-        AppSpacing.feedContentHorizontal(context),
-        0,
-      ),
-      child: GestureDetector(
-        key: widget.secondaryTabBarKey,
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                UITextConstants.profileRecordsTotal(totalCount),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.iosFootnote,
-                  color: AppColors.iosSecondaryLabel(context),
-                  letterSpacing: -0.04,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        ProfileSecondaryTabBar(
+          tabs: _creationFilters
+              .map(
+                (filter) => ProfileSecondaryTabItem(
+                  id: filter.id,
+                  label: UITextConstants.contentLabelForKey(filter.labelKey),
                 ),
-              ),
-            ),
-            SizedBox(width: AppSpacing.intraGroupSm),
-            CompositedTransformTarget(
-              key: _filterAnchorKey,
-              link: _filterLayerLink,
-              child: Semantics(
-                button: true,
-                label: UITextConstants.profileWorksFilterTitle,
-                child: CupertinoButton(
-                  key: creationFilterButtonKey,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.containerXs,
-                    vertical: AppSpacing.intraGroupXs,
-                  ),
-                  minimumSize: const Size(
-                    AppSpacing.minInteractiveSize,
-                    AppSpacing.buttonHeightSmCompact,
-                  ),
-                  onPressed: () => _toggleCreationFilterMenu(notifier, state),
-                  child: Icon(
-                    CupertinoIcons.line_horizontal_3_decrease,
-                    size: AppSpacing.iconSmall,
-                    color: AppColors.iosSecondaryLabel(context),
-                  ),
-                ),
-              ),
-            ),
-          ],
+              )
+              .toList(growable: false),
+          selectedId: selectedFilterId,
+          onSelected: (id) => notifier.setSubTab(_creationSubTabForId(id)),
+          isDark: widget.isDark,
+          scrollKey: widget.secondaryTabBarKey,
+          onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
         ),
-      ),
-    );
-  }
-
-  void _toggleCreationFilterMenu(ProfileNotifier notifier, ProfileState state) {
-    if (_filterOverlay != null) {
-      _hideCreationFilterMenu();
-      return;
-    }
-    final overlay = Overlay.of(context);
-
-    // 方向决策：优先在筛选入口「下方」展开；若下方不足以完整显示菜单
-    // （会被底部工具栏遮挡），则改在「上方」展开。两侧都不足时取较大一侧，
-    // 并约束 maxHeight 让菜单内部滚动，保证完整可见且不遮挡底栏。
-    final renderBox =
-        _filterAnchorKey.currentContext?.findRenderObject() as RenderBox?;
-    final mediaSize = MediaQuery.sizeOf(context);
-    final viewPadding = MediaQuery.viewPaddingOf(context);
-    final filterCount = _creationFilters.length;
-    final estItemHeight = AppSpacing.minInteractiveSize;
-    final estMenuHeight =
-        filterCount * estItemHeight + AppSpacing.intraGroupXs * 2;
-    final bottomReserved =
-        viewPadding.bottom +
-        (widget.mode == ProfileMode.mine ? AppSpacing.bottomNavHeight : 0.0) +
-        AppSpacing.interGroupSm;
-    final topReserved =
-        viewPadding.top +
-        AppSpacing.appChromeTopBarHeight(context) +
-        AppSpacing.interGroupSm;
-
-    var showBelow = true;
-    var maxHeight = estMenuHeight;
-    if (renderBox != null && renderBox.hasSize) {
-      final topLeft = renderBox.localToGlobal(Offset.zero);
-      final btnTop = topLeft.dy;
-      final btnBottom = topLeft.dy + renderBox.size.height;
-      final spaceBelow =
-          mediaSize.height -
-          bottomReserved -
-          btnBottom -
-          AppSpacing.intraGroupXs;
-      final spaceAbove = btnTop - topReserved - AppSpacing.intraGroupXs;
-      if (spaceBelow >= estMenuHeight) {
-        showBelow = true;
-        maxHeight = estMenuHeight;
-      } else if (spaceAbove >= estMenuHeight) {
-        showBelow = false;
-        maxHeight = estMenuHeight;
-      } else {
-        showBelow = spaceBelow >= spaceAbove;
-        maxHeight = (showBelow ? spaceBelow : spaceAbove).clamp(
-          estItemHeight,
-          estMenuHeight,
-        );
-      }
-    }
-
-    _filterOverlay = OverlayEntry(
-      builder: (overlayContext) => Stack(
-        children: <Widget>[
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: _hideCreationFilterMenu,
-              child: const SizedBox.expand(),
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.containerMd,
+            AppSpacing.zero,
+            AppSpacing.containerMd,
+            AppSpacing.intraGroupXs,
+          ),
+          child: Text(
+            UITextConstants.profileRecordsTotal(totalCount),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppTypography.iosFootnote,
+              color: AppColors.iosSecondaryLabel(context),
+              letterSpacing: -0.04,
             ),
           ),
-          CompositedTransformFollower(
-            link: _filterLayerLink,
-            showWhenUnlinked: false,
-            targetAnchor: showBelow
-                ? Alignment.bottomRight
-                : Alignment.topRight,
-            followerAnchor: showBelow
-                ? Alignment.topRight
-                : Alignment.bottomRight,
-            offset: Offset(
-              0,
-              showBelow
-                  ? AppSpacing.intraGroupXs
-                  : -AppSpacing.intraGroupXs,
-            ),
-            child: _CreationFilterMenu(
-              filters: _creationFilters,
-              activeSubTab: state.activeSubTab,
-              maxHeight: maxHeight,
-              onSelected: (selected) {
-                _hideCreationFilterMenu();
-                if (selected != state.activeSubTab) {
-                  notifier.setSubTab(selected);
-                }
-              },
-              resolveSubTab: _creationSubTabForId,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
-    overlay.insert(_filterOverlay!);
-  }
-
-  void _hideCreationFilterMenu() {
-    _filterOverlay?.remove();
-    _filterOverlay = null;
   }
 
   Widget _buildEmptyState(
     BuildContext context, {
     required String title,
+    required IconData icon,
     required Color color,
   }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Container(
-          width: AppSpacing.avatarUserLg,
-          height: AppSpacing.avatarUserLg,
+          width: AppSpacing.avatarUserMd,
+          height: AppSpacing.avatarUserMd,
           decoration: BoxDecoration(
-            color: AppColors.iosFill(context),
+            color: AppColors.iosSecondaryFill(context).withValues(alpha: 0.72),
             shape: BoxShape.circle,
           ),
-          child: Icon(
-            CupertinoIcons.photo_on_rectangle,
-            size: AppSpacing.iconMedium,
-            color: color,
-          ),
+          child: Icon(icon, size: AppSpacing.iconSmall, color: color),
         ),
         SizedBox(height: AppSpacing.containerSm),
         Text(
           title,
-          style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            color: color,
-          ),
+          style: TextStyle(fontSize: AppTypography.iosFootnote, color: color),
         ),
       ],
     );
@@ -413,6 +289,19 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         return isMine
             ? UITextConstants.profileCreationEmptyAllMine
             : UITextConstants.profileCreationEmptyAllOther;
+    }
+  }
+
+  IconData _emptyStateIcon(CreationSubTab filter) {
+    switch (filter) {
+      case CreationSubTab.image:
+        return CupertinoIcons.photo_on_rectangle;
+      case CreationSubTab.video:
+        return CupertinoIcons.play_rectangle;
+      case CreationSubTab.article:
+        return CupertinoIcons.doc_text;
+      case CreationSubTab.all:
+        return CupertinoIcons.square_stack_3d_up;
     }
   }
 
@@ -467,167 +356,6 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
   }
 }
 
-class _CreationFilterMenu extends StatelessWidget {
-  const _CreationFilterMenu({
-    required this.filters,
-    required this.activeSubTab,
-    required this.onSelected,
-    required this.resolveSubTab,
-    required this.maxHeight,
-  });
-
-  final List<UserProfileSubTabConfig> filters;
-  final CreationSubTab activeSubTab;
-  final ValueChanged<CreationSubTab> onSelected;
-  final CreationSubTab Function(String id) resolveSubTab;
-
-  /// 菜单可用最大高度（由调用方按上/下可用空间裁定）；超出则内部滚动。
-  final double maxHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final background = isDark
-        ? AppColors.iosSystemSurfaceDark
-        : AppColors.white.withValues(alpha: 0.98);
-    final primary = AppColors.iosAccent(context);
-    final foreground = AppColors.iosLabel(context);
-    final secondary = AppColors.iosSecondaryLabel(context);
-    final menuBorder = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.20 : 0.12);
-    final menuWidth = AppSpacing.minInteractiveSize * 3.7;
-
-    return SizedBox(
-      width: menuWidth,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            border: Border.all(color: menuBorder, width: AppSpacing.hairline),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: AppColors.black.withValues(alpha: isDark ? 0.30 : 0.14),
-                blurRadius: AppSpacing.twenty,
-                offset: Offset(0, AppSpacing.intraGroupSm),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    for (final filter in filters)
-                      _CreationFilterMenuItem(
-                        key: ValueKey<String>(
-                          'profile-works-filter-option-${filter.id}',
-                        ),
-                        icon: _iconForFilter(filter.id),
-                        label: UITextConstants.contentLabelForKey(
-                          filter.labelKey,
-                        ),
-                        selected: resolveSubTab(filter.id) == activeSubTab,
-                        primary: primary,
-                        foreground: foreground,
-                        secondary: secondary,
-                        onTap: () => onSelected(resolveSubTab(filter.id)),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  IconData _iconForFilter(String id) {
-    switch (id) {
-      case 'video':
-        return FluentIcons.video_24_regular;
-      case 'image':
-        return FluentIcons.image_24_regular;
-      case 'article':
-        return FluentIcons.document_24_regular;
-      case 'all':
-      default:
-        return FluentIcons.grid_24_regular;
-    }
-  }
-}
-
-class _CreationFilterMenuItem extends StatelessWidget {
-  const _CreationFilterMenuItem({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.primary,
-    required this.foreground,
-    required this.secondary,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final Color primary;
-  final Color foreground;
-  final Color secondary;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final itemColor = selected ? primary : foreground;
-    return CupertinoButton(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerSm,
-        vertical: AppSpacing.intraGroupXs,
-      ),
-      minimumSize: const Size(
-        AppSpacing.minInteractiveSize * 3,
-        AppSpacing.minInteractiveSize,
-      ),
-      onPressed: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.max,
-        children: <Widget>[
-          Icon(icon, size: AppSpacing.iconSmall, color: itemColor),
-          SizedBox(width: AppSpacing.intraGroupSm),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: AppTypography.iosBody,
-                fontWeight: selected
-                    ? AppTypography.medium
-                    : AppTypography.regular,
-                color: itemColor,
-                letterSpacing: -0.08,
-              ),
-            ),
-          ),
-          SizedBox(width: AppSpacing.intraGroupMd),
-          Icon(
-            CupertinoIcons.check_mark,
-            size: AppSpacing.iconXSmall,
-            color: selected ? primary : secondary.withValues(alpha: 0),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// 瀑布流卡片：与圈子 post 保持同一结构，
 /// 仅底部元信息改为「赞 + 转 + 评」。
 class _WorksPostCard extends ConsumerWidget {
@@ -635,11 +363,13 @@ class _WorksPostCard extends ConsumerWidget {
     required this.post,
     required this.isDark,
     required this.onTap,
+    this.onHorizontalDragEnd,
   });
 
   final PostBaseDto post;
   final bool isDark;
   final VoidCallback onTap;
+  final GestureDragEndCallback? onHorizontalDragEnd;
 
   double get _imageAspectRatio {
     final ratio = post.aspectRatio;
@@ -700,9 +430,12 @@ class _WorksPostCard extends ConsumerWidget {
       mediaAspectRatio: _imageAspectRatio,
       showVideoBadge: post.isVideoLike,
       onTap: onTap,
+      onHorizontalDragEnd: onHorizontalDragEnd,
       header: IntersectionReasonChip.fromReasons(
         post.intersectionReasons,
         isDark: isDark,
+        // N5：用户主页作品卡 → 交集句对象片段点击精确归因为作者主页（非推荐流）。
+        referralSource: ReferralSource.authorProfile,
       ),
       footer: Row(
         children: [

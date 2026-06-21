@@ -160,7 +160,7 @@ tag_runtime/
 ## 与静态标签树的边界
 
 - 静态标签树只定义稳定分类，不保存 `startDate`、`endDate`、`trendScore` 之类动态字段。
-- 动态实例不进入 `publish/v1/tags/`，只进入 `tag_runtime/`。
+- 动态实例不进入 `publish/tags/`，只进入 `tag_runtime/`。
 - 如果一个动态热词最终沉淀为长期语义，再由人工或半自动流程迁移为静态标签。
 - 事件实例与话题实例都不替代 `Entity/地点`、`Entity/人物`、`Entity/活动` 这些实体骨架，只通过引用关联。
 

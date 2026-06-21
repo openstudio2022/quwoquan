@@ -5,6 +5,8 @@ import '../recommendation/intersection_text_span.g.dart';
 import '../recommendation/intersection_visual.g.dart';
 import '../recommendation/intersection_target.g.dart';
 import '../recommendation/intersection_propagation_path.g.dart';
+import '../recommendation/intersection_representative_actor.g.dart';
+import '../recommendation/intersection_action_hint.g.dart';
 
 class CircleImpactItem {
   final String helpType;
@@ -18,6 +20,8 @@ class CircleImpactItem {
   final String impactId;
   final List<IntersectionTextSpan> primarySpans;
   final List<IntersectionVisual> sampleVisuals;
+  final IntersectionRepresentativeActor? representativeActor;
+  final List<IntersectionActionHint> actionHints;
   final IntersectionTarget? countTarget;
   final String evidenceSnapshotId;
   final String countObjectKind;
@@ -36,6 +40,8 @@ class CircleImpactItem {
     this.impactId = '',
     this.primarySpans = const <IntersectionTextSpan>[],
     this.sampleVisuals = const <IntersectionVisual>[],
+    this.representativeActor,
+    this.actionHints = const <IntersectionActionHint>[],
     this.countTarget,
     this.evidenceSnapshotId = '',
     this.countObjectKind = '',
@@ -56,6 +62,8 @@ class CircleImpactItem {
       impactId: m['impactId']?.toString() ?? '',
       primarySpans: _parseProjectionDtoList(m['primarySpans'], IntersectionTextSpan.fromMap),
       sampleVisuals: _parseProjectionDtoList(m['sampleVisuals'], IntersectionVisual.fromMap),
+      representativeActor: m['representativeActor'] == null ? null : IntersectionRepresentativeActor.fromMap(_parseStringKeyMap(m['representativeActor'])!),
+      actionHints: _parseProjectionDtoList(m['actionHints'], IntersectionActionHint.fromMap),
       countTarget: m['countTarget'] == null ? null : IntersectionTarget.fromMap(_parseStringKeyMap(m['countTarget'])!),
       evidenceSnapshotId: m['evidenceSnapshotId']?.toString() ?? '',
       countObjectKind: m['countObjectKind']?.toString() ?? '',
@@ -77,6 +85,8 @@ class CircleImpactItem {
       'impactId': impactId,
       'primarySpans': primarySpans,
       'sampleVisuals': sampleVisuals,
+      'representativeActor': representativeActor,
+      'actionHints': actionHints,
       'countTarget': countTarget,
       'evidenceSnapshotId': evidenceSnapshotId,
       'countObjectKind': countObjectKind,
@@ -97,6 +107,8 @@ class CircleImpactItem {
     String? impactId,
     List<IntersectionTextSpan>? primarySpans,
     List<IntersectionVisual>? sampleVisuals,
+    IntersectionRepresentativeActor? representativeActor,
+    List<IntersectionActionHint>? actionHints,
     IntersectionTarget? countTarget,
     String? evidenceSnapshotId,
     String? countObjectKind,
@@ -115,6 +127,8 @@ class CircleImpactItem {
       impactId: impactId ?? this.impactId,
       primarySpans: primarySpans ?? this.primarySpans,
       sampleVisuals: sampleVisuals ?? this.sampleVisuals,
+      representativeActor: representativeActor ?? this.representativeActor,
+      actionHints: actionHints ?? this.actionHints,
       countTarget: countTarget ?? this.countTarget,
       evidenceSnapshotId: evidenceSnapshotId ?? this.evidenceSnapshotId,
       countObjectKind: countObjectKind ?? this.countObjectKind,

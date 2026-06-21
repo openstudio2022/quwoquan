@@ -24,15 +24,25 @@ gwt_acceptance:
     edge_cases: []
     contract_refs: []
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
       planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.circle_community.circle_management_and_stats.moderation_governance.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.circle_community.circle_management_and_stats.moderation_governance.gwt1_local_contract
+        envs: *id001
+      supporting: []
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

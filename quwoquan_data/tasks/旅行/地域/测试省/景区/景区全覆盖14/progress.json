@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/测试省/景区/景区全覆盖14",
+  "updatedAt": "2026-06-20T09:28:53.543679+00:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/测试景区甲"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

@@ -20,7 +20,7 @@ type PgPersonaStore struct {
 
 var _ repository.PersonaRepository = (*PgPersonaStore)(nil)
 
-const personaNullableSafeCols = `user_id, display_name, COALESCE(user_handle, ''), COALESCE(phone, ''), COALESCE(email, ''), COALESCE(avatar_url, ''), COALESCE(caller_ringtone_id, ''), COALESCE(theme_mode_override, ''), COALESCE(font_size_preset_override, ''), appearance_override_updated_at, is_primary, is_private, is_active, COALESCE(status, 'active'), retired_at, COALESCE(sub_account_id, ''), COALESCE(isolation_level, ''), COALESCE(purpose_hint, ''), COALESCE(inherits_profile_from_owner, false), COALESCE(array_to_string(overridden_profile_fields, ','), ''), last_profile_sync_at, COALESCE(last_profile_sync_source, ''), last_activated_at, invite_count, created_at, updated_at`
+const personaNullableSafeCols = `user_id, display_name, COALESCE(user_handle, ''), COALESCE(phone, ''), COALESCE(email, ''), COALESCE(avatar_url, ''), avatar_version, COALESCE(background_url, ''), COALESCE(caller_ringtone_id, ''), COALESCE(theme_mode_override, ''), COALESCE(font_size_preset_override, ''), appearance_override_updated_at, is_primary, is_private, is_active, COALESCE(status, 'active'), retired_at, COALESCE(sub_account_id, ''), COALESCE(isolation_level, ''), COALESCE(purpose_hint, ''), COALESCE(inherits_profile_from_owner, false), COALESCE(array_to_string(overridden_profile_fields, ','), ''), last_profile_sync_at, COALESCE(last_profile_sync_source, ''), last_activated_at, invite_count, created_at, updated_at`
 
 func NewPgPersonaStore(pool *pgxpool.Pool) *PgPersonaStore {
 	return &PgPersonaStore{pgPersonaStoreBase: pgPersonaStoreBase{pool: pool}}
@@ -55,6 +55,8 @@ func (s *PgPersonaStore) FindByUserID(ctx context.Context, userID string) ([]mod
 			&e.Phone,
 			&e.Email,
 			&e.AvatarURL,
+			&e.AvatarVersion,
+			&e.BackgroundURL,
 			&e.CallerRingtoneID,
 			&e.ThemeModeOverride,
 			&e.FontSizePresetOverride,

@@ -41,7 +41,7 @@ class ArticlePaginationEngine {
                   block.type == ArticleDocumentBlockType.heading3 ||
                   block.type == ArticleDocumentBlockType.sectionTitle ||
                   (block.type == ArticleDocumentBlockType.paragraph &&
-                      block.spans.any((span) => span.isEntity)),
+                      block.spans.any((span) => span.isInlineMention)),
             )
             .toList(growable: false)
           ..sort((left, right) {

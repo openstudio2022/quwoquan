@@ -87,6 +87,9 @@ def _compact_assets(assets: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]
         "role",
         "entityName",
         "sourcePath",
+        "sourceRef",
+        "sourceAssetRef",
+        "researchLane",
         "imageLayout",
         "sourceCollectionId",
         "creator",
@@ -181,40 +184,46 @@ def _base_fidelity_range_label() -> str:
     return f"{int(FIDELITY_MIN * 100)}%~{int(FIDELITY_MAX * 100)}%"
 
 
-_FACTUAL_FEWSHOT_REPLACEMENTS: tuple[tuple[str, str], ...] = (
-    ("以百科底稿为基础适度加工（轻改）", "以事实证据为基础独立组织"),
-    ("以百科底稿为基础适度加工", "以事实证据为基础独立组织"),
-    ("授权底稿来源", "事实参考来源"),
-    ("可在许可范围内改编", "仅可抽取可核验事实"),
-    ("以下方授权底稿为基底", "以下方事实参考材料核验信息"),
-    ("贴合度控制", "事实覆盖要求"),
-    ("轻改", "独立表达"),
-    ("结构以上方底稿为准", "结构由事实参考与写作主线共同决定"),
-    ("结构跟随底稿", "结构按事实参考与写作主线独立组织"),
-)
+def _sop_text(raw: Mapping[str, Any]) -> dict[str, str]:
+    """版权风险全面放开后所有来源统一以底稿为骨架，few-shot 不再按来源模式降噪。"""
+    return {key: str(raw.get(key) or "") for key in ("ref", "example", "guide")}
 
 
-def _sanitize_factual_fewshot(text: str) -> str:
-    """事实参考来源只允许做事实抽取；SOP/few-shot 里的改编口径必须降噪。"""
-    sanitized = str(text or "")
-    for old, new in _FACTUAL_FEWSHOT_REPLACEMENTS:
-        sanitized = sanitized.replace(old, new)
-    return sanitized
+def _append_persona_block(lines: list[str], persona: Any) -> None:
+    """渲染「作者人设（轻量化适配）」块：把匹配到的虚拟创作者人设注入 prompt。
 
-
-def _sop_for_source_mode(raw: Mapping[str, Any], *, has_authorized_base: bool) -> dict[str, str]:
-    sop = {key: str(raw.get(key) or "") for key in ("ref", "example", "guide")}
-    if has_authorized_base:
-        return sop
-    sop["example"] = _sanitize_factual_fewshot(sop.get("example") or "")
-    sop["guide"] = _sanitize_factual_fewshot(sop.get("guide") or "")
-    return sop
-
-
-def _text_for_source_mode(text: str, *, has_authorized_base: bool) -> str:
-    if has_authorized_base:
-        return str(text or "")
-    return _sanitize_factual_fewshot(str(text or ""))
+    适配仅作用于用词用语/语气/写作手法等表层风格，严禁为贴合人设而重写底稿、改事实、
+    或虚构亲历/资质——与「以底稿为基础适度润色、大面积保留」范式一致。
+    """
+    if not isinstance(persona, Mapping) or not persona:
+        return
+    lines.append("### 作者人设（轻量化适配，不重写、不改面目全非）")
+    lines.append("")
+    who = " · ".join(str(x) for x in [persona.get("displayName"), persona.get("creatorArchetype")] if x)
+    if who:
+        lines.append(f"- **作者**：{who}")
+    if persona.get("headline"):
+        lines.append(f"- **定位**：{persona.get('headline')}")
+    voice = persona.get("voiceStyle") if isinstance(persona.get("voiceStyle"), Mapping) else {}
+    voice_bits = " · ".join(
+        str(x) for x in [voice.get("narrativePointOfView") or voice.get("pointOfView"), voice.get("tone")] if x
+    )
+    if voice_bits:
+        lines.append(f"- **视角与语气**：{voice_bits}")
+    expertise = [str(x) for x in (persona.get("expertiseClaims") or []) if x]
+    if expertise:
+        lines.append(f"- **擅长**：{' / '.join(expertise)}")
+    if persona.get("coverageScopeLabel"):
+        lines.append(f"- **题材与范围**：{persona.get('coverageScopeLabel')}")
+    mustnot = [str(x) for x in (persona.get("mustNotClaim") or []) if x]
+    if mustnot:
+        lines.append(f"- **禁止宣称**：{' / '.join(mustnot)}")
+    lines.append(
+        "- **适配方式**：仅在底稿基础上按该作者的视角、语气、用词用语与写作手法做**轻量化微调**，让风格贴合作者；"
+        "**严禁为贴合人设而重写底稿、改变事实、改动结构到面目全非，或虚构该作者的亲身经历、资质与商业合作**。"
+        "底稿优质原文与自然段应大面积保留。"
+    )
+    lines.append("")
 
 
 def render_prompt_md(pack: Mapping[str, Any]) -> str:
@@ -254,6 +263,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
             "正文写完后自检标题兑现、信息密度、图文节奏、证据边界与作者可信边界。"
         )
         lines.append("")
+        _append_persona_block(lines, creative.get("persona"))
     intent = pack.get("writingIntent")
     if intent and intent in WRITING_INTENTS:
         spec = WRITING_INTENTS[intent]
@@ -263,19 +273,15 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         )
     base = pack.get("baseSourceRef")
     base_text = str(pack.get("baseDraftText") or "")
-    source_use_mode = str(pack.get("sourceUseMode") or "factual_reference_only")
-    has_authorized_base = source_use_mode == "licensed_adaptation"
+    # 版权风险全面放开：所有来源统一「以底稿为基础适度润色、大面积保留优质原文」；
+    # sourceUseMode 仅供授权快照/署名留痕，不再切换保留口径。
     if base:
-        if has_authorized_base:
-            lines.append(
-                f"- **授权底稿来源**：`{base}` 可在许可范围内改编；保留事实和必要结构，"
-                f"贴合度控制在 {_base_fidelity_range_label()}，同时保留署名与授权快照。"
-            )
-        else:
-            lines.append(
-                f"- **事实参考来源**：`{base}` 仅用于提取可核验事实。必须独立组织结构和表达，"
-                "禁止复现连续长句、原文小标题和作者个人叙事。"
-            )
+        lines.append(
+            f"- **底稿来源**：`{base}` 作为本篇骨架。以底稿为基础做**适度润色 + 人设轻量化适配**"
+            "（去语病/错字、私人信息脱敏替代、按作者人设微调用词用语与写作手法），"
+            f"优质原文与自然段可大面积保留，贴合度 {_base_fidelity_range_label()}。"
+            "禁止脱离底稿大修/重写/编故事或改到面目全非；去除原平台名/原作者署名/水印（以虚拟创作者身份发布）。"
+        )
     banned = pack.get("bannedRegisterTerms") or []
     if banned:
         lines.append(f"- **禁用语域**：本主体禁止出现 {', '.join(banned)} 等错配语域词。")
@@ -313,41 +319,43 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
             "这趟适合谁 / 到底适合谁 / 适合谁」作为固定小标题。"
         )
         if base_text:
-            if has_authorized_base:
-                lines.append("- 以下方授权底稿为基底，在许可范围内改编并用其它证据补全事实。")
-            else:
-                lines.append("- 以下方事实参考材料核验信息，自行重组标题、章节和叙事顺序，禁止沿用原文结构。")
+            lines.append("- 以下方底稿为基底做适度润色与人设适配，并用其它证据补全/校正事实；底稿合理的标题、小标题与结构可保留。")
         else:
             lines.append("- 综合证据点独立组织内容，不要把多个来源机械拼成清单，也不要每篇都用相同章节套路。")
     lines.append("- 信息必须来自下方素材；**禁止编造**票价/时长/海拔/里程等数字（拿不准就写区间或定性，别杜撰精确值）。")
-    lines.append("- 禁止出现平台名/作者名/水印/来源痕迹；禁止逐句搬运素材原文（改写为自己的表达）。")
+    lines.append("- 去除原平台名/原作者署名/水印/来源痕迹（本文以虚拟创作者身份发布）；可在底稿基础上大面积保留优质原文。")
     lines.append(
-        "- **禁止私人联系方式**：正文不得出现私人电话/手机/微信/QQ；仅可保留紧急或公共服务短号（如 110/120/12301）"
-        "或 source 证据中核实的景区官方接待电话。"
+        "- **私人联系方式脱敏替代**：正文不得出现私人电话/手机/微信/QQ（做脱敏替代，而非整段删除）；"
+        "仅可保留紧急或公共服务短号（如 110/120/12301）或 source 证据中核实的景区官方接待电话。"
     )
     lines.append(
         "- **小标题自然、避免机械清单标题**：禁止 `## 节点顺序` `## 实用信息` `## 注意事项` `## 门票信息` 这类纯功能清单标题；"
-        "**不要套用统一标题模板，也不要复制普通网页的原标题或小标题**。"
+        "**不要套用统一标题模板**；底稿合理的标题与小标题可保留。"
     )
     forb = pack.get("forbiddenPhrases") or []
     if forb:
         lines.append(f"- 禁用词: {', '.join(forb)}")
     lines.append("")
     if base_text:
-        heading = (
-            f"## 授权底稿（许可范围内改编；贴合度 {_base_fidelity_range_label()}）"
-            if has_authorized_base
-            else "## 事实参考材料（只取可核验事实，必须独立表达）"
-        )
-        lines.append(heading)
+        lines.append(f"## 底稿（以此为骨架适度润色 + 人设轻量化适配；贴合度 {_base_fidelity_range_label()}）")
         lines.append("")
-        if has_authorized_base:
-            lines.append("> 在许可范围内加工，保留必要署名；禁止逐句搬运超出许可或掩盖来源。")
-        else:
-            lines.append("> 只抽取事实，独立拟定标题、结构和句子；不得模仿原作者叙事顺序或复现连续长句。")
+        lines.append(
+            "> 在底稿基础上做适度润色与人设用词语气适配，优质原文与自然段可大面积保留；"
+            "去除原平台名/原作者署名/水印，禁止重写到面目全非或改变事实。"
+        )
         lines.append("")
         lines.append(base_text)
         lines.append("")
+        from _common.content_review import _NUMERIC_FACT_RE
+
+        numeric_tokens = sorted(
+            {match.group(0).strip() for match in _NUMERIC_FACT_RE.finditer(base_text)}
+        )
+        if numeric_tokens:
+            lines.append("## 带单位数字白名单（正文仅允许复用底稿已出现的带单位数字）")
+            lines.append("")
+            lines.append(_fmt_list(numeric_tokens))
+            lines.append("")
     og = pack.get("openingGuidance") or opening_guidance(str(pack.get("styleFamily") or ""))
     candidates = og.get("styleFamilyCandidates") or []
     if candidates and carrier not in ("image", "gallery"):
@@ -357,16 +365,12 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
             mark = "（默认）" if c.get("styleFamily") == og.get("styleFamily") else ""
             lines.append(f"- `{c.get('styleFamily')}`{mark}：{c.get('writingGenre')}")
         lines.append("")
-    sop = _sop_for_source_mode(
+    sop = _sop_text(
         pack.get("sopFewshot") or _load_sop_fewshot(str(pack.get("sopExampleRef") or "")) or {},
-        has_authorized_base=has_authorized_base,
     )
     if sop.get("example") or sop.get("guide"):
         if base_text:
-            if has_authorized_base:
-                lines.append("## 写作范例与规范（few-shot：仅供参考其**口吻与信息颗粒度**；**结构以上方底稿为准**，禁止照搬范例结构、事实、实体与数字）")
-            else:
-                lines.append("## 写作范例与规范（few-shot：仅供参考其**口吻与信息颗粒度**；结构按事实参考与写作主线独立组织，禁止照搬范例结构、事实、实体与数字）")
+            lines.append("## 写作范例与规范（few-shot：仅供参考其**口吻与信息颗粒度**；**结构以上方底稿为准**，禁止照搬范例结构、事实、实体与数字）")
         else:
             lines.append("## 写作范例与规范（few-shot：模仿其口吻与信息颗粒度，结构按写作主线独立组织，禁止照搬其事实、实体与数字）")
         lines.append("")
@@ -388,17 +392,17 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         lines.append("")
         lines.append(_fmt_list(source_paths))
         lines.append("")
-    if has_authorized_base:
-        lines.append("## 章节意图（仅参考；结构以底稿为准，可自然调整，不要照抄为标题）")
-    else:
-        lines.append("## 章节意图（仅参考；结构按事实参考与写作主线独立组织，不要照抄为标题）")
+    lines.append("## 章节意图（仅参考；结构以底稿为准，可自然调整，不要照抄为标题）")
     lines.append("")
-    section_intents = [
-        _text_for_source_mode(str(item), has_authorized_base=has_authorized_base)
-        for item in (pack.get("sectionIntents") or [])
-    ]
+    section_intents = [str(item) for item in (pack.get("sectionIntents") or [])]
     lines.append(_fmt_list(section_intents))
     lines.append("")
+    lines.append("## 地域条件边界")
+    lines.append("")
+    lines.append(
+        "- 涉及海拔、高反、高原反应、缺氧等地域专有现象时，必须已有 `conditionContext.region` 授权；"
+        "无 region 条件时禁止写入这些地域锁定词。"
+    )
     cc = pack.get("conditionContext") or {}
     region = cc.get("region") if isinstance(cc, Mapping) else None
     if region:
@@ -440,6 +444,18 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     lines.append("asset://<assetId>")
     lines.append(":::")
     lines.append('```')
+    lines.append("")
+    lines.append("## Review Gate 硬检查（reviewGateChecklist）")
+    lines.append("")
+    lines.append(
+        "- `draft_meta.creativePlan`：至少 2 个候选构思 concepts、selectedPlanId、selectionReason、"
+        "readerPromise、unusedFacts。"
+    )
+    lines.append(
+        "- `draft_meta.selfCritique`：必须自评 readerPromise、titlePromise、informationDensity、"
+        "evidenceBoundary、personaBoundary。"
+    )
+    lines.append("- 禁止伪装亲历（平台编辑口吻不得写「我亲自去了」）；数字不得超出底稿/证据白名单。")
     lines.append("")
     lines.append("## 产出方式")
     lines.append("")

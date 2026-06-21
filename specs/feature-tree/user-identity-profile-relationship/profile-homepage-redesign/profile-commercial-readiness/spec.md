@@ -96,7 +96,7 @@
 
 - 产品：需求与验收标准确认。
 - 开发：TDD 落地、Repository 对接、UI 调整。
-- 测试：T2/T3 证据收集。
+- 测试：local_contract/api_integration 证据收集。
 
 ## 非功能目标
 

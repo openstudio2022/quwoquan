@@ -15,34 +15,51 @@ gwt_acceptance:
     title: multi environment wave deployment GWT
     given:
     - 仓库保持当前 `alpha-local / beta-local / prod-hosted` 混合拓扑（gamma 仅本地，无远端 gamma-hosted）。
-    - "`main` 后需要自动串行推进当前环境链，而不是绑定固定数量环境或新增第二套 hosted beta。"
+    - '`main` 后需要自动串行推进当前环境链，而不是绑定固定数量环境或新增第二套 hosted beta。'
     when:
-    - "`main` 入库触发多环境自动 promotion workflow。"
+    - '`main` 入库触发多环境自动 promotion workflow。'
     then:
-    - 主链按 `alpha-local -> beta-local -> prod-hosted(gray-initial -> carry-on -> full)` 固定顺序推进（无远端 gamma-hosted 阶段）。
-    - "`prod` 内部灰度只表现为 rollout stage，而不是独立环境名。"
+    - 主链按 `alpha-local -> beta-local -> prod-hosted(gray-initial -> carry-on -> full)`
+      固定顺序推进（无远端 gamma-hosted 阶段）。
+    - '`prod` 内部灰度只表现为 rollout stage，而不是独立环境名。'
     done_when:
     - 环境矩阵、workflow、runbook、gray rollout stage 与 profile 口径一致。
     edge_cases:
     - beta 继续依赖 self-hosted macOS runner 与本地设备，不引入新的 beta hosted。
-    - "`prod full` 自动推进失败时必须能回滚，但回滚仍属于 `prod` 生命周期。"
+    - '`prod full` 自动推进失败时必须能回滚，但回滚仍属于 `prod` 生命周期。'
     contract_refs:
     - deploy/shared/environment_matrix.md
     - deploy/shared/gray_rollout_stages.yaml
     performance_points:
-    - "`mainline_auto_prod` blocking critical path `<= 900s`"
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T3_app_api_integration
+    - '`mainline_auto_prod` blocking critical path `<= 900s`'
     tests:
-      planned:
-      - 环境矩阵与 `gray_rollout_stages.yaml` 同步描述主链与 prod stage
-      - main promotion workflow 通过 timing summary 证明关键路径预算
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.deliver_deploy_prod_pipeline.multi_environment_wave_deployment.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.runtime.deliver_deploy_prod_pipeline.multi_environment_wave_deployment.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.runtime.deliver_deploy_prod_pipeline.multi_environment_wave_deployment.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes:
+    - '[migrated_from_planned] 环境矩阵与 `gray_rollout_stages.yaml` 同步描述主链与 prod stage'
+    - '[migrated_from_planned] main promotion workflow 通过 timing summary 证明关键路径预算'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -249,25 +249,25 @@
 3. `BlockEdge` 未定义删除双方 FollowEdge、失效 pending GreetingRequest、发布事件与取消拉黑不恢复关注的规则。
 4. `CreateConversation`、`SendMessage`、RTC 发起缺服务端关系门禁与结构化错误码。
 5. `GreetingRequest` 缺 pending 唯一性、回复建会话、幂等和频控验收。
-6. acceptance 未列出 SIT/GWT/contract、T1-T4 证据和磁盘测试路径。
+6. acceptance 未列出 SIT/GWT/contract、local_contract-user_acceptance 证据和磁盘测试路径。
 
 ## 11. 验收重点
 
-### T1
+### local_contract
 
 - 关系状态枚举与字段契约只保留关注状态、拉黑门禁和消息流程字段。
 - 错误码、事件、DTO、路径、operation/surface 均来自 metadata。
 
-### T2
+### local_contract
 
 - 主页动作矩阵、请求箱、正式会话、blocked 会话四态正确。
 - 端侧不出现旧关系词和旧升级入口。
 
-### T3
+### api_integration
 
 - follow / unfollow / block / unblock / greeting / create direct conversation / send message / RTC 发起在端云集成环境按状态机运行。
 - 服务端门禁不能被绕过。
 
-### T4
+### user_acceptance
 
 - 真实用户旅程覆盖：关注 → 打招呼 → 回复建会话 → 互相关注 → 1v1 通话 → 拉黑 → 禁止发送/通话 → 取消拉黑后重新关注。

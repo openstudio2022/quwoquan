@@ -3,7 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
+import 'package:quwoquan_app/components/media/app_media_image.dart';
 
 class RectangularCircleCard extends StatelessWidget {
   final CircleDto circle;
@@ -42,7 +42,7 @@ class RectangularCircleCard extends StatelessWidget {
           children: [
             // Cover Image
             Positioned.fill(
-              child: CircleMediaImage(
+              child: AppMediaImage(
                 imageSource: circle.coverUrl ?? '',
                 fit: BoxFit.cover,
               ),

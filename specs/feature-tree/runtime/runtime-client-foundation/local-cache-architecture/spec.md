@@ -126,7 +126,7 @@
 
 ## 验收概要
 
-- T1：规格、对象策略、inventory、runbook、业务特性树缓存章节齐全。
-- T2：对象缓存、查询快照、资源缓存、清理入口的单元/组件测试覆盖。
-- T3：RemoteRepository 与 metadata 版本字段对齐，弱网/离线/恢复后最终一致。
-- T4：真机冷启动、滚动、重复详情、头像/封面变更、用户清理缓存有录屏/抓包证据。
+- local_contract：规格、对象策略、inventory、runbook、业务特性树缓存章节齐全。
+- local_contract：对象缓存、查询快照、资源缓存、清理入口的单元/组件测试覆盖。
+- api_integration：RemoteRepository 与 metadata 版本字段对齐，弱网/离线/恢复后最终一致。
+- user_acceptance：真机冷启动、滚动、重复详情、头像/封面变更、用户清理缓存有录屏/抓包证据。

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/services/content-service/internal/generated"
 )
 
 // 交集视图值对象（IntersectionReasonView / PointView / TargetView / TextSpanView /
@@ -38,6 +39,16 @@ func (emptyIntersectionSource) AffinityReasons(context.Context, string, string) 
 }
 func (emptyIntersectionSource) ObjectReasons(context.Context, string, string, string) ([]IntersectionReasonView, error) {
 	return nil, nil
+}
+
+// IntersectionListQuery 是 ListMyIntersections 的服务端过滤/分页参数。
+type IntersectionListQuery struct {
+	Dimension  string
+	Filter     string
+	SourceRef  string
+	TimeBucket string
+	Cursor     string
+	Limit      int
 }
 
 // intersectionRedis 抽象 Redis 路由，便于测试注入。*rtredis.Router 满足该接口。
@@ -400,17 +411,17 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 	}, nil
 }
 
-// List 按维度列出事实交集，自上次查看的新增在前。
-func (s *IntersectionService) List(ctx context.Context, userID, dimension string, limit int) ([]IntersectionReasonView, error) {
+// List 按维度/sourceRef/timeBucket/filter 分页列出事实交集，自上次查看的新增在前。
+func (s *IntersectionService) List(ctx context.Context, userID string, query IntersectionListQuery) ([]IntersectionReasonView, string, bool, error) {
 	reasons, err := s.source.FactReasons(ctx, userID, "")
 	if err != nil {
-		return nil, err
+		return nil, "", false, err
 	}
 	wm := s.watermarks(ctx, userID)
 	filtered := make([]IntersectionReasonView, 0, len(reasons))
 	for _, raw := range reasons {
 		r := hydratePointSummary(raw)
-		if dimension != "" && r.Dimension != dimension {
+		if !matchesIntersectionListQuery(r, query, wm) {
 			continue
 		}
 		if !s.isFresh(r) {
@@ -427,10 +438,78 @@ func (s *IntersectionService) List(ctx context.Context, userID, dimension string
 		}
 		return freshUnix(filtered[i]) > freshUnix(filtered[j])
 	})
-	if limit > 0 && len(filtered) > limit {
-		filtered = filtered[:limit]
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 50
 	}
-	return filtered, nil
+	if limit > 100 {
+		limit = 100
+	}
+	offset := decodeIntersectionListCursor(query.Cursor)
+	if offset > len(filtered) {
+		offset = len(filtered)
+	}
+	end := offset + limit
+	hasMore := end < len(filtered)
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	nextCursor := ""
+	if hasMore {
+		nextCursor = strconv.Itoa(end)
+	}
+	return filtered[offset:end], nextCursor, hasMore, nil
+}
+
+func matchesIntersectionListQuery(r IntersectionReasonView, query IntersectionListQuery, wm map[string]int64) bool {
+	dimension := strings.TrimSpace(query.Dimension)
+	if dimension != "" && r.Dimension != dimension {
+		return false
+	}
+	timeBucket := strings.TrimSpace(query.TimeBucket)
+	if timeBucket != "" && r.TimeBucket != timeBucket {
+		return false
+	}
+	sourceRef := strings.TrimSpace(query.SourceRef)
+	if sourceRef != "" && !reasonHasSourceRef(r, sourceRef) {
+		return false
+	}
+	switch strings.TrimSpace(query.Filter) {
+	case "", "all":
+		return true
+	case "new":
+		return freshUnix(r) > wm[r.Dimension]
+	case "fact":
+		return r.IntersectionClass == "" || r.IntersectionClass == "fact"
+	case "affinity", "recommended":
+		return r.IntersectionClass == "affinity"
+	default:
+		return true
+	}
+}
+
+func reasonHasSourceRef(r IntersectionReasonView, sourceRef string) bool {
+	if r.Source == sourceRef {
+		return true
+	}
+	for _, point := range r.IntersectionPoints {
+		if point.SourceRef == sourceRef {
+			return true
+		}
+	}
+	return false
+}
+
+func decodeIntersectionListCursor(cursor string) int {
+	cursor = strings.TrimSpace(cursor)
+	if cursor == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(cursor)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }
 
 // Feed 首页/频道交集推荐：事实/推荐交集点同源合并；已曝光对象保留但降权。
@@ -517,33 +596,18 @@ func isSpotlightDisplayComplete(r IntersectionReasonView) bool {
 
 // evidenceKindRank 证据组 kind 的挖掘强度（§9.8）：值越小越靠前；
 // 人物 > 事物 > 地点 > 内容 > 身份 > 兴趣fact > recommended。
-// kind 取值集合与 rank 真相源 = 机器可读注册表
-// contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml 的 evidenceRank 字段
-// （取代「§5.4 markdown 表 + 本 switch」双源；本 switch 必须与注册表逐项对齐）。
-// 未知 kind 落中段（500），保证未来新增维度优雅降级（不写死闭集，缺省排在已知 fact 之后、recommended 之前）。
+// kind→rank 唯一真相源 = 机器可读注册表
+// contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml 的 evidenceRank 字段，
+// 经 tools/codegen_rec_intersection 生成 generated.IntersectionEvidenceRank 查表（§23 去桥接，禁手写 switch 第二份）。
+// pointClass==recommended 固定落末段 900；未登记 kind 落中段（500），保证未来新增维度优雅降级。
 func evidenceKindRank(kind, pointClass string) int {
 	if pointClass == "recommended" {
 		return 900
 	}
-	switch kind {
-	case "sharedFollowees", "commonFollower", "commonContact",
-		"followeeInObject", "followeeVisited", "followeeViewing", "followeeDiscussedThis":
-		return 10
-	case "coMemberCircle", "sharedCircle", "sameCompany", "sameTeam", "sameIndustry",
-		"sharedEntityAttention", "coWishlistedEntity":
-		return 20
-	case "coVisitedEntity":
-		return 30
-	case "coCommented", "coSharedContent", "coCreatedContent", "sharedDiscussion":
-		return 40
-	case "sameSchool", "sameDepartment", "sameMajor", "sameCohort", "alumni",
-		"alumniHere", "colleagueHere":
-		return 50
-	case "sharedTagSample":
-		return 60
-	default:
-		return 500
+	if rank, ok := generated.IntersectionEvidenceRank[kind]; ok {
+		return rank
 	}
+	return 500
 }
 
 // reasonObjectRank 取一条 reason 的最强可见点排序键（用于对象多 reason 时整体排序）。

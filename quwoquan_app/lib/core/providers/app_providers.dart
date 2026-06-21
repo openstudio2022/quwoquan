@@ -64,6 +64,7 @@ import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart
 import 'package:quwoquan_app/core/services/cache/conversation_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/cached_content_repository.dart';
 import 'package:quwoquan_app/core/services/cache/cache_management_service.dart';
+import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
@@ -78,6 +79,8 @@ import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
+import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/models/user_models.dart';
 // 跨平台防腐层 Provider（平台目标、能力契约、文件存储网关、原生桥）统一从
 // app_providers 再导出，业务层经同一入口消费能力位，禁止直接判断平台。
@@ -220,8 +223,17 @@ class UserDataNotifier extends Notifier<User?> {
     try {
       final repo = ref.read(userProfileRepositoryProvider);
       final profile = await repo.getUserProfile(userId);
-      final avatarUrl = resolveAvatarImageUrl(profile.avatarUrl);
-      final backgroundUrl = resolveContentMediaUrl(profile.backgroundUrl);
+      // 本地选取（相册/拍照）但尚未上传的临时文件路径原样保留（alpha 保存后即时回显），
+      // 不经媒体解析器拼成不可访问 URL；服务端对象键 / 远端地址仍正常解析。
+      final avatarUrl = isLocalFileImageSource(profile.avatarUrl)
+          ? profile.avatarUrl
+          : resolveAvatarImageUrl(
+              profile.avatarUrl,
+              avatarVersion: profile.avatarVersion,
+            );
+      final backgroundUrl = isLocalFileImageSource(profile.backgroundUrl)
+          ? profile.backgroundUrl
+          : resolveContentMediaUrl(profile.backgroundUrl);
       final subAccountId = profile.subAccountId.isNotEmpty
           ? profile.subAccountId
           : userId;
@@ -239,6 +251,7 @@ class UserDataNotifier extends Notifier<User?> {
           'ownerUserId': profile.ownerUserId,
           'subAccountId': profile.subAccountId,
           'subjectType': profile.subjectType,
+          'avatarVersion': profile.avatarVersion,
         },
       );
     } catch (_) {
@@ -287,6 +300,21 @@ final responsiveProvider =
     NotifierProvider<ResponsiveNotifier, ResponsiveState>(() {
       return ResponsiveNotifier();
     });
+
+final appResourceCacheProfileProvider = Provider<AppResourceCacheProfile>((
+  ref,
+) {
+  final responsiveState = ref.watch(responsiveProvider);
+  final capabilities = ref.watch(platformCapabilitiesProvider);
+  if (!capabilities.wideScreenLayout ||
+      responsiveState.breakpoint == AppBreakpoint.compact) {
+    return AppResourceCacheProfile.compact;
+  }
+  if (responsiveState.breakpoint == AppBreakpoint.expanded) {
+    return AppResourceCacheProfile.expanded;
+  }
+  return AppResourceCacheProfile.regular;
+});
 
 /// 聚合后的全局外观快照，供根入口和共享组件消费。
 final appearanceSnapshotProvider = Provider<AppearanceSnapshot>((ref) {
@@ -977,6 +1005,9 @@ class UserRelationshipStateNotifier extends Notifier<UserRelationshipState> {
     final raw = await _readPersistedInteractionMap(
       _userRelationshipStateStorageKey,
     );
+    if (!ref.mounted) {
+      return;
+    }
     if (raw == null) {
       return;
     }
@@ -1171,6 +1202,9 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     final raw = await _readPersistedInteractionMap(
       _postInteractionStateStorageKey,
     );
+    if (!ref.mounted) {
+      return;
+    }
     if (raw == null) {
       return;
     }
@@ -1423,4 +1457,3 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     );
   }
 }
-

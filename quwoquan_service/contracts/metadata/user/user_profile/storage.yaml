@@ -13,10 +13,12 @@ tables:
       - { name: logical_shard, type: INTEGER, constraints: [NOT_NULL], default: 0 }
       - { name: anonymous_retention_policy, type: VARCHAR(32), constraints: [NOT_NULL], default: "'preserve'" }
       - { name: phone, type: VARCHAR(64), constraints: [UNIQUE] }
-      - { name: nickname, type: VARCHAR(64), constraints: [UNIQUE, NOT_NULL] }
+      - { name: nickname, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: nickname_customized, type: BOOLEAN, constraints: [NOT_NULL], default: false }
       - { name: avatar_url, type: TEXT }
       - { name: avatar_asset_id, type: VARCHAR(64) }
       - { name: avatar_version, type: INTEGER, constraints: [NOT_NULL], default: 0 }
+      - { name: background_url, type: TEXT }
       - { name: bio, type: VARCHAR(500) }
       - { name: identity_tags, type: TEXT }
       - { name: gender, type: VARCHAR(16) }
@@ -51,6 +53,8 @@ tables:
       - { name: phone, type: VARCHAR(20) }
       - { name: email, type: VARCHAR(128) }
       - { name: avatar_url, type: TEXT }
+      - { name: avatar_version, type: INTEGER, constraints: [NOT_NULL], default: 0 }
+      - { name: background_url, type: TEXT }
       - { name: caller_ringtone_id, type: VARCHAR(64) }
       - { name: theme_mode_override, type: VARCHAR(16) }
       - { name: font_size_preset_override, type: VARCHAR(16) }

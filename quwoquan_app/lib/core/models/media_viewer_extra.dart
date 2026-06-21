@@ -131,44 +131,106 @@ class MediaViewerResult extends MediaViewerInteractionSnapshot {
 
 /// work browser / 沉浸式评论直达上下文。
 ///
-/// `openComments=true` 表示进入帖子后直接展开评论分屏；其余 id 用于恢复
-/// “查看原评论 / 在上下文中回复”的目标语义。
+/// `openComments=true` 表示进入帖子后直接展开评论分屏；`target*` 用于恢复
+/// “查看原评论 / 在上下文中定位”的目标语义，`replyToCommentId` 用于落地后
+/// 直接进入回复输入态。
+///
+/// 评论深链 query 参数与入口来源的唯一真相源即本类的 `query*` / `entrySource*`
+/// 常量与 [buildDeepLinkQuery]；所有入口（我的互动、我的评论等）必须复用，
+/// 禁止在各页面散落字面量或维护第二套方言。
 class MediaViewerCommentContext {
   const MediaViewerCommentContext({
     this.openComments = false,
-    this.commentId,
-    this.parentCommentId,
     this.replyToCommentId,
+    this.targetCommentId,
+    this.targetParentCommentId,
+    this.targetReplyId,
+    this.entrySource,
   });
 
+  /// 评论深链 query 参数键（单一方言唯一真相源）。
+  static const String queryOpenComments = 'openComments';
+  static const String queryEntrySource = 'commentEntrySource';
+  static const String queryTargetCommentId = 'targetCommentId';
+  static const String queryTargetParentCommentId = 'targetParentCommentId';
+  static const String queryTargetReplyId = 'targetReplyId';
+  static const String queryReplyToCommentId = 'replyToCommentId';
+
+  /// 评论深链入口来源（用于分析口径与落地 mode 判定）。
+  static const String entrySourceProfileInteraction = 'profile-interaction';
+  static const String entrySourceProfileComments = 'profile-comments';
+
   final bool openComments;
-  final String? commentId;
-  final String? parentCommentId;
+
+  /// 打开评论区后直接进入回复态的目标 id。
   final String? replyToCommentId;
+
+  /// 一级评论定位目标。
+  final String? targetCommentId;
+
+  /// 二级回复所属一级评论 id。
+  final String? targetParentCommentId;
+
+  /// 二级回复定位目标。
+  final String? targetReplyId;
+
+  /// 深链入口来源（见 entrySource* 常量）。
+  final String? entrySource;
+
+  /// 来自「我的互动 / 我的评论」等个人页深链，落地统一使用 profileInteraction
+  /// mode；entrySource 仍保留具体来源用于分析口径。
+  bool get usesProfileInteractionMode =>
+      entrySource == entrySourceProfileInteraction ||
+      entrySource == entrySourceProfileComments;
 
   bool get shouldOpen =>
       openComments ||
-      (commentId?.trim().isNotEmpty ?? false) ||
-      (parentCommentId?.trim().isNotEmpty ?? false) ||
-      (replyToCommentId?.trim().isNotEmpty ?? false);
+      (replyToCommentId?.trim().isNotEmpty ?? false) ||
+      (targetCommentId?.trim().isNotEmpty ?? false) ||
+      (targetParentCommentId?.trim().isNotEmpty ?? false) ||
+      (targetReplyId?.trim().isNotEmpty ?? false);
+
+  /// 构造评论深链 query（单一方言）。一级评论传 [targetCommentId]；二级回复传
+  /// [targetParentCommentId] + [targetReplyId]；需落地直接进入回复态时传
+  /// [replyToCommentId]。两个入口共用，禁止再各自拼字面量。
+  static Map<String, String> buildDeepLinkQuery({
+    required String entrySource,
+    String? targetCommentId,
+    String? targetParentCommentId,
+    String? targetReplyId,
+    String? replyToCommentId,
+  }) {
+    final query = <String, String>{
+      queryOpenComments: 'true',
+      queryEntrySource: entrySource,
+    };
+    final comment = targetCommentId?.trim() ?? '';
+    final parent = targetParentCommentId?.trim() ?? '';
+    final reply = targetReplyId?.trim() ?? '';
+    final replyTo = replyToCommentId?.trim() ?? '';
+    if (comment.isNotEmpty) query[queryTargetCommentId] = comment;
+    if (parent.isNotEmpty) query[queryTargetParentCommentId] = parent;
+    if (reply.isNotEmpty) query[queryTargetReplyId] = reply;
+    if (replyTo.isNotEmpty) query[queryReplyToCommentId] = replyTo;
+    return query;
+  }
 
   static MediaViewerCommentContext fromQueryParameters(
     Map<String, String> query,
   ) {
-    final openComments =
-        (query['openComments'] ?? '').trim().toLowerCase() == 'true';
-    final commentId = query['commentId']?.trim();
-    final parentCommentId = query['parentCommentId']?.trim();
-    final replyToCommentId = query['replyToCommentId']?.trim();
+    String? clean(String key) {
+      final value = query[key]?.trim();
+      return (value == null || value.isEmpty) ? null : value;
+    }
+
     return MediaViewerCommentContext(
-      openComments: openComments,
-      commentId: commentId?.isEmpty == true ? null : commentId,
-      parentCommentId: parentCommentId?.isEmpty == true
-          ? null
-          : parentCommentId,
-      replyToCommentId: replyToCommentId?.isEmpty == true
-          ? null
-          : replyToCommentId,
+      openComments:
+          (query[queryOpenComments] ?? '').trim().toLowerCase() == 'true',
+      replyToCommentId: clean(queryReplyToCommentId),
+      targetCommentId: clean(queryTargetCommentId),
+      targetParentCommentId: clean(queryTargetParentCommentId),
+      targetReplyId: clean(queryTargetReplyId),
+      entrySource: clean(queryEntrySource),
     );
   }
 }

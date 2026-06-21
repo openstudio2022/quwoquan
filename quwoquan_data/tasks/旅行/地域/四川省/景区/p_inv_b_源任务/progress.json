@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/四川省/景区/p_inv_b_源任务",
+  "updatedAt": "2026-06-20T18:10:06.520581+00:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/九寨沟"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

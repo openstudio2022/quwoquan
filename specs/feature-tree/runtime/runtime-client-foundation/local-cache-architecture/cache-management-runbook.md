@@ -34,26 +34,26 @@
 
 ## 测试要求
 
-### T1 静态
+### local_contract 静态
 
 - `object-cache-policy.yaml` 每个对象必须声明 `clear_policy`。
 - 设置页不得直接 import 或操作底层 cache manager/file/db。
 - 图片入口 allowlist 不得新增新债。
 
-### T2 单元/组件
+### local_contract 单元/组件
 
 - 清理临时图片后，post metadata 与头像 URL 仍存在。
 - 清理离线内容后，非 pinned post detail 被删除，收藏/最近阅读 post 保留。
 - 清理全部本地缓存后，草稿、待发送消息、outbox 仍存在。
 - 同一头像被多个对象引用时，只删除字节，不破坏对象引用。
 
-### T3 集成
+### api_integration 集成
 
 - 离线清理资源后恢复网络，资源按对象版本重新下载。
 - outbox 操作在清理后仍可重试并合并远端确认。
 - sync patch 到达时能刷新已被标记 stale 的对象。
 
-### T4 真机
+### user_acceptance 真机
 
 - `flutter run` 冷启动首页 feed，断网后仍显示最近 snapshot。
 - 连续滚动图文 feed，头像/封面不逐项闪烁重拉。

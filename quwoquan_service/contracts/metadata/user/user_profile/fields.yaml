@@ -71,14 +71,24 @@ entities:
 
       - name: nickname
         type: string
-        constraints: [UK, NOT_NULL]
+        constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
         recommend_feature: false
         search_field: true
-        description: 昵称
+        description: 昵称（显示名，允许重复，不再作为唯一标识；唯一性由 userId/subAccountId/userHandle 承担）
+
+      - name: nicknameCustomized
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        description: 用户是否手动修改过昵称；首次创建的系统默认昵称为 false，用户改名后置 true，端侧据此决定是否展示昵称编辑画笔
 
       - name: avatarUrl
         type: string
@@ -150,7 +160,7 @@ entities:
         ops_exposure: read
         recommend_feature: true
         tag_ref: true
-        description: 声明式用户兴趣（路径制 tagRef，真相源 publish/v1/tags）；与行为派生兴趣互补，用于兴趣维度交集与冷启动召回
+        description: 声明式用户兴趣（路径制 tagRef，真相源 publish/tags）；与行为派生兴趣互补，用于兴趣维度交集与冷启动召回
 
       - name: gender
         type: enum
@@ -341,6 +351,16 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
+
+      - name: avatarVersion
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        description: 子账号头像版本号；用于 persona 头像缓存失效与继承头像对齐
 
       - name: backgroundUrl
         type: string
@@ -1827,6 +1847,15 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: nicknameCustomized
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 是否手动修改过昵称；端侧据此决定本人主页是否展示昵称编辑画笔
 
       - name: avatarUrl
         type: string

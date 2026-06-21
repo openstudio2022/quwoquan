@@ -82,6 +82,44 @@ def test_unknown_entity_is_candidate_not_placeholder_homepage(tmp_path: Path, mo
     assert [row["mentionId"] for row in approved_sidecar["semanticMentions"]] == entity["mentionIds"]
 
 
+def test_extracted_tags_emit_tag_semantic_mentions(tmp_path: Path, monkeypatch) -> None:
+    """草稿 extractedTags → tag mention：已发布标签 published 可点击，未发布 pending_review 待治理。"""
+    monkeypatch.setattr(entity_extract, "entities_path", lambda *_args: tmp_path / "review_entities.json")
+    monkeypatch.setattr(entity_extract, "homepage_exists", lambda *_args: False)
+    published_refs = {"Topic/摄影/晨雾"}
+    monkeypatch.setattr(entity_extract, "tag_exists", lambda ref: ref in published_refs)
+    repository = CandidateRepository(tmp_path / "governance")
+    meta = {
+        "extractedEntities": [],
+        "extractedTags": [
+            {"label": "晨雾", "dimensionId": "Topic/摄影", "isNew": False},
+            {"label": "小众路线", "dimensionId": "Topic/旅行", "isNew": True},
+        ],
+    }
+    article = "清晨拍到了晨雾，这是一条小众路线。"
+    sidecar = entity_extract.build_entities_sidecar(
+        "task",
+        "batch",
+        "post:tag",
+        meta,
+        article_text=article,
+        candidate_repository=repository,
+    )
+    tags = {row["label"]: row for row in sidecar["tags"]}
+    assert tags["晨雾"]["ref"] == "Topic/摄影/晨雾"
+    assert tags["晨雾"]["published"] is True
+    assert tags["晨雾"]["governanceStatus"] == "published"
+    assert tags["小众路线"]["published"] is False
+    assert tags["小众路线"]["governanceStatus"] == "pending_review"
+
+    tag_mentions = [row for row in sidecar["semanticMentions"] if row["kind"] == "tag"]
+    assert {row["surface"] for row in tag_mentions} == {"晨雾", "小众路线"}
+    published_mention = next(row for row in tag_mentions if row["surface"] == "晨雾")
+    assert published_mention["status"] == "published"
+    assert published_mention["targetRef"] == "Topic/摄影/晨雾"
+    assert tags["晨雾"]["mentionIds"] == [published_mention["mentionId"]]
+
+
 def test_existing_offline_homepage_marks_mentions_offline(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(entity_extract, "entities_path", lambda *_args: tmp_path / "review_entities.json")
     monkeypatch.setattr(entity_extract, "homepage_exists", lambda *_args: True)

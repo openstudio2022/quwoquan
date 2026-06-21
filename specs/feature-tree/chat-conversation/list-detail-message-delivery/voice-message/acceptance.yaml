@@ -34,7 +34,7 @@ gwt_acceptance:
     - 合法录音通过 MediaUploadManager 上传并发送 type=audio 消息。
     - 发送成功后消息气泡可点击播放。
     done_when:
-    - 录音、上传、发送、消息展示、播放闭环在 Widget/Provider 测试和 T4 记录中均有证据。
+    - 录音、上传、发送、消息展示、播放闭环在 Widget/Provider 测试和 user_acceptance 记录中均有证据。
     edge_cases:
     - 快速按下后立刻松手不会发送。
     - 振幅采样单帧失败不打断录音。
@@ -45,25 +45,46 @@ gwt_acceptance:
     performance_points:
     - 录音 HUD 只保留固定窗口采样，长录音不无限增长 UI 状态。
     - 强网录音完成到发送方可播放目标不超过 3 秒。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T4_device_journey
-      supporting:
-      - T1_contract
-      - T3_app_api_integration
     tests:
       planned:
-      - quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
-      - quwoquan_app/test/ui/chat/pages/chat_conversation_page_composer_test.dart
-      - runtime/reports/voice_message_t4_evidence.md
+      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      - file: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
+      - file: quwoquan_app/test/ui/chat/pages/chat_conversation_page_composer_test.dart
+      - file: runtime/reports/voice_message_t4_evidence.md
       recorded:
-      - quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
-      - quwoquan_app/test/ui/chat/pages/chat_conversation_page_composer_test.dart
-      - runtime/reports/voice_message_t4_evidence.md
+      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      - file: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
+      - file: quwoquan_app/test/ui/chat/pages/chat_conversation_page_composer_test.dart
+      - file: runtime/reports/voice_message_t4_evidence.md
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.chat_conversation.list_detail_message_delivery.voice_message.gwt1_local_contract
+        envs: &id001
+        - local
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.chat_conversation.list_detail_message_delivery.voice_message.device_journey
+        envs: &id002
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.chat_conversation.list_detail_message_delivery.voice_message.contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.chat_conversation.list_detail_message_delivery.voice_message.gwt1_api_integration
+        envs: &id003
+        - beta
+        - gamma
+    notes: []
   GWT2:
     title: 上滑取消、页面退出和并发录音不会产生幽灵录音或重复发送
     given:
@@ -77,28 +98,37 @@ gwt_acceptance:
     - 页面退出或路由切换释放录音资源。
     - 同一时刻最多一个 VoiceRecorder 处于 recording，不重复发送。
     done_when:
-    - 取消、释放资源、重复按下均有 T2 测试覆盖。
+    - 取消、释放资源、重复按下均有 local_contract 测试覆盖。
     edge_cases:
     - Pointer cancel 触发取消。
     - onStartRecord 异步返回前用户已松手时取消录音。
     contract_refs: []
     performance_points:
     - 快速连按不创建第二个录音任务。
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T4_device_journey
     tests:
       planned:
-      - quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - quwoquan_app/test/ui/chat/pages/chat_conversation_page_composer_test.dart
-      - quwoquan_app/test/ui/chat/providers/voice_offline_queue_test.dart
+      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      - file: quwoquan_app/test/ui/chat/pages/chat_conversation_page_composer_test.dart
+      - file: quwoquan_app/test/ui/chat/providers/voice_offline_queue_test.dart
       recorded:
-      - quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - quwoquan_app/test/ui/chat/providers/voice_offline_queue_test.dart
-      - runtime/reports/voice_message_t4_evidence.md
+      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      - file: quwoquan_app/test/ui/chat/providers/voice_offline_queue_test.dart
+      - file: runtime/reports/voice_message_t4_evidence.md
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.chat_conversation.list_detail_message_delivery.voice_message.gwt2_local_contract
+        envs: *id001
+      supporting:
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.chat_conversation.list_detail_message_delivery.voice_message.device_journey
+        envs: *id002
+    notes: []
   GWT3:
     title: 权限与失败统一映射到临时或永久恢复动作
     given:
@@ -119,25 +149,34 @@ gwt_acceptance:
     contract_refs:
     - specs/ux/error-and-permission-semantics.md
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_static_contract
     tests:
       planned:
-      - quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
-      - quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
-      - quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
-      - runtime/reports/voice_message_t4_evidence.md
+      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      - file: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
+      - file: quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
+      - file: quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
+      - file: runtime/reports/voice_message_t4_evidence.md
       recorded:
-      - quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
-      - quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
-      - quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
-      - runtime/reports/voice_message_t4_evidence.md
+      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      - file: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
+      - file: quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
+      - file: quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
+      - file: runtime/reports/voice_message_t4_evidence.md
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.chat_conversation.list_detail_message_delivery.voice_message.gwt3_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.chat_conversation.list_detail_message_delivery.voice_message.gwt3_local_contract
+        envs: *id001
+    notes: []
   GWT4:
     title: audio 消息契约与端云 media payload 一致
     given:
@@ -148,7 +187,7 @@ gwt_acceptance:
     - media payload 包含 url、mediaId、mimeType、fileSizeBytes、durationMs、waveform、codec。
     - MessageType.audio、mediaUrl、MessageSent payload 与 metadata/codegen 一致。
     done_when:
-    - T1 contract 和端云契约测试覆盖 audio 消息字段。
+    - local_contract contract 和端云契约测试覆盖 audio 消息字段。
     edge_cases:
     - 上传失败不发送 audio 消息。
     - 空 cdnUrl 不展示为可播放成功态。
@@ -158,24 +197,37 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/_shared/types.yaml#MessageType
     performance_points:
     - waveform 做采样压缩，避免 120 秒录音产生超大 payload。
-    evidence:
-      primary:
-      - T1_contract
-      - T3_app_api_integration
-      supporting:
-      - T2_module_interaction
     tests:
       planned:
-      - quwoquan_app/test/cloud/chat/message/contract/send_message_request_contract_test.dart
-      - quwoquan_app/test/cloud/chat/message/contract/message_dto_contract_test.dart
-      - quwoquan_service/runtime/media/media_test.go
-      - quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
+      - file: quwoquan_app/test/cloud/chat/message/contract/send_message_request_contract_test.dart
+      - file: quwoquan_app/test/cloud/chat/message/contract/message_dto_contract_test.dart
+      - file: quwoquan_service/runtime/media/media_test.go
+      - file: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
       recorded:
-      - quwoquan_app/test/cloud/chat/message/contract/send_message_request_contract_test.dart
-      - quwoquan_app/test/cloud/chat/message/contract/message_dto_contract_test.dart
-      - quwoquan_service/runtime/media/media_test.go
-      - quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
+      - file: quwoquan_app/test/cloud/chat/message/contract/send_message_request_contract_test.dart
+      - file: quwoquan_app/test/cloud/chat/message/contract/message_dto_contract_test.dart
+      - file: quwoquan_service/runtime/media/media_test.go
+      - file: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.chat_conversation.list_detail_message_delivery.voice_message.contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt4_api_integration
+        cases:
+        - api_integration.chat_conversation.list_detail_message_delivery.voice_message.gwt4_api_integration
+        envs: *id003
+      supporting:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.chat_conversation.list_detail_message_delivery.voice_message.gwt4_local_contract
+        envs: *id001
+    notes: []
   GWT5:
     title: 播放、缓存和并发播放状态可用可靠
     given:
@@ -188,28 +240,37 @@ gwt_acceptance:
     - 播放进度驱动气泡波形。
     - 缓存失败降级为流式播放；不可播放失败显示统一错误提示。
     done_when:
-    - 播放切换、失败、缓存降级均有测试或 T4 证据。
+    - 播放切换、失败、缓存降级均有测试或 user_acceptance 证据。
     edge_cases:
     - 消息撤回或删除时停止对应播放。
     - URL 空时气泡不可播放并显示发送中/不可播放态。
     contract_refs: []
     performance_points:
     - 播放进度更新不导致消息列表全量重建或掉帧。
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T4_device_journey
     tests:
       planned:
-      - quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
-      - quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
-      - runtime/reports/voice_message_t4_evidence.md
+      - file: quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
+      - file: quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
+      - file: runtime/reports/voice_message_t4_evidence.md
       recorded:
-      - quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
-      - quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
-      - runtime/reports/voice_message_t4_evidence.md
+      - file: quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
+      - file: quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
+      - file: runtime/reports/voice_message_t4_evidence.md
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt5_local_contract
+        cases:
+        - local_contract.chat_conversation.list_detail_message_delivery.voice_message.gwt5_local_contract
+        envs: *id001
+      supporting:
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.chat_conversation.list_detail_message_delivery.voice_message.device_journey
+        envs: *id002
+    notes: []
   GWT6:
     title: 评论和回复入口在 ASR 未支持时不展示语音能力
     given:
@@ -228,21 +289,34 @@ gwt_acceptance:
     contract_refs:
     - specs/feature-tree/global-search-experience/cross-domain-search-journey/recent-search-sync-and-voice-asr/spec.md
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_static_contract
-      - T4_device_journey
     tests:
       planned:
-      - quwoquan_app/test/components/comment_system/comment_input_overlay_test.dart
-      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/components/comment_system/comment_input_overlay_test.dart
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
       recorded:
-      - quwoquan_app/test/components/comment_system/comment_input_overlay_test.dart
-      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
-      - runtime/reports/voice_message_t4_evidence.md
+      - file: quwoquan_app/test/components/comment_system/comment_input_overlay_test.dart
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: runtime/reports/voice_message_t4_evidence.md
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt6_local_contract
+        cases:
+        - local_contract.chat_conversation.list_detail_message_delivery.voice_message.gwt6_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: gwt6_local_contract
+        cases:
+        - local_contract.chat_conversation.list_detail_message_delivery.voice_message.gwt6_local_contract
+        envs: *id001
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.chat_conversation.list_detail_message_delivery.voice_message.device_journey
+        envs: *id002
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

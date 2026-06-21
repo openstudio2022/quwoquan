@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_25910256318e81b2",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "庐山风景名胜区·行前指南：诗画九江，我终于来到诗词里的庐山",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer",
+    "agentRunId": "run-6440a210-38ce-4639-b5e1-62864ad8bd31",
+    "agentId": "agent-8b5ed86a-cf40-45b8-8e37-8aeb8ba78509",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/庐山风景名胜区"
+    ],
+    "articleDigest": "sha256:f28a5ca9ec507eb4039e7e84eff8ba315bfe80dc6ac5a412d2e741306180abe2"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "庐山风景名胜区·行前指南：诗画九江，我终于来到诗词里的庐山",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:9a87416f88d2b064c1bbdc7cf19975eed6e85fb1678bebc062d6456f80c495f0",
+    "writingPackSha256": "sha256:cc15e3ea95de50a0232edc15b8d7419d5f5f8ca6b13a8b4e231201718dff9d30",
+    "sourceBundleSha256": "sha256:aa04b5971c8cc278d54c273348d39c13669a247033aa1f9789cb8cf46ccc2f56",
+    "draftSha256": "sha256:29d8dadae1938fc1175b634143d1e70d89426dae4bef2a73192974e37d1d286b"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/庐山风景名胜区/1.download/sources/03.qunar_guide_candidate_0d1ef411fc8c191c/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7887582"
+    },
+    {
+      "path": "entities/地点/景区/庐山风景名胜区/1.download/sources/16.qunar_guide_candidate_25910256318e81b2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7875177"
+    },
+    {
+      "path": "entities/地点/景区/庐山风景名胜区/1.download/sources/46.qunar_guide_candidate_5df3de5ed1501f8d/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7871708"
+    },
+    {
+      "path": "entities/地点/景区/庐山风景名胜区/1.download/sources/96.qunar_guide_candidate_dce216df50bbc5f7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7900464"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/庐山风景名胜区/1.download/sources/16.qunar_guide_candidate_25910256318e81b2/source.md",
+    "entities/地点/景区/庐山风景名胜区/1.download/sources/46.qunar_guide_candidate_5df3de5ed1501f8d/source.md",
+    "entities/地点/景区/庐山风景名胜区/1.download/sources/96.qunar_guide_candidate_dce216df50bbc5f7/source.md"
+  ]
+}

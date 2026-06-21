@@ -1821,6 +1821,15 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get expandMoreReplies => '展开更多回复';
+
+  @override
+  String get expandFullText => '展开全文';
+
+  @override
+  String get collapseReplies => '收起';
+
+  @override
   String get replyToPrefix => ' 回复 ';
 
   @override

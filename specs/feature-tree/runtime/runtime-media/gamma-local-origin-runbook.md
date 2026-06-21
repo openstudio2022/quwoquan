@@ -6,7 +6,7 @@
 
 ## 适用边界
 
-- 仅用于 `gamma-pre` 手工联调、T3/T4 验证。
+- 仅用于 `gamma-pre` 手工联调、api_integration/user_acceptance 验证。
 - 不用于长期无人值守 CI。
 - 不作为正式商用架构。
 

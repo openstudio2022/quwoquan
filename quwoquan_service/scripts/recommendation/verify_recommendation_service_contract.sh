@@ -43,4 +43,11 @@ else
   echo "[verify] WARN: python3 not found — skipping verify_intersection_kind_registry.py"
 fi
 
+# 影响力 helpType 注册表单一真相源（§23 去桥接）：registry ↔ Go 表 ↔ Dart 产物 ↔ resolver ↔ 消费方 ↔ fixtures。
+if command -v python3 >/dev/null 2>&1; then
+  python3 "$ROOT/quwoquan_service/scripts/recommendation/verify_impact_help_type_registry.py" || exit 1
+else
+  echo "[verify] WARN: python3 not found — skipping verify_impact_help_type_registry.py"
+fi
+
 echo "[verify] OK: recommendation-service contract checked"

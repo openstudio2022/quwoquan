@@ -252,6 +252,7 @@ class ConversationSyncService {
       case 'user.avatar.updated':
         final userId = patch.payload['userId']?.toString() ?? '';
         final avatarUrl = patch.payload['avatarUrl']?.toString() ?? '';
+        final avatarVersion = (patch.payload['avatarVersion'] as num?)?.toInt();
         if (userId.isEmpty || avatarUrl.isEmpty) {
           throw StateError('user avatar patch missing userId or avatarUrl');
         }
@@ -259,6 +260,7 @@ class ConversationSyncService {
           namespace: namespace,
           userId: userId,
           avatarUrl: avatarUrl,
+          avatarVersion: avatarVersion,
         );
         return;
       default:

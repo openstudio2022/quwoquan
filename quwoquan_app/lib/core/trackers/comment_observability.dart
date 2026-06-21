@@ -9,6 +9,10 @@ class CommentMetricNames {
   static const String replyExpandMs = 'comment_reply_expand_ms';
   static const String reactionConfirmMs = 'comment_reaction_confirm_ms';
   static const String pollingRefreshMs = 'comment_polling_refresh_ms';
+  static const String pinConfirmMs = 'comment_pin_confirm_ms';
+
+  /// 评论计数可解释增量查询（GetCommentCountsDelta）耗时。
+  static const String countsDeltaMs = 'comment_counts_delta_ms';
 
   const CommentMetricNames._();
 }
@@ -17,15 +21,23 @@ class CommentEventNames {
   static const String surfaceExpose = 'comment_surface_expose';
   static const String sortChanged = 'comment_sort_changed';
   static const String replyExpanded = 'comment_reply_expanded';
+  static const String replyCollapsed = 'comment_reply_collapsed';
   static const String submitSucceeded = 'comment_submit_succeeded';
   static const String submitFailed = 'comment_submit_failed';
   static const String reactionChanged = 'comment_reaction_changed';
+
+  /// 评论置顶/取消置顶（仅内容作者）。reaction 字段复用为 pin/unpin 区分。
+  static const String pinChanged = 'comment_pin_changed';
   static const String attachmentAdded = 'comment_attachment_added';
   static const String mentionAdded = 'comment_mention_added';
   static const String reported = 'comment_reported';
   static const String newNoticeClicked = 'comment_new_notice_clicked';
   static const String surfaceClosed = 'comment_surface_closed';
   static const String listCacheHit = 'comment_list_cache_hit';
+
+  /// 评论深链：从入口（如「我的-互动」）跳转打开评论区，或评论列表定位高亮命中目标。
+  /// entrySource 区分入口（profile-interaction）与落地（deeplink-highlight）。
+  static const String deeplinkOpened = 'comment_deeplink_opened';
 
   const CommentEventNames._();
 }
@@ -77,6 +89,7 @@ class CommentObservability {
     int? mentionCount,
     int? itemCount,
     String? reaction,
+    String? result,
   }) {
     unawaited(
       _analytics.trackEvent(
@@ -96,6 +109,7 @@ class CommentObservability {
             if (mentionCount != null) 'mentionCount': mentionCount,
             if (itemCount != null) 'itemCount': itemCount,
             if (reaction != null) 'reaction': reaction,
+            if (result != null) 'result': result,
           },
         ),
       ),

@@ -39,6 +39,7 @@ import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.da
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_app/core/media/media_aspect_ratio.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
@@ -53,6 +54,7 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_layout_policy.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_video_autoplay_policy.dart';
+import 'package:quwoquan_app/ui/discovery/models/home_feed_video_focus_coordinator.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
@@ -64,8 +66,10 @@ part 'home_multi_form_feed_states.dart';
 part 'home_multi_form_feed_media.dart';
 part 'home_multi_form_feed_media_grid.dart';
 part 'home_multi_form_feed_actions.dart';
+
 const double _feedCardVerticalPadding = AppSpacing.fourteen;
-const double _feedCardSectionGap = DiscoveryFeedSpacing.homeFeedCardSectionGapCompact;
+const double _feedCardSectionGap =
+    DiscoveryFeedSpacing.homeFeedCardSectionGapCompact;
 const double _feedToolbarIconSize = AppSpacing.twenty;
 const double _feedMediaGap = AppSpacing.xs;
 typedef _HomeFeedItemBuilder =
@@ -257,12 +261,72 @@ class HomeMultiFormFeed extends ConsumerWidget {
           key: ValueKey<String>('feed-patch-reporter-$index'),
           postId: dto.id,
           child: _FollowingArticleCard(
+            item: dto,
+            isDark: isDark,
+            summaryLineLimit:
+                _followingArticleDistributionProfile.summaryLineLimit,
+            sourceCircleName: _resolveSourceCircleName(ref, dto.id),
+            onTap: () {
+              final feedSession = ref.read(feedSessionProvider.notifier);
+              ref
+                  .read(contentBehaviorTrackerProvider)
+                  .trackClick(
+                    dto.id,
+                    contentType: dto.identity,
+                    feedRequestId: feedSession.currentFeedRequestId,
+                    position: index,
+                    referralSource: ReferralSource.organicFeed,
+                    channelId: channelId,
+                    rankingVersion: feedSession.currentRankingVersion,
+                  );
+              onPostTap?.call(dto, 0, feedPosts: feedPosts);
+            },
+            onMoreTap: () {
+              if (onMoreTap != null) {
+                onMoreTap!(dto);
+              } else {
+                _showMoreActions(context, ref, dto);
+              }
+            },
+          ),
+        );
+      }
+      return _FeedPatchVisibilityReporter(
+        key: ValueKey<String>('feed-patch-reporter-$index'),
+        postId: dto.id,
+        child: _HomeRelationPostCard(
+          cardContainerKey: ValueKey<String>('home-feed-card-$index'),
+          moreButtonKey: ValueKey<String>('home-feed-more-$index'),
+          wideLayout: isMultiColumn,
           item: dto,
           isDark: isDark,
-          summaryLineLimit:
-              _followingArticleDistributionProfile.summaryLineLimit,
+          isLiked: effectivePostLiked(ref, dto.id),
+          likeCount: effectivePostLikeCount(
+            ref,
+            dto.id,
+            fallback: dto.likeCount,
+          ),
+          shareCount: effectivePostShareCount(
+            ref,
+            dto.id,
+            fallback: dto.shareCount,
+          ),
+          commentCount: effectivePostCommentCount(
+            ref,
+            dto.id,
+            fallback: dto.commentCount,
+          ),
           sourceCircleName: _resolveSourceCircleName(ref, dto.id),
-          onTap: () {
+          inlineImageCarousel: effectiveInlineCarousel,
+          videoScrollSignal: videoScrollSignal,
+          isFocused: index == 0,
+          onUserTap: (id) => onUserTap(
+            id,
+            avatarUrl: dto.avatarUrl,
+            displayName: dto.displayName,
+            backgroundUrl: dto.authorBackgroundUrl,
+          ),
+          onImageTap: (imgIndex) {
             final feedSession = ref.read(feedSessionProvider.notifier);
             ref
                 .read(contentBehaviorTrackerProvider)
@@ -275,103 +339,60 @@ class HomeMultiFormFeed extends ConsumerWidget {
                   channelId: channelId,
                   rankingVersion: feedSession.currentRankingVersion,
                 );
-            onPostTap?.call(dto, 0, feedPosts: feedPosts);
+            if (!(effectiveDisableViewerOnTap && dto.hasImages)) {
+              onPostTap?.call(dto, imgIndex, feedPosts: feedPosts);
+            }
           },
-          onMoreTap: () {
+          onCommentTap: () {
+            CommentViewer.showModal(
+              context: context,
+              postId: dto.id,
+              onShareTap: () => _showShare(
+                context,
+                ref,
+                dto,
+                enableIdentityTemplate: ref.read(
+                  contentFeatureFlagProvider('enable_identity_share_template'),
+                ),
+              ),
+            );
+          },
+          onShareTap: () => _showShare(
+            context,
+            ref,
+            dto,
+            enableIdentityTemplate: ref.read(
+              contentFeatureFlagProvider('enable_identity_share_template'),
+            ),
+          ),
+          onLikeTap: () {
+            runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+              final wasLiked = effectivePostLiked(ref, dto.id);
+              final currentLikeCount = effectivePostLikeCount(
+                ref,
+                dto.id,
+                fallback: dto.likeCount,
+              );
+              final nextLiked = !wasLiked;
+              final nextLikeCount = wasLiked
+                  ? (currentLikeCount - 1).clamp(0, 1 << 31).toInt()
+                  : currentLikeCount + 1;
+              syncPostLikeIntent(
+                ref,
+                postId: dto.id,
+                previousLiked: wasLiked,
+                isLiked: nextLiked,
+                likeCount: nextLikeCount,
+              );
+            });
+          },
+          onMoreTap: (cardWidth) {
             if (onMoreTap != null) {
               onMoreTap!(dto);
             } else {
-              _showMoreActions(context, ref, dto);
+              _showMoreActions(context, ref, dto, panelMaxWidth: cardWidth);
             }
           },
-          ),
-        );
-      }
-      return _FeedPatchVisibilityReporter(
-        key: ValueKey<String>('feed-patch-reporter-$index'),
-        postId: dto.id,
-        child: _HomeRelationPostCard(
-        cardContainerKey: ValueKey<String>('home-feed-card-$index'),
-        moreButtonKey: ValueKey<String>('home-feed-more-$index'),
-        wideLayout: isMultiColumn,
-        item: dto,
-        isDark: isDark,
-        isLiked: effectivePostLiked(ref, dto.id),
-        likeCount: effectivePostLikeCount(ref, dto.id, fallback: dto.likeCount),
-        shareCount: effectivePostShareCount(
-          ref,
-          dto.id,
-          fallback: dto.shareCount,
-        ),
-        commentCount: effectivePostCommentCount(
-          ref,
-          dto.id,
-          fallback: dto.commentCount,
-        ),
-        sourceCircleName: _resolveSourceCircleName(ref, dto.id),
-        inlineImageCarousel: effectiveInlineCarousel,
-        videoScrollSignal: videoScrollSignal,
-        isFocused: index == 0,
-        onUserTap: (id) => onUserTap(
-          id,
-          avatarUrl: dto.avatarUrl,
-          displayName: dto.displayName,
-          backgroundUrl: dto.authorBackgroundUrl,
-        ),
-        onImageTap: (imgIndex) {
-          final feedSession = ref.read(feedSessionProvider.notifier);
-          ref
-              .read(contentBehaviorTrackerProvider)
-              .trackClick(
-                dto.id,
-                contentType: dto.identity,
-                feedRequestId: feedSession.currentFeedRequestId,
-                position: index,
-                referralSource: ReferralSource.organicFeed,
-                channelId: channelId,
-                rankingVersion: feedSession.currentRankingVersion,
-              );
-          if (!(effectiveDisableViewerOnTap && dto.hasImages)) {
-            onPostTap?.call(dto, imgIndex, feedPosts: feedPosts);
-          }
-        },
-        onCommentTap: () {
-          CommentViewer.showModal(context: context, postId: dto.id);
-        },
-        onShareTap: () => _showShare(
-          context,
-          ref,
-          dto,
-          enableIdentityTemplate: ref.read(
-            contentFeatureFlagProvider('enable_identity_share_template'),
-          ),
-        ),
-        onLikeTap: () {
-          runWhenLoggedIn(ref, context, AuthGateReason.like, () {
-            final wasLiked = effectivePostLiked(ref, dto.id);
-            final currentLikeCount = effectivePostLikeCount(
-              ref,
-              dto.id,
-              fallback: dto.likeCount,
-            );
-            final nextLikeCount = wasLiked
-                ? (currentLikeCount - 1).clamp(0, 1 << 31).toInt()
-                : currentLikeCount + 1;
-            syncPostLikeIntent(
-              ref,
-              postId: dto.id,
-              isLiked: !wasLiked,
-              likeCount: nextLikeCount,
-            );
-          });
-        },
-        onMoreTap: (cardWidth) {
-          if (onMoreTap != null) {
-            onMoreTap!(dto);
-          } else {
-            _showMoreActions(context, ref, dto, panelMaxWidth: cardWidth);
-          }
-        },
         ),
       );
     }
@@ -692,4 +713,3 @@ class HomeMultiFormFeed extends ConsumerWidget {
 
 /// 多列瀑布每段卡数：段尾由 sliver 边界天然两列齐平，段间可插入交集模块。
 const int _kFeedSegmentSize = 10;
-

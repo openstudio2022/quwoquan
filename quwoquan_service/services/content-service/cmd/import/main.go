@@ -17,8 +17,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -205,6 +207,15 @@ func sourceHash(v any) string {
 	return hex.EncodeToString(sum[:])
 }
 
+func RuntimePostID(postRef string) string {
+	ref := strings.TrimSpace(postRef)
+	if ref == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte("qwq-content-post:" + ref))
+	return "data_post_" + hex.EncodeToString(sum[:])
+}
+
 func releaseFields(opts ImportOptions, now time.Time, lifecycleStatus string) bson.M {
 	return bson.M{
 		"releaseId":            opts.ReleaseID,
@@ -225,6 +236,17 @@ func desiredPostRefs(posts []PostDoc) []string {
 	return refs
 }
 
+func desiredRuntimePostIDs(posts []PostDoc) []string {
+	ids := make([]string, 0, len(posts))
+	for _, p := range posts {
+		id := RuntimePostID(p.PostRef)
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 func desiredEntityRefs(entities []EntityDoc) []string {
 	refs := make([]string, 0, len(entities))
 	for _, e := range entities {
@@ -239,6 +261,10 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 	opts = NormalizeImportOptions(opts)
 	n := 0
 	for _, p := range posts {
+		postID := RuntimePostID(p.PostRef)
+		if postID == "" {
+			return n, fmt.Errorf("postRef is required to derive runtime postId")
+		}
 		newHash := sourceHash(p)
 		runtimeEntityRefs := p.NormalizedEntityRefs
 		if len(runtimeEntityRefs) == 0 {
@@ -252,7 +278,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			summary = p.Body
 		}
 		doc := bson.M{
-			"postRef": p.PostRef, "contentType": p.ContentType, "title": p.Title,
+			"postRef": p.PostRef, "postId": postID, "contentType": p.ContentType, "title": p.Title,
 			"angle": p.Angle, "seq": p.Seq, "entityRefs": runtimeEntityRefs, "tagRefs": p.TagRefs,
 			"semanticMentions":      p.SemanticMentions,
 			"authorId":              p.AuthorID,
@@ -285,9 +311,12 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 		for k, v := range releaseFields(opts, now, "active") {
 			doc[k] = v
 		}
+		if err := migrateImportedPostIdentity(ctx, coll, p.PostRef, postID, opts); err != nil {
+			return n, err
+		}
 		if _, err := coll.UpdateOne(ctx,
 			bson.M{"postRef": p.PostRef},
-			bson.M{"$set": doc, "$setOnInsert": bson.M{"_id": p.PostRef}},
+			bson.M{"$set": doc, "$setOnInsert": bson.M{"_id": postID}},
 			options.UpdateOne().SetUpsert(true),
 		); err != nil {
 			return n, err
@@ -295,6 +324,33 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 		n++
 	}
 	return n, nil
+}
+
+func migrateImportedPostIdentity(ctx context.Context, coll *mongo.Collection, postRef string, runtimeID string, opts ImportOptions) error {
+	var existing struct {
+		ID          string `bson:"_id"`
+		SourceOwner string `bson:"sourceOwner"`
+	}
+	err := coll.FindOne(ctx,
+		bson.M{"postRef": postRef},
+		options.FindOne().SetProjection(bson.M{"_id": 1, "sourceOwner": 1}),
+	).Decode(&existing)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil
+		}
+		return err
+	}
+	if existing.ID == "" || existing.ID == runtimeID {
+		return nil
+	}
+	if existing.SourceOwner != "" && existing.SourceOwner != opts.SourceOwner {
+		return fmt.Errorf("refuse to migrate postRef %q owned by %q while importing owner %q", postRef, existing.SourceOwner, opts.SourceOwner)
+	}
+	if _, err := coll.DeleteOne(ctx, bson.M{"postRef": postRef, "_id": existing.ID}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // contentSourceChanged 判断目标文档相对新内容 hash 是否发生实质变更。
@@ -440,7 +496,7 @@ func importedMediaFields(assets []AssetManifestItem) ([]string, []bson.M, string
 }
 
 // UpsertDiscoveryFeed 把发布主线内容同写发现流 ReadModel（rm_discovery_feed）。
-// postId 用稳定 postRef；conditionProfile 取首个命中实体的画像冗余。
+// postId 用运行时安全 ID；postRef 保留发布证据引用；conditionProfile 取首个命中实体的画像冗余。
 // status/visibility 固定 published/public（冷启动内容均为公开发布），保证召回可见。
 // authorId/coverUrl 由 manifest 契约补齐（P1 produce 侧）后再透传；缺省留空不影响 tag/hot/explore 召回。
 func UpsertDiscoveryFeed(ctx context.Context, coll *mongo.Collection, posts []PostDoc, condByEntity map[string]map[string]any, now time.Time) (int, error) {
@@ -451,6 +507,10 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 	opts = NormalizeImportOptions(opts)
 	n := 0
 	for _, p := range posts {
+		postID := RuntimePostID(p.PostRef)
+		if postID == "" {
+			return n, fmt.Errorf("postRef is required to derive discovery feed postId")
+		}
 		var cond map[string]any
 		runtimeEntityRefs := p.NormalizedEntityRefs
 		if len(runtimeEntityRefs) == 0 {
@@ -464,7 +524,8 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 		}
 		newHash := sourceHash(p)
 		set := bson.M{
-			"postId":                p.PostRef,
+			"postId":                postID,
+			"postRef":               p.PostRef,
 			"title":                 p.Title,
 			"contentType":           p.ContentType,
 			"contentIdentity":       "work",
@@ -502,8 +563,11 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 		for k, v := range releaseFields(opts, now, "active") {
 			set[k] = v
 		}
+		if err := removeLegacyDiscoveryFeedIdentity(ctx, coll, p.PostRef, postID, opts); err != nil {
+			return n, err
+		}
 		if _, err := coll.UpdateOne(ctx,
-			bson.M{"postId": p.PostRef},
+			bson.M{"postId": postID},
 			bson.M{"$set": set, "$setOnInsert": bson.M{
 				"likeCount": int64(0), "commentCount": int64(0),
 				"viewCount": int64(0), "recScore": 0.0,
@@ -517,12 +581,27 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 	return n, nil
 }
 
+func removeLegacyDiscoveryFeedIdentity(ctx context.Context, coll *mongo.Collection, postRef string, runtimeID string, opts ImportOptions) error {
+	filter := bson.M{"postId": postRef}
+	if opts.SourceOwner != "" {
+		filter["sourceOwner"] = opts.SourceOwner
+	}
+	res, err := coll.DeleteOne(ctx, filter)
+	if err != nil {
+		return err
+	}
+	if res.DeletedCount > 0 {
+		return nil
+	}
+	return nil
+}
+
 func ApplyMissingFeedPolicy(ctx context.Context, coll *mongo.Collection, posts []PostDoc, now time.Time, opts ImportOptions) (int64, error) {
 	opts = NormalizeImportOptions(opts)
 	if !missingPolicyEnabled(opts) || opts.DeletePolicy == "none" {
 		return 0, nil
 	}
-	filter := bson.M{"sourceOwner": opts.SourceOwner, "postId": bson.M{"$nin": desiredPostRefs(posts)}}
+	filter := bson.M{"sourceOwner": opts.SourceOwner, "postId": bson.M{"$nin": desiredRuntimePostIDs(posts)}}
 	if opts.DeletePolicy == "hard-delete" {
 		res, err := coll.DeleteMany(ctx, filter)
 		if err != nil {

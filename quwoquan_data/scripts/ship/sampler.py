@@ -99,11 +99,40 @@ def _entity_bucket(rec: Mapping[str, Any]) -> str:
     return f"{rec.get('domain', '')}__{rec.get('etype', '')}"
 
 
+def _normalize_entity_ref(raw_ref: Any) -> str:
+    raw = str(raw_ref or "").strip()
+    if not raw:
+        return ""
+    parts = [part for part in raw.strip("/").split("/") if part]
+    if parts and parts[0] == "entity":
+        parts = parts[1:]
+    if len(parts) >= 3:
+        return "/".join(parts[:3])
+    return "/".join(parts)
+
+
+def _post_entity_refs(post: Mapping[str, Any]) -> list[str]:
+    refs: list[str] = []
+    for key in ("entityRef", "normalizedEntityRef"):
+        value = post.get(key)
+        if value:
+            refs.append(str(value))
+    for key in ("entityRefs", "normalizedEntityRefs"):
+        for value in post.get(key) or []:
+            if value:
+                refs.append(str(value))
+    return refs
+
+
 def build_sample_bundle(
     env: str,
     manifest: Mapping[str, Any],
     posts: Sequence[Mapping[str, Any]],
     entities: Sequence[Mapping[str, Any]],
+    *,
+    forced_post_refs: Sequence[str] | None = None,
+    forced_entity_refs: Sequence[str] | None = None,
+    isolate_forced_sample: bool = False,
 ) -> dict[str, Any]:
     envs = manifest.get("environments") or {}
     if env not in envs:
@@ -132,18 +161,47 @@ def build_sample_bundle(
         ref_key="entityRef",
         bucket_key=_entity_bucket,
     )
+    known_posts = {str(p.get("postRef")) for p in posts if p.get("postRef")}
+    known_entity_by_ref = {
+        _normalize_entity_ref(e.get("entityRef")): str(e.get("entityRef")).strip()
+        for e in entities
+        if _normalize_entity_ref(e.get("entityRef"))
+    }
+    known_entities = set(known_entity_by_ref.values())
+    forced_posts = sorted(
+        {
+            str(ref).strip()
+            for ref in (forced_post_refs or [])
+            if str(ref).strip() and str(ref).strip() in known_posts
+        }
+    )
+    forced_entities = sorted(
+        {
+            known_entity_by_ref.get(_normalize_entity_ref(ref), _normalize_entity_ref(ref))
+            for ref in (forced_entity_refs or [])
+            if _normalize_entity_ref(ref) in known_entity_by_ref
+        }
+    )
+    # 受控发布可显式把当前批次对象纳入环境样本。默认仍保留环境采样；
+    # isolate_forced_sample 用于百/千级试跑，避免历史 publish 主线污染样本。
+    if isolate_forced_sample:
+        post_refs = forced_posts
+        entity_refs = forced_entities
+    else:
+        post_refs = sorted(set(post_refs) | set(forced_posts))
+        entity_refs = sorted(set(entity_refs) | set(forced_entities))
+
     # 引用闭包：post 一旦进入环境，所引用且已发布的 entity 必须同批进入。
     # 否则内容详情、实体主页和推荐条件画像会在目标环境产生悬挂引用。
-    known_entities = {str(e.get("entityRef")) for e in entities if e.get("entityRef")}
     selected_posts = {str(ref) for ref in post_refs}
     required_entities: set[str] = set()
     for post in posts:
         if str(post.get("postRef") or "") not in selected_posts:
             continue
-        for entity_ref in post.get("entityRefs") or []:
-            ref = str(entity_ref)
-            if ref in known_entities:
-                required_entities.add(ref)
+        for entity_ref in _post_entity_refs(post):
+            ref = _normalize_entity_ref(entity_ref)
+            if ref in known_entity_by_ref:
+                required_entities.add(known_entity_by_ref[ref])
     entity_refs = sorted(set(entity_refs) | required_entities)
     return {
         "schemaVersion": "quwoquan.content_sample_bundle",
@@ -152,6 +210,9 @@ def build_sample_bundle(
         "salt": salt,
         "posts": post_refs,
         "entities": entity_refs,
+        "forcedPosts": forced_posts,
+        "forcedEntities": forced_entities,
+        "isolatedForcedSample": bool(isolate_forced_sample),
         "counts": {
             "posts": len(post_refs),
             "entities": len(entity_refs),

@@ -4,14 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
-import 'package:quwoquan_app/ui/circle/providers/circle_media_picker_provider.dart';
 
 Widget _app({
   CircleEditSettingsTab initialTab = CircleEditSettingsTab.info,
   bool createMode = false,
   CircleRepository? repository,
-  CircleMediaPickerController? mediaPicker,
+  ImagePickGateway? mediaPicker,
 }) {
   final circle = CircleDto(
     id: 'fixture_circle_photo',
@@ -33,7 +33,7 @@ Widget _app({
   final overrides = [
     if (repository != null) circleRepositoryProvider.overrideWithValue(repository),
     if (mediaPicker != null)
-      circleMediaPickerProvider.overrideWithValue(mediaPicker),
+      imagePickGatewayProvider.overrideWithValue(mediaPicker),
   ];
   return ProviderScope(
     overrides: overrides,
@@ -59,15 +59,17 @@ class _RecordingCircleRepository extends MockCircleRepository {
   }
 }
 
-class _FakeCircleMediaPickerController implements CircleMediaPickerController {
-  _FakeCircleMediaPickerController(this.pathsBySource);
+class _FakeImagePickGateway implements ImagePickGateway {
+  _FakeImagePickGateway(this.pathsBySource);
 
-  final Map<CircleMediaPickSource, String> pathsBySource;
+  final Map<ImagePickSource, String> pathsBySource;
 
   @override
   Future<String?> pickImage(
     BuildContext context, {
-    required CircleMediaPickSource source,
+    required ImagePickSource source,
+    required String cameraRouteName,
+    required String galleryRouteName,
   }) async {
     return pathsBySource[source];
   }
@@ -101,10 +103,10 @@ void main() {
 
     testWidgets('创建模式提交真实圈子表单', (tester) async {
       final repository = _RecordingCircleRepository();
-      final mediaPicker = _FakeCircleMediaPickerController(
+      final mediaPicker = _FakeImagePickGateway(
         const {
-          CircleMediaPickSource.photoLibrary: '/tmp/circle-cover.png',
-          CircleMediaPickSource.camera: '/tmp/circle-avatar.png',
+          ImagePickSource.photoLibrary: '/tmp/circle-cover.png',
+          ImagePickSource.camera: '/tmp/circle-avatar.png',
         },
       );
       await tester.pumpWidget(

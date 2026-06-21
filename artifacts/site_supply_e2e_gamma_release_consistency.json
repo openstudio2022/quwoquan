@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "quwoquan.data_release_consistency_report.v1",
+  "releaseId": "data_gamma_2026-06-20T16_58_52.065836_00_00",
+  "environment": "gamma",
+  "phase": "post-write-pre-activation",
+  "status": "passed",
+  "blockingIssues": [],
+  "warnings": [],
+  "danglingRefs": [],
+  "dirtyRows": [],
+  "orphanReadModels": [],
+  "sourceOwnerDrift": [],
+  "observability": {
+    "releaseArtifactDir": "quwoquan_data/publish/env_releases/data_gamma_2026-06-20T16_58_52.065836_00_00",
+    "phase": "post-write-pre-activation",
+    "importReport": "quwoquan_data/publish/env_releases/data_gamma_2026-06-20T16_58_52.065836_00_00/import-gamma.json",
+    "importReportCandidates": [
+      "quwoquan_data/publish/env_releases/data_gamma_2026-06-20T16_58_52.065836_00_00/import-gamma.json",
+      "quwoquan_data/publish/env_releases/data_gamma_2026-06-20T16_58_52.065836_00_00/import-report-gamma.json"
+    ],
+    "importReportStatus": "active"
+  },
+  "counts": {
+    "blockingIssues": 0,
+    "warnings": 0,
+    "danglingRefs": 0
+  }
+}

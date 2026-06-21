@@ -17,24 +17,40 @@ sit_acceptance:
     done_when:
     - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
     tests:
       planned:
-      - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
-      - quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_feedback_test.dart
+      - file: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
       recorded:
-      - quwoquan_app/test/ui/assistant/widgets/assistant_half_sheet_personalization_provider_test.dart
-      - quwoquan_app/test/ui/assistant/personal_content_access_provider_test.dart
-      - quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - quwoquan_service/services/assistant-service/internal/application/service_test.go
-      - quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
-      - specs/feature-tree/assistant-run-learning/commercial_slo_observability.md
+      - file: quwoquan_app/test/ui/assistant/widgets/assistant_half_sheet_personalization_provider_test.dart
+      - file: quwoquan_app/test/ui/assistant/personal_content_access_provider_test.dart
+      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      - file: quwoquan_service/services/assistant-service/internal/application/service_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
+      - file: specs/feature-tree/assistant-run-learning/commercial_slo_observability.md
     status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.assistant_run_learning.world_class_trinity_experience_baseline.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.assistant_run_learning.world_class_trinity_experience_baseline.sit1.sit1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.assistant_run_learning.world_class_trinity_experience_baseline.sit1.sit1_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_feedback_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

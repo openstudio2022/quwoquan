@@ -1,0 +1,92 @@
+id: CR-20260621-050-intersection-impact-debridge-registry-codegen
+title: 交集 / 影响力模型去桥接（注册表单一真相源 → Go/Dart codegen 查表，消除散落 switch/常量/字面量）
+slug: intersection-impact-debridge-registry-codegen
+revision: 1
+status: implemented
+
+affected_nodes:
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/impact_help_type_registry.yaml
+  - quwoquan_service/tools/recintersectionmeta/registry.go
+  - quwoquan_service/tools/recimpactmeta/registry.go
+  - quwoquan_service/tools/codegen_rec_intersection/main.go
+  - quwoquan_service/tools/codegen_impact/main.go
+  - quwoquan_service/tools/codegen_app_metadata/intersection_kind_metadata_codegen.go
+  - quwoquan_service/tools/codegen_app_metadata/impact_help_type_metadata_codegen.go
+  - quwoquan_service/services/content-service/internal/generated/intersection_kind_table.go
+  - quwoquan_service/runtime/impact/help_type_table.go
+  - quwoquan_app/lib/cloud/runtime/generated/recommendation/impact_help_type_metadata.g.dart
+  - quwoquan_app/lib/components/object_page/intersection_icon_resolver.dart
+  - quwoquan_service/scripts/recommendation/verify_intersection_kind_registry.py
+  - quwoquan_service/scripts/recommendation/verify_impact_help_type_registry.py
+
+entries:
+  - timestamp: "2026-06-21T18:30:00+08:00"
+    summary: |
+      把「交集 intersection」与「影响力 impact helpType」两套模型的语义闭集，从散落在 Go 服务
+      手写 switch、重复常量、Dart 端硬编码 switch、fixtures 字面量的多份「桥接源」，统一收敛到
+      两份机器可读注册表单一真相源，并由 codegen 下发 Go 表 / Dart 元数据，消费方一律查表：
+
+      A. 交集（intersection_kind_registry.yaml）：
+        - 注册表补 evidenceRank（每 kind）与 actionLabelByKey（终端短标签，键集 == actionHintLegend）。
+        - 新增共享解析层 tools/recintersectionmeta（Go/Dart codegen 同一 parser），新增 Go 生成器
+          tools/codegen_rec_intersection → content-service/internal/generated/intersection_kind_table.go
+          （IntersectionEvidenceRank / IconKeyByKind / IconKeyByDimension / RouteIDByObjectKind /
+          AssetKindByObjectKind / ActionKeysByKind / ActionLabelByKey）。
+        - intersection_service.go(evidenceKindRank) / intersection_hydration.go(icon/route/asset/action*)
+          去手写 switch 改查 generated.Intersection* 表；修正历史漂移（coLiked evidenceRank 500→70、
+          commonContact iconKey people→contact）。
+
+      B. 影响力（impact_help_type_registry.yaml，新建）：
+        - 6 个 helpType 闭集（relationship/community/decision/knowledge/spread/audience），audience 正式
+          一等化（独立 iconKey=audienceReach、tone=mist，此前隐式落 cascadePath 兜底，属漂移）。
+        - 每 helpType 登记 iconKey / summaryAction{key,label} / evidenceAction{key,label} / behaviorActions
+          + toneByIconKey + defaults 兜底。新增共享解析层 tools/recimpactmeta + Go 生成器 tools/codegen_impact
+          → runtime/impact/help_type_table.go（Help* 常量 + IconKeyByHelpType + Summary/EvidenceActionByHelpType
+          + BehaviorActionToHelpType 反查 + Default*）。
+        - 消费方收敛：explain.go 删重复 Help* 常量；author_impact_language.go(impactIconKey/impactActionHints)、
+          author_impact_evidence_view.go(impactEvidenceActionHints)、behavior_service.go(action→helpType 反查)
+          去 switch 改查 rtimpact.*；author_impact_store.go 删 AuthorImpactHelp* 重复常量、契约测试改引 rtimpact.Help*；
+          circle_service.go helpType 字面量改 rtimpact.Help*。
+        - Dart 生成器 tools/codegen_app_metadata 新增 impact_help_type_metadata.g.dart（impactHelpTypeKeys /
+          impactIconKeyByHelpType / impactToneByIconKey / impactDefault*）；intersection_icon_resolver.dart 删
+          impact 色调硬编码 switch 改查 impactToneByIconKey、_iconForKey 清除 legacy 别名 compass/read 并补
+          audienceReach；修 content_scenarios.json / .gamma-curated.json 的 iconKey:"audience"→"audienceReach"。
+
+      C. 门禁：verify_intersection_kind_registry.py 升级为「注册表 ↔ 生成 Go 表逐字段一致 + 消费方查表反回归」；
+        新增 verify_impact_help_type_registry.py（注册表 ↔ Go 表 ↔ Dart 产物 ↔ resolver ↔ Go 消费方 ↔ fixtures
+        全链一致 + legacy 漂移反回归），均挂 verify_recommendation_service_contract.sh → make gate。
+    reason: |
+      交集与影响力的同一语义（iconKey、tone、行动建议、evidenceRank、helpType→行为反查）此前被复制成
+      多份手写源：Go 多个 switch + 两份 Help* 常量 + Dart resolver 双套色调 switch + fixtures 字面量。
+      已产生静默漂移（coLiked evidenceRank、commonContact iconKey、audience 隐式兜底、evidenceActionHints 缺
+      relationship/audience、actionLabel 与 legend 不同步），且任一维度/垂类扩展都要同时改 5~7 处、极易再次跑偏。
+      按「当前未上线、对不合理实现零兼容」原则，去掉所有桥接源，建立注册表→codegen→查表单源闭环，使模型
+      可在维度 / 垂类 / helpType 方向单点扩展、无需端云手工同步。
+    change_type:
+      - metadata
+      - codegen
+      - refactor
+      - feature-implementation
+      - gate
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      - "go build ./...：全量绿"
+      - "go vet runtime/impact + circle/content application + content-service/tests：绿"
+      - "go test ./runtime/impact/...：ok"
+      - "dart analyze intersection_icon_resolver.dart + impact_help_type_metadata.g.dart：No issues"
+      - "flutter test object_page（intersection_four_slot_primitives + object_intersection_card）：33 passed"
+      - "verify_intersection_kind_registry.py：OK（28 kinds 对齐）"
+      - "verify_impact_help_type_registry.py：OK（6 helpTypes 对齐），负向篡改 Go 表已检出漂移"
+    notes:
+      - audience iconKey 从隐式 cascadePath 兜底升级为显式 audienceReach，是本次刻意修复的视觉漂移（端 _iconForKey 用 eye_fill glyph）。
+      - 行为保持：behaviorActions / summaryAction / evidenceAction / iconKey 与原 switch 逐项核对一致（仅 audience iconKey 为修复项）。
+      - glyph（iconKey→IconData）仍由端设计层在 _iconForKey 维护，verify 守护「注册表每个 impact iconKey 必有 glyph case」闭集覆盖。
+      - 本轮不登记新风险（用户指令）；剩余任务与风险在新一轮规格规划中系统梳理。

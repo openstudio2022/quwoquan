@@ -24,33 +24,89 @@ gwt_acceptance:
     edge_cases: []
     contract_refs: []
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
       planned:
       - file: quwoquan_data/tests/template/test_template_cli.py
-        command: python3 quwoquan_data/tests/template/test_template_cli.py
-        evidence: T1_contract
       - file: quwoquan_data/scripts/template/condition.py
-        command: python3 quwoquan_data/scripts/cli.py template region-season-lint
-        evidence: T1_contract
       - file: quwoquan_data/scripts/verify/verify_content_quality.py
-        command: python3 quwoquan_data/scripts/verify/verify_content_quality.py
-        evidence: T1_contract
       recorded:
       - file: quwoquan_data/tests/template/test_template_cli.py
-        command: python3 quwoquan_data/tests/template/test_template_cli.py
-        evidence: T1_contract
       - file: quwoquan_data/scripts/template/condition.py
-        command: python3 quwoquan_data/scripts/cli.py template region-season-lint
-        evidence: T1_contract
       - file: quwoquan_data/scripts/verify/verify_content_quality.py
-        command: python3 quwoquan_data/scripts/verify/verify_content_quality.py
-        evidence: T1_contract
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.gwt1_local_contract
+        envs: *id001
+      supporting: []
+    notes: []
+  GWT2:
+    title: partial delivery and failed entity reference isolation
+    given:
+    - 内容生产任务配置了实体主页、文章、图片或视频目标额度。
+    - 部分对象或实体主页在来源、质量、权利或审核门中失败。
+    when:
+    - 数据工程执行 publish、release integrity、scale readiness 与 trial review。
+    then:
+    - release 只包含已通过质量与权利门的成功文章、图片、视频和主页对象。
+    - 未达额度只写入 partialDelivery 履约率、warning 与审计证据，不阻断成功对象发布。
+    - 未发布实体主页对应的 entityRefs、normalizedEntityRefs 与正文 /entity 链接被剔除或降级，保留 pendingEntityMentions
+      供后续补实体审核。
+    done_when:
+    - 成功对象可独立发布，失败对象不污染下游 release/import。
+    edge_cases:
+    - 实体主页 0 个但 postCount > 0 时，publish 可继续且实体引用为空。
+    - image/video 不满目标时只影响对应 lane fulfillment，不影响文章发布。
+    - allowPartialContent=false 的任务仍按全量契约硬阻断。
+    contract_refs:
+    - quwoquan_data/scripts/publish/gate.py
+    - quwoquan_data/scripts/_common/publish_filter.py
+    - quwoquan_data/scripts/verify/scale_readiness.py
+    - quwoquan_data/scripts/task/trial_review.py
+    performance_points:
+    - partialDelivery.fulfillment 可用于百级、千级、万级扩容时估算真实产能。
+    tests:
+      planned:
+      - file: quwoquan_data/tests/annotate/test_annotate_publish_filter.py
+      - file: quwoquan_data/tests/workflow/test_task_run_pipeline.py
+      - file: quwoquan_data/tests/verify/test_scale_readiness.py
+      - file: quwoquan_data/tests/task/test_trial_review.py
+      recorded:
+      - file: quwoquan_data/tests/annotate/test_annotate_publish_filter.py
+      - file: quwoquan_data/tests/workflow/test_task_run_pipeline.py
+      - file: quwoquan_data/tests/verify/test_scale_readiness.py
+      - file: quwoquan_data/tests/task/test_trial_review.py
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.gwt2_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: data_e2e
+        cases:
+        - api_integration.runtime.runtime_data_engineering.geo_content_trinity.data_e2e
+        envs:
+        - beta
+        - gamma
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

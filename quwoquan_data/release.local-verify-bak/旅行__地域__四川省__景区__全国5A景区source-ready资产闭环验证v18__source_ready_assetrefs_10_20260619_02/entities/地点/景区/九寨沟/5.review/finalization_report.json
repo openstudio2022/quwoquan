@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "/entity/地点/景区/九寨沟",
+  "articleSource": "4.draft/page.md",
+  "draftArticleRef": "4.draft/page.md",
+  "finalArticleRef": "page.md",
+  "composeSnapshotRef": null,
+  "draftSha256": "sha256:15734685d842da2001a1e32564a219d78fd800337e165d5648494907fd496389",
+  "finalSha256": "sha256:15734685d842da2001a1e32564a219d78fd800337e165d5648494907fd496389",
+  "draftBodySha256": "sha256:15734685d842da2001a1e32564a219d78fd800337e165d5648494907fd496389",
+  "finalBodySha256": "sha256:15734685d842da2001a1e32564a219d78fd800337e165d5648494907fd496389",
+  "composeSnapshotSha256": null,
+  "composeSnapshotMatchesDraft": null,
+  "frontmatterInjected": false,
+  "frontmatterChanged": false,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": false,
+  "normalizationActions": [
+    "entity_homepage_draft_materialized"
+  ]
+}

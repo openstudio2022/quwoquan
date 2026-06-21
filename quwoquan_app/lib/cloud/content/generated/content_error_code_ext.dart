@@ -35,6 +35,10 @@ extension ContentErrorCodeExt on ContentErrorCode {
         return 'CONTENT.USER.comment_like_duplicate';
       case ContentErrorCode.commentReactionForbidden:
         return 'CONTENT.USER.comment_reaction_forbidden';
+      case ContentErrorCode.commentPinForbidden:
+        return 'CONTENT.USER.comment_pin_forbidden';
+      case ContentErrorCode.commentPinInvalidTarget:
+        return 'CONTENT.USER.comment_pin_invalid_target';
       case ContentErrorCode.commentAttachmentLimitExceeded:
         return 'CONTENT.USER.comment_attachment_limit_exceeded';
       case ContentErrorCode.commentAttachmentNotReady:

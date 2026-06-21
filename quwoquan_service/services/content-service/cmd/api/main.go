@@ -230,6 +230,24 @@ func main() {
 
 		learningSink = runtimelearning.NewMongoSink(db, logger)
 
+		// Comments (R-CMT01): authoritative Mongo store (comments +
+		// comment_reactions collections). Ranking and counting are served by
+		// keyset pagination over compound indexes and exact indexed Count — the
+		// previous Redis ZSet leaderboards and per-comment reaction counters were
+		// write-only / racy and have been removed (no second drifting source,
+		// R24/R26). The post comment total stays single-sourced on the comments
+		// collection; Post.commentCount is a denormalized accelerator maintained
+		// by atomic $inc and self-healed on read. Without mongo the PostService
+		// constructor defaults to the in-memory store (alpha degrade), so this
+		// branch is the only place the persistent comment path is wired.
+		commentStore := persistence.NewMongoCommentStore(db, logger)
+		commentReactionStore := persistence.NewMongoCommentReactionStore(db, logger)
+		postServiceOpts = append(postServiceOpts,
+			application.WithCommentStore(commentStore),
+			application.WithCommentReactionStore(commentReactionStore),
+		)
+		log.Printf("content-service comments storage=mongodb (collections=comments,comment_reactions; ranking/count=indexed keyset)")
+
 		// Event publisher: Redis Pub/Sub for cross-service consumption
 		postServiceOpts = append(postServiceOpts, application.WithEventPublisher(eventPub))
 

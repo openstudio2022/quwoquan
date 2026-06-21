@@ -49,6 +49,9 @@ type validator struct {
 	enums       map[string]bool
 	objectCount int
 	enumCount   int
+	// projectionReadModels 是全仓 projections/*.yaml 的 read_model 闭集（跨域），
+	// 供 service.yaml operation 的 response_body 指向性强校验消费。
+	projectionReadModels map[string]bool
 }
 
 func (v *validator) errorf(format string, args ...any) {
@@ -61,10 +64,49 @@ func (v *validator) warnf(format string, args ...any) {
 
 func (v *validator) run() {
 	v.loadSharedEnums()
+	v.loadProjectionReadModels()
 	v.validateSharedControlPlaneBaseline()
 	v.validateControlPlaneMetadata()
 	v.validateDomainOnboardingMetadata()
 	v.validateBusinessObjects()
+}
+
+// loadProjectionReadModels 收集全仓 projections/*.yaml 的 read_model 闭集（跨域可见），
+// 作为 service.yaml operation response_body 的唯一指向性真相源。
+func (v *validator) loadProjectionReadModels() {
+	v.projectionReadModels = map[string]bool{}
+	_ = filepath.WalkDir(v.metadataDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".yaml") {
+			return nil
+		}
+		if filepath.Base(filepath.Dir(path)) != "projections" {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return nil
+		}
+		var parsed struct {
+			ReadModel        string `yaml:"read_model"`
+			ClientProjection struct {
+				DartClass string `yaml:"dart_class"`
+			} `yaml:"client_projection"`
+		}
+		if yaml.Unmarshal(data, &parsed) != nil {
+			return nil
+		}
+		if rm := strings.TrimSpace(parsed.ReadModel); rm != "" {
+			v.projectionReadModels[rm] = true
+		}
+		// 兼容 response_body 直接指向 client_projection.dart_class 的写法。
+		if dc := strings.TrimSpace(parsed.ClientProjection.DartClass); dc != "" {
+			v.projectionReadModels[dc] = true
+		}
+		return nil
+	})
 }
 
 type sharedControlPlaneDefinition struct {
@@ -1188,29 +1230,71 @@ func (v *validator) validateStorageEntities(dir, dirName string, fieldsEntities 
 	}
 }
 
+// responseBodyKinds 是 operation 响应体形态闭集：
+//
+//	object = 单读模型对象；page = 分页/列表（items 承载读模型）；ack = 仅状态确认（无读模型）。
+var responseBodyKinds = map[string]bool{"object": true, "page": true, "ack": true}
+
 func (v *validator) validateServiceEntities(dir, dirName string, fieldsEntities map[string]bool) {
 	data, err := os.ReadFile(filepath.Join(dir, "service.yaml"))
 	if err != nil {
 		return
 	}
+	// service.yaml 真实结构是顶层扁平 api_routes（历史 routes/operations 嵌套从未落地，
+	// 旧解析对现网文件恒为空转）；这里按真实结构解析并对响应契约做强校验。
 	var parsed struct {
-		Routes []struct {
-			Operations []struct {
-				ResponseEntity string `yaml:"response_entity"`
-				RequestEntity  string `yaml:"request_entity"`
-			} `yaml:"operations"`
-		} `yaml:"routes"`
+		APIRoutes []struct {
+			Operation        string `yaml:"operation"`
+			ResponseEntity   string `yaml:"response_entity"`
+			RequestEntity    string `yaml:"request_entity"`
+			ResponseBody     string `yaml:"response_body"`
+			ResponseBodyKind string `yaml:"response_body_kind"`
+		} `yaml:"api_routes"`
 	}
 	if err := yaml.Unmarshal(data, &parsed); err != nil {
 		return
 	}
 
-	for _, route := range parsed.Routes {
-		for _, op := range route.Operations {
-			if op.ResponseEntity != "" && !fieldsEntities[op.ResponseEntity] {
-				v.warnf("%s/service.yaml: operation references response_entity %q not in fields.yaml (may be a list/special type)",
-					dirName, op.ResponseEntity)
+	for _, op := range parsed.APIRoutes {
+		opName := strings.TrimSpace(op.Operation)
+		// response_entity 既可指向 fields.yaml entity，也可指向 projection read_model（如各类 *View/*Summary）。
+		if op.ResponseEntity != "" && !fieldsEntities[op.ResponseEntity] && !v.projectionReadModels[op.ResponseEntity] {
+			v.warnf("%s/service.yaml: operation %q references response_entity %q not in fields.yaml nor any projection read_model",
+				dirName, opName, op.ResponseEntity)
+		}
+
+		body := strings.TrimSpace(op.ResponseBody)
+		kind := strings.TrimSpace(op.ResponseBodyKind)
+		// response_body / response_body_kind 为可选的框架级响应契约；一旦任一出现即强校验配对与指向。
+		if body == "" && kind == "" {
+			continue
+		}
+		if kind == "" {
+			v.errorf("%s/service.yaml: operation %q declares response_body %q but missing response_body_kind (object|page|ack)",
+				dirName, opName, body)
+			continue
+		}
+		if !responseBodyKinds[kind] {
+			v.errorf("%s/service.yaml: operation %q has invalid response_body_kind %q (allowed: object|page|ack)",
+				dirName, opName, kind)
+			continue
+		}
+		if kind == "ack" {
+			if body != "" {
+				v.errorf("%s/service.yaml: operation %q response_body_kind=ack must not declare response_body (got %q)",
+					dirName, opName, body)
 			}
+			continue
+		}
+		// object | page 必须指向存在的 projection read_model（或 client_projection.dart_class）。
+		if body == "" {
+			v.errorf("%s/service.yaml: operation %q response_body_kind=%s requires a response_body read model reference",
+				dirName, opName, kind)
+			continue
+		}
+		if !v.projectionReadModels[body] {
+			v.errorf("%s/service.yaml: operation %q response_body %q is not a known projection read_model",
+				dirName, opName, body)
 		}
 	}
 }

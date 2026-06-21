@@ -20,6 +20,8 @@ client_projection:
     - ../recommendation/intersection_visual.g.dart
     - ../recommendation/intersection_target.g.dart
     - ../recommendation/intersection_propagation_path.g.dart
+    - ../recommendation/intersection_representative_actor.g.dart
+    - ../recommendation/intersection_action_hint.g.dart
   fields:
     - name: helpType
       dart_type: String
@@ -93,6 +95,18 @@ client_projection:
       source: sampleVisuals
       aliases: [sampleVisuals]
       list_element_dart_class: IntersectionVisual
+    - name: representativeActor
+      dart_type: IntersectionRepresentativeActor
+      nullable: true
+      source: representativeActor
+      aliases: [representativeActor]
+      map_from_string_key_class: IntersectionRepresentativeActor
+    - name: actionHints
+      dart_type: List<IntersectionActionHint>
+      nullable: false
+      source: actionHints
+      aliases: [actionHints]
+      list_element_dart_class: IntersectionActionHint
     - name: countTarget
       dart_type: IntersectionTarget
       nullable: true

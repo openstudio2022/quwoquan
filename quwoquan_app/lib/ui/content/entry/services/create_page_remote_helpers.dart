@@ -58,10 +58,11 @@ String buildArticleMarkdownForPayload(CreateEditorState state) {
       ? state.settings.summary.trim()
       : articleSummaryForPayload(state);
   final entityRefs = entityRefsForPayload(state);
+  final tagRefs = tagRefsForPayload(state);
   return ArticleMarkdownCodec.serializeDocument(
     state.articleDocument,
     summary: summary,
-    tagRefs: state.settings.tagRefs,
+    tagRefs: tagRefs,
     entityRefs: entityRefs,
     visibility: state.settings.isPublic ? 'public' : 'private',
     assistantUsePolicy: state.settings.assistantUsePolicy.trim().isNotEmpty
@@ -93,6 +94,107 @@ List<String> entityRefsForPayload(CreateEditorState state) {
     }
   }
   return refs.toList(growable: false);
+}
+
+/// 与 [entityRefsForPayload] 对称：合并发布设置里的 tagRefs 与正文 inline tag
+/// mention（剥离 `tag:` 前缀，对齐 front matter `tag_refs` 不带前缀的格式），
+/// 去重后投影为 active tagRefs。只采纳正文里已存在的 `@[label](tag:ref)`，
+/// 不在创作端自造 tag 候选。
+List<String> tagRefsForPayload(CreateEditorState state) {
+  final refs = <String>{
+    ...state.settings.tagRefs
+        .map((ref) => ref.trim())
+        .where((ref) => ref.isNotEmpty),
+  };
+  for (final node in state.articleDocument.nodes) {
+    for (final span in node.spans) {
+      if (!span.isTag) continue;
+      final id = span.targetId?.trim() ?? '';
+      if (!id.startsWith('tag:')) continue;
+      final ref = id.substring('tag:'.length).trim();
+      if (ref.isNotEmpty) {
+        refs.add(ref);
+      }
+    }
+  }
+  return refs.toList(growable: false);
+}
+
+/// 发布侧 grounding 真相源（R-CS06）：把正文 entity / tag 内联 + 发布设置里的
+/// active refs 投影为结构化 `semanticMentions` 行 `{kind,status:published,targetRef}`。
+///
+/// 服务端 `semantic.Project`（content-service domain/post/semantic）把 `status=published`
+/// 且 `targetRef` 合法的 mention 投影为只读 `post.entityRefs/tagRefs`；本函数与
+/// [entityRefsForPayload]/[tagRefsForPayload] 同源（同一去重 ref 集），保证服务端投影
+/// 结果 == 端侧 active refs == 文章 front matter 的 entity_refs/tag_refs，三者一致。
+///
+/// targetRef 形态：entity 用完整 `entity:`/`homepage_` id；tag 用层级 bare ref（去 `tag:`
+/// 前缀，与全应用 tagRef 口径一致）。[isSemanticTargetRefValid] 防御性过滤畸形 ref，
+/// 避免单个非法内联触发服务端整篇发布拒绝。
+List<Map<String, dynamic>> semanticMentionsForPayload(CreateEditorState state) {
+  final rows = <Map<String, dynamic>>[];
+  final seen = <String>{};
+  void addRow(String kind, String rawRef) {
+    final ref = rawRef.trim();
+    if (ref.isEmpty || !isSemanticTargetRefValid(kind, ref)) {
+      return;
+    }
+    if (!seen.add('$kind|$ref')) {
+      return;
+    }
+    rows.add(<String, dynamic>{
+      'kind': kind,
+      'status': 'published',
+      'targetRef': ref,
+    });
+  }
+
+  for (final ref in entityRefsForPayload(state)) {
+    addRow('entity', ref);
+  }
+  for (final ref in tagRefsForPayload(state)) {
+    addRow('tag', ref);
+  }
+  return rows;
+}
+
+/// 防御性镜像服务端 `semantic.ValidTargetRef`（唯一权威：
+/// `quwoquan_service/services/content-service/internal/domain/post/semantic/mentions.go`）。
+/// 仅用于发布前过滤必然非法 / candidate 的 targetRef；服务端仍为最终校验权威。
+bool isSemanticTargetRefValid(String kind, String ref) {
+  final value = ref.trim();
+  if (value.isEmpty || value.toLowerCase().contains('candidate')) {
+    return false;
+  }
+  if (value.contains('\n') || value.contains('\r') || value.contains('\t')) {
+    return false;
+  }
+  int nonEmptyParts(List<String> parts) =>
+      parts.where((part) => part.trim().isNotEmpty).length;
+  switch (kind) {
+    case 'entity':
+      if (value.startsWith('entity:')) {
+        return nonEmptyParts(value.split(':')) >= 3;
+      }
+      if (value.startsWith('/entity/') || value.startsWith('entity/')) {
+        final trimmed = value.startsWith('/') ? value.substring(1) : value;
+        return nonEmptyParts(trimmed.split('/')) >= 4;
+      }
+      return value.startsWith('homepage_');
+    case 'tag':
+      if (value.startsWith('tag:')) {
+        return nonEmptyParts(value.split(':')) >= 2;
+      }
+      if (value.startsWith('/tag/')) {
+        return nonEmptyParts(value.substring('/tag/'.length).split('/')) >= 2;
+      }
+      if (value.startsWith('tag/')) {
+        return nonEmptyParts(value.substring('tag/'.length).split('/')) >= 2;
+      }
+      return nonEmptyParts(value.split('/')) >= 2;
+    default:
+      return false;
+  }
 }
 
 Map<String, dynamic> buildArticleAssetManifestForPayload(
@@ -174,6 +276,16 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
   final entityRefs = entityRefsForPayload(state);
   if (entityRefs.isNotEmpty) {
     settings['entityRefs'] = entityRefs;
+  }
+  final tagRefs = tagRefsForPayload(state);
+  if (tagRefs.isNotEmpty) {
+    settings['tagRefs'] = tagRefs;
+  }
+  // R-CS06：发布唯一可写 grounding 字段。顶层 tagRefs/entityRefs 是只读投影，会被
+  // wire writable_fields 剥离；entity/tag 内联只有经 semanticMentions 才落服务端 refs。
+  final semanticMentions = semanticMentionsForPayload(state);
+  if (semanticMentions.isNotEmpty) {
+    settings['semanticMentions'] = semanticMentions;
   }
   final coverAssetPath = coverAssetPathForPayload(state);
   if (state.editorKind == CreateEditorKind.media) {

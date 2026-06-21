@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_contact_record.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
@@ -26,8 +27,12 @@ final class LocalChatSearchSqliteRow {
 
 class LocalChatSearchStore {
   LocalChatSearchStore({String? databasePath, DatabaseFactory? databaseFactory})
-    : _databasePath = databasePath,
-      _databaseFactory = databaseFactory;
+    : this._internal(
+        databasePath: databasePath,
+        databaseFactory: databaseFactory,
+      );
+
+  LocalChatSearchStore._internal({this._databasePath, this._databaseFactory});
 
   static final LocalChatSearchStore shared = LocalChatSearchStore();
   static bool _ffiInitialized = false;
@@ -665,10 +670,15 @@ class LocalChatSearchStore {
     required LocalSearchNamespace namespace,
     required String userId,
     required String avatarUrl,
+    int? avatarVersion,
   }) async {
     if (userId.trim().isEmpty || avatarUrl.trim().isEmpty) {
       return;
     }
+    final resolvedAvatarUrl = resolveAvatarImageUrl(
+      avatarUrl,
+      avatarVersion: avatarVersion,
+    );
     final database = await _database;
     final rows = await database.query(
       'chat_contacts',
@@ -681,9 +691,9 @@ class LocalChatSearchStore {
       return;
     }
     final payload = _decodePayload(rows.first['payload_json']);
-    final updatedPayload = LocalChatSearchContactRecord.fromWireMap(payload)
-        .copyWith(avatarUrl: avatarUrl)
-        .toWireMap();
+    final updatedPayload = LocalChatSearchContactRecord.fromWireMap(
+      payload,
+    ).copyWith(avatarUrl: resolvedAvatarUrl).toWireMap();
     await database.update(
       'chat_contacts',
       <String, Object?>{
@@ -961,7 +971,12 @@ class LocalChatSearchStore {
         ),
       );
     }
-    return openDatabase(path, version: 2, onCreate: _onCreate, onUpgrade: _onUpgrade);
+    return openDatabase(
+      path,
+      version: 2,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   Future<void> _onUpgrade(

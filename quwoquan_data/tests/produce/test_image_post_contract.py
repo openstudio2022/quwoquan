@@ -79,6 +79,16 @@ def _seed_source_collection() -> list[dict]:
     return object_image_candidates(object_dir, TASK, BATCH)
 
 
+def test_object_image_candidates_preserve_sha_and_rights_metadata():
+    first, second = _seed_source_collection()
+    assert first["sha256"].startswith("sha256:")
+    assert second["sha256"].startswith("sha256:")
+    assert first["sourceCollectionId"] == "collection-alpine-001"
+    assert first["creator"] == "摄影师甲"
+    assert first["collectionPageUrl"] == "https://example.com/collections/alpine"
+    assert first["license"] == "CC-BY-4.0"
+
+
 def _seed_image_post() -> None:
     ensure_task_layout(TASK)
     ensure_batch_layout(TASK, BATCH, "produce")
@@ -178,6 +188,14 @@ def test_image_materialize_is_structured_only():
     assert len(manifest["assets"]) == 2
     assert manifest["sourceCollectionId"] == "collection-alpine-001"
     assert manifest["creator"]["name"] == "摄影师甲"
+    assert manifest["page"] == "https://example.com/collections/alpine"
+    assert manifest["sourceCollectionUrl"] == "https://example.com/collections/alpine"
+    assert manifest["licenseProof"] == {
+        "license": "CC-BY-4.0",
+        "termsUrl": "https://example.com/licenses/alpine",
+        "proofUrl": "https://example.com/licenses/alpine",
+    }
+    assert manifest["licenseProofRef"] == "https://example.com/licenses/alpine"
     assert provenance_issues(post_dir, manifest) == []
 
 

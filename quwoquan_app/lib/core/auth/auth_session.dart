@@ -14,6 +14,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -894,8 +895,8 @@ final authSessionRefreshExecutorProvider = Provider<AuthSessionRefreshExecutor>(
     return AuthLoginResultDto.fromMap(<String, dynamic>{
       'accessToken': 'mock_refreshed_token_${refreshToken.hashCode}',
       'refreshToken': 'mock_refreshed_refresh',
-      'ownerId': 'mock_owner_id',
-      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'ownerId': kMockCurrentOwnerId,
+      'activeSub': <String, dynamic>{'subAccountId': kMockCurrentSubAccountId},
       'subAccountCount': 1,
       'accountState': 'active',
       'identityOrigin': 'phone',

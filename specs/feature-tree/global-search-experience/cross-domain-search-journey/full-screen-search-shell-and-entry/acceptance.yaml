@@ -39,16 +39,26 @@ gwt_acceptance:
     - specs/feature-tree/global-search-experience/spec.md
     performance_points:
     - 搜索页打开后默认壳层即时可见，默认数据可异步补齐。
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
       planned:
-      - quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+      - file: quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.gwt1_local_contract
+        envs: *id001
+      supporting: []
+    notes: []
   GWT2:
     title: 输入过程只快速定位已连接或已关注对象
     given:
@@ -70,16 +80,25 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/_shared/search_objects.yaml
     performance_points:
     - 输入后首批可见分组 P95 在 1.5s 内出现。
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+      - file: quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.gwt2_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.contract
+        envs: *id001
+    notes: []
   GWT3:
     title: 全部 Tab 先展示已连接区，再展示未连接发现区分组混排
     given:
@@ -103,17 +122,26 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/_shared/search_contract.yaml
     performance_points:
     - 单次综合搜索 fan-out 不得让首屏分组超过 1.5s 目标。
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
-      - quwoquan_app/test/ui/search/search_repository_test.dart
+      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - file: quwoquan_app/test/ui/search/search_repository_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.gwt3_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.contract
+        envs: *id001
+    notes: []
   GWT4:
     title: 指定类别 Tab 只展示该类别的消费流
     given:
@@ -136,16 +164,25 @@ gwt_acceptance:
     - specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/acceptance.yaml
     performance_points:
     - 切换 Tab 后加载状态和结果状态稳定，无旧 Tab 内容闪回。
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.gwt4_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.full_screen_search_shell_and_entry.contract
+        envs: *id001
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

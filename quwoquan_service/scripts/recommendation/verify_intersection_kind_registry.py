@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
-"""交集 kind 注册表单一真相源门禁（Phase 0 漂移收口 §20d）。
+"""交集 kind 注册表单一真相源门禁（Phase 0 漂移收口 §20d + §23 去桥接闭集校验）。
 
 唯一真相源:
   contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml
 
 校验项:
-  1. 注册表本身结构完整（每个 kind 必填 valueTier/computability/evidenceRank 等枚举字段且取值合法）。
-  2. content-service intersection_service.go 的 evidenceKindRank switch 中出现的每个 kind
-     必须已在注册表登记，且 rank 与注册表 evidenceRank 完全一致（消除「markdown+switch」双源）。
+  1. 顶层四闭集结构完整：dimensions / lifecycleStates / verticals / objectKinds 均非空，且包含
+     §22/§23 要求的必备成员（lifecycleStates 含 archived/expired，verticals 含 travel_photography/campus，
+     objectKinds 含 route/photo_spot/gear）。objectKinds 每项 roles ⊆ {object,count}，roles 含 object 必填 assetKind。
+  2. 注册表每个 kind 结构完整（必填 valueTier/computability/evidenceRank/vertical 等且取值合法），
+     且与顶层闭集一致：objectKind/countObjectKind ∈ objectKinds，dimensions ⊆ dimensions 闭集，vertical ∈ verticals 闭集。
+  3. 服务端 Go codegen 产物 generated/intersection_kind_table.go 与注册表逐字段一致（§23 去桥接：
+     evidenceRank / iconKey(by kind) / iconKeyByDimension / route(by objectKind) / asset(by objectKind) /
+     actionKeys(by kind) / actionLabel(by key) 全部 == registry，取代「markdown + 手写 switch」双源）。
+  4. iconKeyByDimension 末级回退闭集：键 ∈ dimensions、值 ∈ iconKeyLegend，且每个维度都有回退。
+  5. actionLabelByKey 键集 == actionHintLegend 键集（终端短标签与词典描述同闭集）。
+  6. 服务端消费方（intersection_service.go / intersection_hydration.go）已改为查 generated.Intersection* 表，
+     不得回归手写 kind→iconKey/route/asset/action/evidenceRank switch（防漂移再生）。
 
 退出码: 0 通过 / 1 失败。
 """
@@ -24,19 +33,52 @@ REGISTRY = (
     REPO_ROOT
     / "quwoquan_service/contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml"
 )
-GO_SWITCH = (
+GENERATED_TABLE = (
+    REPO_ROOT
+    / "quwoquan_service/services/content-service/internal/generated/intersection_kind_table.go"
+)
+SERVICE_GO = (
     REPO_ROOT
     / "quwoquan_service/services/content-service/internal/application/intersection_service.go"
+)
+HYDRATION_GO = (
+    REPO_ROOT
+    / "quwoquan_service/services/content-service/internal/application/intersection_hydration.go"
 )
 
 VALUE_TIERS = {"T1", "T2", "T3", "T4"}
 COMPUTABILITY = {"R1", "R2", "R3", "R4"}
 LEVELS = {"sharedFact", "bridgeFact", "impactFact", "affinity"}
 CLASSES = {"fact", "affinity"}
-OBJECT_KINDS = {"person", "circle", "school", "place", "enterprise"}
 STATUSES = {"active", "deferred"}
+OBJECT_KIND_ROLES = {"object", "count"}
+
+# §23 去桥接：闭集必备成员（防止回归把扩展项删回旧集合）。
+REQUIRED_DIMENSIONS = {"identity", "location", "content", "interest", "relationship"}
+REQUIRED_LIFECYCLE_STATES = {
+    "new",
+    "strengthened",
+    "stable",
+    "weakened",
+    "reactivated",
+    "archived",
+    "expired",
+}
+REQUIRED_VERTICALS = {"general", "travel_photography", "campus"}
+REQUIRED_OBJECT_KINDS = {
+    "person",
+    "circle",
+    "school",
+    "place",
+    "enterprise",
+    "route",
+    "photo_spot",
+    "gear",
+}
+
 REQUIRED = [
     "kind",
+    "vertical",
     "entry",
     "level",
     "intersectionClass",
@@ -54,10 +96,86 @@ def fail(msg: str) -> None:
     sys.exit(1)
 
 
-def load_registry() -> dict[str, dict]:
+def load_closed_sets(data: dict) -> tuple[set[str], set[str], set[str], set[str]]:
+    """读取并校验顶层四闭集，返回 (dimensions, lifecycleStates, verticals, objectKinds)。"""
+    dimensions = data.get("dimensions")
+    lifecycle = data.get("lifecycleStates")
+    verticals = data.get("verticals")
+    object_kinds_raw = data.get("objectKinds")
+    for name, value in (
+        ("dimensions", dimensions),
+        ("lifecycleStates", lifecycle),
+        ("verticals", verticals),
+        ("objectKinds", object_kinds_raw),
+    ):
+        if not isinstance(value, list) or not value:
+            fail(f"top-level closed set `{name}` must be a non-empty list")
+
+    dim_set = set(dimensions)
+    life_set = set(lifecycle)
+    vert_set = set(verticals)
+
+    object_kinds: set[str] = set()
+    for item in object_kinds_raw:
+        if not isinstance(item, dict):
+            fail("objectKinds entries must be mappings (kind/roles/routeId/assetKind)")
+        kind = item.get("kind")
+        if not kind:
+            fail("objectKinds entry missing kind")
+        if kind in object_kinds:
+            fail(f"duplicate objectKind {kind}")
+        roles = item.get("roles") or []
+        if not isinstance(roles, list) or not roles:
+            fail(f"objectKind {kind} must declare non-empty roles")
+        bad = set(roles) - OBJECT_KIND_ROLES
+        if bad:
+            fail(f"objectKind {kind} invalid roles {sorted(bad)} (allowed: {sorted(OBJECT_KIND_ROLES)})")
+        if "object" in roles and not str(item.get("assetKind", "")).strip():
+            fail(f"objectKind {kind} has role object but missing assetKind")
+        object_kinds.add(kind)
+
+    if not REQUIRED_DIMENSIONS <= dim_set:
+        fail(f"dimensions missing required members {sorted(REQUIRED_DIMENSIONS - dim_set)}")
+    if not REQUIRED_LIFECYCLE_STATES <= life_set:
+        fail(f"lifecycleStates missing required members {sorted(REQUIRED_LIFECYCLE_STATES - life_set)}")
+    if not REQUIRED_VERTICALS <= vert_set:
+        fail(f"verticals missing required members {sorted(REQUIRED_VERTICALS - vert_set)}")
+    if not REQUIRED_OBJECT_KINDS <= object_kinds:
+        fail(f"objectKinds missing required members {sorted(REQUIRED_OBJECT_KINDS - object_kinds)}")
+
+    return dim_set, life_set, vert_set, object_kinds
+
+
+def validate_icon_key_by_dimension(data: dict, dim_set: set[str]) -> None:
+    """dimension → iconKey 末级回退闭集：键 ∈ dimensions、值 ∈ iconKeyLegend，且每维度都有回退。
+
+    §23 去桥接：端 IntersectionIconResolver 与 inbox 归一层共用此唯一回退表，
+    未登记 kind / affinity 概率类据此降级，禁止端各写一份 dimension switch。
+    """
+    fallback = data.get("iconKeyByDimension")
+    if not isinstance(fallback, dict) or not fallback:
+        fail("iconKeyByDimension must be a non-empty mapping")
+    legend = data.get("iconKeyLegend")
+    if not isinstance(legend, dict) or not legend:
+        fail("iconKeyLegend must be a non-empty mapping")
+    legend_keys = set(legend)
+    for dim, icon_key in fallback.items():
+        if dim not in dim_set:
+            fail(f"iconKeyByDimension key {dim!r} not in dimensions closed set")
+        if icon_key not in legend_keys:
+            fail(f"iconKeyByDimension[{dim!r}] value {icon_key!r} not in iconKeyLegend closed set")
+    missing = dim_set - set(fallback)
+    if missing:
+        fail(f"dimensions missing iconKeyByDimension fallback: {sorted(missing)}")
+
+
+def load_registry() -> tuple[dict[str, dict], dict]:
     if not REGISTRY.exists():
         fail(f"missing registry: {REGISTRY}")
     data = yaml.safe_load(REGISTRY.read_text(encoding="utf-8"))
+    dim_set, _life_set, vert_set, object_kinds = load_closed_sets(data)
+    validate_icon_key_by_dimension(data, dim_set)
+    validate_action_labels(data)
     kinds = data.get("kinds")
     if not isinstance(kinds, list) or not kinds:
         fail("registry.kinds must be a non-empty list")
@@ -74,8 +192,22 @@ def load_registry() -> dict[str, dict]:
             fail(f"kind {item['kind']} invalid level {item['level']}")
         if item["intersectionClass"] not in CLASSES:
             fail(f"kind {item['kind']} invalid intersectionClass {item['intersectionClass']}")
-        if item["objectKind"] not in OBJECT_KINDS:
-            fail(f"kind {item['kind']} invalid objectKind {item['objectKind']}")
+        if item["objectKind"] not in object_kinds:
+            fail(f"kind {item['kind']} invalid objectKind {item['objectKind']} (not in objectKinds closed set)")
+        count_object_kind = item.get("countObjectKind")
+        if count_object_kind not in (None, "") and count_object_kind not in object_kinds:
+            fail(
+                f"kind {item['kind']} invalid countObjectKind {count_object_kind} "
+                "(not in objectKinds closed set)"
+            )
+        dims = item["dimensions"]
+        if not isinstance(dims, list) or not dims:
+            fail(f"kind {item['kind']} dimensions must be a non-empty list")
+        bad_dims = set(dims) - dim_set
+        if bad_dims:
+            fail(f"kind {item['kind']} dimensions {sorted(bad_dims)} not in dimensions closed set")
+        if item["vertical"] not in vert_set:
+            fail(f"kind {item['kind']} invalid vertical {item['vertical']} (not in verticals closed set)")
         if item["status"] not in STATUSES:
             fail(f"kind {item['kind']} invalid status {item['status']}")
         if not isinstance(item["evidenceRank"], int):
@@ -83,52 +215,145 @@ def load_registry() -> dict[str, dict]:
         if item["kind"] in by_kind:
             fail(f"duplicate kind {item['kind']}")
         by_kind[item["kind"]] = item
-    return by_kind
+    return by_kind, data
 
 
-def parse_go_switch() -> dict[str, int]:
-    """提取 evidenceKindRank 函数体内 case "k1","k2": return N 的 kind→rank。"""
-    src = GO_SWITCH.read_text(encoding="utf-8")
-    m = re.search(r"func evidenceKindRank\(kind, pointClass string\) int \{(.*?)\n\}", src, re.S)
+def validate_action_labels(data: dict) -> None:
+    """actionLabelByKey 键集必须 == actionHintLegend 键集（终端短标签 vs 词典描述同闭集）。"""
+    legend = data.get("actionHintLegend")
+    labels = data.get("actionLabelByKey")
+    if not isinstance(legend, dict) or not legend:
+        fail("actionHintLegend must be a non-empty mapping")
+    if not isinstance(labels, dict) or not labels:
+        fail("actionLabelByKey must be a non-empty mapping")
+    only_legend = set(legend) - set(labels)
+    only_labels = set(labels) - set(legend)
+    if only_legend:
+        fail(f"actionLabelByKey missing keys present in actionHintLegend: {sorted(only_legend)}")
+    if only_labels:
+        fail(f"actionLabelByKey has keys absent from actionHintLegend: {sorted(only_labels)}")
+
+
+def _table_block(src: str, var_name: str, value_type: str) -> str:
+    pat = rf"var {re.escape(var_name)} = map\[string\]{re.escape(value_type)}\{{(.*?)\n\}}"
+    m = re.search(pat, src, re.S)
     if not m:
-        fail("cannot locate evidenceKindRank function body")
-    func_body = m.group(1)
-    # 只解析 `switch kind { ... }` 块，排除前置 pointClass=="recommended" 守卫。
-    sw = re.search(r"switch kind \{(.*?)\n\t\}", func_body, re.S)
-    if not sw:
-        fail("cannot locate `switch kind` block in evidenceKindRank")
-    body = sw.group(1)
-    out: dict[str, int] = {}
-    pending: list[str] = []
-    for line in body.splitlines():
-        cases = re.findall(r'"([A-Za-z0-9_]+)"', line)
-        if cases:
-            pending.extend(cases)
-        ret = re.search(r"return\s+(\d+)", line)
-        if ret and pending:
-            rank = int(ret.group(1))
-            for k in pending:
-                out[k] = rank
-            pending = []
-    if not out:
-        fail("no kind cases parsed from evidenceKindRank")
-    return out
+        fail(f"generated table missing var {var_name} (map[string]{value_type})")
+    return m.group(1)
+
+
+def parse_generated_table() -> dict[str, dict]:
+    """解析 Go codegen 产物 intersection_kind_table.go 的各查表（§23 单一真相源下发）。"""
+    if not GENERATED_TABLE.exists():
+        fail(f"missing generated table: {GENERATED_TABLE} (run `make codegen-rec-intersection`)")
+    src = GENERATED_TABLE.read_text(encoding="utf-8")
+
+    evidence: dict[str, int] = {}
+    for k, v in re.findall(r'"([^"]+)":\s*(\d+),', _table_block(src, "IntersectionEvidenceRank", "int")):
+        evidence[k] = int(v)
+
+    def parse_str_map(var_name: str) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for k, v in re.findall(r'"([^"]+)":\s*"([^"]*)",', _table_block(src, var_name, "string")):
+            out[k] = v
+        return out
+
+    icon_by_kind = parse_str_map("IntersectionIconKeyByKind")
+    icon_by_dim = parse_str_map("IntersectionIconKeyByDimension")
+    route_by_obj = parse_str_map("IntersectionRouteIDByObjectKind")
+    asset_by_obj = parse_str_map("IntersectionAssetKindByObjectKind")
+    action_label = parse_str_map("IntersectionActionLabelByKey")
+
+    actions: dict[str, list[str]] = {}
+    body = _table_block(src, "IntersectionActionKeysByKind", "[]string")
+    for k, raw in re.findall(r'"([^"]+)":\s*\{([^}]*)\},', body):
+        actions[k] = re.findall(r'"([^"]+)"', raw)
+
+    return {
+        "evidenceRank": evidence,
+        "iconKeyByKind": icon_by_kind,
+        "iconKeyByDimension": icon_by_dim,
+        "routeByObjectKind": route_by_obj,
+        "assetByObjectKind": asset_by_obj,
+        "actionKeysByKind": actions,
+        "actionLabelByKey": action_label,
+    }
+
+
+def expected_from_registry(by_kind: dict[str, dict], data: dict) -> dict[str, dict]:
+    """从注册表派生「服务端 Go 表应当生成」的期望值（与生成器口径一致）。"""
+    object_kinds = data.get("objectKinds") or []
+    route = {
+        ok["kind"]: ok["routeId"]
+        for ok in object_kinds
+        if str(ok.get("routeId", "")).strip()
+    }
+    asset = {
+        ok["kind"]: ok["assetKind"]
+        for ok in object_kinds
+        if str(ok.get("assetKind", "")).strip()
+    }
+    return {
+        "evidenceRank": {k: v["evidenceRank"] for k, v in by_kind.items()},
+        "iconKeyByKind": {k: v["iconKey"] for k, v in by_kind.items()},
+        "iconKeyByDimension": dict(data.get("iconKeyByDimension") or {}),
+        "routeByObjectKind": route,
+        "assetByObjectKind": asset,
+        "actionKeysByKind": {k: list(v) for k, v in (data.get("actionHintsByKind") or {}).items()},
+        "actionLabelByKey": dict(data.get("actionLabelByKey") or {}),
+    }
+
+
+def diff_field(name: str, expected: dict, actual: dict, problems: list[str]) -> None:
+    for key in sorted(set(expected) | set(actual)):
+        if key not in actual:
+            problems.append(f"{name}: generated table missing key '{key}' (registry={expected[key]!r})")
+        elif key not in expected:
+            problems.append(f"{name}: generated table has unregistered key '{key}'={actual[key]!r}")
+        elif expected[key] != actual[key]:
+            problems.append(
+                f"{name}: key '{key}' drift registry={expected[key]!r} generated={actual[key]!r}"
+            )
+
+
+def check_consumers_table_driven(problems: list[str]) -> None:
+    """消费方必须查 generated.Intersection* 表，不得回归手写 kind switch。"""
+    if not SERVICE_GO.exists() or not HYDRATION_GO.exists():
+        problems.append("intersection_service.go / intersection_hydration.go missing")
+        return
+    service = SERVICE_GO.read_text(encoding="utf-8")
+    hydration = HYDRATION_GO.read_text(encoding="utf-8")
+    required = [
+        (service, "generated.IntersectionEvidenceRank", "intersection_service.go evidenceKindRank"),
+        (hydration, "generated.IntersectionIconKeyByKind", "intersection_hydration.go iconKeyForKind"),
+        (hydration, "generated.IntersectionIconKeyByDimension", "intersection_hydration.go dimension fallback"),
+        (hydration, "generated.IntersectionRouteIDByObjectKind", "intersection_hydration.go routeIDForObjectKind"),
+        (hydration, "generated.IntersectionAssetKindByObjectKind", "intersection_hydration.go assetKindForObjectKind"),
+        (hydration, "generated.IntersectionActionKeysByKind", "intersection_hydration.go actionKeysForKind"),
+        (hydration, "generated.IntersectionActionLabelByKey", "intersection_hydration.go actionLabelForKey"),
+    ]
+    for src, token, where in required:
+        if token not in src:
+            problems.append(f"consumer not table-driven: {where} must consume {token}")
 
 
 def main() -> int:
-    registry = load_registry()
-    go_ranks = parse_go_switch()
+    by_kind, data = load_registry()
+    expected = expected_from_registry(by_kind, data)
+    actual = parse_generated_table()
 
     problems: list[str] = []
-    for kind, rank in go_ranks.items():
-        reg = registry.get(kind)
-        if reg is None:
-            problems.append(f"Go switch kind '{kind}' not registered in registry yaml")
-            continue
-        if reg["evidenceRank"] != rank:
-            problems.append(
-                f"kind '{kind}' evidenceRank drift: registry={reg['evidenceRank']} go_switch={rank}"
-            )
+    for field in (
+        "evidenceRank",
+        "iconKeyByKind",
+        "iconKeyByDimension",
+        "routeByObjectKind",
+        "assetByObjectKind",
+        "actionKeysByKind",
+        "actionLabelByKey",
+    ):
+        diff_field(field, expected[field], actual[field], problems)
+    check_consumers_table_driven(problems)
 
     if problems:
         for p in problems:
@@ -136,8 +361,9 @@ def main() -> int:
         return 1
 
     print(
-        f"[verify-intersection-kind-registry] OK: {len(registry)} kinds registered, "
-        f"{len(go_ranks)} go-switch kinds aligned (single source = intersection_kind_registry.yaml)"
+        f"[verify-intersection-kind-registry] OK: {len(by_kind)} kinds registered; "
+        f"generated Go table aligned across evidenceRank/iconKey/iconKeyByDimension/route/asset/"
+        f"actionKeys/actionLabel (single source = intersection_kind_registry.yaml)"
     )
     return 0
 

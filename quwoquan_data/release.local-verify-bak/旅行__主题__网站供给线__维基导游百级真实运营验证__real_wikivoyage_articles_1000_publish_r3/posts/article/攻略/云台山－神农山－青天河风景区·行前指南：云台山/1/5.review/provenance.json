@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_d3540e577c899f65",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "云台山－神农山－青天河风景区·行前指南：云台山",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "codex-agent-gpt-5-real-site-supply",
+    "agentRunId": "real_wikivoyage_articles_1000_publish_r3:candidate_d3540e577c899f65:governance-repair",
+    "agentId": "codex-site-supply-operator",
+    "sessionTrace": "real-site-supply-1000-subset-r3-agent-draft-governance-repair",
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [],
+    "articleDigest": "sha256:4f40a53239f58148513a6ea9737c47fe26c649389233e7af8d5e72f966350e1a"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "云台山－神农山－青天河风景区·行前指南：云台山",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:8848f6c0a7f80bf2071d07f73032fff0168100e634c0a1d35d063cc385df89a0",
+    "writingPackSha256": "sha256:58470d5edf64faa2b25973babd0d4a2358f20ea6ee2d80bb093f041ca058cb1c",
+    "sourceBundleSha256": "sha256:dbba94d336696c263f03128a6c29f303e6183ba85d78c8504a154bbd9dc2d3ac",
+    "draftSha256": "sha256:4053227c6131b352d90829829cb4636416810b131535fafb9abd3b91a9918831"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/云台山－神农山－青天河风景区/1.download/sources/03.wikivoyage_zh_candidate_d3540e577c899f65/source.md",
+      "url": "https://zh.wikivoyage.org/wiki/%E4%BA%91%E5%8F%B0%E5%B1%B1"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/云台山－神农山－青天河风景区/1.download/sources/03.wikivoyage_zh_candidate_d3540e577c899f65/source.md"
+  ]
+}

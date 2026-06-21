@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/测试省/景区/来源可用性优先",
+  "updatedAt": "2026-06-20T18:10:34.707697+00:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": []
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

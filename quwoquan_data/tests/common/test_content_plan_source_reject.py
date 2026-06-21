@@ -68,7 +68,7 @@ def _oversized_png_header(width: int = 9000, height: int = 6000) -> bytes:
     )
 
 
-def _write_article_source_asset(source_dir: Path, *, label: str) -> None:
+def _write_article_source_asset(source_dir: Path, *, label: str) -> Path:
     asset_dir = source_dir / "assets"
     asset_dir.mkdir(parents=True, exist_ok=True)
     asset_file = asset_dir / f"{label}.jpg"
@@ -81,6 +81,7 @@ def _write_article_source_asset(source_dir: Path, *, label: str) -> None:
                     "fileName": asset_file.name,
                     "sourceAssetId": f"asset_{label}",
                     "sha256": f"sha256:{label}",
+                    "sourceCollectionId": f"article:{label}",
                     "license": "CC-BY-4.0",
                     "credit": "fixture",
                     "sourceUrl": "https://example.com/image.jpg",
@@ -92,6 +93,7 @@ def _write_article_source_asset(source_dir: Path, *, label: str) -> None:
             ]
         },
     )
+    return asset_file
 
 
 def _seed():
@@ -150,7 +152,7 @@ def test_content_plan_blocks_base_source_reuse_policy_in_strict_mode():
         * 80,
         encoding="utf-8",
     )
-    _write_article_source_asset(source_dir, label="jiuzhaigou_shared")
+    article_asset = _write_article_source_asset(source_dir, label="jiuzhaigou_shared")
     write_json(
         source_dir / "meta.json",
         {
@@ -187,6 +189,7 @@ def test_content_plan_blocks_base_source_reuse_policy_in_strict_mode():
             "rationale": f"{intent} 主线证据",
             "writingIntent": intent,
             "baseSourceRef": source_ref,
+            "assetRefs": [article_asset.relative_to(batch_root(TASK, batch)).as_posix()],
             "sourceUseMode": "factual_reference_only",
         }
         if index == 2:
@@ -213,8 +216,8 @@ def test_content_plan_blocks_base_source_reuse_policy_in_strict_mode():
     assert any("baseSourceRef reused by" in issue for issue in issues), issues
 
 
-def test_content_plan_blocks_article_base_source_without_source_assets():
-    batch = "article_base_without_source_assets"
+def test_content_plan_allows_text_only_article_base_source_without_source_assets():
+    batch = "article_base_without_source_assets_text_only"
     entity = "九寨沟"
     ref = f"{entity}_planning_consultation"
     title = "九寨沟行前怎么安排"
@@ -266,10 +269,11 @@ def test_content_plan_blocks_article_base_source_without_source_assets():
                     "title": title,
                     "entityRefs": [f"/entity/地点/景区/{entity}"],
                     "evidenceRefs": [source_ref],
-                    "rationale": "缺图底稿应被拦截",
+                    "rationale": "优质文字底稿可无源图发布",
                     "writingIntent": "planning_consultation",
                     "baseSourceRef": source_ref,
                     "sourceUseMode": "factual_reference_only",
+                    "publishMediaMode": "text_only",
                 }
             ],
         },
@@ -287,7 +291,95 @@ def test_content_plan_blocks_article_base_source_without_source_assets():
         },
     }
     issues = cp.validate_content_plan(TASK, batch, spec)
-    assert any("article baseSourceRef must include at least one source asset" in issue for issue in issues), issues
+    assert issues == []
+
+
+def test_content_plan_blocks_declared_article_asset_missing_rights_fields():
+    batch = "article_declared_asset_missing_rights"
+    entity = "九寨沟"
+    ref = f"{entity}_planning_consultation"
+    title = "九寨沟行前怎么安排"
+    source_dir = (
+        batch_root(TASK, batch)
+        / "entities/地点/景区/九寨沟/1.download/sources/01.article_with_unlicensed_asset"
+    )
+    asset_dir = source_dir / "assets"
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    source_path = source_dir / "source.md"
+    source_path.write_text(
+        (
+            "九寨沟长篇图文底稿，覆盖交通方式、沟内换乘、开放时间、季节差异、"
+            "拍照点、亲子老人同行和雨雪天气替代安排。"
+        )
+        * 80,
+        encoding="utf-8",
+    )
+    asset_path = asset_dir / "source.jpg"
+    asset_path.write_bytes(b"fake-image")
+    write_json(
+        source_dir / "meta.json",
+        {
+            "sourceId": "article_with_unlicensed_asset",
+            "sourceUseMode": "factual_reference_only",
+            "researchLane": "article",
+            "sourceRole": "base",
+            "category": "travelogue",
+        },
+    )
+    write_json(
+        asset_dir / "index.json",
+        {"assets": [{"fileName": asset_path.name, "sha256": "sha256:test"}]},
+    )
+    content_object.register_content_object(
+        TASK,
+        batch,
+        ref,
+        content_type="article",
+        angle="攻略",
+        title=title,
+    )
+    brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
+    write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": title, "writingIntent": "planning_consultation"})
+    source_ref = source_path.relative_to(batch_root(TASK, batch)).as_posix()
+    asset_ref = asset_path.relative_to(batch_root(TASK, batch)).as_posix()
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
+        {
+            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "items": [
+                {
+                    "ref": ref,
+                    "kind": "entity",
+                    "carrier": "article",
+                    "researchLane": "article",
+                    "title": title,
+                    "entityRefs": [f"/entity/地点/景区/{entity}"],
+                    "evidenceRefs": [source_ref],
+                    "rationale": "声明源图必须权利完整",
+                    "writingIntent": "planning_consultation",
+                    "baseSourceRef": source_ref,
+                    "assetRefs": [asset_ref],
+                    "sourceUseMode": "factual_reference_only",
+                }
+            ],
+        },
+    )
+    spec = {
+        "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
+        "content": {
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityArticlesPerTarget": 1,
+                "imageWorksPerTarget": 0,
+                "entityHomepagesPerTarget": 1,
+                "routeArticles": 0,
+            },
+        },
+    }
+
+    issues = cp.validate_content_plan(TASK, batch, spec)
+
+    assert any("missing rights fields" in issue for issue in issues), issues
 
 
 def test_content_plan_enforces_per_target_2_plus_2_distribution():
@@ -316,8 +408,9 @@ def test_content_plan_enforces_per_target_2_plus_2_distribution():
             (f"四姑娘山来源证据 {index}，这是一段包含交通、季节、游览动线和体验判断的图文底稿。" * 45),
             encoding="utf-8",
         )
+        article_asset = None
         if carrier != "image":
-            _write_article_source_asset(source_dir, label=f"article_{index}")
+            article_asset = _write_article_source_asset(source_dir, label=f"article_{index}")
         write_json(
             source_dir / "meta.json",
             {
@@ -380,6 +473,8 @@ def test_content_plan_enforces_per_target_2_plus_2_distribution():
                     "sourceUseMode": "",
                 }
             )
+        elif article_asset is not None:
+            item["assetRefs"] = [article_asset.relative_to(batch_root(TASK, batch)).as_posix()]
         items.append(item)
     write_json(
         batch_content_plan_packet_path(TASK, batch),
@@ -397,6 +492,7 @@ def test_content_plan_enforces_per_target_2_plus_2_distribution():
                 "routeArticles": 0,
             },
             "modalityContract": "separated_research",
+            "research": {"imageCountPolicy": "hard_quota"},
         },
     }
     assert cp.validate_content_plan(TASK, batch, spec) == []
@@ -438,7 +534,7 @@ def test_content_plan_enforces_required_angles_for_4_plus_1_distribution():
             (f"九寨沟 {intent} 来源证据，含图文混合底稿 {index}，补充路线、季节、停留时长和风险提示。" * 45),
             encoding="utf-8",
         )
-        _write_article_source_asset(source_dir, label=f"jiuzhaigou_{index}")
+        article_asset = _write_article_source_asset(source_dir, label=f"jiuzhaigou_{index}")
         write_json(
             source_dir / "meta.json",
             {
@@ -469,11 +565,12 @@ def test_content_plan_enforces_required_angles_for_4_plus_1_distribution():
                 "entityRefs": [f"/entity/地点/景区/{entity}"],
                 "evidenceRefs": [rel],
                 "rationale": f"{intent} 主线证据",
-                "writingIntent": intent,
-                "baseSourceRef": rel,
-                "sourceUseMode": "factual_reference_only",
-            }
-        )
+                    "writingIntent": intent,
+                    "baseSourceRef": rel,
+                    "assetRefs": [article_asset.relative_to(batch_root(TASK, batch)).as_posix()],
+                    "sourceUseMode": "factual_reference_only",
+                }
+            )
 
     image_source = (
         batch_root(TASK, batch)
@@ -710,6 +807,7 @@ def test_content_plan_blocks_image_work_reusing_article_base_asset():
         brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
         write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": title})
     article_source_ref = (article_source / "source.md").relative_to(root).as_posix()
+    article_asset_ref = (article_source / "assets" / "article.jpg").relative_to(root).as_posix()
     image_source_ref = (image_source / "source.md").relative_to(root).as_posix()
     image_asset_ref = (image_source / "assets" / "image.jpg").relative_to(root).as_posix()
     write_json(
@@ -726,10 +824,11 @@ def test_content_plan_blocks_image_work_reusing_article_base_asset():
                     "entityRefs": [f"/entity/地点/景区/{entity}"],
                     "evidenceRefs": [article_source_ref],
                     "rationale": "文章底稿",
-                    "writingIntent": "planning_consultation",
-                    "baseSourceRef": article_source_ref,
-                    "sourceUseMode": "factual_reference_only",
-                },
+                        "writingIntent": "planning_consultation",
+                        "baseSourceRef": article_source_ref,
+                        "assetRefs": [article_asset_ref],
+                        "sourceUseMode": "factual_reference_only",
+                    },
                 {
                     "ref": image_ref,
                     "kind": "entity",
@@ -963,13 +1062,17 @@ def test_base_draft_fidelity_gallery_uses_leading_excerpt_window():
     ) == []
 
 
-def test_factual_reference_only_has_no_minimum_similarity_gate():
-    issues = base_draft_fidelity_issues(
+def test_factual_reference_only_uses_unified_fidelity_gate():
+    """版权风险全面放开：fidelity 门对所有来源统一生效，不再因 factual_reference_only 跳过。
+
+    未授权普通网页同样要求「以底稿为基础适度润色」，脱离底稿从零另写会被同一道下限门拦截。
+    """
+    off_base = base_draft_fidelity_issues(
         "完全独立组织的正文，只复述可核验事实。",
         "普通网页的原始叙述和作者表达。",
         source_use_mode="factual_reference_only",
     )
-    assert issues == []
+    assert off_base, "factual 来源脱离底稿应被统一 fidelity 门拦截"
 
 
 def _run_all() -> None:

@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
 
 /// 一次发码的结果（脱敏号码 + 有效期；调试码仅非生产返回）。
 class OtpSendResultData {
@@ -216,8 +217,8 @@ class MockAuthRepository implements AuthRepository {
     return AuthLoginResultDto.fromMap(<String, dynamic>{
       'accessToken': 'mock_token_${credentialKey.hashCode}',
       'refreshToken': 'mock_refresh',
-      'ownerId': 'mock_owner_id',
-      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'ownerId': kMockCurrentOwnerId,
+      'activeSub': <String, dynamic>{'subAccountId': kMockCurrentSubAccountId},
       'subAccountCount': 1,
     });
   }
@@ -236,8 +237,8 @@ class MockAuthRepository implements AuthRepository {
     return AuthLoginResultDto.fromMap(<String, dynamic>{
       'accessToken': 'mock_one_tap_token_${carrierToken.hashCode}',
       'refreshToken': 'mock_one_tap_refresh',
-      'ownerId': 'mock_owner_id',
-      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'ownerId': kMockCurrentOwnerId,
+      'activeSub': <String, dynamic>{'subAccountId': kMockCurrentSubAccountId},
       'subAccountCount': 1,
       'accountState': 'active',
       'identityOrigin': 'phone',
@@ -287,8 +288,8 @@ class MockAuthRepository implements AuthRepository {
     return AuthLoginResultDto.fromMap(<String, dynamic>{
       'accessToken': 'mock_wechat_token_${wechatCode.hashCode}',
       'refreshToken': 'mock_wechat_refresh',
-      'ownerId': 'mock_owner_id',
-      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'ownerId': kMockCurrentOwnerId,
+      'activeSub': <String, dynamic>{'subAccountId': kMockCurrentSubAccountId},
       'subAccountCount': 1,
       'accountState': 'active',
       'identityOrigin': 'wechat',
@@ -305,8 +306,8 @@ class MockAuthRepository implements AuthRepository {
     return AuthLoginResultDto.fromMap(<String, dynamic>{
       'accessToken': 'mock_alipay_token_${alipayAuthCode.hashCode}',
       'refreshToken': 'mock_alipay_refresh',
-      'ownerId': 'mock_owner_id',
-      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'ownerId': kMockCurrentOwnerId,
+      'activeSub': <String, dynamic>{'subAccountId': kMockCurrentSubAccountId},
       'subAccountCount': 1,
       'accountState': 'active',
       'identityOrigin': 'alipay',
@@ -323,8 +324,8 @@ class MockAuthRepository implements AuthRepository {
     return AuthLoginResultDto.fromMap(<String, dynamic>{
       'accessToken': 'mock_qq_token_${qqAuthCode.hashCode}',
       'refreshToken': 'mock_qq_refresh',
-      'ownerId': 'mock_owner_id',
-      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'ownerId': kMockCurrentOwnerId,
+      'activeSub': <String, dynamic>{'subAccountId': kMockCurrentSubAccountId},
       'subAccountCount': 1,
       'accountState': 'active',
       'identityOrigin': 'qq',
@@ -341,8 +342,8 @@ class MockAuthRepository implements AuthRepository {
     return AuthLoginResultDto.fromMap(<String, dynamic>{
       'accessToken': 'mock_apple_token_${appleIdToken.hashCode}',
       'refreshToken': 'mock_apple_refresh',
-      'ownerId': 'mock_owner_id',
-      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'ownerId': kMockCurrentOwnerId,
+      'activeSub': <String, dynamic>{'subAccountId': kMockCurrentSubAccountId},
       'subAccountCount': 1,
       'accountState': 'active',
       'identityOrigin': 'apple',
@@ -360,8 +361,8 @@ class MockAuthRepository implements AuthRepository {
     return AuthLoginResultDto.fromMap(<String, dynamic>{
       'accessToken': 'mock_passkey_token_${passkeyAssertion.hashCode}',
       'refreshToken': 'mock_passkey_refresh',
-      'ownerId': 'mock_owner_id',
-      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'ownerId': kMockCurrentOwnerId,
+      'activeSub': <String, dynamic>{'subAccountId': kMockCurrentSubAccountId},
       'subAccountCount': 1,
       'accountState': 'active',
       'identityOrigin': 'passkey',
@@ -392,8 +393,8 @@ class MockAuthRepository implements AuthRepository {
     return AuthLoginResultDto.fromMap(<String, dynamic>{
       'accessToken': 'mock_refreshed_token_${refreshToken.hashCode}',
       'refreshToken': 'mock_refreshed_refresh',
-      'ownerId': 'mock_owner_id',
-      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
+      'ownerId': kMockCurrentOwnerId,
+      'activeSub': <String, dynamic>{'subAccountId': kMockCurrentSubAccountId},
       'subAccountCount': 1,
       'accountState': 'active',
       'identityOrigin': 'phone',

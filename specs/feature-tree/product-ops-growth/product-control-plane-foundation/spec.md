@@ -115,7 +115,7 @@
 - 产品：定义统一运营控制面的产品边界、菜单范围、治理/增长模块范围
 - 架构：定义三类面边界、元数据契约、工作流上位模型、部署演进策略
 - 开发：按 metadata-first 落地 `product-control-plane`、codegen、对象模型与业务逻辑
-- 测试：建立 T1~T4 对应的契约、模块、集成、旅程验证
+- 测试：建立 三层测试 对应的契约、模块、集成、旅程验证
 - 发布：负责灰度放量、审计校验、回滚守门与风险动作审批链
 
 ## 非功能目标
@@ -161,10 +161,10 @@
 
 ## 四层验收视图
 
-- T1：控制面元数据、工作流 schema、审计 schema、配置 schema、对象模型与契约一致性
-- T2：门户交互、case 流程、实验配置、推荐运营配置、风险动作确认与双签交互
-- T3：`product-ops` 与 content / circle / chat / user / assistant 等领域的控制面联调
-- T4：真实治理旅程、真实申诉/恢复旅程、真实实验放量与回滚旅程
+- local_contract：控制面元数据、工作流 schema、审计 schema、配置 schema、对象模型与契约一致性
+- local_contract：门户交互、case 流程、实验配置、推荐运营配置、风险动作确认与双签交互
+- api_integration：`product-ops` 与 content / circle / chat / user / assistant 等领域的控制面联调
+- user_acceptance：真实治理旅程、真实申诉/恢复旅程、真实实验放量与回滚旅程
 
 ## 灰度与回滚约束
 

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "四姑娘山_planning_consultation",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:b830c09d9fdb5f99d238cf60e008973fec84715bdb1c19ce9a807c5d57c25481",
+  "finalSha256": "sha256:4264ac7d0b25a042f09fdd468e022642db6fe754b8061d0974fa7e9e62cd4112",
+  "draftBodySha256": "sha256:b830c09d9fdb5f99d238cf60e008973fec84715bdb1c19ce9a807c5d57c25481",
+  "finalBodySha256": "sha256:b830c09d9fdb5f99d238cf60e008973fec84715bdb1c19ce9a807c5d57c25481",
+  "composeSnapshotSha256": "sha256:b830c09d9fdb5f99d238cf60e008973fec84715bdb1c19ce9a807c5d57c25481",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

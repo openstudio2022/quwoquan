@@ -129,6 +129,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
     required bool isDark,
     required String? avatarUrl,
     required String displayName,
+    required bool showEditPencil,
     required String? bio,
     required ProfileState state,
     required ProfileNotifier notifier,
@@ -137,132 +138,168 @@ extension _ProfileShellBuilders on _ProfileShellState {
         SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final summaryBorder =
         SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
+    final isMine = widget.mode == ProfileMode.mine;
     final displayCapability = state.displayCapability;
+    final resolvedAvatarUrl = isLocalFileImageSource(avatarUrl)
+        ? (avatarUrl ?? '')
+        : resolveAvatarImageUrl(avatarUrl);
+    final effectiveIdentityTags =
+        state.profile?.identityTags ?? const <String>[];
+    final hasIdentityTags = effectiveIdentityTags
+        .map((tag) => tag.trim())
+        .any((tag) => tag.isNotEmpty);
+    final hasAvatar = resolvedAvatarUrl.isNotEmpty;
+    final hasBio = (bio ?? '').trim().isNotEmpty;
+    final isProfileComplete = hasIdentityTags && hasAvatar && hasBio;
     final summaryShadow = isDark
         ? AppColors.black.withValues(alpha: 0.10)
         : AppColors.black.withValues(alpha: 0.025);
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: SettingsSemanticConstants.conversationSheetPanelBackground(
-          isDark,
-        ).withValues(alpha: isDark ? 0.98 : 0.96),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.feedContentHorizontal(context),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              key: const ValueKey<String>('profile-shell-profile-card'),
-              decoration: BoxDecoration(
-                color: summarySurface,
-                borderRadius: BorderRadius.circular(
-                  _ProfileShellState._profileCardRadius,
+      decoration: const BoxDecoration(color: AppColors.transparent),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            key: const ValueKey<String>('profile-shell-profile-card'),
+            decoration: BoxDecoration(
+              color: summarySurface,
+              borderRadius: BorderRadius.circular(
+                _ProfileShellState._profileCardRadius,
+              ),
+              border: Border.all(
+                color: summaryBorder.withValues(alpha: isDark ? 0.75 : 0.55),
+                width: AppSpacing.hairline,
+              ),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: summaryShadow,
+                  blurRadius: AppSpacing.fourteen,
+                  offset: const Offset(0, 6),
                 ),
-                border: Border.all(
-                  color: summaryBorder.withValues(alpha: isDark ? 0.75 : 0.55),
-                  width: AppSpacing.hairline,
-                ),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: summaryShadow,
-                    blurRadius: AppSpacing.fourteen,
-                    offset: const Offset(0, 6),
+              ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.containerMd,
+                0,
+                AppSpacing.containerMd,
+                AppSpacing.containerMd,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ProfileHeader(
+                    isDark: isDark,
+                    avatarUrl: avatarUrl,
+                    displayName: displayName,
+                    identityTags: effectiveIdentityTags,
+                    verified: state.profile?.verified ?? false,
+                    showEdit: showEditPencil,
+                    onEdit: () => context.push(AppRoutePaths.profileEdit),
+                    showUploadAvatarPrompt: isMine && !hasAvatar,
+                    showIdentityTagPrompt: isMine && !hasIdentityTags,
                   ),
+                  if (widget.mode == ProfileMode.mine ||
+                      (bio != null && bio.trim().isNotEmpty)) ...[
+                    SizedBox(height: AppSpacing.interGroupSm),
+                    ProfileSloganCard(
+                      isDark: isDark,
+                      bio: bio,
+                      showEmptyPrompt: widget.mode == ProfileMode.mine,
+                      onTap: widget.mode == ProfileMode.mine
+                          ? () => context.push(AppRoutePaths.profileEdit)
+                          : null,
+                    ),
+                  ],
+                  if (widget.mode == ProfileMode.mine &&
+                      (state.profile?.profileCompleteness ?? 100) < 100) ...[
+                    SizedBox(height: AppSpacing.intraGroupMd),
+                    ProfileCompletenessCard(
+                      percent: state.profile?.profileCompleteness ?? 100,
+                      missingItems:
+                          state.profile?.profileCompletenessMissingItems ??
+                          const <String>[],
+                      onTap: () => context.push(AppRoutePaths.profileEdit),
+                    ),
+                  ],
+                  SizedBox(height: AppSpacing.interGroupSm),
+                  ProfileStatsRow(
+                    isDark: isDark,
+                    profile: state.profile,
+                    onStatTap: (type) =>
+                        _handleProfileStatTap(context, type, state),
+                  ),
+                  if (widget.mode == ProfileMode.mine) ...[
+                    SizedBox(height: AppSpacing.interGroupSm),
+                    ProfileActionBar(
+                      mode: widget.mode,
+                      isDark: isDark,
+                      isFollowing: state.isFollowing,
+                      profileComplete: isProfileComplete,
+                      onManagePersonas:
+                          ref.watch(personaManagementFeatureFlagProvider)
+                          ? () => context.push(AppRoutePaths.profilePersonas)
+                          : null,
+                      onEditProfile: () =>
+                          context.push(AppRoutePaths.profileEdit),
+                    ),
+                  ] else ...[
+                    SizedBox(height: AppSpacing.interGroupSm),
+                    ProfileActionBar(
+                      mode: widget.mode,
+                      isDark: isDark,
+                      isFollowing:
+                          displayCapability?.viewerFollowsTarget ??
+                          state.isFollowing,
+                      capability: displayCapability,
+                      onEditProfile: () =>
+                          context.push(AppRoutePaths.profileEdit),
+                      onShareProfile: () => AppToast.show(
+                        context,
+                        UITextConstants.shareComingSoon,
+                      ),
+                      onFollow: () => _gatedToggleFollow(context, notifier),
+                      onMessage: () =>
+                          unawaited(_gatedOpenMessage(context, notifier)),
+                    ),
+                  ],
                 ],
               ),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  0,
-                  AppSpacing.containerMd,
-                  AppSpacing.containerMd,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ProfileHeader(
-                      isDark: isDark,
-                      avatarUrl: avatarUrl,
-                      displayName: displayName,
-                      identityTags:
-                          state.profile?.identityTags ?? const <String>[],
-                      verified: state.profile?.verified ?? false,
-                      showEdit: widget.mode == ProfileMode.mine,
-                      onEdit: () => context.push(AppRoutePaths.profileEdit),
-                    ),
-                    if (bio != null && bio.trim().isNotEmpty) ...[
-                      SizedBox(height: AppSpacing.interGroupSm),
-                      ProfileSloganCard(
-                        isDark: isDark,
-                        bio: bio,
-                        onTap: widget.mode == ProfileMode.mine
-                            ? () => context.push(AppRoutePaths.profileEdit)
-                            : null,
-                      ),
-                    ],
-                    if (widget.mode == ProfileMode.mine &&
-                        (state.profile?.profileCompleteness ?? 100) < 100) ...[
-                      SizedBox(height: AppSpacing.intraGroupMd),
-                      ProfileCompletenessCard(
-                        percent: state.profile?.profileCompleteness ?? 100,
-                        missingItems:
-                            state.profile?.profileCompletenessMissingItems ??
-                            const <String>[],
-                        onTap: () => context.push(AppRoutePaths.profileEdit),
-                      ),
-                    ],
-                    SizedBox(height: AppSpacing.interGroupSm),
-                    ProfileStatsRow(
-                      isDark: isDark,
-                      profile: state.profile,
-                      onStatTap: (type) =>
-                          _handleProfileStatTap(context, type, state),
-                    ),
-                    if (widget.mode == ProfileMode.other) ...[
-                      SizedBox(height: AppSpacing.interGroupSm),
-                      ProfileActionBar(
-                        mode: widget.mode,
-                        isDark: isDark,
-                        isFollowing:
-                            displayCapability?.viewerFollowsTarget ??
-                            state.isFollowing,
-                        capability: displayCapability,
-                        onEditProfile: () =>
-                            context.push(AppRoutePaths.profileEdit),
-                        onShareProfile: () => AppToast.show(
-                          context,
-                          UITextConstants.shareComingSoon,
-                        ),
-                        onFollow: () => _gatedToggleFollow(context, notifier),
-                        onMessage: () =>
-                            unawaited(_gatedOpenMessage(context, notifier)),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
             ),
-            if (widget.mode == ProfileMode.mine) ...[
-              MyIntersectionInboxCard(isDark: isDark),
-            ] else ...[
-              _buildIntersectionCard(isDark),
-            ],
-            _buildAuthorImpactCard(isDark),
-            SizedBox(height: _ProfileShellState._profileSurfaceBridge),
+          ),
+          if (widget.mode == ProfileMode.mine) ...[
+            MyIntersectionInboxCard(isDark: isDark),
+          ] else ...[
+            _buildIntersectionCard(isDark),
           ],
-        ),
+          _buildAuthorImpactCard(isDark),
+          SizedBox(height: AppSpacing.interGroupSm),
+        ],
       ),
     );
+  }
+
+  /// 「添加封面」按钮顶部锚点：toolbar 底部，避免遮住顶部工具栏。
+  double _coverPromptTop(BuildContext context) => _toolbarExtent(context);
+
+  /// 「添加封面」按钮可用高度：非拉伸态封面可见区（base 封面高 − toolbar 区），
+  /// 不含下拉拉伸增量，确保拉伸时按钮锚点不下沉。
+  double _coverPromptVisibleHeight(BuildContext context) {
+    final baseHeight =
+        MediaQuery.sizeOf(context).height *
+        AppSpacing.adaptiveProfileHeaderBaseHeightRatio(context);
+    final visible = baseHeight - _toolbarExtent(context);
+    return visible > 0 ? visible : 0.0;
   }
 
   Widget _buildBackgroundLayer(
     BuildContext context, {
     required String? backgroundUrl,
     required Color backgroundColor,
+    required bool showCoverPrompt,
+    required VoidCallback onCoverPrompt,
   }) {
+    final isDark = ref.watch(isDarkProvider);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -272,12 +309,25 @@ extension _ProfileShellBuilders on _ProfileShellState {
           top: 0,
           bottom: -_ProfileShellState._profileSurfaceBridge,
           child: backgroundUrl != null && backgroundUrl.isNotEmpty
-              ? AppCachedNetworkImage(
-                  imageUrl: backgroundUrl,
-                  fit: BoxFit.cover,
-                  errorWidget: ColoredBox(color: backgroundColor),
-                )
-              : ColoredBox(color: backgroundColor.withValues(alpha: 0.75)),
+              ? (isLocalFileImageSource(backgroundUrl)
+                    // 本地选取（未上传）封面经 FileImage 直显（alpha 保存后即时回显）。
+                    ? AppMediaImage(
+                        imageSource: backgroundUrl,
+                        fit: BoxFit.cover,
+                        errorWidget: _buildProfileBackgroundFallback(
+                          backgroundColor: backgroundColor,
+                        ),
+                      )
+                    : AppCachedNetworkImage(
+                        imageUrl: backgroundUrl,
+                        fit: BoxFit.cover,
+                        errorWidget: _buildProfileBackgroundFallback(
+                          backgroundColor: backgroundColor,
+                        ),
+                      ))
+              : _buildProfileBackgroundFallback(
+                  backgroundColor: backgroundColor,
+                ),
         ),
         Positioned(
           left: 0,
@@ -299,7 +349,88 @@ extension _ProfileShellBuilders on _ProfileShellState {
             ),
           ),
         ),
+        if (showCoverPrompt)
+          // 「添加封面」按钮锚定在「非拉伸态封面可见区」的垂直居中点：
+          //  - 顶部从 toolbar 底部起算，避免遮住顶部工具栏；
+          //  - 高度只取 base 封面高度（不含下拉拉伸增量），故下拉拉伸时按钮不下沉；
+          //  - 背景层整体随内容上卷（top = -scrollOffset），故上滑时按钮随封面上移。
+          Positioned(
+            left: 0,
+            right: 0,
+            top: _coverPromptTop(context),
+            height: _coverPromptVisibleHeight(context),
+            child: Align(
+              alignment: Alignment.center,
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                onPressed: onCoverPrompt,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.iosSystemBackground(
+                      context,
+                    ).withValues(alpha: isDark ? 0.22 : 0.82),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.radiusNinetyNine,
+                    ),
+                    border: Border.all(
+                      color: AppColors.iosSeparator(
+                        context,
+                      ).withValues(alpha: isDark ? 0.24 : 0.18),
+                      width: AppSpacing.hairline,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerMd,
+                      vertical: AppSpacing.intraGroupSm,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Icon(
+                          CupertinoIcons.photo,
+                          size: AppSpacing.iconSmall,
+                          color: AppColors.iosSecondaryLabel(context),
+                        ),
+                        SizedBox(width: AppSpacing.intraGroupXs),
+                        Text(
+                          UITextConstants.profileUploadCover,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            color: AppColors.iosSecondaryLabel(context),
+                            fontWeight: AppTypography.regular,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
+    );
+  }
+
+  Widget _buildProfileBackgroundFallback({required Color backgroundColor}) {
+    final isDark = ref.watch(isDarkProvider);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            isDark
+                ? backgroundColor.withValues(alpha: 0.86)
+                : AppColors.brandBlue100.withValues(alpha: 0.96),
+            isDark
+                ? AppColors.iosProfileSurface(context).withValues(alpha: 0.76)
+                : AppColors.brandBlue50.withValues(alpha: 0.92),
+            backgroundColor.withValues(alpha: isDark ? 0.96 : 0.88),
+          ],
+        ),
+      ),
     );
   }
 
@@ -312,6 +443,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
     required String? avatarUrl,
     required double opacity,
     required double backgroundOpacity,
+    required bool contentForegroundIsDark,
   }) {
     final topPadding = AppSpacing.appChromeTopSafeInset(
       MediaQuery.viewPaddingOf(context).top,
@@ -328,19 +460,28 @@ extension _ProfileShellBuilders on _ProfileShellState {
               AppSpacing.containerXs
         : sideSlotWidth;
     final resolvedOpacity = backgroundOpacity.clamp(0.0, 1.0);
-    final compactForeground = resolvedOpacity > 0.12
+    final chromeVisible = resolvedOpacity > 0.12;
+    // chrome 不透明：随主题（浅色=深字，深色=浅字）。chrome 透明（贴在封面上）：
+    // 随封面亮度自适应，默认浅色封面下不再用不可见的白色前景。
+    final compactForeground = chromeVisible
         ? fg
-        : CupertinoColors.white;
+        : (contentForegroundIsDark
+              ? AppColors.iosLabel(context)
+              : CupertinoColors.white);
     final toolbarChrome = Color.lerp(
       AppColors.transparent,
       AppColors.iosSystemBackground(context),
       resolvedOpacity,
     )!;
+    final toolbarShadowColor = AppColors.black.withValues(
+      alpha: isDark ? 0.18 : 0.07,
+    );
     final actionBackground =
         AppNavigationSemanticConstants.chromeActionBackground(
           surface: AppChromeSurface.overlay,
         );
-    final statusIconsDark = resolvedOpacity > 0.12;
+    // 状态栏图标深浅与 toolbar 前景同源：chrome 不透明随主题，透明随封面亮度。
+    final useDarkStatusIcons = chromeVisible ? !isDark : contentForegroundIsDark;
     return Positioned(
       top: 0,
       left: 0,
@@ -348,11 +489,11 @@ extension _ProfileShellBuilders on _ProfileShellState {
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle(
           statusBarColor: AppColors.transparent,
-          statusBarIconBrightness: statusIconsDark
-              ? (isDark ? Brightness.light : Brightness.dark)
+          statusBarIconBrightness: useDarkStatusIcons
+              ? Brightness.dark
               : Brightness.light,
-          statusBarBrightness: statusIconsDark
-              ? (isDark ? Brightness.dark : Brightness.light)
+          statusBarBrightness: useDarkStatusIcons
+              ? Brightness.light
               : Brightness.dark,
         ),
         child: Container(
@@ -361,6 +502,15 @@ extension _ProfileShellBuilders on _ProfileShellState {
             color: toolbarChrome,
             border: resolvedOpacity > 0.02
                 ? Border(bottom: _profileSeparatorSide(border))
+                : null,
+            boxShadow: resolvedOpacity > 0.18
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: toolbarShadowColor,
+                      blurRadius: AppSpacing.containerSm,
+                      offset: const Offset(0, AppSpacing.one),
+                    ),
+                  ]
                 : null,
           ),
           child: LayoutBuilder(
@@ -413,21 +563,41 @@ extension _ProfileShellBuilders on _ProfileShellState {
                                             child:
                                                 avatarUrl != null &&
                                                     avatarUrl.isNotEmpty
-                                                ? AppCachedNetworkImage(
-                                                    imageUrl: avatarUrl,
-                                                    fit: BoxFit.cover,
-                                                    errorWidget: ColoredBox(
-                                                      color: actionBackground,
-                                                      child: Icon(
-                                                        CupertinoIcons
-                                                            .person_crop_circle_fill,
-                                                        size: AppSpacing
-                                                            .iconMedium,
-                                                        color:
-                                                            compactForeground,
-                                                      ),
-                                                    ),
-                                                  )
+                                                ? (isLocalFileImageSource(
+                                                        avatarUrl,
+                                                      )
+                                                      ? AppMediaImage(
+                                                          imageSource: avatarUrl,
+                                                          fit: BoxFit.cover,
+                                                          errorWidget: ColoredBox(
+                                                            color:
+                                                                actionBackground,
+                                                            child: Icon(
+                                                              CupertinoIcons
+                                                                  .person_crop_circle_fill,
+                                                              size: AppSpacing
+                                                                  .iconMedium,
+                                                              color:
+                                                                  compactForeground,
+                                                            ),
+                                                          ),
+                                                        )
+                                                      : AppCachedNetworkImage(
+                                                          imageUrl: avatarUrl,
+                                                          fit: BoxFit.cover,
+                                                          errorWidget: ColoredBox(
+                                                            color:
+                                                                actionBackground,
+                                                            child: Icon(
+                                                              CupertinoIcons
+                                                                  .person_crop_circle_fill,
+                                                              size: AppSpacing
+                                                                  .iconMedium,
+                                                              color:
+                                                                  compactForeground,
+                                                            ),
+                                                          ),
+                                                        ))
                                                 : ColoredBox(
                                                     color: actionBackground,
                                                     child: Icon(
@@ -472,9 +642,10 @@ extension _ProfileShellBuilders on _ProfileShellState {
                                 ? Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const GlobalTopActions(
+                                      GlobalTopActions(
                                         showQuickAction: false,
                                         surface: AppChromeSurface.overlay,
+                                        foregroundColor: compactForeground,
                                       ),
                                       SizedBox(width: AppSpacing.intraGroupXs),
                                       ProfileIosIconButton(
@@ -524,27 +695,56 @@ extension _ProfileShellBuilders on _ProfileShellState {
     required bool pinned,
     double opacity = 1.0,
   }) {
+    final tabDivider = SettingsSemanticConstants.conversationSheetDividerColor(
+      CupertinoTheme.brightnessOf(context) == Brightness.dark,
+    );
     final tabs = UserProfileUIConfig.profileTabs
         .map(
           (tab) => TabItem(id: tab.id, label: _profileObjectTabLabel(tab.id)),
         )
         .toList(growable: false);
+    final state = ref.watch(profileNotifierProvider(widget.userId));
+    final showInteractionDirectionSwitch =
+        widget.mode == ProfileMode.mine && _activeTabId == 'interaction';
+    final directionSwitch = showInteractionDirectionSwitch
+        ? ProfileInteractionDirectionSwitch(
+            isDark: CupertinoTheme.brightnessOf(context) == Brightness.dark,
+            current: state.interactionDirection,
+            onSelected: (direction) {
+              ref
+                  .read(profileNotifierProvider(widget.userId).notifier)
+                  .setInteractionDirection(direction);
+            },
+          )
+        : null;
     final surface = Container(
       key: pinned
           ? const ValueKey<String>('profile-shell-primary-tabs-pinned')
           : const ValueKey<String>('profile-shell-primary-tabs-inline'),
       clipBehavior: pinned ? Clip.none : Clip.antiAlias,
-      decoration: BoxDecoration(color: bg),
+      decoration: BoxDecoration(
+        color: bg,
+        border: pinned ? Border(top: _profileSeparatorSide(tabDivider)) : null,
+      ),
       child: SizedBox(
         height: _primaryTabBarHeight(context),
-        child: CenteredScrollableTabBar(
-          tabs: tabs,
-          activeTab: _activeTabId,
-          onTabChange: _onPrimaryTabChange,
-          onHorizontalDragEnd: _handleTabSwipeDragEnd,
-          transparentBackground: true,
-          excludeUnderlineTabIds: tabs.map((tab) => tab.id).toList(),
-          selectedLabelColor: AppColors.iosAccent(context),
+        child: Stack(
+          alignment: Alignment.center,
+          children: <Widget>[
+            CenteredScrollableTabBar(
+              tabs: tabs,
+              activeTab: _activeTabId,
+              onTabChange: _onPrimaryTabChange,
+              onHorizontalDragEnd: _handleTabSwipeDragEnd,
+              transparentBackground: true,
+              selectedLabelColor: AppColors.iosAccent(context),
+            ),
+            if (directionSwitch != null)
+              PositionedDirectional(
+                end: AppSpacing.containerMd,
+                child: directionSwitch,
+              ),
+          ],
         ),
       ),
     );
@@ -590,13 +790,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
   /// 仅在无可展示档案时渲染，保持壳层几何稳定、错误对用户可见。
   Widget _buildFirstScreenError(BuildContext context, ProfileState state) {
     return AppPageErrorState(
-      semantic: runtimeErrorSemantic(
-        // hasLoadError ⟺ rawError != null（调用点已保证），此处直接消费原始错误。
-        context,
-        error: state.rawError!,
-        category: UiErrorCategory.pageLoad,
-        scope: UiErrorScope.page,
-      ),
+      semantic: _profileBlockingErrorSemantic(context, state.rawError!),
       onAction: (action) async {
         if (action.type == UiErrorActionType.retry ||
             action.type == UiErrorActionType.resubmit) {
@@ -627,9 +821,82 @@ extension _ProfileShellBuilders on _ProfileShellState {
         onSecondaryHorizontalDragEnd: _handleTabSwipeDragEnd,
       ),
     };
-    return KeyedSubtree(
+    final body = KeyedSubtree(
       key: ValueKey<String>('profile-tab-body-$_activeTabId'),
       child: content,
+    );
+    final fallbackError = ref
+        .watch(profileNotifierProvider(widget.userId))
+        .rawError;
+    if (fallbackError == null) {
+      return body;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppTransientErrorNotice(
+          semantic: _profileCacheFallbackSemantic(context, fallbackError),
+        ),
+        body,
+      ],
+    );
+  }
+
+  UiErrorSemantic _profileBlockingErrorSemantic(
+    BuildContext context,
+    Object error,
+  ) {
+    final base = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
+    return UiErrorSemantic(
+      category: base.category,
+      scope: base.scope,
+      title: UITextConstants.homepageLoadFailedTitle,
+      message: UITextConstants.pageLoadFailedMessage,
+      secondaryMessage: base.secondaryMessage,
+      primaryAction: base.primaryAction,
+      secondaryAction: base.secondaryAction,
+      dismissible: base.dismissible,
+      sourceCode: base.sourceCode,
+      failureKind: base.failureKind,
+      copyKey: 'homepageLoadFailedTitle',
+      recoveryAction: base.recoveryAction,
+      presentation: base.presentation,
+      tone: base.tone,
+    );
+  }
+
+  UiErrorSemantic _profileCacheFallbackSemantic(
+    BuildContext context,
+    Object error,
+  ) {
+    final base = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.backgroundAction,
+      scope: UiErrorScope.section,
+      allowRetry: false,
+      presentation: UiErrorPresentation.transientNotice,
+    );
+    return UiErrorSemantic(
+      category: base.category,
+      scope: base.scope,
+      title: UITextConstants.homepageLoadFailedTitle,
+      message: UITextConstants.profileCacheFallback,
+      secondaryMessage: base.secondaryMessage,
+      primaryAction: base.primaryAction,
+      secondaryAction: base.secondaryAction,
+      dismissible: base.dismissible,
+      sourceCode: base.sourceCode,
+      failureKind: base.failureKind,
+      copyKey: 'profileCacheFallback',
+      recoveryAction: base.recoveryAction,
+      presentation: base.presentation,
+      tone: UiErrorTone.caution,
     );
   }
 

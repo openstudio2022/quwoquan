@@ -8,42 +8,58 @@ node:
 scope:
   summary: 运行时数据工程发布物、校验和环境数据同源验收范围。
   in_scope:
-    - tagRef 发布物。
-    - canonical entity 与 entityRef。
-    - relationEdge 候选事实。
-    - seed manifest 与环境数据隔离。
+  - tagRef 发布物。
+  - canonical entity 与 entityRef。
+  - relationEdge 候选事实。
+  - seed manifest 与环境数据隔离。
   out_of_scope:
-    - 在线推荐排序实现。
-    - 业务服务在线写路径。
+  - 在线推荐排序实现。
+  - 业务服务在线写路径。
 sit_acceptance:
   SIT1:
     title: 数据工程同源输入验收
     done_when:
-      - tagRef、canonicalEntityId、entityRef、relationEdge 有明确发布物或 fixture 来源。
-      - alpha/beta/gamma/prod 数据策略不漂移。
-      - 对象主页网络可引用同一数据工程输入构建交集、推荐和小艺上下文。
+    - tagRef、canonicalEntityId、entityRef、relationEdge 有明确发布物或 fixture 来源。
+    - alpha/beta/gamma/prod 数据策略不漂移。
+    - 对象主页网络可引用同一数据工程输入构建交集、推荐和小艺上下文。
     integration_points:
-      - quwoquan_data/publish/v1/tags
-      - quwoquan_service/contracts/metadata
-      - quwoquan_service/contracts/metadata/_shared/test_fixtures
-      - quwoquan_app/lib/cloud/services
+    - quwoquan_data/publish/tags
+    - quwoquan_service/contracts/metadata
+    - quwoquan_service/contracts/metadata/_shared/test_fixtures
+    - quwoquan_app/lib/cloud/services
     performance_points: []
-    evidence:
-      primary:
-        - T1_contract
-        - T3_cross_service_integration
-      supporting:
-        - T2_module_interaction
     tests:
       planned:
-        - quwoquan_data/scripts/verify/verify_content_quality.py
-        - quwoquan_app/scripts/env/verify_app_seed_manifests.py
-        - quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py
+      - file: quwoquan_data/scripts/verify/verify_content_quality.py
+      - file: quwoquan_app/scripts/env/verify_app_seed_manifests.py
+      - file: quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.runtime_data_engineering.sit1.contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: cross_service_integration
+        cases:
+        - api_integration.runtime.runtime_data_engineering.sit1.cross_service_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.runtime.runtime_data_engineering.sit1.sit1_local_contract
+        envs: *id001
+    notes: []
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

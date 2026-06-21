@@ -5,7 +5,7 @@ service:
   name: tag-service
   domain: tag
 
-# 唯一标签真相源为数据工程 publish/v1/tags；tag-service 只读消费导入产物。
+# 唯一标签真相源为数据工程 publish/tags；tag-service 只读消费导入产物。
 # 交集核心新增：ResolveTag / SharedTags / InvertedObjects（V0.5 首发实现）。
 # 创作打标与搜索 API（dimensions/suggest/validate/search/related/search-by-tags/
 #   feedback/cooccurrence/related-objects）保留契约，端统一走 codegen path（消除硬编码）。

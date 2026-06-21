@@ -543,7 +543,7 @@ func TestIntersectionService_ExplainPipelineInstantiatesPrimaryText(t *testing.T
 			Strength: 0.9, ActionTargetID: "u1", RelationKind: "none",
 			// R-ID01：reason 级 displayText 已零兼容删除；primaryText 必须由 kind+count 模板化产出。
 			IntersectionPoints: []IntersectionPointView{
-				{PointID: "p1", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", Count: 3, Visibility: "public"},
+				{PointID: "p1", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", Count: 3, SampleText: "林清越", Visibility: "public"},
 				{PointID: "p2", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedCircle", Label: "共同圈子", Count: 2, Visibility: "public"},
 			},
 		},
@@ -559,14 +559,83 @@ func TestIntersectionService_ExplainPipelineInstantiatesPrimaryText(t *testing.T
 		t.Fatalf("want 1 reason, got %d", len(feed))
 	}
 	got := feed[0]
-	if got.PrimaryText != "你们有3位共同关注的人" {
+	if got.PrimaryText != "你和林清越等3人共同关注了相同的人" {
 		t.Fatalf("primaryText must instantiate sharedFollowees template, got %q", got.PrimaryText)
+	}
+	if got.RepresentativeActor == nil || got.RepresentativeActor.DisplayName != "林清越" {
+		t.Fatalf("representativeActor must come from evidence snapshot, got %+v", got.RepresentativeActor)
+	}
+	if len(got.ActionHints) == 0 || got.ActionHints[0].ActionKey == "" {
+		t.Fatalf("actionHints must be generated from kind registry, got %+v", got.ActionHints)
 	}
 	if !strings.Contains(got.SecondaryText, "共同圈子") {
 		t.Fatalf("secondaryText should enumerate other-kind evidence, got %q", got.SecondaryText)
 	}
 	if got.ConnectionSummary != "你们已有2个共同点" {
 		t.Fatalf("connectionSummary mismatch, got %q", got.ConnectionSummary)
+	}
+}
+
+func TestIntersectionService_ListFiltersAndPaginates(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	src := stubSource{facts: []IntersectionReasonView{
+		{
+			IntersectionID: "a", IntersectionClass: "fact", Dimension: "relationship",
+			Strength: 0.9, FreshAt: now.Add(-1 * time.Hour).Format(time.RFC3339), TimeBucket: "today",
+			IntersectionPoints: []IntersectionPointView{
+				{PointID: "a1", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", Count: 2, SampleText: "林清越", Visibility: "public"},
+			},
+		},
+		{
+			IntersectionID: "b", IntersectionClass: "fact", Dimension: "relationship",
+			Strength: 0.7, FreshAt: now.Add(-2 * time.Hour).Format(time.RFC3339), TimeBucket: "today",
+			IntersectionPoints: []IntersectionPointView{
+				{PointID: "b1", PointClass: "fact", Dimension: "relationship", SourceRef: "commonContact", Label: "共同联系人", Count: 1, SampleText: "周屿", Visibility: "public"},
+			},
+		},
+		{
+			IntersectionID: "c", IntersectionClass: "fact", Dimension: "location",
+			Strength: 0.8, FreshAt: now.Add(-3 * time.Hour).Format(time.RFC3339), TimeBucket: "last7Days",
+			IntersectionPoints: []IntersectionPointView{
+				{PointID: "c1", PointClass: "fact", Dimension: "location", SourceRef: "followeeVisited", Label: "来过这里", Count: 5, SampleText: "顾南", Visibility: "public"},
+			},
+		},
+	}}
+	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
+	fixedNow(svc, now)
+
+	page, nextCursor, hasMore, err := svc.List(context.Background(), "viewer1", IntersectionListQuery{
+		Dimension:  "relationship",
+		TimeBucket: "today",
+		Limit:      1,
+	})
+	if err != nil {
+		t.Fatalf("list page 1: %v", err)
+	}
+	if len(page) != 1 || page[0].IntersectionID != "a" || !hasMore || nextCursor == "" {
+		t.Fatalf("unexpected page 1: items=%+v next=%q hasMore=%v", page, nextCursor, hasMore)
+	}
+	page, _, hasMore, err = svc.List(context.Background(), "viewer1", IntersectionListQuery{
+		Dimension:  "relationship",
+		TimeBucket: "today",
+		Cursor:     nextCursor,
+		Limit:      1,
+	})
+	if err != nil {
+		t.Fatalf("list page 2: %v", err)
+	}
+	if len(page) != 1 || page[0].IntersectionID != "b" || hasMore {
+		t.Fatalf("unexpected page 2: items=%+v hasMore=%v", page, hasMore)
+	}
+	page, _, _, err = svc.List(context.Background(), "viewer1", IntersectionListQuery{
+		SourceRef: "followeeVisited",
+		Limit:     10,
+	})
+	if err != nil {
+		t.Fatalf("list sourceRef: %v", err)
+	}
+	if len(page) != 1 || page[0].IntersectionID != "c" {
+		t.Fatalf("sourceRef filter mismatch: %+v", page)
 	}
 }
 

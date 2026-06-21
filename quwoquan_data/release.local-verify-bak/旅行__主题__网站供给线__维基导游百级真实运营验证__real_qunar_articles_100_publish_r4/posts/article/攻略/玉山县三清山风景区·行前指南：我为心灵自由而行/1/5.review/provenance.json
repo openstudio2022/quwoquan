@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_05ac44bd3e049dd2",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "玉山县三清山风景区·行前指南：我为心灵自由而行",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-2caa97b4-f2ed-47c4-a211-c026fee8483a",
+    "agentId": "agent-6fdc91c1-8dd3-4230-b7a1-b8b0c2e9b125",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/玉山县三清山风景区"
+    ],
+    "articleDigest": "sha256:f059e2a96d66d44b5f2edbb1f4341bdede8dff03e5729f2e5c221f6c75df1527"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "玉山县三清山风景区·行前指南：我为心灵自由而行",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:c63cdf29b062d1c0e44b9c796ab2164b3867af8f3359175ba68ae83a80fa2a57",
+    "writingPackSha256": "sha256:ac75703c22e9cbbf31e5a2a3458de9c90eba9c61c2290389939e1ad754689ba7",
+    "sourceBundleSha256": "sha256:cd99aa5cbfd416c042869388ce2a7f8d631368450819ddef5fff8fb23eab1011",
+    "draftSha256": "sha256:d95437931f12af84a92ed1269fa448a108f55ad1d8ea9012e791eb9ceb80d253"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/玉山县三清山风景区/1.download/sources/01.qunar_guide_candidate_05ac44bd3e049dd2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7870529"
+    },
+    {
+      "path": "entities/地点/景区/玉山县三清山风景区/1.download/sources/14.qunar_guide_candidate_2379af60db498ba0/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7884187"
+    },
+    {
+      "path": "entities/地点/景区/玉山县三清山风景区/1.download/sources/71.qunar_guide_candidate_a32d0e27eeb66407/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7888409"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/玉山县三清山风景区/1.download/sources/01.qunar_guide_candidate_05ac44bd3e049dd2/source.md",
+    "entities/地点/景区/玉山县三清山风景区/1.download/sources/14.qunar_guide_candidate_2379af60db498ba0/source.md",
+    "entities/地点/景区/玉山县三清山风景区/1.download/sources/71.qunar_guide_candidate_a32d0e27eeb66407/source.md"
+  ]
+}

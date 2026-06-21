@@ -1,0 +1,44 @@
+{
+  "label": "九寨沟",
+  "domain": "地点",
+  "type": "景区",
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "entityRef": "/entity/地点/景区/九寨沟",
+  "summary": "九寨沟风景名胜区，简称九寨溝，位于中国四川省北部阿坝藏族羌族自治州九寨沟县（原南坪县）。",
+  "conditionProfile": {
+    "regions": [
+      "高原",
+      "山地森林"
+    ],
+    "seasons": [
+      "春"
+    ],
+    "evidenceRefs": [
+      {
+        "field": "regions",
+        "value": "高原",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "九寨沟 主页正文概况与空间特征归纳"
+      },
+      {
+        "field": "regions",
+        "value": "山地森林",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "九寨沟 主页正文概况与空间特征归纳"
+      },
+      {
+        "field": "seasons",
+        "value": "春",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "九寨沟 主页正文季节与游览信息归纳"
+      }
+    ]
+  },
+  "sourceRefs": [
+    "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/source.md"
+  ]
+}

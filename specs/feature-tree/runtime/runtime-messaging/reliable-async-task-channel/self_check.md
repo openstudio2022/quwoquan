@@ -11,14 +11,14 @@
 | 不变量 | 规格 | 设计 | 验收/门禁 | 状态 |
 |--------|------|------|-----------|------|
 | Outbox 是事实源，队列只是执行索引 | `spec.md` | `design.md` | `acceptance.yaml` / catalog 校验 | 已覆盖 |
-| 业务数据 + Outbox 同事务 | `spec.md` | `design.md` | T3/T4 测试规划 | 已覆盖 |
+| 业务数据 + Outbox 同事务 | `spec.md` | `design.md` | api_integration/user_acceptance 测试规划 | 已覆盖 |
 | 未到期任务保留在 DB，`startAt <= now` 才投递 | `spec.md` | `design.md` | `verify_reliable_task_catalog.py` 间接约束 | 已覆盖 |
 | payload 只保存版本提示，worker 重读 DB | `spec.md` | `design.md` | payload allowlist 校验 | 已覆盖 |
-| 结果 + Notification Outbox 同事务 | `spec.md` | `design.md` | T3/T4 测试规划 | 已覆盖 |
-| ACK 只在结果事务后发生 | `spec.md` | `design.md` | T3/T4 测试规划 | 已覆盖 |
+| 结果 + Notification Outbox 同事务 | `spec.md` | `design.md` | api_integration/user_acceptance 测试规划 | 已覆盖 |
+| ACK 只在结果事务后发生 | `spec.md` | `design.md` | api_integration/user_acceptance 测试规划 | 已覆盖 |
 | 至少一次投递 + 幂等 | `spec.md` | `design.md` | task catalog 幂等/partition 约束 | 已覆盖 |
 | DLQ 与人工恢复 | `spec.md` | `design.md` | retention policy 校验 | 已覆盖 |
-| recipient 级通知去重 | `spec.md` | `design.md` | T3/T4 测试规划 | 已覆盖 |
+| recipient 级通知去重 | `spec.md` | `design.md` | api_integration/user_acceptance 测试规划 | 已覆盖 |
 
 ## 模块化部署覆盖
 
@@ -85,7 +85,7 @@
 ## 剩余实现项
 
 - retention、backpressure、rate limit 与观测指标输出仍需进一步产品化。
-- 扩缩容 rebalance、真实进程崩溃、Redis/Mongo 短暂不可用等系统级演练仍需进入更高阶 T4 环境。
+- 扩缩容 rebalance、真实进程崩溃、Redis/Mongo 短暂不可用等系统级演练仍需进入更高阶 user_acceptance 环境。
 - `chat` 的群头像链路已接入 reliable-task；roster/inbox 仍需按后续切片接入同一公共通道。
 - `user` 与 `content` 业务场景尚未接入。
 - alpha/beta 已通过本地 ready index 场景测试；真实部署环境的长稳压测仍需后续补充。

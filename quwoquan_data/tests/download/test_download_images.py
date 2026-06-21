@@ -29,7 +29,7 @@ os.environ["QWQ_PUBLISH_ROOT"] = str(_TMP / "publish")
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common.io import read_json, write_json  # noqa: E402
-from _common.paths import STAGE_DOWNLOAD, ensure_batch_layout  # noqa: E402
+from _common.paths import STAGE_DOWNLOAD, batch_root, ensure_batch_layout  # noqa: E402
 from _common.source_unit import resolve_entity_object_dir  # noqa: E402
 import download.fetch as fetch_mod  # noqa: E402
 import download.handler as handler_mod  # noqa: E402
@@ -206,6 +206,22 @@ def test_fetch_image_payload_reads_only_data_root_file_urls():
     outside = Path(tempfile.mkdtemp(prefix="outside_data_root_")) / "asset.jpg"
     outside.write_bytes(_real_jpeg(24))
     assert fetch_mod.fetch_image_payload(outside.resolve().as_uri()) is None
+
+
+def test_image_check_temp_file_is_ephemeral():
+    batch = "b_img_temp_cleanup"
+    ensure_batch_layout(_TASK, batch, "download")
+    body = _real_jpeg(31)
+    temp_path = handler_mod._write_image_check_temp_file(
+        _TASK,
+        batch,
+        subdir="tmp_image_checks",
+        payload={"bytes": body, "ext": ".jpg"},
+    )
+    assert temp_path.is_file()
+    assert temp_path.read_bytes() == body
+    handler_mod._cleanup_image_check_temp_file(temp_path)
+    assert not temp_path.exists()
 
 
 def test_repeated_fetch_preserves_better_same_url_source_unit():
@@ -406,19 +422,19 @@ def test_handle_download_fetches_images_into_source_unit():
     assert len(all_assets) == 2, all_assets
     unit, first = all_assets[0]
     assert (unit / "assets" / first["fileName"]).is_file()
-    # 新增持久化字段：尺寸 + contentType + 完整版权 + 相关性 + 多变体。
+    # download 主链路只闭合原图、尺寸、版权、hash 与相关性；WebP 变体延后到 media/release 阶段。
     assert first["width"] >= 640 and first["height"] >= 426, first
     assert first["contentType"] == "image/jpeg", first
     assert first["relevance"], first
-    assert first["variants"], "应有物理多变体(webp)"
-    variant_profiles = {v["profile"] for v in first["variants"]}
-    assert {"thumbnail", "display"}.issubset(variant_profiles), variant_profiles
-    for v in first["variants"]:
-        assert (unit / "assets" / v["fileName"]).is_file(), v
+    assert first["variantGeneration"] == "deferred", first
+    assert first["variants"] == [], "download 阶段不得物理生成 WebP 变体"
     assert all_assets[1][1]["license"] == "CC-BY-SA 4.0"
     assert all_assets[1][1]["credit"] == "Bob"
     # 不再有对象级散落 images/
     assert not (obj / "images").exists()
+    events_path = batch_root(_TASK, batch) / "_shared" / "download_events.jsonl"
+    assert events_path.is_file(), "并发下载必须写 append-only events，不能只覆盖 progress snapshot"
+    assert "source fetch done" in events_path.read_text(encoding="utf-8")
 
 
 def test_repeated_image_lane_fetch_reuses_cached_assets_when_network_fails():

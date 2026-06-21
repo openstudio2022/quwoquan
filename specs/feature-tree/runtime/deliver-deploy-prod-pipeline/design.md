@@ -62,7 +62,7 @@ repo verify/package
 | Profile | 作用 | 阻断链职责 |
 |---|---|---|
 | `pr_light` | PR 默认 preflight | 共享 gamma readiness + advisory smoke |
-| `manual_full` | 手动完整 gamma 复验 | ECS deploy + T3 + hosted/high-signal smoke |
+| `manual_full` | 手动完整 gamma 复验 | ECS deploy + api_integration + hosted/high-signal smoke |
 | `nightly_full` | 夜间全量验证 | hosted full + Patrol + 全设备矩阵 |
 | `release_candidate` | 发布前回归 | 与 nightly_full 同级但更靠近发布 |
 | `mainline_auto_prod` | `main` 自动 promotion | beta matrix + prod gray-initial 阻断链（承接旧 gamma-hosted）+ prod initial checks |

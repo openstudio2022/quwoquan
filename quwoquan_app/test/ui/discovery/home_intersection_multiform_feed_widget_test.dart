@@ -1,13 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
@@ -16,6 +20,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/discovery_feed_spacing.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -47,7 +52,8 @@ IntersectionReason _reason({String intersectionClass = 'fact'}) {
     intersectionId: 'ix_post_lin',
     intersectionClass: intersectionClass,
     objectKind: 'person',
-    relationKind: 'person',
+    source: 'sharedFollowees',
+    pointSummarySnapshotId: 'snap_lin',
     primaryText: '你与林清越等 3 位都来这里互动过',
     primarySpans: <IntersectionTextSpan>[
       IntersectionTextSpan(text: '你与', role: 'plain'),
@@ -83,8 +89,7 @@ MicroPostDto _microPost({
 }) {
   final effectiveReason = reason ?? _reason();
   return MicroPostDto(
-    id:
-        'post_intersection_demo_${effectiveReason.intersectionClass}_${imageUrls.length}',
+    id: 'post_intersection_demo_${effectiveReason.intersectionClass}_${imageUrls.length}',
     type: 'moment',
     identity: 'moment',
     authorId: 'user_demo',
@@ -233,6 +238,11 @@ class _ArticleLayoutPost extends PostBaseDto {
   Map<String, dynamic> toMap() => <String, dynamic>{'id': id};
 }
 
+class _NoopMediaDownloadCache extends MediaDownloadCache {
+  @override
+  Future<String?> getCachedFilePath(String url) async => null;
+}
+
 Widget _buildFeed(
   PostBaseDto post, {
   ContentBehaviorTracker? tracker,
@@ -246,6 +256,7 @@ Widget _buildFeed(
       discoveryFeedMapProvider.overrideWith(
         () => _SinglePostFeedMapNotifier(post),
       ),
+      mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
       if (authenticated)
         authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
       if (tracker != null)
@@ -303,7 +314,10 @@ void main() {
     expect(reasonDecoration.color, isNotNull);
     expect(reasonDecoration.border, isNotNull);
     final reasonRadius = reasonDecoration.borderRadius! as BorderRadius;
-    expect(reasonRadius.topLeft.x, DiscoveryFeedSpacing.homeFeedMediaCornerRadius);
+    expect(
+      reasonRadius.topLeft.x,
+      DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
+    );
     final richText = tester.widget<RichText>(
       find.descendant(
         of: find.byType(InteractiveIntersectionText),
@@ -315,7 +329,10 @@ void main() {
       find.byType(InteractiveIntersectionText),
     );
     final plainColor = AppColors.iosLabel(textContext);
-    final accentColor = AppColors.iosAccent(textContext);
+    final isDark = CupertinoTheme.of(textContext).brightness == Brightness.dark;
+    final accentColor = isDark
+        ? AppColors.profileSloganAccentDark
+        : AppColors.profileSloganAccentLight;
     expect(_spanByText(richText, '你与').style?.color, plainColor);
     expect(_spanByText(richText, '等 ').style?.color, plainColor);
     expect(_spanByText(richText, ' 位都来这里互动过').style?.color, plainColor);
@@ -407,11 +424,11 @@ void main() {
 
     expect(find.byKey(const ValueKey('home-feed-empty')), findsOneWidget);
     expect(find.text(DiscoveryFeedText.homeFeedEmptyTitle), findsOneWidget);
-    expect(find.text(DiscoveryFeedText.homeFeedEmptyDescription), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('home-feed-empty-retry')),
+      find.text(DiscoveryFeedText.homeFeedEmptyDescription),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('home-feed-empty-retry')), findsOneWidget);
     // 空态禁止落到空白滚动视图。
     expect(find.byKey(const ValueKey('home-feed-skeleton')), findsNothing);
   });
@@ -449,8 +466,12 @@ void main() {
     final nameSpan = _spanByText(richText, '林清越');
     final countSpan = _spanByText(richText, '3');
 
-    expect(nameSpan.style?.color, AppColors.iosAccent(textContext));
-    expect(countSpan.style?.color, AppColors.iosAccent(textContext));
+    final isDark = CupertinoTheme.of(textContext).brightness == Brightness.dark;
+    final accentColor = isDark
+        ? AppColors.profileSloganAccentDark
+        : AppColors.profileSloganAccentLight;
+    expect(nameSpan.style?.color, accentColor);
+    expect(countSpan.style?.color, accentColor);
     expect(
       _fontWeightValue(nameSpan),
       greaterThan(_fontWeightValue(_spanByText(richText, '你与'))),
@@ -557,9 +578,10 @@ void main() {
               'home-moment-grid-tile-',
             ),
       ),
-      findsNWidgets(5),
+      findsNWidgets(3),
     );
-    expect(find.byKey(const ValueKey('home-moment-grid-more')), findsNothing);
+    expect(find.text('+2'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-moment-grid-more')), findsOneWidget);
 
     await pumpMomentGrid(6);
     expect(
@@ -605,7 +627,10 @@ void main() {
     final gradient = scrimDecoration.gradient! as LinearGradient;
     expect(gradient.colors, isNot(contains(AppColors.overlayStrong)));
     final morePill = tester.widget<DecoratedBox>(
-      find.byKey(const ValueKey('home-moment-grid-more')),
+      find.descendant(
+        of: find.byKey(const ValueKey('home-moment-grid-more')),
+        matching: find.byType(DecoratedBox),
+      ),
     );
     final pillDecoration = morePill.decoration as BoxDecoration;
     expect(pillDecoration.color, isNot(AppColors.overlayStrong));
@@ -645,7 +670,7 @@ void main() {
     expect(find.text('+1'), findsOneWidget);
   });
 
-  testWidgets('图片 post 单图满宽，多图使用横滑轮播和最多 6 个毛玻璃点', (tester) async {
+  testWidgets('图片 post 单图满宽，多图使用横滑轮播、底部点状与右上角数字指示器', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -661,7 +686,10 @@ void main() {
       find.descendant(of: media, matching: find.byType(ClipRRect)).first,
     );
     final landscapeRadius = landscapeClip.borderRadius as BorderRadius;
-    expect(landscapeRadius.topLeft.x, DiscoveryFeedSpacing.homeFeedMediaCornerRadius);
+    expect(
+      landscapeRadius.topLeft.x,
+      DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
+    );
     expect(
       find.descendant(
         of: media,
@@ -717,6 +745,11 @@ void main() {
     await tester.pump();
     expect(find.byType(PageView), findsWidgets);
     expect(
+      find.byKey(const ValueKey('home-image-carousel-counter')),
+      findsOneWidget,
+    );
+    expect(find.text('1/8'), findsOneWidget);
+    expect(
       find.byKey(const ValueKey('home-image-carousel-dots')),
       findsOneWidget,
     );
@@ -736,17 +769,6 @@ void main() {
     final dotDecoration = dot.decoration as BoxDecoration;
     expect(dotDecoration.color, isNot(AppColors.black));
     expect(dotDecoration.shape, BoxShape.circle);
-    final dotsSurface = tester.widget<DecoratedBox>(
-      find
-          .descendant(
-            of: find.byKey(const ValueKey('home-image-carousel-dots')),
-            matching: find.byType(DecoratedBox),
-          )
-          .first,
-    );
-    final dotsDecoration = dotsSurface.decoration as BoxDecoration;
-    expect(dotsDecoration.color, isNot(AppColors.black));
-    expect(dotsDecoration.border, isNotNull);
   });
 
   testWidgets('视频 post 首帧先延迟初始化，避免焦点瞬间抢播', (tester) async {
@@ -801,6 +823,27 @@ void main() {
     );
     expect(video.width, lessThan(card.width - 32));
     expect(video.width, greaterThan((card.width - 32) * 0.55));
+  });
+
+  test('视频 post 外层播放按钮只属于未初始化静态封面态', () {
+    final source = File(
+      'lib/ui/discovery/widgets/home_multi_form_feed_media_grid.dart',
+    ).readAsStringSync();
+    expect(source, contains('if (!initialize && !autoPlay)'));
+    expect(source, isNot(contains('if (!autoPlay)\n              Center(')));
+  });
+
+  test('视频快滑抑制事件走统一 cache telemetry sink', () {
+    final postCardSource = File(
+      'lib/ui/discovery/widgets/home_multi_form_feed_post_cards.dart',
+    ).readAsStringSync();
+    final mediaSource = File(
+      'lib/ui/discovery/widgets/home_multi_form_feed_media.dart',
+    ).readAsStringSync();
+
+    expect(postCardSource, contains('cacheTelemetrySinkProvider'));
+    expect(postCardSource, contains('video.init.suppressed_fast_scroll'));
+    expect(mediaSource, isNot(contains('developer.log')));
   });
 
   testWidgets('文章 post 支持无图短文、无图长文、上文下图和左文右图', (tester) async {
@@ -877,6 +920,28 @@ void main() {
       find.byKey(const ValueKey('home-article-layout-side-image')),
       findsOneWidget,
     );
+    final sideSummary = tester.widget<Text>(find.text('短图文保持左文右图，快速扫读也能看到封面。'));
+    expect(sideSummary.style?.fontWeight, FontWeight.normal);
+    final titleRect = tester.getRect(
+      find.byKey(const ValueKey('home-post-title')),
+    );
+    final thumbRect = tester.getRect(
+      find.byKey(const ValueKey('home-article-side-thumb')),
+    );
+    final thumbAspectRatio = thumbRect.width / thumbRect.height;
+    expect(
+      thumbAspectRatio,
+      closeTo(DiscoveryFeedSpacing.homeFeedArticleSideThumbAspectRatio, 0.02),
+    );
+    final bodyRect = tester.getRect(find.text('短图文保持左文右图，快速扫读也能看到封面。'));
+    final intersectionRect = tester.getRect(
+      find.byKey(const ValueKey('home-article-inline-intersection')),
+    );
+    expect(thumbRect.top, greaterThan(titleRect.bottom - 1));
+    expect((bodyRect.top - thumbRect.top).abs(), lessThan(2));
+    expect(bodyRect.right, lessThan(thumbRect.left + 1));
+    expect(intersectionRect.top, greaterThan(thumbRect.bottom - 1));
+    expect(intersectionRect.right, greaterThanOrEqualTo(thumbRect.right - 1));
 
     await tester.pumpWidget(
       _buildFeed(
@@ -969,6 +1034,93 @@ void main() {
     expect(clicks.single.referralSource, ReferralSource.organicFeed);
     expect(clicks.single.feedRequestId, isNotEmpty);
   });
+
+  // ── N6：交集 span 点击埋点带全归因（sourceRef + evidenceId 不再被丢） ──
+  testWidgets('点击交集名字 span → trackClick 透传 intersectionSourceRef + evidenceId', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final behaviorRepo = MockBehaviorRepository();
+    final tracker = ContentBehaviorTracker(
+      repository: behaviorRepo,
+      maxBatchSize: 1,
+      enablePeriodicFlush: false,
+    );
+    addTearDown(tracker.dispose);
+
+    await tester.pumpWidget(_routedFeed(_microPost(), tracker: tracker));
+    await tester.pump();
+
+    final richText = tester.widget<RichText>(
+      find.descendant(
+        of: find.byType(InteractiveIntersectionText),
+        matching: find.byType(RichText),
+      ),
+    );
+    final nameSpan = _spanByText(richText, '林清越');
+    (nameSpan.recognizer! as TapGestureRecognizer).onTap!();
+    await tester.pump();
+    await tracker.flush();
+
+    final clicks = behaviorRepo.recorded
+        .where((event) => event.action == BehaviorAction.click)
+        .toList(growable: false);
+    expect(clicks, hasLength(1));
+    final click = clicks.single;
+    // 关键回归：sourceRef / evidenceId 由 attribution 真正转发到埋点（此前被丢）。
+    expect(click.intersectionSourceRef, equals('sharedFollowees'));
+    expect(click.intersectionEvidenceId, equals('snap_lin'));
+    expect(click.intersectionId, equals('ix_post_lin'));
+    expect(click.intersectionDimension, equals('relationship'));
+    expect(click.intersectionTagRefs, isNotNull);
+  });
+}
+
+/// N6：带 GoRouter 的 feed 宿主，使交集 span 点击的 `context.push` 可达，
+/// 从而验证 onTrack → trackClick 的归因字段透传（`/user/:username` 复用
+/// resolvePath(userProfile) 的 codegen 路由）。
+Widget _routedFeed(
+  PostBaseDto post, {
+  required ContentBehaviorTracker tracker,
+}) {
+  final router = GoRouter(
+    initialLocation: '/',
+    routes: <RouteBase>[
+      GoRoute(
+        path: '/',
+        builder: (_, _) => ScreenUtilInit(
+          designSize: const Size(390, 844),
+          child: MediaQuery(
+            data: const MediaQueryData(size: Size(390, 844)),
+            child: HomeMultiFormFeed(
+              isDark: false,
+              channelId: 'recommend',
+              template: 'single_column_multiform',
+              onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
+              onPostTap: null,
+            ),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/user/:username',
+        builder: (_, state) => Text('USER:${state.pathParameters['username']}'),
+      ),
+    ],
+  );
+  return ProviderScope(
+    key: ValueKey<String>('routed-feed-scope-${post.id}'),
+    overrides: [
+      discoveryFeedMapProvider.overrideWith(
+        () => _SinglePostFeedMapNotifier(post),
+      ),
+      mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
+      contentBehaviorTrackerProvider.overrideWithValue(tracker),
+    ],
+    child: CupertinoApp.router(routerConfig: router),
+  );
 }
 
 class _AuthenticatedSession extends AuthSessionController {
@@ -1006,9 +1158,7 @@ class _EmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
     return <String, AsyncValue<DiscoveryFeedState>>{
-      'recommend': AsyncData(
-        const DiscoveryFeedState(items: <PostBaseDto>[]),
-      ),
+      'recommend': AsyncData(const DiscoveryFeedState(items: <PostBaseDto>[])),
     };
   }
 

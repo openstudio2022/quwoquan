@@ -64,6 +64,7 @@ class ClientStateSyncOutboxEntry {
     required this.intentType,
     required this.desiredBoolValue,
     required this.nextFlushAt,
+    this.confirmedBoolValue,
     this.retryCount = 0,
   });
 
@@ -73,18 +74,27 @@ class ClientStateSyncOutboxEntry {
   final String intentType;
   final bool desiredBoolValue;
   final DateTime nextFlushAt;
+  final bool? confirmedBoolValue;
   final int retryCount;
 
+  bool get hasPendingDelta =>
+      confirmedBoolValue == null || confirmedBoolValue != desiredBoolValue;
+
   factory ClientStateSyncOutboxEntry.fromMap(Map<String, dynamic> map) {
+    final desiredBoolValue = map['desiredBoolValue'] == true;
+    final legacyNeedsRemoteSync = map['needsRemoteSync'] != false;
     return ClientStateSyncOutboxEntry(
       coalesceKey: (map['coalesceKey'] ?? '').toString(),
       objectType: (map['objectType'] ?? '').toString(),
       objectId: (map['objectId'] ?? '').toString(),
       intentType: (map['intentType'] ?? '').toString(),
-      desiredBoolValue: map['desiredBoolValue'] == true,
+      desiredBoolValue: desiredBoolValue,
       nextFlushAt:
           DateTime.tryParse(map['nextFlushAt']?.toString() ?? '')?.toUtc() ??
           DateTime.now().toUtc(),
+      confirmedBoolValue:
+          _boolOrNull(map['confirmedBoolValue'] ?? map['baselineBoolValue']) ??
+          (legacyNeedsRemoteSync ? !desiredBoolValue : desiredBoolValue),
       retryCount: _int(map['retryCount'], 0),
     );
   }
@@ -96,6 +106,7 @@ class ClientStateSyncOutboxEntry {
     String? intentType,
     bool? desiredBoolValue,
     DateTime? nextFlushAt,
+    bool? confirmedBoolValue,
     int? retryCount,
   }) {
     return ClientStateSyncOutboxEntry(
@@ -105,6 +116,7 @@ class ClientStateSyncOutboxEntry {
       intentType: intentType ?? this.intentType,
       desiredBoolValue: desiredBoolValue ?? this.desiredBoolValue,
       nextFlushAt: nextFlushAt ?? this.nextFlushAt,
+      confirmedBoolValue: confirmedBoolValue ?? this.confirmedBoolValue,
       retryCount: retryCount ?? this.retryCount,
     );
   }
@@ -117,6 +129,7 @@ class ClientStateSyncOutboxEntry {
       'intentType': intentType,
       'desiredBoolValue': desiredBoolValue,
       'nextFlushAt': nextFlushAt.toUtc().toIso8601String(),
+      'confirmedBoolValue': confirmedBoolValue,
       'retryCount': retryCount,
     };
   }
@@ -151,6 +164,20 @@ class ClientStateSyncOutboxState {
     return ClientStateSyncOutboxState(entries: entries ?? this.entries);
   }
 
+  ClientStateSyncOutboxEntry? entryFor({
+    required String objectType,
+    required String objectId,
+    required String intentType,
+  }) {
+    final coalesceKey = '$objectType:$intentType:$objectId';
+    for (final entry in entries.reversed) {
+      if (entry.coalesceKey == coalesceKey) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'entries': entries.map((entry) => entry.toMap()).toList(growable: false),
@@ -172,4 +199,19 @@ bool _bool(Object? value, bool fallback) {
     if (lower == 'false') return false;
   }
   return fallback;
+}
+
+bool? _boolOrNull(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is bool) {
+    return value;
+  }
+  if (value is String) {
+    final lower = value.toLowerCase().trim();
+    if (lower == 'true') return true;
+    if (lower == 'false') return false;
+  }
+  return null;
 }

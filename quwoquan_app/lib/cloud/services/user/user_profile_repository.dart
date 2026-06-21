@@ -8,6 +8,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -29,6 +33,7 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
+import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -106,6 +111,19 @@ abstract class ProfileReadRepository {
 
   /// 创作者影响力摘要（GetAuthorImpact，codegen DTO；displayText 云侧产出端只读直出）。
   Future<AuthorImpactSummary> getAuthorImpact(String userId);
+
+  /// 创作者单条影响（impactId）的完整证据分页明细（ListAuthorImpactEvidence；R-ID03 端侧下钻闭合）。
+  ///
+  /// 端只读云侧分页结果（occurredAt 倒序，cursor opaque token，触底 hasMore=false），
+  /// 以被影响内容为载体、不暴露产生影响的具体用户身份。alpha Mock 从同一
+  /// `intersection_core` seed 对应的 [AuthorImpactItem] 派生分页明细，不新造第二套业务列表。
+  Future<AuthorImpactEvidencePage> listAuthorImpactEvidence({
+    required String subAccountId,
+    required String impactId,
+    String evidenceSnapshotId = '',
+    String cursor = '',
+    int limit = 20,
+  });
 
   Future<List<SocialRelationSearchItemView>> searchSocialRelations({
     required String query,
@@ -244,20 +262,40 @@ abstract class UserProfileRepository
 
 // ─── Mock 实现（本地数据，不发 HTTP）──────────────────────────────────────────
 
+/// Mock 当前用户资料的唯一解析入口。
+///
+/// `MockUserProfileRepository`、`MockUserRepository` 等 mock 链路都必须复用它，
+/// 避免再次出现「主页资料已更新，但 active persona 仍读旧静态 JSON」的双真相源。
+SubAccountProfileWireDto resolveMockUserProfileWire(String userId) {
+  return MockUserProfileRepository._profileOverrides[userId] ??
+      _contractProfileWireByUserId[userId] ??
+      SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
+}
+
 class MockUserProfileRepository extends UserProfileRepository {
   const MockUserProfileRepository();
 
   static final List<RecentSearchEntryWireDto> _recentSearchEntries =
       <RecentSearchEntryWireDto>[];
 
+  /// 本人在 mock 下保存的资料覆盖（开发态进程内持久化）。
+  ///
+  /// key = subAccountId；value = 合并后的完整 wire。保存成功后 [getUserProfile]
+  /// 立即读到同一真相源，保证「我的主页」即时回显新昵称 / 简介 / 头像 / 封面，
+  /// 不再是空实现导致的「保存后无变化」。
+  static final Map<String, SubAccountProfileWireDto> _profileOverrides =
+      <String, SubAccountProfileWireDto>{};
+
+  /// 解析某个用户的基础 wire（覆盖优先，其次契约种子，最后默认档案）。
+  SubAccountProfileWireDto _baseProfileWire(String userId) {
+    return resolveMockUserProfileWire(userId);
+  }
+
   @override
   Future<SubAccountProfileViewData> getUserProfile(String userId) async {
-    final contractWire = _contractProfileWireByUserId[userId];
-    if (contractWire != null) {
-      return SubAccountProfileViewData.fromSubAccountProfileWire(contractWire);
-    }
-    final wire = SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
-    return SubAccountProfileViewData.fromSubAccountProfileWire(wire);
+    return SubAccountProfileViewData.fromSubAccountProfileWire(
+      _baseProfileWire(userId),
+    );
   }
 
   /// Mock 本人态判定（开发态约定）：'me' / contract 当前用户 / 默认用户视为本人。
@@ -303,7 +341,38 @@ class MockUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<void> updateProfile(ProfileEditUpdatePayload data) async {}
+  Future<void> updateProfile(ProfileEditUpdatePayload data) async {
+    if (data.isEmpty) {
+      return;
+    }
+    // mock 资料编辑恒为「编辑本人资料」，落到 canonical 当前用户上（与登录态
+    // currentUserIdProvider 同源）。按 PATCH 语义只改本次携带的字段。
+    const subAccountId = kMockCurrentSubAccountId;
+    var next = _baseProfileWire(subAccountId);
+    final nickname = data.nickname;
+    if (nickname != null) {
+      // 昵称同时回填 displayName，并标记 nicknameCustomized=true（主页画笔随之隐藏）。
+      next = next.copyWith(
+        nickname: nickname,
+        displayName: nickname,
+        nicknameCustomized: true,
+      );
+    }
+    final bio = data.bio;
+    if (bio != null) {
+      next = next.copyWith(bio: bio);
+    }
+    final avatarUrl = data.avatarUrl;
+    if (avatarUrl != null) {
+      next = next.copyWith(avatarUrl: avatarUrl);
+    }
+    final backgroundUrl = data.backgroundUrl;
+    if (backgroundUrl != null) {
+      next = next.copyWith(backgroundUrl: backgroundUrl);
+    }
+    next = next.copyWith(updatedAt: DateTime.now());
+    _profileOverrides[subAccountId] = next;
+  }
 
   @override
   Future<List<PostBaseDto>> listUserPosts(
@@ -398,12 +467,118 @@ class MockUserProfileRepository extends UserProfileRepository {
     );
     final impactByAuthor = seed?['authorImpact'];
     if (impactByAuthor is Map) {
-      final entry = impactByAuthor[userId];
+      // alpha 原型：guest / 空 / owner-like 视角（me / user_001）解析为本人种子作者，
+      // 保证「我的影响力」详情页不因 currentUserId 未就绪而空白；其它已登记作者按原 id 取数。
+      final resolvedId = _resolveImpactAuthorId(userId);
+      final entry = impactByAuthor[resolvedId] ?? impactByAuthor[userId];
       if (entry is Map) {
         return AuthorImpactSummary.fromMap(entry.cast<String, dynamic>());
       }
     }
     return AuthorImpactSummary(authorId: userId);
+  }
+
+  @override
+  Future<AuthorImpactEvidencePage> listAuthorImpactEvidence({
+    required String subAccountId,
+    required String impactId,
+    String evidenceSnapshotId = '',
+    String cursor = '',
+    int limit = 20,
+  }) async {
+    // 真相源：同一 intersection_core seed 的 AuthorImpactSummary。按 impactId /
+    // evidenceSnapshotId 定位对应 AuthorImpactItem，再从该 item 自身派生可枚举明细行
+    // （不新造第二套业务列表，R15/R30）；未命中作者或未命中影响 → 空页（不造假）。
+    final summary = await getAuthorImpact(subAccountId);
+    final item = _matchImpactItem(summary, impactId, evidenceSnapshotId);
+    if (item == null) {
+      return AuthorImpactEvidencePage(
+        impactId: impactId,
+        evidenceSnapshotId: evidenceSnapshotId,
+      );
+    }
+    final allRows = _deriveEvidenceRows(item);
+    final clampedLimit = limit <= 0 ? 20 : (limit > 50 ? 50 : limit);
+    final offset = int.tryParse(cursor) ?? 0;
+    final start = offset < 0 ? 0 : offset;
+    final end = (start + clampedLimit) > allRows.length
+        ? allRows.length
+        : (start + clampedLimit);
+    final pageItems = start >= allRows.length
+        ? const <AuthorImpactEvidenceItem>[]
+        : allRows.sublist(start, end);
+    final hasMore = end < allRows.length;
+    return AuthorImpactEvidencePage(
+      impactId: item.impactId,
+      evidenceSnapshotId: item.evidenceSnapshotId,
+      totalCount: item.count > allRows.length ? item.count : allRows.length,
+      items: pageItems,
+      nextCursor: hasMore ? '$end' : '',
+      hasMore: hasMore,
+    );
+  }
+
+  static AuthorImpactItem? _matchImpactItem(
+    AuthorImpactSummary summary,
+    String impactId,
+    String evidenceSnapshotId,
+  ) {
+    final wantedImpact = impactId.trim();
+    final wantedSnapshot = evidenceSnapshotId.trim();
+    for (final item in summary.items) {
+      if (wantedImpact.isNotEmpty && item.impactId == wantedImpact) {
+        return item;
+      }
+      if (wantedSnapshot.isNotEmpty &&
+          item.evidenceSnapshotId == wantedSnapshot) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  /// 从 seed [AuthorImpactItem] 自身派生可枚举证据行：以其 sampleVisuals（真实样本）为载体，
+  /// 不足 count 时补足文本行（representativeActor 文本，无头像），occurredAt 由 freshAt 确定性回推。
+  static List<AuthorImpactEvidenceItem> _deriveEvidenceRows(
+    AuthorImpactItem item,
+  ) {
+    final visuals = item.sampleVisuals;
+    final target = item.count <= 0 ? visuals.length : item.count;
+    final rowCount = target > 12 ? 12 : target; // alpha 上限，避免无意义长列表
+    if (rowCount <= 0) {
+      return const <AuthorImpactEvidenceItem>[];
+    }
+    final base = DateTime.tryParse(item.freshAt) ?? DateTime.now().toUtc();
+    final summaryText = item.subtitleText.trim().isNotEmpty
+        ? item.subtitleText.trim()
+        : item.primaryText.trim();
+    return List<AuthorImpactEvidenceItem>.generate(rowCount, (i) {
+      final occurredAt = base.subtract(Duration(days: i)).toIso8601String();
+      return AuthorImpactEvidenceItem(
+        evidenceId: '${item.impactId}_ev_$i',
+        impactId: item.impactId,
+        helpType: item.helpType,
+        action: item.action,
+        intersectionDimension: item.intersectionDimension,
+        occurredAt: occurredAt,
+        summaryText: summaryText,
+        sampleVisual: i < visuals.length ? visuals[i] : null,
+        representativeActor: i == 0 ? item.representativeActor : null,
+        actionHints: i == 0
+            ? item.actionHints
+            : const <IntersectionActionHint>[],
+        contentTarget: item.countTarget,
+      );
+    });
+  }
+
+  /// 影响力作者归一：空 / owner-like（me/user_001）→ 本人种子作者 fixture_user_current。
+  static String _resolveImpactAuthorId(String userId) {
+    final trimmed = userId.trim();
+    if (trimmed.isEmpty || _ownerLikeSubAccountIds.contains(trimmed)) {
+      return 'fixture_user_current';
+    }
+    return trimmed;
   }
 
   @override
@@ -437,6 +612,7 @@ class MockUserProfileRepository extends UserProfileRepository {
             username: subAccountId,
             displayName: (user['displayName'] ?? subAccountId).toString(),
             avatarUrl: user['avatarUrl']?.toString(),
+            avatarVersion: (user['avatarVersion'] as num?)?.toInt() ?? 0,
             headline: (user['bio'] ?? '').toString(),
             chatAvailable: true,
             relationshipCapability: <String, dynamic>{
@@ -748,4 +924,3 @@ class MockUserProfileRepository extends UserProfileRepository {
 }
 
 // ─── Remote 实现（调用云侧 API）───────────────────────────────────────────────
-

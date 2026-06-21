@@ -8,9 +8,9 @@ alwaysApply: true
 ## 必守
 
 - 一棵树：`AppRoot -> L1_domain_service -> L2_business_capability -> L3_story`。
-- 命令和自然语言输入等价：用户未显式输入 slash command 时，也必须按 `docs/agent_context_contract.md` 识别阶段、区域、规格和证据层。
+- 命令和自然语言输入等价：用户未显式输入 slash command 时，也必须按 `docs/agent_context_contract.md` 识别阶段、区域、规格和三层测试证据。
 - 正式文档：应用根/领域/能力用 `spec.md + design.md + acceptance.yaml`；Story 只用 `spec.md + acceptance.yaml`。
-- 测试语言：验收意图为 UAT/SIT/GWT/contract，证据层只用 T1/T2/T3/T4。
+- 测试语言：验收意图为 UAT/SIT/GWT/contract，测试工程层只用 `local_contract`、`api_integration`、`user_acceptance`。
 - DDD 依赖方向固定：`domain <- application <- adapters <- infrastructure`。
 - `contracts/metadata/**` 是字段、错误码、path、operation、surface、route、decoder context 的唯一真相源。
 - codegen 文件禁止手改；改行为先改 metadata，再 verify/codegen。
@@ -33,5 +33,5 @@ alwaysApply: true
 - `/prd`：冻结规格与验收。
 - `/design`：冻结应用根/领域/能力设计。
 - `/dev`：按 metadata -> codegen -> 业务逻辑 -> 测试闭环。
-- `/verify`：检查 UAT/SIT/GWT/contract 与 T1~T4。
+- `/verify`：检查 UAT/SIT/GWT/contract 与三层测试证据。
 - `/commit` / `/deploy`：以门禁、SLO、灰度与回滚演练为准。

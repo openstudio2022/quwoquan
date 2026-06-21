@@ -6,6 +6,7 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	rtimpact "quwoquan_service/runtime/impact"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/runtime/repository"
 	"quwoquan_service/services/content-service/internal/domain/post/event"
@@ -474,19 +475,10 @@ func (s *BehaviorService) GetMyFootprint(ctx context.Context, userID, footprintT
 }
 
 func authorImpactEventFromSignal(signal rtrec.BehaviorSignal, occurredAt time.Time) persistence.AuthorImpactEvent {
-	helpType := ""
-	switch signal.Action {
-	case "follow", "add_contact":
-		helpType = persistence.AuthorImpactHelpRelationship
-	case "join_circle":
-		helpType = persistence.AuthorImpactHelpCommunity
-	case "author_view", "entity_page_view", "content_depth", "play_progress", "like", "comment":
-		helpType = persistence.AuthorImpactHelpDecision
-	case "share":
-		helpType = persistence.AuthorImpactHelpSpread
-	case "assistant_interest":
-		helpType = persistence.AuthorImpactHelpKnowledge
-	default:
+	// behavior action → helpType 反查 rtimpact.BehaviorActionToHelpType
+	// （源 registry.helpTypes[].behaviorActions）。未登记动作不产生影响力事件。
+	helpType, ok := rtimpact.BehaviorActionToHelpType[strings.TrimSpace(signal.Action)]
+	if !ok {
 		return persistence.AuthorImpactEvent{}
 	}
 	return persistence.AuthorImpactEvent{

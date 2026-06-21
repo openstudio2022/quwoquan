@@ -24,6 +24,8 @@ client_projection:
   dart_imports:
     - ../recommendation/intersection_visual.g.dart
     - ../recommendation/intersection_target.g.dart
+    - ../recommendation/intersection_representative_actor.g.dart
+    - ../recommendation/intersection_action_hint.g.dart
   fields:
     - name: evidenceId
       dart_type: String
@@ -75,6 +77,18 @@ client_projection:
       source: sampleVisual
       aliases: [sampleVisual]
       map_from_string_key_class: IntersectionVisual
+    - name: representativeActor
+      dart_type: IntersectionRepresentativeActor
+      nullable: true
+      source: representativeActor
+      aliases: [representativeActor]
+      map_from_string_key_class: IntersectionRepresentativeActor
+    - name: actionHints
+      dart_type: List<IntersectionActionHint>
+      nullable: false
+      source: actionHints
+      aliases: [actionHints]
+      list_element_dart_class: IntersectionActionHint
     # contentTarget：明细行点击下钻目标（被影响内容），可空表示暂不可下钻。
     - name: contentTarget
       dart_type: IntersectionTarget

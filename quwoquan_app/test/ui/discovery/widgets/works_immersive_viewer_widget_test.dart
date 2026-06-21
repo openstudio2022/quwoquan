@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
@@ -614,6 +615,13 @@ Widget _wrapWithRouter(Widget child, {List overrides = const []}) {
           key: const ValueKey<String>('homepage-detail-probe'),
         ),
       ),
+      GoRoute(
+        path: AppRoutePaths.globalSearchNetworkResultsPathTemplate,
+        builder: (context, state) => Text(
+          'search:${state.uri.queryParameters['query'] ?? ''}',
+          key: const ValueKey<String>('search-network-probe'),
+        ),
+      ),
     ],
   );
   return ProviderScope(
@@ -826,9 +834,15 @@ void main() {
     expect(repo.appendCallCount, greaterThan(0));
     expect(switchedToHome, isFalse);
 
+    // 预取耗时 4s（append delay）；推进 5s 让追加完成并回灌 provider。预取揭示后
+    // 当前竖向页可能聚焦到视频卡，其 autoPlay 加载占位的 CupertinoActivityIndicator
+    // 是 by-design 永续动画，pumpAndSettle 会永不收敛。改用有界 pump 让回灌后的重建
+    // 帧落地，再断言 provider 真实条数与哨兵消失。
     await tester.pump(const Duration(seconds: 5));
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    _consumeImageLoadExceptions(tester);
 
     expect(
       container.read(discoveryFeedProvider('photo')).value?.items.length,
@@ -1243,7 +1257,14 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    // 聚焦视频默认 autoPlay（canvas `_episodePlaybackSettled` 初值为 true），其加载占位
+    // 是 CupertinoActivityIndicator —— 一个 by-design 永续动画。widget 测试环境没有
+    // video_player 平台实现，VideoPlayerController.initialize() 永不回报 initialized，
+    // 占位转圈会一直调度新帧，pumpAndSettle 因此永不收敛。布局（canvas 矩形）不依赖该
+    // 转圈，用有界 pump 让布局稳定后断言真实的状态栏铺入几何即可。
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 16));
+    _consumeImageLoadExceptions(tester);
 
     final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
     final canvasRect = tester.getRect(
@@ -2291,7 +2312,11 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // 聚焦视频默认 autoPlay，其加载占位的 CupertinoActivityIndicator 是 by-design
+    // 永续动画（测试环境视频永不就绪），pumpAndSettle 永不收敛。用有界 pump 推进帧并
+    // 让横滑回弹/settle（debounce 100ms）收敛后断言真实的边界手势行为。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
 
@@ -2299,14 +2324,16 @@ void main() {
       Offset(viewerRect.center.dx, viewerRect.center.dy),
       const Offset(220, 0),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
     expect(dismissed, isFalse);
 
     await tester.dragFrom(
       Offset(viewerRect.left + 6, viewerRect.center.dy),
       const Offset(220, 0),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
     expect(dismissed, isTrue);
   });
 
@@ -2644,6 +2671,55 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('homepage:homepage_sight_west_lake'), findsOneWidget);
+  });
+
+  testWidgets('文章标签内联点击进入按 tagRef 搜索的 metadata 路由', (tester) async {
+    final post = _articlePost();
+
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: _articleMarkdownRaw(
+              post,
+              '---\n'
+              'title: 城市漫步指南\n'
+              'template: journal\n'
+              'fontPreset: clean\n'
+              '---\n\n'
+              '# 城市漫步指南\n\n'
+              '午后沿着@[城市漫步](tag:topic:city_walk)的路线散步。\n',
+            ),
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final mentionText = find.byKey(
+      const ValueKey<String>('article-entity-rich-text'),
+    );
+    expect(mentionText, findsWidgets);
+    await _tapRichTextSubstring(
+      tester,
+      mentionText.hitTestable().first,
+      '城市漫步',
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('search-network-probe')),
+      findsOneWidget,
+    );
+    expect(find.text('search:topic:city_walk'), findsOneWidget);
   });
 
   testWidgets('文章阅读不显示底部 caption rail 且页码只保留正文下方一处', (tester) async {

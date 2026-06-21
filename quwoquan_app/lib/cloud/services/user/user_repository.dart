@@ -13,6 +13,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/persona_update_request
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_setting_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
 
 UserSettingDto _userSettingDtoFromWire(Map<String, dynamic> json) {
   final m = Map<String, dynamic>.from(json);
@@ -64,8 +66,8 @@ abstract class UserRepository {
 /// 与网关 `ListSubAccounts` 同形 JSON，经 `jsonDecode` 再走 Wire → View（与 Remote 对齐）。
 const String _kMockPersonasWireJson = r'''
 [
-  {"subAccountId":"persona_primary","displayName":"主分身","userHandle":"main_handle","phone":"13800000000","email":"main@example.com","avatarUrl":"media/avatar/s/mock/user/user_001/v1/avatar.png","isolationLevel":"open","profileVisibility":"public","isPrimary":true,"isActive":true,"inheritsProfileFromOwner":true,"overriddenProfileFields":[]},
-  {"subAccountId":"persona_photo","displayName":"摄影分身","userHandle":"photo_handle","phone":"13800000000","email":"photo@example.com","avatarUrl":"media/avatar/s/mock/user/user_001_photo/v1/avatar.png","isolationLevel":"semi","profileVisibility":"public","isPrimary":false,"isActive":false,"hasAttributedHistory":true,"inheritsProfileFromOwner":false,"overriddenProfileFields":["email"]}
+  {"subAccountId":"persona_primary","displayName":"主分身","userHandle":"main_handle","phone":"13800000000","email":"main@example.com","avatarUrl":"media/avatar/s/mock/user/user_001/v1/avatar.png","avatarVersion":1,"isolationLevel":"open","profileVisibility":"public","isPrimary":true,"isActive":true,"inheritsProfileFromOwner":true,"overriddenProfileFields":[]},
+  {"subAccountId":"persona_photo","displayName":"摄影分身","userHandle":"photo_handle","phone":"13800000000","email":"photo@example.com","avatarUrl":"media/avatar/s/mock/user/user_001_photo/v1/avatar.png","avatarVersion":1,"isolationLevel":"semi","profileVisibility":"public","isPrimary":false,"isActive":false,"hasAttributedHistory":true,"inheritsProfileFromOwner":false,"overriddenProfileFields":["email"]}
 ]
 ''';
 
@@ -77,6 +79,56 @@ List<Map<String, dynamic>> _decodeMockPersonasWire() {
   return decoded
       .whereType<Map>()
       .map((e) => Map<String, dynamic>.from(e))
+      .toList(growable: false);
+}
+
+Map<String, dynamic> _mockActivePersonaContextWire() {
+  final profile = resolveMockUserProfileWire(kMockCurrentSubAccountId);
+  return <String, dynamic>{
+    'ownerUserId': profile.ownerUserId.isNotEmpty
+        ? profile.ownerUserId
+        : kMockCurrentOwnerId,
+    'subAccountId': profile.subAccountId.isNotEmpty
+        ? profile.subAccountId
+        : kMockCurrentSubAccountId,
+    'subjectType': profile.subjectType.isNotEmpty
+        ? profile.subjectType
+        : 'user',
+    'displayName': profile.displayName,
+    'avatarUrl': profile.avatarUrl,
+    'avatarVersion': profile.avatarVersion,
+    'personaContextVersion':
+        profile.updatedAt?.millisecondsSinceEpoch.toString() ?? 'mock-static',
+    'personaSnapshotVersion': 1,
+    'sourceSurfaceId': 'mock.user_repository',
+    'explicitOverride': false,
+    'isPrimary': true,
+  };
+}
+
+List<Map<String, dynamic>> _mockPersonaItemsWithCurrentProfile() {
+  final active = _mockActivePersonaContextWire();
+  return _decodeMockPersonasWire()
+      .asMap()
+      .entries
+      .map((entry) {
+        final index = entry.key;
+        final item = entry.value;
+        if (index != 0) {
+          return item;
+        }
+        return <String, dynamic>{
+          ...item,
+          'subAccountId': active['subAccountId'],
+          'userId': active['subAccountId'],
+          'displayName': active['displayName'],
+          'avatarUrl': active['avatarUrl'],
+          'avatarVersion': active['avatarVersion'],
+          'isPrimary': true,
+          'isActive': true,
+          'inheritsProfileFromOwner': true,
+        };
+      })
       .toList(growable: false);
 }
 
@@ -125,18 +177,21 @@ class MockUserRepository implements UserRepository {
 
   @override
   Future<ActivePersonaContextViewData> getActivePersonaContext() async {
-    return ActivePersonaContextViewData.fromMap(_mockPersonas.first);
+    return ActivePersonaContextViewData.fromMap(
+      _mockActivePersonaContextWire(),
+    );
   }
 
   @override
   Future<PersonaManagementSummaryViewData> getPersonaManagementSummary() async {
+    final items = _mockPersonaItemsWithCurrentProfile();
     return PersonaManagementSummaryViewData.fromMap(<String, dynamic>{
-      'items': _mockPersonas,
+      'items': items,
       'quota': <String, dynamic>{
         'usedSubAccounts': _mockPersonas.length,
         'maxSubAccounts': 5,
       },
-      'activeContext': _mockPersonas.first,
+      'activeContext': _mockActivePersonaContextWire(),
     });
   }
 
@@ -168,7 +223,7 @@ class MockUserRepository implements UserRepository {
 
   @override
   Future<List<PersonaManagementItemViewData>> listPersonas() async {
-    return _mockPersonas
+    return _mockPersonaItemsWithCurrentProfile()
         .map(
           (m) => PersonaManagementItemViewData.fromPersonaManagementItemWire(
             PersonaManagementItemWireDto.fromMap(m),
@@ -201,6 +256,7 @@ class MockUserRepository implements UserRepository {
       'phone': phone ?? '',
       'email': email ?? '',
       'avatarUrl': avatarUrl ?? '',
+      'avatarVersion': avatarUrl == null || avatarUrl.isEmpty ? 0 : 1,
       'isolationLevel': isolationLevel ?? 'open',
       'profileVisibility': switch (isolationLevel ?? 'open') {
         'strict' => 'private',
@@ -222,10 +278,9 @@ class RemoteUserRepository implements UserRepository {
   RemoteUserRepository({
     CloudHttpClient? httpClient,
     String? baseUrl,
-    UserRemoteMergeRequestContext? mergeRequestContext,
+    this._mergeRequestContext,
   }) : _httpClient = httpClient ?? CloudHttpClient(),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
-       _mergeRequestContext = mergeRequestContext;
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;

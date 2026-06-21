@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "九寨沟_seasonal_timing",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:be135af93f1adb3f280bc79781c25e699faf40b939bc22f7b9613e1dc239a903",
+  "finalSha256": "sha256:e3348a86e81fd4e2aeaf5a17457c2829c68c58b944baa9b49df37597e19a5a71",
+  "draftBodySha256": "sha256:be135af93f1adb3f280bc79781c25e699faf40b939bc22f7b9613e1dc239a903",
+  "finalBodySha256": "sha256:be135af93f1adb3f280bc79781c25e699faf40b939bc22f7b9613e1dc239a903",
+  "composeSnapshotSha256": "sha256:be135af93f1adb3f280bc79781c25e699faf40b939bc22f7b9613e1dc239a903",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

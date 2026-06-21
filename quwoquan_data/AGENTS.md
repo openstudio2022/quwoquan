@@ -30,7 +30,7 @@
 - Review 必须先判定证据是否充足，再判定模板/SOP 是否失配，最后才判定创作执行问题；不同归因回退到不同阶段。
 - 禁止百科罗列、机械收尾、模板化小标题、来源痕迹、不可商用素材、平台水印、未经改写长句复现。
 - 内容角度、实体类型、tagRefs、manifest、asset id、source paths、发布账本必须一致；不一致先修契约或数据，不用代码绕过。
-- 数据工程同样要补 `T1` schema/静态、`T2` CLI/模块、`T3` importer/真实存储或环境采样、`T4` 用户消费链路证据。
+- 数据工程同样要补 `local_contract` schema/静态/CLI/模块、`api_integration` importer/真实存储或环境采样、`user_acceptance` 用户消费链路证据。
 
 ## 数据工程七角色准出
 

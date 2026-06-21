@@ -33,7 +33,7 @@
 | F3 | 双浏览模式 | 平铺文章评论为正文后的内联 section；沉浸式内容评论为内容上压分屏，保留上半屏内容上下文 | 小红书/抖音 |
 | F4 | 评论列表 | 游标分页，每页 20 条，滚动到底自动加载 | 全平台共识 |
 | F5 | 排序策略 | 默认（recommended）/ 最新（latest）/ 最多赞（most_liked），用户可切换 | 小红书/Instagram |
-| F6 | 回复折叠分页 | 默认展示 `reply_preview_count` 条回复，fallback=1；每次展开 `reply_expand_page_size` 条，fallback=10 | TikTok/小红书 |
+| F6 | 回复折叠分页 | 默认展示 `reply_preview_count` 条回复（fallback=1）；**首次**展开最多 `reply_first_expand_page_size` 条（fallback=5），**后续**每次展开 `reply_expand_page_size` 条（fallback=10）；展示数超过预览数时提供"收起" | TikTok/小红书 |
 | F7 | 评论赞踩 | 单评论可赞/取消赞、踩/取消踩；赞踩互斥，赞数展示，状态随列表重入恢复 | 全平台共识 |
 | F8 | 评论删除 | 评论作者可删除自己的评论；帖主可删除帖下任意评论；软删除 + 审计 | 全平台共识 |
 | F9 | 回复与 @ | 回复时自动绑定被回复评论；输入支持 @小趣、联系人、关注对象，提及结构化入库 | 全平台共识 |
@@ -57,7 +57,7 @@
 | E4 图片沉浸查看器 | `immersive_image_viewer.dart` | 内容上压分屏 | 保留当前 post 与图片索引，上半区展示图片上下文 | 关闭后图片索引不丢；评论/回复/展开/赞踩；图片评论附件回显 |
 | E5 视频沉浸查看器 | `immersive_video_viewer.dart` | 内容上压分屏 | 保留当前 post 与视频上下文，上半区展示视频内容 | 关闭后视频页不丢；评论/回复/展开/赞踩；弱网提交保留草稿 |
 | E6 MediaPostCard 评论按钮 | `media_post_card.dart` | Feed 弹层或详情锚点 | 从卡片进入同一 CommentThread，不复制评论状态 | postId、commentCount、viewerReaction 与详情/沉浸一致 |
-| E7 平铺文章详情 BottomBar | `article_detail_page.dart` | 正文后内联 section | 点击评论入口滚动到正文后的 `InlineArticleCommentSection`，不打开弹窗 | 可滑回正文；内联首屏、排序、回复展开、赞踩、输入能力完整 |
+| E7 平铺文章详情 BottomBar（未落地） | 待落地的平铺文章详情页 | 正文后内联 section | 未来落地时点击评论入口滚动到正文后内联评论区，不打开弹窗；**必须复用 `CommentDetailSurface`（同一 widget + mode），禁止再造第二套阉割评论壳** | 可滑回正文；内联首屏、排序、回复展开、赞踩、输入能力完整且与 CommentDetailSurface 一致 |
 | E8 文章翻页阅读 | `works_immersive_viewer.dart` + article reader host | 内容上压分屏 | 评论层只作为宿主 chrome，不进入 pageflip geometry/paint 链路 | pageflip 当前页保持；关闭恢复；评论/回复/展开/赞踩；不得改动 BACK 几何真相源 |
 | E9 个人主页评论 | `profile_comments_page.dart` | 评论列表跳转原内容 | “我的评论”/“收到的评论”可回原内容并定位评论 | 原内容 postId、commentId、reply target 正确；收到评论可继续回复 |
 
@@ -71,6 +71,9 @@
 | F18 | 我收到的评论 | 个人主页 Tab，按时间倒序，含快捷回复入口 |
 | F19 | 评论字数限制 | 500 字上限，端云一致（云侧校验 + 端侧通过 App Config 同步） |
 | F20 | 评论通知 | 收到回复 / 帖子被评论时推送通知（协调 notification 域，V1 骨架接入） |
+| F23 | 评论置顶 | 内容作者可置顶/取消置顶一级评论（二级回复不可置顶）；置顶项排在列表最前，多条置顶按置顶时间倒序；`canPin` 仅内容作者且为一级评论时为 true，端侧据此渲染置顶图标与「置顶」徽标 |
+| F24 | IP 属地显示 | 创建评论时按受信客户端 IP（X-Forwarded-For 首段 > X-Real-IP > RemoteAddr）解析省级属地快照（`ipLocation`）落库，读取原样透传；无法解析时留空不臆造 |
+| F25 | 作者赞过标识 | 内容作者点赞过的评论展示「作者赞过」标识（`authorLiked` 由云侧按内容作者反应派生），增强社交信任信号 |
 
 ### 2.4 视觉规格
 
@@ -149,9 +152,9 @@
 | 项目 | 说明 |
 |------|------|
 | 评论搜索 | 全文检索能力不在 V1 范围，V2+ 可接入 ES |
-| 图片/视频评论 | V1 仅支持纯文本；V2 表情、V3 图片 |
-| 评论置顶 | 需作者权限体系完善后在 V2 引入 |
-| IP 属地显示 | 需政策配合，V2 引入 |
+| 视频评论附件 | V2 评论附件已支持 emoji + 图片（见 F21/F22、GWT7、GWT10）；评论内视频附件仍超出范围 |
+| ~~评论置顶~~ | **已交付**：内容作者可置顶/取消置顶一级评论，置顶项排在列表最前（见 F23、GWT12、§6.2 权限） |
+| ~~IP 属地显示~~ | **已交付**：创建评论时按受信客户端 IP 解析省级属地快照落库并展示（见 F24、GWT13、§6.3） |
 | 评论翻译 | V2+ |
 | 敏感词实时拦截 | V1 采用先发后审，不做前置拦截；V2 可增加前置检测 |
 | 评论区关闭 | 帖主关闭评论区功能，V2 引入 |
@@ -177,8 +180,9 @@ TikTok/抖音、小红书、网易云音乐、微博、微信视频号。
 | 作者标识 | ✅ 借鉴 | 社交信任信号 |
 | 先发后审 | ✅ 借鉴 | 用户体验优先，业界主流 |
 | 图片评论 | ✅ 借鉴 | 本次进入 V2，必须复用媒体上传与审核 |
-| IP 属地 | ❌ V1 不借鉴 | 需政策配合 |
-| 评论置顶 | ⚠️ V2 借鉴 | 需权限体系 |
+| IP 属地 | ✅ 借鉴（已交付） | 受信代理头解析省级属地快照，无法解析留空 |
+| 评论置顶 | ✅ 借鉴（已交付） | 内容作者置顶一级评论，置顶优先排序 |
+| 作者赞过 | ✅ 借鉴（已交付） | 内容作者反应派生，社交信任信号 |
 | AI 辅助回复 | ❌ 不借鉴 | 适合 B 端，C 端场景不同 |
 
 ### 4.3 当前差距与收敛路径
@@ -191,7 +195,9 @@ TikTok/抖音、小红书、网易云音乐、微博、微信视频号。
 | 无评论赞踩 | V2 赞踩互斥 + viewer state | 本次交付 |
 | 无个人主页评论 | V1 我的/收到的评论 | 本次交付 |
 | 无表情/图片/@ | V2 输入面板 | 本次交付 |
-| 无评论置顶 | V2 作者置顶 | 下一迭代 |
+| 无评论置顶 | 内容作者置顶一级评论 + 置顶优先排序 | 本次交付 |
+| 无 IP 属地 | 受信代理头解析省级属地快照 | 本次交付 |
+| 无作者赞过标识 | 内容作者反应派生 authorLiked | 本次交付 |
 
 ---
 
@@ -256,7 +262,8 @@ TikTok/抖音、小红书、网易云音乐、微博、微信视频号。
 |--------|----------------|--------|----------|
 | 评论字数上限 | `sys.content.comment.max_length` | 500 | ✅ App Config |
 | 回复预览数 | `sys.content.comment.reply_preview_count` | 1 | ✅ App Config |
-| 回复每次展开数 | `sys.content.comment.reply_expand_page_size` | 10 | ✅ App Config |
+| 回复首次展开数 | `sys.content.comment.reply_first_expand_page_size` | 5 | ✅ App Config |
+| 回复后续展开数 | `sys.content.comment.reply_expand_page_size` | 10 | ✅ App Config |
 | 长评论折叠行数 | `sys.content.comment.fold_line_count` | 3 | ✅ App Config |
 | 默认排序 | `sys.content.comment.sort.default` | recommended | ✅ App Config |
 | 图片评论数量上限 | `sys.content.comment.attachment.max_images` | 1 | ✅ App Config |
@@ -274,6 +281,18 @@ TikTok/抖音、小红书、网易云音乐、微博、微信视频号。
 - 端侧通过 App Config Endpoint（`GET /v1/config/app`）同步业务规则
 - 端侧 codegen 产出 **fallback 默认值**，网络不可达时使用
 - 云侧是"最终裁判"——即使端侧因 fallback 允许提交，云侧仍校验并拒绝超限
+
+### 6.3 权限与属地策略（V2 新增能力）
+
+| 能力 | 规则 | 错误码 |
+|------|------|--------|
+| 评论置顶 | 仅内容作者（`viewerId == post.authorId`）可置顶/取消置顶；仅一级评论（无 `parentCommentId`）可置顶；已删除评论不可置顶 | `comment_pin_forbidden`（非作者）/ `comment_pin_invalid_target`（非一级评论） |
+| 置顶排序 | 置顶评论恒排列表最前；多条置顶按 `pinnedAt` 倒序；二级回复不可置顶不影响 | — |
+| `canPin` 派生 | 云侧投影按 `viewer 是内容作者 && 一级评论 && 未删除` 派生，端侧据此渲染入口，不在端侧二次判权 | — |
+| IP 属地解析 | 仅在**创建评论**时按受信代理头解析省级属地快照落库（`X-Forwarded-For` 首段 > `X-Real-IP` > `RemoteAddr`）；读取原样透传，不二次解析 | — |
+| IP 属地降级 | 无法解析为已知省份时 `ipLocation` 留空，端侧不展示属地，绝不臆造 | — |
+
+> **属地解析器（生产化路径）**：alpha/测试环境使用确定性 `deterministicProvinceResolver` stub（固定 IP 段→省份），便于契约与回归测试。生产环境需替换为真实 GeoIP 库（如 MaxMind GeoLite2 / ip2region），通过 `WithIPLocationResolver` 注入，不改动调用方。该替换为已登记长期风险（见 `docs/outstanding_risks_backlog.md`）。
 
 ---
 
@@ -294,11 +313,14 @@ TikTok/抖音、小红书、网易云音乐、微博、微信视频号。
 
 | 类型 | 内容 | 说明 |
 |------|------|------|
-| fields.yaml | `Comment.replyCount`、`dislikeCount`、`viewerReaction`、`attachments`、`mentions`、`replyPreview`、`replyNextCursor` | 回复折叠、赞踩、附件与 @ 所需 |
+| fields.yaml | `Comment.replyCount`、`dislikeCount`、`viewerReaction`、`attachments`、`mentions`、`replyPreview`、`replyNextCursor` | 回复折叠、赞踩、附件与 @ 所需。**已交付**：`attachments` 形态 `[{mediaId,type,url,thumbnailUrl,width,height,moderationStatus}]`，端侧 codegen 产出类型化 `CommentAttachmentDto`（消除 Map 穿透，见 GWT10），不再以 `List<Map<String,dynamic>>` 穿透到消费层 |
+| fields.yaml | **已交付** `Comment.isPinned`、`pinnedAt`、`canPin`、`ipLocation`、`authorLiked` | 置顶状态/时间、当前 viewer 可否置顶、评论属地快照、内容作者是否赞过；均为 PUBLIC + read，端侧 codegen 产出 `CommentDto` 对应类型化字段 |
+| fields.yaml | **已交付** `ProfileInteractionActivityView.commentId`、`parentCommentId` | 我的-互动评论类深链精确定位到具体评论/父评论（见 GWT9、GWT14） |
 | service.yaml | `ListCommentReplies`、`ReactToComment` | 回复独立分页与赞踩统一入口 |
 | service.yaml | 仅保留 `ReactToComment` 端点 | 评论反应统一为 like/dislike/none 三态 |
 | service.yaml | `ListCommentsByAuthor` 端点 | 个人主页"我发出的评论" |
 | service.yaml | `ListCommentsForPostAuthor` 端点 | 个人主页"我收到的评论" |
+| service.yaml | **已交付** `PinComment`（POST `/v1/content/posts/{postId}/comments/{commentId}/pin`）、`UnpinComment`（DELETE 同路径） | 内容作者置顶/取消置顶一级评论 |
 | events.yaml | `CommentReacted` 事件 | 评论赞踩三态事件 |
 | events.yaml | `CommentModerated` 事件 | 审核结果回调 |
 | storage.yaml | `idx_comments_hot` 索引 | (postId, likeCount DESC, createdAt DESC) |
@@ -306,6 +328,7 @@ TikTok/抖音、小红书、网易云音乐、微博、微信视频号。
 | errors.yaml | `comment_too_long` | 评论超长错误 |
 | errors.yaml | `comment_rate_limited` | 评论频率限制错误 |
 | errors.yaml | `comment_like_duplicate` | 重复点赞错误 |
+| errors.yaml | **已交付** `comment_pin_forbidden`（403）、`comment_pin_invalid_target`（400） | 非内容作者置顶 / 置顶非一级评论 |
 
 ### 7.3 需修复
 
@@ -358,21 +381,28 @@ TikTok/抖音、小红书、网易云音乐、微博、微信视频号。
 
 ## 十、验收标准概要
 
-详见 `acceptance.yaml`，共 20 条验收标准（A1~A20），覆盖：
+详见 `acceptance.yaml`，共 14 条 GWT 验收标准（GWT1~GWT14），覆盖：
 
-- **A1~A5**：核心交互（列表/创建/删除/回复/赞踩）
-- **A6~A8**：入口打通与 UI 规格
-- **A9~A11**：排序/分页/折叠
-- **A12~A14**：个人主页/Persona/审核
-- **A15~A17**：端云一致/配置/DTO
-- **A18~A20**：NFR（性能/弱网/热帖）
-- **A21**：对象级缓存，覆盖 comment page snapshot、作者快照、pending comment outbox 保护、清理离线内容后的恢复行为。
+- **GWT1**：平铺文章评论入口定位到正文后内联评论区。
+- **GWT2**：图片/视频/文章翻页沉浸式内容打开上压评论分屏并可恢复上下文。
+- **GWT3**：评论与回复提交支持游客登录续接、失败保留草稿。
+- **GWT4**：回复预览与展开数量由云端配置（`reply_preview_count` / `reply_expand_page_size`）控制，端云一致。
+- **GWT5**：默认/最新/最多赞三档排序端云一致，端侧不维护第二套排序。
+- **GWT6**：评论赞踩 like/dislike/none 互斥并由 `viewerReaction` 重入恢复。
+- **GWT7**：评论输入支持 emoji、图片附件与 @ 提及，结构化回显。
+- **GWT8**：alpha/beta/gamma 非生产种子与 三层测试 四层证据完整。
+- **GWT9**：我的-互动评论类点击深链进入评论区并滚动定位高亮。
+- **GWT10**：评论附件类型化端云契约（`CommentAttachmentDto`，消除 Map 穿透）。
+- **GWT11**：评论可观测埋点（曝光/深链/赞踩/延迟）真实发射。
+- **GWT12**：内容作者置顶/取消置顶一级评论，置顶项优先排序，`canPin` 仅作者可见入口；非作者/非一级评论返回对应错误码（新增）。
+- **GWT13**：创建评论按受信代理头解析省级属地快照落库并透传展示，无法解析留空（新增）。
+- **GWT14**：内容作者赞过的评论展示「作者赞过」标识（`authorLiked` 云侧派生）；互动深链精确定位到 `commentId`/`parentCommentId`（新增）。
 
 ### 测试层责任
 
 | 层级 | 职责 |
 |------|------|
-| T1 | 防契约漂移：Comment DTO ↔ metadata fields.yaml；API 路径 ↔ service.yaml |
-| T2 | 防交互回归：入口形态、内联/上压、提交、回复、展开、赞踩、图片、@；缓存命中时先显示最近 comment page |
-| T3 | 防端云联调断裂：Remote Repository 与 Go Handler 路径/参数/响应一致；评论 overlay/outbox 与云端确认合并 |
-| T4 | 防真实设备失效：真实键盘、图片附件、@选择、弱网 >3s 降级提示；10 万评论滚动流畅度 ≥ 50fps |
+| local_contract | 防契约漂移：Comment DTO ↔ metadata fields.yaml；API 路径 ↔ service.yaml |
+| local_contract | 防交互回归：入口形态、内联/上压、提交、回复、展开、赞踩、图片、@；缓存命中时先显示最近 comment page |
+| api_integration | 防端云联调断裂：Remote Repository 与 Go Handler 路径/参数/响应一致；评论 overlay/outbox 与云端确认合并 |
+| user_acceptance | 防真实设备失效：真实键盘、图片附件、@选择、弱网 >3s 降级提示；10 万评论滚动流畅度 ≥ 50fps |

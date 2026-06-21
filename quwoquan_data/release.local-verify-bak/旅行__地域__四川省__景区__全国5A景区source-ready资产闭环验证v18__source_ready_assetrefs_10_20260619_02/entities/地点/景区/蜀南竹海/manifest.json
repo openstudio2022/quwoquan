@@ -1,0 +1,23 @@
+{
+  "entityRef": "/entity/地点/景区/蜀南竹海",
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "sourceRefs": [
+    "entities/地点/景区/蜀南竹海/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/蜀南竹海/1.download/sources/01.home_wikipedia/source.md"
+  ],
+  "assets": [
+    {
+      "assetId": "001_home_wikipedia_1.jpg",
+      "fileName": "001_home_wikipedia_1.jpg",
+      "caption": "shunanzhuhai-2013-10-11-liuzusai",
+      "license": "CC BY 3.0",
+      "credit": "liuzusai刘祖赛",
+      "relevance": "shunanzhuhai-2013-10-11-liuzusai",
+      "sourceRef": "entities/地点/景区/蜀南竹海/1.download/sources/01.home_wikipedia/source.md",
+      "sourceAssetRef": "entities/地点/景区/蜀南竹海/1.download/sources/01.home_wikipedia/assets/001_home_wikipedia_1.jpg",
+      "termsUrl": "https://creativecommons.org/licenses/by/3.0",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:Shunanzhuhai-2013-10-11-liuzusai_-_panoramio_(4).jpg"
+    }
+  ],
+  "generator": "deterministic_homepage_builder"
+}

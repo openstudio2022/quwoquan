@@ -4,19 +4,19 @@
 >
 > 本阶段以“四类主页高保统一落地”为当前执行口径：用户主页与我的主页首屏统一为
 > `身份区 -> CTA -> 交集 -> 影响力 -> Tab -> 内容流`。首屏 CTA 固定为他人主页
-> `关注 / 私信`、我的主页 `编辑资料 / 分享主页`；不再把打招呼、语音、视频、分身管理等
-> 操作放在首屏。Profile 一级 Tab 当前收敛为 `作品 / 互动`，圈子作为统计数字与粉丝/关注同层进入
+> `关注 / 私信`、我的主页 `管理分身 / 编辑资料`；浏览历史收敛到一级 `足迹` Tab。
+> Profile 一级 Tab 当前收敛为 `记录 / 互动 / 足迹`，圈子作为统计数字与粉丝/关注同层进入
 > 统计详情页，不再占据主页一级 Tab；作品二级只保留
 > `全部 / 图片 / 视频 / 文字`，其中底层类型仍为 `article`，展示筛选用“文字”。
 > “文章”只用于正式内容类型或详情语境，“长文”只用于编辑创作语境。
 >
 > 交集表达以用户可解释语言为准：他人主页为 `你们的交集`，我的主页为 `我的新交集`；
-> 影响模块为 `TA的影响力` / `我的影响力`，均采用纵向列表，第一条主结论使用品牌蓝，
-> 灰色仅用于原因说明。
+> 影响模块为 `TA的影响力` / `我的影响力`，均采用纵向列表；可点击文字、一级 Tab 选中态与
+> 「查看全部」弱入口使用克制蓝色阶，类型图标使用非品牌蓝低饱和语义色。
 
 > 版本口径冻结（V5，参见 specs/changelog/CR-20260531-027）：本 spec 为 `profile-homepage-redesign` 能力的**唯一冻结口径**。本次 V5 在历史 `profile-commercial-readiness`（已上线收窄子集）基础上**全量补全**，并明确以下三处与历史口径的差异，**不向后兼容旧实现**：
 >
-> 1. **一级 Tab 收敛为 2 个**：`[创作 | 互动]`；`圈子`作为统计数字进入`粉丝 / 关注 / 圈子`三 Tab 详情页，`生活`不再作为本阶段主页一级 Tab。
+> 1. **一级 Tab 收敛为 3 个**：`[记录 | 互动 | 足迹]`；`圈子`作为统计数字进入`粉丝 / 关注 / 圈子`三 Tab 详情页，`足迹`承载浏览历史列表。
 > 2. **profile 内容形式只有三类**：文章 / 图片 / 视频（均为 `contentIdentity=work` 作品）。**profile 不存在「微趣」概念**；`moment/micro`（点滴微动态）是 content/discovery 域的独立活跃概念，不进 profile 创作 Tab。历史 spec/commercial-readiness 中创作含「微趣」的表述在 V5 一律废止。
 > 3. **交集卡为真闭环**：`你们的交集` 卡由 tag-service `shared-tags` 真实倒排数据驱动（`object_tag_index` 打标管道），统一到 `IntersectionReason`；历史 `resonance`（共鸣）旧链路全部删除，不保留。
 
@@ -52,12 +52,12 @@
 - 滚动吸顶：上滑过头像/名字后，小头像+名字平滑过渡到顶部工具栏；继续上滑一级 Tab 吸顶
 - 暗色模式全面支持：所有背景、前景、渐变、工具栏颜色通过语义 Token 切换
 
-**mine 差异**：操作按钮 = [编辑资料, 管理人设]（等宽双按钮）；创作可见性含「私密」；顶栏 = [设置]
+**mine 差异**：操作按钮 = [管理分身, 编辑资料]（等宽双按钮）；创作可见性含「私密」；顶栏 = [设置]
 **other 差异**：操作按钮 = [关注/已关注, 私信]（等宽双按钮，与 mine 布局一致）；无「私密」；顶栏 = [返回, 更多]
 
 ### F2: 一级 Tab 与统计入口重新设计
 
-一级 Tab：`[创作 | 互动]`，默认选中「创作」。一级 Tab 由 codegen `profile_tabs`（`user/user_profile/ui_config.yaml`）驱动，端侧不得硬编码 Tab id/文案。
+一级 Tab：`[记录 | 互动 | 足迹]`，默认选中「记录」。一级 Tab 由 codegen `profile_tabs`（`user/user_profile/ui_config.yaml`）驱动，端侧不得硬编码 Tab id/文案；`足迹`为浏览历史入口，不再占用首屏 CTA。
 
 命名语义：「创作」= 用户发布的全部原创**作品**（`contentIdentity=work`），内容形式为 文章 / 图片 / 视频 三类。**profile 不引入「微趣」(moment/micro) 概念**——点滴微动态属 content/discovery 域，profile 创作 Tab 不展示。
 
@@ -124,12 +124,12 @@
 - 可交互热区下限 44×44，主操作 48×48
 - 深色模式全面适配：背景渐变、工具栏折叠态、分界区衔接、所有前景色均通过语义 Token 跟随暗色切换
 
-### F11: 四层测试覆盖（T1~T4）
+### F11: 四层测试覆盖（三层测试）
 
-- T1: 契约/单测（UserProfile DTO、`UserLifeItem` DTO + `LifeItemCategory` 枚举、`IntersectionReason` 5 维度闭集、tag `shared-tags` 契约字段、`ObjectTagIndexWriter` upsert 幂等）
-- T2: Widget/Provider（ProfileShell mine/other 渲染、创作 SubTab 切换与可见性过滤、圈子/互动/生活 Tab、交集卡 mine 不展示/other 有交集展示/无交集不占位、`ProfileActionBar` 五态、Mock 异常/边界）
-- T3: 端云集成（gamma 真打 `shared-tags` 对已打标对象非空并映射成 `IntersectionReason`、life-items Remote 字段对齐、relationship 五态；每条 T3 断言在 T2 有对应 Mock 断言）
-- T4: 端到端旅程（我的/他人主页完整旅程、交集卡点击→归因上报→跳转、四 Tab 切换与可见性过滤）
+- local_contract: 契约/单测（UserProfile DTO、`UserLifeItem` DTO + `LifeItemCategory` 枚举、`IntersectionReason` 5 维度闭集、tag `shared-tags` 契约字段、`ObjectTagIndexWriter` upsert 幂等）
+- local_contract: Widget/Provider（ProfileShell mine/other 渲染、创作 SubTab 切换与可见性过滤、圈子/互动/生活 Tab、交集卡 mine 不展示/other 有交集展示/无交集不占位、`ProfileActionBar` 五态、Mock 异常/边界）
+- api_integration: 端云集成（gamma 真打 `shared-tags` 对已打标对象非空并映射成 `IntersectionReason`、life-items Remote 字段对齐、relationship 五态；每条 api_integration 断言在 local_contract 有对应 Mock 断言）
+- user_acceptance: 端到端旅程（我的/他人主页完整旅程、交集卡点击→归因上报→跳转、四 Tab 切换与可见性过滤）
 
 ### F12: 你们的交集卡（真闭环）
 
@@ -252,6 +252,6 @@
 6. 端云 DTO codegen 对齐（含 `UserLifeItem`/`LifeItemCategory`）
 7. 你们的交集卡真闭环（shared-tags 真数据 + 归因）
 8. resonance 旧链路零残留
-9. 四层测试覆盖（T1~T4）
+9. 四层测试覆盖（三层测试）
 10. 视觉一致性：零硬编码，全语义 Token
 11. SLO/KPI、权限、生命周期、灰度回滚、观测达成

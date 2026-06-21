@@ -371,35 +371,35 @@ make codegen-app
 
 ## TDD / ATDD 策略
 
-### T1：schema / metadata
+### local_contract：schema / metadata
 
 - shell DTO、module DTO、route/surface/page ids、ui config
 
-### T2：module interaction
+### local_contract：module interaction
 
 - overview shell、review summary、content preview、groups preview、contextual publish handoff
 
-### T3：cross service integration
+### api_integration：cross service integration
 
 - entity shell 消费 content / circle 聚合结果
 - contextual publish 后的主页回流
 
-### T4：user journey
+### user_acceptance：user journey
 
 - 用户进入主页并在首屏理解对象
 - 用户浏览口碑/内容/提问/群组
 - 用户从主页发布并回到主页
 
-## plan slice 与 T1~T4 证据矩阵映射
+## plan slice 与 三层测试 证据矩阵映射
 
 | Slice | 目标 | 验证层 |
 |---|---|---|
-| `P1` | 冻结 homepage shell / module metadata | `T1` |
-| `P2` | 建立 codegen baseline | `T1` |
-| `P3` | 落 overview shell 与 review summary | `T2`, `T4` |
-| `P4` | 落 content/question/related groups 聚合 | `T2`, `T3`, `T4` |
-| `P5` | 落 contextual publish 与回流 | `T2`, `T3`, `T4` |
-| `P6` | 加固观测、回滚与 Journey 回归 | `T3`, `T4` |
+| `P1` | 冻结 homepage shell / module metadata | `local_contract` |
+| `P2` | 建立 codegen baseline | `local_contract` |
+| `P3` | 落 overview shell 与 review summary | `local_contract`, `user_acceptance` |
+| `P4` | 落 content/question/related groups 聚合 | `local_contract`, `api_integration`, `user_acceptance` |
+| `P5` | 落 contextual publish 与回流 | `local_contract`, `api_integration`, `user_acceptance` |
+| `P6` | 加固观测、回滚与 Journey 回归 | `api_integration`, `user_acceptance` |
 
 ## 未来演进
 

@@ -502,7 +502,10 @@ class _ErrorActionRow extends StatelessWidget {
     );
   }
 
-  Future<void> _dispatchAction(BuildContext context, UiErrorAction action) async {
+  Future<void> _dispatchAction(
+    BuildContext context,
+    UiErrorAction action,
+  ) async {
     if (action.type == UiErrorActionType.back) {
       _popOrGoHome(context);
       return;
@@ -637,6 +640,7 @@ UiErrorSemantic _withSafePageExit(
       dismissible: semantic.dismissible,
       sourceCode: semantic.sourceCode,
       failureKind: semantic.failureKind,
+      copyKey: semantic.copyKey,
       recoveryAction: semantic.recoveryAction,
       presentation: semantic.presentation,
       tone: semantic.tone,
@@ -662,6 +666,7 @@ UiErrorSemantic _withSafePageExit(
     dismissible: semantic.dismissible,
     sourceCode: semantic.sourceCode,
     failureKind: semantic.failureKind,
+    copyKey: semantic.copyKey,
     recoveryAction: semantic.recoveryAction,
     presentation: semantic.presentation,
     tone: semantic.tone,

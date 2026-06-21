@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_25dc6c03f0fddc45",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "大雁塔－大唐芙蓉园景区·行前指南：1日游",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer",
+    "agentRunId": "run-af632509-da93-48eb-9d86-c42fb2c45deb",
+    "agentId": "agent-11221fdf-deec-4af2-82cc-d02e3c8e310b",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/大雁塔－大唐芙蓉园景区"
+    ],
+    "articleDigest": "sha256:8d0f27bf232f7c2e6f92d4e89fda8b776d00482e63c542118f28d4efe8efb43c"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "大雁塔－大唐芙蓉园景区·行前指南：1日游",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:870834d41e5a3e24ed47c0d913cb17593f39820e7db3c0d3bafea4df6a7eb13f",
+    "writingPackSha256": "sha256:6cd90db8d0ed3f74541d73bf45cf9587fcba4b6627b5f6571d1c32d480f027df",
+    "sourceBundleSha256": "sha256:f3b7f2060a98c71361feb4d9fac82d6bad49e6691fe1c7bdb07e686c4e62b6dd",
+    "draftSha256": "sha256:b56203b8ad97e6de6eb3b982d60bc5af6712e6c9927ff3281127d200411f527e"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/大雁塔－大唐芙蓉园景区/1.download/sources/02.qunar_guide_candidate_068028b8c8dc99bd/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7892869"
+    },
+    {
+      "path": "entities/地点/景区/大雁塔－大唐芙蓉园景区/1.download/sources/18.qunar_guide_candidate_25dc6c03f0fddc45/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7883527"
+    },
+    {
+      "path": "entities/地点/景区/大雁塔－大唐芙蓉园景区/1.download/sources/23.qunar_guide_candidate_3339c6e152ac6cc9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7898860"
+    },
+    {
+      "path": "entities/地点/景区/大雁塔－大唐芙蓉园景区/1.download/sources/33.qunar_guide_candidate_4bbb7024143ff274/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7870192"
+    },
+    {
+      "path": "entities/地点/景区/大雁塔－大唐芙蓉园景区/1.download/sources/65.qunar_guide_candidate_9673923bf8c95405/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7884744"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/大雁塔－大唐芙蓉园景区/1.download/sources/02.qunar_guide_candidate_068028b8c8dc99bd/source.md",
+    "entities/地点/景区/大雁塔－大唐芙蓉园景区/1.download/sources/18.qunar_guide_candidate_25dc6c03f0fddc45/source.md",
+    "entities/地点/景区/大雁塔－大唐芙蓉园景区/1.download/sources/23.qunar_guide_candidate_3339c6e152ac6cc9/source.md",
+    "entities/地点/景区/大雁塔－大唐芙蓉园景区/1.download/sources/33.qunar_guide_candidate_4bbb7024143ff274/source.md"
+  ]
+}

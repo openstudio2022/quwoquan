@@ -33,15 +33,22 @@ sit_acceptance:
     performance_points:
       - response latency target
       - conflict or false-positive rate target
-    evidence:
+    test_evidence:
       primary:
-        - T2_module_interaction
-        - T3_app_api_integration
+        - layer: api_integration
+          suite: capability_primary_flow
+          cases:
+            - api_integration.domain.capability.primary_flow
+          envs: [beta, gamma]
       supporting:
-        - T1_static_contract
+        - layer: local_contract
+          suite: capability_state_machine
+          cases:
+            - local_contract.domain.capability.state_machine
+          envs: [local]
     tests:
       planned:
-        - module or integration test
+        - command: replace-with-real-capability-test-command
       recorded: []
     status: pending
 

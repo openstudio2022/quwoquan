@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
+import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 
@@ -11,14 +14,98 @@ const List<String> messageHomeFilters = <String>[
   'notification',
 ];
 
+class MessageHomeRowsState {
+  const MessageHomeRowsState({
+    required this.items,
+    this.cacheFallbackError,
+    this.copyKey,
+  });
+
+  final List<ChatListItemViewModel> items;
+  final Object? cacheFallbackError;
+  final String? copyKey;
+
+  bool get isCacheFallback => cacheFallbackError != null;
+}
+
+final messageHomeRowsStateProvider =
+    FutureProvider.family<MessageHomeRowsState, String>((ref, filter) async {
+      ref
+          .read(pageLifecycleObservabilityProvider)
+          .recordPageState(
+            pageName: 'chat_list',
+            route: '/chat',
+            surface: filter,
+            phase: 'onlineLoading',
+            source: 'online',
+          );
+      final repo = ref.watch(chatRepositoryProvider);
+      try {
+        final rows = await repo.listMessageHome(filter: filter, limit: 100);
+        _storeMessageRowsInConversationCache(ref, rows);
+        final items = rows
+            .map(ChatListItemViewModel.fromMessageHomeDto)
+            .toList();
+        ref
+            .read(pageLifecycleObservabilityProvider)
+            .recordPageState(
+              pageName: 'chat_list',
+              route: '/chat',
+              surface: filter,
+              phase: 'onlineSuccess',
+              source: 'online',
+              itemCount: items.length,
+              hasCache: false,
+            );
+        return MessageHomeRowsState(items: items);
+      } catch (error) {
+        final cached = _cachedMessageRowsForFilter(ref, filter);
+        if (cached.isNotEmpty) {
+          ref
+              .read(pageLifecycleObservabilityProvider)
+              .recordPageState(
+                pageName: 'chat_list',
+                route: '/chat',
+                surface: filter,
+                phase: 'cacheFallback',
+                source: 'cache',
+                error: error,
+                copyKey: 'chatListCacheFallback',
+                itemCount: cached.length,
+                hasCache: true,
+              );
+          return MessageHomeRowsState(
+            items: cached,
+            cacheFallbackError: error,
+            copyKey: 'chatListCacheFallback',
+          );
+        }
+        ref
+            .read(pageLifecycleObservabilityProvider)
+            .recordPageState(
+              pageName: 'chat_list',
+              route: '/chat',
+              surface: filter,
+              phase: 'blockingFailure',
+              source: 'online',
+              error: error,
+              copyKey: 'chatListLoadFailedTitle',
+              itemCount: 0,
+              hasCache: false,
+            );
+        rethrow;
+      }
+    });
+
 final messageHomeRowsProvider =
     FutureProvider.family<List<ChatListItemViewModel>, String>((
       ref,
       filter,
     ) async {
-      final repo = ref.watch(chatRepositoryProvider);
-      final rows = await repo.listMessageHome(filter: filter, limit: 100);
-      return rows.map(ChatListItemViewModel.fromMessageHomeDto).toList();
+      final state = await ref.watch(
+        messageHomeRowsStateProvider(filter).future,
+      );
+      return state.items;
     });
 
 int totalUnreadMessages(Iterable<ChatListItemViewModel> rows) {
@@ -33,6 +120,90 @@ final messageHomeUnreadBadgeCountProvider = Provider<int?>((ref) {
 void refreshMessageReadState(WidgetRef ref, String conversationId) {
   ref.read(chatInboxListProvider.notifier).markConversationRead(conversationId);
   for (final filter in messageHomeFilters) {
+    ref.invalidate(messageHomeRowsStateProvider(filter));
     ref.invalidate(messageHomeRowsProvider(filter));
   }
+}
+
+void _storeMessageRowsInConversationCache(
+  Ref ref,
+  Iterable<MessageHomeRowDto> rows,
+) {
+  final records = rows
+      .where((row) => row.conversationId.trim().isNotEmpty)
+      .map(_conversationCacheRecordFromMessageHomeRow)
+      .where((record) => record.id.isNotEmpty)
+      .toList(growable: false);
+  if (records.isEmpty) {
+    return;
+  }
+  ref.read(conversationCacheProvider).putAll(records);
+}
+
+List<ChatListItemViewModel> _cachedMessageRowsForFilter(
+  Ref ref,
+  String filter,
+) {
+  final records = ref
+      .read(conversationCacheProvider)
+      .getAll()
+      .where((record) {
+        final item = ChatListItemViewModel.fromDto(record.toChatInboxDto());
+        return _matchesMessageHomeFilter(item, filter);
+      })
+      .toList(growable: false);
+  records.sort((a, b) {
+    if (a.pinned != b.pinned) {
+      return a.pinned ? -1 : 1;
+    }
+    final aTime = DateTime.tryParse(a.lastMessageAt);
+    final bTime = DateTime.tryParse(b.lastMessageAt);
+    if (aTime == null && bTime == null) {
+      return a.title.compareTo(b.title);
+    }
+    if (aTime == null) return 1;
+    if (bTime == null) return -1;
+    return bTime.compareTo(aTime);
+  });
+  final rows = records
+      .map((record) => ChatListItemViewModel.fromDto(record.toChatInboxDto()))
+      .toList(growable: false);
+  return List<ChatListItemViewModel>.unmodifiable(rows);
+}
+
+bool _matchesMessageHomeFilter(ChatListItemViewModel item, String filter) {
+  switch (filter) {
+    case 'unread':
+      return item.hasUnread || item.hasMention;
+    case 'group':
+      return item.isGroup;
+    case 'direct':
+      return !item.isGroup && !item.isNotification;
+    case 'notification':
+      return item.isNotification;
+    case 'all':
+    default:
+      return true;
+  }
+}
+
+ConversationCacheRecord _conversationCacheRecordFromMessageHomeRow(
+  MessageHomeRowDto row,
+) {
+  return ConversationCacheRecord(
+    id: row.conversationId.trim(),
+    type: row.conversationType.trim().isEmpty
+        ? 'direct'
+        : row.conversationType.trim(),
+    title: row.title.trim(),
+    avatarUrl: row.avatarUrl.trim(),
+    groupAvatarVersion: row.groupAvatarVersion,
+    lastMessagePreview: row.summary.trim(),
+    lastMessageType: 'text',
+    lastMessageAt: row.lastActiveAt?.toIso8601String() ?? '',
+    unreadCount: row.unreadCount,
+    mentionUnreadCount: row.mentionUnreadCount,
+    muted: row.muted,
+    pinned: row.pinned,
+  );
 }

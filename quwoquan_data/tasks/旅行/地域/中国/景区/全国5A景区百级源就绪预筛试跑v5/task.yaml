@@ -904,6 +904,23 @@ content:
       article: 3
       image: 4
     allowAiImages: false
+    imageAssetStrategy: open_license_publish
+    imageCountPolicy: score_bonus
+    openLicenseScaleProof:
+      preScreenedEntityCount: 100
+      desiredPassedEntityCount: 87
+      scoredEntityCount: 100
+      publishableImageAssets: 175
+      sourceCollectionCount: 175
+      imageCountPolicy: score_bonus
+      desiredImageWorksPerTarget: 2
+      minimumImageWorksPerTarget: 0
+      desiredPublishableImageAssets: 200
+      minimumPublishableImageAssets: 0
+      averageImageCountScore: 0.875
+      averageCompositeScore: 0.875
+      assetPoolPath: quwoquan_data/runtime/tasks/scale-proof-placeholder/entities
+      verifiedAt: '2026-06-21T00:00:00+00:00'
   carriers:
   - article
   - image

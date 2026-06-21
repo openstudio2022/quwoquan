@@ -18,6 +18,8 @@ var (
 	ErrCommentForbiddenDelete              = errors.New("CONTENT.USER.comment_forbidden_delete")
 	ErrCommentLikeDuplicate                = errors.New("CONTENT.USER.comment_like_duplicate")
 	ErrCommentNotFound                     = errors.New("CONTENT.USER.comment_not_found")
+	ErrCommentPinForbidden                 = errors.New("CONTENT.USER.comment_pin_forbidden")
+	ErrCommentPinInvalidTarget             = errors.New("CONTENT.USER.comment_pin_invalid_target")
 	ErrCommentRateLimited                  = errors.New("CONTENT.USER.comment_rate_limited")
 	ErrCommentReactionForbidden            = errors.New("CONTENT.USER.comment_reaction_forbidden")
 	ErrCommentTooLong                      = errors.New("CONTENT.USER.comment_too_long")
@@ -85,6 +87,18 @@ func AppErrorFromCommentLikeDuplicate(debugMessage string) *rterr.AppError {
 func AppErrorFromCommentNotFound(debugMessage string) *rterr.AppError {
 	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found")
 	return rterr.NewAppError(code, "评论不存在或已删除", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromCommentPinForbidden returns *AppError for CONTENT.USER.comment_pin_forbidden (user_message from errors.yaml).
+func AppErrorFromCommentPinForbidden(debugMessage string) *rterr.AppError {
+	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden")
+	return rterr.NewAppError(code, "仅内容作者可置顶评论", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromCommentPinInvalidTarget returns *AppError for CONTENT.USER.comment_pin_invalid_target (user_message from errors.yaml).
+func AppErrorFromCommentPinInvalidTarget(debugMessage string) *rterr.AppError {
+	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
+	return rterr.NewAppError(code, "只能置顶一级评论", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCommentRateLimited returns *AppError for CONTENT.USER.comment_rate_limited (user_message from errors.yaml).

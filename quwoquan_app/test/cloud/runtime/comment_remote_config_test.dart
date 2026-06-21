@@ -10,6 +10,7 @@ void main() {
             'comment': <String, Object?>{
               'max_length': 320,
               'reply_preview_count': 2,
+              'reply_first_expand_page_size': 6,
               'reply_expand_page_size': 12,
               'fold_line_count': 4,
               'attachment': <String, Object?>{'max_images': 3},
@@ -20,6 +21,7 @@ void main() {
 
       expect(config.maxLength, 320);
       expect(config.replyPreviewCount, 2);
+      expect(config.replyFirstExpandPageSize, 6);
       expect(config.replyExpandPageSize, 12);
       expect(config.foldLineCount, 4);
       expect(config.maxImageAttachments, 3);

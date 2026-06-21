@@ -1,0 +1,586 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/中国/景区/全国5A景区百实体源就绪收敛试跑v8
+title: 全国5A景区百实体源就绪收敛试跑v8
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 中国
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 中国
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 八达岭—慕田峪长城旅游区
+  - entityType: 地点/景区
+    name: 沈阳市沈阳植物园
+  - entityType: 地点/景区
+    name: 上海野生动物园
+  - entityType: 地点/景区
+    name: 九华山风景区
+  - entityType: 地点/景区
+    name: 武夷山风景名胜区
+  - entityType: 地点/景区
+    name: 云台山－神农山－青天河风景区
+  - entityType: 地点/景区
+    name: 武陵源－天门山旅游区
+  - entityType: 地点/景区
+    name: 大足石刻景区
+  - entityType: 地点/景区
+    name: 九寨沟景区
+  - entityType: 地点/景区
+    name: 玉龙雪山景区
+  - entityType: 地点/景区
+    name: 大昭寺景区
+  - entityType: 地点/景区
+    name: 华清宫景区
+  - entityType: 地点/景区
+    name: 青海湖风景区
+  - entityType: 地点/景区
+    name: 沙坡头旅游景区
+  - entityType: 地点/景区
+    name: 喀纳斯景区
+  - entityType: 地点/景区
+    name: 盘山风景名胜区
+  - entityType: 地点/景区
+    name: 杭州西湖风景区
+  - entityType: 地点/景区
+    name: 黄山风景区
+  - entityType: 地点/景区
+    name: 鼓浪屿风景名胜区
+  - entityType: 地点/景区
+    name: 庐山市庐山风景名胜区
+  - entityType: 地点/景区
+    name: 泰山景区
+  - entityType: 地点/景区
+    name: 嵩山少林景区
+  - entityType: 地点/景区
+    name: 黄鹤楼公园
+  - entityType: 地点/景区
+    name: 衡山旅游区
+  - entityType: 地点/景区
+    name: 独秀峰·靖江王城景区
+  - entityType: 地点/景区
+    name: 南山文化旅游区
+  - entityType: 地点/景区
+    name: 小三峡－小小三峡旅游区
+  - entityType: 地点/景区
+    name: 峨眉山景区
+  - entityType: 地点/景区
+    name: 黄果树瀑布景区
+  - entityType: 地点/景区
+    name: 石林风景区
+  - entityType: 地点/景区
+    name: 布达拉宫景区
+  - entityType: 地点/景区
+    name: 秦始皇帝陵博物院景区
+  - entityType: 地点/景区
+    name: 塔尔寺景区
+  - entityType: 地点/景区
+    name: 沙湖旅游景区
+  - entityType: 地点/景区
+    name: 天山天池风景名胜区
+  - entityType: 地点/景区
+    name: 塔克拉玛干·三五九旅文化旅游区
+  - entityType: 地点/景区
+    name: 故宫博物院
+  - entityType: 地点/景区
+    name: 白洋淀景区
+  - entityType: 地点/景区
+    name: 中俄边境旅游区
+  - entityType: 地点/景区
+    name: 金石滩景区
+  - entityType: 地点/景区
+    name: 净月潭景区
+  - entityType: 地点/景区
+    name: 镜泊湖景区
+  - entityType: 地点/景区
+    name: 上海科技馆
+  - entityType: 地点/景区
+    name: 苏州市苏州园林（拙政园－留园－虎丘）
+  - entityType: 地点/景区
+    name: 雁荡山风景区
+  - entityType: 地点/景区
+    name: 天柱山风景区
+  - entityType: 地点/景区
+    name: 泰宁风景旅游区
+  - entityType: 地点/景区
+    name: 蓬莱阁-三仙山-八仙过海旅游区
+  - entityType: 地点/景区
+    name: 龙门石窟景区
+  - entityType: 地点/景区
+    name: 岳阳楼－君山岛景区
+  - entityType: 地点/景区
+    name: 喀斯特旅游区
+  - entityType: 地点/景区
+    name: 青城山－都江堰旅游景区
+  - entityType: 地点/景区
+    name: 丽江古城景区
+  - entityType: 地点/景区
+    name: 巴松措景区
+  - entityType: 地点/景区
+    name: 黄帝陵景区
+  - entityType: 地点/景区
+    name: 麦积山景区
+  - entityType: 地点/景区
+    name: 葡萄沟风景区
+  - entityType: 地点/景区
+    name: 颐和园
+  - entityType: 地点/景区
+    name: 西柏坡景区
+  - entityType: 地点/景区
+    name: 绵山风景区
+  - entityType: 地点/景区
+    name: 阿尔山-柴河旅游景区
+  - entityType: 地点/景区
+    name: 本溪水洞景区
+  - entityType: 地点/景区
+    name: 钟山风景名胜区－中山陵园风景区
+  - entityType: 地点/景区
+    name: 刘公岛景区
+  - entityType: 地点/景区
+    name: 尧山－中原大佛景区
+  - entityType: 地点/景区
+    name: 武当山风景区
+  - entityType: 地点/景区
+    name: 韶山旅游区
+  - entityType: 地点/景区
+    name: 白云区白云山景区
+  - entityType: 地点/景区
+    name: 两江四湖·象山景区
+  - entityType: 地点/景区
+    name: 陵水县分界洲岛旅游区
+  - entityType: 地点/景区
+    name: 万盛黑山谷-龙鳞石海风景区
+  - entityType: 地点/景区
+    name: 乐山大佛景区
+  - entityType: 地点/景区
+    name: 荔波县樟江景区
+  - entityType: 地点/景区
+    name: 崇圣寺三塔文化旅游区
+  - entityType: 地点/景区
+    name: 扎什伦布寺景区
+  - entityType: 地点/景区
+    name: 华山风景区
+  - entityType: 地点/景区
+    name: 鸣沙山月牙泉景区
+  - entityType: 地点/景区
+    name: 阿咪东索景区
+  - entityType: 地点/景区
+    name: 水洞沟旅游区
+  - entityType: 地点/景区
+    name: 那拉提旅游风景区
+  - entityType: 地点/景区
+    name: 明十三陵景区
+  - entityType: 地点/景区
+    name: 灵山大佛景区
+  - entityType: 地点/景区
+    name: 千岛湖风景区
+  - entityType: 地点/景区
+    name: 清源山风景名胜区
+  - entityType: 地点/景区
+    name: 婺源县江湾景区
+  - entityType: 地点/景区
+    name: 南山景区
+  - entityType: 地点/景区
+    name: 殷墟景区
+  - entityType: 地点/景区
+    name: 神农溪纤夫文化旅游区
+  - entityType: 地点/景区
+    name: 岳麓山-橘子洲旅游区
+  - entityType: 地点/景区
+    name: 连州市地下河旅游景区
+  - entityType: 地点/景区
+    name: 德天跨国瀑布景区
+  - entityType: 地点/景区
+    name: 保亭县海南槟榔谷黎苗文化旅游区
+  - entityType: 地点/景区
+    name: 桃花源旅游景区
+  - entityType: 地点/景区
+    name: 黄龙风景名胜区
+  - entityType: 地点/景区
+    name: 花溪区青岩古镇景区
+  - entityType: 地点/景区
+    name: 西双版纳州中科院西双版纳热带植物园
+  - entityType: 地点/景区
+    name: 雅鲁藏布大峡谷景区
+  - entityType: 地点/景区
+    name: 大雁塔－大唐芙蓉园景区
+  - entityType: 地点/景区
+    name: 七彩丹霞景区
+  - entityType: 地点/景区
+    name: 六盘山红军长征旅游区
+  reserveCoverageTargets:
+  - entityType: 地点/景区
+    name: 北京奥林匹克公园
+  - entityType: 地点/景区
+    name: 恭王府景区
+  - entityType: 地点/景区
+    name: 圆明园遗址公园景区
+  - entityType: 地点/景区
+    name: 清西陵景区
+  - entityType: 地点/景区
+    name: 金山岭长城景区
+  - entityType: 地点/景区
+    name: 黄河壶口瀑布旅游区(陕西省延安市·山西省临汾市)
+  - entityType: 地点/景区
+    name: 胡杨林旅游区
+  - entityType: 地点/景区
+    name: 虎头旅游景区
+  - entityType: 地点/景区
+    name: 南京市夫子庙－秦淮风光带
+  - entityType: 地点/景区
+    name: 同里古镇景区
+  - entityType: 地点/景区
+    name: 太湖旅游区
+  - entityType: 地点/景区
+    name: 沙家浜－虞山尚湖旅游区
+  - entityType: 地点/景区
+    name: 云龙湖景区
+  - entityType: 地点/景区
+    name: 花果山景区
+  - entityType: 地点/景区
+    name: 春秋淹城旅游区
+  - entityType: 地点/景区
+    name: 惠山古镇景区
+  - entityType: 地点/景区
+    name: 洪泽湖湿地景区
+  - entityType: 地点/景区
+    name: 横店影视城景区
+  - entityType: 地点/景区
+    name: 江郎山·廿八都旅游区
+  - entityType: 地点/景区
+    name: 西塘古镇旅游景区
+  - entityType: 地点/景区
+    name: 方特旅游区
+  - entityType: 地点/景区
+    name: 长江采石矶文化生态旅游区
+  - entityType: 地点/景区
+    name: 琅琊山景区
+  - entityType: 地点/景区
+    name: （白水洋·鸳鸯溪）旅游景区
+  - entityType: 地点/景区
+    name: 太姥山旅游区
+  - entityType: 地点/景区
+    name: 三坊七巷景区
+  - entityType: 地点/景区
+    name: 古田旅游区
+  - entityType: 地点/景区
+    name: 湄洲岛妈祖文化旅游区
+  - entityType: 地点/景区
+    name: 冠豸山景区
+  - entityType: 地点/景区
+    name: 厦门园林植物园景区
+  - entityType: 地点/景区
+    name: 景德镇市昌江区古窑民俗博览区
+  - entityType: 地点/景区
+    name: 瑞金市共和国摇篮景区
+  - entityType: 地点/景区
+    name: 袁州区明月山旅游区
+  - entityType: 地点/景区
+    name: 弋阳县龟峰景区
+  - entityType: 地点/景区
+    name: 资溪县大觉山景区
+  - entityType: 地点/景区
+    name: 东湖区滕王阁旅游区
+  - entityType: 地点/景区
+    name: 芦溪县萍乡武功山景区
+  - entityType: 地点/景区
+    name: 永修县庐山西海景区
+  - entityType: 地点/景区
+    name: 三百山景区
+  - entityType: 地点/景区
+    name: 篁岭景区
+  - entityType: 地点/景区
+    name: 崂山景区
+  - entityType: 地点/景区
+    name: 台儿庄古城景区
+  - entityType: 地点/景区
+    name: 天下第一泉景区
+  - entityType: 地点/景区
+    name: 沂蒙山旅游区
+  - entityType: 地点/景区
+    name: 威海华夏城景区
+  - entityType: 地点/景区
+    name: 青州古城景区
+  - entityType: 地点/景区
+    name: 黄河口生态旅游区
+  - entityType: 地点/景区
+    name: 萤火虫水洞·地下大峡谷旅游区
+  - entityType: 地点/景区
+    name: 微山湖旅游区
+  - entityType: 地点/景区
+    name: 周村古商城景区
+  - entityType: 地点/景区
+    name: 奥帆海洋文化旅游区
+  - entityType: 地点/景区
+    name: 清明上河园景区
+  - entityType: 地点/景区
+    name: 白云山景区
+  - entityType: 地点/景区
+    name: 老君山－鸡冠洞旅游区
+  - entityType: 地点/景区
+    name: 龙潭大峡谷景区
+  - entityType: 地点/景区
+    name: 西峡恐龙遗迹园-伏牛山-老界岭旅游区
+  - entityType: 地点/景区
+    name: 嵖岈山旅游景区
+  - entityType: 地点/景区
+    name: 红旗渠－太行大峡谷旅游景区
+  - entityType: 地点/景区
+    name: 芒砀山汉文化旅游景区
+  - entityType: 地点/景区
+    name: 八里沟景区
+  - entityType: 地点/景区
+    name: 鸡公山景区
+  - entityType: 地点/景区
+    name: 太昊伏羲陵文化旅游区
+  - entityType: 地点/景区
+    name: 宝泉旅游区
+  - entityType: 地点/景区
+    name: 神农架生态旅游区
+  - entityType: 地点/景区
+    name: 东湖景区
+  - entityType: 地点/景区
+    name: 清江画廊景区
+  - entityType: 地点/景区
+    name: 木兰文化生态旅游区
+  - entityType: 地点/景区
+    name: 恩施大峡谷景区
+  - entityType: 地点/景区
+    name: 三国赤壁古战场景区
+  - entityType: 地点/景区
+    name: 古隆中景区
+  - entityType: 地点/景区
+    name: 腾龙洞景区
+  - entityType: 地点/景区
+    name: 三峡大瀑布景区
+  - entityType: 地点/景区
+    name: 明显陵文化旅游景区
+  - entityType: 地点/景区
+    name: 麻城龟峰山景区
+  - entityType: 地点/景区
+    name: 花明楼景区
+  - entityType: 地点/景区
+    name: 东江湖旅游区
+  - entityType: 地点/景区
+    name: 崀山景区
+  - entityType: 地点/景区
+    name: 炎帝陵景区
+  - entityType: 地点/景区
+    name: 桃花源旅游区
+  - entityType: 地点/景区
+    name: 矮寨·十八洞·德夯大峡谷景区
+  - entityType: 地点/景区
+    name: 凤凰古城旅游区
+  - entityType: 地点/景区
+    name: 龙华区观澜湖休闲旅游区
+  - entityType: 地点/景区
+    name: 仁化县丹霞山景区
+  - entityType: 地点/景区
+    name: 南海区西樵山景区
+  - entityType: 地点/景区
+    name: 博罗县罗浮山景区
+  - entityType: 地点/景区
+    name: 佛山市顺德区长鹿旅游休博园
+  - entityType: 地点/景区
+    name: 江城区海陵岛大角湾海上丝路旅游区
+  - entityType: 地点/景区
+    name: 孙中山故里旅游区
+  - entityType: 地点/景区
+    name: 惠城区惠州西湖旅游景区
+  - entityType: 地点/景区
+    name: 端州区星湖旅游景区
+  - entityType: 地点/景区
+    name: 开平市开平碉楼文化旅游区
+  - entityType: 地点/景区
+    name: 万绿湖风景区
+  - entityType: 地点/景区
+    name: 百色起义纪念园景区
+  - entityType: 地点/景区
+    name: 涠洲岛南湾鳄鱼山景区
+  - entityType: 地点/景区
+    name: 黄姚古镇景区
+  - entityType: 地点/景区
+    name: 程阳八寨景区
+  - entityType: 地点/景区
+    name: 花山岩画景区
+  - entityType: 地点/景区
+    name: 蜈支洲岛旅游区
+  - entityType: 地点/景区
+    name: 三亚市天涯海角游览区
+  - entityType: 地点/景区
+    name: 金佛山景区
+  - entityType: 地点/景区
+    name: 四面山景区
+  - entityType: 地点/景区
+    name: 龙缸景区
+  - entityType: 地点/景区
+    name: 阿依河景区
+  - entityType: 地点/景区
+    name: 濯水景区
+  - entityType: 地点/景区
+    name: 白帝城·瞿塘峡景区
+  - entityType: 地点/景区
+    name: 武陵山大裂谷景区
+  - entityType: 地点/景区
+    name: 汶川特别旅游区
+  - entityType: 地点/景区
+    name: 羌城旅游区
+  - entityType: 地点/景区
+    name: 邓小平故里旅游区
+  - entityType: 地点/景区
+    name: 阆中古城旅游景区
+  - entityType: 地点/景区
+    name: 剑门蜀道剑门关旅游景区
+  - entityType: 地点/景区
+    name: 朱德故里景区
+  - entityType: 地点/景区
+    name: 海螺沟景区
+  - entityType: 地点/景区
+    name: 碧峰峡旅游景区
+  - entityType: 地点/景区
+    name: 光雾山旅游景区
+  - entityType: 地点/景区
+    name: 稻城亚丁旅游景区
+  - entityType: 地点/景区
+    name: 安仁古镇景区
+  - entityType: 地点/景区
+    name: 四姑娘山景区
+  - entityType: 地点/景区
+    name: 成都市天台山景区
+  - entityType: 地点/景区
+    name: 江口县梵净山旅游区
+  - entityType: 地点/景区
+    name: 镇远县镇远古城旅游景区
+  - entityType: 地点/景区
+    name: 赤水市赤水丹霞旅游区
+  - entityType: 地点/景区
+    name: 织金洞景区
+  - entityType: 地点/景区
+    name: 万峰林景区
+  - entityType: 地点/景区
+    name: 普达措国家公园
+  - entityType: 地点/景区
+    name: 昆明世博园景区
+  - entityType: 地点/景区
+    name: 火山热海旅游区
+  - entityType: 地点/景区
+    name: 普者黑旅游景区
+  - entityType: 地点/景区
+    name: 和顺古镇景区
+  - entityType: 地点/景区
+    name: 法门文化景区
+  - entityType: 地点/景区
+    name: 金丝峡景区
+  - entityType: 地点/景区
+    name: 太白山旅游景区
+  - entityType: 地点/景区
+    name: 城墙·碑林历史文化景区
+  - entityType: 地点/景区
+    name: 延安革命纪念地景区
+  - entityType: 地点/景区
+    name: 大明宫旅游景区
+  - entityType: 地点/景区
+    name: 乾陵景区
+  - entityType: 地点/景区
+    name: 延川黄河乾坤湾景区
+  - entityType: 地点/景区
+    name: 炳灵寺世界文化遗产旅游区
+  - entityType: 地点/景区
+    name: 官鹅沟景区
+  - entityType: 地点/景区
+    name: 冶力关旅游区
+  - entityType: 地点/景区
+    name: 青铜峡黄河大峡谷旅游区
+  - entityType: 地点/景区
+    name: 可可托海景区
+  - entityType: 地点/景区
+    name: 天山大峡谷
+  - entityType: 地点/景区
+    name: 金湖杨景区
+  - entityType: 地点/景区
+    name: 博斯腾湖景区
+  - entityType: 地点/景区
+    name: 喀什古城景区
+  - entityType: 地点/景区
+    name: 喀拉峻景区
+  - entityType: 地点/景区
+    name: 巴音布鲁克景区
+  - entityType: 地点/景区
+    name: 帕米尔旅游区
+  - entityType: 地点/景区
+    name: 世界魔鬼城景区
+  - entityType: 地点/景区
+    name: 赛里木湖景区
+  - entityType: 地点/景区
+    name: 江布拉克景区
+  - entityType: 地点/景区
+    name: 天山托木尔景区
+provenance:
+  createdAt: '2026-06-19T06:23:56.860843+00:00'
+  createdBy: codex
+content:
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    - article
+    - image
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+      article: 3
+      image: 4
+    allowAiImages: false
+    imageAssetStrategy: open_license_publish
+    openLicenseScaleProof:
+      preScreenedEntityCount: 100
+      desiredPassedEntityCount: 87
+      scoredEntityCount: 100
+      publishableImageAssets: 175
+      sourceCollectionCount: 175
+      imageCountPolicy: score_bonus
+      desiredImageWorksPerTarget: 2
+      minimumImageWorksPerTarget: 0
+      desiredPublishableImageAssets: 200
+      minimumPublishableImageAssets: 0
+      averageImageCountScore: 0.875
+      averageCompositeScore: 0.875
+      assetPoolPath: /Users/zhaoyuxi/Projects/quwoquan/quwoquan_data/runtime/tasks/旅行/地域/中国/景区/全国5A景区百实体源就绪收敛试跑v8/batches/national100_v8_image_prescreen_stable_20260620/entities
+      verifiedAt: '2026-06-20T01:07:28.252478+00:00'
+    imageCountPolicy: score_bonus
+  carriers:
+  - article
+  - image
+  quotas:
+    entityArticlesPerTarget: 4
+    imageWorksPerTarget: 2
+    entityHomepagesPerTarget: 1
+    routeArticles: 0
+acceptance:
+  minEntities: 100
+  minPostsPerEntity: 6
+  requiredAngles:
+  - planning_consultation
+  - decision_experience
+  - route_transport
+  - seasonal_timing
+  - image
+workflowPolicy:
+  allowPartialContent: true
+  deliveryMode: partial_with_replacement_report
+  autoResearchWaveSize: 4
+queuePolicy:
+  backend: reliabletask
+  reliableTask:
+    taskType: data.content_object.execute
+    queue: reliabletask.data.content_supply
+    store: MongoStore
+    readyIndex: RedisReadyIndex
+  leaseSeconds: 900
+  heartbeatSeconds: 60
+  deadLetterAfterAttempts: 3

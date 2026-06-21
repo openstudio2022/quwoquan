@@ -1,0 +1,164 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "青城山_decision_experience",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/青城山"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:青城山"
+  ],
+  "tagRefs": [
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "conditionContext": {
+    "region": {
+      "name": "四川省",
+      "label": "四川省"
+    },
+    "entityProfile": {
+      "entityRef": "/entity/地点/景区/青城山",
+      "regions": [
+        "高原",
+        "平原都市"
+      ],
+      "seasons": [
+        "春",
+        "秋"
+      ],
+      "altitudeMeters": null,
+      "notes": null,
+      "conditionSource": "entityConditionProfile"
+    },
+    "season": {
+      "name": "春",
+      "label": "春",
+      "source": "entityProfile"
+    }
+  },
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E9%9D%92%E5%9F%8E%E5%B1%B1",
+    "https://touch.travel.qunar.com/youji/7884821",
+    "https://touch.travel.qunar.com/youji/7883576",
+    "https://touch.travel.qunar.com/youji/7861638",
+    "https://touch.travel.qunar.com/youji/7783661",
+    "https://touch.travel.qunar.com/youji/7775512",
+    "https://touch.travel.qunar.com/youji/7765650",
+    "https://touch.travel.qunar.com/youji/7739835",
+    "https://touch.travel.qunar.com/youji/7725884",
+    "https://touch.travel.qunar.com/youji/7713724",
+    "https://touch.travel.qunar.com/youji/7711086",
+    "https://touch.travel.qunar.com/youji/7706119",
+    "https://touch.travel.qunar.com/youji/7702361",
+    "https://touch.travel.qunar.com/youji/7697921",
+    "https://touch.travel.qunar.com/youji/7697516",
+    "https://touch.travel.qunar.com/youji/7685161",
+    "https://touch.travel.qunar.com/search?q=%E9%9D%92%E5%9F%8E%E5%B1%B1",
+    "https://commons.wikimedia.org/wiki/File:%E9%9D%92%E5%9F%8E%E5%B1%B1_(92)_(31311514355).jpg",
+    "https://commons.wikimedia.org/wiki/File:%E9%9D%92%E5%9F%8E%E5%B1%B1%E4%BA%91%E9%9B%BE.jpg",
+    "https://commons.wikimedia.org/wiki/File:%E9%9D%92%E5%9F%8E%E5%B1%B1_Mount_Qingcheng_2017.jpg"
+  ],
+  "assets": [
+    {
+      "assetId": "青城山_cover_3_d413e275",
+      "fileName": "青城山_cover_3_d413e275.jpg",
+      "caption": "Mount Qingcheng, located in Sichuan, China, is a renowned Taoist mountain and is considered one of the birthplaces of Ta",
+      "imageLayout": "fullWidth",
+      "sha256": "sha256:61c780608a66554b3cc5727079bf05379643c1a9bb6950fba06f8cd753d4df47",
+      "sourceAssetRef": "entities/地点/景区/青城山/1.download/sources/08.article_qunar_base_5/assets/001_article_qunar_base_5_1.jpg",
+      "sourceRef": "entities/地点/景区/青城山/1.download/sources/08.article_qunar_base_5/source.md",
+      "alignmentEvidence": "Mount Qingcheng, located in Sichuan, China, is a renowned Taoist mountain and is considered one of the birthplaces of Ta",
+      "sourceCollectionId": "source_image:青城山:62faa66fd5a44f14",
+      "creator": "xiquinhosilva",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Jianfu_Palace,_Mount_Qingcheng_(54530903712).jpg",
+      "license": "CC BY 2.0",
+      "termsUrl": "https://creativecommons.org/licenses/by/2.0",
+      "licenseSnapshot": "CC BY 2.0 recorded on Wikimedia Commons file page",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:Jianfu_Palace,_Mount_Qingcheng_(54530903712).jpg",
+      "usageScope": "app_publish"
+    }
+  ],
+  "template": "journal",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/青城山/1.download/sources/08.article_qunar_base_5/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "青城山·值不值得去：成都周边宝藏徒步地|山幽 流泉 飞瀑 悬岩|青城后山",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "青城山",
+    "routeEntities": [
+      "青城山"
+    ],
+    "beats": [
+      "先从 青城山 进入主线。",
+      "青城山分前山、后山，前山是青城山风景名胜区的主体部分，约15平方公里，景色优美，文物古迹众多",
+      "还是很喜欢道观的院子，立体丰富，神秘幽深，洒满阳光的时候让人很想住下来",
+      "且今日的高铁票买的15:39，时间很充裕，累了就歇，晃悠着也不累",
+      "路上停了4次，吃了野生乌梅、豆花、烤肠、雪莲果，卖雪莲果的大姐因为没交钱从上清宫被赶下来的，下山路远没上面人乌泱乌泱的多，看她辛苦照顾下生意自己也尝个特产，她还问上面人多不多"
+    ],
+    "sourceNote": "青城山为中国道教发源地之一，属道教名山之一。位于四川省成都市都江堰市西南，古称「丈人山」，东距成都市68公里，处于都江堰水利工程西南10公里处。主峰老霄顶海拔1600米。在四川名山中与剑门之险、峨嵋之秀、夔门之雄齐名，有“青城天下幽”之美誉。青城山是著名的中国历史名山和国家重点风景名胜区，并于2000年同都江堰共同作为一项世界文化遗产被列入世界遗产名录。20。",
+    "relatedTopics": [
+      "青城山",
+      "青城山分前山、后山，前山是青城山风景名胜区的主体部分，约15平方公里，景色优美，文物古迹众多",
+      "还是很喜欢道观的院子，立体丰富，神秘幽深，洒满阳光的时候让人很想住下来",
+      "且今日的高铁票买的15:39，时间很充裕，累了就歇，晃悠着也不累",
+      "路上停了4次，吃了野生乌梅、豆花、烤肠、雪莲果，卖雪莲果的大姐因为没交钱从上清宫被赶下来的，下山路远没上面人乌泱乌泱的多，看她辛苦照顾下生意自己也尝个特产，她还问上面人多不多"
+    ],
+    "mustIncludeFacts": [
+      "青城山 来源提及 值不值得去",
+      "青城山 图文底稿来自 成都周边宝藏徒步地|山幽 流泉 飞瀑 悬岩|青城后山；文章源图必须来自同一底稿并且全批独占"
+    ]
+  },
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "sourceBatchId": "source_ready_assetrefs_10_20260619_02",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "journal",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T21:09:02.020353+00:00",
+  "updatedAt": "2026-06-19T21:49:09.524145+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:青城山"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "四川省"
+    }
+  ],
+  "articleMarkdownDigest": "sha256:34ef8fd4d824bcc1b71d35727be994cf77a5f5cdf3d47312025f61e585d44059"
+}

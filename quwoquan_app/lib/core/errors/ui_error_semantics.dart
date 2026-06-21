@@ -40,20 +40,10 @@ enum UiErrorPresentation {
 
 enum UiErrorTone { neutral, info, caution, critical }
 
-enum UiErrorActionType {
-  retry,
-  login,
-  openSettings,
-  back,
-  dismiss,
-  resubmit,
-}
+enum UiErrorActionType { retry, login, openSettings, back, dismiss, resubmit }
 
 class UiErrorAction {
-  const UiErrorAction({
-    required this.type,
-    required this.label,
-  });
+  const UiErrorAction({required this.type, required this.label});
 
   final UiErrorActionType type;
   final String label;
@@ -71,6 +61,7 @@ class UiErrorSemantic {
     this.dismissible = false,
     this.sourceCode,
     this.failureKind,
+    this.copyKey,
     this.recoveryAction,
     this.presentation = UiErrorPresentation.emptyPage,
     this.tone = UiErrorTone.neutral,
@@ -86,6 +77,7 @@ class UiErrorSemantic {
   final bool dismissible;
   final String? sourceCode;
   final RuntimeFailureKind? failureKind;
+  final String? copyKey;
   final RuntimeRecoveryAction? recoveryAction;
   final UiErrorPresentation presentation;
   final UiErrorTone tone;
@@ -130,11 +122,7 @@ class UiErrorSemanticResolver {
       allowRetry: allowRetry,
       allowOpenSettings: allowOpenSettings,
     );
-    final domainMessage = _domainMessage(
-      context,
-      error,
-      category: category,
-    );
+    final domainMessage = _domainMessage(context, error, category: category);
     final fallbackMessage = _fallbackMessage(
       context,
       error: error,
@@ -145,10 +133,15 @@ class UiErrorSemanticResolver {
     );
     final message = domainMessage ?? fallbackMessage;
     final sourceCode = _sourceCode(error, failure);
+    final copyKey = _copyKey(
+      error,
+      failure,
+      category: category,
+      allowOpenSettings: allowOpenSettings,
+    );
     final title = _title(
       error: error,
       category: category,
-      message: message,
       authGateReason: authGateReason,
       failure: failure,
       allowOpenSettings: allowOpenSettings,
@@ -177,10 +170,12 @@ class UiErrorSemanticResolver {
       dismissible: scope == UiErrorScope.global || scope == UiErrorScope.dialog,
       sourceCode: sourceCode,
       failureKind: failure?.kind,
+      copyKey: copyKey,
       recoveryAction: recoveryAction,
-      presentation: presentation ??
-          _presentationFor(category: category, scope: scope),
-      tone: tone ??
+      presentation:
+          presentation ?? _presentationFor(category: category, scope: scope),
+      tone:
+          tone ??
           _toneFor(
             category: category,
             failure: failure,
@@ -214,6 +209,7 @@ class UiErrorSemanticResolver {
         label: UITextConstants.loginLater,
       ),
       dismissible: true,
+      copyKey: 'authRequired',
       recoveryAction: RuntimeRecoveryAction.surface,
       presentation: UiErrorPresentation.gateCard,
       tone: UiErrorTone.info,
@@ -283,7 +279,8 @@ class UiErrorSemanticResolver {
     }
     if (category == UiErrorCategory.authRequired ||
         failure?.kind == RuntimeFailureKind.auth ||
-        (error is CloudException && error.type == CloudErrorType.unauthorized)) {
+        (error is CloudException &&
+            error.type == CloudErrorType.unauthorized)) {
       return RuntimeRecoveryAction.surface;
     }
     if (failure?.kind == RuntimeFailureKind.validation ||
@@ -352,6 +349,10 @@ class UiErrorSemanticResolver {
         }
         return null;
       }
+      if (category == UiErrorCategory.pageLoad ||
+          category == UiErrorCategory.sectionLoad) {
+        return null;
+      }
       if (code.startsWith('CONTENT.')) {
         final contentError = ContentErrorCode.fromCode(code);
         if (contentError != ContentErrorCode.unknown) {
@@ -369,9 +370,11 @@ class UiErrorSemanticResolver {
             return _localizedDefaultMessage(
               l10n,
               zh:
-                  EntityErrorMessages.zh[entityError] ?? entityError.defaultMessage,
+                  EntityErrorMessages.zh[entityError] ??
+                  entityError.defaultMessage,
               en:
-                  EntityErrorMessages.en[entityError] ?? entityError.defaultMessage,
+                  EntityErrorMessages.en[entityError] ??
+                  entityError.defaultMessage,
             );
           }
           return EntityErrorMessages.zh[entityError] ??
@@ -385,9 +388,11 @@ class UiErrorSemanticResolver {
             return _localizedDefaultMessage(
               l10n,
               zh:
-                  CircleErrorMessages.zh[circleError] ?? circleError.defaultMessage,
+                  CircleErrorMessages.zh[circleError] ??
+                  circleError.defaultMessage,
               en:
-                  CircleErrorMessages.en[circleError] ?? circleError.defaultMessage,
+                  CircleErrorMessages.en[circleError] ??
+                  circleError.defaultMessage,
             );
           }
           return CircleErrorMessages.zh[circleError] ??
@@ -455,7 +460,6 @@ class UiErrorSemanticResolver {
     AuthGateReason? authGateReason,
     required bool allowOpenSettings,
   }) {
-    final l10n = _maybeL10n(context);
     final failureKind = _effectiveFailureKind(error, failure);
     if (category == UiErrorCategory.authRequired && authGateReason != null) {
       return authGateReason.prompt;
@@ -466,34 +470,37 @@ class UiErrorSemanticResolver {
       return UITextConstants.authPermissionDenied;
     }
     return switch (category) {
-      UiErrorCategory.pageLoad || UiErrorCategory.sectionLoad => switch (failureKind) {
-          RuntimeFailureKind.auth => UITextConstants.needLogin,
-          RuntimeFailureKind.notFound => UITextConstants.contentUnavailableReason,
-          RuntimeFailureKind.network ||
-          RuntimeFailureKind.timeout ||
-          RuntimeFailureKind.unavailable => UITextConstants.checkNetworkAndTryAgain,
-          _ => UITextConstants.contentLoadSoftFailed,
-        },
-      UiErrorCategory.listAppend => UITextConstants.appendSoftFailed,
+      UiErrorCategory.pageLoad ||
+      UiErrorCategory.sectionLoad => switch (failureKind) {
+        RuntimeFailureKind.auth => UITextConstants.needLogin,
+        RuntimeFailureKind.notFound => _notFoundMessage(error, failure),
+        RuntimeFailureKind.network ||
+        RuntimeFailureKind.timeout ||
+        RuntimeFailureKind.unavailable => UITextConstants.pageLoadFailedMessage,
+        _ => UITextConstants.pageLoadFailedMessage,
+      },
+      UiErrorCategory.listAppend => UITextConstants.appendFailedRetry,
       UiErrorCategory.submit => switch (failure?.kind) {
-          RuntimeFailureKind.validation => '请检查填写内容后重试',
-          RuntimeFailureKind.auth => authGateReason?.prompt ?? '请先登录后再试',
-          RuntimeFailureKind.rateLimited => '操作太频繁，请稍后重试',
-          _ => '${UITextConstants.operationFailed}，请稍后重试',
-        },
-      UiErrorCategory.validation => '请检查填写内容后重试',
-      UiErrorCategory.notFound => UITextConstants.contentUnavailableReason,
-      UiErrorCategory.rateLimited => '操作太频繁，请稍后重试',
-      UiErrorCategory.backgroundAction => '${UITextConstants.operationFailed}，请稍后重试',
-      UiErrorCategory.authRequired => authGateReason?.prompt ?? '请先登录后再试',
-      UiErrorCategory.permissionRequired => UITextConstants.authPermissionDenied,
+        RuntimeFailureKind.validation => UITextConstants.validationCheckFields,
+        RuntimeFailureKind.auth =>
+          authGateReason?.prompt ?? UITextConstants.loginThenRetry,
+        RuntimeFailureKind.rateLimited => UITextConstants.rateLimitedRetryLater,
+        _ => UITextConstants.operationFailedRetry,
+      },
+      UiErrorCategory.validation => UITextConstants.validationCheckFields,
+      UiErrorCategory.notFound => _notFoundMessage(error, failure),
+      UiErrorCategory.rateLimited => UITextConstants.rateLimitedRetryLater,
+      UiErrorCategory.backgroundAction => UITextConstants.operationFailedRetry,
+      UiErrorCategory.authRequired =>
+        authGateReason?.prompt ?? UITextConstants.loginThenRetry,
+      UiErrorCategory.permissionRequired =>
+        UITextConstants.authPermissionDenied,
     };
   }
 
   static String _title({
     required Object error,
     required UiErrorCategory category,
-    required String message,
     required AuthGateReason? authGateReason,
     required RuntimeFailureBase? failure,
     required bool allowOpenSettings,
@@ -505,43 +512,66 @@ class UiErrorSemanticResolver {
     if (allowOpenSettings ||
         category == UiErrorCategory.permissionRequired ||
         failure?.nature == RuntimeFailureNature.requiresPermission) {
-      return '需要开启权限';
+      return UITextConstants.permissionRequiredTitle;
     }
     return switch (category) {
       UiErrorCategory.pageLoad => switch (failureKind) {
-          RuntimeFailureKind.notFound => _notFoundTitle(error, failure),
-          RuntimeFailureKind.network ||
-          RuntimeFailureKind.timeout ||
-          RuntimeFailureKind.unavailable => UITextConstants.temporarilyUnavailable,
-          _ => UITextConstants.contentNotLoadedYet,
-        },
-      UiErrorCategory.sectionLoad => '这块内容暂时没加载出来',
-      UiErrorCategory.listAppend => '继续加载没成功',
-      UiErrorCategory.submit => '提交未完成',
+        RuntimeFailureKind.notFound => _pageLoadTitle(error, failure),
+        RuntimeFailureKind.network ||
+        RuntimeFailureKind.timeout ||
+        RuntimeFailureKind.unavailable => _pageLoadTitle(error, failure),
+        _ => _pageLoadTitle(error, failure),
+      },
+      UiErrorCategory.sectionLoad => _sectionLoadTitle(error, failure),
+      UiErrorCategory.listAppend => UITextConstants.appendFailedTitle,
+      UiErrorCategory.submit => UITextConstants.submitNotCompleted,
       UiErrorCategory.authRequired => UITextConstants.needLogin,
-      UiErrorCategory.permissionRequired => '需要开启权限',
-      UiErrorCategory.validation => '请检查填写内容',
+      UiErrorCategory.permissionRequired =>
+        UITextConstants.permissionRequiredTitle,
+      UiErrorCategory.validation => UITextConstants.checkFieldsTitle,
       UiErrorCategory.notFound => UITextConstants.contentUnavailable,
-      UiErrorCategory.rateLimited => '请稍后再试',
+      UiErrorCategory.rateLimited => UITextConstants.rateLimitedRetryLater,
       UiErrorCategory.backgroundAction => UITextConstants.operationFailed,
     };
   }
 
-  static String _notFoundTitle(Object error, RuntimeFailureBase? failure) {
+  static String _pageLoadTitle(Object error, RuntimeFailureBase? failure) {
     final code = _sourceCode(error, failure) ?? '';
-    if (code.startsWith('ENTITY.')) {
-      return UITextConstants.homepageInfoUnavailableTitle;
-    }
-    if (code.startsWith('CIRCLE.')) {
-      return UITextConstants.circleInfoUnavailableTitle;
-    }
-    if (code.startsWith('USER.')) {
-      return UITextConstants.userInfoUnavailableTitle;
+    if (code.startsWith('CONTENT.')) {
+      return UITextConstants.workOpenFailedTitle;
     }
     if (code.startsWith('CHAT.')) {
-      return UITextConstants.conversationInfoUnavailableTitle;
+      return UITextConstants.chatOpenFailedTitle;
     }
-    return UITextConstants.contentUnavailable;
+    if (code.startsWith('ENTITY.')) {
+      return UITextConstants.homepageLoadFailedTitle;
+    }
+    if (code.startsWith('USER.')) {
+      return UITextConstants.userProfileLoadFailedTitle;
+    }
+    if (code.startsWith('CIRCLE.')) {
+      return UITextConstants.circleLoadFailedTitle;
+    }
+    return UITextConstants.pageLoadFailedTitle;
+  }
+
+  static String _sectionLoadTitle(Object error, RuntimeFailureBase? failure) {
+    final code = _sourceCode(error, failure) ?? '';
+    if (code.startsWith('CONTENT.') && code.contains('comment')) {
+      return UITextConstants.commentLoadFailedTitle;
+    }
+    if (code.startsWith('CIRCLE.')) {
+      return UITextConstants.sectionLoadFailedTitleDefault;
+    }
+    return UITextConstants.sectionLoadFailedTitleDefault;
+  }
+
+  static String _notFoundMessage(Object error, RuntimeFailureBase? failure) {
+    final code = _sourceCode(error, failure) ?? '';
+    if (code.startsWith('CHAT.')) {
+      return UITextConstants.chatOpenFailedMessage;
+    }
+    return UITextConstants.contentUnavailableReason;
   }
 
   static String? _secondaryMessage({
@@ -551,7 +581,7 @@ class UiErrorSemanticResolver {
   }) {
     if (authGateReason == null && continuation == null) {
       return failure?.kind == RuntimeFailureKind.auth
-          ? '登录后可继续当前操作'
+          ? UITextConstants.loginToContinue
           : null;
     }
     if (continuation is SubmitCommentContinuation) {
@@ -583,6 +613,52 @@ class UiErrorSemanticResolver {
       };
     }
     return authGateReason?.prompt;
+  }
+
+  static String _copyKey(
+    Object error,
+    RuntimeFailureBase? failure, {
+    required UiErrorCategory category,
+    required bool allowOpenSettings,
+  }) {
+    if (allowOpenSettings || category == UiErrorCategory.permissionRequired) {
+      return 'permissionRequiredTitle';
+    }
+    if (category == UiErrorCategory.listAppend) {
+      return 'appendFailedRetry';
+    }
+    if (category == UiErrorCategory.backgroundAction) {
+      return 'operationFailedRetry';
+    }
+    if (category == UiErrorCategory.submit) {
+      return 'submitNotCompleted';
+    }
+    final code = _sourceCode(error, failure) ?? '';
+    if (code.startsWith('CHAT.')) {
+      return 'chatOpenFailedTitle';
+    }
+    if (code.startsWith('CONTENT.')) {
+      if (code.contains('comment')) {
+        return 'commentLoadFailedTitle';
+      }
+      return 'workOpenFailedTitle';
+    }
+    if (code.startsWith('ENTITY.')) {
+      return 'homepageLoadFailedTitle';
+    }
+    if (code.startsWith('USER.')) {
+      return 'userProfileLoadFailedTitle';
+    }
+    if (code.startsWith('CIRCLE.')) {
+      return 'circleLoadFailedTitle';
+    }
+    if (category == UiErrorCategory.pageLoad) {
+      return 'pageLoadFailedTitle';
+    }
+    if (category == UiErrorCategory.sectionLoad) {
+      return 'sectionLoadFailedTitle';
+    }
+    return category.name;
   }
 
   static UiErrorAction? _primaryAction(
@@ -628,7 +704,8 @@ class UiErrorSemanticResolver {
     required UiErrorCategory category,
     required UiErrorScope scope,
   }) {
-    if (scope == UiErrorScope.dialog || category == UiErrorCategory.authRequired) {
+    if (scope == UiErrorScope.dialog ||
+        category == UiErrorCategory.authRequired) {
       return const UiErrorAction(
         type: UiErrorActionType.dismiss,
         label: UITextConstants.cancel,
@@ -689,4 +766,3 @@ class UiErrorSemanticResolver {
     };
   }
 }
-

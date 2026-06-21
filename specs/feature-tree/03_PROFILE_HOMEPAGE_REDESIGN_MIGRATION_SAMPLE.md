@@ -49,7 +49,7 @@ L2_business_capability: profile-homepage-redesign
 
 - 主体模型、资料同步、关系能力与互动活动的单场景目标
 - 该场景负责的异常边界
-- 对应 `树内计划文档` slices 与 `T1/T2/T3` 证据
+- 对应 `树内计划文档` slices 与 `local_contract/local_contract/api_integration` 证据
 
 移出：
 

@@ -1,6 +1,66 @@
 // ignore_for_file: unnecessary_non_null_assertion
 part of 'home_multi_form_feed.dart';
 
+class _HomeFeedMediaOverlayPill extends StatelessWidget {
+  const _HomeFeedMediaOverlayPill({
+    super.key,
+    required this.label,
+  });
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.black.withValues(
+          alpha: DiscoveryFeedSpacing.homeFeedGridMorePillOpacity,
+        ),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+        border: Border.all(
+          color: AppColors.white.withValues(
+            alpha: DiscoveryFeedSpacing.homeFeedGridMorePillBorderOpacity,
+          ),
+          width: AppSpacing.hairline,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.black.withValues(
+              alpha: DiscoveryFeedSpacing.homeFeedGridMoreScrimBottomOpacity,
+            ),
+            blurRadius: AppSpacing.xs,
+            offset: const Offset(AppSpacing.zero, AppSpacing.one),
+          ),
+        ],
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: DiscoveryFeedSpacing.homeFeedGridMorePillHeight,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal:
+                DiscoveryFeedSpacing.homeFeedGridMorePillHorizontalPadding,
+          ),
+          child: Align(
+            widthFactor: AppSpacing.one,
+            heightFactor: AppSpacing.one,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                fontWeight: AppTypography.semiBold,
+                color: AppColors.white,
+                height: AppSpacing.one,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HomeMomentGridCard extends StatelessWidget {
   const _HomeMomentGridCard({
     required this.urls,
@@ -19,7 +79,9 @@ class _HomeMomentGridCard extends StatelessWidget {
     final remaining = urls.length - visibleCount;
     return ClipRRect(
       key: const ValueKey('home-moment-grid'),
-      borderRadius: BorderRadius.circular(DiscoveryFeedSpacing.homeFeedMediaCornerRadius),
+      borderRadius: BorderRadius.circular(
+        DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
+      ),
       child: GridView.builder(
         padding: EdgeInsets.zero,
         physics: const NeverScrollableScrollPhysics(),
@@ -57,11 +119,12 @@ class _HomeMomentGridCard extends StatelessWidget {
                           end: Alignment.bottomCenter,
                           colors: [
                             AppColors.black.withValues(
-                              alpha: DiscoveryFeedSpacing.homeFeedGridMoreScrimTopOpacity,
+                              alpha: DiscoveryFeedSpacing
+                                  .homeFeedGridMoreScrimTopOpacity,
                             ),
                             AppColors.black.withValues(
-                              alpha:
-                                  DiscoveryFeedSpacing.homeFeedGridMoreScrimBottomOpacity,
+                              alpha: DiscoveryFeedSpacing
+                                  .homeFeedGridMoreScrimBottomOpacity,
                             ),
                           ],
                         ),
@@ -69,65 +132,12 @@ class _HomeMomentGridCard extends StatelessWidget {
                     ),
                   ),
                 if (showMore)
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.intraGroupSm),
-                      child: DecoratedBox(
-                        key: const ValueKey('home-moment-grid-more'),
-                        decoration: BoxDecoration(
-                          color: AppColors.black.withValues(
-                            alpha: DiscoveryFeedSpacing.homeFeedGridMorePillOpacity,
-                          ),
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.radiusNinetyNine,
-                          ),
-                          border: Border.all(
-                            color: AppColors.white.withValues(
-                              alpha:
-                                  DiscoveryFeedSpacing.homeFeedGridMorePillBorderOpacity,
-                            ),
-                            width: AppSpacing.hairline,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.black.withValues(
-                                alpha: DiscoveryFeedSpacing
-                                    .homeFeedGridMoreScrimBottomOpacity,
-                              ),
-                              blurRadius: AppSpacing.xs,
-                              offset: const Offset(
-                                AppSpacing.zero,
-                                AppSpacing.one,
-                              ),
-                            ),
-                          ],
-                        ),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            minHeight: DiscoveryFeedSpacing.homeFeedGridMorePillHeight,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: DiscoveryFeedSpacing
-                                  .homeFeedGridMorePillHorizontalPadding,
-                            ),
-                            child: Align(
-                              widthFactor: AppSpacing.one,
-                              heightFactor: AppSpacing.one,
-                              child: Text(
-                                '+$remaining',
-                                style: TextStyle(
-                                  fontSize: AppTypography.iosFootnote,
-                                  fontWeight: AppTypography.semiBold,
-                                  color: AppColors.white,
-                                  height: AppSpacing.one,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                  Positioned(
+                    top: AppSpacing.intraGroupSm,
+                    right: AppSpacing.intraGroupSm,
+                    child: _HomeFeedMediaOverlayPill(
+                      key: const ValueKey('home-moment-grid-more'),
+                      label: '+$remaining',
                     ),
                   ),
               ],
@@ -209,7 +219,15 @@ class _HomeFeedImageCarouselState extends State<_HomeFeedImageCarousel> {
                 );
               },
             ),
-            if (urls.length > 1)
+            if (urls.length > 1) ...[
+              Positioned(
+                top: AppSpacing.intraGroupSm,
+                right: AppSpacing.intraGroupSm,
+                child: _HomeFeedMediaOverlayPill(
+                  key: const ValueKey('home-image-carousel-counter'),
+                  label: '${_index + 1}/${urls.length}',
+                ),
+              ),
               Positioned(
                 left: 0,
                 right: 0,
@@ -220,6 +238,7 @@ class _HomeFeedImageCarouselState extends State<_HomeFeedImageCarousel> {
                   isDark: widget.isDark,
                 ),
               ),
+            ],
           ],
         ),
       ),
@@ -396,32 +415,28 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                 placeholder: _mediaPlaceholder(isDark),
                 errorWidget: _mediaPlaceholder(isDark),
               ),
-            // 中央播放按钮
-            Center(
-              child: Container(
-                key: ValueKey<String>(
-                  autoPlay
-                      ? 'home-video-focus-autoplay-${dto.id}'
-                      : 'home-video-focus-paused-${dto.id}',
-                ),
-                width: AppSpacing.videoPlayOverlaySize,
-                height: AppSpacing.videoPlayOverlaySize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.overlayMedium,
-                ),
-                child: Icon(
-                  autoPlay
-                      ? CupertinoIcons.pause_fill
-                      : CupertinoIcons.play_fill,
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.mediaThumbnailOverlayForeground,
+            // 中央播放标识只属于完全未初始化的静态封面态；预热/初始化后由
+            // VideoPlayerWidget 自己呈现加载或画面，避免长按时叠出两个播放按钮。
+            if (!initialize && !autoPlay)
+              Center(
+                child: Container(
+                  key: ValueKey<String>('home-video-focus-paused-${dto.id}'),
+                  width: AppSpacing.videoPlayOverlaySize,
+                  height: AppSpacing.videoPlayOverlaySize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.overlayMedium,
                   ),
-                  size: AppSpacing.videoPlayOverlayIconSize,
+                  child: Icon(
+                    CupertinoIcons.play_fill,
+                    color: AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.mediaThumbnailOverlayForeground,
+                    ),
+                    size: AppSpacing.videoPlayOverlayIconSize,
+                  ),
                 ),
               ),
-            ),
             // 时长
             if (dto.durationMs != null)
               Positioned(

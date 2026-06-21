@@ -1,0 +1,44 @@
+{
+  "label": "乐山大佛",
+  "domain": "地点",
+  "type": "景区",
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "entityRef": "/entity/地点/景区/乐山大佛",
+  "summary": "乐山大佛，全名嘉州凌云寺大弥勒石像，别称凌云大佛，位于中华人民共和国四川省乐山市市中区的岷江、青衣江、大渡河三江交汇之处，是世界上高度最高的石佛像。",
+  "conditionProfile": {
+    "regions": [
+      "山地森林"
+    ],
+    "seasons": [
+      "春",
+      "秋"
+    ],
+    "evidenceRefs": [
+      {
+        "field": "regions",
+        "value": "山地森林",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "乐山大佛 主页正文概况与空间特征归纳"
+      },
+      {
+        "field": "seasons",
+        "value": "春",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "乐山大佛 主页正文季节与游览信息归纳"
+      },
+      {
+        "field": "seasons",
+        "value": "秋",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "乐山大佛 主页正文季节与游览信息归纳"
+      }
+    ]
+  },
+  "sourceRefs": [
+    "entities/地点/景区/乐山大佛/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/01.home_wikipedia/source.md"
+  ]
+}

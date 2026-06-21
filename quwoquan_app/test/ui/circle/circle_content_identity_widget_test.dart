@@ -37,7 +37,7 @@ Widget _buildApp(Widget child, {CircleRepository? repository}) {
 }
 
 void main() {
-  testWidgets('圈子作品二级筛选仅展示全部/图片/视频/文字', (tester) async {
+  testWidgets('圈子作品二级筛选仅展示全部/图片/视频/长文', (tester) async {
     await tester.pumpWidget(
       _buildApp(
         const SizedBox(
@@ -60,13 +60,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('图片'), findsAtLeastNWidgets(1));
     expect(find.text('视频'), findsAtLeastNWidgets(1));
-    expect(find.text('文字'), findsAtLeastNWidgets(1));
+    // 「长文」是与用户主页同源的 metadata 子页签 creation_sub_text 文案
+    // （UserProfileUIConfig.creationSubTabs），与作者主页保持一致。
+    expect(find.text('长文'), findsAtLeastNWidgets(1));
     expect(find.text('点滴'), findsNothing);
     expect(find.text('微趣'), findsNothing);
     expect(find.text('文章'), findsNothing);
   });
 
-  testWidgets('圈子作品切到文字后，列表标签与筛选口径保持一致', (tester) async {
+  testWidgets('圈子作品切到长文后，列表标签与筛选口径保持一致', (tester) async {
     final repository = _ArticleFixtureCircleRepository();
     await tester.pumpWidget(
       _buildApp(
@@ -96,7 +98,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('文字'), findsAtLeastNWidgets(1));
+    expect(find.text('长文'), findsAtLeastNWidgets(1));
     expect(
       find.byKey(
         const ValueKey<String>(

@@ -3,6 +3,8 @@
 
 import '../recommendation/intersection_visual.g.dart';
 import '../recommendation/intersection_target.g.dart';
+import '../recommendation/intersection_representative_actor.g.dart';
+import '../recommendation/intersection_action_hint.g.dart';
 
 class AuthorImpactEvidenceItem {
   final String evidenceId;
@@ -13,6 +15,8 @@ class AuthorImpactEvidenceItem {
   final String occurredAt;
   final String summaryText;
   final IntersectionVisual? sampleVisual;
+  final IntersectionRepresentativeActor? representativeActor;
+  final List<IntersectionActionHint> actionHints;
   final IntersectionTarget? contentTarget;
 
   AuthorImpactEvidenceItem({
@@ -24,6 +28,8 @@ class AuthorImpactEvidenceItem {
     this.occurredAt = '',
     this.summaryText = '',
     this.sampleVisual,
+    this.representativeActor,
+    this.actionHints = const <IntersectionActionHint>[],
     this.contentTarget,
   });
 
@@ -37,6 +43,8 @@ class AuthorImpactEvidenceItem {
       occurredAt: m['occurredAt']?.toString() ?? '',
       summaryText: m['summaryText']?.toString() ?? '',
       sampleVisual: m['sampleVisual'] == null ? null : IntersectionVisual.fromMap(_parseStringKeyMap(m['sampleVisual'])!),
+      representativeActor: m['representativeActor'] == null ? null : IntersectionRepresentativeActor.fromMap(_parseStringKeyMap(m['representativeActor'])!),
+      actionHints: _parseProjectionDtoList(m['actionHints'], IntersectionActionHint.fromMap),
       contentTarget: m['contentTarget'] == null ? null : IntersectionTarget.fromMap(_parseStringKeyMap(m['contentTarget'])!),
     );
   }
@@ -51,6 +59,8 @@ class AuthorImpactEvidenceItem {
       'occurredAt': occurredAt,
       'summaryText': summaryText,
       'sampleVisual': sampleVisual,
+      'representativeActor': representativeActor,
+      'actionHints': actionHints,
       'contentTarget': contentTarget,
     };
   }
@@ -64,6 +74,8 @@ class AuthorImpactEvidenceItem {
     String? occurredAt,
     String? summaryText,
     IntersectionVisual? sampleVisual,
+    IntersectionRepresentativeActor? representativeActor,
+    List<IntersectionActionHint>? actionHints,
     IntersectionTarget? contentTarget,
   }) {
     return AuthorImpactEvidenceItem(
@@ -75,9 +87,28 @@ class AuthorImpactEvidenceItem {
       occurredAt: occurredAt ?? this.occurredAt,
       summaryText: summaryText ?? this.summaryText,
       sampleVisual: sampleVisual ?? this.sampleVisual,
+      representativeActor: representativeActor ?? this.representativeActor,
+      actionHints: actionHints ?? this.actionHints,
       contentTarget: contentTarget ?? this.contentTarget,
     );
   }
+}
+
+List<T> _parseProjectionDtoList<T>(
+  Object? v,
+  T Function(Map<String, dynamic> m) fromMap,
+) {
+  if (v == null) return List<T>.empty(growable: false);
+  if (v is! List) return List<T>.empty(growable: false);
+  final out = <T>[];
+  for (final e in v) {
+    if (e is Map<String, dynamic>) {
+      out.add(fromMap(e));
+    } else if (e is Map) {
+      out.add(fromMap(Map<String, dynamic>.from(e)));
+    }
+  }
+  return out;
 }
 
 

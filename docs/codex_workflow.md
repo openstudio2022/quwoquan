@@ -34,15 +34,16 @@ Codex 不一定认识本仓库的 `/xxx` 命令，但它可以严格遵守这些
 
 | 阶段 | 何时使用 | 必须产出 |
 |---|---|---|
-| `/explore` | 需求刚进入、先定位归属 | Journey/Scenario + `L1/L2/L3` + 验收意图 + 证据层 |
+| `/explore` | 需求刚进入、先定位归属 | Journey/Scenario + `L1/L2/L3` + 验收意图 + 三层测试证据 |
 | `/prd` | 冻结规格，不做实现 | `spec.md` + `acceptance.yaml` + 必要 registry/CR |
 | `/design` | 冻结架构设计 | AppRoot/L1/L2 的 `design.md` |
 | `/baseline` | 需求稳定，做一次性冻结 | `spec.md` + `acceptance.yaml` + 必要 `design.md` + CR |
 | `/extend` | 实施中需要增量扩 metadata | metadata 变更、verify、codegen、补充手写清单 |
 | `/dev` | 正式实现 | Red -> Green -> Refactor + 对应文档/测试回填 |
-| `/verify` | 实现后验收 | 对应 `T1~T4` 证据、gate、测试记录 |
+| `/verify` | 实现后验收 | 对应三层测试证据、gate、测试记录 |
 | `/plan-review` | 开发前审规划 | 按多角色刷新规格/验收/任务清单 |
 | `/plan-next` | 当前轮完成后再规划 | 完成度复盘、证据对账、下一轮规划 |
+| `/continue-dev` | 规划就绪进入开发，或一轮完成后复盘+再规划+再开发 | 裁决最优方案、零技术债、分层测试闭环 + 复盘/遗留风险台账/下一轮规划 |
 | `/audit` | 代码库级健康审计 | Findings、严重度、文件行号、修复路径 |
 | `/deliver` | 闭环交付 | `/dev` + `/verify` + `/commit` 的证据链 |
 | `/commit` | 提交已闭环增量 | Story、文档、metadata/codegen、测试和 CR 对齐 |
@@ -73,7 +74,7 @@ L1_domain_service: <domain>
 L2_business_capability: <capability>
 L3_story: <story>
 验收意图: UAT / SIT / GWT / contract
-测试证据: T1 / T2 / T3 / T4
+测试证据: local_contract / api_integration / user_acceptance
 ```
 
 起手式前先审视 `docs/outstanding_risks_backlog.md` 的未解决项；若本轮识别出新的长期遗留，需先向用户复述并在确认后登记。
@@ -109,7 +110,7 @@ Codex 每次执行都必须带 review 视角，而不是只按用户指令完成
 
 1. 会导致用户旅程断点、数据错乱、安全隐私、生产不可回滚的问题。
 2. metadata、DTO、错误码、route/surface/operation、Mock/Remote、测试证据之间的漂移。
-3. 缺少 T1~T4、缺少四环境证据、缺少埋点/指标/告警/回滚。
+3. 缺少三层测试证据、缺少四环境证据、缺少埋点/指标/告警/回滚。
 4. 弱类型、硬编码、空 catch、手改 codegen、UI 直连 Mock、第二真相源。
 5. 技术债、死代码、过时兼容、无意义 fallback、allowlist 扩张。
 
@@ -121,32 +122,32 @@ Codex 每次执行都必须带 review 视角，而不是只按用户指令完成
 | 架构 | 是否守住 DDD、单一真相源、抽象克制、存储无关和可回滚演进？ |
 | 代码评审 | 是否引入弱类型、硬编码、空 catch、手改 codegen、第二数据通路？ |
 | 质量 | Mock/Remote、metadata/codegen、验收、门禁是否一致？ |
-| 测试 | `UAT/SIT/GWT/contract` 是否都有 `T1~T4` 对应证据？ |
+| 测试 | `UAT/SIT/GWT/contract` 是否都有 `local_contract/api_integration/user_acceptance` 对应证据？ |
 | 用户 | 是否有可理解的加载、空态、错误、权限、降级与性能反馈？ |
 | 运维 | 是否有 SLO、指标、采样、告警、日志、TTL、回滚和四环境配置？ |
 | 运营 | 是否有曝光、停留、互动、转化、推荐反馈、AB 分桶和归因链？ |
 
 ## 5. 四层测试与四环境
 
-### 5.1 四层测试
+### 5.1 三层测试
 
 测试语言必须分清：
 
 - 验收意图：`UAT`、`SIT`、`GWT`、`contract`
-- 证据层：`T1`、`T2`、`T3`、`T4`
+- 测试工程层：`local_contract`、`api_integration`、`user_acceptance`
 
 默认映射：
 
 | 层级 | 验收 | 证据 |
 |---|---|---|
-| AppRoot Journey/Scenario | `UAT` | 主 `T4`，辅 `T3` |
-| `L1_domain_service` | 领域边界/治理 | `T1/T3`，必要时 `T4` |
-| `L2_business_capability` | `SIT` | `T2/T3` |
-| `L3_story` | `GWT/contract` | `T1/T2`，远端补 `T3` |
+| AppRoot Journey/Scenario | `UAT` | 主 `user_acceptance`，辅 `api_integration` |
+| `L1_domain_service` | 领域边界/治理 | `api_integration/local_contract`，必要时 `user_acceptance` |
+| `L2_business_capability` | `SIT` | `api_integration`，辅 `local_contract` |
+| `L3_story` | `GWT/contract` | `local_contract`，远端补 `api_integration`，页面补 `user_acceptance` |
 
 远端 API、Repository、MockRepository 或用户旅程变化时：
 
-- `T3` 中验证的字段、状态码、错误码、边界行为，必须在 `T2` Mock/Provider/Widget 测试中有对应断言。
+- `api_integration` 中验证的字段、状态码、错误码、边界行为，必须在 `local_contract` Mock/Provider/Widget/领域规则测试中有对应断言。
 - `acceptance.yaml` 不能标记完成却缺 `tests.recorded`。
 - 高风险改动必须先有失败测试或明确替代验证说明。
 
@@ -209,7 +210,7 @@ contracts/metadata/**/errors.yaml
   -> RuntimeFailure + RuntimeRecoveryPolicy
   -> 用户可见提示/操作按钮/降级 UI
   -> telemetry/log/metrics/alert/dashboard
-  -> T1/T2/T3/T4 证据
+  -> local_contract/api_integration/user_acceptance 证据
 ```
 
 硬约束：
@@ -226,10 +227,9 @@ contracts/metadata/**/errors.yaml
 
 测试要求：
 
-- `T1`：metadata semantic、错误码枚举/codegen、硬编码扫描、runtime cutover check。
-- `T2`：mapper、Provider/UI 状态、用户提示、恢复按钮、Mock 错误响应。
-- `T3`：服务 HTTP 边界、真实 API 错误响应、request/trace id 透传、RemoteRepository 映射。
-- `T4`：用户旅程中错误出现后的提示、恢复、降级、埋点和告警证据。
+- `local_contract`：metadata semantic、错误码枚举/codegen、硬编码扫描、runtime cutover check、mapper、Provider/UI 状态、Mock 错误响应。
+- `api_integration`：服务 HTTP 边界、真实 API 错误响应、request/trace id 透传、RemoteRepository 映射。
+- `user_acceptance`：用户旅程中错误出现后的提示、恢复、降级、埋点和告警证据。
 
 常用验证：
 
@@ -308,13 +308,13 @@ make gate
 ### 12.1 需求进入
 
 ```text
-先按 /explore 执行：定位这项需求对应的 Journey/Scenario、L1/L2/L3、验收意图和 T1~T4，若不完整就先补规格，不要直接实现。
+先按 /explore 执行：定位这项需求对应的 Journey/Scenario、L1/L2/L3、验收意图和三层测试证据，若不完整就先补规格，不要直接实现。
 ```
 
 ### 12.2 规格冻结
 
 ```text
-先按 /plan-review 检视现有 spec/acceptance 是否满足八角色、T1~T4、四环境、错误码端云链路、可观测、推荐反馈和零技术债约束；如果收敛，再按 /baseline 更新 spec、acceptance、必要 design 和 CR。
+先按 /plan-review 检视现有 spec/acceptance 是否满足八角色、三层测试、四环境、错误码端云链路、可观测、推荐反馈和零技术债约束；如果收敛，再按 /baseline 更新 spec、acceptance、必要 design 和 CR。
 ```
 
 ### 12.3 实施阶段
@@ -326,7 +326,7 @@ make gate
 ### 12.4 收口与下一轮规划
 
 ```text
-先按 /verify 对账当前改动的 T1~T4、四环境、错误码链路、观测、推荐反馈和部署证据，再按 /plan-next 生成下一轮规划，不能用新规划掩盖未完成项。
+先按 /verify 对账当前改动的三层测试、四环境、错误码链路、观测、推荐反馈和部署证据，再按 /plan-next 生成下一轮规划，不能用新规划掩盖未完成项。
 ```
 
 若本轮关闭了 backlog 中的遗留事项，收口前必须同步更新 `docs/outstanding_risks_backlog.md` 的 checkbox、状态与验证证据。
@@ -334,7 +334,7 @@ make gate
 ### 12.5 错误码/异常语义任务
 
 ```text
-这是错误码端云链路任务。先从 metadata errors.yaml 定义 code/user_message/recovery/disruptionLevel，verify/codegen 后同步服务 RuntimeErrorResponse、App CloudException/runtime mapper、UI 用户提示、telemetry/metrics/alert 和 T1~T4 证据。
+这是错误码端云链路任务。先从 metadata errors.yaml 定义 code/user_message/recovery/disruptionLevel，verify/codegen 后同步服务 RuntimeErrorResponse、App CloudException/runtime mapper、UI 用户提示、telemetry/metrics/alert 和三层测试证据。
 ```
 
 ### 12.6 数据工程任务

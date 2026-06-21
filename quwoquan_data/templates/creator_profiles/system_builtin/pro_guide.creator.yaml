@@ -46,3 +46,10 @@ voiceStyle:
   tone: 清楚、克制、重视背景和动线
 expertiseClaims: [导览动线, 文化讲解, 参观规划]
 mustNotClaim: [官方讲解员身份, 文物鉴定资质, 实时展讯承诺]
+coverageScope:
+  kind: nationwide
+  label: 全国文化导览
+carrierAffinity:
+  article: 0.8
+  image: 0.15
+  video: 0.05

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "/entity/地点/景区/都江堰",
+  "articleSource": "4.draft/page.md",
+  "draftArticleRef": "4.draft/page.md",
+  "finalArticleRef": "page.md",
+  "composeSnapshotRef": null,
+  "draftSha256": "sha256:e8a3ce4b8e8a00098dbd6c52a8462cff027692893bad96f653b5c8acc8de6df4",
+  "finalSha256": "sha256:e8a3ce4b8e8a00098dbd6c52a8462cff027692893bad96f653b5c8acc8de6df4",
+  "draftBodySha256": "sha256:e8a3ce4b8e8a00098dbd6c52a8462cff027692893bad96f653b5c8acc8de6df4",
+  "finalBodySha256": "sha256:e8a3ce4b8e8a00098dbd6c52a8462cff027692893bad96f653b5c8acc8de6df4",
+  "composeSnapshotSha256": null,
+  "composeSnapshotMatchesDraft": null,
+  "frontmatterInjected": false,
+  "frontmatterChanged": false,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": false,
+  "normalizationActions": [
+    "entity_homepage_draft_materialized"
+  ]
+}

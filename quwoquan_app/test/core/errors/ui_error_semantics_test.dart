@@ -9,9 +9,7 @@ import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 
 void main() {
-  testWidgets('权限永久拒绝时优先透传本地 permission 文案并给出去设置动作', (
-    tester,
-  ) async {
+  testWidgets('权限永久拒绝时优先透传本地 permission 文案并给出去设置动作', (tester) async {
     late BuildContext capturedContext;
     await tester.pumpWidget(
       CupertinoApp(
@@ -98,7 +96,8 @@ void main() {
     );
 
     expect(semantic.presentation, UiErrorPresentation.appendFooter);
-    expect(semantic.message, '后面的内容暂时没拉到，上拉再试。');
+    expect(semantic.message, UITextConstants.appendFailedRetry);
+    expect(semantic.copyKey, 'appendFailedRetry');
     expect(semantic.primaryAction?.label, '再试一次');
   });
 
@@ -155,8 +154,9 @@ void main() {
       allowRetry: false,
     );
 
-    expect(semantic.title, UITextConstants.homepageInfoUnavailableTitle);
-    expect(semantic.message, '主页不存在或已下线');
+    expect(semantic.title, UITextConstants.homepageLoadFailedTitle);
+    expect(semantic.message, UITextConstants.contentUnavailableReason);
+    expect(semantic.copyKey, 'homepageLoadFailedTitle');
     expect(semantic.primaryAction, isNull);
   });
 }

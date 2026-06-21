@@ -93,23 +93,41 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 		return nil, generated.AppErrorFromUserNotFound("user not found: " + userID)
 	}
 
-	if v, ok := data["nickname"].(string); ok && v != "" {
-		existing, _ := s.profiles.FindByNickname(ctx, v)
-		if existing != nil && existing.UserID != userID {
-			return nil, generated.AppErrorFromNicknameTaken("nickname_taken: " + v)
-		}
-		profile.Nickname = v
+	// 昵称已不再要求全局唯一（唯一性由 userId/subAccountId/userHandle 承担）；
+	// 用户主动改名后置 nicknameCustomized=true，本人主页据此不再展示编辑画笔。
+	// nickname 与 displayName 互为别名：编辑页可能任一字段携带新昵称。
+	nicknameChanged := false
+	newNickname := ""
+	if v, ok := data["nickname"].(string); ok && strings.TrimSpace(v) != "" {
+		newNickname = strings.TrimSpace(v)
+	} else if v, ok := data["displayName"].(string); ok && strings.TrimSpace(v) != "" {
+		newNickname = strings.TrimSpace(v)
+	}
+	if newNickname != "" && newNickname != strings.TrimSpace(profile.Nickname) {
+		profile.Nickname = newNickname
+		profile.NicknameCustomized = true
+		nicknameChanged = true
 	}
 	oldAvatarURL := strings.TrimSpace(profile.AvatarURL)
 	oldAvatarVersion := profile.AvatarVersion
+	avatarChanged := false
 	if v, ok := data["avatarUrl"].(string); ok {
 		profile.AvatarURL = strings.TrimSpace(v)
 		if strings.TrimSpace(profile.AvatarURL) != oldAvatarURL {
+			avatarChanged = true
 			profile.AvatarVersion++
 			if profile.AvatarVersion <= 0 {
 				profile.AvatarVersion = 1
 			}
 			profile.AvatarAssetID = fmt.Sprintf("ua_%s", userID)
+		}
+	}
+	backgroundChanged := false
+	if v, ok := data["backgroundUrl"].(string); ok {
+		nb := strings.TrimSpace(v)
+		if nb != strings.TrimSpace(profile.BackgroundURL) {
+			profile.BackgroundURL = nb
+			backgroundChanged = true
 		}
 	}
 	if v, ok := data["bio"].(string); ok {
@@ -125,19 +143,31 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 		profile.Region = v
 	}
 
+	// 任一资料字段变更都递增 profileVersion，供端侧增量校验与缓存失效。
+	profile.ProfileVersion++
+	if profile.ProfileVersion <= 0 {
+		profile.ProfileVersion = 1
+	}
+
 	if err := s.profiles.Update(ctx, profile); err != nil {
 		return nil, err
 	}
 
+	// 把继承自 owner 基线的展示字段同步到当前激活分身，
+	// 保证本人主页（读取 persona.displayName/avatar/background）保存后立即回显。
+	s.propagateOwnerProfileToActivePersona(ctx, userID, profile, nicknameChanged, avatarChanged, backgroundChanged)
+
 	_ = s.pcache.Del(ctx, userID)
 	updatedAt := profile.UpdatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
 	if err := s.events.PublishUserEvent(ctx, event.UserProfileUpdated, userID, userID, map[string]any{
-		"userId":         profile.UserID,
-		"nickname":       profile.Nickname,
-		"bio":            profile.Bio,
-		"avatarUrl":      profile.AvatarURL,
-		"profileVersion": profile.ProfileVersion,
-		"updatedAt":      updatedAt,
+		"userId":             profile.UserID,
+		"nickname":           profile.Nickname,
+		"nicknameCustomized": profile.NicknameCustomized,
+		"bio":                profile.Bio,
+		"avatarUrl":          avatarURLWithVersion(profile.AvatarURL, profile.AvatarVersion),
+		"backgroundUrl":      profile.BackgroundURL,
+		"profileVersion":     profile.ProfileVersion,
+		"updatedAt":          updatedAt,
 	}); err != nil {
 		return nil, err
 	}
@@ -146,7 +176,7 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 			"userId":         profile.UserID,
 			"avatarAssetId":  profile.AvatarAssetID,
 			"avatarVersion":  profile.AvatarVersion,
-			"avatarUrl":      profile.AvatarURL,
+			"avatarUrl":      avatarURLWithVersion(profile.AvatarURL, profile.AvatarVersion),
 			"profileVersion": profile.ProfileVersion,
 			"updatedAt":      updatedAt,
 		}
@@ -160,6 +190,52 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 		}
 	}
 	return profile, nil
+}
+
+// propagateOwnerProfileToActivePersona 把 owner 基线变更同步到当前激活分身的继承字段。
+// 仅在分身仍继承（InheritsProfileFromOwner 或该字段未被 override）时覆盖，避免破坏分身自定义。
+func (s *ProfileService) propagateOwnerProfileToActivePersona(
+	ctx context.Context,
+	userID string,
+	profile *model.UserProfile,
+	nicknameChanged, avatarChanged, backgroundChanged bool,
+) {
+	if s.personas == nil || (!nicknameChanged && !avatarChanged && !backgroundChanged) {
+		return
+	}
+	active, err := s.personas.FindActiveByUserID(ctx, userID)
+	if err != nil || active == nil {
+		return
+	}
+	overridden := parseProfileFieldList(active.OverriddenProfileFields)
+	changed := false
+	if nicknameChanged && !containsField(overridden, "displayName") {
+		active.DisplayName = profile.Nickname
+		changed = true
+	}
+	if avatarChanged && !containsField(overridden, "avatarUrl") {
+		if active.AvatarURL != profile.AvatarURL || active.AvatarVersion != profile.AvatarVersion {
+			active.AvatarURL = profile.AvatarURL
+			active.AvatarVersion = profile.AvatarVersion
+			changed = true
+		}
+	}
+	if backgroundChanged && !containsField(overridden, "backgroundUrl") {
+		active.BackgroundURL = profile.BackgroundURL
+		changed = true
+	}
+	if changed {
+		_ = s.personas.Update(ctx, active)
+	}
+}
+
+func containsField(fields []string, target string) bool {
+	for _, f := range fields {
+		if strings.TrimSpace(f) == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *ProfileService) GetStats(ctx context.Context, userID string) (_ map[string]any, err error) {

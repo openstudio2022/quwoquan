@@ -1,11 +1,11 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
-import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
 
 /// 交集统一原子 [IntersectionEntity] 的展示密度。
 ///
@@ -104,7 +104,7 @@ class IntersectionEntity extends StatelessWidget {
           children: <Widget>[
             _Avatar(
               avatarUrl: reason.avatarUrl,
-              relationKind: reason.relationKind,
+              objectKind: reason.objectKind,
               size: AppSpacing.avatarUserMd,
               isDark: isDark,
             ),
@@ -176,7 +176,7 @@ class IntersectionEntity extends StatelessWidget {
               children: <Widget>[
                 _Avatar(
                   avatarUrl: reason.avatarUrl,
-                  relationKind: reason.relationKind,
+                  objectKind: reason.objectKind,
                   size: AppSpacing.avatarUserXs,
                   isDark: isDark,
                 ),
@@ -231,7 +231,7 @@ class IntersectionEntity extends StatelessWidget {
           children: <Widget>[
             _Avatar(
               avatarUrl: reason.avatarUrl,
-              relationKind: reason.relationKind,
+              objectKind: reason.objectKind,
               size: AppSpacing.avatarUserSm,
               isDark: isDark,
             ),
@@ -379,19 +379,20 @@ class _StatusBadge extends StatelessWidget {
 class _Avatar extends StatelessWidget {
   const _Avatar({
     required this.avatarUrl,
-    required this.relationKind,
+    required this.objectKind,
     required this.size,
     required this.isDark,
   });
 
   final String avatarUrl;
-  final String relationKind;
+  final String objectKind;
   final double size;
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final kind = UnifiedObjectKind.resolve(relationKind: relationKind);
+    // objectKind 一等字段为真相源（codegen UnifiedObjectKind）；未知/缺省按 person 头像形状降级。
+    final kind = UnifiedObjectKind.fromWire(objectKind) ?? UnifiedObjectKind.person;
     final accent = AppColors.iosAccent(context);
     final radius = kind == UnifiedObjectKind.person
         ? BorderRadius.circular(size)
@@ -432,6 +433,13 @@ class _Avatar extends StatelessWidget {
         return CupertinoIcons.book_fill;
       case UnifiedObjectKind.enterprise:
         return CupertinoIcons.building_2_fill;
+      // §22.2 旅行摄影 objectKind（结构就位，本轮无数据流入；保持图标语义可辨识）。
+      case UnifiedObjectKind.route:
+        return CupertinoIcons.map_pin_ellipse;
+      case UnifiedObjectKind.photoSpot:
+        return CupertinoIcons.camera_fill;
+      case UnifiedObjectKind.gear:
+        return CupertinoIcons.bag_fill;
     }
   }
 }

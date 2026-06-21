@@ -62,73 +62,73 @@
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/app/shell/main_app_shell.dart` | T1 | — | exempt | app_shell |  | 壳层导航；无云行模型 |
-| `lib/app/shell/bottom_navigation.dart` | T1 | — | exempt | app_shell |  | 底栏；无云行模型 |
+| `lib/app/shell/main_app_shell.dart` | local_contract | — | exempt | app_shell |  | 壳层导航；无云行模型 |
+| `lib/app/shell/bottom_navigation.dart` | local_contract | — | exempt | app_shell |  | 底栏；无云行模型 |
 
 ### welcome
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/welcome/pages/welcome_screen.dart` | T2 | — | exempt | welcome |  | 欢迎流以本地为主；无业务云 DTO 行模型 |
+| `lib/ui/welcome/pages/welcome_screen.dart` | local_contract | — | exempt | welcome |  | 欢迎流以本地为主；无业务云 DTO 行模型 |
 
 ### discovery
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/discovery/pages/home_page.dart` | T1 | ○ | partial | content | PostBaseDto | Tab 根；沉浸/作品流消费 PostBaseDto |
+| `lib/ui/discovery/pages/home_page.dart` | local_contract | ○ | partial | content | PostBaseDto | Tab 根；沉浸/作品流消费 PostBaseDto |
 | `lib/ui/discovery/pages/discovery_page.dart` | T7 | ○ | partial | content | PostBaseDto | Feed 行以 PostBaseDto 为主；少量 raw 映射用于分享/埋点兼容 |
 
 ### assistant
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/assistant/pages/assistant_tab_page.dart` | T1 | ○ | partial | assistant | TBD |  |
-| `lib/ui/assistant/pages/assistant_management_page.dart` | T2 | ○ | partial | assistant | TBD |  |
-| `lib/ui/assistant/pages/assistant_reference_webview_page.dart` | T2 | — | exempt | assistant |  | WebView；云契约 — |
-| `lib/ui/assistant/pages/assistant_conversation_page.dart` | T2 | ○ | partial | assistant | TBD | 引擎契约与云 API 分层；云调用须 codegen |
-| `lib/ui/assistant/pages/assistant_dev_replay_page.dart` | T2 | — | exempt | assistant |  | 开发工具 |
-| `lib/ui/assistant/pages/assistant_skill_center_page.dart` | T2 | ○ | partial | assistant | TBD |  |
-| `lib/ui/assistant/pages/assistant_chat_settings_page.dart` | T2 | ○ | partial | assistant | TBD |  |
+| `lib/ui/assistant/pages/assistant_tab_page.dart` | local_contract | ○ | partial | assistant | TBD |  |
+| `lib/ui/assistant/pages/assistant_management_page.dart` | local_contract | ○ | partial | assistant | TBD |  |
+| `lib/ui/assistant/pages/assistant_reference_webview_page.dart` | local_contract | — | exempt | assistant |  | WebView；云契约 — |
+| `lib/ui/assistant/pages/assistant_conversation_page.dart` | local_contract | ○ | partial | assistant | TBD | 引擎契约与云 API 分层；云调用须 codegen |
+| `lib/ui/assistant/pages/assistant_dev_replay_page.dart` | local_contract | — | exempt | assistant |  | 开发工具 |
+| `lib/ui/assistant/pages/assistant_skill_center_page.dart` | local_contract | ○ | partial | assistant | TBD |  |
+| `lib/ui/assistant/pages/assistant_chat_settings_page.dart` | local_contract | ○ | partial | assistant | TBD |  |
 
 ### chat
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/chat/pages/chat_page.dart` | T1 | ○ | partial | chat | ChatInboxDto | 主列表 ChatInboxDto；密信/联系人 Tab 等仍有 Map 或旁路 |
-| `lib/ui/chat/pages/chat_detail_page.dart` | T2 | ○ | partial | chat | TBD | 委托 ChatConversationPage；契约随子页 |
+| `lib/ui/chat/pages/chat_page.dart` | local_contract | ○ | partial | chat | ChatInboxDto | 主列表 ChatInboxDto；密信/联系人 Tab 等仍有 Map 或旁路 |
+| `lib/ui/chat/pages/chat_detail_page.dart` | local_contract | ○ | partial | chat | TBD | 委托 ChatConversationPage；契约随子页 |
 | `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ○ | partial | chat | TBD | 消息气泡动态结构；长期与 conversation metadata 对齐 |
-| `lib/ui/chat/pages/chat_settings_page.dart` | T2 | ○ | partial | chat | ChatConversationMemberDto | 成员列表 ChatConversationMemberDto；会话元数据等可继续收口 |
-| `lib/ui/chat/pages/start_group_chat_page.dart` | T4 | ○ | partial | chat | ChatInboxDto | listInbox/Contacts/Members/Circle 已 DTO；消息等仍 Map |
-| `lib/ui/chat/pages/transfer_ownership_page.dart` | T3 | ○ | partial | chat | ChatConversationMemberDto |  |
-| `lib/ui/chat/pages/group_member_search_page.dart` | T3 | ○ | partial | chat | ChatConversationMemberDto |  |
-| `lib/ui/chat/pages/group_manage_page.dart` | T3 | ○ | partial | chat | TBD |  |
-| `lib/ui/chat/pages/group_admins_page.dart` | T3 | ○ | partial | chat | ChatConversationMemberDto |  |
+| `lib/ui/chat/pages/chat_settings_page.dart` | local_contract | ○ | partial | chat | ChatConversationMemberDto | 成员列表 ChatConversationMemberDto；会话元数据等可继续收口 |
+| `lib/ui/chat/pages/start_group_chat_page.dart` | user_acceptance | ○ | partial | chat | ChatInboxDto | listInbox/Contacts/Members/Circle 已 DTO；消息等仍 Map |
+| `lib/ui/chat/pages/transfer_ownership_page.dart` | api_integration | ○ | partial | chat | ChatConversationMemberDto |  |
+| `lib/ui/chat/pages/group_member_search_page.dart` | api_integration | ○ | partial | chat | ChatConversationMemberDto |  |
+| `lib/ui/chat/pages/group_manage_page.dart` | api_integration | ○ | partial | chat | TBD |  |
+| `lib/ui/chat/pages/group_admins_page.dart` | api_integration | ○ | partial | chat | ChatConversationMemberDto |  |
 
 ### circle
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/circle/pages/home_circles_hub_page.dart` | T1 | ○ | partial | circle | TBD |  |
-| `lib/ui/circle/pages/circles_page.dart` | T1 | ○ | partial | circle | TBD |  |
-| `lib/ui/circle/pages/circle_detail_page.dart` | T2 | ○ | partial | circle | TBD |  |
+| `lib/ui/circle/pages/home_circles_hub_page.dart` | local_contract | ○ | partial | circle | TBD |  |
+| `lib/ui/circle/pages/circles_page.dart` | local_contract | ○ | partial | circle | TBD |  |
+| `lib/ui/circle/pages/circle_detail_page.dart` | local_contract | ○ | partial | circle | TBD |  |
 | `lib/ui/circle/pages/circle_edit_settings_page.dart` | T5 | ○ | partial | circle | TBD |  |
-| `lib/ui/circle/pages/circle_stats_page.dart` | T3 | ○ | partial | circle | TBD |  |
+| `lib/ui/circle/pages/circle_stats_page.dart` | api_integration | ○ | partial | circle | TBD |  |
 | `lib/ui/circle/pages/circles_hub_page.dart` | T0 | — | exempt | circle |  | 仅 export，无独立云契约 |
 
 ### content
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/content/pages/article_detail_page.dart` | T2 | ○ | partial | content | PostBaseDto |  |
-| `lib/ui/content/pages/photo_detail_page.dart` | T2 | ○ | partial | content | PostBaseDto |  |
-| `lib/ui/content/pages/video_detail_page.dart` | T2 | ○ | partial | content | PostBaseDto |  |
-| `lib/ui/content/pages/unified_media_viewer_page.dart` | T2 | ○ | partial | content | PostBaseDto |  |
+| `lib/ui/content/pages/article_detail_page.dart` | local_contract | ○ | partial | content | PostBaseDto |  |
+| `lib/ui/content/pages/photo_detail_page.dart` | local_contract | ○ | partial | content | PostBaseDto |  |
+| `lib/ui/content/pages/video_detail_page.dart` | local_contract | ○ | partial | content | PostBaseDto |  |
+| `lib/ui/content/pages/unified_media_viewer_page.dart` | local_contract | ○ | partial | content | PostBaseDto |  |
 
 ### content / entry（创作与发布子域）
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/content/entry/pages/create_page.dart` | T4 | ○ | partial | content | TBD |  |
+| `lib/ui/content/entry/pages/create_page.dart` | user_acceptance | ○ | partial | content | TBD |  |
 | `lib/ui/content/entry/pages/article_preview_page.dart` | T5 | ○ | partial | content | TBD |  |
 | `lib/ui/content/entry/pages/publish_location_selector_page.dart` | T5 | ○ | partial | content | TBD |  |
 | `lib/ui/content/entry/pages/video_editor_page.dart` | T5 | ○ | partial | content | TBD |  |
@@ -138,49 +138,49 @@
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/entity/pages/suggest_homepage_page.dart` | T4 | ○ | partial | entity | TBD |  |
-| `lib/ui/entity/pages/homepage_picker_page.dart` | T4 | ○ | partial | entity | TBD |  |
-| `lib/ui/entity/pages/homepage_claim_page.dart` | T2 | ○ | partial | entity | TBD |  |
-| `lib/ui/entity/pages/homepage_maintenance_page.dart` | T2 | ○ | partial | entity | TBD |  |
-| `lib/ui/entity/pages/homepage_status_report_page.dart` | T2 | ○ | partial | entity | TBD |  |
-| `lib/ui/entity/pages/homepage_detail_page.dart` | T2 | ○ | partial | entity | TBD |  |
+| `lib/ui/entity/pages/suggest_homepage_page.dart` | user_acceptance | ○ | partial | entity | TBD |  |
+| `lib/ui/entity/pages/homepage_picker_page.dart` | user_acceptance | ○ | partial | entity | TBD |  |
+| `lib/ui/entity/pages/homepage_claim_page.dart` | local_contract | ○ | partial | entity | TBD |  |
+| `lib/ui/entity/pages/homepage_maintenance_page.dart` | local_contract | ○ | partial | entity | TBD |  |
+| `lib/ui/entity/pages/homepage_status_report_page.dart` | local_contract | ○ | partial | entity | TBD |  |
+| `lib/ui/entity/pages/homepage_detail_page.dart` | local_contract | ○ | partial | entity | TBD |  |
 
 ### rtc
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/rtc/pages/incoming_call_page.dart` | T2 | ○ | partial | rtc | TBD |  |
-| `lib/ui/rtc/pages/outgoing_call_page.dart` | T2 | ○ | partial | rtc | TBD |  |
-| `lib/ui/rtc/pages/voice_call_page.dart` | T2 | ○ | partial | rtc | TBD |  |
-| `lib/ui/rtc/pages/video_call_page.dart` | T2 | ○ | partial | rtc | TBD |  |
-| `lib/ui/rtc/pages/call_participant_picker_page.dart` | T2 | ○ | partial | rtc | ChatInboxDto | ChatInboxDto / ChatConversationMemberDto / ChatContactRowDto |
+| `lib/ui/rtc/pages/incoming_call_page.dart` | local_contract | ○ | partial | rtc | TBD |  |
+| `lib/ui/rtc/pages/outgoing_call_page.dart` | local_contract | ○ | partial | rtc | TBD |  |
+| `lib/ui/rtc/pages/voice_call_page.dart` | local_contract | ○ | partial | rtc | TBD |  |
+| `lib/ui/rtc/pages/video_call_page.dart` | local_contract | ○ | partial | rtc | TBD |  |
+| `lib/ui/rtc/pages/call_participant_picker_page.dart` | local_contract | ○ | partial | rtc | ChatInboxDto | ChatInboxDto / ChatConversationMemberDto / ChatContactRowDto |
 
 ### search
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/search/pages/global_search_page.dart` | T2 | ○ | partial | search | TBD |  |
-| `lib/ui/search/pages/search_network_results_page.dart` | T3 | ○ | partial | search | TBD |  |
+| `lib/ui/search/pages/global_search_page.dart` | local_contract | ○ | partial | search | TBD |  |
+| `lib/ui/search/pages/search_network_results_page.dart` | api_integration | ○ | partial | search | TBD |  |
 
 ### settings
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/settings/pages/settings_page.dart` | T2 | ✓ | compliant | settings | N/A | 以本地/Cupertino 为主；云上外观设置走 codegen 错误码路径 |
-| `lib/ui/settings/pages/developer_settings_page.dart` | T2 | — | exempt | settings |  | 开发者工具；无产品云契约 |
+| `lib/ui/settings/pages/settings_page.dart` | local_contract | ✓ | compliant | settings | N/A | 以本地/Cupertino 为主；云上外观设置走 codegen 错误码路径 |
+| `lib/ui/settings/pages/developer_settings_page.dart` | local_contract | — | exempt | settings |  | 开发者工具；无产品云契约 |
 
 ### user
 
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
-| `lib/ui/user/pages/my_profile_page.dart` | T2 | ○ | partial | user | UserProfileDto |  |
-| `lib/ui/user/pages/other_profile_page.dart` | T2 | ○ | partial | user | UserProfileDto |  |
-| `lib/ui/user/pages/edit_profile_page.dart` | T2 | ○ | partial | user | UserProfileDto |  |
+| `lib/ui/user/pages/my_profile_page.dart` | local_contract | ○ | partial | user | UserProfileDto |  |
+| `lib/ui/user/pages/other_profile_page.dart` | local_contract | ○ | partial | user | UserProfileDto |  |
+| `lib/ui/user/pages/edit_profile_page.dart` | local_contract | ○ | partial | user | UserProfileDto |  |
 | `lib/ui/user/pages/persona_management_page.dart` | T7 | ○ | partial | user | TBD |  |
-| `lib/ui/user/pages/sub_account_management_page.dart` | T2 | ○ | partial | user | TBD |  |
-| `lib/ui/user/pages/resonance_page.dart` | T2 | ○ | partial | user | TBD |  |
-| `lib/ui/user/pages/profile_stats_page.dart` | T2 | ○ | partial | user | TBD |  |
-| `lib/ui/user/pages/profile_comments_page.dart` | T2 | ○ | partial | user | TBD |  |
+| `lib/ui/user/pages/sub_account_management_page.dart` | local_contract | ○ | partial | user | TBD |  |
+| `lib/ui/user/pages/resonance_page.dart` | local_contract | ○ | partial | user | TBD |  |
+| `lib/ui/user/pages/profile_stats_page.dart` | local_contract | ○ | partial | user | TBD |  |
+| `lib/ui/user/pages/profile_comments_page.dart` | local_contract | ○ | partial | user | TBD |  |
 
 ### components（跨域复用全屏 / 骨架）
 

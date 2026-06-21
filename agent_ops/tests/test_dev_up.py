@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from agent_ops.deploy.lib.dev_up import (
@@ -11,12 +12,15 @@ from agent_ops.deploy.lib.dev_up import (
     runtime_env_for_dev_env,
 )
 from agent_ops.deploy.lib.environment_topology import load_environment_topology
-from agent_ops.deploy.lib.alpha_media_origin import AlphaMediaOriginHandler
+from agent_ops.deploy.lib.local_media_origin import LocalMediaOriginHandler
 from agent_ops.deploy.lib.mock_public_plane import MockPublicPlaneHandler
+from agent_ops.deploy.stackctl import _health_checks_for_target
 from agent_ops.assistant.dev_assistant_beta_gateway import (
     AssistantBetaGateway,
     app_message_unread_count,
 )
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class _TtyStringIO(io.StringIO):
@@ -68,8 +72,10 @@ class DevUpTest(unittest.TestCase):
                 "beta",
             )
 
-    def test_alpha_media_origin_resolves_conversation_avatar_alias(self) -> None:
-        handler = AlphaMediaOriginHandler.__new__(AlphaMediaOriginHandler)
+    def test_local_media_origin_resolves_conversation_avatar_alias(self) -> None:
+        handler = LocalMediaOriginHandler.__new__(LocalMediaOriginHandler)
+        # alpha / prod-sim 启用 alias 时才会解析占位会话头像。
+        handler.conversation_avatar_alias_enabled = True
         self.assertEqual(
             handler._resolve_alias("/media/avatar/conversation/conv_002/v1/mock.png"),
             "media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png",
@@ -79,6 +85,40 @@ class DevUpTest(unittest.TestCase):
             "media/avatar/s/archived-avatar/group/fixture_conv_photo_group/v1/composite.png",
         )
         self.assertIsNone(handler._resolve_alias("/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"))
+
+    def test_local_media_origin_alias_disabled_by_default(self) -> None:
+        handler = LocalMediaOriginHandler.__new__(LocalMediaOriginHandler)
+        # gamma-local 默认关闭 alias：会话占位路径不再被改写。
+        self.assertIsNone(
+            handler._resolve_alias("/media/avatar/conversation/conv_002/v1/mock.png")
+        )
+
+    def test_local_media_origin_supports_byte_range_probe(self) -> None:
+        self.assertEqual(
+            LocalMediaOriginHandler._parse_byte_range("bytes=0-1", 1128375),
+            (0, 1),
+        )
+
+    def test_stackctl_media_health_checks_include_video_range(self) -> None:
+        topology = load_environment_topology()
+        checks = _health_checks_for_target(topology, "alpha-local", "media")
+        video_check = next(
+            item for item in checks if item["name"] == "media-video-range-sample"
+        )
+        self.assertEqual(video_check["headers"], {"Range": "bytes=0-1"})
+        self.assertEqual(video_check["expectedStatus"], 206)
+        self.assertIn(
+            "/media/video/s/archived-video/beta-sample.mp4",
+            video_check["url"],
+        )
+
+    def test_beta_manual_uses_range_aware_media_origin(self) -> None:
+        script = (ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("agent_ops/deploy/lib/local_media_origin.py", script)
+        self.assertIn("beta_manual_wait_http_range_ok", script)
+        self.assertNotIn("python3 -m http.server", script)
 
     def test_alpha_mock_public_plane_ops_event_endpoints(self) -> None:
         handler = MockPublicPlaneHandler.__new__(MockPublicPlaneHandler)

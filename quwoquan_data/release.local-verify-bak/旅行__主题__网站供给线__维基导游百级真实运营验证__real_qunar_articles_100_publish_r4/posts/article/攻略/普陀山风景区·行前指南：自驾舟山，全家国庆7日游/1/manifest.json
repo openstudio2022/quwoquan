@@ -1,0 +1,149 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_57c8b529f1cd7530",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/普陀山风景区"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:普陀山风景区"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/普陀山风景区",
+      "reason": "no_condition_profile; uses region/season menu"
+    },
+    "region": {
+      "name": "沿海/海岛",
+      "label": "沿海/海岛",
+      "source": "site_candidate_evidence",
+      "evidenceTerms": [
+        "海岛",
+        "潮汐"
+      ],
+      "evidenceRef": "entities/地点/景区/普陀山风景区/1.download/sources/39.qunar_guide_candidate_57c8b529f1cd7530/source.md"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7900351",
+    "https://touch.travel.qunar.com/youji/7864738"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/普陀山风景区/1.download/sources/39.qunar_guide_candidate_57c8b529f1cd7530/source.md",
+    "entities/地点/景区/普陀山风景区/1.download/sources/84.qunar_guide_candidate_be0f505999085b4f/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "普陀山风景区·行前指南：自驾舟山，全家国庆7日游",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "普陀山风景区",
+    "routeEntities": [
+      "普陀山风景区"
+    ],
+    "beats": [
+      "先从 普陀山风景区 进入主线。",
+      "含泪找了个最高气温最低值",
+      "大青山自驾赏景对孩子无价值，沙滩值回票价",
+      "一大早启程回去，赶学校作业"
+    ],
+    "sourceNote": "自驾舟山，全家国庆7日游,2026舟山游记,舟山旅游/自助游/自由行/游玩攻略-【去哪儿攻略】\nojlo... 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n自驾舟山，全家国庆7日游\nojlo0083\n2025/10/01出发\n人物\n家庭\n玩法\n人均\n300元\n前言\n上海迪士尼度假区\n用地点蹭个热度，与迪士尼无关。\n仅表示出发点是",
+    "relatedTopics": [
+      "普陀山风景区",
+      "含泪找了个最高气温最低值",
+      "大青山自驾赏景对孩子无价值，沙滩值回票价",
+      "一大早启程回去，赶学校作业"
+    ],
+    "mustIncludeFacts": [
+      "普陀山风景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-19T22:36:43.568662+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:普陀山风景区"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "沿海/海岛"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_9510b8469f333434",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "普陀山风景区",
+      "sourceEntityRef": "/entity/地点/景区/普陀山风景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_57c8b529f1cd7530",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 17
+    }
+  ],
+  "articleMarkdownDigest": "sha256:f74bb18178cf5f39bac22e96a3f5e0505a36ddbeb60a9159319669085ece1947"
+}

@@ -5,7 +5,7 @@
 准入：
 - Story `spec.md` 与 `acceptance.yaml` 已稳定。
 - 所属业务能力 `design.md` 覆盖实现约束。
-- 当前工作能指出 UAT/SIT/GWT/contract 与 T1~T4。
+- 当前工作能指出 UAT/SIT/GWT/contract 与 三层测试。
 
 执行：
 1. 读取相关 spec/design/acceptance、registry、CR。

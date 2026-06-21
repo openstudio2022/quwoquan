@@ -55,6 +55,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "GetAuthorImpact":
 		h.handleGetAuthorImpact(w, r)
+	case "GetCommentCountsDelta":
+		h.handleNotImplemented(w, r, operation)
 	case "GetCounters":
 		h.handleNotImplemented(w, r, operation)
 	case "GetFeed":
@@ -97,6 +99,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "MarkIntersectionsVisited":
 		h.handleMarkIntersectionsVisited(w, r)
+	case "PinComment":
+		h.handleNotImplemented(w, r, operation)
 	case "PromotePostToWork":
 		h.handleNotImplemented(w, r, operation)
 	case "PublishPost":
@@ -120,6 +124,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "SharePost":
 		h.handleNotImplemented(w, r, operation)
 	case "UnlikePost":
+		h.handleNotImplemented(w, r, operation)
+	case "UnpinComment":
 		h.handleNotImplemented(w, r, operation)
 	case "UnsharePost":
 		h.handleNotImplemented(w, r, operation)
@@ -162,7 +168,10 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "PATCH", pathTemplate: "/v1/content/posts/{postId}/circles", operation: "UpdatePostCircles"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/comments", operation: "ListComments"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/comments", operation: "CreateComment"},
+	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/comments/counts-delta", operation: "GetCommentCountsDelta"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}", operation: "DeleteComment"},
+	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}/pin", operation: "UnpinComment"},
+	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}/pin", operation: "PinComment"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}/replies", operation: "ListCommentReplies"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/counters", operation: "GetCounters"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/like", operation: "UnlikePost"},

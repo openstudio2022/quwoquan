@@ -10,6 +10,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dt
 import 'package:quwoquan_app/cloud/runtime/generated/user/recent_search_entry_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relationship_capability_wire_dto.g.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 
 /// 与集合迭代顺序无关的稳定 hash（用于 [SearchObjectSelection.hashCode]）。
 int _enumIndexSetHash<T extends Enum>(Set<T> values) {
@@ -414,6 +415,7 @@ class SocialRelationSearchItemView {
     required this.username,
     required this.displayName,
     this.avatarUrl,
+    this.avatarVersion = 0,
     this.headline,
     required this.chatAvailable,
     required this.relationshipCapability,
@@ -423,6 +425,7 @@ class SocialRelationSearchItemView {
   final String username;
   final String displayName;
   final String? avatarUrl;
+  final int avatarVersion;
   final String? headline;
   final bool chatAvailable;
   final SocialRelationshipCapabilityView relationshipCapability;
@@ -454,7 +457,10 @@ class SocialRelationSearchItemView {
       subAccountId: subAccountId,
       username: username,
       displayName: displayName,
-      avatarUrl: w.avatarUrl,
+      avatarUrl: w.avatarUrl == null
+          ? null
+          : resolveAvatarImageUrl(w.avatarUrl, avatarVersion: w.avatarVersion),
+      avatarVersion: w.avatarVersion,
       headline: w.headline,
       chatAvailable: w.chatAvailable || capView.canOpenConversation,
       relationshipCapability: capView,

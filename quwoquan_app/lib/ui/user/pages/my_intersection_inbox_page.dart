@@ -2,19 +2,24 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
+import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
-import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
-import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
-import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
+import 'package:quwoquan_app/ui/user/widgets/intersection_statement_card.dart';
+import 'package:quwoquan_app/ui/user/widgets/my_intersection_impact_timeline.dart';
+import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_timeline.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
 /// 「我的交集」详情页：筛选 + 时间桶 timeline。
@@ -55,17 +60,41 @@ class MyIntersectionInboxPage extends ConsumerStatefulWidget {
 class _MyIntersectionInboxPageState
     extends ConsumerState<MyIntersectionInboxPage> {
   late String _selectedFilter;
+  late _IntersectionDetailTab _selectedTab;
 
-  static const List<_IntersectionFilter> _filters = <_IntersectionFilter>[
-    _IntersectionFilter('all', DiscoveryFeedText.intersectionFilterAll),
-    _IntersectionFilter('person', DiscoveryFeedText.intersectionFilterPeople),
-    _IntersectionFilter('circle', DiscoveryFeedText.intersectionFilterCircles),
-    _IntersectionFilter('place', DiscoveryFeedText.intersectionFilterPlaces),
-    _IntersectionFilter(
-      'interest',
-      DiscoveryFeedText.intersectionFilterInterests,
-    ),
-  ];
+  /// 二级筛选闭集（与「我的主页」二级页签同款胶囊样式）。
+  static const List<ProfileSecondaryTabItem> _filterTabs =
+      <ProfileSecondaryTabItem>[
+        ProfileSecondaryTabItem(
+          id: 'all',
+          label: DiscoveryFeedText.intersectionFilterAll,
+        ),
+        ProfileSecondaryTabItem(
+          id: 'person',
+          label: DiscoveryFeedText.intersectionFilterPeople,
+        ),
+        ProfileSecondaryTabItem(
+          id: 'circle',
+          label: DiscoveryFeedText.intersectionFilterCircles,
+        ),
+        ProfileSecondaryTabItem(
+          id: 'place',
+          label: DiscoveryFeedText.intersectionFilterPlaces,
+        ),
+        ProfileSecondaryTabItem(
+          id: 'interest',
+          label: DiscoveryFeedText.intersectionFilterInterests,
+        ),
+      ];
+
+  /// 二级筛选可选值闭集；不在集合内（如 `fact`/`impact`/空）一律归一到 `all`。
+  static const Set<String> _filterIds = <String>{
+    'all',
+    'person',
+    'circle',
+    'place',
+    'interest',
+  };
 
   IntersectionTargetNavigator get _navigator => IntersectionTargetNavigator(
     onTrack: (target, attribution) {
@@ -75,7 +104,7 @@ class _MyIntersectionInboxPageState
           .read(contentBehaviorTrackerProvider)
           .trackClick(
             id,
-            referralSource: ReferralSource.organicFeed,
+            referralSource: ReferralSource.myIntersections,
             intersectionId: attribution.intersectionId,
             intersectionDimension: attribution.dimension,
             intersectionClass: attribution.intersectionClass,
@@ -89,10 +118,16 @@ class _MyIntersectionInboxPageState
   @override
   void initState() {
     super.initState();
-    _selectedFilter = widget.filter.trim().isEmpty
-        ? 'all'
-        : widget.filter.trim();
-    Future<void>.microtask(_load);
+    _selectedTab = widget.filter.trim() == 'impact'
+        ? _IntersectionDetailTab.impact
+        : _IntersectionDetailTab.intersections;
+    // 默认「全部」高亮：仅 person/circle/place/interest 是合法二级筛选；
+    // fact / impact / 空 等一律归一到 all，避免「无选中」假象。
+    final rawFilter = widget.filter.trim();
+    _selectedFilter = _filterIds.contains(rawFilter) ? rawFilter : 'all';
+    if (_selectedTab == _IntersectionDetailTab.intersections) {
+      Future<void>.microtask(_load);
+    }
   }
 
   Future<void> _load() {
@@ -107,37 +142,15 @@ class _MyIntersectionInboxPageState
   }
 
   UiErrorSemantic _resolvePageErrorSemantic(Object error) {
-    final resolved = runtimeErrorSemantic(
+    return resolveIntersectionDetailErrorSemantic(
       context,
       error: error,
-      category: UiErrorCategory.pageLoad,
-      scope: UiErrorScope.page,
-    );
-    return UiErrorSemantic(
-      category: resolved.category,
-      scope: resolved.scope,
       title: '${DiscoveryFeedText.myIntersectionsTitle}暂不可用',
-      message: resolved.message,
-      secondaryMessage: resolved.secondaryMessage,
-      primaryAction:
-          resolved.primaryAction ??
-          const UiErrorAction(
-            type: UiErrorActionType.retry,
-            label: UITextConstants.tryAgain,
-          ),
-      secondaryAction: resolved.secondaryAction,
-      dismissible: resolved.dismissible,
-      sourceCode: resolved.sourceCode,
-      failureKind: resolved.failureKind,
-      recoveryAction: resolved.recoveryAction,
-      presentation: resolved.presentation,
-      tone: resolved.tone,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = ref.watch(isDarkProvider);
     final bg = AppColors.iosSystemBackground(context);
     final state = ref.watch(myIntersectionListProvider);
     return AppScaffold(
@@ -148,31 +161,34 @@ class _MyIntersectionInboxPageState
           icon: CupertinoIcons.back,
           onPressed: () => context.pop(),
         ),
-        middle: Text(
-          DiscoveryFeedText.myIntersectionsTitle,
-          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-        ),
+        middle: Text(_titleForTab(_selectedTab)),
       ),
       child: _buildBody(context, state),
     );
   }
 
+  String _titleForTab(_IntersectionDetailTab tab) =>
+      tab == _IntersectionDetailTab.impact
+      ? UITextConstants.profileTabImpact
+      : UITextConstants.profileTabIntersection;
+
+  void _selectDetailTab(_IntersectionDetailTab tab) {
+    if (tab == _selectedTab) return;
+    setState(() => _selectedTab = tab);
+    final state = ref.read(myIntersectionListProvider);
+    if (tab == _IntersectionDetailTab.intersections &&
+        state.items.isEmpty &&
+        !state.isLoading) {
+      _load();
+    }
+  }
+
   Widget _buildBody(BuildContext context, MyIntersectionListState state) {
-    if (state.isLoading && state.items.isEmpty) {
-      return const Center(child: CupertinoActivityIndicator());
-    }
-    if (state.rawError != null) {
-      return AppPageErrorState(
-        semantic: _resolvePageErrorSemantic(state.rawError!),
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry ||
-              action.type == UiErrorActionType.resubmit) {
-            await _load();
-          }
-        },
-      );
-    }
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final items = _visibleItems(state.items);
+    final impactState = ref.watch(
+      authorImpactProvider(ref.watch(currentUserIdProvider)),
+    );
     return ListView(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -181,26 +197,110 @@ class _MyIntersectionInboxPageState
         AppSpacing.xl,
       ),
       children: <Widget>[
-        _FilterPills(
-          filters: _filters,
-          selected: _selectedFilter,
-          onSelected: (value) {
-            if (_selectedFilter == value) return;
-            setState(() => _selectedFilter = value);
-            _load();
-          },
+        // 一级 tab（交集 / 影响力）：移入 body 顶部，与「我的主页」内容区一级 tab 同款
+        // 蓝色下划线 + 选中加粗（CenteredScrollableTabBar），导航栏标题随之切换。
+        _IntersectionDetailTabs(
+          selected: _selectedTab,
+          onSelected: _selectDetailTab,
         ),
-        SizedBox(height: AppSpacing.containerMd),
-        if (items.isEmpty)
-          _EmptyTimelineState()
+        SizedBox(height: AppSpacing.intraGroupSm),
+        if (_selectedTab == _IntersectionDetailTab.impact)
+          ImpactTimeline(state: impactState)
         else
-          _BucketTimeline(
-            items: items,
-            onRowTap: _openReason,
-            onSpanTap: _onSpanTap,
-          ),
+          ..._buildIntersectionTimelineChildren(state, items, isDark),
       ],
     );
+  }
+
+  List<Widget> _buildIntersectionTimelineChildren(
+    MyIntersectionListState state,
+    List<IntersectionReason> items,
+    bool isDark,
+  ) {
+    if (state.isLoading && state.items.isEmpty) {
+      return const <Widget>[Center(child: CupertinoActivityIndicator())];
+    }
+    if (state.rawError != null) {
+      return <Widget>[
+        AppPageErrorState(
+          semantic: _resolvePageErrorSemantic(state.rawError!),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _load();
+            }
+          },
+        ),
+      ];
+    }
+    return <Widget>[
+      // 二级筛选（全部/人/圈子/地点/兴趣）：accent 胶囊，与「我的主页」二级页签同款。
+      ProfileSecondaryTabBar(
+        tabs: _filterTabs,
+        selectedId: _selectedFilter,
+        isDark: isDark,
+        onSelected: (value) {
+          if (_selectedFilter == value) return;
+          setState(() => _selectedFilter = value);
+          _load();
+        },
+      ),
+      SizedBox(height: AppSpacing.intraGroupSm),
+      if (items.isEmpty)
+        const IntersectionTimelineEmptyState()
+      else
+        IntersectionBucketTimeline(rows: _intersectionRows(items)),
+    ];
+  }
+
+  /// 交集行 → 时间桶条目（复用共享 [IntersectionStatementRow]：四槽 + 行动 pill + 生命周期弱标）。
+  List<IntersectionTimelineEntry> _intersectionRows(
+    List<IntersectionReason> items,
+  ) {
+    return <IntersectionTimelineEntry>[
+      for (final reason in items)
+        IntersectionTimelineEntry(
+          bucket: resolveIntersectionTimeBucket(
+            reason.timeBucket,
+            reason.freshAt,
+          ),
+          child: IntersectionTimelineCard(
+            child: IntersectionStatementRow(item: _intersectionItem(reason)),
+          ),
+        ),
+    ];
+  }
+
+  IntersectionStatementItem _intersectionItem(IntersectionReason reason) {
+    final hasAction = reason.actionHints.any(
+      (hint) => hint.label.trim().isNotEmpty,
+    );
+    return IntersectionStatementItem(
+      primaryText: reason.primaryText,
+      subtitleText: '',
+      spans: reason.primarySpans,
+      iconKey: reason.iconKey,
+      sourceRef: _sourceRefFor(reason),
+      dimension: reason.dimension,
+      actionHints: reason.actionHints,
+      lifecycleState: reason.lifecycleState,
+      showAuxiliaryLine: hasAction,
+      onTap: () => _openReason(reason),
+      onSpanTap: (span) => _onSpanTap(reason, span),
+      onActionHintTap: (hint) => _onActionHint(reason, hint),
+    );
+  }
+
+  void _onActionHint(IntersectionReason reason, IntersectionActionHint hint) {
+    if (hint.target != null && hint.target!.objectId.trim().isNotEmpty) {
+      _navigator.open(
+        context,
+        hint.target,
+        attribution: _attributionFor(reason),
+      );
+      return;
+    }
+    _openReason(reason);
   }
 
   List<IntersectionReason> _visibleItems(List<IntersectionReason> raw) {
@@ -221,9 +321,7 @@ class _MyIntersectionInboxPageState
   bool _matchesFilter(IntersectionReason item, String filter) {
     switch (filter) {
       case 'person':
-        return item.objectKind == 'person' ||
-            item.relationKind == 'person' ||
-            item.dimension == 'relationship';
+        return item.objectKind == 'person' || item.dimension == 'relationship';
       case 'circle':
         return item.objectKind == 'circle';
       case 'place':
@@ -255,9 +353,7 @@ class _MyIntersectionInboxPageState
         : item.relationObjectId.trim().isNotEmpty
         ? item.relationObjectId.trim()
         : item.intersectionId.trim();
-    final objectType = item.objectKind.trim().isNotEmpty
-        ? item.objectKind.trim()
-        : item.relationKind.trim();
+    final objectType = item.objectKind.trim();
     return '$objectId:$objectType';
   }
 
@@ -307,21 +403,10 @@ class _MyIntersectionInboxPageState
     );
   }
 
-  String _routeIdFor(IntersectionReason reason) {
-    switch (UnifiedObjectKind.resolve(
-      objectKind: reason.objectKind,
-      relationKind: reason.relationKind,
-    )) {
-      case UnifiedObjectKind.person:
-        return 'userProfile';
-      case UnifiedObjectKind.circle:
-        return 'circleDetail';
-      case UnifiedObjectKind.place:
-      case UnifiedObjectKind.school:
-      case UnifiedObjectKind.enterprise:
-        return 'homepageDetail';
-    }
-  }
+  // objectKind → 端路由逻辑名：codegen intersectionRouteIdForObjectKind 单一真相源
+  // （registry.objectKinds.routeId）；旧 relationKind 对象类型桥接已删除（§23 去桥接）。
+  String _routeIdFor(IntersectionReason reason) =>
+      intersectionRouteIdForObjectKind(reason.objectKind.trim());
 }
 
 String _sourceRefFor(IntersectionReason reason) {
@@ -331,329 +416,51 @@ String _sourceRefFor(IntersectionReason reason) {
   return reason.intersectionPoints.first.sourceRef.trim();
 }
 
-String _timeBucketFor(IntersectionReason reason) {
-  final explicit = reason.timeBucket.trim();
-  if (explicit.isNotEmpty) return explicit;
-  final freshAt = DateTime.tryParse(reason.freshAt);
-  if (freshAt == null) return 'lastMonth';
-  final diff = DateTime.now().toUtc().difference(freshAt.toUtc());
-  if (diff.inHours < 24) return 'today';
-  if (diff.inHours < 48) return 'yesterday';
-  if (diff.inDays < 7) return 'last7Days';
-  if (diff.inDays < 31) return 'thisMonth';
-  return 'lastMonth';
-}
+enum _IntersectionDetailTab { intersections, impact }
 
-String _bucketLabel(String bucket) {
-  switch (bucket) {
-    case 'today':
-      return DiscoveryFeedText.intersectionTimeBucketToday;
-    case 'yesterday':
-      return DiscoveryFeedText.intersectionTimeBucketYesterday;
-    case 'last7Days':
-      return DiscoveryFeedText.intersectionTimeBucketLast7Days;
-    case 'thisMonth':
-      return DiscoveryFeedText.intersectionTimeBucketThisMonth;
-    case 'lastMonth':
-      return DiscoveryFeedText.intersectionTimeBucketLastMonth;
-    default:
-      return DiscoveryFeedText.intersectionTimeBucketLastMonth;
-  }
-}
-
-class _IntersectionFilter {
-  const _IntersectionFilter(this.value, this.label);
-
-  final String value;
-  final String label;
-}
-
-class _FilterPills extends StatelessWidget {
-  const _FilterPills({
-    required this.filters,
+class _IntersectionDetailTabs extends StatelessWidget {
+  const _IntersectionDetailTabs({
     required this.selected,
     required this.onSelected,
   });
 
-  final List<_IntersectionFilter> filters;
-  final String selected;
-  final ValueChanged<String> onSelected;
+  final _IntersectionDetailTab selected;
+  final ValueChanged<_IntersectionDetailTab> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: <Widget>[
-          for (final filter in filters) ...<Widget>[
-            _FilterPill(
-              filter: filter,
-              selected: filter.value == selected,
-              onTap: () => onSelected(filter.value),
-            ),
-            SizedBox(width: AppSpacing.intraGroupSm),
-          ],
-        ],
+    final tabs = <TabItem>[
+      TabItem(
+        id: _IntersectionDetailTab.intersections.id,
+        label: UITextConstants.profileTabIntersection,
+      ),
+      TabItem(
+        id: _IntersectionDetailTab.impact.id,
+        label: UITextConstants.profileTabImpact,
+      ),
+    ];
+    return SizedBox(
+      height: AppSpacing.buttonHeightMd,
+      child: CenteredScrollableTabBar(
+        tabs: tabs,
+        activeTab: selected.id,
+        onTabChange: (id) => onSelected(_intersectionDetailTabForId(id)),
+        transparentBackground: true,
+        selectedLabelColor: AppColors.iosAccent(context),
       ),
     );
   }
 }
 
-class _FilterPill extends StatelessWidget {
-  const _FilterPill({
-    required this.filter,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _IntersectionFilter filter;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppColors.iosAccent(context);
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: onTap,
-      child: Container(
-        height: AppSpacing.buttonHeightSm,
-        padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.iosProfileSurface(context)
-              : AppColors.transparent,
-          borderRadius: BorderRadius.circular(AppSpacing.buttonHeightSm / 2),
-          boxShadow: selected
-              ? <BoxShadow>[
-                  BoxShadow(
-                    color: AppColors.black.withValues(alpha: 0.05),
-                    blurRadius: AppSpacing.sm,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          filter.label,
-          style: TextStyle(
-            fontSize: AppTypography.iosFootnote,
-            color: selected ? accent : AppColors.iosSecondaryLabel(context),
-          ),
-        ),
-      ),
-    );
-  }
+extension _IntersectionDetailTabMetadata on _IntersectionDetailTab {
+  String get id => switch (this) {
+    _IntersectionDetailTab.intersections => 'intersections',
+    _IntersectionDetailTab.impact => 'impact',
+  };
 }
 
-class _BucketTimeline extends StatelessWidget {
-  const _BucketTimeline({
-    required this.items,
-    required this.onRowTap,
-    required this.onSpanTap,
-  });
-
-  final List<IntersectionReason> items;
-  final ValueChanged<IntersectionReason> onRowTap;
-  final void Function(IntersectionReason reason, IntersectionTextSpan span)
-  onSpanTap;
-
-  static const List<String> _bucketOrder = <String>[
-    'today',
-    'yesterday',
-    'last7Days',
-    'thisMonth',
-    'lastMonth',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final byBucket = <String, List<IntersectionReason>>{};
-    for (final item in items) {
-      byBucket.putIfAbsent(_timeBucketFor(item), () => <IntersectionReason>[]);
-      byBucket[_timeBucketFor(item)]!.add(item);
-    }
-    final buckets = _bucketOrder
-        .where((bucket) => byBucket[bucket]?.isNotEmpty ?? false)
-        .toList(growable: false);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        for (var bucketIndex = 0; bucketIndex < buckets.length; bucketIndex++)
-          _BucketSection(
-            bucket: buckets[bucketIndex],
-            items: byBucket[buckets[bucketIndex]]!,
-            showLineTail: bucketIndex < buckets.length - 1,
-            onRowTap: onRowTap,
-            onSpanTap: onSpanTap,
-          ),
-      ],
-    );
-  }
-}
-
-class _BucketSection extends StatelessWidget {
-  const _BucketSection({
-    required this.bucket,
-    required this.items,
-    required this.showLineTail,
-    required this.onRowTap,
-    required this.onSpanTap,
-  });
-
-  final String bucket;
-  final List<IntersectionReason> items;
-  final bool showLineTail;
-  final ValueChanged<IntersectionReason> onRowTap;
-  final void Function(IntersectionReason reason, IntersectionTextSpan span)
-  onSpanTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppColors.iosAccent(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        SizedBox(
-          width: AppSpacing.containerMd,
-          child: Column(
-            children: <Widget>[
-              SizedBox(height: AppSpacing.xs),
-              Container(
-                width: AppSpacing.xs,
-                height: AppSpacing.xs,
-                decoration: BoxDecoration(
-                  color: accent,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              if (showLineTail)
-                Container(
-                  width: AppSpacing.hairline,
-                  height:
-                      (AppSpacing.minInteractiveSize + AppSpacing.sm) *
-                      items.length,
-                  color: accent.withValues(alpha: 0.18),
-                ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: AppSpacing.containerMd),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  _bucketLabel(bucket),
-                  style: TextStyle(
-                    fontSize: AppTypography.iosFootnote,
-                    fontWeight: AppTypography.medium,
-                    color: AppColors.iosLabel(context),
-                  ),
-                ),
-                SizedBox(height: AppSpacing.intraGroupSm),
-                for (final item in items) ...<Widget>[
-                  _TimelineIntersectionRow(
-                    reason: item,
-                    onTap: () => onRowTap(item),
-                    onSpanTap: (span) => onSpanTap(item, span),
-                  ),
-                  SizedBox(height: AppSpacing.intraGroupSm),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TimelineIntersectionRow extends StatelessWidget {
-  const _TimelineIntersectionRow({
-    required this.reason,
-    required this.onTap,
-    required this.onSpanTap,
-  });
-
-  final IntersectionReason reason;
-  final VoidCallback onTap;
-  final void Function(IntersectionTextSpan span) onSpanTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.iosProfileSurface(context),
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        border: Border.all(
-          color: AppColors.iosSeparator(context).withValues(alpha: 0.10),
-          width: AppSpacing.hairline,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        minimumSize: Size.square(AppSpacing.minInteractiveSize),
-        onPressed: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.containerSm,
-            vertical: AppSpacing.containerXs,
-          ),
-          child: Row(
-            children: <Widget>[
-              IntersectionTypeIcon(
-                iconKey: reason.iconKey,
-                sourceRef: _sourceRefFor(reason),
-                dimension: reason.dimension,
-              ),
-              SizedBox(width: AppSpacing.intraGroupSm),
-              Expanded(
-                child: InteractiveIntersectionText(
-                  spans: reason.primarySpans,
-                  fallbackText: reason.primaryText,
-                  onSpanTap: onSpanTap,
-                  onFallbackTap: onTap,
-                  baseStyle: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    height: AppSpacing.textLineHeightFootnote,
-                    color: AppColors.iosLabel(context),
-                  ),
-                ),
-              ),
-              SizedBox(width: AppSpacing.intraGroupSm),
-              Icon(
-                CupertinoIcons.chevron_forward,
-                size: AppSpacing.iconXSmall,
-                color: AppColors.iosQuaternaryLabel(context),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyTimelineState extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
-      child: Center(
-        child: Text(
-          DiscoveryFeedText.myIntersectionsEmpty,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            color: AppColors.iosSecondaryLabel(context),
-          ),
-        ),
-      ),
-    );
-  }
+_IntersectionDetailTab _intersectionDetailTabForId(String id) {
+  return id == _IntersectionDetailTab.impact.id
+      ? _IntersectionDetailTab.impact
+      : _IntersectionDetailTab.intersections;
 }

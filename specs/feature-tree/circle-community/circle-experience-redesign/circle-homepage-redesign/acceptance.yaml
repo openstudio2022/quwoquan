@@ -31,20 +31,35 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/social/circle/ui_config.yaml
     performance_points:
     - Tab 切换 p95 < 200ms
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T4_journey
     tests:
       planned: []
       recorded:
-      - quwoquan_app/test/ui/circle/widgets/circle_action_bar_widget_test.dart
-      - quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
-      - quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart
-      - quwoquan_app/test/components/object_page/object_intersection_card_test.dart
-    status: passing
+      - file: quwoquan_app/test/ui/circle/widgets/circle_action_bar_widget_test.dart
+      - file: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      - file: quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart
+      - file: quwoquan_app/test/components/object_page/object_intersection_card_test.dart
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.circle_community.circle_experience_redesign.circle_homepage_redesign.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.circle_community.circle_experience_redesign.circle_homepage_redesign.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: user_acceptance
+        suite: journey
+        cases:
+        - user_acceptance.circle_community.circle_experience_redesign.circle_homepage_redesign.journey
+        envs:
+        - gamma
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

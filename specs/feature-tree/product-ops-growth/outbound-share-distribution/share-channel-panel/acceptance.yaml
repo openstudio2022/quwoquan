@@ -33,16 +33,26 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
     performance_points:
     - 面板打开 P95 <= 300ms。
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_static_contract
     tests:
-      planned:
-      - quwoquan_app/test/ui/share/object_share_panel_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_channel_panel.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_channel_panel.gwt1_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/share/object_share_panel_test.dart'
   GWT2:
     title: 分享登录门关闭后不死循环且成功续接
     given:
@@ -59,15 +69,20 @@ gwt_acceptance:
     - quwoquan_app/lib/core/auth/auth_continuation.dart
     - specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/ui/share/share_login_continuation_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_channel_panel.gwt2_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/share/share_login_continuation_test.dart'
   GWT3:
     title: 可见性分级控制渠道可用性
     given:
@@ -83,16 +98,25 @@ gwt_acceptance:
     contract_refs:
     - specs/feature-tree/product-ops-growth/outbound-share-distribution/share-channel-panel/spec.md
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_static_contract
     tests:
-      planned:
-      - quwoquan_app/test/ui/share/share_channel_visibility_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_channel_panel.gwt3_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_channel_panel.gwt3_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/share/share_channel_visibility_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

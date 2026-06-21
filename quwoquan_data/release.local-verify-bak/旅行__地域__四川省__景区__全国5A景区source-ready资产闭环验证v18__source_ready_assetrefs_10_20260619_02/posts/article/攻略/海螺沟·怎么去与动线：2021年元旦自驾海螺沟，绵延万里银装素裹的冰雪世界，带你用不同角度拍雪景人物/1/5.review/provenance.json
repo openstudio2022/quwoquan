@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "海螺沟_route_transport",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "海螺沟·怎么去与动线：2021年元旦自驾海螺沟，绵延万里银装素裹的冰雪世界，带你用不同角度拍雪景人物",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-8e83778b-089d-4053-973f-90342bb8eaa0",
+    "agentId": "agent-9bd39b89-e221-4032-a02f-5fe0eb2df5b4",
+    "sessionTrace": null,
+    "styleFamily": "路线规划风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/海螺沟"
+    ],
+    "articleDigest": "sha256:f68fa2374cbdbc94d902db622276d236c129198991dda46121634715dc11d4e8"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "海螺沟·怎么去与动线：2021年元旦自驾海螺沟，绵延万里银装素裹的冰雪世界，带你用不同角度拍雪景人物",
+    "styleFamily": "",
+    "promptSha256": "sha256:a91adbf52df3641df840437514aefaae7099dc12d034888afbc67d245c4b95da",
+    "writingPackSha256": "sha256:b3b7792991221678f561c438b1c709aca8475b1aeaad38ea4c5e9e9c80832b3c",
+    "sourceBundleSha256": "sha256:ce870a8fe7bfaf678971dc7a76fbc5fcf923695055f6867ff0f283a84da667f2",
+    "draftSha256": "sha256:c9c89fd8f8c20f14185e505b3b9f164dbdd3565db80ddcc7048b4441a4eec200"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/source.md",
+      "url": "https://zh.wikipedia.org/wiki/%E6%B5%B7%E8%9E%BA%E6%B2%9F"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/04.article_qunar_base_2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7708315"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/07.article_qunar_base_5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7664441"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/08.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7646378"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/09.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7637762"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/10.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7632319"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/14.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7593443"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/17.article_qunar_base_15/source.md",
+      "url": "https://touch.travel.qunar.com/youji/6922547"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/18.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/6873351"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/19.article_open_visual_support/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E6%B5%B7%E8%9E%BA%E6%B2%9F-%E6%9F%8F%E7%A7%A7%E5%9D%AA_-_panoramio_(7).jpg"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/20.article_qunar_review_support/source.md",
+      "url": "https://touch.travel.qunar.com/search?q=%E6%B5%B7%E8%9E%BA%E6%B2%9F"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/22.image_open_license_file_海螺沟_httpscommonswikimediaorgwikifilee6b5b7e89ebae6b29fe69f8fe7a7_a2a5899933/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E6%B5%B7%E8%9E%BA%E6%B2%9F-%E6%9F%8F%E7%A7%A7%E5%9D%AA_-_panoramio.jpg"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/23.image_open_license_file_海螺沟_httpscommonswikimediaorgwikifilehailuogouglacierjpg_69d8251a0a/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Hailuogou_glacier.JPG"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/24.image_open_license_file_海螺沟_httpscommonswikimediaorgwikifilehailuogouglaciersinsummerjpe_f949c5dddf/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Hailuogou_Glaciers_in_Summer.jpeg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/海螺沟/1.download/sources/08.article_qunar_base_6/source.md"
+  ]
+}

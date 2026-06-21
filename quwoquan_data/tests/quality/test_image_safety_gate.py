@@ -81,6 +81,21 @@ def test_clean_image_is_safe():
     assert v.has_watermark is False
 
 
+def test_image_safety_persistent_cache_reuses_verdict_for_same_bytes():
+    first = _clean_image()
+    second = _TMP_DIR / "same-bytes-copy.jpg"
+    second.write_bytes(first.read_bytes())
+    cache_dir = _TMP_DIR / "safety-cache"
+
+    first_verdict = I.assess_image_cached(first, cache_dir=cache_dir)
+    second_verdict = I.assess_image_cached(second, cache_dir=cache_dir)
+
+    assert list(cache_dir.rglob("*.json")), "persistent verdict cache must be written"
+    assert second_verdict.path == str(second)
+    assert second_verdict.status == first_verdict.status
+    assert second_verdict.reasons == first_verdict.reasons
+
+
 def test_watermark_image_is_unsafe():
     v = I.assess_image(_watermark_image())
     assert v.has_watermark is True, v.to_dict()

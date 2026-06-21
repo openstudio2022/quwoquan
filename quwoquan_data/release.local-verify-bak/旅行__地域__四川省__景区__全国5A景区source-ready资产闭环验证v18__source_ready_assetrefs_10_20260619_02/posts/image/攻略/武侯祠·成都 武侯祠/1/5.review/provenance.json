@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "武侯祠_image",
+  "final": {
+    "contentType": "image",
+    "publishTitle": "武侯祠·成都 武侯祠",
+    "publishSeq": 1,
+    "generator": "image_evidence_pack",
+    "model": null,
+    "agentRunId": null,
+    "agentId": null,
+    "sessionTrace": null,
+    "styleFamily": "",
+    "openingStrategy": null,
+    "entityRefs": [
+      "/entity/地点/景区/武侯祠"
+    ],
+    "assetDigest": "sha256:5bdf006d40c480ec33e5940563e1e425e98bbeda3650f185d5e8dcd9cb2d0a22",
+    "sourceCollectionId": "open_license_file:武侯祠:httpscommonswikimediaorgwikifilee68890e983bde6ada6e4beafe7a5:36d11d4d92",
+    "creator": "Ann Lee",
+    "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E6%88%90%E9%83%BD_%E6%AD%A6%E4%BE%AF%E7%A5%A0_(40154129382).jpg",
+    "license": "CC BY-SA 2.0",
+    "termsUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E6%88%90%E9%83%BD_%E6%AD%A6%E4%BE%AF%E7%A5%A0_(40154129382).jpg"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "武侯祠·成都 武侯祠",
+    "styleFamily": "",
+    "promptSha256": null,
+    "writingPackSha256": null,
+    "sourceBundleSha256": null,
+    "draftSha256": null
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/21.image_open_license_file_武侯祠_httpscommonswikimediaorgwikifilee68890e983bde6ada6e4beafe7a5_36d11d4d92/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E6%88%90%E9%83%BD_%E6%AD%A6%E4%BE%AF%E7%A5%A0_(40154129382).jpg",
+      "sourceCollectionId": "open_license_file:武侯祠:httpscommonswikimediaorgwikifilee68890e983bde6ada6e4beafe7a5:36d11d4d92",
+      "creator": "Ann Lee",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E6%88%90%E9%83%BD_%E6%AD%A6%E4%BE%AF%E7%A5%A0_(40154129382).jpg",
+      "license": "CC BY-SA 2.0",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E6%88%90%E9%83%BD_%E6%AD%A6%E4%BE%AF%E7%A5%A0_(40154129382).jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "carrierConsistency": true,
+      "imageGate": true,
+      "imageSourceScope": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/武侯祠/1.download/sources/21.image_open_license_file_武侯祠_httpscommonswikimediaorgwikifilee68890e983bde6ada6e4beafe7a5_36d11d4d92/source.md"
+  ]
+}

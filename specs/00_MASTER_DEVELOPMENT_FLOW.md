@@ -18,6 +18,8 @@ AppRoot
 
 `Journey/Scenario` 只在应用根 registry 和 UAT 中表达，不作为目录层。临时执行计划与会话 todo 不属于正式特性树文档。
 
+测试工程唯一口径见 `specs/03_TESTING_STRATEGY.md`，只使用 `local_contract`、`api_integration`、`user_acceptance` 三层。
+
 ## 增量入口检查
 
 任何增量开始前必须能回答：
@@ -29,7 +31,7 @@ L2_business_capability: <capability>
 L3_story: <story>
 
 验收意图: UAT / SIT / GWT / contract
-测试证据: T1 / T2 / T3 / T4
+测试证据: local_contract / api_integration / user_acceptance
 ```
 
 若无法填写，先补 `spec.md` / `acceptance.yaml`，或补应用根 registry、能力 `design.md`、metadata/test 设计。不得绕过。
@@ -46,10 +48,12 @@ L3_story: <story>
 
 | 树层级 | 验收意图 | 主要证据 |
 |---|---|---|
-| AppRoot | UAT | `T4`，辅以 `T3` |
-| `L1_domain_service` | 领域边界与治理 | `T1/T3`，必要时 `T4` |
-| `L2_business_capability` | SIT | `T2/T3` |
-| `L3_story` | GWT + contract | `T1/T2`，涉及远端补 `T3` |
+| AppRoot | UAT | `user_acceptance`，辅以 `api_integration` |
+| `L1_domain_service` | 领域边界与治理 | `api_integration/local_contract`，必要时 `user_acceptance` |
+| `L2_business_capability` | SIT | `api_integration`，辅以 `local_contract` |
+| `L3_story` | GWT + contract | `local_contract`，涉及远端补 `api_integration`，涉及页面补 `user_acceptance` |
+
+AppRoot / Journey / 产品 superpower 不使用 GWT 表达；GWT 只属于 Story 级最小行为。
 
 ## 非协商原则
 
@@ -68,10 +72,10 @@ L3_story: <story>
 - `/plan-review`：冻结/开发前，用设计、产品、架构、代码评审、测试质量、运维运营、工程自动化多角色交叉检视规格/任务清单/验收的完备性，对标微信·小红书·Apple HIG 刷新规划。
 - `/baseline`：需求稳定且方案收敛时，一次冻结 spec / acceptance / 必要 design / CR。
 - `/dev`：从 Story acceptance 和当前会话计划派生 todo，执行 Red → Green → Refactor。
-- `/verify`：检查 UAT/SIT/GWT/contract 与 `T1~T4` 证据。
+- `/verify`：检查 UAT/SIT/GWT/contract 与三层测试证据。
 - `/plan-next`：功能或计划完成后，多角色自检完成度与证据，回填未达成项后生成下一轮规划（目标 / 规格 / 任务清单 / 验收标准）。
 - `/commit`：只提交已闭环 Story、相关文档、metadata/codegen、测试和 CR。
-- `/deploy`：以 release batch / CR 范围发布，必须完成 `T3/T4`、SLO、观测和回滚演练。
+- `/deploy`：以 release batch / CR 范围发布，必须完成 `api_integration/user_acceptance`、SLO、观测和回滚演练。
 
 ## 阻断项
 

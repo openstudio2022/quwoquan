@@ -8,6 +8,7 @@ class PersonaManagementItemWireDto {
   final String phone;
   final String email;
   final String avatarUrl;
+  final int avatarVersion;
   final String isolationLevel;
   final String profileVisibility;
   final bool isPrimary;
@@ -30,6 +31,7 @@ class PersonaManagementItemWireDto {
     this.phone = '',
     this.email = '',
     this.avatarUrl = '',
+    this.avatarVersion = 0,
     this.isolationLevel = 'open',
     this.profileVisibility = 'public',
     this.isPrimary = false,
@@ -54,6 +56,7 @@ class PersonaManagementItemWireDto {
       phone: m['phone']?.toString() ?? '',
       email: m['email']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
+      avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
       isolationLevel: m['isolationLevel']?.toString() ?? 'open',
       profileVisibility: m['profileVisibility']?.toString() ?? 'public',
       isPrimary: m['isPrimary'] as bool? ?? false,
@@ -79,6 +82,7 @@ class PersonaManagementItemWireDto {
       'phone': phone,
       'email': email,
       'avatarUrl': avatarUrl,
+      'avatarVersion': avatarVersion,
       'isolationLevel': isolationLevel,
       'profileVisibility': profileVisibility,
       'isPrimary': isPrimary,
@@ -103,6 +107,7 @@ class PersonaManagementItemWireDto {
     String? phone,
     String? email,
     String? avatarUrl,
+    int? avatarVersion,
     String? isolationLevel,
     String? profileVisibility,
     bool? isPrimary,
@@ -125,6 +130,7 @@ class PersonaManagementItemWireDto {
       phone: phone ?? this.phone,
       email: email ?? this.email,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarVersion: avatarVersion ?? this.avatarVersion,
       isolationLevel: isolationLevel ?? this.isolationLevel,
       profileVisibility: profileVisibility ?? this.profileVisibility,
       isPrimary: isPrimary ?? this.isPrimary,

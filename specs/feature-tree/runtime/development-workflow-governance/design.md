@@ -61,7 +61,7 @@
 ### 当前差距
 
 - 目录、索引生成器、脚手架、门禁、命令文案仍然深度绑定旧层级。
-- `03-testing.mdc` 已有 `T1~T4` 治理视图，但主流程和 deploy 文案仍混用 `L3/L4` 测试称呼。
+- `03-testing.mdc` 已有 `三层测试` 治理视图，但主流程和 deploy 文案仍混用 `L3/L4` 测试称呼。
 - `changes/` 旧脚手架体系与 `specs/feature-tree/` 主树并存，形成第二真相源。
 
 ## 方案对比
@@ -138,7 +138,7 @@
 - 决策 1：三层唯一正式层级为 `L1_domain_service / L2_business_capability / L3_story`。
 - 决策 2：目录树保留到 `L3_story`，`Task` 不进入目录。
 - 决策 3：`acceptance.yaml` 在 `L1`、`L2_business_capability` 与 `L3_story` 存在；`Task` 不单独有验收文件。
-- 决策 4：测试只保留 `T1~T4` 作为治理语言，不再使用 `L3/L4` 表示测试层。
+- 决策 4：测试只保留 `三层测试` 作为治理语言，不再使用 `L3/L4` 表示测试层。
 - 决策 5：`changes/` 旧五层脚手架退出特性树主治理链路。
 - 决策 6：任何旧层级、旧兼容字段、旧目录深度在门禁中直接 fail。
 - 决策 7：存量中间层若仍有语义价值，迁移为 tag 或元数据，不继续保留目录层。
@@ -196,22 +196,22 @@
 本特性自身当前落在 `runtime/development-workflow-governance` 这个治理节点下，后续以其下 `L3_story` 的 Task 作为实施映射：
 
 - 任务 `文档与标准重写`
-  - 主要覆盖 `T1`
+  - 主要覆盖 `local_contract`
 - 任务 `命令与流程去四层化`
-  - 主要覆盖 `T1 + T2`
+  - 主要覆盖 `local_contract + local_contract`
 - 任务 `脚手架、索引和 gate 重写`
-  - 主要覆盖 `T1 + T3`
+  - 主要覆盖 `local_contract + api_integration`
 - 任务 `存量节点迁移与抽样验证`
-  - 主要覆盖 `T2 + T3`
+  - 主要覆盖 `local_contract + api_integration`
 - 任务 `切换窗口与回滚演练`
-  - 主要覆盖 `T3 + T4`
+  - 主要覆盖 `api_integration + user_acceptance`
 
 ## 角色职责与多重防护网
 
 - **产品/治理 owner**：冻结三层定义，不接受中途回到四层。
 - **架构**：定义目录、索引、脚手架和门禁的最终结构。
 - **开发**：按任务序列实施文档、脚本、生成器与迁移。
-- **测试**：验证 `acceptance.yaml`、`T1~T4`、样例节点迁移和 gate 结果。
+- **测试**：验证 `acceptance.yaml`、`三层测试`、样例节点迁移和 gate 结果。
 - **发布**：控制冻结窗口、合入时机与回滚策略。
 
 多重防护网：
@@ -264,7 +264,7 @@
 
 - 仓库只有一套三层治理语言
 - 目录到 `L3_story`
-- 测试只用 `T1~T4`
+- 测试只用 `三层测试`
 - 脚手架、索引和 gate 对旧层级零容忍
 - 所有 `specs/feature-tree/` 节点和验收文件使用同一结构
 

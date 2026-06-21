@@ -7,8 +7,7 @@ node:
   parent_domain_service: product-ops-growth
   parent_business_capability: feedback-optimization-loop
 scope:
-  summary: >-
-    基线对照 / champion-challenger：control/champion/rule 为基线，AB 分桶 + PipelineMetrics
+  summary: 基线对照 / champion-challenger：control/champion/rule 为基线，AB 分桶 + PipelineMetrics
     按 preset×segment×bucket 归因，护栏以相对基线 minRatio 比对，reject 支配，达标才进人审。
   in_scope:
   - policy.yaml 基线身份（defaultPreset=control / champion / rule）+ AB 分桶
@@ -37,17 +36,27 @@ gwt_acceptance:
     - contracts/metadata/recommendation/rec_model/policy.yaml
     - contracts/metadata/_control_plane/product/workflow.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
       planned: []
       recorded:
-      - scripts/recommendation/test_rec_policy_advisor.py
-      - runtime/recommendation/engine_test.go
-    status: implemented
+      - file: scripts/recommendation/test_rec_policy_advisor.py
+      - file: runtime/recommendation/engine_test.go
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.product_ops_growth.feedback_optimization_loop.optimization_evaluation_and_release_baseline_comparison.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.product_ops_growth.feedback_optimization_loop.optimization_evaluation_and_release_baseline_comparison.gwt1_local_contract
+        envs: *id001
+      supporting: []
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

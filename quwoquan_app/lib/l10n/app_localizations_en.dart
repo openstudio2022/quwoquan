@@ -1835,6 +1835,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get expandMoreReplies => 'Expand more replies';
+
+  @override
+  String get expandFullText => 'Show more';
+
+  @override
+  String get collapseReplies => 'Collapse';
+
+  @override
   String get replyToPrefix => ' replied to ';
 
   @override

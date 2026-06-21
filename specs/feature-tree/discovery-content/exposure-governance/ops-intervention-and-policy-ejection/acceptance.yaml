@@ -9,43 +9,59 @@ node:
 scope:
   summary: 推荐运营干预与违规/下架内容实时剔除规格。
   in_scope:
-    - 人工加权、置顶、精品、热点干预入口与审计。
-    - 违规、审核失败、下架内容推荐池剔除。
+  - 人工加权、置顶、精品、热点干预入口与审计。
+  - 违规、审核失败、下架内容推荐池剔除。
   out_of_scope:
-    - 本轮不实现 product-ops/content-service 写入入口。
+  - 本轮不实现 product-ops/content-service 写入入口。
 gwt_acceptance:
   GWT1:
     title: 运营干预与治理剔除 GWT
     given:
-      - 运营人员对内容或分群设置加权/置顶/精品/热点策略，或内容被审核下架。
+    - 运营人员对内容或分群设置加权/置顶/精品/热点策略，或内容被审核下架。
     when:
-      - 用户请求推荐 feed。
+    - 用户请求推荐 feed。
     then:
-      - 合法干预在作用域内生效且可审计；违规或下架内容在 SLO 窗口内被剔除。
+    - 合法干预在作用域内生效且可审计；违规或下架内容在 SLO 窗口内被剔除。
     done_when:
-      - 干预字段、审计、过期、回滚和剔除延迟指标均冻结。
+    - 干预字段、审计、过期、回滚和剔除延迟指标均冻结。
     edge_cases:
-      - 干预不能覆盖审核不通过或已下架状态。
+    - 干预不能覆盖审核不通过或已下架状态。
     contract_refs:
-      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
-      - deploy/monitoring/alerts/quwoquan_alerts.yaml
+    - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    - deploy/monitoring/alerts/quwoquan_alerts.yaml
     performance_points:
-      - policy_takedown_ejection_latency P95 <= 60s
-      - ops_intervention_audit_coverage = 1.0
-    evidence:
-      primary:
-        - T1_contract
-        - T3_app_api_integration
-      supporting:
-        - T2_module_interaction
+    - policy_takedown_ejection_latency P95 <= 60s
+    - ops_intervention_audit_coverage = 1.0
     tests:
-      planned:
-        - quwoquan_service/services/content-service/tests/recommendation_ops_intervention_contract_test.go
+      planned: []
       recorded: []
-    status: specified
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.exposure_governance.ops_intervention_and_policy_ejection.contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.discovery_content.exposure_governance.ops_intervention_and_policy_ejection.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.exposure_governance.ops_intervention_and_policy_ejection.gwt1_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/recommendation_ops_intervention_contract_test.go'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

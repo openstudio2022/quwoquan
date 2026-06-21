@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "quwoquan_data.stage_envelope",
+  "taskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "batchId": "source_ready_assetrefs_10_20260619_02",
+  "step": "media_check_gate",
+  "ref": "海螺沟_seasonal_timing",
+  "payload": {
+    "schemaVersion": "quwoquan_data.stage_gate_report",
+    "taskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+    "batchId": "source_ready_assetrefs_10_20260619_02",
+    "command": "produce",
+    "step": "media_check",
+    "ref": "海螺沟_seasonal_timing",
+    "status": "green",
+    "passed": true,
+    "issues": [],
+    "evidenceSummary": {
+      "total": 0,
+      "unsafe": 0,
+      "needsReview": 0,
+      "textHeavy": 0,
+      "duplicateGroups": 0
+    },
+    "nextStep": "review",
+    "fallbackStage": null
+  }
+}

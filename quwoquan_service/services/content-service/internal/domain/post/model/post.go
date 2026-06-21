@@ -18,6 +18,7 @@ type Comment struct {
 	AuthorId                  string         `json:"authorId" bson:"authorId"`
 	AuthorDisplayNameSnapshot string         `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
 	AuthorAvatarUrlSnapshot   string         `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
+	IpLocation                string         `json:"ipLocation" bson:"ipLocation"`
 	PersonaContextVersion     int64          `json:"personaContextVersion" bson:"personaContextVersion"`
 	Content                   string         `json:"content" bson:"content"`
 	ReplyToCommentId          string         `json:"replyToCommentId" bson:"replyToCommentId"`
@@ -39,12 +40,17 @@ type Comment struct {
 	LikeCount                 int64          `json:"likeCount" bson:"likeCount"`
 	DislikeCount              int64          `json:"dislikeCount" bson:"dislikeCount"`
 	ViewerReaction            string         `json:"viewerReaction" bson:"viewerReaction"`
+	AuthorLiked               bool           `json:"authorLiked" bson:"authorLiked"`
 	RecommendedScore          float64        `json:"recommendedScore" bson:"recommendedScore"`
 	Status                    string         `json:"status" bson:"status"`
+	IsPinned                  bool           `json:"isPinned" bson:"isPinned"`
+	PinnedAt                  time.Time      `json:"pinnedAt" bson:"pinnedAt"`
 	CanDelete                 bool           `json:"canDelete" bson:"canDelete"`
 	CanReply                  bool           `json:"canReply" bson:"canReply"`
 	CanReport                 bool           `json:"canReport" bson:"canReport"`
+	CanPin                    bool           `json:"canPin" bson:"canPin"`
 	CreatedAt                 time.Time      `json:"createdAt" bson:"createdAt"`
+	DeletedAt                 time.Time      `json:"deletedAt" bson:"deletedAt"`
 }
 
 // ContentReaction domain model.
@@ -253,6 +259,9 @@ type ProfileInteractionActivityView struct {
 	PreviewUnavailable   bool      `json:"previewUnavailable" bson:"previewUnavailable"`
 	PreviewObjectId      string    `json:"previewObjectId" bson:"previewObjectId"`
 	PreviewRouteId       string    `json:"previewRouteId" bson:"previewRouteId"`
+	CommentId            string    `json:"commentId" bson:"commentId"`
+	ParentCommentId      string    `json:"parentCommentId" bson:"parentCommentId"`
+	ViewerReaction       string    `json:"viewerReaction" bson:"viewerReaction"`
 	FilterKeys           []string  `json:"filterKeys" bson:"filterKeys"`
 	CreatedAt            time.Time `json:"createdAt" bson:"createdAt"`
 }

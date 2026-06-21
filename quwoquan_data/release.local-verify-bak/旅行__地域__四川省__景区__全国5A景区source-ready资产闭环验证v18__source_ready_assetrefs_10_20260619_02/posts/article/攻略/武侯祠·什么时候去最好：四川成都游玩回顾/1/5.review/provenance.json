@@ -1,0 +1,136 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "武侯祠_seasonal_timing",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "武侯祠·什么时候去最好：四川成都游玩回顾",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-22d54810-aa55-4ba5-8f6d-84d883c4ce84",
+    "agentId": "agent-5e2ea57a-c247-4f9f-8aae-eec02c3235a0",
+    "sessionTrace": null,
+    "styleFamily": "客观评测风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/武侯祠"
+    ],
+    "articleDigest": "sha256:0b33dcee6563af6358f119bb70073d1f0a6f9142645e6b295ff14c0b739ae867"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "武侯祠·什么时候去最好：四川成都游玩回顾",
+    "styleFamily": "",
+    "promptSha256": "sha256:82040cae11d7b2bcd89cfb7f565f6c1e12a64a90da054eef9182079965d21092",
+    "writingPackSha256": "sha256:364b47bc240ded3e6c733a09feb529f029e37d34c0b2665bfd77feec3cfec5e0",
+    "sourceBundleSha256": "sha256:b8fb4b6ce9db1754f2b319d7e3031ba0f9fe60a0f98aa7adb1ba47ef39b847ce",
+    "draftSha256": "sha256:9fa9dfa49f0233e83a34d1212cfb8f5fcbeb6b0bc6359ada333e155de43a9514"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/01.home_wikipedia/source.md",
+      "url": "https://zh.wikipedia.org/wiki/%E6%AD%A6%E4%BE%AF%E7%A5%A0"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/05.article_qunar_base_3/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7863076"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/06.article_qunar_base_4/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7860961"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/07.article_qunar_base_5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7858912"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/08.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7844551"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/09.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7825234"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/10.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7813255"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/11.article_qunar_base_9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7806961"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/12.article_qunar_base_10/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7805258"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/13.article_qunar_base_11/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7804490"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/14.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7783661"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/15.article_qunar_base_13/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7779370"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/16.article_qunar_base_14/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7765654"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/17.article_qunar_base_15/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7765172"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/18.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7764355"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/20.article_qunar_review_support/source.md",
+      "url": "https://touch.travel.qunar.com/search?q=%E6%AD%A6%E4%BE%AF%E7%A5%A0"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/21.image_open_license_file_武侯祠_httpscommonswikimediaorgwikifilee68890e983bde6ada6e4beafe7a5_36d11d4d92/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E6%88%90%E9%83%BD_%E6%AD%A6%E4%BE%AF%E7%A5%A0_(40154129382).jpg"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/22.image_open_license_file_武侯祠_httpscommonswikimediaorgwikifilee68890e983bde6ada6e4beafe7a5_3c81ba448a/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E6%88%90%E9%83%BD_%E6%AD%A6%E4%BE%AF%E7%A5%A0_(40154130912).jpg"
+    },
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/23.image_open_license_file_武侯祠_httpscommonswikimediaorgwikifilee68890e983bde6ada6e4beafe7a5_6066ae9b61/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E6%88%90%E9%83%BD_%E6%AD%A6%E4%BE%AF%E7%A5%A0_(40154137792).jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/武侯祠/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/武侯祠/1.download/sources/05.article_qunar_base_3/source.md",
+    "entities/地点/景区/武侯祠/1.download/sources/13.article_qunar_base_11/source.md",
+    "entities/地点/景区/武侯祠/1.download/sources/14.article_qunar_base_12/source.md"
+  ]
+}

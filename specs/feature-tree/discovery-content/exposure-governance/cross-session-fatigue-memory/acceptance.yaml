@@ -9,45 +9,61 @@ node:
 scope:
   summary: 用户级跨会话 impressed 记忆与时间衰减疲劳，避免看过内容短期反复出现。
   in_scope:
-    - per-user impressed 窗口。
-    - 时间衰减疲劳惩罚。
-    - 强负反馈优先级。
+  - per-user impressed 窗口。
+  - 时间衰减疲劳惩罚。
+  - 强负反馈优先级。
   out_of_scope:
-    - P0 不引入 Bloom/Cuckoo 或精确 Sorted Set；先用 user+day bucket 与候选 membership 点查闭合中小规模容量路径。
+  - P0 不引入 Bloom/Cuckoo 或精确 Sorted Set；先用 user+day bucket 与候选 membership 点查闭合中小规模容量路径。
 gwt_acceptance:
   GWT1:
     title: 跨会话疲劳 GWT
     given:
-      - 用户在上一次会话真实曝光过内容 A。
+    - 用户在上一次会话真实曝光过内容 A。
     when:
-      - 用户在疲劳窗口内开启新会话并请求推荐。
+    - 用户在疲劳窗口内开启新会话并请求推荐。
     then:
-      - 内容 A 被过滤或显著降权；窗口过期后可重新参与排序。
+    - 内容 A 被过滤或显著降权；窗口过期后可重新参与排序。
     done_when:
-      - impressed 窗口、半衰期、降级路径和强负反馈优先级均有契约描述。
-      - impressed 按 user+day 分桶跨会话保持，negative 改用户级 key，过滤不依赖长窗口全量 SMembers。
+    - impressed 窗口、半衰期、降级路径和强负反馈优先级均有契约描述。
+    - impressed 按 user+day 分桶跨会话保持，negative 改用户级 key，过滤不依赖长窗口全量 SMembers。
     edge_cases:
-      - 候选不足时疲劳从硬过滤降级为软降权。
+    - 候选不足时疲劳从硬过滤降级为软降权。
     contract_refs:
-      - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
-      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+    - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
     performance_points:
-      - repeat_exposure_rate < 0.01
-    evidence:
-      primary:
-        - T1_contract
-        - T2_module_interaction
-      supporting:
-        - T3_app_api_integration
+    - repeat_exposure_rate < 0.01
     tests:
-      planned:
-        - quwoquan_service/services/content-service/tests/post_feed_exposure_governance_contract_test.go
+      planned: []
       recorded:
-        - quwoquan_service/runtime/recommendation/engine_test.go
+      - file: quwoquan_service/runtime/recommendation/engine_test.go
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.exposure_governance.cross_session_fatigue_memory.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.exposure_governance.cross_session_fatigue_memory.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.discovery_content.exposure_governance.cross_session_fatigue_memory.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/post_feed_exposure_governance_contract_test.go'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

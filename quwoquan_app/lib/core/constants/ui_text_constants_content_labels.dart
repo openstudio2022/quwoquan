@@ -25,6 +25,8 @@ String _contentLabelForKey(String labelKey) {
       return UITextConstants.profileTabCreations;
     case 'profile_tab_interaction':
       return UITextConstants.profileTabInteraction;
+    case 'profile_tab_footprint':
+      return UITextConstants.profileTabFootprint;
     case 'profile_tab_lifestyle':
       return UITextConstants.profileTabLifestyle;
     case 'homepage_tab_record':
@@ -85,6 +87,8 @@ String _contentLabelForKey(String labelKey) {
       return UITextConstants.interactionSubComments;
     case 'interaction_sub_shares':
       return UITextConstants.interactionSubShares;
+    case 'interaction_sub_views':
+      return UITextConstants.interactionSubViews;
     case 'work_format_all':
       return UITextConstants.workFormatFilterAll;
     case 'work_format_image':

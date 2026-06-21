@@ -121,6 +121,7 @@ api_routes:
     description: 评论列表（支持 recommended/latest/most_liked 排序；一级评论可携带 replyPreview 与 replyNextCursor）
     query_params: [sort, cursor, limit]
     response_entity: Comment
+    response_fields: [items, nextCursor, totalCount]
 
   - method: POST
     path: /v1/content/posts/{postId}/comments
@@ -141,6 +142,7 @@ api_routes:
     description: 二级回复独立分页；默认 limit 取 sys.content.comment.reply_expand_page_size
     query_params: [cursor, limit]
     response_entity: Comment
+    response_fields: [items, nextCursor, totalCount]
 
   - method: DELETE
     path: /v1/content/posts/{postId}/comments/{commentId}
@@ -160,6 +162,30 @@ api_routes:
     request_entity: Comment
     writable_fields: [viewerReaction]
     auth: required
+
+  - method: POST
+    path: /v1/content/posts/{postId}/comments/{commentId}/pin
+    operation: PinComment
+    description: 内容作者置顶一级评论（仅内容作者可操作，置顶项排在评论区最前；二级回复不可置顶）
+    response_entity: Comment
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: DELETE
+    path: /v1/content/posts/{postId}/comments/{commentId}/pin
+    operation: UnpinComment
+    description: 内容作者取消置顶评论（仅内容作者可操作）
+    response_entity: Comment
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/content/users/me/comments
@@ -212,6 +238,9 @@ api_routes:
     query_params: [impactId, evidenceSnapshotId, cursor, limit]
     response_entity: AuthorImpactEvidencePage
     response_fields: [impactId, evidenceSnapshotId, totalCount, items, nextCursor, hasMore]
+    # R-ID02：显式声明响应契约。整页为单读模型对象（端 _decodeObject → AuthorImpactEvidencePage.fromMap）。
+    response_body: AuthorImpactEvidencePage
+    response_body_kind: object
     auth: required
 
   - method: GET
@@ -279,6 +308,27 @@ api_routes:
     path: /v1/content/posts/{postId}/counters
     operation: GetCounters
     description: 聚合计数
+
+  - method: GET
+    path: /v1/content/posts/{postId}/comments/counts-delta
+    operation: GetCommentCountsDelta
+    description: |
+      评论计数可解释增量：相对 since 水位线给出「此期间新增 N / 删除 M」与当前总数及下次基线水位。
+      since 缺省（首次）返回 createdSinceCount=currentTotal、deletedSinceCount=0。
+      实现：createdSinceCount=count(createdAt>since)（含其后又被删的，按「新增」口径）；
+      deletedSinceCount=count(status=deleted && deletedAt>since)；currentTotal=非删除权威 count；
+      watermark 为单调毫秒水位线，客户端下次以其为 since 避免重复计数。
+    query_params: [since]
+    response_fields: [createdSinceCount, deletedSinceCount, currentTotal, watermark, since]
+    metrics:
+      - { name: content_comment_counts_delta_requests_total, type: counter, description: "GetCommentCountsDelta 调用次数（labels: result=ok|error）" }
+      - { name: content_comment_counts_delta_latency_ms, type: histogram, description: "GetCommentCountsDelta 端到端时延（两段索引 count）" }
+    slo:
+      latency_p99_ms: 80
+      availability: "99.9%"
+    trace:
+      span: content.GetCommentCountsDelta
+      attributes: [postId, since, createdSinceCount, deletedSinceCount, currentTotal]
 
   - method: GET
     path: /v1/content/footprint
@@ -372,6 +422,9 @@ api_routes:
     path: /v1/content/intersections/summary
     operation: GetMyIntersectionSummary
     description: 我的主页「我的交集」聚合摘要（总数 + 各维度计数与自上次查看未读数）
+    # 响应契约（框架级 response_body）：单读模型对象，端只读直出。
+    response_body: IntersectionInboxSummary
+    response_body_kind: object
     security:
       auth_mode: required
       principal: owner
@@ -384,6 +437,9 @@ api_routes:
     operation: ListMyIntersections
     description: 我的主页按筛选/维度/证据组/时间桶分页交集列表；服务端先全局去重，再按强度、时间桶、锚点权重、共同人数和对象类型稳定排序
     query_params: [dimension, filter, sourceRef, timeBucket, cursor, limit]
+    # 响应契约（框架级 response_body）：分页列表，items 承载 IntersectionReason。
+    response_body: IntersectionReason
+    response_body_kind: page
     security:
       auth_mode: required
       principal: owner
@@ -395,6 +451,8 @@ api_routes:
     path: /v1/content/intersections/visit
     operation: MarkIntersectionsVisited
     description: 推进某维度（或全部）已读水位并清零未读红点
+    # 响应契约（框架级 response_body）：仅状态确认（{dimension,status}），无读模型，端返回 void。
+    response_body_kind: ack
     security:
       auth_mode: required
       principal: owner
@@ -407,6 +465,9 @@ api_routes:
     operation: GetObjectIntersections
     description: 对象页「我与该对象」的关系类交集（共同关注的人/你关注的人来过/你关注的人在这里等证据组，kind 见交集词典注册表，与标签交集在端合并）
     query_params: [objectId, objectType, limit]
+    # 响应契约（框架级 response_body）：分页列表，items 承载 IntersectionReason。
+    response_body: IntersectionReason
+    response_body_kind: page
     security:
       auth_mode: required
       principal: owner

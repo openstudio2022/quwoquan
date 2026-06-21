@@ -9,7 +9,9 @@ class SubAccountProfileWireDto {
   final String displayName;
   final String username;
   final String subjectType;
+  final bool nicknameCustomized;
   final String avatarUrl;
+  final int avatarVersion;
   final String backgroundUrl;
   final String bio;
   final List<String> identityTags;
@@ -35,7 +37,9 @@ class SubAccountProfileWireDto {
     this.displayName = '',
     this.username = '',
     this.subjectType = '',
+    this.nicknameCustomized = false,
     this.avatarUrl = '',
+    this.avatarVersion = 0,
     this.backgroundUrl = '',
     this.bio = '',
     this.identityTags = const <String>[],
@@ -63,7 +67,9 @@ class SubAccountProfileWireDto {
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
       username: m['username']?.toString() ?? m['userHandle']?.toString() ?? m['nickname']?.toString() ?? '',
       subjectType: m['subjectType']?.toString() ?? '',
+      nicknameCustomized: m['nicknameCustomized'] as bool? ?? false,
       avatarUrl: m['avatarUrl']?.toString() ?? '',
+      avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
       backgroundUrl: m['backgroundUrl']?.toString() ?? m['backgroundImage']?.toString() ?? '',
       bio: m['bio']?.toString() ?? '',
       identityTags: _parseStringList(m['identityTags']) ?? <String>[],
@@ -92,7 +98,9 @@ class SubAccountProfileWireDto {
       'displayName': displayName,
       'username': username,
       'subjectType': subjectType,
+      'nicknameCustomized': nicknameCustomized,
       'avatarUrl': avatarUrl,
+      'avatarVersion': avatarVersion,
       'backgroundUrl': backgroundUrl,
       'bio': bio,
       'identityTags': identityTags,
@@ -120,7 +128,9 @@ class SubAccountProfileWireDto {
     String? displayName,
     String? username,
     String? subjectType,
+    bool? nicknameCustomized,
     String? avatarUrl,
+    int? avatarVersion,
     String? backgroundUrl,
     String? bio,
     List<String>? identityTags,
@@ -146,7 +156,9 @@ class SubAccountProfileWireDto {
       displayName: displayName ?? this.displayName,
       username: username ?? this.username,
       subjectType: subjectType ?? this.subjectType,
+      nicknameCustomized: nicknameCustomized ?? this.nicknameCustomized,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarVersion: avatarVersion ?? this.avatarVersion,
       backgroundUrl: backgroundUrl ?? this.backgroundUrl,
       bio: bio ?? this.bio,
       identityTags: identityTags ?? this.identityTags,

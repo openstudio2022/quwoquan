@@ -1,7 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_app/components/media/app_media_image.dart';
+import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 
 class CircleHeader extends StatelessWidget {
   const CircleHeader({
@@ -13,7 +15,7 @@ class CircleHeader extends StatelessWidget {
     this.tags = const [],
     this.metaLine,
     this.badgeLabel,
-    this.memberAvatarUrls = const <String>[],
+    this.memberVisuals = const <IntersectionVisual>[],
     this.onTagTap,
   });
 
@@ -25,8 +27,9 @@ class CircleHeader extends StatelessWidget {
   final String? metaLine;
   final String? badgeLabel;
 
-  /// 头部成员头像簇（圈子里你认识的人，最多展示前若干个）；为空则不展示。
-  final List<String> memberAvatarUrls;
+  /// 头部成员视觉簇（圈子里你认识的人，结构化样本视觉）；为空则不展示。
+  /// 走统一 [IntersectionVisualCluster]（形状区分 / 降级 / 语义一致），不再裸 URL 自绘。
+  final List<IntersectionVisual> memberVisuals;
   final ValueChanged<String>? onTagTap;
 
   static const double avatarRadius = AppSpacing.xl;
@@ -35,7 +38,7 @@ class CircleHeader extends StatelessWidget {
   static double get avatarIntrusion => avatarOuterDiameter * 0.34;
 
   Widget _buildAvatar(Color bg, Color fgSecondary) {
-    final avatarProvider = circleImageProvider(avatarUrl);
+    final avatarProvider = mediaImageProvider(avatarUrl);
     return Container(
       key: const ValueKey<String>('circle-header-avatar'),
       decoration: BoxDecoration(
@@ -69,40 +72,14 @@ class CircleHeader extends StatelessWidget {
   }
 
   /// 成员头像簇：叠加展示前若干位成员头像，传达「圈子里有真实的人」。
-  Widget _buildMemberCluster(Color bg, Color fgSecondary) {
-    final urls = memberAvatarUrls
-        .where((u) => u.trim().isNotEmpty)
-        .take(4)
-        .toList(growable: false);
-    if (urls.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    const double diameter = AppSpacing.avatarUserXs;
-    const double step = diameter - AppSpacing.sm;
-    return SizedBox(
+  Widget _buildMemberCluster() {
+    // 归一到统一交集视觉簇：形状按 assetKind（成员头像走圆形 avatar）、降级占位、
+    // 超出「+N」收口、可点击都由 IntersectionVisualCluster 统一处理，不再裸 URL 自绘。
+    return IntersectionVisualCluster(
       key: const ValueKey<String>('circle-header-member-cluster'),
-      height: diameter,
-      width: diameter + step * (urls.length - 1),
-      child: Stack(
-        children: [
-          for (var i = 0; i < urls.length; i++)
-            Positioned(
-              left: i * step,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: bg, width: AppSpacing.hairline * 2),
-                ),
-                child: CircleAvatar(
-                  radius: diameter / 2,
-                  backgroundColor: fgSecondary.withValues(alpha: 0.2),
-                  backgroundImage: circleImageProvider(urls[i]),
-                  onBackgroundImageError: (e, s) {},
-                ),
-              ),
-            ),
-        ],
-      ),
+      visuals: memberVisuals,
+      maxVisuals: 4,
+      size: AppSpacing.avatarUserXs,
     );
   }
 
@@ -195,9 +172,9 @@ class CircleHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              if (memberAvatarUrls.any((u) => u.trim().isNotEmpty)) ...[
+              if (memberVisuals.isNotEmpty) ...[
                 SizedBox(height: AppSpacing.intraGroupSm),
-                _buildMemberCluster(bg, fgSecondary),
+                _buildMemberCluster(),
               ],
               if (description != null && description!.isNotEmpty) ...[
                 SizedBox(height: AppSpacing.intraGroupXs),

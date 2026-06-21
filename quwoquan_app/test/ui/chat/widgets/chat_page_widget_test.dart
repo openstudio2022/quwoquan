@@ -640,7 +640,10 @@ void main() {
       final avatar = tester.widget<RoundedSquareAvatar>(
         find.byType(RoundedSquareAvatar).first,
       );
-      expect(avatar.imageUrl, 'https://example.com/contact-consistent.jpg');
+      expect(
+        avatar.imageUrl,
+        contains('media/avatar/s/archived-avatar/user/user_contact'),
+      );
     });
   });
 }
@@ -1060,7 +1063,7 @@ class _DirectAvatarFallbackChatRepository extends MockChatRepository {
       ChatConversationMemberDto(
         userId: 'user_002',
         displayName: '契约撰稿人',
-        avatarUrl: 'https://example.com/user_002.jpg',
+        avatarUrl: 'media/avatar/s/archived-avatar/user/user_002/v1/avatar.png',
       ),
     ];
   }
@@ -1105,7 +1108,8 @@ class _DirectAvatarConsistencyChatRepository extends MockChatRepository {
       ChatConversationMemberDto(
         userId: 'user_contact',
         displayName: '手机端头像一致性',
-        avatarUrl: 'https://example.com/contact-consistent.jpg',
+        avatarUrl:
+            'media/avatar/s/archived-avatar/user/user_contact/v1/avatar.png',
       ),
     ];
   }

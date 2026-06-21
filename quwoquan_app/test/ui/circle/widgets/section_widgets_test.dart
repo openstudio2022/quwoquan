@@ -100,7 +100,9 @@ void main() {
       );
       expect(find.text('图片'), findsWidgets);
       expect(find.text('视频'), findsWidgets);
-      expect(find.text('文字'), findsWidgets);
+      // 「长文」是与用户主页同源的 metadata 子页签 creation_sub_text 文案
+      // （UserProfileUIConfig.creationSubTabs），与作者主页保持一致。
+      expect(find.text('长文'), findsWidgets);
     });
 
     testWidgets('空数据安全渲染', (tester) async {

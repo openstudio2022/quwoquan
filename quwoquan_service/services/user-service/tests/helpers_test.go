@@ -64,8 +64,18 @@ func createTestProfile(t *testing.T, userID, nickname string) {
 	phone := fmt.Sprintf("t_%016x", xxhash.Sum64String(userID))
 	logicalShard := fixtureLogicalShard(userID)
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO user_profiles (user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy, phone, nickname, avatar_url, avatar_asset_id, avatar_version, bio, identity_tags, gender, region, owner_display_name, status, profile_version, created_at, updated_at)
-		VALUES ($1, 'active', 'migrated_seed', $2, 'preserve', $3, $4, '', '', 0, '', '', '', '', '', 'active', 1, NOW(), NOW())
+		INSERT INTO user_profiles (
+			user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy,
+			phone, nickname, nickname_customized, avatar_url, avatar_asset_id, avatar_version,
+			background_url, bio, identity_tags, gender, region, owner_display_name,
+			status, profile_version, sub_account_count, created_at, updated_at
+		)
+		VALUES (
+			$1, 'active', 'migrated_seed', $2, 'preserve',
+			$3, $4, false, '', '', 0,
+			'', '', '', '', '', '',
+			'active', 1, 1, NOW(), NOW()
+		)
 		ON CONFLICT (user_id) DO NOTHING`,
 		userID, logicalShard, phone, nickname)
 	if err != nil {

@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +43,10 @@ const (
 	maxLoginFailCount     = 5
 	lockDurationMinutes   = 30
 	refreshTokenTTLHours  = 24 * 30
+
+	// defaultNewUserNicknamePrefix 是首次创建用户的系统默认昵称前缀。
+	// 云侧可通过 WithDefaultNicknamePrefix 覆盖（USER_DEFAULT_NICKNAME_PREFIX）。
+	defaultNewUserNicknamePrefix = "新同学"
 )
 
 // AuthService handles OwnerAccount authentication and credential binding.
@@ -63,6 +69,7 @@ type AuthService struct {
 	otpSandbox       SandboxAllowlist
 	socialProviders  ExternalAuthProviderClient
 	accessSigner     *rtauth.Signer
+	nicknamePrefix   string
 }
 
 type AuthServiceOption func(*AuthService)
@@ -99,6 +106,7 @@ func NewAuthService(
 		oneTapResolver:   TokenEncodedOneTapPhoneResolver{},
 		otpChallenges:    NewMemoryOtpChallengeStore(),
 		otpPassThrough:   SmsOtpPassThroughConfig{Mode: SmsOtpPassThroughDisabled},
+		nicknamePrefix:   defaultNewUserNicknamePrefix,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -106,6 +114,16 @@ func NewAuthService(
 		}
 	}
 	return svc
+}
+
+// WithDefaultNicknamePrefix 注入系统默认昵称前缀（云侧可配置）。
+// 首次创建用户时默认昵称为 "{prefix}_{YYMM}{9位随机数}"。
+func WithDefaultNicknamePrefix(prefix string) AuthServiceOption {
+	return func(s *AuthService) {
+		if p := strings.TrimSpace(prefix); p != "" {
+			s.nicknamePrefix = p
+		}
+	}
 }
 
 func WithUserAuthRepository(repo userrepo.UserAuthRepository) AuthServiceOption {
@@ -330,13 +348,21 @@ func (s *AuthService) syncProviderProfileOnFirstLogin(ctx context.Context, owner
 	updated := false
 	if displayName := sanitizeProviderDisplayName(identity.DisplayName); displayName != "" {
 		profile.OwnerDisplayName = displayName
-		if nick := s.resolveAvailableNickname(ctx, displayName, ownerID); nick != "" {
+		if nick := sanitizedProviderNickname(displayName); nick != "" {
 			profile.Nickname = nick
+			// 厂商提供的是真实公开昵称，视为已具备有意义名称：
+			// 标记 nicknameCustomized，本人主页不再展示「完善昵称」编辑画笔。
+			profile.NicknameCustomized = true
 		}
 		updated = true
 	}
-	if avatar := strings.TrimSpace(identity.AvatarURL); avatar != "" {
+	if avatar := strings.TrimSpace(identity.AvatarURL); avatar != "" && avatar != strings.TrimSpace(profile.AvatarURL) {
 		profile.AvatarURL = avatar
+		profile.AvatarVersion++
+		if profile.AvatarVersion <= 0 {
+			profile.AvatarVersion = 1
+		}
+		profile.AvatarAssetID = fmt.Sprintf("ua_%s", ownerID)
 		updated = true
 	}
 	if updated {
@@ -353,8 +379,10 @@ func (s *AuthService) syncProviderProfileOnFirstLogin(ctx context.Context, owner
 		activeSub.DisplayName = name
 		personaUpdated = true
 	}
-	if avatar := strings.TrimSpace(profile.AvatarURL); avatar != "" && activeSub.AvatarURL != avatar {
+	if avatar := strings.TrimSpace(profile.AvatarURL); avatar != "" &&
+		(activeSub.AvatarURL != avatar || activeSub.AvatarVersion != profile.AvatarVersion) {
 		activeSub.AvatarURL = avatar
+		activeSub.AvatarVersion = profile.AvatarVersion
 		personaUpdated = true
 	}
 	if personaUpdated {
@@ -364,32 +392,10 @@ func (s *AuthService) syncProviderProfileOnFirstLogin(ctx context.Context, owner
 	return nil
 }
 
-// resolveAvailableNickname 优先使用厂商昵称；若已被占用则追加 owner 熵尾后缀生成可用昵称。
-func (s *AuthService) resolveAvailableNickname(ctx context.Context, desired, ownerID string) string {
-	desired = sanitizeProviderDisplayName(desired)
-	if desired == "" {
-		return ""
-	}
-	existing, err := s.profiles.FindByNickname(ctx, desired)
-	if err != nil {
-		return ""
-	}
-	if existing == nil || strings.TrimSpace(existing.UserID) == ownerID {
-		return desired
-	}
-	suffix := strings.TrimSpace(ownerID)
-	if len(suffix) > 4 {
-		suffix = suffix[len(suffix)-4:]
-	}
-	candidate := desired + "_" + suffix
-	other, err := s.profiles.FindByNickname(ctx, candidate)
-	if err != nil {
-		return ""
-	}
-	if other == nil || strings.TrimSpace(other.UserID) == ownerID {
-		return candidate
-	}
-	return ""
+// sanitizedProviderNickname 直接采用厂商公开昵称作为初始昵称。
+// 昵称已不再要求全局唯一，因此不再做占用探测与熵尾后缀拼接。
+func sanitizedProviderNickname(desired string) string {
+	return sanitizeProviderDisplayName(desired)
 }
 
 func sanitizeProviderDisplayName(name string) string {
@@ -827,7 +833,8 @@ func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey,
 	profile := &model.UserProfile{
 		UserID:                   ownerID,
 		Phone:                    "",
-		Nickname:                 defaultNicknameForCredential(ownerID, credType, credKey),
+		Nickname:                 s.buildDefaultNickname(),
+		NicknameCustomized:       false,
 		Status:                   "active",
 		AccountState:             accountStateForCredentialType(credType),
 		IdentityOrigin:           identityOriginValue(credType),
@@ -910,11 +917,52 @@ func buildLoginAccountHint(profile *model.UserProfile, fallbackMaskedPhone strin
 	}
 	return map[string]any{
 		"displayName":    displayName,
-		"avatarUrl":      strings.TrimSpace(profile.AvatarURL),
+		"avatarUrl":      avatarURLWithVersion(profile.AvatarURL, profile.AvatarVersion),
 		"avatarAssetId":  strings.TrimSpace(profile.AvatarAssetID),
 		"maskedPhone":    maskedPhone,
 		"identityOrigin": strings.TrimSpace(profile.IdentityOrigin),
 	}
+}
+
+func avatarURLWithVersion(raw string, version int) string {
+	value := strings.TrimSpace(raw)
+	if value == "" || version <= 0 {
+		return value
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return value
+	}
+	query := parsed.Query()
+	query.Set("v", fmt.Sprintf("%d", version))
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+func avatarVersionFromURL(raw string) int {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return 0
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return 0
+	}
+	version, err := strconv.Atoi(strings.TrimSpace(parsed.Query().Get("v")))
+	if err != nil || version <= 0 {
+		return 0
+	}
+	return version
+}
+
+func resolvedPersonaAvatarVersion(persona *model.Persona) int {
+	if persona == nil {
+		return 0
+	}
+	if persona.AvatarVersion > 0 {
+		return persona.AvatarVersion
+	}
+	return avatarVersionFromURL(persona.AvatarURL)
 }
 
 func ensureProfileCanLogin(profile *model.UserProfile) error {
@@ -994,23 +1042,28 @@ func generateCredentialBindingID() string {
 	return "cb_" + id
 }
 
-func defaultNickname(ownerID string) string {
-	trimmed := strings.TrimSpace(ownerID)
-	if len(trimmed) > 10 {
-		trimmed = trimmed[len(trimmed)-10:]
+// buildDefaultNickname 生成首次创建用户的系统默认昵称：
+//
+//	{prefix}_{YYMM}{9位随机数}
+//
+// 前缀云侧可配置（默认「新同学」）；年月与随机数之间不再加分隔符；
+// 昵称允许重复，唯一性由 ownerID/subAccountId/userHandle 承担。
+func (s *AuthService) buildDefaultNickname() string {
+	prefix := strings.TrimSpace(s.nicknamePrefix)
+	if prefix == "" {
+		prefix = defaultNewUserNicknamePrefix
 	}
-	trimmed = strings.ReplaceAll(trimmed, "_", "")
-	return "user_" + strings.ToLower(trimmed)
+	yymm := time.Now().Format("0601")
+	return fmt.Sprintf("%s_%s%09d", prefix, yymm, randomNineDigitSuffix())
 }
 
-func defaultNicknameForCredential(ownerID, credType, credKey string) string {
-	if credType == credentialPhone || credType == credentialCarrierPhone {
-		phone := normalizePhoneCredentialKey(credKey)
-		if len(phone) >= 4 {
-			return "趣友" + phone[len(phone)-4:]
-		}
+// randomNineDigitSuffix 返回 [0, 1e9) 的随机整数，用于默认昵称尾缀。
+func randomNineDigitSuffix() int64 {
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000_000))
+	if err != nil {
+		return time.Now().UnixNano() % 1_000_000_000
 	}
-	return defaultNickname(ownerID)
+	return n.Int64()
 }
 
 func extractOwnerRootPrefix(ownerID string) string {
@@ -1366,7 +1419,7 @@ func (s *SubAccountService) CreateSubAccount(ctx context.Context, ownerID string
 		p.UserHandle = strings.TrimSpace(v)
 	}
 	if v, ok := data["avatarUrl"].(string); ok {
-		p.AvatarURL = v
+		p.AvatarURL = strings.TrimSpace(v)
 	}
 	if v, ok := data["isolationLevel"].(string); ok {
 		p.IsolationLevel = v
@@ -1427,8 +1480,23 @@ func (s *SubAccountService) UpdatePersona(ctx context.Context, ownerID, personaI
 		changedFields = append(changedFields, "email")
 	}
 	if v, ok := data["avatarUrl"].(string); ok {
-		persona.AvatarURL = v
+		nextAvatarURL := strings.TrimSpace(v)
+		if nextAvatarURL != strings.TrimSpace(persona.AvatarURL) {
+			persona.AvatarURL = nextAvatarURL
+			if nextAvatarURL == "" {
+				persona.AvatarVersion = 0
+			} else {
+				persona.AvatarVersion++
+				if persona.AvatarVersion <= 0 {
+					persona.AvatarVersion = 1
+				}
+			}
+		}
 		changedFields = append(changedFields, "avatarUrl")
+	}
+	if v, ok := data["backgroundUrl"].(string); ok {
+		persona.BackgroundURL = strings.TrimSpace(v)
+		changedFields = append(changedFields, "backgroundUrl")
 	}
 	if v, ok := data["isolationLevel"].(string); ok {
 		persona.IsolationLevel = v
@@ -1590,6 +1658,7 @@ func (s *SubAccountService) GetActivePersonaContextView(ctx context.Context, own
 		"subAccountId":           view["subAccountId"],
 		"displayName":            view["displayName"],
 		"avatarUrl":              view["avatarUrl"],
+		"avatarVersion":          view["avatarVersion"],
 		"subjectType":            "persona",
 		"isPrimary":              persona != nil && persona.IsPrimary,
 		"personaContextVersion":  "1",
@@ -1823,9 +1892,13 @@ func buildSubAccountProfileView(owner *model.UserProfile, persona *model.Persona
 	userHandle := strings.TrimSpace(owner.UserID)
 	displayName := owner.Nickname
 	avatarURL := owner.AvatarURL
+	avatarVersion := owner.AvatarVersion
+	backgroundURL := owner.BackgroundURL
 	isolationLevel := defaultIsolationLevel
 	overriddenFields := []string{}
 	updatedAt := owner.UpdatedAt
+	// nicknameCustomized 以 owner 基线为真相源；非主分身若自定义过展示名亦视为已定制。
+	nicknameCustomized := owner.NicknameCustomized
 
 	if persona != nil {
 		subjectType = "persona"
@@ -1840,7 +1913,15 @@ func buildSubAccountProfileView(owner *model.UserProfile, persona *model.Persona
 		}
 		if persona.AvatarURL != "" {
 			avatarURL = persona.AvatarURL
+			avatarVersion = resolvedPersonaAvatarVersion(persona)
 			overriddenFields = append(overriddenFields, "avatarUrl")
+		}
+		if persona.BackgroundURL != "" {
+			backgroundURL = persona.BackgroundURL
+			overriddenFields = append(overriddenFields, "backgroundUrl")
+		}
+		if !persona.IsPrimary && strings.TrimSpace(persona.DisplayName) != "" {
+			nicknameCustomized = true
 		}
 		isolationLevel = defaultString(persona.IsolationLevel, defaultIsolationLevel)
 		updatedAt = persona.UpdatedAt
@@ -1856,28 +1937,30 @@ func buildSubAccountProfileView(owner *model.UserProfile, persona *model.Persona
 	}
 
 	return map[string]any{
-		"ownerUserId":       owner.UserID,
-		"subjectType":       subjectType,
-		"subAccountId":      subAccountID,
-		"userId":            defaultString(subAccountID, owner.UserID),
-		"userHandle":        userHandle,
-		"username":          userHandle,
-		"displayName":       displayName,
-		"nickname":          displayName,
-		"avatarUrl":         avatarURL,
-		"backgroundUrl":     "",
-		"bio":               owner.Bio,
-		"identityTags":      parsePgTextArray(owner.IdentityTags),
-		"followerCount":     owner.FollowerCount,
-		"followingCount":    owner.FollowingCount,
-		"postCount":         owner.PostCount,
-		"circleCount":       owner.CircleCount,
-		"likeCount":         owner.LikeCount,
-		"isolationLevel":    isolationLevel,
-		"profileVisibility": profileVisibilityFromIsolation(isolationLevel),
-		"inheritsFromOwner": persona != nil && persona.InheritsProfileFromOwner,
-		"overriddenFields":  overriddenFields,
-		"updatedAt":         updatedAt.Format(time.RFC3339),
+		"ownerUserId":        owner.UserID,
+		"subjectType":        subjectType,
+		"subAccountId":       subAccountID,
+		"userId":             defaultString(subAccountID, owner.UserID),
+		"userHandle":         userHandle,
+		"username":           userHandle,
+		"displayName":        displayName,
+		"nickname":           displayName,
+		"nicknameCustomized": nicknameCustomized,
+		"avatarUrl":          avatarURLWithVersion(avatarURL, avatarVersion),
+		"avatarVersion":      avatarVersion,
+		"backgroundUrl":      backgroundURL,
+		"bio":                owner.Bio,
+		"identityTags":       parsePgTextArray(owner.IdentityTags),
+		"followerCount":      owner.FollowerCount,
+		"followingCount":     owner.FollowingCount,
+		"postCount":          owner.PostCount,
+		"circleCount":        owner.CircleCount,
+		"likeCount":          owner.LikeCount,
+		"isolationLevel":     isolationLevel,
+		"profileVisibility":  profileVisibilityFromIsolation(isolationLevel),
+		"inheritsFromOwner":  persona != nil && persona.InheritsProfileFromOwner,
+		"overriddenFields":   overriddenFields,
+		"updatedAt":          updatedAt.Format(time.RFC3339),
 	}
 }
 
@@ -1886,6 +1969,7 @@ func BuildPersonaManagementItem(persona model.Persona) map[string]any {
 }
 
 func BuildPersonaManagementItemWithHistory(persona model.Persona, hasAttributedHistory bool) map[string]any {
+	avatarVersion := resolvedPersonaAvatarVersion(&persona)
 	var lastProfileSyncAt any
 	if persona.LastProfileSyncAt != nil {
 		lastProfileSyncAt = persona.LastProfileSyncAt.Format(time.RFC3339)
@@ -1904,8 +1988,9 @@ func BuildPersonaManagementItemWithHistory(persona model.Persona, hasAttributedH
 		"userHandle":               resolvedPersonaUserHandle(&persona),
 		"phone":                    persona.Phone,
 		"email":                    persona.Email,
-		"avatarUrl":                persona.AvatarURL,
-		"backgroundUrl":            "",
+		"avatarUrl":                avatarURLWithVersion(persona.AvatarURL, avatarVersion),
+		"avatarVersion":            avatarVersion,
+		"backgroundUrl":            persona.BackgroundURL,
 		"bio":                      "",
 		"isolationLevel":           defaultString(persona.IsolationLevel, defaultIsolationLevel),
 		"profileVisibility":        profileVisibilityFromIsolation(defaultString(persona.IsolationLevel, defaultIsolationLevel)),
@@ -2102,11 +2187,20 @@ func normalizePersonaPersistence(persona *model.Persona) {
 	if persona == nil {
 		return
 	}
+	persona.AvatarURL = strings.TrimSpace(persona.AvatarURL)
 	if strings.TrimSpace(persona.OverriddenProfileFields) == "" {
 		persona.OverriddenProfileFields = "{}"
 	}
 	if strings.TrimSpace(persona.Status) == "" {
 		persona.Status = personaStatusActive
+	}
+	if persona.AvatarURL == "" {
+		persona.AvatarVersion = 0
+	} else if persona.AvatarVersion <= 0 {
+		persona.AvatarVersion = resolvedPersonaAvatarVersion(persona)
+		if persona.AvatarVersion <= 0 {
+			persona.AvatarVersion = 1
+		}
 	}
 	if persona.Status == personaStatusRetired {
 		persona.IsActive = false
@@ -2253,6 +2347,7 @@ func applyFieldsFromSource(target *model.Persona, source *model.Persona, fields 
 			target.Email = source.Email
 		case "avatarUrl":
 			target.AvatarURL = source.AvatarURL
+			target.AvatarVersion = source.AvatarVersion
 		}
 	}
 }

@@ -56,8 +56,29 @@ def test_writing_pack_carries_creative_brief_and_prompt_contract():
 
     prompt = render_prompt_md(pack)
     assert "creativeBrief" in prompt
+    assert "Review Gate 硬检查" in prompt
+    assert "reviewGateChecklist" in prompt
     assert "draft_meta.creativePlan" in prompt
     assert "draft_meta.selfCritique" in prompt
+
+
+def test_prompt_limits_numeric_facts_to_source_allowlist():
+    pack = _pack()
+    pack["baseDraftText"] = "景区接驳车票价80元，游览步行约2公里，常见安排是3小时左右。"
+    prompt = render_prompt_md(pack)
+    assert "带单位数字白名单" in prompt
+    assert "80元" in prompt
+    assert "2公里" in prompt
+    assert "3小时" in prompt
+    assert "3500元" not in prompt
+
+
+def test_prompt_blocks_region_locked_terms_without_condition_context():
+    prompt = render_prompt_md(_pack())
+    assert "地域条件边界" in prompt
+    assert "conditionContext.region" in prompt
+    assert "海拔" in prompt
+    assert "高反" in prompt
 
 
 def test_creative_governance_requires_plan_and_self_critique():

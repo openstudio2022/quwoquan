@@ -29,4 +29,4 @@
 - A1：交集 Tab 每张卡有且仅一条 primaryText，无 displayText 回退。
 - A2：connectionState 分组与 global-search-experience spec 已连接/发现区规则一致；**缺 connectionState 的 hit 不进入交集展示窗**（零过渡，禁止客户端推断）。
 - A3：无 primaryText 的 hit 不进入交集展示窗（不占位）。
-- A4：alpha mock search hit 含 intersectionReason 子集，T2 widget 测试绿。
+- A4：alpha mock search hit 含 intersectionReason 子集，local_contract widget 测试绿。

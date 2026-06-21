@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "稻城亚丁_seasonal_timing",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:233d8efc30927a8bd276cdf18ab8abae75ae1bd4376987812218812669327f85",
+  "finalSha256": "sha256:3cad80e0aa1d14bd98f1c88a531f96023c206a6bce369b11978598e0d70e6cf8",
+  "draftBodySha256": "sha256:233d8efc30927a8bd276cdf18ab8abae75ae1bd4376987812218812669327f85",
+  "finalBodySha256": "sha256:233d8efc30927a8bd276cdf18ab8abae75ae1bd4376987812218812669327f85",
+  "composeSnapshotSha256": "sha256:233d8efc30927a8bd276cdf18ab8abae75ae1bd4376987812218812669327f85",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

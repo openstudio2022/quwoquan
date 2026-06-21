@@ -61,12 +61,16 @@
 
 ### 来源权利模式
 
-- `licensed_adaptation`：自有、明确授权、CC 或公版；必须保存 license、terms、credit 与授权快照。
-- `factual_reference_only`：普通网页仅用于事实核验，成品必须独立表达。
+- `licensed_adaptation`：自有、明确授权、CC 或公版；必须保存 license、terms、credit 与授权快照。**遵从原创、适度润色而非重写，优质原文可大面积保留**。
+- `factual_reference_only`：未授权普通网页，只采可核验客观事实（票价/海拔/交通等不受版权保护信息）；作者个人独创叙事与独特文学表达须自行组织、避免成段逐句搬运。
 - `blocked`：权利不明、禁止商用、抓取失败或探针页，不得进入 content_plan。
-- `baseDraftFidelity` 只对 `licensed_adaptation` 生效；普通网页不设最低相似度，使用事实回溯、长句复现和跨稿重复门。
+- **版权合规靠来源准入，不靠生产环节强制重写**：能否大面积保留优质原文由 `sourceUseMode` 决定，授权来源放开保留、未授权来源只采客观事实；不得用「重写洗稿」掩盖未授权搬运。
+- `baseDraftFidelity`（机械文字留存率门）只对 `licensed_adaptation` 生效（下限 55% 防从零另写；上限放宽到 99.5%，仅兜底「零加工整篇照搬」，要求至少完成 PII 脱敏与去语病，**优质原文可大面积保留，无须为去版权而重写**）；未授权网页不设相似度门。
+- `_long_phrase_hits`（反抄袭逐句搬运门，≥28 字）**只对 `factual_reference_only` 生效**，拦未授权网页机械整句搬运；`licensed_adaptation` 不触发该门。
+- **个人身份信息脱敏（所有来源）**：手机号/微信/QQ/身份证/车牌/私人住址等一律替代处理或隐去（`contactInfo` 门拦成品 PII），不得原样保留，也不得因含 PII 就删整段有效内容。
+- **原创忠实（所有来源）**：无论权利模式，成品都必须以**最高质量底稿**为骨架、从多事实源补关键事实并适度润色去语病，**不得直接总结/综述、不得脱离来源大修或编造情节与数据**；由 rubric 软轨 `originalityFidelity` 维度 + 事实回溯（旅游/知识类 ≥95%）+ 跨稿重复门共同保障，与机械 `baseDraftFidelity` 正交。
 - **可读性**：对齐主要来源体裁（加工而非重写腔调）；禁止百科罗列、机械收尾、独立「实用信息」清单块。
-- **发布 tagRefs**：`brief.json` / manifest 的 `tagRefs` 必须指向 `publish/v1/tags/**/_definition.json` 已存在路径；禁止扁平的省名/品类名（如 `<region>`/`<category>`）等未发布 tag（`ship` dangling_post_tag_ref）。
+- **发布 tagRefs**：`brief.json` / manifest 的 `tagRefs` 必须指向 `publish/tags/**/_definition.json` 已存在路径；禁止扁平的省名/品类名（如 `<region>`/`<category>`）等未发布 tag（`ship` dangling_post_tag_ref）。
 - **线路 title**：`publishTitle` / frontmatter `title` 不得嵌入乱序实体名片段，否则 `verify_content_semantics` 的 routeCoverage progression 会在全文（含 frontmatter）判失败。
 
 Cursor 只允许三类执行面：
@@ -153,6 +157,7 @@ Cursor 只允许三类执行面：
 - 正文只由会话模型创作（`generator=agent`），脚本不拼正文。
 - 草稿可声明 `extractedEntities`（如「洛绒牛场」）；review 据此生成实体 sidecar，无主页者**自动生成关联实体主页** `page.md`，使其可关联查看；发布时仍无主页的 entityRef 被过滤。
 - 质量门：三道真实性门（出处/模板指纹/事实可回溯）+ 游记感密度 + 载体一致性 + **图文混合编排门**（figure 跨小节穿插、禁空图块、禁大段无图空档；图多转 gallery 配小字）+ 图片精美门（人脸/水印/近重复/文字占比）。
+- **作品准入门（works classifier）**：`compose-brief` 阶段在释放创作之前先判定对象是「作品 / 随记 / 弃稿」。仅 `decision=work`（实体主页 / 文章 / 图片作品）放行进入 Agent 创作，随记（碎片流即时表达）与弃稿（低专业度来源且内容不自证）被阻断、落 `3.compose/works_verdict.json` 审计，**不消耗 Cursor SDK token**。判定真相源：`templates/_registry/catalogs/works_classification.yaml`（阈值/权重/自证等级）+ `content_source_registry.yaml`（来源专业度 `sourceClass→sourceTier`）；实现 `_common/works_classifier.py`，接入 `produce/works_gate.py`，契约门 `qwq-data verify works-classification`。本平台**不生产任何随记**（文字/图片/视频随记）；视频作品当前阶段后置。详见 [`content_supply_commercialization_plan.md`](content_supply_commercialization_plan.md)。
 
 ### 2.1 AI 自主创作边界与 Creative Workspace
 

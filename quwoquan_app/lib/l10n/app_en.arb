@@ -709,6 +709,18 @@
       }
     }
   },
+  "expandMoreReplies": "Expand more replies",
+  "@expandMoreReplies": {
+    "description": "Expand more replies button text after the first reply expansion"
+  },
+  "expandFullText": "Show more",
+  "@expandFullText": {
+    "description": "Show the full text of a folded long comment"
+  },
+  "collapseReplies": "Collapse",
+  "@collapseReplies": {
+    "description": "Collapse expanded replies back to preview in comment thread"
+  },
   "replyToPrefix": " replied to ",
   "@replyToPrefix": {
     "description": "Reply-to prefix between usernames in comment thread (with spaces)"

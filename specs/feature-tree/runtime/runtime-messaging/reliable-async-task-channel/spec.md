@@ -35,7 +35,7 @@
 - alpha/beta/gamma/prod 的 onebox 与拆分部署实施路径。
 - 所有现有领域服务的 module/catalog/config 处置；`chat` 首批完整接入，`user` 与 `content` 用于证明公共能力。
 - `chat-service` 私有 group avatar scheduler/timer/local queue 到 reliable-task 的迁移与双链路关闭。
-- T1-T4 自动化验证与故障注入用例。
+- local_contract-user_acceptance 自动化验证与故障注入用例。
 
 ### Out of Scope
 
@@ -97,7 +97,7 @@
 
 ### A8：公共能力与门禁
 
-至少一个非头像场景必须通过本通道完成 T3 验证；所有 domain 必须在 module catalog 和 config 中明确启用、禁用或延期；`make verify` 与 `make gate` 必须阻断 catalog/package/retention/permission/migration 漂移。
+至少一个非头像场景必须通过本通道完成 api_integration 验证；所有 domain 必须在 module catalog 和 config 中明确启用、禁用或延期；`make verify` 与 `make gate` 必须阻断 catalog/package/retention/permission/migration 漂移。
 
 ## 用例生成提示
 

@@ -75,7 +75,7 @@
 ## Out of Scope
 
 - 不新增交易/支付/预约闭环。
-- 不新增第二套标签枚举；标签真相源仍为 `publish/v1/tags` + metadata `tagRef`。
+- 不新增第二套标签枚举；标签真相源仍为 `publish/tags` + metadata `tagRef`。
 - 不保留端侧拼接交集整句、旧 demo dock、`TodayIntersectionRail` 死代码分支。
 
 ## 验收重点
@@ -86,7 +86,7 @@
 4. campus/travel 频道出现专属交集推荐。
 5. 事实/概率分通道，事实每条可追溯，概率明确标注推荐。
 6. 保鲜期/冷却窗口生效；曝光→点击→转化全链路埋点。
-7. 页面横向质量 P1-P8、Mock 隔离、语义 token、弱类型预算、T1-T4 全部满足。
+7. 页面横向质量 P1-P8、Mock 隔离、语义 token、弱类型预算、local_contract-user_acceptance 全部满足。
 
 ## 架构基线 v2 对齐（§21 收口，A–E 五会话开工基线）
 
@@ -121,7 +121,7 @@
 
 ### 赞红线翻转（§21.9）
 
-`coLiked`（赞）恢复为 T4 最低权重轻量交集事实；只翻赞、不恢复收藏（§14A favorite 退场不变）；性能上禁请求期全量求交，走预投影/采样/上限。
+`coLiked`（赞）恢复为 user_acceptance 最低权重轻量交集事实；只翻赞、不恢复收藏（§14A favorite 退场不变）；性能上禁请求期全量求交，走预投影/采样/上限。
 
 ### 分期边界
 

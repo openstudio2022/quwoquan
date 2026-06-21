@@ -76,4 +76,67 @@ void main() {
       );
     });
   });
+
+  group('shouldSuppressHomeFeedVideoFastScroll', () {
+    HomeFeedVideoFastScrollSuppressionInput input({
+      bool hasPlayableSource = true,
+      double visibleFraction = 0.70,
+      Duration prewarmStableVisibleDuration = const Duration(milliseconds: 180),
+      double scrollVelocityPxPerSecond =
+          homeFeedVideoFastScrollVelocityPxPerSecond + 10,
+      Duration timeSinceHighVelocity = const Duration(milliseconds: 600),
+    }) {
+      return HomeFeedVideoFastScrollSuppressionInput(
+        hasPlayableSource: hasPlayableSource,
+        visibleFraction: visibleFraction,
+        prewarmStableVisibleDuration: prewarmStableVisibleDuration,
+        scrollVelocityPxPerSecond: scrollVelocityPxPerSecond,
+        timeSinceHighVelocity: timeSinceHighVelocity,
+      );
+    }
+
+    test('预热可见且快滑时抑制视频初始化', () {
+      expect(shouldSuppressHomeFeedVideoFastScroll(input()), isTrue);
+      expect(
+        shouldSuppressHomeFeedVideoFastScroll(
+          input(
+            scrollVelocityPxPerSecond: 0,
+            timeSinceHighVelocity: const Duration(milliseconds: 120),
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('无可播源、未达预热可见或驻留不足时不记录抑制', () {
+      expect(
+        shouldSuppressHomeFeedVideoFastScroll(input(hasPlayableSource: false)),
+        isFalse,
+      );
+      expect(
+        shouldSuppressHomeFeedVideoFastScroll(input(visibleFraction: 0.4)),
+        isFalse,
+      );
+      expect(
+        shouldSuppressHomeFeedVideoFastScroll(
+          input(prewarmStableVisibleDuration: const Duration(milliseconds: 80)),
+        ),
+        isFalse,
+      );
+    });
+
+    test('telemetry attributes clamp negative cooldown to zero', () {
+      final attributes = homeFeedVideoFastScrollSuppressedTelemetryAttributes(
+        videoId: 'video_1',
+        visibleFraction: 0.88,
+        velocityPxPerSecond: 1800,
+        cooldownRemaining: const Duration(milliseconds: -20),
+      );
+
+      expect(attributes['videoId'], 'video_1');
+      expect(attributes['visibleFraction'], 0.88);
+      expect(attributes['velocityPxPerSecond'], 1800);
+      expect(attributes['cooldownRemainingMs'], 0);
+    });
+  });
 }

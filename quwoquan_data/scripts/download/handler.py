@@ -6,10 +6,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
 from datetime import datetime, timezone
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
 import sys
+import tempfile
 from threading import Lock
 from typing import Any, Mapping
 
@@ -31,11 +33,10 @@ from _common.source_catalog import (  # noqa: E402
 from _common.source_unit import resolve_entity_object_dir, slugify, write_source_unit  # noqa: E402
 from _common.image_rules import (  # noqa: E402
     MIN_ENTITY_IMAGES,
-    min_count_issue,
     pixel_size_issue,
     relevance_issue,
 )
-from _common.image_safety import assess_image  # noqa: E402
+from _common.image_safety import assess_image, assess_image_cached  # noqa: E402
 from _common.image_variants import image_dimensions  # noqa: E402
 from _common.image_safety import dedupe_image_payloads  # noqa: E402
 from _common.stage_reports import write_gate_report, write_stage_result  # noqa: E402
@@ -230,24 +231,29 @@ def _write_download_progress(
     sources: int = 0,
     images: int = 0,
     message: str = "",
+    **extra: Any,
 ) -> None:
     shared = batch_root(task_id, batch_id) / "_shared"
     shared.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schemaVersion": "quwoquan.download.progress",
+        "updatedAt": _now_iso(),
+        "status": status,
+        "entityId": entity_id,
+        "entityIndex": entity_index,
+        "entityCount": entity_count,
+        "sources": sources,
+        "images": images,
+        "message": message,
+    }
+    for key, value in extra.items():
+        if value in (None, ""):
+            continue
+        payload[key] = value
     with _DOWNLOAD_PROGRESS_LOCK:
-        write_json(
-            shared / "download_progress.json",
-            {
-                "schemaVersion": "quwoquan.download.progress",
-                "updatedAt": _now_iso(),
-                "status": status,
-                "entityId": entity_id,
-                "entityIndex": entity_index,
-                "entityCount": entity_count,
-                "sources": sources,
-                "images": images,
-                "message": message,
-            },
-        )
+        write_json(shared / "download_progress.json", payload)
+        with (shared / "download_events.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 def _source_screen_report_ref(entity_id: str, source_id: str) -> str:
@@ -309,9 +315,56 @@ def _source_image_requires_ocr(spec: Mapping[str, Any]) -> bool:
     return not (trusted_open_license and has_open_license and proof)
 
 
-def _assess_source_image(path: Path, spec: Mapping[str, Any]):
+def _image_safety_cache_dir(task_id: str, batch_id: str) -> Path:
+    return batch_root(task_id, batch_id) / "_shared" / "image_safety_cache"
+
+
+def _write_image_check_temp_file(
+    task_id: str,
+    batch_id: str,
+    *,
+    subdir: str,
+    payload: Mapping[str, Any],
+) -> Path:
+    body = payload.get("bytes") or b""
+    digest = str(payload.get("sha256") or "").removeprefix("sha256:")
+    if not digest and isinstance(body, (bytes, bytearray)):
+        digest = hashlib.sha256(bytes(body)).hexdigest()
+    ext = str(payload.get("ext") or ".jpg")
+    if not ext.startswith("."):
+        ext = "." + ext
+    temp_dir = batch_root(task_id, batch_id) / "_shared" / subdir
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    prefix = f"{(digest or 'unknown')[:16]}_"
+    with tempfile.NamedTemporaryFile(prefix=prefix, suffix=ext, dir=temp_dir, delete=False) as handle:
+        if isinstance(body, (bytes, bytearray)):
+            handle.write(bytes(body))
+        return Path(handle.name)
+
+
+def _cleanup_image_check_temp_file(path: Path) -> None:
     try:
-        return assess_image(path, require_ocr=_source_image_requires_ocr(spec))
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError:
+        return
+
+
+def _assess_source_image(
+    path: Path,
+    spec: Mapping[str, Any],
+    *,
+    task_id: str = "",
+    batch_id: str = "",
+):
+    try:
+        cache_dir = _image_safety_cache_dir(task_id, batch_id) if task_id and batch_id else None
+        return assess_image_cached(
+            path,
+            cache_dir=cache_dir,
+            require_ocr=_source_image_requires_ocr(spec),
+        )
     except TypeError:
         return assess_image(path)
 
@@ -676,14 +729,16 @@ def _download_source_unit_images(
         if px_issue:
             issues.append(px_issue)
             continue
-        # assess_image operates on a path; keep source-unit image checks in the
-        # batch temp tree next to the existing image lane checks.
-        temp_dir = batch_root(task_id, batch_id) / "_shared" / "tmp_source_unit_image_checks"
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        safe_slug = slugify(f"{entity_id}_{source_id}_{idx_img}")
-        temp_file = temp_dir / f"{safe_slug}{payload['ext']}"
-        temp_file.write_bytes(payload["bytes"])
-        verdict = _assess_source_image(temp_file, spec)
+        temp_file = _write_image_check_temp_file(
+            task_id,
+            batch_id,
+            subdir="tmp_source_unit_image_checks",
+            payload=payload,
+        )
+        try:
+            verdict = _assess_source_image(temp_file, spec, task_id=task_id, batch_id=batch_id)
+        finally:
+            _cleanup_image_check_temp_file(temp_file)
         if verdict.blocks_image_publish:
             issues.append(f"{label}: imageSafety blocked ({verdict.status}) reasons={list(verdict.reasons)}")
             continue
@@ -784,6 +839,19 @@ def _fetch_download_entity(
         if image_lane_selected
         else []
     )
+    _write_download_progress(
+        task_id,
+        batch_id,
+        status="running",
+        entity_id=entity_id,
+        entity_index=entity_index,
+        entity_count=entity_count,
+        sources=0,
+        images=0,
+        message="entity source plan loaded",
+        plannedSources=len(sources),
+        plannedImages=len(image_specs),
+    )
     image_manifest: list[dict] = []
     image_rights_issues: list[str] = []
     image_quality_issues: list[str] = []
@@ -805,6 +873,21 @@ def _fetch_download_entity(
                 f"imageFetch: {entity_id} stopped after {image_candidate_limit} image candidate(s)"
             )
             break
+        _write_download_progress(
+            task_id,
+            batch_id,
+            status="running",
+            entity_id=entity_id,
+            entity_index=entity_index,
+            entity_count=entity_count,
+            sources=0,
+            images=len(pending_images),
+            message="image candidate check",
+            lane="image",
+            imageCandidateIndex=idx_img,
+            imageCandidateCount=len(image_specs),
+            imageFetchTarget=image_fetch_target,
+        )
         asset_label = f"{entity_id}#{idx_img}"
         issues = validate_image_rights(spec, vertical=vertical)
         if issues:
@@ -825,10 +908,16 @@ def _fetch_download_entity(
         if px_issue:
             image_quality_issues.append(px_issue)
             continue
-        temp_path = batch_root(task_id, batch_id) / "_shared" / "tmp_image_checks" / f"{entity_id}_{idx_img}{payload['ext']}"
-        temp_path.parent.mkdir(parents=True, exist_ok=True)
-        temp_path.write_bytes(payload["bytes"])
-        verdict = _assess_source_image(temp_path, spec)
+        temp_path = _write_image_check_temp_file(
+            task_id,
+            batch_id,
+            subdir="tmp_image_checks",
+            payload=payload,
+        )
+        try:
+            verdict = _assess_source_image(temp_path, spec, task_id=task_id, batch_id=batch_id)
+        finally:
+            _cleanup_image_check_temp_file(temp_path)
         if verdict.blocks_image_publish:
             image_quality_issues.append(
                 f"imageSafety: {asset_label} blocked ({verdict.status}) reasons={list(verdict.reasons)}"
@@ -885,6 +974,21 @@ def _fetch_download_entity(
         ]
 
     for ordinal, source in enumerate(sources, start=1):
+        _write_download_progress(
+            task_id,
+            batch_id,
+            status="running",
+            entity_id=entity_id,
+            entity_index=entity_index,
+            entity_count=entity_count,
+            sources=len(fetched_sources),
+            images=len(pending_images),
+            message="source fetch started",
+            lane=str(source.get("researchLane") or ""),
+            sourceId=str(source.get("source_id") or ""),
+            sourceIndex=ordinal,
+            sourceCount=len(sources),
+        )
         html_bytes: bytes | None = None
         status_code = 0
         fetched_text = ""
@@ -973,6 +1077,7 @@ def _fetch_download_entity(
             images=source_images,
             task_id=task_id,
             batch_id=batch_id,
+            build_variants=False,
         )
         unit_dir = source_unit_dir(object_dir, ordinal, source["source_id"])
         if str(quality.get("quality") or "") == "Reject":
@@ -981,6 +1086,21 @@ def _fetch_download_entity(
             print(
                 f"[download] Rejected source isolated {entity_id}/{source['source_id']}",
                 flush=True,
+            )
+            _write_download_progress(
+                task_id,
+                batch_id,
+                status="running",
+                entity_id=entity_id,
+                entity_index=entity_index,
+                entity_count=entity_count,
+                sources=len(fetched_sources),
+                images=len(pending_images),
+                message="source rejected",
+                lane=str(source.get("researchLane") or ""),
+                sourceId=str(source.get("source_id") or ""),
+                sourceIndex=ordinal,
+                sourceCount=len(sources),
             )
             continue
         written_source_dirs.add(unit_dir)
@@ -1003,6 +1123,21 @@ def _fetch_download_entity(
                 "entityId": entity_id,
                 "retainedFromCache": bool(quality.get("retainedFromCache")),
             }
+        )
+        _write_download_progress(
+            task_id,
+            batch_id,
+            status="running",
+            entity_id=entity_id,
+            entity_index=entity_index,
+            entity_count=entity_count,
+            sources=len(fetched_sources),
+            images=len(pending_images),
+            message="source fetch done",
+            lane=str(source.get("researchLane") or ""),
+            sourceId=str(source.get("source_id") or ""),
+            sourceIndex=ordinal,
+            sourceCount=len(sources),
         )
     image_groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for image in pending_images:
@@ -1061,28 +1196,29 @@ def _fetch_download_entity(
             images=group,
             task_id=task_id,
             batch_id=batch_id,
+            build_variants=False,
         )
         written_source_dirs.add(source_unit_dir(object_dir, len(sources) + offset, source_id))
     kept_images = len(pending_images)
     count_issue = None
-    if image_lane_selected:
+    if image_lane_selected and required_images > 0 and kept_images < required_images:
         count_issue = (
-            min_count_issue(kept_images, entity_id=entity_id)
+            f"imageCount: {entity_id} 仅下到 {kept_images} 张合格图"
+            f"（要求 ≥{required_images}）"
             if required_images <= MIN_ENTITY_IMAGES
             else (
                 f"imageCount: {entity_id} 仅下到 {kept_images} 张合格去重图"
                 f"（规模化任务要求 ≥{required_images}）"
-                if kept_images < required_images
-                else None
             )
         )
     fetch_issues = list(image_rights_issues)
     if count_issue:
         fetch_issues.append(count_issue)
-    if image_lane_selected and kept_images == 0 and not image_rights_issues:
+    if image_lane_selected and required_images > 0 and kept_images == 0 and not image_rights_issues:
         fetch_issues.append(
             "imageFetch: 未下到真实图片，请在 source_plan 提供可用 imageUrls(CC/PD/授权)"
         )
+    blocking_fetch_issues = fetch_issues if required_images > 0 else []
     preserved_image_dirs: set[Path] = set()
     if fetch_issues:
         preserved_image_dirs = existing_image_source_dirs - written_source_dirs
@@ -1134,18 +1270,19 @@ def _fetch_download_entity(
             command="download",
             step="image_fetch",
             ref=entity_id,
-            passed=not fetch_issues,
-            issues=fetch_issues,
+            passed=not blocking_fetch_issues,
+            issues=blocking_fetch_issues,
             evidence_summary={
                 "plannedImages": len(image_specs),
                 "downloadedImages": kept_images,
                 "minRequired": required_images,
                 "rejectedForQuality": image_quality_issues,
+                "nonBlockingImageIssues": fetch_issues if not blocking_fetch_issues else [],
             },
             next_step="quality_analysis",
-            fallback_stage="source_plan" if fetch_issues else None,
+            fallback_stage="source_plan" if blocking_fetch_issues else None,
         )
-    if image_lane_selected and fetch_issues:
+    if image_lane_selected and blocking_fetch_issues:
         failed_image = True
     print(
         f"[download] Entity done {entity_index}/{entity_count}: {entity_id} "

@@ -83,6 +83,8 @@
 - `tagRefs` 必须能解析到 `tag_catalog`。
 - 图文标题、snippet、正文锚点必须能命中 canonical name 或 `label_zh`。
 - 内容侧发现的新名称/别名/行政信息应输出 diff 提案，反向修订目录/实体。
+- 主页、文章、图片与视频的计划额度是生产目标与成功率指标，不是发布硬门。任一载体未达额度时，release/import 只消费已通过质量与权利门的成功对象，并在 `partialDelivery` 中记录缺额、履约率与失败原因。
+- 若实体主页未成功发布，该实体不得进入已发布 `entityRefs`、`tagRefs` 派生引用、`normalizedEntityRefs` 或可点击 `/entity/...` 链接；文章、图片、视频可继续发布，但只能保留非结构化文本提及与 `pendingEntityMentions` 审计记录。
 
 ### R6：四川旅游出行端到端验证作为首个运行样例
 

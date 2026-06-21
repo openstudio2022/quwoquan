@@ -260,10 +260,10 @@ LiveKit 是 Apache 2.0 开源的 Go 语言 SFU 引擎（基于 Pion WebRTC），
 
 | 指标 | 要求 | 验证方式 |
 |------|------|---------|
-| 弱网通话保持率 | 100kbps 下音频通话不断 ≥ 60s | T3 弱网模拟 |
-| 自动降质时延 | 检测到丢包 → 切换质量 ≤ 2s | T3 SFU 日志 |
-| ICE 重连成功率 | 断网 10s 内恢复 → 重连成功 ≥ 95% | T4 灰度监控 |
-| 音频优先保障 | 极弱网下音频 MOS ≥ 3.0 | T3 质量评估 |
+| 弱网通话保持率 | 100kbps 下音频通话不断 ≥ 60s | api_integration 弱网模拟 |
+| 自动降质时延 | 检测到丢包 → 切换质量 ≤ 2s | api_integration SFU 日志 |
+| ICE 重连成功率 | 断网 10s 内恢复 → 重连成功 ≥ 95% | user_acceptance 灰度监控 |
+| 音频优先保障 | 极弱网下音频 MOS ≥ 3.0 | api_integration 质量评估 |
 
 ### 6.4 并发性能约束
 
@@ -300,12 +300,12 @@ LiveKit 是 Apache 2.0 开源的 Go 语言 SFU 引擎（基于 Pion WebRTC），
 
 | 指标 | 1v1 | 多人(32) | 验证方式 |
 |------|-----|---------|---------|
-| 音频端到端延迟 p95 | ≤ 150ms | ≤ 200ms | T4 灰度实测 |
-| 视频端到端延迟 p95 | ≤ 200ms | ≤ 350ms | T4 灰度实测 |
-| 信令延迟（发起→来电通知） | ≤ 1s | ≤ 2s | T3 端云集成 |
-| ICE 建连时间 p95 | ≤ 2s | ≤ 3s | T3 |
-| 通话状态同步延迟 | ≤ 500ms | ≤ 1s | T3 |
-| 参与者加入可见延迟 | — | ≤ 2s | T4 |
+| 音频端到端延迟 p95 | ≤ 150ms | ≤ 200ms | user_acceptance 灰度实测 |
+| 视频端到端延迟 p95 | ≤ 200ms | ≤ 350ms | user_acceptance 灰度实测 |
+| 信令延迟（发起→来电通知） | ≤ 1s | ≤ 2s | api_integration 端云集成 |
+| ICE 建连时间 p95 | ≤ 2s | ≤ 3s | api_integration |
+| 通话状态同步延迟 | ≤ 500ms | ≤ 1s | api_integration |
+| 参与者加入可见延迟 | — | ≤ 2s | user_acceptance |
 
 ### 6.5 部署约束
 
@@ -412,14 +412,14 @@ realtime-gateway 是本特性的关键前置依赖。推荐路径：先实现 re
 
 ## 9. 验收重点
 
-### T1 契约与静态层
+### local_contract 契约与静态层
 
 - DTO 契约：CallSession / CallParticipant / RtcToken 全字段解析
 - 错误码契约：RtcErrorCode round-trip + fromCode + httpStatus
 - Repository 契约：14 方法 Mock 与 Abstract 一致
 - metadata 一致性：fields.yaml → codegen → Go/Dart 零偏差
 
-### T2 模块与交互层
+### local_contract 模块与交互层
 
 - 通话 UI：OutgoingCall / IncomingCall / VoiceCall / VideoCall 四页面
 - 控制栏：静音/关摄像头/翻转/邀请/扬声器/挂断 六按钮
@@ -428,7 +428,7 @@ realtime-gateway 是本特性的关键前置依赖。推荐路径：先实现 re
 - 参与者管理面板：状态显示+中途邀请
 - CallKit/Android 来电 UI
 
-### T3 端云集成层
+### api_integration 端云集成层
 
 - 通话生命周期：Initiate/Answer/Reject/Hangup/Timeout 全状态机
 - 多人房间：Join/Leave/Invite + 32 人上限
@@ -438,7 +438,7 @@ realtime-gateway 是本特性的关键前置依赖。推荐路径：先实现 re
 - 基准性能：500 并发 p99、32 人房间 SFU 负载
 - 弱网：100kbps 音频保持、ICE 重连
 
-### T4 端到端旅程层
+### user_acceptance 端到端旅程层
 
 - 完整旅程：1v1 语音/视频、多人加入/离开、来电接听/拒绝/超时
 - PiP + 蓝色通话条
@@ -446,7 +446,7 @@ realtime-gateway 是本特性的关键前置依赖。推荐路径：先实现 re
 - 灰度 prod 5%→20%→50%→100% 无回滚
 - 延迟/中断率/建连率灰度实测
 
-详细可执行验收项见 `acceptance.yaml`（按 SIT/GWT/contract + T1~T4 结构组织，不再以“固定 N 条”计数描述，避免与实际条目漂移）。
+详细可执行验收项见 `acceptance.yaml`（按 SIT/GWT/contract + 三层测试 结构组织，不再以“固定 N 条”计数描述，避免与实际条目漂移）。
 
 ## 10. 子特性结构
 
@@ -470,7 +470,7 @@ realtime-gateway 是本特性的关键前置依赖。推荐路径：先实现 re
 
 ## 12. 商用上线 UX 基线（对标微信/小红书/FaceTime）
 
-> 本章是“商用可上线”的强制 UX 验收基线，覆盖入口清晰度、过程态完整性、错误/权限提示语、可靠性。每条都映射到 `acceptance.yaml` 的 GWT/contract，并落到 T1~T4 证据。
+> 本章是“商用可上线”的强制 UX 验收基线，覆盖入口清晰度、过程态完整性、错误/权限提示语、可靠性。每条都映射到 `acceptance.yaml` 的 GWT/contract，并落到 三层测试 证据。
 
 ### 12.1 入口清晰度（可解释、不分叉）
 
@@ -550,17 +550,17 @@ realtime-gateway 是本特性的关键前置依赖。推荐路径：先实现 re
 
 ### 15.1 分层测试与计划文件
 
-- T1（契约/静态）：
+- local_contract（契约/静态）：
   - `quwoquan_service` `go run ./tools/verify_metadata/ contracts/metadata`（rtc fields/events/types 一致，已通过）。
   - `ws_event_wire_type_contract_test.go`（已落地：domain event→`client_ws_type` 映射不漂移）。
   - codegen hash 比对（`make gate`），DTO/error/WS+推送 payload 契约。
-- T2（模块/交互）：
+- local_contract（模块/交互）：
   - `chat_conversation_page_call_entry_test.dart`、`call_participant_picker_page_test.dart`（入口显隐与解释）。
   - `call_session_provider_lifecycle_test.dart`（过程态机）、`video_call_page_states_test.dart`、`video_grid_layout_test.dart`（LiveKit fake track 渲染）。
   - `participant_trust_badge_test.dart`（信任两态）、`call_controls_bar_device_test.dart`（翻转/音频输出真实调用 SFU）、`call_permission_card_test.dart`、`rtc_error_code_test.dart`、`rtc_signaling_wire_type_test.dart`、`platform_capabilities_incoming_call_test.dart`、`active_call_shell_mount_test.dart`。
-- T3（端云集成）：
+- api_integration（端云集成）：
   - `call_lifecycle_contract_test.go`、`multi_party_room_contract_test.go`、`incoming_push_payload_contract_test.go`（与 Dart Mock 行为对齐）。
-- T4（端到端旅程，真机/Patrol 或手工 UAT）：
+- user_acceptance（端到端旅程，真机/Patrol 或手工 UAT）：
   - 三端来电（iOS CallKit / Android 全屏意图 / Web Push）后台/锁屏唤醒；权限拒绝降级；1v1 视频；群聊 3 人；通话中加“可能不认识”的人提示；返回 PiP；成员离开；弱网降级。
 
 ### 15.2 门禁命令

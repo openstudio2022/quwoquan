@@ -70,7 +70,7 @@ stateDiagram-v2
 
 - 各对象分享落库：内容复用 `content/post` 既有 `SharePost`；circle/user/entity_homepage 新增对齐 operation（在 metadata-cr 汇总）。
 - Mock/Remote 一致（rule R12/R13）：分享面板与归因的 Mock 行为与 Remote 落库断言一一对应。
-- 测试层：T1（link_templates/口令/落库 operation 契约）、T2（面板/卡片/海报 widget+provider）、T3（分享落库端云）、T4（真机微信分享+回流端到端，planned）。
+- 测试层：local_contract（link_templates/口令/落库 operation 契约）、local_contract（面板/卡片/海报 widget+provider）、api_integration（分享落库端云）、user_acceptance（真机微信分享+回流端到端，planned）。
 
 ## 7. 与现状的衔接（避免返工）
 
@@ -102,20 +102,20 @@ stateDiagram-v2
 - 跨平台统一路由：链接/口令/中转页单一真相源 `link_templates.yaml`，能力位驱动差异（rule 14 R-XP1/R-XP2）。
 - 可见性与权限：private 不外分享、circle_visible 受控、public 完整，深链不绕过 App 权限判断。
 
-## 9. T1–T4 验收证据矩阵（一体性，rule R12）
+## 9. local_contract–user_acceptance 验收证据矩阵（一体性，rule R12）
 
 | Journey 环节 | 节点 | 主证据 | 关键测试（planned） |
 |--------------|------|--------|---------------------|
-| 链接/归因/口令结构 | entity-link-templates-metadata | T1 | link_templates_route_binding / share_attribution_params / transfer_page_token_resolution |
-| 入站回流 + 微信唤起 + 延迟深链 | external-inbound-deeplink-routing | T2/T4 | deep_link_resolver / wechat_launch_strategy / deferred_deep_link / 各能力位 profile |
-| 公开 Web SEO + 中转页 + 安装转化 | public-content-web-entry | T1/T3 | seo_object_pages_snapshot / transfer_page_ua_routing / install_conversion_cta |
-| 分享卡片 | object-share-cards | T2 | wechat_share_card_mapping / object_share_poster_render / 可见性 |
-| 分享面板 | share-channel-panel | T2 | object_share_panel / share_login_continuation / 可见性 |
-| 分享归因 + 口令 + 落库 | share-attribution-and-token | T1/T3 | share_attribution_inject / share_token_resolution / object_share_attribution_contract |
-| 端到端旅程 | AppRoot UAT_EXTERNAL_ACQUISITION | T4 | external_acquisition_deeplink_e2e |
+| 链接/归因/口令结构 | entity-link-templates-metadata | local_contract | link_templates_route_binding / share_attribution_params / transfer_page_token_resolution |
+| 入站回流 + 微信唤起 + 延迟深链 | external-inbound-deeplink-routing | local_contract/user_acceptance | deep_link_resolver / wechat_launch_strategy / deferred_deep_link / 各能力位 profile |
+| 公开 Web SEO + 中转页 + 安装转化 | public-content-web-entry | local_contract/api_integration | seo_object_pages_snapshot / transfer_page_ua_routing / install_conversion_cta |
+| 分享卡片 | object-share-cards | local_contract | wechat_share_card_mapping / object_share_poster_render / 可见性 |
+| 分享面板 | share-channel-panel | local_contract | object_share_panel / share_login_continuation / 可见性 |
+| 分享归因 + 口令 + 落库 | share-attribution-and-token | local_contract/api_integration | share_attribution_inject / share_token_resolution / object_share_attribution_contract |
+| 端到端旅程 | AppRoot UAT_EXTERNAL_ACQUISITION | user_acceptance | external_acquisition_deeplink_e2e |
 
 一体性约束（rule R12/R13/R14）：
 
-- T3 每条端云断言（分享落库、短链解析、SEO 渲染、UA 分流）在 T2 必须有对应 Mock 断言，Mock 与 Remote 返回结构一致。
+- api_integration 每条端云断言（分享落库、短链解析、SEO 渲染、UA 分流）在 local_contract 必须有对应 Mock 断言，Mock 与 Remote 返回结构一致。
 - 新增 Remote 方法（circle/user/entity 分享落库、短链解析）必须同时补 Mock + 契约测试。
 - `acceptance.yaml` 中 `tests[].file` 路径在 /dev 落地后须与磁盘一致（本次为 planned）。

@@ -1,0 +1,136 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_2379af60db498ba0",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/玉山县三清山风景区"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:玉山县三清山风景区"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/玉山县三清山风景区",
+      "reason": "no_condition_profile; uses region/season menu"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7870529",
+    "https://touch.travel.qunar.com/youji/7884187",
+    "https://touch.travel.qunar.com/youji/7888409"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/玉山县三清山风景区/1.download/sources/01.qunar_guide_candidate_05ac44bd3e049dd2/source.md",
+    "entities/地点/景区/玉山县三清山风景区/1.download/sources/14.qunar_guide_candidate_2379af60db498ba0/source.md",
+    "entities/地点/景区/玉山县三清山风景区/1.download/sources/71.qunar_guide_candidate_a32d0e27eeb66407/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "玉山县三清山风景区·行前指南：江西上饶春天5日自驾游",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "玉山县三清山风景区",
+    "routeEntities": [
+      "玉山县三清山风景区"
+    ],
+    "beats": [
+      "先从 玉山县三清山风景区 进入主线。",
+      "我们渡过了愉快轻松的5天美好时光，值得回味",
+      "真的推荐可以来，来了一定给你带来视觉冲击，建在悬崖上的房屋，灯光把黑夜的山谷绘出让人震撼的效果，太美了",
+      "不然需要自己去拿号，去排队，一个小时1000个号，很麻烦的",
+      "感到不足和遗憾的是：众多景点门票太贵，在有的景点对60岁老人半价优惠的情况下，我们4个人共花了近两千元，占到这次旅行总费用的1/4；篁岭景点人太多拥挤不堪，体验感大打折扣"
+    ],
+    "sourceNote": "我为心灵自由而行,2026婺源游记,婺源旅游/自助游/自由行/游玩攻略-【去哪儿攻略】\n勇者... 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n我为心灵自由而行\n勇者无畏\n2024/10/12出发\n人物\n家庭\n玩法\n美食\n人均\n2000元\n前言\n婺源篁岭\n生活在大城市的快节奏中，偶尔需要一场说走就走的旅行来缓解压力。10-2的早",
+    "relatedTopics": [
+      "玉山县三清山风景区",
+      "我们渡过了愉快轻松的5天美好时光，值得回味",
+      "真的推荐可以来，来了一定给你带来视觉冲击，建在悬崖上的房屋，灯光把黑夜的山谷绘出让人震撼的效果，太美了",
+      "不然需要自己去拿号，去排队，一个小时1000个号，很麻烦的",
+      "感到不足和遗憾的是：众多景点门票太贵，在有的景点对60岁老人半价优惠的情况下，我们4个人共花了近两千元，占到这次旅行总费用的1/4；篁岭景点人太多拥挤不堪，体验感大打折扣"
+    ],
+    "mustIncludeFacts": [
+      "玉山县三清山风景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-19T23:16:55.845100+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:玉山县三清山风景区"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_4bd10440533afea8",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "玉山县三清山风景区",
+      "sourceEntityRef": "/entity/地点/景区/玉山县三清山风景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_2379af60db498ba0",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 20
+    }
+  ],
+  "articleMarkdownDigest": "sha256:37d727fd188cf646f72f943a852ea9ca5fd6eaee358ffac0122ab99bfbc4bffd"
+}

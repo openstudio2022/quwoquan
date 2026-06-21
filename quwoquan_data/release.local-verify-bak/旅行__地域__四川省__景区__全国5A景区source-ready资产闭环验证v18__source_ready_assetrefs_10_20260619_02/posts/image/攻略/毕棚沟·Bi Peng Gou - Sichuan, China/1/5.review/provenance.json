@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "毕棚沟_image",
+  "final": {
+    "contentType": "image",
+    "publishTitle": "毕棚沟·Bi Peng Gou - Sichuan, China",
+    "publishSeq": 1,
+    "generator": "image_evidence_pack",
+    "model": null,
+    "agentRunId": null,
+    "agentId": null,
+    "sessionTrace": null,
+    "styleFamily": "",
+    "openingStrategy": null,
+    "entityRefs": [
+      "/entity/地点/景区/毕棚沟"
+    ],
+    "assetDigest": "sha256:9341a63baeaafdcff2592a7b2a1b2d6f73c030c153a735183d01e6ea0568aeb7",
+    "sourceCollectionId": "open_license_file:毕棚沟:httpscommonswikimediaorgwikifilechina27smistmountainunsplash:77fd64e173",
+    "creator": "Arnaud Jaegers ajaegers",
+    "collectionPageUrl": "https://commons.wikimedia.org/wiki/Category%3ABipeng_Valley",
+    "license": "CC0",
+    "termsUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "authorizationProof": "https://commons.wikimedia.org/wiki/File:China%27s_mist_mountain_(Unsplash).jpg"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "毕棚沟·Bi Peng Gou - Sichuan, China",
+    "styleFamily": "",
+    "promptSha256": null,
+    "writingPackSha256": null,
+    "sourceBundleSha256": null,
+    "draftSha256": null
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/21.image_open_license_file_毕棚沟_httpscommonswikimediaorgwikifilechina27smistmountainunsplash_77fd64e173/source.md",
+      "url": "https://commons.wikimedia.org/wiki/Category%3ABipeng_Valley",
+      "sourceCollectionId": "open_license_file:毕棚沟:httpscommonswikimediaorgwikifilechina27smistmountainunsplash:77fd64e173",
+      "creator": "Arnaud Jaegers ajaegers",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/Category%3ABipeng_Valley",
+      "license": "CC0",
+      "termsUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:China%27s_mist_mountain_(Unsplash).jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "carrierConsistency": true,
+      "imageGate": true,
+      "imageSourceScope": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/毕棚沟/1.download/sources/21.image_open_license_file_毕棚沟_httpscommonswikimediaorgwikifilechina27smistmountainunsplash_77fd64e173/source.md"
+  ]
+}

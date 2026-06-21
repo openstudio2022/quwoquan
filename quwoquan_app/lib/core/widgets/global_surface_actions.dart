@@ -57,6 +57,8 @@ class GlobalTopActions extends ConsumerWidget {
         GlobalAssistantEntryButton(
           semanticLabel: UITextConstants.globalXiaoquSearchAsk,
           showLabel: false,
+          surface: surface,
+          foregroundColor: foregroundColor,
           onTap: () => GlobalAssistantLauncher.open(context, ref),
         ),
         if (showQuickAction) ...[
@@ -318,18 +320,21 @@ class GlobalAssistantEntryButton extends StatelessWidget {
     this.semanticLabel,
     this.showLabel = true,
     this.surface = AppChromeSurface.standard,
+    this.foregroundColor,
   });
 
   final VoidCallback onTap;
   final String? semanticLabel;
   final bool showLabel;
   final AppChromeSurface surface;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final circleSize = AppSpacing.globalAssistantEntryMarkSize;
     final elevatedSurface = surface != AppChromeSurface.standard;
+    final toolbarForeground = foregroundColor;
     return Semantics(
       button: true,
       label: semanticLabel,
@@ -346,44 +351,52 @@ class GlobalAssistantEntryButton extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                key: TestKeys.globalAssistantEntryMark,
-                width: circleSize,
-                height: circleSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.welcomeTitleGradientEnd,
-                      isDark
-                          ? AppColors.assistantMarkColorOnDark
-                          : AppColors.assistantMarkColor,
-                      AppColors.welcomeTitleGradientMid,
-                    ],
-                  ),
-                  border: Border.all(
-                    color: AppColors.white.withValues(
-                      alpha: elevatedSurface ? 0.68 : (isDark ? 0.24 : 0.4),
-                    ),
-                    width: AppSpacing.hairline,
-                  ),
-                  boxShadow: elevatedSurface
-                      ? [
-                          BoxShadow(
-                            color: AppColors.black.withValues(alpha: 0.18),
-                            blurRadius: AppSpacing.six,
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Icon(
+              if (toolbarForeground != null && !showLabel)
+                Icon(
                   CupertinoIcons.sparkles,
-                  size: AppSpacing.globalAssistantEntryGlyphSize,
-                  color: AppColors.white,
+                  key: TestKeys.globalAssistantEntryMark,
+                  size: AppSpacing.appChromeActionIconSize,
+                  color: toolbarForeground,
+                )
+              else
+                Container(
+                  key: TestKeys.globalAssistantEntryMark,
+                  width: circleSize,
+                  height: circleSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppColors.welcomeTitleGradientEnd,
+                        isDark
+                            ? AppColors.assistantMarkColorOnDark
+                            : AppColors.assistantMarkColor,
+                        AppColors.welcomeTitleGradientMid,
+                      ],
+                    ),
+                    border: Border.all(
+                      color: AppColors.white.withValues(
+                        alpha: elevatedSurface ? 0.68 : (isDark ? 0.24 : 0.4),
+                      ),
+                      width: AppSpacing.hairline,
+                    ),
+                    boxShadow: elevatedSurface
+                        ? [
+                            BoxShadow(
+                              color: AppColors.black.withValues(alpha: 0.18),
+                              blurRadius: AppSpacing.six,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Icon(
+                    CupertinoIcons.sparkles,
+                    size: AppSpacing.globalAssistantEntryGlyphSize,
+                    color: AppColors.white,
+                  ),
                 ),
-              ),
               if (showLabel) ...[
                 SizedBox(height: AppSpacing.globalAssistantEntryLabelGap),
                 Text(
@@ -581,7 +594,17 @@ class _QuickActionSheet extends ConsumerWidget {
       ref
           .read(authContinuationProvider.notifier)
           .set(OpenSheetContinuation(sheet));
-      unawaited(requireLogin(ref, rootContext, reason));
+      // 账号态动作门为强登录入口：动作面板已关闭，关闭登录只走安全兜底（首页），
+      // 禁止 pop 回受限触发态形成「关闭→再弹登录」死循环（登录入口无死循环宪法）。
+      unawaited(
+        requireLogin(
+          ref,
+          rootContext,
+          reason,
+          dismissFallback: AppRoutePaths.home,
+          allowGuestDismissPop: false,
+        ),
+      );
     });
   }
 }

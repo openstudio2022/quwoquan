@@ -1,0 +1,135 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "都江堰_decision_experience",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "都江堰·值不值得去：成都遛娃，清凉一夏",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-96157ad8-2edf-4ae8-a53d-01c91f30716b",
+    "agentId": "agent-680ae3db-063f-413c-9eef-45ad836f072c",
+    "sessionTrace": null,
+    "styleFamily": "客观评测风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/都江堰"
+    ],
+    "articleDigest": "sha256:9135578fd63673b6e2891c4cfa2d95179636c91f8928e3be619a47105f7446ec"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "都江堰·值不值得去：成都遛娃，清凉一夏",
+    "styleFamily": "",
+    "promptSha256": "sha256:0b786a3706d5a6b499d12578ef4a67e3da5e9b76269ec83a3627e0a4dfc57d2a",
+    "writingPackSha256": "sha256:404fc9caf71461cb33d204e05102b32ac354243fd1c95a1f5b16e78bd67014b5",
+    "sourceBundleSha256": "sha256:467e5a6ffb90547e97351938c3c940cd34e9b087ef9cb203a97a44ce59810b62",
+    "draftSha256": "sha256:f3e738848efc7d7d8c9ef3d0768ba3a9908b81a44cf7110339d2cae37d3ecb8c"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/01.home_wikipedia/source.md",
+      "url": "https://zh.wikipedia.org/wiki/%E9%83%BD%E6%B1%9F%E5%A0%B0"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/05.article_qunar_base_3/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7893753"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/06.article_qunar_base_4/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7884821"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/07.article_qunar_base_5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7883576"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/08.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7882433"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/09.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7873448"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/10.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7843150"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/11.article_qunar_base_9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7805258"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/12.article_qunar_base_10/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7786402"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/13.article_qunar_base_11/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7783661"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/14.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7772407"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/15.article_qunar_base_13/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7770861"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/16.article_qunar_base_14/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7765650"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/17.article_qunar_base_15/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7739835"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/18.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7736789"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/21.article_authoritative_support_2/source.md",
+      "url": "http://www.dujiangyan.com.cn/"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/22.image_open_license_file_都江堰_httpscommonswikimediaorgwikifilecurrentdujiangyanirrigations_4463f9ac64/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Current_Dujiangyan_Irrigation_System_-_panoramio.jpg"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/23.image_open_license_file_都江堰_httpscommonswikimediaorgwikifiledujiangyanirrigationsystemjp_f08d2431ca/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Dujiangyan_Irrigation_System.jpg"
+    },
+    {
+      "path": "entities/地点/景区/都江堰/1.download/sources/24.image_open_license_file_都江堰_httpscommonswikimediaorgwikifiledujiangyanirrigationsystemto_664da3642b/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Dujiangyan-Irrigation-System-TOUR-Map104.jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/都江堰/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/都江堰/1.download/sources/11.article_qunar_base_9/source.md",
+    "entities/地点/景区/都江堰/1.download/sources/23.image_open_license_file_都江堰_httpscommonswikimediaorgwikifiledujiangyanirrigationsystemjp_f08d2431ca/source.md"
+  ]
+}

@@ -128,7 +128,13 @@ void main() {
         reason: '前置：当前为游客态',
       );
 
-      syncPostLikeIntent(ref, postId: 'post_x', isLiked: true, likeCount: 10);
+      syncPostLikeIntent(
+        ref,
+        postId: 'post_x',
+        previousLiked: false,
+        isLiked: true,
+        likeCount: 10,
+      );
       await tester.pump();
 
       expect(ref.read(postInteractionStateProvider).isLiked('post_x'), isTrue);

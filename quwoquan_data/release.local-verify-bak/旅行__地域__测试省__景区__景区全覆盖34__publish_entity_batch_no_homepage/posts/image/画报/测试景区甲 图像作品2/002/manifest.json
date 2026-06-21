@@ -1,0 +1,46 @@
+{
+  "contentType": "image",
+  "carrier": "image",
+  "title": "测试景区甲 图像作品2",
+  "caption": "",
+  "sourceTaskId": "旅行/地域/测试省/景区/景区全覆盖34",
+  "sourceBatchId": "publish_entity_batch_no_homepage",
+  "entityRefs": [],
+  "tagRefs": [
+    "四川省",
+    "景区"
+  ],
+  "sourceCollectionId": "fixture:collection:b",
+  "creator": "测试摄影师2",
+  "collectionPageUrl": "https://img.invalid/collection/2",
+  "license": "CC-BY-SA 4.0",
+  "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "authorizationProof": "https://source.invalid/fixture:collection:b/license",
+  "assets": [
+    {
+      "assetId": "image_2",
+      "fileName": "image_2.jpg",
+      "sourceRef": "posts/image/画报/测试景区甲 图像作品2/002/1.download/sources/collection/source.md",
+      "sourceAssetRef": "posts/image/画报/测试景区甲 图像作品2/002/1.download/sources/collection/assets/image_2.jpg",
+      "sha256": "f2113307a73226a54930e154b6d2054cc4030ff3e322d5f8b4b157a432b8fe5d",
+      "sourceCollectionId": "fixture:collection:b",
+      "creator": "测试摄影师2",
+      "collectionPageUrl": "https://img.invalid/collection/2",
+      "license": "CC-BY-SA 4.0",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "authorizationProof": "https://source.invalid/fixture:collection:b/license"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_25b8c3c4cda45597",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "测试景区甲",
+      "sourceEntityRef": "/entity/地点/景区/测试景区甲",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "entityType": "地点/景区",
+      "location": "manifest"
+    }
+  ]
+}

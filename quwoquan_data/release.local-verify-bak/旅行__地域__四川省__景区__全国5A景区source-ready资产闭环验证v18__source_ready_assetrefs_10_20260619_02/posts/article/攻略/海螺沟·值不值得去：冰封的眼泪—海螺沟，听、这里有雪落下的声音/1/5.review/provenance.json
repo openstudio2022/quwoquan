@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "海螺沟_decision_experience",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "海螺沟·值不值得去：冰封的眼泪—海螺沟，听、这里有雪落下的声音",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer",
+    "agentRunId": "run-d2474023-d74b-40d4-9361-48dceed4eba4",
+    "agentId": "agent-d2b6dd23-ba65-4e85-a286-b0bb55d29718",
+    "sessionTrace": null,
+    "styleFamily": "客观评测风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/海螺沟"
+    ],
+    "articleDigest": "sha256:a85cd2bc10e4f27946a3a65870d3f8f7d6ceee57cb262a4b420dac6200c4ca44"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "海螺沟·值不值得去：冰封的眼泪—海螺沟，听、这里有雪落下的声音",
+    "styleFamily": "",
+    "promptSha256": "sha256:33f065929d6ea97e16f171abd9fdcc3f0fcfd08859b83f9a9aa3b6b5e80c787f",
+    "writingPackSha256": "sha256:0f4c090dd25a9ab9ed81c6862db6b3caa4f87a16c93ca37da5727764dec139ea",
+    "sourceBundleSha256": "sha256:67f7eafd0ee408ca41e347f3d227a0ad4357b3392f6a7b949d2a8adc292a5355",
+    "draftSha256": "sha256:cc5dd5745a8102d01e8f21bf46ce33d9685d10458441607585d2136ae9ec9c3b"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/source.md",
+      "url": "https://zh.wikipedia.org/wiki/%E6%B5%B7%E8%9E%BA%E6%B2%9F"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/04.article_qunar_base_2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7708315"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/07.article_qunar_base_5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7664441"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/08.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7646378"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/09.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7637762"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/10.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7632319"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/14.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7593443"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/17.article_qunar_base_15/source.md",
+      "url": "https://touch.travel.qunar.com/youji/6922547"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/18.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/6873351"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/19.article_open_visual_support/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E6%B5%B7%E8%9E%BA%E6%B2%9F-%E6%9F%8F%E7%A7%A7%E5%9D%AA_-_panoramio_(7).jpg"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/20.article_qunar_review_support/source.md",
+      "url": "https://touch.travel.qunar.com/search?q=%E6%B5%B7%E8%9E%BA%E6%B2%9F"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/22.image_open_license_file_海螺沟_httpscommonswikimediaorgwikifilee6b5b7e89ebae6b29fe69f8fe7a7_a2a5899933/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E6%B5%B7%E8%9E%BA%E6%B2%9F-%E6%9F%8F%E7%A7%A7%E5%9D%AA_-_panoramio.jpg"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/23.image_open_license_file_海螺沟_httpscommonswikimediaorgwikifilehailuogouglacierjpg_69d8251a0a/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Hailuogou_glacier.JPG"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/24.image_open_license_file_海螺沟_httpscommonswikimediaorgwikifilehailuogouglaciersinsummerjpe_f949c5dddf/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Hailuogou_Glaciers_in_Summer.jpeg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/海螺沟/1.download/sources/09.article_qunar_base_7/source.md",
+    "entities/地点/景区/海螺沟/1.download/sources/22.image_open_license_file_海螺沟_httpscommonswikimediaorgwikifilee6b5b7e89ebae6b29fe69f8fe7a7_a2a5899933/source.md"
+  ]
+}

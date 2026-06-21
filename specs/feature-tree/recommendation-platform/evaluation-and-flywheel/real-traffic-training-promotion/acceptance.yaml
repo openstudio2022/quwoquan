@@ -9,41 +9,57 @@ node:
 scope:
   summary: 真实流量训练、评估、注册、推理 reload 与回滚晋升闭环规格。
   in_scope:
-    - gamma/prod 行为样本、dataset、registry、evaluation report、reload 证据。
+  - gamma/prod 行为样本、dataset、registry、evaluation report、reload 证据。
   out_of_scope:
-    - 本轮不实现训练作业、模型注册、推理 reload 或深度模型。
+  - 本轮不实现训练作业、模型注册、推理 reload 或深度模型。
 gwt_acceptance:
   GWT1:
     title: 真实流量训练晋升 GWT
     given:
-      - gamma/prod 已产生真实行为样本和推荐特征。
+    - gamma/prod 已产生真实行为样本和推荐特征。
     when:
-      - 训练管线产出 challenger 模型。
+    - 训练管线产出 challenger 模型。
     then:
-      - 模型必须通过 replay、AB 或 shadow 证据后才能晋升，reload 可追踪且可回滚。
+    - 模型必须通过 replay、AB 或 shadow 证据后才能晋升，reload 可追踪且可回滚。
     done_when:
-      - 样本来源、dataset 版本、模型注册、评估报告、reload 和回滚证据均规格化。
+    - 样本来源、dataset 版本、模型注册、评估报告、reload 和回滚证据均规格化。
     edge_cases:
-      - 样本窗口不足、特征缺失或评估失败时不晋升。
+    - 样本窗口不足、特征缺失或评估失败时不晋升。
     contract_refs:
-      - specs/feature-tree/recommendation-platform/rec-model-training/spec.md
-      - specs/feature-tree/recommendation-platform/rec-model-service/spec.md
+    - specs/feature-tree/recommendation-platform/rec-model-training/spec.md
+    - specs/feature-tree/recommendation-platform/rec-model-service/spec.md
     performance_points:
-      - model_fallback_rate <= 0.05
-    evidence:
-      primary:
-        - T2_module_interaction
-        - T3_service_contract
-      supporting:
-        - T1_contract
+    - model_fallback_rate <= 0.05
     tests:
-      planned:
-        - quwoquan_service/scripts/ml/tests/test_training_promotion_gate.py
+      planned: []
       recorded: []
-    status: specified
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.recommendation_platform.evaluation_and_flywheel.real_traffic_training_promotion.gwt1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.recommendation_platform.evaluation_and_flywheel.real_traffic_training_promotion.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.recommendation_platform.evaluation_and_flywheel.real_traffic_training_promotion.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_training_promotion_gate.py'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

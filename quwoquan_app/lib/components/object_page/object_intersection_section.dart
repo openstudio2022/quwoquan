@@ -1,16 +1,16 @@
-import 'dart:async';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card_skeleton.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 
 /// 对象页交集区块（V4 · 商用完整态 · 三主页统一）。
 ///
@@ -95,29 +95,47 @@ class ObjectIntersectionSection extends ConsumerWidget {
         // 统一交集证据组点击归因（R20 漏斗 · 三主页一致）：
         // 触发维度 + 路径制 tagRefs 回流推荐管线（B3）。仓库内部失败入队。
         _reportReasonTap(ref, reason);
-        onReasonTap?.call(reason);
+        final external = onReasonTap;
+        if (external != null) {
+          // 调用方自定义处理（如实体页开助手）：尊重其语义，不叠加默认下钻，避免双跳转。
+          external(reason);
+          return;
+        }
+        // 未传外部处理（用户 / 圈子主页「为什么推荐X」）→ 统一 navigator 下钻到该交集
+        // 涉及对象，整行对象级可达（消除「整行仅 track 不可下钻」断点 · §20.7 统一交互子契约）。
+        _openReasonTarget(context, reason);
       },
     );
     return card ?? const SizedBox.shrink();
   }
 
-  void _reportReasonTap(WidgetRef ref, IntersectionReason reason) {
-    final repo = ref.read(behaviorRepositoryProvider);
-    unawaited(
-      repo.reportEvents(
-        events: <BehaviorEvent>[
-          BehaviorEvent(
-            contentId: query.objectBId,
-            action: BehaviorAction.tagClick,
-            contentType: query.objectBType,
-            authorId: query.objectBType == 'user' ? query.objectBId : null,
-            referralSource: ReferralSource.authorProfile,
-            tags: reason.tagRefs,
-            intersectionDimension: reason.dimension,
-            intersectionTagRefs: reason.tagRefs,
-          ),
-        ],
-      ),
+  void _openReasonTarget(BuildContext context, IntersectionReason reason) {
+    // 统一导航器：reason 归一 target → codegen 路由下钻；
+    // actionTargetId 缺省 / 不可路由时 open 返回 false 静默不跳（优雅降级）。
+    const IntersectionTargetNavigator().open(
+      context,
+      IntersectionTargetNavigator.targetForReason(reason),
     );
   }
+
+  void _reportReasonTap(WidgetRef ref, IntersectionReason reason) {
+    // 统一通道（N7）：经 ContentBehaviorTracker.trackTagClick 上报，保留 tag_click
+    // 语义与推荐 HotPath 1.8 权重（禁降级为 click），补齐统一交互子契约归因字段
+    // （intersectionId/sourceRef/class），tagRefs 回流推荐管线（B3）不丢。
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackTagClick(
+          query.objectBId,
+          contentType: query.objectBType,
+          authorId: query.objectBType == 'user' ? query.objectBId : null,
+          referralSource: referralSourceForObjectType(query.objectBType),
+          tags: reason.tagRefs,
+          intersectionId: reason.intersectionId,
+          intersectionDimension: reason.dimension,
+          intersectionSourceRef: reason.source,
+          intersectionTagRefs: reason.tagRefs,
+          intersectionClass: reason.intersectionClass,
+        );
+  }
+
 }

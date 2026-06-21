@@ -21,7 +21,7 @@
 | app 门禁（含 6 个回归测试） | **全绿**：`gate_repo.sh --scope app` `[gate] OK`，无 FAIL/BLOCK | **D5 CLEARED** |
 | 口碑内容类型 metadata | **已落盘**：ContentType+review、rating/reviewAspects、3 错误码、2 索引；`verify-metadata`+codegen 绿，Go build 绿 | **C1 CLEARED** |
 | 创作侧打标（tagRef 打标 UI + payload 注入） | **IA 已冻结**：内联编辑页可选打标、自动打标辅助、首发子集芯片+C2 后搜索灰度；payload wire 已通。端侧实现属 /dev | **B3 CLEARED（IA 冻结）** |
-| tagRef 真相源 `publish/v1/tags` | **已发布**：路径制四分组树（activeVersion 1，2026-05-15）；首发 launch 子集 6 个 tagRef 目标 100% 覆盖；`verify_tag_tree.py` 0 错误、`verify_tag_ref_source_of_truth.py` 门禁绿 | **C2 CLEARED** |
+| tagRef 真相源 `publish/tags` | **已发布**：路径制四分组树（activeVersion 1，2026-05-15）；首发 launch 子集 6 个 tagRef 目标 100% 覆盖；`verify_tag_tree.py` 0 错误、`verify_tag_ref_source_of_truth.py` 门禁绿 | **C2 CLEARED** |
 | 商用/环境前置（SLO/权限/生命周期/覆盖矩阵/灰度回滚/env-seed） | **已汇总冻结**：SLO·权限·生命周期·覆盖矩阵·灰度回滚落 `review-content-type` spec；三环境 seed manifest + 生产隔离门禁全绿；修复 content fixture `contentType: moment→micro` 残留（77 处） | **C3 CLEARED** |
 
 ---
@@ -82,7 +82,7 @@
 > 范围边界：仅 content/discovery 域；非相关域债务、`article_read_only_book_deck.dart`(pageflip 专管)、编辑器类大文件、`create_page.dart` 不纳入本轮，不阻断出口。
 
 ### D1. 统一展示 model（R24，收敛四套，全量硬切）
-- [x] 新建单一只读 presentation model `ContentSurfaceView` + 单一 `ContentSurfaceViewMapper`，覆盖 micro/image/video/article 四媒体类型（`lib/ui/content/models/`）；T1 投影契约 6 例全绿。
+- [x] 新建单一只读 presentation model `ContentSurfaceView` + 单一 `ContentSurfaceViewMapper`，覆盖 micro/image/video/article 四媒体类型（`lib/ui/content/models/`）；local_contract 投影契约 6 例全绿。
 - [x] **share surface** 经统一 model 接入（`ContentShareTemplateBuilder.build(surfaceView:)`），四类型同源 parity 测试全绿。
 - [x] **feed**（`home_multi_form_feed` 卡片体）接入统一 model；脱离 `PostSummaryView`。
 - [x] **detail**（`article_detail_page`）接入统一 model（`ContentSurfaceView.fromArticleDetailPayload`，富渲染经 `surfaceView.article(pages/document)` 消费，pageflip 几何不动）。
@@ -124,21 +124,21 @@
 ### B3. 创作打标 IA — **CLEARED（IA 冻结，端侧实现属 /dev）**
 - 决策与口径已落 [`creation-tagging-ia/spec.md`](creation-tagging-ia/spec.md)（B3-D1~D7）；详见 [CR-20260530-023](../../../changelog/CR-20260530-023-review-content-type.yaml) rev2。
 - [x] 创作侧 tagRef 打标 UI：**内联各类型编辑页**、打标全类型**可选不强制**、IA 归属 content/entry；自动打标（转发识别+内容识别）辅助，手动作确认/修正层。
-- [x] 选择范围=首发标签子集（唯一引用 `tag_ref_migration` `launch` 项）芯片 + 自动建议多选≤5；C2 后 flag 灰度搜索补充（检索源唯一 publish/v1/tags）。
+- [x] 选择范围=首发标签子集（唯一引用 `tag_ref_migration` `launch` 项）芯片 + 自动建议多选≤5；C2 后 flag 灰度搜索补充（检索源唯一 publish/tags）。
 - [x] payload 注入路径：`CreatePost`/`UpdatePost` `writable_fields.tagRefs`（wire 已通），验收以发布后 content.tagRefs 一致为准。
-- [x] 打标 → 内容 tagRefs → 交集 `IntersectionReason.tagRefs` 归因可还原（验收 GWT5，T2/T3）。
+- [x] 打标 → 内容 tagRefs → 交集 `IntersectionReason.tagRefs` 归因可还原（验收 GWT5，local_contract/api_integration）。
 
 ---
 
 ## Block C — 依赖与商用/环境前置（冻结时同步确认）
 
 - [x] **C1 口碑 metadata 设计完成**并通过 `make verify-metadata` + codegen/codegen-app（types.yaml+review、fields rating/reviewAspects、service 3 处 writable、errors 3 码、storage 2 索引；Go content-service build 绿）。详见 [CR-20260530-023](../../../changelog/CR-20260530-023-review-content-type.yaml)。
-- [x] **C2 tagRef 真相源 `publish/v1/tags` 发布**：路径制四分组树已发布（activeVersion 1）；`_shared/tag_ref_migration.yaml` 全部 `status: launch` 目标（Topic/旅行·摄影·美食餐饮·地理、Entity/机构、Format/内容载体）100% 命中树节点；`deferred` 项按设计延后回填，不进首发召回。`verify_tag_tree.py` 0 错误（21 条非阻断 R4/R9 警告），`verify_tag_ref_source_of_truth.py` 门禁绿。
+- [x] **C2 tagRef 真相源 `publish/tags` 发布**：路径制四分组树已发布（activeVersion 1）；`_shared/tag_ref_migration.yaml` 全部 `status: launch` 目标（Topic/旅行·摄影·美食餐饮·地理、Entity/机构、Format/内容载体）100% 命中树节点；`deferred` 项按设计延后回填，不进首发召回。`verify_tag_tree.py` 0 错误（21 条非阻断 R4/R9 警告），`verify_tag_ref_source_of_truth.py` 门禁绿。
 - [x] **C3a benchmark / SLO·KPI / 弱网·并发·容量**：口碑发布 P99 复用 publish 链路 SLO（≤ 既有 CreatePost P99）、POI 聚合读 SLO 与 KPI 已冻结于 [`review-content-type/spec.md`](review-content-type/spec.md) §SLO/KPI；打标为可选内联交互、无独立网络 SLO（复用 publish）。
 - [x] **C3b 权限边界、可见性、删除撤销时效**：口碑写=登录用户对 POI 可发、遵循统一 `visibility`+`moderationStatus`；删=作者软删+tombstone+即时聚合补偿；仅自己可见口碑不计入公开聚合。已冻结于 [`review-content-type/spec.md`](review-content-type/spec.md) §权限边界与可见性 / §数据生命周期合同。
 - [x] **C3c 覆盖矩阵与优先级**：口碑与既有内容类型 Story 的覆盖关系已在 [`review-content-type/spec.md`](review-content-type/spec.md) §覆盖矩阵 声明（复用 publish/召回/统一展示，不与既有冲突）。
 - [x] **C3d 迁移灰度回滚**：feature flag 控发布入口曝光与 POI 聚合展示、读路径对未知 `contentType` 安全降级、关闭 flag 即停新增（已写 review 作普通内容可读）。已冻结于 [`review-content-type/spec.md`](review-content-type/spec.md) §迁移/灰度/回滚；打标搜索为 C2 后 flag 灰度（见 [`creation-tagging-ia/spec.md`](creation-tagging-ia/spec.md)）。
-- [x] **C3e 单一真相源（path/operation/surface/route/decoder/tagRef）**：口碑复用 `content/post/service.yaml` 写链路、`publish/v1/tags` 唯一检索源；UI/Router 不维护第二套规则表（约束已写入两份 spec 的 §约束）。
+- [x] **C3e 单一真相源（path/operation/surface/route/decoder/tagRef）**：口碑复用 `content/post/service.yaml` 写链路、`publish/tags` 唯一检索源；UI/Router 不维护第二套规则表（约束已写入两份 spec 的 §约束）。
 - [x] **C3f env-seed manifest + 单一真相源回填**：`app_{alpha,beta,gamma}_seed_manifest.json` 三环境通过 `verify_app_seed_manifests.py`（生产 seed 隔离 13 文件已检），`verify_business_env_data_inventory.py`（26 seedRefs）、`verify_contract_mock_data_inventory.py` 全绿。**修复 E1 残留**：content 三套 scenario fixture（`content_scenarios.json/.gamma-curated/.lite`）`contentType/type: moment → micro`（共 77 处，identity 轴 moment 保留），消除「micro 内容被 `postBaseDtoFromMap` 默认落到 `PhotoPostDto`」的隐性错配。口碑 review fixture 属 `review-content-type` /dev 范围（env-seed-first 在故事内补 alpha mock + beta/gamma remote seed），不阻断准入出口。
 
 ---
@@ -161,7 +161,7 @@
 5. [x] **Block B 三决策冻结**：B1/B2 落 [`review-content-type/spec.md`](review-content-type/spec.md)（方案 A + 统一 model 分支接入）；B3 落 [`creation-tagging-ia/spec.md`](creation-tagging-ia/spec.md)（可选内联打标 + 自动辅助 + 分阶段搜索）。
 6. [x] **Block C 依赖与前置全绿**：**C1 口碑 metadata 已落盘绿 + C2 tagRef 真相源已发布绿 + C3 商用/env-seed 前置已汇总冻结**（SLO/权限/生命周期/覆盖矩阵/灰度回滚落 review spec；三环境 seed manifest + 生产隔离门禁绿；content fixture moment→micro 残留已修）。
 7. [x] 内容多形态统一自身规格冻结：L3 [`unified-presentation-model`](unified-presentation-model/spec.md)、[`review-content-type`](review-content-type/spec.md)、[`creation-tagging-ia`](creation-tagging-ia/spec.md) 各自 `spec.md + acceptance.yaml`（feature-tree L3 约定 design/plan 并入 spec）已冻结；CR [021](../../../changelog/CR-20260530-021-v2-precondition-debt-cleanup.yaml)（含 D1 统一展示 model）/[022](../../../changelog/CR-20260530-022-content-naming-convergence.yaml)（命名收敛）/[023](../../../changelog/CR-20260530-023-review-content-type.yaml)（口碑 + 创作打标）已落。
-8. [x] 全量门禁无 BLOCKING：`bash agent_ops/gate/gate_repo.sh`（scope=all：service + app + portal）`[gate] OK`。本轮收口同时清理了与内容统一无关、但阻塞 gate-full 的仓库级 feature-tree 约定迁移残留——`quwoquan_service/scripts/gate.sh §5.1–5.3` 由旧约定（每节点 `tasks.md` + acceptance `feature/level`）对齐到新 L3 约定（`spec.md` + `acceptance.yaml` 的 `node.id/node.level`、`archived` 触发归档检查、`tests.recorded` 校验），并对齐 `verify_specs_l1_hierarchy.sh`（v2 `domain_services`）与 `verify_ff_config_contract.sh`（门禁矩阵迁入 `spec.md`）。`make gate-full` 额外的 gamma T3/T4 镜像属 `/deploy` 前置，不阻断准入。
+8. [x] 全量门禁无 BLOCKING：`bash agent_ops/gate/gate_repo.sh`（scope=all：service + app + portal）`[gate] OK`。本轮收口同时清理了与内容统一无关、但阻塞 gate-full 的仓库级 feature-tree 约定迁移残留——`quwoquan_service/scripts/gate.sh §5.1–5.3` 由旧约定（每节点 `tasks.md` + acceptance `feature/level`）对齐到新 L3 约定（`spec.md` + `acceptance.yaml` 的 `node.id/node.level`、`archived` 触发归档检查、`tests.recorded` 校验），并对齐 `verify_specs_l1_hierarchy.sh`（v2 `domain_services`）与 `verify_ff_config_contract.sh`（门禁矩阵迁入 `spec.md`）。`make gate-full` 额外的 gamma api_integration/user_acceptance 镜像属 `/deploy` 前置，不阻断准入。
 
 > **准入结论（本轮）**：Gate 条目 1–8 全部勾选，全量门禁 `gate_repo.sh`（scope=all）`[gate] OK`，无 BLOCKING。内容多形态统一已满足开工（`/dev`）严格准入门。
 >

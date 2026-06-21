@@ -230,3 +230,11 @@ def write_repair_report(
     )
     return write_stage_result(task_id, batch_id, command, "repair_report", ref, payload)
 
+
+def clear_repair_report(*, task_id: str, batch_id: str, command: str, ref: str) -> Path | None:
+    """Remove a stale repair report after the same object passes its gate."""
+    path = stage_result_path(task_id, batch_id, command, "repair_report", ref)
+    if path.is_file():
+        path.unlink()
+        return path
+    return None

@@ -83,9 +83,36 @@ class MediaSliceHandler(BaseHTTPRequestHandler):
     ) -> None:
         mime, _ = mimetypes.guess_type(str(target))
         stat = target.stat()
-        self.send_response(HTTPStatus.OK)
+        file_size = stat.st_size
+        start = 0
+        end = file_size - 1
+        partial = False
+        range_header = str(self.headers.get("Range") or "").strip()
+        if range_header.startswith("bytes=") and file_size > 0:
+            raw_range = range_header.split("=", 1)[1].split(",", 1)[0].strip()
+            raw_start, _, raw_end = raw_range.partition("-")
+            try:
+                if raw_start:
+                    start = max(0, int(raw_start))
+                    end = min(file_size - 1, int(raw_end)) if raw_end else file_size - 1
+                elif raw_end:
+                    suffix = max(0, int(raw_end))
+                    start = max(0, file_size - suffix)
+                    end = file_size - 1
+                if start > end or start >= file_size:
+                    self.send_error(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE, f"invalid range: {range_header}")
+                    return
+                partial = True
+            except ValueError:
+                self.send_error(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE, f"invalid range: {range_header}")
+                return
+        content_length = end - start + 1 if file_size > 0 else 0
+        self.send_response(HTTPStatus.PARTIAL_CONTENT if partial else HTTPStatus.OK)
         self.send_header("Content-Type", mime or "application/octet-stream")
-        self.send_header("Content-Length", str(stat.st_size))
+        self.send_header("Content-Length", str(content_length))
+        self.send_header("Accept-Ranges", "bytes")
+        if partial:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
         self.send_header("Cache-Control", "public, max-age=300")
         self.send_header("X-Quwoquan-Slice-Id", str(entry.get("sliceId", "")))
         self.send_header("X-Quwoquan-Origin-Type", str(entry.get("originType", "")))
@@ -93,7 +120,8 @@ class MediaSliceHandler(BaseHTTPRequestHandler):
         self.end_headers()
         if send_body:
             with target.open("rb") as handle:
-                self.wfile.write(handle.read())
+                handle.seek(start)
+                self.wfile.write(handle.read(content_length))
 
     def _proxy_remote(
         self,

@@ -9,51 +9,68 @@ node:
 scope:
   summary: 曝光治理的指标、告警、容量估算和回滚层。
   in_scope:
-    - 曝光健康 SLI 和告警阈值。
-    - 容量策略分层。
-    - 回滚层与降级路径。
+  - 曝光健康 SLI 和告警阈值。
+  - 容量策略分层。
+  - 回滚层与降级路径。
   out_of_scope:
-    - P0 不实现曝光基尼、覆盖率、生命周期复活、策略下架剔除延迟等 P1/P2 高级 emitter。
+  - P0 不实现曝光基尼、覆盖率、生命周期复活、策略下架剔除延迟等 P1/P2 高级 emitter。
 gwt_acceptance:
   GWT1:
     title: 曝光观测与容量 GWT
     given:
-      - 曝光治理能力逐步上线。
+    - 曝光治理能力逐步上线。
     when:
-      - 重复曝光、曝光集中、复活异常、频控异常或预算异常发生。
+    - 重复曝光、曝光集中、复活异常、频控异常或预算异常发生。
     then:
-      - SLI、告警和回滚层能够定位并关闭对应能力，feed 主路径可回退。
+    - SLI、告警和回滚层能够定位并关闭对应能力，feed 主路径可回退。
     done_when:
-      - SLI 名称、告警、容量分层和回滚层均冻结。
-      - 状态写入量、ingest QPS 与 buffer/ingest drop（rec_hotpath_dropped_total、ingest_dropped_total）可观测；无 emitter 告警标注前置。
+    - SLI 名称、告警、容量分层和回滚层均冻结。
+    - 状态写入量、ingest QPS 与 buffer/ingest drop（rec_hotpath_dropped_total、ingest_dropped_total）可观测；无
+      emitter 告警标注前置。
     edge_cases:
-      - local-gamma 只能证明链路，不作为真集群容量基准。
+    - local-gamma 只能证明链路，不作为真集群容量基准。
     contract_refs:
-      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
-      - deploy/monitoring/alerts/quwoquan_alerts.yaml
+    - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    - deploy/monitoring/alerts/quwoquan_alerts.yaml
     performance_points:
-      - exposure_gini <= 0.65
-      - content_coverage_rate >= 0.30
-      - policy_takedown_ejection_latency P95 <= 60s
-    evidence:
-      primary:
-        - T1_contract
-        - T3_app_api_integration
-      supporting:
-        - T2_module_interaction
+    - exposure_gini <= 0.65
+    - content_coverage_rate >= 0.30
+    - policy_takedown_ejection_latency P95 <= 60s
     tests:
-      planned:
-        - quwoquan_service/services/content-service/tests/recommendation_slo_contract_test.go
-        - agent_ops/tests/test_recommendation_alerts.py
+      planned: []
       recorded:
-        - quwoquan_service/runtime/recommendation/engine_test.go
-        - quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
-        - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
-        - deploy/monitoring/alerts/quwoquan_alerts.yaml
+      - file: quwoquan_service/runtime/recommendation/engine_test.go
+      - file: quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
+      - file: quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+      - file: deploy/monitoring/alerts/quwoquan_alerts.yaml
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.exposure_governance.exposure_observability_capacity.contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.discovery_content.exposure_governance.exposure_observability_capacity.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.exposure_governance.exposure_observability_capacity.gwt1_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/recommendation_slo_contract_test.go'
+    - '[migrated_from_planned] agent_ops/tests/test_recommendation_alerts.py'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

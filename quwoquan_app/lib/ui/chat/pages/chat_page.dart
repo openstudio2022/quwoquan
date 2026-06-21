@@ -323,7 +323,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     final messageFilter = _messageHomeFilterForSubTab(
       _messageSubTabs[_subTabIndex],
     );
-    final messageRows = ref.watch(messageHomeRowsProvider(messageFilter));
+    final messageRows = ref.watch(messageHomeRowsStateProvider(messageFilter));
     final greetingInbox = ref.watch(chatGreetingInboxProvider(20));
     final pendingGreetings = greetingInbox.maybeWhen(
       data: (items) =>
@@ -333,9 +333,12 @@ class _ChatPageState extends ConsumerState<ChatPage>
     final shouldShowGreetingInbox =
         _subTabIndex == 0 && pendingGreetings.isNotEmpty;
     final items = messageRows.maybeWhen(
-      data: (rows) => rows,
+      data: (state) => state.items,
       orElse: () => const <ChatListItemViewModel>[],
     );
+    final rowsState = messageRows.value;
+    final cacheFallbackError = rowsState?.cacheFallbackError;
+    final shouldShowCacheFallback = cacheFallbackError != null;
 
     final isLoading = messageRows.maybeWhen(
       loading: () => true,
@@ -357,15 +360,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
 
     if (rowError != null && items.isEmpty) {
       return AppPageErrorState(
-        semantic: runtimeErrorSemantic(
-          context,
-          error: rowError,
-          category: UiErrorCategory.pageLoad,
-          scope: UiErrorScope.page,
-        ),
+        semantic: _chatListBlockingErrorSemantic(context, rowError),
         onAction: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
+            ref.invalidate(messageHomeRowsStateProvider(messageFilter));
             ref.invalidate(messageHomeRowsProvider(messageFilter));
           }
         },
@@ -386,9 +385,21 @@ class _ChatPageState extends ConsumerState<ChatPage>
             MediaQuery.viewPaddingOf(context).bottom +
             AppSpacing.bottomNavBarHeight(context),
       ),
-      itemCount: items.length + (shouldShowGreetingInbox ? 1 : 0),
+      itemCount:
+          items.length +
+          (shouldShowGreetingInbox ? 1 : 0) +
+          (shouldShowCacheFallback ? 1 : 0),
       itemBuilder: (context, index) {
-        if (shouldShowGreetingInbox && index == 0) {
+        if (shouldShowCacheFallback && index == 0) {
+          return AppTransientErrorNotice(
+            semantic: _chatListCacheFallbackSemantic(
+              context,
+              cacheFallbackError,
+            ),
+          );
+        }
+        final adjustedIndex = shouldShowCacheFallback ? index - 1 : index;
+        if (shouldShowGreetingInbox && adjustedIndex == 0) {
           return _GreetingInboxTile(
             pendingCount: pendingGreetings.length,
             latest: pendingGreetings.first,
@@ -399,7 +410,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
             onTap: () => _showGreetingInboxSheet(context, pendingGreetings),
           );
         }
-        final itemIndex = shouldShowGreetingInbox ? index - 1 : index;
+        final itemIndex = shouldShowGreetingInbox
+            ? adjustedIndex - 1
+            : adjustedIndex;
         final item = items[itemIndex];
         return _InboxConversationTile(
           item: item,
@@ -415,6 +428,64 @@ class _ChatPageState extends ConsumerState<ChatPage>
           },
         );
       },
+    );
+  }
+
+  UiErrorSemantic _chatListBlockingErrorSemantic(
+    BuildContext context,
+    Object error,
+  ) {
+    final base = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.pageLoad,
+      scope: UiErrorScope.page,
+    );
+    return UiErrorSemantic(
+      category: base.category,
+      scope: base.scope,
+      title: UITextConstants.chatListLoadFailedTitle,
+      message: UITextConstants.chatListLoadFailedMessage,
+      secondaryMessage: base.secondaryMessage,
+      primaryAction: base.primaryAction,
+      secondaryAction: base.secondaryAction,
+      dismissible: base.dismissible,
+      sourceCode: base.sourceCode,
+      failureKind: base.failureKind,
+      copyKey: 'chatListLoadFailedTitle',
+      recoveryAction: base.recoveryAction,
+      presentation: base.presentation,
+      tone: base.tone,
+    );
+  }
+
+  UiErrorSemantic _chatListCacheFallbackSemantic(
+    BuildContext context,
+    Object error,
+  ) {
+    final base = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.backgroundAction,
+      scope: UiErrorScope.section,
+      allowRetry: false,
+      presentation: UiErrorPresentation.transientNotice,
+    );
+    return UiErrorSemantic(
+      category: base.category,
+      scope: base.scope,
+      title: UITextConstants.chatListLoadFailedTitle,
+      message: UITextConstants.chatListCacheFallback,
+      secondaryMessage: base.secondaryMessage,
+      primaryAction: base.primaryAction,
+      secondaryAction: base.secondaryAction,
+      dismissible: base.dismissible,
+      sourceCode: base.sourceCode,
+      failureKind: base.failureKind,
+      copyKey: 'chatListCacheFallback',
+      recoveryAction: base.recoveryAction,
+      presentation: base.presentation,
+      tone: UiErrorTone.caution,
     );
   }
 

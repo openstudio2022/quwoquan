@@ -31,13 +31,13 @@
 - `specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/*` 文档包存在性检查
 
 ## 当前仍需人工补充的项
-- 双设备 / 双账号 / 弱网 / gap / `requiresResync` 的真机 T4 演练
+- 双设备 / 双账号 / 弱网 / gap / `requiresResync` 的真机 user_acceptance 演练
 - 默认群图标降级比例与 hint-to-pull 抓样
 - 冷启动 feed、连续滚动、重复进入详情、分层清理缓存后的真机录屏和抓包证据
 
 ## 判定口径
-- 自动化门禁通过 + T4 演练记录完整：可宣称高标准准出成立
-- 自动化门禁通过但 T4 未执行：仅可宣称功能准出成立
+- 自动化门禁通过 + user_acceptance 演练记录完整：可宣称高标准准出成立
+- 自动化门禁通过但 user_acceptance 未执行：仅可宣称功能准出成立
 - 自动化门禁失败：不得宣称当前主链路稳定
 
 ## 视频：商用端到端环境矩阵边界

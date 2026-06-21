@@ -69,7 +69,7 @@
 
 ## 验收摘要
 
-- T1：配置目录、schema、禁止字段、feature flag expiry 与页面可运营矩阵静态校验。
-- T2：端侧 default/LKG/network/pending/immediate 状态机与消费者收口测试。
-- T3：服务端投影、ETag、快照缓存、回滚 hash 与高并发冷启动集成测试。
-- T4：运营灰度发布、生效率看板、SLO 失败回滚与审计记录演练。
+- local_contract：配置目录、schema、禁止字段、feature flag expiry 与页面可运营矩阵静态校验。
+- local_contract：端侧 default/LKG/network/pending/immediate 状态机与消费者收口测试。
+- api_integration：服务端投影、ETag、快照缓存、回滚 hash 与高并发冷启动集成测试。
+- user_acceptance：运营灰度发布、生效率看板、SLO 失败回滚与审计记录演练。

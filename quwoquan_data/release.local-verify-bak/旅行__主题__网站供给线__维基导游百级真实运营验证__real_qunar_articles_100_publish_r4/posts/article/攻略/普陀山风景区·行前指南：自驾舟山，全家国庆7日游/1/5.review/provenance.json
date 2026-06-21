@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_57c8b529f1cd7530",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "普陀山风景区·行前指南：自驾舟山，全家国庆7日游",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-d411b8a9-6b11-4e83-96a9-5dde26054271",
+    "agentId": "agent-89a344d0-93d8-44f5-865e-aaca46625413",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/普陀山风景区"
+    ],
+    "articleDigest": "sha256:f74bb18178cf5f39bac22e96a3f5e0505a36ddbeb60a9159319669085ece1947"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "普陀山风景区·行前指南：自驾舟山，全家国庆7日游",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:652c8ae76637992c814ed9f42911e5a057e017241c6bbcccdc00bfa738d49b12",
+    "writingPackSha256": "sha256:906891f474c0b19b11d28a16b8b9342a2d0b02bf9d72e1ee32e205ca9857edbb",
+    "sourceBundleSha256": "sha256:f67964b8b9023e541e101870ae7fe27cae693328eced990357094cc664cfe8e4",
+    "draftSha256": "sha256:99b72f7cd0b09825dd341d996b816868f4b22bfd2d99c793e5b435b5a2973fb2"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/普陀山风景区/1.download/sources/39.qunar_guide_candidate_57c8b529f1cd7530/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7900351"
+    },
+    {
+      "path": "entities/地点/景区/普陀山风景区/1.download/sources/84.qunar_guide_candidate_be0f505999085b4f/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7864738"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/普陀山风景区/1.download/sources/39.qunar_guide_candidate_57c8b529f1cd7530/source.md",
+    "entities/地点/景区/普陀山风景区/1.download/sources/84.qunar_guide_candidate_be0f505999085b4f/source.md"
+  ]
+}

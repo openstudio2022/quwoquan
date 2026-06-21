@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_baf63a68d9f3687a",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "庐山风景名胜区·行前指南：庐山",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "gpt-5-codex",
+    "agentRunId": "codex-real-site-supply-authoring-20260620-r2-repair1",
+    "agentId": "codex",
+    "sessionTrace": "codex-real-site-supply-authoring-20260620-r2-repair1",
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [],
+    "articleDigest": "sha256:995c61ec388a4c9069843537a36127c7b1459353500307a6c777b67a678d9590"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "庐山风景名胜区·行前指南：庐山",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:eb973e55e10f35dd0fb3da27441d16a4c7f964659b013aaef5c314b3d0d28063",
+    "writingPackSha256": "sha256:532e54df2f225f14f0806e2db85e3e488cbba41d566680927ac2129ea799256f",
+    "sourceBundleSha256": "sha256:5b461b6f492a55bba4f708a034be05f22fba847810b4f92c2261f0d8a51d9c17",
+    "draftSha256": "sha256:15b4749af0f63102fe5b0886107f1281e084e38e1a99410202ef3b43f6b68836"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/庐山风景名胜区/1.download/sources/05.wikivoyage_zh_candidate_baf63a68d9f3687a/source.md",
+      "url": "https://zh.wikivoyage.org/wiki/%E5%BA%90%E5%B1%B1"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/庐山风景名胜区/1.download/sources/05.wikivoyage_zh_candidate_baf63a68d9f3687a/source.md"
+  ]
+}

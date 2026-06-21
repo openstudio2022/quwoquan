@@ -30,7 +30,8 @@ gwt_acceptance:
     - cursor 连续推进；已看窗口不因未来排序变化而抖动；强负反馈候选不再出现在未来窗口；弱反馈只调整未来排序。
     done_when:
     - App provider/widget 与 runtime engine 测试覆盖 cursor、强反馈过滤、排序稳定性与异常降级。
-    - collaborative-recall、ranking-calibration、time-decay-contextual-ranking 的 spec/acceptance 已冻结，且均标注本轮不实现。
+    - collaborative-recall、ranking-calibration、time-decay-contextual-ranking 的 spec/acceptance
+      已冻结，且均标注本轮不实现。
     edge_cases:
     - cursor 过期或不合法时返回结构化降级/首屏恢复策略，不由端侧解析 token。
     - 候选集变化时避免跨页重复或跳跃扩大。
@@ -40,26 +41,42 @@ gwt_acceptance:
     performance_points:
     - 同 session 跨页重复率 < 1%。
     - Feed P95 <= 200ms。
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T3_app_api_integration
     tests:
       planned:
-      - quwoquan_app/test/patrol/discovery/feed_load_test.dart
-      - quwoquan_service/runtime/recommendation/collaborative_recall_test.go
-      - quwoquan_service/runtime/recommendation/ranking_calibration_test.go
-      - quwoquan_service/runtime/recommendation/time_decay_contextual_ranking_test.go
+      - file: quwoquan_app/test/patrol/discovery/feed_load_test.dart
+      - file: quwoquan_service/runtime/recommendation/collaborative_recall_test.go
       recorded:
-      - quwoquan_app/test/ui/discovery/post/contract/discovery_feed_query_contract_test.dart
-      - quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
-      - quwoquan_app/test/ui/discovery/post/journeys/discovery_post_interaction_journey_test.dart
-      - quwoquan_service/runtime/recommendation/engine_test.go
-      - quwoquan_service/runtime/recommendation/rerank_mmr_test.go
-      - quwoquan_service/runtime/recommendation/ucb_explore_test.go
+      - file: quwoquan_app/test/ui/discovery/post/contract/discovery_feed_query_contract_test.dart
+      - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
+      - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_interaction_journey_test.dart
+      - file: quwoquan_service/runtime/recommendation/engine_test.go
+      - file: quwoquan_service/runtime/recommendation/rerank_mmr_test.go
+      - file: quwoquan_service/runtime/recommendation/ucb_explore_test.go
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.feed_orchestration_recommendation.personalized_ranking.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.feed_orchestration_recommendation.personalized_ranking.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.discovery_content.feed_orchestration_recommendation.personalized_ranking.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_service/runtime/recommendation/ranking_calibration_test.go'
+    - '[migrated_from_planned] quwoquan_service/runtime/recommendation/time_decay_contextual_ranking_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

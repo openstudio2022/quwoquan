@@ -18,13 +18,14 @@ class CommentDto {
     required this.authorId,
     this.displayName,
     this.avatarUrl,
+    this.ipLocation,
     required this.content,
     this.replyToCommentId,
     this.replyToUserId,
     this.replyToDisplayName,
     this.parentCommentId,
     this.attachmentMediaIds = const <String>[],
-    this.attachments = const <CloudJsonMap>[],
+    this.attachments = const <CommentAttachmentDto>[],
     this.mentions = const <CloudJsonMap>[],
     this.entityRefs = const <String>[],
     this.primaryHomepageId,
@@ -39,14 +40,19 @@ class CommentDto {
     this.likeCount = 0,
     this.dislikeCount = 0,
     this.viewerReaction = 'none',
+    this.authorLiked = false,
     this.recommendedScore,
     this.status = 'visible',
+    this.isPinned = false,
+    this.pinnedAt,
     this.isAuthor = false,
     this.canDelete = false,
     this.canReply = true,
     this.canReport = true,
+    this.canPin = false,
     this.personaContextVersion,
     required this.createdAt,
+    this.deletedAt,
   });
 
   final String id;
@@ -54,13 +60,14 @@ class CommentDto {
   final String authorId;
   final String? displayName;
   final String? avatarUrl;
+  final String? ipLocation;
   final String content;
   final String? replyToCommentId;
   final String? replyToUserId;
   final String? replyToDisplayName;
   final String? parentCommentId;
   final List<String> attachmentMediaIds;
-  final List<CloudJsonMap> attachments;
+  final List<CommentAttachmentDto> attachments;
   final List<CloudJsonMap> mentions;
   final List<String> entityRefs;
   final String? primaryHomepageId;
@@ -75,14 +82,21 @@ class CommentDto {
   final int likeCount;
   final int dislikeCount;
   final String viewerReaction;
+  final bool authorLiked;
   final double? recommendedScore;
   final String status;
+  final bool isPinned;
+  final DateTime? pinnedAt;
   final bool isAuthor;
   final bool canDelete;
   final bool canReply;
   final bool canReport;
+  final bool canPin;
   final int? personaContextVersion;
   final DateTime createdAt;
+  // 软删落时间戳：status=deleted 时由服务端 projection 输出 RFC3339，否则为 null。
+  // 支撑端侧基于 GetCommentCountsDelta 的「此期间删除 M」可解释增量。
+  final DateTime? deletedAt;
 
   factory CommentDto.fromMap(CloudJsonMap m) {
     return CommentDto(
@@ -92,13 +106,14 @@ class CommentDto {
       displayName: (m['authorDisplayNameSnapshot'] ?? m['displayName'])
           ?.toString(),
       avatarUrl: (m['authorAvatarUrlSnapshot'] ?? m['avatarUrl'])?.toString(),
+      ipLocation: m['ipLocation']?.toString(),
       content: (m['content'] ?? '').toString(),
       replyToCommentId: m['replyToCommentId']?.toString(),
       replyToUserId: m['replyToUserId']?.toString(),
       replyToDisplayName: m['replyToDisplayName']?.toString(),
       parentCommentId: m['parentCommentId']?.toString(),
       attachmentMediaIds: _commentStringList(m['attachmentMediaIds']),
-      attachments: _commentMapList(m['attachments']),
+      attachments: _commentAttachmentList(m['attachments']),
       mentions: _commentMapList(m['mentions']),
       entityRefs: _commentStringList(m['entityRefs']),
       primaryHomepageId: m['primaryHomepageId']?.toString(),
@@ -115,15 +130,20 @@ class CommentDto {
       likeCount: (m['likeCount'] as num?)?.toInt() ?? 0,
       dislikeCount: (m['dislikeCount'] as num?)?.toInt() ?? 0,
       viewerReaction: (m['viewerReaction'] ?? 'none').toString(),
+      authorLiked: m['authorLiked'] == true,
       recommendedScore: (m['recommendedScore'] as num?)?.toDouble(),
       status: (m['status'] ?? 'visible').toString(),
+      isPinned: m['isPinned'] == true,
+      pinnedAt: DateTime.tryParse(m['pinnedAt']?.toString() ?? ''),
       isAuthor: m['isAuthor'] == true,
       canDelete: m['canDelete'] == true,
       canReply: m['canReply'] != false,
       canReport: m['canReport'] != false,
+      canPin: m['canPin'] == true,
       personaContextVersion: (m['personaContextVersion'] as num?)?.toInt(),
       createdAt:
           DateTime.tryParse(m['createdAt']?.toString() ?? '') ?? DateTime.now(),
+      deletedAt: DateTime.tryParse(m['deletedAt']?.toString() ?? ''),
     );
   }
 
@@ -135,13 +155,15 @@ class CommentDto {
         'authorDisplayNameSnapshot': displayName,
         'avatarUrl': avatarUrl,
         'authorAvatarUrlSnapshot': avatarUrl,
+        'ipLocation': ipLocation,
         'content': content,
         'replyToCommentId': replyToCommentId,
         'replyToUserId': replyToUserId,
         'replyToDisplayName': replyToDisplayName,
         'parentCommentId': parentCommentId,
         'attachmentMediaIds': attachmentMediaIds,
-        'attachments': attachments,
+        'attachments':
+            attachments.map((e) => e.toMap()).toList(growable: false),
         'mentions': mentions,
         'entityRefs': entityRefs,
         'primaryHomepageId': primaryHomepageId,
@@ -156,15 +178,20 @@ class CommentDto {
         'likeCount': likeCount,
         'dislikeCount': dislikeCount,
         'viewerReaction': viewerReaction,
+        'authorLiked': authorLiked,
         'recommendedScore': recommendedScore,
         'status': status,
+        'isPinned': isPinned,
+        if (pinnedAt != null) 'pinnedAt': pinnedAt!.toIso8601String(),
         'isAuthor': isAuthor,
         'canDelete': canDelete,
         'canReply': canReply,
         'canReport': canReport,
+        'canPin': canPin,
         if (personaContextVersion != null)
           'personaContextVersion': personaContextVersion,
         'createdAt': createdAt.toIso8601String(),
+        if (deletedAt != null) 'deletedAt': deletedAt!.toIso8601String(),
       };
 
   CommentDto copyWith({
@@ -176,6 +203,9 @@ class CommentDto {
     int? dislikeCount,
     String? viewerReaction,
     String? status,
+    bool? isPinned,
+    DateTime? Function()? pinnedAt,
+    DateTime? Function()? deletedAt,
   }) {
     return CommentDto(
       id: id,
@@ -183,6 +213,7 @@ class CommentDto {
       authorId: authorId,
       displayName: displayName,
       avatarUrl: avatarUrl,
+      ipLocation: ipLocation,
       content: content,
       replyToCommentId: replyToCommentId,
       replyToUserId: replyToUserId,
@@ -205,14 +236,19 @@ class CommentDto {
       likeCount: likeCount ?? this.likeCount,
       dislikeCount: dislikeCount ?? this.dislikeCount,
       viewerReaction: viewerReaction ?? this.viewerReaction,
+      authorLiked: authorLiked,
       recommendedScore: recommendedScore,
       status: status ?? this.status,
+      isPinned: isPinned ?? this.isPinned,
+      pinnedAt: pinnedAt != null ? pinnedAt() : this.pinnedAt,
       isAuthor: isAuthor,
       canDelete: canDelete,
       canReply: canReply,
       canReport: canReport,
+      canPin: canPin,
       personaContextVersion: personaContextVersion,
       createdAt: createdAt,
+      deletedAt: deletedAt != null ? deletedAt() : this.deletedAt,
     );
   }
 }
@@ -234,6 +270,76 @@ List<CloudJsonMap> _commentMapList(Object? raw) {
   return list
       .whereType<Map>()
       .map((e) => Map<String, dynamic>.from(e))
+      .toList(growable: false);
+}
+
+/// 评论附件回显快照（contracts/metadata/content/post/fields.yaml entities.Comment.attachments）。
+/// 形态 [{mediaId,type,url,thumbnailUrl,width,height,moderationStatus}]，
+/// 类型化以消除消费端 Map 穿透。
+class CommentAttachmentDto {
+  const CommentAttachmentDto({
+    required this.mediaId,
+    this.type,
+    this.url,
+    this.thumbnailUrl,
+    this.width,
+    this.height,
+    this.moderationStatus,
+  });
+
+  final String mediaId;
+  final String? type;
+  final String? url;
+  final String? thumbnailUrl;
+  final int? width;
+  final int? height;
+  final String? moderationStatus;
+
+  /// 缩略图优先 thumbnailUrl，回退原图 url；二者皆空返回 null。
+  String? get displayUrl {
+    final thumb = thumbnailUrl;
+    if (thumb != null && thumb.isNotEmpty) return thumb;
+    final full = url;
+    if (full != null && full.isNotEmpty) return full;
+    return null;
+  }
+
+  /// 原始宽高比；任一缺失或非正返回 null（由消费端套用统一宽高比护栏）。
+  double? get aspectRatio {
+    final w = width;
+    final h = height;
+    if (w == null || h == null || w <= 0 || h <= 0) return null;
+    return w / h;
+  }
+
+  factory CommentAttachmentDto.fromMap(CloudJsonMap m) {
+    return CommentAttachmentDto(
+      mediaId: (m['mediaId'] ?? m['id'] ?? '').toString(),
+      type: m['type']?.toString(),
+      url: m['url']?.toString(),
+      thumbnailUrl: m['thumbnailUrl']?.toString(),
+      width: (m['width'] as num?)?.toInt(),
+      height: (m['height'] as num?)?.toInt(),
+      moderationStatus: m['moderationStatus']?.toString(),
+    );
+  }
+
+  CloudJsonMap toMap() => <String, dynamic>{
+        'mediaId': mediaId,
+        if (type != null) 'type': type,
+        if (url != null) 'url': url,
+        if (thumbnailUrl != null) 'thumbnailUrl': thumbnailUrl,
+        if (width != null) 'width': width,
+        if (height != null) 'height': height,
+        if (moderationStatus != null) 'moderationStatus': moderationStatus,
+      };
+}
+
+List<CommentAttachmentDto> _commentAttachmentList(Object? raw) {
+  final list = raw is List ? raw : const <Object?>[];
+  return list
+      .whereType<Map>()
+      .map((e) => CommentAttachmentDto.fromMap(Map<String, dynamic>.from(e)))
       .toList(growable: false);
 }
 `

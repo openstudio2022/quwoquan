@@ -52,6 +52,14 @@ class IntegrationApiMetadata {
     'SubmitPushDelivery': 'public',
   };
 
+  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  static const Map<String, String> operationToResponseModel = <String, String>{
+  };
+
+  /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
+  static const Map<String, String> operationToResponseKind = <String, String>{
+  };
+
   static const String getExternalInteractionRequestOperation = 'GetExternalInteractionRequest';
   static const String getNearbyLocationsOperation = 'GetNearbyLocations';
   static const String listExternalInteractionAttemptsOperation = 'ListExternalInteractionAttempts';

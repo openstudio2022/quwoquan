@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "乐山大佛_decision_experience",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:96993290388186e44854950747b20172f87b4fda02167c391454d7ea25cb76b9",
+  "finalSha256": "sha256:93c276b4e993e3035294a38d4a125c436ada648147768b0ccf2b53d9fc8801eb",
+  "draftBodySha256": "sha256:96993290388186e44854950747b20172f87b4fda02167c391454d7ea25cb76b9",
+  "finalBodySha256": "sha256:96993290388186e44854950747b20172f87b4fda02167c391454d7ea25cb76b9",
+  "composeSnapshotSha256": "sha256:96993290388186e44854950747b20172f87b4fda02167c391454d7ea25cb76b9",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

@@ -224,7 +224,7 @@
 ### 使用规则
 
 - `话题`、`地点` 不替代共享主页
-- `话题 / 标签` 唯一真相源是数据工程路径制 taxonomy（`publish/v1/tags`，`tagRef`）；禁止新造扁平标签枚举，废弃 `tag_taxonomy.yaml`
+- `话题 / 标签` 唯一真相源是数据工程路径制 taxonomy（`publish/tags`，`tagRef`）；禁止新造扁平标签枚举，废弃 `tag_taxonomy.yaml`
 - `内容挂载主页` 优先于“创建抽象对象”的用户心智
 
 ---

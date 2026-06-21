@@ -32,16 +32,26 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
     - content/post service.yaml SharePost
     performance_points: []
-    evidence:
-      primary:
-      - T1_static_contract
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/ui/share/share_attribution_inject_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt1_local_contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt1_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/share/share_attribution_inject_test.dart'
   GWT2:
     title: 口令三路径同源回流并归因
     given:
@@ -60,18 +70,33 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
     - specs/feature-tree/runtime/runtime-client-foundation/external-inbound-deeplink-routing/spec.md
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
     tests:
-      planned:
-      - quwoquan_app/test/ui/share/share_token_resolution_test.dart
-      - quwoquan_service/services/content-service/tests/share_short_link_contract_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt2_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt2_api_integration
+        cases:
+        - api_integration.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt2_api_integration
+        envs: &id002
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt2_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/share/share_token_resolution_test.dart'
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/share_short_link_contract_test.go'
   GWT3:
     title: 5 类对象分享落库端云一致
     given:
@@ -91,17 +116,30 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
     - quwoquan_service/contracts/metadata/entity/homepage/service.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T1_static_contract
-      - T3_app_api_integration
-      supporting:
-      - T2_module_interaction
     tests:
-      planned:
-      - quwoquan_service/services/content-service/tests/object_share_attribution_contract_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt3_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt3_api_integration
+        cases:
+        - api_integration.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt3_api_integration
+        envs: *id002
+      supporting:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt3_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/object_share_attribution_contract_test.go'
   GWT4:
     title: 分享与安装归因可按渠道与对象统计
     given:
@@ -118,16 +156,25 @@ gwt_acceptance:
     contract_refs:
     - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/spec.md
     performance_points: []
-    evidence:
-      primary:
-      - T1_static_contract
-      supporting:
-      - T2_module_interaction
     tests:
-      planned:
-      - quwoquan_app/test/core/trackers/share_attribution_tracking_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt4_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.gwt4_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/core/trackers/share_attribution_tracking_test.dart'
 contract_acceptance:
   CONTRACT1:
     title: 分享落库与短链/口令契约
@@ -136,15 +183,20 @@ contract_acceptance:
     - quwoquan_service/contracts/metadata/content/post/service.yaml
     done_when:
     - share_id/utm 落库字段、短链解析、口令结构来自 metadata，端云一致。
-    evidence:
-      primary:
-      - T1_metadata_contract
-      supporting: []
     tests:
-      planned:
-      - quwoquan_service/services/content-service/tests/share_short_link_contract_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract1_local_contract
+        cases:
+        - local_contract.product_ops_growth.outbound_share_distribution.share_attribution_and_token.contract1_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/share_short_link_contract_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

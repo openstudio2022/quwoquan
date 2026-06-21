@@ -159,23 +159,23 @@ class ConversationCacheEntry {
 
 ## 11. 验收重点
 
-### T1
+### local_contract
 - `/conversations/timestamps` 响应结构契约
 - `/conversations/batch` 请求响应结构契约
 
-### T2
+### local_contract
 - 有本地缓存时打开列表无白屏，直接显示缓存数据
 - 本地新建会话立即可见
 - 云端有变化的会话被正确增量刷新
 - 本地有但云端无的会话被标记删除
 - 清理临时图片后，会话列表、群头像 URL/版本、成员 roster revision 不丢失
 
-### T3
+### api_integration
 - 端侧 → 云端时间戳比对正确：仅拉取有变化的会话
 - 新建会话成功同步到云端后用正式 ID 覆盖
 - `groupAvatarVersion/membersRosterRevision` 变化后只刷新受影响会话头像派生数据
 
-### T4
+### user_acceptance
 - 弱网环境下先渲染本地，后台同步完成后静默更新
 - 无网络时会话列表可正常浏览
 - 用户执行普通缓存清理后，最近会话与待发送消息仍可见

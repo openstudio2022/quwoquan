@@ -17,6 +17,7 @@ class ContentRequestPageIds {
     'GenerateArticleSummary': 'content.article.summary',
     'GetAppConfig': 'content.get.app.config',
     'GetAuthorImpact': 'content.get.author.impact',
+    'GetCommentCountsDelta': 'content.get.comment.counts.delta',
     'GetCounters': 'content.post.counters',
     'GetFeed': 'content.feed.list',
     'GetHelperRead': 'content.get.helper.read',
@@ -39,6 +40,7 @@ class ContentRequestPageIds {
     'ListProfileInteractionActivitiesSent': 'content.profile.interactions.sent',
     'ListUserPosts': 'content.user.posts',
     'MarkIntersectionsVisited': 'content.mark.intersections.visited',
+    'PinComment': 'content.pin.comment',
     'PromotePostToWork': 'content.post.promote',
     'PublishPost': 'content.post.publish',
     'QuoteToCircle': 'content.post.quote',
@@ -52,6 +54,7 @@ class ContentRequestPageIds {
     'SelectManualVideoCover': 'content.media.cover.manual',
     'SharePost': 'content.share.post',
     'UnlikePost': 'content.post.unlike',
+    'UnpinComment': 'content.unpin.comment',
     'UnsharePost': 'content.unshare.post',
     'UpdatePost': 'content.post.update',
     'UpdatePostCircles': 'content.post.circles',
@@ -70,6 +73,7 @@ class ContentRequestPageIds {
   static const String generateArticleSummary = 'content.article.summary';
   static const String getAppConfig = 'content.get.app.config';
   static const String getAuthorImpact = 'content.get.author.impact';
+  static const String getCommentCountsDelta = 'content.get.comment.counts.delta';
   static const String getCounters = 'content.post.counters';
   static const String getFeed = 'content.feed.list';
   static const String getHelperRead = 'content.get.helper.read';
@@ -92,6 +96,7 @@ class ContentRequestPageIds {
   static const String listProfileInteractionActivitiesSent = 'content.profile.interactions.sent';
   static const String listUserPosts = 'content.user.posts';
   static const String markIntersectionsVisited = 'content.mark.intersections.visited';
+  static const String pinComment = 'content.pin.comment';
   static const String promotePostToWork = 'content.post.promote';
   static const String publishPost = 'content.post.publish';
   static const String quoteToCircle = 'content.post.quote';
@@ -105,6 +110,7 @@ class ContentRequestPageIds {
   static const String selectManualVideoCover = 'content.media.cover.manual';
   static const String sharePost = 'content.share.post';
   static const String unlikePost = 'content.post.unlike';
+  static const String unpinComment = 'content.unpin.comment';
   static const String unsharePost = 'content.unshare.post';
   static const String updatePost = 'content.post.update';
   static const String updatePostCircles = 'content.post.circles';

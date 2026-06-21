@@ -5,8 +5,12 @@ import 'intersection_point.g.dart';
 import 'intersection_dimension_tally.g.dart';
 import 'intersection_text_span.g.dart';
 import 'intersection_visual.g.dart';
+import 'intersection_representative_actor.g.dart';
+import 'intersection_action_hint.g.dart';
 
 class IntersectionReason {
+  final String kind;
+  final String vertical;
   final String dimension;
   final List<String> tagRefs;
   final String relationKind;
@@ -40,6 +44,8 @@ class IntersectionReason {
   final String rankState;
   final List<IntersectionTextSpan> primarySpans;
   final List<IntersectionVisual> sampleVisuals;
+  final IntersectionRepresentativeActor? representativeActor;
+  final List<IntersectionActionHint> actionHints;
   final String lifecycleState;
   final double previousStrength;
   final double strengthDelta;
@@ -52,6 +58,8 @@ class IntersectionReason {
   final int mutualCount;
 
   IntersectionReason({
+    this.kind = '',
+    this.vertical = 'general',
     this.dimension = '',
     this.tagRefs = const <String>[],
     this.relationKind = '',
@@ -85,6 +93,8 @@ class IntersectionReason {
     this.rankState = 'fresh',
     this.primarySpans = const <IntersectionTextSpan>[],
     this.sampleVisuals = const <IntersectionVisual>[],
+    this.representativeActor,
+    this.actionHints = const <IntersectionActionHint>[],
     this.lifecycleState = '',
     this.previousStrength = 0.0,
     this.strengthDelta = 0.0,
@@ -99,6 +109,8 @@ class IntersectionReason {
 
   factory IntersectionReason.fromMap(Map<String, dynamic> m) {
     return IntersectionReason(
+      kind: m['kind']?.toString() ?? m['sourceRef']?.toString() ?? '',
+      vertical: m['vertical']?.toString() ?? 'general',
       dimension: m['dimension']?.toString() ?? '',
       tagRefs: _parseStringList(m['tagRefs']) ?? <String>[],
       relationKind: m['relationKind']?.toString() ?? '',
@@ -132,6 +144,8 @@ class IntersectionReason {
       rankState: m['rankState']?.toString() ?? 'fresh',
       primarySpans: _parseProjectionDtoList(m['primarySpans'], IntersectionTextSpan.fromMap),
       sampleVisuals: _parseProjectionDtoList(m['sampleVisuals'], IntersectionVisual.fromMap),
+      representativeActor: m['representativeActor'] == null ? null : IntersectionRepresentativeActor.fromMap(_parseStringKeyMap(m['representativeActor'])!),
+      actionHints: _parseProjectionDtoList(m['actionHints'], IntersectionActionHint.fromMap),
       lifecycleState: m['lifecycleState']?.toString() ?? '',
       previousStrength: (m['previousStrength'] as num?)?.toDouble() ?? 0.0,
       strengthDelta: (m['strengthDelta'] as num?)?.toDouble() ?? 0.0,
@@ -147,6 +161,8 @@ class IntersectionReason {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
+      'kind': kind,
+      'vertical': vertical,
       'dimension': dimension,
       'tagRefs': tagRefs,
       'relationKind': relationKind,
@@ -180,6 +196,8 @@ class IntersectionReason {
       'rankState': rankState,
       'primarySpans': primarySpans,
       'sampleVisuals': sampleVisuals,
+      'representativeActor': representativeActor,
+      'actionHints': actionHints,
       'lifecycleState': lifecycleState,
       'previousStrength': previousStrength,
       'strengthDelta': strengthDelta,
@@ -194,6 +212,8 @@ class IntersectionReason {
   }
 
   IntersectionReason copyWith({
+    String? kind,
+    String? vertical,
     String? dimension,
     List<String>? tagRefs,
     String? relationKind,
@@ -227,6 +247,8 @@ class IntersectionReason {
     String? rankState,
     List<IntersectionTextSpan>? primarySpans,
     List<IntersectionVisual>? sampleVisuals,
+    IntersectionRepresentativeActor? representativeActor,
+    List<IntersectionActionHint>? actionHints,
     String? lifecycleState,
     double? previousStrength,
     double? strengthDelta,
@@ -239,6 +261,8 @@ class IntersectionReason {
     int? mutualCount,
   }) {
     return IntersectionReason(
+      kind: kind ?? this.kind,
+      vertical: vertical ?? this.vertical,
       dimension: dimension ?? this.dimension,
       tagRefs: tagRefs ?? this.tagRefs,
       relationKind: relationKind ?? this.relationKind,
@@ -272,6 +296,8 @@ class IntersectionReason {
       rankState: rankState ?? this.rankState,
       primarySpans: primarySpans ?? this.primarySpans,
       sampleVisuals: sampleVisuals ?? this.sampleVisuals,
+      representativeActor: representativeActor ?? this.representativeActor,
+      actionHints: actionHints ?? this.actionHints,
       lifecycleState: lifecycleState ?? this.lifecycleState,
       previousStrength: previousStrength ?? this.previousStrength,
       strengthDelta: strengthDelta ?? this.strengthDelta,

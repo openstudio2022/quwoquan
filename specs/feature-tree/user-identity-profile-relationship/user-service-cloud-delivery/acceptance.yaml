@@ -17,16 +17,32 @@ sit_acceptance:
     done_when:
     - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
     tests:
       planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.user_service_cloud_delivery.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.user_service_cloud_delivery.sit1.sit1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.user_service_cloud_delivery.sit1.sit1_local_contract
+        envs: *id001
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -111,7 +111,8 @@ Future<void> testDiscoveryToDetailRouteParams(WidgetTester tester) async {
 /// mock.yaml dart_func: testCommentPostJourney
 ///
 /// 旅程 C：进入详情 → 提交评论 → Mock 记录调用 + 评论数 +1
-/// Provider 层验证：createComment 被调用且参数正确，评论计数通过 countersStub 体现。
+/// Provider 层验证：createComment 被调用且参数正确，评论计数通过 getCounters 派生
+/// 计数（commentCount 单一真相源，派生自评论集）体现。
 Future<void> testCommentPostJourney(WidgetTester tester) async {
   final mock = MockContentRepository();
   await tester.pumpWidget(_providerApp(mock: mock));
@@ -127,6 +128,8 @@ Future<void> testCommentPostJourney(WidgetTester tester) async {
 
   // 提交评论
   const commentText = '这张图真漂亮！';
+  final commentCountBefore =
+      (await mock.getCounters(postId: postId)).commentCount;
   final result = await mock.createComment(
     postId: postId,
     content: commentText,
@@ -146,9 +149,11 @@ Future<void> testCommentPostJourney(WidgetTester tester) async {
       reason: 'createComment 响应应包含提交的内容');
   expect(result.id, isNotEmpty, reason: 'createComment 响应应包含新评论 id');
 
-  // 评论计数已更新
-  expect(mock.countersStubCommentCount, equals(1),
-      reason: '提交评论后评论数应 +1');
+  // 评论计数已更新（派生自评论集，commentCount 单一真相源）
+  final commentCountAfter =
+      (await mock.getCounters(postId: postId)).commentCount;
+  expect(commentCountAfter, equals(commentCountBefore + 1),
+      reason: '提交评论后派生评论数应 +1');
 
   // Widget 树未崩溃
   expect(find.byType(MaterialApp), findsOneWidget);

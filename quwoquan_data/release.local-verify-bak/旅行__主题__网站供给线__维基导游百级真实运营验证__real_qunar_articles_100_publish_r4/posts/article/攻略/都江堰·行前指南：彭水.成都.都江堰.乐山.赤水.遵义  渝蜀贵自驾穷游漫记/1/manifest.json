@@ -1,0 +1,161 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_4cc810d56a8179c5",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/都江堰"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:都江堰"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfile": {
+      "entityRef": "/entity/地点/景区/都江堰",
+      "regions": [
+        "平原都市"
+      ],
+      "seasons": [
+        "春"
+      ],
+      "altitudeMeters": null,
+      "notes": null,
+      "conditionSource": "entityConditionProfile"
+    },
+    "region": {
+      "name": "平原都市",
+      "label": "平原都市",
+      "source": "entityProfile"
+    },
+    "season": {
+      "name": "春",
+      "label": "春",
+      "source": "entityProfile"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7901034",
+    "https://touch.travel.qunar.com/youji/7882433",
+    "https://touch.travel.qunar.com/youji/7873448"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/都江堰/1.download/sources/34.qunar_guide_candidate_4cc810d56a8179c5/source.md",
+    "entities/地点/景区/都江堰/1.download/sources/53.qunar_guide_candidate_6f64382e1127942a/source.md",
+    "entities/地点/景区/都江堰/1.download/sources/79.qunar_guide_candidate_ad66cdb2583cf893/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "都江堰·行前指南：彭水.成都.都江堰.乐山.赤水.遵义  渝蜀贵自驾穷游漫记",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "都江堰",
+    "routeEntities": [
+      "都江堰"
+    ],
+    "beats": [
+      "先从 都江堰 进入主线。",
+      "长假头两晚的住宿像涨潮的水，房价蹭蹭往上涌，早早在去哪儿网锁了彭水的连锁酒店，像给旅途钉了个安稳的桩；往后的住处，只圈了几处备选，打算看云看风 “见机行事”—— 省了银子，更留了份 “随遇而安” 的松弛",
+      "晚餐: 麻辣烤鱼，成都最喜欢最火🔥的一家烤鱼店",
+      "身为 70 后，我们骨子里揣着几分旧派的执拗：春节要守着炉边的团圆，断不肯把年味折进旅途；盛夏又怕从长沙 “小火炉” 跳出来，一头扎进川渝更烈的暑气里",
+      "可对着地图反复摩挲，算着每日几百公里的赶路、陡峭的盘山公路，忽然醒了：带着老人走这样的 “急行军路线”，怕不是看风景，倒成了扛着行李的奔波"
+    ],
+    "sourceNote": "彭水.成都.都江堰.乐山.赤水.遵义  渝蜀贵自驾穷游漫记,-【去哪儿攻略】\n人海... 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n彭水.成都.都江堰.乐山.赤水.遵义  渝蜀贵自驾穷游漫记\n人海过客...\n2025/10/01出发\n人物\n家庭\n玩法\n自驾\n人均\n2000元\n前言\n说说这次旅行\n2025 年的中秋与国庆，像两枚",
+    "relatedTopics": [
+      "都江堰",
+      "长假头两晚的住宿像涨潮的水，房价蹭蹭往上涌，早早在去哪儿网锁了彭水的连锁酒店，像给旅途钉了个安稳的桩；往后的住处，只圈了几处备选，打算看云看风 “见机行事”—— 省了银子，更留了份 “随遇而安” 的松弛",
+      "晚餐: 麻辣烤鱼，成都最喜欢最火🔥的一家烤鱼店",
+      "身为 70 后，我们骨子里揣着几分旧派的执拗：春节要守着炉边的团圆，断不肯把年味折进旅途；盛夏又怕从长沙 “小火炉” 跳出来，一头扎进川渝更烈的暑气里",
+      "可对着地图反复摩挲，算着每日几百公里的赶路、陡峭的盘山公路，忽然醒了：带着老人走这样的 “急行军路线”，怕不是看风景，倒成了扛着行李的奔波"
+    ],
+    "mustIncludeFacts": [
+      "都江堰"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-19T22:36:43.546389+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:都江堰"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "平原都市"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_767e70a805a4e3d2",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "都江堰",
+      "sourceEntityRef": "/entity/地点/景区/都江堰",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_4cc810d56a8179c5",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 14
+    }
+  ],
+  "articleMarkdownDigest": "sha256:a8edfd855e6ec5ba8bfaa5890a7a5f572e7c53d05f26f921b2e587bdaa6dc45d"
+}

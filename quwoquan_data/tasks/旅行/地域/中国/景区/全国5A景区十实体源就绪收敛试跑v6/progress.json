@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/中国/景区/全国5A景区十实体源就绪收敛试跑v6",
+  "updatedAt": "2026-06-19T02:00:42.346407+00:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/天津古文化街旅游区（津门故里）",
+        "地点/景区/山海关景区",
+        "地点/景区/云冈石窟景区",
+        "地点/景区/响沙湾旅游景区",
+        "地点/景区/太阳岛景区",
+        "地点/景区/普陀山风景区",
+        "地点/景区/武夷山风景名胜区",
+        "地点/景区/井冈山市井冈山风景旅游区",
+        "地点/景区/三峡大坝－屈原故里文化旅游区",
+        "地点/景区/漓江风景区"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

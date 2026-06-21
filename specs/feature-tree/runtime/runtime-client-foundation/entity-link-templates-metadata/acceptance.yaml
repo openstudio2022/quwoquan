@@ -11,7 +11,8 @@ scope:
   journey_scenarios:
   - external-inbound-deeplink-return
   in_scope:
-  - 5 类实体（post/circle/user/entity_homepage，「我」等同 user）的 web/deeplink 双链与 navigation 映射。
+  - 5 类实体（post/circle/user/entity_homepage，「我」等同 user）的 web/deeplink 双链与 navigation
+    映射。
   - 对外引流归因参数 attribution_params 结构。
   - 智能中转落地页 transfer_pages（short_link/universal_landing）结构。
   - 跨 App 口令 share_token 结构。
@@ -38,16 +39,26 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
     - quwoquan_service/contracts/metadata/_shared/app_routes.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T1_static_contract
-      supporting:
-      - T2_module_interaction
     tests:
-      planned:
-      - quwoquan_app/test/cloud/runtime/link_templates_route_binding_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt1_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/cloud/runtime/link_templates_route_binding_test.dart'
   GWT2:
     title: 对外链接统一携带归因参数且入站被剥离
     given:
@@ -65,16 +76,25 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T1_static_contract
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/cloud/runtime/share_attribution_params_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt2_local_contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt2_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/cloud/runtime/share_attribution_params_test.dart'
   GWT3:
     title: 中转页与口令回溯到同一实体真相源
     given:
@@ -92,16 +112,25 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T1_static_contract
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/cloud/runtime/transfer_page_token_resolution_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt3_local_contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.gwt3_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/cloud/runtime/transfer_page_token_resolution_test.dart'
 contract_acceptance:
   CONTRACT1:
     title: 链接模板/归因/口令/中转页结构契约
@@ -109,16 +138,22 @@ contract_acceptance:
     - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
     - quwoquan_service/contracts/metadata/_shared/app_routes.yaml
     done_when:
-    - link_templates.yaml 的 entities/attribution_params/transfer_pages/share_token 结构合法且 route_id 可解析。
-    evidence:
-      primary:
-      - T1_metadata_contract
-      supporting: []
+    - link_templates.yaml 的 entities/attribution_params/transfer_pages/share_token
+      结构合法且 route_id 可解析。
     tests:
-      planned:
-      - quwoquan_service/tools/codegen_app_metadata/link_templates_schema_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract1_local_contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.entity_link_templates_metadata.contract1_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_service/tools/codegen_app_metadata/link_templates_schema_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

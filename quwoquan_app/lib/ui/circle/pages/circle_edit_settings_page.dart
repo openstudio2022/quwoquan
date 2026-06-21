@@ -2,17 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/components/media/app_media_image.dart';
+import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_page_tab.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_edit_submit_payload.dart';
-import 'package:quwoquan_app/ui/circle/providers/circle_media_picker_provider.dart';
 import 'package:quwoquan_app/ui/circle/services/circle_create_merge_wire.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
-import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 
 enum CircleEditSettingsTab { info, settings }
 
@@ -303,9 +304,9 @@ class _CircleEditSettingsPageState
     }
     switch (action) {
       case _CircleMediaAction.camera:
-        await _pickMedia(slot, CircleMediaPickSource.camera);
+        await _pickMedia(slot, ImagePickSource.camera);
       case _CircleMediaAction.photoLibrary:
-        await _pickMedia(slot, CircleMediaPickSource.photoLibrary);
+        await _pickMedia(slot, ImagePickSource.photoLibrary);
       case _CircleMediaAction.remove:
         setState(() => _setMediaSource(slot, ''));
     }
@@ -313,10 +314,15 @@ class _CircleEditSettingsPageState
 
   Future<void> _pickMedia(
     _CircleMediaSlot slot,
-    CircleMediaPickSource source,
+    ImagePickSource source,
   ) async {
-    final picker = ref.read(circleMediaPickerProvider);
-    final path = await picker.pickImage(context, source: source);
+    final picker = ref.read(imagePickGatewayProvider);
+    final path = await picker.pickImage(
+      context,
+      source: source,
+      cameraRouteName: PageAccessInternalRoutes.circleMediaPickerCamera,
+      galleryRouteName: PageAccessInternalRoutes.circleMediaPickerGallery,
+    );
     if (!mounted || path == null || path.trim().isEmpty) {
       return;
     }
@@ -732,7 +738,7 @@ class _CircleEditSettingsPageState
                   AppSpacing.md,
               width: double.infinity,
               child: coverUrl.isNotEmpty
-                  ? CircleMediaImage(
+                  ? AppMediaImage(
                       imageSource: coverUrl,
                       fit: BoxFit.cover,
                       placeholder: ColoredBox(color: cardBg),
@@ -776,7 +782,7 @@ class _CircleEditSettingsPageState
                     ),
                     child: avatarUrl.isNotEmpty
                         ? ClipOval(
-                            child: CircleMediaImage(
+                            child: AppMediaImage(
                               imageSource: avatarUrl,
                               fit: BoxFit.cover,
                               errorWidget: const ColoredBox(
@@ -961,7 +967,7 @@ class _CircleEditSettingsPageState
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
                   child: _hasCoverSource
-                      ? CircleMediaImage(
+                      ? AppMediaImage(
                           imageSource: _resolvedCoverSource,
                           fit: BoxFit.cover,
                           placeholder: ColoredBox(color: fill),
@@ -1068,7 +1074,7 @@ class _CircleEditSettingsPageState
                 ),
                 child: ClipOval(
                   child: _hasAvatarSource
-                      ? CircleMediaImage(
+                      ? AppMediaImage(
                           imageSource: _resolvedAvatarSource,
                           fit: BoxFit.cover,
                           placeholder: ColoredBox(

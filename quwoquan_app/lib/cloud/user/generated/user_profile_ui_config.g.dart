@@ -87,6 +87,7 @@ class UserProfileUIConfig {
     UserProfileSubTabConfig(id: "comments", labelKey: "interaction_sub_comments", contentType: null, lifeCategory: null),
     UserProfileSubTabConfig(id: "likes", labelKey: "interaction_sub_likes", contentType: null, lifeCategory: null),
     UserProfileSubTabConfig(id: "shares", labelKey: "interaction_sub_shares", contentType: null, lifeCategory: null),
+    UserProfileSubTabConfig(id: "views", labelKey: "interaction_sub_views", contentType: null, lifeCategory: null),
   ];
 
   static const Map<String, List<String>> interactionDirectionFiltersByMode = <String, List<String>>{

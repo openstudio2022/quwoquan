@@ -283,6 +283,14 @@ class ArticleInlineSpan {
       (targetType ?? '').trim().isNotEmpty &&
       (targetId ?? '').trim().isNotEmpty;
 
+  bool get isTag =>
+      kind == 'tag' &&
+      (targetType ?? '').trim().isNotEmpty &&
+      (targetId ?? '').trim().isNotEmpty;
+
+  /// 正文内联可点击 mention（实体或标签），渲染与序列化统一以此判定。
+  bool get isInlineMention => isEntity || isTag;
+
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'start': start,
@@ -1131,7 +1139,7 @@ _ArticleDocumentProjection _projectArticleDocument(
             textAlign: node.textAlign,
             spans: node.spans,
           );
-          if (node.spans.any((span) => span.isEntity)) {
+          if (node.spans.any((span) => span.isInlineMention)) {
             blocks.add(b);
           }
           allBlocks.add(b);

@@ -1,0 +1,160 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_c3db900bffa32feb",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/丽江古城景区"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:丽江古城景区"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/丽江古城景区",
+      "reason": "no_condition_profile; uses region/season menu"
+    },
+    "region": {
+      "name": "山地/荒漠",
+      "label": "山地/荒漠",
+      "source": "site_candidate_evidence",
+      "evidenceTerms": [
+        "雪山"
+      ],
+      "evidenceRef": "entities/地点/景区/丽江古城景区/1.download/sources/87.qunar_guide_candidate_c3db900bffa32feb/source.md"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7887403",
+    "https://touch.travel.qunar.com/youji/7888717",
+    "https://touch.travel.qunar.com/youji/7887808",
+    "https://touch.travel.qunar.com/youji/7892987",
+    "https://touch.travel.qunar.com/youji/7887023",
+    "https://touch.travel.qunar.com/youji/7894575",
+    "https://touch.travel.qunar.com/youji/7898540",
+    "https://touch.travel.qunar.com/youji/7892157",
+    "https://touch.travel.qunar.com/youji/7900676",
+    "https://touch.travel.qunar.com/youji/7890210",
+    "https://touch.travel.qunar.com/youji/7890266",
+    "https://touch.travel.qunar.com/youji/7891080",
+    "https://touch.travel.qunar.com/youji/7887863"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/丽江古城景区/1.download/sources/87.qunar_guide_candidate_c3db900bffa32feb/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "丽江古城景区·行前指南：如果你要来丽江，那么我的游记攻略你应该看一看！",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "丽江古城景区",
+    "routeEntities": [
+      "丽江古城景区"
+    ],
+    "beats": [
+      "先从 丽江古城景区 进入主线。",
+      "我个人最喜欢的一趴就是环湖骑行，碰见好看的景色就停下来拍拍拍，累了就边上找个咖啡店喝个下午茶， chill",
+      "“心邸咖啡”(P3)附近的美景还是很不错的，民宿老板推荐的",
+      "3.玉龙雪山、云杉坪、牦牛坪、蓝月谷、甘海子等景点均在雪山景区内，大多数游客会挑选其中3-4个一天内走完，但是这样走下来个人感觉极累，尤其是你还想去甘海子看日照金山的，基本上早上5点多就要起来了",
+      "第1天，云杉坪/牦牛坪+蓝月谷，不需要带羽绒服，可正常穿裙子拍照出片，基本无高反"
+    ],
+    "sourceNote": "暑假到丽江和大理旅游需要注意什么？（以身试法）,2026丽江游记,丽江旅游/自助游/自由行/游玩攻略-【去哪儿攻略】\n去哪... 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n暑假到丽江和大理旅游需要注意什么？（以身试法）\n去哪儿用户\n2025/04/20出发\n人物\n三五好友\n玩法\n人均\n3600元\n大理出游小tips\n大理古城\n",
+    "relatedTopics": [
+      "丽江古城景区",
+      "我个人最喜欢的一趴就是环湖骑行，碰见好看的景色就停下来拍拍拍，累了就边上找个咖啡店喝个下午茶， chill",
+      "“心邸咖啡”(P3)附近的美景还是很不错的，民宿老板推荐的",
+      "3.玉龙雪山、云杉坪、牦牛坪、蓝月谷、甘海子等景点均在雪山景区内，大多数游客会挑选其中3-4个一天内走完，但是这样走下来个人感觉极累，尤其是你还想去甘海子看日照金山的，基本上早上5点多就要起来了",
+      "第1天，云杉坪/牦牛坪+蓝月谷，不需要带羽绒服，可正常穿裙子拍照出片，基本无高反"
+    ],
+    "mustIncludeFacts": [
+      "丽江古城景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-19T22:36:43.693813+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:丽江古城景区"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "山地/荒漠"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_1ee0371ff04823b1",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "丽江古城景区",
+      "sourceEntityRef": "/entity/地点/景区/丽江古城景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_c3db900bffa32feb",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 17
+    }
+  ],
+  "articleMarkdownDigest": "sha256:307f495803a719ae27c9d1390abf528a7f615c86de2acd0f0beeca51b51bb0c1"
+}

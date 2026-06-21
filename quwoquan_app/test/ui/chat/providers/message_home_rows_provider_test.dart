@@ -73,6 +73,7 @@ void main() {
 
       repo.markConversationRead('conv_group_01');
       for (final filter in messageHomeFilters) {
+        container.invalidate(messageHomeRowsStateProvider(filter));
         container.invalidate(messageHomeRowsProvider(filter));
       }
       for (final filter in messageHomeFilters) {
@@ -92,12 +93,34 @@ void main() {
       expect(allRows.single.unreadCount, 0);
       expect(directRows.single.unreadCount, 0);
     });
+
+    test('远端失败时用本机最近聊天兜底并标记 copyKey', () async {
+      final repo = _FakeChatRepository();
+      final container = ProviderContainer(
+        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(messageHomeRowsProvider('all').future);
+      repo.failRequests = true;
+      container.invalidate(messageHomeRowsStateProvider('all'));
+
+      final state = await container.read(
+        messageHomeRowsStateProvider('all').future,
+      );
+
+      expect(state.items.single.id, 'conv_group_01');
+      expect(state.isCacheFallback, isTrue);
+      expect(state.copyKey, 'chatListCacheFallback');
+      expect(state.cacheFallbackError, isA<StateError>());
+    });
   });
 }
 
 final class _FakeChatRepository extends MockChatRepository {
   final List<String> requestedFilters = <String>[];
   final Set<String> _readConversationIds = <String>{};
+  bool failRequests = false;
 
   void markConversationRead(String conversationId) {
     _readConversationIds.add(conversationId);
@@ -110,6 +133,9 @@ final class _FakeChatRepository extends MockChatRepository {
     int limit = 100,
   }) async {
     requestedFilters.add(filter);
+    if (failRequests) {
+      throw StateError('message home offline');
+    }
     if (filter == 'notification') {
       return <MessageHomeRowDto>[
         MessageHomeRowDto(

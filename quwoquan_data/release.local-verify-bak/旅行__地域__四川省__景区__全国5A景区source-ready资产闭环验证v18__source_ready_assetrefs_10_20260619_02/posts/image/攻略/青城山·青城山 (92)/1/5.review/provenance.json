@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "青城山_image",
+  "final": {
+    "contentType": "image",
+    "publishTitle": "青城山·青城山 (92)",
+    "publishSeq": 1,
+    "generator": "image_evidence_pack",
+    "model": null,
+    "agentRunId": null,
+    "agentId": null,
+    "sessionTrace": null,
+    "styleFamily": "",
+    "openingStrategy": null,
+    "entityRefs": [
+      "/entity/地点/景区/青城山"
+    ],
+    "assetDigest": "sha256:e51ca4eab407cc71d400d64aa0efb34509a71181707209def1f87abadbe86624",
+    "sourceCollectionId": "open_license_file:青城山:httpscommonswikimediaorgwikifilee99d92e59f8ee5b1b19231311514:f17c449f82",
+    "creator": "ixmatex wu",
+    "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E9%9D%92%E5%9F%8E%E5%B1%B1_(92)_(31311514355).jpg",
+    "license": "CC BY 2.0",
+    "termsUrl": "https://creativecommons.org/licenses/by/2.0",
+    "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E9%9D%92%E5%9F%8E%E5%B1%B1_(92)_(31311514355).jpg"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "青城山·青城山 (92)",
+    "styleFamily": "",
+    "promptSha256": null,
+    "writingPackSha256": null,
+    "sourceBundleSha256": null,
+    "draftSha256": null
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/23.image_open_license_file_青城山_httpscommonswikimediaorgwikifilee99d92e59f8ee5b1b19231311514_f17c449f82/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E9%9D%92%E5%9F%8E%E5%B1%B1_(92)_(31311514355).jpg",
+      "sourceCollectionId": "open_license_file:青城山:httpscommonswikimediaorgwikifilee99d92e59f8ee5b1b19231311514:f17c449f82",
+      "creator": "ixmatex wu",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E9%9D%92%E5%9F%8E%E5%B1%B1_(92)_(31311514355).jpg",
+      "license": "CC BY 2.0",
+      "termsUrl": "https://creativecommons.org/licenses/by/2.0",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E9%9D%92%E5%9F%8E%E5%B1%B1_(92)_(31311514355).jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "carrierConsistency": true,
+      "imageGate": true,
+      "imageSourceScope": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/青城山/1.download/sources/23.image_open_license_file_青城山_httpscommonswikimediaorgwikifilee99d92e59f8ee5b1b19231311514_f17c449f82/source.md"
+  ]
+}

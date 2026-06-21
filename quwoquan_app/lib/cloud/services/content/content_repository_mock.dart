@@ -6,49 +6,6 @@ class MockContentRepository implements ContentRepository {
 
   final List<PostBaseDto>? _seedPosts;
 
-  static List<PostBaseDto>? _contractSeedPosts() {
-    final seed = ContractFixtureRuntimeLoader.contentSeedSet();
-    final posts = seed?['posts'];
-    final contractPosts = <PostBaseDto>[];
-    if (posts is! List) {
-      return null;
-    }
-    contractPosts.addAll(
-      posts
-          .whereType<Map>()
-          .map((item) => postBaseDtoFromMap(item.cast<String, dynamic>()))
-          .toList(growable: false),
-    );
-    if (contractPosts.isEmpty) {
-      return null;
-    }
-    return _mergePostSeeds(contractPosts, _discoverySeedPosts());
-  }
-
-  static List<PostBaseDto> _discoverySeedPosts() {
-    return aggregateDiscoveryWireSlices(
-      showcase: ContentMockData.seededShowcaseFeedItems,
-      photo: ContentMockData.discoveryPhotoData,
-      video: ContentMockData.discoveryVideoData,
-      moment: ContentMockData.discoveryMomentData,
-      article: ContentMockData.discoveryArticleData,
-    ).map(postBaseDtoFromMap).toList(growable: false);
-  }
-
-  static List<PostBaseDto> _mergePostSeeds(
-    List<PostBaseDto> primary,
-    List<PostBaseDto> fallback,
-  ) {
-    final byId = <String, PostBaseDto>{};
-    for (final post in primary) {
-      byId[post.id] = post;
-    }
-    for (final post in fallback) {
-      byId.putIfAbsent(post.id, () => post);
-    }
-    return byId.values.toList(growable: false);
-  }
-
   Never _throwMockPostNotFound(String postId) {
     throw CloudErrorMapper.fromStatusCode(
       404,
@@ -75,76 +32,7 @@ class MockContentRepository implements ContentRepository {
   Map<String, dynamic> reactionStateStub = {'liked': false, 'shared': false};
   List<CommentDto> commentsStub = _contractSeedComments();
   int countersStubLikeCount = 0;
-  int countersStubCommentCount = 0;
   int countersStubShareCount = 0;
-
-  static List<CommentDto> _contractSeedComments() {
-    final comments = <CommentDto>[];
-    for (final ref in const <String>[
-      'content_discovery_core',
-      'comment_thread_v2_core',
-    ]) {
-      final seed = ContractFixtureRuntimeLoader.contentSeedSet(ref);
-      final raw = seed?['comments'];
-      if (raw is! List) {
-        continue;
-      }
-      comments.addAll(
-        raw.whereType<Map>().map(
-          (item) => CommentDto.fromMap(item.cast<String, dynamic>()),
-        ),
-      );
-    }
-    final byId = <String, CommentDto>{};
-    for (final comment in comments) {
-      byId[comment.id] = comment;
-    }
-    return byId.values.toList(growable: false);
-  }
-
-  PostBaseDto _mockPostDto(
-    String postId, {
-    required Map<String, dynamic> payloadMerge,
-  }) {
-    return postBaseDtoFromMap(
-      _mockPostWire(postId, payloadMerge: payloadMerge),
-    );
-  }
-
-  Map<String, dynamic> _mockPostWire(
-    String postId, {
-    required Map<String, dynamic> payloadMerge,
-  }) {
-    final merged = <String, dynamic>{
-      'postId': postId,
-      '_id': postId,
-      'id': postId,
-      'authorId': 'mock_user',
-      'displayName': 'Mock User',
-      'authorAvatarUrl':
-          'media/avatar/s/archived-avatar/content/default/v1/avatar.jpg',
-      'body': '',
-      'mediaUrls': <String>[],
-      'likeCount': 0,
-      'commentCount': 0,
-      'shareCount': 0,
-      'publishedAt': DateTime.now().toUtc().toIso8601String(),
-      'createdAt': DateTime.now().toUtc().toIso8601String(),
-      'assistantUsePolicy': 'inherit',
-      ...payloadMerge,
-    };
-    final contentType = (merged['contentType'] ?? merged['type'] ?? 'micro')
-        .toString();
-    merged['contentType'] = contentType;
-    if (contentType == 'micro') {
-      merged['contentIdentity'] = merged['contentIdentity'] ?? 'moment';
-      merged['identity'] = merged['identity'] ?? 'moment';
-    } else {
-      merged['contentIdentity'] = merged['contentIdentity'] ?? 'work';
-      merged['identity'] = merged['identity'] ?? 'work';
-    }
-    return merged;
-  }
 
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
@@ -167,7 +55,10 @@ class MockContentRepository implements ContentRepository {
     final safeOffset = offset.clamp(0, items.length);
     final safeLimit = limit <= 0 ? items.length : limit;
     final end = (safeOffset + safeLimit).clamp(0, items.length);
-    final pageItems = items.sublist(safeOffset, end);
+    final pageItems = items
+        .sublist(safeOffset, end)
+        .map(_withLiveCommentCount)
+        .toList(growable: false);
     final nextCursor = end < items.length ? '$end' : null;
     // 模拟服务端权威下发：首刷生成 frq_ 归因 id，分页回显客户端透传的同一 id。
     final resolvedFeedRequestId = (feedRequestId?.trim().isNotEmpty == true)
@@ -228,11 +119,12 @@ class MockContentRepository implements ContentRepository {
     }
     final raw =
         _contractSeedPostWire(postId) ??
-        lookupCanonicalDiscoveryWireRowByPostId(postId);
+        lookupCanonicalDiscoveryWireRowByPostId(postId) ??
+        _profilePreviewPostWireById(postId);
     if (raw == null) {
       _throwMockPostNotFound(postId);
     }
-    return ContentPostDetailPayload.fromWire(raw);
+    return ContentPostDetailPayload.fromWire(_withLiveCommentCountWire(raw));
   }
 
   @override
@@ -295,10 +187,12 @@ class MockContentRepository implements ContentRepository {
     String sort = 'recommended',
     int limit = CloudApiDefaults.pageLimit,
   }) async {
+    final resolvedPostId = _resolveSeededCommentPostId(postId);
     final all = commentsStub
         .where(
           (comment) =>
-              comment.postId == postId &&
+              comment.postId == resolvedPostId &&
+              comment.status != 'deleted' &&
               (comment.parentCommentId == null ||
                   comment.parentCommentId!.isEmpty) &&
               (comment.replyToCommentId == null ||
@@ -306,13 +200,21 @@ class MockContentRepository implements ContentRepository {
         )
         .toList(growable: false);
     final sorted = _sortComments(all, sort);
+    // 计数单一真相源：与 getPost/getCounters 同走 _liveCommentCountForPost
+    // （排除软删），保证三者与 currentTotal 恒一致。
+    final totalCount = _liveCommentCountForPost(resolvedPostId);
     final offset = int.tryParse((cursor ?? '').trim()) ?? 0;
     final safeOffset = offset.clamp(0, sorted.length);
     final safeLimit = limit <= 0 ? sorted.length : limit;
     final end = (safeOffset + safeLimit).clamp(0, sorted.length);
+    final page = sorted
+        .sublist(safeOffset, end)
+        .map((comment) => _withReplyPreview(resolvedPostId, comment))
+        .toList(growable: false);
     return CommentPage(
-      items: sorted.sublist(safeOffset, end),
+      items: page,
       nextCursor: end < sorted.length ? '$end' : null,
+      totalCount: totalCount,
     );
   }
 
@@ -323,12 +225,14 @@ class MockContentRepository implements ContentRepository {
     String? cursor,
     int limit = CloudApiQueryDefaults.commentRepliesLimit,
   }) async {
+    final resolvedPostId = _resolveSeededCommentPostId(postId);
     final replies =
         commentsStub
             .where(
               (comment) =>
-                  comment.postId == postId &&
-                  comment.parentCommentId == commentId,
+                  comment.postId == resolvedPostId &&
+                  comment.parentCommentId == commentId &&
+                  comment.status != 'deleted',
             )
             .toList(growable: false)
           ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
@@ -339,6 +243,7 @@ class MockContentRepository implements ContentRepository {
     return CommentPage(
       items: replies.sublist(safeOffset, end),
       nextCursor: end < replies.length ? '$end' : null,
+      totalCount: replies.length,
     );
   }
 
@@ -358,11 +263,16 @@ class MockContentRepository implements ContentRepository {
     if (throwOnCreateComment != null) throw throwOnCreateComment!;
     final comment = <String, dynamic>{
       '_id': 'mock_comment_${DateTime.now().millisecondsSinceEpoch}',
-      'postId': postId,
+      'postId': _resolveSeededCommentPostId(postId),
       'content': content,
       'authorId': 'mock_user',
       'subAccountId': subAccountId ?? 'mock_user',
-      'personaContextVersion': personaContextVersion,
+      // 云侧 personaContextVersion 为 int64（handler 经 asInt64Flexible 收敛），
+      // 响应回显为数字。mock 必须与远端 wire 形态一致，避免 CommentDto.fromMap
+      // 把字符串当作 num 解析时崩溃（alpha 评论提交不可用的根因）。
+      'personaContextVersion': _personaContextVersionToInt(
+        personaContextVersion,
+      ),
       'replyCount': 0,
       'attachmentMediaIds': attachmentMediaIds,
       'attachments': attachmentMediaIds
@@ -399,7 +309,6 @@ class MockContentRepository implements ContentRepository {
     }
     final dto = CommentDto.fromMap(comment);
     commentsStub = [...commentsStub, dto];
-    countersStubCommentCount++;
     return dto;
   }
 
@@ -408,7 +317,55 @@ class MockContentRepository implements ContentRepository {
     required String postId,
     required String commentId,
   }) async {
-    commentsStub = commentsStub.where((c) => c.id != commentId).toList();
+    // 软删墓碑（与云侧一致）：保留评论并打 status=deleted + deletedAt，
+    // 使 _liveCommentCountForPost 自然剔除、listComments 不再展示，且
+    // getCommentCountsDelta 能在区间内统计到该删除，支撑可解释增量。
+    commentsStub = commentsStub
+        .map(
+          (c) => c.id == commentId
+              ? c.copyWith(
+                  status: 'deleted',
+                  deletedAt: () => c.deletedAt ?? DateTime.now(),
+                )
+              : c,
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<CommentCountsDelta> getCommentCountsDelta({
+    required String postId,
+    DateTime? since,
+  }) async {
+    final resolvedPostId = _resolveSeededCommentPostId(postId);
+    // watermark = 本次查询时刻（作下次 since 基线，保证相邻 delta 不重不漏）。
+    final watermark = DateTime.now();
+    var created = 0;
+    var deleted = 0;
+    for (final comment in commentsStub) {
+      if (comment.postId != resolvedPostId) {
+        continue;
+      }
+      // createdSinceCount：createdAt ∈ (since, watermark]（不论其后是否被删）。
+      if (_withinHalfOpenWindow(comment.createdAt, since, watermark)) {
+        created++;
+      }
+      // deletedSinceCount：status=deleted 且 deletedAt ∈ (since, watermark]。
+      if (comment.status == 'deleted') {
+        final deletedAt = comment.deletedAt;
+        if (deletedAt != null &&
+            _withinHalfOpenWindow(deletedAt, since, watermark)) {
+          deleted++;
+        }
+      }
+    }
+    return CommentCountsDelta(
+      createdSinceCount: created,
+      deletedSinceCount: deleted,
+      currentTotal: _liveCommentCountForPost(resolvedPostId),
+      watermark: watermark,
+      since: since,
+    );
   }
 
   @override
@@ -453,11 +410,46 @@ class MockContentRepository implements ContentRepository {
   }
 
   @override
+  Future<CommentDto> setCommentPinned({
+    required String postId,
+    required String commentId,
+    required bool pinned,
+  }) async {
+    CommentDto? updated;
+    commentsStub = commentsStub
+        .map((comment) {
+          if (comment.id != commentId) {
+            return comment;
+          }
+          updated = comment.copyWith(
+            isPinned: pinned,
+            pinnedAt: () => pinned ? DateTime.now() : null,
+          );
+          return updated!;
+        })
+        .toList(growable: false);
+    // 与云侧一致：置顶的一级评论排在最前（保持其余评论的相对顺序）。
+    final pinnedFirst = commentsStub.where((c) => c.isPinned).toList();
+    final rest = commentsStub.where((c) => !c.isPinned).toList();
+    commentsStub = [...pinnedFirst, ...rest];
+    return updated ??
+        CommentDto(
+          id: commentId,
+          postId: postId,
+          authorId: '',
+          content: '',
+          isPinned: pinned,
+          pinnedAt: pinned ? DateTime.now() : null,
+          createdAt: DateTime.now(),
+        );
+  }
+
+  @override
   Future<CommentPage> listCommentsByAuthor({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return const CommentPage(items: [], nextCursor: null);
+    return const CommentPage(items: [], nextCursor: null, totalCount: 0);
   }
 
   @override
@@ -465,7 +457,7 @@ class MockContentRepository implements ContentRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return const CommentPage(items: [], nextCursor: null);
+    return const CommentPage(items: [], nextCursor: null, totalCount: 0);
   }
 
   @override
@@ -515,7 +507,7 @@ class MockContentRepository implements ContentRepository {
   Future<PostEngagementCounters> getCounters({required String postId}) async {
     return PostEngagementCounters(
       likeCount: countersStubLikeCount,
-      commentCount: countersStubCommentCount,
+      commentCount: _liveCommentCountForPost(postId),
       shareCount: countersStubShareCount,
     );
   }
@@ -707,226 +699,20 @@ class MockContentRepository implements ContentRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final filtered = _allDiscoveryPosts()
-        .where((p) => p.authorId == userId)
+    final authorId = userId.trim();
+    final directPosts = _allDiscoveryPosts()
+        .where((p) => p.authorId == authorId)
+        .toList(growable: false);
+    final sourcePosts = _mergePostSeeds(
+      directPosts,
+      _profilePreviewPostsFor(authorId),
+    );
+    final filtered = sourcePosts
         .where(
           (p) => _matchesIdentityAndTypePost(p, identity: identity, type: type),
         )
         .toList();
     return CursorPage<PostBaseDto>(items: filtered, nextCursor: null);
-  }
-
-  List<PostBaseDto> _allDiscoveryPosts() {
-    final seeded = _seedPosts;
-    if (seeded != null) {
-      return List<PostBaseDto>.from(seeded, growable: false);
-    }
-    return _discoverySeedPosts();
-  }
-
-  Map<String, dynamic>? _contractSeedPostWire(String postId) {
-    final trimmed = postId.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-    final raw = ContractFixtureRuntimeLoader.contentSeedSet()?['posts'];
-    if (raw is! List) {
-      return null;
-    }
-    for (final item in raw.whereType<Map>()) {
-      final wire = item.cast<String, dynamic>();
-      final itemId =
-          wire['postId']?.toString() ??
-          wire['_id']?.toString() ??
-          wire['id']?.toString() ??
-          '';
-      if (itemId == trimmed) {
-        return Map<String, dynamic>.from(wire);
-      }
-    }
-    return null;
-  }
-
-  List<CommentDto> _sortComments(List<CommentDto> comments, String sort) {
-    final sorted = List<CommentDto>.from(comments);
-    switch (sort) {
-      case 'latest':
-        sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        break;
-      case 'most_liked':
-        sorted.sort((a, b) {
-          final byLike = b.likeCount.compareTo(a.likeCount);
-          return byLike != 0 ? byLike : b.createdAt.compareTo(a.createdAt);
-        });
-        break;
-      case 'recommended':
-      default:
-        sorted.sort((a, b) {
-          final byScore = (b.recommendedScore ?? 0).compareTo(
-            a.recommendedScore ?? 0,
-          );
-          return byScore != 0 ? byScore : b.createdAt.compareTo(a.createdAt);
-        });
-        break;
-    }
-    return sorted;
-  }
-
-  List<PostBaseDto> _resolveDiscoveryPosts({
-    required String category,
-    String? identity,
-    String? type,
-  }) {
-    final requestedIdentity = (identity ?? '').trim();
-    final requestedType = _normalizeFeedType(type);
-    if (_shouldServeAlphaShowcaseFeed(
-      category: category,
-      requestedIdentity: requestedIdentity,
-      requestedType: requestedType,
-    )) {
-      return _alphaShowcasePosts();
-    }
-    final resolvedIdentity = identity ?? _mapCategoryToIdentity(category);
-    final resolvedType = _normalizeFeedType(
-      type ?? _mapCategoryToFeedType(category),
-    );
-    return _allDiscoveryPosts()
-        .where(
-          (item) => _matchesIdentityAndTypePost(
-            item,
-            identity: resolvedIdentity,
-            type: resolvedType,
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  List<PostBaseDto> _alphaShowcasePosts() {
-    return ContentMockData.seededShowcaseFeedItems
-        .map((item) => postBaseDtoFromMap(item.toDiscoveryWireMap()))
-        .toList(growable: false);
-  }
-
-  bool _shouldServeAlphaShowcaseFeed({
-    required String category,
-    required String requestedIdentity,
-    required String? requestedType,
-  }) {
-    if (requestedType != null) return false;
-    switch (category.trim()) {
-      case 'recommend':
-      case 'recommended':
-        return requestedIdentity.isEmpty || requestedIdentity == 'moment';
-      case 'micro':
-      case 'moment':
-        return requestedIdentity == 'moment';
-      default:
-        return false;
-    }
-  }
-
-  bool _matchesIdentityAndTypePost(
-    PostBaseDto post, {
-    String? identity,
-    String? type,
-  }) {
-    return _matchesIdentityAndType(
-      <String, dynamic>{
-        'contentType': post.type,
-        'type': post.type,
-        'contentIdentity': post.identity,
-        'identity': post.identity,
-      },
-      identity: identity,
-      type: type,
-    );
-  }
-
-  String? _mapCategoryToIdentity(String category) {
-    switch (category.trim()) {
-      case 'moment':
-      case 'recommended':
-      case 'following':
-        return 'moment';
-      case 'work':
-      case 'works':
-      case 'photo':
-      case 'images':
-      case 'video':
-      case 'article':
-        return 'work';
-      default:
-        return null;
-    }
-  }
-
-  String? _mapCategoryToFeedType(String category) {
-    final mapped =
-        GeneratedPostRuntimeMetadata.feedCategoryToRequestType[category];
-    return _normalizeFeedType(mapped);
-  }
-
-  String? _normalizeFeedType(String? type) {
-    final normalized = (type ?? '').trim().toLowerCase();
-    switch (normalized) {
-      case '':
-        return null;
-      case 'photo':
-        return 'image';
-      case 'note':
-        return 'article';
-      default:
-        return normalized;
-    }
-  }
-
-  bool _matchesIdentityAndType(
-    Map<String, dynamic> item, {
-    String? identity,
-    String? type,
-  }) {
-    final itemType = _normalizeFeedType(
-      item['contentType']?.toString() ?? item['type']?.toString(),
-    );
-    final itemIdentity =
-        (item['contentIdentity'] ??
-                item['identity'] ??
-                (itemType == 'micro' ? 'moment' : 'work'))
-            .toString();
-    final expectedIdentity = (identity ?? '').trim();
-    final expectedType = _normalizeFeedType(type);
-    if (expectedIdentity.isNotEmpty && itemIdentity != expectedIdentity) {
-      return false;
-    }
-    if (expectedType != null && expectedType.isNotEmpty) {
-      return itemType == expectedType;
-    }
-    return true;
-  }
-
-  String _mockCategoryForCircleIds(Iterable<String> circleIds) {
-    for (final circleId in circleIds) {
-      switch (circleId) {
-        case 'fixture_circle_photo':
-        case 'circle_photo_01':
-        case 'c1':
-        case 'c-human-1':
-        case 'c-photo-owner':
-        case 'c-meet-2':
-          return 'photography';
-        case 'c2':
-        case 'c3':
-          return 'travel';
-        case 'c-tech-admin':
-          return 'tech';
-        case 'c-meet-1':
-          return 'campus';
-        case 'c-car-1':
-        case 'c-car-2':
-          return 'car';
-      }
-    }
-    return '';
   }
 
   @override

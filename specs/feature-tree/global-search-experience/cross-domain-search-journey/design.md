@@ -359,12 +359,12 @@ G1 基线已在本轮 `/design` 实际执行并通过。
 
 | 验收 | 测试层 | 设计策略 |
 |---|---|---|
-| `J1` | `T1/T2/T4` | route/surface/request context、全屏壳层与统一入口 |
-| `J2` | `T1/T2/T3/T4` | 统一 `Search` 接口、内部 Search* contract、结果分组、局部降级 |
-| `J3` | `T1/T2/T3/T4` | recent search sync、语音转词、问小趣 handoff |
-| `R1` | `T3/T4` | 观测、SLO、回滚演练 |
+| `J1` | `local_contract/user_acceptance` | route/surface/request context、全屏壳层与统一入口 |
+| `J2` | `local_contract/api_integration/user_acceptance` | 统一 `Search` 接口、内部 Search* contract、结果分组、局部降级 |
+| `J3` | `local_contract/api_integration/user_acceptance` | recent search sync、语音转词、问小趣 handoff |
+| `R1` | `api_integration/user_acceptance` | 观测、SLO、回滚演练 |
 
-## plan slice 与 T1~T4 证据矩阵映射
+## plan slice 与 三层测试 证据矩阵映射
 
 | Slice | 目标 | 对应验收 | 主要证据 |
 |---|---|---|---|

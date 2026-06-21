@@ -26,7 +26,9 @@
     "preferredBlueprintIds",
     "voiceStyle",
     "expertiseClaims",
-    "mustNotClaim"
+    "mustNotClaim",
+    "coverageScope",
+    "carrierAffinity"
   ],
   "properties": {
     "creatorProfileId": { "type": "string" },
@@ -85,6 +87,27 @@
     "preferredBlueprintIds": { "type": "array", "items": { "type": "string" } },
     "voiceStyle": { "type": "object" },
     "expertiseClaims": { "type": "array", "items": { "type": "string" } },
-    "mustNotClaim": { "type": "array", "items": { "type": "string" } }
+    "mustNotClaim": { "type": "array", "items": { "type": "string" } },
+    "coverageScope": {
+      "type": "object",
+      "description": "作者题材与地理范围（用于内容→作者最适配匹配的范围维度）。",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["nationwide", "regional", "thematic"] },
+        "label": { "type": "string" },
+        "regionRefs": { "type": "array", "items": { "type": "string" } },
+        "topicRefs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "carrierAffinity": {
+      "type": "object",
+      "description": "作者载体偏向权重（article/image/video，0..1）；为 0 表示不产出该载体。",
+      "required": ["article", "image", "video"],
+      "properties": {
+        "article": { "type": "number", "minimum": 0, "maximum": 1 },
+        "image": { "type": "number", "minimum": 0, "maximum": 1 },
+        "video": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
   }
 }

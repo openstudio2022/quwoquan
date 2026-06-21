@@ -226,6 +226,13 @@ func (c *instrumentedClient) SAdd(ctx context.Context, key string, members ...st
 	return err
 }
 
+func (c *instrumentedClient) SRem(ctx context.Context, key string, members ...string) error {
+	t := time.Now()
+	err := c.inner.SRem(ctx, key, members...)
+	c.record(t, err)
+	return err
+}
+
 func (c *instrumentedClient) SMembers(ctx context.Context, key string) ([]string, error) {
 	t := time.Now()
 	v, err := c.inner.SMembers(ctx, key)

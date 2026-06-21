@@ -1,0 +1,23 @@
+{
+  "entityRef": "/entity/地点/景区/九寨沟",
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "sourceRefs": [
+    "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/source.md"
+  ],
+  "assets": [
+    {
+      "assetId": "001_home_wikipedia_1.jpg",
+      "fileName": "001_home_wikipedia_1.jpg",
+      "caption": "jiuzhaigou valley long lake 长海, Cháng Hǎi zechawa valley 则查洼沟 sichuan china 2011 autumn fall",
+      "license": "CC BY-SA 4.0",
+      "credit": "chensiyuan",
+      "relevance": "jiuzhaigou valley long lake 长海, Cháng Hǎi zechawa valley 则查洼沟 sichuan china 2011 autumn fall",
+      "sourceRef": "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/source.md",
+      "sourceAssetRef": "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/assets/001_home_wikipedia_1.jpg",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:1_jiuzhaigou_valley_long_lake_chang_hai_2011.jpg"
+    }
+  ],
+  "generator": "deterministic_homepage_builder"
+}

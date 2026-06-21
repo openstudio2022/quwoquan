@@ -410,14 +410,14 @@ lib/ui/user/
 
 | Story | 范围 | 主要验收项 | 测试层 |
 |-------|------|-----------|--------|
-| S1: metadata + codegen 基线 | fields.yaml / ui_config / service.yaml + codegen | A6 | T1(契约) |
-| S2: ProfileShell 核心框架 | ProfileShell + Header + ActionBar + StatsRow | A1, A11, A12 | T1+T2+T4 |
-| S3: 创作 Tab（SubTab + Visibility） | ProfileCreationsTab + popup | A3 | T1+T2+T4 |
-| S4: 圈子 Tab | ProfileCirclesTab + CircleCard + Repository | A4 | T1+T2 |
-| S5: 互动 Tab + 生活 Tab | Interaction + Lifestyle | A9, A10 | T2 |
-| S6: 一级 Tab 导航 | CenteredScrollableTabBar 集成 + 默认选中 | A2 | T1+T2+T4 |
-| S7: 目录迁移 | features/profile/ → ui/user/ + router 更新 | A5 | T1+T4 |
-| S8: 视觉审计 + 测试覆盖 | Token 替换 + verify_dart_semantic + 测试补全 | A7, A8 | T1+T2 |
+| S1: metadata + codegen 基线 | fields.yaml / ui_config / service.yaml + codegen | A6 | local_contract(契约) |
+| S2: ProfileShell 核心框架 | ProfileShell + Header + ActionBar + StatsRow | A1, A11, A12 | local_contract+local_contract+user_acceptance |
+| S3: 创作 Tab（SubTab + Visibility） | ProfileCreationsTab + popup | A3 | local_contract+local_contract+user_acceptance |
+| S4: 圈子 Tab | ProfileCirclesTab + CircleCard + Repository | A4 | local_contract+local_contract |
+| S5: 互动 Tab + 生活 Tab | Interaction + Lifestyle | A9, A10 | local_contract |
+| S6: 一级 Tab 导航 | CenteredScrollableTabBar 集成 + 默认选中 | A2 | local_contract+local_contract+user_acceptance |
+| S7: 目录迁移 | features/profile/ → ui/user/ + router 更新 | A5 | local_contract+user_acceptance |
+| S8: 视觉审计 + 测试覆盖 | Token 替换 + verify_dart_semantic + 测试补全 | A7, A8 | local_contract+local_contract |
 
 **推荐实施顺序**：S7 → S1 → S2 → S6 → S3 → S4 → S5 → S8
 

@@ -16,6 +16,7 @@ fi
 
 bash agent_ops/scaffold/verify_global_increment_constraints.sh
 python3 agent_ops/gate/verify_agent_context_contract.py
+python3 agent_ops/scaffold/verify_test_directory_inventory.py
 
 run_service() {
   echo "[gate] quwoquan_service"
@@ -29,6 +30,9 @@ run_service() {
   python3 agent_ops/gate/verify_prod_access_guard.py
   bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
   python3 quwoquan_service/scripts/contract/verify_tag_ref_source_of_truth.py
+  # 内容域评论计数自洽（缺口A 防回归）：真相源 + 派生产物（*.lite.json / *.gamma-curated.json）
+  # 的 commentCount/replyCount 不得与裁剪后评论集漂移（派生由 bundle 生成器在裁剪后重算保证）
+  python3 quwoquan_service/scripts/contract/verify_content_fixture_comment_counts.py --include-derived
   bash agent_ops/scaffold/verify_acceptance_standard.sh
   bash agent_ops/scaffold/verify_specs_l1_hierarchy.sh
   bash agent_ops/scaffold/verify_feature_tree_refactor.sh
@@ -143,8 +147,10 @@ run_app() {
     fi
     # 助手手写 + App 搜索仓库：弱类型棘轮（见 specs/gates/assistant_search_weak_typing_governance.md）
     python3 agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_user_profile_avatar_projection_versions.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_metadata_response_body_vs_codegen_app.py || exit 1
     python3 quwoquan_app/scripts/auth/verify_auth_policy_contract.py || exit 1
     python3 quwoquan_app/scripts/auth/verify_login_entry_loop_contract.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_metadata_service_entities_vs_fields.py || exit 1
@@ -176,15 +182,14 @@ run_app() {
   else
     echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_native_edge_navigation, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_assistant_context_contract, verify_assistant_security_contract, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_lib_dart_io_budget, verify_lib_platform_check_isolation, verify_app_seed_manifests, verify_business_env_data_inventory, verify_markdown_article_no_article_document, verify_article_contract_purity, verify_post_view_projection_wire_keys, verify_pageflip_backward_mainline"
   fi
-  # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
-  # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)
+  # local_contract tests — fast, no external deps. Canonical App entry is test/local_contract/.
   # 使用 tee 边跑边输出：原先整段输出进变量，长时间无日志易被误判为「卡住」。
   local flutter_log
   flutter_log="$(mktemp -t quwoquan_gate_flutter_l1.XXXXXX)"
   local flutter_status=0
   set +e
   set -o pipefail
-  python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/core/services/visit_recorder_service_test.dart test/cloud/ test/components/ test/core/ test/ui/ test/smoke/ 2>&1 | tee "$flutter_log"
+  python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/ 2>&1 | tee "$flutter_log"
   flutter_status=${PIPESTATUS[0]:-1}
   set +o pipefail
   set -e
@@ -255,7 +260,7 @@ run_patrol_local() {
     echo "[gate] SKIP: patrol CLI not found — L4 skipped (install: dart pub global activate patrol_cli)"
     return 0
   fi
-  echo "[gate] L4 Patrol (local device)"
+  echo "[gate] user_acceptance Patrol (local device)"
   (cd quwoquan_app && patrol test test/patrol/ --dart-define=APP_RUNTIME_ENV=gamma --dart-define=API_CONTRACT_ENV=gamma)
 }
 

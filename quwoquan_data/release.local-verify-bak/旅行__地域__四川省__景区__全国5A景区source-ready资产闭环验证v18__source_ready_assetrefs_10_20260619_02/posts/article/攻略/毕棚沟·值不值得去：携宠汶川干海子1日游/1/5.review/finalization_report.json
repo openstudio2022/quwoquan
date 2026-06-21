@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "毕棚沟_decision_experience",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:ce5cd6431fce39761c72e20c52b4a84aa9e52fae9309f086914d041f4a7b018f",
+  "finalSha256": "sha256:fbd7cdbcc1fdb5d4b0c360371f9002dc628efaa0786c0c0c497d09ecdaf2d45a",
+  "draftBodySha256": "sha256:ce5cd6431fce39761c72e20c52b4a84aa9e52fae9309f086914d041f4a7b018f",
+  "finalBodySha256": "sha256:ce5cd6431fce39761c72e20c52b4a84aa9e52fae9309f086914d041f4a7b018f",
+  "composeSnapshotSha256": "sha256:ce5cd6431fce39761c72e20c52b4a84aa9e52fae9309f086914d041f4a7b018f",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

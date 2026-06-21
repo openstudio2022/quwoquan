@@ -262,9 +262,9 @@ retry: 1
 
 **分步方案**：
 1. **T0（立即）**：`go test ./services/content-service/...` 加入 gate，当前已有的 handler tests 继续通过（in-memory 暂时保留，标记 TODO）
-2. **T1（本迭代）**：修复 testcontainers，删除 in-memory store
-3. **T2（本迭代）**：`flutter test` 去掉 QWQ_GATE_TESTS=1 跳过条件（现有 6 个 L1a 测试已全通过）
-4. **T3（下一迭代）**：补全 L1b/c Widget + Journey tests，contract.yaml go_func 全部实现
+2. **local_contract（本迭代）**：修复 testcontainers，删除 in-memory store
+3. **local_contract（本迭代）**：`flutter test` 去掉 QWQ_GATE_TESTS=1 跳过条件（现有 6 个 L1a 测试已全通过）
+4. **api_integration（下一迭代）**：补全 L1b/c Widget + Journey tests，contract.yaml go_func 全部实现
 
 ---
 

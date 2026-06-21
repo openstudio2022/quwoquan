@@ -12,10 +12,10 @@
 
 | 代码 | 含义 |
 |------|------|
-| **T1** | 主壳 `IndexedStack` 内一级频道根页（Tab 常驻） |
-| **T2** | `GoRouter` 独立全屏路由页 |
-| **T3** | `GoRouter` **子路由** / 嵌套 path（挂在父 route 下） |
-| **T4** | **模态**全屏（如 `fullscreenDialog`、透明过渡创作入口） |
+| **local_contract** | 主壳 `IndexedStack` 内一级频道根页（Tab 常驻） |
+| **local_contract** | `GoRouter` 独立全屏路由页 |
+| **api_integration** | `GoRouter` **子路由** / 嵌套 path（挂在父 route 下） |
+| **user_acceptance** | **模态**全屏（如 `fullscreenDialog`、透明过渡创作入口） |
 | **T5** | **无独立 GoRoute**，主要由 `Navigator.push` / 内嵌栈打开 |
 | **T6** | **`components/`** 内全屏页或 **跨路由复用骨架**（非业务 `ui/*/pages` 独占） |
 | **T7** | **壳内子视图**或 **当前未挂路由的存量页面文件**（须标记后续处理） |

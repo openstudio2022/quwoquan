@@ -69,7 +69,7 @@ func TestListProfileInteractionActivitiesProjectsReceivedContractFields(t *testi
 		t.Fatalf("comment owner post: %v", err)
 	}
 
-	items, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "received", 20)
+	items, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", 20)
 	if err != nil {
 		t.Fatalf("list received: %v", err)
 	}
@@ -101,11 +101,79 @@ func TestListProfileInteractionActivitiesProjectsReceivedContractFields(t *testi
 		!stringSliceEqual(comment.FilterKeys, []string{"all", "comments"}) {
 		t.Fatalf("received comment projection mismatch: %#v", comment)
 	}
+	if comment.CommentId == "" {
+		t.Fatalf("received comment must carry commentId for deeplink: %#v", comment)
+	}
+	if comment.ParentCommentId != "" {
+		t.Fatalf("top-level comment must have empty parentCommentId: %#v", comment)
+	}
 
 	share := byType["share"]
 	if share.PrimaryText != "转发了你的记录" ||
 		!stringSliceEqual(share.FilterKeys, []string{"all", "shares"}) {
 		t.Fatalf("received share projection mismatch: %#v", share)
+	}
+}
+
+func TestListProfileInteractionActivitiesWiresCommentIdentity(t *testing.T) {
+	ctx := context.Background()
+	svc := newProfileInteractionTestService()
+
+	top, _, err := svc.AddComment(
+		ctx,
+		"post_owner_image",
+		"actor_comment",
+		"构图很稳",
+		"",
+		"actor_comment",
+		"",
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("add top-level comment: %v", err)
+	}
+	topID, _ := top["_id"].(string)
+	if topID == "" {
+		t.Fatalf("top-level comment missing _id: %#v", top)
+	}
+	if _, _, err := svc.AddComment(
+		ctx,
+		"post_owner_image",
+		"actor_reply",
+		"同感",
+		topID,
+		"actor_reply",
+		"",
+		nil,
+		nil,
+	); err != nil {
+		t.Fatalf("add reply comment: %v", err)
+	}
+
+	items, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", 20)
+	if err != nil {
+		t.Fatalf("list received: %v", err)
+	}
+	var topView, replyView postmodel.ProfileInteractionActivityView
+	for _, item := range items {
+		if item.ActivityType != "comment" {
+			continue
+		}
+		if item.CommentKind == "reply" {
+			replyView = item
+		} else {
+			topView = item
+		}
+	}
+	if topView.CommentId != topID || topView.ParentCommentId != "" {
+		t.Fatalf("top-level comment identity mismatch: %#v", topView)
+	}
+	if replyView.CommentId == "" || replyView.CommentId == topID {
+		t.Fatalf("reply must carry its own commentId: %#v", replyView)
+	}
+	if replyView.ParentCommentId != topID {
+		t.Fatalf("reply parentCommentId must point to top-level comment %q: %#v", topID, replyView)
 	}
 }
 
@@ -117,7 +185,7 @@ func TestListProfileInteractionActivitiesProjectsSentContractFields(t *testing.T
 		t.Fatalf("like target post: %v", err)
 	}
 
-	items, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "sent", 20)
+	items, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "sent", 20)
 	if err != nil {
 		t.Fatalf("list sent: %v", err)
 	}

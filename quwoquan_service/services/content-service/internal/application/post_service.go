@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/url"
 	"regexp"
 	"sort"
@@ -23,6 +24,7 @@ import (
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/runtime/repository"
 	rtsearch "quwoquan_service/runtime/search"
+	commentdomain "quwoquan_service/services/content-service/internal/domain/comment"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
 	"quwoquan_service/services/content-service/internal/generated"
@@ -82,47 +84,56 @@ type StoryRuntimeConfig struct {
 }
 
 type PostService struct {
-	store            persistence.PostRepository
-	signaler         rtrec.SignalProcessor
-	publisher        repository.EventPublisher
-	projector        Projector
-	logger           *slog.Logger
-	mu               sync.Mutex
-	reactions        map[string]map[string]contentReactionState // postID -> userID -> state
-	distributions    map[string]map[string]bool                 // postID -> circleID -> active
-	reshares         map[string]map[string]bool                 // postID -> (circleID:userID) -> active
-	tombstones       map[string]time.Time                       // postID -> deletedAt
-	mediaAssets      map[string]postmodel.MediaAsset            // mediaID -> asset
-	uploadSession    map[string]string                          // sessionID -> mediaID
-	comments         map[string][]map[string]any                // postID -> comments list
-	commentReactions map[string]map[string]string               // commentID -> userID -> like|dislike|none
-	commentMaxLen    int                                        // configurable, default 500
-	storyRuntime     StoryRuntimeConfig
-	mediaCDNBase     string
-	mediaUploadBase  string
-	mediaStore       runtimemedia.MediaStore
+	store         persistence.PostRepository
+	signaler      rtrec.SignalProcessor
+	publisher     repository.EventPublisher
+	projector     Projector
+	logger        *slog.Logger
+	mu            sync.RWMutex
+	reactions     map[string]map[string]contentReactionState // postID -> userID -> state
+	distributions map[string]map[string]bool                 // postID -> circleID -> active
+	reshares      map[string]map[string]bool                 // postID -> (circleID:userID) -> active
+	tombstones    map[string]time.Time                       // postID -> deletedAt
+	mediaAssets   map[string]postmodel.MediaAsset            // mediaID -> asset
+	uploadSession map[string]string                          // sessionID -> mediaID
+	// 评论读写已迁出进程内存：commentStore 承载评论 CRUD/分页/排序/计数（Mongo+Redis
+	// 或内存降级），commentReactionStore 承载三态反应权威成员关系（R-CMT01）。
+	commentStore         commentdomain.Store
+	commentReactionStore commentdomain.ReactionStore
+	commentMaxLen        int // configurable, default 500
+	storyRuntime         StoryRuntimeConfig
+	mediaCDNBase         string
+	mediaUploadBase      string
+	mediaStore           runtimemedia.MediaStore
+	ipResolver           IPLocationResolver // 评论属地解析（默认确定性 stub，生产注入 GeoIP）
 }
 
 func NewPostService(store persistence.PostRepository, opts ...PostServiceOption) *PostService {
 	s := &PostService{
-		store:            store,
-		logger:           slog.Default(),
-		reactions:        map[string]map[string]contentReactionState{},
-		distributions:    map[string]map[string]bool{},
-		reshares:         map[string]map[string]bool{},
-		tombstones:       map[string]time.Time{},
-		mediaAssets:      map[string]postmodel.MediaAsset{},
-		uploadSession:    map[string]string{},
-		comments:         map[string][]map[string]any{},
-		commentReactions: map[string]map[string]string{},
-		commentMaxLen:    500,
-		storyRuntime:     defaultStoryRuntimeConfig(),
-		mediaCDNBase:     "https://media.quwoquan.invalid",
-		mediaUploadBase:  "https://media-origin.quwoquan.invalid",
-		mediaStore:       runtimemedia.NewMockMediaStore(),
+		store:           store,
+		logger:          slog.Default(),
+		reactions:       map[string]map[string]contentReactionState{},
+		distributions:   map[string]map[string]bool{},
+		reshares:        map[string]map[string]bool{},
+		tombstones:      map[string]time.Time{},
+		mediaAssets:     map[string]postmodel.MediaAsset{},
+		uploadSession:   map[string]string{},
+		commentMaxLen:   500,
+		storyRuntime:    defaultStoryRuntimeConfig(),
+		mediaCDNBase:    "https://media.quwoquan.invalid",
+		mediaUploadBase: "https://media-origin.quwoquan.invalid",
+		mediaStore:      runtimemedia.NewMockMediaStore(),
+		ipResolver:      newDeterministicProvinceResolver(),
 	}
 	for _, opt := range opts {
 		opt(s)
+	}
+	// 未注入持久化实现时（alpha/单元测试）默认内存降级实现；语义与 Mongo 完全一致。
+	if s.commentStore == nil {
+		s.commentStore = persistence.NewMemoryCommentStore()
+	}
+	if s.commentReactionStore == nil {
+		s.commentReactionStore = persistence.NewMemoryCommentReactionStore()
 	}
 	return s
 }
@@ -166,6 +177,26 @@ func WithEventPublisher(pub repository.EventPublisher) PostServiceOption {
 // WithProjector enables in-process read-model projection after writes.
 func WithProjector(p Projector) PostServiceOption {
 	return func(s *PostService) { s.projector = p }
+}
+
+// WithCommentStore injects the comment repository (Mongo+Redis in beta/gamma/prod,
+// in-memory in alpha/tests). Interface lives in the domain layer (R01/R10).
+func WithCommentStore(store commentdomain.Store) PostServiceOption {
+	return func(s *PostService) {
+		if store != nil {
+			s.commentStore = store
+		}
+	}
+}
+
+// WithCommentReactionStore injects the authoritative three-state comment reaction
+// store. Membership is authoritative; per-comment counts are derived from it.
+func WithCommentReactionStore(store commentdomain.ReactionStore) PostServiceOption {
+	return func(s *PostService) {
+		if store != nil {
+			s.commentReactionStore = store
+		}
+	}
 }
 
 // WithLogger sets a structured logger.
@@ -1424,49 +1455,38 @@ func (s *PostService) BindMediaAssetsToPost(_ context.Context, postID string, as
 	}, nil
 }
 
-func (s *PostService) BindMediaAssetsToComment(_ context.Context, commentID, userID string, assetIDs []string) (map[string]any, error) {
+func (s *PostService) BindMediaAssetsToComment(ctx context.Context, commentID, userID string, assetIDs []string) (map[string]any, error) {
 	commentID = strings.TrimSpace(commentID)
 	if commentID == "" {
 		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "commentId 不能为空", "missing commentId")
 	}
 	userID = strings.TrimSpace(userID)
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
-	var comment map[string]any
-	var postID string
-	for _, comments := range s.comments {
-		for _, c := range comments {
-			if cid, _ := c["_id"].(string); cid == commentID {
-				comment = c
-				postID = asString(c["postId"])
-				break
-			}
-		}
-		if comment != nil {
-			break
-		}
-	}
-	if comment == nil {
+	comment, found := s.commentStore.FindByID(ctx, commentID)
+	if !found || strings.TrimSpace(comment.Status) == "deleted" {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_not_found"),
 			"评论不存在",
 			"comment not found",
 		)
 	}
-	if authorID := strings.TrimSpace(asString(comment["authorId"])); userID != "" && authorID != "" && authorID != userID {
+	authorID := strings.TrimSpace(comment.AuthorId)
+	if userID != "" && authorID != "" && authorID != userID {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_forbidden_update"),
 			"无权更新此评论附件",
 			"comment author mismatch",
 		)
 	}
-	boundIDs, attachments, err := s.prepareCommentAttachmentsLocked(postID, asString(comment["authorId"]), assetIDs)
+	boundIDs, attachments, err := s.prepareCommentAttachments(comment.PostId, authorID, assetIDs)
 	if err != nil {
 		return nil, err
 	}
-	comment["attachmentMediaIds"] = boundIDs
-	comment["attachments"] = attachments
+	if _, err := s.commentStore.SetAttachments(ctx, commentID, boundIDs, attachments); err != nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleContent, "附件绑定失败，请稍后重试", "comment set attachments failed: "+err.Error(),
+		)
+	}
 	return map[string]any{
 		"commentId":     commentID,
 		"boundAssetIds": boundIDs,
@@ -1669,10 +1689,12 @@ func (s *PostService) GetReactionState(postID, userID, deviceActorID string) (li
 func (s *PostService) ListProfileInteractionActivities(
 	ctx context.Context,
 	profileSubjectID string,
+	viewerID string,
 	direction string,
 	limit int,
 ) ([]postmodel.ProfileInteractionActivityView, error) {
 	profileSubjectID = strings.TrimSpace(profileSubjectID)
+	viewerID = strings.TrimSpace(viewerID)
 	direction = strings.TrimSpace(direction)
 	if profileSubjectID == "" {
 		return []postmodel.ProfileInteractionActivityView{}, nil
@@ -1683,99 +1705,67 @@ func (s *PostService) ListProfileInteractionActivities(
 	if limit <= 0 {
 		limit = 20
 	}
+	if limit > profileInteractionActivityMaxLimit {
+		limit = profileInteractionActivityMaxLimit
+	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// 点赞/转发仍为进程内互动：读锁内只做轻量快照（不触达外部 store、不构造投影）。
+	refs := s.snapshotProfileInteractionRefs(profileSubjectID, direction)
+	// 评论互动已迁出内存：经 commentStore 持久化读取（Mongo+Redis 或内存降级）。
+	commentRefs, err := s.gatherCommentInteractionRefs(ctx, profileSubjectID, direction)
+	if err != nil {
+		return nil, err
+	}
+	refs = append(refs, commentRefs...)
 
-	items := make([]postmodel.ProfileInteractionActivityView, 0)
-	for postID, byUser := range s.reactions {
-		post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-		if !ok {
-			continue
+	// viewer 对互动评论的真实三态反应：一次性批量解析（避免 N+1）。
+	commentIDs := make([]string, 0, len(commentRefs))
+	for _, ref := range commentRefs {
+		if ref.commentModel != nil {
+			commentIDs = append(commentIDs, ref.commentModel.ID)
 		}
-		for actorID, state := range byUser {
-			if !state.Liked {
-				continue
-			}
-			if direction == "received" {
-				if post.AuthorId != profileSubjectID || actorID == profileSubjectID {
-					continue
-				}
-			} else if actorID != profileSubjectID {
-				continue
-			}
-			items = append(items, buildProfileInteractionActivityView(profileInteractionProjectionInput{
-				ActivityID:         fmt.Sprintf("like:%s:%s", postID, actorID),
-				ActivityType:       "like",
-				Direction:          direction,
-				ActorID:            actorID,
-				TargetSubAccountID: post.AuthorId,
-				Post:               post,
-				CreatedAt:          post.UpdatedAt,
-			}))
+	}
+	viewerReactions := map[string]commentdomain.Reaction{}
+	if viewerID != "" && len(commentIDs) > 0 {
+		if m, rerr := s.commentReactionStore.ReactionsForUser(ctx, viewerID, commentIDs); rerr == nil {
+			viewerReactions = m
+		} else {
+			s.logger.Warn("ListProfileInteractionActivities: viewer reactions failed", "error", rerr.Error())
 		}
 	}
 
-	for postID, comments := range s.comments {
-		post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-		if !ok {
+	// 按 postID 去重 hydrate（每条作品仅取一次），再投影 / 归属过滤 / 排序 / 截断。
+	postCache := make(map[string]*postmodel.Post, len(refs))
+	items := make([]postmodel.ProfileInteractionActivityView, 0, len(refs))
+	for _, ref := range refs {
+		post, cached := postCache[ref.postID]
+		if !cached {
+			post, _ = s.store.FindByID(ctx, ref.postID)
+			postCache[ref.postID] = post
+		}
+		if post == nil {
 			continue
 		}
-		for _, comment := range comments {
-			if deletedAt, _ := comment["deletedAt"].(string); deletedAt != "" {
-				continue
-			}
-			actorID, _ := comment["authorId"].(string)
-			if direction == "received" {
-				if post.AuthorId != profileSubjectID || actorID == profileSubjectID {
-					continue
-				}
-			} else if actorID != profileSubjectID {
-				continue
-			}
-			items = append(items, buildProfileInteractionActivityView(profileInteractionProjectionInput{
-				ActivityID:         fmt.Sprintf("comment:%s", stringValue(comment["_id"])),
-				ActivityType:       "comment",
-				Direction:          direction,
-				ActorID:            actorID,
-				TargetSubAccountID: post.AuthorId,
-				Post:               post,
-				Comment:            comment,
-				CreatedAt:          parseActivityTime(comment["createdAt"]),
-			}))
-		}
-	}
-
-	for postID, shares := range s.reshares {
-		post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-		if !ok {
+		if direction == "received" && post.AuthorId != profileSubjectID {
 			continue
 		}
-		for shareKey, active := range shares {
-			if !active {
-				continue
-			}
-			actorID := shareActorID(shareKey)
-			if actorID == "" {
-				continue
-			}
-			if direction == "received" {
-				if post.AuthorId != profileSubjectID || actorID == profileSubjectID {
-					continue
-				}
-			} else if actorID != profileSubjectID {
-				continue
-			}
-			items = append(items, buildProfileInteractionActivityView(profileInteractionProjectionInput{
-				ActivityID:         fmt.Sprintf("share:%s:%s", postID, actorID),
-				ActivityType:       "share",
-				Direction:          direction,
-				ActorID:            actorID,
-				TargetSubAccountID: post.AuthorId,
-				Post:               post,
-				CreatedAt:          post.UpdatedAt,
-			}))
+		createdAt := post.UpdatedAt
+		viewerReaction := ""
+		if ref.activityType == "comment" && ref.commentModel != nil {
+			createdAt = ref.commentModel.CreatedAt
+			viewerReaction = string(viewerReactions[ref.commentModel.ID])
 		}
+		items = append(items, buildProfileInteractionActivityView(profileInteractionProjectionInput{
+			ActivityID:         ref.activityID,
+			ActivityType:       ref.activityType,
+			Direction:          direction,
+			ActorID:            ref.actorID,
+			TargetSubAccountID: post.AuthorId,
+			Post:               post,
+			Comment:            ref.commentModel,
+			ViewerReaction:     viewerReaction,
+			CreatedAt:          createdAt,
+		}))
 	}
 
 	sort.Slice(items, func(i, j int) bool {
@@ -1787,13 +1777,135 @@ func (s *PostService) ListProfileInteractionActivities(
 	return items, nil
 }
 
-func parseActivityTime(raw any) time.Time {
-	if s, ok := raw.(string); ok {
-		if parsed, err := time.Parse(time.RFC3339, s); err == nil {
-			return parsed
+// profileInteractionActivityMaxLimit clamp 上界：杜绝调用方传入超大 limit 触发无界结果集。
+const profileInteractionActivityMaxLimit = 50
+
+// profileInteractionRef 是轻量互动引用；不携带作品/投影，hydrate 推迟到后续阶段。
+// 评论互动携带强类型评论模型（R04），点赞/转发互动不携带评论。
+type profileInteractionRef struct {
+	activityID   string
+	activityType string
+	actorID      string
+	postID       string
+	commentModel *postmodel.Comment
+}
+
+// gatherCommentInteractionRefs 经 commentStore 收集匹配方向的评论互动引用：
+// sent = 主页主体发表的评论；received = 他人对主页主体作品发表的评论。
+// 评论权威存储已迁出进程内存（R-CMT01），此处读取持久化层而非内存快照。
+func (s *PostService) gatherCommentInteractionRefs(
+	ctx context.Context,
+	profileSubjectID string,
+	direction string,
+) ([]profileInteractionRef, error) {
+	var comments []postmodel.Comment
+	if direction == "sent" {
+		page, err := s.commentStore.ListByAuthor(ctx, profileSubjectID, "", profileInteractionActivityMaxLimit)
+		if err != nil {
+			return nil, rterr.NewUnavailable(
+				rterr.ModuleContent, "互动加载失败，请稍后重试", "gather sent comment interactions failed: "+err.Error(),
+			)
+		}
+		comments = page.Comments
+	} else {
+		authored := s.store.ListByAuthor(ctx, profileSubjectID, 10000, "")
+		postIDs := make([]string, 0, len(authored))
+		for _, p := range authored {
+			postIDs = append(postIDs, p.ID)
+		}
+		if len(postIDs) == 0 {
+			return nil, nil
+		}
+		page, err := s.commentStore.ListReceivedByPostAuthor(ctx, profileSubjectID, postIDs, "", profileInteractionActivityMaxLimit)
+		if err != nil {
+			return nil, rterr.NewUnavailable(
+				rterr.ModuleContent, "互动加载失败，请稍后重试", "gather received comment interactions failed: "+err.Error(),
+			)
+		}
+		comments = page.Comments
+	}
+	refs := make([]profileInteractionRef, 0, len(comments))
+	for i := range comments {
+		c := comments[i]
+		actorID := strings.TrimSpace(c.AuthorId)
+		if !profileInteractionActorMatches(direction, actorID, profileSubjectID) {
+			continue
+		}
+		model := c
+		refs = append(refs, profileInteractionRef{
+			activityID:   fmt.Sprintf("comment:%s", c.ID),
+			activityType: "comment",
+			actorID:      actorID,
+			postID:       strings.TrimSpace(c.PostId),
+			commentModel: &model,
+		})
+	}
+	return refs, nil
+}
+
+// snapshotProfileInteractionRefs 在读锁内收集匹配方向/主页主体的点赞/转发互动引用。
+// 仅做内存遍历与方向侧（actor）过滤，不调用外部 post store；received 的作者归属在锁外
+// hydrate 后再校验。评论互动改由 gatherCommentInteractionRefs 经持久化层收集。
+func (s *PostService) snapshotProfileInteractionRefs(
+	profileSubjectID string,
+	direction string,
+) []profileInteractionRef {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	refs := make([]profileInteractionRef, 0)
+
+	for postID, byUser := range s.reactions {
+		pid := strings.TrimSpace(postID)
+		for actorID, state := range byUser {
+			if !state.Liked {
+				continue
+			}
+			if !profileInteractionActorMatches(direction, actorID, profileSubjectID) {
+				continue
+			}
+			refs = append(refs, profileInteractionRef{
+				activityID:   fmt.Sprintf("like:%s:%s", pid, actorID),
+				activityType: "like",
+				actorID:      actorID,
+				postID:       pid,
+			})
 		}
 	}
-	return time.Now().UTC()
+
+	for postID, shares := range s.reshares {
+		pid := strings.TrimSpace(postID)
+		for shareKey, active := range shares {
+			if !active {
+				continue
+			}
+			actorID := shareActorID(shareKey)
+			if actorID == "" {
+				continue
+			}
+			if !profileInteractionActorMatches(direction, actorID, profileSubjectID) {
+				continue
+			}
+			refs = append(refs, profileInteractionRef{
+				activityID:   fmt.Sprintf("share:%s:%s", pid, actorID),
+				activityType: "share",
+				actorID:      actorID,
+				postID:       pid,
+			})
+		}
+	}
+
+	return refs
+}
+
+// profileInteractionActorMatches 仅做方向侧（actor）匹配：sent 要求 actor 即主页主体；
+// received 要求 actor 非主页主体（作者归属在锁外 hydrate 后再校验）。
+func profileInteractionActorMatches(direction, actorID, profileSubjectID string) bool {
+	actorID = strings.TrimSpace(actorID)
+	if direction == "sent" {
+		return actorID == profileSubjectID
+	}
+	return actorID != profileSubjectID
 }
 
 func shareActorID(shareKey string) string {
@@ -1802,13 +1914,6 @@ func shareActorID(shareKey string) string {
 		return ""
 	}
 	return strings.TrimSpace(parts[len(parts)-1])
-}
-
-func stringValue(raw any) string {
-	if value, ok := raw.(string); ok {
-		return value
-	}
-	return ""
 }
 
 func (s *PostService) AddComment(
@@ -1858,82 +1963,92 @@ func (s *PostService) AddComment(
 	replyToCommentID = strings.TrimSpace(replyToCommentID)
 	var replyToUserId string
 	var parentCommentID string
-	s.mu.Lock()
+	now := time.Now().UTC()
 	if replyToCommentID != "" {
-		foundReplyTarget := false
-		for _, c := range s.comments[post.ID] {
-			if cid, _ := c["_id"].(string); cid == replyToCommentID {
-				replyToUserId, _ = c["authorId"].(string)
-				foundReplyTarget = true
-				parentCommentID, _ = c["parentCommentId"].(string)
-				if parentCommentID == "" {
-					parentCommentID = replyToCommentID
-				}
-				break
-			}
-		}
-		if !foundReplyTarget {
-			s.mu.Unlock()
+		target, found := s.commentStore.FindByID(ctx, replyToCommentID)
+		if !found {
 			return nil, 0, rterr.NewAppError(
 				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_not_found"),
 				"回复目标不存在",
 				"reply target comment not found",
 			)
 		}
-		for _, c := range s.comments[post.ID] {
-			if cid, _ := c["_id"].(string); cid == parentCommentID {
-				rc := asInt64Flexible(c["replyCount"])
-				c["replyCount"] = rc + 1
-				break
+		replyToUserId = strings.TrimSpace(target.AuthorId)
+		parentCommentID = strings.TrimSpace(target.ParentCommentId)
+		if parentCommentID == "" {
+			parentCommentID = replyToCommentID
+		}
+		// 回复数变化影响父评论综合分：原子 +1 并落写时确定性快照分。
+		if parent, pok := s.commentStore.FindByID(ctx, parentCommentID); pok {
+			projectedParent := *parent
+			projectedParent.ReplyCount = parent.ReplyCount + 1
+			newScore := commentRecommendedScoreModel(projectedParent, now)
+			if _, _, err := s.commentStore.AdjustReplyCount(ctx, parentCommentID, 1, newScore); err != nil {
+				s.logger.Warn("AddComment: adjust parent reply count failed", "error", err.Error())
 			}
 		}
 	}
-	attachmentIDs, attachments, err := s.prepareCommentAttachmentsLocked(post.ID, authorID, attachmentMediaIDs)
+
+	// 媒体附件绑定仍依赖进程内存的 mediaAssets，单独短临界区加锁。
+	attachmentIDs, attachments, err := s.prepareCommentAttachments(post.ID, authorID, attachmentMediaIDs)
 	if err != nil {
-		s.mu.Unlock()
 		return nil, 0, err
 	}
 	normalizedMentions := normalizeCommentMentions(mentions)
 	assistantMentioned := commentHasAssistantMention(normalizedMentions)
 
-	now := time.Now().UTC()
-	post.CommentCount++
-	post.UpdatedAt = now
-	_ = s.store.Update(ctx, post.ID, post)
-
-	isAuthor := authorID == post.AuthorId
-	comment := map[string]any{
-		"_id":      fmt.Sprintf("comment_%d", now.UnixNano()),
-		"postId":   post.ID,
-		"authorId": authorID,
-		"personaContextVersion": asInt64Flexible(
-			personaContextVersion,
-		),
-		"content":            content,
-		"replyToCommentId":   replyToCommentID,
-		"replyToUserId":      replyToUserId,
-		"parentCommentId":    parentCommentID,
-		"attachmentMediaIds": attachmentIDs,
-		"attachments":        attachments,
-		"mentions":           normalizedMentions,
-		"assistantMentioned": assistantMentioned,
-		"replyCount":         int64(0),
-		"likeCount":          int64(0),
-		"dislikeCount":       int64(0),
-		"reportCount":        int64(0),
-		"viewerReaction":     "none",
-		"recommendedScore":   float64(0),
-		"status":             "visible",
-		"isAuthor":           isAuthor,
-		"canDelete":          true,
-		"canReply":           true,
-		"canReport":          false,
-		"createdAt":          now.Format(time.RFC3339),
-		"deletedAt":          "",
+	// 评论属地：创建时按受信客户端 IP 解析省级展示串并落库快照；
+	// 解析不出则留空（前端不展示），绝不臆造属地。
+	ipLocation := ""
+	if s.ipResolver != nil {
+		ipLocation = strings.TrimSpace(s.ipResolver.Resolve(clientIPFromContext(ctx)))
 	}
-	s.comments[post.ID] = append(s.comments[post.ID], comment)
-	projectedComment := s.projectCommentForViewerLocked(comment, authorID, true)
-	s.mu.Unlock()
+	comment := postmodel.Comment{
+		ID:                    fmt.Sprintf("comment_%d", now.UnixNano()),
+		PostId:                post.ID,
+		AuthorId:              authorID,
+		PersonaContextVersion: asInt64Flexible(personaContextVersion),
+		Content:               content,
+		IpLocation:            ipLocation,
+		ReplyToCommentId:      replyToCommentID,
+		ReplyToUserId:         replyToUserId,
+		ParentCommentId:       parentCommentID,
+		AttachmentMediaIds:    attachmentIDs,
+		Attachments:           attachments,
+		Mentions:              normalizedMentions,
+		AssistantMentioned:    assistantMentioned,
+		ReplyCount:            0,
+		LikeCount:             0,
+		DislikeCount:          0,
+		ViewerReaction:        "none",
+		RecommendedScore:      0,
+		Status:                "visible",
+		CanDelete:             true,
+		CanReply:              true,
+		CanReport:             false,
+		CreatedAt:             now,
+	}
+	// 综合分写时确定性预计算并落字段：排序只读快照值，消除读路径 time.Since 漂移。
+	comment.RecommendedScore = commentRecommendedScoreModel(comment, now)
+	if err := s.commentStore.Create(ctx, &comment); err != nil {
+		return nil, 0, rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"评论保存失败，请稍后重试",
+			"comment persist failed: "+err.Error(),
+		)
+	}
+
+	// 计数热路径：单字段原子 $inc(+1)，消除每次增删的全量 CountDocuments + 整文档
+	// 改写热写。单一真相源仍是评论集 DB count；Post.commentCount 仅为去规范化加速
+	// 器，GetCounters 读路径按权威 count 机会式自愈漂移。$inc 失败才回退权威对账。
+	commentCount, ok, err := s.store.AdjustCommentCount(ctx, post.ID, 1)
+	if err != nil || !ok {
+		if err != nil {
+			s.logger.Warn("AddComment: adjust comment count failed", "postId", post.ID, "error", err.Error())
+		}
+		commentCount = s.reconcilePostCommentCount(ctx, post.ID)
+	}
+	projectedComment := s.projectCommentSingle(ctx, comment, authorID, true)
 
 	if s.publisher != nil {
 		featurePayload := commentFeaturePayload(*post, content, parentCommentID, replyToUserId, attachments)
@@ -1942,7 +2057,7 @@ func (s *PostService) AddComment(
 			AggregateType: "Post",
 			AggregateID:   post.ID,
 			Payload: map[string]any{
-				"commentId":             comment["_id"],
+				"commentId":             comment.ID,
 				"postId":                post.ID,
 				"authorId":              authorID,
 				"content":               content,
@@ -1965,147 +2080,89 @@ func (s *PostService) AddComment(
 		})
 	}
 
-	return projectedComment, post.CommentCount, nil
+	return projectedComment, commentCount, nil
 }
 
-func (s *PostService) ListComments(_ context.Context, postID, viewerID, cursor, sort string, limit int) ([]map[string]any, string, error) {
+// prepareCommentAttachments locks the in-memory media asset table only for the
+// duration of attachment binding (asset table is the last in-process state).
+func (s *PostService) prepareCommentAttachments(postID, authorID string, assetIDs []string) ([]string, []map[string]any, error) {
+	if len(assetIDs) == 0 {
+		return []string{}, []map[string]any{}, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.prepareCommentAttachmentsLocked(postID, authorID, assetIDs)
+}
+
+// reconcilePostCommentCount recomputes the authoritative non-deleted comment
+// count (top-level + replies) from the comment store and converges the
+// denormalized Post.commentCount accelerator to it via a single atomic $set
+// (no full-document rewrite). The comment-collection count is the single source
+// of truth; this is the self-heal / error-fallback path, NOT the hot write path
+// (Add/Delete use atomic $inc — see AddComment/DeleteComment).
+func (s *PostService) reconcilePostCommentCount(ctx context.Context, postID string) int64 {
+	n, err := s.commentStore.CountByPost(ctx, postID)
+	if err != nil {
+		s.logger.Warn("reconcile comment count failed", "postId", postID, "error", err.Error())
+		if post, ok := s.store.FindByID(ctx, postID); ok {
+			return post.CommentCount
+		}
+		return 0
+	}
+	if _, err := s.store.SetCommentCount(ctx, postID, n); err != nil {
+		s.logger.Warn("reconcile set comment count failed", "postId", postID, "error", err.Error())
+	}
+	return n
+}
+
+func (s *PostService) ListComments(ctx context.Context, postID, viewerID, cursor, sort string, limit int) ([]map[string]any, string, int, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	all := s.comments[strings.TrimSpace(postID)]
-	active := make([]map[string]any, 0, len(all))
-	for _, c := range all {
-		if del, _ := c["deletedAt"].(string); del != "" {
-			continue
-		}
-		if commentParentID(c) != "" {
-			continue
-		}
-		active = append(active, c)
+	postID = strings.TrimSpace(postID)
+	mode := commentdomain.NormalizeSortMode(sort)
+	page, err := s.commentStore.ListTopLevel(ctx, postID, mode, strings.TrimSpace(cursor), limit)
+	if err != nil {
+		return nil, "", 0, rterr.NewUnavailable(
+			rterr.ModuleContent, "评论加载失败，请稍后重试", "list comments failed: "+err.Error(),
+		)
 	}
-
-	sortCommentsByMode(active, sort)
-
-	startIdx := 0
-	if cursor != "" {
-		for i, c := range active {
-			if cid, _ := c["_id"].(string); cid == cursor {
-				startIdx = i + 1
-				break
-			}
-		}
+	// totalCount 单一真相源：DB 权威 count（含二级、排除软删），与切换排序无关。
+	totalCount, err := s.commentStore.CountByPost(ctx, postID)
+	if err != nil {
+		s.logger.Warn("ListComments: count failed", "postId", postID, "error", err.Error())
 	}
-
-	if startIdx >= len(active) {
-		return []map[string]any{}, "", nil
-	}
-	end := startIdx + limit
-	if end > len(active) {
-		end = len(active)
-	}
-	page := active[startIdx:end]
-	nextCursor := ""
-	if end < len(active) {
-		if cid, ok := page[len(page)-1]["_id"].(string); ok {
-			nextCursor = cid
-		}
-	}
-	projected := make([]map[string]any, 0, len(page))
-	for _, c := range page {
-		projected = append(projected, s.projectCommentForViewerLocked(c, viewerID, true))
-	}
-	return projected, nextCursor, nil
+	projected := s.projectCommentPage(ctx, postID, page.Comments, viewerID, true)
+	return projected, page.NextCursor, int(totalCount), nil
 }
 
-func (s *PostService) ListCommentReplies(_ context.Context, postID, commentID, viewerID, cursor string, limit int) ([]map[string]any, string, error) {
+func (s *PostService) ListCommentReplies(ctx context.Context, postID, commentID, viewerID, cursor string, limit int) ([]map[string]any, string, int, error) {
 	if limit <= 0 {
 		limit = 10
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+	postID = strings.TrimSpace(postID)
 	parentID := strings.TrimSpace(commentID)
-	all := s.comments[strings.TrimSpace(postID)]
-	active := make([]map[string]any, 0, len(all))
-	parentFound := false
-	for _, c := range all {
-		cid, _ := c["_id"].(string)
-		if cid == parentID {
-			parentFound = true
-		}
-		if del, _ := c["deletedAt"].(string); del != "" {
-			continue
-		}
-		if commentParentID(c) == parentID {
-			active = append(active, c)
-		}
-	}
-	if !parentFound {
-		return nil, "", rterr.NewAppError(
+	parent, found := s.commentStore.FindByID(ctx, parentID)
+	if !found || strings.TrimSpace(parent.PostId) != postID || strings.TrimSpace(parent.Status) == "deleted" {
+		return nil, "", 0, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_not_found"),
 			"评论不存在",
 			"parent comment not found",
 		)
 	}
-	sortCommentsByMode(active, "latest")
-	startIdx := 0
-	if cursor != "" {
-		for i, c := range active {
-			if cid, _ := c["_id"].(string); cid == cursor {
-				startIdx = i + 1
-				break
-			}
-		}
+	page, err := s.commentStore.ListReplies(ctx, postID, parentID, strings.TrimSpace(cursor), limit)
+	if err != nil {
+		return nil, "", 0, rterr.NewUnavailable(
+			rterr.ModuleContent, "回复加载失败，请稍后重试", "list replies failed: "+err.Error(),
+		)
 	}
-	if startIdx >= len(active) {
-		return []map[string]any{}, "", nil
+	// 该父评论下全部非删除回复数，作为渐进分页「展开 N 条回复」的权威总数。
+	totalCount, err := s.commentStore.CountReplies(ctx, postID, parentID)
+	if err != nil {
+		s.logger.Warn("ListCommentReplies: count failed", "parentId", parentID, "error", err.Error())
 	}
-	end := startIdx + limit
-	if end > len(active) {
-		end = len(active)
-	}
-	page := active[startIdx:end]
-	nextCursor := ""
-	if end < len(active) {
-		if cid, ok := page[len(page)-1]["_id"].(string); ok {
-			nextCursor = cid
-		}
-	}
-	projected := make([]map[string]any, 0, len(page))
-	for _, c := range page {
-		projected = append(projected, s.projectCommentForViewerLocked(c, viewerID, false))
-	}
-	return projected, nextCursor, nil
-}
-
-func sortCommentsByMode(comments []map[string]any, sortMode string) {
-	mode := strings.TrimSpace(sortMode)
-	if mode == "" {
-		mode = "recommended"
-	}
-	sort.SliceStable(comments, func(i, j int) bool {
-		left := comments[i]
-		right := comments[j]
-		switch mode {
-		case "latest":
-			return commentCreatedAt(left).After(commentCreatedAt(right))
-		case "most_liked":
-			if asInt64Flexible(left["likeCount"]) == asInt64Flexible(right["likeCount"]) {
-				return commentCreatedAt(left).After(commentCreatedAt(right))
-			}
-			return asInt64Flexible(left["likeCount"]) > asInt64Flexible(right["likeCount"])
-		default:
-			leftScore := commentRecommendedScore(left)
-			rightScore := commentRecommendedScore(right)
-			if leftScore == rightScore {
-				return commentCreatedAt(left).After(commentCreatedAt(right))
-			}
-			return leftScore > rightScore
-		}
-	})
+	projected := s.projectCommentPage(ctx, postID, page.Comments, viewerID, false)
+	return projected, page.NextCursor, int(totalCount), nil
 }
 
 func (s *PostService) syncArticleMarkdownSnapshot(post *postmodel.Post) {
@@ -2244,38 +2301,30 @@ func markdownAssetURIs(markdown string) []string {
 	return result
 }
 
-func commentRecommendedScore(c map[string]any) float64 {
-	if score, ok := c["recommendedScore"].(float64); ok && score != 0 {
-		return score
+// wilsonLowerBound 返回赞占比的 Wilson 95% 置信下界（positive/total），
+// 低样本时收敛保守，避免「1 赞 0 踩」直接压过「99 赞 1 踩」。
+func wilsonLowerBound(positive, total int64) float64 {
+	if total <= 0 || positive < 0 {
+		return 0
 	}
-	likes := asInt64Flexible(c["likeCount"])
-	dislikes := asInt64Flexible(c["dislikeCount"])
-	reports := asInt64Flexible(c["reportCount"])
-	replies := asInt64Flexible(c["replyCount"])
-	ageHours := time.Since(commentCreatedAt(c)).Hours()
-	freshness := 24.0 - ageHours
-	if freshness < 0 {
-		freshness = 0
+	n := float64(total)
+	phat := float64(positive) / n
+	const z = 1.96
+	denom := 1 + z*z/n
+	centre := phat + z*z/(2*n)
+	margin := z * math.Sqrt((phat*(1-phat)+z*z/(4*n))/n)
+	lower := (centre - margin) / denom
+	if lower < 0 {
+		return 0
 	}
-	return float64(likes)*10 - float64(dislikes)*8 - float64(reports)*20 + float64(replies)*5 + freshness
+	return lower
 }
 
-func commentCreatedAt(c map[string]any) time.Time {
-	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(asString(c["createdAt"]))); err == nil {
-		return t
+func maxInt64(a, b int64) int64 {
+	if a > b {
+		return a
 	}
-	return time.Time{}
-}
-
-func commentParentID(c map[string]any) string {
-	parentID := strings.TrimSpace(asString(c["parentCommentId"]))
-	if parentID != "" {
-		return parentID
-	}
-	if replyToID := strings.TrimSpace(asString(c["replyToCommentId"])); replyToID != "" {
-		return replyToID
-	}
-	return ""
+	return b
 }
 
 func commentReplyDepth(parentCommentID string) int {
@@ -2438,121 +2487,60 @@ func commentAttachmentSnapshot(asset postmodel.MediaAsset) map[string]any {
 	}
 }
 
-func (s *PostService) projectCommentForViewerLocked(c map[string]any, viewerID string, includePreview bool) map[string]any {
-	projected := map[string]any{}
-	for k, v := range c {
-		projected[k] = v
-	}
-	commentID := strings.TrimSpace(asString(c["_id"]))
-	authorID := strings.TrimSpace(asString(c["authorId"]))
-	viewerID = strings.TrimSpace(viewerID)
-	reaction := "none"
-	if byUser := s.commentReactions[commentID]; byUser != nil {
-		if v := strings.TrimSpace(byUser[viewerID]); v == "like" || v == "dislike" {
-			reaction = v
-		}
-	}
-	projected["viewerReaction"] = reaction
-	projected["likeCount"] = asInt64Flexible(c["likeCount"])
-	projected["dislikeCount"] = asInt64Flexible(c["dislikeCount"])
-	projected["replyCount"] = asInt64Flexible(c["replyCount"])
-	projected["recommendedScore"] = commentRecommendedScore(c)
-	projected["isAuthor"] = viewerID != "" && viewerID == authorID
-	projected["canDelete"] = viewerID != "" && viewerID == authorID
-	projected["canReply"] = strings.TrimSpace(asString(c["status"])) != "deleted"
-	projected["canReport"] = viewerID != "" && viewerID != authorID
-	if post, ok := s.store.FindByID(context.Background(), strings.TrimSpace(asString(c["postId"]))); ok {
-		projected["postSummary"] = map[string]any{
-			"postId":      post.ID,
-			"contentType": post.ContentType,
-			"title":       defaultString(strings.TrimSpace(post.Title), strings.TrimSpace(post.Summary)),
-			"coverUrl":    post.CoverUrl,
-			"status":      post.Status,
-			"visibility":  post.Visibility,
-			"authorId":    post.AuthorId,
-		}
-	}
-	if !includePreview {
-		projected["replyPreview"] = []map[string]any{}
-		projected["replyNextCursor"] = ""
-		return projected
-	}
-	parentID := commentID
-	replies := make([]map[string]any, 0, 1)
-	for _, candidate := range s.comments[strings.TrimSpace(asString(c["postId"]))] {
-		if del, _ := candidate["deletedAt"].(string); del != "" {
-			continue
-		}
-		if commentParentID(candidate) == parentID {
-			replies = append(replies, candidate)
-		}
-	}
-	sortCommentsByMode(replies, "latest")
-	preview := []map[string]any{}
-	for i, reply := range replies {
-		if i >= 1 {
-			break
-		}
-		preview = append(preview, s.projectCommentForViewerLocked(reply, viewerID, false))
-	}
-	projected["replyPreview"] = preview
-	if len(replies) > len(preview) && len(preview) > 0 {
-		projected["replyNextCursor"] = asString(preview[len(preview)-1]["_id"])
-	} else {
-		projected["replyNextCursor"] = ""
-	}
-	return projected
-}
-
 func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, userID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	postID = strings.TrimSpace(postID)
+	commentID = strings.TrimSpace(commentID)
+	userID = strings.TrimSpace(userID)
 
-	comments := s.comments[strings.TrimSpace(postID)]
-	found := false
-	for i, c := range comments {
-		cid, _ := c["_id"].(string)
-		if cid != strings.TrimSpace(commentID) {
-			continue
-		}
-		author, _ := c["authorId"].(string)
-		if userID != "" && author != "" && author != userID {
-			return rterr.NewAppError(
-				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_forbidden_delete"),
-				"无权删除此评论",
-				"comment author mismatch",
-			)
-		}
-		comments[i]["deletedAt"] = time.Now().UTC().Format(time.RFC3339)
-		comments[i]["status"] = "deleted"
-		found = true
-
-		if parentID, _ := c["replyToCommentId"].(string); parentID != "" {
-			for _, pc := range comments {
-				if pid, _ := pc["_id"].(string); pid == parentID {
-					rc, _ := pc["replyCount"].(int64)
-					if rc > 0 {
-						pc["replyCount"] = rc - 1
-					}
-					break
-				}
-			}
-		}
-		break
-	}
-	if !found {
+	existing, found := s.commentStore.FindByID(ctx, commentID)
+	if !found || strings.TrimSpace(existing.PostId) != postID || strings.TrimSpace(existing.Status) == "deleted" {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"评论不存在",
 			"comment not found",
 		)
 	}
+	if author := strings.TrimSpace(existing.AuthorId); userID != "" && author != "" && author != userID {
+		return rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_forbidden_delete"),
+			"无权删除此评论",
+			"comment author mismatch",
+		)
+	}
 
-	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-	if ok && post.CommentCount > 0 {
-		post.CommentCount--
-		post.UpdatedAt = time.Now().UTC()
-		_ = s.store.Update(ctx, post.ID, post)
+	_, removed, err := s.commentStore.SoftDelete(ctx, commentID, time.Now().UTC())
+	if err != nil {
+		return rterr.NewUnavailable(
+			rterr.ModuleContent, "评论删除失败，请稍后重试", "comment soft delete failed: "+err.Error(),
+		)
+	}
+	if !removed {
+		// 并发下另一删除已抢先落地（SoftDelete 仅对未删文档生效）：幂等返回，
+		// 不重复递减计数、不重复回收父 replyCount，避免双重扣减。
+		return nil
+	}
+	// 删除回复时回收父评论 replyCount 并重算父评论快照分。
+	if parentID := commentParentOfModel(*existing); parentID != "" {
+		if parent, pok := s.commentStore.FindByID(ctx, parentID); pok {
+			projectedParent := *parent
+			if projectedParent.ReplyCount > 0 {
+				projectedParent.ReplyCount--
+			}
+			newScore := commentRecommendedScoreModel(projectedParent, time.Now().UTC())
+			if _, _, err := s.commentStore.AdjustReplyCount(ctx, parentID, -1, newScore); err != nil {
+				s.logger.Warn("DeleteComment: adjust parent reply count failed", "error", err.Error())
+			}
+		}
+	}
+	// 软删评论的全部三态反应一并清理（计数派生自成员关系，避免残留）。
+	if err := s.commentReactionStore.PurgeComment(ctx, commentID); err != nil {
+		s.logger.Warn("DeleteComment: purge reactions failed", "error", err.Error())
+	}
+	// 计数热路径：单字段原子 $inc(-1)。单一真相源仍是评论集 DB count，$inc 失败
+	// 才回退权威对账自愈。
+	if _, _, err := s.store.AdjustCommentCount(ctx, postID, -1); err != nil {
+		s.logger.Warn("DeleteComment: adjust comment count failed", "postId", postID, "error", err.Error())
+		s.reconcilePostCommentCount(ctx, postID)
 	}
 
 	if s.publisher != nil {
@@ -2573,6 +2561,78 @@ func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, user
 	return nil
 }
 
+// SetCommentPinned 由内容作者置顶/取消置顶一级评论。仅内容作者可操作，
+// 二级回复不可置顶。置顶时写入 isPinned/pinnedAt，取消时清空。
+func (s *PostService) SetCommentPinned(ctx context.Context, postID, commentID, userID string, pinned bool) (map[string]any, error) {
+	postID = strings.TrimSpace(postID)
+	commentID = strings.TrimSpace(commentID)
+	userID = strings.TrimSpace(userID)
+
+	post, ok := s.store.FindByID(ctx, postID)
+	if !ok {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+		)
+	}
+	if userID == "" || strings.TrimSpace(post.AuthorId) != userID {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_pin_forbidden"),
+			"仅内容作者可置顶评论",
+			"only post author can pin comments",
+		)
+	}
+
+	target, found := s.commentStore.FindByID(ctx, commentID)
+	if !found || strings.TrimSpace(target.PostId) != postID || strings.TrimSpace(target.Status) == "deleted" {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_not_found"),
+			"评论不存在",
+			"comment not found",
+		)
+	}
+	if !commentTopLevelModel(*target) {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_pin_invalid_target"),
+			"只能置顶一级评论",
+			"only top-level comments can be pinned",
+		)
+	}
+
+	if _, err := s.commentStore.SetPinned(ctx, commentID, pinned, time.Now().UTC()); err != nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleContent, "置顶操作失败，请稍后重试", "comment set pinned failed: "+err.Error(),
+		)
+	}
+	refreshed, _ := s.commentStore.FindByID(ctx, commentID)
+	if refreshed == nil {
+		refreshed = target
+	}
+	projected := s.projectCommentSingle(ctx, *refreshed, userID, true)
+
+	if s.publisher != nil {
+		action := "unpin"
+		if pinned {
+			action = "pin"
+		}
+		_ = s.publisher.Publish(ctx, repository.DomainEvent{
+			Type:          "CommentPinChanged",
+			AggregateType: "Post",
+			AggregateID:   postID,
+			Payload: map[string]any{
+				"commentId":   commentID,
+				"postId":      postID,
+				"operatorId":  userID,
+				"auditAction": action,
+				"auditedAt":   time.Now().UTC().Format(time.RFC3339),
+			},
+			OccurredAt: time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+	return projected, nil
+}
+
 func (s *PostService) ReactToComment(ctx context.Context, commentID, userID, reaction string) (map[string]any, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
@@ -2587,65 +2647,44 @@ func (s *PostService) ReactToComment(ctx context.Context, commentID, userID, rea
 		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "reaction 必须为 like/dislike/none", "invalid comment reaction")
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	var updated map[string]any
-	var postID string
-	var authorID string
-	for _, comments := range s.comments {
-		for _, c := range comments {
-			if cid, _ := c["_id"].(string); cid == commentID {
-				previous := "none"
-				if byUser := s.commentReactions[commentID]; byUser != nil {
-					if v := strings.TrimSpace(byUser[userID]); v == "like" || v == "dislike" {
-						previous = v
-					}
-				}
-				likeCount := asInt64Flexible(c["likeCount"])
-				dislikeCount := asInt64Flexible(c["dislikeCount"])
-				if previous == "like" && likeCount > 0 {
-					likeCount--
-				}
-				if previous == "dislike" && dislikeCount > 0 {
-					dislikeCount--
-				}
-				if reaction == "like" {
-					likeCount++
-				}
-				if reaction == "dislike" {
-					dislikeCount++
-				}
-				c["likeCount"] = likeCount
-				c["dislikeCount"] = dislikeCount
-				c["recommendedScore"] = commentRecommendedScore(c)
-				byUser := s.commentReactions[commentID]
-				if byUser == nil {
-					byUser = map[string]string{}
-					s.commentReactions[commentID] = byUser
-				}
-				if reaction == "none" {
-					delete(byUser, userID)
-				} else {
-					byUser[userID] = reaction
-				}
-				postID = asString(c["postId"])
-				authorID = asString(c["authorId"])
-				updated = s.projectCommentForViewerLocked(c, userID, false)
-				break
-			}
-		}
-		if updated != nil {
-			break
-		}
-	}
-	if updated == nil {
+	existing, found := s.commentStore.FindByID(ctx, commentID)
+	if !found || strings.TrimSpace(existing.Status) == "deleted" {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_not_found"),
 			"评论不存在",
 			"comment not found",
 		)
 	}
+	postID := strings.TrimSpace(existing.PostId)
+	authorID := strings.TrimSpace(existing.AuthorId)
+
+	desired, _ := commentdomain.NormalizeReaction(reaction)
+	// 三态反应权威成员关系落库（Mongo comment_reactions），幂等。
+	if err := s.commentReactionStore.Set(ctx, commentID, userID, desired); err != nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleContent, "操作失败，请稍后重试", "comment reaction set failed: "+err.Error(),
+		)
+	}
+	// 计数直接派生自权威成员关系（Mongo 索引 Count，并发下精确），落库的
+	// likeCount/recommendedScore 永不陈旧；不再经只写不读的 Redis 计数器回填。
+	likeCount, dislikeCount, err := s.commentReactionStore.Counts(ctx, commentID)
+	if err != nil {
+		s.logger.Warn("ReactToComment: counts failed", "commentId", commentID, "error", err.Error())
+		likeCount, dislikeCount = existing.LikeCount, existing.DislikeCount
+	}
+	now := time.Now().UTC()
+	scored := *existing
+	scored.LikeCount = likeCount
+	scored.DislikeCount = dislikeCount
+	newScore := commentRecommendedScoreModel(scored, now)
+	if _, err := s.commentStore.SetReactionState(ctx, commentID, likeCount, dislikeCount, newScore); err != nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleContent, "操作失败，请稍后重试", "comment reaction state failed: "+err.Error(),
+		)
+	}
+	scored.RecommendedScore = newScore
+	updated := s.projectCommentSingle(ctx, scored, userID, false)
+
 	if s.publisher != nil {
 		var featurePayload map[string]any
 		if post, ok := s.store.FindByID(ctx, postID); ok {
@@ -2679,58 +2718,19 @@ func (s *PostService) ReactToComment(ctx context.Context, commentID, userID, rea
 	return updated, nil
 }
 
-func (s *PostService) ListCommentsByAuthor(_ context.Context, userID, cursor string, limit int) ([]map[string]any, string, error) {
+func (s *PostService) ListCommentsByAuthor(ctx context.Context, userID, cursor string, limit int) ([]map[string]any, string, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	userID = strings.TrimSpace(userID)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	var all []map[string]any
-	for _, comments := range s.comments {
-		for _, c := range comments {
-			if del, _ := c["deletedAt"].(string); del != "" {
-				continue
-			}
-			if aid, _ := c["authorId"].(string); aid == userID {
-				all = append(all, c)
-			}
-		}
+	page, err := s.commentStore.ListByAuthor(ctx, userID, strings.TrimSpace(cursor), limit)
+	if err != nil {
+		return nil, "", rterr.NewUnavailable(
+			rterr.ModuleContent, "评论加载失败，请稍后重试", "list comments by author failed: "+err.Error(),
+		)
 	}
-
-	for i, j := 0, len(all)-1; i < j; i, j = i+1, j-1 {
-		all[i], all[j] = all[j], all[i]
-	}
-
-	startIdx := 0
-	if cursor != "" {
-		for i, c := range all {
-			if cid, _ := c["_id"].(string); cid == cursor {
-				startIdx = i + 1
-				break
-			}
-		}
-	}
-	if startIdx >= len(all) {
-		return []map[string]any{}, "", nil
-	}
-	end := startIdx + limit
-	if end > len(all) {
-		end = len(all)
-	}
-	page := all[startIdx:end]
-	nextCursor := ""
-	if end < len(all) {
-		if cid, ok := page[len(page)-1]["_id"].(string); ok {
-			nextCursor = cid
-		}
-	}
-	projected := make([]map[string]any, 0, len(page))
-	for _, c := range page {
-		projected = append(projected, s.projectCommentForViewerLocked(c, userID, false))
-	}
-	return projected, nextCursor, nil
+	projected := s.projectCommentsAcrossPosts(ctx, page.Comments, userID)
+	return projected, page.NextCursor, nil
 }
 
 func (s *PostService) ListCommentsForPostAuthor(ctx context.Context, userID, cursor string, limit int) ([]map[string]any, string, error) {
@@ -2738,61 +2738,20 @@ func (s *PostService) ListCommentsForPostAuthor(ctx context.Context, userID, cur
 		limit = 20
 	}
 	userID = strings.TrimSpace(userID)
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
-	authorPostIDs := map[string]bool{}
-	for _, p := range s.store.ListByAuthor(ctx, userID, 10000, "") {
-		authorPostIDs[p.ID] = true
+	authored := s.store.ListByAuthor(ctx, userID, 10000, "")
+	postIDs := make([]string, 0, len(authored))
+	for _, p := range authored {
+		postIDs = append(postIDs, p.ID)
 	}
-
-	var all []map[string]any
-	for postID, comments := range s.comments {
-		if !authorPostIDs[postID] {
-			continue
-		}
-		for _, c := range comments {
-			if del, _ := c["deletedAt"].(string); del != "" {
-				continue
-			}
-			if aid, _ := c["authorId"].(string); aid != userID {
-				all = append(all, c)
-			}
-		}
+	page, err := s.commentStore.ListReceivedByPostAuthor(ctx, userID, postIDs, strings.TrimSpace(cursor), limit)
+	if err != nil {
+		return nil, "", rterr.NewUnavailable(
+			rterr.ModuleContent, "评论加载失败，请稍后重试", "list received comments failed: "+err.Error(),
+		)
 	}
-
-	for i, j := 0, len(all)-1; i < j; i, j = i+1, j-1 {
-		all[i], all[j] = all[j], all[i]
-	}
-
-	startIdx := 0
-	if cursor != "" {
-		for i, c := range all {
-			if cid, _ := c["_id"].(string); cid == cursor {
-				startIdx = i + 1
-				break
-			}
-		}
-	}
-	if startIdx >= len(all) {
-		return []map[string]any{}, "", nil
-	}
-	end := startIdx + limit
-	if end > len(all) {
-		end = len(all)
-	}
-	page := all[startIdx:end]
-	nextCursor := ""
-	if end < len(all) {
-		if cid, ok := page[len(page)-1]["_id"].(string); ok {
-			nextCursor = cid
-		}
-	}
-	projected := make([]map[string]any, 0, len(page))
-	for _, c := range page {
-		projected = append(projected, s.projectCommentForViewerLocked(c, userID, false))
-	}
-	return projected, nextCursor, nil
+	projected := s.projectCommentsAcrossPosts(ctx, page.Comments, userID)
+	return projected, page.NextCursor, nil
 }
 
 func (s *PostService) GetAppConfig() map[string]any {
@@ -2818,12 +2777,15 @@ func (s *PostService) GetAppConfig() map[string]any {
 			"kill_switches": "immediate",
 		},
 		"content": map[string]any{
+			// 评论客户端配置真相源：contracts/metadata/content/post/projections/
+			// content_app_config_client.yaml#comment_defaults（端 CommentRemoteConfig 消费）。
 			"comment": map[string]any{
-				"max_length":             s.commentMaxLen,
-				"reply_preview_count":    3,
-				"reply_expand_page_size": 10,
-				"fold_line_count":        3,
-				"attachment":             map[string]any{"max_images": 1},
+				"max_length":                   s.commentMaxLen,
+				"reply_preview_count":          1,
+				"reply_first_expand_page_size": 5,
+				"reply_expand_page_size":       10,
+				"fold_line_count":              3,
+				"attachment":                   map[string]any{"max_images": 1},
 			},
 			"feature_flags": featureFlags,
 			"gray_release": map[string]any{
@@ -2859,10 +2821,78 @@ func (s *PostService) GetCounters(ctx context.Context, postID string) (map[strin
 			"post not found",
 		)
 	}
+	// 评论数取 DB 权威 count（含二级、排除软删），与 ListComments.totalCount 同源；
+	// post.CommentCount 仅作 feed/详情页去规范化加速器。读路径机会式自愈：发现加速器
+	// 与权威 count 漂移时按权威值单 $set 收敛（无整文档改写），保证最终一致。
+	commentCount := post.CommentCount
+	if n, err := s.commentStore.CountByPost(ctx, post.ID); err == nil {
+		commentCount = n
+		if n != post.CommentCount {
+			if _, serr := s.store.SetCommentCount(ctx, post.ID, n); serr != nil {
+				s.logger.Warn("GetCounters: self-heal comment count failed", "postId", post.ID, "error", serr.Error())
+			}
+		}
+	} else {
+		s.logger.Warn("GetCounters: authoritative comment count failed", "postId", post.ID, "error", err.Error())
+	}
 	return map[string]any{
 		"like":    post.LikeCount,
-		"comment": post.CommentCount,
+		"comment": commentCount,
 		"share":   post.ShareCount,
+	}, nil
+}
+
+// GetCommentCountsDelta returns an explainable incremental comment-count report
+// for a post relative to a client baseline `since`. It answers "since you last
+// synced, N comments were created and M were removed; the authoritative total is
+// now T". The interval is half-open (since, watermark]: createdSinceCount counts
+// comments whose createdAt falls in the window (regardless of later deletion),
+// deletedSinceCount counts comments soft-deleted (status=deleted) whose deletedAt
+// falls in the window, and currentTotal is the authoritative non-deleted count.
+// watermark is a monotonic UTC timestamp the client passes as the next `since`,
+// so consecutive deltas never double-count nor skip an event. A zero `since`
+// (first sync) is treated as unbounded-below to seed the baseline.
+func (s *PostService) GetCommentCountsDelta(ctx context.Context, postID string, since time.Time) (map[string]any, error) {
+	postID = strings.TrimSpace(postID)
+	if _, ok := s.store.FindByID(ctx, postID); !ok {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+		)
+	}
+	// 水位线取本次查询时刻；下次以此为 since，半开区间 (since, watermark] 保证
+	// 相邻两次 delta 既不重复也不遗漏。
+	watermark := time.Now().UTC()
+	since = since.UTC()
+	created, err := s.commentStore.CountCreatedBetween(ctx, postID, since, watermark)
+	if err != nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleContent, "评论计数加载失败，请稍后重试", "count created between failed: "+err.Error(),
+		)
+	}
+	deleted, err := s.commentStore.CountDeletedBetween(ctx, postID, since, watermark)
+	if err != nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleContent, "评论计数加载失败，请稍后重试", "count deleted between failed: "+err.Error(),
+		)
+	}
+	currentTotal, err := s.commentStore.CountByPost(ctx, postID)
+	if err != nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleContent, "评论计数加载失败，请稍后重试", "current total count failed: "+err.Error(),
+		)
+	}
+	sinceWire := ""
+	if !since.IsZero() {
+		sinceWire = since.Format(time.RFC3339Nano)
+	}
+	return map[string]any{
+		"createdSinceCount": created,
+		"deletedSinceCount": deleted,
+		"currentTotal":      currentTotal,
+		"watermark":         watermark.Format(time.RFC3339Nano),
+		"since":             sinceWire,
 	}, nil
 }
 
@@ -3274,6 +3304,16 @@ func asInt64Flexible(v any) int64 {
 		}
 	}
 	return 0
+}
+
+func asBoolFlexible(v any) bool {
+	switch vv := v.(type) {
+	case bool:
+		return vv
+	case string:
+		return strings.EqualFold(strings.TrimSpace(vv), "true")
+	}
+	return false
 }
 
 func asStringSlice(v any) []string {

@@ -245,6 +245,10 @@ String pageNameFromRouteLocation(String location) {
       return 'circle_media_camera';
     case PageAccessInternalRoutes.circleMediaPickerGallery:
       return 'circle_media_gallery';
+    case PageAccessInternalRoutes.profileMediaPickerCamera:
+      return 'profile_media_camera';
+    case PageAccessInternalRoutes.profileMediaPickerGallery:
+      return 'profile_media_gallery';
     case PageAccessInternalRoutes.globalSurfaceCircleEditCreate:
       return 'circle_edit_create';
     case PageAccessInternalRoutes.publishLocationSearch:

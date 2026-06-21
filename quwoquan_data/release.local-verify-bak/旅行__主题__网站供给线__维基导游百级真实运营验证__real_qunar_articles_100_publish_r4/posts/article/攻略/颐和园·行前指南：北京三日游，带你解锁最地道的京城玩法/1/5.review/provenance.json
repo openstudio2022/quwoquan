@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_10ce762a8ae4d92a",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "颐和园·行前指南：北京三日游，带你解锁最地道的京城玩法",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-d9991d2e-bb4d-4068-9ef6-ff50d96bd04b",
+    "agentId": "agent-fe4c01f2-762e-4fdf-a9fc-7bded78ec018",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/颐和园"
+    ],
+    "articleDigest": "sha256:cbd5f9ba4f87a72e21cb4e6d6131554719020c5639ea1f9eff84bc4d1983b24d"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "颐和园·行前指南：北京三日游，带你解锁最地道的京城玩法",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:ef016752ebde90cdec7e6ba0ea0412dc7eceeb7035efc77fc247308c1d018ee2",
+    "writingPackSha256": "sha256:bcd13716b87f6e81ab4568dd34f52feb7bbe5d2b6dd4152d3852b54c880678aa",
+    "sourceBundleSha256": "sha256:ff795f6bf1af161b9227cea2f358bffe7c139e9bca195dbf76004194100bcf5a",
+    "draftSha256": "sha256:48bbb744b293ea25fa9212adf401811eb40c9718a7fdf9c597c0ff0a321fc93e"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/06.qunar_guide_candidate_10ce762a8ae4d92a/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7883023"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/19.qunar_guide_candidate_29bc697f3876726d/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7879815"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/26.qunar_guide_candidate_39c2561d2aa9c823/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7874919"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/41.qunar_guide_candidate_59ec8a6352ccac02/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7902914"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/43.qunar_guide_candidate_5b62e653bab69474/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7890364"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/70.qunar_guide_candidate_a31321d5992c863e/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7863644"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/82.qunar_guide_candidate_b71c523b17e65457/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7872796"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/颐和园/1.download/sources/06.qunar_guide_candidate_10ce762a8ae4d92a/source.md",
+    "entities/地点/景区/颐和园/1.download/sources/19.qunar_guide_candidate_29bc697f3876726d/source.md"
+  ]
+}

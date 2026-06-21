@@ -29,7 +29,6 @@ from _common.content_review import (
     check_provenance,
     fact_traceability_issues,
     generator_provenance_issues,
-    _long_phrase_hits,
 )
 from _common.draft_io import (
     GENERATOR_AGENT,
@@ -870,13 +869,11 @@ def _check_gallery_caption(
         issues.append("title too long (>80)")
     if any(term in article for term in PROVENANCE_TERMS):
         issues.append("contains provenance/platform wording")
-    source_texts = _load_source_texts(quality_payload.get("sourcePaths") or [])
-    for hit in _long_phrase_hits(article, source_texts):
-        issues.append(f"too similar to source phrase '{hit}'")
+    # 版权风险全面放开：取消反抄袭长句门；画报配文只约束长度与平台/来源痕迹。
     return {
         "passed": not issues,
         "issues": issues,
-        "suggestions": ["画报配文保持简短，避免平台口吻与整句搬运。"] if issues else [],
+        "suggestions": ["画报配文保持简短，去除平台口吻与来源痕迹。"] if issues else [],
     }
 
 
@@ -1172,14 +1169,7 @@ def _check_provenance_rewrite(
     issues = check_narrative_quality(article, {"template": brief.get("templateId"), "carrier": carrier})
     if any(term in article for term in PROVENANCE_TERMS):
         issues.append("contains provenance/platform wording")
-    source_texts: list[str] = []
-    for path in quality_payload.get("sourcePaths") or []:
-        candidate = Path(path)
-        if candidate.is_file():
-            source_texts.append(candidate.read_text(encoding="utf-8"))
-    hits = _long_phrase_hits(article, source_texts)
-    for hit in hits:
-        issues.append(f"too similar to source phrase '{hit}'")
+    # 版权风险全面放开：取消反抄袭长句门；来源痕迹改由 check_provenance 与底稿贴合度门约束。
     temp_dir = Path("/tmp") / "qwq_route_review"
     temp_dir.mkdir(parents=True, exist_ok=True)
     temp_article = temp_dir / f"{quality_payload.get('topicId', 'route')}.md"
@@ -1514,6 +1504,7 @@ def _build_route_assets(
             raise RuntimeError(f"{ref}: image work must resolve exactly one sourceCollectionId")
         return assets
     base_source_ref = str(brief.get("baseSourceRef") or "").strip()
+    raw_per_entity = per_entity
     per_entity = {
         name: [
             candidate
@@ -1529,8 +1520,17 @@ def _build_route_assets(
                 )
             )
         ]
-        for name, rows in per_entity.items()
+        for name, rows in raw_per_entity.items()
     }
+    if base_source_ref and not any(per_entity.values()):
+        per_entity = {
+            name: [
+                candidate
+                for candidate in rows
+                if str(candidate.get("researchLane") or "") == "article"
+            ]
+            for name, rows in raw_per_entity.items()
+        }
     if base_source_ref and not any(per_entity.values()):
         raise RuntimeError(f"{ref}: article base draft source has no usable source images")
 

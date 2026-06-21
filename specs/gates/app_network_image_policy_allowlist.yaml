@@ -9,8 +9,6 @@ allowed:
     maxCount: 1
   - path: components/content/video_post_card.dart
     maxCount: 1
-  - path: components/post/post_preview_card.dart
-    maxCount: 1
   - path: components/post/post_preview_list_tile.dart
     maxCount: 1
   - path: components/media/image/editor/image_editor_page.dart
@@ -28,8 +26,6 @@ allowed:
   - path: core/widgets/global_surface_actions.dart
     maxCount: 1
   - path: ui/assistant/widgets/message/assistant_message_bubble.dart
-    maxCount: 1
-  - path: ui/chat/widgets/message/chat_message_bubble.dart
     maxCount: 1
   - path: ui/circle/pages/circle_stats_page.dart
     maxCount: 2
@@ -61,8 +57,6 @@ allowed:
     maxCount: 1
   - path: ui/rtc/widgets/pip_call_overlay.dart
     maxCount: 1
-  - path: ui/search/pages/global_search_page.dart
-    maxCount: 1
   - path: ui/user/pages/edit_profile_page.dart
     maxCount: 2
   - path: ui/user/pages/profile_stats_page.dart
@@ -72,8 +66,6 @@ allowed:
   - path: ui/user/widgets/circle_compact_card.dart
     maxCount: 1
   - path: ui/user/widgets/profile_header.dart
-    maxCount: 1
-  - path: ui/user/widgets/profile_interaction_tab.dart
     maxCount: 1
   - path: ui/user/widgets/profile_lifestyle_tab.dart
     maxCount: 1

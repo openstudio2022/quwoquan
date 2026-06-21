@@ -21,10 +21,12 @@ coverImage: asset://cover
               'assetId': 'cover',
               'variants': <String, Object?>{
                 'cover': <String, Object?>{
-                  'cdnUrl': 'https://cdn.example.com/cover-card.webp',
+                  'objectKey':
+                      'media/image/s/seo/cover_variants/v1/cover-card.webp',
                 },
                 'display': <String, Object?>{
-                  'cdnUrl': 'https://cdn.example.com/cover-display.webp',
+                  'objectKey':
+                      'media/image/s/seo/cover_variants/v1/cover-display.webp',
                 },
                 'original': <String, Object?>{
                   'objectKey':
@@ -37,10 +39,14 @@ coverImage: asset://cover
         },
       );
 
-      expect(document.coverImageUrl, 'https://cdn.example.com/cover-card.webp');
+      // 封面用 cover 变体、正文图用 display 变体（object key 经 content_media_url
+      // 解析为可加载 CDN URL，保留变体路径以区分 cover/display）。
+      expect(document.coverImageUrl, contains('cover-card.webp'));
+      expect(document.coverImageUrl, isNot(contains('cover-display')));
       final figure = document.nodes.where((node) => node.isFigure).single;
       expect(figure.assetId, 'cover');
-      expect(figure.imageUrl, 'https://cdn.example.com/cover-display.webp');
+      expect(figure.imageUrl, contains('cover-display.webp'));
+      expect(figure.imageUrl, isNot(contains('cover-card')));
       expect(figure.imageUrl, isNot(contains('original')));
     });
 
@@ -75,6 +81,65 @@ title: 杭州一日游
         contains('@[河坊街](entity:restaurant:night_market)'),
       );
     });
+
+    test(
+      'parses tag mentions into clickable spans and keeps entity behavior',
+      () {
+        final document = ArticleMarkdownCodec.parseDocument('''
+---
+title: 城市漫步指南
+---
+# 城市漫步指南
+
+午后沿着@[城市漫步](tag:topic:city_walk)的路线，顺便去@[灵隐寺](entity:sight:west_lake)。
+''');
+
+        final paragraph = document.nodes
+            .where((node) => node.text.contains('午后沿着'))
+            .single;
+        expect(paragraph.text, contains('午后沿着城市漫步的路线'));
+        expect(paragraph.text, isNot(contains('tag:')));
+        expect(paragraph.text, isNot(contains('entity:')));
+        expect(paragraph.spans, hasLength(2));
+
+        final tagSpan = paragraph.spans.firstWhere(
+          (span) => span.kind == 'tag',
+        );
+        expect(tagSpan.isTag, isTrue);
+        expect(tagSpan.isEntity, isFalse);
+        expect(tagSpan.isInlineMention, isTrue);
+        expect(tagSpan.targetType, 'tag');
+        expect(tagSpan.targetId, 'tag:topic:city_walk');
+        expect(tagSpan.displayText, '城市漫步');
+
+        final entitySpan = paragraph.spans.firstWhere(
+          (span) => span.kind == 'entity',
+        );
+        expect(entitySpan.isEntity, isTrue);
+        expect(entitySpan.isTag, isFalse);
+        expect(entitySpan.targetType, 'entity');
+        expect(entitySpan.targetId, 'entity:sight:west_lake');
+        expect(entitySpan.displayText, '灵隐寺');
+
+        final serialized = ArticleMarkdownCodec.serializeDocument(document);
+        expect(serialized, contains('@[城市漫步](tag:topic:city_walk)'));
+        expect(serialized, contains('@[灵隐寺](entity:sight:west_lake)'));
+
+        // round-trip 保形：再次解析后 span 结构与目标一致。
+        final reparsed = ArticleMarkdownCodec.parseDocument(serialized);
+        final reparsedParagraph = reparsed.nodes
+            .where((node) => node.text.contains('午后沿着'))
+            .single;
+        expect(
+          reparsedParagraph.spans.map((span) => span.targetId).toList(),
+          <String>['tag:topic:city_walk', 'entity:sight:west_lake'],
+        );
+        expect(
+          reparsedParagraph.spans.map((span) => span.kind).toList(),
+          <String>['tag', 'entity'],
+        );
+      },
+    );
 
     test(
       'front matter preserves summary tag refs entity refs and assistant policy',

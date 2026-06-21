@@ -14,7 +14,7 @@
 | `product-ops-growth/experiment-bucketing-and-rollout` | 灰度与分桶 | `experimentBucket`、白名单、地域、版本进入 rollout 上下文 |
 | `recommendation-platform` | 实时推荐 | 消费对象页行为与关系边，做 relation-aware ranking |
 | `assistant-run-learning` | 小艺主动服务 | 消费 `ObjectPageContext`，回流 accept/dismiss |
-| 数据工程 `publish/v1/tags` | 标签真相源 | `tagRef`、实体归一与关系边作为对象网络输入 |
+| 数据工程 `publish/tags` | 标签真相源 | `tagRef`、实体归一与关系边作为对象网络输入 |
 
 ## 核心数据流
 
@@ -190,10 +190,10 @@ flowchart TD
 
 ## 测试设计
 
-- T1：metadata、DTO、route/surface/operation、fixture、灰度策略静态校验。
-- T2：Widget/Provider/Repository mock，覆盖三页首屏、交集证据、小艺提示、空态、灰度分支。
-- T3：local-gamma/contract，验证 entity-service 持久化、对象关系 bundle、行为事件入库、推荐回流。
-- T4：端到端旅程，覆盖用户→圈子→学校→内容→评论→小艺解释→行动。
+- local_contract：metadata、DTO、route/surface/operation、fixture、灰度策略静态校验。
+- local_contract：Widget/Provider/Repository mock，覆盖三页首屏、交集证据、小艺提示、空态、灰度分支。
+- api_integration：local-gamma/contract，验证 entity-service 持久化、对象关系 bundle、行为事件入库、推荐回流。
+- user_acceptance：端到端旅程，覆盖用户→圈子→学校→内容→评论→小艺解释→行动。
 
 ## 风险
 

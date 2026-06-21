@@ -177,10 +177,20 @@ def _environment_observability_issues(root: Path, contract: Mapping[str, Any], p
     issues: list[dict[str, str]] = []
     observability: dict[str, Any] = {"releaseArtifactDir": str(release_dir), "phase": phase}
     if phase in {"post-write-pre-activation", "post-write"}:
-        import_report = release_dir / f"import-report-{env}.json"
+        import_report_candidates = [
+            release_dir / f"import-{env}.json",
+            release_dir / f"import-report-{env}.json",
+        ]
+        import_report = next((path for path in import_report_candidates if path.is_file()), import_report_candidates[0])
         observability["importReport"] = str(import_report)
+        observability["importReportCandidates"] = [str(path) for path in import_report_candidates]
         if not import_report.is_file():
-            issues.append(_issue(BLOCKING, "missing_post_write_import_report", "post-write 阶段缺少 importer report", str(import_report)))
+            issues.append(_issue(
+                BLOCKING,
+                "missing_post_write_import_report",
+                "post-write 阶段缺少 importer report",
+                ", ".join(str(path) for path in import_report_candidates),
+            ))
         else:
             report = read_json(import_report)
             observability["importReportStatus"] = report.get("status") or "present"

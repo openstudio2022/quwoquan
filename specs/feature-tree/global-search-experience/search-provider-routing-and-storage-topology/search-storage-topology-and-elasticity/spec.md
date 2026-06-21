@@ -64,13 +64,13 @@
 - **R-S05a~e 各域灌数**：`content.post / entity.homepage / circle.circle / circle.group / user.profile` 经各域写时 `Projector` + `Backfill` 灌入统一 ES 索引 `quwoquan_objects`；新增第一方地点对象 `location.place`（content 域 `place_snapshots` 派生读模型，复用 geo 维度，与 `entity.homepage` 互斥单源）。读模型仍是派生数据，posts / 各域写模型为唯一写真相源。
 - **R-S06 App 接线**：`RemoteSearchRepository` 走 `CloudHttpClient` + codegen path 调 `/v1/search`，按 `appDataSourceModeProvider` 切换；读路径护栏（metadata path + header 审计）成立。
 - **R-S07 反馈/热力/排序**：`feedbackstore`(Mongo, TTL) + `queryheat` 派生 `rm_search_term_heat`(TTL 86400) + 排序透明化信封；多读切片原则在 ES 分片/副本弹性上落地。
-- **R-S07-5 推荐信号注入**：search → Redis Stream `events.search.recommendation_signals` → content-service consumer → `rm_recommend_feature`（代码 T1/T2 通过）。
+- **R-S07-5 推荐信号注入**：search → Redis Stream `events.search.recommendation_signals` → content-service consumer → `rm_recommend_feature`（代码 local_contract 通过）。
 - **R-S06-S 端到端冒烟**：stackctl 实例化 search-service 进 local-gamma（ES-enabled，`quwoquan_objects` backfill），网关 `/v1/search` 200、`/v1/search/feedback` 202，证据 `artifacts/local-gamma/search_smoke_report.json` 与 `artifacts/stackctl/gamma/**`。
 
 ## 未完成风险（弹性/长稳缺口，登记为后续 /dev）
 
 1. **真集群性能差异（R-S06-S-1 / WP-E）**：local-gamma 在 Apple Silicon/Colima 下用 `linux/amd64` 模拟 ES，冷启动与 `_bulk` 性能不代表真实 ES/OpenSearch 集群；真集群需用原生镜像/托管集群重新校准 batch 与启动 SLA。
-2. **写时投影长稳（R-S06-S-2 / WP-E）**：写时投影器常驻增量同步、ES 重启后索引一致性与补偿恢复尚未做长稳 T3。
+2. **写时投影长稳（R-S06-S-2 / WP-E）**：写时投影器常驻增量同步、ES 重启后索引一致性与补偿恢复尚未做长稳 api_integration。
 3. **go module 可复现（R-S06-S-3 / WP-E）**：`search-service` 独立 Go module 的 `go.mod`/`go.sum` 完整依赖图需纳入版本控制并由 CI 验证，避免新环境构建因 `missing go.sum entry` 失败。
 
 ### 未完成项任务化（backlog 对齐，不另建第二清单）
@@ -78,7 +78,7 @@
 | Backlog | 任务 | 完成条件 | 验收证据 |
 |---|---|---|---|
 | R-S06-S-1 | 真集群/prod-sim 原生 ES/OpenSearch 容量校准 | 回填 measured RPS/P95/P99、饱和点、最大稳定 RPS、推荐 shard/replica/节点规格、refresh/bulk/circuit 阈值；多副本 `preference` 验证 TopN 不跳变 | `artifacts/search-load/**` 真集群报告、`search_slo.yaml` 回填、`stackctl verify --env prod --kind all --tier all` |
-| R-S06-S-2 | 写时增量 + backfill 幂等长稳 | content/entity/circle/user/location publish/update/unpublish 触发索引收敛；backfill rerun count/hash 不漂移；ES restart 后恢复 SLA 达标 | T3 soak 报告、`search_index_restart_recovery_t3.json` 扩展、projector/backfill tests |
+| R-S06-S-2 | 写时增量 + backfill 幂等长稳 | content/entity/circle/user/location publish/update/unpublish 触发索引收敛；backfill rerun count/hash 不漂移；ES restart 后恢复 SLA 达标 | api_integration soak 报告、`search_index_restart_recovery_t3.json` 扩展、projector/backfill tests |
 | R-S06-S-3 | search-service module + release config 干净检出可复现 | `services/search-service`、`deploy/service/search-service`、`releases/config/search-service/vX.yaml`、backlog/CR 全部 git-tracked；config PR policy 绿 | `verify_search_service_module.sh`、`verify_config_pr_policy.sh`、`gate_repo.sh --scope service` |
 
 ## 容量校准（capacity calibration / R-S06-S-1）

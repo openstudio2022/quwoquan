@@ -56,7 +56,7 @@
 - 社交：`conversationId`、`messageId`、`rtcSessionId`
 - 实体：`entityType`、`entityId`、`bindPosition`
 - 学习：`runId`、`traceId`、`scorecardType`、`feedbackTarget`
-- 交集：`intersectionDimension`（identity/location/content/interest/relationship 五维之一）、`intersectionTagRef`（路径制 tagRef，唯一真相源 `quwoquan_data/publish/v1/tags`）
+- 交集：`intersectionDimension`（identity/location/content/interest/relationship 五维之一）、`intersectionTagRef`（路径制 tagRef，唯一真相源 `quwoquan_data/publish/tags`）
 
 ## 指标定义原则
 
@@ -98,7 +98,7 @@
 
 ### SLO 基线
 
-- L1：T4 旅程 `首页精品 -> 圈子校园 -> 北京大学主页 -> 评论 @小趣 -> 消息承接 -> ops 可见` 完成率 beta ≥ 90%。
+- L1：user_acceptance 旅程 `首页精品 -> 圈子校园 -> 北京大学主页 -> 评论 @小趣 -> 消息承接 -> ops 可见` 完成率 beta ≥ 90%。
 - L2：推荐 surface `featured / circle / campus / travel / homepage_detail / search_xiaoqu` 均必须上报曝光、点击、CTR 和停留；缺任一维度视为看板不可发布。
 - L3：核心 API RED p95 < 800ms，错误率 < 1%；assistant 评论回复 p95 < 5s；recommendation recall hit rate ≥ 95%。
 - L4：`gateway / product-ops / ops-portal / observability` beta health check 可用率 ≥ 99%，队列延迟 p95 < 30s。

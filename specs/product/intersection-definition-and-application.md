@@ -842,6 +842,8 @@ flowchart LR
 | `IntersectionReason` | 首页、理由位、spotlight、摘要、**对象页交集卡** | 不承担运营漏斗数字 |
 | `IntersectionPoint` | reason 的点位真相源（含对象页 evidence 微缩） | 不单独承担完整卡 UI 结构 |
 | `AuthorImpact*` | 下游影响 | 不承担“共同事实” |
+| `IntersectionRepresentativeActor` | 人数句前的代表人锚点（头像/名字/可点击目标/隐私态） | 不替代完整证据列表，不用于本地拼装结论句 |
+| `IntersectionActionHint` | 交集或影响的下一步建议（关注、打招呼、进入圈子、查看路线等） | 不承载事实证据，不决定排序 |
 
 ---
 
@@ -860,9 +862,11 @@ flowchart LR
 | `适用 surfaces` | feed / spotlight / 我的交集 / 对象页 / 影响力卡 / 小趣 |
 | `主承载 contract` | `IntersectionReason` / `ObjectIntersection` / `AuthorImpact` 等 |
 | `primaryText 模板` | 主结论句 |
+| `representativeActor` | 人数句前代表人；必须来自同一证据快照 |
 | `secondaryText / connectionSummary` | 次级解释或桥接说明 |
 | `sampleText / sampleAvatarUrls` | 实例样本要求 |
 | `actionTargetId / objectKind` | 跳转目标与对象类型要求 |
+| `actionHints` | 可行动建议闭集，含主 CTA 与可选次 CTA |
 | `evidence 真相源` | 真实表、边、投影、事件源 |
 | `visibility / privacyLevel` | 权限约束 |
 | `freshness TTL` | 新鲜度时长 |
@@ -877,6 +881,8 @@ flowchart LR
 
 - 若无法明确 `evidence 真相源`，不得标为事实交集。
 - 若无法明确 `actionTargetId / objectKind`，不得进入对象卡型推荐。
+- 若 `primaryText` 含人数，必须明确 `representativeActor` 选择口径；没有可见代表人时只能使用可证匿名锚点（如「一位校友」），不得编造姓名。
+- 若无法给出下一步 `actionHints`，只能进入解释型详情，不得进入首页/卡片强推荐位。
 - 若属于影响类，必须写明下游动作，不得只写“曝光、浏览、增长”。
 - kind 必须是 §5.4 注册表标准名；禁止引入任何 alias 或第二命名。
 - 若计算策略为「投影预计算」，实现前置条件是对应 projector 就位；未就位前该条目不得上线（不得用请求期全量扫描顶替）。
@@ -1099,19 +1105,46 @@ flowchart LR
 交集句统一格式：
 
 ```text
-主语[数量 N 位 + 关系限定] + 谓语[行为动词] + 宾语[对象]
+主语[代表人 + 等 + 数量 N 位/人 + 关系限定] + 谓语[行为动词] + 宾语[对象]
 ```
 
 - 端只读云侧 `IntersectionReason.primaryText`，**禁止本地拼装事实**（§14.4 / G2）。`primaryText` 即主谓宾整句；`source` / `IntersectionPoint.sourceRef` 取 §5.4 注册表标准 kind。
 - 句子必须可被一行容纳（超出省略），不依赖图标列表/标签堆叠传达语义。
+- 任何含人数的交集/影响力句子必须有 `representativeActor` 作为数字前锚点；禁止裸写 `N 人...`。代表人不是装饰，而是用户最可能点击、最能解释这条连接的证据样本。
 
 示例（均为合规口径，关系语言遵循 §5.1）：
 
-- `你的8位校友关注了 Claude Code`（identity + 对象关注）
-- `你关注的3人讨论了这篇内容`（content / 桥接）
-- `你和8人共同关注了 Claude Code`（`sharedEntityAttention`，事实）
-- `4位校友正在讨论 AI产品`（`alumniHere` / `followeeDiscussedThis`）
-- `你们共同加入了3个圈子`（`sharedCircle`）
+- `南星等8位校友关注了 Claude Code`（identity + 对象关注）
+- `周屿等3位你关注的人讨论了这篇内容`（content / 桥接）
+- `你和林清越等8人共同关注了 Claude Code`（`sharedEntityAttention`，事实）
+- `顾南等4位校友正在讨论 AI 产品`（`alumniHere` / `followeeDiscussedThis`）
+- `你和周屿等3人共同加入了 AI 产品圈`（`sharedCircle`）
+
+### 17.1.1 代表人锚点（必填）
+
+`representativeActor` 是每条含人数结论句的用户点击锚点，必须与 `primaryText` 来自同一个证据快照。
+
+选择原则：
+
+- 关系优先：互相关注 / 已关注 / 共同联系人 / 同校同事等强关系优先于陌生大 V。
+- 证据优先：评论/回复 > 转发 > 完读/长停留 > 到访/关注对象 > 点赞；共同点赞永远不得压过更高价值证据。
+- 新鲜优先：同等强度下选最近发生的证据，但同一 `intersectionId + pointSummarySnapshotId` 在 TTL 内保持稳定，避免刷新跳人。
+- 可点优先：有头像、可进入主页、未被拉黑、未被隐私策略隐藏的人优先。
+- 隐私优先：通讯录、匿名、不可见 actor、被屏蔽关系不得展示真实姓名；可降级为「一位联系人」「一位校友」等可证匿名锚点。
+
+场景口径：
+
+| 场景 | 代表人选择 | 合规示例 |
+|---|---|---|
+| 关系交集 | viewer 已关注 / 互关 / 共同联系人中最强样本 | `林清越等4人与你共同关注了 Claude Code` |
+| 身份交集 | 同校/同届/同专业/同公司中与对象最相关样本 | `南星等6位校友关注了这条路线` |
+| 圈子交集 | 圈内最近活跃且 viewer 认识或关注的人 | `周屿等3人在这个圈子里很活跃` |
+| 内容交集 | 对同一内容参与深度最高的人 | `顾南等5人都讨论过这篇内容` |
+| 地点交集 | 最近到访或关系最近的人 | `张可等5位校友都去过西湖` |
+| 影响力聚合 | evidence 明细中可见的真实被影响 actor | `林清越等8人通过你的内容建立了新连接` |
+| 亲和力推荐 | 推荐对象本人；必须标注推荐 | `推荐认识：程一苇和你旅行口味相近` |
+
+点击分工固定：代表人头像/名字进代表人主页，数字进证据列表，对象名/封面进对象页，行动建议执行该 kind 的主 CTA。四类目标不得混用。
 
 ### 17.2 两类 surface 的句式层次（避免误判约束）
 
@@ -1151,10 +1184,10 @@ flowchart LR
 
 | 高保示意（不合规） | 合规收敛 | 依据 |
 |---|---|---|
-| `3位朋友收藏了这篇内容` | 删除（收藏已退场）或 `你关注的3人讨论了这篇内容` | §5.1 去好友化 + §14A 收藏退场 |
-| `8人通过他认识了新朋友` | `8人通过TA建立了新连接` | §5.1 / §8.1 |
-| `你和8位同趣都关注了 Claude Code` | `你和8人共同关注了 Claude Code` | §3.4 同趣=affinity 概率，「都关注同一对象」才是事实 |
-| `4位同趣喜爱双冲浪` | `你关注的4人去过这片浪点` 或标注「推荐」 | §3.4 / §7.D1 |
+| `3位朋友收藏了这篇内容` | 删除（收藏已退场）或 `周屿等3位你关注的人讨论了这篇内容` | §5.1 去好友化 + §14A 收藏退场 + §17.1.1 |
+| `8人通过他认识了新朋友` | `林清越等8人通过TA建立了新连接` | §5.1 / §8.1 / §17.1.1 |
+| `你和8位同趣都关注了 Claude Code` | `你和林清越等8人共同关注了 Claude Code` | §3.4 同趣=affinity 概率，「都关注同一对象」才是事实 |
+| `4位同趣喜爱双冲浪` | `张可等4位你关注的人去过这片浪点` 或标注「推荐」 | §3.4 / §7.D1 / §17.1.1 |
 
 裁决原则：**事实交集通道禁止出现「朋友/好友/收藏/同趣」**；affinity（概率）必须分通道、明确标注「推荐」，不得伪装成共同事实。
 
@@ -1200,7 +1233,7 @@ flowchart LR
 | `42个实体正在被讨论` | `42个话题正在被讨论` | §8 禁用「实体」 |
 | `N位同趣关注了这里`（作事实计数） | 头部计数用「N 关注」（事实）；affinity 句须标注「推荐」 | §3.4 同趣=affinity |
 | `兴趣圈` tab | `相关圈子` | §8 禁用「兴趣圈」 |
-| 影响项「N人认识新朋友」 | `N人建立了新连接` | §5.1 去好友化 |
+| 影响项「N人认识新朋友」 | `林清越等N人建立了新连接` | §5.1 去好友化 + §17.1.1 |
 
 ---
 
@@ -1400,16 +1433,16 @@ maxAffinityPerSurface=3 / cooldownDays=14 / freshnessTtlDaysByDimension`）；fe
 
 | 漂移 | 处置 | 状态 | 证据 |
 |---|---|---|---|
-| a. Go `IntersectionReasonView` 残留 `Label/DisplayText/SharedCount` | Go 内部冗余字段（端侧契约已无），移除需重构 `followeeVisited` 计数语义 + Explain + 多个 Go 测试 | **延后**（不阻塞 A–E：端 DTO 已无这些字段） | 见 §20.6 清单 |
+| a. Go `IntersectionReasonView` 残留 `Label/DisplayText/SharedCount` | 移除 Go 内部冗余 reason 级字段 + `followeeVisited`/桥接型计数语义迁移到单聚合点 `IntersectionPoint.Count=n` | **已收口**（端云契约一致；reason 级结论句唯一来源 `primaryText`） | `intersection_views.go` `IntersectionReasonView` 已无三字段；`intersection_source.go:434` 桥接型单聚合点 `Count=n`（注释「R-ID01：取代 reason 级 SharedCount」）；`intersection_hydration.go:541` 注释「不再有 reason 级 SharedCount」；全 `internal` 层 `SharedCount` 仅剩注释、无活代码引用；backlog R-ID01 复核 |
 | b. `recommendationTraceId` × `pointSummarySnapshotId` 双通道 | 收敛为单一 `pointSummarySnapshotId`；删 metadata 字段+别名、Go 字段、2 处 Dart mock 写入 | **已完成** | codegen-app 重生成 DTO；`go test` 通过；`dart analyze` 通过 |
 | c. Go `IntersectionDimensionTallyView` 缺 `SubtitleText` | Go view 补 `SubtitleText`，与 metadata/Dart 对齐 | **已完成** | `go build`/`go test` 通过 |
 | d. kind「markdown + Go switch」双源 | 新增机读 `intersection_kind_registry.yaml`；Go `evidenceKindRank` 对齐；门禁 `verify_intersection_kind_registry.py` 入 `make verify` | **已完成** | 27 kinds 对齐，门禁 OK |
-| e. 4 operation 补 `response_body` schema | 仓库 metadata **当前无任何 `response_body` 能力**（responses 由 Go handler 隐式承载），projection 已声明对应 read_model | **延后**（框架能力缺失，非本 Phase 可单点引入） | `rg response_body contracts/metadata` 无命中 |
+| e. operation 补 `response_body` schema | metadata 框架能力（`verify_metadata` 强校验 `response_body`/`response_body_kind`，kind∈{object,page,ack}）+ 端侧 codegen 映射（`operationToResponseModel/Kind`）+ 一致性门禁；首批绑定 5 op（4 交集 + `ListAuthorImpactEvidence`） | **部分收口（Slice 1，2026-06-20）** | `content/post/service.yaml` 已声明 `response_body`；`verify_metadata_response_body_vs_codegen_app: OK (5 ops)`；剩余 Go 响应类型 codegen / metadata→OpenAPI 生成器 / 全仓推广属框架横切 epic（见 backlog R-ID02） |
 | feed API 删除（`GetFeedIntersections`/`ReportIntersectionExposure`） | 与共享 `Feed()`（`feed_service.go` post-chip 数据路径）+ spotlight UI（会话 E）+ SLO 配置 + Go/Dart 测试强耦合 | **延后到会话 E**（删除必然触及推荐页 UI = 会话 E 范围） | 见 §20.6 清单 |
 
 ### 20.6 延后项的精确清单（交接给对应会话）
 
-**漂移 a（移除 Go reason 级 Label/DisplayText/SharedCount）** — 改动集：
+**漂移 a（移除 Go reason 级 Label/DisplayText/SharedCount）** — ✅ 已收口（端云契约一致，无活代码残留；证据见 §20.5 表 a 行）。以下为历史改动集留档：
 - `intersection_service.go`：删 struct 3 字段；`pointLabelForReason` 去 DisplayText/Label 分支（回落 DisplayName/IntersectionID）；
   `anchorAggregateCount` 去 `r.SharedCount` 分支（改读 anchor.Count）。
 - `intersection_source.go`：`buildTagReason`/`buildContentReason`/`viewerRelationReason`/`followeeVisitedReason` 停止设 reason 级
@@ -1429,8 +1462,11 @@ maxAffinityPerSurface=3 / cooldownDays=14 / freshnessTtlDaysByDimension`）；fe
 - UI：`home_multi_form_feed.dart` 移除 spotlight 引用；删 `intersection_spotlight_module.dart`；交集改 post 内 `intersection_reason_chip` 承载。
 - 测试：`intersection_service_test.go` / `intersection_metrics_test.go` / `intersection_readpath_invariant_test.go` 中 Feed/ReportExposure 用例。
 
-**response_body schema（框架增强，跨能力）** — 需先给 `service.yaml` 引入 `response_body`/`response_schema` 字段 + codegen
-支持，再为 4 operation 绑定 read_model；当前 projection `consumers` + 描述已声明对应 read_model，端侧 Remote 已按 read_model 解析。
+**response_body schema（框架增强，跨能力）** — 🟡 部分收口（Slice 1，2026-06-20）：
+- 已落地框架能力——`verify_metadata` 对 `response_body`/`response_body_kind` 强校验（kind∈{object,page,ack}；ack 禁带 body、object/page 必带 body；body 必须命中全仓 projection `read_model`/`client_projection.dart_class` 闭集）。
+- 已落地端侧 codegen——`codegen_app_metadata` 生成 `operationToResponseModel`/`operationToResponseKind` 两张静态映射，并新增一致性门禁 `verify_metadata_response_body_vs_codegen_app.py`（已串 `make gate`）。
+- 已绑定 5 op：`GetMyIntersectionSummary`(object)/`ListMyIntersections`(page)/`GetObjectIntersections`(page)/`MarkIntersectionsVisited`(ack) + `ListAuthorImpactEvidence`(object)。
+- 剩余 epic（独立排期）：Go 侧消费 `response_body` 生成响应类型契约；metadata→OpenAPI 响应 schema 生成器；Go↔端侧产物漂移门禁；从「首批 5 op」推广为全仓 operation 绑定。详见 backlog R-ID02。
 
 ### 20.7 统一交互子契约（A–E 横切复用，可交互交集句的单一真相源）
 
@@ -1584,7 +1620,7 @@ new → strengthened → stable → weakened → reactivated
 
 #### 21.5.1 交集具象化四槽视觉模型（单行）
 
-`[① 类型图标 leading] + [② 句内 inline 头像簇(人名前)] + [③ 尾部对象封面缩略图] + [④ lifecycle 弱标 overlay]`
+`[① 类型图标 leading] + [② 代表人头像/名字锚点] + [③ 尾部对象封面缩略图] + [④ lifecycle 弱标 overlay]`
 
 ```text
 (place)  你和 (头像)林清越 等8位校友        [新]
@@ -1592,7 +1628,7 @@ new → strengthened → stable → weakened → reactivated
 ```
 
 - ① 类型图标：交集语义类型，闭集、metadata 下发 `iconKey`、端语义 resolver 解析（禁端硬编码 switch）。
-- ② 句内 inline 头像：`role=object` 人名 span 前置真实头像簇（`IntersectionTextSpan.visual`），让「和谁」具象。
+- ② 代表人锚点：`representativeActor` 是人数句的第一可点击对象；可用 `IntersectionTextSpan.visual` 同源渲染头像，必须与 §17.1.1 选择口径一致。
 - ③ 尾部对象封面：`IntersectionReason.objectVisual`（place 封面 / circle 封面 / school 校徽，`assetKind` 闭集），无则回退 chevron。
 - ④ lifecycle 弱标：见 §21.3；不进图标位、不进结论句。
 
@@ -1616,14 +1652,35 @@ new → strengthened → stable → weakened → reactivated
 
 iconKey 真相源：交集 kind 在 `intersection_kind_registry.yaml` 声明；影响 helpType 在 author/circle impact projection 声明；端 `IntersectionIconResolver` 映射到设计系统图标。
 
-#### 21.5.3 其余展示统一要求（沿用并收口 §17/§20.4）
+#### 21.5.3 actionHint 行动建议闭集
+
+行动建议是“交集可行动”的 contract 承载，云侧按 kind/helpType 下发，端只负责渲染和导航。
+
+| actionKey | 用途 |
+|---|---|
+| `follow_person` | 关注代表人或对象人 |
+| `greet_person` | 打招呼 |
+| `message_person` | 私信 |
+| `view_shared_people` | 查看共同关注 / 共同联系人来源 |
+| `join_circle` | 加入圈子 |
+| `open_discussion` | 进入讨论 / 跟帖 |
+| `open_content` | 回到内容 |
+| `open_object` | 进入实体 / 地点 / 学校 / 公司主页 |
+| `follow_object` | 关注对象 |
+| `open_route` | 查看路线 / 地点内容 |
+| `create_followup` | 写续篇 / 发布跟进 |
+| `ask_assistant` | 让助手解释这条交集 |
+
+约束：紧凑 surface 只保留主行动，列表详情可展示主行动 + 次行动；无真实目标不得下发 actionHint，不得端侧猜测。
+
+#### 21.5.4 其余展示统一要求（沿用并收口 §17/§20.4）
 
 - 结论句唯一来源 `primaryText` / `briefText`（主谓宾、先人后事、一句话）；可交互 = `spans`，不变量 `join(spans.text)==primaryText/briefText`；称谓统一「你们」。
 - 每 surface 密度上限：紧凑（feed / 记录卡）严格 1 句、lifecycle 仅「新」；列表入口（我的连接 / 为什么推荐X / 我的影响力）1 结论句 + ≤1 灰色辅助 + 可展开；对象页证据组一屏 ≤5。
 - 降级链：具名样本+头像 → 纯计数 → 维度母表达 → 隐藏；无 `primaryText` 不占位不造假。
-- 可点击优先级：名字 > 数字 > 整行；下钻带 `intersectionId/sourceRef/dimension/objectKind/objectId`。
+- 可点击优先级：代表人 > 数字 > 对象 > 行动建议 > 整行；下钻带 `intersectionId/sourceRef/dimension/objectKind/objectId`。
 
-#### 21.5.4 五面展示统一矩阵
+#### 21.5.5 五面展示统一矩阵
 
 | 面 | 主表达 | 具象化要点 |
 |---|---|---|
@@ -1681,3 +1738,212 @@ propagationInfluence = reach × conversion × secondarySpread   # 仅影响/传�
 - **本轮（契约草案 + 端原型）**：本章 + spec/design 同步 + metadata 草案字段 + `codegen-app` 端 DTO + 端共享组件/Mock/5 面 UI 原型 + 端测试/文档。契约标「草案/未冻结」，由 UI 原型反推定稿。
 - **里程碑**：UI 原型评审通过 → 冻结契约（更新 `intersection-contract-freeze-checklist.md`）→ 进入云侧。
 - **后续会话**：①A–E 各页面正式 UI 落地；②云侧数据源采集 + 算法真算（Graph 加权 / Lifecycle 状态机 / 多跳 Propagation / coLiked 预投影 / Selection 数值化 / Remote 填充）。
+
+---
+
+## 22. 旅行摄影 vertical 垂类实例化（P0 契约冻结）
+
+> 本章是「旅行摄影」垂类交集与影响力的**设计真相源**（WS0 契约冻结）。落地顺序受当前交集子系统重构 WIP 约束，见 §22.8。垂类不另起第二套体系，全部建立在 §21 基线（iconKey 14 闭集 / `actionHintLegend` / 5 维 dimensions / 6 类 countObjectKind / lifecycle 弱标）之上。
+
+### 22.0 决策基线（用户裁决 2026-06-21）
+
+- 垂类建模 = **B**：引入 `vertical` 命名空间 + `travel.*` 垂类 kind，正交标注，非第二套 kind 表。
+- 影响力代表人 = **B**：实名下发（仅限对方公开行为，见 §22.6 隐私红线调整）。
+- 交付深度 = **B**：端云全链路 P0 闭环（云侧真算 + gamma T3，gamma 依赖 R-IX05）。
+- 范围 = **A**：旅行摄影先行；校园仅结构预留（§22.9），本轮不实例化数据。
+
+### 22.1 vertical 架构（正交标注）
+
+- `intersection_kind_registry.yaml` 顶层新增 `verticals` 闭集：`general | travel_photography | campus`；每个 kind 新增 `vertical` 字段（缺省 `general`，兼容存量 27 kind）。
+- `travel.*` kind 命名 `<vertical>.<dimension_group>.<semantic>`，**语义层与现有通用 kind 一一对齐**（复用其 hydration / iconKey / actionHint 派生），仅以 `vertical=travel_photography` + 旅行 `objectKind` 正交区分，避免「~90 独立 kind」hydration 重复实现技术债。
+- `intersection_reason.yaml` / `intersection_point.yaml` 增只读 `vertical` 字段（端只读直出，不本地拼装）。
+
+### 22.2 objectKind 扩展（§21 闭集 superset）
+
+- 现 5 类 `person | circle | school | place | enterprise` → 新增 `route | photo_spot | gear`。
+- 酒店 / 餐厅 / 季节本轮归 `place` 子类靠 `tagRef`，不新增 objectKind（控制膨胀）。
+- 对应 `verify_intersection_kind_registry.py` `OBJECT_KINDS` 同步扩 3 类；端侧 `UnifiedObjectKind` 同步扩 + `IntersectionTargetNavigator` routeId 解 `open_route` 落点（路线 / 机位页）。
+
+### 22.3 lifecycle 8 态映射（扩 §21.3 闭集）
+
+| v1.0 8 态 | §21.3 现 5 态 | 端表达 | 弱标/筛选 |
+|---|---|---|---|
+| `new` | new | 新出现 | 显红点，主页优先 |
+| `active` | stable（展示语「正在发生」） | 正在发生 | 默认展示，不显强标 |
+| `strengthened` | strengthened | 交集增强 / 影响增强 | 显弱标，高优先 |
+| `resurfaced` | reactivated | 重新活跃 | 显弱标 |
+| `stable` | stable | 持续相关 | 详情页展示，不显标 |
+| `cooling` | weakened | 最近仍有关联 | 详情页低优先，不显标 |
+| `archived` | **新增** | 历史记录 | 仅历史筛选，不进默认列表 |
+| `expired` | **新增** | 不展示 | 不进 UI |
+
+- 端侧 `discovery_feed_text_constants.dart` lifecycle 文案表补 `active/resurfaced/cooling/archived` 展示语，`expired` 端侧过滤。
+
+### 22.4 P0 交集 kind 映射（17 条，travel.* → 复用语义）
+
+| travel.* kind | 复用底层语义 | dimension | objectKind | countObjectKind | iconKey | actionKey | lifecycle |
+|---|---|---|---|---|---|---|---|
+| `travel.people.same_place` | coVisitedEntity | location | place | person | place | open_object,open_route | ✓ |
+| `travel.people.same_route` | coVisitedEntity | location | route | person | place | open_route,open_object | ✓ |
+| `travel.people.same_spot` | coVisitedEntity | location | photo_spot | person | place | open_route,open_object | ✓ |
+| `travel.interest.landscape` | sharedTagSample | interest | circle | tag | interest | open_object,join_circle | ✓ |
+| `travel.interest.sunset` | sharedTagSample | interest | circle | tag | interest | open_object,join_circle | ✓ |
+| `travel.location.co_visited_place` | coVisitedEntity | location | place | place | place | open_object,open_route | ✓ |
+| `travel.location.same_route` | coVisitedEntity | location | route | place | place | open_route | ✓ |
+| `travel.location.photo_spot` | coVisitedEntity | location | photo_spot | place | place | open_route | ✓ |
+| `travel.entity.scenic_spot` | sharedEntityAttention | interest,identity | place | entity | attention | open_object,follow_object | ✓ |
+| `travel.entity.route` | sharedEntityAttention | location | route | entity | attention | open_route,follow_object | ✓ |
+| `travel.entity.photo_spot` | sharedEntityAttention | location | photo_spot | entity | attention | open_route,follow_object | ✓ |
+| `travel.circle.travel_photo` | sharedCircle | relationship,interest | circle | circle | circle | join_circle,open_discussion | ✓ |
+| `travel.circle.hiking_photo` | sharedCircle | relationship,interest | circle | circle | circle | join_circle,open_discussion | ✓ |
+| `travel.record.co_view` | followeeViewing | relationship,content | person | content | viewing | open_content,view_shared_people | ✓ |
+| `travel.record.co_like` | coLiked | content | person | content | like | open_content,follow_person | ✓ |
+| `travel.discussion.route` | sharedDiscussion | relationship,content | circle | content | discussion | open_discussion,follow_person | ✓ |
+| `travel.discussion.photo_spot` | sharedDiscussion | relationship,content | circle | content | discussion | open_discussion,follow_person | ✓ |
+
+- P1/P2（§5 其余 ~70 kind：设备 / 风格 / 酒店 / 餐饮 / 跨圈 / 小趣 / 年度足迹等）登记 `status: deferred`，不产出。
+
+### 22.5 P0 影响力 kind 映射（10 条）+ helpType
+
+| travel.impact.* kind | helpType | sourceAction | targetObjectKind | actionKey | lifecycle |
+|---|---|---|---|---|---|
+| `travel.impact.circle_join_by_record` | community | record_publish | circle | open_object | ✓ |
+| `travel.impact.follow_place` | decision | record_publish | place | open_object | ✓ |
+| `travel.impact.follow_route` | decision | record_publish | route | open_route | ✓ |
+| `travel.impact.open_route` | decision | record_publish | route | open_route | ✓ |
+| `travel.impact.open_spot` | decision | record_publish | photo_spot | open_route | ✓ |
+| `travel.impact.record_discovered_by_circle` | spread | circle_post | content | open_object | ✓ |
+| `travel.impact.record_discovered_by_entity` | spread | entity_bind | content | open_object | ✓ |
+| `travel.impact.discussion_route` | community | comment | content | open_discussion | ✓ |
+| `travel.impact.person_circle_connection` | relationship | record_publish | circle | open_object | ✓ |
+| `travel.impact.person_entity_connection` | relationship | record_publish | entity | open_object | ✓ |
+
+### 22.6 影响力代表人隐私红线调整（B：实名化）
+
+- **变更**：`author_impact_evidence_item.yaml` 原红线「不展示产生影响的具体用户身份（actorId 仅服务端存储）」→ 调整为「**仅当对方该影响行为为公开行为（公开关注 / 公开加入圈子 / 公开讨论）时，可下发实名代表人**；非公开行为仍匿名降级为纯数字」。
+- **下发门**：`author_impact_language.go` 实名化必须过 `representativeActor.privacyState == visible` + 行为公开性校验；任一不满足 → 匿名「N人」。
+- **代表人形态**：纯文本蓝字（无头像，沿用 §17.1.1 代表人锚点 + 交集既定约束）。
+- **合规**：此为契约层正式变更，需产品/合规确认「公开行为可下发」边界；同步登记 backlog。
+
+### 22.7 验收测试用户「林墨」实例化蓝图 + 覆盖矩阵（ws-acc 真相源）
+
+- 测试用户 `fixture_user_travel_curator`「林墨」：杭州+成都旅行摄影创作者，索尼 A7M4，胶片风格，旅行摄影圈/徒步摄影圈，某高校校友。落点：`content_scenarios.json` `intersection_core.inboxReasons`（我的交集）+ `authorImpact`（我的影响力，按作者 id）。alpha 直出；gamma 需 seed viewer 关系（R-IX05）。
+- **我的交集 35 条**：按 5 维分组承载 §5.1–5.9 九组语义全集（关系 7 / 身份 5 / 兴趣 5 / 足迹 7 / 内容 6 + 特殊句式专项 5）；每条标 dimension/sourceRef/objectKind/lifecycle/代表人/行动。
+- **我的影响力 14 条**：按 helpType 5 类承载 §6.1–6.8（community/decision/spread/relationship/knowledge + 创作者成长），含实名代表人 + 匿名降级。
+- **覆盖矩阵（测试专家口径）**：
+  - 维度全覆盖（5 维 + 9 组语义各 ≥1）；
+  - lifecycle 全覆盖（new/stable/strengthened/reactivated/weakened/archived/expired，弱标显隐正确）；
+  - 特殊句式全覆盖（count=1 无「等N位」/ 无代表人纯数字 /「上百·上千位」大数量 / affinity 标「推荐」）；
+  - 代表人契约（蓝字纯文本、同 snapshot、影响力实名+匿名两形态）；
+  - 行动契约（actionKey 闭集落地，名字 span→对象页、数字 span→维度下钻经 IntersectionTargetNavigator）；
+  - 不变量（`join(primarySpans.text)==primaryText`、summary 数字==inbox 可见点派生、端只读不拼装）。
+
+### 22.8 实现分期与撞车协调
+
+- 本章（§22 设计真相源）为 WS0 交付，**不依赖** WIP，已冻结。
+- WS1–WS5 代码落地（`intersection_kind_registry.yaml` 注册 travel.*+vertical / `reason.yaml` 加 vertical + codegen / `content_scenarios.json` 铺「林墨」fixture / `intersection_service.go`+`intersection_hydration.go`+`author_impact_*.go` 真算 / 端侧闭集渲染）**全部落在当前活跃交集子系统重构 WIP 面上**；按用户裁决 A，待该重构提交/收敛后基于本章 + 新基线增量落地，避免冲突与契约漂移返工。
+
+### 22.9 校园 vertical 结构预留（WS6，不实例化）
+
+- `verticals` 闭集含 `campus` 占位；验证 vertical / lifecycle / objectKind 分层可平移迁校园（社团→circle、课程→tag/entity、校友→identity），本轮不铺数据。
+
+### 22.10 实例化验收证据（2026-06-21 落地，端到端闭环）
+
+> 头数补齐进度：第一轮按「矩阵完整」口径落地（交集 15 / 影响力 7）；**第二轮已补到 §22.7 规划头数（交集 35 / 影响力 14）并完成零遗留收口，见 §22.10.1**。
+
+WS2/WS3/WS-ACC 已在主 seed（`content_scenarios.json`）落地并验证。第一轮按「矩阵完整」口径实例化（覆盖所有必需矩阵单元），实例条数少于 §22.7 规划头数（交集 15 条 / 影响力 7 条 vs 计划 35/14）——头数在第二轮（§22.10.1）补齐。
+
+- **数据（WS2）**：`intersection_core.inboxReasons` 新增林墨 15 条三元组 `(基kind + vertical=travel_photography + objectKind∈{route,photo_spot,gear,place,circle,person})`；`authorImpact.fixture_user_travel_curator` 7 条（跨 community/decision/spread/relationship/knowledge，实名+匿名代表人）。
+  - objectKind 全覆盖 6 类；lifecycle 全覆盖 new/strengthened/stable/weakened/reactivated/archived/expired；route/photo_spot/gear object 片段落点 `homepageDetail`；`join(primarySpans.text)==primaryText` 不变量逐条成立。
+- **云侧真算（WS3）**：`intersection_hydration.go` 新增 `verticalForReason`（objectKind/旅行 tag→travel_photography，基 kind 不参与）+ `lifecycleStateForReason`（§21.3 状态机：previousStrength/strengthDelta 离散化，无信号返回空不造假）；route/photo_spot/gear 落点/资产经 codegen `IntersectionRouteIDByObjectKind`/`IntersectionAssetKindByObjectKind` 单源（homepageDetail/coverImage）。
+- **显隐过滤（端侧单源）**：`filterDefaultInboxLifecycle`（`expired` 不进 UI、`archived` 不进默认列表），mock 与 remote 列表路径共用。
+- **验收测试**：
+  - Go：`intersection_hydration_vertical_test.go`（vertical 7 例 + lifecycle 7 例 + route/asset 落点）。
+  - Dart：`test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart`（数据闭环 6 例 + 过滤 2 例 + inbox 三元组渲染 1 例）。
+- **证据**：`make verify-metadata` ✓；`verify_app_seed_manifests.py` / `verify_contract_mock_data_inventory.py` / `verify_intersection_kind_registry.py` ✓；content-service `go test ./internal/application/... ./internal/adapters/...` ✓；相关 dart 测试 + `dart analyze`（变更文件 No issues）✓。
+- **变体口径**：林墨实例化落在主文件（= alpha 全量 seed `app_alpha_seed_manifest.json` 消费）；`.lite.json`（dev 默认轻量子集）/ `.gamma-curated.json` 未铺量，验收测试以「直读主 seed + 确定性 in-test repo」双层覆盖，规避 profile 依赖。
+
+### 22.10.1 零遗留收口补齐（2026-06-21 第二轮，端到端闭环）
+
+第二轮在第一轮基线上**增量补齐到规划头数并修复一条契约回归**，无打折、无技术债转移。
+
+- **任务 A · contract 回归诚实修复**：`content_repository_contract_test.dart`「alpha 首页推荐稳定返回全样式 showcase 顺序」断言 `recommend.every(intersectionReasons 非空)` 曾回归为空。
+  - **根因**：`content_repository_mock_comment_logic.dart` 的 `_withLiveCommentCount` 用 `post.toMap()`→`postBaseDtoFromMap()` 回环刷新评论数；codegen `toMap()` 把嵌套投影 DTO（`intersectionReasons` 及其 `primarySpans`/`representativeActor`/`actionHints`）原样保留为对象而非 map，回环时被 `_parseProjectionDtoList`（只接受 Map）静默丢弃 → 交集线索变空。
+  - **修复（按真相源，不弱化断言）**：新增共享序列化真相源 `intersectionReasonsToWireList`（`feed_item_discovery_wire_map.dart`，逐层下沉嵌套 DTO 为 JSON-safe map），`_withLiveCommentCount` 重建 map 时用它无损序列化 `intersectionReasons`。发现区 wire 与 Mock 重建路径共用同一序列化真相源。
+- **任务 B · 林墨「我的主页」完整壳**：
+  - **B1 用户档案**：`user_scenarios.json` 新增 `fixture_user_travel_curator`「林墨」profile（旅行摄影策展人画像，复用既有旅行用户媒体资产防悬空）。
+  - **B2 专用旅行实体**：`entity_scenarios.json` 新增 13 个专用旅行实体主页（route×5 / photo_spot×3 / gear×2 / place×3，`homepageId=fixture_homepage_travel_*`）；林墨交集与影响力的 objectId 由上轮复用占位**重指向**这些专用实体，悬空引用清零。
+  - **B3 N3 对象页「你们的交集」**：`intersection_core.objectIntersections` 新增旅行对象 seed（`fixture_homepage_travel_route_erhai` 2 条 / `fixture_homepage_travel_spot_duanqiao` 1 条，含 `primarySpans`）；端 `MockIntersectionRepository.getObjectIntersections` 新增 seed-first 真相源接线（`_seedObjectIntersections`，命中即直出、与 inbox 同一 hydrate 收点摘要管线），未命中回退证据组合成。
+- **任务 C · 覆盖矩阵补量到规划头数**：
+  - `intersection_core.inboxReasons` 林墨交集 **15 → 35**（vertical 全 `travel_photography`；objectKind = route×5/photo_spot×3/place×3/gear×2/circle×6/person×12/school×3/enterprise×1；lifecycle 覆盖 new/strengthened/stable/weakened/reactivated/archived/expired）。
+  - `authorImpact.fixture_user_travel_curator` **7 → 14**（helpType 覆盖 community/decision/spread/relationship/knowledge/audience；lifecycle 多态；实名+匿名代表人）。
+- **契约纠偏（零遗留）**：4 条旅行 decision 影响力曾误用 `countObjectKind=route/photo_spot`（route/photo_spot 在 §23.3 B 闭集中为 `roles:[object]`，非可计数子集）。已按语义修正为 `countObjectKind=person`（受影响的「人」），下钻目标对象 route/photo_spot 移入 `countTarget`（§22.5 `targetObjectKind` 承载）。修正后 `countObjectKind` 全部落在可计数闭集（person×13/content×1）。
+- **任务 D · 远端真算补全（WS3）**：旅行影响力「类型」由真实行为聚合产出，而非仅 seed 直出。
+  - `author_impact_store.go` 的 `AuthorImpactItem` 新增装饰字段 `CountObjectKind`/`CountTarget`（`bson:"-"`，不入库）。
+  - `author_impact_language.go` `DecorateAuthorImpact` 新增 `travelImpactCountTarget`：由**真实聚合的 `IntersectionTagRef`** 命名空间派生旅行下钻目标对象（route/photo_spot/gear/place），被计数对象恒为 person；非旅行信号不造假（留空）。与 `IntersectionReason.verticalForReason` 共用旅行 tag 真相源。
+  - 测试：`author_impact_travel_test.go`（无 Mongo 单元：tagRef→objectKind 8 例 + 装饰派生 + 预置不覆盖 3 组）；`post_behavior_contract_test.go` 新增 `TestAuthorImpactTravelCountTargetFromBehaviorAggregation`（端到端：真实行为聚合 → `rm_author_impact` → 装饰派生旅行 countTarget，Mongo 集成，CI/gamma 运行）。
+- **任务 E · 变体定位（按用户授权取最优 = 单一真相源 + 文档化取舍）**：林墨 35/14 实例**单一真相源落在 alpha 全量主 seed**（`content_scenarios.json`）。
+  - **dev-lite**：`content_scenarios.lite.json` 刻意为轻量子集，`intersection_core` 不在其 refs；`ContractFixtureRuntimeLoader` 对变体缺失 ref **回退主 seed**（既有、受测基础设施，非林墨专用 hack）→ dev 取数即真实主 seed，**非 in-test 旁路**。
+  - **gamma**：`.gamma-curated.json` 保留其 curated 通用 `intersection_core`；林墨旅行垂类验收以**直读 canonical 主 seed**（env/profile 无关、CI 安全）+ 聚焦 widget 渲染 harness 双层覆盖。
+  - **取舍理由**：跨变体复制林墨 35/14 会形成**第二真相源（违反 single-source / R25）且易漂移**，并可能在 curated 子集中引入新悬空引用；故采用「主 seed 单源 + 变体按需回退 + 验收直读 canonical seed」，dev/gamma 验收均跑真实 seed 数据，不依赖 in-test 伪造数据。
+- **验证证据（命令 + 结果）**：
+  - `python3 quwoquan_service/scripts/recommendation/verify_intersection_kind_registry.py` ✓（28 kinds，Go 表对齐）。
+  - `python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py` ✓（alpha/beta/gamma + 生产隔离 16 文件）。
+  - `python3 quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py` ✓。
+  - `cd quwoquan_service && make verify-metadata` ✓（73 实体 / 110 枚举；4 条为既有无关 warning）。
+  - content-service `go build ./...` ✓；`go test -count=1 ./internal/...` ✓（含 `internal/application` 旅行影响力真算）。
+  - `flutter test test/cloud/content/contract/content_repository_contract_test.dart test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart` ✓（37 例，回归转绿 + 验收全覆盖）。
+  - `flutter test test/cloud/content test/cloud/services/content test/cloud/recommendation test/components/object_page test/ui/intersection test/ui/user/author_impact_card_test.dart` ✓（298 例，含 N3 对象页证据 + 影响力卡）。
+  - `dart analyze`（`intersection_repository.dart` / `feed_item_discovery_wire_map.dart` / `content_repository_mock_comment_logic.dart`）✓ No issues。
+- **零遗留结论**：data(seed 35/14 + N3 + 专用实体 + profile) → service(旅行 behavior→impact 真算) → app(端只读直出 + N3 seed-first) → 测试（contract 回归转绿 + 验收 + 全交集套件 + Go 真算）全绿闭环。
+
+---
+
+## 23. 交集/影响力模型可扩展性与去桥接架构定稿（架构复核 2026-06-21）
+
+> 本章是「模型 dimension/vertical 多方向可扩展 + 清晰无桥接转换」的架构裁决与落地真相源，优先级高于 §22 的具体 kind 命名。原则：单一真相源（registry/metadata）+ codegen 下发 + 端只读直出 + 不兼容历史。
+
+### 23.1 现状架构债（按严重度）
+
+**GATE_BLOCK（扩展杀手 / 第二真相源）：**
+
+1. **kind→元数据端侧硬编码（核心债）**：registry 每个 kind 已有 `iconKey`/`objectKind`/`dimensions`/`actionHintsByKind`（真相源），但端 `intersection_kind_mapping.dart` 用 `iconKeyForKind()`/`objectKindForKind()` switch **重复一份 kind→iconKey、kind→objectKind 映射**（第二真相源，违反 R06）。新增任何 kind（含 `travel.*`）必须改这个端侧 switch，否则落 `default`（iconKey=''、objectKind='person'）。这是 vertical 扩展的首要阻塞。
+2. **对象类型 6-7 套表**：`registry.objectKind`(5) / `reason.yaml.objectKind`(5) / `UnifiedObjectKind`(端 enum,5+`relationKind` 旧词桥接) / `registry.countObjectKind`(6,不同集合) / `objectKindForKind()`(端) / `routeIdForObjectKind()`(端) / `intersection_target_navigator._knownObjectKinds`(端,5) / `resolvePath()` objectKind→route。新增 `route/photo_spot/gear` 需改 **6-7 处**。
+3. **dimension 闭集散落 4+ 处**：`registry.dimensions` / `reason.yaml.dimension` / `intersection_kind_mapping._dimensionNames` / `intersection_repository._dimensionLabels`，verify 脚本只校验 objectKind 不校验 dimension。新增维度需改 4+ 处且无门禁兜底。
+
+**PR_WARN（模型冗余 / 兼容债）：**
+
+4. **`IntersectionReason` 44 字段语义重叠**：视觉 4 套（`avatarUrl`/`displayName` 裸字段 + `sampleVisuals` + `objectVisual` + `representativeActor` 自带视觉，注释已声明 sampleVisuals 取代裸字段但裸字段仍在）；计数 4 套（`factPointCount`/`recommendedPointCount`/`totalPointCount`/`mutualCount` + `point.count`）；文案 4 个（`primaryText`/`secondaryText`/`connectionSummary`/`pointClassLabel`）；行动 3 套（`actionType`/`actionTargetId`/`relationKind` + `actionHints` + `representativeActor.target`）。
+5. **kind 非一等字段**：交集的注册表主键 kind 埋在 `intersectionPoints[].sourceRef`，靠端 `intersectionKindOf()` 提取（point.sourceRef→reason.source→排除 dimension 名），脆弱且是端逻辑推断。
+6. **历史兼容桥接**：`UnifiedObjectKind.resolve()` 的 `relationKind` 旧词分支（org/poi/university/brand/user/location→objectKind）；`registry.migrations` 旧名别名；`reason.yaml` 多 `aliases`。
+
+### 23.2 根因
+
+registry/metadata 是真相源，但**「kind→(iconKey,objectKind,countObjectKind,dimensions,actionHints,tone,lifecycleApplicable,vertical)」这张元数据表从未 codegen 下发到端**。端侧只能硬编码 switch 复制，于是每次扩展都要端云双改 + 多处对象类型表互转。这是所有桥接债的同一根因。
+
+### 23.3 最佳方案（去桥接 + 多方向可扩展，不兼容历史）
+
+- **A. kind 元数据 codegen 下发（消除核心债）**：registry → 生成端 `IntersectionKindMetadata`（`Map<kind, {iconKey, objectKind, countObjectKind, dimensions, actionHints, tone, lifecycleApplicable, vertical}>`）。**删除** `intersection_kind_mapping.dart` 的 `iconKeyForKind`/`objectKindForKind`/`routeIdForObjectKind` 三个 switch，改查 codegen 表。新增 `travel.*` / 任意 kind → **仅改 registry，端零改动**。
+- **B. 对象类型单一闭集 + 路由 codegen**：`objectKind` 闭集（扩 `route/photo_spot/gear`）与 `objectKind→routeId` 映射全部 registry 单源 codegen。`UnifiedObjectKind` 改由 codegen 生成（删 `relationKind` 旧词桥接分支与 `_knownObjectKinds` 硬编码）；`countObjectKind` 与 `objectKind` 合并为同一对象类型闭集的「可计数子集」标注，不再两套集合。
+- **C. dimension / lifecycle / vertical 闭集数据驱动**：三者闭集在 registry 顶层声明（`dimensions` / `lifecycleStates` / `verticals`）→ codegen 端枚举 + 文案表键 + `verify_intersection_kind_registry.py` 统一校验（补 dimension/lifecycle/vertical 闭集校验，现仅校验 objectKind）。lifecycle 仅需新增 `archived/expired` 两态（`active/resurfaced/cooling` 是 stable/reactivated/weakened 的展示同义，不新增状态机态）。
+- **D. kind 升为 `IntersectionReason`/`IntersectionPoint` 一等字段**：契约直出 `kind`，删除端 `intersectionKindOf()` 提取逻辑。
+- **E. 字段收敛（reason）**：删 `avatarUrl`/`displayName` 裸字段（统一走 `sampleVisuals` + `representativeActor`）；计数唯一真相 `mutualCount`（+ `intersectionPoints` 派生），删 factPoint/recommendedPoint/totalPoint 冗余或降为内部；行动统一 `actionHints` + `representativeActor.target`，删 `actionType`/`actionTargetId`/`relationKind` 承载对象语义。
+- **F. 影响力对齐**：`AuthorImpactItem` 已复用统一交互子契约（primarySpans/sampleVisuals/representativeActor/actionHints/countTarget/evidenceSnapshotId/countObjectKind/lifecycleState），保持；`circle_impact_item` 补齐同一子契约（plan WS3）。影响力图标按 `helpType`、交集图标按 kind `iconKey`，两轴正交合理，保留。
+
+### 23.4 vertical 建模定稿（关键决策，修正 §22）
+
+- **裁决**：**不引入 `travel.*` 独立 kind 表**；改用 **`(基 kind + vertical 字段 + objectKind/tagRef)` 三元组正交**。例：`coVisitedEntity + vertical=travel_photography + objectKind=route` 即「旅游·同路线」；`sharedTagSample + vertical=travel_photography + tagRef=sunset` 即「旅游·日落兴趣」。
+- **理由**：travel.* 独立 kind 与基 kind 元数据（iconKey/actionHints/level/evidenceRank）除 objectKind 外完全相同 → 是「加 vertical 标注的别名」，会造成 ~90 kind 爆炸 + hydration 重复 + 必须靠映射层桥接（R24 抽象克制、避免第二真相源）。三元组正交：kind 闭集稳定 27 个，新垂类（campus）**零新 kind**，只加 `vertical` 值 + 必要 `objectKind`。
+- **产品可读性**：v1.0 的 `travel.location.same_route` 等可读名由 `(kind, vertical, objectKind)` → 展示语/iconKey 的 codegen 派生承载，不必落为独立 kind。
+- **§22 对齐修正**：§22.4/§22.5 的 `travel.*` kind 映射表降级为「**展示语义命名参考**」，实际注册以 `(kind,vertical,objectKind)` 三元组为准；registry 仅新增 `verticals` 闭集 + 每 kind `vertical` 缺省字段 + `objectKind` 扩 3 类，**不新增 travel.* kind 行**。
+
+### 23.5 对 plan 工作流的调整建议
+
+- **WS1 重定向**：从「注册 17 个 travel.* kind」→「① registry 顶层加 `verticals`/`dimensions`/`lifecycleStates` 闭集 + objectKind 扩 route/photo_spot/gear；② 每 kind 加 `vertical` 缺省 general；③ **新增 kind 元数据 codegen 下发**（方案 A，本轮去桥接核心）；④ reason/point 加一等 `kind` + `vertical` 字段；⑤ 扩 verify 脚本校验三闭集」。
+- **WS4 重定向**：从「端扩 UnifiedObjectKind 等多处」→「删 `intersection_kind_mapping.dart` 三 switch + `UnifiedObjectKind.resolve` 旧词桥接 + `_knownObjectKinds`，全部改查 codegen 元数据表」。
+- **WS2 不变**：测试用户「林墨」fixture 用 `(kind,vertical,objectKind)` 三元组铺设（如 `coVisitedEntity`+`vertical:travel_photography`+`objectKind:route`），不再用 `travel.*` sourceRef。
+- **收益**：方案 A 落地后，vertical/dimension/campus 等所有方向扩展均「仅改 registry，端零改动、零桥接」，根除 §23.1 全部 GATE_BLOCK 债。
+
+### 23.6 落地顺序与撞车
+
+- 本章（§23 定稿）不依赖 WIP，已冻结。方案 A-F 的代码落地全部落在当前活跃交集重构 WIP 面（registry/reason/Go/Dart/codegen），按既定协调待该重构收敛后基于本章实施；**WS1 必须先落方案 A（kind 元数据 codegen 下发），再铺垂类数据**，否则继续制造端侧桥接债。

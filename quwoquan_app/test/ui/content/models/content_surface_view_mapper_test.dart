@@ -160,7 +160,7 @@ void main() {
           <String, dynamic>{
             'dimension': 'alumni',
             'tagRefs': <String>['tag:school:neworiental'],
-            'relationKind': 'circle',
+            'objectKind': 'circle',
             'relationObjectId': 'circle1',
             'label': '校友圈',
             'sharedCount': 12,

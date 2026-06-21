@@ -32,4 +32,4 @@
 - A1：Error Governance dashboard 可展示 override hit/miss、runtime error response、config sync source/result。
 - A2：override miss rate、locale 缺失、disk fallback 和 runtime error spike 有告警规则。
 - A3：override 发布和回滚无需云服务重启，且不需要端侧升级。
-- A4：dashboard 与告警字段均能通过 T2/T3 测试或真实指标样本证明来源。
+- A4：dashboard 与告警字段均能通过 local_contract/api_integration 测试或真实指标样本证明来源。

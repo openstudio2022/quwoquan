@@ -481,10 +481,13 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           .followingSubAccountIds,
       onFollowClick: (subAccountId, _) =>
           runWhenLoggedIn(ref, context, AuthGateReason.follow, () {
+            final wasFollowing = effectiveProfileFollowing(ref, subAccountId);
+            final nextFollowing = !wasFollowing;
             syncProfileFollowIntent(
               ref,
               subAccountId: subAccountId,
-              isFollowing: !effectiveProfileFollowing(ref, subAccountId),
+              previousFollowing: wasFollowing,
+              isFollowing: nextFollowing,
             );
           }),
       onVideoTap: (post, index) {
@@ -962,6 +965,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       context: context,
       postId: postId,
       config: const CommentConfig(enabled: true),
+      onShareTap: () => _onMomentShareTap(context, post),
     );
   }
 
@@ -2033,10 +2037,12 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                                         context,
                                         AuthGateReason.like,
                                         () {
+                                          final nextLiked = !isLiked;
                                           syncPostLikeIntent(
                                             ref,
                                             postId: post.id,
-                                            isLiked: !isLiked,
+                                            previousLiked: isLiked,
+                                            isLiked: nextLiked,
                                             likeCount: isLiked
                                                 ? (likeCount - 1)
                                                       .clamp(0, 1 << 31)

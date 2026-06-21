@@ -608,7 +608,11 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-(root / "media/video/beta-sample.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
+source = root / "media/video/s/archived-video/beta-sample.mp4"
+target = root / "media/video/beta-sample.mp4"
+if not source.is_file():
+    raise SystemExit(f"playable sample video missing: {source}")
+target.write_bytes(source.read_bytes())
 PY
 MEDIA_EDGE_LOG="$LOG_DIR/media-edge.log"
 echo "[app-beta-manual] starting local media origin on :$MEDIA_ORIGIN_PORT"
@@ -616,12 +620,17 @@ beta_manual_start_process \
   "media-origin" \
   "$MEDIA_LOG" \
   "$ROOT_DIR" \
-  python3 -m http.server "$MEDIA_ORIGIN_PORT" --bind 127.0.0.1 --directory "$MEDIA_DIR"
+  python3 agent_ops/deploy/lib/local_media_origin.py \
+    --listen-host 127.0.0.1 \
+    --listen-port "$MEDIA_ORIGIN_PORT" \
+    --root-dir "$MEDIA_DIR" \
+    --server-label app-beta-manual-media-origin
 beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "media origin current user avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png" "media origin friend avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png" "media origin group avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "media origin post cover fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/image/s/archived-image/post/fixture_post_photography_001/v1/cover.jpg" "media origin mixed-format post cover fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_range_ok "http://127.0.0.1:${MEDIA_ORIGIN_PORT}/media/video/s/archived-video/beta-sample.mp4" "media origin playable video range" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
 echo "[app-beta-manual] starting local media edge on :$MEDIA_PORT -> :$MEDIA_ORIGIN_PORT"
 beta_manual_start_process \
   "media-edge" \
@@ -633,6 +642,7 @@ beta_manual_start_process \
     --target-base-url "http://127.0.0.1:${MEDIA_ORIGIN_PORT}"
 beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "media edge current user avatar fixture" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "media edge post cover fixture" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_range_ok "http://127.0.0.1:${MEDIA_PORT}/media/video/s/archived-video/beta-sample.mp4" "media edge playable video range" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
 if [[ "$DEVICE_KIND" == "android_physical" && -n "$FLUTTER_DEVICE_ID" && "$LOCAL_PUBLIC_HOST" == "127.0.0.1" && -x "$(command -v adb 2>/dev/null || true)" ]]; then
   adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${GATEWAY_PORT}" "tcp:${GATEWAY_PORT}" >/dev/null 2>&1 || true
   adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${MEDIA_PORT}" "tcp:${MEDIA_PORT}" >/dev/null 2>&1 || true
