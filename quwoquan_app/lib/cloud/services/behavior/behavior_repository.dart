@@ -70,6 +70,7 @@ enum ReferralSource {
   search,
   pushNotification,
   deepLink,
+  myIntersections,
 }
 
 extension ReferralSourceExt on ReferralSource {
@@ -93,7 +94,26 @@ extension ReferralSourceExt on ReferralSource {
         return 'push_notification';
       case ReferralSource.deepLink:
         return 'deep_link';
+      case ReferralSource.myIntersections:
+        return 'my_intersections';
     }
+  }
+}
+
+/// 对象面 objectType → 来源 [ReferralSource] 的统一映射（N10）。
+///
+/// 用户 / 圈子 / 实体对象面（对象页交集 section、对象交集列表页）共享此映射，
+/// 去除各展示位 `organicFeed` 一刀切硬编，按当前所在对象面精确归因（R23/R32）。
+/// 用现有闭集最近邻：user→authorProfile、circle→circlePost、entity/homepage→entityPage。
+ReferralSource referralSourceForObjectType(String objectType) {
+  switch (objectType.trim()) {
+    case 'circle':
+      return ReferralSource.circlePost;
+    case 'entity':
+    case 'homepage':
+      return ReferralSource.entityPage;
+    default:
+      return ReferralSource.authorProfile;
   }
 }
 

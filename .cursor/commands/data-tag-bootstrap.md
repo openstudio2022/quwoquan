@@ -33,7 +33,7 @@ python3 quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_tags.py --dry-run
 
 ## 输出位置
 
-`quwoquan_data/publish/v1/tags/`
+`quwoquan_data/publish/tags/`
 
 ## 目标
 

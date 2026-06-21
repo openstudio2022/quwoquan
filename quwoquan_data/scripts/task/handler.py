@@ -42,7 +42,9 @@ from task import store
 from task.cleanup_generated import build_cleanup_manifest, execute_cleanup, write_manifest
 from task.decompose import register_decompose_parser
 from task.content_supply import register_content_supply_parsers
+from task.image_scale_proof import handle_open_license_proof
 from task.run import register_run_parser
+from task.trial_review import build_trial_review, parse_run_ref, write_trial_review
 from verify.gate import gate_verify
 from verify.audit_summary import write_batch_audit_summary
 
@@ -272,8 +274,6 @@ def handle_status(args: argparse.Namespace) -> None:
 
 
 def handle_trial_review(args: argparse.Namespace) -> None:
-    from task.trial_review import build_trial_review, parse_run_ref, write_trial_review
-
     compares = [
         parse_run_ref(value, default_task_id=args.task)
         for value in (getattr(args, "compare", None) or [])
@@ -971,6 +971,18 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pstg.add_argument("--category", default="景区")
     pstg.add_argument("--name", required=True, help="新任务名")
     pstg.add_argument("--title", help="新任务标题；默认同 name")
+    pstg.add_argument(
+        "--entity-articles-per-target",
+        type=int,
+        default=4,
+        help="每个实体的文章配额；默认 4",
+    )
+    pstg.add_argument(
+        "--image-works-per-target",
+        type=int,
+        default=1,
+        help="每个实体的图片作品配额；默认 1（100 实体验收即 100 图库）",
+    )
     pstg.add_argument("--owner", help="createdBy")
     pstg.add_argument("--write", action="store_true", help="写入 committed task；默认只打印 selection report")
     pstg.add_argument("--force", action="store_true", help="覆盖同名任务")
@@ -983,6 +995,21 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pab.add_argument("--write", action="store_true", help="写入 batch/_shared/managed_batch_audit.json")
     pab.add_argument("--strict", action="store_true", help="failedLaneCount > 0 时返回非零退出码")
     pab.set_defaults(handler=handle_audit_batch)
+
+    pop = sub.add_parser(
+        "open-license-proof",
+        help="从 batch 图片 source plan 生成百级开放许可图片预筛证明",
+    )
+    pop.add_argument("--task", required=True)
+    pop.add_argument("--batch", required=True)
+    pop.add_argument("--write", action="store_true", help="写入 batch/_shared/open_license_scale_proof.json")
+    pop.add_argument(
+        "--apply-task",
+        action="store_true",
+        help="仅在 proof 通过时写回 task.yaml 的 content.research.openLicenseScaleProof",
+    )
+    pop.add_argument("--strict", action="store_true", help="proof 未通过时返回非零退出码")
+    pop.set_defaults(handler=handle_open_license_proof)
 
     pabn = sub.add_parser("abandon-targets", help="快速失败：标记实体 abandoned，后续 workflow/audit 跳过")
     pabn.add_argument("--task", required=True)

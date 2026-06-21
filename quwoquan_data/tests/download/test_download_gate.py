@@ -217,6 +217,103 @@ def test_gate_download_blocks_missing_homepage_lane_text_unit():
     assert any("homepage retained sources=0 need>=1" in issue for issue in issues), issues
 
 
+def test_gate_download_partial_content_ignores_missing_successful_sources(monkeypatch):
+    batch = "download_gate_partial_missing_sources"
+    ensure_task_layout(TASK)
+    monkeypatch.setattr("download.gate._download_allows_partial_content", lambda _task_id: True)
+
+    issues = gate_download(TASK, batch, target_entities={"失败景区"})
+
+    assert issues == []
+
+
+def test_gate_download_partial_content_ignores_soft_image_fetch_report(monkeypatch):
+    batch = "download_gate_partial_soft_image_fetch"
+    ensure_task_layout(TASK)
+    monkeypatch.setattr("download.gate._download_allows_partial_content", lambda _task_id: True)
+    monkeypatch.setattr(
+        "download.gate.download_requirements",
+        lambda _task_id: {
+            "minSources": 4,
+            "minImages": 0,
+            "minArticleImageSources": 0,
+            "minArticleBaseSources": 4,
+            "minHomepageSources": 1,
+        },
+    )
+    entity_dir = batch_entity_object_dir(TASK, batch, "地点", "景区", "软图景区")
+    write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="article_base_1",
+        source_md="# 软图景区\n\n游记正文",
+        quality={"sourceId": "article_base_1", "quality": "A-story", "score": 8},
+        platform="马蜂窝",
+        source_category="travelogue",
+        research_lane="article",
+        url="https://example.com/a1",
+        title="软图景区攻略",
+        target_ref="/entity/地点/景区/软图景区",
+    )
+    write_json(
+        batch_root(TASK, batch)
+        / "task_download"
+        / "results"
+        / "image_fetch_gate"
+        / "软图景区.json",
+        {
+            "payload": {
+                "passed": False,
+                "ref": "软图景区",
+                "issues": [
+                    "imageFetch: 未下到真实图片，请在 source_plan 提供可用 imageUrls(CC/PD/授权)"
+                ],
+            }
+        },
+    )
+
+    issues = gate_download(TASK, batch)
+
+    assert issues == []
+
+
+def test_gate_download_partial_content_keeps_image_rights_blocking(monkeypatch):
+    batch = "download_gate_partial_image_rights"
+    ensure_task_layout(TASK)
+    monkeypatch.setattr("download.gate._download_allows_partial_content", lambda _task_id: True)
+    monkeypatch.setattr(
+        "download.gate.download_requirements",
+        lambda _task_id: {
+            "minSources": 4,
+            "minImages": 0,
+            "minArticleImageSources": 0,
+            "minArticleBaseSources": 4,
+            "minHomepageSources": 1,
+        },
+    )
+    entity_dir = batch_entity_object_dir(TASK, batch, "地点", "景区", "权利风险景区")
+    write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="article_base_1",
+        source_md="# 权利风险景区\n\n游记正文",
+        quality={"sourceId": "article_base_1", "quality": "A-story", "score": 8},
+        platform="马蜂窝",
+        source_category="travelogue",
+        research_lane="article",
+        url="https://example.com/a1",
+        title="权利风险景区攻略",
+        target_ref="/entity/地点/景区/权利风险景区",
+        images=[{"bytes": b"not-a-real-image", "url": "https://example.com/risky.jpg"}],
+        build_variants=False,
+    )
+
+    issues = gate_download(TASK, batch)
+
+    assert any("missing image rights" in issue for issue in issues), issues
+    assert not any("only 1 sources" in issue for issue in issues), issues
+
+
 def test_gate_download_blocks_homepage_source_without_base_draft_facts():
     batch = "download_gate_homepage_not_base_ready"
     ensure_task_layout(TASK)

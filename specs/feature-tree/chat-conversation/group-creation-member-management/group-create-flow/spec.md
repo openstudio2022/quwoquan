@@ -151,18 +151,18 @@
 
 ## 9. 验收重点
 
-### T1
+### local_contract
 
 - route / surface / create contract / candidate contract 结构冻结
 
-### T2
+### local_contract
 
 - 图一页面、图二/图三 sheet、搜索、A-Z 索引、已选区折叠/展开/删除全部可交互
 
-### T3
+### api_integration
 
 - 原子建群后消息列表、聊天详情页与成员数据一致
 
-### T4
+### user_acceptance
 
 - 真机完成“发起群聊 -> 选择来源 -> 选择成员 -> 完成建群 -> 返回消息页”的完整旅程

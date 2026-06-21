@@ -221,10 +221,10 @@ flowchart TD
 
 ### 8.6 验证
 
-- T1：`ContentUIConfig.homeChannels` layout policy 契约测试；`HomeFeedLayoutPolicy` 单测；`IntersectionReason` 解析契约。
-- T2：首页 widget 覆盖 390px 手机和 768px 平板；推荐/校园/旅行/关注/精品各频道都应走正确布局。
-- T3：feed `intersectionReasons` 与 tag-service `shared-tags` 真打，验证对象页承接。
-- T4：首页看到交集 → 点击内容/对象 → 小趣解释或关注/加入 → 行为回流推荐。
+- local_contract：`ContentUIConfig.homeChannels` layout policy 契约测试；`HomeFeedLayoutPolicy` 单测；`IntersectionReason` 解析契约。
+- local_contract：首页 widget 覆盖 390px 手机和 768px 平板；推荐/校园/旅行/关注/精品各频道都应走正确布局。
+- api_integration：feed `intersectionReasons` 与 tag-service `shared-tags` 真打，验证对象页承接。
+- user_acceptance：首页看到交集 → 点击内容/对象 → 小趣解释或关注/加入 → 行为回流推荐。
 
 ## 9. 关注页对象列表与未读变化设计（V9）
 

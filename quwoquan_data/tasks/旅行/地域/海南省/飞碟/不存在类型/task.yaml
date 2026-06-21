@@ -1,0 +1,20 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/海南省/飞碟/不存在类型
+title: 海南省飞碟不存在类型
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 海南省
+entityCategory: 景区
+parentTaskId: null
+status: draft
+scope:
+  region: 海南省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 三亚示例景区
+provenance:
+  createdAt: '2026-06-20T18:10:34.277663+00:00'
+  createdBy: task new

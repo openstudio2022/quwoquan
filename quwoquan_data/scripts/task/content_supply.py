@@ -37,7 +37,10 @@ VALID_SCENARIOS = (
     "refresh_stale",
     "reported_revision",
 )
-VALID_CONTENT_TYPES = ("homepage", "article", "imagePost", "videoPost", "moment", "knowledgeCard")
+# 可生产 content_type 单一真相源：moment(随记/casual) 不属于"作品"，禁止进入生产。
+# 与 schema/produce/post_manifest.schema.json 的 contentType enum(article/image/video) 对齐：
+# imagePost→image、videoPost→video、knowledgeCard→article、homepage→实体主页独立流程。
+VALID_CONTENT_TYPES = ("homepage", "article", "imagePost", "videoPost", "knowledgeCard")
 VALID_RUN_MODES = ("new", "fill_missing", "optimize_existing", "refresh_stale", "repair_failed")
 VALID_CREATOR_STATUSES = ("draft", "ai_reviewed", "active", "throttled", "suspended", "retired")
 VALID_RISK_TIERS = ("low", "medium", "high")
@@ -75,7 +78,6 @@ CONTENT_SPEC_REFS = {
     "article": "sop/article.md",
     "imagePost": "sop/image.md",
     "videoPost": "sop/video.md",
-    "moment": "sop/moment.md",
     "knowledgeCard": "sop/article.md",
 }
 
@@ -103,7 +105,6 @@ DEFAULT_TOKEN_BUDGET = {
         "article": 1800,
         "imagePost": 700,
         "videoPost": 1200,
-        "moment": 500,
         "knowledgeCard": 900,
     },
     "draftMaxTokens": {
@@ -111,7 +112,6 @@ DEFAULT_TOKEN_BUDGET = {
         "article": 3200,
         "imagePost": 600,
         "videoPost": 1800,
-        "moment": 500,
         "knowledgeCard": 1200,
     },
     "reviewMaxTokens": 900,

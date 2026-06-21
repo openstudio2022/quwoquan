@@ -1225,14 +1225,29 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return value.toString();
   }
 
-  void _handleArticleEntityTap(ArticleInlineSpan span) {
+  void _handleArticleInlineMentionTap(ArticleInlineSpan span) {
     final targetType = span.targetType?.trim();
     final targetId = span.targetId?.trim() ?? '';
     if (targetId.isEmpty) return;
+    if (span.isTag) {
+      final tagRef = _tagRefForArticleMention(targetId);
+      if (tagRef.isEmpty) return;
+      context.push(
+        AppRoutePaths.globalSearchNetworkResults(query: tagRef),
+      );
+      return;
+    }
     if (targetType != 'homepage' && targetType != 'entity') return;
     context.push(
       AppRoutePaths.homepageDetail(id: _homepageIdForArticleEntity(targetId)),
     );
+  }
+
+  String _tagRefForArticleMention(String targetId) {
+    final normalized = targetId.trim();
+    return normalized.startsWith('tag:')
+        ? normalized.substring('tag:'.length)
+        : normalized;
   }
 
   String _homepageIdForArticleEntity(String targetId) {
@@ -1681,6 +1696,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       syncPostLikeIntent(
         ref,
         postId: post.id,
+        previousLiked: isLiked,
         isLiked: nextLiked,
         likeCount: nextLikeCount,
       );
@@ -1690,10 +1706,12 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   void _onFollow(PostBaseDto post) {
     runWhenLoggedIn(ref, context, AuthGateReason.follow, () {
       final subjectId = post.subAccountId;
-      final nextFollowing = !effectiveProfileFollowing(ref, subjectId);
+      final wasFollowing = effectiveProfileFollowing(ref, subjectId);
+      final nextFollowing = !wasFollowing;
       syncProfileFollowIntent(
         ref,
         subAccountId: subjectId,
+        previousFollowing: wasFollowing,
         isFollowing: nextFollowing,
       );
     });
@@ -1777,8 +1795,21 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             content: _buildCommentSplitContent(commentSplitPost),
             commentContext: widget.initialCommentContext,
             likeCount: interaction.likeCountFor(splitPostId),
+            shareCount: effectivePostShareCount(
+              ref,
+              splitPostId,
+              fallback: commentSplitPost.shareCount,
+            ),
             isLiked: interaction.isLiked(splitPostId),
+            isShared: interaction.isShared(splitPostId),
             onLikeTap: () => _onLike(commentSplitPost),
+            onShareTap: () => _sharePost(
+              context,
+              commentSplitPost,
+              enableIdentityTemplate: ref.read(
+                contentFeatureFlagProvider('enable_identity_share_template'),
+              ),
+            ),
             onClose: () => setState(() => _commentSplitPostId = null),
           ),
         ),
@@ -2274,7 +2305,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         onPageFlipCommitted: (event) =>
             _trackArticlePageFlipCommit(post, event),
         onPageCurlAborted: (event) => _trackArticlePageCurlAbort(post, event),
-        onEntityTap: _handleArticleEntityTap,
+        onEntityTap: _handleArticleInlineMentionTap,
         onOverflowPrevious: null,
         onOverflowNext: null,
       );
@@ -2422,4 +2453,3 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         .trackShare(postId, tags: <String>[actionId]);
   }
 }
-

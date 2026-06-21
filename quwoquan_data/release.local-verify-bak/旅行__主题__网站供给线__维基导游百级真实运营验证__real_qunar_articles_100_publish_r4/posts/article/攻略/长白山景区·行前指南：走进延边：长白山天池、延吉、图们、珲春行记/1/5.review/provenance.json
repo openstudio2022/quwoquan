@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_157b7472028ada2f",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "长白山景区·行前指南：走进延边：长白山天池、延吉、图们、珲春行记",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-cc72a571-87a3-4b81-bbb0-fd3badc76bb7",
+    "agentId": "agent-446757cd-f399-4ef2-8401-b557d2bd8cc7",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/长白山景区"
+    ],
+    "articleDigest": "sha256:cd4bfaeb6478457a5195a3047aa8fe5f27f4644ffdb8eca3e0486376a52e7d86"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "长白山景区·行前指南：走进延边：长白山天池、延吉、图们、珲春行记",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:4ffd1f58ed2c18561c7832d31ca0848d66cf26c1ee4bc7d55dfd4a2ffe891ed8",
+    "writingPackSha256": "sha256:7cf9812b1bebd4dc4d0d45e979b364c124cd5183c47d281d55d7959f824c1442",
+    "sourceBundleSha256": "sha256:8953932bdb001ab7908e7a8869ec3f6935bd9ace2f1565a5ccd9f4699abc9cff",
+    "draftSha256": "sha256:121e3ba3a0916feaac10cd6fdef0a8a9a68dccc9bedc5a89bbcf8664e7b521e6"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/长白山景区/1.download/sources/09.qunar_guide_candidate_157b7472028ada2f/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7902342"
+    },
+    {
+      "path": "entities/地点/景区/长白山景区/1.download/sources/15.qunar_guide_candidate_2475d8270f4825a9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7868578"
+    },
+    {
+      "path": "entities/地点/景区/长白山景区/1.download/sources/92.qunar_guide_candidate_cfe5b2749d640bc2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7871817"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/长白山景区/1.download/sources/09.qunar_guide_candidate_157b7472028ada2f/source.md",
+    "entities/地点/景区/长白山景区/1.download/sources/15.qunar_guide_candidate_2475d8270f4825a9/source.md",
+    "entities/地点/景区/长白山景区/1.download/sources/92.qunar_guide_candidate_cfe5b2749d640bc2/source.md"
+  ]
+}

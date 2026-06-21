@@ -18,6 +18,8 @@ enum ContentErrorCode {
   commentRateLimited,
   commentLikeDuplicate,
   commentReactionForbidden,
+  commentPinForbidden,
+  commentPinInvalidTarget,
   commentAttachmentLimitExceeded,
   commentAttachmentNotReady,
   commentForbiddenDelete,
@@ -70,6 +72,10 @@ enum ContentErrorCode {
         return ContentErrorCode.commentLikeDuplicate;
       case 'CONTENT.USER.comment_reaction_forbidden':
         return ContentErrorCode.commentReactionForbidden;
+      case 'CONTENT.USER.comment_pin_forbidden':
+        return ContentErrorCode.commentPinForbidden;
+      case 'CONTENT.USER.comment_pin_invalid_target':
+        return ContentErrorCode.commentPinInvalidTarget;
       case 'CONTENT.USER.comment_attachment_limit_exceeded':
         return ContentErrorCode.commentAttachmentLimitExceeded;
       case 'CONTENT.USER.comment_attachment_not_ready':
@@ -129,6 +135,8 @@ class ContentErrorMessages {
     ContentErrorCode.commentRateLimited: '评论太频繁，请稍后重试',
     ContentErrorCode.commentLikeDuplicate: '已经点过赞了',
     ContentErrorCode.commentReactionForbidden: '当前无法评价这条评论',
+    ContentErrorCode.commentPinForbidden: '仅内容作者可置顶评论',
+    ContentErrorCode.commentPinInvalidTarget: '只能置顶一级评论',
     ContentErrorCode.commentAttachmentLimitExceeded: '评论图片数量超出限制',
     ContentErrorCode.commentAttachmentNotReady: '评论图片正在处理中，请稍后重试',
     ContentErrorCode.commentForbiddenDelete: '无权删除此评论',
@@ -164,6 +172,8 @@ class ContentErrorMessages {
     ContentErrorCode.commentRateLimited: 'Too many comments, please retry later',
     ContentErrorCode.commentLikeDuplicate: 'Already liked',
     ContentErrorCode.commentReactionForbidden: 'Not allowed to react to this comment',
+    ContentErrorCode.commentPinForbidden: 'Only the post author can pin comments',
+    ContentErrorCode.commentPinInvalidTarget: 'Only top-level comments can be pinned',
     ContentErrorCode.commentAttachmentLimitExceeded: 'Too many comment images',
     ContentErrorCode.commentAttachmentNotReady: 'Comment image is still processing, please retry shortly',
     ContentErrorCode.commentForbiddenDelete: 'Not allowed to delete this comment',

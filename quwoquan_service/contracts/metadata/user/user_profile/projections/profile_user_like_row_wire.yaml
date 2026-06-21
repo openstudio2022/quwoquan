@@ -50,6 +50,13 @@ client_projection:
       aliases: [likerAvatarUrl]
       default: "''"
 
+    - name: likerAvatarVersion
+      dart_type: int
+      nullable: false
+      source: likerAvatarVersion
+      aliases: [likerAvatarVersion, avatarVersion]
+      default: "0"
+
     - name: likedAt
       dart_type: DateTime
       nullable: true

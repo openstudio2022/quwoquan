@@ -23,7 +23,7 @@ spec.md 定义了 32 人实时音视频通话端到端闭环，且在本轮 PRD 
 ## 上游输入评审
 
 - spec.md 已扩展到 F23 并新增 §12 商用上线 UX 基线、§13 来电平台能力矩阵、§14 信任与隐私提示
-- acceptance.yaml 由模板化 SIT 重写为可执行 SIT/GWT/contract + T1~T4 结构（不再以“A1~A56”固定编号描述，避免与磁盘条目漂移）
+- acceptance.yaml 由模板化 SIT 重写为可执行 SIT/GWT/contract + 三层测试 结构（不再以“A1~A56”固定编号描述，避免与磁盘条目漂移）
 - 前置依赖 realtime-gateway 已有完整 spec（L2），可并行或串行推进
 - 前置依赖 `contact-and-session-governance` 已明确请求箱、互相关注、能力位真相源
 - **无阻断项**
@@ -742,7 +742,7 @@ Phase 1: dev 全量
 └── 通过 → 进入 integration
 
 Phase 2: integration 全量
-├── T1~T3 全量自动化测试通过
+├── local_contract~api_integration 全量自动化测试通过
 ├── 32 人基准测试（SFU CPU <85%, 延迟 p95 <350ms）
 ├── 弱网模拟（100kbps 音频不断 ≥60s, ICE 重连 ≥95%）
 ├── 持续 48h 无 P0
@@ -792,17 +792,17 @@ Phase 6: prod 100% 全量放开
   4. Green：打通 user-service 设置、rtc-service 快照与 CallKit/FullScreen 解析
   5. Refactor：统一蓝色视觉、清理记录绿色语义和调试开关泄漏
 - **本轮新增优先失败测试**：
-  - T1：来电偏好 DTO / 错误码 / `initiatorRingtoneId` round-trip
-  - T2：Incoming/Outgoing/ActiveCallBar 的品牌蓝与开发态入口显示约束
-  - T3：rtc-service 发起通话时快照 initiator 铃声、群邀请保持 initiator 归属
-  - T4：前台 / 后台 / 锁屏来电旅程，发起方铃声覆盖与默认铃声回退
+  - local_contract：来电偏好 DTO / 错误码 / `initiatorRingtoneId` round-trip
+  - local_contract：Incoming/Outgoing/ActiveCallBar 的品牌蓝与开发态入口显示约束
+  - api_integration：rtc-service 发起通话时快照 initiator 铃声、群邀请保持 initiator 归属
+  - user_acceptance：前台 / 后台 / 锁屏来电旅程，发起方铃声覆盖与默认铃声回退
 
 ## 角色职责与多重防护网
 
 - **产品**：冻结群邀请仅响铃、蓝色品牌主色、互相关注门禁、多来源选人和铃声归属规则
 - **架构**：决定 ringtoneId 的 metadata 承载位、CallSession 快照策略、CallKit/FullScreen 唤醒分层与灰度指标
 - **开发**：按 `metadata → codegen → Red → Green → Refactor` 实施，禁止绕过 metadata 手写接口常量
-- **测试**：覆盖 T1~T4，特别是锁屏唤醒、群邀请铃声归属、跨群拉人和开发态调试剧本隔离
+- **测试**：覆盖 三层测试，特别是锁屏唤醒、群邀请铃声归属、跨群拉人和开发态调试剧本隔离
 - **发布**：分阶段灰度，新增监控“来电唤醒成功率”“发起方铃声解析成功率”“默认铃声回退率”
 - **防护网**：
   - 需求防漏：A52~A56 覆盖本轮新增体验规则
@@ -858,7 +858,7 @@ Phase 6: prod 100% 全量放开
 
 ## Story 与测试层映射
 
-| L4 Story | T1 契约 | T2 模块 | T3 集成 | T4 旅程 |
+| L4 Story | local_contract 契约 | local_contract 模块 | api_integration 集成 | user_acceptance 旅程 |
 |----------|---------|---------|---------|---------|
 | call-lifecycle-contract | DTO/Error/Repository codegen 契约 | OutgoingCall+IncomingCall+VoiceCall+VideoCall 页面 | 全状态机+事件发布+超时+来电推送 | 1v1 语音/视频/来电/拒绝/超时旅程 |
 | multi-party-room-contract | 同上（多人字段扩展） | 网格布局+演讲者视图+参与者面板 | Join/Leave/Invite+32人上限+SFU 基准 | 多人加入/离开旅程+群聊/圈子入口 |

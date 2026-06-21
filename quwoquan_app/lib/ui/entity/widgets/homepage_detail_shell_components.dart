@@ -39,7 +39,7 @@ class HomepageIdentityHeader extends StatelessWidget {
 
     final image = (coverUrl ?? '').trim().isEmpty
         ? fallback
-        : CircleMediaImage(
+        : AppMediaImage(
             imageSource: coverUrl!,
             fit: BoxFit.cover,
             placeholder: fallback,

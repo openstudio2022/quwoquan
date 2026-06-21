@@ -15,6 +15,15 @@ CONTENT_SOURCE_REGISTRY_PATH = (
 )
 CONTENT_SOURCE_REGISTRY_SCHEMA = "quwoquan.content_source_registry.v1"
 
+VALID_SOURCE_TIERS = (
+    "tier1_authoritative",
+    "tier2_professional",
+    "tier3_quality_ugc",
+    "tier4_casual",
+    "tier5_reject",
+)
+VALID_WORKS_AFFINITIES = ("work_strong", "work", "neutral", "moment", "reject")
+
 
 def load_content_source_registry() -> dict[str, Any]:
     if not CONTENT_SOURCE_REGISTRY_PATH.is_file():
@@ -27,6 +36,63 @@ def load_content_source_registry() -> dict[str, Any]:
 
 def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
+
+
+def resolve_source_tier(source_class: str, *, data: Mapping[str, Any] | None = None) -> dict[str, str]:
+    """按 sourceClass 解析来源专业度先验（baseTier + worksAffinity）；缺失走 default。
+
+    单一真相源 = content_source_registry.yaml: sourceTierSignals。供 WorksClassifier 消费，
+    禁止在判定代码里另维护第二套 sourceClass→tier 映射。
+    """
+    registry = data if data is not None else load_content_source_registry()
+    signals = registry.get("sourceTierSignals") if isinstance(registry.get("sourceTierSignals"), dict) else {}
+    by_class = signals.get("bySourceClass") if isinstance(signals.get("bySourceClass"), dict) else {}
+    default = signals.get("default") if isinstance(signals.get("default"), dict) else {}
+    row = by_class.get(str(source_class or "").strip())
+    if not isinstance(row, dict):
+        row = default if isinstance(default, dict) else {}
+    base_tier = str(row.get("baseTier") or "tier4_casual")
+    affinity = str(row.get("worksAffinity") or "neutral")
+    return {"baseTier": base_tier, "worksAffinity": affinity}
+
+
+def resolve_source_class(
+    *,
+    source_id: str = "",
+    platform: str = "",
+    data: Mapping[str, Any] | None = None,
+) -> str:
+    """把来源单元的 sourceId/platform 解析为 registry sourceClass（单一真相源）。
+
+    优先 sourceId 精确匹配；回退 platform 精确匹配；再回退 platform 包含匹配
+    （"携程攻略" 命中 platform="携程攻略"，"携程" 命中含"携程"的条目）。
+    缺失返回 ""（由 resolve_source_tier 落 default → tier4_casual）。
+    WorksClassifier 经此拿到来源专业度先验，禁止在判定代码里另维护第二套映射。
+    """
+    registry = data if data is not None else load_content_source_registry()
+    by_id: dict[str, str] = {}
+    by_platform: dict[str, str] = {}
+    for _, row in _registry_sources(registry):
+        cls = str(row.get("sourceClass") or "").strip()
+        if not cls:
+            continue
+        sid = str(row.get("sourceId") or "").strip().lower()
+        plat = str(row.get("platform") or "").strip().lower()
+        if sid:
+            by_id.setdefault(sid, cls)
+        if plat:
+            by_platform.setdefault(plat, cls)
+    sid = str(source_id or "").strip().lower()
+    if sid and sid in by_id:
+        return by_id[sid]
+    plat = str(platform or "").strip().lower()
+    if plat and plat in by_platform:
+        return by_platform[plat]
+    if plat:
+        for known, cls in by_platform.items():
+            if known and (known in plat or plat in known):
+                return cls
+    return ""
 
 
 def _registry_sources(data: Mapping[str, Any]) -> list[tuple[str, dict[str, Any]]]:
@@ -102,6 +168,37 @@ def verify_content_source_registry() -> list[str]:
     for lane in ("homepage", "article", "image", "video"):
         if lane not in lane_policies:
             issues.append(f"lanePolicies.{lane}: missing")
+
+    signals = data.get("sourceTierSignals") if isinstance(data.get("sourceTierSignals"), dict) else {}
+    if not signals:
+        issues.append("sourceTierSignals: missing (作品判定来源专业度先验真相源)")
+    else:
+        default = signals.get("default") if isinstance(signals.get("default"), dict) else {}
+        by_class = signals.get("bySourceClass") if isinstance(signals.get("bySourceClass"), dict) else {}
+        if not default:
+            issues.append("sourceTierSignals.default: missing 兜底 baseTier/worksAffinity")
+
+        def _check_tier_row(name: str, row: Mapping[str, Any]) -> None:
+            base_tier = str(row.get("baseTier") or "")
+            affinity = str(row.get("worksAffinity") or "")
+            if base_tier not in VALID_SOURCE_TIERS:
+                issues.append(f"sourceTierSignals.{name}: invalid baseTier {base_tier!r}")
+            if affinity not in VALID_WORKS_AFFINITIES:
+                issues.append(f"sourceTierSignals.{name}: invalid worksAffinity {affinity!r}")
+
+        if default:
+            _check_tier_row("default", default)
+        for cls, row in by_class.items():
+            if isinstance(row, dict):
+                _check_tier_row(f"bySourceClass.{cls}", row)
+            else:
+                issues.append(f"sourceTierSignals.bySourceClass.{cls}: must be a mapping")
+        seen_classes = {str(row.get("sourceClass") or "").strip() for _, row in _registry_sources(data)}
+        for cls in sorted(c for c in seen_classes if c):
+            if cls not in by_class:
+                issues.append(
+                    f"sourceTierSignals.bySourceClass: missing explicit mapping for sourceClass {cls!r} (falls back to default)"
+                )
     return issues
 
 
@@ -170,6 +267,7 @@ def render_lane_source_prompt(
     per_target_articles: int = 1,
     per_target_image_works: int = 1,
     article_intents: list[str] | None = None,
+    image_asset_strategy: str = "open_license_publish",
 ) -> str:
     data = load_content_source_registry()
     policy = (data.get("lanePolicies") or {}).get(lane) or {}
@@ -210,9 +308,19 @@ def render_lane_source_prompt(
         publishable = _names(rows, role="publish_candidate")
         licensed = _names(rows, role="licensed_candidate")
         discovery = _names(rows, role="discovery_only") + _names(rows, role="reference_only")
+        strategy_text = {
+            "open_license_publish": "当前 imageAssetStrategy=open_license_publish：只能把开放许可或逐资产可发布授权图片写入 collections。",
+            "licensed_provider_publish": "当前 imageAssetStrategy=licensed_provider_publish：只能把授权图库/授权池中有凭证的图片写入 collections。",
+            "ai_generated_original": "当前 imageAssetStrategy=ai_generated_original：可使用原创生成图，但必须写 generationModel、generationPromptHash、generatedAt、syntheticDisclosure 和完整权利字段。",
+            "reference_only_no_image_release": "当前 imageAssetStrategy=reference_only_no_image_release：只能做发现/参考验证，不得把未授权图片写成可发布 collections。",
+        }.get(
+            image_asset_strategy,
+            f"当前 imageAssetStrategy={image_asset_strategy}：必须遵守任务配置和逐资产权利门。",
+        )
         lines.append(
             "只做图片作品检索。广泛检索通用视觉平台、摄影社区、图库、官方图库和垂类图库。"
         )
+        lines.append(strategy_text)
         lines.append(
             f"开放或可发布候选优先看：{', '.join(publishable[:12])}；"
             f"授权候选看：{', '.join(licensed[:16])}；"

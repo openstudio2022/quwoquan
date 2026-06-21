@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,14 @@ ROOT = Path(__file__).resolve().parents[3]
 METADATA_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
 ALPHA_MANIFEST = METADATA_ROOT / "_shared" / "test_fixtures" / "app_alpha_seed_manifest.json"
 ALPHA_LITE_MANIFEST = METADATA_ROOT / "_shared" / "test_fixtures" / "app_alpha_dev_lite_seed_manifest.json"
+
+# 复用内容域评论计数门禁的对齐口径（单一真相源），避免在裁剪后另写一套统计逻辑。
+_CONTRACT_DIR = ROOT / "quwoquan_service" / "scripts" / "contract"
+if str(_CONTRACT_DIR) not in sys.path:
+    sys.path.insert(0, str(_CONTRACT_DIR))
+from verify_content_fixture_comment_counts import (  # noqa: E402
+    realign_payload_counts,
+)
 
 LITE_REFS: dict[str, list[str]] = {
     "assistant/test_fixtures/scenarios/assistant_scenarios.json": [
@@ -230,6 +239,9 @@ def build_lite_scenarios() -> list[str]:
         ).strip()
         lite_payload["seedSets"] = lite_seed_sets
         lite_payload = prune_seed_payload(relative_path, lite_payload)
+        # 裁剪评论后、写出前重算计数：commentCount/replyCount 必须等于裁剪后实际保留数，
+        # 否则派生产物会把真相源原值带成「卡片显示 26、详情页只有 2」式漂移。
+        realign_payload_counts(lite_payload)
         write_json(scenario_lite_path(relative_path), lite_payload)
         written.append(str(scenario_lite_path(relative_path).relative_to(ROOT)))
     return written

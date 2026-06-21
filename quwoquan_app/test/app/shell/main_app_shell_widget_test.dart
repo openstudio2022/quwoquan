@@ -836,7 +836,7 @@ void main() {
       );
       final contactsIcon = find.descendant(
         of: navFinder,
-        matching: find.byType(AppContactsIcon),
+        matching: find.byIcon(FluentIcons.chat_multiple_24_regular),
       );
       final profileIcon = find.descendant(
         of: navFinder,
@@ -857,11 +857,10 @@ void main() {
         inactiveColor,
       );
       expect(
-        tester.widget<AppContactsIcon>(contactsIcon).size,
+        tester.widget<Icon>(contactsIcon).size,
         expectedIconSize,
       );
-      expect(tester.widget<AppContactsIcon>(contactsIcon).filled, isFalse);
-      expect(tester.widget<AppContactsIcon>(contactsIcon).color, inactiveColor);
+      expect(tester.widget<Icon>(contactsIcon).color, inactiveColor);
       expect(
         tester.widget<AppProfilePersonIcon>(profileIcon).size,
         expectedIconSize,
@@ -936,7 +935,7 @@ void main() {
       );
       final contactsIcon = find.descendant(
         of: navFinder,
-        matching: find.byType(AppContactsIcon),
+        matching: find.byIcon(FluentIcons.chat_multiple_24_regular),
       );
       final profileIcon = find.descendant(
         of: navFinder,
@@ -944,14 +943,13 @@ void main() {
       );
 
       final premium = tester.widget<AppOpenWindowIcon>(premiumIcon);
-      final contacts = tester.widget<AppContactsIcon>(contactsIcon);
+      final contacts = tester.widget<Icon>(contactsIcon);
       final profile = tester.widget<AppProfilePersonIcon>(profileIcon);
 
       expect(premium.size, expectedIconSize);
       expect(contacts.size, expectedIconSize);
       expect(profile.size, expectedIconSize);
       expect(premium.filled, isFalse);
-      expect(contacts.filled, isTrue);
       expect(profile.filled, isFalse);
       expect(premium.color, inactiveColor);
       expect(contacts.color, AppColors.primaryColor);
@@ -1158,7 +1156,9 @@ void main() {
           find.byKey(const ValueKey<String>('web-primary-create')),
         ),
       );
-      expect(find.text(UITextConstants.homeTabFollowing), findsOneWidget);
+      // 首页内容流复用 HomeMultiFormFeed 后，「关注」既是频道页签也是卡片关注按钮文案，
+      // 与「推荐」一致允许多处出现（频道页签仍在其中）。
+      expect(find.text(UITextConstants.homeTabFollowing), findsWidgets);
       expect(find.text(UITextConstants.homeTabRecommended), findsWidgets);
       expect(find.text(UITextConstants.webPcSearchHintHome), findsOneWidget);
       expect(find.text(UITextConstants.globalXiaoquSearchAsk), findsNothing);

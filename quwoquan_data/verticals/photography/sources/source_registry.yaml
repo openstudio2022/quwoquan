@@ -1,0 +1,75 @@
+schemaVersion: quwoquan.site_source_registry.v1
+vertical: photography
+sites:
+  - siteId: pinterest
+    platform: Pinterest
+    category: image_discovery
+    domains: [www.pinterest.com, pinterest.com]
+    urlPatterns:
+      - https://www.pinterest.com/*
+      - https://pinterest.com/*
+    fetchable: false
+    extractor: platform_reference
+    licensePolicy: discovery_only
+    qualityTier: C
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [image]
+      allowedPaths:
+        - https://www.pinterest.com/*
+        - https://pinterest.com/*
+      fetchMode: platform_reference
+      extractor: platform_reference
+      rightsPolicy: discovery_only
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://policy.pinterest.com/terms-of-service
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          image: 500
+        notes: 仅用于图片供给线 DAG、并发、质量分布和准出稳定性验证；Pinterest 默认只能做发现/参考，不发布平台素材。
+      notes: Pinterest 只作为发现源；缺少逐图授权链、原始作者授权和可发布 license 时不得进入图片作品生产。
+    notes: 发现/参考源，不作为真实批量下载或发布图片来源。
+  - siteId: tuchong
+    platform: 图虫
+    category: image_community
+    domains: [tuchong.com, www.tuchong.com]
+    urlPatterns:
+      - https://tuchong.com/*
+      - https://www.tuchong.com/*
+    fetchable: false
+    extractor: platform_reference
+    licensePolicy: licensed_candidate
+    qualityTier: B
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [image]
+      allowedPaths:
+        - https://tuchong.com/*
+        - https://www.tuchong.com/*
+      fetchMode: platform_reference
+      extractor: platform_reference
+      rightsPolicy: licensed_candidate
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://tuchong.com/terms/
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          image: 500
+        notes: 仅用于图片供给线 DAG、并发、质量分布和准出稳定性验证；逐资产授权不明时不得发布。
+      notes: 图虫可作为 licensed_candidate 线索源；必须有逐图 license、credit、sourceUrl、termsUrl、usageScope 和必要肖像授权后才可进入发布。
+    notes: 授权候选源，不作为默认真实批量下载或自动发布图片来源。

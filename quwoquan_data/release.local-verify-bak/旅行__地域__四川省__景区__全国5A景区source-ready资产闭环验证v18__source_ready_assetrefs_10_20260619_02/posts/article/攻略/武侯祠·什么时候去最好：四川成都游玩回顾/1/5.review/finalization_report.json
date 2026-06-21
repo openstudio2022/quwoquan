@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "武侯祠_seasonal_timing",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:05c36988e7751254f0b730f74c78c769719b5f36ff4d1bb2bddb41aaf6b60eb0",
+  "finalSha256": "sha256:0b33dcee6563af6358f119bb70073d1f0a6f9142645e6b295ff14c0b739ae867",
+  "draftBodySha256": "sha256:05c36988e7751254f0b730f74c78c769719b5f36ff4d1bb2bddb41aaf6b60eb0",
+  "finalBodySha256": "sha256:05c36988e7751254f0b730f74c78c769719b5f36ff4d1bb2bddb41aaf6b60eb0",
+  "composeSnapshotSha256": "sha256:05c36988e7751254f0b730f74c78c769719b5f36ff4d1bb2bddb41aaf6b60eb0",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

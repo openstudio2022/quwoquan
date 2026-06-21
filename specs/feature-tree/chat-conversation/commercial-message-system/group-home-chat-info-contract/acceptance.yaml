@@ -9,62 +9,88 @@ node:
 scope:
   summary: 让群聊天页与聊天信息页共用同一 GroupHome 事实源和群头像资产来源。
   journey_scenarios:
-    - commercial-message-system
+  - commercial-message-system
   out_of_scope:
-    - 群治理底层实现细节
+  - 群治理底层实现细节
 gwt_acceptance:
   GWT1:
     title: 群聊天页与聊天信息页读取同一 GroupHome 真相源
     given:
-      - 用户已加入一个带 GroupHome 事实源的群。
+    - 用户已加入一个带 GroupHome 事实源的群。
     when:
-      - 用户从消息首页进入群聊天并打开聊天信息页。
+    - 用户从消息首页进入群聊天并打开聊天信息页。
     then:
-      - 群名称、来源实体、来源圈子、成员数和公告在两个页面保持一致。
-      - 群头像只消费云端预合成 avatarUrl，不回退成员九宫格主渲染。
+    - 群名称、来源实体、来源圈子、成员数和公告在两个页面保持一致。
+    - 群头像只消费云端预合成 avatarUrl，不回退成员九宫格主渲染。
     done_when:
-      - 群聊天页和聊天信息页的主渲染都绑定到同一 GroupHome 契约。
+    - 群聊天页和聊天信息页的主渲染都绑定到同一 GroupHome 契约。
     edge_cases:
-      - 群公告为空时不影响页面一致性。
-      - 群头像资产尚未刷新时仍有稳定服务端 fallback。
+    - 群公告为空时不影响页面一致性。
+    - 群头像资产尚未刷新时仍有稳定服务端 fallback。
     platform_variants:
       iOS: []
       Android: []
     contract_refs:
-      - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
     performance_points: []
-    evidence:
-      primary:
-        - T2_module_interaction
-        - T3_service_contract
-      supporting:
-        - T4_device_journey
     tests:
       planned:
-        - quwoquan_service/services/chat-service/tests/group_home_contract_test.go
-        - quwoquan_app/test/ui/chat/widgets/chat_settings_page_widget_test.dart
+      - file: quwoquan_app/test/ui/chat/widgets/chat_settings_page_widget_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.chat_conversation.commercial_message_system.group_home_chat_info_contract.gwt1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.chat_conversation.commercial_message_system.group_home_chat_info_contract.gwt1_api_integration
+        envs: &id002
+        - beta
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.chat_conversation.commercial_message_system.group_home_chat_info_contract.device_journey
+        envs:
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/group_home_contract_test.go'
 contract_acceptance:
   CONTRACT1:
     title: GroupHome 事实源作为聊天与信息页唯一契约来源
     metadata_refs:
-      - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
     done_when:
-      - 群聊天页和聊天信息页都能从同一 GroupHome metadata / DTO 来源取数。
-    evidence:
-      primary:
-        - T1_static_contract
-      supporting:
-        - T3_service_contract
+    - 群聊天页和聊天信息页都能从同一 GroupHome metadata / DTO 来源取数。
     tests:
       planned:
-        - make -C quwoquan_service verify-metadata
+      - command: make -C quwoquan_service verify-metadata
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract1_local_contract
+        cases:
+        - local_contract.chat_conversation.commercial_message_system.group_home_chat_info_contract.contract1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: contract1_api_integration
+        cases:
+        - api_integration.chat_conversation.commercial_message_system.group_home_chat_info_contract.contract1_api_integration
+        envs: *id002
+    notes: []
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

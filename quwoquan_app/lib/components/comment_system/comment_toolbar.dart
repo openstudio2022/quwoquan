@@ -1,40 +1,47 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
-/// 评论贴底工具栏（图一）。
+/// 评论贴底工具栏（对标小红书底栏）。
 ///
-/// 左侧是圆角只读「说点什么…」输入条，点击触发统一评论输入浮层；右侧依次为
-/// 点赞、评论两组「图标 + 计数」（内容只有 赞/评/转 三动作）。
-/// 计数由宿主从 `postInteractionStateProvider` / 评论数实时下发，工具栏只负责展示与回调。
+/// 左侧是圆角只读「添加评论…」输入条，点击触发统一评论输入浮层；右侧依次为
+/// 「点赞 + 计数」「转发 + 计数」两组动作（内容互动只保留 赞/评/转，评论入口已由
+/// 左侧输入条承载，故底栏不再出现独立的评论计数按钮）。
+/// 计数与状态由宿主从 `postInteractionStateProvider` 实时下发，工具栏只负责展示与回调。
 class CommentToolbar extends StatelessWidget {
   const CommentToolbar({
     super.key,
     required this.likeCount,
-    required this.commentCount,
+    required this.shareCount,
     this.isLiked = false,
+    this.isShared = false,
     this.placeholder = UITextConstants.commentPlaceholder,
     this.onInputTap,
     this.onLikeTap,
-    this.onCommentTap,
+    this.onShareTap,
   });
 
   final int likeCount;
-  final int commentCount;
+  final int shareCount;
   final bool isLiked;
+  final bool isShared;
   final String placeholder;
   final VoidCallback? onInputTap;
   final VoidCallback? onLikeTap;
-  final VoidCallback? onCommentTap;
+  final VoidCallback? onShareTap;
 
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return Container(
       key: TestKeys.commentToolbar,
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.commentToolbarVerticalPadding,
+        AppSpacing.md,
+        AppSpacing.commentToolbarVerticalPadding +
+            MediaQuery.viewPaddingOf(context).bottom,
       ),
       decoration: BoxDecoration(
         color: AppColorsFunctional.getColor(
@@ -43,7 +50,10 @@ class CommentToolbar extends StatelessWidget {
         ),
         border: Border(
           top: BorderSide(
-            color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.borderPrimary,
+            ),
             width: AppSpacing.hairline,
           ),
         ),
@@ -56,7 +66,8 @@ class CommentToolbar extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               onTap: onInputTap,
               child: Container(
-                height: AppSpacing.commentInputHeight,
+                key: TestKeys.commentInputCapsule,
+                height: AppSpacing.commentToolbarInputHeight,
                 padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
                 alignment: Alignment.centerLeft,
                 decoration: BoxDecoration(
@@ -64,7 +75,16 @@ class CommentToolbar extends StatelessWidget {
                     isDark,
                     ColorType.backgroundSecondary,
                   ),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.commentToolbarInputRadius,
+                  ),
+                  border: Border.all(
+                    color: AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.borderSecondary,
+                    ),
+                    width: AppSpacing.hairline,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -101,15 +121,21 @@ class CommentToolbar extends StatelessWidget {
             buttonKey: TestKeys.likeButton,
             icon: isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
             count: likeCount,
+            zeroLabel: UITextConstants.interactionSubLikes,
             active: isLiked,
             activeColor: AppColors.error,
             onTap: onLikeTap,
           ),
+          SizedBox(width: AppSpacing.xs),
           _CountAction(
-            buttonKey: TestKeys.commentButton,
-            icon: CupertinoIcons.chat_bubble,
-            count: commentCount,
-            onTap: onCommentTap,
+            buttonKey: TestKeys.shareButton,
+            icon: isShared
+                ? CupertinoIcons.arrowshape_turn_up_right_fill
+                : CupertinoIcons.arrowshape_turn_up_right,
+            count: shareCount,
+            zeroLabel: UITextConstants.interactionSubShares,
+            active: isShared,
+            onTap: onShareTap,
           ),
         ],
       ),
@@ -122,6 +148,7 @@ class _CountAction extends StatelessWidget {
     required this.buttonKey,
     required this.icon,
     required this.count,
+    required this.zeroLabel,
     this.active = false,
     this.activeColor,
     this.onTap,
@@ -130,6 +157,7 @@ class _CountAction extends StatelessWidget {
   final Key buttonKey;
   final IconData icon;
   final int count;
+  final String zeroLabel;
   final bool active;
   final Color? activeColor;
   final VoidCallback? onTap;
@@ -137,38 +165,45 @@ class _CountAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final labelColor = active
+        ? (activeColor ?? AppColors.primaryColor)
+        : AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     return CupertinoButton(
       key: buttonKey,
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-      minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(
+        AppSpacing.commentToolbarActionColumnWidth,
+        AppSpacing.commentToolbarActionHitSize,
+      ),
       onPressed: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: AppSpacing.appChromeActionIconSize,
-            color: active
-                ? (activeColor ?? AppColors.primaryColor)
-                : AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.foregroundSecondary,
-                  ),
-          ),
-          if (count > 0) ...[
+      child: SizedBox(
+        width: AppSpacing.commentToolbarActionColumnWidth,
+        height: AppSpacing.commentToolbarActionHitSize,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Icon(
+              icon,
+              size: AppSpacing.commentToolbarActionIconSize,
+              color: active
+                  ? (activeColor ?? AppColors.primaryColor)
+                  : AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.foregroundSecondary,
+                    ),
+            ),
             SizedBox(width: AppSpacing.xs),
-            Text(
-              '$count',
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: AppColorsFunctional.getColor(
-                  isDark,
-                  ColorType.foregroundSecondary,
-                ),
+            SizedBox(
+              width: AppSpacing.commentReactionCountWidth,
+              child: Text(
+                count > 0 ? formatCompactActionCount(count) : zeroLabel,
+                maxLines: 1,
+                overflow: TextOverflow.clip,
+                style: TextStyle(fontSize: AppTypography.sm, color: labelColor),
               ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }

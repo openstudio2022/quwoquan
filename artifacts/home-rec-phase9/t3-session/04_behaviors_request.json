@@ -1,0 +1,5 @@
+{"userId":"us_01_3278_01kvevr8s7s3b0arr7x3p27efe","events":[
+ {"clientEventId":"t3run_20260619024651_hide_author","type":"hide_author","postId":"alpha_moment_grid_10","authorId":"alpha_moment_author","contentType":"micro","state":"negative","feedRequestId":"frq_01KVEWCA5EAWVW6ZW8MYC7TK6Z","position":3,"channelId":"recommend","rankingVersion":"rec-v1","referralSource":"organic_feed"},
+ {"clientEventId":"t3run_20260619024651_hide_ctype","type":"hide_content_type","postId":"alpha_photo_landscape_single","contentType":"image","state":"negative","feedRequestId":"frq_01KVEWCA5EAWVW6ZW8MYC7TK6Z","position":1,"channelId":"recommend","rankingVersion":"rec-v1","referralSource":"organic_feed"},
+ {"clientEventId":"t3run_20260619024651_dislike","type":"dislike","postId":"alpha_video_portrait_playable","authorId":"alpha_video_author","contentType":"video","state":"negative","feedRequestId":"frq_01KVEWCA5EAWVW6ZW8MYC7TK6Z","position":0,"channelId":"recommend","rankingVersion":"rec-v1","referralSource":"organic_feed"}
+]}

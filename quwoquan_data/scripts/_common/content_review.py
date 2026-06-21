@@ -68,29 +68,6 @@ def _load_source_texts(task: str | None, batch: str | None, manifest: dict, fall
     return texts
 
 
-def _long_phrase_hits(article: str, source_texts: Iterable[str], min_len: int = 28) -> list[str]:
-    hits: list[str] = []
-    compact_article = re.sub(r"\s+", "", article)
-    for text in source_texts:
-        cleaned = re.sub(r"\s+", "", text)
-        sentences = re.split(r"[。！？\n]", cleaned)
-        for sent in sentences:
-            sent = sent.strip()
-            if len(sent) < min_len:
-                continue
-            if sent.count("：") >= 1 or sent.count(":") >= 1:
-                continue
-            if any(label in sent for label in ("交通", "门票", "开放", "最佳季节", "体验时间", "图片来源", "授权状态", "行程", "路线")):
-                continue
-            if len(re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", sent)) < min_len:
-                continue
-            if sent in compact_article:
-                hits.append(sent[:40])
-                if len(hits) >= 5:
-                    return hits
-    return hits
-
-
 def check_narrative_quality(article: str, manifest: dict) -> list[str]:
     issues: list[str] = []
     for term in PLATFORM_TERMS:
@@ -119,9 +96,8 @@ def check_provenance(article_path: Path, task: str | None = None, batch: str | N
     for term in PLATFORM_TERMS:
         if term in article:
             issues.append(f"{ref}: leaked provenance term {term}")
-    source_texts = _load_source_texts(task, batch, manifest, ref)
-    for hit in _long_phrase_hits(article, source_texts):
-        issues.append(f"{ref}: too similar to source phrase '{hit}'")
+    # 版权风险全面放开：取消反抄袭长句门，所有来源允许以底稿为基础大面积保留优质原文；
+    # 仍清洗平台名/原作者署名/水印等来源痕迹（内容以虚拟创作者身份发布）。
     if "来源平台：" in article:
         issues.append(f"{ref}: leaked source platform label")
     if "游记里还提到：" in article:

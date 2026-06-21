@@ -5,6 +5,11 @@ from pathlib import Path
 
 from _common.paths import batch_root
 from _common.io import read_json
+from _common.image_asset_strategy import (
+    image_count_is_hard_quota,
+    image_strategy_requires_publishable_images,
+    minimum_publishable_images_per_target,
+)
 
 LEGACY_MIN_SOURCES = 2
 SCALED_MIN_SOURCES = 4
@@ -14,10 +19,9 @@ SCALED_DEFAULT_MIN_IMAGES = 3
 def download_requirements(task_id: str) -> dict[str, int]:
     """Return source/image minimums from the current task contract.
 
-    For separated research, image capacity follows the declared object quota:
-    each entity homepage needs at least one sourced image from homepage
-    evidence, and each image work needs at least one publishable image from
-    its own image collection. Multi-image works are allowed but not required.
+    For separated research, imageWorksPerTarget is the desired score
+    saturation point by default.  Only hard_quota tasks or explicit
+    minimumPublishableImagesPerTarget values become download blockers.
     """
     try:
         from task import store
@@ -49,7 +53,17 @@ def download_requirements(task_id: str) -> dict[str, int]:
         min_article_image_sources = 0
         min_article_base_sources = article_works if article_works > 0 else 0
         min_homepage_sources = 1 if homepage_works > 0 else 0
-        min_images = max(1, homepage_works + image_works)
+        # Homepage images belong to homepage evidence, not to the independent
+        # image-post lane. A single image work is valid with one rights-cleared
+        # high-quality image; do not force cover+detail for every entity.
+        if image_works > 0 and image_strategy_requires_publishable_images(spec):
+            min_images = (
+                max(1, image_works)
+                if image_count_is_hard_quota(spec)
+                else minimum_publishable_images_per_target(spec)
+            )
+        else:
+            min_images = 0
     else:
         min_images = SCALED_DEFAULT_MIN_IMAGES
         min_article_image_sources = 0
@@ -62,6 +76,17 @@ def download_requirements(task_id: str) -> dict[str, int]:
         "minArticleBaseSources": min_article_base_sources,
         "minHomepageSources": min_homepage_sources,
     }
+
+
+def _download_allows_partial_content(task_id: str) -> bool:
+    try:
+        from task import store
+
+        spec = store.load_spec(task_id)
+    except Exception:  # noqa: BLE001
+        return False
+    policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), dict) else {}
+    return bool(policy.get("allowPartialContent"))
 
 
 def _lane_plan_has_payload(download_dir: Path, lane: str) -> bool:
@@ -179,9 +204,12 @@ def _stage_gate_report_issues(
     abandoned: set[str],
     *,
     target_entities: set[str] | None = None,
+    allow_partial_content: bool = False,
+    requirements: dict[str, int] | None = None,
 ) -> list[str]:
     result_root = batch_root(task_id, batch_id) / "task_download" / "results"
     issues: list[str] = []
+    min_images = int((requirements or {}).get("minImages") or 0)
     for step in (
         "source_plan_gate",
         "image_rights_gate",
@@ -206,10 +234,67 @@ def _stage_gate_report_issues(
                 continue
             raw_issues = payload.get("issues") if isinstance(payload.get("issues"), list) else []
             if raw_issues:
-                issues.extend(f"{ref}: {issue}" for issue in raw_issues)
+                for issue in raw_issues:
+                    text = str(issue)
+                    if _partial_content_soft_stage_issue(
+                        step,
+                        text,
+                        allow_partial_content=allow_partial_content,
+                        min_images=min_images,
+                    ):
+                        continue
+                    issues.append(f"{ref}: {text}")
             else:
+                if _partial_content_soft_stage_issue(
+                    step,
+                    "",
+                    allow_partial_content=allow_partial_content,
+                    min_images=min_images,
+                ):
+                    continue
                 issues.append(f"{ref}: {step} failed")
     return issues
+
+
+def _partial_content_soft_stage_issue(
+    step: str,
+    issue: str,
+    *,
+    allow_partial_content: bool,
+    min_images: int,
+) -> bool:
+    if not allow_partial_content:
+        return False
+    text = issue.lower()
+    if step == "image_fetch_gate" and min_images <= 0:
+        quantity_markers = (
+            "imagefetch: 未下到真实图片",
+            "imagecount:",
+            "only ",
+            "unique publishable images",
+            "未下到",
+            "downloadedimages",
+        )
+        return not text or any(marker in text for marker in quantity_markers)
+    if step == "source_plan_gate":
+        source_quantity_markers = (
+            "fewer than",
+            "sources=",
+            "need>=",
+            "research needs >=",
+            "homepage research needs",
+            "sourceplan:",
+        )
+        return any(marker in text for marker in source_quantity_markers)
+    if step == "entity_source_bundle_gate":
+        bundle_quantity_markers = (
+            "retained sources",
+            "baseDraft-ready",
+            "only ",
+            "sources directory missing",
+        )
+        return any(marker.lower() in text for marker in bundle_quantity_markers)
+    return False
 
 
 def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | None = None) -> list[str]:
@@ -218,8 +303,12 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
     只检查对象树 `entities/**/1.download/sources/`；每个对象至少需要 2 个可消费来源单元。
     """
     issues: list[str] = []
+    requirements = download_requirements(task_id)
+    allow_partial_content = _download_allows_partial_content(task_id)
     root, sources_dirs = _source_roots(task_id, batch_id)
     if not sources_dirs:
+        if allow_partial_content:
+            return []
         if target_entities:
             for entity in sorted(target_entities - _abandoned_entities(task_id, batch_id)):
                 issues.append(f"{_missing_sources_label(root, entity)}: sources directory missing")
@@ -227,12 +316,11 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
         issues.append(f"No sources directory under {root}")
         return issues
 
-    requirements = download_requirements(task_id)
     abandoned = _abandoned_entities(task_id, batch_id)
     source_entities = {_entity_from_sources_dir(root, path) for path in sources_dirs}
     if target_entities is not None:
         for entity in sorted(target_entities):
-            if entity and entity not in abandoned and entity not in source_entities:
+            if entity and entity not in abandoned and entity not in source_entities and not allow_partial_content:
                 issues.append(f"{_missing_sources_label(root, entity)}: sources directory missing")
     batch_dir = root.parent
     for sources_dir in sources_dirs:
@@ -297,9 +385,9 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
                             f"{sd.name}/{asset.get('fileName') or '?'} missing image rights {missing}"
                         )
         rel = sources_dir.relative_to(root).as_posix() if sources_dir.is_relative_to(root) else sources_dir.name
-        if md_count < requirements["minSources"]:
+        if not allow_partial_content and md_count < requirements["minSources"]:
             issues.append(f"{rel}: only {md_count} sources (need >= {requirements['minSources']})")
-        if retained_count < requirements["minSources"]:
+        if not allow_partial_content and retained_count < requirements["minSources"]:
             issues.append(
                 f"{rel}: only {retained_count} retained sources "
                 f"(need >= {requirements['minSources']}; Reject/manual probe sources do not count)"
@@ -311,12 +399,12 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
                 or _lane_plan_has_payload(download_dir, "homepage")
                 or lane_md_count["homepage"] > 0
             )
-            if homepage_required and lane_retained_count["homepage"] < 1:
+            if not allow_partial_content and homepage_required and lane_retained_count["homepage"] < 1:
                 issues.append(
                     f"{rel}: homepage retained sources={lane_retained_count['homepage']} need>=1 "
                     "(homepage lane must yield a readable encyclopedia/wiki/official source unit)"
                 )
-            elif homepage_required and homepage_base_ready_count < 1:
+            elif not allow_partial_content and homepage_required and homepage_base_ready_count < 1:
                 issues.append(
                     f"{rel}: homepage baseDraft-ready sources={homepage_base_ready_count} need>=1 "
                     "(homepage lane must yield an encyclopedia/wiki/official source with >=4 usable facts)"
@@ -329,7 +417,7 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
                     or lane_md_count["article"] > 0
                 )
             )
-            if article_required and lane_retained_count["article"] < min_article_sources:
+            if not allow_partial_content and article_required and lane_retained_count["article"] < min_article_sources:
                 issues.append(
                     f"{rel}: article retained sources={lane_retained_count['article']} "
                     f"need>={min_article_sources}"
@@ -347,6 +435,8 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
         batch_id,
         abandoned,
         target_entities=target_entities,
+        allow_partial_content=allow_partial_content,
+        requirements=requirements,
     ):
         if str(issue) not in seen:
             issues.append(str(issue))

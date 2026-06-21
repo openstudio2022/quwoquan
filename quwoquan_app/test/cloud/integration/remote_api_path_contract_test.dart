@@ -527,6 +527,34 @@ void main() {
       expect(log.last.path, ContentApiMetadata.listCommentsPath(postId: 'p1'));
     });
 
+    test(
+      'getCommentCountsDelta → GET .../comments/counts-delta?since=<RFC3339>',
+      () async {
+        final since = DateTime.utc(2026, 6, 10, 8, 30);
+        await repo.getCommentCountsDelta(postId: 'p1', since: since);
+        expect(log.last.method, 'GET');
+        expect(
+          log.last.path,
+          ContentApiMetadata.getCommentCountsDeltaPath(postId: 'p1'),
+        );
+        expect(log.last.query['since'], since.toIso8601String());
+        _expectPageHeaders(
+          log.last.headers,
+          pageId: ContentRequestPageIds.getCommentCountsDelta,
+        );
+      },
+    );
+
+    test('getCommentCountsDelta(since=null) → 无 since query（首同步）', () async {
+      await repo.getCommentCountsDelta(postId: 'p1', since: null);
+      expect(log.last.method, 'GET');
+      expect(
+        log.last.path,
+        ContentApiMetadata.getCommentCountsDeltaPath(postId: 'p1'),
+      );
+      expect(log.last.query.containsKey('since'), isFalse);
+    });
+
     test('createComment → POST /v1/content/posts/{postId}/comments', () async {
       await repo.createComment(postId: 'p1', content: 'hi');
       expect(log.last.method, 'POST');

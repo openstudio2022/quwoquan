@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "蜀南竹海_decision_experience",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:2f26011621eb167d68a0fc704946f3cff848b64e4e1e14f909ff403a5b598059",
+  "finalSha256": "sha256:6bcbb400639d1c93a9b9c91a0589ebba94d84cacc58f67192814b666d7db92fb",
+  "draftBodySha256": "sha256:2f26011621eb167d68a0fc704946f3cff848b64e4e1e14f909ff403a5b598059",
+  "finalBodySha256": "sha256:2f26011621eb167d68a0fc704946f3cff848b64e4e1e14f909ff403a5b598059",
+  "composeSnapshotSha256": "sha256:2f26011621eb167d68a0fc704946f3cff848b64e4e1e14f909ff403a5b598059",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

@@ -23,6 +23,14 @@ CloudJsonMap? _mutationStringKeyedMap(Object? v) {
   return Map<String, dynamic>.from(v);
 }
 
+List<CloudJsonMap>? _mutationMapList(Object? v) {
+  if (v is! List) return null;
+  return v
+      .whereType<Map>()
+      .map((e) => Map<String, dynamic>.from(e))
+      .toList(growable: false);
+}
+
 /// HTTP body for CreatePost (metadata writable_fields).
 class CreatePostRequestWire {
   CreatePostRequestWire({
@@ -68,9 +76,9 @@ class CreatePostRequestWire {
   final String? title;
   final String? body;
   final String? summary;
-  final String? semanticMentions;
+  final List<CloudJsonMap>? semanticMentions;
   final String? rating;
-  final String? reviewAspects;
+  final List<CloudJsonMap>? reviewAspects;
   final List<String>? mediaUrls;
   final String? coverUrl;
   final String? articleMarkdown;
@@ -105,9 +113,9 @@ class CreatePostRequestWire {
     _mutationPutOpt(m, 'title', title);
     _mutationPutOpt(m, 'body', body);
     _mutationPutOpt(m, 'summary', summary);
-    _mutationPutOpt(m, 'semanticMentions', semanticMentions);
+    if (semanticMentions != null) m['semanticMentions'] = semanticMentions!;
     _mutationPutOpt(m, 'rating', rating);
-    _mutationPutOpt(m, 'reviewAspects', reviewAspects);
+    if (reviewAspects != null) m['reviewAspects'] = reviewAspects!;
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
     _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
@@ -144,9 +152,9 @@ class CreatePostRequestWire {
       title: m['title']?.toString(),
       body: m['body']?.toString(),
       summary: m['summary']?.toString(),
-      semanticMentions: m['semanticMentions']?.toString(),
+      semanticMentions: _mutationMapList(m['semanticMentions']),
       rating: m['rating']?.toString(),
-      reviewAspects: m['reviewAspects']?.toString(),
+      reviewAspects: _mutationMapList(m['reviewAspects']),
       mediaUrls: _mutationStringList(m['mediaUrls']),
       coverUrl: m['coverUrl']?.toString(),
       articleMarkdown: m['articleMarkdown']?.toString(),
@@ -212,9 +220,9 @@ class UpdatePostRequestWire {
   final String? title;
   final String? body;
   final String? summary;
-  final String? semanticMentions;
+  final List<CloudJsonMap>? semanticMentions;
   final String? rating;
-  final String? reviewAspects;
+  final List<CloudJsonMap>? reviewAspects;
   final List<String>? mediaUrls;
   final String? coverUrl;
   final String? articleMarkdown;
@@ -241,9 +249,9 @@ class UpdatePostRequestWire {
     _mutationPutOpt(m, 'title', title);
     _mutationPutOpt(m, 'body', body);
     _mutationPutOpt(m, 'summary', summary);
-    _mutationPutOpt(m, 'semanticMentions', semanticMentions);
+    if (semanticMentions != null) m['semanticMentions'] = semanticMentions!;
     _mutationPutOpt(m, 'rating', rating);
-    _mutationPutOpt(m, 'reviewAspects', reviewAspects);
+    if (reviewAspects != null) m['reviewAspects'] = reviewAspects!;
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
     _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
@@ -272,9 +280,9 @@ class UpdatePostRequestWire {
       title: m['title']?.toString(),
       body: m['body']?.toString(),
       summary: m['summary']?.toString(),
-      semanticMentions: m['semanticMentions']?.toString(),
+      semanticMentions: _mutationMapList(m['semanticMentions']),
       rating: m['rating']?.toString(),
-      reviewAspects: m['reviewAspects']?.toString(),
+      reviewAspects: _mutationMapList(m['reviewAspects']),
       mediaUrls: _mutationStringList(m['mediaUrls']),
       coverUrl: m['coverUrl']?.toString(),
       articleMarkdown: m['articleMarkdown']?.toString(),
@@ -426,9 +434,9 @@ class PromotePostToWorkRequestWire {
   final String? contentType;
   final String? title;
   final String? summary;
-  final String? semanticMentions;
+  final List<CloudJsonMap>? semanticMentions;
   final String? rating;
-  final String? reviewAspects;
+  final List<CloudJsonMap>? reviewAspects;
   final String? coverUrl;
   final String? articleMarkdown;
   final String? articleMarkdownVersion;
@@ -448,9 +456,9 @@ class PromotePostToWorkRequestWire {
     _mutationPutOpt(m, 'contentType', contentType);
     _mutationPutOpt(m, 'title', title);
     _mutationPutOpt(m, 'summary', summary);
-    _mutationPutOpt(m, 'semanticMentions', semanticMentions);
+    if (semanticMentions != null) m['semanticMentions'] = semanticMentions!;
     _mutationPutOpt(m, 'rating', rating);
-    _mutationPutOpt(m, 'reviewAspects', reviewAspects);
+    if (reviewAspects != null) m['reviewAspects'] = reviewAspects!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
     _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
     _mutationPutOpt(m, 'articleMarkdownVersion', articleMarkdownVersion);
@@ -472,9 +480,9 @@ class PromotePostToWorkRequestWire {
       contentType: m['contentType']?.toString(),
       title: m['title']?.toString(),
       summary: m['summary']?.toString(),
-      semanticMentions: m['semanticMentions']?.toString(),
+      semanticMentions: _mutationMapList(m['semanticMentions']),
       rating: m['rating']?.toString(),
-      reviewAspects: m['reviewAspects']?.toString(),
+      reviewAspects: _mutationMapList(m['reviewAspects']),
       coverUrl: m['coverUrl']?.toString(),
       articleMarkdown: m['articleMarkdown']?.toString(),
       articleMarkdownVersion: m['articleMarkdownVersion']?.toString(),

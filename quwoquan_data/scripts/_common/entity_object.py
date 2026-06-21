@@ -286,7 +286,7 @@ def sync_entity_object_to_task_mirror(
     if src_assets.is_dir():
         if dst_assets.exists():
             shutil.rmtree(dst_assets)
-        shutil.copytree(src_assets, dst_assets)
+        shutil.copytree(src_assets, dst_assets, dirs_exist_ok=True)
     elif dst_assets.exists():
         shutil.rmtree(dst_assets)
     return dst

@@ -23,6 +23,8 @@ from _common.io import write_json  # noqa: E402
 from _common.paths import batch_root, release_root  # noqa: E402
 from _common.release_integrity import scan_release_integrity, scan_runtime_batch_integrity  # noqa: E402
 from build.homepage import _entity_base_draft  # noqa: E402
+from publish.assemble import assemble_release  # noqa: E402
+from publish.gate import _quota_issues  # noqa: E402
 from task.cleanup_generated import build_cleanup_manifest, execute_cleanup  # noqa: E402
 
 
@@ -47,7 +49,15 @@ def _seed_source(entity: str, unit: str, *, kind: str, source_use_mode: str = "l
     root = batch_root(TASK, BATCH)
     source_ref = f"entities/地点/景区/{entity}/1.download/sources/{unit}/source.md"
     unit_dir = root / source_ref
-    _write(unit_dir, "# 来源\n\n" + "这是一个足够长的实体或图文底稿。" * 80)
+    _write(
+        unit_dir,
+        "# 来源\n\n"
+        f"{entity}位于四川省阿坝藏族羌族自治州，属于高山峡谷型景区。"
+        f"{entity}景区海拔跨度较大，游览线路通常围绕湖泊、森林和雪山展开。"
+        f"{entity}在秋季以彩林景观受到关注，夏季则适合避暑和观水。"
+        f"{entity}周边交通以成都方向进入为主，游客通常需要预留较完整的一天。"
+        f"{entity}因自然景观集中，适合实体主页介绍位置、景观类型、季节和交通条件。",
+    )
     write_json(
         unit_dir.parent / "meta.json",
         {
@@ -55,6 +65,7 @@ def _seed_source(entity: str, unit: str, *, kind: str, source_use_mode: str = "l
             "sourceKind": kind,
             "platform": kind,
             "sourceUseMode": source_use_mode,
+            "researchLane": "homepage",
             "authorizationProof": "fixture-proof",
             "licenseSnapshot": "fixture-license",
         },
@@ -65,7 +76,16 @@ def _seed_source(entity: str, unit: str, *, kind: str, source_use_mode: str = "l
     return source_ref
 
 
-def _seed_release_post(title: str, topic: str, *, base_source: str, asset_source: str, asset_sha: str = "sha256:abc") -> None:
+def _seed_release_post(
+    title: str,
+    topic: str,
+    *,
+    base_source: str,
+    asset_source: str,
+    asset_sha: str = "sha256:abc",
+    publish_media_mode: str = "",
+    with_assets: bool = True,
+) -> None:
     runtime_post = batch_root(TASK, BATCH) / "posts/article/攻略" / title / "1"
     release_post = release_root(RELEASE) / "posts/article/攻略" / title / "1"
     for post in (runtime_post, release_post):
@@ -81,6 +101,7 @@ def _seed_release_post(title: str, topic: str, *, base_source: str, asset_source
             "baseSourceRef": base_source,
             "sourceUseMode": "licensed_adaptation",
             "baseDraftText": "这是足够长的图文底稿。" * 80,
+            "publishMediaMode": publish_media_mode,
         },
     )
     _write(runtime_post / "4.draft" / "prompt.md", "基于授权底稿创作")
@@ -96,23 +117,25 @@ def _seed_release_post(title: str, topic: str, *, base_source: str, asset_source
             ]},
         },
     )
+    assets = [
+        {
+            "assetId": "cover",
+            "fileName": "cover.jpg",
+            "sha256": asset_sha,
+            "caption": "红叶雪山",
+            "sourceRef": asset_source,
+            "sourceAssetRef": asset_source.replace("source.md", "assets/001.jpg"),
+            "authorizationProof": "fixture-proof",
+            "alignmentEvidence": "图片来自同一图文底稿并对应正文中的红叶雪山段落。",
+        }
+    ] if with_assets else []
     manifest = {
         "topicId": topic,
         "contentType": "article",
         "carrier": "article",
+        "publishMediaMode": publish_media_mode,
         "entityRefs": ["/entity/地点/景区/毕棚沟"],
-        "assets": [
-            {
-                "assetId": "cover",
-                "fileName": "cover.jpg",
-                "sha256": asset_sha,
-                "caption": "红叶雪山",
-                "sourceRef": asset_source,
-                "sourceAssetRef": asset_source.replace("source.md", "assets/001.jpg"),
-                "authorizationProof": "fixture-proof",
-                "alignmentEvidence": "图片来自同一图文底稿并对应正文中的红叶雪山段落。",
-            }
-        ],
+        "assets": assets,
     }
     write_json(runtime_post / "manifest.json", manifest)
     write_json(release_post / "manifest.json", manifest)
@@ -132,6 +155,14 @@ def _seed_release_root() -> None:
         batch_root(TASK, BATCH) / "_shared" / "base_draft_ledger.json",
         {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {}},
     )
+
+
+def _seed_approved_entity(entity: str) -> None:
+    entity_dir = batch_root(TASK, BATCH) / "entities/地点/景区" / entity
+    _write(entity_dir / "page.md", f"# {entity}\n\n实体主页。")
+    write_json(entity_dir / "_entity.json", {"name": entity, "type": "地点/景区"})
+    write_json(entity_dir / "manifest.json", {"entityRef": f"/entity/地点/景区/{entity}"})
+    write_json(entity_dir / "5.review" / "review.json", {"decision": "approved"})
 
 
 def test_release_integrity_flags_cross_post_asset_reuse_and_empty_source_ref():
@@ -188,6 +219,43 @@ def test_release_integrity_allows_article_asset_from_independent_source_unit():
     assert "sourceAssetRef must belong to its declared sourceRef unit" not in text
 
 
+def test_release_integrity_allows_text_only_article_without_source_asset():
+    _reset()
+    _seed_release_root()
+    base = _seed_source("毕棚沟", "01.base", kind="维基百科")
+    _seed_release_post(
+        "毕棚沟TextOnly",
+        "text-only",
+        base_source=base,
+        asset_source="",
+        publish_media_mode="text_only",
+        with_assets=False,
+    )
+    write_json(
+        batch_root(TASK, BATCH) / "_shared" / "base_draft_ledger.json",
+        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {base: "text-only"}},
+    )
+
+    release_report = scan_release_integrity(RELEASE)
+    runtime_report = scan_runtime_batch_integrity(TASK, BATCH)
+    combined = "\n".join(release_report["issues"] + runtime_report["issues"])
+
+    assert "article must include at least one sourced image asset" not in combined
+
+
+def test_release_integrity_still_blocks_unmarked_assetless_article():
+    _reset()
+    _seed_release_root()
+    base = _seed_source("毕棚沟", "01.base", kind="维基百科")
+    _seed_release_post("毕棚沟NoAsset", "no-asset", base_source=base, asset_source="", with_assets=False)
+    write_json(
+        batch_root(TASK, BATCH) / "_shared" / "base_draft_ledger.json",
+        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {base: "no-asset"}},
+    )
+    report = scan_release_integrity(RELEASE)
+    assert "article must include at least one sourced image asset" in "\n".join(report["issues"])
+
+
 def test_release_integrity_flags_article_asset_not_belonging_to_declared_source_unit():
     _reset()
     _seed_release_root()
@@ -232,6 +300,54 @@ def test_homepage_base_draft_never_falls_back_to_guide_source():
     _reset()
     _seed_source("毕棚沟", "01.guide", kind="去哪儿攻略", source_use_mode="factual_reference_only")
     assert _entity_base_draft(TASK, BATCH, "地点", "景区", "毕棚沟") == {}
+
+
+def test_release_quota_blocks_entity_homepage_outside_primary_post_refs():
+    _reset()
+    _seed_release_root()
+    root = release_root(RELEASE)
+    post = root / "posts/article/攻略/毕棚沟/1"
+    write_json(
+        post / "manifest.json",
+        {
+            "topicId": "post-1",
+            "contentType": "article",
+            "carrier": "article",
+            "entityRefs": ["/entity/地点/景区/毕棚沟"],
+            "assets": [],
+        },
+    )
+    _write(root / "entities/地点/景区/毕棚沟/page.md", "# 毕棚沟")
+    _write(root / "entities/地点/景区/无关替补/page.md", "# 无关替补")
+
+    issues = _quota_issues(root)
+    text = "\n".join(issues)
+
+    assert "outside primary post refs" in text
+    assert "release entity quota: expected 1, got 2" in text
+
+
+def test_assemble_release_copies_only_primary_post_entity_homepages():
+    _reset()
+    runtime_post = batch_root(TASK, BATCH) / "posts/article/攻略/毕棚沟/1"
+    _write(runtime_post / "article.md", "# 毕棚沟\n\n正文。")
+    write_json(
+        runtime_post / "manifest.json",
+        {
+            "topicId": "post-1",
+            "contentType": "article",
+            "carrier": "article",
+            "entityRefs": ["/entity/地点/景区/毕棚沟"],
+            "assets": [],
+        },
+    )
+    _seed_approved_entity("毕棚沟")
+    _seed_approved_entity("无关替补")
+
+    release = assemble_release(TASK, RELEASE, batch_id=BATCH)
+
+    assert (release / "entities/地点/景区/毕棚沟/page.md").is_file()
+    assert not (release / "entities/地点/景区/无关替补/page.md").exists()
 
 
 def test_cleanup_generated_is_confirm_required_and_preserves_truth_roots():

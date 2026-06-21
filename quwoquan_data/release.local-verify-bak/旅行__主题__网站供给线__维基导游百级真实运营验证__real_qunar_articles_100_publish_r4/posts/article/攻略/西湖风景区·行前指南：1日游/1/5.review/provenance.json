@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_4f920097f62dc337",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "西湖风景区·行前指南：1日游",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-0855ce1f-945d-440d-9e75-71184909f1e2",
+    "agentId": "agent-2ae143f4-5252-47e2-89c9-01b63237f14c",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/西湖风景区"
+    ],
+    "articleDigest": "sha256:215d18ba13dbcf91aea547793305caea10c0ca1755733dfea635b4af931967f8"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "西湖风景区·行前指南：1日游",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:8ed08671f899bb6f154cc5e45e27111b18f7469e7db37498dcc899ac9d48c6e5",
+    "writingPackSha256": "sha256:e12b678305bd9876820eac55da8003c3a0546fe0b7948fce9011de7bae8ccab3",
+    "sourceBundleSha256": "sha256:e5685bb2e221f71da62db0f6cab1034883c51bdc5ab574c5ff03039fd3d6b2f5",
+    "draftSha256": "sha256:b6b975d2c56a36705105e609e8aa00a818bc3531c3980340d7b1141ca64ce0bc"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/西湖风景区/1.download/sources/05.qunar_guide_candidate_107eaa4579632ed2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7872890"
+    },
+    {
+      "path": "entities/地点/景区/西湖风景区/1.download/sources/21.qunar_guide_candidate_2aa71f6399d01b5b/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7885058"
+    },
+    {
+      "path": "entities/地点/景区/西湖风景区/1.download/sources/35.qunar_guide_candidate_4f920097f62dc337/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7874868"
+    },
+    {
+      "path": "entities/地点/景区/西湖风景区/1.download/sources/44.qunar_guide_candidate_5bd05175c8101c11/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7879641"
+    },
+    {
+      "path": "entities/地点/景区/西湖风景区/1.download/sources/61.qunar_guide_candidate_817e1b29032f7407/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7871883"
+    },
+    {
+      "path": "entities/地点/景区/西湖风景区/1.download/sources/67.qunar_guide_candidate_98073a9394b00b66/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7904227"
+    },
+    {
+      "path": "entities/地点/景区/西湖风景区/1.download/sources/80.qunar_guide_candidate_af0095cd7c25b7eb/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7898781"
+    },
+    {
+      "path": "entities/地点/景区/西湖风景区/1.download/sources/81.qunar_guide_candidate_afbb2c15a3334fce/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7880186"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/西湖风景区/1.download/sources/35.qunar_guide_candidate_4f920097f62dc337/source.md"
+  ]
+}

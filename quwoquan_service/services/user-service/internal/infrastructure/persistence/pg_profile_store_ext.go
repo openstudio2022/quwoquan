@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -20,6 +21,61 @@ var _ repository.ProfileRepository = (*PgProfileStore)(nil)
 
 func NewPgProfileStore(pool *pgxpool.Pool) *PgProfileStore {
 	return &PgProfileStore{pgProfileStoreBase{pool: pool}}
+}
+
+const userProfileNullableSafeCols = `user_id, COALESCE(account_state, 'active'), COALESCE(identity_origin, ''), logical_shard, COALESCE(anonymous_retention_policy, ''), COALESCE(phone, ''), COALESCE(nickname, ''), COALESCE(nickname_customized, false), COALESCE(avatar_url, ''), COALESCE(avatar_asset_id, ''), avatar_version, COALESCE(background_url, ''), COALESCE(bio, ''), COALESCE(identity_tags, ''), COALESCE(gender, ''), birth_date, COALESCE(region, ''), COALESCE(status, 'active'), profile_version, follower_count, following_count, post_count, circle_count, like_count, COALESCE(owner_display_name, ''), sub_account_count, created_at, updated_at`
+
+type userProfileScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanNullableSafeUserProfile(scanner userProfileScanner) (*model.UserProfile, error) {
+	e := &model.UserProfile{}
+	err := scanner.Scan(
+		&e.UserID,
+		&e.AccountState,
+		&e.IdentityOrigin,
+		&e.LogicalShard,
+		&e.AnonymousRetentionPolicy,
+		&e.Phone,
+		&e.Nickname,
+		&e.NicknameCustomized,
+		&e.AvatarURL,
+		&e.AvatarAssetID,
+		&e.AvatarVersion,
+		&e.BackgroundURL,
+		&e.Bio,
+		&e.IdentityTags,
+		&e.Gender,
+		&e.BirthDate,
+		&e.Region,
+		&e.Status,
+		&e.ProfileVersion,
+		&e.FollowerCount,
+		&e.FollowingCount,
+		&e.PostCount,
+		&e.CircleCount,
+		&e.LikeCount,
+		&e.OwnerDisplayName,
+		&e.SubAccountCount,
+		&e.CreatedAt,
+		&e.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
+// FindByID overrides generated lookup so newly nullable profile fields
+// (e.g. background_url) never break read paths during transitional data states.
+func (s *PgProfileStore) FindByID(ctx context.Context, id string) (*model.UserProfile, error) {
+	return scanNullableSafeUserProfile(
+		s.pool.QueryRow(ctx, `SELECT `+userProfileNullableSafeCols+` FROM user_profiles WHERE user_id = $1`, id),
+	)
 }
 
 // Create overrides the generated Create to apply business defaults.
@@ -41,15 +97,16 @@ func (s *PgProfileStore) Create(ctx context.Context, p *model.UserProfile) error
 
 // Update performs a selective update on editable profile fields and bumps version.
 func (s *PgProfileStore) Update(ctx context.Context, p *model.UserProfile) error {
-	p.UpdatedAt = time.Now().UTC()
-	p.ProfileVersion++
+	if p.UpdatedAt.IsZero() {
+		p.UpdatedAt = time.Now().UTC()
+	}
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE user_profiles
-		SET nickname=$2, avatar_url=$3, avatar_asset_id=$4, avatar_version=$5,
-		    bio=$6, gender=$7, birth_date=$8, region=$9, profile_version=$10, updated_at=$11
+		SET nickname=$2, nickname_customized=$3, avatar_url=$4, avatar_asset_id=$5, avatar_version=$6,
+		    background_url=$7, bio=$8, gender=$9, birth_date=$10, region=$11, profile_version=$12, updated_at=$13
 		WHERE user_id=$1`,
-		p.UserID, p.Nickname, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion, p.Bio, p.Gender,
-		p.BirthDate, p.Region, p.ProfileVersion, p.UpdatedAt)
+		p.UserID, p.Nickname, p.NicknameCustomized, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion,
+		p.BackgroundURL, p.Bio, p.Gender, p.BirthDate, p.Region, p.ProfileVersion, p.UpdatedAt)
 	if err != nil {
 		return err
 	}
@@ -61,8 +118,8 @@ func (s *PgProfileStore) Update(ctx context.Context, p *model.UserProfile) error
 
 func (s *PgProfileStore) FindByNickname(ctx context.Context, nickname string) (*model.UserProfile, error) {
 	row := s.pool.QueryRow(ctx,
-		`SELECT `+userProfileCols+` FROM user_profiles WHERE nickname = $1`, nickname)
-	return scanUserProfile(row)
+		`SELECT `+userProfileNullableSafeCols+` FROM user_profiles WHERE nickname = $1`, nickname)
+	return scanNullableSafeUserProfile(row)
 }
 
 func (s *PgProfileStore) SearchProfiles(ctx context.Context, query string, limit int) ([]model.UserProfile, error) {
@@ -79,7 +136,7 @@ func (s *PgProfileStore) SearchProfiles(ctx context.Context, query string, limit
 	pattern := "%" + normalized + "%"
 	rows, err := s.pool.Query(
 		ctx,
-		`SELECT `+userProfileCols+`
+		`SELECT `+userProfileNullableSafeCols+`
 		FROM user_profiles
 		WHERE user_id ILIKE $1
 		   OR nickname ILIKE $1
@@ -98,7 +155,7 @@ func (s *PgProfileStore) SearchProfiles(ctx context.Context, query string, limit
 
 	results := make([]model.UserProfile, 0, limit)
 	for rows.Next() {
-		profile, err := scanUserProfileRow(rows)
+		profile, err := scanNullableSafeUserProfile(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -108,42 +165,6 @@ func (s *PgProfileStore) SearchProfiles(ctx context.Context, query string, limit
 		return nil, err
 	}
 	return results, nil
-}
-
-func scanUserProfileRow(rows pgx.Rows) (*model.UserProfile, error) {
-	e := &model.UserProfile{}
-	err := rows.Scan(
-		&e.UserID,
-		&e.AccountState,
-		&e.IdentityOrigin,
-		&e.LogicalShard,
-		&e.AnonymousRetentionPolicy,
-		&e.Phone,
-		&e.Nickname,
-		&e.AvatarURL,
-		&e.AvatarAssetID,
-		&e.AvatarVersion,
-		&e.Bio,
-		&e.IdentityTags,
-		&e.Gender,
-		&e.BirthDate,
-		&e.Region,
-		&e.Status,
-		&e.ProfileVersion,
-		&e.FollowerCount,
-		&e.FollowingCount,
-		&e.PostCount,
-		&e.CircleCount,
-		&e.LikeCount,
-		&e.OwnerDisplayName,
-		&e.SubAccountCount,
-		&e.CreatedAt,
-		&e.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return e, nil
 }
 
 // ListProfilesForIndex enumerates profiles in stable user_id order for cold-start
@@ -157,7 +178,7 @@ func (s *PgProfileStore) ListProfilesForIndex(ctx context.Context, afterUserID s
 	}
 	rows, err := s.pool.Query(
 		ctx,
-		`SELECT `+userProfileCols+`
+		`SELECT `+userProfileNullableSafeCols+`
 		FROM user_profiles
 		WHERE user_id > $1
 		ORDER BY user_id ASC
@@ -172,18 +193,11 @@ func (s *PgProfileStore) ListProfilesForIndex(ctx context.Context, afterUserID s
 
 	results := make([]model.UserProfile, 0, limit)
 	for rows.Next() {
-		e := model.UserProfile{}
-		if err := rows.Scan(
-			&e.UserID, &e.AccountState, &e.IdentityOrigin, &e.LogicalShard,
-			&e.AnonymousRetentionPolicy, &e.Phone, &e.Nickname, &e.AvatarURL,
-			&e.AvatarAssetID, &e.AvatarVersion, &e.Bio, &e.IdentityTags, &e.Gender,
-			&e.BirthDate, &e.Region, &e.Status, &e.ProfileVersion, &e.FollowerCount,
-			&e.FollowingCount, &e.PostCount, &e.CircleCount, &e.LikeCount,
-			&e.OwnerDisplayName, &e.SubAccountCount, &e.CreatedAt, &e.UpdatedAt,
-		); err != nil {
+		e, err := scanNullableSafeUserProfile(rows)
+		if err != nil {
 			return nil, err
 		}
-		results = append(results, e)
+		results = append(results, *e)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

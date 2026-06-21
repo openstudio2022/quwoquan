@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "/entity/地点/景区/四姑娘山",
+  "articleSource": "4.draft/page.md",
+  "draftArticleRef": "4.draft/page.md",
+  "finalArticleRef": "page.md",
+  "composeSnapshotRef": null,
+  "draftSha256": "sha256:7c62b27d9b1a12f95a14f082c4b0f10ba2ddd1abb6344cebdcd43ed79d862c8c",
+  "finalSha256": "sha256:7c62b27d9b1a12f95a14f082c4b0f10ba2ddd1abb6344cebdcd43ed79d862c8c",
+  "draftBodySha256": "sha256:7c62b27d9b1a12f95a14f082c4b0f10ba2ddd1abb6344cebdcd43ed79d862c8c",
+  "finalBodySha256": "sha256:7c62b27d9b1a12f95a14f082c4b0f10ba2ddd1abb6344cebdcd43ed79d862c8c",
+  "composeSnapshotSha256": null,
+  "composeSnapshotMatchesDraft": null,
+  "frontmatterInjected": false,
+  "frontmatterChanged": false,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": false,
+  "normalizationActions": [
+    "entity_homepage_draft_materialized"
+  ]
+}

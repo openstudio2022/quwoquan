@@ -1044,14 +1044,14 @@ class _ArticleInlineText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final entitySpans = spans.where((span) => span.isEntity).toList()
+    final mentionSpans = spans.where((span) => span.isInlineMention).toList()
       ..sort((a, b) => a.start.compareTo(b.start));
-    if (entitySpans.isEmpty) {
+    if (mentionSpans.isEmpty) {
       return Text(text, style: style);
     }
     final children = <InlineSpan>[];
     var cursor = 0;
-    for (final span in entitySpans) {
+    for (final span in mentionSpans) {
       final start = span.start.clamp(0, text.length);
       final end = span.end.clamp(start, text.length);
       if (start < cursor) continue;

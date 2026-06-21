@@ -7,6 +7,7 @@ class ProfileUserLikeRowWireDto {
   final String coverUrl;
   final String likerNickname;
   final String likerAvatarUrl;
+  final int likerAvatarVersion;
   final DateTime? likedAt;
 
   ProfileUserLikeRowWireDto({
@@ -15,6 +16,7 @@ class ProfileUserLikeRowWireDto {
     this.coverUrl = '',
     this.likerNickname = '',
     this.likerAvatarUrl = '',
+    this.likerAvatarVersion = 0,
     this.likedAt,
   });
 
@@ -25,6 +27,7 @@ class ProfileUserLikeRowWireDto {
       coverUrl: m['coverUrl']?.toString() ?? '',
       likerNickname: m['likerNickname']?.toString() ?? '',
       likerAvatarUrl: m['likerAvatarUrl']?.toString() ?? '',
+      likerAvatarVersion: (m['likerAvatarVersion'] as num?)?.toInt() ?? (m['avatarVersion'] as num?)?.toInt() ?? 0,
       likedAt: _parseDateTime(m['likedAt']) ?? null,
     );
   }
@@ -36,6 +39,7 @@ class ProfileUserLikeRowWireDto {
       'coverUrl': coverUrl,
       'likerNickname': likerNickname,
       'likerAvatarUrl': likerAvatarUrl,
+      'likerAvatarVersion': likerAvatarVersion,
       'likedAt': likedAt,
     };
   }
@@ -46,6 +50,7 @@ class ProfileUserLikeRowWireDto {
     String? coverUrl,
     String? likerNickname,
     String? likerAvatarUrl,
+    int? likerAvatarVersion,
     DateTime? likedAt,
   }) {
     return ProfileUserLikeRowWireDto(
@@ -54,6 +59,7 @@ class ProfileUserLikeRowWireDto {
       coverUrl: coverUrl ?? this.coverUrl,
       likerNickname: likerNickname ?? this.likerNickname,
       likerAvatarUrl: likerAvatarUrl ?? this.likerAvatarUrl,
+      likerAvatarVersion: likerAvatarVersion ?? this.likerAvatarVersion,
       likedAt: likedAt ?? this.likedAt,
     );
   }

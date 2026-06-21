@@ -29,6 +29,7 @@ import cv2  # noqa: E402
 from _common.batch_manifest import write_batch_manifest  # noqa: E402
 from _common.paths import ensure_batch_layout, ensure_task_layout  # noqa: E402
 from _common.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
+from produce import route_workflow as RW  # noqa: E402
 from produce.route_workflow import _build_route_assets  # noqa: E402
 
 
@@ -127,6 +128,27 @@ def test_layouts_not_uniformly_degraded():
     assert len(layouts) >= 2, f"layouts should vary by role, got {layouts}"
     cover = next(a for a in assets if a["role"] == "cover")
     assert cover["imageLayout"] == "fullWidth", cover
+
+
+def test_article_declared_asset_refs_constrain_selection():
+    _seed_images()
+    entity = ENTITIES[0]
+    candidates = RW._entity_image_candidates(TASK, BATCH, entity, f"/entity/地点/景区/{entity}")
+    assert len(candidates) >= 2
+    declared = candidates[1]
+    brief = {
+        "carrier": "article",
+        "baseSourceRef": declared["sourceRef"],
+        "assetRefs": [declared["sourceAssetRef"]],
+        "imagePlan": [{"slot": "封面", "imageLayout": "fullWidth"}],
+    }
+    evidence_bundle = {
+        "routeNodes": [{"entityName": entity, "entityRef": f"/entity/地点/景区/{entity}"}]
+    }
+
+    assets = _build_route_assets(TASK, BATCH, "声明源图文章", brief, evidence_bundle)
+
+    assert [asset["sourceAssetRef"] for asset in assets] == [declared["sourceAssetRef"]]
 
 
 def _run_all() -> None:

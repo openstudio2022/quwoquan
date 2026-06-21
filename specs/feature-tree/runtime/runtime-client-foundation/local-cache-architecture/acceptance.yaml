@@ -7,32 +7,101 @@ node:
   parent_domain_service: runtime
   parent_business_capability: runtime-client-foundation
 scope:
-  summary: local cache architecture 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 本地对象缓存、查询快照、资源预算入口与清理语义的端侧验收范围。
+  in_scope:
+  - QuerySnapshot 持久化与 stale-while-revalidate 命中
+  - Post/User 最小对象快照复用
+  - 图片 preset 入口与媒体缓存轻量本地优先
+  - 快速滑动下视频单活跃与资源预取抑制
+  out_of_scope:
+  - 完整离线视频平台
+  - 预测式大规模预下载
+  - 业务 UI 内平台分支
 gwt_acceptance:
   GWT1:
-    title: local cache architecture GWT
+    title: QuerySnapshot 短退重启与频道切换复用
     given:
-    - 前置条件明确。
+    - 用户已浏览首页推荐、精品或个人作品第一页，ContentRepository 已写入 query snapshot。
     when:
-    - 用户或系统动作发生。
+    - 用户频道切换、回滑、短退重启，或在 profile works 区再次打开已看内容列表。
     then:
-    - 可观察结果符合预期。
+    - 端侧先回显 snapshot 中的 post 文本、作者快照、互动计数与 cursor，再后台刷新；命中 fresh snapshot 时不重复请求远端。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
+    - feed 与 userPosts 共用 ContentQuerySnapshotStore，清理临时资源不删除 post metadata，离线内容清理可删除
+      query snapshot。
+    edge_cases:
+    - snapshot 过期时 stale-while-revalidate 不阻塞 UI。
+    - 媒体字节不存在时展示占位并在网络恢复后重拉。
+    contract_refs:
+    - object-cache-policy.yaml#objects.QuerySnapshot
+    - object-cache-policy.yaml#objects.Post
+    performance_points:
+    - 回滑和频道切换避免重复远端请求。
+    - 快速滑动不触发多视频并发初始化。
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - command: flutter test test/core/services/content_cache_services_test.dart
+      - command: flutter test test/core/widgets/app_cached_network_image_test.dart
+      - command: flutter test test/core/providers/resource_cache_profile_provider_test.dart
+      - command: flutter test test/cloud/media/media_download_cache_test.dart
+      - command: flutter test test/ui/user/providers/profile_state_provider_test.dart
+      - command: flutter test test/ui/discovery/home_feed_video_focus_coordinator_test.dart
+      - command: flutter test test/ui/discovery/home_feed_video_autoplay_policy_test.dart
+      - command: flutter test test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
+      - command: python3 quwoquan_app/scripts/media/verify_app_network_image_surface.py
+      recorded:
+      - command: flutter analyze quwoquan_app/lib/core/widgets/app_cached_network_image.dart
+          quwoquan_app/lib/core/services/cache/cache_telemetry_sink.dart quwoquan_app/lib/core/services/cache/content_cache_services.dart
+          quwoquan_app/lib/core/services/cache/cached_content_repository.dart quwoquan_app/lib/core/services/cache/cache_management_service.dart
+          quwoquan_app/lib/cloud/media/media_download_cache.dart quwoquan_app/lib/core/providers/app_providers.dart
+          quwoquan_app/lib/core/providers/app_providers_client_sync.dart quwoquan_app/lib/quwoquan_app_shell.dart
+          quwoquan_app/lib/components/comment_system/comment_input_overlay.dart quwoquan_app/lib/components/comment_system/comment_thread_view.dart
+          quwoquan_app/lib/ui/circle/widgets/section_members.dart quwoquan_app/lib/ui/content/widgets/record_post_card.dart
+          quwoquan_app/lib/ui/search/pages/global_search_page.dart quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
+          quwoquan_app/lib/ui/user/pages/login_page.dart quwoquan_app/lib/ui/user/widgets/profile_interaction_tab.dart
+          quwoquan_app/lib/ui/chat/widgets/message/chat_message_bubble.dart quwoquan_app/test/core/services/content_cache_services_test.dart
+          quwoquan_app/test/core/widgets/app_cached_network_image_test.dart quwoquan_app/test/cloud/media/media_download_cache_test.dart
+      - command: flutter analyze quwoquan_app/lib/ui/discovery/models/home_feed_video_autoplay_policy.dart
+          quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_post_cards.dart
+          quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_media.dart quwoquan_app/test/core/providers/resource_cache_profile_provider_test.dart
+          quwoquan_app/test/ui/discovery/home_feed_video_autoplay_policy_test.dart
+          quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
+      - command: flutter test test/core/services/content_cache_services_test.dart
+          test/core/widgets/app_cached_network_image_test.dart test/core/providers/resource_cache_profile_provider_test.dart
+          test/cloud/media/media_download_cache_test.dart test/ui/user/providers/profile_state_provider_test.dart
+          test/ui/discovery/home_feed_video_focus_coordinator_test.dart test/ui/discovery/home_feed_video_autoplay_policy_test.dart
+          test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
+      - command: python3 quwoquan_app/scripts/media/verify_app_network_image_surface.py
+      - command: python3 quwoquan_app/scripts/runtime/verify_lib_dart_io_budget.py
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.local_cache_architecture.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.local_cache_architecture.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: integration
+        cases:
+        - api_integration.runtime.runtime_client_foundation.local_cache_architecture.integration
+        envs:
+        - beta
+        - gamma
+      - layer: user_acceptance
+        suite: user_journey
+        cases:
+        - user_acceptance.runtime.runtime_client_foundation.local_cache_architecture.user_journey
+        envs:
+        - gamma
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

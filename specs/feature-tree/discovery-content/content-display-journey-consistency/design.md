@@ -208,6 +208,8 @@ App 侧新增轻量本地同步模型，建议命名：
 - follow/unfollow：按 `ProfileSubjectId + intentType`
 - like/favorite/share：按 `PostId + intentType`
 - 合并策略：`latest_wins`
+- outbox 为每个 key 记录“云端已确认状态 + 本地最终意图”；窗口内允许立即反向点击，若最终意图回到已确认状态，则直接删除 pending entry，不发云端持久化请求。
+- 若 flush 已发出而用户又在窗口内反悔，则保留最新本地意图，并在本轮 flush 完成后基于最新 confirmed 状态继续收敛，避免 feed / viewer / profile 与云端出现断链。
 
 调度规则：
 
@@ -385,21 +387,21 @@ G1 校验结果：
 
 | 验收 | 测试层 | 设计策略 |
 |------|--------|----------|
-| J1 | T1, T2, T3, T4 | discovery/circle handoff schema、widget/integration、真实旅程回归 |
-| J2 | T1, T2, T3 | canonical key、provider 边界、profile/viewer/feed 一致性 |
-| J3 | T1, T2, T3, T4 | outbox 配置 schema、coalesce/retry、弱网与恢复旅程 |
-| R1 | T1, T3, T4 | 灰度配置、观测 guardrail、回滚演练 |
+| J1 | local_contract, local_contract, api_integration, user_acceptance | discovery/circle handoff schema、widget/integration、真实旅程回归 |
+| J2 | local_contract, local_contract, api_integration | canonical key、provider 边界、profile/viewer/feed 一致性 |
+| J3 | local_contract, local_contract, api_integration, user_acceptance | outbox 配置 schema、coalesce/retry、弱网与恢复旅程 |
+| R1 | local_contract, api_integration, user_acceptance | 灰度配置、观测 guardrail、回滚演练 |
 
-## plan slice 与 T1~T4 证据矩阵映射
+## plan slice 与 三层测试 证据矩阵映射
 
 | Slice | 目标 | 主要验收 | 主要证据 |
 |-------|------|----------|----------|
-| P1 | 冻结 canonical metadata 与 runtime config schema | J2, J3 | T1 |
-| P2 | 生成并接入 codegen 基线 | J2, J3 | T1, T3 |
-| P3 | 落地 shared provider 与 viewer/profile 同步 | J2 | T2, T3 |
-| P4 | 落地 circle handoff / dismiss absorb | J1 | T2, T3 |
-| P5 | 落地 outbox flush / retry / reconcile | J3 | T2, T3, T4 |
-| P6 | 灰度、观测与回滚验证 | R1 | T3, T4 |
+| P1 | 冻结 canonical metadata 与 runtime config schema | J2, J3 | local_contract |
+| P2 | 生成并接入 codegen 基线 | J2, J3 | local_contract, api_integration |
+| P3 | 落地 shared provider 与 viewer/profile 同步 | J2 | local_contract, api_integration |
+| P4 | 落地 circle handoff / dismiss absorb | J1 | local_contract, api_integration |
+| P5 | 落地 outbox flush / retry / reconcile | J3 | local_contract, api_integration, user_acceptance |
+| P6 | 灰度、观测与回滚验证 | R1 | api_integration, user_acceptance |
 
 ## 未来演进
 

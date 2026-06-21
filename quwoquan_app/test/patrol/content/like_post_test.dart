@@ -7,8 +7,8 @@
 ///   - server 响应后与 likeCount 一致
 ///   - rate limit 触发时：回滚 + 错误 Toast（真实触摸交互 + 真实网络时序）
 ///
-/// 注：App 由 test/patrol/patrol_test_main.dart 的 app.main() 启动，
-///     本 test 直接与已运行的 App 交互，不需要 pumpWidget。
+/// 注：每个用例自启动 App（launchPatrolAppOnce），对齐已绿的
+///     home_recommendation_journey_test，不依赖 patrol_test_main 预启动。
 library;
 
 import 'dart:convert';
@@ -95,7 +95,9 @@ void main() {
     skip: !kRunPatrolT4,
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 10)),
     ($) async {
-      // ── App 已运行，等待发现页 + 包含 seededPost 的卡片 ──────────────
+      await launchPatrolAppOnce($);
+
+      // ── 等待发现页 + 包含 seededPost 的卡片 ──────────────────────────
       await $(
         TestKeys.photoPostCard,
       ).waitUntilVisible(timeout: const Duration(seconds: 20));
@@ -136,7 +138,9 @@ void main() {
     tags: ['t4', 'content', 'like'],
     skip: !kRunPatrolT4,
     ($) async {
-      // ── App 已运行，等待点赞按钮可见 ─────────────────────────────────
+      await launchPatrolAppOnce($);
+
+      // ── 等待点赞按钮可见 ─────────────────────────────────────────────
       await $(
         TestKeys.likeButton,
       ).waitUntilVisible(timeout: const Duration(seconds: 20));

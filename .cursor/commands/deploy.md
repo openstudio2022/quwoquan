@@ -4,13 +4,13 @@
 
 准入：
 - UAT/SIT/GWT/contract 已闭环。
-- T3/T4、SLO、观测、灰度、回滚演练完成。
+- api_integration/user_acceptance、SLO、观测、灰度、回滚演练完成。
 - 生产包默认 Remote，无 mock 切换入口。
 
 阻断：SLO 未达、回滚不清、生产数据或 seed 边界不清。
 
 执行：
-1. 先按 `docs/agent_context_contract.md` 复核 release batch / CR 的规格、T1~T4、四环境、观测和回滚证据。
+1. 先按 `docs/agent_context_contract.md` 复核 release batch / CR 的规格、三层测试、四环境、观测和回滚证据。
 2. 对照 `docs/agent_command_simulation_matrix.md` 确认部署命令的禁止事项和出口证据。
 3. 环境打包、验证、健康检查、巡检和部署统一使用 `python3 agent_ops/deploy/stackctl.py`。
 4. 发布前至少执行或引用等价证据：

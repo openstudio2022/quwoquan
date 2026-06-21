@@ -108,25 +108,25 @@ stateDiagram-v2
 
 ## 验收重点
 
-### T1 契约与静态层
+### local_contract 契约与静态层
 
 - `chat_realtime_mock_core` 已登记到 chat fixture 与 alpha seed manifest
 - Remote realtime 文件不再依赖 `ChatMockData`
 - Long-poll transport 使用 generated metadata path + page id
 
-### T2 模块与交互层
+### local_contract 模块与交互层
 
 - Mock delegate 进入聊天后只走 state + catalog，不发 remote HTTP/WS
 - Remote 生命周期状态机覆盖 foreground idle、enter active、background disconnect
 - `ChatConversationPage` 在 mock 模式下可观察到 fixture realtime 新消息
 - `MemberJoined` 通过 `RealtimeMessageHandler` 插入系统消息
 
-### T3 端云集成层
+### api_integration 端云集成层
 
 - transport contract 测试验证 Long-poll 路径与 request page id 仍与 metadata 一致
 - Remote delegate 生命周期测试验证 idle/active transport 切换未偏离现有 transport 语义
 
-### T4 端到端旅程层
+### user_acceptance 端到端旅程层
 
 - alpha/mock 旅程可稳定演示：进聊天 → 新消息出现 → 页面退出不残留异常定时器
 

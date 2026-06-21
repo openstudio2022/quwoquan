@@ -76,12 +76,14 @@ func (s *SearchService) SearchSocialRelations(
 		if displayName == "" {
 			displayName = subAccountID
 		}
+		avatarVersion, _ := view["avatarVersion"].(int)
 
 		results = append(results, map[string]any{
 			"subAccountId":  subAccountID,
 			"username":      firstNonEmpty(strings.TrimSpace(asString(view["username"])), strings.TrimSpace(profile.Nickname), subAccountID),
 			"displayName":   displayName,
 			"avatarUrl":     strings.TrimSpace(asString(view["avatarUrl"])),
+			"avatarVersion": avatarVersion,
 			"headline":      strings.TrimSpace(asString(view["bio"])),
 			"chatAvailable": true,
 		})

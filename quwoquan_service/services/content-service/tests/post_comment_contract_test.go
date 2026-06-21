@@ -868,6 +868,20 @@ func TestGetAppConfig(t *testing.T) {
 	if maxLen != 500 {
 		t.Errorf("expected max_length=500, got %v", maxLen)
 	}
+	// 二级回复分层展开契约（对齐 content_app_config_client.yaml#comment_defaults，
+	// 端 CommentRemoteConfig 消费）：默认回显 1 条、首展 5 条、续展 10 条。
+	if comment["reply_preview_count"] != float64(1) {
+		t.Errorf("expected reply_preview_count=1, got %v", comment["reply_preview_count"])
+	}
+	if comment["reply_first_expand_page_size"] != float64(5) {
+		t.Errorf("expected reply_first_expand_page_size=5, got %v", comment["reply_first_expand_page_size"])
+	}
+	if comment["reply_expand_page_size"] != float64(10) {
+		t.Errorf("expected reply_expand_page_size=10, got %v", comment["reply_expand_page_size"])
+	}
+	if comment["fold_line_count"] != float64(3) {
+		t.Errorf("expected fold_line_count=3, got %v", comment["fold_line_count"])
+	}
 	attachment, _ := comment["attachment"].(map[string]any)
 	if attachment["max_images"] != float64(1) {
 		t.Fatalf("expected attachment.max_images=1, got %v", attachment["max_images"])

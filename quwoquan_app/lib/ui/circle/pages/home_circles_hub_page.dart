@@ -20,7 +20,8 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/services/home_circles_hub_media_viewer_wiring.dart';
 import 'package:quwoquan_app/ui/circle/services/home_circles_hub_wire.dart';
-import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
+import 'package:quwoquan_app/ui/circle/widgets/circle_entity_bridge_strip_metrics.dart';
+import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_entity_bridge_strip.dart';
@@ -1043,7 +1044,7 @@ class _HomeCircleRailCard extends StatelessWidget {
                 ),
                 child: AspectRatio(
                   aspectRatio: _homeCircleCoverAspectRatio,
-                  child: CircleMediaImage(
+                  child: AppMediaImage(
                     imageSource: circle.coverUrl ?? '',
                     fit: BoxFit.cover,
                   ),

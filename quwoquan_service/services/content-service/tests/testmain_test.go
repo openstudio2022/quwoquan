@@ -81,7 +81,13 @@ func TestMain(m *testing.M) {
 	mongoDB = mongoClient.Database("content_test")
 	postStore = persistence.NewMongoPostStore(mongoDB.Collection("posts"))
 
-	// Wire services with redis.Router (dual-scene: rec + general).
+	// Wire services with redis.Router. The rec scene runs against the real
+	// miniredis instance so the recommendation hot path exercises authentic Redis
+	// semantics (EXPIRE/DEL/SET round-trips, byte encoding); the general scene
+	// stays on the in-memory fake and is isolated from rec. The comment domain no
+	// longer touches Redis at all (the write-only/racy ZSet + reaction-counter
+	// caches were removed in R-CMT01), so there are no comment keys left to back
+	// with miniredis — comment counts/ranking are authoritative on Mongo.
 	testRouter = rtredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
 			"rec":      {Mode: "standalone", Addr: mr.Addr()},
@@ -95,9 +101,19 @@ func TestMain(m *testing.M) {
 	source := recinfra.NewPostRepositorySource(postStore)
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
 	feedService := application.NewFeedService(engine, source)
+
+	// Comments run against the authoritative Mongo persistence path (keyset
+	// pagination over compound indexes + exact indexed Count) so the L2 contract
+	// suite proves the R-CMT01 migration end-to-end (decode shape, indexes,
+	// counts, ranking, reactions). Redis ZSet/reaction-counter caches were
+	// removed (write-only / racy); the post total stays single-sourced on Mongo.
+	commentStore := persistence.NewMongoCommentStore(mongoDB, slog.Default())
+	commentReactionStore := persistence.NewMongoCommentReactionStore(mongoDB, slog.Default())
 	postService := application.NewPostService(
 		postStore,
 		application.WithEventPublisher(eventSpy),
+		application.WithCommentStore(commentStore),
+		application.WithCommentReactionStore(commentReactionStore),
 		application.WithProjector(&testProjectorAdapter{
 			p: recinfra.NewDiscoveryFeedProjector(mongoDB),
 		}),
@@ -159,14 +175,19 @@ func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, er
 }
 
 // cleanPosts deletes all documents from the posts collection to isolate tests.
+// Comments now persist in Mongo (R-CMT01), so their collections are cleared too;
+// Redis caches are keyed by the unique generated post/comment ids and degrade to
+// the authoritative store, so stale cache entries cannot leak across tests.
 func cleanPosts(t *testing.T) {
 	t.Helper()
 	if mongoDB == nil {
 		return
 	}
-	_, err := mongoDB.Collection("posts").DeleteMany(context.Background(), bson.M{})
-	if err != nil {
-		t.Logf("cleanPosts: %v", err)
+	ctx := context.Background()
+	for _, coll := range []string{"posts", "comments", "comment_reactions"} {
+		if _, err := mongoDB.Collection(coll).DeleteMany(ctx, bson.M{}); err != nil {
+			t.Logf("cleanPosts(%s): %v", coll, err)
+		}
 	}
 	eventSpy.Reset()
 }

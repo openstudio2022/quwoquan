@@ -92,17 +92,30 @@ class ContractFixtureRuntimeLoader {
     if (_seedCache.containsKey(cacheKey)) {
       return _seedCache[cacheKey];
     }
-    final decoded = _loadMetadataJson(fixturePath, env: env);
-    final seedSets = decoded?['seedSets'];
-    if (seedSets is! Map) {
-      _seedCache[cacheKey] = null;
+    Map<String, dynamic>? readSeedFromPath(String path) {
+      final decoded = _loadMetadataJson(path, env: env);
+      final seedSets = decoded?['seedSets'];
+      if (seedSets is! Map) {
+        return null;
+      }
+      final seed = seedSets[ref];
+      if (seed is Map) {
+        return seed.cast<String, dynamic>();
+      }
       return null;
     }
-    final seed = seedSets[ref];
-    if (seed is Map) {
-      final casted = seed.cast<String, dynamic>();
-      _seedCache[cacheKey] = casted;
-      return casted;
+
+    final seed = readSeedFromPath(fixturePath);
+    if (seed != null) {
+      _seedCache[cacheKey] = seed;
+      return seed;
+    }
+    if (fixturePath != fallbackFixturePath) {
+      final fallbackSeed = readSeedFromPath(fallbackFixturePath);
+      if (fallbackSeed != null) {
+        _seedCache[cacheKey] = fallbackSeed;
+        return fallbackSeed;
+      }
     }
     _seedCache[cacheKey] = null;
     return null;
@@ -116,9 +129,9 @@ class ContractFixtureRuntimeLoader {
 
   static String _fixturePathForDomain(
     String domain,
-    String fallbackFixturePath,
-    {String env = CloudRuntimeConfig.appRuntimeEnv}
-  ) {
+    String fallbackFixturePath, {
+    String env = CloudRuntimeConfig.appRuntimeEnv,
+  }) {
     final manifest = seedManifest(env);
     final entries = manifest?['seedRefs'];
     if (entries is List) {
@@ -164,9 +177,7 @@ class ContractFixtureRuntimeLoader {
   }
 
   static List<File> _candidateFiles(String metadataRelativePath) {
-    final relativeCandidates = <String>[
-      metadataRelativePath,
-    ];
+    final relativeCandidates = <String>[metadataRelativePath];
     final suffixes = relativeCandidates
         .map((path) => 'quwoquan_service/contracts/metadata/$path')
         .toSet()

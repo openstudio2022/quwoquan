@@ -1,17 +1,14 @@
 schemaVersion: quwoquan.task.defaults
-# 旅行垂类默认。多数 task 直接继承这里的通用三件套角度与四季；
-# 仅当实体类别确有特化角度时（博物馆=科普 / 美食=探店 / 线路=路线推荐）才在 task.yaml override。
 content:
   angles:
   - 体验
   - 美图
   - 攻略
   audiences:
-  - leisureTraveler
-  - familyTraveler
-  - selfDriveTraveler
+  - 通用
+  carriers:
+  - article
   conditionAxes:
-    # 季节默认四季；具体每篇按实体真实物候在 produce/brief 阶段注入
     seasons:
     - 春
     - 夏

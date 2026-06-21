@@ -364,36 +364,36 @@ baseline 分层：
 
 ## TDD / ATDD 策略
 
-### T1：schema / metadata
+### local_contract：schema / metadata
 
 - lifecycle 状态、claim fields、status report fields、错误码、ui config
 
-### T2：module interaction
+### local_contract：module interaction
 
 - claim 表单、补件/驳回、基础维护表单、offline report 表单
 
-### T3：cross service integration
+### api_integration：cross service integration
 
 - published/offline 状态被搜索、内容聚合、群组摘要正确消费
 - 已下线主页仍可保留记录内容和口碑
 
-### T4：user journey
+### user_acceptance：user journey
 
 - 候选主页发布
 - 认领申请 -> 审核 -> 基础维护
 - 上报下线 -> 审核 -> 记录可见
 
-## plan slice 与 T1~T4 证据矩阵映射
+## plan slice 与 三层测试 证据矩阵映射
 
 | Slice | 目标 | 验证层 |
 |---|---|---|
-| `P1` | 冻结 lifecycle / claim / offline metadata | `T1` |
-| `P2` | 建立 codegen baseline 与错误码生成物 | `T1` |
-| `P3` | 落候选主页 intake / publish 主线 | `T2`, `T3`, `T4` |
-| `P4` | 落 claim request / review | `T2`, `T3`, `T4` |
-| `P5` | 落 claimed homepage maintenance 与审计边界 | `T2`, `T3` |
-| `P6` | 落 offline report / history retention | `T2`, `T3`, `T4` |
-| `P7` | 加固观测、SLO、回滚与整体验收 | `T3`, `T4` |
+| `P1` | 冻结 lifecycle / claim / offline metadata | `local_contract` |
+| `P2` | 建立 codegen baseline 与错误码生成物 | `local_contract` |
+| `P3` | 落候选主页 intake / publish 主线 | `local_contract`, `api_integration`, `user_acceptance` |
+| `P4` | 落 claim request / review | `local_contract`, `api_integration`, `user_acceptance` |
+| `P5` | 落 claimed homepage maintenance 与审计边界 | `local_contract`, `api_integration` |
+| `P6` | 落 offline report / history retention | `local_contract`, `api_integration`, `user_acceptance` |
+| `P7` | 加固观测、SLO、回滚与整体验收 | `api_integration`, `user_acceptance` |
 
 ## 未来演进
 

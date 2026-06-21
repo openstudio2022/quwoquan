@@ -11,6 +11,7 @@ from typing import Any, Mapping
 
 from _common.base_draft import load_base_draft_text
 from _common.content_object import BRIEF_FILE, content_object_stage_dir, load_index
+from _common.image_asset_strategy import image_count_is_hard_quota
 from _common.io import read_json
 from _common.image_safety import assess_image_publish_prefilter
 from _common.paths import (
@@ -77,6 +78,38 @@ def load_content_plan_packet(task_id: str, batch_id: str) -> dict[str, Any] | No
     return data if isinstance(data, dict) else None
 
 
+def site_supply_dynamic_content_plan(spec: Mapping[str, Any]) -> bool:
+    """站点供给线批次由 content_plan_packet 自带对象清单和动态实体集合。"""
+    policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
+    return bool(policy.get("siteSupplyDynamicContentPlan") is True)
+
+
+def _is_site_supply_packet(packet: Mapping[str, Any]) -> bool:
+    return (
+        str(packet.get("generatedBy") or "") == "site_supply_content_plan_bridge"
+        or isinstance(packet.get("sourceSite"), Mapping)
+    )
+
+
+def _dynamic_targets_from_packet(packet: Mapping[str, Any]) -> list[str]:
+    targets: list[str] = []
+    seen: set[str] = set()
+    for item in packet.get("items") or []:
+        if not isinstance(item, Mapping):
+            continue
+        if str(item.get("kind") or "") != "entity":
+            continue
+        for entity_ref in item.get("entityRefs") or []:
+            parts = [part for part in str(entity_ref or "").strip("/").split("/") if part]
+            if len(parts) < 4 or parts[0] != "entity":
+                continue
+            name = parts[-1].strip()
+            if name and name not in seen:
+                seen.add(name)
+                targets.append(name)
+    return targets
+
+
 def _abandoned_content_refs(task_id: str, batch_id: str) -> set[str]:
     path = batch_root(task_id, batch_id) / "_shared" / "task_workflow_state.json"
     if not path.is_file():
@@ -133,17 +166,19 @@ def allow_partial_content(spec: Mapping[str, Any]) -> bool:
     """Whether entity-level source gaps may be handled by target replacement.
 
     Default is strict. Scale workflows may opt in explicitly so fast-fail
-    objects do not block unrelated production, but this does not allow shrinking
-    per-entity article/image quotas.
+    objects do not block unrelated production.
     """
     policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
     return bool(policy.get("allowPartialContent") is True)
 
 
 def allow_content_quota_shortfall(spec: Mapping[str, Any]) -> bool:
-    """Explicit opt-in for publishing fewer objects than the declared quotas."""
+    """Whether successful content objects may ship when per-target quotas shortfall."""
     policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
-    return bool(policy.get("allowContentQuotaShortfall") is True)
+    return bool(
+        policy.get("allowContentQuotaShortfall") is True
+        or policy.get("allowPartialContent") is True
+    )
 
 
 def _source_asset_rows(root: Path, source_ref: str) -> list[dict[str, Any]]:
@@ -220,6 +255,7 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
     want_gallery = 0 if separated_research else int(quotas.get("galleryPosts") or 0)
     per_target_articles = int(quotas.get("entityArticlesPerTarget") or 0)
     per_target_galleries = int(quotas.get("imageWorksPerTarget") or 0)
+    image_quota_hard = (not separated_research) or image_count_is_hard_quota(spec)
     if separated_research and (
         int(quotas.get("galleryPosts") or 0)
         or int(quotas.get("galleryPostsPerTarget") or 0)
@@ -239,9 +275,15 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
         for target in ((spec.get("scope") or {}).get("coverageTargets") or [])
         if isinstance(target, Mapping) and str(target.get("name") or "").strip()
     ]
+    if site_supply_dynamic_content_plan(spec) and _is_site_supply_packet(packet):
+        dynamic_targets = _dynamic_targets_from_packet(packet)
+        if dynamic_targets:
+            targets = dynamic_targets
+        else:
+            issues.append("siteSupplyDynamicContentPlan requires entityRefs in site_supply content_plan_packet")
     if per_target_articles:
         want_entity = per_target_articles * len(targets)
-    if per_target_galleries:
+    if per_target_galleries and image_quota_hard:
         want_gallery = per_target_galleries * len(targets)
     required_angles = [
         str(angle).strip()
@@ -296,7 +338,7 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                 f"(minus abandoned {abandoned_article_n} => {effective_want_entity}) "
                 f"but packet has {entity_article_n}"
             )
-        if want_gallery and gallery_n != effective_want_gallery:
+        if want_gallery and image_quota_hard and gallery_n != effective_want_gallery:
             issues.append(
                 f"imageWorks quota {want_gallery} "
                 f"(minus abandoned {abandoned_image_n} => {effective_want_gallery}) "
@@ -588,16 +630,35 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                 )
             base_source_owners.setdefault(base_source_ref, ref)
             asset_rows = _source_asset_rows(root, base_source_ref)
-            if strict_rights_mode and not asset_rows:
-                issues.append(
-                    f"item[{ref}]: article baseSourceRef must include at least one source asset"
-                )
-            for asset in asset_rows:
-                source_asset_ref = _source_asset_ref(task_id, batch_id, root, base_source_ref, asset)
-                if source_asset_ref:
-                    _claim_asset(ref, source_asset_ref)
-                _claim_asset_sha(ref, str(asset.get("sha256") or ""))
-                _claim_collection(ref, str(asset.get("sourceCollectionId") or ""))
+            row_by_asset_ref = {
+                _source_asset_ref(task_id, batch_id, root, base_source_ref, asset): asset
+                for asset in asset_rows
+            }
+            declared_asset_refs = [
+                str(asset_ref).strip()
+                for asset_ref in (item.get("assetRefs") or [])
+                if str(asset_ref).strip()
+            ]
+            if declared_asset_refs and len(set(declared_asset_refs)) != len(declared_asset_refs):
+                issues.append(f"item[{ref}]: article assetRefs contains duplicates")
+            for asset_ref in declared_asset_refs:
+                asset_path = root / asset_ref
+                source_dir = (root / base_source_ref).parent
+                if not asset_path.is_file():
+                    issues.append(f"item[{ref}]: article asset not found: {asset_ref}")
+                    continue
+                try:
+                    asset_path.relative_to(source_dir / "assets")
+                except ValueError:
+                    issues.append(
+                        f"item[{ref}]: article assetRefs must belong to baseSourceRef assets: "
+                        f"{asset_ref}"
+                    )
+                    continue
+                asset = row_by_asset_ref.get(asset_ref)
+                if not isinstance(asset, Mapping):
+                    issues.append(f"item[{ref}]: article asset metadata missing: {asset_ref}")
+                    continue
                 missing_asset_fields = [
                     field
                     for field in ("license", "credit", "sourceUrl", "termsUrl", "usageScope")
@@ -608,6 +669,20 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                         f"item[{ref}]: baseSourceRef asset {asset.get('fileName') or '?'} "
                         f"missing rights fields {missing_asset_fields}"
                     )
+                asset_row = row_by_asset_ref.get(asset_ref)
+                if not asset_row:
+                    issues.append(f"item[{ref}]: article asset absent from base source index: {asset_ref}")
+                    continue
+                verdict = assess_image_publish_prefilter(asset_path)
+                if verdict.blocks_image_publish:
+                    reason = "/".join(verdict.reasons) or verdict.status
+                    issues.append(
+                        f"item[{ref}]: article asset blocked by image safety gate: "
+                        f"{asset_ref}:{reason}"
+                    )
+                _claim_asset(ref, asset_ref)
+                _claim_asset_sha(ref, str(asset_row.get("sha256") or ""))
+                _claim_collection(ref, str(asset_row.get("sourceCollectionId") or ""))
         if carrier != "image":
             for msg in writing_intent_issues(item.get("writingIntent")):
                 issues.append(f"item[{ref}]: {msg}")
@@ -635,7 +710,7 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                 f"(minus abandoned {len(target_abandoned_articles)} => {effective_target_articles}) "
                 f"but packet has {len(articles)}"
             )
-        if per_target_galleries and len(galleries) != effective_target_galleries:
+        if per_target_galleries and image_quota_hard and len(galleries) != effective_target_galleries:
             issues.append(
                 f"{target}: imageWorksPerTarget quota {per_target_galleries} "
                 f"(minus abandoned {len(target_abandoned_galleries)} => {effective_target_galleries}) "
@@ -680,6 +755,8 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
 
 
 def content_plan_quotas_required(spec: Mapping[str, Any]) -> bool:
+    if site_supply_dynamic_content_plan(spec):
+        return True
     content = spec.get("content") if isinstance(spec.get("content"), Mapping) else {}
     quotas = content.get("quotas") if isinstance(content.get("quotas"), Mapping) else {}
     return bool(

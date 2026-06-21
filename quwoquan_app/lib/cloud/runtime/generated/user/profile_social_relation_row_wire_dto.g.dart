@@ -5,12 +5,14 @@ class ProfileSocialRelationRowWireDto {
   final String subAccountId;
   final String displayName;
   final String avatarUrl;
+  final int avatarVersion;
   final bool isFollowing;
 
   ProfileSocialRelationRowWireDto({
     this.subAccountId = '',
     this.displayName = '',
     this.avatarUrl = '',
+    this.avatarVersion = 0,
     this.isFollowing = false,
   });
 
@@ -19,6 +21,7 @@ class ProfileSocialRelationRowWireDto {
       subAccountId: m['subAccountId']?.toString() ?? m['userId']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
+      avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
       isFollowing: m['isFollowing'] as bool? ?? false,
     );
   }
@@ -28,6 +31,7 @@ class ProfileSocialRelationRowWireDto {
       'subAccountId': subAccountId,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
+      'avatarVersion': avatarVersion,
       'isFollowing': isFollowing,
     };
   }
@@ -36,12 +40,14 @@ class ProfileSocialRelationRowWireDto {
     String? subAccountId,
     String? displayName,
     String? avatarUrl,
+    int? avatarVersion,
     bool? isFollowing,
   }) {
     return ProfileSocialRelationRowWireDto(
       subAccountId: subAccountId ?? this.subAccountId,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarVersion: avatarVersion ?? this.avatarVersion,
       isFollowing: isFollowing ?? this.isFollowing,
     );
   }

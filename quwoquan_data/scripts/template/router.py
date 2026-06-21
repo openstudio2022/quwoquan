@@ -4,7 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from template.creator import choose_creator
+from template.blueprint import collect_tag_refs
+from template.creator import match_creator
 from template.registry import TemplateRegistry
 
 
@@ -51,7 +52,16 @@ def resolve_route(registry: TemplateRegistry, request: RouteRequest) -> RouteRes
         raise ValueError(f"Route points to missing template: {template_id}")
     blueprint = registry.blueprints[template_id]
     creator_archetype = request.creator_archetype or selected.get("creatorArchetype")
-    creator = choose_creator(registry, blueprint, str(creator_archetype) if creator_archetype else None)
+    creator = match_creator(
+        registry,
+        blueprint,
+        carrier=blueprint.get("carrier"),
+        tag_refs=collect_tag_refs(blueprint),
+        region=request.region,
+        vertical=request.vertical,
+        seed=f"{request.subject_type}|{template_id}",
+        preferred_archetype=str(creator_archetype) if creator_archetype else None,
+    )
     return RouteResult(
         template_id=template_id,
         creator_profile_id=str(creator["creatorProfileId"]),

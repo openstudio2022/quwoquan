@@ -92,7 +92,7 @@ micro/image/video/article 的差异由 `ContentSurfaceView` 内的强类型可�
 
 | 指标 | 门槛 |
 |------|------|
-| 四 surface 同帖字段口径一致 | 100%（T2 同源断言） |
+| 四 surface 同帖字段口径一致 | 100%（local_contract 同源断言） |
 | 抽象接口/投影裸 Map 残留 | 0（R04 GATE_BLOCK 清零） |
 | 接入后现有 widget 测试回归 | 0 回归 |
 | 切换回滚 | feature flag 单独可回退，旧路径仍可读 |
@@ -121,6 +121,6 @@ micro/image/video/article 的差异由 `ContentSurfaceView` 内的强类型可�
 1. `ContentSurfaceView` 已定义并覆盖四媒体类型，字段对齐 metadata。
 2. 四 surface（feed/immersive/detail/share）均消费统一 model，无各自投影分叉。
 3. 抽象接口与投影无 `Map<String, dynamic>` 穿透（`discoveryPresentationWireForPost` 已强类型化）。
-4. T1 投影契约 + T2 四 surface 同源 widget 测试通过；旧投影类已 `@Deprecated`。
+4. local_contract 投影契约 + local_contract 四 surface 同源 widget 测试通过；旧投影类已 `@Deprecated`。
 5. feature flag 双读、观测、回滚边界已就绪。
 6. 接入顺带完成三超大文件强拆，现有测试无回归。

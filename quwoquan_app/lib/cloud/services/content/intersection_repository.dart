@@ -6,14 +6,19 @@ import 'package:quwoquan_app/cloud/runtime/cloud_api_query_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/recommendation/intersection_action_keys.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_fact_items.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
 /// 交集 Repository（三层模式：Abstract → Mock → Remote）。
 ///
@@ -29,6 +34,7 @@ abstract class IntersectionRepository {
     String? filter,
     String? sourceRef,
     String? timeBucket,
+    String? cursor,
     int limit = CloudApiQueryDefaults.intersectionListLimit,
   });
 
@@ -52,14 +58,6 @@ class MockIntersectionRepository implements IntersectionRepository {
   MockIntersectionRepository();
 
   final Map<String, DateTime> _watermark = <String, DateTime>{};
-
-  static const Map<String, String> _dimensionLabels = <String, String>{
-    'identity': '身份',
-    'location': '足迹',
-    'content': '内容',
-    'relationship': '关系',
-    'interest': '兴趣',
-  };
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
@@ -93,7 +91,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       tallies.add(
         IntersectionDimensionTally(
           dimension: dimension,
-          label: _dimensionLabels[dimension] ?? dimension,
+          label: DiscoveryFeedText.intersectionDimensionShortLabel(dimension),
           count: items.length,
           newCount: newCount,
           strengthenedCount: strengthenedCount,
@@ -128,6 +126,7 @@ class MockIntersectionRepository implements IntersectionRepository {
     String? filter,
     String? sourceRef,
     String? timeBucket,
+    String? cursor,
     int limit = CloudApiQueryDefaults.intersectionListLimit,
   }) async {
     final wanted = (dimension ?? '').trim();
@@ -135,7 +134,7 @@ class MockIntersectionRepository implements IntersectionRepository {
     final wantedSourceRef = (sourceRef ?? '').trim();
     final wantedTimeBucket = (timeBucket ?? '').trim();
     final items = rankAndDedupeIntersections(
-      _inboxReasons
+      filterDefaultInboxLifecycle(_inboxReasons)
           .where((r) {
             if (wanted.isNotEmpty && r.dimension != wanted) return false;
             if (wantedFilter == 'fact' && r.intersectionClass != 'fact') {
@@ -168,7 +167,9 @@ class MockIntersectionRepository implements IntersectionRepository {
     final now = DateTime.now().toUtc();
     final wanted = (dimension ?? '').trim();
     if (wanted.isEmpty) {
-      for (final key in _dimensionLabels.keys) {
+      // 维度闭集真相源 = codegen intersectionDimensionKeys（registry.dimensions），
+      // 端不再维护第二份维度键表。
+      for (final key in intersectionDimensionKeys) {
         _watermark[key] = now;
       }
       return;
@@ -182,6 +183,14 @@ class MockIntersectionRepository implements IntersectionRepository {
     required String objectType,
     int limit = CloudApiQueryDefaults.objectIntersectionsLimit,
   }) async {
+    // N3 对象页「你们的交集」优先消费 contract fixture（intersection_core.objectIntersections，
+    // 与 alpha/beta/gamma seed 同源，自带 primarySpans）；缺省回退证据组合成（关系类对象）。
+    final seeded = _seedObjectIntersections(objectId);
+    if (seeded.isNotEmpty) {
+      return seeded.length <= limit
+          ? seeded
+          : seeded.sublist(0, limit);
+    }
     final groups = _objectEvidenceGroups(objectType);
     if (groups.isEmpty) return const <IntersectionReason>[];
     final isRecommended = groups.every((g) => g.pointClass == 'recommended');
@@ -190,7 +199,7 @@ class MockIntersectionRepository implements IntersectionRepository {
         dimension: groups.first.dimension,
         intersectionId: 'objix_${objectType}_$objectId',
         intersectionClass: isRecommended ? 'affinity' : 'fact',
-        relationKind: _relationKindForObjectType(objectType),
+        objectKind: _objectKindForObjectType(objectType),
         relationObjectId: objectId,
         actionType: 'view_object',
         actionTargetId: objectId,
@@ -217,7 +226,31 @@ class MockIntersectionRepository implements IntersectionRepository {
     return <IntersectionReason>[reason];
   }
 
-  String _relationKindForObjectType(String objectType) {
+  /// N3 对象页「你们的交集」seed 真相源（intersection_core.objectIntersections，按 objectId 索引）。
+  /// 自带 primarySpans/intersectionPoints；命中即直出（与 inbox 同一 hydrate 管线收敛点摘要）。
+  static List<IntersectionReason> _seedObjectIntersections(String objectId) {
+    final seed = ContractFixtureRuntimeLoader.contentSeedSet('intersection_core');
+    if (seed == null) return const <IntersectionReason>[];
+    final raw = seed['objectIntersections'];
+    if (raw is! Map) return const <IntersectionReason>[];
+    final entries = raw[objectId];
+    if (entries is! List) return const <IntersectionReason>[];
+    return entries
+        .whereType<Map>()
+        .map((entry) {
+          final map = Map<String, dynamic>.from(entry);
+          var reason = IntersectionReason.fromMap(map);
+          reason = reason.intersectionPoints.isNotEmpty
+              ? _withPoints(reason, reason.intersectionPoints)
+              : _withDefaultPointSummary(reason);
+          return reason;
+        })
+        .toList(growable: false);
+  }
+
+  /// 对象页对象类型 → objectKind 闭集（registry.objectKinds，统一品牌角标真相源）。
+  /// 旧 relationKind 承载对象类型语义已废止（§23 / 投影 yaml「禁止再承载对象类型语义」）。
+  String _objectKindForObjectType(String objectType) {
     switch (objectType) {
       case 'circle':
         return 'circle';
@@ -501,7 +534,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       target: IntersectionTarget(
         objectId: objectId,
         objectKind: objectKind,
-        routeId: _routeIdForObjectKind(objectKind),
+        routeId: intersectionRouteIdForObjectKind(objectKind),
       ),
     );
   }
@@ -533,7 +566,7 @@ class MockIntersectionRepository implements IntersectionRepository {
       final objectId = item.actionTargetId.trim();
       visuals.add(
         IntersectionVisual(
-          assetKind: _assetKindForObjectKind(objectKind),
+          assetKind: UnifiedObjectKind.fromWire(objectKind)?.assetKind ?? 'avatar',
           imageUrl: url,
           displayName: name,
           target: objectId.isEmpty
@@ -541,7 +574,7 @@ class MockIntersectionRepository implements IntersectionRepository {
               : IntersectionTarget(
                   objectId: objectId,
                   objectKind: objectKind,
-                  routeId: _routeIdForObjectKind(objectKind),
+                  routeId: intersectionRouteIdForObjectKind(objectKind),
                 ),
         ),
       );
@@ -552,59 +585,11 @@ class MockIntersectionRepository implements IntersectionRepository {
     return visuals;
   }
 
+  /// reason 的对象类型：objectKind 一等字段为真相源；缺省回退 person（旧 relationKind
+  /// 对象类型桥接已删除，§23 去桥接）。
   static String _objectKindForReason(IntersectionReason reason) {
     final objectKind = reason.objectKind.trim();
-    if (objectKind.isNotEmpty) {
-      return objectKind;
-    }
-    switch (reason.relationKind.trim()) {
-      case 'circle':
-        return 'circle';
-      case 'school':
-      case 'university':
-        return 'school';
-      case 'place':
-      case 'poi':
-      case 'location':
-        return 'place';
-      case 'org':
-      case 'organization':
-      case 'enterprise':
-      case 'brand':
-        return 'enterprise';
-      default:
-        return 'person';
-    }
-  }
-
-  static String _routeIdForObjectKind(String objectKind) {
-    switch (objectKind) {
-      case 'person':
-        return 'userProfile';
-      case 'circle':
-        return 'circleDetail';
-      case 'school':
-      case 'place':
-      case 'enterprise':
-        return 'homepageDetail';
-      default:
-        return '';
-    }
-  }
-
-  static String _assetKindForObjectKind(String objectKind) {
-    switch (objectKind) {
-      case 'circle':
-        return 'circleAvatar';
-      case 'school':
-        return 'emblem';
-      case 'enterprise':
-        return 'logo';
-      case 'place':
-        return 'coverImage';
-      default:
-        return 'avatar';
-    }
+    return objectKind.isNotEmpty ? objectKind : 'person';
   }
 
   static String _subtitleTextFor(List<IntersectionReason> items) {
@@ -668,7 +653,7 @@ class MockIntersectionRepository implements IntersectionRepository {
         .map(
           (entry) => IntersectionDimensionTally(
             dimension: entry.key,
-            label: _dimensionLabels[entry.key] ?? entry.key,
+            label: DiscoveryFeedText.intersectionDimensionShortLabel(entry.key),
             count: entry.value,
           ),
         )
@@ -681,8 +666,94 @@ class MockIntersectionRepository implements IntersectionRepository {
       totalPointCount: visible.length,
       dimensionPointSummary: summary,
       pointClassLabel: recommendedCount > 0 && factCount == 0 ? '推荐交集' : '事实交集',
+      representativeActor:
+          reason.representativeActor ??
+          _representativeActorFor(reason, visible),
+      actionHints: reason.actionHints.isNotEmpty
+          ? reason.actionHints
+          : _actionHintsFor(reason, visible),
       rankState: 'fresh',
     );
+  }
+
+  static IntersectionRepresentativeActor? _representativeActorFor(
+    IntersectionReason reason,
+    List<IntersectionPoint> points,
+  ) {
+    final point = points.isEmpty ? null : points.first;
+    final name = (point?.sampleText.trim().isNotEmpty ?? false)
+        ? point!.sampleText.trim()
+        : reason.displayName.trim();
+    final avatarUrl = (point?.sampleAvatarUrls.isNotEmpty ?? false)
+        ? point!.sampleAvatarUrls.first.trim()
+        : reason.avatarUrl.trim();
+    if (name.isEmpty && avatarUrl.isEmpty) {
+      return null;
+    }
+    final target = reason.actionTargetId.trim().isEmpty
+        ? null
+        : IntersectionTarget(
+            objectId: reason.actionTargetId.trim(),
+            objectKind: reason.objectKind.trim().isEmpty
+                ? 'person'
+                : reason.objectKind.trim(),
+            routeId: intersectionRouteIdForObjectKind(reason.objectKind),
+          );
+    return IntersectionRepresentativeActor(
+      actorId: target?.objectKind == 'person' ? target!.objectId : '',
+      displayName: name.isEmpty ? '一位用户' : name,
+      avatarUrl: avatarUrl,
+      relationLabel: _relationLabelFor(point?.sourceRef ?? reason.source),
+      privacyState: name.startsWith('一位') ? 'anonymous' : 'visible',
+      target: target,
+      evidenceRank: 0,
+      snapshotVersion: reason.intersectionId,
+    );
+  }
+
+  static List<IntersectionActionHint> _actionHintsFor(
+    IntersectionReason reason,
+    List<IntersectionPoint> points,
+  ) {
+    final sourceRef = points.isEmpty
+        ? reason.source.trim()
+        : points.first.sourceRef.trim();
+    // 行动 actionKey 真相源 = codegen IntersectionKindMetadata.primaryActionKey
+    // （registry.actionHintsByKind）；端不再按 kind 硬编码 switch（曾与注册表漂移）。
+    final key =
+        IntersectionKindMetadata.of(sourceRef)?.primaryActionKey ??
+        IntersectionActionKeys.askAssistant;
+    return <IntersectionActionHint>[
+      IntersectionActionHint(
+        actionKey: key,
+        label: DiscoveryFeedText.intersectionActionLabel(key),
+        target: reason.actionTargetId.trim().isEmpty
+            ? null
+            : IntersectionTarget(
+                objectId: reason.actionTargetId.trim(),
+                objectKind: reason.objectKind.trim(),
+                routeId: intersectionRouteIdForObjectKind(reason.objectKind),
+              ),
+        isPrimary: true,
+        priority: 1,
+      ),
+    ];
+  }
+
+  static String _relationLabelFor(String sourceRef) {
+    switch (sourceRef.trim()) {
+      case 'commonContact':
+        return '共同联系人';
+      case 'sharedCircle':
+      case 'coMemberCircle':
+        return '同圈成员';
+      case 'sameSchool':
+      case 'sameMajor':
+      case 'alumni':
+        return '校友';
+      default:
+        return '代表人';
+    }
   }
 
   static IntersectionReason _withDefaultPointSummary(
@@ -789,6 +860,7 @@ class RemoteIntersectionRepository implements IntersectionRepository {
     String? filter,
     String? sourceRef,
     String? timeBucket,
+    String? cursor,
     int limit = CloudApiQueryDefaults.intersectionListLimit,
   }) async {
     final query = <String, String>{'limit': '$limit'};
@@ -804,6 +876,9 @@ class RemoteIntersectionRepository implements IntersectionRepository {
     if ((timeBucket ?? '').trim().isNotEmpty) {
       query['timeBucket'] = timeBucket!.trim();
     }
+    if ((cursor ?? '').trim().isNotEmpty) {
+      query['cursor'] = cursor!.trim();
+    }
     final decoded = await _httpClient.getJson(
       _uri(ContentApiMetadata.listMyIntersectionsPath, query),
       headers: CloudRequestHeaders.forPage(
@@ -814,10 +889,12 @@ class RemoteIntersectionRepository implements IntersectionRepository {
       decoded,
       context: ContentRequestPageIds.listMyIntersections,
     );
-    return CloudResponseDecoder.mapList(
+    final parsed = CloudResponseDecoder.mapList(
       obj,
       'items',
     ).map(IntersectionReason.fromMap).toList(growable: false);
+    // §22.3：expired/archived 默认列表显隐规则端侧单源（mock 与 remote 一致）。
+    return filterDefaultInboxLifecycle(parsed);
   }
 
   @override

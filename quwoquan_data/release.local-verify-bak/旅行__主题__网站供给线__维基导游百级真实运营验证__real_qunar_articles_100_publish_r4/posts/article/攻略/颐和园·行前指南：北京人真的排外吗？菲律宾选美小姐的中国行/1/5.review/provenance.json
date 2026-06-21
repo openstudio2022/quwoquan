@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_39c2561d2aa9c823",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "颐和园·行前指南：北京人真的排外吗？菲律宾选美小姐的中国行",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5",
+    "agentRunId": "run-9e7ebb1c-a1d3-4047-aab3-3da0d56be0c2",
+    "agentId": "agent-6d271f5a-f642-4d26-96f2-929684054c75",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "question_hook",
+    "entityRefs": [
+      "/entity/地点/景区/颐和园"
+    ],
+    "articleDigest": "sha256:ca1d7f1fda8b8de980860d8dcfedbca41f4fd1f1441cec66dfe670d2c448ec56"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "颐和园·行前指南：北京人真的排外吗？菲律宾选美小姐的中国行",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:009239498792c6f271c47c298da875aac494622e2a9166b0f4b8da53ab5ebbd7",
+    "writingPackSha256": "sha256:f4b89c26343527e563a50b37b07650ee5bc55b21f74884b3e8fb982c76778c32",
+    "sourceBundleSha256": "sha256:7f604d91684db246e9dafa3f03982fdd1e6778b1244b24f88e554ec8a777cfb0",
+    "draftSha256": "sha256:31938d938ebbc6248b1cac2ef0af1face974d5433594c952a6bff3a8fa28ca66"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/06.qunar_guide_candidate_10ce762a8ae4d92a/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7883023"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/19.qunar_guide_candidate_29bc697f3876726d/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7879815"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/26.qunar_guide_candidate_39c2561d2aa9c823/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7874919"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/41.qunar_guide_candidate_59ec8a6352ccac02/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7902914"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/43.qunar_guide_candidate_5b62e653bab69474/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7890364"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/70.qunar_guide_candidate_a31321d5992c863e/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7863644"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/82.qunar_guide_candidate_b71c523b17e65457/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7872796"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/颐和园/1.download/sources/06.qunar_guide_candidate_10ce762a8ae4d92a/source.md",
+    "entities/地点/景区/颐和园/1.download/sources/19.qunar_guide_candidate_29bc697f3876726d/source.md",
+    "entities/地点/景区/颐和园/1.download/sources/26.qunar_guide_candidate_39c2561d2aa9c823/source.md",
+    "entities/地点/景区/颐和园/1.download/sources/41.qunar_guide_candidate_59ec8a6352ccac02/source.md",
+    "entities/地点/景区/颐和园/1.download/sources/43.qunar_guide_candidate_5b62e653bab69474/source.md",
+    "entities/地点/景区/颐和园/1.download/sources/70.qunar_guide_candidate_a31321d5992c863e/source.md",
+    "entities/地点/景区/颐和园/1.download/sources/82.qunar_guide_candidate_b71c523b17e65457/source.md"
+  ]
+}

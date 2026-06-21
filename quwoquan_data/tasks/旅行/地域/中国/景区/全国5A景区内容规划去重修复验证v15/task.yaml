@@ -1,0 +1,122 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/中国/景区/全国5A景区内容规划去重修复验证v15
+title: 全国5A景区内容规划去重修复验证v15
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 中国
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 中国
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 故宫博物院
+  - entityType: 地点/景区
+    name: 颐和园
+  - entityType: 地点/景区
+    name: 黄果树瀑布景区
+  - entityType: 地点/景区
+    name: 布达拉宫景区
+  - entityType: 地点/景区
+    name: 秦始皇帝陵博物院景区
+  - entityType: 地点/景区
+    name: 龙门石窟景区
+  - entityType: 地点/景区
+    name: 黄山风景区
+  - entityType: 地点/景区
+    name: 杭州西湖风景区
+  - entityType: 地点/景区
+    name: 鼓浪屿风景名胜区
+  - entityType: 地点/景区
+    name: 喀纳斯景区
+  reserveCoverageTargets:
+  - entityType: 地点/景区
+    name: 八达岭—慕田峪长城旅游区
+  - entityType: 地点/景区
+    name: 天坛公园
+  - entityType: 地点/景区
+    name: 明十三陵景区
+  - entityType: 地点/景区
+    name: 北京奥林匹克公园
+  - entityType: 地点/景区
+    name: 恭王府景区
+  - entityType: 地点/景区
+    name: 圆明园遗址公园景区
+  - entityType: 地点/景区
+    name: 北京（通州）大运河文化旅游景区
+  - entityType: 地点/景区
+    name: 天津古文化街旅游区（津门故里）
+  - entityType: 地点/景区
+    name: 盘山风景名胜区
+  - entityType: 地点/景区
+    name: 山海关景区
+  - entityType: 地点/景区
+    name: 承德避暑山庄及周围寺庙景区
+  - entityType: 地点/景区
+    name: 白洋淀景区
+  - entityType: 地点/景区
+    name: 西柏坡景区
+  - entityType: 地点/景区
+    name: 野三坡景区
+  - entityType: 地点/景区
+    name: 娲皇宫景区
+  - entityType: 地点/景区
+    name: 清东陵景区
+  - entityType: 地点/景区
+    name: 广府古城景区
+  - entityType: 地点/景区
+    name: 白石山景区
+  - entityType: 地点/景区
+    name: 清西陵景区
+  - entityType: 地点/景区
+    name: 金山岭长城景区
+provenance:
+  createdAt: '2026-06-19T11:10:06.853693+00:00'
+  createdBy: codex
+content:
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    - article
+    - image
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+      article: 3
+      image: 4
+    allowAiImages: false
+  carriers:
+  - article
+  - image
+  quotas:
+    entityArticlesPerTarget: 4
+    imageWorksPerTarget: 2
+    entityHomepagesPerTarget: 1
+    routeArticles: 0
+acceptance:
+  minEntities: 10
+  minPostsPerEntity: 6
+  requiredAngles:
+  - planning_consultation
+  - decision_experience
+  - route_transport
+  - seasonal_timing
+  - image
+workflowPolicy:
+  allowPartialContent: true
+  deliveryMode: partial_with_replacement_report
+queuePolicy:
+  backend: reliabletask
+  reliableTask:
+    taskType: data.content_object.execute
+    queue: reliabletask.data.content_supply
+    store: MongoStore
+    readyIndex: RedisReadyIndex
+  leaseSeconds: 900
+  heartbeatSeconds: 60
+  deadLetterAfterAttempts: 3

@@ -238,7 +238,7 @@ BlockEdge、FollowEdge、GreetingRequest、Conversation 分属不同存储或服
 
 只隐藏端侧按钮会被 API 绕过。
 
-**预案**：CreateConversation、SendMessage、RTC 发起各自补 T3 契约测试，断言非授权状态不落库。
+**预案**：CreateConversation、SendMessage、RTC 发起各自补 api_integration 契约测试，断言非授权状态不落库。
 
 ### 风险 3：旧关系词回流
 

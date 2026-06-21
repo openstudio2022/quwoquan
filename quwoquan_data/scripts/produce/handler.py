@@ -1,8 +1,9 @@
-"""data produce — 两阶段内容生产（compose-brief → 会话模型创作 → review）。
+"""data produce — 两阶段内容生产（compose-brief → 会话模型/结构化图片 → review）。
 
 正文由会话模型（Agent）创作，CLI 不再拼接任何句子：
-  --stage compose-brief : 准备写作契约 writing_pack.json + prompt.md + 占位草稿（posts/.../4.draft/）。
-  （人/Agent 据 prompt.md 创作正文写回 4.draft/draft.article.md，generator=agent）
+  --stage compose-brief : 准备写作契约 writing_pack.json + prompt.md + 草稿包（posts/.../4.draft/）。
+  文章/主页类由人/Agent 据 prompt.md 创作正文写回 4.draft/draft.article.md（generator=agent）；
+  图片作品只使用结构化 sourceCollection/assets/caption，不生成正文草稿。
   --stage review        : 读 agent 草稿，过模板指纹/事实可回溯/出处三道门 + 质量门；--materialize 落地 approved。
 """
 from __future__ import annotations
@@ -133,6 +134,7 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
     overrides = load_writing_intent_overrides(task_id, batch_id)
     routes, entities = _collect_briefs(task_id, batch_id, refs)
     prepared_refs: list[str] = []
+    prepared_article_like = False
     blocked = 0
     base_draft_warnings: list[str] = []
     for ref, brief in routes:
@@ -149,6 +151,8 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
             print(f"[produce] SKIP {ref}: evidence too weak (recommendation=skip)", file=sys.stderr)
             continue
         build_route_writing_pack(task_id, batch_id, ref, brief, quality)
+        if not _is_image_carrier(brief):
+            prepared_article_like = True
         prepared_refs.append(ref)
     for ref, brief in entities:
         brief = _apply_writing_intent_override(brief, overrides.get(ref))
@@ -164,6 +168,8 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
             print(f"[produce] SKIP {ref}: evidence too weak (recommendation=skip)", file=sys.stderr)
             continue
         build_entity_writing_pack(task_id, batch_id, ref, brief, quality)
+        if not _is_image_carrier(brief):
+            prepared_article_like = True
         prepared_refs.append(ref)
     for warn in base_draft_warnings:
         print(f"[produce] BASE-DRAFT WARN {warn}", file=sys.stderr)
@@ -179,9 +185,14 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
             f"[produce] single-session batches: {len(prepared_refs)} ref(s) → {len(groups)} batch prompt(s) "
             f"(size={batch_size}); see {batch_dir(task_id, batch_id)}"
         )
-        print("[produce] Next: 会话模型阅读 _batch/{seq}.batch_prompt.md，一会话产 N 篇分别写回各 4.draft/draft.article.md。")
-    else:
+        if prepared_article_like:
+            print("[produce] Next: 会话模型阅读 _batch/{seq}.batch_prompt.md；文章/主页类写回各 4.draft/draft.article.md，图片作品不生成正文草稿。")
+        else:
+            print("[produce] Next: 图片作品已由结构化 sourceCollection/assets/caption 准备；不生成 4.draft/draft.article.md。")
+    elif prepared_article_like:
         print("[produce] Next: 会话模型阅读 4.draft/prompt.md 与 3.compose/writing_pack.json 创作正文，写回 4.draft/draft.article.md (generator=agent)。")
+    else:
+        print("[produce] Next: 图片作品已由结构化 sourceCollection/assets/caption 准备；不生成 4.draft/draft.article.md。")
     print("[produce] 然后运行: qwq-data data produce --task <T> --batch <B> --type article --stage review --materialize")
     return len(prepared_refs)
 

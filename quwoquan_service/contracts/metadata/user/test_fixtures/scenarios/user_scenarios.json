@@ -495,6 +495,98 @@
           "profileCompletenessMissingItems": []
         },
         {
+          "userId": "fixture_user_travel_curator",
+          "verified": true,
+          "displayName": "林墨",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
+          "bio": "旅行摄影策展人 · 杭州/成都双城 · 索尼 A7M4 + 胶片风格 · 主理旅行摄影圈与徒步摄影圈。",
+          "stats": {
+            "followingCount": 182,
+            "followerCount": 5400,
+            "postCount": 48,
+            "circleCount": 6,
+            "likeCount": 12800
+          },
+          "primaryRole": "leadAuthor",
+          "primaryTheme": "travel",
+          "secondaryThemes": [
+            "photography",
+            "film_photo",
+            "hiking"
+          ],
+          "themeTags": [
+            "travel",
+            "photography",
+            "film_photo",
+            "hiking",
+            "landscape"
+          ],
+          "postThemeRefs": [
+            "travel",
+            "photography"
+          ],
+          "circleThemeRefs": [
+            "travel",
+            "photography"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "leadAuthor",
+              "count": 4,
+              "userIds": [
+                "fixture_user_travel_curator",
+                "fixture_user_lin",
+                "fixture_user_su",
+                "fixture_user_zhou"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 2,
+              "userIds": [
+                "fixture_user_friend",
+                "fixture_user_commenter"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
+          "subAccountRefs": [],
+          "tags": [
+            "author",
+            "travel",
+            "curator"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 315882,
+              "sourceHash": "sha256:220c4d75ea4c8fcc5ec6584afa0442f2f3692d98b564024e789bbe23717afb27"
+            },
+            "background": {
+              "objectKey": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 2522887,
+              "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
+            }
+          },
+          "identityTags": [
+            "travel",
+            "photography",
+            "film_photo"
+          ],
+          "profileCompleteness": 100,
+          "profileCompletenessMissingItems": []
+        },
+        {
           "userId": "fixture_user_video",
           "displayName": "契约剪辑师",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_video/v1/avatar.png",

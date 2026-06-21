@@ -12,7 +12,7 @@ UserExperience
   -> L1_domain_service boundary
   -> L2_business_capability SIT
   -> L3_story GWT + contract
-  -> T1/T2/T3/T4 + performance evidence
+  -> local_contract / api_integration / user_acceptance + performance evidence
 ```
 
 ## 必填字段
@@ -23,7 +23,7 @@ UserExperience
 - `platforms`：iOS、Android、Web 或服务端。
 - `journey_refs` / `scenario_refs`：跨领域路径。
 - `done_when`：用户可观察结果。
-- `evidence.primary`：通常为 `T4_user_journey`。
+- `test_evidence.primary`：通常为 `user_acceptance`。
 
 ### 业务能力 SIT
 
@@ -31,7 +31,7 @@ UserExperience
 - `state_machine`：状态与转换。
 - `conflict_matrix`：与相邻体验或系统手势的冲突仲裁。
 - `performance_points`：响应延迟、帧率、误触率、降级窗口。
-- `evidence.primary`：通常为 `T2_module_interaction` 和 `T3_app_api_integration`。
+- `test_evidence.primary`：通常为 `api_integration`，并辅以 `local_contract`。
 
 ### Story GWT / contract
 
@@ -40,7 +40,7 @@ UserExperience
 - `platform_variants`：iOS / Android 差异。
 - `edge_cases`：边界、权限、冲突、取消、重试。
 - `performance_points`：Story 级性能阈值。
-- `evidence.primary`：通常为 `T1_contract` 和 `T2_module_interaction`。
+- `test_evidence.primary`：通常为 `local_contract`。
 
 ## 性能指标口径
 
@@ -58,4 +58,4 @@ UserExperience
 - 能力 SIT 能解释能力边界和组合行为。
 - Story GWT 能解释最小行为。
 - Contract 能解释接口、平台策略或配置边界。
-- `T1~T4` 证据和性能指标有明确计划或记录。
+- 三层测试证据和性能指标有明确计划或记录。

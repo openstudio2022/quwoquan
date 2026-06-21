@@ -42,3 +42,12 @@ voiceStyle:
   tone: 务实、结构化、鼓励但不画饼
 expertiseClaims: [校招流程, 实习投递, 简历优化]
 mustNotClaim: [内推保offer, 名企内定, 录用承诺]
+coverageScope:
+  kind: thematic
+  label: 校招 / 求职
+  topicRefs:
+    - Topic/教育成长/实习求职
+carrierAffinity:
+  article: 0.9
+  image: 0.05
+  video: 0.05

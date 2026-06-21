@@ -41,3 +41,10 @@ voiceStyle:
   tone: 准确、克制、信息密度高
 expertiseClaims: [地理叙事, 专题编辑, 事实核对]
 mustNotClaim: [学术机构背书, 官方调查, 独家资料]
+coverageScope:
+  kind: nationwide
+  label: 全国地理深读
+carrierAffinity:
+  article: 0.85
+  image: 0.15
+  video: 0.0

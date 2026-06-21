@@ -192,7 +192,7 @@ fields.yaml                  ──→ codegen（OpenAPI schema / 拦截链 / mo
                               ──→ 日志脱敏 / 接口过滤 / 推荐特征标记
                               ──→ 契约测试 mock 数据生成
 _shared/domain_taxonomy.yaml ──→ 领域路由（圈子频道 / 助理领域 / 推荐场景）
-                              ──→ 标签真相源 = 数据工程 publish/v1/tags（路径制 tagRef，tag-service 只读消费）
+                              ──→ 标签真相源 = 数据工程 publish/tags（路径制 tagRef，tag-service 只读消费）
 events.yaml                  ──→ Event Store / MQ 路由 / Projector 注册
                               ──→ 契约测试事件发布断言
 storage.yaml                 ──→ codegen（migration / 索引脚本）/ 存储适配器

@@ -490,7 +490,55 @@ class AppSpacing {
   static const double chatInputSendButtonSize = appChromeActionButtonSize;
 
   /// 评论输入默认高度，与对话输入单行槽一致。
+  @Deprecated('评论底栏改用 commentToolbarInputHeight，解耦聊天输入栏高度')
   static const double commentInputHeight = chatInputToolbarMinHeight;
+
+  // ==================== 评论底栏 / 列表语义 token（对标小红书） ====================
+  /// 评论底栏只读胶囊输入条高度（低于聊天输入栏，更轻量）。
+  static const double commentToolbarInputHeight = thirtySix;
+
+  /// 评论底栏胶囊输入条圆角。
+  static const double commentToolbarInputRadius = radiusEighteen;
+
+  /// 评论底栏外层上下留白：36px 胶囊 + 4px*2 = 44px，与消息单行输入栏视觉高度一致。
+  static const double commentToolbarVerticalPadding = xs;
+
+  /// 评论底栏右侧赞/转动作图标尺寸。
+  static const double commentToolbarActionIconSize = 22.0;
+
+  /// 评论底栏右侧赞/转固定动作列宽。
+  static const double commentToolbarActionColumnWidth = 58.0;
+
+  /// 评论底栏右侧赞/转固定热区高度。
+  static const double commentToolbarActionHitSize = commentToolbarInputHeight;
+
+  /// 一级评论头像边长（对标小红书一级评论头像）。
+  static const double commentAvatarSize = thirtySix;
+
+  /// 二级回复头像边长（较一级更紧凑）。
+  static const double commentReplyAvatarSize = twentyEight;
+
+  /// 评论赞/踩单个动作列宽，确保不同数字宽度不推动图标位置。
+  static const double commentReactionColumnWidth = 48.0;
+
+  /// 评论赞/踩 group 内距，两个动作需保持紧凑但仍可辨识。
+  static const double commentReactionActionGap = two;
+
+  /// 评论赞/踩固定 group 宽度，一级/二级共用同一右边界。
+  static const double commentReactionGroupWidth =
+      commentReactionColumnWidth * 2 + commentReactionActionGap;
+
+  /// 评论赞/踩计数文本最大宽度（compact 计数最多 4 字符）。
+  static const double commentReactionCountWidth = twentyEight;
+
+  /// 评论赞/踩图标尺寸。
+  static const double commentReactionIconSize = iconSmall;
+
+  /// 评论排序锚定菜单最小宽度。
+  static const double commentSortMenuMinWidth = 132.0;
+
+  /// 评论排序锚定菜单单项高度。
+  static const double commentSortMenuItemHeight = minInteractiveSize;
 
   /// 侵入式分屏评论区默认占屏高比例（评论区 2/3，媒体区 1/3）。
   static const double immersiveCommentSheetRatio = 0.66;
@@ -514,6 +562,12 @@ class AppSpacing {
 
   /// 评论列表虚拟化缓存高度（约一屏评论高度）。
   static const double commentListCacheExtent = 520.0;
+
+  /// 一级评论图片附件最大展示宽度（按宽高比护栏布局）。
+  static const double commentImageMaxWidth = 220.0;
+
+  /// 二级回复图片附件最大展示宽度（较一级更紧凑）。
+  static const double commentReplyImageMaxWidth = 160.0;
 
   /// 简版媒体底栏内容区高度。
   static double mediaBottomBarHeight(BuildContext context) =>
@@ -680,11 +734,49 @@ class AppSpacing {
   /// Post 预览卡片统一圆角语义。
   static const double postPreviewCornerRadius = contentPreviewCornerRadius;
 
-  /// 作者主页背景基础高度：默认保持约 1/4 屏高。
-  static const double profileHeaderBaseHeightRatio = 0.25;
+  /// 对象主页封面基础高度：用户 / 实体 / 圈子主页共用。
+  ///
+  /// 常规手机约为屏高 21.5%，比旧 1/4 屏更克制；视觉上接近黄金比例
+  /// 的小分割节奏（0.236）但为资料卡留出更多首屏信息密度。
+  static const double profileHeaderBaseHeightRatio = 0.215;
 
-  /// 作者主页下拉拉伸上限：可拉升到约 1/2 屏高。
-  static const double profileHeaderMaxStretchHeightRatio = 0.5;
+  /// 对象主页封面在超窄长屏上的基础高度比例。
+  static const double profileHeaderTallBaseHeightRatio = 0.205;
+
+  /// 对象主页封面在 expanded / 宽屏上的基础高度比例。
+  static const double profileHeaderWideBaseHeightRatio = 0.18;
+
+  /// 对象主页下拉拉伸上限：保留沉浸感，但不再拉到半屏。
+  static const double profileHeaderMaxStretchHeightRatio = 0.4;
+
+  /// 对象主页封面在 expanded / 宽屏上的下拉拉伸上限。
+  static const double profileHeaderWideMaxStretchHeightRatio = 0.32;
+
+  /// 长屏判断比例（height / width），用于 iPhone Pro Max 等屏幕收紧头图。
+  static const double profileHeaderTallScreenAspectRatio = 2.05;
+
+  /// 响应式对象主页封面基础比例。
+  static double adaptiveProfileHeaderBaseHeightRatio(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    if (size.width >= expandedBreakpoint) {
+      return profileHeaderWideBaseHeightRatio;
+    }
+    final aspect = size.height / size.width;
+    if (aspect >= profileHeaderTallScreenAspectRatio) {
+      return profileHeaderTallBaseHeightRatio;
+    }
+    return profileHeaderBaseHeightRatio;
+  }
+
+  /// 响应式对象主页封面下拉拉伸比例。
+  static double adaptiveProfileHeaderMaxStretchHeightRatio(
+    BuildContext context,
+  ) {
+    if (MediaQuery.sizeOf(context).width >= expandedBreakpoint) {
+      return profileHeaderWideMaxStretchHeightRatio;
+    }
+    return profileHeaderMaxStretchHeightRatio;
+  }
 
   /// 顶部工具栏高度（常规）
   static const double toolbarHeight = 56.0;

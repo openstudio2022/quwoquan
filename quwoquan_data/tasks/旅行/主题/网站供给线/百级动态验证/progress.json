@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/主题/网站供给线/百级动态验证",
+  "updatedAt": "2026-06-20T18:08:14.546052+00:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/峨眉山",
+        "地点/景区/乐山大佛"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "conditionCells": [],
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

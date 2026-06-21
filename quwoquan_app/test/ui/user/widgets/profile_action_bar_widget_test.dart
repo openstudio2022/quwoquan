@@ -23,9 +23,9 @@ Widget _wrap(Widget child) => MaterialApp(
 
 void main() {
   group('ProfileActionBar — 四类主页首屏 CTA 契约', () {
-    testWidgets('mine 模式固定渲染编辑资料和分享主页', (tester) async {
+    testWidgets('mine 模式固定渲染分身和资料入口', (tester) async {
+      var managed = false;
       var edited = false;
-      var shared = false;
 
       await tester.pumpWidget(
         _wrap(
@@ -33,23 +33,24 @@ void main() {
             mode: ProfileMode.mine,
             isDark: false,
             isFollowing: false,
+            onManagePersonas: () => managed = true,
             onEditProfile: () => edited = true,
-            onShareProfile: () => shared = true,
           ),
         ),
       );
       await tester.pump();
 
+      expect(find.text(UITextConstants.personaSwitchProfile), findsOneWidget);
       expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
-      expect(find.text(UITextConstants.profileShareHomepage), findsOneWidget);
-      expect(find.text(UITextConstants.profilePersonasLabel), findsNothing);
+      expect(find.text(UITextConstants.profileBrowseHistory), findsNothing);
+      expect(find.text(UITextConstants.profileShareHomepage), findsNothing);
 
+      await tester.tap(find.text(UITextConstants.personaSwitchProfile));
       await tester.tap(find.text(UITextConstants.profileEditLabel));
-      await tester.tap(find.text(UITextConstants.profileShareHomepage));
       await tester.pump();
 
+      expect(managed, isTrue);
       expect(edited, isTrue);
-      expect(shared, isTrue);
     });
 
     testWidgets('other 未关注时固定渲染关注和私信', (tester) async {

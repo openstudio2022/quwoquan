@@ -9,44 +9,60 @@ node:
 scope:
   summary: 统计量时间加权衰减、时段/季节/事件上下文化排序规格。
   in_scope:
-    - CTR/完成率/互动率等统计量时间加权。
-    - requestHour、weekday、season、eventWindow 上下文。
-    - 时间特征新鲜度 SLI。
+  - CTR/完成率/互动率等统计量时间加权。
+  - requestHour、weekday、season、eventWindow 上下文。
+  - 时间特征新鲜度 SLI。
   out_of_scope:
-    - 本轮不实现特征作业、scorer 改动或 UI 分叉。
+  - 本轮不实现特征作业、scorer 改动或 UI 分叉。
 gwt_acceptance:
   GWT1:
     title: 时间衰减与上下文化排序 GWT
     given:
-      - 内容过往统计量存在长时间跨度，且请求发生在特定时段或季节。
+    - 内容过往统计量存在长时间跨度，且请求发生在特定时段或季节。
     when:
-      - 系统进行推荐排序。
+    - 系统进行推荐排序。
     then:
-      - 排序使用时间加权统计和上下文特征，避免全量过往均值钉死内容。
+    - 排序使用时间加权统计和上下文特征，避免全量过往均值钉死内容。
     done_when:
-      - 衰减函数、上下文字段、指标和回滚策略均规格化。
+    - 衰减函数、上下文字段、指标和回滚策略均规格化。
     edge_cases:
-      - 时间上下文缺失时回退默认 freshness 与规则排序。
+    - 时间上下文缺失时回退默认 freshness 与规则排序。
     contract_refs:
-      - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
-      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+    - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
     performance_points:
-      - time_decay_feature_freshness >= 0.95
-    evidence:
-      primary:
-        - T1_contract
-        - T2_module_interaction
-      supporting:
-        - T3_app_api_integration
+    - time_decay_feature_freshness >= 0.95
     tests:
-      planned:
-        - quwoquan_service/runtime/recommendation/time_decay_contextual_ranking_test.go
-        - quwoquan_service/scripts/ml/tests/test_time_decay_features.py
+      planned: []
       recorded: []
-    status: specified
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.feed_orchestration_recommendation.time_decay_contextual_ranking.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.feed_orchestration_recommendation.time_decay_contextual_ranking.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.discovery_content.feed_orchestration_recommendation.time_decay_contextual_ranking.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_service/runtime/recommendation/time_decay_contextual_ranking_test.go'
+    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_time_decay_features.py'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

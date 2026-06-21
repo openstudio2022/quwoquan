@@ -1,7 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
+import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// Profile header with left-aligned avatar that intrudes 1/3 into the
@@ -17,6 +19,8 @@ class ProfileHeader extends StatelessWidget {
     this.verified = false,
     this.showEdit = false,
     this.onEdit,
+    this.showUploadAvatarPrompt = false,
+    this.showIdentityTagPrompt = false,
   });
 
   final bool isDark;
@@ -32,6 +36,8 @@ class ProfileHeader extends StatelessWidget {
   /// 我的主页昵称右侧编辑入口。
   final bool showEdit;
   final VoidCallback? onEdit;
+  final bool showUploadAvatarPrompt;
+  final bool showIdentityTagPrompt;
 
   static const Key verifiedBadgeKey = ValueKey<String>(
     'profile-header-verified-badge',
@@ -45,9 +51,13 @@ class ProfileHeader extends StatelessWidget {
   static double get avatarIntrusion => avatarOverlapPx;
 
   Widget _buildAvatar(BuildContext context, Color bg, Color fgSecondary) {
-    final resolvedAvatarUrl = resolveAvatarImageUrl(avatarUrl);
+    // 本地选取（未上传）路径原样交给 FileImage；服务端对象键 / 远端地址走解析器。
+    final resolvedAvatarUrl = isLocalFileImageSource(avatarUrl)
+        ? (avatarUrl ?? '')
+        : resolveAvatarImageUrl(avatarUrl);
     final hasAvatar = resolvedAvatarUrl.isNotEmpty;
-    return Container(
+    final avatarImage = hasAvatar ? mediaImageProvider(resolvedAvatarUrl) : null;
+    final avatar = Container(
       key: const ValueKey<String>('profile-header-avatar'),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -60,22 +70,45 @@ class ProfileHeader extends StatelessWidget {
           ),
         ],
       ),
-      child: hasAvatar
+      child: hasAvatar && avatarImage != null
           ? CircleAvatar(
               radius: avatarRadius,
               backgroundColor: AppColors.iosSecondaryFill(context),
-              backgroundImage: NetworkImage(resolvedAvatarUrl),
+              backgroundImage: avatarImage,
               onBackgroundImageError: (e, s) {},
             )
           : CircleAvatar(
               radius: avatarRadius,
               backgroundColor: AppColors.iosTintedFill(context),
               child: Icon(
-                CupertinoIcons.person_crop_circle_fill,
+                CupertinoIcons.camera_fill,
                 size: AppSpacing.iconLarge,
-                color: AppColors.iosAccent(context),
+                color: fgSecondary.withValues(alpha: 0.82),
               ),
             ),
+    );
+    if (hasAvatar || !showUploadAvatarPrompt || onEdit == null) {
+      return avatar;
+    }
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onEdit,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          avatar,
+          SizedBox(height: AppSpacing.intraGroupXs),
+          Text(
+            UITextConstants.profileUploadAvatar,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption2,
+              color: fgSecondary,
+              fontWeight: AppTypography.regular,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -160,6 +193,25 @@ class ProfileHeader extends StatelessWidget {
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                ),
+              ] else if (showIdentityTagPrompt && onEdit != null) ...[
+                SizedBox(height: AppSpacing.intraGroupXs),
+                CupertinoButton(
+                  key: const ValueKey<String>('profile-header-tags-prompt'),
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: onEdit,
+                  child: Text(
+                    UITextConstants.profileEmptyTagsPrompt,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      color: fgSecondary,
+                      fontWeight: AppTypography.regular,
+                      letterSpacing: -0.08,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ],

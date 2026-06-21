@@ -20,18 +20,30 @@ domain_acceptance:
     - 领域边界、上下游依赖、工程映射和服务治理清晰。
     - evaluation-and-flywheel 的离线 replay、在线 AB 与真实训练晋升规格已登记，且不与训练/推理服务职责混淆。
     boundary_points: []
-    evidence:
-      primary:
-      - T1_static_contract
-      - T3_service_contract
-      supporting: []
     tests:
-      planned:
-      - quwoquan_service/scripts/ml/tests/test_replay_evaluation.py
-      - quwoquan_service/scripts/ml/tests/test_ab_significance.py
-      - quwoquan_service/scripts/ml/tests/test_training_promotion_gate.py
+      planned: []
       recorded: []
-    status: specified
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: da1_local_contract
+        cases:
+        - local_contract.recommendation_platform.domain_service.da1.da1_local_contract
+        envs:
+        - local
+      - layer: api_integration
+        suite: da1_api_integration
+        cases:
+        - api_integration.recommendation_platform.domain_service.da1.da1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_replay_evaluation.py'
+    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_ab_significance.py'
+    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_training_promotion_gate.py'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

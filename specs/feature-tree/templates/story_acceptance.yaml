@@ -37,15 +37,22 @@ gwt_acceptance:
       - route, metadata, platform policy, or config contract
     performance_points:
       - story-level latency or jank target
-    evidence:
+    test_evidence:
       primary:
-        - T1_contract
-        - T2_module_interaction
+        - layer: local_contract
+          suite: story_primary_behavior
+          cases:
+            - local_contract.domain.capability.story.primary
+          envs: [local]
       supporting:
-        - T3_app_api_integration
+        - layer: api_integration
+          suite: story_remote_flow
+          cases:
+            - api_integration.domain.operation.story_case
+          envs: [beta, gamma]
     tests:
       planned:
-        - contract or widget test
+        - command: replace-with-real-story-test-command
       recorded: []
     status: pending
 
@@ -56,13 +63,17 @@ contract_acceptance:
       - contracts/metadata/domain/entity/service.yaml
     done_when:
       - API path, operation, DTO, error and route/surface constants come from metadata
-    evidence:
+    test_evidence:
       primary:
-        - T1_metadata_contract
+        - layer: local_contract
+          suite: story_metadata_contract
+          cases:
+            - local_contract.domain.metadata.contract
+          envs: [local]
       supporting: []
     tests:
       planned:
-        - metadata or DTO contract test
+        - command: replace-with-real-metadata-contract-command
       recorded: []
     status: pending
 

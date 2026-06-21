@@ -223,7 +223,7 @@
   - 未闭合（真实缺口，需真集群）: measured RPS/P95/P99、饱和点、最大稳定 RPS、推荐 shard/replica/节点规格与 refresh/bulk/circuit 实测阈值必须在真集群/prod-sim 原生 ES/OpenSearch 回填；本环境无真集群，属发布前阻断。压测/profiling 证据见 `artifacts/search-load/search_load_analysis.md` 与 `artifacts/search-load/search_e2e_hotpath_profile.md`（local 单节点 ES 为唯一瓶颈，result/suggest 高并发 NO-GO）。
   - 可重复性多副本兜底（并入本项）: 跨副本 `_score` 漂移需 ES `preference`（viewer/session/query 稳定派生路由）兜底；需通过 Searcher 透传查询参数实现，local 单节点无副本无法验证，随真集群里程碑实现验收。local 单节点重复查询已 0 跳变（`artifacts/local-gamma/search_repeatability_golden_diff.json`），稳定排序/AB 粘性已由单测闭环。
   - 纳入规划: WP-E 索引长稳（搜索商用规划复审；见 `specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md`「后续 /dev 工作包登记」与 `search-storage-topology-and-elasticity` GWT2 planned）。
-  - 状态: 待办（负载模型/容量方法学/拓扑推荐已冻结；真集群 measured 值与饱和点未采集 → 阻断）
+  - 状态: 待办（负载模型/容量方法学/ES 拓扑推荐已冻结、local-gamma 单节点稳定性与重复查询 0 跳变已证；剩余真集群 measured RPS/P95/P99/饱和点/shard·replica·refresh·bulk 实测阈值严格依赖真 ES/OpenSearch 集群或 prod-sim，归属 WP-E 索引长稳·发布前阻断，非本地可采集）
 - [ ] R-S06-S-2 搜索索引写时增量与 ES 重启恢复长稳验证
   - 区域: Service / Ops
   - 域: `search` / `content`
@@ -234,19 +234,20 @@
   - 部分证据（2026-06-16 故障/回滚演练补充）: `quwoquan_service/scripts/search/search_rollback_rehearsal.py` 在 gamma-local 对 ES/Redis/search-service 三类故障注入 + 回滚到已知良好态。**ES 宕机** → search-service fail-closed 返回 typed `503 SEARCH.MIDDLEWARE.unavailable`（`nature:transient`+用户文案，3.5ms 快速失败不挂起），ES 重启（~105s）后检索恢复一致 TopN；**Redis 失败** → 检索主路径仍 200/5 命中（信号发布 best-effort 不阻塞），content-service 消费侧保持 healthy，重启 6.1s 恢复；**search-service 不可用** → 受控连接拒绝（非超时挂起），重启回滚 6.1s 后 healthz 200 + 检索恢复；演练后 `stackctl health --target gamma-local --scope service` 8/8 healthy。证据落盘 `artifacts/local-gamma/search_rollback_rehearsal_report.json` + `artifacts/stackctl/gamma/search_rollback_rehearsal.md`。
   - 未闭合（保持待办）: ①写时增量长稳——内容 publish/update/下线触发常驻投影器的增量同步与持续 soak（需 content-service 写路径鉴权 + 长时运行）；②backfill 幂等再跑收敛同一 count；③真集群恢复 SLA 与 green（归 R-S06-S-1）。
   - 纳入规划: WP-E 索引长稳（搜索商用规划复审；见 `specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md`「后续 /dev 工作包登记」与 `search-storage-topology-and-elasticity` GWT2 planned）。
-  - 状态: 待办（ES 重启恢复 + 索引持久 + 搜索恢复分项已证；写时增量长稳/backfill 幂等再跑/真集群恢复仍缺运行证据）
-- [ ] R-S06-S-3 search-service 独立 Go module 依赖图可复现性
+  - 状态: 待办（ES 重启恢复 + 索引持久 + 故障/回滚演练分项已证；剩余写时增量常驻投影器长稳 soak[需写路径鉴权 + 长时运行]、backfill 幂等再跑收敛、真集群恢复 SLA[归 R-S06-S-1]，归属 WP-E 索引长稳，需运行环境长稳，非本会话单点可闭）
+- [x] R-S06-S-3 search-service 独立 Go module 依赖图可复现性
   - 区域: Service / Ops
   - 域: `search`
   - 原因: `search-service` 是独立 Go module，容器构建依赖 `services/search-service/go.mod` 与 `go.sum` 的完整依赖图；排障中曾出现 `missing go.sum entry`，需确保新模块依赖锁文件纳入版本控制并由 CI 验证。
   - 影响: 若依赖图未被稳定提交，新环境或 CI 容器构建可能因缺失 `go.sum` 条目失败，影响 search-service 可复现构建。
   - 涉及文件: `quwoquan_service/services/search-service/go.mod`、`quwoquan_service/services/search-service/go.sum`、`deploy/service/search-service/Dockerfile`。
   - 已验证（代码就绪）: `go mod tidy && go test ./...`（search-service module）本地 exit 0；本轮复验 `go vet ./...`、`go build ./...`、`go test ./...`（search-service module）全 exit 0，依赖图可在本地重现解析（go.sum 142 行；`go mod verify` 仅对 local replace 目标 `quwoquan_service` 报 missing ziphash 属正常，非缺口）。
-  - 未闭合（真实缺口）: `git ls-files quwoquan_service/services/search-service/go.mod go.sum` 为空 —— go.mod/go.sum 及整个 `services/search-service/` **仍是 git untracked**，并未纳入版本控制。上一轮「go.sum 已纳入版本控制」属状态虚报，本轮已纠正。CI 在干净检出上仍会因缺失锁文件失败。
+  - 未闭合（真实缺口，历史记录）: `git ls-files quwoquan_service/services/search-service/go.mod go.sum` 为空 —— go.mod/go.sum 及整个 `services/search-service/` **仍是 git untracked**，并未纳入版本控制。上一轮「go.sum 已纳入版本控制」属状态虚报，本轮已纠正。CI 在干净检出上仍会因缺失锁文件失败。
+  - 已闭合（2026-06-19 复核）: ①`git ls-files quwoquan_service/services/search-service/go.mod quwoquan_service/services/search-service/go.sum` 已返回这两个文件（已纳入版本控制），该目录 `git status` 无未跟踪/未提交变更；②CI 门禁 `bash quwoquan_service/scripts/search/verify_search_service_module.sh` 本轮实跑 `RC=0`，输出 `OK: search-service module tracked + reproducible`（以干净检出视角断言 go.mod/go.sum/cmd/api/main.go/Dockerfile 均 git-tracked + `go build ./...` 依赖图可解析），门禁已从「故意 RED」转 GREEN，上方「未闭合」段保留为历史虚报纠正记录。
   - CI 门禁（本轮新增收口工具）: `bash quwoquan_service/scripts/search/verify_search_service_module.sh [--with-tests]` —— 以「干净检出视角」断言 go.mod/go.sum/cmd/api/main.go/Dockerfile 必须 git-tracked，并 `go build ./...` 验证依赖图可解析。当前因 untracked **故意 RED**（=真实阻断信号）；用户提交后自动转 GREEN，本项即可闭合。
   - 收口动作（归属用户）: 由用户 git add/commit `services/search-service/`（含 go.mod/go.sum/Dockerfile）后，重跑上述门禁转绿，本项方可标记已解决；提交动作不在本轮 verify_only 范围内。
   - 纳入规划: WP-E 索引长稳（搜索商用规划复审；见 `specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/spec.md`「后续 /dev 工作包登记」）。
-  - 状态: 待办（代码就绪、依赖图本地可重现、CI 门禁已就位；待用户将 search-service 纳入版本控制后门禁转绿即闭合）
+  - 状态: 已解决（2026-06-19；search-service go.mod/go.sum 已 git-tracked，门禁 verify_search_service_module.sh RC=0 = "module tracked + reproducible" 转绿）
 
 ## 灵魂交集统一（端云，intersection-unification）
 
@@ -261,7 +262,7 @@
   - 影响: 事实通道（已回流）不受影响，融合与排序主链路安全。读路径零同步打分已被契约测试锁定。
   - 进展（2026-06-19，切片⑥ 部分前移，见 R-ID06）: affinity 通道已从「裸 count 启发式」升级为确定性 Graph 边权真算（`edgeWeight = relationStrength × interactionFrequency × recencyDecay`，在 `ReadModelIntersectionSource.AffinityReasons` 物化，纯算术、零评分服务调用），`affinityIntersectionScore`（edgeWeight）不再恒 0；读路径零同步打分不变量保持。**剩余**：真正的 `/v1/score` 模型概率分（深排多任务）写入 affinity 段，属深排平台轨（与 R-IX03 合并推进），非确定性图权可替代。
   - 涉及文件: `quwoquan_service/services/content-service/internal/infrastructure/recommendation/intersection_source.go`、`read_model_intersection_source.go`(affinity 边权真算)、`intersection_graph_materializer.go`、`viewer_object_intersection_store.go`、`runtime/recommendation/scorer.go`(RemoteModelScorer)、`internal/application/intersection_readpath_invariant_test.go`(不变量契约)、异步评分作业。
-  - 状态: 待办（读路径零同步打分不变量已固化；affinity 确定性图权真算已落地[R-ID06]；剩余 `/v1/score` 模型概率分异步写入 affinity 段——并入深排平台轨 R-IX03）
+  - 状态: 待办（读路径零同步打分不变量已固化[契约测试锁定]、affinity 确定性 Graph 边权真算已落地[R-ID06]；剩余 `/v1/score` 模型概率分异步写入 affinity 段——确定性图权不可替代，并入深排平台轨 R-IX03）
 - [ ] R-IX02 viewer×object 关系交集 per-candidate 信号物化（P1 kind + 关系级精排融合的前置）
   - 区域: Service
   - 域: `recommendation` → `content`
@@ -269,7 +270,7 @@
   - 正确设计: 新增按 viewer 预计算的关系交集投影（或扩展 `rm_viewer_object_intersection` 存逐 object 的关系事实），由社交图谱 + 共访/共评事件增量维护；读路径零计算消费；精排可在候选侧读取该 per-candidate 关系强度。
   - 影响: 未做前 P1 关系类 kind 仅在 ObjectReasons（单对象主页）可得，feed/list 的关系级 per-candidate 融合用 viewer 级揭示偏好近似（已交付，安全但非逐候选关系事实）。
   - 涉及文件: `quwoquan_service/contracts/metadata/recommendation/rec_model/projections/`、`services/content-service/internal/infrastructure/recommendation/`、`runtime/recommendation/scorer.go`。
-  - 状态: 待办
+  - 状态: 待办（viewer 级聚合近似已交付[feed/list 安全]、P1 关系 kind 在 ObjectReasons 可得；剩余 per-candidate 关系交集投影需按社交图谱 + 共访/共评事件增量预计算，归属关系投影/数据工程预计算轨，非本会话单点可闭）
 - [ ] R-IX03 深度排序模型平台轨（MMoE/PLE/ESMM 多任务、双塔 ANN 在线服务、Thompson/IPS 反事实闭环）
   - 区域: Service / Data
   - 域: `recommendation`
@@ -277,7 +278,7 @@
   - 现状安全基线: 多目标 LightGBM + champion/challenger + shadow 评估 + 晋升门禁 已是生产安全基线；WP-3 已补 UCB 曝光感知探索（去偏 + 冷启动，确定性可复现）与 MMR 多样性重排（policy 可选）。
   - 影响: 不阻塞主链路；为持续优化的长期能力上限。
   - 涉及文件: `quwoquan_service/services/rec-model-service/**`、`runtime/recommendation/**`、`scripts/ml/**`。
-  - 状态: 待办
+  - 状态: 待办（生产安全基线已落地：多目标 LightGBM + champion/challenger + shadow + 晋升门禁 + UCB 探索 + MMR 多样性；剩余 MMoE/PLE/ESMM/双塔 ANN/Thompson·IPS 闭环属多周-多月深排平台工程，不阻塞主链路，归属推荐平台长期轨）
 - [ ] R-IX04 精品池召回源（featured / 高完成率内容专用候选通道）——前置缺失：无 featuring 写入能力
   - 区域: Service / Data / Ops
   - 域: `content` → `recommendation`
@@ -286,7 +287,7 @@
   - 正确顺序: 先落地 product-ops「全局精选/编辑加权」写入能力（admin 标记 featured scope 或由完成率/质量分作业派生），再在 `rm_discovery_feed`（或 `rm_premium_pool`）投影补 featured scope + 质量分，最后建 `PremiumPoolSource`（按场景自门控，RecallPath=`premium_pool`，装配 engine sources 末位）。
   - 影响: 未做前精品场景的「优中选优」由排序侧 premium 预设承担（已上线，数据驱动）；召回候选仍是通用池。不阻塞主链路。
   - 涉及文件: `services/product-ops-service/**`(featuring 写入)、`services/content-service/internal/infrastructure/recommendation/`、`contracts/metadata/.../projections/`。
-  - 状态: 待办（前置 featuring 能力缺失；现在建池=死基础设施，故正确决策是先补前置而非先建池）
+  - 状态: 待办（排序侧 premium 预设[场景路由 + 完成率/停留/相关性加权]已上线、圈内精选写入已补；剩余召回侧精品池前置缺失——需先落地 product-ops 全局 featuring/编辑加权写入能力，再建 PremiumPoolSource，否则=死基础设施。归属 content/product-ops 前置能力轨，不阻塞主链路）
 - [ ] R-IX05 四主页云侧真实数据 + DDD 收口（WP-6，客户端+跨服务，字段漂移已收口）
   - 区域: App / Service
   - 域: `entity` / `circle` / `user`
@@ -296,15 +297,16 @@
   - 影响: 编译级字段漂移不再阻塞；四主页在 beta/gamma/prod 仍可能展示 seed/mock 派生数据，需各域服务真实数据与 impact 回写后才能端到端闭环。
   - 涉及文件: `quwoquan_app/lib/ui/{entity,circle,user}/**`、`services/{entity,circle,user}-service/**`、`contracts/metadata/{social/circle,content/post}/projections/*impact*`。
   - 衍生待办（2026-06-16 gamma-local 实测）: `docker-compose.gamma-local.yaml` 当前只含 content/chat/user/assistant/product-ops/tag/search/rec-model 服务，**不含 `entity-service` 与 `circle-service`**；经网关 `/v1/homepages/*` 返回 404「local-gamma mirror route is not ready」，故四主页 detail（`/v1/homepages/{id}/object-page-bundle`）与圈子 impact（`/v1/circles/{id}/impact`）的 gamma-local T3 暂不可冒烟。content 交集 GET 路由（`/v1/content/intersections/object|summary`、`/v1/content/intersections`）已在运行栈内并强制 viewer 鉴权；populated 交集分组（connectionState / intersectionReason.primaryText）需网关可识别的真实 token + 已 seed 的 viewer 关系，当前匿名探测返回「需要登录」。证据：`artifacts/local-gamma/search_intersection_smoke.json`（`/v1/search` 200 ES-backed 杭州西湖、`/v1/content/feed` 200、`/v1/content/feed/intersections` 200 空、交集 GET 路由 viewer 鉴权）。要闭合：把 entity/circle-service 纳入 gamma-local compose + 网关路由 + seed viewer 关系后补 T3。本轮（gamma 远端退役真相源收敛，2026-06-16）：按「gamma 已取消远端、合入 local-gamma mirror + prod 生产灰度」口径，`deploy/shared/environment_topology_manifest.yaml` 的 `gamma` 块（publicBases/hostAllowlist/artifactPolicy.allowLocalHosts/distribution/forbiddenHostTokens）与 `quwoquan_app/configs/gamma/app_runtime.yaml`、`quwoquan_service/services/chat-service/configs/gamma/config.yaml` 已从远端 `118.31.239.122:1900x` 收敛为本地 `127.0.0.1:1900x`，并重打包 git 纳管的 gamma app/service env artifact（chat/platform-ops/product-ops，残留远端 IP 归零），与文档既定口径（`environment_matrix.md`、`prod_plane_access_isolation.yaml`、environment-ops SKILL）一致。证据：`verify_environment_topology_manifest`/`verify_gamma_local_prod_isomorphism`/`verify_env_artifact_isolation`/`verify_prod_package_purity` + `content_media_url_test`(8/8) + `verify_retired_terms_zero`/`verify_concept_naming` 全绿。结论：entity/circle 的接入目标明确为 **local-gamma compose**（非远端 gamma），真实远端集成由 **prod gray-initial** rollout stage 承接。
-  - 状态: 待办（字段漂移、客户端编译断点、Pin/Feature 持久化、PostCount 跨服务回写、WeeklyActive 窗口回写、Impact Explain 归一已解决；剩余为 gamma-local entity/circle 拓扑接入 + 真实数据灌入 + viewer 鉴权 seed + 端到端验收）
-- [ ] R-IX06 搜索六场景端侧收口 + 术语退场关注者（WP-7，客户端，部分由 R-S06/R-S07 覆盖）
+  - 状态: 待办（字段漂移/客户端编译断点/Pin·Feature 持久化/PostCount 跨服务回写/WeeklyActive 窗口回写/Impact Explain 归一已解决并验证绿；剩余 gamma-local entity·circle-service 纳入 compose + 网关路由 + seed viewer 关系 + viewer 鉴权 + T3/T4——严格依赖运行环境与真数据灌入，真实远端集成归 prod gray-initial rollout stage，非本会话单点可闭）
+- [x] R-IX06 搜索六场景端侧收口 + 术语退场关注者（WP-7，客户端，部分由 R-S06/R-S07 覆盖）
   - 区域: App
   - 域: `search` / `user`
   - 原因: 搜索 hit 真实 `connectionState` 闭集 + `intersectionReason` 子集、搜索交集 Tab 去本地拼装、实体页双交集源收口单源、术语「关注者」退场为「粉丝/关注/成员」、交集 G2 单句，均为端侧文案/装配收口。
   - 现状: 搜索云侧读模型/接线已在 R-S05/R-S06/R-S07 详细跟踪；服务端交集理由闭集（kind §5.4 + connectionState）已由 WP-0~2/WP-4 在云侧统一。端侧搜索交集 Tab 的本地拼装去除已收口（见 R-003 已解决）：交集分组唯一真相源改为云侧 `connectionState` 闭集，交集句严格只读 `intersectionReason.primaryText`，无 primaryText 不展示，删除 `_deterministicCount`/`_fallbackConnectionCardModels`/`_fallbackDiscoverCardModels`/`_friendActionLabel`/`_knownIntersectionEntity`/`_discoverContentReason`，并补 `_IntersectionContractSearchRepository` 契约测试（10/10 green）。术语退场为「粉丝/关注/成员」在 user/circle/entity widgets 切片内同步。
   - 影响: 搜索结果页交集理由/连接态的客户端合成已去除（第二真相源风险闭合）；剩余 R-008 跟踪的一般搜索 demo 回退（空集 fallback、硬编码实体置顶）与术语退场逐页核对。
   - 涉及文件: `quwoquan_app/lib/ui/search/**`、`quwoquan_app/lib/components/object_page/**`、`quwoquan_app/lib/ui/{user,circle,entity}/widgets/*`（术语）。
-  - 状态: 待办（搜索交集 Tab 本地拼装去除已解决 R-003；剩余术语逐页核对 + R-008 一般 demo 回退 + R-S06/R-S07 端云读模型联动）
+  - 证据（2026-06-19 复核）: ①搜索交集 Tab 本地拼装去除已解决（R-003 已 [x]）：分组唯一真相源为云侧 `connectionState` 闭集，交集句只读 `intersectionReason.primaryText`；②R-008 一般搜索 demo 回退已解决（R-008 已 [x]）：`_fallbackContentItemsForQuery` 在 `lib/` 零残留，`_entityTopResult()` 已改为真实读路径——遍历真实 `_locationResults` 中 `objectType==entityHomepage` 且标题匹配 query 的 hit，`meta` 由 `_entityMetaFromHit(hit)` 只读 `hit.payload` 的 `followerCount/contentCount`（无值则空），无「厦门大学/26.8万关注·1.2万内容」硬编码伪 meta；③术语「关注者」退场：`rg "关注者" quwoquan_app/lib --glob '*.dart'` 零命中，已全部退场为「粉丝/关注/成员」；④R-S06/R-S07 端云读模型联动前提已满足（R-S06、R-S07、R-S07-5、R-S06-S 均已 [x]）。
+  - 状态: 已解决（2026-06-19；搜索交集 Tab 本地拼装去除[R-003]、R-008 一般 demo 回退[空集 fallback 删除 + 实体置顶只读 hit payload]、术语「关注者」lib/ 零残留退场、R-S06/R-S07 端云读模型联动均已闭合）
 - [x] R-IX07 交集统一端到端验收：T3/T4 + 观测/SLO/灰度 + 全量 make gate（WP-8）— 四环境 stackctl 分层验证闭环（真机 patrol 巡检归 CI 设备矩阵）
   - 区域: App / Service / Ops
   - 域: `recommendation` / `search` / 多域
@@ -325,22 +327,34 @@
 
 > 真相源 spec：`specs/product/intersection-definition-and-application.md`。交集契约对齐（A–E）的 Phase 0 已落地；以下为用户确认后登记的两项「交集漂移」延后事项，均不阻塞 A–E 端侧契约与 UI 实现，附精确交接坐标，按独立排期推进。
 
-- [ ] R-ID01 交集漂移 a：content-service reason 级 Label/DisplayText/SharedCount 未移除
+- [x] R-ID01 交集漂移 a：content-service reason 级 Label/DisplayText/SharedCount 未移除
   - 区域: Service
   - 域: `content`
   - 事项: content-service 的 Go `IntersectionReasonView` 仍保留已被契约（§18.1）删除的 `Label/DisplayText/SharedCount` 三个 reason 级字段，Explain 管线仍依赖它们做计数聚合（如 followeeVisited）。
   - 原因: 移除需改 `followeeVisitedReason` 计数语义（`SharedCount=n` → 单聚合点 `Count=n`）+ `anchorAggregateCount` bridge 分支 + 4 个 Go 测试（含 `viewer_object_intersection_store_contract_test.go` 直接断言 `r.SharedCount`）；Phase 0 为避免半成品破坏 `go test` 而诚实延后。
   - 影响: 纯服务端内部清理；端侧 Dart DTO 已无这些字段，不影响 A–E 任何端侧契约与 UI 实现；属技术债，可独立排期。
   - 验证证据/交接: 精确改动集见 `specs/product/intersection-definition-and-application.md` §20.6。
-  - 状态: 待办（未排期；2026-06-17 登记）
-- [ ] R-ID02 交集漂移 e：4 个交集 operation 缺 response_body schema
+  - 证据（2026-06-19 复核）: ①契约 `quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml` 第 34 行明确「本契约已零兼容删除 displayText / label / sharedCount（§18.1 一次性收口）」，reason 级三字段在契约层已移除；②Go `services/content-service/internal/application/intersection_views.go` 的 reason 级结构 `IntersectionReasonView` 已无 `Label/DisplayText/SharedCount`，`intersection_hydration.go` 注释「R-ID01：不再有 reason 级 SharedCount」；③测试 `tests/intersection_source_contract_test.go` 残留的 `DisplayText` 断言全部是 **point 级** `IntersectionPointView.DisplayText`（如 `shared.DisplayText`/`commented.DisplayText`），`intersection_source.go` 的 `Label/DisplayText` 也只赋给 `IntersectionPointView`（point 级合法字段，不在 §18.1 reason 级删除范围）；④结论：§18.1 要求删除的 reason 级三字段已全部移除，Explain 紧凑结论句唯一来源为 `primaryText`，契约与代码一致。
+  - 状态: 已解决（2026-06-19；契约 intersection_reason.yaml §18.1 零兼容删除 reason 级 displayText/label/sharedCount，IntersectionReasonView 无三字段，残留 DisplayText 断言均为 point 级合法字段）
+- [ ] R-ID02 交集漂移 e：4 个交集 operation 缺 response_body schema（Slice 1 已交付框架能力+绑定，剩余 Go/OpenAPI epic）
   - 区域: Service
   - 域: `content`
   - 事项: 保留的 4 个交集 operation（`GetMyIntersectionSummary` / `ListMyIntersections` / `MarkIntersectionsVisited` / `GetObjectIntersections`）未在 metadata 显式声明 `response_body` schema。
   - 原因: 当前仓库 metadata 全仓无 `response_body` 能力（`rg response_body contracts/metadata` 零命中），responses 由 Go handler 隐式承载，需先做 metadata 框架增强而非单点引入。
   - 影响: 不阻塞 A–E——projection consumers + 描述已声明 `read_model`，端侧 Remote 已按 `read_model` 正确解析；属契约显式化的框架级增强，需统一排期。
   - 验证证据/交接: 见 `specs/product/intersection-definition-and-application.md` §20.5。
-  - 状态: 待办（未排期；2026-06-17 登记）
+  - 本轮收口（2026-06-20，Slice 1 = 框架能力 + 首批绑定 + 门禁 + 端侧消费）:
+    1. **框架能力（verify_metadata）**: `tools/verify_metadata/main.go` 先修复 `validateServiceEntities` 空转 latent bug（原解析不存在的 `routes` 键→对所有 `api_routes` 零校验），再引入 `response_body`/`response_body_kind` 强校验：kind∈{object,page,ack}；ack 禁带 body、object/page 必带 body；`response_body` 必须命中全仓 `projections/*.yaml` 的 `read_model`/`client_projection.dart_class` 闭集（新增 `loadProjectionReadModels` 全仓索引）。原 `response_entity` 误报由 14→4（仅剩既有命名错配），`go test ./tools/verify_metadata` 绿。
+    2. **首批绑定（service.yaml）**: `content/post/service.yaml` 5 个 operation 声明 `response_body`/`response_body_kind`：`GetMyIntersectionSummary`=object→`IntersectionInboxSummary`、`ListMyIntersections`/`GetObjectIntersections`=page→`IntersectionReason`、`MarkIntersectionsVisited`=ack（无 body）、`ListAuthorImpactEvidence`=object→`AuthorImpactEvidencePage`（R-ID03 端侧接入协同绑定，2026-06-20 补）。
+    3. **端侧 codegen（codegen_app_metadata）**: `routeDef` 加 `ResponseBody`/`ResponseBodyKind`；`collectProjectionReadModelDartClass` 建 read_model→dart_class 全仓索引；`renderDomainAPIMetadataDart` 生成 `operationToResponseModel`/`operationToResponseKind` 两张静态映射（content 实表 3+4 项，其余 13 域空表统一字段）。codegen 幂等（重生无新增漂移），`go test ./tools/codegen_app_metadata` 绿。
+    4. **门禁**: 新增 `quwoquan_app/scripts/runtime/verify_metadata_response_body_vs_codegen_app.py`（四维交叉校验 metadata↔codegen↔projection＋反向 orphan 检测），已串 `agent_ops/gate/gate_repo.sh` app 段；证伪通过（非法 kind→FAIL）。
+    5. **端侧消费（防死字段）**: 新增 `test/cloud/integration/intersection_response_body_contract_test.dart`（5 绿），断言生成映射值 == Remote 仓库真实解码运行时类型（object→`IntersectionInboxSummary`、page→`IntersectionReason` 元素、ack→不入 model 表且返回 void）。
+  - 剩余 epic（独立排期，本回合不做）:
+    a. Go 侧消费 `response_body` 生成响应类型契约/装配（当前 Go handler 仍隐式承载）；
+    b. 新建 metadata→OpenAPI 响应 schema 生成器（全仓无 OpenAPI 响应生成）；
+    c. content/app codegen 产物漂移门禁（防 Go 响应类型与端侧 DTO 漂移）；
+    d. 将 `response_body` 从「首批 4 op」推广为全仓 operation 绑定（框架能力 + 门禁已就绪，可增量逐域绑定，不再是「唯一特例债」）。
+  - 状态: 部分收口（2026-06-20；Slice 1 框架能力+5 op 绑定（4 交集 + `ListAuthorImpactEvidence`）+端侧 codegen 映射+一致性门禁（`verify_metadata_response_body_vs_codegen_app: OK (5 response_body operations)`）+合约测试已闭环，端云无断点；剩余 Go 响应 codegen / OpenAPI 生成器 / 产物漂移门禁 / 全仓推广属框架横切 epic，spec §20.5/§20.6.2）
 - [x] R-ID03 我的影响力完整分页明细 API 缺失
   - 区域: App / Service
   - 域: `content` / `recommendation` / `user`
@@ -350,7 +364,8 @@
   - 正确设计: metadata-first 新增 `listAuthorImpactEvidence` operation + 强类型 evidence read model，服务端按 `evidenceSnapshotId`/`impactId` 分页返回真实影响来源；端侧明细 sheet/page 只读该 API，仍复用 `IntersectionTarget` / `IntersectionVisual` / `InteractiveIntersectionText`。
   - 涉及文件: `quwoquan_service/contracts/metadata/content/post/projections/author_impact_evidence_item.yaml`、`author_impact_evidence_page.yaml`、`quwoquan_service/contracts/metadata/content/post/service.yaml`、`quwoquan_service/services/content-service/internal/infrastructure/persistence/author_impact_evidence_store.go`、`internal/application/author_impact_evidence_view.go`、`internal/adapters/http/content_handler.go`、`runtime/impact/explain.go`、`quwoquan_app/lib/cloud/runtime/generated/content/author_impact_evidence_{item,page}.g.dart`
   - 证据: metadata-first 冻结 `AuthorImpactEvidenceItem`/`AuthorImpactEvidencePage` projection + `ListAuthorImpactEvidence` operation（`GET /v1/content/sub-accounts/{subAccountId}/author-impact/evidence?impactId=&evidenceSnapshotId=&cursor=&limit=`）；云侧 `rm_author_impact_evidence`（Mongo，`sourceEventId` 唯一索引保证幂等）+ cursor 分页；`StableImpactID`(SHA1) 对齐 summary `AuthorImpactItem.impactId`；读路径 hydrate 内容标题/封面，结论句经 `runtime/impact.EvidenceText` 隐私安全直出（「有人…」，不泄露 actorId）。T3 集成测试 `author_impact_evidence_contract_test.go` 全绿：契约/隐私（"有人"前缀且无 actorId 泄露）/幂等（同 clientEventId 重放不重复计数）/分页触底（hasMore=false）/空态（未知 impactId 返回空不编造）/summary-evidence count 一致性。`make verify-metadata` + `make codegen-app` 绿，Dart DTO（typed 嵌套 IntersectionVisual/IntersectionTarget）已生成。
-  - 状态: 已解决（2026-06-19；③⑤ 切片闭环，T3 契约/幂等/隐私/分页/空态/一致性全绿）
+  - 端侧接入闭环（2026-06-20，本回合补齐「服务端已就绪但端侧未消费」断点）: ①仓库三层 `UserProfileRepository.listAuthorImpactEvidence({subAccountId,impactId,evidenceSnapshotId,cursor,limit})`——Abstract+Mock（无 seed/未命中 impact 返回空页，不编造）+Remote（经 `ContentApiMetadata.listAuthorImpactEvidencePath` path builder + query `impactId/limit/cursor`，`_decodeObject`→`AuthorImpactEvidencePage`）；②`AuthorImpactEvidenceSheet` 重构为 `StatefulWidget` + 注入 `AuthorImpactEvidenceFetcher` 闭包（DI，脱 Provider 依赖便于测试），首屏拉取 + 触底「加载更多」+ 空态/失败结构化降级（R17，不崩溃）；明细以被影响内容为载体逐条展示（summaryText+时间+样本），整行可点进被影响内容；分页为空/失败回退聚合样本视觉（仅当 `sampleVisuals` 非空），既不编造完整名单也不暴露 actorId；③调用方 `author_impact_card.dart` / `my_intersection_impact_timeline.dart` 经 `userProfileRepositoryProvider` 构造 fetcher 下沉（`ref.read` 延迟到 sheet 打开）；④文案常量入 `discovery_feed_text_constants.dart`。测试：`test/cloud/user/contract/author_impact_evidence_contract_test.dart`（5 绿：response_body kind/model 契约、Remote path/query/解码/cursor 翻页、Mock 无 seed 空安全）+ `test/ui/user/widgets/author_impact_evidence_sheet_test.dart`（5 绿：真实来源行渲染、触底翻页、整行进内容、空态/失败降级、空页+样本回退）+ `author_impact_card_test.dart`（无样本+分页空→空态文案，8 绿）。
+  - 状态: 已解决（2026-06-19 服务端③⑤切片闭环；2026-06-20 端侧仓库三层+分页 sheet+调用方接线+端云契约/widget 测试闭环，用户可在「我的影响力」明细下钻查看云侧完整分页来源，无端云断点）
 
 - [x] R-ID04 主页首屏聚合 user homepage-bundle（决策 #1）端云冻结
   - 区域: App / Service
@@ -417,3 +432,214 @@
   - 涉及文件: `runtime/errors/errors.go`、`runtime/errors/errors_test.go`、`runtime/registry/registry_test.go`、`runtime/redis/adapter_test.go`、`runtime/context/context_test.go`、`services/rtc-service/tests/one_to_one_relationship_gate_test.go`、`services/content-service/tests/post_feed_contract_test.go`
   - 证据: `make gate`（服务侧 scripts/gate.sh）→ `[gate] OK`（assistant/content 17.5s/rtc/product-ops/tag/recommendation python/ML + 元数据/特性树一致性全绿）；`go test ./runtime/...` 全包绿（OVERALL_EXIT=0）；`go test ./services/user-service/...` 全包绿（USER_EXIT=0，确认共享 errors.go 改动无回归）；`go test ./services/rtc-service/...` 全包绿（含两个原失败测试）。
   - 状态: 已解决（2026-06-19；切片⑧服务侧全量 gate 闭环，5 处基线红测/缺口零技术债修绿）
+
+- [ ] R-ID09 我的主页交集/影响力服务端读路径契约与高并发风险
+  - 区域: App / Service
+  - 域: `content` / `user`
+  - 事项: `ListMyIntersections` metadata 与端侧已声明/透传 `filter/sourceRef/timeBucket/cursor/limit`，但服务端 handler/application 仍需逐项核实并补齐真实过滤/分页契约；`ProfileInteractionActivities` 当前存在请求期全量扫描 + 循环读 post 的风险；`AuthorImpactEvidence` 明细页存在 Count + N+1 hydrate 读放大风险。
+  - 原因: 本轮 UX/UI 收口已完成端侧 `cursor` 扩展位、详情双 tab、fixture 全类型实例化与能力级 SIT 验收，但服务端读路径尚未同步落地全部过滤/分页/性能硬化；高互动账号、热门作者或大内容库下会放大请求成本。
+  - 影响: beta/gamma/prod 高并发下可能出现交集筛选分页契约漂移、互动 Tab 请求延迟升高、热门影响力明细 Mongo/post store 压力升高；不会影响本轮前端视觉体验和 mock/contract fixture 展示，但会影响真实规模化准出。
+  - 正确设计:
+    1. `ListMyIntersections` 服务端按 metadata 支持 `dimension/filter/sourceRef/timeBucket/cursor/limit`，无法支持的参数必须显式契约化拒绝，禁止静默忽略；
+    2. profile interaction 读路径迁移到分页 read model 或至少补可审计索引/limit clamp，避免全局锁内无限扫描与循环 `FindByID`；
+    3. author-impact evidence 分页避免每页重复 Count + N+1 hydrate，至少做到同页 contentId 去重 hydrate、limit clamp、summary count 与 evidence total 一致；
+    4. App 侧同一主页停留内 `GetAuthorImpact` 与交集 preview 需要 Provider 级短时去重/缓存，避免 rebuild 重复打服务。
+  - 验收标准:
+    1. T3 contract 覆盖 `ListMyIntersections` 的 `filter/sourceRef/timeBucket/cursor/limit`；
+    2. 高互动测试种子下 profile interaction 不在全局锁内做 O(全量互动) 扫描；
+    3. author-impact evidence `limit > 50` clamp、同页 hydrate 去重、summary/evidence count 一致；
+    4. App fake repository 计数测试证明同一主页停留内交集 preview 与 author impact 不因 rebuild 重复请求。
+  - 涉及文件: `quwoquan_service/contracts/metadata/content/post/service.yaml`、`quwoquan_service/services/content-service/internal/adapters/http/intersection_handler.go`、`quwoquan_service/services/content-service/internal/application/intersection_service.go`、`quwoquan_service/services/content-service/internal/application/post_service.go`、`quwoquan_service/services/content-service/internal/adapters/http/content_handler.go`、`quwoquan_service/services/content-service/internal/infrastructure/persistence/author_impact_evidence_store.go`、`quwoquan_app/lib/ui/user/providers/my_intersection_inbox_provider.dart`、`quwoquan_app/lib/ui/user/providers/author_impact_provider.dart`
+  - 本轮部分收口（2026-06-20）:
+    1. `ListMyIntersections` handler/application 已消费 `dimension/filter/sourceRef/timeBucket/cursor/limit`，返回 `items/nextCursor/hasMore`；新增 `TestIntersectionService_ListFiltersAndPaginates` 覆盖 sourceRef/timeBucket/cursor/limit。（对应验收 #1）
+    2. `AuthorImpactEvidenceStore.ListPageWithTotal` 用 Mongo facet 同页返回 items + total，替换 handler 中 Count + List 双读；同页 contentId hydrate 已保留去重。（对应验收 #3）
+    3. **App Provider 级短时去重（A2，闭验收 #4）**: 交集 preview 与 author impact 改用容器作用域 `TtlCache`（无定时器、按 key TTL 去重、`force` 显式绕过），同一主页停留内 rebuild 不重复打服务；`flutter test test/ui/user/providers/intersection_provider_cache_test.dart` 5 绿（preview 重复 load 仅取数一次 / TTL 窗口取消订阅再订阅复用 / force 绕过 / authorImpact TTL 去重 / 不同 userId 各自取数互不串用）。
+    4. 验证: `go test ./services/content-service/internal/application ./services/content-service/internal/infrastructure/persistence ./runtime/impact` 绿；`flutter test test/ui/user/widgets/profile_shell_widget_test.dart`、`test/ui/user/providers/intersection_provider_cache_test.dart` 绿。
+  - 状态: 部分收口（2026-06-20；验收 #1/#3/#4 已闭，证据见上；剩余验收 #2 服务端 profile interaction 高互动读路径 O(全量互动) 扫描硬化由活动并发编辑（post_service.go）独立推进，本回合不竞争）
+- [ ] R-ID10 交集 5 展示位统一渲染/交互/图标标准化收敛（两套并行链路收敛到统一组件）
+  - 区域: App
+  - 域: `content` / `recommendation`
+  - 事项: 仓内存在两套并行交集渲染链路——统一链路（首页 feed / 我的主页 / 影响力卡 / 圈子影响卡，消费 `primarySpans` + `IntersectionTargetNavigator` + `IntersectionVisualCluster`）与自绘旧链路（记录卡 `IntersectionReasonChip` + 对象页 `ObjectIntersectionCard`/`EvidenceGroup` 自绘行 + 硬编码图标 switch）。自绘链路未消费 `primarySpans`、行/片段不可下钻、归因丢字段、图标绕过 resolver。
+  - 原因: 交集补全分阶段落地，统一渲染器/导航器/图标 resolver 先在我的主页与首页 feed 收口，对象页（B 用户 / C 圈子 / D 实体）与记录卡的旧链路尚未收敛。
+  - 影响: 用户旅程在对象页/记录卡有断点（交集句不可点、无法名字→对象页 / 数字→下钻）；图标/归因/导航多套真相源，违反 §20.7 统一交互子契约与 §21.5.2 图标单一真相源。不影响数据正确性与端云契约。
+  - 正确设计（逐项）:
+    - N3: 对象页三页用 `IntersectionStatementRow`（消费 `reason.primarySpans` + `sampleVisuals` + `iconKey`）替换 `ObjectIntersectionCard`/`EvidenceGroup` 自绘行。**证据级前置（2026-06-20 勘察坐实）**：N3 完整价值是 reason 粒度「名字蓝字可点 + 句内头像」，依赖 reason 级 `primarySpans`/`sampleVisuals`。云侧 `content-service` 对象交集已在 `ObjectIntersections → hydratePointSummary → hydrateExplain → hydrateInteractionContract` 完整产出 `primaryText/primarySpans/sampleVisuals/actionHints`（remote 已就位，无需改 go）；但端侧 mock `intersection_repository.getObjectIntersections` 走 `_objectEvidenceGroups` 硬编码 **point 粒度**，`primaryText/primarySpans` 为空。直接换 reason 粒度渲染器会：mock primaryText 空 → 整行降级隐藏 → 破坏 alpha 对象页交集展示与现有 object_page 测试；保持 group 粒度 → 拿不到 reason 级 spans → remote 价值兑现不了（换壳不换核）。故 N3 须先 **env-seed-first**：把云侧 hydration 后的对象交集 reason（含 spans）固化进 `contracts/metadata/content/test_fixtures`，mock 从 fixture 读（删 `_objectEvidenceGroups`），再换渲染器 + 重写 object_page 测试。该增量触 content-service fixtures 域（与 `post_service.go` 并发编辑同域，需避开撞车窗口），不宜与 N1/N2/N4 同轮强推。
+    - N4: 对象页/他人主页交集行经 `IntersectionTargetNavigator` 下钻（名字/数字 span 级；section 内部默认下钻不改脏树调用方）。
+    - N5: 记录卡 `IntersectionReasonChip` → `InteractiveIntersectionText(spans)` 可点击 + `IntersectionTypeIcon`。
+    - N6: 首页 feed `onTrack` 透传 `sourceRef`/`evidenceId`。
+    - N7: 「为什么推荐X」埋点通道统一——**纠偏（2026-06-20 证据级）**：初判「统一到 `trackClick`」方向错误。交集证据组点击语义是 `tag_click`（`contracts/metadata/content/post/behaviors.yaml` 已登记 `type: tag_click` / `dart_method: trackTagClick`；推荐 HotPath `runtime/recommendation/hotpath.go` 给 `tag_click` 权重 **1.8**，高于 `click`），统一到 `trackClick(click)` 会把 1.8 强信号降权、改变推荐归因强度（违反 R23/R32 改埋点验三面）。当前 `object_intersection_section._reportReasonTap` 经 `behaviorRepository.reportEvents(action: tagClick)` 直发 **语义正确、tagRefs 回流不丢**，「双通道」实为 `ContentBehaviorTracker` 缺 `trackTagClick` 公开封装（仅内部 switch 处理 `BehaviorAction.tagClick`）。正确收口：在 tracker 补 `trackTagClick`（保 `tag_click` 1.8 权重 + 补 `intersectionSourceRef`/`intersectionEvidenceId` 归因），统一通道不改信号语义，并以契约测试验证推荐权重不变性。降级为不阻断用户旅程的封装统一债（PR_WARN/TECH_DEBT，非 click 降权改造）。
+    - N8: 圈子头像簇 `sampleAvatarUrls` → `sampleVisuals` + `IntersectionVisualCluster`。
+    - N9: 实体行硬编码 `'ask_xiaoqu'`/产品名 → `IntersectionActionHint.actionKey` 闭集。
+    - N10: `referralSource` 按面（profile/circle/entity）精确来源，去 `organicFeed` 硬编。
+  - 验收标准:
+    1. 对象页/记录卡交集句经统一渲染器（`primarySpans`/统一图标 resolver），无自绘行与硬编码图标 switch；
+    2. 名字 span → 对象页、数字 span → 维度下钻、行点击经 `IntersectionTargetNavigator`（与我的主页/首页 feed 同口径），新增 widget/契约测试断言；
+    3. 归因字段（`sourceRef`/`evidenceId`/精确 `referralSource`）跨展示位一致；
+    4. 删除 `EvidenceGroup` 自绘渲染与 `IntersectionReasonChip` 纯文本路径后，全仓无第二渲染/导航/图标真相源（门禁/grep 守护）。
+  - 涉及文件: `quwoquan_app/lib/components/object_page/{object_intersection_card,object_intersection_section,evidence_group,intersection_target_navigator}.dart`、`quwoquan_app/lib/ui/content/widgets/intersection_reason_chip.dart`、`quwoquan_app/lib/ui/content/widgets/record_post_card.dart`、`quwoquan_app/lib/ui/user/widgets/profile_shell_builders.dart`、`quwoquan_app/lib/ui/circle/widgets/circle_shell_builders.dart`、`quwoquan_app/lib/ui/entity/widgets/{homepage_detail_shell_builders,homepage_detail_page}.dart`、`quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_post_cards.dart`
+  - 本轮部分收口（2026-06-20）:
+    1. N1（断点4）: `object_intersection_list_page` 手写 `switch(UnifiedObjectKind)→context.push` 复制导航逻辑删除，归一 `IntersectionTarget` 后交 `IntersectionTargetNavigator`，保留 `relationKind` 兜底；新增 `test/ui/intersection/pages/object_intersection_list_page_test.dart`（4 组绿）+ navigator 回归 13 绿。
+    2. N2（断点5）: `object_intersection_card._ConnectionLeadingIcon._fallbackIcon` 与 `evidence_group.fallbackIconKindFor` 两层硬编码图标 switch 删除，统一 `IntersectionIconResolver.resolve`（`sourceRef`/`dimension` 从 `group.kind` 解析）；object_page 全测试目录 60 绿，全仓 `fallbackIconKind` 无代码引用。
+    3. N4（断点2）: `object_intersection_section` 在未传 `onReasonTap`（用户主页 B / 圈子主页 C）时内部默认经 `IntersectionTargetNavigator` 下钻（整行对象级可达，消除「整行仅 track 不可下钻」断点）；传入 `onReasonTap`（实体页 D 自定义开助手）时尊重调用方语义、不叠加默认下钻（不双跳），零改脏树调用方。reason→target 归一逻辑从 N1 list page 顶层函数上移为 `IntersectionTargetNavigator.targetForReason`（B/C/list page 单一真相源，保留 `relationKind` 兜底）。`test/components/object_page/object_intersection_section_test.dart` 新增 2 条 GoRouter host 测试（默认下钻 / 调用方优先不双跳）；object_page 全测试目录 + N1 list page 测试共 69 绿。
+  - 第二轮收口（2026-06-21）:
+    4. N6: `home_multi_form_feed_post_cards` 两处 `trackClick` 补 `intersectionSourceRef`/`intersectionEvidenceId`，三处 `IntersectionNavAttribution` 补 `evidenceId`（取 `reason.pointSummarySnapshotId`）；新增 GoRouter host span 点击回归（`home_intersection_multiform_feed_widget_test`），15 绿（feed 集合 83 绿）。
+    5. N7: `ContentBehaviorTracker.trackTagClick` 公开封装落地（保 `tag_click` 1.8 权重、补全统一交互子契约归因字段，**未**降级为 `click`），`object_intersection_section._reportReasonTap` 改走统一通道；`content_behavior_tracker_test` 新增 `tag_click` 断言，31 绿。
+    6. N9: 实体页 D 面 `_handleIntersectionReasonTap` 改消费结构化 `actionHints`（新增端侧闭集常量 `IntersectionActionKeys` + `isAssistant`），删除 `actionType == 'ask_xiaoqu'` 死分支（该值全仓从无产出）；mock `intersection_repository` 改用闭集常量；新增 `intersection_action_keys_test`（11 绿）。
+    7. N10: `behaviors.yaml` `referralSource` enum 扩 `my_intersections` + 云 `ReferralSourceMultiplier` 加 `my_intersections: 1.5`（端云三同步 R08，`verify_metadata` 通过）；新增共享 `referralSourceForObjectType`（user→authorProfile / circle→circlePost / entity→entityPage），`object_intersection_section`/`object_intersection_list_page` 改用；`author_impact_card`→authorProfile，3 个「我的」面→`myIntersections`；contract 测试补闭集 + 映射断言。
+    8. N8: `circle_header` `memberAvatarUrls: List<String>` → `memberVisuals: List<IntersectionVisual>` 归一到统一 `IntersectionVisualCluster`（形状/降级/「+N」/可点击统一）；`circle_shell_builders._circleMemberClusterVisuals` 优先 `point.sampleVisuals`、过渡期回退裸 `sampleAvatarUrls` 包装（N3 fixture 化后回退分支自消亡）；`circle_header_widget_test` 新增 2 条簇渲染断言，13 绿。
+    9. N5: `IntersectionReasonChip` 升级 `ConsumerWidget`——槽①图标归一统一 `IntersectionTypeIcon`（删本组件第二套 `kind` switch `_icon`，消除与 resolver 分叉）；结论句归一统一 `InteractiveIntersectionText(spans)`，对象/计数片段可点击经统一 `IntersectionTargetNavigator` 进对象页、埋点保 `tag_click`（`trackTagClick`）；4 调用方（`profile_works_tab`=authorProfile / `homepage_detail_shell`=entityPage / `section_creations` 文章卡 + `record_post_card`=circlePost）传 `referralSource` 精确归因；`intersection_reason_chip_widget_test` 重写（图标归一 + weightTier 分化读 `InteractiveIntersectionText.baseStyle` + 可点击 span 导航/`trackTagClick` 全归因），15 绿。
+    10. 顺手清理: `author_impact_evidence.dart` 行尾箭头 `chevron_right`→`chevron_forward`（pre-existing iOS 语义债，`verify_dart_semantic` 门禁绿）；author impact + 我的交集 21 绿。
+    - 第二轮门禁: `verify_dart_semantic` 绿、`verify_ui_mock_isolation` 绿、`verify_metadata` 绿；交集核心测试集合 83 绿。
+    - 已知非本轮：`home_circles_hub_page_test`（`home-circle-grid-post-*` key 缺失）与 `homepage_detail_page_widget_test`（「主页暂不可用」失效态文案）2 例失败属 discovery/entity 脏树并发 WIP 漂移，与本轮交集改动无关。
+  - 状态: 大部收口（2026-06-21；N1/N2/N4/N5/N6/N7/N8/N9/N10 已闭并验证，证据见上）；**仅剩 N3** 未做——经证据级勘察定性为 reason 粒度 + env-seed-first 跨端云增量（云侧 spans 已就位、端侧 mock `getObjectIntersections` 走 `_objectEvidenceGroups` point 粒度无 spans，须先把云侧 hydration 后对象交集 reason 含 spans 固化进 `contracts/metadata/content/test_fixtures` → mock 读 fixture 删 `_objectEvidenceGroups` → UI 换 `IntersectionStatementRow` → object_page 测试重写），触 content-service fixtures 域（与 `post_service.go` 并发编辑同域），须避开撞车窗口**单独排期**，不在脏树并发 WIP 活跃期强推（避免半成品 fixture 成新债）。对象页交集行当前已具备统一图标 resolver + 整行可下钻 + 云侧文案，N3 增量价值是「句内对象名蓝字可点 + 句内头像 + 与我的交集渲染器字面一致」。
+
+## 评论系统重做（Comment System Redesign）
+
+> 真相源 spec/契约：`quwoquan_service/contracts/metadata/content/post/{fields,service,storage,errors}.yaml`。本会话评论重做（小红书级二层线程 + 综合/最新/最多赞排序 + 端云契约）已落地端侧展示、排序锚定菜单、端云排序契约、fixture 扩充（0/1/5/10/50/100+）与并发硬化（RWMutex + recommendedScore 预计算）。以下为用户确认（`harden_plus_backlog` 决策）后登记的生产持久化迁移延后事项。
+
+- [x] R-CMT01 评论存储为进程内 map + 全局锁，缺 MongoDB/Redis 生产持久化落地
+  - 区域: Service
+  - 域: `content`
+  - 事项: `content-service` 评论读写曾由 `PostService.comments map[string][]map[string]any` 进程内存承载，`storage.yaml` 声明的 MongoDB `comments` 集合与 Redis 缓存未接入 infrastructure 实现。
+  - 原因: 进程内实现仅满足 alpha mock + 单实例契约测试，不满足多副本、重启不丢、千万级评论分页与高并发读写。
+  - 影响: 进程重启评论全丢、无法水平扩容、深分页/热评论排序大数据量下退化为全量内存扫描排序、跨副本排序漂移。
+  - 正确设计: 在 `infrastructure/persistence` 实现 storage-agnostic comment store，一级评论两段 keyset（pinned 段 + 排序段）走复合索引，二级回复按 `(postId,parentCommentId,createdAt,_id)` keyset；application 层只依赖 `domain/comment.Store` 接口，不出现存储驱动 import；`Post.commentCount` 由原子 `$inc` 加速、评论集 DB count 为单一真相源。
+  - 验收标准:
+    1. 评论读写经 MongoDB store，重启（重连）后评论与排序不丢；
+    2. 三种排序在大数据量（≥1e4 评论）走索引分页，无全表内存排序；
+    3. 同集合一致性：换排序不换集合/总数；
+    4. 多副本下排序由落库字段驱动稳定；
+    5. 主请求不再依赖评论 Redis 缓存（移除只写不读 ZSet / 竞态计数器后无降级阻断）。
+  - 涉及文件（已落地）: `quwoquan_service/services/content-service/internal/domain/comment/{comment_repository.go,comment_cursor.go,reaction.go,sort_mode.go}`、`internal/infrastructure/persistence/{comment_mongo_store.go,comment_memory_store.go,comment_reaction_mongo_store.go,mongo_post_store.go,post_store.go,post_repository_iface.go}`、`internal/infrastructure/cache/post_cache_repository.go`、`internal/application/{post_service.go,comment_projection.go}`、`internal/adapters/http/content_handler.go`、`cmd/api/main.go`、`contracts/metadata/content/post/{fields,storage,service}.yaml`、`contracts/metadata/_shared/redis_keyspace.yaml`、测试 `services/content-service/tests/{comment_persistence_migration_contract_test.go,comment_keyset_explain_bench_test.go}` 与 `internal/infrastructure/persistence/{comment_memory_store_test.go,comment_keyset_delta_test.go}`
+  - 本轮收口（2026-06-20）:
+    1. **决断① 排行 ZSet → 删除**：`comment_hot` / `comment_recommended` 排序 ZSet 是只写不读（`ListTopLevel` 直接走 Mongo），per-comment 赞踩计数器读穿回填非原子（stale-backfill 竞态、陈旧 `likeCount`/`recommendedScore` 落库）。判定为写放大无读收益且引入一致性债，整体删除 `infrastructure/cache/comment_cache.go`，从 `redis_keyspace.yaml` 移除对应前缀；排序/计数权威化到 Mongo 复合索引 + `CountDocuments`。`ReactToComment` 计数改为派生自权威成员关系 store（`comment_reactions` 集合），落库分值永不陈旧。
+    2. **决断② post 计数热写 → Mongo 原子 `$inc`**：`AddComment`/`DeleteComment` 用 `MongoPostStore.AdjustCommentCount(±1)`（单字段 `$inc`，配 `SetReturnDocument` + 投影）替换每次 `CountDocuments + 整文档改写`；`GetCounters`/`ListComments` 读路径以评论集 DB count 为单一真相源，发现 `Post.commentCount` 漂移时单 `$set` 机会式自愈；`$inc` 失败回退 `reconcilePostCommentCount` 全量对账。未引入 runtime/redis `DecrBy/IncrBy`（避免再加一套跨副本会漂移的计数真相源）。
+    3. **决断③ keyset 分页取代 1e4 扫描**：强类型 `comment.Cursor`（`Phase/Score/TimeUnixNano/ID`，base64 JSON 编解码，非 `map[string]any`）；一级两段 keyset（pinned 段 `(pinnedAt,_id)` partial index + 非置顶排序段 `(score,createdAt,_id)`），二级/作者/收到 keyset `(createdAt,_id)`；所有 keyset 服务索引追加 `_id:-1` tiebreak 使排序全索引覆盖。`storage.yaml` 新增 `idx_comments_pinned`（partial `isPinned:true`）/`idx_comments_deleted`（partial `status:deleted`）。
+    4. **块2 计数 delta 契约**：`fields.yaml` 评论补 `deletedAt`（软删落时间戳、记录保留可查、count 仍排除 deleted）；`SoftDelete` 真正写入 `deletedAt` 并对已删幂等（不二次扣减）；`comment_projection.go` 输出真实 `deletedAt`；新增 `GetCommentCountsDelta(postId, since)` → `{createdSinceCount, deletedSinceCount, currentTotal, watermark, since}`，半开区间 `(since, watermark]`，watermark 作下次 since 基线避免重复/遗漏；`service.yaml` 声明该接口 metrics/SLO/trace；`make codegen-app` 端侧 `comment_dto.g.dart` 已含 `deletedAt` 供后续端侧消费。
+  - 验证证据（2026-06-20，`TEST_MONGO_URI=mongodb://localhost:32775`）:
+    - explain 索引覆盖（`TestCommentMongoStore_ListQueriesAreIndexCovered`）：recommended/most_liked/replies 三查询 winningPlan 均 `FETCH ← IXSCAN(idx_comments_recommended|idx_comments_hot|idx_comments_parent_created)`，无 `COLLSCAN`、无阻塞 `SORT`（SORT 仅出现在 rejectedPlans）。
+    - ≥1e4 深翻不截断（`TestCommentMongoStore_DeepPageBeyond10kNoTruncation` 10001 条 / 内存 `TestMemoryCommentStore_DeepPageNoTruncation` 12001 条）：全量唯一、无重复、顺序稳定。
+    - 翻页不漂移（`TestMemoryCommentStore_LatestKeysetDriftFreeUnderMutation`）：分页中持续 mutate 分值，`createdAt+_id` 不变 keyset 仍不重不漏。
+    - delta 半开区间（`TestCommentCountsDelta_ExplainableHalfOpenWindow` + 内存 `TestMemoryCommentStore_DeltaWindowSemantics`）：连续两次 since=上次 watermark，created/deleted 精确不重复计数，currentTotal == 权威 Mongo 非删计数。
+    - 并发一致性（`TestCommentCountReconciliation_HighConcurrency`，`-race` 干净）：并发增/删/反应后 `ListComments.totalCount == GetCounters.comment == 权威 Mongo count`。
+    - 基准（Apple M5 Pro，docker Mongo over TCP）：`BenchmarkCommentListTopLevel_DeepPage` ~11.3ms/op、`BenchmarkCommentListReplies_DeepPage` ~1.77ms/op（深位 keyset seek，O(pageSize) 与深度无关）、`BenchmarkPostCommentCount_AtomicHotWrite` ~0.94ms/op（含网络往返）。
+    - `go build ./...`、`go vet ./services/content-service/...` 通过；`go test ./services/content-service/...` 仅余两项与本任务无关的既有失败（见 R-CMT02）。
+  - 状态: 已解决（2026-06-20；评论域已迁出进程内 map，Mongo keyset + 权威 count 落地，证据见上）
+
+- [ ] R-CMT02 评论计数加速器最终一致窗口 + delta watermark 依赖服务端墙钟（残留）
+  - 区域: Service
+  - 域: `content`
+  - 事项: ① `Post.commentCount` 为去规范化加速器，`SoftDelete` 成功与 `AdjustCommentCount(-1)` 之间若进程崩溃，加速器会短暂偏差 1，直到下次 `GetCounters`/`ListComments` 读路径按权威 Mongo count 自愈；② `GetCommentCountsDelta` 的 `createdAt`/`deletedAt`/`watermark` 均由应用服务端墙钟写入/取值，多副本时钟偏移下，半开区间边界可能把一条临界事件计入相邻窗口。
+  - 原因: 单一真相源选定为评论集 DB count（强一致），加速器与 delta 走「写后/读时对账 + 半开 watermark」最终一致策略，刻意不引入分布式事务/逻辑时钟以避免过度设计。
+  - 影响: ①加速器偏差为自愈瞬态、不影响权威 count 与列表 totalCount（两者实时从 Mongo 取），仅 feed/详情页去规范化字段可能短暂偏 1；②delta 边界偏移为单条、单窗口、不累积（下窗口仍以同一 watermark 续接，不重复不遗漏总量），仅「此期间新增 N/删除 M」在时钟偏移瞬间可能 ±1。均不影响最终一致与端侧 baseline 对齐。
+  - 正确设计（如需强一致）: 加速器改事件驱动 outbox 回写 + 周期对账任务；delta 改用 Mongo 服务端时间（`$$NOW`）或单调逻辑水位线替代应用墙钟，消除跨副本时钟依赖。
+  - 验收标准:
+    1. 注入「SoftDelete 后崩溃」故障，加速器在下一次读路径后收敛到权威 count；
+    2. 多副本/时钟偏移仿真下，delta 总量随 watermark 续接零重复零遗漏；
+    3. 若落地服务端时间/逻辑水位线，临界事件不再因时钟偏移错窗。
+  - 涉及文件: `quwoquan_service/services/content-service/internal/application/post_service.go`（`AdjustCommentCount`/`reconcilePostCommentCount`/`GetCommentCountsDelta`）、`internal/infrastructure/persistence/{comment_mongo_store.go,mongo_post_store.go}`
+  - 状态: 待办（残留最终一致项；本轮已实现读时自愈 + 半开 watermark，强一致化作为后续可选里程碑）
+
+- [ ] R-CMT03 content-service 既有契约测试两项失败（与评论域硬化无关，working-tree 阻断）
+  - 区域: Service
+  - 域: `content`
+  - 事项: `go test ./services/content-service/tests/` 有两项失败：`TestContractFixtureSeed_ContentAlphaReadsViaHandler`（`content_discovery_core` seedSet 不含 `fixture_photo_001` 评论，断言 comments 非空失败）与 `TestIntersectionSource_EntityObjectProducesFolloweeVisited`（交集文案 `ixsrc_visitor_c来过这里` off-dictionary）。
+  - 原因: 二者均由当前 working-tree 中**他项未提交改动**引入：`content_scenarios.json` 共享池重构把 `fixture_photo_001` 评论从 `content_discovery_core` 迁到 `comment_thread_core` seedSet；`intersection_kind_registry.yaml`/`intersection_reason.yaml` 文案词典调整。已用 clean HEAD worktree 复跑证明两测试在干净基线通过，故与本会话评论域/delta 改动无关。
+  - 影响: 阻断 content-service `tests` 包整体绿；不影响评论域/计数 delta 正确性（其余全部用例含本会话新增 explain/deep-page/delta/并发用例均绿）。
+  - 正确设计: 由 `content_scenarios.json` 共享池重构 / 交集文案词典的负责会话同步修正 seedSet 与词典；或将 `TestContractFixtureSeed` 的评论断言改读包含该评论的 seedSet。
+  - 验收标准: clean working-tree 下 `go test ./services/content-service/tests/` 全绿。
+  - 涉及文件: `quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json`、`quwoquan_service/contracts/metadata/recommendation/rec_model/{intersection_kind_registry.yaml,projections/intersection_reason.yaml}`、`services/content-service/tests/{contract_fixture_seed_contract_test.go,intersection_source_contract_test.go}`
+  - 状态: 待办（非本任务引入；登记以免误判为评论域回归）
+
+## 内容生产工作流商用化（Content Supply）
+
+> 来源：2026-06-21 内容生产工作流商用化系统性规划（`quwoquan_data/docs/content_supply_commercialization_plan.md`）落地 + 四川景区两工作流真实 e2e + 十→千→十万规模评估。蓝图、三份 spec、Phase 0-4、运行时地基、两工作流 e2e 与规模门均已完成；以下为诚实剩余断点。
+
+- [ ] R-CS01 指令线 homepage source sufficiency 反爬瓶颈
+  - 区域: Data
+  - 域: `content-supply`（指令维度工作流 / download homepage lane）
+  - 原因: homepage lane 要求每实体 ≥1 可读百科/官方源；四川十级 e2e 中阆中古城、黄龙风景区的百度/搜狗百科被反爬隔离 reject（`home_baidu_baike`/`home_sogou_baike`），`homepage retained sources=0 need>=1` 触发 download gate 失败，ReAct 回退两次仍不满足。
+  - 影响: commercial 零失败模式下个别实体 source 不足会阻断整批；十级实测 8/10（80%）成功。百/千级放量需 `allowPartialContent` 替补策略或更强多源 plan，否则成功率随外站反爬波动。
+  - 涉及文件: download lane、`quwoquan_data/verticals/travel/sources/source_registry.yaml`、task `workflowPolicy.allowPartialContent`
+  - 复核（2026-06-21 真实运行时复盘，代码+e2e10 实证）: 多源候选生成工程已实质建成——`research_plan.py` 已对 homepage 同时产出 official_url + 维基（`_wiki_title_for_entity` 经 canonical+短名+别名解析 + `_wikidata_item_for_entity_search` zhwiki 失败兜底）+ curated `knownHomepageSupportSites` + baidu + sogou；CR-049 已落 partial delivery（`allowPartialContent` 默认 true、单实体主页失败不阻断整批）。对真实批次 e2e10 跑 `verify scale-readiness`：`sourceSufficiency.homepage rate=1.0(8/8 活跃)`、`sourcePlanCategories.encyclopedia=10`，**源充分性在计划层已达标**。黄龙/阆中失败精确定位在 `build_prepare`「homepage input unavailable after build_prepare repair budget」（候选有、但抓取到的正文被反爬探针页污染不可用），已由 partial delivery 处理为 8/10、abandoned=2 excluded from refs。
+  - 状态: 待办（残留收敛为「外站反爬 fetch-time 不可控 + 逐实体 curated 兜底 + 真实放量成功率」，非干净泛化工程缺口；证据 `artifacts/sichuan-e2e-assessment/scale_readiness_{100,1000}.json`）
+- [ ] R-CS02 十万级放量工程门槛（reliabletask adapter + 吞吐）
+  - 区域: Data / Service / Ops
+  - 域: `content-supply` / `reliabletask`
+  - 原因: `verify scale-readiness` / `site-scale-readiness` 在 `daily_target>=100000` 强制 `queueBackend=reliabletask` + 吞吐 4166.67/h；当前文件队列(`local_file`) + 单会话 ~80/h 仅够十→千级。`object_queue.py` 已定义 `_reliabletask_ref` 路由契约（taskType/queue/dedupeKey/partitionKey），但服务侧 reliabletask adapter（MongoStore+RedisReadyIndex）实际分发未端到端实测；52× 吞吐需外部 cursor-sdk 多 worker ~500 并发 + spend limit + Cursor API 速率配额确认。
+  - 影响: 就绪配置 trial 已证明十万级门可过（0 blocker），但生产分发链路未实跑；真实十万级放量前必须落地 reliabletask 分发 + 外部 SDK 编排 + 计费/速率护栏。
+  - 涉及文件: `quwoquan_data/scripts/task/object_queue.py`、`quwoquan_service/runtime/reliabletask`、`quwoquan_data/docs/subagent_scheduler_spec.md` §9-10
+  - 复核（2026-06-21 真实 e2e10 scale-readiness）: 真实批次 `executionReadiness.queueBackend=""`、`maxConcurrency=0`、`measuredThroughput=null`，百/千级 `decision=no_go`，blocker 含「measured throughput evidence missing」「workflow status must be succeeded」。即吞吐/分发证据只能由真实跑完、烧 token 的放量批次产出，仍受外部 cursor-sdk 多 worker + spend limit + Cursor API 速率配额约束（用户决策项，非会话内可独立闭合）。
+  - 状态: 待办（真实放量门槛，需外部资源授权）
+- [ ] R-CS03 作品线真实 token/成本/firstPassRate 未实测
+  - 区域: Data
+  - 域: `content-supply`（produce author / TokenLedger）
+  - 原因: `scaled-e2e prepare` 与 `site-supply trial` 均为结构验证（不烧 token、注入受控吞吐/质量/账本证据）；真实作品 author（cursor sdk）的单位 token、单位通过成本、缓存命中率、firstPassRate 尚无真实 TokenLedger 批次。
+  - 影响: 日产十万的商用经济性（单位成本可承受性）未经真实数据验证；scale-readiness commercial 门的 TokenLedger/firstPassRate 维度需真实 author 批次才能过。
+  - 涉及文件: TokenLedger、`quwoquan_data/scripts/task/object_queue.py`(`record_usage`)、`quwoquan_data/scripts/verify/scale_readiness.py`
+  - 复核（2026-06-21 真实 e2e10 scale-readiness）: 真实批次 `executionReadiness.tokenLedgerCount=0`、`firstPassRate=null`、`expectedObjects.total=0`（e2e10 为 quotas=0 纯实体主页基线，冻结在 content_plan 检查点，结构上不产出 POST，因此无法产生 TokenLedger/firstPassRate/吞吐证据）。要诚实证明放量经济性，必须新跑一个**含内容配额（quotas>0）、Agent 真实创作正文、烧 token、跑完 produce_author→review→materialize→ship** 的真实批次；env preflight 已确认本环境 `CURSOR_API_KEY=present`、`network=ready` 具备真实跑能力。
+  - 状态: 待办（需真实烧 token 的内容生产批次；本环境已具备执行条件，待用户授权 token 预算与放量规模）
+- [ ] R-CS04 创作侧 tag 投影端云一致缺口
+  - 区域: App
+  - 域: `content`（创作入口）
+  - 原因: 阅读消费侧 tag 内联可点击 + codec round-trip 已闭环；但创作端仍只处理 entity span，正文 `@[label](tag:ref)` 内联未对称投影为 `tagRefs`、编辑态未保留 tag span。
+  - 影响: 创作侧产出的正文 tag 内联在发布/编辑往返中丢失，端云 tagRefs 不一致。
+  - 涉及文件: `quwoquan_app/lib/ui/content/entry/services/create_page_remote_helpers.dart`、`quwoquan_app/lib/ui/content/entry/providers/create_editor_provider.dart`
+  - 证据: 新增 `tagRefsForPayload(state)`（正文 `span.isTag` 内联剥 `tag:` 前缀 + `settings.tagRefs` Set 合并去重），`buildArticleMarkdownForPayload`/`buildCreatePostPayloadMap` 改用之；编辑态 `_toggleSpansInRange` 由 `isEntity` 放宽为 `isInlineMention` 保留 tag span；`flutter analyze` 4 文件 0 issue、相关 4 测试文件 70 用例全绿（含 entity 不回归）。
+  - 状态: 已解决（2026-06-21；App 侧 tag 与 entity 完全对称这一目标已达成。注：端云真正落库 entity/tag refs 受 R-CS06 阻断，App 侧对称是其前置而非终点）
+- [x] R-CS06 App 发布侧 semanticMentions 端云契约断裂（entity+tag 内联均不落服务端 refs）
+  - 区域: App / Service
+  - 域: `content`
+  - 原因: 服务侧 `content-service` `semantic.Project` 已对称支持 entity/tag，且把 `tagRefs/entityRefs` 当作 published `semanticMentions` 的只读投影（`post_service` 在 `SemanticMentions` 存在时直接覆盖 refs）。但 App 发布**从不构建结构化 `semanticMentions`**（kind/status/targetRef 数组）；顶层 `tagRefs/entityRefs` 被 wire `createWritableFields` 剥离（非可写字段）；wire codegen 按字段名硬编码把 `semanticMentions/reviewAspects` 误生成为 `String?`，与服务侧期望的 `[]object` 数组不一致（R06/R24 桥接债）。
+  - 影响: 端侧创作的 entity 与 tag 正文内联发布后**均无法落到服务端 `post.TagRefs/EntityRefs`**，端云 semanticMentions grounding 链在 App 发布侧断裂，削弱云侧可点击数据来源与推荐 grounding（注：数据工程 materialize 侧已能写 manifest semanticMentions，断点专指 App 用户创作发布路径）。
+  - 正确设计: metadata-first——wire 字段类型由 `fields.yaml` 的 `type` 驱动渲染（`[]object`→`List<CloudJsonMap>?`，object/GeoPoint→`CloudJsonMap?`，标量/ObjectId→`String?`），消除按字段名硬编码 switch；App 发布由正文 entity/tag 内联 + settings/homepage 构建 published `semanticMentions` 行并提交；服务侧 `Project` 投影落 `entityRefs/tagRefs`（pending/rejected 不落、published+非法 targetRef 整单拒绝、顶层 refs 与投影不一致拒绝）。
+  - 涉及文件: `quwoquan_service/tools/codegen_app_metadata/content_post_mutation_wires_codegen.go`+`main.go`、`quwoquan_app/lib/cloud/runtime/generated/content/content_post_mutation_wires.g.dart`、`quwoquan_app/lib/ui/content/entry/services/create_page_remote_helpers.dart`、`quwoquan_service/services/content-service/internal/application/post_service.go`（`applySemanticMentionPayload`）
+  - 证据:
+    - 契约: wire codegen 改为 metadata type 驱动 + `_mutationMapList` helper；三处 wire 类（Create/Update/PromoteToWork）`semanticMentions`/`reviewAspects` 由 `String?` → `List<CloudJsonMap>?`，`illustrationAssetId`/`sourcePostId` 等 ObjectId 标量不回归仍为 `String?`；`make codegen-app` 幂等无新漂移。
+    - App: `create_page_remote_helpers.dart` 新增 `semanticMentionsForPayload`（entity+tag 内联/settings/homepage → published 行 + `isSemanticTargetRefValid` 镜像服务端校验去非法/candidate），`buildCreatePostPayloadMap` 注入；`flutter analyze` 2 文件 0 issue。
+    - 测试: App `publish_payload_contract_test.dart` + `publish_draft_projection_bridge_test.dart` 共 28 用例全绿（含 semanticMentions 结构化数组、投影、去重过滤、wire round-trip、tagRefs/entityRefs 不入 wire）；Go `create_semantic_projection_test.go` 3 用例（published entity+tag 落 refs / pending+rejected 排除 / published 非法 targetRef 拒绝 / 顶层 refs 偏离投影拒绝）+ `content_post_mutation_wires_codegen_test.go` 1 用例（[]object→List<CloudJsonMap>? 等类型映射）全绿；`go build/vet ./services/content-service/... ./tools/codegen_app_metadata/...` 绿。
+  - 状态: 已解决（2026-06-21；App 用户创作发布路径 entity+tag 内联经结构化 semanticMentions 端云落 refs，metadata-first 契约对齐，桥接债清除）
+- [ ] R-CS07 current release 发布面缺实体主页闭环
+  - 区域: Data
+  - 域: `content-supply`（release publish / homepage lane）
+  - 原因: `quwoquan_data/scripts/cli.py verify --scope current` 已收窄为只扫描当前 `quwoquan_data.post_manifest` schema 的 release posts 根；旧无 schema 测试 release 已排除，但当前 schema release 仍存在已发布 post 的主 `entityRefs[0]` 缺同 release 下 `entities/.../page.md` 实体主页产物。`publish.gate` 对 assembled release 要求已发布 post 的主实体主页闭环，`allowPartialContent` 只允许缺计划 post，不允许已发布 post 缺主页。
+  - 影响: `make verify` / `verify-quwoquan-data` 被真实发布面质量门阻断；缺实体主页会造成内容消费、搜索承接、推荐交集理由和 entity landing 的端到端链路断点。不能用手写 stub 或放宽 gate 补绿，必须从对应 task/batch 的 homepage lane 重新生产、审核、发布可追溯主页产物，或明确将不完整 release 移出 current 发布面。
+  - 涉及文件: `quwoquan_data/scripts/_common/post_verify.py`、`quwoquan_data/scripts/publish/gate.py`、`quwoquan_data/release/旅行__地域__四川省__景区__全国5A景区source-ready资产闭环验证v18__source_ready_assetrefs_10_20260619_02/`、`quwoquan_data/release/旅行__主题__网站供给线__维基导游百级真实运营验证__real_*`
+  - 证据: `python3 quwoquan_data/tests/verify/test_verify_scope_semantics.py` 通过；`python3 quwoquan_data/scripts/cli.py verify --scope current` 仍失败，剩余问题包含 `release missing primary entity homepage(s)` 与 `release entity quota: expected 20, got 0`，以及因缺实体闭环导致的 `intersection dimension missing: content`。
+  - 状态: 待办（2026-06-21 用户确认登记；下一轮应走 CLI-first 的 homepage lane 补产物或清理 current 发布面归属）
+- [ ] R-CS05 video 作品链路后置
+  - 区域: Data
+  - 域: `content-supply`（video 形态）
+  - 原因: 用户主动 defer，计划 §14 Out of Scope；video research lane / producer / 作品判定 / 权利安全门未实现。
+  - 影响: 当前仅支持 entity / article / image 三形态，video 作品不可生产。
+  - 涉及文件: 计划 §14、produce video lane（未建）
+  - 状态: 待办（后置，需用户明确启动）
+
+## 测试治理与目录迁移（Three-layer Test Migration）
+
+- [ ] R-TST01 三层测试目录的物理迁移尚未全仓完成
+  - 区域: App / Service / Data / Ops
+  - 域: `runtime-test-pyramid` / `runtime-testinfra`
+  - 原因: 本轮已完成 `acceptance.yaml` 规范化、`verify-test-specs` 强化、`verify-test-directory-layout` 目录门、`specs/gates/test_directory_inventory.yaml` 全仓 legacy 基线，以及 App canonical wrapper 批量生成并切换 `test-local-contract`/`gate_repo.sh` 到 `test/local_contract/`；但 legacy 源文件仍存在于旧目录。当前基线统计：App 377、Service 198、Data 100、agent_ops 8 个 legacy 测试文件。
+  - 影响: canonical 三层目录已经成为门禁与 App 本地执行入口，但 Service/Data/Ops 仍需后续把源文件物理搬迁/拆分到 `local_contract` / `api_integration` / `user_acceptance`，否则阅读和维护层面仍保留历史目录心智负担。
+  - 涉及文件: `specs/gates/test_directory_inventory.yaml`、`agent_ops/scaffold/{generate_test_directory_inventory.py,verify_test_directory_inventory.py,generate_app_canonical_test_wrappers.py,test_directory_inventory_lib.py}`、`Makefile`、`agent_ops/gate/gate_repo.sh`、`specs/03_TESTING_STRATEGY.md`
+  - 证据: `make verify-test-specs`、`make verify-test-directory-layout` 全绿；App canonical wrapper 烟测 `test/local_contract/core/app_content_repository_remote__local_contract_test.dart`、`test/user_acceptance/ui/chat/journeys/chat_message_send_journey__user_acceptance_test.dart`、`test/api_integration/beta/personal_assistant_beta_weather_ui__api_integration_test.dart` 通过；`make test-local-contract` 已切到 canonical 根；Service 高价值三服务（user/content/chat）已建立 canonical 桥接根（各 1 个 `local_contract` inventory 测试 + 1 个 `api_integration` legacy runner），`go test ./services/{user,content,chat}-service/tests/{local_contract,api_integration}` 全绿（2026-06-21 收口）。
+  - 状态: 待办（2026-06-21；已锁债并切入口，待后续物理迁移收尾）
+
+- [ ] R-TST02 Service/Data/Ops 的三层归类仍有启发式基线，需逐套件语义复核
+  - 区域: Service / Data / Ops
+  - 域: `runtime-test-pyramid`
+  - 原因: 目录清单生成器为避免“伪物理迁移”导致的假绿，当前采用保守启发式：Service `services/<service>/tests/**` 先归 `api_integration`、`internal/**` 先归 `local_contract`；Data `tests/integration/**` 先归 `api_integration`；agent_ops 含 `stackctl/runtime/deploy` 关键字的测试先归 `api_integration`。这能锁住新债，但还不是逐 suite 的最终语义归属。
+  - 影响: 目录门已阻断新增 legacy 路径，但某些历史测试的层级语义仍可能偏粗；后续若直接据此统计三层覆盖率，可能高估或低估某一层的真实覆盖。
+  - 涉及文件: `agent_ops/scaffold/test_directory_inventory_lib.py`、`specs/gates/test_directory_inventory.yaml`
+  - 证据: `python3 agent_ops/scaffold/verify_test_directory_inventory.py` 全绿，说明基线完整；但 inventory 中 `layer` 仍是自动映射结果，不是逐 suite 人工复核结果。
+  - 状态: 待办（2026-06-21；下一轮需按 service/data/ops 套件逐批语义校正）
+
+- [ ] R-TST03 canonical `make test-local-contract` 仍被 9 个既有 App 红测阻断
+  - 区域: App
+  - 域: `runtime-test-pyramid`
+  - 原因: 本轮已把 `make test-local-contract` 切到 `test/local_contract/` canonical 入口并成功执行 2500+ 测试，但最终仍被 9 个既有 App 用例阻断。通过直接回放原 legacy 文件确认，失败在迁移前已存在：`chat_message_bubble_widget_test.dart` 3 条（图片/视频预览断言）、`chat_receipt_ui_widget_test.dart` 1 条（图片消息回执缺 `ProviderScope`）、`homepage_detail_page_widget_test.dart` 1 条（缺“主页暂不可用”文案）、`location_selector_page_widget_test.dart` 1 条（缺超时文案）、`work_browser_entry_page_test.dart` 1 条（缺“这个作品不可用了”文案）、`home_circles_hub_page_test.dart` 2 条（缺图片/视频卡片 key）。
+  - 影响: 三层目录迁移本身已成立，但 `make test-local-contract` 不能作为全绿证据；若不单独登记，后续很容易把这 9 个存量红灯误判成 canonical wrapper 或目录门引入的回归。
+  - 涉及文件: `quwoquan_app/test/{local_contract,ui}/chat/widgets/{chat_message_bubble_widget_test.dart,chat_receipt_ui_widget_test.dart}`、`quwoquan_app/test/{local_contract,ui}/entity/pages/homepage_detail_page_widget_test.dart`、`quwoquan_app/test/{local_contract,ui}/content/entry/widgets/location_selector_page_widget_test.dart`、`quwoquan_app/test/{local_contract,ui}/content/pages/work_browser_entry_page_test.dart`、`quwoquan_app/test/{local_contract,ui}/circle/pages/home_circles_hub_page_test.dart`
+  - 证据: `python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/core/app_content_repository_remote__local_contract_test.dart test/user_acceptance/ui/chat/journeys/chat_message_send_journey__user_acceptance_test.dart test/api_integration/beta/personal_assistant_beta_weather_ui__api_integration_test.dart` 全绿；`make test-local-contract` 在 canonical 入口执行后失败；随后直接运行原 legacy 文件 `test/ui/chat/widgets/{chat_message_bubble_widget_test.dart,chat_receipt_ui_widget_test.dart}` 与 `test/ui/{entity/pages/homepage_detail_page_widget_test.dart,content/entry/widgets/location_selector_page_widget_test.dart,content/pages/work_browser_entry_page_test.dart,circle/pages/home_circles_hub_page_test.dart}`，复现完全相同的 9 个失败。
+  - 状态: 待办（2026-06-21；需单独修红后 `make test-local-contract` 才能作为三层迁移完成证据）

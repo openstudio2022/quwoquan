@@ -11,6 +11,7 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -124,7 +125,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text(DiscoveryFeedText.myIntersectionsEmpty), findsOneWidget);
+    expect(
+      find.text(UITextConstants.profileIntersectionEmptyGuidance),
+      findsOneWidget,
+    );
   });
 
   testWidgets('契约 seed 默认 Mock：显示查看全部，不显示展开收起', (tester) async {
@@ -152,7 +156,13 @@ void main() {
     expect(find.text(DiscoveryFeedText.myIntersectionsTitle), findsOneWidget);
     expect(find.text(DiscoveryFeedText.intersectionViewAll), findsOneWidget);
     expect(find.text(DiscoveryFeedText.intersectionExpandMore), findsNothing);
-    expect(find.text('你和林清越等4位用户都关注「黄金投资圈」'), findsOneWidget);
+    // 真实契约 seed 至少渲染一条 fact 交集预览行，非空态；具体合成句由 T1 合成测试覆盖，
+    // 此处不耦合 fixture 措辞，避免 seed 文案演进即误伤卡片行为契约。
+    expect(find.byType(InteractiveIntersectionText), findsWidgets);
+    expect(
+      find.text(UITextConstants.profileIntersectionEmptyGuidance),
+      findsNothing,
+    );
   });
 
   testWidgets('primarySpans 名字片段点击进对象主页（优先于整行）', (tester) async {
@@ -213,8 +223,8 @@ void main() {
     expect(find.byKey(MyIntersectionInboxCard.cardKey), findsOneWidget);
     expect(_spanByText(tester, '张晓明').style?.fontWeight, AppTypography.regular);
     expect(_spanByText(tester, '3').style?.fontWeight, AppTypography.regular);
-    final context = tester.element(find.byType(InteractiveIntersectionText));
-    final accent = AppColors.iosAccent(context);
+    // 统一交互蓝字采用低饱和 slogan-accent（浅色态）。
+    final accent = AppColors.profileSloganAccentLight;
     expect(_spanByText(tester, '张晓明').style?.color, accent);
     expect(_spanByText(tester, '3').style?.color, accent);
   });
@@ -312,7 +322,6 @@ IntersectionReason _item({
     intersectionClass: 'fact',
     intersectionId: id,
     objectKind: 'circle',
-    relationKind: 'circle',
     primaryText: text,
     primarySpans: spans,
     actionTargetId: 'fixture_circle_gold_invest',
@@ -383,6 +392,7 @@ class _StubIntersectionRepository implements IntersectionRepository {
     String? filter,
     String? sourceRef,
     String? timeBucket,
+    String? cursor,
     int limit = 50,
   }) async {
     return items.take(limit).toList(growable: false);

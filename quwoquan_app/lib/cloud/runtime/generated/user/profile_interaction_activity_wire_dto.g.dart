@@ -8,6 +8,7 @@ class ProfileInteractionActivityWireDto {
   final String actorSubAccountId;
   final String actorDisplayName;
   final String actorAvatarUrl;
+  final int actorAvatarVersion;
   final String targetSubAccountId;
   final String targetContentId;
   final String targetContentType;
@@ -15,6 +16,7 @@ class ProfileInteractionActivityWireDto {
   final String displaySubAccountId;
   final String displayName;
   final String displayAvatarUrl;
+  final int displayAvatarVersion;
   final String displayUserRouteId;
   final String primaryText;
   final String contextText;
@@ -26,6 +28,9 @@ class ProfileInteractionActivityWireDto {
   final String previewRouteId;
   final List<String> filterKeys;
   final String commentKind;
+  final String commentId;
+  final String parentCommentId;
+  final String viewerReaction;
   final DateTime? createdAt;
 
   ProfileInteractionActivityWireDto({
@@ -35,6 +40,7 @@ class ProfileInteractionActivityWireDto {
     this.actorSubAccountId = '',
     this.actorDisplayName = '',
     this.actorAvatarUrl = '',
+    this.actorAvatarVersion = 0,
     this.targetSubAccountId = '',
     this.targetContentId = '',
     this.targetContentType = '',
@@ -42,6 +48,7 @@ class ProfileInteractionActivityWireDto {
     this.displaySubAccountId = '',
     this.displayName = '',
     this.displayAvatarUrl = '',
+    this.displayAvatarVersion = 0,
     this.displayUserRouteId = '',
     this.primaryText = '',
     this.contextText = '',
@@ -53,6 +60,9 @@ class ProfileInteractionActivityWireDto {
     this.previewRouteId = '',
     this.filterKeys = const <String>[],
     this.commentKind = 'none',
+    this.commentId = '',
+    this.parentCommentId = '',
+    this.viewerReaction = 'none',
     this.createdAt,
   });
 
@@ -64,6 +74,7 @@ class ProfileInteractionActivityWireDto {
       actorSubAccountId: m['actorSubAccountId']?.toString() ?? m['userId']?.toString() ?? '',
       actorDisplayName: m['actorDisplayName']?.toString() ?? m['nickname']?.toString() ?? m['displayName']?.toString() ?? '',
       actorAvatarUrl: m['actorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? '',
+      actorAvatarVersion: (m['actorAvatarVersion'] as num?)?.toInt() ?? (m['avatarVersion'] as num?)?.toInt() ?? 0,
       targetSubAccountId: m['targetSubAccountId']?.toString() ?? m['targetUserId']?.toString() ?? '',
       targetContentId: m['targetContentId']?.toString() ?? m['postId']?.toString() ?? '',
       targetContentType: m['targetContentType']?.toString() ?? m['contentType']?.toString() ?? '',
@@ -71,6 +82,7 @@ class ProfileInteractionActivityWireDto {
       displaySubAccountId: m['displaySubAccountId']?.toString() ?? m['actorSubAccountId']?.toString() ?? m['userId']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['actorDisplayName']?.toString() ?? m['nickname']?.toString() ?? '',
       displayAvatarUrl: m['displayAvatarUrl']?.toString() ?? m['actorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? '',
+      displayAvatarVersion: (m['displayAvatarVersion'] as num?)?.toInt() ?? (m['actorAvatarVersion'] as num?)?.toInt() ?? (m['avatarVersion'] as num?)?.toInt() ?? 0,
       displayUserRouteId: m['displayUserRouteId']?.toString() ?? '',
       primaryText: m['primaryText']?.toString() ?? '',
       contextText: m['contextText']?.toString() ?? '',
@@ -82,6 +94,9 @@ class ProfileInteractionActivityWireDto {
       previewRouteId: m['previewRouteId']?.toString() ?? '',
       filterKeys: _parseStringList(m['filterKeys']) ?? const <String>['all'],
       commentKind: m['commentKind']?.toString() ?? 'none',
+      commentId: m['commentId']?.toString() ?? '',
+      parentCommentId: m['parentCommentId']?.toString() ?? '',
+      viewerReaction: m['viewerReaction']?.toString() ?? 'none',
       createdAt: _parseDateTime(m['createdAt']) ?? null,
     );
   }
@@ -94,6 +109,7 @@ class ProfileInteractionActivityWireDto {
       'actorSubAccountId': actorSubAccountId,
       'actorDisplayName': actorDisplayName,
       'actorAvatarUrl': actorAvatarUrl,
+      'actorAvatarVersion': actorAvatarVersion,
       'targetSubAccountId': targetSubAccountId,
       'targetContentId': targetContentId,
       'targetContentType': targetContentType,
@@ -101,6 +117,7 @@ class ProfileInteractionActivityWireDto {
       'displaySubAccountId': displaySubAccountId,
       'displayName': displayName,
       'displayAvatarUrl': displayAvatarUrl,
+      'displayAvatarVersion': displayAvatarVersion,
       'displayUserRouteId': displayUserRouteId,
       'primaryText': primaryText,
       'contextText': contextText,
@@ -112,6 +129,9 @@ class ProfileInteractionActivityWireDto {
       'previewRouteId': previewRouteId,
       'filterKeys': filterKeys,
       'commentKind': commentKind,
+      'commentId': commentId,
+      'parentCommentId': parentCommentId,
+      'viewerReaction': viewerReaction,
       'createdAt': createdAt,
     };
   }
@@ -123,6 +143,7 @@ class ProfileInteractionActivityWireDto {
     String? actorSubAccountId,
     String? actorDisplayName,
     String? actorAvatarUrl,
+    int? actorAvatarVersion,
     String? targetSubAccountId,
     String? targetContentId,
     String? targetContentType,
@@ -130,6 +151,7 @@ class ProfileInteractionActivityWireDto {
     String? displaySubAccountId,
     String? displayName,
     String? displayAvatarUrl,
+    int? displayAvatarVersion,
     String? displayUserRouteId,
     String? primaryText,
     String? contextText,
@@ -141,6 +163,9 @@ class ProfileInteractionActivityWireDto {
     String? previewRouteId,
     List<String>? filterKeys,
     String? commentKind,
+    String? commentId,
+    String? parentCommentId,
+    String? viewerReaction,
     DateTime? createdAt,
   }) {
     return ProfileInteractionActivityWireDto(
@@ -150,6 +175,7 @@ class ProfileInteractionActivityWireDto {
       actorSubAccountId: actorSubAccountId ?? this.actorSubAccountId,
       actorDisplayName: actorDisplayName ?? this.actorDisplayName,
       actorAvatarUrl: actorAvatarUrl ?? this.actorAvatarUrl,
+      actorAvatarVersion: actorAvatarVersion ?? this.actorAvatarVersion,
       targetSubAccountId: targetSubAccountId ?? this.targetSubAccountId,
       targetContentId: targetContentId ?? this.targetContentId,
       targetContentType: targetContentType ?? this.targetContentType,
@@ -157,6 +183,7 @@ class ProfileInteractionActivityWireDto {
       displaySubAccountId: displaySubAccountId ?? this.displaySubAccountId,
       displayName: displayName ?? this.displayName,
       displayAvatarUrl: displayAvatarUrl ?? this.displayAvatarUrl,
+      displayAvatarVersion: displayAvatarVersion ?? this.displayAvatarVersion,
       displayUserRouteId: displayUserRouteId ?? this.displayUserRouteId,
       primaryText: primaryText ?? this.primaryText,
       contextText: contextText ?? this.contextText,
@@ -168,6 +195,9 @@ class ProfileInteractionActivityWireDto {
       previewRouteId: previewRouteId ?? this.previewRouteId,
       filterKeys: filterKeys ?? this.filterKeys,
       commentKind: commentKind ?? this.commentKind,
+      commentId: commentId ?? this.commentId,
+      parentCommentId: parentCommentId ?? this.parentCommentId,
+      viewerReaction: viewerReaction ?? this.viewerReaction,
       createdAt: createdAt ?? this.createdAt,
     );
   }

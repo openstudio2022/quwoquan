@@ -9,64 +9,82 @@ node:
 scope:
   summary: 收口商用消息体系主路径，禁止以 Mock、prototype 和退役字段维持正式渲染。
   journey_scenarios:
-    - commercial-message-system
+  - commercial-message-system
   out_of_scope:
-    - alpha/test fixture 的开发态组织方式
+  - alpha/test fixture 的开发态组织方式
 gwt_acceptance:
   GWT1:
     title: 商用消息体系主路径只消费 Remote 与真实持久化事实
     given:
-      - 应用运行在商用消息体系正式主路径。
+    - 应用运行在商用消息体系正式主路径。
     when:
-      - 页面、Provider 与服务配置加载消息、联系、群和通知数据。
+    - 页面、Provider 与服务配置加载消息、联系、群和通知数据。
     then:
-      - App UI/Provider 不依赖 MockChatRepository、MockIntersectionRepository、MockAppMessageRepository 或 prototype bundle 拼业务列表。
-      - 服务端生产配置不允许 mock-user、memory store、noop resolver 或空 baseURL 返回空。
-      - 退役字段不再作为商用主渲染来源。
+    - App UI/Provider 不依赖 MockChatRepository、MockIntersectionRepository、MockAppMessageRepository
+      或 prototype bundle 拼业务列表。
+    - 服务端生产配置不允许 mock-user、memory store、noop resolver 或空 baseURL 返回空。
+    - 退役字段不再作为商用主渲染来源。
     done_when:
-      - 商用消息体系主路径的正式渲染不再依赖 Mock、prototype 和退役字段。
+    - 商用消息体系主路径的正式渲染不再依赖 Mock、prototype 和退役字段。
     edge_cases:
-      - release 包默认 Remote 且无切换入口。
-      - 远端失败时只能走结构化错误或缓存降级，不回退本地业务拼接。
+    - release 包默认 Remote 且无切换入口。
+    - 远端失败时只能走结构化错误或缓存降级，不回退本地业务拼接。
     platform_variants:
       iOS: []
       Android: []
     contract_refs:
-      - specs/feature-tree/chat-conversation/commercial-message-system/spec.md
-      - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+    - specs/feature-tree/chat-conversation/commercial-message-system/spec.md
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
     performance_points: []
-    evidence:
-      primary:
-        - T1_static_contract
-      supporting:
-        - T3_service_contract
     tests:
       planned:
-        - make verify-app-mock-isolation
-        - make verify-app-seed-manifest
-        - quwoquan_service/services/chat-service/tests/commercial_config_contract_test.go
+      - command: make verify-app-mock-isolation
+      - command: make verify-app-seed-manifest
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.chat_conversation.commercial_message_system.commercial_remote_only_message_system.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.chat_conversation.commercial_message_system.commercial_remote_only_message_system.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/commercial_config_contract_test.go'
 contract_acceptance:
   CONTRACT1:
     title: 商用消息体系 Remote-only 契约保持单一真相源
     metadata_refs:
-      - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
-      - quwoquan_service/contracts/metadata/notification/notification/service.yaml
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+    - quwoquan_service/contracts/metadata/notification/notification/service.yaml
     done_when:
-      - 商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动。
-    evidence:
-      primary:
-        - T1_static_contract
-      supporting: []
+    - 商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动。
     tests:
       planned:
-        - bash agent_ops/scaffold/verify_acceptance_standard.sh
+      - command: bash agent_ops/scaffold/verify_acceptance_standard.sh
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract1_local_contract
+        cases:
+        - local_contract.chat_conversation.commercial_message_system.commercial_remote_only_message_system.contract1_local_contract
+        envs: *id001
+      supporting: []
+    notes: []
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

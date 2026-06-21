@@ -9,45 +9,66 @@ node:
 scope:
   summary: 内容生命周期状态机与优质老内容复活召回。
   in_scope:
-    - 生命周期状态机。
-    - 季节、事件、社交、常青、二次分发复活触发器。
-    - 合规准入、疲劳、去重和动态预算约束。
+  - 生命周期状态机。
+  - 季节、事件、社交、常青、二次分发复活触发器。
+  - 合规准入、疲劳、去重和动态预算约束。
   out_of_scope:
-    - 本轮不实现 ResurfaceSource 或 rm_exposure_state。
+  - 本轮不实现 ResurfaceSource 或 rm_exposure_state。
 gwt_acceptance:
   GWT1:
     title: 内容复活 GWT
     given:
-      - 一篇老内容处于 dormant 状态，但过往完成率高，且当前季节或社交事件命中。
+    - 一篇老内容处于 dormant 状态，但过往完成率高，且当前季节或社交事件命中。
     when:
-      - 用户请求推荐 feed。
+    - 用户请求推荐 feed。
     then:
-      - 该内容可经复活召回进入候选，但仍受去重、疲劳、审核和预算约束，并带复活触发解释。
+    - 该内容可经复活召回进入候选，但仍受去重、疲劳、审核和预算约束，并带复活触发解释。
     done_when:
-      - 生命周期状态、触发器、约束链路、指标和回滚层均冻结。
+    - 生命周期状态、触发器、约束链路、指标和回滚层均冻结。
     edge_cases:
-      - retired 或违规下架内容不能被复活。
+    - retired 或违规下架内容不能被复活。
     contract_refs:
-      - quwoquan_service/contracts/metadata/content/post/storage.yaml
-      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    - quwoquan_service/contracts/metadata/content/post/storage.yaml
+    - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
     performance_points:
-      - resurfaced_exposure_rate observe_only
-    evidence:
-      primary:
-        - T1_contract
-        - T2_module_interaction
-      supporting:
-        - T3_app_api_integration
-        - T4_e2e_journey
+    - resurfaced_exposure_rate observe_only
     tests:
-      planned:
-        - quwoquan_service/runtime/recommendation/exposure_resurfacing_test.go
-        - quwoquan_service/services/content-service/tests/post_feed_resurfacing_contract_test.go
+      planned: []
       recorded: []
-    status: specified
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.exposure_governance.content_lifecycle_resurfacing.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.exposure_governance.content_lifecycle_resurfacing.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.discovery_content.exposure_governance.content_lifecycle_resurfacing.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      - layer: user_acceptance
+        suite: e2e_journey
+        cases:
+        - user_acceptance.discovery_content.exposure_governance.content_lifecycle_resurfacing.e2e_journey
+        envs:
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_service/runtime/recommendation/exposure_resurfacing_test.go'
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/post_feed_resurfacing_contract_test.go'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

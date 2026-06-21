@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -40,6 +41,40 @@ func (s *MongoPostStore) FindByID(ctx context.Context, id string) (*postmodel.Po
 		return nil, false
 	}
 	return &post, true
+}
+
+func (s *MongoPostStore) AdjustCommentCount(ctx context.Context, id string, delta int64) (int64, bool, error) {
+	var updated postmodel.Post
+	err := s.coll.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": id},
+		bson.M{
+			"$inc": bson.M{"commentCount": delta},
+			"$set": bson.M{"updatedAt": time.Now().UTC()},
+		},
+		options.FindOneAndUpdate().
+			SetReturnDocument(options.After).
+			SetProjection(bson.M{"commentCount": 1}),
+	).Decode(&updated)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	return updated.CommentCount, true, nil
+}
+
+func (s *MongoPostStore) SetCommentCount(ctx context.Context, id string, count int64) (bool, error) {
+	res, err := s.coll.UpdateOne(
+		ctx,
+		bson.M{"_id": id},
+		bson.M{"$set": bson.M{"commentCount": count, "updatedAt": time.Now().UTC()}},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount > 0, nil
 }
 
 func (s *MongoPostStore) ListAll(ctx context.Context) []postmodel.Post {

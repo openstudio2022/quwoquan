@@ -8,6 +8,12 @@ from _common.stage_reports import iter_stage_envelopes
 from verify.audit_summary import write_batch_audit_summary
 
 
+def _publish_gate_issues(release_id: str) -> list[str]:
+    from publish.gate import gate_publish
+
+    return gate_publish(release_id)
+
+
 def gate_verify(*, task: str | None = None, batch: str | None = None, release: str | None = None, scope: str = "current"):
     """返回 (roots, issues)。issues 非空即门禁失败。"""
     roots, issues = verify_scope(task=task, batch=batch, release=release, scope=scope)
@@ -15,6 +21,7 @@ def gate_verify(*, task: str | None = None, batch: str | None = None, release: s
         issues.extend(_verify_runtime_stage_payloads(task, batch))
         write_batch_audit_summary(task, batch, roots=roots, issues=issues)
     if release:
+        issues.extend(_publish_gate_issues(release))
         issues.extend(release_integrity_issues(release))
     elif not task and not batch:
         seen_releases: set[str] = set()
@@ -25,6 +32,7 @@ def gate_verify(*, task: str | None = None, batch: str | None = None, release: s
             if release_id in seen_releases:
                 continue
             seen_releases.add(release_id)
+            issues.extend(_publish_gate_issues(release_id))
             issues.extend(release_integrity_issues(release_id))
     return roots, issues
 

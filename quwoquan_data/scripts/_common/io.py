@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -13,9 +15,21 @@ def read_json(path: Path) -> Any:
 
 def write_json(path: Path, data: Any, *, indent: int = 2) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    tmp_name = ""
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as f:
+        tmp_name = f.name
         json.dump(data, f, ensure_ascii=False, indent=indent)
         f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_name, path)
 
 
 def read_ndjson(path: Path) -> list[dict]:

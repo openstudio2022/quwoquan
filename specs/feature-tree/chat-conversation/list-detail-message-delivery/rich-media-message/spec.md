@@ -170,12 +170,12 @@
 
 ## 验收重点
 
-### T1 契约与静态层
+### local_contract 契约与静态层
 
 - metadata 不需要变更（video/file/image 已在 types.yaml 和 fields.yaml 中定义）
 - 视觉语义检查：`verify_dart_semantic.py` 无新增硬编码
 
-### T2 模块与交互层
+### local_contract 模块与交互层
 
 - 视频气泡 Widget 渲染正确（缩略图/播放按钮/时长/进度）
 - 文件气泡 Widget 渲染正确（图标/文件名/大小/下载状态）
@@ -183,12 +183,12 @@
 - 大号 Emoji 检测与放大逻辑正确
 - 图片全屏查看器缩放/手势正确
 
-### T3 端云集成层
+### api_integration 端云集成层
 
 - 视频/文件/图片消息 `SendMessage` + `SyncMessages` 端云联调
 - 上传→发送→同步→下载→预览/播放链路联通
 
-### T4 端到端旅程层
+### user_acceptance 端到端旅程层
 
 - 视频消息发送→接收→播放旅程
 - 文件消息发送→接收→各格式预览旅程

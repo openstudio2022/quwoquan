@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "毕棚沟_route_transport",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:227282b72343bbab708466bc8ed9cef8f827cc09ed7cae688834fcbde7c18222",
+  "finalSha256": "sha256:4f73a553314d6dd7ee158560c45e317363c3ade5f936e3ddf6a6be7a3716a8c3",
+  "draftBodySha256": "sha256:227282b72343bbab708466bc8ed9cef8f827cc09ed7cae688834fcbde7c18222",
+  "finalBodySha256": "sha256:227282b72343bbab708466bc8ed9cef8f827cc09ed7cae688834fcbde7c18222",
+  "composeSnapshotSha256": "sha256:227282b72343bbab708466bc8ed9cef8f827cc09ed7cae688834fcbde7c18222",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

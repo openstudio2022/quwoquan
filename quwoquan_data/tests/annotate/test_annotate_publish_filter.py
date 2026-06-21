@@ -120,7 +120,11 @@ def test_publish_filter_discard_and_homepage(tmp_path_factory=None):
             {"assetId": "bad", "fileName": "bad.jpg"},
         ],
     })
-    (topic / "article.md").write_text("# t\n\n:::figure\n![x](asset://bad)\nbad\n:::\n\n正文。\n", encoding="utf-8")
+    (topic / "article.md").write_text(
+        "# t\n\n:::figure\n![x](asset://bad)\nbad\n:::\n\n"
+        "正文提到[无主页](/entity/地点/景区/无主页)。\n",
+        encoding="utf-8",
+    )
     # 账本：文章可发布，bad 图 discard
     ledger = ReviewLedger(
         taskId=TASK, batchId=BATCH, ref=REF,
@@ -137,6 +141,8 @@ def test_publish_filter_discard_and_homepage(tmp_path_factory=None):
     assert verdict.publishable is True
     assert "bad" in verdict.discarded_assets
     assert "无主页" in "".join(verdict.filtered_entities)
+    assert verdict.manifest["pendingEntityMentions"][0]["status"] == "pending_review"
+    assert verdict.manifest["pendingEntityMentions"][0]["surface"] == "无主页"
     # discard 图从 manifest.assets 剔除
     asset_ids = {a["assetId"] for a in verdict.manifest["assets"]}
     assert "bad" not in asset_ids and "ok" in asset_ids
@@ -144,6 +150,9 @@ def test_publish_filter_discard_and_homepage(tmp_path_factory=None):
     assert all("无主页" not in r for r in verdict.manifest["entityRefs"])
     # 正文 figure 引用 bad 被剔除
     assert "asset://bad" not in verdict.article_md
+    # 无主页实体链接被降级为普通文本，避免发布可点击实体引用
+    assert "[无主页](/entity/地点/景区/无主页)" not in verdict.article_md
+    assert "正文提到无主页" in verdict.article_md
 
 
 def test_publish_filter_accepts_release_entities_root():
@@ -164,6 +173,7 @@ def test_publish_filter_accepts_release_entities_root():
     assert verdict.publishable is True
     assert verdict.filtered_entities == ["/entity/地点/景区/无主页"]
     assert verdict.manifest["entityRefs"] == ["/entity/地点/景区/有主页"]
+    assert verdict.manifest["pendingEntityMentions"][0]["sourceEntityRef"] == "/entity/地点/景区/无主页"
 
 
 def test_publish_filter_syncs_readonly_ref_projections_after_entity_filter():
@@ -191,6 +201,7 @@ def test_publish_filter_syncs_readonly_ref_projections_after_entity_filter():
     assert "semanticMentions" not in verdict.manifest
     assert verdict.manifest["entityRefs"] == ["/entity/地点/景区/有主页"]
     assert verdict.manifest["normalizedEntityRefs"] == ["entity:景区:有主页"]
+    assert verdict.manifest["pendingEntityMentions"][0]["candidateId"].startswith("entity_candidate_")
     action_targets = [item.get("actionTargetId") for item in verdict.manifest["intersectionHints"]]
     assert "entity:景区:无主页" not in action_targets
     assert "entity:景区:有主页" in action_targets

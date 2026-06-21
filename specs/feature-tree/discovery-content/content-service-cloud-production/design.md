@@ -173,11 +173,11 @@ Projector 通过 Redis Pub/Sub 订阅 PostCreated 事件，异步写入投影。
 
 | Story (L3) | 包含的 Acceptance | 测试层覆盖 |
 |---|---|---|
-| storage-cache-event-enablement | A1 存储 + A2 缓存 + A3 事件投影 + A4 治理 | T1 契约 + T3 集成 |
-| missing-api-completion | A5 缺失 API | T1 契约 + T3 集成 |
-| client-api-alignment | A6 端侧方法 + A7 兼容层清理 | T1 契约 + T2 组件 |
-| deployment-ci-readiness | A8 Kustomize + A9 CI | T1 静态校验 |
-| production-test-coverage | A10 T1 + A11 T2 + A12 T3+T4 | T1 + T2 + T3 + T4 |
+| storage-cache-event-enablement | A1 存储 + A2 缓存 + A3 事件投影 + A4 治理 | local_contract 契约 + api_integration 集成 |
+| missing-api-completion | A5 缺失 API | local_contract 契约 + api_integration 集成 |
+| client-api-alignment | A6 端侧方法 + A7 兼容层清理 | local_contract 契约 + local_contract 组件 |
+| deployment-ci-readiness | A8 Kustomize + A9 CI | local_contract 静态校验 |
+| production-test-coverage | A10 local_contract + A11 local_contract + A12 api_integration+user_acceptance | local_contract + local_contract + api_integration + user_acceptance |
 
 ---
 

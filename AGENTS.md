@@ -23,7 +23,7 @@
 - `L2_business_capability`
 - `L3_story`
 - 验收意图：`UAT / SIT / GWT / contract`
-- 证据层：`T1 / T2 / T3 / T4`
+- 测试证据：`local_contract / api_integration / user_acceptance`
 
 如果以上任一项无法明确，先刷新规格或特性树文档，不要直接写实现。
 
@@ -48,13 +48,13 @@
 
 ## 自然语言与命令等价
 
-用户直接输入自然语言时，也必须按 `docs/agent_context_contract.md` 路由：先识别阶段、特性树、触达区域和证据层，再做正向规格理解与执行前自检反思。不能因为用户没有显式输入 `/explore`、`/dev` 或 `/verify` 就跳过项目规约。
+用户直接输入自然语言时，也必须按 `docs/agent_context_contract.md` 路由：先识别阶段、特性树、触达区域和三层测试证据，再做正向规格理解与执行前自检反思。不能因为用户没有显式输入 `/explore`、`/dev` 或 `/verify` 就跳过项目规约。
 
 触达多个区域（App / Service / Data / Ops / Portal）时，必须自动启用端到端模式，证明 `Data -> Service -> App -> Behavior -> Recommendation -> Observability -> Environment` 无断点。
 
 每次非纯查询任务必须显式遵守三段协议：
 
-- **Spec Entry**：目标、用户价值、范围、Out of Scope、特性树、验收意图、证据层、风险。
+- **Spec Entry**：目标、用户价值、范围、Out of Scope、特性树、验收意图、三层测试证据、风险。
 - **Pre-work Reflection**：metadata-first、runtime error、mock 隔离、页面质量、data CLI-first、stackctl、跨域 E2E 是否触发。
 - **Exit Review**：规格达成、测试证据、E2E、产品/UX、运营观测、自动化/门禁、剩余风险。
 
@@ -65,7 +65,7 @@
 Codex 在本仓库做任何增量，都必须同时用这些视角审视，不得只完成代码表面改动：
 
 - **Review 视角**：按产品、架构、代码评审、质量、测试、用户、运维、运营八角色检查；优先发现 bug、契约漂移、无测试、无观测、体验断点、第二真相源和不合理抽象。
-- **四层测试视角**：`T1` 契约/静态、`T2` 模块交互、`T3` 端云集成、`T4` 用户旅程必须与 `UAT/SIT/GWT/contract` 映射；远端行为的 `T3` 断言必须能在 `T2` Mock 行为中找到对应覆盖。
+- **三层测试视角**：`local_contract`、`api_integration`、`user_acceptance` 必须与 `UAT/SIT/GWT/contract` 映射；远端行为在 `api_integration` 中验证的字段、错误码和边界，必须能在 `local_contract` 的 Mock/Provider/Widget/领域规则中找到对应覆盖。
 - **四环境视角**：`alpha`、`beta`、`gamma`、`prod` 的数据源、配置、包纯度、URL/topology、部署与回滚证据必须分层；不存在 `prod-gray`，生产灰度只是 `prod` rollout stage。
 - **错误码端云链路视角**：错误码、用户提示、恢复动作、HTTP 响应、端侧 `CloudException`/`RuntimeFailure`、埋点、日志、告警和测试必须同源；禁止只改 UI 文案、只改 mapper 或只改服务错误响应。
 - **可观测与可配置视角**：新增页面、API、行为信号、推荐策略、数据工程发布都必须声明 SLI/SLO、指标、采样、保留周期、告警阈值、配置来源、灰度与回滚。

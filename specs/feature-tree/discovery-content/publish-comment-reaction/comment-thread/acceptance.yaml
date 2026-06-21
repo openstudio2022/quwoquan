@@ -14,10 +14,14 @@ scope:
   - 一级评论、二级回复预览、回复分页展开、默认/最新/最多赞排序。
   - 文本、emoji、图片附件、@小趣、@联系人或关注对象输入与结构化回显。
   - 评论赞踩互斥、viewerReaction 重入恢复、删除/举报/回复权限态。
+  - 内容作者置顶/取消置顶一级评论与置顶优先排序、canPin 派生权限。
+  - 创建评论按受信代理头解析省级属地快照（ipLocation）落库与透传展示。
+  - 内容作者赞过标识（authorLiked）与互动深链精确定位（commentId/parentCommentId）。
   - alpha/beta/gamma 非生产环境复杂评论种子与四层测试证据。
   out_of_scope:
   - 评论全文搜索。
-  - 评论置顶与评论翻译。
+  - 评论翻译。
+  - 评论区关闭（帖主关闭评论区，V2+）。
   - ML rerank，仅保留低延迟 recommended 可解释排序。
 gwt_acceptance:
   GWT1:
@@ -38,18 +42,33 @@ gwt_acceptance:
     - content/post service.yaml ListComments
     performance_points:
     - 评论 section 首屏 P95 小于 800ms。
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_static_contract
-      - T4_device_journey
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/article_inline_comment_section_test.dart
+      planned: []
       recorded:
-      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt1_local_contract
+        envs: *id001
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey
+        envs: &id002
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/article_inline_comment_section_test.dart'
   GWT2:
     title: 沉浸式内容打开上压评论分屏
     given:
@@ -68,17 +87,26 @@ gwt_acceptance:
     - content/post service.yaml ListComments
     performance_points:
     - 打开分屏动画小于 300ms。
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T4_device_journey
     tests:
-      planned:
-      - quwoquan_app/test/components/comment_system/immersive_comment_split_sheet_test.dart
+      planned: []
       recorded:
-      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt2_local_contract
+        envs: *id001
+      supporting:
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey
+        envs: *id002
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/components/comment_system/immersive_comment_split_sheet_test.dart'
   GWT3:
     title: 评论与回复提交支持登录续接和失败保留草稿
     given:
@@ -98,29 +126,45 @@ gwt_acceptance:
     - runtime/errors
     performance_points:
     - 乐观渲染小于 100ms，云端确认 P95 小于 500ms。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T4_device_journey
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/providers/comment_provider_test.dart
-      - quwoquan_app/test/auth/comment_login_continuation_test.dart
+      planned: []
       recorded:
-      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt3_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt3_api_integration
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt3_api_integration
+        envs: &id003
+        - beta
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey
+        envs: *id002
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/providers/comment_provider_test.dart'
+    - '[migrated_from_planned] quwoquan_app/test/auth/comment_login_continuation_test.dart'
   GWT4:
     title: 回复预览和展开数量由云端配置控制
     given:
-    - App Config 返回 reply_preview_count 和 reply_expand_page_size。
+    - App Config 返回 reply_preview_count、reply_first_expand_page_size 和 reply_expand_page_size。
     when:
-    - 用户打开评论列表并展开某条一级评论的回复。
+    - 用户打开评论列表并多次展开某条一级评论的回复。
     then:
     - 一级评论默认展示 reply_preview_count 条回复，配置不可达时 fallback 为 1。
-    - 每次点击展开追加 reply_expand_page_size 条回复，配置不可达时 fallback 为 10。
-    - 剩余回复数量准确递减。
+    - 首次点击展开最多追加 reply_first_expand_page_size 条回复，配置不可达时 fallback 为 5。
+    - 后续每次点击展开追加 reply_expand_page_size 条回复，配置不可达时 fallback 为 10。
+    - 展示数超过预览数时提供收起，剩余回复数量准确递减。
     done_when:
     - Mock、Remote、服务端 contract 对相同配置给出一致结果。
     edge_cases:
@@ -129,23 +173,37 @@ gwt_acceptance:
     contract_refs:
     - content/post service.yaml ListCommentReplies
     - app config sys.content.comment.reply_preview_count
+    - app config sys.content.comment.reply_first_expand_page_size
     - app config sys.content.comment.reply_expand_page_size
     performance_points:
     - 回复展开查询 P95 小于 500ms。
-    evidence:
-      primary:
-      - T1_static_contract
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/providers/comment_reply_pagination_test.dart
-      - quwoquan_service/services/content-service/tests/comment_thread_contract_test.go
+      planned: []
       recorded:
-      - quwoquan_service/services/content-service/tests/post_comment_contract_test.go
-      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt4_local_contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt4_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt4_api_integration
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt4_api_integration
+        envs: *id003
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/providers/comment_reply_pagination_test.dart'
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/comment_thread_contract_test.go'
   GWT5:
     title: 默认、最新、最多赞三档排序端云一致
     given:
@@ -164,19 +222,32 @@ gwt_acceptance:
     - content/post service.yaml ListComments sort
     performance_points:
     - 评论首屏排序查询 P95 小于 800ms。
-    evidence:
-      primary:
-      - T1_static_contract
-      - T3_app_api_integration
-      supporting:
-      - T2_module_interaction
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/providers/comment_sort_test.dart
-      - quwoquan_service/services/content-service/tests/comment_thread_contract_test.go
+      planned: []
       recorded:
-      - quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt5_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt5_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt5_api_integration
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt5_api_integration
+        envs: *id003
+      supporting:
+      - layer: local_contract
+        suite: gwt5_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt5_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/providers/comment_sort_test.dart'
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/comment_thread_contract_test.go'
   GWT6:
     title: 评论赞踩互斥并能重入恢复
     given:
@@ -196,20 +267,33 @@ gwt_acceptance:
     - Comment.viewerReaction
     performance_points:
     - 乐观 UI 更新小于 100ms。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/providers/comment_reaction_test.dart
-      - quwoquan_service/services/content-service/tests/comment_reaction_contract_test.go
+      planned: []
       recorded:
-      - quwoquan_service/services/content-service/tests/post_comment_contract_test.go
-      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt6_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt6_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt6_api_integration
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt6_api_integration
+        envs: *id003
+      supporting:
+      - layer: local_contract
+        suite: gwt6_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt6_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/providers/comment_reaction_test.dart'
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/comment_reaction_contract_test.go'
   GWT7:
     title: 评论输入支持 emoji、图片和 @ 提及
     given:
@@ -229,20 +313,34 @@ gwt_acceptance:
     - sys.content.comment.attachment.max_images
     performance_points:
     - 打开 @ 候选不阻塞输入。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T4_device_journey
-      supporting:
-      - T3_app_api_integration
     tests:
-      planned:
-      - quwoquan_app/test/components/comment_system/comment_composer_panel_test.dart
-      - quwoquan_app/integration_test/comment_composer_journey_test.dart
+      planned: []
       recorded:
-      - quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
-      - quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/cloud/content/contract/comment_dto_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt7_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt7_local_contract
+        envs: *id001
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey
+        envs: *id002
+      supporting:
+      - layer: api_integration
+        suite: gwt7_api_integration
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt7_api_integration
+        envs: *id003
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/components/comment_system/comment_composer_panel_test.dart'
+    - '[migrated_from_planned] quwoquan_app/integration_test/comment_composer_journey_test.dart'
   GWT8:
     title: 非生产数据和四层证据完整
     given:
@@ -251,7 +349,8 @@ gwt_acceptance:
     - 执行评论相关 gate 与端云集成测试。
     then:
     - seed 覆盖 20+ 回复线程、图片评论、@小趣、@联系人、viewerReaction=like/dislike/none、排序样本。
-    - T1/T2/T3/T4 均有测试路径或 recorded 证据。
+    - local_contract/local_contract/api_integration/user_acceptance 均有测试路径或 recorded
+      证据。
     done_when:
     - seed manifest verifiedEndpoints 包含 comments、replies、reaction、attachment。
     edge_cases:
@@ -261,24 +360,286 @@ gwt_acceptance:
     - content test_fixtures
     - _shared app_alpha/app_beta seed manifest
     performance_points: []
-    evidence:
-      primary:
-      - T1_static_contract
-      - T2_module_interaction
-      - T3_app_api_integration
-      - T4_device_journey
-      supporting: []
     tests:
-      planned:
-      - quwoquan_service/services/content-service/tests/comment_seed_contract_test.go
-      - quwoquan_app/integration_test/comment_thread_journey_test.dart
+      planned: []
       recorded:
-      - quwoquan_service/services/content-service/tests/post_comment_contract_test.go
-      - quwoquan_service/services/content-service/tests/contract_fixture_seed_test.go
-      - quwoquan_service/contracts/metadata/_shared/test_fixtures/app_alpha_seed_manifest.json
-      - quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json
-      - quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json
+      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/contract_fixture_seed_test.go
+      - file: quwoquan_service/contracts/metadata/_shared/test_fixtures/app_alpha_seed_manifest.json
+      - file: quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json
+      - file: quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt8_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt8_local_contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt8_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt8_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt8_api_integration
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt8_api_integration
+        envs: *id003
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey
+        envs: *id002
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/comment_seed_contract_test.go'
+    - '[migrated_from_planned] quwoquan_app/integration_test/comment_thread_journey_test.dart'
+  GWT9:
+    title: 我的-互动评论类点击深链进入评论区并滚动定位高亮
+    given:
+    - 用户在"我的-互动"列表看到评论类或回复类互动项。
+    when:
+    - 用户点击该互动项的内容预览。
+    then:
+    - 深链进入对应内容评论区并携带 openComments=true，非评论类互动不带该参数。
+    - 评论列表命中已加载的目标一级评论时滚动定位并短暂高亮，约 2.4s 后淡出。
+    done_when:
+    - 评论类互动深链稳定打开评论区，命中目标项与可见区有正面积交集并高亮。
+    edge_cases:
+    - 目标评论不在已加载页时不报错；commentId wire 已落地，精确定位见 GWT14。
+    - 高亮淡出定时器在组件销毁时取消，不泄漏。
+    contract_refs:
+    - content/post service.yaml ListComments
+    - app route workBrowser openComments
+    performance_points:
+    - 滚动定位动画小于 320ms。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_app/test/ui/user/widgets/profile_interaction_tab_test.dart
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt9_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt9_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: gwt9_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt9_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/integration_test/comment_deeplink_journey_test.dart'
+  GWT10:
+    title: 评论附件类型化端云契约消除 Map 穿透
+    given:
+    - 云端按 fields.yaml entities.Comment.attachments 形态返回 [{mediaId,type,url,thumbnailUrl,width,height,moderationStatus}]。
+    when:
+    - 端侧 CommentDto.fromMap 解析评论附件并在列表展示。
+    then:
+    - attachments 类型化为 List<CommentAttachmentDto>，消费端不再做 Map 穿透。
+    - displayUrl 与 aspectRatio 由 DTO 派生，异常宽高比套用统一护栏裁剪。
+    done_when:
+    - local_contract 契约 fromMap/toMap round-trip 锁定附件字段，且 UI Map 字面量预算不回升。
+    edge_cases:
+    - 宽或高缺失/非正时 aspectRatio 返回 null 交护栏处理。
+    - thumbnailUrl 为空时 displayUrl 回退原图 url。
+    contract_refs:
+    - content/post fields.yaml entities.Comment.attachments
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_app/test/cloud/content/contract/comment_dto_contract_test.dart
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt10_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt10_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: gwt10_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt10_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/comment_attachment_contract_test.go'
+  GWT11:
+    title: 评论可观测埋点真实发射
+    given:
+    - 评论区与互动入口均接入 commentObservability。
+    when:
+    - 用户曝光评论区、深链进入或落地、点赞、加载评论列表。
+    then:
+    - surfaceExpose、comment_deeplink_opened（entrySource=profile-interaction/initiated
+      与 deeplink-highlight/hit）、reactionChanged 等动作事件真实发射。
+    - listLoadMs、reactionConfirmMs 等延迟指标真实发射，埋点经 unawaited 不阻塞 UI。
+    done_when:
+    - local_contract 用记录型 observability 桩断言关键事件与延迟指标被真实调用并携带正确属性。
+    edge_cases:
+    - 未命中深链目标时不发 deeplink hit 事件。
+    - 高亮定时器结束不影响埋点记录。
+    contract_refs:
+    - client analytics comment_observability（无 metadata 契约第二真相源）
+    performance_points:
+    - 埋点通过 unawaited 异步发射，不阻塞评论 UI。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/ui/user/widgets/profile_interaction_tab_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt11_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt11_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/integration_test/comment_observability_journey_test.dart'
+  GWT12:
+    title: 内容作者置顶一级评论并优先排序
+    given:
+    - 内容作者打开自己帖子的评论区，存在一级评论与二级回复。
+    when:
+    - 作者点按某条一级评论的置顶图标，再次点按取消置顶。
+    then:
+    - canPin 仅在 viewer 为内容作者且评论为一级、未删除时为 true，端侧据此渲染置顶入口与「置顶」徽标。
+    - 置顶后该评论 isPinned=true、pinnedAt 非空并排到列表最前；多条置顶按 pinnedAt 倒序。
+    - 取消置顶后 isPinned=false 并回到原排序位置。
+    done_when:
+    - Mock、Remote、服务端对置顶/取消置顶给出一致状态与排序，pinChanged 事件与 pinConfirmMs 指标真实发射。
+    edge_cases:
+    - 非内容作者置顶返回 comment_pin_forbidden（403）。
+    - 置顶二级回复返回 comment_pin_invalid_target（400）。
+    contract_refs:
+    - content/post service.yaml PinComment
+    - content/post service.yaml UnpinComment
+    - content/post fields.yaml entities.Comment.isPinned/pinnedAt/canPin
+    - content/post errors.yaml comment_pin_forbidden/comment_pin_invalid_target
+    performance_points:
+    - 置顶乐观 UI 更新小于 100ms。
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/content-service/internal/application/comment_display_fields_test.go
+      - file: quwoquan_app/test/cloud/content/contract/comment_dto_contract_test.dart
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt12_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt12_local_contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt12_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt12_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt12_api_integration
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt12_api_integration
+        envs: *id003
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/integration_test/comment_pin_journey_test.dart'
+  GWT13:
+    title: 创建评论按受信代理头解析省级属地快照
+    given:
+    - 评论创建请求经受信代理携带 X-Forwarded-For/X-Real-IP/RemoteAddr。
+    when:
+    - 用户在某帖创建评论。
+    then:
+    - 云侧按 X-Forwarded-For 首段 > X-Real-IP > RemoteAddr 解析客户端 IP，再解析为省级属地写入 ipLocation
+      快照。
+    - 读取投影原样透传 ipLocation，端侧以次要文本展示属地。
+    - 无法解析为已知省份时 ipLocation 留空，端侧不展示属地，绝不臆造。
+    done_when:
+    - 已知 IP 段解析为对应省份、未知 IP 留空，投影透传一致，端侧渲染属地文本。
+    edge_cases:
+    - 非法或缺失的全部来源头时解析为空字符串。
+    - 读取链路不对既有评论二次解析，只透传创建时快照。
+    contract_refs:
+    - content/post fields.yaml entities.Comment.ipLocation
+    - content/post service.yaml CreateComment
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/content-service/internal/application/comment_display_fields_test.go
+      - file: quwoquan_app/test/cloud/content/contract/comment_dto_contract_test.dart
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt13_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt13_local_contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt13_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt13_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/integration_test/comment_ip_location_journey_test.dart'
+  GWT14:
+    title: 作者赞过标识与互动深链精确定位
+    given:
+    - 评论被内容作者点赞，且我的-互动评论项携带 commentId/parentCommentId。
+    when:
+    - 用户浏览评论列表与点击互动评论项深链。
+    then:
+    - authorLiked 由云侧按内容作者反应派生，端侧据此渲染「作者赞过」标识。
+    - 互动深链携带 commentId/parentCommentId，进入评论区精确定位到目标评论或父评论。
+    done_when:
+    - authorLiked 端云一致渲染，互动 wire 字段透传到深链并命中目标项。
+    edge_cases:
+    - 内容作者未赞过时不展示「作者赞过」标识。
+    - commentId 为空时回退到 openComments 行为，不报错。
+    contract_refs:
+    - content/post fields.yaml entities.Comment.authorLiked
+    - content/post fields.yaml entities.ProfileInteractionActivityView.commentId/parentCommentId
+    performance_points: []
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/content-service/internal/application/comment_display_fields_test.go
+      - file: quwoquan_app/test/cloud/content/contract/comment_dto_contract_test.dart
+      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/ui/user/widgets/profile_interaction_tab_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt14_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt14_local_contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt14_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread.gwt14_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/integration_test/comment_author_liked_journey_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -25,6 +25,7 @@ class ContentApiMetadata {
     'GenerateArticleSummary': '/v1/content/articles/summary:generate',
     'GetAppConfig': '/v1/config/app',
     'GetAuthorImpact': '/v1/content/sub-accounts/{subAccountId}/author-impact',
+    'GetCommentCountsDelta': '/v1/content/posts/{postId}/comments/counts-delta',
     'GetCounters': '/v1/content/posts/{postId}/counters',
     'GetFeed': '/v1/content/feed',
     'GetHelperRead': '/v1/content/helper-read/{contentId}',
@@ -47,6 +48,7 @@ class ContentApiMetadata {
     'ListProfileInteractionActivitiesSent': '/v1/content/sub-accounts/{subAccountId}/interactions/sent',
     'ListUserPosts': '/v1/content/sub-accounts/{subAccountId}/posts',
     'MarkIntersectionsVisited': '/v1/content/intersections/visit',
+    'PinComment': '/v1/content/posts/{postId}/comments/{commentId}/pin',
     'PromotePostToWork': '/v1/content/posts/{postId}:promoteToWork',
     'PublishPost': '/v1/content/posts/{postId}/publish',
     'QuoteToCircle': '/v1/content/posts/{postId}/quote',
@@ -60,6 +62,7 @@ class ContentApiMetadata {
     'SelectManualVideoCover': '/v1/content/media/{mediaId}/cover:manual',
     'SharePost': '/v1/content/posts/{postId}/share',
     'UnlikePost': '/v1/content/posts/{postId}/like',
+    'UnpinComment': '/v1/content/posts/{postId}/comments/{commentId}/pin',
     'UnsharePost': '/v1/content/posts/{postId}/share',
     'UpdatePost': '/v1/content/posts/{postId}',
     'UpdatePostCircles': '/v1/content/posts/{postId}/circles',
@@ -79,6 +82,7 @@ class ContentApiMetadata {
     'GenerateArticleSummary': 'POST',
     'GetAppConfig': 'GET',
     'GetAuthorImpact': 'GET',
+    'GetCommentCountsDelta': 'GET',
     'GetCounters': 'GET',
     'GetFeed': 'GET',
     'GetHelperRead': 'GET',
@@ -101,6 +105,7 @@ class ContentApiMetadata {
     'ListProfileInteractionActivitiesSent': 'GET',
     'ListUserPosts': 'GET',
     'MarkIntersectionsVisited': 'POST',
+    'PinComment': 'POST',
     'PromotePostToWork': 'POST',
     'PublishPost': 'POST',
     'QuoteToCircle': 'POST',
@@ -114,6 +119,7 @@ class ContentApiMetadata {
     'SelectManualVideoCover': 'POST',
     'SharePost': 'POST',
     'UnlikePost': 'DELETE',
+    'UnpinComment': 'DELETE',
     'UnsharePost': 'DELETE',
     'UpdatePost': 'PATCH',
     'UpdatePostCircles': 'PATCH',
@@ -134,6 +140,7 @@ class ContentApiMetadata {
     'GenerateArticleSummary': 'required',
     'GetAppConfig': 'public',
     'GetAuthorImpact': 'required',
+    'GetCommentCountsDelta': 'public',
     'GetCounters': 'public',
     'GetFeed': 'optional',
     'GetHelperRead': 'public',
@@ -156,6 +163,7 @@ class ContentApiMetadata {
     'ListProfileInteractionActivitiesSent': 'required',
     'ListUserPosts': 'public',
     'MarkIntersectionsVisited': 'required',
+    'PinComment': 'required',
     'PromotePostToWork': 'required',
     'PublishPost': 'required',
     'QuoteToCircle': 'required',
@@ -169,10 +177,28 @@ class ContentApiMetadata {
     'SelectManualVideoCover': 'required',
     'SharePost': 'optional',
     'UnlikePost': 'optional',
+    'UnpinComment': 'required',
     'UnsharePost': 'optional',
     'UpdatePost': 'required',
     'UpdatePostCircles': 'required',
     'UpdatePostSettings': 'required',
+  };
+
+  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  static const Map<String, String> operationToResponseModel = <String, String>{
+    'GetMyIntersectionSummary': 'IntersectionInboxSummary',
+    'GetObjectIntersections': 'IntersectionReason',
+    'ListAuthorImpactEvidence': 'AuthorImpactEvidencePage',
+    'ListMyIntersections': 'IntersectionReason',
+  };
+
+  /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
+  static const Map<String, String> operationToResponseKind = <String, String>{
+    'GetMyIntersectionSummary': 'object',
+    'GetObjectIntersections': 'page',
+    'ListAuthorImpactEvidence': 'object',
+    'ListMyIntersections': 'page',
+    'MarkIntersectionsVisited': 'ack',
   };
 
   static const String abortMediaUploadOperation = 'AbortMediaUpload';
@@ -187,6 +213,7 @@ class ContentApiMetadata {
   static const String generateArticleSummaryOperation = 'GenerateArticleSummary';
   static const String getAppConfigOperation = 'GetAppConfig';
   static const String getAuthorImpactOperation = 'GetAuthorImpact';
+  static const String getCommentCountsDeltaOperation = 'GetCommentCountsDelta';
   static const String getCountersOperation = 'GetCounters';
   static const String getFeedOperation = 'GetFeed';
   static const String getHelperReadOperation = 'GetHelperRead';
@@ -209,6 +236,7 @@ class ContentApiMetadata {
   static const String listProfileInteractionActivitiesSentOperation = 'ListProfileInteractionActivitiesSent';
   static const String listUserPostsOperation = 'ListUserPosts';
   static const String markIntersectionsVisitedOperation = 'MarkIntersectionsVisited';
+  static const String pinCommentOperation = 'PinComment';
   static const String promotePostToWorkOperation = 'PromotePostToWork';
   static const String publishPostOperation = 'PublishPost';
   static const String quoteToCircleOperation = 'QuoteToCircle';
@@ -222,6 +250,7 @@ class ContentApiMetadata {
   static const String selectManualVideoCoverOperation = 'SelectManualVideoCover';
   static const String sharePostOperation = 'SharePost';
   static const String unlikePostOperation = 'UnlikePost';
+  static const String unpinCommentOperation = 'UnpinComment';
   static const String unsharePostOperation = 'UnsharePost';
   static const String updatePostOperation = 'UpdatePost';
   static const String updatePostCirclesOperation = 'UpdatePostCircles';
@@ -278,6 +307,12 @@ class ContentApiMetadata {
   static String getAuthorImpactPath({required String subAccountId}) {
     return _fillPath(getAuthorImpactPathTemplate, <String, String>{
       'subAccountId': subAccountId,
+    });
+  }
+  static const String getCommentCountsDeltaPathTemplate = '/v1/content/posts/{postId}/comments/counts-delta';
+  static String getCommentCountsDeltaPath({required String postId}) {
+    return _fillPath(getCommentCountsDeltaPathTemplate, <String, String>{
+      'postId': postId,
     });
   }
   static const String getCountersPathTemplate = '/v1/content/posts/{postId}/counters';
@@ -368,6 +403,13 @@ class ContentApiMetadata {
     });
   }
   static const String markIntersectionsVisitedPath = '/v1/content/intersections/visit';
+  static const String pinCommentPathTemplate = '/v1/content/posts/{postId}/comments/{commentId}/pin';
+  static String pinCommentPath({required String postId, required String commentId}) {
+    return _fillPath(pinCommentPathTemplate, <String, String>{
+      'postId': postId,
+      'commentId': commentId,
+    });
+  }
   static const String promotePostToWorkPathTemplate = '/v1/content/posts/{postId}:promoteToWork';
   static String promotePostToWorkPath({required String postId}) {
     return _fillPath(promotePostToWorkPathTemplate, <String, String>{
@@ -434,6 +476,13 @@ class ContentApiMetadata {
   static String unlikePostPath({required String postId}) {
     return _fillPath(unlikePostPathTemplate, <String, String>{
       'postId': postId,
+    });
+  }
+  static const String unpinCommentPathTemplate = '/v1/content/posts/{postId}/comments/{commentId}/pin';
+  static String unpinCommentPath({required String postId, required String commentId}) {
+    return _fillPath(unpinCommentPathTemplate, <String, String>{
+      'postId': postId,
+      'commentId': commentId,
     });
   }
   static const String unsharePostPathTemplate = '/v1/content/posts/{postId}/share';

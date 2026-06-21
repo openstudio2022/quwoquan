@@ -22,7 +22,7 @@
 - 附近位置/发现流首屏加载失败使用内联页态/区块态
 - 发现流分页追加失败保留旧内容并在尾部展示重试，不清空现有列表
 - 所有错误文案来自 l10n，颜色/字号使用设计系统
-- **T1 contract 错误码→UiErrorSemantic 映射契约**：CloudException.code / RuntimeFailure → 正确 message / action / scope
+- **local_contract contract 错误码→UiErrorSemantic 映射契约**：CloudException.code / RuntimeFailure → 正确 message / action / scope
 - **L1b 位置选择页错误态**：注入 FakeLocationService 抛 CloudException 时，UI 展示正确内联错误
 - **L1c 创作流**：选位置 → 云端超时 → 内联错误（非 SnackBar）
 - **依赖**：L1b 错误态需 permission-card 的 LocationPermissionChecker（FakeChecker 返回 granted 以进入 nearby()）

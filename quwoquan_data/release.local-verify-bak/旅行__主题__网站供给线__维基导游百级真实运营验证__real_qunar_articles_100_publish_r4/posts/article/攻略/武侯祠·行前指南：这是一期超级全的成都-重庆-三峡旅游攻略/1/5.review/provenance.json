@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_1cbf43e862f19264",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "武侯祠·行前指南：这是一期超级全的成都-重庆-三峡旅游攻略",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer",
+    "agentRunId": "run-42d91199-ff1e-451e-b715-462c1f779b2d",
+    "agentId": "agent-5a3ef825-b842-4635-b2c8-f40665aa8c13",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/武侯祠"
+    ],
+    "articleDigest": "sha256:975be4a6bae1c1537aa4cc0c26c4ff29e9cad2ca56905d42be29b154b7f142a4"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "武侯祠·行前指南：这是一期超级全的成都-重庆-三峡旅游攻略",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:4265044b1fcdd871bdfc4b47ad454796b93434fd2f8732a73a2cc27500b6d71c",
+    "writingPackSha256": "sha256:d05528cf7c34247adbd67c0e00f604d90150e7b6a8939d85b6739c0978d650c3",
+    "sourceBundleSha256": "sha256:79e14ca2ea5621636587c4d408024462e48ee4c15df43cfdaed08699ad786aac",
+    "draftSha256": "sha256:3c1e7aa730e715a17f08f228cb73f316cd0ec8302b36ad8bcd192d3dc968a738"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/武侯祠/1.download/sources/10.qunar_guide_candidate_1cbf43e862f19264/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7886327"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/武侯祠/1.download/sources/10.qunar_guide_candidate_1cbf43e862f19264/source.md"
+  ]
+}

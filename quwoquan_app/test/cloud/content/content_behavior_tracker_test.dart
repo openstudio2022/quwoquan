@@ -257,6 +257,42 @@ void main() {
       expect(event.rankingVersion, equals('rank-v9'));
     });
 
+    // ── N7：交集证据组点击统一通道，保 tag_click 语义（推荐 HotPath 1.8 权重）──
+    test('tag_click 交集证据组点击：独立动作（禁降级为 click）+ 完整交集归因回流', () async {
+      tracker.trackTagClick(
+        'u_lin',
+        contentType: 'user',
+        authorId: 'u_lin',
+        referralSource: ReferralSource.authorProfile,
+        tags: const <String>['relationship/sharedFollowees'],
+        intersectionId: 'ix_1',
+        intersectionDimension: 'relationship',
+        intersectionSourceRef: 'sharedFollowees',
+        intersectionTagRefs: const <String>['relationship/sharedFollowees'],
+        intersectionClass: 'fact',
+        intersectionEvidenceId: 'ev_1',
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      // 关键不变量：保留 tag_click 语义，未降级为 click（否则丢推荐 1.8 权重）。
+      expect(event.action, BehaviorAction.tagClick);
+      expect(event.toJson()['action'], equals('tag_click'));
+      expect(event.state, equals('interaction'));
+      expect(event.contentId, equals('u_lin'));
+      expect(event.authorId, equals('u_lin'));
+      expect(event.referralSource, equals(ReferralSource.authorProfile));
+      expect(event.intersectionId, equals('ix_1'));
+      expect(event.intersectionDimension, equals('relationship'));
+      expect(event.intersectionSourceRef, equals('sharedFollowees'));
+      expect(event.intersectionClass, equals('fact'));
+      expect(
+        event.intersectionTagRefs,
+        contains('relationship/sharedFollowees'),
+      );
+      expect(event.intersectionEvidenceId, equals('ev_1'));
+    });
+
     // ── 七态漏斗：visible（弱可见）与 impressed（达阈值）状态严格区分，归因字段全透传 ──
     test('七态漏斗：visible 未达阈值 vs impressed 达阈值，状态区分且 channelId/rankingVersion 透传', () async {
       tracker.trackQualifiedImpression(

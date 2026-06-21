@@ -12,7 +12,10 @@ import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart'
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
+import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
@@ -130,6 +133,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         _interactionSubTabForId(filters[nextIndex].id),
       );
       return true;
+    }
+    if (_activeTabId != 'creations') {
+      return false;
     }
     if (!_isSecondaryTabVisible(_worksSecondaryTabKey)) {
       return false;
@@ -274,24 +280,40 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     );
     final profile = state.profile;
     final isMine = widget.mode == ProfileMode.mine;
+    // 昵称是否被用户自定义过（云侧 nicknameCustomized 直出）。默认昵称（未改名）
+    // 时我的主页在昵称右侧展示编辑画笔引导改名；改过即隐藏画笔。用户号 / 趣我圈号
+    // 等内部标识对 UI 完全不可见，主页只展示昵称。
+    final nicknameCustomized = profile?.nicknameCustomized ?? false;
+    final showEditPencil = isMine && !nicknameCustomized;
     final avatarUrl =
         widget.initialAvatarUrl ??
         (isMine ? (userData?.avatar ?? userData?.avatarUrl) : null) ??
         profile?.avatarUrl;
+    final profileName = profile?.displayName.trim() ?? '';
     final displayName =
         widget.initialDisplayName ??
         (isMine ? userData?.displayName : null) ??
-        profile?.displayName ??
-        widget.userId;
+        (profileName.isNotEmpty ? profileName : '');
     final bio = (profile?.bio.isNotEmpty ?? false)
         ? profile?.bio
-        : userData?.bio;
+        : (isMine ? userData?.bio : null);
+    final profileBackground = _firstNonEmptyString([
+      widget.initialBackgroundUrl,
+      if (isMine) userData?.backgroundImage,
+      profile?.backgroundUrl,
+    ]);
+    final hasProfileBackground =
+        profileBackground != null && profileBackground.isNotEmpty;
     final backgroundUrl = _firstNonEmptyString([
       widget.initialBackgroundUrl,
       if (isMine) userData?.backgroundImage,
       profile?.backgroundUrl,
       ...state.creations.map((post) => post.authorBackgroundUrl),
     ]);
+    final hasCoverImage = backgroundUrl != null && backgroundUrl.isNotEmpty;
+    // 无真实封面（默认渐变封面）时，浅色模式需要深色 toolbar 前景才可见；
+    // 有真实封面图则保持白色前景叠加在顶部暗纱上。
+    final contentForegroundIsDark = !hasCoverImage && !isDark;
     final bottomPadding = isMine ? AppSpacing.bottomNavHeight : 0.0;
 
     return AppScaffold(
@@ -301,6 +323,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         pinMode: ObjectPagePinMode.full,
         cardRadius: _profileCardRadius,
         toolbarContentHeight: _compactToolbarHeight(context),
+        identityTransitionDistance: AppSpacing.xs,
         collapseCurve: _curveForName(
           UserProfileUIConfig.scrollMotion.collapseCurve,
         ),
@@ -310,17 +333,22 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
             ProfileHeader.avatarOuterDiameter - ProfileHeader.avatarOverlapPx,
         summaryTrackerKey: const ValueKey<String>('profile-shell-summary-card'),
         onSwipe: _handleTabSwipeDragEnd,
-        surfaceBridgeOverride: AppSpacing.containerSm,
+        surfaceBridgeOverride: AppSpacing.zero,
+        scrollBackgroundWithContent: true,
+        tabSurfaceTopRadius: _profileCardRadius,
         backgroundBuilder: (c, pull) => _buildBackgroundLayer(
           c,
           backgroundUrl: backgroundUrl,
           backgroundColor: backgroundBridge,
+          showCoverPrompt: isMine && !hasProfileBackground,
+          onCoverPrompt: () => context.push(AppRoutePaths.profileEdit),
         ),
         summaryBuilder: (c) => _buildSummarySection(
           c,
           isDark: isDark,
           avatarUrl: avatarUrl,
           displayName: displayName,
+          showEditPencil: showEditPencil,
           bio: bio,
           state: state,
           notifier: notifier,
@@ -334,6 +362,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
           avatarUrl: avatarUrl,
           opacity: identity,
           backgroundOpacity: bgOpacity,
+          contentForegroundIsDark: contentForegroundIsDark,
         ),
         tabBarBuilder: (c, pinned, opacity) => _buildPrimaryTabBarSurface(
           bg: profileSurface,

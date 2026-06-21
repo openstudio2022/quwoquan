@@ -8,8 +8,9 @@ import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
+import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -20,19 +21,6 @@ class ProfileStatsPage extends ConsumerStatefulWidget {
 
   final String type;
   final String userId;
-
-  static String _title(String type) {
-    switch (type) {
-      case 'circles':
-        return UITextConstants.contactsTabCircles;
-      case 'following':
-        return UITextConstants.follow;
-      case 'fans':
-        return UITextConstants.circleFans;
-      default:
-        return UITextConstants.circleFans;
-    }
-  }
 
   @override
   ConsumerState<ProfileStatsPage> createState() => _ProfileStatsPageState();
@@ -205,10 +193,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           icon: CupertinoIcons.back,
           onPressed: () => context.pop(),
         ),
-        middle: Text(
-          ProfileStatsPage._title(_type),
-          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-        ),
+        middle: const SizedBox.shrink(),
       ),
       child: Column(
         children: [
@@ -219,7 +204,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
               AppSpacing.md,
               AppSpacing.zero,
             ),
-            child: _buildTypeTabs(context, fg, fgSecondary),
+            child: _buildTypeTabs(context),
           ),
           Padding(
             padding: EdgeInsets.symmetric(
@@ -254,46 +239,22 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     );
   }
 
-  Widget _buildTypeTabs(BuildContext context, Color fg, Color fgSecondary) {
-    Text tabLabel(String label, bool selected) {
-      return Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: AppTypography.iosSubheadline,
-          fontWeight: selected ? AppTypography.medium : AppTypography.regular,
-          color: selected ? fg : fgSecondary,
-        ),
-      );
-    }
-
-    return CupertinoSlidingSegmentedControl<String>(
-      groupValue: _type,
-      backgroundColor: AppColors.iosFill(context),
-      thumbColor: AppColors.iosSystemBackground(context),
-      onValueChanged: (value) {
-        if (value != null) {
-          _selectType(value);
-        }
-      },
-      children: <String, Widget>{
-        'fans': Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
-          child: tabLabel(UITextConstants.circleFans, _type == 'fans'),
-        ),
-        'following': Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
-          child: tabLabel(UITextConstants.follow, _type == 'following'),
-        ),
-        'circles': Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
-          child: tabLabel(
-            UITextConstants.contactsTabCircles,
-            _type == 'circles',
-          ),
-        ),
-      },
+  Widget _buildTypeTabs(BuildContext context) {
+    final tabs = <TabItem>[
+      const TabItem(id: 'fans', label: UITextConstants.circleFans),
+      const TabItem(id: 'following', label: UITextConstants.follow),
+      const TabItem(id: 'circles', label: UITextConstants.contactsTabCircles),
+    ];
+    return SizedBox(
+      height: AppSpacing.buttonHeightMd,
+      child: CenteredScrollableTabBar(
+        tabs: tabs,
+        activeTab: _type,
+        onTabChange: _selectType,
+        transparentBackground: true,
+        excludeUnderlineTabIds: tabs.map((tab) => tab.id).toList(),
+        selectedLabelColor: AppColors.iosAccent(context),
+      ),
     );
   }
 
@@ -354,8 +315,8 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                       Text(
                         name,
                         style: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: FontWeight.w800,
+                          fontSize: AppTypography.iosSubheadline,
+                          fontWeight: AppTypography.medium,
                           color: fg,
                         ),
                         maxLines: 1,
@@ -365,8 +326,8 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                       Text(
                         '$postCount 创作',
                         style: TextStyle(
-                          fontSize: AppTypography.xsPlus,
-                          fontWeight: FontWeight.w700,
+                          fontSize: AppTypography.iosCaption1,
+                          fontWeight: AppTypography.regular,
                           color: fgSecondary,
                         ),
                         maxLines: 1,
@@ -447,8 +408,8 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                       Text(
                         nickname,
                         style: TextStyle(
-                          fontSize: AppTypography.lg,
-                          fontWeight: FontWeight.w800,
+                          fontSize: AppTypography.iosSubheadline,
+                          fontWeight: AppTypography.medium,
                           color: fg,
                         ),
                         maxLines: 1,
@@ -482,7 +443,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: AppTypography.xsPlus,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: AppTypography.medium,
                         color: isFollowing
                             ? fgSecondary
                             : AppColors.primaryColor,

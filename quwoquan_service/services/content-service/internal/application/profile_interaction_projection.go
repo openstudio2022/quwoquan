@@ -15,8 +15,11 @@ type profileInteractionProjectionInput struct {
 	ActorID            string
 	TargetSubAccountID string
 	Post               *postmodel.Post
-	Comment            map[string]any
-	CreatedAt          time.Time
+	Comment            *postmodel.Comment
+	// ViewerReaction 是当前 viewer 对该互动评论的真实三态反应（none/like/dislike），
+	// 由调用方经 ReactionStore 批量解析后注入；非评论互动恒为 none。
+	ViewerReaction string
+	CreatedAt      time.Time
 }
 
 func buildProfileInteractionActivityView(input profileInteractionProjectionInput) postmodel.ProfileInteractionActivityView {
@@ -33,10 +36,18 @@ func buildProfileInteractionActivityView(input profileInteractionProjectionInput
 	if direction == "" {
 		direction = "received"
 	}
-	commentText := strings.TrimSpace(asString(input.Comment["content"]))
+	commentText := ""
+	if input.Comment != nil {
+		commentText = strings.TrimSpace(input.Comment.Content)
+	}
 	commentKind := profileInteractionCommentKind(input.Comment)
+	commentID, parentCommentID := profileInteractionCommentIdentity(input.Comment)
+	viewerReaction := normalizeProfileInteractionViewerReaction(input.ViewerReaction)
 	if activityType != "comment" {
 		commentKind = "none"
+		commentID = ""
+		parentCommentID = ""
+		viewerReaction = "none"
 	}
 	actorName, actorAvatarURL := profileInteractionActorSnapshot(input.ActorID, input.Post, input.Comment)
 	targetName, targetAvatarURL := profileInteractionTargetSnapshot(input.TargetSubAccountID, input.Post)
@@ -65,6 +76,10 @@ func buildProfileInteractionActivityView(input profileInteractionProjectionInput
 		ActivityType:         activityType,
 		Direction:            direction,
 		CommentKind:          commentKind,
+		CommentId:            commentID,
+		ParentCommentId:      parentCommentID,
+		// viewer 对该互动评论的真实三态反应（R-CMT01：由 ReactionStore 解析后注入）。
+		ViewerReaction:       viewerReaction,
 		ActorSubAccountId:    strings.TrimSpace(input.ActorID),
 		ActorDisplayName:     actorName,
 		ActorAvatarUrl:       actorAvatarURL,
@@ -89,11 +104,11 @@ func buildProfileInteractionActivityView(input profileInteractionProjectionInput
 	}
 }
 
-func profileInteractionActorSnapshot(actorID string, post *postmodel.Post, comment map[string]any) (string, string) {
+func profileInteractionActorSnapshot(actorID string, post *postmodel.Post, comment *postmodel.Comment) (string, string) {
 	actorID = strings.TrimSpace(actorID)
-	if comment != nil && strings.TrimSpace(asString(comment["authorId"])) == actorID {
-		name := strings.TrimSpace(asString(comment["authorDisplayNameSnapshot"]))
-		avatarURL := strings.TrimSpace(asString(comment["authorAvatarUrlSnapshot"]))
+	if comment != nil && strings.TrimSpace(comment.AuthorId) == actorID {
+		name := strings.TrimSpace(comment.AuthorDisplayNameSnapshot)
+		avatarURL := strings.TrimSpace(comment.AuthorAvatarUrlSnapshot)
 		return defaultString(name, actorID), avatarURL
 	}
 	if post != nil && strings.TrimSpace(post.AuthorId) == actorID {
@@ -157,24 +172,47 @@ func summarizeInteractionActivityFallback(commentText string) string {
 	return "互动了这条记录"
 }
 
-func profileInteractionContextText(comment map[string]any) string {
+func profileInteractionContextText(comment *postmodel.Comment) string {
 	if comment == nil {
 		return ""
 	}
-	replyToUserID := strings.TrimSpace(asString(comment["replyToUserId"]))
+	replyToUserID := strings.TrimSpace(comment.ReplyToUserId)
 	if replyToUserID == "" {
 		return ""
 	}
 	return fmt.Sprintf("回复 %s", replyToUserID)
 }
 
-func profileInteractionCommentKind(comment map[string]any) string {
+// normalizeProfileInteractionViewerReaction coerces a raw reaction string into a
+// valid three-state value (none/like/dislike), defaulting unknown/empty to none.
+func normalizeProfileInteractionViewerReaction(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "like":
+		return "like"
+	case "dislike":
+		return "dislike"
+	default:
+		return "none"
+	}
+}
+
+// profileInteractionCommentIdentity 解析互动评论的稳定标识：
+// commentID 为本条评论/回复 id（用于深链精确定位），
+// parentCommentID 为其顶级评论 id（回复场景用于在评论区高亮父评论行）。
+func profileInteractionCommentIdentity(comment *postmodel.Comment) (string, string) {
+	if comment == nil {
+		return "", ""
+	}
+	return strings.TrimSpace(comment.ID), strings.TrimSpace(comment.ParentCommentId)
+}
+
+func profileInteractionCommentKind(comment *postmodel.Comment) string {
 	if comment == nil {
 		return "none"
 	}
-	if strings.TrimSpace(asString(comment["parentCommentId"])) != "" ||
-		strings.TrimSpace(asString(comment["replyToCommentId"])) != "" ||
-		strings.TrimSpace(asString(comment["replyToUserId"])) != "" {
+	if strings.TrimSpace(comment.ParentCommentId) != "" ||
+		strings.TrimSpace(comment.ReplyToCommentId) != "" ||
+		strings.TrimSpace(comment.ReplyToUserId) != "" {
 		return "reply"
 	}
 	return "comment"

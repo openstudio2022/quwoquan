@@ -15,7 +15,7 @@
 ```text
 原始数据/运营导入/内容反抽
   -> 数据工程清洗与归一
-  -> publish/v1/tags + canonical entity + relation edge
+  -> publish/tags + canonical entity + relation edge
   -> metadata/codegen + 服务端投影 + App Mock/Remote
   -> 行为回流与推荐/小艺学习
 ```
@@ -31,7 +31,7 @@
 
 ## 校验策略
 
-- T1：schema、路径、tagRef、实体引用、seed manifest 静态校验。
-- T2：App Mock 与 contract fixture 同构测试。
-- T3：local-gamma 使用 RemoteRepository 读取云侧 seed。
-- T4：对象主页和推荐旅程验证数据闭环。
+- local_contract：schema、路径、tagRef、实体引用、seed manifest 静态校验。
+- local_contract：App Mock 与 contract fixture 同构测试。
+- api_integration：local-gamma 使用 RemoteRepository 读取云侧 seed。
+- user_acceptance：对象主页和推荐旅程验证数据闭环。

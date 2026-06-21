@@ -1,0 +1,138 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "毕棚沟_planning_consultation",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "毕棚沟·行前怎么安排：达古冰川-毕棚沟-熊猫基地 半自由行",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-227782ef-474d-4fb8-b429-ce1ffa38cb6b",
+    "agentId": "agent-8b75d5e2-91f1-4819-9a26-ceb86680d0cb",
+    "sessionTrace": null,
+    "styleFamily": "路线规划风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/毕棚沟"
+    ],
+    "articleDigest": "sha256:d50a0a971f8c27c7fd30b942ee470b82c57be34fa537d0d87c50c711c97c09a8"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "毕棚沟·行前怎么安排：达古冰川-毕棚沟-熊猫基地 半自由行",
+    "styleFamily": "",
+    "promptSha256": "sha256:088bbc105747498a2b91781f4b211bcf16479a62e768a7920837eb94e2991bc7",
+    "writingPackSha256": "sha256:9afd3646efafc683ce37114fdb7198f14fd55ed8e1eed61172f53d80be0dc958",
+    "sourceBundleSha256": "sha256:5a5e6792821a09fb6adab5207c3075b08936fadaeb21b72984968f08a7579202",
+    "draftSha256": "sha256:7b10f5f16dc1d7bed4e05ff7b03518893cfbe518a15d93adc9dfad710b2fc271"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/02.home_official/source.md",
+      "url": "http://www.bipenggou.net/"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/03.article_qunar_base_1/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7902773"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/04.article_qunar_base_2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7801857"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/05.article_qunar_base_3/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7765654"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/06.article_qunar_base_4/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7748135"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/08.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7707845"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/09.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7707310"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/10.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7639145"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/11.article_qunar_base_9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7630263"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/12.article_qunar_base_10/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7626807"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/13.article_qunar_base_11/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7639731"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/14.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7601882"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/15.article_qunar_base_13/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7565410"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/16.article_qunar_base_14/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7554229"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/18.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7546588"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/19.article_open_visual_support/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E5%9B%9B%E5%B7%9D_%E7%90%86%E5%8E%BF-%E6%AF%95%E6%A3%9A%E6%B2%9F_%E5%A4%A7%E9%81%93_-_panoramio.jpg"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/20.article_qunar_review_support/source.md",
+      "url": "https://touch.travel.qunar.com/search?q=%E6%AF%95%E6%A3%9A%E6%B2%9F"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/21.image_open_license_file_毕棚沟_httpscommonswikimediaorgwikifilechina27smistmountainunsplash_77fd64e173/source.md",
+      "url": "https://commons.wikimedia.org/wiki/Category%3ABipeng_Valley"
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/22.image_open_license_file_毕棚沟_httpscommonswikimediaorgwikifilee59b9be5b79de79086e58ebfe6af_46cf5cc605/source.md",
+      "url": null
+    },
+    {
+      "path": "entities/地点/景区/毕棚沟/1.download/sources/23.image_open_license_file_毕棚沟_httpscommonswikimediaorgwikifilesnowinwestsichuan136704919jp_68a08c831d/source.md",
+      "url": null
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/毕棚沟/1.download/sources/18.article_qunar_base_16/source.md",
+    "entities/地点/景区/毕棚沟/1.download/sources/02.home_official/source.md"
+  ]
+}

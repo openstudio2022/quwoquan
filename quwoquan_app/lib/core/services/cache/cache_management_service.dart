@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
@@ -48,18 +50,23 @@ class CacheManagementService {
     required UserProfileCacheService userProfileCache,
     required ConversationCacheService conversationCache,
     Future<void> Function()? clearTemporaryImages,
+    Future<void> Function()? clearAllRebuildableImages,
   }) : _postCache = postCache,
        _querySnapshotStore = querySnapshotStore,
        _userProfileCache = userProfileCache,
        _conversationCache = conversationCache,
        _clearTemporaryImages =
-           clearTemporaryImages ?? AppImageCacheController.clearTemporaryImages;
+           clearTemporaryImages ?? AppImageCacheController.clearTemporaryImages,
+       _clearAllRebuildableImages =
+           clearAllRebuildableImages ??
+           AppImageCacheController.clearAllRebuildableImages;
 
   final PostObjectCacheService _postCache;
   final ContentQuerySnapshotStore _querySnapshotStore;
   final UserProfileCacheService _userProfileCache;
   final ConversationCacheService _conversationCache;
   final Future<void> Function() _clearTemporaryImages;
+  final Future<void> Function() _clearAllRebuildableImages;
 
   CacheUsageEstimate estimateUsage() {
     return CacheUsageEstimate(
@@ -86,6 +93,7 @@ class CacheManagementService {
         await _clearTemporaryImages();
         final removed =
             _postCache.clearRecentDetails() + _querySnapshotStore.clearAll();
+        await _querySnapshotStore.flushPersistence();
         return CacheClearResult(
           level: level,
           objectsRemoved: removed,
@@ -93,6 +101,7 @@ class CacheManagementService {
         );
       case CacheClearLevel.searchAndBrowseHistory:
         final removed = _querySnapshotStore.clearAll();
+        await _querySnapshotStore.flushPersistence();
         return CacheClearResult(
           level: level,
           objectsRemoved: removed,
@@ -100,13 +109,14 @@ class CacheManagementService {
           resourceBytesCleared: false,
         );
       case CacheClearLevel.allRebuildable:
-        await _clearTemporaryImages();
+        await _clearAllRebuildableImages();
         final removed =
             _postCache.clearAllRebuildable() +
             _querySnapshotStore.clearAll() +
             _userProfileCache.clearRebuildable(
               protectedUserIds: protectedUserIds,
             );
+        await _querySnapshotStore.flushPersistence();
         return CacheClearResult(
           level: level,
           objectsRemoved: removed,

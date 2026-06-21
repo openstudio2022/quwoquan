@@ -3,6 +3,21 @@ import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/providers/provider_cache.dart';
+
+/// 我的主页交集预览短时缓存窗口：卡片被长列表回收或 push 进入详情再返回会重建消费方，
+/// 在窗口内复用已取结果，避免 `initState` 重打 `listMyIntersections`
+/// （backlog R-ID09 验收项④）。
+const Duration _myIntersectionPreviewCacheTtl = Duration(seconds: 90);
+
+/// 预览缓存固定单键（无入参变体）；容器作用域，随 ProviderContainer 释放回收。
+const String _myIntersectionPreviewCacheKey = 'fact';
+
+/// 容器作用域预览缓存：autoDispose Notifier 重建时先查命中即复用，无定时器。
+final _myIntersectionPreviewCacheProvider =
+    Provider<TtlCache<List<IntersectionReason>>>(
+      (ref) => TtlCache<List<IntersectionReason>>(),
+    );
 
 /// 「我的交集」聚合摘要状态：总数 + 各维度计数 / 未读新增。
 class MyIntersectionSummaryState {
@@ -83,16 +98,41 @@ class MyIntersectionPreviewState {
 
 class MyIntersectionPreviewNotifier
     extends Notifier<MyIntersectionPreviewState> {
-  @override
-  MyIntersectionPreviewState build() => const MyIntersectionPreviewState();
+  DateTime? _loadedAt;
 
-  Future<void> load() async {
+  @override
+  MyIntersectionPreviewState build() {
+    // 重建时优先复用容器作用域缓存：命中即直接呈现已取结果，initState 的 load 随后
+    // 经 _loadedAt 守卫短路，避免长列表回收 / 路由往返触发重复 listMyIntersections。
+    final hit = ref
+        .read(_myIntersectionPreviewCacheProvider)
+        .readFresh(_myIntersectionPreviewCacheKey, _myIntersectionPreviewCacheTtl);
+    if (hit != null) {
+      _loadedAt = hit.storedAt;
+      return MyIntersectionPreviewState(items: hit.value);
+    }
+    return const MyIntersectionPreviewState();
+  }
+
+  /// 加载主页交集预览。窗口内已有成功结果时直接复用，避免卡片重建重打服务；
+  /// [force] 用于显式刷新（如下拉刷新）绕过去重。
+  Future<void> load({bool force = false}) async {
     if (state.isLoading) return;
+    final loadedAt = _loadedAt;
+    if (!force &&
+        loadedAt != null &&
+        DateTime.now().difference(loadedAt) < _myIntersectionPreviewCacheTtl) {
+      return;
+    }
     state = state.copyWith(isLoading: true, rawError: () => null);
     try {
       final items = await ref
           .read(intersectionRepositoryProvider)
           .listMyIntersections(filter: 'fact');
+      _loadedAt = DateTime.now();
+      ref
+          .read(_myIntersectionPreviewCacheProvider)
+          .write(_myIntersectionPreviewCacheKey, items);
       state = state.copyWith(items: items, isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, rawError: () => e);

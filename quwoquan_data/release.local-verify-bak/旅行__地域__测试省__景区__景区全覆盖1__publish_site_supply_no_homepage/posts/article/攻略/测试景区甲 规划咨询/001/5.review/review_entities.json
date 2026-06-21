@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "quwoquan_data.review_entities",
+  "ref": "测试景区甲 规划咨询",
+  "entities": [
+    {
+      "name": "测试景区甲",
+      "domain": "地点",
+      "type": "景区",
+      "ref": "/entity/地点/景区/测试景区甲",
+      "hasHomepage": true,
+      "generated": false,
+      "evidenceRef": ""
+    }
+  ]
+}

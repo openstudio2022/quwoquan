@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_d920781a9cc49ec5",
+  "contentType": "article",
+  "entityRefs": [],
+  "normalizedEntityRefs": [],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/泰山景区",
+      "reason": "no_condition_profile; uses region/season menu"
+    }
+  },
+  "sourceUrls": [
+    "https://zh.wikivoyage.org/wiki/%E6%B3%B0%E5%B1%B1"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "gpt-5-codex",
+  "citedSourceRefs": [
+    "entities/地点/景区/泰山景区/1.download/sources/09.wikivoyage_zh_candidate_d920781a9cc49ec5/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "泰山景区·行前指南：泰山",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "泰山景区",
+    "routeEntities": [
+      "泰山景区"
+    ],
+    "beats": [
+      "先从 泰山景区 进入主线。"
+    ],
+    "sourceNote": "其他同名地点的条目，请见泰山 (消歧义)。\n泰山是中国五岳之首，古名岱山，又称岱宗，位于中国山东省中部，泰安市境内，也是联合国教科文组织世界遗产。\n\n\n== 瞭解 ==\n泰山，是中國五大道教名山之一。由於其歷史上為中國最多人登過的山。\n官方网站 泰山风景名胜区\n\n\n=== 歷史 ===\n泰山多人登上山已經在中國歷史上非常重要的。偉大朝代的皇帝不得不爬這座山，",
+    "relatedTopics": [
+      "泰山景区"
+    ],
+    "mustIncludeFacts": [
+      "泰山景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_wikivoyage_scenic_articles_15_publish_r2",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-20T04:04:26.645438+00:00",
+  "updatedAt": "2026-06-20T04:07:06.460555+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_7aa14189d0ef4b28",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "泰山景区",
+      "sourceEntityRef": "/entity/地点/景区/泰山景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_d920781a9cc49ec5",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 15
+    }
+  ],
+  "articleMarkdownDigest": "sha256:ec785c4837056fc69773d6f86e2b68513ca9cee00b664f63846f59d54bf70e3e"
+}

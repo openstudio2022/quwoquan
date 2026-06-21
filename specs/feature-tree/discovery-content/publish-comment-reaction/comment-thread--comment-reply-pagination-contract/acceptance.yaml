@@ -38,18 +38,34 @@ gwt_acceptance:
     - content/post service.yaml CreateComment
     performance_points:
     - 回复展开 P95 小于 500ms。
-    evidence:
-      primary:
-      - T1_static_contract
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/providers/comment_reply_pagination_test.dart
-      - quwoquan_service/services/content-service/tests/comment_thread_contract_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread_comment_reply_pagination_contract.gwt1_local_contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.comment_thread_comment_reply_pagination_contract.gwt1_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.comment_thread_comment_reply_pagination_contract.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/providers/comment_reply_pagination_test.dart'
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/comment_thread_contract_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

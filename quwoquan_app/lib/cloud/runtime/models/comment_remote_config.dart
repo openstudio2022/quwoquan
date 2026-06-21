@@ -5,6 +5,7 @@ class CommentRemoteConfig {
   const CommentRemoteConfig({
     this.maxLength = 500,
     this.replyPreviewCount = 1,
+    this.replyFirstExpandPageSize = 5,
     this.replyExpandPageSize = 10,
     this.foldLineCount = 3,
     this.maxImageAttachments = 1,
@@ -13,6 +14,11 @@ class CommentRemoteConfig {
 
   final int maxLength;
   final int replyPreviewCount;
+
+  /// 首次点击「展开 N 条回复」时加载的最大回复数（对标小红书首屏 5 条）。
+  final int replyFirstExpandPageSize;
+
+  /// 后续点击「展开更多回复」时每页加载的最大回复数。
   final int replyExpandPageSize;
   final int foldLineCount;
   final int maxImageAttachments;
@@ -48,6 +54,10 @@ class CommentRemoteConfig {
       replyPreviewCount: _positiveOrFallback(
         _asInt(comment['reply_preview_count']),
         fallback.replyPreviewCount,
+      ),
+      replyFirstExpandPageSize: _positiveOrFallback(
+        _asInt(comment['reply_first_expand_page_size']),
+        fallback.replyFirstExpandPageSize,
       ),
       replyExpandPageSize: _positiveOrFallback(
         _asInt(comment['reply_expand_page_size']),

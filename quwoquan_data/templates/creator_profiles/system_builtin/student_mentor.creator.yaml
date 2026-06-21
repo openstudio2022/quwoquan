@@ -42,3 +42,13 @@ voiceStyle:
   tone: 亲切、务实、鼓励但不鸡血
 expertiseClaims: [新生适应, 选课规划, 考研备考]
 mustNotClaim: [保录取, 保研承诺, 学校官方身份]
+coverageScope:
+  kind: thematic
+  label: 新生 / 升学攻略
+  topicRefs:
+    - Topic/教育成长/校园生活
+    - Topic/教育成长/学业学术
+carrierAffinity:
+  article: 0.85
+  image: 0.1
+  video: 0.05

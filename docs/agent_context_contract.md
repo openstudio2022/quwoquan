@@ -21,7 +21,7 @@ L1_domain_service：
 L2_business_capability：
 L3_story：
 验收意图：UAT / SIT / GWT / contract
-证据层：T1 / T2 / T3 / T4
+测试证据：local_contract / api_integration / user_acceptance
 风险：
 ```
 
@@ -143,7 +143,7 @@ user input
 | 触达路径或意图 | 必读上下文 | 关键约束 |
 |---|---|---|
 | `quwoquan_app/**` | `quwoquan_app/AGENTS.md`、Dart/Mock/runtime error/page quality rules | 设计系统、Provider、Mock/Remote、错误体验、页面矩阵、四环境数据源 |
-| `quwoquan_service/**` | `quwoquan_service/AGENTS.md`、metadata README、架构/runtime error rules | metadata-first、DDD、RuntimeErrorResponse、真实存储 T3、metrics/trace/SLO |
+| `quwoquan_service/**` | `quwoquan_service/AGENTS.md`、metadata README、架构/runtime error rules | metadata-first、DDD、RuntimeErrorResponse、`api_integration` 真实存储、metrics/trace/SLO |
 | `quwoquan_data/**` | `quwoquan_data/AGENTS.md`、`quwoquan-data-content` skill | CLI-first、Agent-only 正文、事实/权利/图片/账本、ship/importer、七角色准出 |
 | `agent_ops/**`、环境、部署、门禁 | `agent_ops/AGENTS.md`、`environment-ops` skill | stackctl、四环境、repair 白名单、prod rollout、gate 证据 |
 | `apps/ops-portal/**` | `apps/ops-portal/AGENTS.md` | NodeNext imports、runtime errors、观测页面、test/build |
@@ -165,7 +165,7 @@ L1_domain_service：
 L2_business_capability：
 L3_story：
 验收意图：UAT / SIT / GWT / contract
-证据层：T1 / T2 / T3 / T4
+测试证据：local_contract / api_integration / user_acceptance
 风险：
 ```
 
@@ -177,7 +177,7 @@ L3_story：
 
 - 是否触发 metadata-first、env-seed-first、mock 隔离、页面质量、runtime error、数据工程 CLI-first、环境部署或推荐/观测规则。
 - 是否需要更新 `spec.md`、`design.md`、`acceptance.yaml`、`journey_scenario_registry.yaml`、`tree_index.yaml` 或 `specs/changelog/CR-*.yaml`。
-- 是否涉及错误码端云链路：`errors.yaml -> codegen -> RuntimeErrorResponse -> CloudException/runtime mapper -> UI prompt -> telemetry/alert -> T1~T4`。
+- 是否涉及错误码端云链路：`errors.yaml -> codegen -> RuntimeErrorResponse -> CloudException/runtime mapper -> UI prompt -> telemetry/alert -> local_contract/api_integration/user_acceptance`。
 - 是否会跨 App、Service、Data、Ops 任意两个以上区域。
 - 是否存在错误实现、旧兼容、allowlist 扩张、测试阈值放宽或第二真相源；当前未上线阶段默认直接修正，不做兼容。
 
@@ -205,7 +205,7 @@ E2E 准出：
 - `Observability`：曝光、停留、互动、错误、延迟、freshness/correctness、dashboard/report。
 - `Environment`：alpha/beta/gamma/prod 数据源、包纯度、topology、`stackctl verify --tier all`。
 
-跨域任务至少需要 `T1/T2/T3`；用户旅程或发布前能力必须补 `T4`。
+跨域任务至少需要 `local_contract` 与 `api_integration`；用户旅程或发布前能力必须补 `user_acceptance`。
 
 ## 5. 完成后验收复盘
 
@@ -214,7 +214,7 @@ E2E 准出：
 | 视角 | 必答 |
 |---|---|
 | 规格达成 | 是否满足目标、范围、Out of Scope 和成功标准 |
-| 测试证据 | `T1/T2/T3/T4` 跑了什么，未跑说明原因 |
+| 测试证据 | `local_contract/api_integration/user_acceptance` 跑了什么，未跑说明原因 |
 | E2E 验证 | Data/Service/App/Behavior/Recommendation/Observability/Environment 是否闭环 |
 | 产品/UX | 加载、空态、错误态、权限态、恢复动作、设计系统是否满足 |
 | 运营观测 | 指标、SLO、告警、采样、dashboard/report、归因链是否可用 |

@@ -73,10 +73,10 @@
 
 | 维度 | 要求 | 验收 |
 |---|---|---|
-| 过程动效 | suggest 输入变化即时；result 跳转显示骨架/加载态；错误/重试不丢 query；最近搜索管理有明确进入/退出态 | T4 journey + widget pump 覆盖加载、错误、重试、最近搜索 |
+| 过程动效 | suggest 输入变化即时；result 跳转显示骨架/加载态；错误/重试不丢 query；最近搜索管理有明确进入/退出态 | user_acceptance journey + widget pump 覆盖加载、错误、重试、最近搜索 |
 | 空态/错误/降级/权限 | 四态齐全，且 typed error/degrade 驱动；语音权限拒绝回手动输入；远端单域错误不阻塞整页 | `AppPageErrorState` retry、degrade banner、权限态用例 |
 | 触控与可访问 | 结果卡、Tab、清除按钮、重试按钮符合最小触控热区；语义文案来自 `UITextConstants`/l10n | 页面质量矩阵 P1-P8 + 语义门禁 |
-| 弱网与并发 | 连续输入只保留最新 query；旧请求晚返回不能覆盖新结果；云 result 超时可恢复 | provider/widget 测试 + T3 弱网/timeout 验证 |
+| 弱网与并发 | 连续输入只保留最新 query；旧请求晚返回不能覆盖新结果；云 result 超时可恢复 | provider/widget 测试 + api_integration 弱网/timeout 验证 |
 | 准确性 | result 排序原因可见/可追溯；同 query 在稳定版本下不跳变；本地对象不污染云侧 TopN | rankReasons/rankPosition 断言 + repeatability golden + result-only negative 断言 |
 
 ## 特性树拆分
@@ -205,4 +205,4 @@
 2. “联系人直达会话”与“群组分类 facet tab” 的边界明确，不再复用旧 chat 搜索节点。
 3. metadata 真相源边界清晰，可直接进入 `/design`。
 4. suggest/result 两阶段体验可测：本地缓存命中即时、云侧最终结果独立、本地对象不进 result。
-5. 加载 / 空态 / 错误 / 降级 / 权限 / 最近搜索管理 / 埋点归因链均有 T2/T4 证据。
+5. 加载 / 空态 / 错误 / 降级 / 权限 / 最近搜索管理 / 埋点归因链均有 local_contract/user_acceptance 证据。

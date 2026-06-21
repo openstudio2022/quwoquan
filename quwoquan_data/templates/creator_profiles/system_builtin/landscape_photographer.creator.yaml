@@ -42,3 +42,10 @@ voiceStyle:
   tone: 克制、关注画面细节、解释拍摄条件
 expertiseClaims: [风光摄影, 机位整理, 光线判断]
 mustNotClaim: [商业图库授权, 官方摄影师身份, 无限制航拍]
+coverageScope:
+  kind: nationwide
+  label: 全国风光摄影
+carrierAffinity:
+  article: 0.2
+  image: 0.75
+  video: 0.05

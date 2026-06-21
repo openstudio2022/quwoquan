@@ -9,45 +9,61 @@ node:
 scope:
   summary: 作者、标签、话题、内容类型频控与 near-dup 去重，解决体验重复。
   in_scope:
-    - 维度频控阈值与 soft/hard 策略。
-    - near-dup 签名单一真相源。
-    - 频控/near-dup 指标。
+  - 维度频控阈值与 soft/hard 策略。
+  - near-dup 签名单一真相源。
+  - 频控/near-dup 指标。
   out_of_scope:
-    - P1 先实现基于 recpolicy 的作者/标签/话题频控与 Jaccard near-dup 软延后；simhash/embedding 签名计算留给后续物化增强。
+  - P1 先实现基于 recpolicy 的作者/标签/话题频控与 Jaccard near-dup 软延后；simhash/embedding 签名计算留给后续物化增强。
 gwt_acceptance:
   GWT1:
     title: 维度频控与 near-dup GWT
     given:
-      - 候选集中存在同作者、同标签、同话题或近重复内容。
+    - 候选集中存在同作者、同标签、同话题或近重复内容。
     when:
-      - 用户连续请求多批推荐。
+    - 用户连续请求多批推荐。
     then:
-      - 同维度内容不应连续挤占窗口，near-dup 内容被过滤或降权，feed 不为空。
+    - 同维度内容不应连续挤占窗口，near-dup 内容被过滤或降权，feed 不为空。
     done_when:
-      - 频控阈值、near-dup 语义、指标和保底策略均已规格化。
+    - 频控阈值、near-dup 语义、指标和保底策略均已规格化。
     edge_cases:
-      - 小内容池下从硬过滤降级为软降权。
+    - 小内容池下从硬过滤降级为软降权。
     contract_refs:
-      - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
-      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+    - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
     performance_points:
-      - frequency_cap_filter_rate observe_only
-      - near_dup_filter_rate observe_only
-    evidence:
-      primary:
-        - T1_contract
-        - T2_module_interaction
-      supporting:
-        - T3_app_api_integration
+    - frequency_cap_filter_rate observe_only
+    - near_dup_filter_rate observe_only
     tests:
-      planned:
-        - quwoquan_service/services/content-service/tests/post_feed_exposure_governance_contract_test.go
+      planned: []
       recorded:
-        - quwoquan_service/runtime/recommendation/engine_test.go
+      - file: quwoquan_service/runtime/recommendation/engine_test.go
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.exposure_governance.dimension_frequency_and_neardup.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.exposure_governance.dimension_frequency_and_neardup.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.discovery_content.exposure_governance.dimension_frequency_and_neardup.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/post_feed_exposure_governance_contract_test.go'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

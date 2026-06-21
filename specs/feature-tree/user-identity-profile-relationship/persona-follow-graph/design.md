@@ -354,7 +354,7 @@ SLO 验证：
 - `T4_release_rehearsal`
   - 数据重整 rehearsal、观测面板校验、整版回滚 rehearsal
 
-## plan slice 与 T1~T4 证据矩阵映射
+## plan slice 与 三层测试 证据矩阵映射
 
 | Slice | 目标 | 对应验收 | 主要证据 |
 |-------|------|----------|----------|

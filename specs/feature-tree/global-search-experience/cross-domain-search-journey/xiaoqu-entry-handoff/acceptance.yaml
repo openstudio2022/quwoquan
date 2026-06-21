@@ -9,19 +9,20 @@ node:
 scope:
   summary: xiaoqu entry handoff 验收范围，重点验证小趣通过 canonical search 获得 web_search 等价能力与趣我圈业务对象检索能力。
   in_scope:
-    - 小趣自然语言 query 到 canonical search request 的转换。
-    - web.document 与站内对象统一聚合、引用和降级。
-    - SearchXiaoquResults 输出真实 citation provenance。
-    - page/object rich context 参与 retrieval 与 citation rank。
+  - 小趣自然语言 query 到 canonical search request 的转换。
+  - web.document 与站内对象统一聚合、引用和降级。
+  - SearchXiaoquResults 输出真实 citation provenance。
+  - page/object rich context 参与 retrieval 与 citation rank。
   out_of_scope:
-    - LLM 自由执行未登记 provider。
-    - 未授权聊天消息跨用户检索。
+  - LLM 自由执行未登记 provider。
+  - 未授权聊天消息跨用户检索。
 gwt_acceptance:
   GWT1:
     title: 小趣通过统一 LLM search tool 获得网页与站内对象检索结果
     given:
     - 用户在小趣或全局搜索“小趣搜”输入自然语言 query。
-    - canonical search registry 已注册 web.document、content.post、entity.homepage、circle.group、chat.message 等对象类型。
+    - canonical search registry 已注册 web.document、content.post、entity.homepage、circle.group、chat.message
+      等对象类型。
     when:
     - 小趣生成 searchPlans/queryVariants 并调用 search 工具。
     then:
@@ -43,21 +44,37 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/_shared/search_objects.yaml
     performance_points:
     - 小趣检索必须记录 search.intensity、provider coverage、citation count 与 degrade signal。
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T3_app_api_integration
     tests:
       planned:
-      - quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
-      - quwoquan_service/services/assistant-service/tests/search_xiaoqu_contract_test.go
-      - quwoquan_app/test/common/search/search_to_xiaoqu_journey_test.dart
+      - file: quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
       recorded:
-      - quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
-      - quwoquan_service/services/assistant-service/internal/application/service_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/service_test.go
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.xiaoqu_entry_handoff.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.global_search_experience.cross_domain_search_journey.xiaoqu_entry_handoff.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.global_search_experience.cross_domain_search_journey.xiaoqu_entry_handoff.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/assistant-service/tests/search_xiaoqu_contract_test.go'
+    - '[migrated_from_planned] quwoquan_app/test/common/search/search_to_xiaoqu_journey_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

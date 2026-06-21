@@ -124,6 +124,45 @@ _ENTITY_SUFFIXES = (
     "旅游区",
     "景区",
 )
+_ZH_VARIANT_TRANSLATION = str.maketrans(
+    {
+        "雲": "云",
+        "臺": "台",
+        "颱": "台",
+        "風": "风",
+        "區": "区",
+        "國": "国",
+        "峽": "峡",
+        "體": "体",
+        "觀": "观",
+        "遊": "游",
+        "龍": "龙",
+        "車": "车",
+        "鐵": "铁",
+        "門": "门",
+        "頂": "顶",
+        "園": "园",
+        "級": "级",
+        "廣": "广",
+        "東": "东",
+        "華": "华",
+        "陰": "阴",
+        "縣": "县",
+        "處": "处",
+        "內": "内",
+        "條": "条",
+        "線": "线",
+        "運": "运",
+        "灣": "湾",
+        "鹽": "盐",
+        "鄉": "乡",
+        "鎮": "镇",
+    }
+)
+
+
+def _fold_zh_variants(value: str) -> str:
+    return str(value or "").translate(_ZH_VARIANT_TRANSLATION)
 
 
 def entity_names_from_refs(entity_refs: Sequence[str] | None) -> list[str]:
@@ -229,6 +268,9 @@ def score_source_markdown(source_id: str, text: str, *, entity_name: str | None 
         score += 2
         reasons.append("fact_dense")
     entity_grounded = bool(entity_name and any(term in compact for term in _entity_match_terms(entity_name)))
+    if not entity_grounded and entity_name:
+        folded_compact = _fold_zh_variants(compact)
+        entity_grounded = any(_fold_zh_variants(term) in folded_compact for term in _entity_match_terms(entity_name))
     if entity_grounded:
         score += 1
         reasons.append("entity_grounded")
@@ -357,7 +399,10 @@ def extract_source_evidence(text: str, *, entity_name: str | None = None) -> dic
     fact_entries: list[dict[str, Any]] = []
     emotion_entries: list[dict[str, str]] = []
     mainline_entries: list[str] = []
+    entity_terms = _entity_match_terms(entity_name)
+    folded_entity_terms = tuple(_fold_zh_variants(term) for term in entity_terms)
     for sentence in _sentences(text):
+        folded_sentence = _fold_zh_variants(sentence)
         category = _fact_category(sentence)
         if category:
             fact_entries.append({"category": category, "sentence": sentence})
@@ -366,7 +411,9 @@ def extract_source_evidence(text: str, *, entity_name: str | None = None) -> dic
             emotion_entries.append({"kind": emotion_kind, "sentence": sentence})
         if any(marker in sentence for marker in _TRANSITION_MARKERS):
             mainline_entries.append(sentence)
-        elif entity_name and entity_name in sentence:
+        elif entity_terms and any(term in sentence for term in entity_terms):
+            mainline_entries.append(sentence)
+        elif folded_entity_terms and any(term in folded_sentence for term in folded_entity_terms):
             mainline_entries.append(sentence)
     return {
         "factEvidence": _unique_fact_entries(fact_entries, limit=8),

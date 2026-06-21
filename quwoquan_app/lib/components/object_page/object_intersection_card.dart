@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/object_page/evidence_group.dart';
+import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
@@ -286,7 +287,7 @@ class _EvidenceRow extends StatelessWidget {
         child: Row(
           children: <Widget>[
             _ConnectionLeadingIcon(
-              fallbackKind: group.fallbackIconKind,
+              sourceKind: group.kind,
               isDark: isDark,
               isPrimary: isPrimary,
             ),
@@ -357,14 +358,18 @@ class _EvidenceRow extends StatelessWidget {
 }
 
 /// 连接行语义图标。主页交集模块统一用纵向列表，避免头像堆叠造成信息焦点偏移。
+///
+/// 图标真相源统一为 [IntersectionIconResolver]（§21.5.2）：从证据组 kind
+/// （sourceRef 或 dimension 语义槽位）解析，端不再自带 `switch(kind)` 复制第二套
+/// 图标规则；保留对象页既有 accent 圆底视觉，仅图标字形改由 resolver 决定。
 class _ConnectionLeadingIcon extends StatelessWidget {
   const _ConnectionLeadingIcon({
-    required this.fallbackKind,
+    required this.sourceKind,
     required this.isDark,
     required this.isPrimary,
   });
 
-  final String fallbackKind;
+  final String sourceKind;
   final bool isDark;
   final bool isPrimary;
 
@@ -383,34 +388,14 @@ class _ConnectionLeadingIcon extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(color: background, shape: BoxShape.circle),
       child: Icon(
-        _fallbackIcon(fallbackKind),
+        IntersectionIconResolver.resolve(
+          sourceRef: sourceKind,
+          dimension: sourceKind,
+        ),
         size: AppSpacing.iconSmall,
         color: foreground,
       ),
     );
-  }
-
-  IconData _fallbackIcon(String kind) {
-    switch (kind) {
-      case 'circle':
-        return CupertinoIcons.person_3_fill;
-      case 'place':
-      case 'poi':
-      case 'location':
-        return CupertinoIcons.location_solid;
-      case 'org':
-      case 'organization':
-      case 'school':
-        return CupertinoIcons.building_2_fill;
-      case 'discussion':
-        return CupertinoIcons.bubble_left_bubble_right_fill;
-      case 'tag':
-        return CupertinoIcons.tag_fill;
-      case 'link':
-        return CupertinoIcons.link;
-      default:
-        return CupertinoIcons.person_crop_circle_fill;
-    }
   }
 }
 

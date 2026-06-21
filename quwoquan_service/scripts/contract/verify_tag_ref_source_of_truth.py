@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """标签真相源门禁（V0.5 B0：标签真相源收口）。
 
-唯一标签真相源 = 数据工程路径制 taxonomy（quwoquan_data/publish/v1/tags，
+唯一标签真相源 = 数据工程路径制 taxonomy（quwoquan_data/publish/tags，
 四分组 Topic/Audience/Format/Entity，tagRef = 目录路径）。已废弃云侧扁平
 tag_taxonomy.yaml（topic_*/circle_*/interest_* 等扁平 id）。
 
-校验（V6 同源收口：扁平 taxonomy 彻底退役，单一真相源 = publish/v1/tags）：
+校验（V6 同源收口：扁平 taxonomy 彻底退役，单一真相源 = publish/tags）：
   C1  扁平 tag_taxonomy 在 Go/Dart 业务代码中零引用，且 _shared/tag_taxonomy.yaml
       与 _shared/tag_ref_migration.yaml 物理文件不存在（已删除，不留第二套真相源）。
   C2  对象标签字段已切路径制 tagRef（post / circle / entity.homepage / user_profile
       的 fields.yaml 至少各含一个 `tag_ref: true` 字段，且不含已废弃 tag_taxonomy_ref）。
   C3  metadata 中不残留旧扁平 id（domain_taxonomy.user_tag_ref 等已切路径制 tagRef）。
-  C4  metadata 文档(.md)不得引用扁平 tag_taxonomy（防 README 等回潮盲区，单一真相源 = publish/v1/tags）。
+  C4  metadata 文档(.md)不得引用扁平 tag_taxonomy（防 README 等回潮盲区，单一真相源 = publish/tags）。
 
 用法: python3 verify_tag_ref_source_of_truth.py
 """
@@ -52,7 +52,7 @@ def c1_zero_reference() -> None:
             "C1: 扁平 tag_taxonomy 仍被 Go/Dart 引用（应改用路径制 tagRef）:\n  "
             + "\n  ".join(hits)
         )
-    # 物理文件必须已删除（单一真相源 = publish/v1/tags，不留过渡映射）
+    # 物理文件必须已删除（单一真相源 = publish/tags，不留过渡映射）
     for retired in ("tag_taxonomy.yaml", "tag_ref_migration.yaml"):
         p = META / "_shared" / retired
         if p.exists():
@@ -89,7 +89,7 @@ def c3_no_flat_ids() -> None:
     text = dt.read_text(encoding="utf-8", errors="ignore")
     ref_re = re.compile(r"^\s*user_tag_ref:\s*(\S+)\s*$", re.MULTILINE)
     refs = [m.group(1).strip() for m in ref_re.finditer(text)]
-    tags_root = ROOT / "quwoquan_data" / "publish" / "v1" / "tags"
+    tags_root = ROOT / "quwoquan_data" / "publish" / "tags"
     for ref in refs:
         if ref.split("/", 1)[0] not in GROUPS:
             errors.append(
@@ -101,7 +101,7 @@ def c3_no_flat_ids() -> None:
             errors.append(f"C3: user_tag_ref 在 taxonomy 不可解析: {ref}")
     if not tags_root.exists():
         warnings.append(
-            "C3: publish/v1/tags 产物不在仓库（数据工程产物不入 git）；"
+            "C3: publish/tags 产物不在仓库（数据工程产物不入 git）；"
             "user_tag_ref resolvable 真校验 SKIP，仅校验路径格式。"
         )
 
@@ -111,7 +111,7 @@ def c4_metadata_docs_clean() -> None:
 
     C1 只扫 .go/.dart 业务代码，metadata 自身的 .md（README/DESIGN 等）是盲区；
     此前 README 把已删的 tag_taxonomy.yaml 写成现行真相源回潮未被任何门禁抓住。
-    单一真相源 = quwoquan_data/publish/v1/tags，metadata 文档不得描述扁平 taxonomy。
+    单一真相源 = quwoquan_data/publish/tags，metadata 文档不得描述扁平 taxonomy。
     """
     pat = re.compile(r"tag_taxonomy")
     hits: list[str] = []
@@ -125,7 +125,7 @@ def c4_metadata_docs_clean() -> None:
                 hits.append(f"{f.relative_to(ROOT)}:{i}")
     if hits:
         errors.append(
-            "C4: metadata 文档仍引用扁平 tag_taxonomy（单一真相源 = publish/v1/tags，"
+            "C4: metadata 文档仍引用扁平 tag_taxonomy（单一真相源 = publish/tags，"
             "文档不得把已删扁平 taxonomy 写成现行真相源）:\n  " + "\n  ".join(hits)
         )
 

@@ -1,16 +1,22 @@
 ---
-description: 端云一体化测试治理（UAT/SIT/GWT/contract + T1~T4）
+description: 端云一体化测试治理（三层测试 + UAT/SIT/GWT/contract）
 globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go,**/acceptance.yaml
 ---
 
 # 端云一体化测试治理
 
+唯一规范：`specs/03_TESTING_STRATEGY.md`。
+
 测试治理分为两套语言：
 
-- 验收意图：`UAT`、`SIT`、`GWT`、`contract`
-- 测试证据：`T1`、`T2`、`T3`、`T4`
+- 验收表达：`UAT`、`SIT`、`GWT`、`contract`
+- 测试工程层：`local_contract`、`api_integration`、`user_acceptance`
 
-禁止用 `L3/L4` 表示测试层。
+禁止：
+
+- 用 `L3/L4` 表示测试层。
+- 新增 `T1/T2/T3/T4` 作为验收证据前缀、目录名或工程层。
+- 用四层特性树替代测试分层。
 
 ---
 
@@ -25,20 +31,20 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go,**/accepta
 
 ---
 
-## 2. 测试证据
+## 2. 三层测试
 
-| 测试层 | 语义 | 典型对象 |
+| 测试层 | 环境 | 典型对象 |
 |---|---|---|
-| `T1` | 契约与静态校验 | metadata、DTO、错误码、字段策略、脚本校验 |
-| `T2` | 模块与交互验证 | widget、provider、模块交互、Story GWT |
-| `T3` | 端云集成验证 | API contract、真实存储、staging/集成环境 |
-| `T4` | 端到端旅程验证 | Patrol、真机、权限、性能、弱网、发布前 UAT |
+| `local_contract` | 本地 / CI / alpha fixture | metadata、DTO、错误码、Repository、Provider、Widget、领域规则、单服务 handler |
+| `api_integration` | beta / gamma-local / prod rollout 低风险阶段 | gateway/API、真实存储、事件/outbox、RemoteRepository、跨服务一致性 |
+| `user_acceptance` | gamma-local / prod rollout / 设备矩阵 | 用户旅程、页面功能、UI/UX、页面生命周期、权限、弱网、SLO、灰度验收 |
 
 规则：
 
 - 测试层只表达验证方式。
 - 特性树层级只表达交付对象和责任归属。
-- `UAT/SIT/GWT/contract` 必须映射到至少一个 `T1~T4` 证据。
+- `UAT/SIT/GWT/contract` 必须映射到至少一个三层测试证据。
+- “superpowers”只表达产品级用户能力，不是测试层，也不是特性树新层级。
 
 ---
 
@@ -47,24 +53,25 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go,**/accepta
 ### 应用根
 
 - 必须声明 UAT。
-- 主要证据为 `T4`，辅以 `T3`。
+- 主要证据为 `user_acceptance`，辅以 `api_integration`。
 - 用 `journey_scenario_registry.yaml` 绑定 Journey / Scenario 与领域服务、业务能力、Story。
+- AppRoot UAT 用用户验收用例表达，不使用 GWT。
 
 ### `L1_domain_service`
 
 - 必须验证领域边界、依赖、权限、生命周期、观测和发布 guardrails。
-- 主要证据为 `T1/T3`，必要时补 `T4`。
+- 主要证据为 `api_integration` 与 `local_contract`，必要时补 `user_acceptance`。
 
 ### `L2_business_capability`
 
 - 必须声明 SIT。
-- 主要证据为 `T2/T3`。
+- 主要证据为 `api_integration`，支撑证据为 `local_contract`；面向用户的能力补 `user_acceptance`。
 - 能力级设计负责说明状态机、策略、数据流和跨 Story 协作。
 
 ### `L3_story`
 
 - 必须声明 GWT 和必要的 contract。
-- 主要证据为 `T1/T2`，涉及远端边界时补 `T3`。
+- 主要证据为 `local_contract`，涉及远端边界时补 `api_integration`，涉及页面/旅程时补 `user_acceptance`。
 - Story 不设 `design.md`；需要设计时上收到业务能力层。
 
 ---
@@ -76,7 +83,7 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go,**/accepta
 ```text
 先定义 acceptance
 → 再确定 UAT/SIT/GWT/contract
-→ 再确定 T1~T4 证据
+→ 再确定 local_contract/api_integration/user_acceptance 证据
 → 先写失败测试或替代验证说明
 → 写最小实现
 → 重构
@@ -96,21 +103,23 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go,**/accepta
 
 开发期 `make gate` 应覆盖：
 
-- `T1`
-- `T2`
-- 必要的本地 `T3`
+- `local_contract`
+- `verify-test-specs`
+- `verify-test-directory-layout`
+- 必要的本地 `api_integration`
 
 收口期 `make gate-full` 应覆盖：
 
-- `T1`
-- `T2`
-- `T3`
-- 必要的 `T4` 入口检查或发布前验证准备
+- `local_contract`
+- `api_integration`
+- gamma-local `user_acceptance`
+- prod rollout 条件具备时的低风险发布验收
 
 发布前必须补齐：
 
-- `T3` 集成验证
-- `T4` 端到端旅程验证
+- `api_integration`
+- `user_acceptance`
+- SLO、告警、灰度、回滚证据
 
 ---
 
@@ -132,11 +141,19 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go,**/accepta
 验收项必须包含：
 
 ```yaml
-evidence:
+test_evidence:
   primary:
-    - T1_contract
+    - layer: local_contract
+      suite: suite_id
+      cases:
+        - local_contract.domain.capability.story.case
+      envs: [local]
   supporting:
-    - T2_module_interaction
+    - layer: api_integration
+      suite: suite_id
+      cases:
+        - api_integration.domain.operation.case
+      envs: [beta, gamma]
 tests:
   planned: []
   recorded: []
@@ -145,6 +162,23 @@ tests:
 禁止：
 
 - `implemented` / `completed` 但 `tests.recorded` 为空。
-- 用 `L3/L4` 作为测试层标识。
-- 将 UAT、SIT、GWT、contract 和 T1~T4 混为一层。
+- 用 `L3/L4` 或 `T1~T4` 作为测试层标识。
+- 将 UAT、SIT、GWT、contract 和三层测试混为一层。
 - 在 Story 层新增 `design.md` 来绕过能力级设计。
+- 在验收项里新增旧字段 `evidence`。
+
+## 8. 工程目录
+
+新增测试目录：
+
+```text
+quwoquan_app/test/local_contract/<domain>/<capability>/<story>/<case>_test.dart
+quwoquan_app/test/api_integration/<domain>/<capability>/<story>/<case>_test.dart
+quwoquan_app/test/user_acceptance/<journey_id>/<scenario_id>/<case>_test.dart
+quwoquan_service/services/<service>/tests/local_contract/<story_or_contract>_test.go
+quwoquan_service/services/<service>/tests/api_integration/<api_or_flow>_test.go
+agent_ops/acceptance/user_acceptance/<journey_id>/manifest.yaml
+agent_ops/acceptance/api_integration/<domain>/<suite>.yaml
+```
+
+存量目录只作为迁移映射，不作为新增标准；其 baseline 由 `specs/gates/test_directory_inventory.yaml` 维护，并由 `python3 agent_ops/scaffold/verify_test_directory_inventory.py` 阻断新增 legacy 路径。

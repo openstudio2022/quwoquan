@@ -1,0 +1,147 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_77fc6698bf4d2979",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/鸣沙山月牙泉景区"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:鸣沙山月牙泉景区"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/鸣沙山月牙泉景区",
+      "reason": "no_condition_profile; uses region/season menu"
+    },
+    "region": {
+      "name": "山地/荒漠",
+      "label": "山地/荒漠",
+      "source": "site_candidate_evidence",
+      "evidenceTerms": [
+        "戈壁",
+        "沙漠"
+      ],
+      "evidenceRef": "entities/地点/景区/鸣沙山月牙泉景区/1.download/sources/56.qunar_guide_candidate_77fc6698bf4d2979/source.md"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7894674"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/鸣沙山月牙泉景区/1.download/sources/56.qunar_guide_candidate_77fc6698bf4d2979/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "鸣沙山月牙泉景区·行前指南：为了“青甘大环线”的近二十天之旅～",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "鸣沙山月牙泉景区",
+    "routeEntities": [
+      "鸣沙山月牙泉景区"
+    ],
+    "beats": [
+      "先从 鸣沙山月牙泉景区 进入主线。",
+      "再次来，发现爱好依旧不变，喜欢拍的依旧是小钱钱",
+      "透过那一抹蓝 我看到了价值连城",
+      "排队很长，人很多，店里就4张桌，运气好的话可以做屋里+吹空调"
+    ],
+    "sourceNote": "为了“青甘大环线”的近二十天之旅～,2026兰州游记,兰州旅游/自助游/自由行/游玩攻略-【去哪儿攻略】\n刁小... 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n为了“青甘大环线”的近二十天之旅～\n刁小刁0301\n2025/07/18出发\n人物\n家庭\n玩法\n人均\n10128元\n前言\n主要出行人员：我+妈妈2个人，要问爸爸为什么没",
+    "relatedTopics": [
+      "鸣沙山月牙泉景区",
+      "再次来，发现爱好依旧不变，喜欢拍的依旧是小钱钱",
+      "透过那一抹蓝 我看到了价值连城",
+      "排队很长，人很多，店里就4张桌，运气好的话可以做屋里+吹空调"
+    ],
+    "mustIncludeFacts": [
+      "鸣沙山月牙泉景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-19T22:36:43.636983+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:鸣沙山月牙泉景区"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "山地/荒漠"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_42fc05fe85c44ef6",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "鸣沙山月牙泉景区",
+      "sourceEntityRef": "/entity/地点/景区/鸣沙山月牙泉景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_77fc6698bf4d2979",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 19
+    }
+  ],
+  "articleMarkdownDigest": "sha256:e60776d5055c9a7115480b22aca77e9019ea50f83ee38945bd03f16d9974f188"
+}

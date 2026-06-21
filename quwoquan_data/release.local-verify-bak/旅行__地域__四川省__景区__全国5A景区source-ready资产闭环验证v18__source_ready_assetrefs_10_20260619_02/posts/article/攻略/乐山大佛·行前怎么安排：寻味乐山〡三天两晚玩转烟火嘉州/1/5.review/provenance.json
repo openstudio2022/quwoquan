@@ -1,0 +1,143 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "乐山大佛_planning_consultation",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "乐山大佛·行前怎么安排：寻味乐山〡三天两晚玩转烟火嘉州",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-c28b8df2-5b71-493f-9f8e-449b647f3ada",
+    "agentId": "agent-c0e0a782-b139-41e6-933d-cb1c478020b8",
+    "sessionTrace": null,
+    "styleFamily": "路线规划风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/乐山大佛"
+    ],
+    "articleDigest": "sha256:4fb4fcf2579f88c4a1f07f42b9fe6b41a6e354c164ee3b50370c6c2f4c8bdfb5"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "乐山大佛·行前怎么安排：寻味乐山〡三天两晚玩转烟火嘉州",
+    "styleFamily": "",
+    "promptSha256": "sha256:6cde2bbc5641069ded6389196e521252057eab0e452d3585f6688c3b713ba1f0",
+    "writingPackSha256": "sha256:6b1fa21cee719340bf0ddffb48082121f2e31d72a350991e31f658e702321703",
+    "sourceBundleSha256": "sha256:a83d291ed356cb602de5b16c1db4d7f069c177c1b5ebfe83223aa118db0fb776",
+    "draftSha256": "sha256:1a49c2a9860b0d9488aab2a28b9c90dbec9e780a30e7a2926c13bca6fcf7aa6d"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/01.home_wikipedia/source.md",
+      "url": "https://zh.wikipedia.org/wiki/%E4%B9%90%E5%B1%B1%E5%A4%A7%E4%BD%9B"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/03.home_official_leshan_committee/source.md",
+      "url": "https://www.leshan.gov.cn/lsswszf/bmdt/92337825/3e865b0e7eee473a94ee6972e.html"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/04.article_qunar_base_1/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7857744"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/05.article_qunar_base_2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7834816"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/06.article_qunar_base_3/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7828681"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/07.article_qunar_base_4/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7800638"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/08.article_qunar_base_5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7779429"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/09.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7765650"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/10.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7749491"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/11.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7717775"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/12.article_qunar_base_9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7705156"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/13.article_qunar_base_10/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7698025"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/14.article_qunar_base_11/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7693272"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/15.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7685161"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/16.article_qunar_base_13/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7676826"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/17.article_qunar_base_14/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7675063"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/18.article_qunar_base_15/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7672714"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/19.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7641101"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/23.image_open_license_file_乐山大佛_httpscommonswikimediaorgwikifileleshangiantbuddha20161101jpg_9cac0dba82/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha,_20161101.jpg"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/24.image_open_license_file_乐山大佛_httpscommonswikimediaorgwikifileleshangiantbuddha20161102jpg_45dd6a0125/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha,_20161102.jpg"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/25.image_open_license_file_乐山大佛_httpscommonswikimediaorgwikifileleshangiantbuddha20161103jpg_202c4616a1/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha,_20161103.jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/乐山大佛/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/07.article_qunar_base_4/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/23.image_open_license_file_乐山大佛_httpscommonswikimediaorgwikifileleshangiantbuddha20161101jpg_9cac0dba82/source.md"
+  ]
+}

@@ -150,11 +150,22 @@ def verify_posts(posts_root: Path, *, post_rels: set[str] | None = None) -> list
 
     # 跨篇模板骨架门 + SimHash 语义去重双指标：换实体名同骨架在发布面也要拦。
     all_articles = [art for _, art in peer_articles]
+    all_article_hashes = {path: qg.simhash64(art) for path, art in peer_articles}
     for path, art in collected:
-        peers = [other for other in all_articles if other is not art]
+        peers = [other for peer_path, other in peer_articles if peer_path != path]
+        peer_hashes = [
+            all_article_hashes[peer_path]
+            for peer_path, _other in peer_articles
+            if peer_path != path
+        ]
         for msg in qg.skeleton_similarity_issues(art, peers):
             issues.append(f"{path}: {msg}")
-        for msg in qg.semantic_duplicate_issues(art, peers):
+        for msg in qg.semantic_duplicate_issues(
+            art,
+            peers,
+            article_hash=all_article_hashes[path],
+            peer_hashes=peer_hashes,
+        ):
             issues.append(f"{path}: {msg}")
     return issues
 

@@ -831,6 +831,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         post: dto,
         isDark: widget.isDark,
         onTap: onTap,
+        // N5：圈子记录卡 → 交集句对象片段点击精确归因为圈子内容（非推荐流）。
+        referralSource: ReferralSource.circlePost,
       );
     }
     final typeLabel = _entryTypeLabel(entry);
@@ -936,6 +938,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       header: IntersectionReasonChip.fromReasons(
         entry.dto?.intersectionReasons,
         isDark: widget.isDark,
+        // N5：圈子文章卡 → 交集句对象片段点击精确归因为圈子内容（非推荐流）。
+        referralSource: ReferralSource.circlePost,
       ),
       onTap: onTap,
       footer: Column(

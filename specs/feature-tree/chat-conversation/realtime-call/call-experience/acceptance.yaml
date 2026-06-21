@@ -9,11 +9,11 @@ node:
 scope:
   summary: 通话中 UI/UX：动态网格、演讲者视图、控制栏、过程态、PiP/顶部通话条、来电页。
   in_scope:
-    - 1/2/3-4/5-9/10-16/17-25/26-32 动态网格与演讲者视图
-    - 控制栏六按钮真实生效、过程态/空态/弱网态
-    - PiP/顶部通话条回流、三端来电页
+  - 1/2/3-4/5-9/10-16/17-25/26-32 动态网格与演讲者视图
+  - 控制栏六按钮真实生效、过程态/空态/弱网态
+  - PiP/顶部通话条回流、三端来电页
   out_of_scope:
-    - SFU/录制基础设施（见 media-infrastructure）
+  - SFU/录制基础设施（见 media-infrastructure）
 gwt_acceptance:
   GWT1_grid_and_states:
     title: 动态网格、过程态与真实视频渲染
@@ -32,17 +32,27 @@ gwt_acceptance:
     - rtc/call_session events.yaml ParticipantLeft
     performance_points:
     - 通话页 FPS ≥60；视频渲染帧率 ≥15fps(32 人)。
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_static_contract
     tests:
       planned:
-      - quwoquan_app/test/ui/rtc/widgets/video_grid_layout_test.dart
-      - quwoquan_app/test/ui/rtc/pages/video_call_page_states_test.dart
+      - file: quwoquan_app/test/ui/rtc/widgets/video_grid_layout_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_grid_and_states_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.call_experience.gwt1_grid_and_states_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: gwt1_grid_and_states_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.call_experience.gwt1_grid_and_states_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/rtc/pages/video_call_page_states_test.dart'
   GWT2_controls_pip_incoming:
     title: 控制栏生效、PiP 回流与三端来电页
     given:
@@ -60,18 +70,32 @@ gwt_acceptance:
     - rtc/call_session service.yaml ToggleCamera
     performance_points:
     - 来电在线推送到达 ≤1s。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T4_e2e_journey
-      supporting:
-      - T1_static_contract
     tests:
       planned:
-      - quwoquan_app/test/ui/rtc/widgets/call_controls_bar_device_test.dart
-      - quwoquan_app/test/app/shell/active_call_shell_mount_test.dart
+      - file: quwoquan_app/test/app/shell/active_call_shell_mount_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_controls_pip_incoming_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.call_experience.gwt2_controls_pip_incoming_local_contract
+        envs: *id001
+      - layer: user_acceptance
+        suite: e2e_journey
+        cases:
+        - user_acceptance.chat_conversation.realtime_call.call_experience.e2e_journey
+        envs:
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: gwt2_controls_pip_incoming_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.call_experience.gwt2_controls_pip_incoming_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/rtc/widgets/call_controls_bar_device_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

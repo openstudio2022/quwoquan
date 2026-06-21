@@ -4,6 +4,11 @@ import (
 	"context"
 	"net/http"
 	"testing"
+
+	"quwoquan_service/services/user-service/internal/application"
+	"quwoquan_service/services/user-service/internal/infrastructure/cache"
+	"quwoquan_service/services/user-service/internal/infrastructure/integration"
+	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
 )
 
 // T3 CredentialBinding 全场景契约测试
@@ -52,6 +57,77 @@ func TestLogin_CreatesOwnerAccountOnFirstUse(t *testing.T) {
 		`SELECT COUNT(*) FROM personas WHERE user_id = $1`, ownerID).Scan(&personaCount)
 	if personaCount != 1 {
 		t.Errorf("expected default persona to be created, got count=%d", personaCount)
+	}
+}
+
+func TestLoginWithSocialProvider_FirstSyncSeedsAvatarVersion(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	profileStore := persistence.NewPgProfileStore(pgPool)
+	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
+	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
+	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
+	profileCache := cache.NewProfileCache(redisClient)
+	shardDirectory, err := application.LoadDefaultShardDirectory()
+	if err != nil {
+		t.Fatalf("load shard directory: %v", err)
+	}
+	authService := application.NewAuthService(
+		profileStore,
+		personaStore,
+		credentialStore,
+		anonymousDeviceBindingStore,
+		profileCache,
+		shardDirectory,
+		application.WithExternalAuthProviderClient(integration.NewMockExternalAuthProviderClient()),
+		application.WithAccessTokenSigner(testAccessSigner),
+	)
+
+	result, err := authService.LoginWithSocialProvider(
+		context.Background(),
+		"wechat",
+		"sandbox-wechat-avatar-001",
+		"device-social-1",
+		"ios",
+		"1.0.0",
+	)
+	if err != nil {
+		t.Fatalf("social login first sync: %v", err)
+	}
+	if result.OwnerID == "" {
+		t.Fatal("expected ownerId from social login")
+	}
+
+	var profileAvatarURL string
+	var profileAvatarVersion int
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT COALESCE(avatar_url, ''), avatar_version FROM user_profiles WHERE user_id = $1`,
+		result.OwnerID,
+	).Scan(&profileAvatarURL, &profileAvatarVersion); err != nil {
+		t.Fatalf("query profile avatar version: %v", err)
+	}
+	if profileAvatarURL == "" {
+		t.Fatal("expected social login to seed avatar_url")
+	}
+	if profileAvatarVersion != 1 {
+		t.Fatalf("expected social login to seed avatar_version=1, got %d", profileAvatarVersion)
+	}
+
+	var personaAvatarURL string
+	var personaAvatarVersion int
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT COALESCE(avatar_url, ''), avatar_version FROM personas WHERE user_id = $1`,
+		result.OwnerID,
+	).Scan(&personaAvatarURL, &personaAvatarVersion); err != nil {
+		t.Fatalf("query persona avatar version: %v", err)
+	}
+	if personaAvatarURL != profileAvatarURL {
+		t.Fatalf("expected default persona avatar_url to inherit profile avatar, got %q vs %q", personaAvatarURL, profileAvatarURL)
+	}
+	if personaAvatarVersion != profileAvatarVersion {
+		t.Fatalf("expected default persona avatar_version=%d, got %d", profileAvatarVersion, personaAvatarVersion)
 	}
 }
 

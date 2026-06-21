@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "都江堰_route_transport",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:33446983c1dec979413d3d32b244325a230961020e2416439b8ed4c68fce4d4b",
+  "finalSha256": "sha256:18032bca73fda4f758ac131ba17800800f5163ad9687b584f4a8ab678aa0765a",
+  "draftBodySha256": "sha256:33446983c1dec979413d3d32b244325a230961020e2416439b8ed4c68fce4d4b",
+  "finalBodySha256": "sha256:33446983c1dec979413d3d32b244325a230961020e2416439b8ed4c68fce4d4b",
+  "composeSnapshotSha256": "sha256:33446983c1dec979413d3d32b244325a230961020e2416439b8ed4c68fce4d4b",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

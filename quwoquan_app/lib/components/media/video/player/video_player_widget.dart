@@ -1,13 +1,17 @@
 import 'dart:developer' as developer;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 
 import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_app/core/platform/video_player_controller_factory.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 /// 视频播放器组件
@@ -149,6 +153,14 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
           _hasError = true;
         });
       }
+      ref
+          .read(pageLifecycleObservabilityProvider)
+          .recordMediaLoad(
+            mediaType: 'video',
+            result: 'failure',
+            copyKey: 'videoLoadFailed',
+            candidatesTried: 0,
+          );
       widget.onPlaybackFailed?.call(0);
       return;
     }
@@ -156,55 +168,70 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
     final startupStopwatch = Stopwatch()..start();
     for (var index = 0; index < candidates.length; index++) {
       final candidate = candidates[index];
-      VideoPlayerController? controller;
-      try {
-        controller = VideoPlayerController.networkUrl(Uri.parse(candidate));
-        await controller.initialize();
-      } catch (error, stackTrace) {
-        await controller?.dispose();
-        // 任务 B · 候选源失败结构化归因：逐个回退、记录失败序号，禁止静默吞错。
-        developer.log(
-          'video candidate init failed '
-          '(index=${index + 1}/${candidates.length})',
-          name: 'VideoPlayerWidget',
-          error: error,
-          stackTrace: stackTrace,
-        );
-        continue;
-      }
+      final sources = await _playableSourcesForCandidate(candidate);
       if (!mounted || generation != _videoInitGeneration) {
-        await controller.dispose();
         return;
       }
-      _controller = controller;
-      _chewieController = ChewieController(
-        videoPlayerController: controller,
-        autoPlay: widget.autoPlay,
-        looping: false,
-        showControls: widget.showControls,
-        showOptions: false,
-        showControlsOnInitialize: false,
-        materialProgressColors: ChewieProgressColors(
-          playedColor: AppColors.primaryColor,
-          handleColor: AppColors.primaryColor,
-          backgroundColor: AppColors.overlayMedium,
-          bufferedColor: AppColors.overlayLight,
-        ),
-        placeholder: _buildVideoPlaceholder(),
-      );
-      setState(() {
-        _isInitialized = true;
-      });
+      for (final source in sources) {
+        VideoPlayerController? controller;
+        try {
+          controller = source.createController();
+          await controller.initialize();
+        } catch (error, stackTrace) {
+          await controller?.dispose();
+          // 任务 B · 候选源失败结构化归因：逐个回退、记录失败序号，禁止静默吞错。
+          developer.log(
+            'video candidate init failed '
+            '(index=${index + 1}/${candidates.length}, '
+            'source=${source.label})',
+            name: 'VideoPlayerWidget',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          continue;
+        }
+        if (!mounted || generation != _videoInitGeneration) {
+          await controller.dispose();
+          return;
+        }
+        _controller = controller;
+        _chewieController = ChewieController(
+          videoPlayerController: controller,
+          autoPlay: widget.autoPlay,
+          looping: false,
+          showControls: widget.showControls,
+          showOptions: false,
+          showControlsOnInitialize: false,
+          materialProgressColors: ChewieProgressColors(
+            playedColor: AppColors.primaryColor,
+            handleColor: AppColors.primaryColor,
+            backgroundColor: AppColors.overlayMedium,
+            bufferedColor: AppColors.overlayLight,
+          ),
+          placeholder: _buildVideoPlaceholder(),
+        );
+        setState(() {
+          _isInitialized = true;
+        });
 
-      // 通知父组件控制器已创建
-      widget.onControllerCreated?.call(controller);
+        // 通知父组件控制器已创建
+        widget.onControllerCreated?.call(controller);
 
-      // 如果设置了自动播放，则开始播放
-      _syncPlaybackWithAutoPlay();
+        // 如果设置了自动播放，则开始播放
+        _syncPlaybackWithAutoPlay();
 
-      startupStopwatch.stop();
-      widget.onPlaybackStarted?.call(startupStopwatch.elapsed, index);
-      return;
+        startupStopwatch.stop();
+        ref
+            .read(pageLifecycleObservabilityProvider)
+            .recordMediaLoad(
+              mediaType: 'video',
+              result: 'success',
+              durationMs: startupStopwatch.elapsedMilliseconds,
+              candidatesTried: index + 1,
+            );
+        widget.onPlaybackStarted?.call(startupStopwatch.elapsed, index);
+        return;
+      }
     }
     startupStopwatch.stop();
     if (mounted && generation == _videoInitGeneration) {
@@ -217,7 +244,67 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
       'video init failed: all ${candidates.length} candidate(s) exhausted',
       name: 'VideoPlayerWidget',
     );
+    ref
+        .read(pageLifecycleObservabilityProvider)
+        .recordMediaLoad(
+          mediaType: 'video',
+          result: 'failure',
+          copyKey: 'videoLoadFailed',
+          candidatesTried: candidates.length,
+        );
     widget.onPlaybackFailed?.call(candidates.length);
+  }
+
+  Future<List<_PlayableVideoSource>> _playableSourcesForCandidate(
+    String candidate,
+  ) async {
+    final normalized = candidate.trim();
+    if (normalized.isEmpty) {
+      return const <_PlayableVideoSource>[];
+    }
+    final sources = <_PlayableVideoSource>[];
+    final seen = <String>{};
+    final cachedPath = await ref
+        .read(mediaDownloadCacheProvider)
+        .getCachedFilePath(normalized);
+    if (cachedPath != null && seen.add('cache:$cachedPath')) {
+      sources.add(_PlayableVideoSource.cachedFile(cachedPath));
+    }
+    final networkUri = Uri.tryParse(normalized);
+    if (_isNetworkVideoUri(networkUri) &&
+        await _canUseNetworkVideoUri(networkUri!) &&
+        seen.add(networkUri.toString())) {
+      sources.add(_PlayableVideoSource.network(networkUri));
+    }
+    return sources;
+  }
+
+  bool _isNetworkVideoUri(Uri? uri) {
+    if (uri == null || uri.host.isEmpty) {
+      return false;
+    }
+    final scheme = uri.scheme.toLowerCase();
+    return scheme == 'http' || scheme == 'https';
+  }
+
+  Future<bool> _canUseNetworkVideoUri(Uri uri) async {
+    if (!isPrivateDevContentMediaUrl(uri.toString())) {
+      return true;
+    }
+    try {
+      final response = await http
+          .get(uri, headers: const <String, String>{'Range': 'bytes=0-1'})
+          .timeout(const Duration(milliseconds: 1200));
+      return response.statusCode == 206;
+    } catch (error, stackTrace) {
+      developer.log(
+        'video local candidate range probe failed',
+        name: 'VideoPlayerWidget',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return false;
+    }
   }
 
   List<String> get _resolvedVideoUrlCandidates {
@@ -270,14 +357,22 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
               ),
             ),
           ColoredBox(color: AppColors.black.withValues(alpha: 0.22)),
+          // 聚焦自动播放（autoPlay）时显示加载转圈，避免与卡片层叠出第二个
+          // 「播放三角」按钮；未自动播放时仍用播放三角作为点按查看提示。
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.play_circle_outline,
-                size: (AppSpacing.avatarSize * 2).sp,
-                color: AppColors.white,
-              ),
+              if (widget.autoPlay)
+                CupertinoActivityIndicator(
+                  color: AppColors.white,
+                  radius: AppSpacing.iconMedium / 2,
+                )
+              else
+                Icon(
+                  Icons.play_circle_outline,
+                  size: (AppSpacing.avatarSize * 2).sp,
+                  color: AppColors.white,
+                ),
               SizedBox(height: AppSpacing.sm.h),
               Text(
                 UITextConstants.loading,
@@ -334,18 +429,10 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
           ),
           SizedBox(height: AppSpacing.sm.h),
           Text(
-            UITextConstants.videoPlaybackFailed,
+            UITextConstants.videoLoadFailed,
             style: TextStyle(
               color: AppColors.white.withValues(alpha: 0.88),
               fontSize: AppTypography.sm.sp,
-            ),
-          ),
-          SizedBox(height: AppSpacing.xs.h),
-          Text(
-            UITextConstants.checkNetworkAndTryAgain,
-            style: TextStyle(
-              color: AppColors.white.withValues(alpha: 0.7),
-              fontSize: AppTypography.xs.sp,
             ),
           ),
           SizedBox(height: AppSpacing.sm.h),
@@ -414,11 +501,39 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
       return _buildCenteredVideoFrame(_buildVideoPlaceholder());
     }
 
+    final player = widget.showControls
+        ? Chewie(controller: _chewieController!)
+        : VideoPlayer(_controller!);
     return GestureDetector(
       onTap: widget.onTap,
-      child: _buildCenteredVideoFrame(Chewie(controller: _chewieController!)),
+      child: _buildCenteredVideoFrame(player),
     );
   }
+}
+
+class _PlayableVideoSource {
+  const _PlayableVideoSource._({
+    required this.label,
+    required this.createController,
+  });
+
+  factory _PlayableVideoSource.cachedFile(String path) {
+    return _PlayableVideoSource._(
+      label: 'cache',
+      createController: () =>
+          AppVideoPlayerControllerFactory.localFilePath(path),
+    );
+  }
+
+  factory _PlayableVideoSource.network(Uri uri) {
+    return _PlayableVideoSource._(
+      label: 'network',
+      createController: () => AppVideoPlayerControllerFactory.networkUri(uri),
+    );
+  }
+
+  final String label;
+  final VideoPlayerController Function() createController;
 }
 
 /// 视频播放器控制器管理（按 url 释放单个控制器）。

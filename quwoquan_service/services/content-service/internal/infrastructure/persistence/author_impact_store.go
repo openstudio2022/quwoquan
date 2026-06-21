@@ -13,14 +13,8 @@ import (
 
 const authorImpactCollection = "rm_author_impact"
 
-const (
-	AuthorImpactHelpRelationship = "relationship"
-	AuthorImpactHelpCommunity    = "community"
-	AuthorImpactHelpDecision     = "decision"
-	AuthorImpactHelpKnowledge    = "knowledge"
-	AuthorImpactHelpSpread       = "spread"
-	AuthorImpactHelpAudience     = "audience"
-)
+// helpType 标准名常量统一由 runtime/impact（tools/codegen_impact 生成 help_type_table.go）
+// 提供：rtimpact.HelpRelationship..HelpAudience。此处不再重复定义第二份常量。
 
 // AuthorImpactEvent is the normalized reverse-aggregation event for creator
 // explainability. It uses the same action and intersection attribution fields
@@ -43,15 +37,47 @@ type AuthorImpactSummary struct {
 }
 
 type AuthorImpactItem struct {
-	ImpactID              string    `json:"impactId" bson:"-"` // 稳定下钻锚点（端侧点数字 → ListAuthorImpactEvidence?impactId=）
-	HelpType              string    `json:"helpType" bson:"helpType"`
-	Action                string    `json:"action" bson:"action"`
-	IntersectionDimension string    `json:"intersectionDimension" bson:"intersectionDimension"`
-	TagRef                string    `json:"tagRef" bson:"tagRef"`
-	Source                string    `json:"source" bson:"source"`
-	Count                 int64     `json:"count" bson:"count"`
-	PrimaryText           string    `json:"primaryText" bson:"-"` // 云侧按 viewer 视角产出的影响结论句（端只读直出）
-	UpdatedAt             time.Time `json:"updatedAt" bson:"updatedAt"`
+	ImpactID              string                     `json:"impactId" bson:"-"` // 稳定下钻锚点（端侧点数字 → ListAuthorImpactEvidence?impactId=）
+	HelpType              string                     `json:"helpType" bson:"helpType"`
+	Action                string                     `json:"action" bson:"action"`
+	IntersectionDimension string                     `json:"intersectionDimension" bson:"intersectionDimension"`
+	TagRef                string                     `json:"tagRef" bson:"tagRef"`
+	Source                string                     `json:"source" bson:"source"`
+	Count                 int64                      `json:"count" bson:"count"`
+	PrimaryText           string                     `json:"primaryText" bson:"-"` // 云侧按 viewer 视角产出的影响结论句（端只读直出）
+	RepresentativeActor   *ImpactRepresentativeActor `json:"representativeActor,omitempty" bson:"-"`
+	ActionHints           []ImpactActionHint         `json:"actionHints" bson:"-"`
+	IconKey               string                     `json:"iconKey" bson:"-"`
+	// CountObjectKind / CountTarget 为云侧按真实聚合 tagRef 派生的「数字下钻」语义（bson:"-"，不入库）：
+	// 旅行影响力（§22.5）被计数对象恒为 person（受影响的人），下钻目标对象类型由旅行 tag 真算
+	// （route/photo_spot/gear/place）。与 IntersectionReason 的 verticalForReason 同一旅行 tag 真相源。
+	CountObjectKind string        `json:"countObjectKind,omitempty" bson:"-"`
+	CountTarget     *ImpactTarget `json:"countTarget,omitempty" bson:"-"`
+	UpdatedAt       time.Time     `json:"updatedAt" bson:"updatedAt"`
+}
+
+type ImpactRepresentativeActor struct {
+	ActorID       string        `json:"actorId"`
+	DisplayName   string        `json:"displayName"`
+	AvatarURL     string        `json:"avatarUrl"`
+	RelationLabel string        `json:"relationLabel"`
+	PrivacyState  string        `json:"privacyState"`
+	Target        *ImpactTarget `json:"target,omitempty"`
+	EvidenceRank  int           `json:"evidenceRank"`
+}
+
+type ImpactActionHint struct {
+	ActionKey string        `json:"actionKey"`
+	Label     string        `json:"label"`
+	Target    *ImpactTarget `json:"target,omitempty"`
+	IsPrimary bool          `json:"isPrimary"`
+	Priority  int           `json:"priority"`
+}
+
+type ImpactTarget struct {
+	ObjectID   string `json:"objectId"`
+	ObjectKind string `json:"objectKind"`
+	RouteID    string `json:"routeId"`
 }
 
 // AuthorImpactStore maintains rm_author_impact for producer-side explainability.

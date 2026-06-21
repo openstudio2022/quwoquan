@@ -1,0 +1,149 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_bedfeb064e4eb55e",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/黄山风景区"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:黄山风景区"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfile": {
+      "entityRef": "/entity/地点/景区/黄山风景区",
+      "regions": [
+        "高原"
+      ],
+      "seasons": [
+        "春"
+      ],
+      "altitudeMeters": null,
+      "notes": null,
+      "conditionSource": "entityConditionProfile"
+    },
+    "region": {
+      "name": "高原",
+      "label": "高原",
+      "source": "entityProfile"
+    },
+    "season": {
+      "name": "春",
+      "label": "春",
+      "source": "entityProfile"
+    }
+  },
+  "sourceUrls": [
+    "https://zh.wikivoyage.org/wiki/%E9%BB%84%E5%B1%B1"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "gpt-5-codex",
+  "citedSourceRefs": [
+    "entities/地点/景区/黄山风景区/1.download/sources/07.wikivoyage_zh_candidate_bedfeb064e4eb55e/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "黄山风景区·行前指南：黄山",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "黄山风景区",
+    "routeEntities": [
+      "黄山风景区"
+    ],
+    "beats": [
+      "先从 黄山风景区 进入主线。"
+    ],
+    "sourceNote": "黄山，位于中国安徽省黄山市黄山区境内，南面浙江边界。1990年12月，黄山被列入联合国教科文组织世界遗产名录；2004年2月，入选世界地质公园。附近较为方便的中转城镇为甘棠镇和汤口镇。\n\n\n== 了解 ==\n黄山原名黟山，因峰岩青黑，遥望苍黛而名。后因传轩辕黄帝曾在此炼丹成仙，唐玄宗信奉道教，故于天宝六年（公元747年）六月十七日改为“黄山”。\n明朝旅行家、",
+    "relatedTopics": [
+      "黄山风景区"
+    ],
+    "mustIncludeFacts": [
+      "黄山风景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_wikivoyage_scenic_articles_15_publish_r2",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-20T04:04:26.660730+00:00",
+  "updatedAt": "2026-06-20T04:07:06.472808+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "高原"
+    },
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:黄山风景区"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_7973382ab0576bb0",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "黄山风景区",
+      "sourceEntityRef": "/entity/地点/景区/黄山风景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_bedfeb064e4eb55e",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 16
+    }
+  ],
+  "articleMarkdownDigest": "sha256:e637661caa87d33997af80c5dcdba4df8e26075abca9b5f624eee9a870db271f"
+}

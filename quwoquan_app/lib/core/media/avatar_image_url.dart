@@ -17,11 +17,13 @@ String resolveAvatarImageUrl(
   String? raw, {
   String? gatewayBaseUrl,
   String? avatarCdnBaseUrl,
+  int? avatarVersion,
 }) {
   final candidates = resolveAvatarImageUrlCandidates(
     raw,
     gatewayBaseUrl: gatewayBaseUrl,
     avatarCdnBaseUrl: avatarCdnBaseUrl,
+    avatarVersion: avatarVersion,
   );
   return candidates.isEmpty ? '' : candidates.first;
 }
@@ -31,6 +33,7 @@ List<String> resolveAvatarImageUrlCandidates(
   String? raw, {
   String? gatewayBaseUrl,
   String? avatarCdnBaseUrl,
+  int? avatarVersion,
 }) {
   final source = raw?.trim() ?? '';
   if (source.isEmpty) {
@@ -48,6 +51,7 @@ List<String> resolveAvatarImageUrlCandidates(
       source,
       gatewayBaseUrl: gateway,
       avatarCdnBaseUrl: cdn,
+      avatarVersion: avatarVersion,
     );
   }
   if (source.startsWith('//')) {
@@ -55,6 +59,7 @@ List<String> resolveAvatarImageUrlCandidates(
       'https:$source',
       gatewayBaseUrl: gateway,
       avatarCdnBaseUrl: cdn,
+      avatarVersion: avatarVersion,
     );
   }
   if (_looksLikeBareHostUrl(source)) {
@@ -62,6 +67,7 @@ List<String> resolveAvatarImageUrlCandidates(
       'https://$source',
       gatewayBaseUrl: gateway,
       avatarCdnBaseUrl: cdn,
+      avatarVersion: avatarVersion,
     );
   }
 
@@ -76,10 +82,13 @@ List<String> resolveAvatarImageUrlCandidates(
   }
 
   final normalizedPath = _rewriteArchivedSeedAvatarPath(paths.first);
-  return _mediaUrlCandidates(
-    normalizedPath,
-    gatewayBaseUrl: gateway,
-    avatarCdnBaseUrl: cdn,
+  return _applyAvatarVersionToUrls(
+    _mediaUrlCandidates(
+      normalizedPath,
+      gatewayBaseUrl: gateway,
+      avatarCdnBaseUrl: cdn,
+    ),
+    avatarVersion,
   );
 }
 
@@ -87,41 +96,53 @@ List<String> _resolveAbsoluteAvatarUrlCandidates(
   String source, {
   required String gatewayBaseUrl,
   required String avatarCdnBaseUrl,
+  required int? avatarVersion,
 }) {
   final uri = Uri.tryParse(source);
   if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-    return <String>[source];
+    return _applyAvatarVersionToUrls(<String>[source], avatarVersion);
   }
   final objectKey = uri.path.replaceFirst(RegExp(r'^/+'), '');
   if (!_looksLikeMediaObjectKey(objectKey)) {
-    return _isTrustedRuntimeHost(
-          uri,
-          gatewayBaseUrl: gatewayBaseUrl,
-          avatarCdnBaseUrl: avatarCdnBaseUrl,
-        )
-        ? <String>[source]
-        : const <String>[];
+    return _applyAvatarVersionToUrls(
+      _isTrustedRuntimeHost(
+            uri,
+            gatewayBaseUrl: gatewayBaseUrl,
+            avatarCdnBaseUrl: avatarCdnBaseUrl,
+          )
+          ? <String>[source]
+          : const <String>[],
+      avatarVersion,
+    );
   }
   final path = _uriPathWithQuery(uri);
   final normalizedPath = _rewriteArchivedSeedAvatarPath(path);
   if (normalizedPath != path) {
-    return _mediaUrlCandidates(
-      normalizedPath,
-      gatewayBaseUrl: gatewayBaseUrl,
-      avatarCdnBaseUrl: avatarCdnBaseUrl,
+    return _applyAvatarVersionToUrls(
+      _mediaUrlCandidates(
+        normalizedPath,
+        gatewayBaseUrl: gatewayBaseUrl,
+        avatarCdnBaseUrl: avatarCdnBaseUrl,
+      ),
+      avatarVersion,
     );
   }
   final shouldRewriteHttpToHttps =
       uri.scheme.toLowerCase() == 'http' &&
       _normalizeBase(avatarCdnBaseUrl).startsWith('https://');
 
-  final candidates = _mediaUrlCandidates(
-    normalizedPath,
-    gatewayBaseUrl: gatewayBaseUrl,
-    avatarCdnBaseUrl: avatarCdnBaseUrl,
+  final candidates = _applyAvatarVersionToUrls(
+    _mediaUrlCandidates(
+      normalizedPath,
+      gatewayBaseUrl: gatewayBaseUrl,
+      avatarCdnBaseUrl: avatarCdnBaseUrl,
+    ),
+    avatarVersion,
   );
   if (_isLoopbackHost(uri.host) || shouldRewriteHttpToHttps) {
-    return candidates.isEmpty ? <String>[source] : candidates;
+    return candidates.isEmpty
+        ? _applyAvatarVersionToUrls(<String>[source], avatarVersion)
+        : candidates;
   }
   if (!_isTrustedRuntimeHost(
     uri,
@@ -130,7 +151,10 @@ List<String> _resolveAbsoluteAvatarUrlCandidates(
   )) {
     return candidates;
   }
-  return _uniqueNonEmpty(<String>[source, ...candidates]);
+  return _applyAvatarVersionToUrls(<String>[
+    source,
+    ...candidates,
+  ], avatarVersion);
 }
 
 String _normalizeBase(String raw) {
@@ -177,6 +201,29 @@ List<String> _uniqueNonEmpty(Iterable<String> values) {
     result.add(normalized);
   }
   return List<String>.unmodifiable(result);
+}
+
+List<String> _applyAvatarVersionToUrls(
+  Iterable<String> values,
+  int? avatarVersion,
+) {
+  if (avatarVersion == null || avatarVersion <= 0) {
+    return _uniqueNonEmpty(values);
+  }
+  return _uniqueNonEmpty(
+    values.map((value) => _replaceVersionQuery(value, avatarVersion)),
+  );
+}
+
+String _replaceVersionQuery(String raw, int avatarVersion) {
+  final value = raw.trim();
+  final uri = Uri.tryParse(value);
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+    return value;
+  }
+  final nextQuery = Map<String, String>.from(uri.queryParameters);
+  nextQuery['v'] = avatarVersion.toString();
+  return uri.replace(queryParameters: nextQuery).toString();
 }
 
 bool _looksLikeMediaObjectKey(String source) {

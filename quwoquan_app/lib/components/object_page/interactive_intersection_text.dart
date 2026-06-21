@@ -14,8 +14,9 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 ///
 /// 降级链（spans → primaryText → 隐藏）：
 /// - `spans` 非空：`Text.rich` 逐段渲染；`role=object/count` 且提供了 [onSpanTap] 的片段用
-///   iOS accent 常规字重 + 点击态（命中 [onSpanTap]，轻量、不整句变蓝），其余片段为
-///   [AppColors.iosLabel] 常规文本不可点击；
+///   低饱和 slogan-accent 蓝（[AppColors.profileSloganAccentLight]/[AppColors.profileSloganAccentDark]）
+///   常规字重 + 点击态（命中 [onSpanTap]，轻量、不整句变蓝、也不用高饱和 systemBlue），
+///   其余片段为 [AppColors.iosLabel] 常规文本不可点击；
 /// - `spans` 为空但 [fallbackText] 非空：渲染纯文本，整行命中 [onFallbackTap]；
 /// - 两者皆空：渲染 [SizedBox.shrink]（隐藏）。
 ///
@@ -126,8 +127,11 @@ class _InteractiveIntersectionTextState
       );
     }
 
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final accent = base.copyWith(
-      color: AppColors.iosAccent(context),
+      color: isDark
+          ? AppColors.profileSloganAccentDark
+          : AppColors.profileSloganAccentLight,
       fontWeight: widget.accentFontWeight,
     );
     // 槽② 行内头像直径：随正文字号缩放，约文字 cap-height 的 ~1.3x，行内对齐居中。

@@ -29,8 +29,6 @@ def _apply_release_publish_filter(release_dir: Path) -> list[str]:
     homepage_root = release_dir / "entities"
     for manifest_path in sorted(posts_root.rglob("manifest.json")):
         topic_dir = manifest_path.parent
-        if not ((topic_dir / "article.md").exists() or (topic_dir / "gallery.md").exists()):
-            continue
         verdict = apply_publish_filter(topic_dir, release_dir, entity_homepage_root=homepage_root)
         rel = topic_dir.relative_to(release_dir).as_posix()
         if not verdict.publishable:

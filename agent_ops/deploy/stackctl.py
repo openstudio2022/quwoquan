@@ -861,6 +861,7 @@ def fetch_url(
     *,
     retry_attempts: int = 2,
     retry_sleep_seconds: float = 2.0,
+    headers: dict[str, str] | None = None,
 ) -> tuple[bool, int | None, str]:
     retry_markers = (
         "timed out",
@@ -871,8 +872,9 @@ def fetch_url(
     total_attempts = max(1, retry_attempts)
     for attempt in range(1, total_attempts + 1):
         try:
+            request = urllib.request.Request(url, headers=headers or {})
             with urllib.request.urlopen(
-                url,
+                request,
                 timeout=timeout,
                 context=ssl._create_unverified_context(),
             ) as response:
@@ -2128,7 +2130,12 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
             timeout=timeout_seconds,
             retry_attempts=retry_attempts,
             retry_sleep_seconds=retry_sleep_seconds,
+            headers=item.get("headers"),
         )
+        expected_status = item.get("expectedStatus")
+        if ok and expected_status is not None and status_code != int(expected_status):
+            ok = False
+            body = f"expected HTTP {expected_status}, got {status_code}"
         if not ok:
             findings.append(f"{item['scope']}/{item['name']} failed: {status_code or 'ERR'} {item['url']}")
         statuses.append(
@@ -2893,6 +2900,15 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
                     "url": f"{str(public_bases['mediaImage']).rstrip('/')}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
                 }
             )
+            checks.append(
+                {
+                    "name": "media-video-range-sample",
+                    "scope": "media",
+                    "url": f"{str(public_bases.get('mediaVideo', public_bases['mediaImage'])).rstrip('/')}/media/video/s/archived-video/beta-sample.mp4",
+                    "headers": {"Range": "bytes=0-1"},
+                    "expectedStatus": 206,
+                }
+            )
         media_origin = str(origins.get("mediaOrigin") or "").rstrip("/")
         if media_origin and allow_fixture_refs:
             checks.append(
@@ -2900,6 +2916,15 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
                     "name": "media-origin-sample",
                     "scope": "media",
                     "url": f"{media_origin}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                }
+            )
+            checks.append(
+                {
+                    "name": "media-origin-video-range-sample",
+                    "scope": "media",
+                    "url": f"{media_origin}/media/video/s/archived-video/beta-sample.mp4",
+                    "headers": {"Range": "bytes=0-1"},
+                    "expectedStatus": 206,
                 }
             )
     if scope in {"service", "full"}:

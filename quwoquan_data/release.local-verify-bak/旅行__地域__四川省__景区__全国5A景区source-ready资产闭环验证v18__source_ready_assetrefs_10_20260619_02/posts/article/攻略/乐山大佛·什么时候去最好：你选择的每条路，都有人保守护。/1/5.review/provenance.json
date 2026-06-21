@@ -1,0 +1,149 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "乐山大佛_seasonal_timing",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "乐山大佛·什么时候去最好：你选择的每条路，都有人保守护。",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer",
+    "agentRunId": "run-0c59b979-db65-42fc-ae54-3b6e924fe643",
+    "agentId": "agent-88be7156-4a60-432d-9cdb-721c88ee8e0d",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/乐山大佛"
+    ],
+    "articleDigest": "sha256:8471eda78e43a24409d40b0a309d0c9b8a66656e80fb9e8def3950f4d7298e29"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "乐山大佛·什么时候去最好：你选择的每条路，都有人保守护。",
+    "styleFamily": "",
+    "promptSha256": "sha256:ead47d5c00e7bc2889bc8be7e3ba1a3ccee7ff40f571a609d1ca4f1abd501084",
+    "writingPackSha256": "sha256:e1b0b23bf8ac25bcd72fac2f32cb806c885e4628ec4991b3fc17b29c3abbc8ca",
+    "sourceBundleSha256": "sha256:e78f314bfbf3266385029cd6ef60b4e77abc00571aa3fdbf0f84b71a4f972916",
+    "draftSha256": "sha256:977457eae09be5cef9aca4c4a03d01fb1db779721332ecf62a29563f62504389"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/01.home_wikipedia/source.md",
+      "url": "https://zh.wikipedia.org/wiki/%E4%B9%90%E5%B1%B1%E5%A4%A7%E4%BD%9B"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/03.home_official_leshan_committee/source.md",
+      "url": "https://www.leshan.gov.cn/lsswszf/bmdt/92337825/3e865b0e7eee473a94ee6972e.html"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/04.article_qunar_base_1/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7857744"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/05.article_qunar_base_2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7834816"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/06.article_qunar_base_3/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7828681"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/07.article_qunar_base_4/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7800638"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/08.article_qunar_base_5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7779429"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/09.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7765650"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/10.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7749491"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/11.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7717775"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/12.article_qunar_base_9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7705156"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/13.article_qunar_base_10/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7698025"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/14.article_qunar_base_11/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7693272"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/15.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7685161"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/16.article_qunar_base_13/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7676826"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/17.article_qunar_base_14/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7675063"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/18.article_qunar_base_15/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7672714"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/19.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7641101"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/23.image_open_license_file_乐山大佛_httpscommonswikimediaorgwikifileleshangiantbuddha20161101jpg_9cac0dba82/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha,_20161101.jpg"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/24.image_open_license_file_乐山大佛_httpscommonswikimediaorgwikifileleshangiantbuddha20161102jpg_45dd6a0125/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha,_20161102.jpg"
+    },
+    {
+      "path": "entities/地点/景区/乐山大佛/1.download/sources/25.image_open_license_file_乐山大佛_httpscommonswikimediaorgwikifileleshangiantbuddha20161103jpg_202c4616a1/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha,_20161103.jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/乐山大佛/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/03.home_official_leshan_committee/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/04.article_qunar_base_1/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/05.article_qunar_base_2/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/08.article_qunar_base_5/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/13.article_qunar_base_10/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/14.article_qunar_base_11/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/17.article_qunar_base_14/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/18.article_qunar_base_15/source.md"
+  ]
+}

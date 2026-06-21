@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -28,9 +29,7 @@ def _parse_entity_ref(raw: str) -> tuple[str, str, str]:
     return "", "", raw
 
 
-def entity_homepage_exists(homepage_root: Path, ref: str, sidecar_homepages: set[str]) -> bool:
-    if ref in sidecar_homepages:
-        return True
+def entity_homepage_exists(homepage_root: Path, ref: str, sidecar_homepages: set[str] | None = None) -> bool:
     domain, etype, name = _parse_entity_ref(ref)
     if not (domain and etype and name):
         return False
@@ -48,6 +47,13 @@ def _normalized_runtime_entity_ref(ref: str) -> str:
     return f"entity:{etype_slug}:{name_slug}"
 
 
+def _normalized_entity_link_ref(ref: str) -> str:
+    domain, etype, name = _parse_entity_ref(ref)
+    if not (domain and etype and name):
+        return ""
+    return f"/entity/{domain}/{etype}/{name}"
+
+
 def _normalized_runtime_entity_refs(entity_refs: list[str]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
@@ -58,6 +64,45 @@ def _normalized_runtime_entity_refs(entity_refs: list[str]) -> list[str]:
         out.append(normalized)
         seen.add(normalized)
     return out
+
+
+def _pending_entity_candidate_id(ref: str) -> str:
+    digest = hashlib.sha256(str(ref or "").encode("utf-8")).hexdigest()[:16]
+    return f"entity_candidate_{digest}"
+
+
+def _pending_entity_mentions(refs: list[str], article_md: str, manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    """Keep site-supply entity gaps auditable without projecting active entity refs."""
+    topic_id = str(manifest.get("topicId") or manifest.get("ref") or "").strip()
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for ref in refs:
+        domain, etype, name = _parse_entity_ref(ref)
+        surface = name.strip()
+        if not surface or ref in seen:
+            continue
+        seen.add(ref)
+        start = article_md.find(surface) if article_md else -1
+        row: dict[str, Any] = {
+            "candidateId": _pending_entity_candidate_id(ref),
+            "kind": "entity",
+            "status": "pending_review",
+            "surface": surface,
+            "sourceEntityRef": ref,
+            "source": "publish_filter.filtered_entity_without_homepage",
+        }
+        if topic_id:
+            row["sourceRef"] = topic_id
+        if domain or etype:
+            row["entityType"] = "/".join(part for part in (domain, etype) if part)
+        if start >= 0:
+            row["location"] = "body"
+            row["rangeStart"] = start
+            row["rangeEnd"] = start + len(surface)
+        else:
+            row["location"] = "manifest"
+        rows.append(row)
+    return rows
 
 
 def _sync_publish_ref_projections(manifest: dict[str, Any]) -> None:
@@ -116,6 +161,24 @@ def _strip_asset_from_markdown(article_md: str, asset_ids: set[str]) -> str:
     return text
 
 
+def _strip_filtered_entity_links(article_md: str, entity_refs: set[str]) -> str:
+    if not article_md or not entity_refs or "/entity/" not in article_md:
+        return article_md
+    normalized = {_normalized_entity_link_ref(ref) for ref in entity_refs if _normalized_entity_link_ref(ref)}
+    if not normalized:
+        return article_md
+    pattern = re.compile(r"\[([^\]\n]+)\]\((/entity/[^)\s]+)\)")
+
+    def replace(match: re.Match[str]) -> str:
+        label = match.group(1)
+        href = match.group(2)
+        if _normalized_entity_link_ref(href) in normalized:
+            return label
+        return match.group(0)
+
+    return pattern.sub(replace, article_md)
+
+
 def apply_publish_filter(
     topic_dir: Path,
     publish_root: Path,
@@ -138,7 +201,8 @@ def apply_publish_filter(
         ledger = ReviewLedger.from_dict(read_json(ledger_file))
         publishable, reasons, discard_targets = post_publishability(ledger)
 
-    # 实体主页存在性：sidecar hasHomepage + publish 主线 page.md / release entity_pages.
+    # 实体主页存在性必须以发布面 page.md 为准；review sidecar 只作审计输入，
+    # 不能让 release 产生悬挂主页链接。
     sidecar_homepages: set[str] = set()
     if entities_file.is_file():
         for ent in read_json(entities_file).get("entities", []):
@@ -154,6 +218,23 @@ def apply_publish_filter(
         else:
             filtered_entities.append(ref)
     manifest["entityRefs"] = kept_refs
+    if filtered_entities:
+        article_md = _strip_filtered_entity_links(article_md, set(filtered_entities))
+        existing_pending = [
+            item for item in (manifest.get("pendingEntityMentions") or [])
+            if isinstance(item, dict)
+        ]
+        existing_keys = {
+            str(item.get("sourceEntityRef") or item.get("candidateId") or "")
+            for item in existing_pending
+        }
+        for item in _pending_entity_mentions(filtered_entities, article_md, manifest):
+            key = str(item.get("sourceEntityRef") or item.get("candidateId") or "")
+            if key and key in existing_keys:
+                continue
+            existing_pending.append(item)
+            existing_keys.add(key)
+        manifest["pendingEntityMentions"] = existing_pending
     _sync_publish_ref_projections(manifest)
 
     # discard 图片：从顶层 assets 剔除并记录文件名

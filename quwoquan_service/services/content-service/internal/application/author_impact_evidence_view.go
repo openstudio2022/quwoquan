@@ -23,15 +23,17 @@ type AuthorImpactEvidencePageView struct {
 // AuthorImpactEvidenceItemView is one paginated impact evidence detail row
 // (mirrors projections/author_impact_evidence_item.yaml).
 type AuthorImpactEvidenceItemView struct {
-	EvidenceID            string                  `json:"evidenceId"`
-	ImpactID              string                  `json:"impactId"`
-	HelpType              string                  `json:"helpType"`
-	Action                string                  `json:"action"`
-	IntersectionDimension string                  `json:"intersectionDimension"`
-	OccurredAt            string                  `json:"occurredAt"`
-	SummaryText           string                  `json:"summaryText"`
-	SampleVisual          *IntersectionVisualView `json:"sampleVisual,omitempty"`
-	ContentTarget         *IntersectionTargetView `json:"contentTarget,omitempty"`
+	EvidenceID            string                               `json:"evidenceId"`
+	ImpactID              string                               `json:"impactId"`
+	HelpType              string                               `json:"helpType"`
+	Action                string                               `json:"action"`
+	IntersectionDimension string                               `json:"intersectionDimension"`
+	OccurredAt            string                               `json:"occurredAt"`
+	SummaryText           string                               `json:"summaryText"`
+	SampleVisual          *IntersectionVisualView              `json:"sampleVisual,omitempty"`
+	RepresentativeActor   *IntersectionRepresentativeActorView `json:"representativeActor,omitempty"`
+	ActionHints           []IntersectionActionHintView         `json:"actionHints"`
+	ContentTarget         *IntersectionTargetView              `json:"contentTarget,omitempty"`
 }
 
 // BuildAuthorImpactEvidencePage hydrates raw evidence facts into the client view:
@@ -70,11 +72,17 @@ func BuildAuthorImpactEvidencePage(
 			IntersectionDimension: raw.IntersectionDimension,
 			OccurredAt:            raw.OccurredAt.UTC().Format(time.RFC3339),
 			SummaryText:           rtimpact.EvidenceText(raw.HelpType, raw.Action, title, perspective),
+			RepresentativeActor: &IntersectionRepresentativeActorView{
+				DisplayName:   "有人",
+				RelationLabel: "被影响的人",
+				PrivacyState:  "anonymous",
+			},
 		}
 		if visual := evidenceContentVisual(raw, post, resolveImageURL); visual != nil {
 			item.SampleVisual = visual
 			item.ContentTarget = visual.Target
 		}
+		item.ActionHints = impactEvidenceActionHints(raw.HelpType, item.ContentTarget)
 		items = append(items, item)
 	}
 	if evidenceSnapshotID == "" {
@@ -88,6 +96,23 @@ func BuildAuthorImpactEvidencePage(
 		NextCursor:         nextCursor,
 		HasMore:            hasMore,
 	}
+}
+
+// impactEvidenceActionHints 查 helpType → 证据明细行主行动
+// （rtimpact.EvidenceActionByHelpType，源 registry.helpTypes[].evidenceAction）。
+// 未登记 helpType 兜底 DefaultEvidenceAction（查看内容）。
+func impactEvidenceActionHints(helpType string, target *IntersectionTargetView) []IntersectionActionHintView {
+	action, ok := rtimpact.EvidenceActionByHelpType[strings.TrimSpace(helpType)]
+	if !ok {
+		action = rtimpact.DefaultEvidenceAction
+	}
+	return []IntersectionActionHintView{{
+		ActionKey: action.Key,
+		Label:     action.Label,
+		Target:    target,
+		IsPrimary: true,
+		Priority:  1,
+	}}
 }
 
 // evidenceContentVisual builds the content-anchored sample visual. Returns nil

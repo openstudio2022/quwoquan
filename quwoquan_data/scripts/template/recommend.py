@@ -16,8 +16,11 @@ def build_recommendation_manifest(
     tag_refs: list[str],
     *,
     condition_context: dict[str, Any] | None = None,
+    creator: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    creator = choose_creator(registry, blueprint)
+    # 复用 route 已按内容信号匹配出的作者，保证 brief 与 recommendation 同一虚拟作者。
+    if creator is None:
+        creator = choose_creator(registry, blueprint)
     merged_tags = list(dict.fromkeys(tag_refs + collect_tag_refs(blueprint) + creator.get("recommendationTagRefs", [])))
     context = condition_context or {}
     manifest = {

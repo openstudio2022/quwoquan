@@ -3,15 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show ReferralSource;
-import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
+    show referralSourceForObjectType;
+import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 
 class ObjectIntersectionListPage extends ConsumerWidget {
   const ObjectIntersectionListPage({
@@ -35,32 +34,31 @@ class ObjectIntersectionListPage extends ConsumerWidget {
     WidgetRef ref,
     IntersectionReason reason,
   ) {
-    final id = reason.actionTargetId.trim();
-    if (id.isEmpty) return;
-    ref
-        .read(contentBehaviorTrackerProvider)
-        .trackClick(
-          id,
-          referralSource: ReferralSource.organicFeed,
-          intersectionId: reason.intersectionId,
-          intersectionDimension: reason.dimension,
-          intersectionClass: reason.intersectionClass,
-          intersectionTagRefs: reason.tagRefs,
-        );
-    final kind = UnifiedObjectKind.resolve(
-      objectKind: reason.objectKind,
-      relationKind: reason.relationKind,
+    final target = IntersectionTargetNavigator.targetForReason(reason);
+    IntersectionTargetNavigator(
+      onTrack: (hit, attribution) {
+        ref
+            .read(contentBehaviorTrackerProvider)
+            .trackClick(
+              hit.objectId,
+              referralSource: referralSourceForObjectType(objectType),
+              intersectionId: attribution.intersectionId,
+              intersectionDimension: attribution.dimension,
+              intersectionClass: attribution.intersectionClass,
+              intersectionTagRefs: attribution.tagRefs,
+            );
+      },
+    ).open(
+      context,
+      target,
+      attribution: IntersectionNavAttribution(
+        intersectionId: reason.intersectionId,
+        dimension: reason.dimension,
+        intersectionClass: reason.intersectionClass,
+        sourceRef: reason.source,
+        tagRefs: reason.tagRefs,
+      ),
     );
-    switch (kind) {
-      case UnifiedObjectKind.person:
-        context.push(AppRoutePaths.userProfile(username: id));
-      case UnifiedObjectKind.circle:
-        context.push(AppRoutePaths.circleDetail(id: id));
-      case UnifiedObjectKind.place:
-      case UnifiedObjectKind.school:
-      case UnifiedObjectKind.enterprise:
-        context.push(AppRoutePaths.homepageDetail(id: id));
-    }
   }
 
   @override

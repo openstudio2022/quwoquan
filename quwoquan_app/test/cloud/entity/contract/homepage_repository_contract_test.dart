@@ -430,13 +430,13 @@ void main() {
             'canonicalEntityId': 'entity:h-bundle',
             'title': 'Bundle',
             'objectPageTemplate': 'campus',
-            'tagRefs': ['publish/v1/tags/campus'],
+            'tagRefs': ['publish/tags/campus'],
             'intersectionReasons': [
               {
                 'dimension': 'interest',
                 'primaryText': '你们都关注校园摄影',
                 'confidenceLabel': '公开资料',
-                'tagRefs': ['publish/v1/tags/campus'],
+                'tagRefs': ['publish/tags/campus'],
                 'totalPointCount': 1,
                 'intersectionPoints': [
                   {

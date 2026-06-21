@@ -7,12 +7,12 @@
 执行：
 - 读取 `docs/agent_context_contract.md`，补齐 `Spec Entry`。
 - 冻结目标、用户价值、范围、Out of Scope、权限/异常、生命周期、SLO/KPI、灰度/回滚和观测。
-- 将验收意图映射到 `UAT / SIT / GWT / contract` 与 `T1 / T2 / T3 / T4`。
+- 将验收意图映射到 `UAT / SIT / GWT / contract` 与 `local_contract / api_integration / user_acceptance`。
 - 只更新规格/验收/registry/CR，不写实现。
 
 产出：
 - 对应层级 `spec.md`。
-- 对应 `acceptance.yaml`，包含 UAT/SIT/GWT/contract 与 T1~T4。
+- 对应 `acceptance.yaml`，包含 UAT/SIT/GWT/contract 与 三层测试。
 - 如影响跨领域体验，更新 `journey_scenario_registry.yaml`。
 - 关联或新建 `specs/changelog/CR-*.yaml`。
 

@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_3c83e06a0d77f00c",
+  "contentType": "article",
+  "entityRefs": [],
+  "normalizedEntityRefs": [],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/五台山风景名胜区",
+      "reason": "no_condition_profile; uses region/season menu"
+    },
+    "region": {
+      "name": "高原/高海拔",
+      "label": "高原/高海拔",
+      "source": "site_candidate_evidence",
+      "evidenceTerms": [
+        "海拔"
+      ],
+      "evidenceRef": "entities/地点/景区/五台山风景名胜区/1.download/sources/01.wikivoyage_zh_candidate_3c83e06a0d77f00c/source.md"
+    }
+  },
+  "sourceUrls": [
+    "https://zh.wikivoyage.org/wiki/%E4%BA%94%E5%8F%B0%E5%B1%B1"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "codex-agent-gpt-5-real-site-supply",
+  "citedSourceRefs": [
+    "entities/地点/景区/五台山风景名胜区/1.download/sources/01.wikivoyage_zh_candidate_3c83e06a0d77f00c/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "五台山风景名胜区·行前指南：五台山",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "五台山风景名胜区",
+    "routeEntities": [
+      "五台山风景名胜区"
+    ],
+    "beats": [
+      "先从 五台山风景名胜区 进入主线。",
+      "无量殿为砖砌结构，里面供奉有铜铸毗卢佛，该殿没有房梁，形制非常独特，具有很高的艺术价值"
+    ],
+    "sourceNote": "五台山国家公园位于忻州五台县东北隅。\n\n\n== 了解 ==\n五台山并非一座山，五台山属有“华北屋脊”之称的 太行山系的北端的一系列山峰群，跨忻州市五台县、繁峙县、代县、原平市、定襄县，周五百余里。景区总面积达607平方公里，行政管辖面积463平方公里，最高海拔3058米。五座山峰（东台望海峰、南台锦绣峰、中台翠岩峰、西台挂月峰、北台叶斗峰）环抱整片区域，顶无",
+    "relatedTopics": [
+      "五台山风景名胜区",
+      "无量殿为砖砌结构，里面供奉有铜铸毗卢佛，该殿没有房梁，形制非常独特，具有很高的艺术价值"
+    ],
+    "mustIncludeFacts": [
+      "五台山风景名胜区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_wikivoyage_articles_1000_publish_r3",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-20T05:27:05.814330+00:00",
+  "updatedAt": "2026-06-20T05:27:05.814330+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "高原/高海拔"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_bfc7c5e5d7ad9173",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "五台山风景名胜区",
+      "sourceEntityRef": "/entity/地点/景区/五台山风景名胜区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_3c83e06a0d77f00c",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 19
+    }
+  ],
+  "articleMarkdownDigest": "sha256:3b6b7e5d35f0cc52c4e60840aaa3f781f535f15df139ac87738ef82e5d53d458"
+}

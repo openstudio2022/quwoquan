@@ -42,3 +42,14 @@ voiceStyle:
   tone: 冷静、实用、少形容词、多判断依据
 expertiseClaims: [路线拆分, 路况判断, 补给规划]
 mustNotClaim: [官方导游资质, 实时路况承诺, 商业合作]
+coverageScope:
+  kind: regional
+  label: 川西 / 西北自驾
+  regionRefs:
+    - Topic/地理/行政区/中国/四川省
+  topicRefs:
+    - Topic/旅行/出行方式/自驾
+carrierAffinity:
+  article: 0.75
+  image: 0.2
+  video: 0.05

@@ -9,124 +9,211 @@ node:
 scope:
   summary: 他人/我的主页同壳同步重做头部信息架构与交集/影响力列表入口。
   in_scope:
-    - 公共头部：认证标识 + 摘要区挂载统计行（记录/粉丝/关注/获赞）。
-    - 一级 tab 内容改记录；二级过滤改最右侧过滤项/图标、去胶囊。
-    - 他人主页「为什么推荐TA」/「TA帮助了很多人」列表入口与去好友化。
-    - 我的主页「我的连接」/「我的影响力」列表入口与去好友化/去收藏。
+  - 公共头部：认证标识 + 摘要区挂载统计行（记录/粉丝/关注/获赞）。
+  - 一级 tab 内容改记录；二级过滤改最右侧过滤项/图标、去胶囊。
+  - 他人主页「为什么推荐TA」/「TA帮助了很多人」列表入口与去好友化。
+  - 我的主页「我的连接」/「我的影响力」列表入口与去好友化/去收藏。
   out_of_scope:
-    - 圈子主页、实体主页。
-    - 云侧 viewer_object_intersections 读模型实现。
+  - 圈子主页、实体主页。
+  - 云侧 viewer_object_intersections 读模型实现。
 gwt_acceptance:
   GWT1:
     title: 主页公共头部高保 GWT
     given:
-      - alpha mock profile 含统计与认证字段。
+    - alpha mock profile 含统计与认证字段。
     when:
-      - 渲染他人主页与我的主页摘要区。
+    - 渲染他人主页与我的主页摘要区。
     then:
-      - 头部含认证标识与 4 列统计行（记录/粉丝/关注/获赞）。
+    - 头部含认证标识与 4 列统计行（记录/粉丝/关注/获赞）。
     done_when:
-      - 他人/我的主页同壳同步展示。
+    - 他人/我的主页同壳同步展示。
     edge_cases:
-      - 未认证用户不展示认证标识。
+    - 未认证用户不展示认证标识。
     contract_refs:
-      - user/profile/fields.yaml
+    - user/profile/fields.yaml
     performance_points: []
-    evidence:
-      primary:
-        - T2_module_interaction
-      supporting:
-        - T1_contract
     tests:
       planned:
-        - quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
-      recorded:
-        - "T2 quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart（公共头部认证标识 + 记录/粉丝/关注/获赞 4 列统计行，他人/我的主页同壳同步，2026-06-16 green）"
-        - "PENDING T3：gamma user profile fields 认证/统计真实链路待 WP-D。"
+      - file: quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
+      recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.user_profile_intersection_redesign.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.user_profile_intersection_redesign.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart（公共头部认证标识
+      + 记录/粉丝/关注/获赞 4 列统计行，他人/我的主页同壳同步，2026-06-16 green）'
+    - '[migrated_from_recorded] PENDING api_integration：gamma user profile fields
+      认证/统计真实链路待 WP-D。'
   GWT2:
     title: 一级 tab 记录与二级右侧过滤 GWT
     given:
-      - 用户主页渲染完成。
+    - 用户主页渲染完成。
     when:
-      - 查看一级 tab 与记录下的二级过滤。
+    - 查看一级 tab 与记录下的二级过滤。
     then:
-      - 一级 tab 显示「记录/圈子/互动」；二级过滤（全部/图片/视频/文字）在最右侧、非胶囊。
+    - 一级 tab 显示「记录/圈子/互动」；二级过滤（全部/图片/视频/文字）在最右侧、非胶囊。
     done_when:
-      - 他人/我的主页二级过滤同一实现。
+    - 他人/我的主页二级过滤同一实现。
     edge_cases: []
     contract_refs:
-      - user/profile/ui_config.yaml
+    - user/profile/ui_config.yaml
     performance_points: []
-    evidence:
-      primary:
-        - T2_module_interaction
-      supporting:
-        - T1_contract
     tests:
       planned:
-        - quwoquan_app/test/ui/user/widgets/profile_creations_tab_test.dart
-      recorded:
-        - "T2 quwoquan_app/test/ui/user/widgets/profile_creations_tab_test.dart（一级 tab「记录/圈子/互动」+ 二级过滤全部/图片/视频/文字在最右侧非胶囊，他人/我的同实现，2026-06-16 green）"
-        - "PENDING T3：gamma user profile ui_config 二级过滤真实链路待 WP-D。"
+      - file: quwoquan_app/test/ui/user/widgets/profile_creations_tab_test.dart
+      recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.user_profile_intersection_redesign.gwt2_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.user_profile_intersection_redesign.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/user/widgets/profile_creations_tab_test.dart（一级
+      tab「记录/圈子/互动」+ 二级过滤全部/图片/视频/文字在最右侧非胶囊，他人/我的同实现，2026-06-16 green）'
+    - '[migrated_from_recorded] PENDING api_integration：gamma user profile ui_config
+      二级过滤真实链路待 WP-D。'
   GWT3:
     title: 他人主页交集列表入口 GWT（S2a）
     given:
-      - alpha mock 提供对象交集与作者影响力数据。
+    - alpha mock 提供对象交集与作者影响力数据。
     when:
-      - 渲染「为什么推荐TA」/「我的连接」与「TA帮助了很多人」/「我的影响力」。
+    - 渲染「为什么推荐TA」/「我的连接」与「TA帮助了很多人」/「我的影响力」。
     then:
-      - 每行单结论句 + 至多一条辅助说明 + 查看更多；影响力文案为「建立了新连接」，无「认识了新朋友」/收藏文案。
+    - 每行单结论句 + 至多一条辅助说明 + 查看更多；影响力文案为「建立了新连接」，无「认识了新朋友」/收藏文案。
     done_when:
-      - 文案口径与 intersection-definition §17 一致。
+    - 文案口径与 intersection-definition §17 一致。
     edge_cases:
-      - 无交集/无影响力事实时不占位（他人）/展示鼓励文案（我的）。
+    - 无交集/无影响力事实时不占位（他人）/展示鼓励文案（我的）。
     contract_refs:
-      - content/post/projections/author_impact_item.yaml
+    - content/post/projections/author_impact_item.yaml
     performance_points: []
-    evidence:
-      primary:
-        - T2_module_interaction
-      supporting:
-        - T1_contract
     tests:
       planned:
-        - quwoquan_app/test/ui/user/author_impact_card_test.dart
-      recorded:
-        - "T2 quwoquan_app/test/ui/user/author_impact_card_test.dart（「TA帮助了很多人」/「我的影响力」单结论句 + 至多一条辅助说明 + 查看更多，文案「建立了新连接」无好友化/收藏，2026-06-16 green）"
-        - "PENDING T3：gamma author_impact_item 真实链路待 WP-D。"
+      - file: quwoquan_app/test/ui/user/author_impact_card_test.dart
+      recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.user_profile_intersection_redesign.gwt3_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.user_profile_intersection_redesign.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/user/author_impact_card_test.dart（「TA帮助了很多人」/「我的影响力」单结论句
+      + 至多一条辅助说明 + 查看更多，文案「建立了新连接」无好友化/收藏，2026-06-16 green）'
+    - '[migrated_from_recorded] PENDING api_integration：gamma author_impact_item 真实链路待
+      WP-D。'
   GWT4:
     title: 我的主页连接与影响力 GWT（S2b）
     given:
-      - alpha mock 提供 my intersection summary 与 author impact。
+    - alpha mock 提供 my intersection summary 与 author impact。
     when:
-      - 渲染「我的连接」与「我的影响力」。
+    - 渲染「我的连接」与「我的影响力」。
     then:
-      - 列表入口每行单结论句；影响力 isMine 视角，无收藏/好友化文案。
+    - 列表入口每行单结论句；影响力 isMine 视角，无收藏/好友化文案。
     done_when:
-      - 红点聚合进「查看更多」。
+    - 红点聚合进「查看更多」。
     contract_refs:
-      - recommendation/rec_model/projections/intersection_reason.yaml
+    - recommendation/rec_model/projections/intersection_reason.yaml
     performance_points:
-      - 我的连接/影响力入口读取一次聚合 summary，折叠态最多渲染 3 行维度简报。
-    evidence:
-      primary:
-        - T2_module_interaction
-      supporting:
-        - T1_contract
+    - 我的连接/影响力入口读取一次聚合 summary，折叠态最多渲染 3 行维度简报。
     tests:
       planned:
-        - quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
-      recorded:
-        - "T2 quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart（我的连接/影响力入口：总数红点聚合进查看更多、≤3 行维度简报 + 展开更多、isMine 视角无收藏/好友化，2026-06-16 green）"
-        - "PENDING T3：gamma my intersection summary 真实链路待 WP-D。"
+      - file: quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
+      recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.user_profile_intersection_redesign.gwt4_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.user_profile_intersection_redesign.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart（我的连接/影响力入口：总数红点聚合进查看更多、≤3
+      行维度简报 + 展开更多、isMine 视角无收藏/好友化，2026-06-16 green）'
+    - '[migrated_from_recorded] PENDING api_integration：gamma my intersection summary
+      真实链路待 WP-D。'
+  GWT5:
+    title: 林墨「我的交集」旅行三元组 inbox 渲染 + lifecycle 单源显隐 GWT（WS-ACC §22.10）
+    given:
+    - alpha 主 seed 已实例化林墨旅行交集（vertical=travel_photography，objectKind route/photo_spot/gear/place/circle/person）。
+    when:
+    - 渲染「我的交集」inbox 行（类型角标 + 句内蓝字实名代表人 + lifecycle 弱标）。
+    then:
+    - 行三元组驱动：route「洱海环线」/photo_spot「玉龙雪山机位」/gear「富士 X-T5」结论句直出，实名代表人为句内纯文本蓝字（无网络头像
+      Image）。
+    - lifecycle 弱标 new/strengthened/reactivated 渲染；类型角标每行一枚。
+    - filterDefaultInboxLifecycle 端侧单源：expired 不进 UI、archived 不进默认列表（mock 与 remote
+      列表路径共用），隐藏闭集 == {expired, archived}。
+    done_when:
+    - 林墨 inbox 三元组渲染 + 显隐过滤 widget/契约测试全绿。
+    edge_cases:
+    - archived/expired 结论句不渲染于主列表（端侧单源过滤，非云侧二次裁剪）。
+    contract_refs:
+    - recommendation/rec_model/projections/intersection_reason.yaml
+    performance_points:
+    - 显隐过滤端侧单源一次性过滤，列表路径 mock/remote 共用同一函数，无第二真相源。
+    tests:
+      planned:
+      - file: quwoquan_app/test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart
+      - file: quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
+      recorded:
+      - file: quwoquan_app/test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart
+      - file: quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt5_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.user_profile_intersection_redesign.gwt5_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.user_profile_intersection_redesign.contract
+        envs: *id001
+    notes: []
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
-    - make verify-app-page-horizontal-quality
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - make verify-app-page-horizontal-quality
   full_gate:
-    - make gate
+  - make gate

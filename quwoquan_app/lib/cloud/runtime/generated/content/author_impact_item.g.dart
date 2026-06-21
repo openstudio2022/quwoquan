@@ -5,6 +5,8 @@ import '../recommendation/intersection_text_span.g.dart';
 import '../recommendation/intersection_visual.g.dart';
 import '../recommendation/intersection_target.g.dart';
 import '../recommendation/intersection_propagation_path.g.dart';
+import '../recommendation/intersection_representative_actor.g.dart';
+import '../recommendation/intersection_action_hint.g.dart';
 
 class AuthorImpactItem {
   final String helpType;
@@ -18,11 +20,18 @@ class AuthorImpactItem {
   final String impactId;
   final List<IntersectionTextSpan> primarySpans;
   final List<IntersectionVisual> sampleVisuals;
+  final IntersectionRepresentativeActor? representativeActor;
+  final List<IntersectionActionHint> actionHints;
   final IntersectionTarget? countTarget;
   final String evidenceSnapshotId;
   final String countObjectKind;
   final IntersectionPropagationPath? propagationPath;
   final String iconKey;
+  final String freshAt;
+  final String timeBucket;
+  final String lifecycleState;
+  final double previousStrength;
+  final double strengthDelta;
 
   AuthorImpactItem({
     this.helpType = '',
@@ -36,11 +45,18 @@ class AuthorImpactItem {
     this.impactId = '',
     this.primarySpans = const <IntersectionTextSpan>[],
     this.sampleVisuals = const <IntersectionVisual>[],
+    this.representativeActor,
+    this.actionHints = const <IntersectionActionHint>[],
     this.countTarget,
     this.evidenceSnapshotId = '',
     this.countObjectKind = '',
     this.propagationPath,
     this.iconKey = '',
+    this.freshAt = '',
+    this.timeBucket = '',
+    this.lifecycleState = '',
+    this.previousStrength = 0.0,
+    this.strengthDelta = 0.0,
   });
 
   factory AuthorImpactItem.fromMap(Map<String, dynamic> m) {
@@ -56,11 +72,18 @@ class AuthorImpactItem {
       impactId: m['impactId']?.toString() ?? '',
       primarySpans: _parseProjectionDtoList(m['primarySpans'], IntersectionTextSpan.fromMap),
       sampleVisuals: _parseProjectionDtoList(m['sampleVisuals'], IntersectionVisual.fromMap),
+      representativeActor: m['representativeActor'] == null ? null : IntersectionRepresentativeActor.fromMap(_parseStringKeyMap(m['representativeActor'])!),
+      actionHints: _parseProjectionDtoList(m['actionHints'], IntersectionActionHint.fromMap),
       countTarget: m['countTarget'] == null ? null : IntersectionTarget.fromMap(_parseStringKeyMap(m['countTarget'])!),
       evidenceSnapshotId: m['evidenceSnapshotId']?.toString() ?? '',
       countObjectKind: m['countObjectKind']?.toString() ?? '',
       propagationPath: m['propagationPath'] == null ? null : IntersectionPropagationPath.fromMap(_parseStringKeyMap(m['propagationPath'])!),
       iconKey: m['iconKey']?.toString() ?? '',
+      freshAt: m['freshAt']?.toString() ?? '',
+      timeBucket: m['timeBucket']?.toString() ?? '',
+      lifecycleState: m['lifecycleState']?.toString() ?? '',
+      previousStrength: (m['previousStrength'] as num?)?.toDouble() ?? 0.0,
+      strengthDelta: (m['strengthDelta'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -77,11 +100,18 @@ class AuthorImpactItem {
       'impactId': impactId,
       'primarySpans': primarySpans,
       'sampleVisuals': sampleVisuals,
+      'representativeActor': representativeActor,
+      'actionHints': actionHints,
       'countTarget': countTarget,
       'evidenceSnapshotId': evidenceSnapshotId,
       'countObjectKind': countObjectKind,
       'propagationPath': propagationPath,
       'iconKey': iconKey,
+      'freshAt': freshAt,
+      'timeBucket': timeBucket,
+      'lifecycleState': lifecycleState,
+      'previousStrength': previousStrength,
+      'strengthDelta': strengthDelta,
     };
   }
 
@@ -97,11 +127,18 @@ class AuthorImpactItem {
     String? impactId,
     List<IntersectionTextSpan>? primarySpans,
     List<IntersectionVisual>? sampleVisuals,
+    IntersectionRepresentativeActor? representativeActor,
+    List<IntersectionActionHint>? actionHints,
     IntersectionTarget? countTarget,
     String? evidenceSnapshotId,
     String? countObjectKind,
     IntersectionPropagationPath? propagationPath,
     String? iconKey,
+    String? freshAt,
+    String? timeBucket,
+    String? lifecycleState,
+    double? previousStrength,
+    double? strengthDelta,
   }) {
     return AuthorImpactItem(
       helpType: helpType ?? this.helpType,
@@ -115,11 +152,18 @@ class AuthorImpactItem {
       impactId: impactId ?? this.impactId,
       primarySpans: primarySpans ?? this.primarySpans,
       sampleVisuals: sampleVisuals ?? this.sampleVisuals,
+      representativeActor: representativeActor ?? this.representativeActor,
+      actionHints: actionHints ?? this.actionHints,
       countTarget: countTarget ?? this.countTarget,
       evidenceSnapshotId: evidenceSnapshotId ?? this.evidenceSnapshotId,
       countObjectKind: countObjectKind ?? this.countObjectKind,
       propagationPath: propagationPath ?? this.propagationPath,
       iconKey: iconKey ?? this.iconKey,
+      freshAt: freshAt ?? this.freshAt,
+      timeBucket: timeBucket ?? this.timeBucket,
+      lifecycleState: lifecycleState ?? this.lifecycleState,
+      previousStrength: previousStrength ?? this.previousStrength,
+      strengthDelta: strengthDelta ?? this.strengthDelta,
     );
   }
 }

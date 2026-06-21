@@ -21,7 +21,7 @@ scope:
     name: 景区丙
   reserveCoverageTargets: []
 provenance:
-  createdAt: '2026-06-18T00:19:30.688717+00:00'
+  createdAt: '2026-06-20T18:10:34.117449+00:00'
   createdBy: test
 content:
   modalityContract: separated_research
@@ -35,27 +35,33 @@ content:
       homepage: 3
       article: 3
       image: 4
+    imageAssetStrategy: open_license_publish
+    imageCountPolicy: score_bonus
     allowAiImages: false
   carriers:
   - article
   - image
   quotas:
     entityArticlesPerTarget: 4
-    imageWorksPerTarget: 2
+    imageWorksPerTarget: 1
     entityHomepagesPerTarget: 1
     routeArticles: 0
 acceptance:
   minEntities: 3
-  minPostsPerEntity: 6
+  minPostsPerEntity: 4
   requiredAngles:
   - planning_consultation
   - decision_experience
   - route_transport
   - seasonal_timing
+  scoredAngles:
   - image
 workflowPolicy:
   allowPartialContent: true
   deliveryMode: partial_with_replacement_report
+  maxReplacementWaves: 3
+  maxReplacementCandidatesPerWave: 8
+  maxReplacementScreenedPerRun: 8
 queuePolicy:
   backend: reliabletask
   reliableTask:

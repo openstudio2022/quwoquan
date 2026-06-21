@@ -19,11 +19,11 @@ for f in _shared/types.yaml _shared/redis_keyspace.yaml; do
 done
 
 # Flat taxonomy fully retired (V6 同源收口): single source of truth =
-# quwoquan_data/publish/v1/tags (path-based tagRef). tag_taxonomy.yaml /
+# quwoquan_data/publish/tags (path-based tagRef). tag_taxonomy.yaml /
 # tag_ref_migration.yaml must NOT exist; enforced by verify_tag_ref_source_of_truth.py (C1).
 for retired in _shared/tag_taxonomy.yaml _shared/tag_ref_migration.yaml; do
   if [[ -f "${BASE}/${retired}" ]]; then
-    echo "[verify] FAIL: retired flat taxonomy file still present: ${retired} (single source = publish/v1/tags)"; exit 1
+    echo "[verify] FAIL: retired flat taxonomy file still present: ${retired} (single source = publish/tags)"; exit 1
   fi
 done
 

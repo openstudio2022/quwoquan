@@ -63,17 +63,21 @@ type routeSecurity struct {
 }
 
 type routeDef struct {
-	Method         string        `yaml:"method"`
-	Path           string        `yaml:"path"`
-	Operation      string        `yaml:"operation"`
-	Description    string        `yaml:"description"`
-	QueryParams    []string      `yaml:"query_params"`
-	WritableFields []string      `yaml:"writable_fields"`
-	RequestFields  []string      `yaml:"request_fields"`
-	ResponseFields []string      `yaml:"response_fields"`
-	RequestEntity  string        `yaml:"request_entity"`
-	ResponseEntity string        `yaml:"response_entity"`
-	Security       routeSecurity `yaml:"security"`
+	Method         string   `yaml:"method"`
+	Path           string   `yaml:"path"`
+	Operation      string   `yaml:"operation"`
+	Description    string   `yaml:"description"`
+	QueryParams    []string `yaml:"query_params"`
+	WritableFields []string `yaml:"writable_fields"`
+	RequestFields  []string `yaml:"request_fields"`
+	ResponseFields []string `yaml:"response_fields"`
+	RequestEntity  string   `yaml:"request_entity"`
+	ResponseEntity string   `yaml:"response_entity"`
+	// 框架级响应契约（R-ID02）：response_body 指向 projection read_model，
+	// response_body_kind ∈ object|page|ack（ack 无读模型，仅状态确认）。
+	ResponseBody     string        `yaml:"response_body"`
+	ResponseBodyKind string        `yaml:"response_body_kind"`
+	Security         routeSecurity `yaml:"security"`
 	// Back-compat: 旧写法 auth: required / auth_required: bool。统一收敛到 security.auth_mode。
 	Auth         string `yaml:"auth"`
 	AuthRequired *bool  `yaml:"auth_required"`
@@ -785,7 +789,11 @@ func main() {
 	}
 
 	writeFile(filepath.Join(contentGenDir, "content_dtos.dart"), renderContentDtosBarrelDart())
-	writeContentPostMutationWires(filepath.Join(contentGenDir, "content_post_mutation_wires.g.dart"), service)
+	postWireFieldTypes := make(map[string]string, len(post.Fields))
+	for _, f := range post.Fields {
+		postWireFieldTypes[f.Name] = strings.TrimSpace(f.Type)
+	}
+	writeContentPostMutationWires(filepath.Join(contentGenDir, "content_post_mutation_wires.g.dart"), service, postWireFieldTypes)
 	writeEntityHomepageMutationWiresFromMetadata(metadataDir, appDir)
 
 	// 3b. 生成其他 domain projections（无 base_class 的 standalone DTO，如 chat inbox）。
@@ -834,6 +842,10 @@ func main() {
 	if err != nil {
 		exitErr(err)
 	}
+	responseModelByReadModel, err := collectProjectionReadModelDartClass(metadataDir)
+	if err != nil {
+		exitErr(err)
+	}
 	defaultsOut := renderCloudAPIDefaultsDart(feedDefaultLimit)
 	writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "cloud_api_defaults.g.dart"), defaultsOut)
 	writeFile(
@@ -841,7 +853,7 @@ func main() {
 		renderAuthPolicyDart(domainRoutes),
 	)
 	for domain, routes := range domainRoutes {
-		metaOut := renderDomainAPIMetadataDart(domain, routes)
+		metaOut := renderDomainAPIMetadataDart(domain, routes, responseModelByReadModel)
 		pageIDsOut := renderDomainRequestPageIDsDart(domain, routes)
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", domain, fmt.Sprintf("%s_api_metadata.g.dart", domain)),
@@ -859,6 +871,12 @@ func main() {
 		exitErr(err)
 	}
 	if err := writeRecommendationFeedPatches(appDir, metadataDir); err != nil {
+		exitErr(err)
+	}
+	if err := writeIntersectionKindMetadata(appDir, metadataDir); err != nil {
+		exitErr(err)
+	}
+	if err := writeImpactHelpTypeMetadata(appDir, metadataDir); err != nil {
 		exitErr(err)
 	}
 	if err := writeRtcRequestWires(appDir, metadataDir); err != nil {
@@ -985,6 +1003,38 @@ func readProjection(path string) (*projectionFile, error) {
 	}
 	var parsed projectionFile
 	return &parsed, yaml.Unmarshal(data, &parsed)
+}
+
+// collectProjectionReadModelDartClass 建立 projection read_model -> client_projection.dart_class
+// 的全仓索引（跨域可见），供 operation response_body 解析其端侧 DTO 类名。
+// 同时把 dart_class 自身登记为键，兼容 response_body 直接写 dart_class 的情况。
+func collectProjectionReadModelDartClass(metadataDir string) (map[string]string, error) {
+	index := map[string]string{}
+	err := filepath.WalkDir(metadataDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".yaml") {
+			return nil
+		}
+		if filepath.Base(filepath.Dir(path)) != "projections" {
+			return nil
+		}
+		p, readErr := readProjection(path)
+		if readErr != nil {
+			return nil
+		}
+		dartClass := strings.TrimSpace(p.ClientProjection.DartClass)
+		if dartClass == "" {
+			return nil
+		}
+		if rm := strings.TrimSpace(p.ReadModel); rm != "" {
+			index[rm] = dartClass
+		}
+		index[dartClass] = dartClass
+		return nil
+	})
+	return index, err
 }
 
 // ── builders ──────────────────────────────────────────────────────────────────
@@ -1209,7 +1259,7 @@ func renderCloudAPIDefaultsDart(pageLimit int) string {
 	return b.String()
 }
 
-func renderDomainAPIMetadataDart(domain string, routes []routeDef) string {
+func renderDomainAPIMetadataDart(domain string, routes []routeDef, responseModelByReadModel map[string]string) string {
 	var b strings.Builder
 	className := toDartExportedName(domain) + "ApiMetadata"
 	hasPathParams := false
@@ -1239,6 +1289,32 @@ func renderDomainAPIMetadataDart(domain string, routes []routeDef) string {
 	b.WriteString("  static const Map<String, String> operationToAuthMode = <String, String>{\n")
 	for _, route := range routes {
 		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", route.Operation, route.resolveAuthMode()))
+	}
+	b.WriteString("  };\n\n")
+	b.WriteString("  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。\n")
+	b.WriteString("  static const Map<String, String> operationToResponseModel = <String, String>{\n")
+	for _, route := range routes {
+		body := strings.TrimSpace(route.ResponseBody)
+		if body == "" {
+			continue
+		}
+		dartClass := responseModelByReadModel[body]
+		if dartClass == "" {
+			// read_model 与 dart_class 一致（交集投影约定）时回退用原名，
+			// 指向不存在的情形由 verify_metadata / 门禁拦截。
+			dartClass = body
+		}
+		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", route.Operation, dartClass))
+	}
+	b.WriteString("  };\n\n")
+	b.WriteString("  /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。\n")
+	b.WriteString("  static const Map<String, String> operationToResponseKind = <String, String>{\n")
+	for _, route := range routes {
+		kind := strings.TrimSpace(route.ResponseBodyKind)
+		if kind == "" {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", route.Operation, kind))
 	}
 	b.WriteString("  };\n\n")
 	for _, route := range routes {

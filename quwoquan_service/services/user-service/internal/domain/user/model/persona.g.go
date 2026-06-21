@@ -12,6 +12,8 @@ type Persona struct {
 	Phone                       string     `json:"phone" db:"phone"`
 	Email                       string     `json:"email" db:"email"`
 	AvatarURL                   string     `json:"avatarUrl" db:"avatar_url"`
+	AvatarVersion               int        `json:"avatarVersion" db:"avatar_version"`
+	BackgroundURL               string     `json:"backgroundUrl" db:"background_url"`
 	CallerRingtoneID            string     `json:"callerRingtoneId" db:"caller_ringtone_id"`
 	ThemeModeOverride           string     `json:"themeModeOverride" db:"theme_mode_override"`
 	FontSizePresetOverride      string     `json:"fontSizePresetOverride" db:"font_size_preset_override"`

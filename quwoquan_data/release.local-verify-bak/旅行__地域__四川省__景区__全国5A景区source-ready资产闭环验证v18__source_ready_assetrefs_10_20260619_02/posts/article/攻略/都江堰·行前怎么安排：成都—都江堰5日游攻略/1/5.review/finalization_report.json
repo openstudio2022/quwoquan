@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "都江堰_planning_consultation",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:b56f93fddec82c46dd875f2a922b8ebd35b0a621ba37d3c2380d6dfa53a88006",
+  "finalSha256": "sha256:07e54ba59d085685a88ace295e1ad8a95ca5c2ce3f8a947d107e088b52938a9f",
+  "draftBodySha256": "sha256:b56f93fddec82c46dd875f2a922b8ebd35b0a621ba37d3c2380d6dfa53a88006",
+  "finalBodySha256": "sha256:b56f93fddec82c46dd875f2a922b8ebd35b0a621ba37d3c2380d6dfa53a88006",
+  "composeSnapshotSha256": "sha256:b56f93fddec82c46dd875f2a922b8ebd35b0a621ba37d3c2380d6dfa53a88006",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
@@ -17,7 +18,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
+import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
@@ -404,6 +405,8 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       header: IntersectionReasonChip.fromReasons(
         item.intersectionReasons,
         isDark: isDark,
+        // N5：实体主页记录卡 → 交集句对象片段点击精确归因为实体主页（非推荐流）。
+        referralSource: ReferralSource.entityPage,
       ),
       footer: Align(
         alignment: Alignment.centerLeft,

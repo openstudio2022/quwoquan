@@ -1,0 +1,129 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_f497d054a07f1adb",
+  "contentType": "article",
+  "entityRefs": [],
+  "normalizedEntityRefs": [],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/华山风景区",
+      "reason": "no_condition_profile; uses region/season menu"
+    },
+    "region": {
+      "name": "高原/高海拔",
+      "label": "高原/高海拔",
+      "source": "site_candidate_evidence",
+      "evidenceTerms": [
+        "海拔"
+      ],
+      "evidenceRef": "entities/地点/景区/华山风景区/1.download/sources/04.wikivoyage_zh_candidate_f497d054a07f1adb/source.md"
+    }
+  },
+  "sourceUrls": [
+    "https://zh.wikivoyage.org/wiki/%E5%8D%8E%E5%B1%B1"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "codex-agent-gpt-5-real-site-supply",
+  "citedSourceRefs": [
+    "entities/地点/景区/华山风景区/1.download/sources/04.wikivoyage_zh_candidate_f497d054a07f1adb/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "华山风景区·行前指南：华山",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "华山风景区",
+    "routeEntities": [
+      "华山风景区"
+    ],
+    "beats": [
+      "先从 华山风景区 进入主线。"
+    ],
+    "sourceNote": "其他同名地点的条目，请见华山 (消歧义)。\n华山（華通花，亦称太華山、褒禪山），又稱西岳，为五岳之一，位于中国陝西省渭南市华阴市城南，西距西安市120公里，秦、晋、豫黄河三角洲交汇处，南接秦岭，北瞰黄河，扼西北进出中原之门户。华山山体倚天拔地，四面如削，更有千尺幢、百尺峡、苍龙岭、鹞子翻身、长空栈道等十分险峻之地，被誉为“奇险天下第一山”。华山共有五峰，即东",
+    "relatedTopics": [
+      "华山风景区"
+    ],
+    "mustIncludeFacts": [
+      "华山风景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_wikivoyage_articles_1000_publish_r3",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-20T05:27:05.837091+00:00",
+  "updatedAt": "2026-06-20T05:27:05.837091+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "高原/高海拔"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_39260b76f2c80172",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "华山风景区",
+      "sourceEntityRef": "/entity/地点/景区/华山风景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_f497d054a07f1adb",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 16
+    }
+  ],
+  "articleMarkdownDigest": "sha256:4da2dce0155fa4f7e1fdcb5d76a38a6525da1a60d447246232d834a36dae2482"
+}

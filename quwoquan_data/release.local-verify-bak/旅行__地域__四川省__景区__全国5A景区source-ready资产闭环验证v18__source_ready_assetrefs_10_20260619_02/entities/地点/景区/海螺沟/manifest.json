@@ -1,0 +1,23 @@
+{
+  "entityRef": "/entity/地点/景区/海螺沟",
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "sourceRefs": [
+    "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/source.md"
+  ],
+  "assets": [
+    {
+      "assetId": "001_home_wikipedia_1.jpg",
+      "fileName": "001_home_wikipedia_1.jpg",
+      "caption": "​海螺溝2014",
+      "license": "CC BY-SA 2.0",
+      "credit": "Culantor Lin",
+      "relevance": "​海螺溝2014",
+      "sourceRef": "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/source.md",
+      "sourceAssetRef": "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/assets/001_home_wikipedia_1.jpg",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E6%B5%B7%E8%9E%BA%E6%BA%9D2014_P1000318.jpg"
+    }
+  ],
+  "generator": "deterministic_homepage_builder"
+}

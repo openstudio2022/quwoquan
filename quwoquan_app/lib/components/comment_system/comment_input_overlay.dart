@@ -3,11 +3,15 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show MaxLengthEnforcement;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart'
+    show CommentDto;
 import 'package:quwoquan_app/components/comment_system/comment_composer_models.dart';
+import 'package:quwoquan_app/components/comment_system/comment_draft_store.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/ui/content/providers/comment_provider.dart';
@@ -29,7 +33,7 @@ class CommentInputOverlay {
     BuildContext context, {
     required String postId,
     CommentConfig config = const CommentConfig(),
-    CommentModel? replyTo,
+    CommentDto? replyTo,
     String surfaceMode = 'overlay',
     List<CommentMentionCandidate> mentionCandidates = _defaultMentions,
     FutureOr<void> Function(CommentComposerPayload payload)? onSubmit,
@@ -71,7 +75,7 @@ class _CommentInputSheet extends ConsumerStatefulWidget {
 
   final String postId;
   final CommentConfig config;
-  final CommentModel? replyTo;
+  final CommentDto? replyTo;
   final String surfaceMode;
   final List<CommentMentionCandidate> mentionCandidates;
   final FutureOr<void> Function(CommentComposerPayload payload)? onSubmit;
@@ -91,6 +95,8 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   bool _showEmojiPanel = false;
   bool _isUploadingAttachment = false;
   bool _isSubmitting = false;
+  bool _draftCleared = false;
+  Timer? _draftSaveTimer;
 
   @override
   void initState() {
@@ -108,20 +114,91 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
           surfaceMode: widget.surfaceMode,
           replyDepth: widget.replyTo == null ? 0 : 1,
         );
+    unawaited(_restoreDraft());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();
     });
   }
 
+  /// 续写本帖/本回复目标的未发草稿（仅在用户尚未输入、且无待续接登录文本时回灌）。
+  Future<void> _restoreDraft() async {
+    final draft = await CommentDraftStore.load(
+      widget.postId,
+      replyToCommentId: widget.replyTo?.id,
+    );
+    if (draft == null || !mounted) return;
+    if (_controller.text.isNotEmpty || _attachmentMediaIds.isNotEmpty) return;
+    setState(() {
+      _controller.text = draft.content;
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+      _attachmentMediaIds
+        ..clear()
+        ..addAll(draft.attachmentMediaIds);
+      for (final subjectId in draft.mentionSubjectIds) {
+        final candidate = widget.mentionCandidates
+            .where((c) => c.subjectId == subjectId)
+            .toList(growable: false);
+        if (candidate.isNotEmpty &&
+            !_selectedMentions.any((m) => m.subjectId == subjectId)) {
+          _selectedMentions.add(candidate.first);
+        }
+      }
+    });
+  }
+
+  void _scheduleDraftSave() {
+    if (_draftCleared) return;
+    _draftSaveTimer?.cancel();
+    _draftSaveTimer = Timer(const Duration(milliseconds: 300), _persistDraft);
+  }
+
+  void _persistDraft() {
+    if (_draftCleared) return;
+    unawaited(
+      CommentDraftStore.save(
+        widget.postId,
+        replyToCommentId: widget.replyTo?.id,
+        draft: CommentDraft(
+          content: _controller.text,
+          attachmentMediaIds: List<String>.unmodifiable(_attachmentMediaIds),
+          mentionSubjectIds: _selectedMentions
+              .map((m) => m.subjectId)
+              .toList(growable: false),
+        ),
+      ),
+    );
+  }
+
+  void _clearDraft() {
+    _draftCleared = true;
+    _draftSaveTimer?.cancel();
+    unawaited(
+      CommentDraftStore.clear(
+        widget.postId,
+        replyToCommentId: widget.replyTo?.id,
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _draftSaveTimer?.cancel();
+    // 关闭未提交：立即落盘当前草稿，重新打开同目标输入态可续写。
+    if (!_draftCleared) {
+      _persistDraft();
+    }
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
-  void _onTextChanged() => setState(() {});
+  void _onTextChanged() {
+    setState(() {});
+    _scheduleDraftSave();
+  }
 
   bool get _canSend =>
       _controller.text.trim().isNotEmpty &&
@@ -135,8 +212,12 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
           ? UITextConstants.commentClosed
           : UITextConstants.needLogin;
     }
-    if (widget.replyTo != null) {
-      return CommentHierarchyManager.getReplyPlaceholder(widget.replyTo!);
+    final replyTo = widget.replyTo;
+    if (replyTo != null) {
+      return UITextConstants.commentReplyToTemplate.replaceFirst(
+        '%s',
+        replyTo.displayName ?? replyTo.authorId,
+      );
     }
     return UITextConstants.commentPlaceholder;
   }
@@ -210,6 +291,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
       }
       if (!mounted) return;
       setState(() => _attachmentMediaIds.add(mediaId));
+      _scheduleDraftSave();
       ref
           .read(commentObservabilityProvider)
           .trackAction(
@@ -239,9 +321,13 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   }
 
   CommentComposerPayload _buildPayload() {
+    final maxImages = _effectiveConfig.maxImageAttachments;
+    final safeAttachments = _attachmentMediaIds
+        .take(maxImages)
+        .toList(growable: false);
     return CommentComposerPayload(
       content: _controller.text.trim(),
-      attachmentMediaIds: List<String>.unmodifiable(_attachmentMediaIds),
+      attachmentMediaIds: List<String>.unmodifiable(safeAttachments),
       mentions: List<CommentMentionCandidate>.unmodifiable(_selectedMentions),
     );
   }
@@ -251,6 +337,16 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     if (content.isEmpty || _isSubmitting) return;
     if (content.length > _effectiveConfig.maxLength) {
       AppToast.show(context, UITextConstants.commentTooLong);
+      return;
+    }
+    if (_attachmentMediaIds.length > _effectiveConfig.maxImageAttachments) {
+      AppToast.show(
+        context,
+        UITextConstants.commentAttachmentLimitReachedTemplate.replaceFirst(
+          '%s',
+          '${_effectiveConfig.maxImageAttachments}',
+        ),
+      );
       return;
     }
 
@@ -325,6 +421,8 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
               mentions: payload.mentions,
             );
       }
+      // 提交成功：清除本目标草稿，避免下次打开回灌已发内容。
+      _clearDraft();
       if (!mounted) return;
       // 提交成功即关闭输入态；评论区列表由 provider 乐观插入即时呈现刚发的内容，
       // 用户立刻看到结果，无需额外 toast（避免与列表反馈重复）。
@@ -375,7 +473,10 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     return DefaultTextStyle(
       style: TextStyle(
         fontSize: AppTypography.body,
-        color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.foregroundPrimary,
+        ),
         decoration: TextDecoration.none,
       ),
       child: GestureDetector(
@@ -385,44 +486,43 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
         child: ColoredBox(
           color: AppColorsFunctional.getColor(isDark, ColorType.modalScrim),
           child: Column(
-          children: [
-            const Spacer(),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {},
-              child: Container(
-                key: TestKeys.commentInputOverlay,
-                decoration: BoxDecoration(
-                  color: surface,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(AppSpacing.largeBorderRadius),
+            children: [
+              const Spacer(),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {},
+                child: Container(
+                  key: TestKeys.commentInputOverlay,
+                  decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(AppSpacing.largeBorderRadius),
+                    ),
                   ),
-                ),
-                padding: EdgeInsets.only(bottom: keyboardInset),
-                child: SafeArea(
-                  top: false,
-                  bottom: keyboardInset <= 0,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (widget.replyTo != null)
-                        _ReplyIndicator(
-                          isDark: isDark,
-                          username:
-                              widget.replyTo!.username ??
-                              widget.replyTo!.authorId ??
-                              UITextConstants.user,
-                          onCancel: _dismiss,
-                        ),
-                      _buildEditor(isDark),
-                      _buildToolRow(isDark),
-                      _buildAccessory(isDark),
-                    ],
+                  padding: EdgeInsets.only(bottom: keyboardInset),
+                  child: SafeArea(
+                    top: false,
+                    bottom: keyboardInset <= 0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (widget.replyTo != null)
+                          _ReplyIndicator(
+                            isDark: isDark,
+                            username:
+                                widget.replyTo!.displayName ??
+                                widget.replyTo!.authorId,
+                            onCancel: _dismiss,
+                          ),
+                        _buildEditor(isDark),
+                        _buildToolRow(isDark),
+                        _buildAccessory(isDark),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
           ),
         ),
       ),
@@ -500,7 +600,10 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
               _AttachmentThumbnail(
                 mediaId: _attachmentMediaIds.first,
                 isDark: isDark,
-                onRemove: () => setState(_attachmentMediaIds.clear),
+                onRemove: () {
+                  setState(_attachmentMediaIds.clear);
+                  _scheduleDraftSave();
+                },
               ),
             ],
           ],
@@ -547,8 +650,33 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
             onTap: _toggleEmojiPanel,
           ),
           const Spacer(),
+          _buildCharCounter(isDark),
+          SizedBox(width: AppSpacing.sm),
           _SendButton(canSend: _canSend, onTap: _canSend ? _submit : null),
         ],
+      ),
+    );
+  }
+
+  /// 字数计数：仅在已输入时显示「当前/上限」，临近上限转警示色。
+  Widget _buildCharCounter(bool isDark) {
+    final length = _controller.text.characters.length;
+    if (length == 0) {
+      return const SizedBox.shrink();
+    }
+    final maxLength = _effectiveConfig.maxLength;
+    final nearLimit = length >= (maxLength * 0.9).floor();
+    return Text(
+      '$length/$maxLength',
+      key: TestKeys.commentCharCounter,
+      style: TextStyle(
+        fontSize: AppTypography.xs,
+        color: nearLimit
+            ? AppColors.error
+            : AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundTertiary,
+              ),
       ),
     );
   }
@@ -732,13 +860,13 @@ class _AttachmentThumbnail extends StatelessWidget {
                 ColorType.backgroundPrimary,
               ),
               alignment: Alignment.center,
-              child: Image.network(
-                thumbnailUrl,
+              child: AppCachedNetworkImage(
+                imageUrl: thumbnailUrl,
                 fit: BoxFit.cover,
                 width: AppSpacing.commentAttachmentThumbnailSize,
                 height: AppSpacing.commentAttachmentThumbnailSize,
-                filterQuality: FilterQuality.low,
-                errorBuilder: (context, error, stackTrace) => Icon(
+                cdnPreset: CdnImagePreset.thumbnail,
+                errorWidget: Icon(
                   CupertinoIcons.photo,
                   size: AppSpacing.iconMedium,
                   color: AppColorsFunctional.getColor(

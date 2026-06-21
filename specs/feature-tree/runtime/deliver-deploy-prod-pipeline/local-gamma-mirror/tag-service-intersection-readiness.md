@@ -11,8 +11,8 @@
   - 无 Docker 本地：`testmain_test.go` 优雅 `os.Exit(0)` skip；
   - CI（`CI=true` / `GITHUB_ACTIONS=true`）：强制起 mongo testcontainer，缺 Docker 即 panic 暴露。
 - **501 闭合**：`search / related / search-by-tags / graph/cooccurrence / related-objects` 已基于
-  只读 `TagNode` / `ObjectTagIndex` 实现并补 T3 contract 断言；`feedback` 保留 501（见 §4）。
-- **端云一致性**：前端 `test/cloud/tag/tag_repository_consistency_test.dart`（T2）锁定 Mock 行为
+  只读 `TagNode` / `ObjectTagIndex` 实现并补 api_integration contract 断言；`feedback` 保留 501（见 §4）。
+- **端云一致性**：前端 `test/cloud/tag/tag_repository_consistency_test.dart`（local_contract）锁定 Mock 行为
   与后端 `*View` → 前端 DTO `fromJson` 字段映射。
 - **local-gamma 拓扑接入（静态验证通过）**：
   - 端口：`deploy/shared/local_env_port_manifest.yaml` 新增 `tag-service` role（service plane,
@@ -30,11 +30,11 @@
 # 1) 起 local-gamma 镜像栈（含 tag-service）
 bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
 
-# 2) 灌入路径制 taxonomy → tag_nodes（幂等可重跑；唯一真相源 publish/v1/tags）
+# 2) 灌入路径制 taxonomy → tag_nodes（幂等可重跑；唯一真相源 publish/tags）
 cd quwoquan_service && \
   TAG_MONGO_PORT="$(python3 ../agent_ops/deploy/print_local_port_profile.py --profile gamma-local --format json | python3 -c 'import json,sys;print(json.load(sys.stdin)["ports"]["mongodb"])')" && \
   go run ./services/tag-service/cmd/import \
-    --tags-dir ../quwoquan_data/publish/v1/tags \
+    --tags-dir ../quwoquan_data/publish/tags \
     --mongo-uri "mongodb://127.0.0.1:${TAG_MONGO_PORT}/?directConnection=true" \
     --db quwoquan_tag
 
@@ -54,10 +54,10 @@ curl -s "$GW/v1/tag/search?q=旅"
   start 脚本会自动起 127.0.0.1 SSH 隧道映射 gateway/product-ops/media-edge 端口。
 - **镜像源**：Go `GOPROXY=https://goproxy.cn,direct`、`GOSUMDB=sum.golang.google.cn`；
   基础镜像走 `docker.m.daocloud.io/library`（`LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX` 可覆盖）。
-- **无 Docker 的 T3**：本机 MongoDB 时 `make -C quwoquan_service test-contract-local`，或
+- **无 Docker 的 api_integration**：本机 MongoDB 时 `make -C quwoquan_service test-contract-local`，或
   `TEST_MONGO_URI=mongodb://localhost:27017 go test ./services/tag-service/... -count=1`。
-- **patrol（T4）**：`dart pub global activate patrol_cli` + 启动 iOS/Android 模拟器，
-  交集 T4 case 经 `agent_ops/deploy/gamma/run_gamma_patrol_matrix_ci.py` 矩阵执行。
+- **patrol（user_acceptance）**：`dart pub global activate patrol_cli` + 启动 iOS/Android 模拟器，
+  交集 user_acceptance case 经 `agent_ops/deploy/gamma/run_gamma_patrol_matrix_ci.py` 矩阵执行。
 
 ## 4. 受控后续项（已登记，进 V5 后处理）
 
@@ -68,9 +68,9 @@ curl -s "$GW/v1/tag/search?q=旅"
     幂等灌入 `object_tag_index`；默认源为 `contracts/metadata/tag/test_fixtures/scenarios/tag_scenarios.json`，
     与契约测试 / app mock 同源。
   - gamma 自动化：`start_local_gamma_mirror.sh` 在 host ready 后 `seed_tag_service_data()` 自动灌
-    `tag_nodes`（publish/v1/tags）+ `object_tag_index`（fixture），失败仅告警不中断。
+    `tag_nodes`（publish/tags）+ `object_tag_index`（fixture），失败仅告警不中断。
   - 端到端真数据对齐（灌入对象 ID ↔ gamma user seed 真实 userId）与交集卡真数据验证在 V5/S5 闭合。
 - **`feedback` 写路径**：`POST /v1/tag/feedback` 保留 501。它是写操作（点击/忽略/修正），与
   tag-service「只读消费导入产物」定位冲突，落地需新增写存储或路由到 behavior/recommendation 域，
   待架构评审；前端 `MockTagRepository.feedback` 为 alpha 乐观占位，Remote 为休眠代码、无 UI 消费。
-- **交集 T4 patrol case**：对象页交集卡的端到端真打用例待补入 gamma patrol 矩阵。
+- **交集 user_acceptance patrol case**：对象页交集卡的端到端真打用例待补入 gamma patrol 矩阵。

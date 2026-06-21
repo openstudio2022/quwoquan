@@ -139,38 +139,38 @@
 
 ## 验收重点
 
-### 端到端闭环（T4 旅程层）
+### 端到端闭环（user_acceptance 旅程层）
 
 - A1: 录音→上传→发送→接收→播放端到端闭环成功
 - A2: 弱网/断网场景下语音消息可靠性
 
-### 消息模型（T1 契约层）
+### 消息模型（local_contract 契约层）
 
 - A3: MessageType 枚举含 audio，Message.media 结构化字段 codegen 通过
 - A4: MessageSent 事件 payload 含 mediaUrl 和 media
 
-### 录音与发送（T2 模块层）
+### 录音与发送（local_contract 模块层）
 
 - A5: 录音引擎 AAC 编码 + 波形提取 + 时长限制
 - A6: 上传通过 MediaUploadManager，支持重试和离线队列
 
-### 播放与缓存（T2 模块层）
+### 播放与缓存（local_contract 模块层）
 
 - A7: 播放引擎支持流式播放、暂停/恢复、进度
 - A8: 本地缓存 LRU 策略有效
 
-### UI 渲染（T2 模块层）
+### UI 渲染（local_contract 模块层）
 
 - A9: 语音消息气泡渲染正确（波形、时长、播放状态）
 
-### 性能与可靠性（T3 集成层 + T4 旅程层）
+### 性能与可靠性（api_integration 集成层 + user_acceptance 旅程层）
 
 - A10: 强网端到端延迟 ≤ 3 秒
 - A11: 弱网上传重试 + 离线队列恢复
 - A12: 快速连按、页面退出、连续发送多条语音、播放切换不产生幽灵录音、重复发送或串音
 - A13: 权限、录音、上传、发送、播放、缓存失败均按统一错误语义展示临时/永久失败和恢复动作
 
-### 部署灰度（T4 旅程层）
+### 部署灰度（user_acceptance 旅程层）
 
 - A14: integration 全量验证 → prod 灰度 10%→50%→100% 无回滚
 

@@ -80,6 +80,58 @@ func TestHomepageBundle_OwnerViewAggregatesIdentityTruth(t *testing.T) {
 	}
 }
 
+func TestHomepageBundle_ProfileCarriesBackgroundAndNicknameCustomized(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	seedHomepageOwner(t, "owner_hb_profile", "sa_hb_profile", "hb_profile", "主页封面分身", "open")
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles SET nickname_customized = true WHERE user_id = $1`,
+		"owner_hb_profile",
+	); err != nil {
+		t.Fatalf("seed homepage bundle nickname_customized: %v", err)
+	}
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles SET avatar_url = $1, avatar_version = $2 WHERE user_id = $3`,
+		"https://cdn.example.com/homepage-bundle-avatar.png",
+		5,
+		"owner_hb_profile",
+	); err != nil {
+		t.Fatalf("seed homepage bundle avatar version: %v", err)
+	}
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE personas SET background_url = $1 WHERE sub_account_id = $2`,
+		"https://cdn.example.com/homepage-bundle-cover.png",
+		"sa_hb_profile",
+	); err != nil {
+		t.Fatalf("seed homepage bundle background: %v", err)
+	}
+
+	rec := doRequest(t, http.MethodGet, "/v1/user/sub-accounts/hb_profile/homepage-bundle", "",
+		authHeadersForPersona("owner_hb_profile", "sa_hb_profile"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("homepage-bundle owner profile fields: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := parseJSON(t, rec)
+	profile, ok := body["profile"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected profile object, got %#v", body["profile"])
+	}
+	if profile["backgroundUrl"] != "https://cdn.example.com/homepage-bundle-cover.png" {
+		t.Fatalf("expected backgroundUrl in homepage bundle profile, got %#v", profile["backgroundUrl"])
+	}
+	if profile["nicknameCustomized"] != true {
+		t.Fatalf("expected nicknameCustomized=true for customized persona homepage, got %#v", profile["nicknameCustomized"])
+	}
+	if profile["avatarUrl"] != "https://cdn.example.com/homepage-bundle-avatar.png?v=5" {
+		t.Fatalf("expected versioned avatarUrl in homepage bundle profile, got %#v", profile["avatarUrl"])
+	}
+	if profile["avatarVersion"] != float64(5) {
+		t.Fatalf("expected avatarVersion=5 in homepage bundle profile, got %#v", profile["avatarVersion"])
+	}
+}
+
 func TestHomepageBundle_GuestViewOmitsRelationshipCapability(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	seedHomepageOwner(t, "owner_hb_guest", "sa_hb_guest", "hb_guest", "游客可见主页", "open")

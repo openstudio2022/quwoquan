@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
+import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
 
 void main() {
   group('UserRepository — 常规契约', () {
@@ -21,9 +22,30 @@ void main() {
       expect(summary.quota.maxSubAccounts, greaterThan(0));
     });
 
+    test(
+      'getPersonaManagementSummary 与 activeContext 显式暴露 avatarVersion',
+      () async {
+        final summary = await repo.getPersonaManagementSummary();
+        expect(summary.items, isNotEmpty);
+        final primary = summary.items.first;
+        expect(primary.avatarUrl, isNotEmpty);
+        expect(primary.avatarVersion, greaterThanOrEqualTo(0));
+        expect(summary.activeContext, isNotNull);
+        expect(summary.activeContext!.avatarUrl, isNotEmpty);
+        expect(summary.activeContext!.avatarVersion, greaterThanOrEqualTo(0));
+      },
+    );
+
     test('getActivePersonaContext 返回活动身份上下文', () async {
       final context = await repo.getActivePersonaContext();
       expect(context.subAccountId, isNotEmpty);
+    });
+
+    test('getActivePersonaContext 与 canonical 当前 mock 用户对齐', () async {
+      final context = await repo.getActivePersonaContext();
+      expect(context.subAccountId, kMockCurrentSubAccountId);
+      expect(context.ownerUserId, kMockCurrentOwnerId);
+      expect(context.displayName, isNotEmpty);
     });
 
     test('activatePersona 不崩溃', () async {

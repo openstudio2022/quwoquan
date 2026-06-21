@@ -1,0 +1,165 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "乐山大佛_route_transport",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/乐山大佛"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:乐山大佛"
+  ],
+  "tagRefs": [
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "conditionContext": {
+    "region": {
+      "name": "四川省",
+      "label": "四川省"
+    },
+    "entityProfile": {
+      "entityRef": "/entity/地点/景区/乐山大佛",
+      "regions": [
+        "山地森林"
+      ],
+      "seasons": [
+        "春",
+        "秋"
+      ],
+      "altitudeMeters": null,
+      "notes": null,
+      "conditionSource": "entityConditionProfile"
+    },
+    "season": {
+      "name": "春",
+      "label": "春",
+      "source": "entityProfile"
+    }
+  },
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E4%B9%90%E5%B1%B1%E5%A4%A7%E4%BD%9B",
+    "https://www.leshan.gov.cn/lsswszf/bmdt/92337825/3e865b0e7eee473a94ee6972e.html",
+    "https://touch.travel.qunar.com/youji/7857744",
+    "https://touch.travel.qunar.com/youji/7834816",
+    "https://touch.travel.qunar.com/youji/7828681",
+    "https://touch.travel.qunar.com/youji/7800638",
+    "https://touch.travel.qunar.com/youji/7779429",
+    "https://touch.travel.qunar.com/youji/7765650",
+    "https://touch.travel.qunar.com/youji/7749491",
+    "https://touch.travel.qunar.com/youji/7717775",
+    "https://touch.travel.qunar.com/youji/7705156",
+    "https://touch.travel.qunar.com/youji/7698025",
+    "https://touch.travel.qunar.com/youji/7693272",
+    "https://touch.travel.qunar.com/youji/7685161",
+    "https://touch.travel.qunar.com/youji/7676826",
+    "https://touch.travel.qunar.com/youji/7675063",
+    "https://touch.travel.qunar.com/youji/7672714",
+    "https://touch.travel.qunar.com/youji/7641101",
+    "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha,_20161101.jpg",
+    "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha,_20161102.jpg",
+    "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha,_20161103.jpg"
+  ],
+  "assets": [
+    {
+      "assetId": "乐山大佛_cover_3_2a3c65ac",
+      "fileName": "乐山大佛_cover_3_2a3c65ac.jpg",
+      "caption": "Leshan Giant Buddha",
+      "imageLayout": "fullWidth",
+      "sha256": "sha256:8c73ddbd232b0ed62499031e8f5a5614bdafac3a756c7aece0a6959b6d829a7b",
+      "sourceAssetRef": "entities/地点/景区/乐山大佛/1.download/sources/17.article_qunar_base_14/assets/001_article_qunar_base_14_1.jpg",
+      "sourceRef": "entities/地点/景区/乐山大佛/1.download/sources/17.article_qunar_base_14/source.md",
+      "alignmentEvidence": "Leshan Giant Buddha",
+      "sourceCollectionId": "source_image:乐山大佛:5652fd598b646a5c",
+      "creator": "Calistemon",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha,_March_2000_03.jpg",
+      "license": "CC BY-SA 4.0",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "licenseSnapshot": "CC BY-SA 4.0 recorded on Wikimedia Commons file page",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:Leshan_Giant_Buddha,_March_2000_03.jpg",
+      "usageScope": "app_publish"
+    }
+  ],
+  "template": "journal",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer",
+  "citedSourceRefs": [
+    "entities/地点/景区/乐山大佛/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/04.article_qunar_base_1/source.md",
+    "entities/地点/景区/乐山大佛/1.download/sources/17.article_qunar_base_14/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "乐山大佛·怎么去与动线：秀美湘西楚地，富饶天府蜀都",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "乐山大佛",
+    "routeEntities": [
+      "乐山大佛"
+    ],
+    "beats": [
+      "先从 乐山大佛 进入主线。",
+      "8.上船了 船上果然很舒服，空调吹着又不用晒太阳，看着穿慢慢地向大福使劲真的还挺棒的，传到乐山大佛的时候会在大佛面停靠15到20分钟，完全有时间拍照一点都不用着急哈",
+      "13顺着甜皮鸭再往前面走100米左转进去就是鞠婆婆咱家的绵绵冰个人推荐茉莉绿妍绵绵冰，真的很好吃，鞠婆婆·绵绵冰·凉糕·手工冰粉(上中顺直营店)",
+      "可能是需要排队的，但是真的好吃",
+      "门口就有一口大锅热气腾腾的煮着牛肉，中午时候人还是有点多，但是不用排队"
+    ],
+    "sourceNote": "乐山大佛，全名嘉州凌云寺大弥勒石像，别称凌云大佛，位于中华人民共和国四川省乐山市市中区的岷江、青衣江、大渡河三江交汇之处，是世界上高度最高的石佛像。乐山大佛开凿于唐代开元元年（713年），完成于贞元十九年（803年），先后历经3位负责人，历时约九十年。大佛整体开山而建，而髮髻等部分结构则为后期添加。大佛在建成时，外侧曾有木阁加以保护，但后来完全损毁。乐山大佛。",
+    "relatedTopics": [
+      "乐山大佛",
+      "8.上船了 船上果然很舒服，空调吹着又不用晒太阳，看着穿慢慢地向大福使劲真的还挺棒的，传到乐山大佛的时候会在大佛面停靠15到20分钟，完全有时间拍照一点都不用着急哈",
+      "13顺着甜皮鸭再往前面走100米左转进去就是鞠婆婆咱家的绵绵冰个人推荐茉莉绿妍绵绵冰，真的很好吃，鞠婆婆·绵绵冰·凉糕·手工冰粉(上中顺直营店)",
+      "可能是需要排队的，但是真的好吃",
+      "门口就有一口大锅热气腾腾的煮着牛肉，中午时候人还是有点多，但是不用排队"
+    ],
+    "mustIncludeFacts": [
+      "乐山大佛 来源提及 怎么去与动线",
+      "乐山大佛 图文底稿来自 秀美湘西楚地，富饶天府蜀都；文章源图必须来自同一底稿并且全批独占"
+    ]
+  },
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "sourceBatchId": "source_ready_assetrefs_10_20260619_02",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "journal",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T21:09:02.020353+00:00",
+  "updatedAt": "2026-06-19T21:49:09.434273+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:乐山大佛"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "四川省"
+    }
+  ],
+  "articleMarkdownDigest": "sha256:cf2030c22920d70007dfa528449882fa7b16f8f0ec610445dd149fb64955aeb9"
+}

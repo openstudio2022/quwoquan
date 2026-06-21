@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
+import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/publish_circle_select_page.dart';
 
@@ -45,7 +45,7 @@ void main() {
 
     expect(find.byKey(TestKeys.publishCircleSelectPage), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
-    expect(find.byType(CircleMediaImage), findsWidgets);
+    expect(find.byType(AppMediaImage), findsWidgets);
     expect(find.textContaining('件作品'), findsWidgets);
     expect(find.byKey(TestKeys.publishCircleCancelButton), findsOneWidget);
     expect(find.byKey(TestKeys.publishCircleConfirmButton), findsOneWidget);

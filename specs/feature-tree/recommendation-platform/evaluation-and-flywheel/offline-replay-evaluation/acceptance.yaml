@@ -9,41 +9,51 @@ node:
 scope:
   summary: 推荐策略离线 replay 评估规格。
   in_scope:
-    - replay 数据集、NDCG/Recall@K/MAP/覆盖率/多样性/校准误差。
+  - replay 数据集、NDCG/Recall@K/MAP/覆盖率/多样性/校准误差。
   out_of_scope:
-    - 本轮不实现 replay 脚本。
+  - 本轮不实现 replay 脚本。
 gwt_acceptance:
   GWT1:
     title: 离线 replay 评估 GWT
     given:
-      - 存在过往请求、候选、曝光和反馈样本。
+    - 存在过往请求、候选、曝光和反馈样本。
     when:
-      - 新推荐策略准备进入线上 AB。
+    - 新推荐策略准备进入线上 AB。
     then:
-      - replay 输出质量指标和回归结论，低于门槛不得晋升。
+    - replay 输出质量指标和回归结论，低于门槛不得晋升。
     done_when:
-      - 指标、报告字段、数据窗口和晋升门槛均冻结。
+    - 指标、报告字段、数据窗口和晋升门槛均冻结。
     edge_cases:
-      - 样本不足时报告标记 invalid，不允许冒充通过。
+    - 样本不足时报告标记 invalid，不允许冒充通过。
     contract_refs:
-      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
     performance_points:
-      - offline_ndcg_at_k >= 0.20
-      - offline_recall_at_k >= 0.25
-      - offline_diversity_rate >= 0.30
-    evidence:
-      primary:
-        - T1_contract
-        - T2_module_interaction
-      supporting: []
+    - offline_ndcg_at_k >= 0.20
+    - offline_recall_at_k >= 0.25
+    - offline_diversity_rate >= 0.30
     tests:
-      planned:
-        - quwoquan_service/scripts/ml/tests/test_replay_evaluation.py
+      planned: []
       recorded: []
-    status: specified
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.recommendation_platform.evaluation_and_flywheel.offline_replay_evaluation.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.recommendation_platform.evaluation_and_flywheel.offline_replay_evaluation.gwt1_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_replay_evaluation.py'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

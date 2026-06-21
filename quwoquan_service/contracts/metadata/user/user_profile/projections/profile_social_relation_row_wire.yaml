@@ -37,6 +37,13 @@ client_projection:
       aliases: [avatarUrl]
       default: "''"
 
+    - name: avatarVersion
+      dart_type: int
+      nullable: false
+      source: avatarVersion
+      aliases: [avatarVersion]
+      default: "0"
+
     - name: isFollowing
       dart_type: bool
       nullable: false

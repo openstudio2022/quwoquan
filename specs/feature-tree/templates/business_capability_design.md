@@ -22,10 +22,10 @@
 
 ## 测试切面
 
-- T1：
-- T2：
-- T3：
-- T4：
+- local_contract：
+- local_contract：
+- api_integration：
+- user_acceptance：
 
 ## 运行约束
 

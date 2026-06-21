@@ -17,6 +17,7 @@ Map<String, dynamic> _defaultProfile(String userId) {
     'displayName': chatName.isEmpty ? userId : chatName,
     'nickname': chatName.isEmpty ? userId : chatName,
     'avatarUrl': ChatMockData.avatarFor(userId),
+    'avatarVersion': 1,
     'bio': '用户与影像，记录思考与生活',
     'identityTags': const <String>['AI 产品', '产品经理', '摄影', '旅行', '北京'],
     'followerCount': 1200,
@@ -39,6 +40,7 @@ Map<String, dynamic> _mockSocialRelationWire({required bool isFollowing}) {
     'nickname': '你的皮炎有点辣',
     'avatarUrl':
         'media/avatar/s/mock/seed/u_1599566150163-29194dcaad36/v1/avatar.jpg',
+    'avatarVersion': 1,
     'isFollowing': isFollowing,
   };
 }
@@ -64,6 +66,7 @@ Map<String, dynamic> _interactionWire({
   required String actorSubAccountId,
   required String actorDisplayName,
   required String actorAvatarUrl,
+  int actorAvatarVersion = 0,
   required String targetSubAccountId,
   required String targetContentId,
   required String targetContentType,
@@ -71,6 +74,7 @@ Map<String, dynamic> _interactionWire({
   required String displaySubAccountId,
   required String displayName,
   required String displayAvatarUrl,
+  int displayAvatarVersion = 0,
   required String primaryText,
   required String previewMediaKind,
   required List<String> filterKeys,
@@ -82,6 +86,8 @@ Map<String, dynamic> _interactionWire({
   String previewObjectId = '',
   String previewRouteId = 'workBrowser',
   String commentKind = 'none',
+  String commentId = '',
+  String parentCommentId = '',
   Object? createdAt,
 }) {
   final normalizedFilters = <String>{
@@ -96,6 +102,7 @@ Map<String, dynamic> _interactionWire({
     'actorSubAccountId': actorSubAccountId,
     'actorDisplayName': actorDisplayName,
     'actorAvatarUrl': actorAvatarUrl,
+    'actorAvatarVersion': actorAvatarVersion,
     'targetSubAccountId': targetSubAccountId,
     'targetContentId': targetContentId,
     'targetContentType': targetContentType,
@@ -103,6 +110,7 @@ Map<String, dynamic> _interactionWire({
     'displaySubAccountId': displaySubAccountId,
     'displayName': displayName,
     'displayAvatarUrl': displayAvatarUrl,
+    'displayAvatarVersion': displayAvatarVersion,
     'displayUserRouteId': displayUserRouteId,
     'primaryText': primaryText,
     'contextText': contextText,
@@ -115,6 +123,8 @@ Map<String, dynamic> _interactionWire({
         : targetContentId,
     'previewRouteId': previewUnavailable ? '' : previewRouteId,
     'filterKeys': normalizedFilters,
+    'commentId': commentId,
+    'parentCommentId': parentCommentId,
     'createdAt': createdAt,
   };
 }
@@ -142,10 +152,34 @@ List<Map<String, dynamic>> _mockInteractionReceivedWiresFor(String userId) {
           'media/avatar/s/mock/seed/u_1599566150163-29194dcaad36/v1/avatar.jpg',
       primaryText: '点赞了你的记录',
       previewMediaKind: 'image',
-      previewImageUrl: 'media/content/mock/profile/interaction-image.jpg',
+      previewImageUrl:
+          'media/image/s/mock/seed/p_1647956450271-2ff54205bebf/v1/image.jpg',
       previewText: '光影的节奏',
       filterKeys: const <String>['likes'],
       createdAt: '2025-12-21T09:30:00Z',
+    ),
+    _interactionWire(
+      activityId: 'mock-view-profile-u2-$userId',
+      activityType: 'view',
+      direction: 'received',
+      actorSubAccountId: 'u2',
+      actorDisplayName: '海边的风',
+      actorAvatarUrl:
+          'media/avatar/s/mock/seed/u_1679823410021-6d22f8c1f3/v1/avatar.jpg',
+      targetSubAccountId: userId,
+      targetContentId: userId,
+      targetContentType: 'profile',
+      targetContentSummary: '主页访客',
+      displaySubAccountId: 'u2',
+      displayName: '海边的风',
+      displayAvatarUrl:
+          'media/avatar/s/mock/seed/u_1679823410021-6d22f8c1f3/v1/avatar.jpg',
+      primaryText: '看过你的主页',
+      previewMediaKind: 'text',
+      previewText: '主页访客',
+      previewRouteId: 'userProfile',
+      filterKeys: const <String>['views'],
+      createdAt: '2025-12-21T09:10:00Z',
     ),
     _interactionWire(
       activityId: 'mock-comment-image-u6-${userId}_p3',
@@ -165,7 +199,8 @@ List<Map<String, dynamic>> _mockInteractionReceivedWiresFor(String userId) {
           'media/avatar/s/mock/seed/u_1683323410021-a07a1ef39e/v1/avatar.jpg',
       primaryText: '评论了你的记录：构图很稳，光也温柔',
       previewMediaKind: 'image',
-      previewImageUrl: 'media/content/mock/profile/interaction-image-2.jpg',
+      previewImageUrl:
+          'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       previewText: '屋檐下的黄昏',
       filterKeys: const <String>['comments'],
       commentKind: 'comment',
@@ -189,7 +224,8 @@ List<Map<String, dynamic>> _mockInteractionReceivedWiresFor(String userId) {
           'media/avatar/s/mock/seed/u_1684423410021-b19cc13e48/v1/avatar.jpg',
       primaryText: '评论了你的记录：这一段转场好自然',
       previewMediaKind: 'video',
-      previewImageUrl: 'media/content/mock/profile/interaction-video-2.jpg',
+      previewImageUrl:
+          'media/image/s/mock/seed/p_1646034296147-d8ed3aace9a4/v1/image.jpg',
       previewText: '雨后的山路',
       filterKeys: const <String>['comments'],
       commentKind: 'comment',
@@ -260,7 +296,8 @@ List<Map<String, dynamic>> _mockInteractionReceivedWiresFor(String userId) {
       primaryText: '回复了你：我也喜欢这个色调',
       contextText: '你说：这组颜色像旧电影',
       previewMediaKind: 'image',
-      previewImageUrl: 'media/content/mock/profile/interaction-reply.jpg',
+      previewImageUrl:
+          'media/image/s/mock/seed/p_1627216661750-c59a4cea849c/v1/image.jpg',
       previewText: '旧巷口',
       filterKeys: const <String>['comments'],
       commentKind: 'reply',
@@ -284,7 +321,8 @@ List<Map<String, dynamic>> _mockInteractionReceivedWiresFor(String userId) {
           'media/avatar/s/mock/seed/u_1688823410021-a25ae178d1/v1/avatar.jpg',
       primaryText: '转发了你的记录：想给朋友也看看这张',
       previewMediaKind: 'image',
-      previewImageUrl: 'media/content/mock/profile/interaction-share.jpg',
+      previewImageUrl:
+          'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
       previewText: '城市转角',
       filterKeys: const <String>['shares'],
       createdAt: '2025-12-21T07:50:00Z',
@@ -341,10 +379,33 @@ List<Map<String, dynamic>> _mockInteractionSentWiresFor(String userId) {
           'media/avatar/s/mock/seed/u_1599566150163-29194dcaad36/v1/avatar.jpg',
       primaryText: '你点赞了TA的记录',
       previewMediaKind: 'image',
-      previewImageUrl: 'media/content/mock/profile/sent-like-image.jpg',
+      previewImageUrl:
+          'media/image/s/mock/seed/p_1647956450271-2ff54205bebf/v1/image.jpg',
       previewText: '光影的节奏',
       filterKeys: const <String>['likes'],
       createdAt: '2025-12-21T10:00:00Z',
+    ),
+    _interactionWire(
+      activityId: 'mock-sent-view-profile-$userId-u8',
+      activityType: 'view',
+      direction: 'sent',
+      actorSubAccountId: userId,
+      actorDisplayName: actorName,
+      actorAvatarUrl: actorAvatar,
+      targetSubAccountId: 'u8',
+      targetContentId: 'u8',
+      targetContentType: 'profile',
+      targetContentSummary: '纸上旅行主页',
+      displaySubAccountId: 'u8',
+      displayName: '纸上旅行',
+      displayAvatarUrl:
+          'media/avatar/s/mock/seed/u_1685523410021-ae81127c98/v1/avatar.jpg',
+      primaryText: '你看过纸上旅行的主页',
+      previewMediaKind: 'text',
+      previewText: '个人主页',
+      previewRouteId: 'userProfile',
+      filterKeys: const <String>['views'],
+      createdAt: '2025-12-21T09:55:00Z',
     ),
     _interactionWire(
       activityId: 'mock-sent-like-comment-$userId-u2',
@@ -364,7 +425,8 @@ List<Map<String, dynamic>> _mockInteractionSentWiresFor(String userId) {
       primaryText: '你点赞了TA的记录',
       contextText: '这段路我也走过',
       previewMediaKind: 'video',
-      previewImageUrl: 'media/content/mock/profile/sent-like-comment.jpg',
+      previewImageUrl:
+          'media/image/s/mock/seed/p_1646034296147-d8ed3aace9a4/v1/image.jpg',
       previewText: '海岸线',
       filterKeys: const <String>['likes'],
       commentKind: 'comment',
@@ -387,7 +449,8 @@ List<Map<String, dynamic>> _mockInteractionSentWiresFor(String userId) {
           'media/avatar/s/mock/seed/u_1680023410021-b7a2cbd7a1/v1/avatar.jpg',
       primaryText: '你评论了TA的记录：这一镜头很有呼吸感',
       previewMediaKind: 'video',
-      previewImageUrl: 'media/content/mock/profile/sent-comment-video.jpg',
+      previewImageUrl:
+          'media/image/s/mock/seed/p_1646034296147-d8ed3aace9a4/v1/image.jpg',
       previewText: '城市夜行',
       filterKeys: const <String>['comments'],
       commentKind: 'comment',
@@ -499,6 +562,7 @@ Map<String, dynamic> _contractProfileWire(Map<String, dynamic> item) {
     'displayName': item['displayName']?.toString() ?? userId,
     'nickname': item['displayName']?.toString() ?? userId,
     'avatarUrl': item['avatarUrl']?.toString() ?? '',
+    'avatarVersion': (item['avatarVersion'] as num?)?.toInt() ?? 0,
     'backgroundUrl': item['backgroundUrl']?.toString() ?? '',
     'bio': item['bio']?.toString() ?? '',
     'identityTags':
@@ -558,6 +622,7 @@ Map<String, dynamic> _relationshipRowToSocialRelationWire(
     'displayName': displayName,
     'nickname': displayName,
     'avatarUrl': avatarUrl,
+    'avatarVersion': (profileRow?['avatarVersion'] as num?)?.toInt() ?? 0,
     'isFollowing': isFollowing,
   };
 }
@@ -651,6 +716,13 @@ String _profileSeedAvatar(
   return profileById[userId]?['avatarUrl']?.toString() ?? '';
 }
 
+int _profileSeedAvatarVersion(
+  Map<String, Map<String, dynamic>> profileById,
+  String userId,
+) {
+  return (profileById[userId]?['avatarVersion'] as num?)?.toInt() ?? 0;
+}
+
 String _postSeedContentType(Map<String, dynamic>? post) {
   return post?['contentType']?.toString() ?? post?['type']?.toString() ?? '';
 }
@@ -716,6 +788,16 @@ String _commentSeedKind(Map<String, dynamic> comment) {
       : 'comment';
 }
 
+// 回复场景下的顶级评论 id，供互动深链在评论区高亮父评论行；
+// 回退到 replyToCommentId（fixture 若未显式标注 parent）。
+String _commentSeedParentId(Map<String, dynamic> comment) {
+  final parentCommentId = comment['parentCommentId']?.toString() ?? '';
+  if (parentCommentId.isNotEmpty) {
+    return parentCommentId;
+  }
+  return comment['replyToCommentId']?.toString() ?? '';
+}
+
 List<Map<String, dynamic>> _contractLikeWiresFor(String userId) {
   if (!_isContractFixtureUser(userId)) {
     return const <Map<String, dynamic>>[];
@@ -748,6 +830,8 @@ List<Map<String, dynamic>> _contractLikeWiresFor(String userId) {
           'likerNickname':
               likerProfile?['displayName']?.toString() ?? likerUserId,
           'likerAvatarUrl': likerProfile?['avatarUrl']?.toString() ?? '',
+          'likerAvatarVersion':
+              (likerProfile?['avatarVersion'] as num?)?.toInt() ?? 0,
         };
       })
       .whereType<Map<String, dynamic>>()
@@ -783,6 +867,7 @@ List<Map<String, dynamic>> _contractInteractionReceivedWiresFor(String userId) {
           actorSubAccountId: actorId,
           actorDisplayName: actorName,
           actorAvatarUrl: actorAvatar,
+          actorAvatarVersion: _profileSeedAvatarVersion(profileById, actorId),
           targetSubAccountId: userId,
           targetContentId: postId,
           targetContentType: _postSeedContentType(post),
@@ -790,6 +875,7 @@ List<Map<String, dynamic>> _contractInteractionReceivedWiresFor(String userId) {
           displaySubAccountId: actorId,
           displayName: actorName,
           displayAvatarUrl: actorAvatar,
+          displayAvatarVersion: _profileSeedAvatarVersion(profileById, actorId),
           primaryText: '点赞了你的记录',
           previewMediaKind: _postSeedPreviewMediaKind(post),
           previewImageUrl: _postSeedPreviewImageUrl(post),
@@ -822,6 +908,7 @@ List<Map<String, dynamic>> _contractInteractionReceivedWiresFor(String userId) {
       actorSubAccountId: actorId,
       actorDisplayName: actorName,
       actorAvatarUrl: actorAvatar,
+      actorAvatarVersion: _profileSeedAvatarVersion(profileById, actorId),
       targetSubAccountId: userId,
       targetContentId: postId,
       targetContentType: _postSeedContentType(post),
@@ -829,6 +916,7 @@ List<Map<String, dynamic>> _contractInteractionReceivedWiresFor(String userId) {
       displaySubAccountId: actorId,
       displayName: actorName,
       displayAvatarUrl: actorAvatar,
+      displayAvatarVersion: _profileSeedAvatarVersion(profileById, actorId),
       primaryText: commentKind == 'reply'
           ? '回复了你：$commentText'
           : '评论了你的记录：$commentText',
@@ -840,6 +928,8 @@ List<Map<String, dynamic>> _contractInteractionReceivedWiresFor(String userId) {
       previewText: _postSeedSummary(post),
       filterKeys: const <String>['comments'],
       commentKind: commentKind,
+      commentId: comment['commentId']?.toString() ?? '',
+      parentCommentId: _commentSeedParentId(comment),
       createdAt: comment['createdAt'],
     );
   }).whereType<Map<String, dynamic>>();
@@ -879,6 +969,7 @@ List<Map<String, dynamic>> _contractInteractionSentWiresFor(String userId) {
           actorSubAccountId: userId,
           actorDisplayName: actorName,
           actorAvatarUrl: actorAvatar,
+          actorAvatarVersion: _profileSeedAvatarVersion(profileById, userId),
           targetSubAccountId: targetUserId,
           targetContentId: postId,
           targetContentType: _postSeedContentType(post),
@@ -886,6 +977,10 @@ List<Map<String, dynamic>> _contractInteractionSentWiresFor(String userId) {
           displaySubAccountId: targetUserId,
           displayName: displayName,
           displayAvatarUrl: _profileSeedAvatar(profileById, targetUserId),
+          displayAvatarVersion: _profileSeedAvatarVersion(
+            profileById,
+            targetUserId,
+          ),
           primaryText: '你点赞了TA的记录',
           previewMediaKind: _postSeedPreviewMediaKind(post),
           previewImageUrl: _postSeedPreviewImageUrl(post),
@@ -921,6 +1016,7 @@ List<Map<String, dynamic>> _contractInteractionSentWiresFor(String userId) {
           actorSubAccountId: userId,
           actorDisplayName: actorName,
           actorAvatarUrl: actorAvatar,
+          actorAvatarVersion: _profileSeedAvatarVersion(profileById, userId),
           targetSubAccountId: targetUserId,
           targetContentId: postId,
           targetContentType: _postSeedContentType(post),
@@ -928,6 +1024,10 @@ List<Map<String, dynamic>> _contractInteractionSentWiresFor(String userId) {
           displaySubAccountId: targetUserId,
           displayName: displayName,
           displayAvatarUrl: _profileSeedAvatar(profileById, targetUserId),
+          displayAvatarVersion: _profileSeedAvatarVersion(
+            profileById,
+            targetUserId,
+          ),
           primaryText: commentKind == 'reply'
               ? '你回复了TA：$commentText'
               : '你评论了TA的记录：$commentText',
@@ -939,6 +1039,8 @@ List<Map<String, dynamic>> _contractInteractionSentWiresFor(String userId) {
           previewText: _postSeedSummary(post),
           filterKeys: const <String>['comments'],
           commentKind: commentKind,
+          commentId: comment['commentId']?.toString() ?? '',
+          parentCommentId: _commentSeedParentId(comment),
           createdAt: comment['createdAt'],
         );
       })
@@ -969,6 +1071,8 @@ List<Map<String, dynamic>> _contractPersonaRows() {
                   true
               ? _contractProfileWireByUserId[subAccountId]!.avatarUrl
               : null,
+          'avatarVersion':
+              _contractProfileWireByUserId[subAccountId]?.avatarVersion ?? 0,
           'isPrimary': subAccountId == activeSubAccountId,
           'isPrivate': false,
           'isActive': subAccountId == activeSubAccountId,

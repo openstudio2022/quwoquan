@@ -360,7 +360,12 @@ ruby -ryaml -rdate -e '
   end
 
   def load_yaml(path)
-    YAML.safe_load(File.read(path), permitted_classes: [Time, Date, DateTime, Symbol], symbolize_names: false) || {}
+    YAML.safe_load(
+      File.read(path),
+      permitted_classes: [Time, Date, DateTime, Symbol],
+      aliases: true,
+      symbolize_names: false
+    ) || {}
   rescue => e
     nil
   end

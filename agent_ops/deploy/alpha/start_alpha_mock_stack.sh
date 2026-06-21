@@ -83,6 +83,20 @@ wait_http_ok() {
   done
 }
 
+wait_http_range_ok() {
+  local url="$1"
+  local timeout="${2:-30}"
+  local deadline=$((SECONDS + timeout))
+  local status=""
+  until [[ "$status" == "206" ]]; do
+    status="$(curl -fsS -r 0-1 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)"
+    if (( SECONDS >= deadline )); then
+      return 1
+    fi
+    sleep 0.5
+  done
+}
+
 write_report() {
   python3 - "$STATE_DIR/report.json" "$API_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$MEDIA_ORIGIN_BASE_URL" <<'PY'
 import json
@@ -122,12 +136,15 @@ case "$ACTION" in
     stop_bg media-edge
     stop_bg media-origin
     start_bg media-origin \
-      python3 "$ROOT_DIR/agent_ops/deploy/lib/alpha_media_origin.py" \
+      python3 "$ROOT_DIR/agent_ops/deploy/lib/local_media_origin.py" \
         --listen-host 127.0.0.1 \
         --listen-port "$MEDIA_ORIGIN_PORT" \
-        --root-dir "$MEDIA_DIR"
+        --root-dir "$MEDIA_DIR" \
+        --server-label alpha-media-origin \
+        --enable-conversation-avatar-alias
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/healthz" 30
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
+    wait_http_range_ok "$MEDIA_ORIGIN_BASE_URL/media/video/s/archived-video/beta-sample.mp4" 30
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/conversation/conv_002/v1/mock.png" 30
     start_bg media-edge \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/http_reverse_proxy.py" \
@@ -136,6 +153,7 @@ case "$ACTION" in
         --target-base-url "$MEDIA_ORIGIN_BASE_URL"
     wait_http_ok "$MEDIA_BASE_URL/healthz" 30
     wait_http_ok "$MEDIA_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
+    wait_http_range_ok "$MEDIA_BASE_URL/media/video/s/archived-video/beta-sample.mp4" 30
     wait_http_ok "$MEDIA_BASE_URL/media/avatar/conversation/conv_002/v1/mock.png" 30
     start_bg api-edge \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/mock_public_plane.py" \

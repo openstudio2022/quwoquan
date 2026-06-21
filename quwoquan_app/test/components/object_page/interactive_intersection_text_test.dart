@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
@@ -76,8 +77,11 @@ TextSpan _spanByText(WidgetTester tester, String text) {
   return result!;
 }
 
-Widget _host(Widget child) =>
-    CupertinoApp(home: CupertinoPageScaffold(child: child));
+// 槽②行内头像走 AppCachedNetworkImage，其图片加载失败上报读 Riverpod provider，
+// 故统一在 ProviderScope 下挂载（与真实 App 根一致），避免裸渲染缺 scope 崩溃。
+Widget _host(Widget child) => ProviderScope(
+  child: CupertinoApp(home: CupertinoPageScaffold(child: child)),
+);
 
 void main() {
   group('InteractiveIntersectionText 降级链（spans → fallback → 隐藏）', () {
@@ -189,7 +193,8 @@ void main() {
       );
 
       final context = tester.element(find.byType(InteractiveIntersectionText));
-      final accent = AppColors.iosAccent(context);
+      // 统一交互蓝字采用低饱和 slogan-accent（浅色态），不再用高饱和 iOS systemBlue。
+      final accent = AppColors.profileSloganAccentLight;
       final plain = AppColors.iosLabel(context);
       expect(_spanByText(tester, '林清越').style?.color, accent);
       expect(_spanByText(tester, '3').style?.color, accent);

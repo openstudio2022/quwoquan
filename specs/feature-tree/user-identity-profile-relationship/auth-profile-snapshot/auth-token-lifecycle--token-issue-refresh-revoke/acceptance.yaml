@@ -37,24 +37,40 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
     performance_points:
     - refresh token 正常轮换 P95 <= 800ms。
-    evidence:
-      primary:
-      - T3_app_api_integration
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - quwoquan_service/services/user-service/tests/auth_contract_test.go
-      - quwoquan_app/test/core/auth/auth_session_store_test.dart
-      - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-      - quwoquan_app/test/core/platform/native_auth_bridge_test.dart
+      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_app/test/core/auth/auth_session_store_test.dart
+      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+      - file: quwoquan_app/test/core/platform/native_auth_bridge_test.dart
       recorded:
-      - make verify-app-auth-policy
-      - quwoquan_app/test/cloud/runtime/cloud_http_client_refresh_test.dart
-      - quwoquan_app/test/core/auth/auth_session_controller_test.dart
-      - quwoquan_app/test/app/app_startup_welcome_test.dart
+      - command: make verify-app-auth-policy
+      - file: quwoquan_app/test/cloud/runtime/cloud_http_client_refresh_test.dart
+      - file: quwoquan_app/test/core/auth/auth_session_controller_test.dart
+      - file: quwoquan_app/test/app/app_startup_welcome_test.dart
     status: partial
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.auth_profile_snapshot.auth_token_lifecycle_token_issue_refresh_revoke.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.auth_profile_snapshot.auth_token_lifecycle_token_issue_refresh_revoke.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.user_identity_profile_relationship.auth_profile_snapshot.auth_token_lifecycle_token_issue_refresh_revoke.contract
+        envs: *id001
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "稻城亚丁_decision_experience",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "稻城亚丁·值不值得去：如何用10天时间来玩转318川藏线",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-cc6e4d74-9f70-494f-ae47-fcf90e594f07",
+    "agentId": "agent-e2f0e129-4f7a-4c85-8571-6e73e81f8e93",
+    "sessionTrace": null,
+    "styleFamily": "路线规划风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/稻城亚丁"
+    ],
+    "articleDigest": "sha256:a3c0b205b98e028e1147f3350a5a45d4f890a0cf094028af866c262cfff8b737"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "稻城亚丁·值不值得去：如何用10天时间来玩转318川藏线",
+    "styleFamily": "",
+    "promptSha256": "sha256:96ea26a24926b1c554978162c8aa4162a901065b31218ec0c11bf73e9a1bb2ed",
+    "writingPackSha256": "sha256:cbce293940d0314af58b83c7b927ef4ad261772db499542d609daf491375eda7",
+    "sourceBundleSha256": "sha256:84ff42b9d17a0f1456f259ef657e9f106f6edfe604b9410fc4bcce984b8a55c7",
+    "draftSha256": "sha256:ccd4ce135ab9dd1de2ab46aa6d6a30a74f98de75c646c87e1481fa13475b2030"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/01.home_wikipedia/source.md",
+      "url": "https://zh.wikipedia.org/wiki/%E7%A8%BB%E5%9F%8E%E4%BA%9A%E4%B8%81"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/03.article_qunar_base_1/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7900763"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/04.article_qunar_base_2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7868435"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/05.article_qunar_base_3/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7804787"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/06.article_qunar_base_4/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7802584"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/07.article_qunar_base_5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7751549"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/08.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7747452"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/09.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7727639"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/10.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7709722"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/11.article_qunar_base_9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7709705"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/12.article_qunar_base_10/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7707732"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/13.article_qunar_base_11/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7702145"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/14.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7694564"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/15.article_qunar_base_13/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7692230"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/16.article_qunar_base_14/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7690200"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/17.article_qunar_base_15/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7683302"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/18.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7682462"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/22.image_open_license_file_稻城亚丁_httpscommonswikimediaorgwikifiledcyairportjpg_8e8ad52c0d/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:DCY_Airport.jpg"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/23.image_open_license_file_稻城亚丁_httpscommonswikimediaorgwikifiledcychinasouthernjpg_42dcd9905d/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:DCY_China_Southern.jpg"
+    },
+    {
+      "path": "entities/地点/景区/稻城亚丁/1.download/sources/24.image_open_license_file_稻城亚丁_httpscommonswikimediaorgwikifilee4bb99e4b983e697a5e5b3b02016_480e4b3a31/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E4%BB%99%E4%B9%83%E6%97%A5%E5%B3%B0_2016_%E7%A8%BB%E5%9F%8E%E4%BA%9A%E4%B8%81_%E5%88%98%E7%A5%96%E8%B5%9B_-_panoramio.jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/稻城亚丁/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/稻城亚丁/1.download/sources/04.article_qunar_base_2/source.md",
+    "entities/地点/景区/稻城亚丁/1.download/sources/05.article_qunar_base_3/source.md",
+    "entities/地点/景区/稻城亚丁/1.download/sources/09.article_qunar_base_7/source.md"
+  ]
+}

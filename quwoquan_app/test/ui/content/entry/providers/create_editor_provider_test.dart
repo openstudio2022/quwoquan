@@ -926,6 +926,64 @@ void main() {
     expect(node.spans.where((span) => span.bold), isNotEmpty);
   });
 
+  test('toggleArticleInlineStyle 保留正文标签内联 tag span', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final notifier = container.read(createEditorProvider.notifier);
+    // 模拟从含 @[label](tag:ref) 的草稿/正文恢复后的编辑态：node 携带 tag span。
+    final document = ArticleDocumentData(
+      nodes: const <ArticleDocumentNode>[
+        ArticleDocumentNode(
+          id: 'document_title',
+          type: ArticleDocumentNodeType.documentTitle,
+          text: '城市漫步',
+        ),
+        ArticleDocumentNode(
+          id: 'p1',
+          type: ArticleDocumentNodeType.paragraph,
+          text: '城市漫步值得一去',
+          spans: <ArticleInlineSpan>[
+            ArticleInlineSpan(
+              start: 0,
+              end: 4,
+              kind: 'tag',
+              targetType: 'tag',
+              targetId: 'tag:topic:city_walk',
+              displayText: '城市漫步',
+            ),
+          ],
+        ),
+      ],
+    );
+    notifier.restoreFromDraft(
+      CreateDraft(
+        id: 'draft_tag',
+        updatedAtMs: 1,
+        state: CreateEditorState.initial().copyWith(
+          editorKind: CreateEditorKind.text,
+          title: '城市漫步',
+          articleDocument: document,
+        ),
+      ),
+    );
+
+    notifier.toggleArticleInlineStyle('p1', 0, 4, bold: true);
+
+    final node = container
+        .read(createEditorProvider)
+        .articleDocument
+        .nodes
+        .firstWhere((n) => n.id == 'p1');
+    final tag = node.spans.where((span) => span.isTag).single;
+    expect(tag.targetType, 'tag');
+    expect(tag.targetId, 'tag:topic:city_walk');
+    expect(tag.displayText, '城市漫步');
+    expect(node.spans.where((span) => span.bold), isNotEmpty);
+    // entity 判定不回归：tag span 不应被误判为 entity。
+    expect(node.spans.where((span) => span.isEntity), isEmpty);
+  });
+
   test('prepareTextNodeForImageInsertion 切段后保留对象提及 span 元数据', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);

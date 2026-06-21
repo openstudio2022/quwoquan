@@ -8,9 +8,9 @@
 
 检查：
 - 读取 `docs/agent_context_contract.md` 与 `docs/agent_command_simulation_matrix.md`。
-- AppRoot UAT 是否受影响并有 T4/T3。
-- 业务能力 SIT 是否闭环并有 T2/T3。
-- Story GWT/contract 是否闭环并有 T1/T2。
+- AppRoot UAT 是否受影响并有 user_acceptance/api_integration。
+- 业务能力 SIT 是否闭环并有 local_contract/api_integration。
+- Story GWT/contract 是否闭环并有 local_contract。
 - metadata、seed、mock、页面质量、runtime error、CR 是否同步。
 - 是否完成 `docs/agent_context_contract.md` 要求的完成后多视角验收复盘：测试、E2E、产品/UX、运营观测、自动化/门禁、剩余风险。
 - 若触及跨域链路，是否证明 Data / Service / App / Behavior / Recommendation / Observability / Environment 无断点。

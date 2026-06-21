@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_3c83e06a0d77f00c",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "五台山风景名胜区·行前指南：五台山",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "codex-agent-gpt-5-real-site-supply",
+    "agentRunId": "real_wikivoyage_articles_1000_publish_r3:candidate_3c83e06a0d77f00c:governance-repair",
+    "agentId": "codex-site-supply-operator",
+    "sessionTrace": "real-site-supply-1000-subset-r3-agent-draft-governance-repair",
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [],
+    "articleDigest": "sha256:3b6b7e5d35f0cc52c4e60840aaa3f781f535f15df139ac87738ef82e5d53d458"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "五台山风景名胜区·行前指南：五台山",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:f40b636b2909a93f5f17d15daec938b7ad87c285a4d291629d5b436de6cd8f51",
+    "writingPackSha256": "sha256:d68e06f3e1d556171b31403473fcca7b1266e9adc961be3b7b15944d74be8ead",
+    "sourceBundleSha256": "sha256:15bb1a6074b0c9a3599828b61d8941097045b4119d7eada4f6fe40f84b4ffc0d",
+    "draftSha256": "sha256:ac00c5c67aa8bed2f7e8b7dd528a695c55f27d4426b4989f530f04431ef72c41"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/五台山风景名胜区/1.download/sources/01.wikivoyage_zh_candidate_3c83e06a0d77f00c/source.md",
+      "url": "https://zh.wikivoyage.org/wiki/%E4%BA%94%E5%8F%B0%E5%B1%B1"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/五台山风景名胜区/1.download/sources/01.wikivoyage_zh_candidate_3c83e06a0d77f00c/source.md"
+  ]
+}

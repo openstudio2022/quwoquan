@@ -22,10 +22,34 @@ void main() {
       expect(
         resolveAvatarImageUrl(
           'media/avatar/s/archived-avatar/default/group/v1/default.png',
-          gatewayBaseUrl: 'http://127.0.0.1:18080/',
-          avatarCdnBaseUrl: 'http://127.0.0.1:18088/',
+          gatewayBaseUrl: 'https://127.0.0.1:18080/',
+          avatarCdnBaseUrl: 'https://127.0.0.1:18088/',
         ),
-        'http://127.0.0.1:18088/media/avatar/s/archived-avatar/default/group/v1/default.png',
+        'https://127.0.0.1:18088/media/avatar/s/archived-avatar/default/group/v1/default.png',
+      );
+    });
+
+    test('appends avatarVersion to cache key when raw path lacks query', () {
+      expect(
+        resolveAvatarImageUrl(
+          'media/avatar/s/archived-avatar/user/u1/v1/profile.png',
+          gatewayBaseUrl: 'https://beta-gateway.example.com',
+          avatarCdnBaseUrl: 'https://cdn.example.com',
+          avatarVersion: 12,
+        ),
+        'https://cdn.example.com/media/avatar/s/archived-avatar/user/u1/v1/profile.png?v=12',
+      );
+    });
+
+    test('overrides stale v query with explicit avatarVersion', () {
+      expect(
+        resolveAvatarImageUrl(
+          'https://cdn.example.com/media/avatar/s/archived-avatar/user/u1/v1/profile.png?v=3',
+          gatewayBaseUrl: 'https://beta-gateway.example.com',
+          avatarCdnBaseUrl: 'https://cdn.example.com',
+          avatarVersion: 18,
+        ),
+        'https://cdn.example.com/media/avatar/s/archived-avatar/user/u1/v1/profile.png?v=18',
       );
     });
 
@@ -112,21 +136,21 @@ void main() {
     test('rewrites archived mock seed avatars to archived fixture avatars', () {
       final candidates = resolveAvatarImageUrlCandidates(
         'media/avatar/s/mock/seed/u_1599566150163-29194dcaad36/v1/avatar.jpg',
-        gatewayBaseUrl: 'http://127.0.0.1:18080',
-        avatarCdnBaseUrl: 'http://127.0.0.1:18088',
+        gatewayBaseUrl: 'https://127.0.0.1:18080',
+        avatarCdnBaseUrl: 'https://127.0.0.1:18088',
       );
       expect(candidates, hasLength(2));
       expect(
         candidates.first,
         startsWith(
-          'http://127.0.0.1:18088/media/avatar/s/archived-avatar/user/fixture_user_',
+          'https://127.0.0.1:18088/media/avatar/s/archived-avatar/user/fixture_user_',
         ),
       );
       expect(candidates.first, isNot(contains('/mock/seed/')));
       expect(
         candidates.last,
         startsWith(
-          'http://127.0.0.1:18080/media/avatar/s/archived-avatar/user/fixture_user_',
+          'https://127.0.0.1:18080/media/avatar/s/archived-avatar/user/fixture_user_',
         ),
       );
       expect(candidates.last, isNot(contains('/mock/seed/')));
@@ -137,28 +161,28 @@ void main() {
       () {
         final mockUserCandidates = resolveAvatarImageUrlCandidates(
           'media/avatar/s/mock/user/user_001/v1/avatar.png',
-          gatewayBaseUrl: 'http://127.0.0.1:18080',
-          avatarCdnBaseUrl: 'http://127.0.0.1:18088',
+          gatewayBaseUrl: 'https://127.0.0.1:18080',
+          avatarCdnBaseUrl: 'https://127.0.0.1:18088',
         );
         expect(mockUserCandidates, hasLength(2));
         expect(
           mockUserCandidates.first,
           startsWith(
-            'http://127.0.0.1:18088/media/avatar/s/archived-avatar/user/fixture_user_',
+            'https://127.0.0.1:18088/media/avatar/s/archived-avatar/user/fixture_user_',
           ),
         );
         expect(mockUserCandidates.join('\n'), isNot(contains('/mock/user/')));
 
         final malformedArchivedCandidates = resolveAvatarImageUrlCandidates(
           'media/avatar/s/archived-avatar/seed/u_1599566150163-29194dcaad36/v1/avatar.jpg',
-          gatewayBaseUrl: 'http://127.0.0.1:18080',
-          avatarCdnBaseUrl: 'http://127.0.0.1:18088',
+          gatewayBaseUrl: 'https://127.0.0.1:18080',
+          avatarCdnBaseUrl: 'https://127.0.0.1:18088',
         );
         expect(malformedArchivedCandidates, hasLength(2));
         expect(
           malformedArchivedCandidates.first,
           startsWith(
-            'http://127.0.0.1:18088/media/avatar/s/archived-avatar/user/fixture_user_',
+            'https://127.0.0.1:18088/media/avatar/s/archived-avatar/user/fixture_user_',
           ),
         );
         expect(

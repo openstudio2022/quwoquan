@@ -124,6 +124,28 @@ class AppColors {
   static const Color iosProfileSurfaceLight = Color(0xFFFFFDFC);
   static const Color iosProfileSurfaceDark = Color(0xFF1C1C1E);
 
+  /// 用户主页 slogan / 弱入口：蓝色只作为交互层级，不进入交集类型图标。
+  static const Color profileSloganSurfaceStartLight = Color(0xFFF5FAFF);
+  static const Color profileSloganSurfaceEndLight = Color(0xFFFFFFFF);
+  static const Color profileSloganSurfaceStartDark = Color(0xFF172033);
+  static const Color profileSloganSurfaceEndDark = Color(0xFF111827);
+  static const Color profileSloganInkLight = Color(0xFF2D3D52);
+  static const Color profileSloganInkDark = Color(0xFFDDEAF8);
+  static const Color profileSloganAccentLight = Color(0xFF5A8FC7);
+  static const Color profileSloganAccentDark = Color(0xFF8DBCF1);
+
+  /// 交集 / 影响力类型图标：非品牌蓝的低饱和语义色阶。
+  static const Color profileIntersectionTeaLight = Color(0xFF786F62);
+  static const Color profileIntersectionTeaDark = Color(0xFFC9BFB0);
+  static const Color profileIntersectionSageLight = Color(0xFF5F7464);
+  static const Color profileIntersectionSageDark = Color(0xFFAFC7B4);
+  static const Color profileIntersectionClayLight = Color(0xFF8E6A61);
+  static const Color profileIntersectionClayDark = Color(0xFFD6AAA0);
+  static const Color profileIntersectionMistLight = Color(0xFF766B8F);
+  static const Color profileIntersectionMistDark = Color(0xFFC6BEE0);
+  static const Color profileIntersectionStoneLight = Color(0xFF626C78);
+  static const Color profileIntersectionStoneDark = Color(0xFFC3CAD2);
+
   // ==================== 欢迎页语义色 ====================
   static const Color welcomeBackground = primaryColor;
   static const Color welcomeGradientStart = brandBlue500;

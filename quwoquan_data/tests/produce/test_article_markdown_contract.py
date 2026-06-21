@@ -3,6 +3,7 @@
 构造一个 agent 创作正文的 article 包（front-matter + 封面 figure + 正文 + 资产清单），
 断言 qwq-rich-md/1 版本标记、asset:// 引用在 manifest 声明、封面/标题/正文同文档流。
 """
+from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -14,15 +15,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from __future__ import annotations
-
 import re
-import sys
-from pathlib import Path
-
-SCRIPTS_ROOT = DATA_ROOT / "scripts"
-if str(SCRIPTS_ROOT) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common.article_package import (  # noqa: E402
     MARKDOWN_VERSION,

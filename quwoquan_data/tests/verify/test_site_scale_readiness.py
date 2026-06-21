@@ -15,19 +15,30 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 from site_supply import handler as ss  # noqa: E402
+from _common.io import read_json, write_json  # noqa: E402
 from verify.site_scale_readiness import build_site_scale_readiness_report  # noqa: E402
 
 
 ARTICLE_TEXT = (
-    "这是一篇用于网站规模化准出测试的正文，覆盖路线、时间、地点、体验判断和证据映射。"
-    "它需要足够长，以便通过候选抽取和评分门，并进入 content_plan handoff。"
+    "## 交通与入口\n"
+    "九寨沟的行前资料覆盖入口动线、景区交通、核心海子、停留节奏、雨天备选和返程时间。"
+    "候选正文说明游客通常需要提前确认预约、门票、观光车和开放状态，旺季还要预留排队缓冲。\n"
+    "## 门票与时间\n"
+    "内容包含路线取舍、时间安排、地点判断、体验反馈和证据映射，适合进入网站供给线评分。"
+    "如果是亲子或老人同行，文本提醒控制徒步强度，优先安排沟口住宿和早进沟。\n"
+    "## 路线与风险\n"
+    "如果遇到降雨或局部封闭，文本建议保留替代节点，并把补给、返程交通和休息点写入计划。"
+    "这些信息足够支持内容计划生成，不依赖裸题扩写，也不把平台口吻带入发布稿。"
 )
 
 
 def _make_site_batch(
     batch: str,
     *,
+    site_id: str = "qunar_guide",
     objects_per_hour: float,
+    handoff_article_count: int = 1,
+    released_post_refs: list[str] | None = None,
     token_ledger_count: int = 1,
     first_pass_rate: float = 0.82,
     release_verified: bool = True,
@@ -35,9 +46,14 @@ def _make_site_batch(
     search_visible: bool = True,
     recommendation_feedback_ready: bool = True,
 ) -> None:
+    url = (
+        f"https://zh.wikivoyage.org/wiki/{batch}"
+        if site_id == "wikivoyage_zh"
+        else f"https://touch.travel.qunar.com/travelbook/note/{batch}"
+    )
     frontier = ss.build_site_frontier_packet(
         vertical="travel",
-        site_id="qunar_guide",
+        site_id=site_id,
         batch_id=batch,
         daily_target=100_000,
         queue_backend="reliabletask",
@@ -47,9 +63,9 @@ def _make_site_batch(
     ss.write_site_frontier_packet(frontier)
     fetch = ss.build_site_fetch_packet(
         vertical="travel",
-        site_id="qunar_guide",
+        site_id=site_id,
         batch_id=batch,
-        url=f"https://touch.travel.qunar.com/travelbook/note/{batch}",
+        url=url,
         lane="article",
         title=f"{batch} 候选",
         published_at="2026-06-01",
@@ -59,16 +75,16 @@ def _make_site_batch(
             "htmlBytes": ARTICLE_TEXT.encode("utf-8"),
             "text": ARTICLE_TEXT,
             "sha256": batch,
-            "runtime": {"siteId": "qunar_guide", "fetchable": True},
+            "runtime": {"siteId": site_id, "fetchable": True},
         },
     )
     assert fetch["gate"]["passed"], fetch["gate"]
     ss.write_site_fetch_packet(fetch, html_bytes=ARTICLE_TEXT.encode("utf-8"))
     candidate = ss.build_site_candidate_packet(
         vertical="travel",
-        site_id="qunar_guide",
+        site_id=site_id,
         batch_id=batch,
-        url=f"https://touch.travel.qunar.com/travelbook/note/{batch}",
+        url=url,
         lane="article",
         title=f"{batch} 候选",
         text=ARTICLE_TEXT,
@@ -85,7 +101,7 @@ def _make_site_batch(
     ss.write_site_map_packet(mapped)
     rollup = ss.build_site_rollup_report(
         vertical="travel",
-        site_id="qunar_guide",
+        site_id=site_id,
         batch_id=batch,
         objects_per_hour=objects_per_hour,
         first_pass_rate=first_pass_rate,
@@ -96,16 +112,127 @@ def _make_site_batch(
         recommendation_feedback_ready=recommendation_feedback_ready,
     )
     assert rollup["passed"], rollup
+    if handoff_article_count != 1:
+        rollup["siteFunnel"]["contentPlanHandoffCount"] = handoff_article_count
+        rollup["siteFunnel"]["contentPlanHandoffLaneCounts"] = {"article": handoff_article_count}
     ss.write_site_rollup_report(rollup)
+    if release_verified:
+        refs = released_post_refs
+        if refs is None:
+            refs = [f"posts/article/攻略/{batch}-release-001"]
+        root = ss.site_supply_root("travel", site_id, batch)
+        downstream_path = root / "_shared" / "site_supply_downstream_e2e_report.json"
+        write_json(
+            downstream_path,
+            {
+                "schemaVersion": "quwoquan_data.site_supply.downstream_e2e/1",
+                "vertical": "travel",
+                "siteId": site_id,
+                "sourceBatchId": batch,
+                "taskId": "旅行/主题/网站供给线/规模准出测试",
+                "targetBatch": f"{batch}_publish",
+                "env": "gamma",
+                "postRefs": refs,
+                "plannedPostRefs": refs,
+                "releasedPostRefs": refs,
+                "plannedPostRefCount": len(refs),
+                "releasedPostRefCount": len(refs),
+                "checks": {
+                    "releaseVerified": True,
+                    "importVerified": import_verified,
+                    "searchVisible": search_visible,
+                    "recommendationFeedbackReady": recommendation_feedback_ready,
+                },
+                "gate": {"passed": True, "blockers": [], "warnings": []},
+            },
+        )
+        write_json(root / "ship_import" / "stage_result.json", {"outputs": [str(downstream_path)]})
 
 
-def test_site_scale_readiness_passes_with_complete_100k_evidence():
+def test_site_scale_readiness_passes_with_complete_evidence_within_registered_capacity():
     _make_site_batch("green", objects_per_hour=5000)
-    report = build_site_scale_readiness_report(vertical="travel", batch_id="green", daily_target=100_000)
+    report = build_site_scale_readiness_report(vertical="travel", batch_id="green", daily_target=5_000)
     assert report["passed"], report["blockers"]
     assert report["aggregate"]["siteCount"] == 1
     assert report["aggregate"]["measuredThroughputObjectsPerHour"] == 5000
-    assert report["requiredThroughputPerHour"] == 4166.6667
+    assert report["aggregate"]["registeredMaxPagesPerDay"] == 5000
+    assert report["requiredThroughputPerHour"] == 208.3333
+
+
+def test_site_scale_readiness_aggregates_explicit_batches_across_sites():
+    _make_site_batch("multi_qunar", site_id="qunar_guide", objects_per_hour=250)
+    _make_site_batch("multi_wikivoyage", site_id="wikivoyage_zh", objects_per_hour=250)
+    report = build_site_scale_readiness_report(
+        vertical="travel",
+        batch_id="multi_qunar",
+        batch_ids=["multi_qunar", "multi_wikivoyage"],
+        daily_target=10_000,
+    )
+    assert report["passed"], report["blockers"]
+    assert report["batchIds"] == ["multi_qunar", "multi_wikivoyage"]
+    assert report["aggregate"]["siteCount"] == 2
+    assert report["aggregate"]["registeredMaxPagesPerDay"] == 10_000
+    assert report["aggregate"]["measuredThroughputObjectsPerHour"] == 500
+
+
+def test_site_scale_readiness_blocks_daily_target_above_registered_site_capacity():
+    _make_site_batch("over_capacity", objects_per_hour=5000)
+    report = build_site_scale_readiness_report(vertical="travel", batch_id="over_capacity", daily_target=100_000)
+    text = "\n".join(report["blockers"])
+    assert not report["passed"]
+    assert "requested dailyTarget 100000 exceeds registered raw crawl capacity 5000 maxPagesPerDay" in text
+
+
+def test_site_scale_readiness_commercial_minimums_use_released_posts_not_handoff():
+    _make_site_batch(
+        "commercial_release_shortfall",
+        objects_per_hour=500,
+        handoff_article_count=10,
+        released_post_refs=[
+            "posts/article/攻略/九寨沟-001",
+            "posts/article/攻略/九寨沟-002",
+            "posts/article/攻略/九寨沟-003",
+            "posts/article/攻略/九寨沟-004",
+        ],
+    )
+    report = build_site_scale_readiness_report(
+        vertical="travel",
+        batch_id="commercial_release_shortfall",
+        daily_target=1_000,
+        mode="commercial",
+        min_lane_counts={"article": 5},
+    )
+    blockers = "\n".join(report["blockers"])
+    assert not report["passed"]
+    assert report["aggregate"]["contentPlanHandoffLaneCounts"]["article"] == 10
+    assert report["aggregate"]["releasedPostLaneCounts"]["article"] == 4
+    assert "releasedPostLaneCounts.article 4 < required 5" in blockers
+
+
+def test_site_scale_readiness_reads_downstream_report_checks_from_stage_outputs():
+    _make_site_batch("downstream_only", objects_per_hour=500)
+    root = ss.site_supply_root("travel", "qunar_guide", "downstream_only")
+    rollup_path = root / "_shared" / "site_rollup_report.json"
+    rollup = read_json(rollup_path)
+    rollup["executionReadiness"]["releaseVerified"] = False
+    rollup["executionReadiness"]["importVerified"] = False
+    rollup["executionReadiness"]["searchVisible"] = False
+    rollup["executionReadiness"]["recommendationFeedbackReady"] = False
+    write_json(rollup_path, rollup)
+
+    report = build_site_scale_readiness_report(
+        vertical="travel",
+        batch_id="downstream_only",
+        daily_target=1_000,
+        mode="commercial",
+    )
+    assert report["passed"], report["blockers"]
+    site = report["sites"][0]
+    assert site["releaseVerified"] is True
+    assert site["importVerified"] is True
+    assert site["searchVisible"] is True
+    assert site["recommendationFeedbackReady"] is True
+    assert site["downstreamE2E"]["reportPaths"]
 
 
 def test_site_scale_readiness_blocks_low_throughput_and_missing_e2e():

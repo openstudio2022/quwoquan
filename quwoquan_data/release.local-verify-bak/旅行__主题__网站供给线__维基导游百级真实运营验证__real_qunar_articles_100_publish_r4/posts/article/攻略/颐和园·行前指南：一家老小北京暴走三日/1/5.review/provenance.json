@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_5b62e653bab69474",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "颐和园·行前指南：一家老小北京暴走三日",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer",
+    "agentRunId": "run-e6424352-25af-4cff-a91e-721b8d520eee",
+    "agentId": "agent-3e768d90-c325-49f8-bb67-d482ff66812a",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/颐和园"
+    ],
+    "articleDigest": "sha256:51971b7ecba86f48efe594fa6ecc0a751b014be8e8dcacecdb3f172f86f3f635"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "颐和园·行前指南：一家老小北京暴走三日",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:abbbc3ab53cc0445b0642a2127a901d35605c784cbab244468d4c9ed41755e0c",
+    "writingPackSha256": "sha256:271c5bc64702884a00915df2f829bd502f772171d0bafa3500cd4842916aa60a",
+    "sourceBundleSha256": "sha256:3f3955c515805be2a32fdde148e4aa67f04fecc3d577132d4a3f7a015f8554e2",
+    "draftSha256": "sha256:c3c65ee7a8ccaffe3dec01d95726ace9fdbd834415d8f50d5d650bc13ab0693a"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/06.qunar_guide_candidate_10ce762a8ae4d92a/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7883023"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/19.qunar_guide_candidate_29bc697f3876726d/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7879815"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/26.qunar_guide_candidate_39c2561d2aa9c823/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7874919"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/41.qunar_guide_candidate_59ec8a6352ccac02/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7902914"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/43.qunar_guide_candidate_5b62e653bab69474/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7890364"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/70.qunar_guide_candidate_a31321d5992c863e/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7863644"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/82.qunar_guide_candidate_b71c523b17e65457/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7872796"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/颐和园/1.download/sources/43.qunar_guide_candidate_5b62e653bab69474/source.md",
+    "entities/地点/景区/颐和园/1.download/sources/06.qunar_guide_candidate_10ce762a8ae4d92a/source.md"
+  ]
+}

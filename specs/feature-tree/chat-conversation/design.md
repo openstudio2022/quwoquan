@@ -14,8 +14,8 @@
 
 ## 上游输入评审
 
-- L1 spec.md：稳定，6 个核心对象模型已明确，12 项功能（F1~F12）+ 11 条性能目标 + §8 适用范围与约束 + §9 T1~T4 验收映射
-- acceptance.yaml：升级为标准 `level_acceptance` 格式，A1~A25 共 25 条可测量验收标准（T1×6 + T2×7 + T3×10 + T4×4，覆盖 spec 全部功能与性能）
+- L1 spec.md：稳定，6 个核心对象模型已明确，12 项功能（F1~F12）+ 11 条性能目标 + §8 适用范围与约束 + §9 三层测试 验收映射
+- acceptance.yaml：升级为标准 `level_acceptance` 格式，A1~A25 共 25 条可测量验收标准（local_contract×6 + local_contract×7 + api_integration×10 + user_acceptance×4，覆盖 spec 全部功能与性能）
 - 依赖 realtime-gateway（已 design）和 runtime-redis（已 design）
 - metadata：8 个 YAML 文件全部完整（aggregate/fields/storage/events/service/errors/projections/tests），与 KD-1~KD-10 对齐
 - 无阻断项
@@ -325,7 +325,7 @@ chat-service 需完整纳入 `make gate` 流水线：
 |------|------|------|
 | chat-service build | `go build ./services/chat-service/...` | 编译检查 |
 | chat-service L2 | `go test ./services/chat-service/... -count=1` | 云侧契约测试 |
-| chat L1 | `flutter test test/cloud/chat/ test/ui/chat/` | 端侧 T1+T2+T4(L1c) |
+| chat L1 | `flutter test test/cloud/chat/ test/ui/chat/` | 端侧 local_contract+local_contract+user_acceptance(L1c) |
 | chat L3 | `make test-api-contract-chat` | gamma HTTP 契约 |
 | chat L4 | `patrol test test/patrol/chat/` | Patrol 真实设备 |
 
@@ -348,9 +348,9 @@ chat-service 需完整纳入 `make gate` 流水线：
 
 **演进路径**：Phase 0~3 可独立交付 HTTP CRUD 全链路；Phase 4（realtime-gateway）并行推进；Phase 5 灰度部署验收。
 
-## Story 与测试层映射（T1~T4 治理视图）
+## Story 与测试层映射（三层测试 治理视图）
 
-| Story | 内容 | T1 | T2 | T3 | T4 | 验收项 |
+| Story | 内容 | local_contract | local_contract | api_integration | user_acceptance | 验收项 |
 |-------|------|:--:|:--:|:--:|:--:|--------|
 | S1 | metadata + codegen（DTO 契约 + 错误码） | ● | | | | A1~A5 |
 | S2 | ChatPage/Detail/Settings Widget 渲染 | | ● | | | A6~A8 |

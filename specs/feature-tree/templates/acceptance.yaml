@@ -15,15 +15,27 @@ domain_acceptance:
     done_when:
     - 领域边界、上下游依赖、工程映射和服务治理清晰。
     boundary_points: []
-    evidence:
-      primary:
-      - T1_static_contract
-      - T3_service_contract
-      supporting: []
     tests:
       planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: da1_local_contract
+        cases:
+        - local_contract.templates.domain_service.da1.da1_local_contract
+        envs:
+        - local
+      - layer: api_integration
+        suite: da1_api_integration
+        cases:
+        - api_integration.templates.domain_service.da1.da1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting: []
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

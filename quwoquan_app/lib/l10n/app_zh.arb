@@ -691,6 +691,18 @@
       "count": { "type": "int", "example": "5" }
     }
   },
+  "expandMoreReplies": "展开更多回复",
+  "@expandMoreReplies": {
+    "description": "Expand more replies button text after the first reply expansion"
+  },
+  "expandFullText": "展开全文",
+  "@expandFullText": {
+    "description": "Show the full text of a folded long comment"
+  },
+  "collapseReplies": "收起",
+  "@collapseReplies": {
+    "description": "Collapse expanded replies back to preview in comment thread"
+  },
   "replyToPrefix": " 回复 ",
   "@replyToPrefix": {
     "description": "Reply-to prefix between usernames in comment thread (with spaces)"

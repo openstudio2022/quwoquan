@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "quwoquan_data.stage_envelope",
+  "taskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "batchId": "real_wikivoyage_scenic_articles_15_publish_r2",
+  "step": "review",
+  "ref": "candidate_bedfeb064e4eb55e",
+  "payload": {
+    "topicId": "candidate_bedfeb064e4eb55e",
+    "decision": "approved",
+    "issues": [],
+    "humanReviewRequired": false,
+    "generator": "agent",
+    "checks": {
+      "entityCoverage": {
+        "passed": true
+      },
+      "provenanceRewrite": {
+        "passed": true
+      },
+      "evidenceQuality": {
+        "passed": true
+      },
+      "carrierConsistency": {
+        "passed": true
+      },
+      "proseStyle": {
+        "passed": true
+      },
+      "imageGate": {
+        "passed": true
+      },
+      "travelogueDensity": {
+        "passed": true
+      },
+      "crossArticleSimilarity": {
+        "passed": true
+      },
+      "sectionShape": {
+        "passed": true
+      },
+      "generatorProvenance": {
+        "passed": true
+      },
+      "factTraceability": {
+        "passed": true
+      },
+      "baseDraftFidelity": {
+        "passed": true
+      },
+      "writingIntentConsistency": {
+        "passed": true
+      },
+      "registerMismatch": {
+        "passed": true
+      },
+      "contactInfo": {
+        "passed": true
+      },
+      "mechanicalHeading": {
+        "passed": true
+      },
+      "creativeGovernance": {
+        "passed": true
+      }
+    }
+  }
+}

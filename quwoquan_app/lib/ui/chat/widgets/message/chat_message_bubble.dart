@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/conversation/message_bubble_frame.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
 
 /// 聊天气泡最大宽度（语义尺寸，多屏适配由布局约束决定）
@@ -170,12 +171,13 @@ class ChatMessageBubble extends StatelessWidget {
           : message.thumbnailUrl;
       contentWidget = ClipRRect(
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        child: Image.network(
-          imageUrl,
+        child: AppCachedNetworkImage(
+          imageUrl: imageUrl,
           width: chatBubbleImageSize,
           height: chatBubbleImageSize,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => Container(
+          cdnPreset: CdnImagePreset.inline,
+          errorWidget: Container(
             width: chatBubbleImageSize,
             height: chatBubbleImageSize,
             color: bubbleColor,
@@ -279,12 +281,13 @@ class ChatMessageBubble extends StatelessWidget {
               alignment: Alignment.center,
               children: [
                 if (previewUrl.isNotEmpty)
-                  Image.network(
-                    previewUrl,
+                  AppCachedNetworkImage(
+                    imageUrl: previewUrl,
                     width: effectiveMaxWidth * 0.86,
                     height: AppSpacing.twoHundredTwenty,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
+                    cdnPreset: CdnImagePreset.cover,
+                    errorWidget: Container(
                       width: effectiveMaxWidth * 0.86,
                       height: AppSpacing.twoHundredTwenty,
                       color: bubbleColor.withValues(alpha: 0.24),

@@ -109,6 +109,48 @@ def _link_spans(body: str) -> list[tuple[int, int]]:
     return sorted(set(spans))
 
 
+def _entity_name_from_ref(ref: str) -> str:
+    parts = [p for p in normalize_link_ref(ref).replace("/entity/", "").split("/") if p]
+    return parts[-1] if len(parts) >= 3 else ""
+
+
+def _clean_existing_entity_links(body: str, dictionary: Mapping[str, str]) -> str:
+    """Normalize existing agent-authored entity links before mechanical annotation.
+
+    The publish gate requires link text to equal the canonical entity name.  If
+    the agent wrote an alias link to a grounded ref, canonicalize the label; if
+    it linked an entity outside the dictionary, strip the link and keep text.
+    """
+    if not dictionary or "/entity/" not in body:
+        return body
+    grounded_refs = {normalize_link_ref(ref) for ref in dictionary.values()}
+    links = _iter_markdown_links(body)
+    if not links:
+        return body
+    out: list[str] = []
+    cursor = 0
+    changed = False
+    for start, end, label, href in links:
+        out.append(body[cursor:start])
+        cursor = end
+        if not href.startswith("/entity/"):
+            out.append(body[start:end])
+            continue
+        ref = normalize_link_ref(href)
+        if ref not in grounded_refs:
+            out.append(label)
+            changed = True
+            continue
+        canonical = _entity_name_from_ref(ref)
+        if canonical and label != canonical:
+            out.append(f"[{canonical}]({ref})")
+            changed = True
+        else:
+            out.append(body[start:end])
+    out.append(body[cursor:])
+    return "".join(out) if changed else body
+
+
 def build_entity_dictionary(
     task_id: str,
     batch_id: str,
@@ -155,6 +197,7 @@ def merge_entity_refs(brief: Mapping[str, Any], draft_meta: Mapping[str, Any] | 
 def annotate_inline(article: str, dictionary: Mapping[str, str]) -> tuple[str, set[str]]:
     """把正文里候选实体首次出现处机械标成 inline 链接（幂等、不动 frontmatter、不嵌套已有链接）。"""
     frontmatter, body = _split_frontmatter(article)
+    body = _clean_existing_entity_links(body, dictionary)
     already = {ref for _, ref in parse_entity_links(body)}
     annotated: set[str] = set(already)
     # 长名优先，避免「九寨沟沟口」中先标短名造成嵌套/截断。

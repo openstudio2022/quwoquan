@@ -68,7 +68,13 @@ lint:
 verify-metadata:
 	go run ./tools/verify_metadata/ contracts/metadata
 
-codegen: codegen-content-service codegen-circle-service codegen-storage codegen-rec-model-python codegen-rec-policy codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-content-service codegen-circle-service codegen-storage codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+
+codegen-rec-intersection:
+	go run ./tools/codegen_rec_intersection --metadata-dir contracts/metadata --output-dir services/content-service/internal/generated
+
+codegen-impact:
+	go run ./tools/codegen_impact --metadata-dir contracts/metadata --output-dir runtime/impact
 
 codegen-app:
 	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service --rtc-service-dir ./services/rtc-service --chat-service-dir ./services/chat-service --user-service-dir ./services/user-service

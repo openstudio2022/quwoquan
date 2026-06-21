@@ -383,15 +383,6 @@ journey_scenarios:
       - mockRepo.lastCommentText == "这张图真漂亮"
       - find.text("4") findsOneWidget (commentCount +1)
 
-  - name: article_inline_comment_journey
-    dart_func: testArticleInlineCommentJourney
-    description: 平铺文章点击评论入口滚动到内联评论区
-    mock_config: {}
-    fixture_seed: { contentType: article, id: "post_article_inline_001", commentCount: 12 }
-    assertions:
-      - InlineArticleCommentSection is visible after tapping comment action
-      - no modal route is pushed
-
   - name: immersive_comment_split_journey
     dart_func: testImmersiveCommentSplitJourney
     description: 图片/视频/翻页文章点击评论入口进入内容上压分屏

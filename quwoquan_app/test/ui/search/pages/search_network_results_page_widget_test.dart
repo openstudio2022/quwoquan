@@ -406,7 +406,7 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('circle.group 远端返回空结果'), findsOneWidget);
+    expect(find.text(UITextConstants.searchPartialGroupFailed), findsOneWidget);
   });
 
   testWidgets('内容类型筛选可驱动网络结果页加载指定内容结果', (tester) async {
@@ -689,7 +689,10 @@ class _IntersectionContractSearchRepository implements SearchRepository {
   Future<SearchResponse> search(SearchRequest request) async {
     final normalized = request.normalized();
     if (!normalized.objectTypes.contains(SearchObjectType.contentPost)) {
-      return SearchResponse(request: normalized, sections: const <SearchSection>[]);
+      return SearchResponse(
+        request: normalized,
+        sections: const <SearchSection>[],
+      );
     }
     PostSearchItemView item(Map<String, dynamic> map) =>
         PostSearchItemView.fromMap(map);

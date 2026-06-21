@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "/entity/地点/景区/稻城亚丁",
+  "articleSource": "4.draft/page.md",
+  "draftArticleRef": "4.draft/page.md",
+  "finalArticleRef": "page.md",
+  "composeSnapshotRef": null,
+  "draftSha256": "sha256:66756fe2112d5d7c711e181b8106cd4ad86e3c09a5719616c10986e06f53f2f0",
+  "finalSha256": "sha256:66756fe2112d5d7c711e181b8106cd4ad86e3c09a5719616c10986e06f53f2f0",
+  "draftBodySha256": "sha256:66756fe2112d5d7c711e181b8106cd4ad86e3c09a5719616c10986e06f53f2f0",
+  "finalBodySha256": "sha256:66756fe2112d5d7c711e181b8106cd4ad86e3c09a5719616c10986e06f53f2f0",
+  "composeSnapshotSha256": null,
+  "composeSnapshotMatchesDraft": null,
+  "frontmatterInjected": false,
+  "frontmatterChanged": false,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": false,
+  "normalizationActions": [
+    "entity_homepage_draft_materialized"
+  ]
+}

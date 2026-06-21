@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -141,6 +142,19 @@ class ImageVerdict:
             "reasons": list(self.reasons),
             "backends": list(self.backends),
         }
+
+    @classmethod
+    def from_dict(cls, data: dict, *, path: str = "") -> "ImageVerdict":
+        return cls(
+            path=path or str(data.get("path") or ""),
+            status=str(data.get("status") or STATUS_NEEDS_REVIEW),
+            faces=int(data.get("faces") if data.get("faces") is not None else -1),
+            has_watermark=bool(data.get("hasWatermark")),
+            text_area_ratio=float(data.get("textAreaRatio") or 0.0),
+            ocr_text=str(data.get("ocrText") or ""),
+            reasons=tuple(str(item) for item in (data.get("reasons") or [])),
+            backends=tuple(str(item) for item in (data.get("backends") or [])),
+        )
 
 
 def backend_status() -> dict[str, bool]:
@@ -450,6 +464,83 @@ def assess_image(path: str | Path, *, require_ocr: bool = True) -> ImageVerdict:
     )
     if content_hash:
         _ASSESS_CACHE[cache_key] = verdict
+    return verdict
+
+
+def _persistent_cache_key(content_hash: str, *, require_ocr: bool, backends: tuple[str, ...]) -> str:
+    payload = {
+        "contentHash": content_hash,
+        "requireOcr": bool(require_ocr),
+        "backends": list(backends),
+        "maxAssessPixels": int(MAX_ASSESS_PIXELS),
+        "ocrMaxPixels": int(OCR_MAX_PIXELS),
+        "ocrTimeoutSeconds": int(OCR_TIMEOUT_SECONDS),
+        "textHeavyRatio": float(TEXT_HEAVY_RATIO),
+        "ocrMinConf": int(_OCR_MIN_CONF),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _persistent_cache_path(cache_dir: Path, key: str) -> Path:
+    return cache_dir / key[:2] / f"{key}.json"
+
+
+def assess_image_cached(
+    path: str | Path,
+    *,
+    cache_dir: str | Path | None = None,
+    require_ocr: bool = True,
+) -> ImageVerdict:
+    """Assess image with a process-independent sha256 cache.
+
+    The cache stores verdicts keyed by image bytes and active gate settings, so
+    retries and later workflow stages can reuse expensive CV/OCR results
+    without weakening the safety decision.
+    """
+    p = Path(path)
+    if cache_dir is None:
+        return assess_image(p, require_ocr=require_ocr)
+    if not p.is_file():
+        return assess_image(p, require_ocr=require_ocr)
+    try:
+        content_hash = hashlib.sha256(p.read_bytes()).hexdigest()
+    except Exception:
+        return assess_image(p, require_ocr=require_ocr)
+    if not content_hash:
+        return assess_image(p, require_ocr=require_ocr)
+    backends = _active_backends()
+    cache_path = _persistent_cache_path(
+        Path(cache_dir),
+        _persistent_cache_key(content_hash, require_ocr=require_ocr, backends=backends),
+    )
+    if cache_path.is_file():
+        try:
+            data = json.loads(cache_path.read_text(encoding="utf-8"))
+            if str(data.get("schemaVersion") or "") == "quwoquan.image_safety_verdict_cache":
+                return ImageVerdict.from_dict(data.get("verdict") or {}, path=str(p))
+        except Exception:
+            pass
+    verdict = assess_image(p, require_ocr=require_ocr)
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": "quwoquan.image_safety_verdict_cache",
+                    "contentHash": content_hash,
+                    "requireOcr": bool(require_ocr),
+                    "verdict": verdict.to_dict(),
+                },
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
     return verdict
 
 

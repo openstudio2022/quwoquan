@@ -13,9 +13,11 @@ type UserProfile struct {
 	AnonymousRetentionPolicy string    `json:"anonymousRetentionPolicy" db:"anonymous_retention_policy"`
 	Phone                    string    `json:"-" db:"phone"`
 	Nickname                 string    `json:"nickname" db:"nickname"`
+	NicknameCustomized       bool      `json:"nicknameCustomized" db:"nickname_customized"`
 	AvatarURL                string    `json:"avatarUrl" db:"avatar_url"`
 	AvatarAssetID            string    `json:"avatarAssetId" db:"avatar_asset_id"`
 	AvatarVersion            int       `json:"avatarVersion" db:"avatar_version"`
+	BackgroundURL            string    `json:"backgroundUrl" db:"background_url"`
 	Bio                      string    `json:"bio" db:"bio"`
 	IdentityTags             string    `json:"identityTags" db:"identity_tags"`
 	Gender                   string    `json:"gender" db:"gender"`

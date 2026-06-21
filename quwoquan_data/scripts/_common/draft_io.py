@@ -3,11 +3,14 @@
 produce 过程产物挂在内容对象目录下（经 `_common.content_object` 路由解析）：
   3.compose/writing_pack.json —— CLI prepare 产出的最小写作契约（证据/图/事实/约束）
   4.draft/prompt.md           —— 给会话模型的人类可读写作指令
-  4.draft/draft.article.md    —— 会话模型创作的正文（prepare 阶段先写占位）
+  4.draft/draft.article.md    —— 文章/主页类会话模型创作的正文（prepare 阶段先写占位）
   4.draft/draft_meta.json     —— 出处元数据（generator/model/citedSourcePaths/coveredFacts）
   4.draft/assets/             —— 草稿可引用资产包（只放必要物理文件）
 
-generator 只有 'agent' 能进入交付面；'template'（脚本拼接）与 'pending'（未创作）被门禁拒绝。
+图片作品是结构化 sourceCollection/assets/title/caption 证据包，不生成 draft.article.md。
+
+generator 只有 'agent' 能进入文章/主页交付面；图片作品使用 'image_evidence_pack'。
+'template'（脚本拼接）与 'pending'（未创作）被门禁拒绝。
 """
 from __future__ import annotations
 
@@ -18,11 +21,12 @@ from typing import Any, Sequence
 
 from _common.article_package import compute_document_sha256, sha256_file, sha256_text
 from _common.io import read_json, write_json
-from _common.paths import STAGE_COMPOSE, STAGE_DRAFT
+from _common.paths import STAGE_COMPOSE, STAGE_DRAFT, batch_root
 
 GENERATOR_AGENT = "agent"
 GENERATOR_TEMPLATE = "template"
 GENERATOR_PENDING = "pending"
+GENERATOR_IMAGE_EVIDENCE = "image_evidence_pack"
 
 PLACEHOLDER_MARKER = "<!-- QWQ_AWAITING_AGENT_DRAFT -->"
 DRAFT_ARTICLE_FILE = "draft.article.md"
@@ -134,6 +138,39 @@ def write_placeholder_draft(task_id: str, batch_id: str, ref: str) -> None:
     )
 
 
+def write_image_evidence_draft(
+    task_id: str,
+    batch_id: str,
+    ref: str,
+    *,
+    selected_asset_ids: Sequence[str] | None = None,
+    cited_source_paths: Sequence[str] | None = None,
+) -> None:
+    """图片作品的结构化草稿元数据；主动删除旧正文草稿，避免载体混用。"""
+
+    article = draft_article_path(task_id, batch_id, ref)
+    article.parent.mkdir(parents=True, exist_ok=True)
+    if article.exists():
+        article.unlink()
+    existing_meta = read_draft_meta(task_id, batch_id, ref) or {}
+    created_at = _normalized_iso(existing_meta.get("createdAt")) or _now_iso()
+    now_iso = _now_iso()
+    write_json(
+        draft_meta_path(task_id, batch_id, ref),
+        {
+            "ref": ref,
+            "generator": GENERATOR_IMAGE_EVIDENCE,
+            "model": None,
+            "citedSourcePaths": list(cited_source_paths or []),
+            "coveredFacts": [],
+            "selectedAssetIds": list(selected_asset_ids or []),
+            "articleContract": "structured_image_only",
+            "createdAt": created_at,
+            "updatedAt": now_iso,
+        },
+    )
+
+
 def read_draft_article(task_id: str, batch_id: str, ref: str) -> str | None:
     path = draft_article_path(task_id, batch_id, ref)
     return path.read_text(encoding="utf-8") if path.exists() else None
@@ -172,12 +209,14 @@ def read_draft_meta(task_id: str, batch_id: str, ref: str) -> dict[str, Any] | N
     return read_json(path) if path.exists() else None
 
 
-def _source_bundle_sha256(cited_source_paths: Sequence[str]) -> str | None:
+def _source_bundle_sha256(cited_source_paths: Sequence[str], *, base_dir: Path | None = None) -> str | None:
     if not cited_source_paths:
         return None
     bundle = []
     for raw in cited_source_paths:
         path = Path(str(raw))
+        if not path.is_absolute() and base_dir is not None:
+            path = base_dir / path
         if not path.is_file():
             continue
         bundle.append({"path": str(raw), "sha256": sha256_file(path)})
@@ -203,7 +242,7 @@ def compute_draft_provenance_facts(
     return {
         "promptSha256": prompt_digest,
         "writingPackSha256": writing_pack_digest,
-        "sourceBundleSha256": _source_bundle_sha256(cited_source_paths),
+        "sourceBundleSha256": _source_bundle_sha256(cited_source_paths, base_dir=batch_root(task_id, batch_id)),
         "draftSha256": compute_document_sha256(article_markdown),
     }
 
@@ -221,6 +260,7 @@ def write_agent_draft(
     agent_run_id: str | None = None,
     agent_id: str | None = None,
     extracted_entities: Sequence[dict[str, Any]] | None = None,
+    extracted_tags: Sequence[dict[str, Any]] | None = None,
     style_family: str | None = None,
     opening_strategy: str | None = None,
     creative_plan: dict[str, Any] | None = None,
@@ -230,6 +270,8 @@ def write_agent_draft(
 
     extracted_entities: 正文中挖掘出的专有实体，形如 [{"name":"洛绒牛场","type":"自然景观","evidenceRef":"..."}]，
     供 produce review 生成实体 sidecar / 关联实体主页。
+    extracted_tags: 正文中命中的标签，形如 [{"label":"晨雾","dimensionId":"摄影"}]，供 review 生成 tag
+    semantic mention（已发布标签→published 可点击；未发布→pending_review 进治理），与实体同链路回填 manifest。
     style_family / opening_strategy: agent 按原文体裁+证据自选的最终文风族与开篇策略 id，
     供 review 开篇门按所选 styleFamily 的 allowedOpenings markers 语义化校验，避免千篇一律开头。
     """
@@ -281,6 +323,7 @@ def write_agent_draft(
             "citedSourcePaths": list(cited_source_paths),
             "coveredFacts": list(covered_facts),
             "extractedEntities": list(extracted_entities or []),
+            "extractedTags": list(extracted_tags or []),
             "creativePlan": creative_plan,
             "selfCritique": self_critique,
             "promptSha256": facts.get("promptSha256"),

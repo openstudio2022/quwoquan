@@ -3,11 +3,15 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _TestUserProfileRepository extends MockUserProfileRepository {
   int followCalls = 0;
@@ -110,6 +114,25 @@ class _FailingUserProfileRepository extends MockUserProfileRepository {
   }
 }
 
+class _CountingProfileContentRepository extends MockContentRepository {
+  int listUserPostsCalls = 0;
+
+  @override
+  Future<CursorPage<PostBaseDto>> listUserPosts({
+    required String userId,
+    String? identity,
+    String? type,
+    String? cursor,
+    int limit = 20,
+  }) async {
+    listUserPostsCalls += 1;
+    return CursorPage<PostBaseDto>(
+      items: <PostBaseDto>[_profilePostDto('content_repo_post')],
+      nextCursor: null,
+    );
+  }
+}
+
 void main() {
   late Directory tempDir;
 
@@ -122,6 +145,7 @@ void main() {
   });
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     if (Hive.isBoxOpen('client_interaction_state')) {
       await Hive.box<String>('client_interaction_state').clear();
       return;
@@ -146,6 +170,7 @@ void main() {
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _TestRelationshipCapabilityRepository(),
         ),
+        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -204,6 +229,7 @@ void main() {
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _TestRelationshipCapabilityRepository(),
         ),
+        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -221,6 +247,34 @@ void main() {
     expect(profileState.capability?.relationState, 'not_following');
   });
 
+  test('作者主页会跟随共享关系态变化刷新关注展示', () async {
+    final container = ProviderContainer(
+      overrides: [
+        userProfileRepositoryProvider.overrideWithValue(
+          _TestUserProfileRepository(),
+        ),
+        relationshipCapabilityRepositoryProvider.overrideWithValue(
+          _TestRelationshipCapabilityRepository(),
+        ),
+        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(profileNotifierProvider('profile-1').notifier);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+
+    container
+        .read(userRelationshipStateProvider.notifier)
+        .setFollowing('profile-1', true);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+
+    final profileState = container.read(profileNotifierProvider('profile-1'));
+    expect(profileState.isFollowing, isTrue);
+    expect(profileState.displayCapability?.relationState, 'following');
+  });
+
   test('loadProfile 一次聚合 bundle：提供关系能力后不再串行 getCapability', () async {
     final capRepo = _CountingRelationshipCapabilityRepository();
     final container = ProviderContainer(
@@ -229,6 +283,7 @@ void main() {
           _TestUserProfileRepository(),
         ),
         relationshipCapabilityRepositoryProvider.overrideWithValue(capRepo),
+        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -247,6 +302,30 @@ void main() {
     expect(capRepo.getCapabilityCalls, 0);
   });
 
+  test('loadProfile 的作品列表经 ContentRepository 读取以复用 query snapshot', () async {
+    final contentRepo = _CountingProfileContentRepository();
+    final container = ProviderContainer(
+      overrides: [
+        userProfileRepositoryProvider.overrideWithValue(
+          _TestUserProfileRepository(),
+        ),
+        contentRepositoryProvider.overrideWithValue(contentRepo),
+        relationshipCapabilityRepositoryProvider.overrideWithValue(
+          _TestRelationshipCapabilityRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(profileNotifierProvider('profile-1').notifier);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+
+    final s = container.read(profileNotifierProvider('profile-1'));
+    expect(contentRepo.listUserPostsCalls, 1);
+    expect(s.creations.single.id, 'content_repo_post');
+  });
+
   test('loadProfile 失败进入结构化错误态：errorMessage 非空且不静默', () async {
     final container = ProviderContainer(
       overrides: [
@@ -256,6 +335,7 @@ void main() {
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _TestRelationshipCapabilityRepository(),
         ),
+        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -269,5 +349,26 @@ void main() {
     expect(s.hasLoadError, isTrue);
     expect(s.errorMessage, isNotNull);
     expect(s.errorMessage, isNotEmpty);
+  });
+}
+
+PostBaseDto _profilePostDto(String id) {
+  return postBaseDtoFromMap(<String, dynamic>{
+    'postId': id,
+    'id': id,
+    '_id': id,
+    'contentType': 'micro',
+    'contentIdentity': 'moment',
+    'identity': 'moment',
+    'authorId': 'profile-1',
+    'displayName': '展示名',
+    'avatarUrl': '',
+    'body': '个人作品缓存内容',
+    'mediaUrls': <String>[],
+    'likeCount': 0,
+    'commentCount': 0,
+    'shareCount': 0,
+    'createdAt': '2026-05-19T00:00:00.000Z',
+    'updatedAt': '2026-05-19T00:00:00.000Z',
   });
 }

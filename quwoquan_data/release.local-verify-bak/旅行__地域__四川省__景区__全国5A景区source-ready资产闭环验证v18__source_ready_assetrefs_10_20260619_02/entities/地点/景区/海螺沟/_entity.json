@@ -1,0 +1,60 @@
+{
+  "label": "海螺沟",
+  "domain": "地点",
+  "type": "景区",
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "entityRef": "/entity/地点/景区/海螺沟",
+  "summary": "海螺沟冰川位于中国四川省甘孜藏族自治州泸定县境内，磨西镇旁，距离成都西南380多公里，是国家5A级景区。",
+  "conditionProfile": {
+    "regions": [
+      "高原",
+      "雪山",
+      "山地森林"
+    ],
+    "seasons": [
+      "春",
+      "秋"
+    ],
+    "evidenceRefs": [
+      {
+        "field": "regions",
+        "value": "高原",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "海螺沟 主页正文概况与空间特征归纳"
+      },
+      {
+        "field": "regions",
+        "value": "雪山",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "海螺沟 主页正文概况与空间特征归纳"
+      },
+      {
+        "field": "regions",
+        "value": "山地森林",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "海螺沟 主页正文概况与空间特征归纳"
+      },
+      {
+        "field": "seasons",
+        "value": "春",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "海螺沟 主页正文季节与游览信息归纳"
+      },
+      {
+        "field": "seasons",
+        "value": "秋",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "海螺沟 主页正文季节与游览信息归纳"
+      }
+    ]
+  },
+  "sourceRefs": [
+    "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/source.md"
+  ]
+}

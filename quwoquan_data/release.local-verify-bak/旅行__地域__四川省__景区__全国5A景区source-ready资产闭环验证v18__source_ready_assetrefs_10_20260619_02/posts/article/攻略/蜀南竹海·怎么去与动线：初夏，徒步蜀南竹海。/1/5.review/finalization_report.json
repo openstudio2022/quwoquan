@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "蜀南竹海_route_transport",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:7b08da4399fe9b0266b103121c310e79149a1834c0730b31c18db3a18ad85bbb",
+  "finalSha256": "sha256:a2a75e8eebb745efc87e7ed85d211035a3d5b1693b4798e90bebebe68e63cd89",
+  "draftBodySha256": "sha256:7b08da4399fe9b0266b103121c310e79149a1834c0730b31c18db3a18ad85bbb",
+  "finalBodySha256": "sha256:7b08da4399fe9b0266b103121c310e79149a1834c0730b31c18db3a18ad85bbb",
+  "composeSnapshotSha256": "sha256:7b08da4399fe9b0266b103121c310e79149a1834c0730b31c18db3a18ad85bbb",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

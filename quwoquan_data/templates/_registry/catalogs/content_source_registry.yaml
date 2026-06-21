@@ -43,6 +43,46 @@ allowedValues:
     - maxPagesPerDay
     - crawlAllowed
 
+# 来源专业度先验（作品 vs 随记判定的来源侧信号）。
+# baseTier ∈ tier1..tier5；worksAffinity ∈ work_strong/work/neutral/moment/reject。
+# 判定权重在 works_classification.yaml；此处只声明"来源类别 → 专业度先验"映射（单一真相源）。
+# 缺失 sourceClass 走 default；内容实测信号(score_source_markdown/结构/图片)会进一步调整。
+sourceTierSignals:
+  version: 1
+  default:
+    baseTier: tier4_casual
+    worksAffinity: neutral
+  bySourceClass:
+    encyclopedia: { baseTier: tier1_authoritative, worksAffinity: work_strong }
+    knowledge_graph: { baseTier: tier1_authoritative, worksAffinity: work_strong }
+    official_site: { baseTier: tier1_authoritative, worksAffinity: work_strong }
+    government_tourism: { baseTier: tier1_authoritative, worksAffinity: work }
+    official_article: { baseTier: tier2_professional, worksAffinity: work }
+    authoritative_media: { baseTier: tier2_professional, worksAffinity: work }
+    vertical_professional: { baseTier: tier2_professional, worksAffinity: work }
+    media_article: { baseTier: tier2_professional, worksAffinity: work }
+    ugc_longform: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
+    community_post: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
+    platform_article: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
+    open_license_media: { baseTier: tier2_professional, worksAffinity: work }
+    photography_community: { baseTier: tier2_professional, worksAffinity: work }
+    free_stock: { baseTier: tier3_quality_ugc, worksAffinity: work }
+    commercial_stock: { baseTier: tier2_professional, worksAffinity: work }
+    visual_discovery_platform: { baseTier: tier4_casual, worksAffinity: neutral }
+    domestic_stock: { baseTier: tier3_quality_ugc, worksAffinity: work }
+    official_gallery: { baseTier: tier1_authoritative, worksAffinity: work }
+    museum_open_access: { baseTier: tier1_authoritative, worksAffinity: work }
+    vertical_image_platform: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
+    guidebook: { baseTier: tier2_professional, worksAffinity: work }
+    route_platform: { baseTier: tier3_quality_ugc, worksAffinity: work }
+    review_note: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
+    video_platform: { baseTier: tier4_casual, worksAffinity: neutral }
+    vertical_video: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
+    stock_video: { baseTier: tier3_quality_ugc, worksAffinity: work }
+    social_feed: { baseTier: tier4_casual, worksAffinity: moment }
+    microblog: { baseTier: tier4_casual, worksAffinity: moment }
+    short_video_feed: { baseTier: tier4_casual, worksAffinity: moment }
+
 lanePolicies:
   homepage:
     maxCoreSources: 5
@@ -291,6 +331,15 @@ common:
       rightsPolicy: creator_authorization_required
       rateLimit: conservative
       promptFacts: [摄影社区, 适合作品发现和授权洽谈]
+    - sourceId: behance
+      platform: Behance
+      sourceClass: photography_community
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: search
+      rightsPolicy: creator_authorization_required
+      rateLimit: conservative
+      promptFacts: [摄影与视觉作品社区, 适合作品发现和创作者授权洽谈, 必须逐图取得作者授权并保留署名和作品落地页]
     - sourceId: unsplash
       platform: Unsplash
       sourceClass: free_stock
@@ -363,6 +412,42 @@ common:
       rightsPolicy: commercial_license_required
       rateLimit: conservative
       promptFacts: [商业图库, 必须有购买或授权凭证]
+    - sourceId: depositphotos
+      platform: Depositphotos
+      sourceClass: commercial_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [商业图库, 必须有购买或授权凭证, 逐图记录授权范围、署名和落地页]
+    - sourceId: dreamstime
+      platform: Dreamstime
+      sourceClass: commercial_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [商业图库, 必须有购买或授权凭证, 逐图记录授权范围、署名和落地页]
+    - sourceId: one_two_three_rf
+      platform: 123RF
+      sourceClass: commercial_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [商业图库, 必须有购买或授权凭证, 逐图记录授权范围、署名和落地页]
+    - sourceId: stocksy
+      platform: Stocksy
+      sourceClass: commercial_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [高端正版商业图库, 必须有购买或授权凭证, 逐图记录授权范围、署名和落地页]
     - sourceId: tuchong
       platform: 图虫
       sourceClass: photography_community
@@ -399,6 +484,42 @@ common:
       rightsPolicy: commercial_license_required
       rateLimit: conservative
       promptFacts: [国内正版图库, 必须记录授权凭证]
+    - sourceId: shetuwang
+      platform: 摄图网
+      sourceClass: domestic_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [国内图库, 区分免费与付费授权, 逐图记录授权凭证、署名和落地页]
+    - sourceId: the_met
+      platform: The Met
+      sourceClass: museum_open_access
+      lanes: [image]
+      defaultRole: publish_candidate
+      fetchMode: api
+      rightsPolicy: open_license_required
+      rateLimit: conservative
+      promptFacts: [大都会博物馆开放获取图像, 逐图记录开放许可、机构署名和文件落地页]
+    - sourceId: rijksmuseum
+      platform: Rijksmuseum
+      sourceClass: museum_open_access
+      lanes: [image]
+      defaultRole: publish_candidate
+      fetchMode: api
+      rightsPolicy: open_license_required
+      rateLimit: conservative
+      promptFacts: [荷兰国立博物馆开放获取图像, 逐图记录开放许可、机构署名和文件落地页]
+    - sourceId: smithsonian_open_access
+      platform: Smithsonian Open Access
+      sourceClass: museum_open_access
+      lanes: [image]
+      defaultRole: publish_candidate
+      fetchMode: api
+      rightsPolicy: open_license_required
+      rateLimit: conservative
+      promptFacts: [史密森尼开放获取图像, 逐图记录开放许可、机构署名和文件落地页]
   video:
     - sourceId: youtube
       platform: YouTube

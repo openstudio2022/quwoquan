@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "九寨沟_seasonal_timing",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "九寨沟·什么时候去最好：川西游",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-63fe2eed-351c-4cf0-9b6a-f1dec9cfc131",
+    "agentId": "agent-dac9519b-c98e-4070-af01-5c1a5dc311cf",
+    "sessionTrace": null,
+    "styleFamily": "客观评测风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/九寨沟"
+    ],
+    "articleDigest": "sha256:e3348a86e81fd4e2aeaf5a17457c2829c68c58b944baa9b49df37597e19a5a71"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "九寨沟·什么时候去最好：川西游",
+    "styleFamily": "",
+    "promptSha256": "sha256:2764dcfc89de492545ac7a68156705c6b8ebcb4cacf0d2326c160750025ebdaa",
+    "writingPackSha256": "sha256:b1362746319decaf8359357fb2256ac2d2b8d2f68b1723caead6f27f86c15fca",
+    "sourceBundleSha256": "sha256:49102053302ff11c2a8e2e1ce6829a2ecb8aff4d94f1712d65398505a16784f2",
+    "draftSha256": "sha256:927fd4cdc6646d4e0cc8b346ffe785da98696de40d2ad06d163329cd61b9a7ff"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/source.md",
+      "url": "https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/03.home_official/source.md",
+      "url": "http://www.jiuzhai.com"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/04.article_qunar_base_1/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7893753"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/05.article_qunar_base_2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7871161"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/06.article_qunar_base_3/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7870085"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/07.article_qunar_base_4/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7869030"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/08.article_qunar_base_5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7866343"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/09.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7861638"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/10.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7858912"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/11.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7832005"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/12.article_qunar_base_9/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7825923"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/13.article_qunar_base_10/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7824533"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/14.article_qunar_base_11/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7804490"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/15.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7799473"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/16.article_qunar_base_13/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7784428"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/17.article_qunar_base_14/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7765172"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/18.article_qunar_base_15/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7760059"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/19.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7748135"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/21.article_qunar_review_support/source.md",
+      "url": "https://touch.travel.qunar.com/search?q=%E4%B9%9D%E5%AF%A8%E6%B2%9F"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/22.article_wikivoyage_base/source.md",
+      "url": "https://zh.wikivoyage.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/23.image_open_license_file_九寨沟_httpscommonswikimediaorgwikifilea6e4b99de5afa8e6b29fliuzusai_70d91b61f2/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:A6_%E4%B9%9D%E5%AF%A8%E6%B2%9F_liuzusai_-_panoramio_(3).jpg"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/24.image_open_license_file_九寨沟_httpscommonswikimediaorgwikifilejiuzhaigousichuanchinajiuzha_6522c0932c/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Jiuzhaigou_Sichuan_China_Jiuzhaigou-Valley-02.jpg"
+    },
+    {
+      "path": "entities/地点/景区/九寨沟/1.download/sources/25.image_open_license_file_九寨沟_httpscommonswikimediaorgwikifilejiuzhaigousichuanchinajpg_0ba906f48d/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Jiu_Zhai_Gou,_Sichuan_China.jpg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/九寨沟/1.download/sources/09.article_qunar_base_6/source.md",
+    "entities/地点/景区/九寨沟/1.download/sources/22.article_wikivoyage_base/source.md"
+  ]
+}

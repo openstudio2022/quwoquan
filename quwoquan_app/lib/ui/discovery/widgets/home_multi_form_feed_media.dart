@@ -161,13 +161,18 @@ class _HomeFeedVideoPlaybackState {
 
 class _HomeFeedVideoAutoPlayGate extends StatefulWidget {
   const _HomeFeedVideoAutoPlayGate({
+    required this.videoId,
     required this.scrollSignal,
     required this.hasPlayableSource,
+    required this.onFastScrollSuppressed,
     required this.builder,
   });
 
+  /// 卡片在单活跃视频协调器中的唯一标识（用 post id）。
+  final String videoId;
   final ValueListenable<_HomeFeedVideoScrollSignal> scrollSignal;
   final bool hasPlayableSource;
+  final ValueChanged<Map<String, Object?>> onFastScrollSuppressed;
   final Widget Function(_HomeFeedVideoPlaybackState playback) builder;
 
   @override
@@ -183,6 +188,12 @@ class _HomeFeedVideoAutoPlayGateState
   DateTime? _visibleSince;
   _HomeFeedVideoPlaybackState _playback =
       const _HomeFeedVideoPlaybackState.idle();
+  // 单活跃视频协调器（feed 范围共享）；本地「想初始化/想播放」的意愿缓存，
+  // 仅在协调器授予活跃资格时才真正生效，保证任意时刻 ≤1 个视频解码器存活。
+  HomeFeedVideoFocusCoordinator? _focusCoordinator;
+  bool _localWantsInitialize = false;
+  bool _localWantsAutoPlay = false;
+  DateTime? _lastFastScrollSuppressionLoggedAt;
 
   @override
   void initState() {
@@ -192,13 +203,31 @@ class _HomeFeedVideoAutoPlayGateState
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final coordinator = _HomeFeedVideoFocusScope.maybeOf(context);
+    if (!identical(coordinator, _focusCoordinator)) {
+      _focusCoordinator?.removeListener(_handleFocusChanged);
+      _focusCoordinator = coordinator;
+      _focusCoordinator?.addListener(_handleFocusChanged);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _evaluate();
+      });
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant _HomeFeedVideoAutoPlayGate oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(widget.scrollSignal, oldWidget.scrollSignal)) {
       oldWidget.scrollSignal.removeListener(_handleSignalChanged);
       widget.scrollSignal.addListener(_handleSignalChanged);
     }
-    if (widget.hasPlayableSource != oldWidget.hasPlayableSource) {
+    if (widget.videoId != oldWidget.videoId) {
+      _focusCoordinator?.withdraw(oldWidget.videoId);
+    }
+    if (widget.hasPlayableSource != oldWidget.hasPlayableSource ||
+        widget.videoId != oldWidget.videoId) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _evaluate());
     }
   }
@@ -207,11 +236,19 @@ class _HomeFeedVideoAutoPlayGateState
   void dispose() {
     _recheckTimer?.cancel();
     widget.scrollSignal.removeListener(_handleSignalChanged);
+    _focusCoordinator?.removeListener(_handleFocusChanged);
+    _focusCoordinator?.withdraw(widget.videoId);
     super.dispose();
   }
 
   void _handleSignalChanged() {
     _evaluate();
+  }
+
+  void _handleFocusChanged() {
+    // 协调器活跃卡片变化：仅据缓存的本地意愿 + 是否活跃刷新播放态，不重新申报，
+    // 避免 report -> notify -> report 的反馈环。
+    _applyFocus();
   }
 
   void _evaluate() {
@@ -269,18 +306,40 @@ class _HomeFeedVideoAutoPlayGateState
         timeSinceHighVelocity >= homeFeedVideoFastScrollCooldown &&
         signal.velocityPxPerSecond.abs() <=
             homeFeedVideoFastScrollVelocityPxPerSecond;
+    final fastScrollSuppressed = shouldSuppressHomeFeedVideoFastScroll(
+      HomeFeedVideoFastScrollSuppressionInput(
+        hasPlayableSource: widget.hasPlayableSource,
+        visibleFraction: visibleFraction,
+        prewarmStableVisibleDuration: prewarmStableDuration,
+        scrollVelocityPxPerSecond: signal.velocityPxPerSecond,
+        timeSinceHighVelocity: timeSinceHighVelocity,
+      ),
+    );
+    if (!canStartInitialize && fastScrollSuppressed) {
+      _recordFastScrollSuppressed(
+        visibleFraction: visibleFraction,
+        velocityPxPerSecond: signal.velocityPxPerSecond,
+        cooldownRemaining:
+            homeFeedVideoFastScrollCooldown - timeSinceHighVelocity,
+      );
+    }
     final shouldRetainInitialized =
         _playback.initialize &&
         widget.hasPlayableSource &&
         visibleFraction >= homeFeedVideoRetainInitializedMinVisibleFraction;
-    final nextPlayback = _HomeFeedVideoPlaybackState(
-      initialize: nextAutoPlay || canStartInitialize || shouldRetainInitialized,
-      autoPlay: nextAutoPlay,
-    );
-    if (nextPlayback.initialize != _playback.initialize ||
-        nextPlayback.autoPlay != _playback.autoPlay) {
-      setState(() => _playback = nextPlayback);
+    // 本地是否「想初始化/想播放」——最终是否真正初始化/播放，由协调器单活跃仲裁决定。
+    _localWantsInitialize =
+        nextAutoPlay || canStartInitialize || shouldRetainInitialized;
+    _localWantsAutoPlay = nextAutoPlay;
+    final coordinator = _focusCoordinator;
+    if (coordinator != null) {
+      if (_localWantsInitialize) {
+        coordinator.report(widget.videoId, visibleFraction);
+      } else {
+        coordinator.withdraw(widget.videoId);
+      }
     }
+    _applyFocus();
     if (!nextAutoPlay && isPrewarmVisible && widget.hasPlayableSource) {
       final stableRemaining =
           homeFeedVideoAutoPlayMinStableVisibleDuration - stableDuration;
@@ -299,6 +358,43 @@ class _HomeFeedVideoAutoPlayGateState
       if (wait > Duration.zero) {
         _recheckTimer = Timer(wait, _evaluate);
       }
+    }
+  }
+
+  void _recordFastScrollSuppressed({
+    required double visibleFraction,
+    required double velocityPxPerSecond,
+    required Duration cooldownRemaining,
+  }) {
+    final now = DateTime.now();
+    final last = _lastFastScrollSuppressionLoggedAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 1)) {
+      return;
+    }
+    _lastFastScrollSuppressionLoggedAt = now;
+    widget.onFastScrollSuppressed(
+      homeFeedVideoFastScrollSuppressedTelemetryAttributes(
+        videoId: widget.videoId,
+        visibleFraction: visibleFraction,
+        velocityPxPerSecond: velocityPxPerSecond,
+        cooldownRemaining: cooldownRemaining,
+      ),
+    );
+  }
+
+  void _applyFocus() {
+    if (!mounted) return;
+    final coordinator = _focusCoordinator;
+    // 协调器缺失时（理论上不出现于首页 feed）退化为本地判定，保持组件可用。
+    final isActive =
+        coordinator == null || coordinator.isActive(widget.videoId);
+    final nextPlayback = _HomeFeedVideoPlaybackState(
+      initialize: _localWantsInitialize && isActive,
+      autoPlay: _localWantsAutoPlay && isActive,
+    );
+    if (nextPlayback.initialize != _playback.initialize ||
+        nextPlayback.autoPlay != _playback.autoPlay) {
+      setState(() => _playback = nextPlayback);
     }
   }
 
@@ -385,7 +481,8 @@ class _HomeVideoPostCard extends StatelessWidget {
           key: const ValueKey('home-relation-card-media'),
           child: _ConstrainedMediaBox(
             aspectRatio: _mediaAspectRatio(item),
-            maxPortraitWidth: DiscoveryFeedSpacing.homeFeedVideoPortraitMaxWidth,
+            maxPortraitWidth:
+                DiscoveryFeedSpacing.homeFeedVideoPortraitMaxWidth,
             child: _HomeFeedVideoCard(
               dto: item,
               isDark: isDark,
@@ -484,28 +581,65 @@ class _HomeArticlePostCard extends StatelessWidget {
   }
 
   Widget _buildSideImageLayout(BuildContext context, String coverUrl) {
+    final title = item.normalizedTitle;
+    final body = item.normalizedBody;
+    final intersectionRow = _buildPostIntersectionRow(
+      reason: reason,
+      onSpanTap: onSpanTap,
+      onFallbackTap: onFallbackTap,
+      key: const ValueKey('home-article-inline-intersection'),
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         final thumbWidth = min(
-          constraints.maxWidth * DiscoveryFeedSpacing.homeFeedArticleThumbWidthFactor,
+          constraints.maxWidth *
+              DiscoveryFeedSpacing.homeFeedArticleThumbWidthFactor,
           DiscoveryFeedSpacing.homeFeedArticleSideThumbMaxWidth,
         );
-        return Row(
+        return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _ArticleTextBlock(
-                item: item,
-                reason: reason,
-                onSpanTap: onSpanTap,
-                onFallbackTap: onFallbackTap,
+            if (title.isNotEmpty) _PostTitle(title: title, maxLines: 1),
+            if (body.isNotEmpty) ...[
+              if (title.isNotEmpty)
+                const SizedBox(height: AppSpacing.intraGroupSm),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _ArticleBodyPreview(text: body)),
+                  const SizedBox(width: AppSpacing.containerSm),
+                  SizedBox(
+                    key: const ValueKey('home-article-side-thumb'),
+                    width: thumbWidth,
+                    child: AspectRatio(
+                      aspectRatio: DiscoveryFeedSpacing
+                          .homeFeedArticleSideThumbAspectRatio,
+                      child: _ArticleCoverImage(url: coverUrl, isDark: isDark),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: AppSpacing.containerSm),
-            SizedBox(
-              width: thumbWidth,
-              child: _ArticleThumb(url: coverUrl, isDark: isDark),
-            ),
+            ] else ...[
+              if (title.isNotEmpty)
+                const SizedBox(height: AppSpacing.intraGroupSm),
+              Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox(
+                  key: const ValueKey('home-article-side-thumb'),
+                  width: thumbWidth,
+                  child: AspectRatio(
+                    aspectRatio: DiscoveryFeedSpacing
+                        .homeFeedArticleSideThumbAspectRatio,
+                    child: _ArticleCoverImage(url: coverUrl, isDark: isDark),
+                  ),
+                ),
+              ),
+            ],
+            if (intersectionRow != null) ...[
+              if (title.isNotEmpty || body.isNotEmpty)
+                const SizedBox(height: AppSpacing.intraGroupSm),
+              intersectionRow,
+            ],
           ],
         );
       },
@@ -712,17 +846,29 @@ class _ArticleThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     return AspectRatio(
       aspectRatio: aspectRatio ?? AppSpacing.one,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(
-          DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
-        ),
-        child: AppCachedNetworkImage(
-          imageUrl: url,
-          imageUrlCandidates: resolveContentMediaUrlCandidates(url),
-          fit: BoxFit.cover,
-          placeholder: _mediaPlaceholder(isDark),
-          errorWidget: _mediaPlaceholder(isDark),
-        ),
+      child: _ArticleCoverImage(url: url, isDark: isDark),
+    );
+  }
+}
+
+class _ArticleCoverImage extends StatelessWidget {
+  const _ArticleCoverImage({required this.url, required this.isDark});
+
+  final String url;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(
+        DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
+      ),
+      child: AppCachedNetworkImage(
+        imageUrl: url,
+        imageUrlCandidates: resolveContentMediaUrlCandidates(url),
+        fit: BoxFit.cover,
+        placeholder: _mediaPlaceholder(isDark),
+        errorWidget: _mediaPlaceholder(isDark),
       ),
     );
   }
@@ -741,21 +887,19 @@ TextStyle _articleSummaryTextStyle(BuildContext context) {
   return TextStyle(
     fontSize: AppTypography.feedBodyResponsive(context),
     color: AppColors.iosLabel(context),
-    fontWeight: AppTypography.regular,
+    fontWeight: FontWeight.normal,
     height: AppSpacing.textLineHeightBody,
     letterSpacing: -0.08,
   );
 }
 
 double _mediaAspectRatio(PostBaseDto item) {
-  final ratio = item.aspectRatio;
-  if (ratio != null && ratio.isFinite && ratio > 0) {
-    return ratio.clamp(
-      DiscoveryFeedSpacing.homeFeedMediaMinAspectRatio,
-      DiscoveryFeedSpacing.homeFeedMediaMaxAspectRatio,
-    );
-  }
-  return item.hasVideo ? DiscoveryFeedSpacing.homeFeedMediaMaxAspectRatio : 4 / 3;
+  return clampDisplayAspectRatioValue(
+    item.aspectRatio,
+    fallback: item.hasVideo
+        ? kDisplayVideoFallbackAspectRatio
+        : kDisplayFallbackAspectRatio,
+  );
 }
 
 bool _isMomentGridPost(PostBaseDto item) {
@@ -765,7 +909,8 @@ bool _isMomentGridPost(PostBaseDto item) {
 int _momentGridVisibleCount(int total) {
   if (total <= 0) return 0;
   if (total <= 2) return total;
-  if (total <= 4) return total;
+  if (total == 4) return total;
+  if (total == 5) return 3;
   if (total <= 8) return total.clamp(1, 6).toInt();
   return total.clamp(1, 9).toInt();
 }
@@ -872,4 +1017,3 @@ class _ExpandableText extends StatelessWidget {
     );
   }
 }
-

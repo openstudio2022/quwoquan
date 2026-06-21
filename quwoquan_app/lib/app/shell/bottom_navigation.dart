@@ -38,7 +38,7 @@ class BottomNavigationWidget extends ConsumerWidget {
       _BottomDestination(
         label: AppConceptConstants.discovery,
         icon: FluentIcons.home_24_regular,
-        selectedIcon: FluentIcons.home_24_regular,
+        selectedIcon: FluentIcons.home_24_filled,
       ),
       _BottomDestination(
         label: AppConceptConstants.premium,
@@ -54,8 +54,8 @@ class BottomNavigationWidget extends ConsumerWidget {
       ),
       _BottomDestination(
         label: UITextConstants.chatPrimaryContacts,
-        iconBuilder: (color, selected, size) =>
-            AppContactsIcon(size: size, color: color, filled: selected),
+        icon: FluentIcons.chat_multiple_24_regular,
+        selectedIcon: FluentIcons.chat_multiple_24_regular,
       ),
       _BottomDestination(
         label: profileLabel,

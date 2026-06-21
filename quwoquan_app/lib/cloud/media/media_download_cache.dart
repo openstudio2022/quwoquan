@@ -1,9 +1,14 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 
 /// LRU download cache for media files (voice, images, etc.).
 /// Manages local file cache with configurable size limit.
@@ -12,13 +17,21 @@ class MediaDownloadCache {
     http.Client? client,
     int maxCacheSizeMb = 200,
     int maxConcurrentDownloads = 4,
-  })  : _client = client ?? http.Client(),
-        _maxCacheSize = maxCacheSizeMb * 1024 * 1024,
-        _maxConcurrent = maxConcurrentDownloads;
+    Future<String> Function()? cacheDirectoryPathProvider,
+    CacheTelemetrySink telemetrySink = const DeveloperLogCacheTelemetrySink(
+      name: 'MediaDownloadCache',
+    ),
+  }) : _client = client ?? http.Client(),
+       _maxCacheSize = maxCacheSizeMb * 1024 * 1024,
+       _maxConcurrent = maxConcurrentDownloads,
+       _cacheDirectoryPathProvider = cacheDirectoryPathProvider,
+       _telemetrySink = telemetrySink;
 
   final http.Client _client;
   final int _maxCacheSize;
   final int _maxConcurrent;
+  final Future<String> Function()? _cacheDirectoryPathProvider;
+  final CacheTelemetrySink _telemetrySink;
 
   final LinkedHashMap<String, _CacheEntry> _entries =
       LinkedHashMap<String, _CacheEntry>();
@@ -30,8 +43,10 @@ class MediaDownloadCache {
 
   Future<String> get _cachePath async {
     if (_cacheDir != null) return _cacheDir!;
-    final dir = await getTemporaryDirectory();
-    final mediaDir = Directory('${dir.path}/qwq_media_cache');
+    final overridePath = await _cacheDirectoryPathProvider?.call();
+    final mediaDir = overridePath == null
+        ? Directory('${(await getTemporaryDirectory()).path}/qwq_media_cache')
+        : Directory(overridePath);
     if (!mediaDir.existsSync()) {
       await mediaDir.create(recursive: true);
     }
@@ -41,7 +56,11 @@ class MediaDownloadCache {
 
   /// Returns the local file path for a cached URL, downloading if needed.
   Future<String?> getFile(String url) async {
-    final key = _keyFromUrl(url);
+    final normalized = url.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    final key = _keyFromUrl(normalized);
     final entry = _entries.remove(key);
     if (entry != null) {
       _entries[key] = entry..lastAccess = DateTime.now();
@@ -51,7 +70,51 @@ class MediaDownloadCache {
       _currentSize -= entry.fileSize;
     }
 
-    return _download(url);
+    final cachedPath = await getCachedFilePath(normalized);
+    if (cachedPath != null) {
+      return cachedPath;
+    }
+    return _download(normalized);
+  }
+
+  /// Returns a cached local file path without triggering a network download.
+  Future<String?> getCachedFilePath(String url) async {
+    final normalized = url.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    final key = _keyFromUrl(normalized);
+    final entry = _entries.remove(key);
+    if (entry != null) {
+      _entries[key] = entry..lastAccess = DateTime.now();
+      if (File(entry.localPath).existsSync()) {
+        return entry.localPath;
+      }
+      _currentSize -= entry.fileSize;
+      return null;
+    }
+
+    final basePath = await _cachePath;
+    final localPath = '$basePath/$key${_extensionFromUrl(normalized)}';
+    final file = File(localPath);
+    if (!file.existsSync()) {
+      return null;
+    }
+    final fileSize = await file.length();
+    _entries[key] = _CacheEntry(
+      localPath: localPath,
+      fileSize: fileSize,
+      lastAccess: DateTime.now(),
+    );
+    _currentSize += fileSize;
+    _evictIfNeeded();
+    return localPath;
+  }
+
+  /// Returns a cached local file URI without triggering a network download.
+  Future<Uri?> getCachedFileUri(String url) async {
+    final path = await getCachedFilePath(url);
+    return path == null ? null : Uri.file(path);
   }
 
   /// Checks if a URL is already cached locally.
@@ -133,22 +196,42 @@ class MediaDownloadCache {
 
   /// Clears all cached files.
   Future<void> clear() async {
-    for (final entry in _entries.values) {
-      try {
-        File(entry.localPath).deleteSync();
-      } catch (_) {
-        /* best-effort: 清空缓存时删除磁盘文件，个别删除失败不影响内存索引清零 */
+    var clearedBytes = 0;
+    var clearedFiles = 0;
+    try {
+      final dir = Directory(await _cachePath);
+      if (dir.existsSync()) {
+        for (final entity in dir.listSync()) {
+          if (entity is File) {
+            try {
+              if (entity.existsSync()) {
+                clearedBytes += entity.lengthSync();
+              }
+              entity.deleteSync();
+              clearedFiles += 1;
+            } catch (_) {
+              /* best-effort: 清空缓存时删除磁盘文件，个别删除失败不影响内存索引清零 */
+            }
+          }
+        }
       }
+    } catch (_) {
+      return;
+    } finally {
+      _entries.clear();
+      _currentSize = 0;
+      _telemetrySink.record('resource.bytes_cleared', <String, Object?>{
+        'bytes': clearedBytes,
+        'files': clearedFiles,
+      });
     }
-    _entries.clear();
-    _currentSize = 0;
   }
 
   int get cachedFileCount => _entries.length;
   int get currentCacheSizeBytes => _currentSize;
 
   String _keyFromUrl(String url) {
-    return url.hashCode.toRadixString(36);
+    return sha1.convert(utf8.encode(url.trim())).toString();
   }
 
   String _extensionFromUrl(String url) {

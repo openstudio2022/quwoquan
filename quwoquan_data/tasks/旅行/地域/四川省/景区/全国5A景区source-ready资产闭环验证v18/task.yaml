@@ -1,0 +1,125 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18
+title: 全国5A景区source-ready资产闭环验证v18
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 四川省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 四姑娘山
+  - entityType: 地点/景区
+    name: 毕棚沟
+  - entityType: 地点/景区
+    name: 稻城亚丁
+  - entityType: 地点/景区
+    name: 海螺沟
+  - entityType: 地点/景区
+    name: 墨石公园
+  - entityType: 地点/景区
+    name: 都江堰
+  - entityType: 地点/景区
+    name: 九寨沟
+  - entityType: 地点/景区
+    name: 乐山大佛
+  - entityType: 地点/景区
+    name: 碧峰峡
+  - entityType: 地点/景区
+    name: 蜀南竹海
+  reserveCoverageTargets:
+  - entityType: 地点/景区
+    name: 青城山
+  - entityType: 地点/景区
+    name: 武侯祠
+  - entityType: 地点/景区
+    name: 大熊猫繁育研究基地
+  - entityType: 地点/景区
+    name: 西岭雪山
+  - entityType: 地点/景区
+    name: 洛带古镇
+  - entityType: 地点/景区
+    name: 黄龙溪古镇
+  - entityType: 地点/景区
+    name: 黄龙
+  - entityType: 地点/景区
+    name: 达古冰川
+  - entityType: 地点/景区
+    name: 莲宝叶则
+  - entityType: 地点/景区
+    name: 汶川映秀震中遗址
+  - entityType: 地点/景区
+    name: 新都桥
+  - entityType: 地点/景区
+    name: 伍须海
+  - entityType: 地点/景区
+    name: 措普沟
+  - entityType: 地点/景区
+    name: 木格措
+  - entityType: 地点/景区
+    name: 峨眉山
+  - entityType: 地点/景区
+    name: 黑竹沟
+  - entityType: 地点/景区
+    name: 嘉阳小火车
+  - entityType: 地点/景区
+    name: 苏稽古镇
+  - entityType: 地点/景区
+    name: 蒙顶山
+  - entityType: 地点/景区
+    name: 上里古镇
+provenance:
+  createdAt: '2026-06-19T20:47:28.370241+00:00'
+  createdBy: codex
+content:
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    - article
+    - image
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+      article: 3
+      image: 4
+    allowAiImages: false
+  carriers:
+  - article
+  - image
+  quotas:
+    entityArticlesPerTarget: 4
+    imageWorksPerTarget: 1
+    entityHomepagesPerTarget: 1
+    routeArticles: 0
+acceptance:
+  minEntities: 10
+  minPostsPerEntity: 5
+  requiredAngles:
+  - planning_consultation
+  - decision_experience
+  - route_transport
+  - seasonal_timing
+  - image
+workflowPolicy:
+  allowPartialContent: true
+  deliveryMode: partial_with_replacement_report
+  maxReplacementWaves: 3
+  maxReplacementCandidatesPerWave: 8
+  maxReplacementScreenedPerRun: 20
+queuePolicy:
+  backend: reliabletask
+  reliableTask:
+    taskType: data.content_object.execute
+    queue: reliabletask.data.content_supply
+    store: MongoStore
+    readyIndex: RedisReadyIndex
+  leaseSeconds: 900
+  heartbeatSeconds: 60
+  deadLetterAfterAttempts: 3

@@ -402,6 +402,15 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 	createTestPersonaFull(t, "shared_owner_graph_persona_1", "shared_owner_graph", "ps_shared_owner_graph_1", "shared_owner_graph_1", "default", true)
 	createTestPersonaFull(t, "shared_owner_graph_persona_2", "shared_owner_graph", "ps_shared_owner_graph_2", "shared_owner_graph_2", "default", false)
 	createTestPersonaFull(t, "viewer_owner_graph_persona", "viewer_owner_graph", "ps_viewer_owner_graph", "viewer_owner_graph", "default", true)
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles SET avatar_url = $1, avatar_version = $2 WHERE user_id = $3`,
+		"https://cdn.example.com/shared-owner-avatar.png",
+		6,
+		"shared_owner_graph",
+	); err != nil {
+		t.Fatalf("seed follower avatar version: %v", err)
+	}
 
 	doRequest(
 		t,
@@ -443,6 +452,12 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 		}
 		if _, exists := item["ownerUserId"]; exists {
 			t.Fatalf("public follower row must not expose ownerUserId, got %#v", item)
+		}
+		if item["avatarUrl"] != "https://cdn.example.com/shared-owner-avatar.png?v=6" {
+			t.Fatalf("expected versioned follower avatarUrl, got %#v", item["avatarUrl"])
+		}
+		if item["avatarVersion"] != float64(6) {
+			t.Fatalf("expected follower avatarVersion=6, got %#v", item["avatarVersion"])
 		}
 	}
 }

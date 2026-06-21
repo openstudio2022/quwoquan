@@ -1,0 +1,36 @@
+{
+  "label": "稻城亚丁",
+  "domain": "地点",
+  "type": "景区",
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "entityRef": "/entity/地点/景区/稻城亚丁",
+  "summary": "稻城亞丁景区（藏語：འདབ་པའི་ཉི་བརྟེན་མཛེས་ལྗོངས་ཁུལ་，威利转写：'dabpaNyibrtenmdzesljongskhul），常被称为稻城亚丁，其中亚丁为藏語，意為「向陽之地」，是位於中國四川省甘孜藏族自治州。",
+  "conditionProfile": {
+    "regions": [
+      "高原"
+    ],
+    "seasons": [
+      "夏"
+    ],
+    "evidenceRefs": [
+      {
+        "field": "regions",
+        "value": "高原",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "稻城亚丁 主页正文概况与空间特征归纳"
+      },
+      {
+        "field": "seasons",
+        "value": "夏",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "稻城亚丁 主页正文季节与游览信息归纳"
+      }
+    ]
+  },
+  "sourceRefs": [
+    "entities/地点/景区/稻城亚丁/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/稻城亚丁/1.download/sources/01.home_wikipedia/source.md"
+  ]
+}

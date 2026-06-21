@@ -20,6 +20,7 @@ os.environ["QWQ_RUNTIME_ROOT"] = str(_TMP / "runtime")
 os.environ["QWQ_COMMITTED_TASKS_ROOT"] = str(_TMP / "tasks")
 
 from _common.io import read_ndjson, write_json  # noqa: E402
+from _common.entity_artifacts import prune_inactive_entity_artifacts  # noqa: E402
 from _common.paths import batch_root, task_catalog  # noqa: E402
 from _common.source_unit import resolve_entity_object_dir  # noqa: E402
 from task.target_selection import (  # noqa: E402
@@ -303,6 +304,62 @@ def test_audit_batch_reports_homepage_input_issue_after_build_prepare():
     ), homepage_failures
 
 
+def test_audit_batch_blocks_inactive_entity_homepage_artifacts():
+    spec = build_multimodal_spec(
+        name="失活主页产物审计",
+        title="失活主页产物审计",
+        region="测试省",
+        category="景区",
+        targets=[{"name": "有效景区", "entityType": "地点/景区"}],
+        created_by="test",
+    )
+    task = spec["taskId"]
+    batch = "b_inactive_homepage_artifacts"
+    store.save_spec(spec)
+    shared = batch_root(task, batch) / "_shared"
+    write_json(
+        shared / "auto_research_plan.json",
+        {"sourceAvailability": {"readyTargets": ["有效景区"], "ineligibleTargets": []}},
+    )
+    inactive = resolve_entity_object_dir(task, batch, "失活景区", etype_hint="地点/景区")
+    write_json(inactive / "manifest.json", {"entityRef": "/entity/地点/景区/失活景区"})
+    (inactive / "page.md").parent.mkdir(parents=True, exist_ok=True)
+    (inactive / "page.md").write_text("失活主页", encoding="utf-8")
+    (inactive / "assets").mkdir(parents=True, exist_ok=True)
+
+    report = audit_managed_batch(task, batch)
+
+    assert report["inactiveEntityArtifactCount"] == 1
+    inactive_failures = [
+        item for item in report["failedLanes"]
+        if item.get("entity") == "失活景区" and item.get("lane") == "homepage"
+    ]
+    assert inactive_failures
+    assert "outside active target set" in inactive_failures[0]["issues"][0]
+
+
+def test_prune_inactive_entity_artifacts_keeps_download_evidence():
+    task = "旅行/地域/测试省/景区/失活产物清理"
+    batch = "b_prune_inactive"
+    inactive = resolve_entity_object_dir(task, batch, "失活景区", etype_hint="地点/景区")
+    write_json(inactive / "manifest.json", {"entityRef": "/entity/地点/景区/失活景区"})
+    write_json(inactive / "_entity.json", {"name": "失活景区"})
+    write_json(inactive / "1.download" / "source.md", {"source": "kept"})
+    (inactive / "assets").mkdir(parents=True, exist_ok=True)
+
+    rows = prune_inactive_entity_artifacts(
+        task,
+        batch,
+        active_entity_names=["有效景区"],
+    )
+
+    assert [row["entity"] for row in rows] == ["失活景区"]
+    assert not (inactive / "manifest.json").exists()
+    assert not (inactive / "_entity.json").exists()
+    assert not (inactive / "assets").exists()
+    assert (inactive / "1.download" / "source.md").exists()
+
+
 def test_audit_batch_dedupes_workflow_failure_for_same_entity_lane():
     spec = build_multimodal_spec(
         name="重复失败审计",
@@ -502,12 +559,29 @@ def test_build_multimodal_spec_uses_separated_research_image_contract():
     assert content["modalityContract"] == "separated_research"
     assert content["carriers"] == ["article", "image"]
     assert content["quotas"]["entityArticlesPerTarget"] == 4
-    assert content["quotas"]["imageWorksPerTarget"] == 2
-    assert spec["acceptance"]["minPostsPerEntity"] == 6
+    assert content["quotas"]["imageWorksPerTarget"] == 1
+    assert spec["acceptance"]["minPostsPerEntity"] == 5
     assert spec["workflowPolicy"]["allowPartialContent"] is True
     assert spec["workflowPolicy"]["deliveryMode"] == "partial_with_replacement_report"
+    assert spec["workflowPolicy"]["maxReplacementCandidatesPerWave"] >= 8
+    assert spec["workflowPolicy"]["maxReplacementScreenedPerRun"] >= 8
     assert spec["scope"]["reserveCoverageTargets"][0]["name"] == "都江堰"
     assert "galleryPostsPerTarget" not in content["quotas"]
+
+
+def test_build_multimodal_spec_allows_explicit_image_work_quota():
+    spec = build_multimodal_spec(
+        name="双图库重跑",
+        title="双图库重跑",
+        region="四川省",
+        category="景区",
+        targets=[{"name": "四姑娘山", "entityType": "地点/景区", "region": "川西"}],
+        created_by="test",
+        image_works_per_target=2,
+    )
+
+    assert spec["content"]["quotas"]["imageWorksPerTarget"] == 2
+    assert spec["acceptance"]["minPostsPerEntity"] == 6
 
 
 def test_write_selected_task_writes_catalog_for_baseline_gate():

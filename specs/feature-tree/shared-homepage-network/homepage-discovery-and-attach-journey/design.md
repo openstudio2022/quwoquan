@@ -363,37 +363,37 @@ Journey 内正式 contract：
 
 ## TDD / ATDD 策略
 
-### T1：schema / metadata
+### local_contract：schema / metadata
 
 - 校验 route / surface / request context 归属
 - 校验 `SearchHomepages`、`HomepageReferenceView`、`primaryEntityId` 等 metadata
 
-### T2：module interaction
+### local_contract：module interaction
 
 - picker 搜索、结果选择、detail preview、suggest page 返回
 - 发布器上下文恢复与主页 chip 更新
 
-### T3：cross service integration
+### api_integration：cross service integration
 
 - content 写入 canonical reference
 - entity 聚合消费内容事实
 - attach 失败与回流延迟的异常路径
 
-### T4：user journey
+### user_acceptance：user journey
 
 - 发布笔记/作品/提问并挂主页
 - 发布口碑必须选主页
 - 搜不到主页 -> 补充主页 -> 返回发布器
 
-## plan slice 与 T1~T4 证据矩阵映射
+## plan slice 与 三层测试 证据矩阵映射
 
 | Slice | 目标 | 验证层 |
 |---|---|---|
-| `P1` | 冻结 route / surface / request context 与 search metadata | `T1` |
-| `P2` | 建立 codegen baseline | `T1` |
-| `P3` | 落主页 picker / detail / suggest | `T2`, `T4` |
-| `P4` | 落发布器 attach 规则和 canonical write path | `T2`, `T3`, `T4` |
-| `P5` | 打通 entity 聚合回流、观测和回滚 | `T3`, `T4` |
+| `P1` | 冻结 route / surface / request context 与 search metadata | `local_contract` |
+| `P2` | 建立 codegen baseline | `local_contract` |
+| `P3` | 落主页 picker / detail / suggest | `local_contract`, `user_acceptance` |
+| `P4` | 落发布器 attach 规则和 canonical write path | `local_contract`, `api_integration`, `user_acceptance` |
+| `P5` | 打通 entity 聚合回流、观测和回滚 | `api_integration`, `user_acceptance` |
 
 ## 未来演进
 

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_1fa1ea26b2f06b61",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "峨眉山·行前指南：品味川渝",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "claude-4.6-opus-high-thinking",
+    "agentRunId": "run-d442f691-d760-452e-a8a1-5b11d87614f0",
+    "agentId": "agent-c3293920-9a8b-49fe-b37f-43f29393e1c4",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/峨眉山"
+    ],
+    "articleDigest": "sha256:ce28cb10f6fe31d334c5007b73331ee3db536adf5fbd47b76aa8e28514456d2e"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "峨眉山·行前指南：品味川渝",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:2bc82da98e8c73178a99ea7d9da6fc6aff65dc2e6f01478265ab0baba08e2ec3",
+    "writingPackSha256": "sha256:9caaebe0ec128508aaf5e93ea4bcae7fe5e3228f47a5e2e4662ce78617558b03",
+    "sourceBundleSha256": "sha256:2de812974e75e7dbac258ad046967ff13571ad58a3694679811b4fff6a8249ab",
+    "draftSha256": "sha256:dd695b03364f910ca556ed4e8a4860ea2c398f7786e3de9946d2d7666d734450"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/峨眉山/1.download/sources/11.qunar_guide_candidate_1fa1ea26b2f06b61/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7863444"
+    },
+    {
+      "path": "entities/地点/景区/峨眉山/1.download/sources/45.qunar_guide_candidate_5dacf68dcf9e5383/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7868354"
+    },
+    {
+      "path": "entities/地点/景区/峨眉山/1.download/sources/76.qunar_guide_candidate_ac46fd8ad9e1553f/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7868592"
+    },
+    {
+      "path": "entities/地点/景区/峨眉山/1.download/sources/86.qunar_guide_candidate_c32bf3e8f3680794/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7865980"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/峨眉山/1.download/sources/11.qunar_guide_candidate_1fa1ea26b2f06b61/source.md",
+    "entities/地点/景区/峨眉山/1.download/sources/45.qunar_guide_candidate_5dacf68dcf9e5383/source.md",
+    "entities/地点/景区/峨眉山/1.download/sources/76.qunar_guide_candidate_ac46fd8ad9e1553f/source.md",
+    "entities/地点/景区/峨眉山/1.download/sources/86.qunar_guide_candidate_c32bf3e8f3680794/source.md"
+  ]
+}

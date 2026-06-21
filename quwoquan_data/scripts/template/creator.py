@@ -1,6 +1,7 @@
 """System builtin creator profile matching and validation."""
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from template.blueprint import REQUIRED_CREATOR_FIELDS, validate_required, collect_tag_refs
@@ -15,6 +16,8 @@ VALID_EXPERIENCE_CLAIM_MODES = {
     "visual_discovery",
 }
 VALID_RISK_TIERS = {"low", "medium", "high"}
+VALID_COVERAGE_KINDS = {"nationwide", "regional", "thematic"}
+_CARRIER_KEYS = ("article", "image", "video")
 
 
 def validate_creators(registry: TemplateRegistry) -> list[str]:
@@ -74,6 +77,9 @@ def validate_creators(registry: TemplateRegistry) -> list[str]:
             if int(cadence.get("maxDailyPosts") or 0) > 1:
                 errors.append(f"{label}: publishCadence.maxDailyPosts must be <= 1")
 
+        errors.extend(_coverage_scope_errors(creator.get("coverageScope"), label))
+        errors.extend(_carrier_affinity_errors(creator.get("carrierAffinity"), label))
+
         for tag_ref in collect_tag_refs(creator):
             if not tag_exists(tag_ref):
                 errors.append(f"{label}: tagRef not found: {tag_ref}")
@@ -106,17 +112,187 @@ def validate_creators(registry: TemplateRegistry) -> list[str]:
     return errors
 
 
-def choose_creator(registry: TemplateRegistry, blueprint: dict[str, Any], preferred_archetype: str | None = None) -> dict[str, Any]:
+def _coverage_scope_errors(scope: Any, label: str) -> list[str]:
+    if not isinstance(scope, dict):
+        return [f"{label}: coverageScope must be an object"]
+    errors: list[str] = []
+    kind = str(scope.get("kind") or "")
+    if kind not in VALID_COVERAGE_KINDS:
+        errors.append(f"{label}: unsupported coverageScope.kind '{kind}'")
+    if kind == "regional" and not scope.get("regionRefs"):
+        errors.append(f"{label}: regional coverageScope requires regionRefs")
+    if kind == "thematic" and not (scope.get("topicRefs") or scope.get("regionRefs")):
+        errors.append(f"{label}: thematic coverageScope requires topicRefs")
+    return errors
+
+
+def _carrier_affinity_errors(aff: Any, label: str) -> list[str]:
+    if not isinstance(aff, dict):
+        return [f"{label}: carrierAffinity must be an object"]
+    errors: list[str] = []
+    positive = False
+    for carrier_key in _CARRIER_KEYS:
+        if carrier_key not in aff:
+            errors.append(f"{label}: carrierAffinity missing '{carrier_key}'")
+            continue
+        try:
+            value = float(aff.get(carrier_key))
+        except (TypeError, ValueError):
+            errors.append(f"{label}: carrierAffinity.{carrier_key} must be a number")
+            continue
+        if value < 0 or value > 1:
+            errors.append(f"{label}: carrierAffinity.{carrier_key} must be within 0..1")
+        if value > 0:
+            positive = True
+    if not errors and not positive:
+        errors.append(f"{label}: carrierAffinity must have at least one carrier > 0")
+    return errors
+
+
+def carrier_affinity(creator: dict[str, Any], carrier: str) -> float:
+    aff = creator.get("carrierAffinity")
+    if not isinstance(aff, dict):
+        return 0.0
+    try:
+        return float(aff.get(carrier, 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _tag_prefix_hit(scope_refs: list[str], tags: list[str], region_name: str) -> bool:
+    """范围 ref 命中：与内容标签互为前缀（行政区/题材树自上而下），或与 region 名相关。"""
+    for ref in scope_refs:
+        if region_name and (ref.endswith(region_name) or region_name and region_name in ref):
+            return True
+        for tag in tags:
+            if tag == ref or tag.startswith(ref + "/") or ref.startswith(tag + "/"):
+                return True
+    return False
+
+
+def coverage_range_fit(creator: dict[str, Any], *, region: str | None, tag_refs: list[str] | None) -> float:
+    """范围契合度 [0,1]：nationwide 给中性基线；regional/thematic 命中给高分、未命中给低分。
+
+    使「川西范围」作者只在川西内容上胜出，「全国」作者在无地域信号或跨地域时胜出。
+    """
+    scope = creator.get("coverageScope")
+    if not isinstance(scope, dict):
+        return 0.5
+    kind = str(scope.get("kind") or "")
+    if kind == "nationwide":
+        return 0.6
+    tags = [str(t) for t in (tag_refs or [])]
+    region_name = str(region or "")
+    region_refs = [str(x) for x in (scope.get("regionRefs") or []) if x]
+    topic_refs = [str(x) for x in (scope.get("topicRefs") or []) if x]
+    if _tag_prefix_hit(region_refs, tags, region_name):
+        return 1.0
+    if _tag_prefix_hit(topic_refs, tags, region_name):
+        return 1.0
+    return 0.1
+
+
+def _tag_overlap(creator: dict[str, Any], tag_refs: list[str] | None) -> float:
+    content = {str(t) for t in (tag_refs or [])}
+    if not content:
+        return 0.0
+    creator_tags = {str(t) for t in creator.get("publicProfileTagRefs", [])}
+    creator_tags |= {str(t) for t in creator.get("recommendationTagRefs", [])}
+    if not creator_tags:
+        return 0.0
+    return len(creator_tags & content) / len(content)
+
+
+def _stable_jitter(creator_id: str, seed: str) -> float:
+    digest = hashlib.sha1(f"{seed}|{creator_id}".encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) / 0xFFFFFFFF
+
+
+def _creator_match_score(
+    creator: dict[str, Any],
+    *,
+    carrier: str,
+    tag_refs: list[str] | None,
+    region: str | None,
+    vertical: str | None,
+    seed: str,
+) -> float:
+    range_fit = coverage_range_fit(creator, region=region, tag_refs=tag_refs)
+    affinity = carrier_affinity(creator, carrier)
+    tag_fit = _tag_overlap(creator, tag_refs)
+    quality = float(creator.get("qualityScore") or 0.0)
+    fatigue = float(creator.get("fatigueScore") or 0.0)
+    vertical_fit = 1.0 if (vertical and vertical in [str(v) for v in creator.get("verticalRefs", [])]) else 0.0
+    jitter = _stable_jitter(str(creator.get("creatorProfileId") or ""), seed)
+    return (
+        3.0 * range_fit
+        + 2.0 * affinity
+        + 1.5 * tag_fit
+        + 0.5 * vertical_fit
+        + 1.0 * quality
+        - 1.0 * fatigue
+        + 0.2 * jitter
+    )
+
+
+def match_creator(
+    registry: TemplateRegistry,
+    blueprint: dict[str, Any],
+    *,
+    carrier: str | None = None,
+    tag_refs: list[str] | None = None,
+    region: str | None = None,
+    vertical: str | None = None,
+    seed: str = "",
+    preferred_archetype: str | None = None,
+) -> dict[str, Any]:
+    """按底稿内容信号在「合适的虚拟作者」中择优，避免随意安排。
+
+    选择逻辑（archetype 为主轴，范围/载体在同 archetype 内择优）：
+      1. blueprint 显式 preferredCreatorIds 优先。
+      2. 主轴：取该 archetype 的 active 候选；按载体偏向>0 硬过滤。
+      3. 同 archetype 内按「范围契合 + 载体偏向 + 标签重叠 + vertical + 质量 - 疲劳 + 稳定抖动」评分择优。
+      4. archetype 无候选时跨 archetype 回退，仍按载体偏向与评分择优。
+    seed（建议传内容 ref/subject）保证同一内容确定性命中同一作者，并在等分作者间分摊负载。
+    """
     persona = blueprint.get("creatorPersona") if isinstance(blueprint.get("creatorPersona"), dict) else {}
-    preferred_ids = [str(x) for x in persona.get("preferredCreatorIds", [])]
-    for creator_id in preferred_ids:
+    for creator_id in (str(x) for x in persona.get("preferredCreatorIds", [])):
         if creator_id in registry.creators:
             return registry.creators[creator_id]
 
     archetype = preferred_archetype or str(persona.get("archetype", ""))
-    candidates = registry.creators_by_archetype(archetype)
-    if candidates:
+    eff_carrier = str(carrier or blueprint.get("carrier") or "article")
+
+    def is_active(creator: dict[str, Any]) -> bool:
+        return str(creator.get("status") or "") == "active"
+
+    pool = [c for c in registry.creators_by_archetype(archetype) if is_active(c)]
+    carrier_pool = [c for c in pool if carrier_affinity(c, eff_carrier) > 0]
+    candidates = carrier_pool or pool
+    if not candidates:
+        all_active = [c for c in registry.creators.values() if is_active(c)]
+        carrier_all = [c for c in all_active if carrier_affinity(c, eff_carrier) > 0]
+        candidates = carrier_all or all_active
+    if not candidates:
+        if registry.creators:
+            return next(iter(registry.creators.values()))
+        raise ValueError("No creator profiles available")
+    if len(candidates) == 1:
         return candidates[0]
-    if registry.creators:
-        return next(iter(registry.creators.values()))
-    raise ValueError("No creator profiles available")
+
+    return max(
+        candidates,
+        key=lambda c: _creator_match_score(
+            c,
+            carrier=eff_carrier,
+            tag_refs=tag_refs,
+            region=region,
+            vertical=vertical,
+            seed=seed,
+        ),
+    )
+
+
+def choose_creator(registry: TemplateRegistry, blueprint: dict[str, Any], preferred_archetype: str | None = None) -> dict[str, Any]:
+    """无内容信号的稳定选择（兼容旧调用方）：委托 match_creator，仅按 archetype + 载体 + 质量择优。"""
+    return match_creator(registry, blueprint, preferred_archetype=preferred_archetype)

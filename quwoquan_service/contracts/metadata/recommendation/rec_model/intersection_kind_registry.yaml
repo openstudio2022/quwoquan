@@ -31,11 +31,23 @@ description: |
     evidenceRank     云侧 evidenceKindRank 排序键（值越小越靠前；与 intersection_service.go 对齐）。
     sampleVisualsRequired 是否要求结构化 sampleVisuals（R1/R2 人级 kind 必填，禁头像冒充非人对象）。
     iconKey          端侧类型图标语义键（§21.5.2 闭集，IntersectionIconResolver 消费，禁端硬编码 switch）：
-                     place | circle | people | alumni | work | discussion | share | like | interest。
+                     place | placeHere | circle | people | contact | followHere | viewing |
+                     alumni | work | discussion | share | like | interest | attention。
     propagationRole  传播图角色（§21.4）：none(共同型，自身不传播) | bridge(桥接型) | source(影响源)。
     lifecycleApplicable 该交集是否适用 Lifecycle 状态机弱标（§21.3）：
                      静态身份(同校/同司/校友在此)为 false，动态连接/行为/关注为 true。
+    vertical         §23.4 垂类正交标注（缺省 general）；闭集见顶层 `verticals`。垂类扩展只改本字段 +
+                     必要的 objectKind，禁止新增 travel.* 独立 kind（三元组 kind+vertical+objectKind 正交）。
     status           active | deferred（deferred = 已登记但当前无数据源，不得产出）。
+
+  顶层闭集（§23.3 去桥接：端枚举 / 文案表键 / verify 校验唯一真相源，codegen 下发，禁端硬编码第二份）：
+    dimensions       五维闭集：identity | location | content | interest | relationship。
+    lifecycleStates  Lifecycle 状态机闭集（§21.3 五态 + §22.3 archived/expired 历史/不展示两态）。
+    verticals        垂类闭集：general（缺省）| travel_photography | campus（结构预留，本轮不铺数据）。
+    objectKinds      统一对象类型闭集（§23.3 B：objectKind 与 countObjectKind 合并为同一闭集 + 可计数子集标注）。
+                     每项：kind / roles(object 主对象品牌角标 / count 被计数对象) / routeId(端路由逻辑名，空=不可导航)
+                     / assetKind(对象视觉资产类型，roles 含 object 时必填)。kind 的 objectKind 取 roles 含 object 的子集，
+                     countObjectKind 取 roles 含 count 的子集；端 UnifiedObjectKind 枚举 + objectKind→routeId 由本闭集 codegen。
 
   Graph 加权元数据（§21.2，edgeWeight = relationStrength × interactionFrequency × recencyDecay）：
     本期数值真算后置；派生口径单一真相源、零逐条占位（避免 27×未实现技术债）：
@@ -51,6 +63,80 @@ valueTierWeights:
   T3: 0.5
   T4: 0.3
 
+# ─── 顶层闭集（§23.3 去桥接：单一真相源 + codegen 下发 + verify 校验） ───
+dimensions:
+  # §21 五维闭集（稳定用户语言来源）。每 kind 的 dimensions 必须是本闭集子集。
+  - identity
+  - location
+  - content
+  - interest
+  - relationship
+
+lifecycleStates:
+  # §21.3 五态状态机 + §22.3 历史/不展示两态（archived/expired，端默认列表过滤）。
+  # active/resurfaced/cooling 是 stable/reactivated/weakened 的展示同义，不是独立状态机态，故不入闭集。
+  - new
+  - strengthened
+  - stable
+  - weakened
+  - reactivated
+  - archived
+  - expired
+
+verticals:
+  # §23.4 垂类正交闭集。每 kind 的 vertical 缺省 general；旅行摄影先行，校园仅结构预留。
+  - general
+  - travel_photography
+  - campus
+
+objectKinds:
+  # §23.3 B 统一对象类型闭集（合并 objectKind + countObjectKind，可计数子集靠 roles 标注，不再两套集合）。
+  # roles: object = 主对象品牌角标（端 UnifiedObjectKind 枚举 + 可导航）；count = 被计数对象（数字下钻列表对象类型）。
+  # routeId 为端路由逻辑名（与 ui_config / app_routes 对齐，空=不可导航纯文本）；assetKind 为对象视觉资产类型。
+  - kind: person
+    roles: [object, count]
+    routeId: userProfile
+    assetKind: avatar
+  - kind: circle
+    roles: [object, count]
+    routeId: circleDetail
+    assetKind: circleAvatar
+  - kind: school
+    roles: [object]
+    routeId: homepageDetail
+    assetKind: emblem
+  - kind: place
+    roles: [object, count]
+    routeId: homepageDetail
+    assetKind: coverImage
+  - kind: enterprise
+    roles: [object]
+    routeId: homepageDetail
+    assetKind: logo
+  # §22.2 旅行摄影 objectKind 扩展（route/photo_spot/gear）；结构就位，open_route 落点走实体主页。
+  - kind: route
+    roles: [object]
+    routeId: homepageDetail
+    assetKind: coverImage
+  - kind: photo_spot
+    roles: [object]
+    routeId: homepageDetail
+    assetKind: coverImage
+  - kind: gear
+    roles: [object]
+    routeId: homepageDetail
+    assetKind: coverImage
+  # 仅被计数对象类型（不作主对象品牌角标）。entity 走实体主页，content/tag 当前无独立可导航落点。
+  - kind: content
+    roles: [count]
+    routeId: ""
+  - kind: entity
+    roles: [count]
+    routeId: homepageDetail
+  - kind: tag
+    roles: [count]
+    routeId: ""
+
 computabilityLegend:
   R1: 关系边集合直接求交（follow_edges / circle_members），最易、最可靠、可请求期算。
   R2: 行为边集合求交（rm_behavior_events 行为边真相源），需扫描+求交，请求期或预投影。
@@ -58,20 +144,118 @@ computabilityLegend:
   R4: 当前无稳定数据源或为概率推断（coCreatedContent / coWishlistedEntity / affinity），暂不产出 fact。
 
 iconKeyLegend:
-  # §21.5.2 交集 iconKey 语义闭集（端 IntersectionIconResolver 真相源）
-  place: 共同地点 / 关注的人去过 / 共同想去（coVisitedEntity / followeeVisited / coWishlistedEntity）
+  # §21.5.2 交集 iconKey 语义闭集（端 IntersectionIconResolver 真相源）。
+  # 闭集去单调：同维度内按"自身共同 / 第三方桥接 / 联系人 / 关注的人正在看"细分到可辨识 glyph，
+  # 但 tone 仍按维度族收敛（relationship→sage、location→tea、identity/work→mist、content→clay、interest→stone）。
+  place: 共同地点（coVisitedEntity / coWishlistedEntity）
+  placeHere: 关注的人来过此地（followeeVisited，桥接）
   circle: 共同圈子 / 同圈成员（sharedCircle / coMemberCircle）
-  people: 共同关注的人 / 共同联系人 / 关注的人在此（sharedFollowees / commonFollower / commonContact / followeeInObject / followeeViewing）
+  people: 共同关注的人 / 共同被关注（sharedFollowees / commonFollower）
+  contact: 共同联系人（commonContact，contactVisible 隐私门）
+  followHere: 关注的人在此对象内（followeeInObject，桥接）
+  viewing: 关注的人正在看此内容（followeeViewing，桥接）
   alumni: 校友 / 同校 / 同专业（sameSchool / sameMajor / sameCohort / alumni / alumniHere）
   work: 同公司 / 同团队 / 同行业 / 同事在此 / 共创（sameCompany / sameTeam / sameIndustry / colleagueHere / coCreatedContent）
   discussion: 共同讨论 / 都评论过 / 关注的人讨论（sharedDiscussion / coCommented / followeeDiscussedThis）
   share: 共同传播（coSharedContent）
   like: 共同点赞（coLiked，T4 最低权重，§21.9 恢复）
-  interest: 共同兴趣 / 共同关注对象（sharedTagSample / sharedEntityAttention）
+  interest: 共同兴趣标签（sharedTagSample）
+  attention: 共同关注对象 / 品牌（sharedEntityAttention）
+
+visualToneByIconKey:
+  # §21.5.2 低饱和语义色调。端侧可按 iconKey 查 tone，不得在页面按 kind 硬编码颜色。
+  place: tea
+  placeHere: tea
+  circle: sage
+  people: sage
+  contact: sage
+  followHere: sage
+  viewing: sage
+  alumni: mist
+  work: mist
+  discussion: clay
+  share: clay
+  like: clay
+  interest: stone
+  attention: stone
+
+iconKeyByDimension:
+  # §21.5.2 dimension → iconKey 末级回退（未登记 kind / 旧数据 / affinity 概率类降级用）。
+  # 端 IntersectionIconResolver 与 inbox 归一层共用此唯一回退表，不再各写一份 dimension switch。
+  # 每个键必须 ∈ dimensions 闭集，每个值必须 ∈ iconKeyLegend 闭集（verify 脚本校验）。
+  identity: alumni
+  location: place
+  content: discussion
+  interest: interest
+  relationship: people
+
+actionHintLegend:
+  # §21.5.3 行动建议闭集。服务端按 kind 查 actionKey，下发 IntersectionActionHint；
+  # 端侧只渲染，不按 kind 猜测下一步。
+  follow_person: 关注代表人或对象人
+  greet_person: 打招呼
+  message_person: 私信
+  view_shared_people: 查看共同关注 / 共同联系人来源
+  join_circle: 加入圈子
+  open_discussion: 进入讨论 / 跟帖
+  open_content: 回到内容
+  open_object: 进入实体 / 地点 / 学校 / 公司主页
+  follow_object: 关注对象
+  open_route: 查看路线 / 地点内容
+  create_followup: 写续篇 / 发布跟进
+  ask_assistant: 让助手解释这条交集
+
+actionLabelByKey:
+  # §21.5.3 行动建议的终端 UI 短标签（按钮文案）。与 actionHintLegend 区分：
+  # legend 是给运营/契约读者的语义描述，本表是端最终渲染/服务端下发 Label 的短文案。
+  # 键集必须与 actionHintLegend 完全一致（verify 脚本校验），服务端 actionLabelForKey 查本表。
+  follow_person: 关注TA
+  greet_person: 打招呼
+  message_person: 私信
+  view_shared_people: 查看共同来源
+  join_circle: 加入圈子
+  open_discussion: 进入讨论
+  open_content: 查看内容
+  open_object: 查看对象
+  follow_object: 关注对象
+  open_route: 查看路线
+  create_followup: 发布跟进
+  ask_assistant: 解释这条交集
+
+actionHintsByKind:
+  sharedFollowees: [follow_person, greet_person, view_shared_people]
+  commonFollower: [follow_person, message_person, view_shared_people]
+  commonContact: [greet_person, message_person, view_shared_people]
+  sameSchool: [greet_person, open_object]
+  sameDepartment: [greet_person, open_object]
+  sameMajor: [greet_person, open_object]
+  sameCohort: [greet_person, open_object]
+  alumni: [greet_person, open_object]
+  sameCompany: [message_person, open_object]
+  sameTeam: [message_person, open_object]
+  sameIndustry: [message_person, open_object]
+  sharedCircle: [join_circle, open_discussion]
+  sharedDiscussion: [open_discussion, follow_person]
+  coMemberCircle: [join_circle, open_discussion]
+  coCommented: [open_content, open_discussion]
+  coSharedContent: [open_content, create_followup]
+  coCreatedContent: [open_content, message_person]
+  coLiked: [open_content, follow_person]
+  coVisitedEntity: [open_object, open_route]
+  sharedEntityAttention: [open_object, follow_object]
+  coWishlistedEntity: [open_route, follow_object]
+  sharedTagSample: [open_object, join_circle]
+  followeeInObject: [join_circle, view_shared_people]
+  followeeVisited: [open_object, open_route]
+  followeeViewing: [open_content, view_shared_people]
+  alumniHere: [open_object, join_circle]
+  colleagueHere: [open_object, message_person]
+  followeeDiscussedThis: [open_discussion, open_content]
 
 kinds:
   # ---- A. 人与人：共同型事实 ----
   - kind: sharedFollowees
+    vertical: general
     entry: A1
     level: sharedFact
     intersectionClass: fact
@@ -92,6 +276,7 @@ kinds:
     status: active
 
   - kind: commonFollower
+    vertical: general
     entry: A2
     level: sharedFact
     intersectionClass: fact
@@ -112,6 +297,7 @@ kinds:
     status: active
 
   - kind: commonContact
+    vertical: general
     entry: A3
     level: sharedFact
     intersectionClass: fact
@@ -126,12 +312,13 @@ kinds:
     timeWindowDays: 30
     evidenceRank: 10
     sampleVisualsRequired: true
-    iconKey: people
+    iconKey: contact
     propagationRole: none
     lifecycleApplicable: true
     status: active
 
   - kind: sameSchool
+    vertical: general
     entry: A4
     level: sharedFact
     intersectionClass: fact
@@ -151,6 +338,7 @@ kinds:
     lifecycleApplicable: false
     status: active
   - kind: sameDepartment
+    vertical: general
     entry: A4
     level: sharedFact
     intersectionClass: fact
@@ -170,6 +358,7 @@ kinds:
     lifecycleApplicable: false
     status: active
   - kind: sameMajor
+    vertical: general
     entry: A4
     level: sharedFact
     intersectionClass: fact
@@ -189,6 +378,7 @@ kinds:
     lifecycleApplicable: false
     status: active
   - kind: sameCohort
+    vertical: general
     entry: A4
     level: sharedFact
     intersectionClass: fact
@@ -208,6 +398,7 @@ kinds:
     lifecycleApplicable: false
     status: active
   - kind: alumni
+    vertical: general
     entry: A4
     level: sharedFact
     intersectionClass: fact
@@ -228,6 +419,7 @@ kinds:
     status: active
 
   - kind: sameCompany
+    vertical: general
     entry: A5
     level: sharedFact
     intersectionClass: fact
@@ -247,6 +439,7 @@ kinds:
     lifecycleApplicable: false
     status: active
   - kind: sameTeam
+    vertical: general
     entry: A5
     level: sharedFact
     intersectionClass: fact
@@ -266,6 +459,7 @@ kinds:
     lifecycleApplicable: false
     status: active
   - kind: sameIndustry
+    vertical: general
     entry: A5
     level: sharedFact
     intersectionClass: fact
@@ -287,6 +481,7 @@ kinds:
 
   # ---- B. 人与圈子 / 讨论：共同参与事实 ----
   - kind: sharedCircle
+    vertical: general
     entry: B1
     level: sharedFact
     intersectionClass: fact
@@ -307,6 +502,7 @@ kinds:
     status: active
 
   - kind: sharedDiscussion
+    vertical: general
     entry: B2
     level: sharedFact
     intersectionClass: fact
@@ -327,6 +523,7 @@ kinds:
     status: active
 
   - kind: coMemberCircle
+    vertical: general
     entry: B3
     level: sharedFact
     intersectionClass: fact
@@ -348,6 +545,7 @@ kinds:
 
   # ---- C. 人与内容：连接型内容行为事实 ----
   - kind: coCommented
+    vertical: general
     entry: C1
     level: sharedFact
     intersectionClass: fact
@@ -368,6 +566,7 @@ kinds:
     status: active
 
   - kind: coSharedContent
+    vertical: general
     entry: C2
     level: sharedFact
     intersectionClass: fact
@@ -388,6 +587,7 @@ kinds:
     status: active
 
   - kind: coCreatedContent
+    vertical: general
     entry: C3
     level: sharedFact
     intersectionClass: fact
@@ -409,6 +609,7 @@ kinds:
     deferredReason: 当前无协作/共创数据源（用户已确认不存在共同协作创建），登记占位、禁止产出。
 
   - kind: coLiked
+    vertical: general
     entry: C4
     level: sharedFact
     intersectionClass: fact
@@ -431,6 +632,7 @@ kinds:
 
   # ---- D. 人与地点 / 对象：共同对象事实 ----
   - kind: coVisitedEntity
+    vertical: general
     entry: D1
     level: sharedFact
     intersectionClass: fact
@@ -451,6 +653,7 @@ kinds:
     status: active
 
   - kind: sharedEntityAttention
+    vertical: general
     entry: D2
     level: sharedFact
     intersectionClass: fact
@@ -465,12 +668,13 @@ kinds:
     timeWindowDays: 14
     evidenceRank: 20
     sampleVisualsRequired: false
-    iconKey: interest
+    iconKey: attention
     propagationRole: none
     lifecycleApplicable: true
     status: active
 
   - kind: coWishlistedEntity
+    vertical: general
     entry: D3
     level: sharedFact
     intersectionClass: fact
@@ -492,6 +696,7 @@ kinds:
     deferredReason: 「共同想去/愿望」是对象级意图，当前无稳定意图行为采集（用户已确认偏理想），登记占位、禁止产出。
 
   - kind: sharedTagSample
+    vertical: general
     entry: 共同兴趣
     level: sharedFact
     intersectionClass: fact
@@ -513,6 +718,7 @@ kinds:
 
   # ---- E. 桥接型交集（第三方桥接） ----
   - kind: followeeInObject
+    vertical: general
     entry: E1
     level: bridgeFact
     intersectionClass: fact
@@ -527,12 +733,13 @@ kinds:
     timeWindowDays: 30
     evidenceRank: 10
     sampleVisualsRequired: true
-    iconKey: people
+    iconKey: followHere
     propagationRole: bridge
     lifecycleApplicable: true
     status: active
 
   - kind: followeeVisited
+    vertical: general
     entry: E2
     level: bridgeFact
     intersectionClass: fact
@@ -547,12 +754,13 @@ kinds:
     timeWindowDays: 14
     evidenceRank: 10
     sampleVisualsRequired: true
-    iconKey: place
+    iconKey: placeHere
     propagationRole: bridge
     lifecycleApplicable: true
     status: active
 
   - kind: followeeViewing
+    vertical: general
     entry: E2
     level: bridgeFact
     intersectionClass: fact
@@ -567,12 +775,13 @@ kinds:
     timeWindowDays: 7
     evidenceRank: 10
     sampleVisualsRequired: true
-    iconKey: people
+    iconKey: viewing
     propagationRole: bridge
     lifecycleApplicable: true
     status: active
 
   - kind: alumniHere
+    vertical: general
     entry: E3
     level: bridgeFact
     intersectionClass: fact
@@ -592,6 +801,7 @@ kinds:
     lifecycleApplicable: false
     status: active
   - kind: colleagueHere
+    vertical: general
     entry: E3
     level: bridgeFact
     intersectionClass: fact
@@ -612,6 +822,7 @@ kinds:
     status: active
 
   - kind: followeeDiscussedThis
+    vertical: general
     entry: E4
     level: bridgeFact
     intersectionClass: fact

@@ -1,0 +1,9 @@
+{
+  "fixture": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/contracts/metadata/_shared/test_fixtures/content_recommendation_social_graph.gamma_seed.json",
+  "targetStore": "content-service:quwoquan_content",
+  "applied": {
+    "followEdges": 0,
+    "featureTags": 4,
+    "invalidated": 0
+  }
+}

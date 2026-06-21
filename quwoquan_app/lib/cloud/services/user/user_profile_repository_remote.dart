@@ -298,6 +298,42 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
+  Future<AuthorImpactEvidencePage> listAuthorImpactEvidence({
+    required String subAccountId,
+    required String impactId,
+    String evidenceSnapshotId = '',
+    String cursor = '',
+    int limit = 20,
+  }) async {
+    final query = <String, String>{
+      'impactId': impactId,
+      'limit': '$limit',
+    };
+    if (evidenceSnapshotId.trim().isNotEmpty) {
+      query['evidenceSnapshotId'] = evidenceSnapshotId.trim();
+    }
+    if (cursor.trim().isNotEmpty) {
+      query['cursor'] = cursor.trim();
+    }
+    final url = _uri(
+      ContentApiMetadata.listAuthorImpactEvidencePath(subAccountId: subAccountId),
+      queryParameters: query,
+    );
+    final resp = await _httpClient.get(
+      url,
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.listAuthorImpactEvidence,
+      ),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception('listAuthorImpactEvidence failed: ${resp.statusCode}');
+    }
+    return AuthorImpactEvidencePage.fromMap(
+      _decodeObject(resp, ContentRequestPageIds.listAuthorImpactEvidence),
+    );
+  }
+
+  @override
   Future<List<SocialRelationSearchItemView>> searchSocialRelations({
     required String query,
     int limit = CloudApiDefaults.pageLimit,

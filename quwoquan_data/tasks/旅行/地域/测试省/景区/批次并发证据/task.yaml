@@ -1,0 +1,31 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/测试省/景区/批次并发证据
+title: 测试省景区批次并发证据
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 测试省
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 测试省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 景区001
+  - entityType: 地点/景区
+    name: 景区002
+provenance:
+  createdAt: '2026-06-20T18:10:34.640993+00:00'
+  createdBy: test
+content:
+  modalityContract: separated_research
+  carriers:
+  - article
+  - image
+  quotas:
+    entityArticlesPerTarget: 4
+    imageWorksPerTarget: 2
+    entityHomepagesPerTarget: 1

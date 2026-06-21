@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_5289f1f877e63611",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/龙门石窟景区"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:龙门石窟景区"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/龙门石窟景区",
+      "reason": "no_condition_profile; uses region/season menu"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7856038",
+    "https://touch.travel.qunar.com/youji/7868211",
+    "https://touch.travel.qunar.com/youji/7891074",
+    "https://touch.travel.qunar.com/youji/7856057",
+    "https://touch.travel.qunar.com/youji/7868155",
+    "https://touch.travel.qunar.com/youji/7863726",
+    "https://touch.travel.qunar.com/youji/7875932",
+    "https://touch.travel.qunar.com/youji/7868516",
+    "https://touch.travel.qunar.com/youji/7855997",
+    "https://touch.travel.qunar.com/youji/7872374",
+    "https://touch.travel.qunar.com/youji/7880967",
+    "https://touch.travel.qunar.com/youji/7855919",
+    "https://touch.travel.qunar.com/youji/7895557",
+    "https://touch.travel.qunar.com/youji/7868509",
+    "https://touch.travel.qunar.com/youji/7899257",
+    "https://touch.travel.qunar.com/youji/7896299",
+    "https://touch.travel.qunar.com/youji/7886999"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/龙门石窟景区/1.download/sources/37.qunar_guide_candidate_5289f1f877e63611/source.md",
+    "entities/地点/景区/龙门石窟景区/1.download/sources/42.qunar_guide_candidate_5a44d70fa512a691/source.md",
+    "entities/地点/景区/龙门石窟景区/1.download/sources/75.qunar_guide_candidate_ac44b07bd4175359/source.md",
+    "entities/地点/景区/龙门石窟景区/1.download/sources/94.qunar_guide_candidate_d47d4e4c70098e52/source.md",
+    "entities/地点/景区/龙门石窟景区/1.download/sources/08.qunar_guide_candidate_14753e465a9ec844/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "龙门石窟景区·行前指南：1日游",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "龙门石窟景区",
+    "routeEntities": [
+      "龙门石窟景区"
+    ],
+    "beats": [
+      "先从 龙门石窟景区 进入主线。",
+      "没想到这次住在洛阳华茂春松酒店真的太值了，旁边还有洛阳市新晋的网红图书馆-归雁中华美学馆，拍照打卡十分出片，不过建议大家早点来打卡，因为有时候人多，需要排队等候",
+      "打卡完归雁图书馆、园区艺术装置和特色店铺之后，我们去观看了下午4：30的寻迹洛神赋沉浸式演出，这是”中国首部数字行浸演艺“，也是来洛阳旅行必看的一场演出，当时我们订的是下午4：30的演出，现场以河洛历史文化为蓝本，通过AR、VR等数字科技、艺术空间造景、多维感官设计等创意手法打造的视觉盛宴，体验感真的超级好，之前作为一个不喜欢看演出的我来说，也是第一次被这样的行浸演艺所震撼到",
+      "中秋假期刚过，少了些拥挤嘈杂，反向出行不要太爽",
+      "就在大河荟一层，提前买票，逛吃到七点多就去排队就行"
+    ],
+    "sourceNote": "来了5次洛阳，这份两天一夜的暑期特种兵旅行指南记得收藏！,2026洛阳游记,洛阳旅游/自助游/自由行/游玩攻略-【去哪儿攻略】\n森屿... 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n来了5次洛阳，这份两天一夜的暑期特种兵旅行指南记得收藏！\n森屿时光...\n2024/06/21出发\n人物\n三五好友\n玩法\n周末游\n人均\n1000元",
+    "relatedTopics": [
+      "龙门石窟景区",
+      "没想到这次住在洛阳华茂春松酒店真的太值了，旁边还有洛阳市新晋的网红图书馆-归雁中华美学馆，拍照打卡十分出片，不过建议大家早点来打卡，因为有时候人多，需要排队等候",
+      "打卡完归雁图书馆、园区艺术装置和特色店铺之后，我们去观看了下午4：30的寻迹洛神赋沉浸式演出，这是”中国首部数字行浸演艺“，也是来洛阳旅行必看的一场演出，当时我们订的是下午4：30的演出，现场以河洛历史文化为蓝本，通过AR、VR等数字科技、艺术空间造景、多维感官设计等创意手法打造的视觉盛宴，体验感真的超级好，之前作为一个不喜欢看演出的我来说，也是第一次被这样的行浸演艺所震撼到",
+      "中秋假期刚过，少了些拥挤嘈杂，反向出行不要太爽",
+      "就在大河荟一层，提前买票，逛吃到七点多就去排队就行"
+    ],
+    "mustIncludeFacts": [
+      "龙门石窟景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-19T22:36:43.559911+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:龙门石窟景区"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_3349c8301f9faba9",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "龙门石窟景区",
+      "sourceEntityRef": "/entity/地点/景区/龙门石窟景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_5289f1f877e63611",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 17
+    }
+  ],
+  "articleMarkdownDigest": "sha256:287ffba729d124c266e01fc39b50910b0edd02aaaf517cd4c1dc3a37dbd7fe19"
+}

@@ -7,48 +7,65 @@ node:
   parent_domain_service: recommendation-platform
   parent_business_capability: rec-model-service
 scope:
-  summary: rec-model-service 商用并发容量与实时性工程：多 worker、打分/特征缓存、跨请求合批、超时预算分层与 guardrails 口径统一。
+  summary: rec-model-service 商用并发容量与实时性工程：多 worker、打分/特征缓存、跨请求合批、超时预算分层与 guardrails
+    口径统一。
   in_scope:
-    - 多进程水平扩容与单进程 GIL 解除。
-    - 打分/特征缓存与跨请求 micro-batch。
-    - 超时预算分层与 guardrails 口径统一。
+  - 多进程水平扩容与单进程 GIL 解除。
+  - 打分/特征缓存与跨请求 micro-batch。
+  - 超时预算分层与 guardrails 口径统一。
   out_of_scope:
-    - 不引入深度模型平台轨的服务拆分或 ANN 检索；P1 仅完成当前 rec-model-service 的容量工程最小集。
-    - 深度模型平台轨。
+  - 不引入深度模型平台轨的服务拆分或 ANN 检索；P1 仅完成当前 rec-model-service 的容量工程最小集。
+  - 深度模型平台轨。
 gwt_acceptance:
   GWT1:
     title: 模型服务并发容量与实时性 GWT
     given:
-      - 推荐打分在商用 QPS 下对 rec-model-service 发起候选打分请求。
+    - 推荐打分在商用 QPS 下对 rec-model-service 发起候选打分请求。
     when:
-      - 并发上升、特征重复或单次重试发生。
+    - 并发上升、特征重复或单次重试发生。
     then:
-      - 多进程承载吞吐、缓存与合批降低尾延迟、超时预算分层避免大面积回退 rule，guardrails 切流口径一致。
+    - 多进程承载吞吐、缓存与合批降低尾延迟、超时预算分层避免大面积回退 rule，guardrails 切流口径一致。
     done_when:
-      - 多 worker、缓存、合批、超时预算分层与 guardrails 口径统一在规格中冻结，并有容量 SLI。
+    - 多 worker、缓存、合批、超时预算分层与 guardrails 口径统一在规格中冻结，并有容量 SLI。
     edge_cases:
-      - 模型不可用时仍按 CascadeScorer 回退 RuleScorer，回退率进入 model_fallback_rate。
+    - 模型不可用时仍按 CascadeScorer 回退 RuleScorer，回退率进入 model_fallback_rate。
     contract_refs:
-      - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
-      - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+    - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
     performance_points:
-      - model_fallback_rate < 0.05
-    evidence:
-      primary:
-        - T1_contract
-        - T3_app_api_integration
-      supporting:
-        - T2_module_interaction
+    - model_fallback_rate < 0.05
     tests:
-      planned:
-        - quwoquan_service/runtime/recommendation/cascade_scorer_budget_test.go
+      planned: []
       recorded:
-        - quwoquan_service/services/rec-model-service/tests/test_inference_capacity.py
-        - quwoquan_service/services/rec-model-service/tests/test_score_api.py
+      - file: quwoquan_service/services/rec-model-service/tests/test_inference_capacity.py
+      - file: quwoquan_service/services/rec-model-service/tests/test_score_api.py
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.recommendation_platform.rec_model_service.inference_capacity_elasticity.contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.recommendation_platform.rec_model_service.inference_capacity_elasticity.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.recommendation_platform.rec_model_service.inference_capacity_elasticity.gwt1_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_service/runtime/recommendation/cascade_scorer_budget_test.go'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

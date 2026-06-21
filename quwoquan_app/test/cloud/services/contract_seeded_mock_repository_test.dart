@@ -96,6 +96,30 @@ void main() {
     expect(feed.map((item) => item.id), contains('fixture_photo_001'));
   });
 
+  test('content mock repository 的真实评论入口复用高保回复磁度', () async {
+    final repo = MockContentRepository();
+    final feed = await repo.listDiscoveryFeed(category: 'all', limit: 0);
+    final feedById = {for (final post in feed) post.id: post};
+    expect(feedById['fixture_photo_001']?.commentCount, 182);
+    final showcaseDetail = await repo.getPost(postId: 'alpha_moment_grid_1');
+    expect(showcaseDetail.post.commentCount, 182);
+
+    for (final postId in const <String>[
+      'fixture_photo_001',
+      'alpha_moment_grid_1',
+    ]) {
+      final page = await repo.listComments(postId: postId, limit: 100);
+      final byId = {for (final comment in page.items) comment.id: comment};
+      expect(page.totalCount, 182, reason: postId);
+      expect(byId['fixture_comment_thread_empty']?.replyCount, 0);
+      expect(byId['fixture_comment_parent_001']?.replyCount, 1);
+      expect(byId['fixture_comment_thread_five']?.replyCount, 5);
+      expect(byId['fixture_comment_thread_ten']?.replyCount, 10);
+      expect(byId['fixture_comment_thread_fifty']?.replyCount, 50);
+      expect(byId['fixture_comment_thread_hundred']?.replyCount, 110);
+    }
+  });
+
   test('circle mock repository 可由 contracts fixture 初始化', () async {
     final pack = loadCircleScenarioPack();
     final seedRefs = pack.seedRefsFor('circle_list_detail_basic');

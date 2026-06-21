@@ -38,25 +38,41 @@ gwt_acceptance:
     performance_points:
     - Feed P95 <= 200ms，P99 <= 400ms。
     - HotPath 行为生效延迟 < 100ms。
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T3_app_api_integration
     tests:
       planned:
-      - quwoquan_app/test/patrol/discovery/feed_load_test.dart
+      - file: quwoquan_app/test/patrol/discovery/feed_load_test.dart
       recorded:
-      - quwoquan_service/runtime/recommendation/engine_test.go
-      - quwoquan_service/runtime/recommendation/bench_test.go
-      - quwoquan_service/runtime/recommendation/feed_type_contract_test.go
-      - quwoquan_service/runtime/recommendation/engagement_depth_test.go
-      - quwoquan_service/runtime/recommendation/rerank_mmr_test.go
-      - quwoquan_service/runtime/recommendation/ucb_explore_test.go
-      - quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
-      - quwoquan_app/test/cloud/behavior/contract/behavior_repository_contract_test.dart
+      - file: quwoquan_service/runtime/recommendation/engine_test.go
+      - file: quwoquan_service/runtime/recommendation/bench_test.go
+      - file: quwoquan_service/runtime/recommendation/feed_type_contract_test.go
+      - file: quwoquan_service/runtime/recommendation/engagement_depth_test.go
+      - file: quwoquan_service/runtime/recommendation/rerank_mmr_test.go
+      - file: quwoquan_service/runtime/recommendation/ucb_explore_test.go
+      - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
+      - file: quwoquan_app/test/cloud/behavior/contract/behavior_repository_contract_test.dart
     status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.feed_orchestration_recommendation.realtime_feed_baseline.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.feed_orchestration_recommendation.realtime_feed_baseline.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.discovery_content.feed_orchestration_recommendation.realtime_feed_baseline.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

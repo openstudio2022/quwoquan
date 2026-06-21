@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "青城山_route_transport",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:05e1b0f428f6e3917bdb1fdb87115eccdb581adbe9f3624250a27b3d9abd3c91",
+  "finalSha256": "sha256:b0073740acc33be8759e0f043e810b7913e0dd7afc70bb57a90dc6b7428476c6",
+  "draftBodySha256": "sha256:05e1b0f428f6e3917bdb1fdb87115eccdb581adbe9f3624250a27b3d9abd3c91",
+  "finalBodySha256": "sha256:05e1b0f428f6e3917bdb1fdb87115eccdb581adbe9f3624250a27b3d9abd3c91",
+  "composeSnapshotSha256": "sha256:05e1b0f428f6e3917bdb1fdb87115eccdb581adbe9f3624250a27b3d9abd3c91",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

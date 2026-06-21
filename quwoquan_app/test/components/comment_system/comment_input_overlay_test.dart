@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
@@ -12,6 +16,7 @@ import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/ui/content/providers/comment_provider.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -32,6 +37,14 @@ class _AuthenticatedSession extends AuthSessionController {
 }
 
 void main() {
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final tempDir = await Directory.systemTemp.createTemp(
+      'comment_overlay_test_',
+    );
+    Hive.init(tempDir.path);
+  });
+
   testWidgets('评论输入浮层不展示语音或 ASR 入口', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -69,6 +82,138 @@ void main() {
   testWidgets(
     'testCommentComposerMentionsAndAttachment: @、附件和 emoji 面板可协同提交',
     testCommentComposerMentionsAndAttachment,
+  );
+
+  test(
+    'testCommentSubmitThroughProvider: 已登录经 provider 真实提交评论并乐观入列',
+    testCommentSubmitThroughProvider,
+  );
+
+  testWidgets('字数计数：输入后显示当前/上限，清空后隐藏', (tester) async {
+    SharedPreferences.setMockInitialValues(const <String, Object>{});
+    await tester.pumpWidget(_overlayHarness(postId: 'char-counter-post'));
+    await tester.tap(find.text('open-comment-input'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(TestKeys.commentCharCounter), findsNothing);
+
+    await tester.enterText(find.byKey(TestKeys.commentTextField), '你好世界');
+    await tester.pump();
+    expect(find.byKey(TestKeys.commentCharCounter), findsOneWidget);
+    expect(find.text('4/500'), findsOneWidget);
+
+    await tester.enterText(find.byKey(TestKeys.commentTextField), '');
+    await tester.pump();
+    expect(find.byKey(TestKeys.commentCharCounter), findsNothing);
+  });
+
+  testWidgets('草稿持久化：关闭未发的输入态后重开自动续写', (tester) async {
+    SharedPreferences.setMockInitialValues(const <String, Object>{});
+    await tester.pumpWidget(_overlayHarness(postId: 'draft-post'));
+
+    await tester.tap(find.text('open-comment-input'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(TestKeys.commentTextField), '未发完的草稿');
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.tap(find.byKey(TestKeys.commentInputOverlayScrim));
+    await tester.pumpAndSettle();
+    expect(find.byKey(TestKeys.commentInputOverlay), findsNothing);
+
+    await tester.tap(find.text('open-comment-input'));
+    await tester.pumpAndSettle();
+    final field = tester.widget<CupertinoTextField>(
+      find.byKey(TestKeys.commentTextField),
+    );
+    expect(field.controller?.text, '未发完的草稿', reason: '重开同帖输入态应续写草稿');
+  });
+
+  testWidgets('草稿清除：提交成功后重开不再回灌', (tester) async {
+    SharedPreferences.setMockInitialValues(const <String, Object>{});
+    final submitted = <CommentComposerPayload>[];
+    await tester.pumpWidget(
+      _overlayHarness(
+        postId: 'draft-clear-post',
+        onSubmit: (payload) => submitted.add(payload),
+      ),
+    );
+
+    await tester.tap(find.text('open-comment-input'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(TestKeys.commentTextField), '这条会发出去');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byKey(TestKeys.submitCommentButton));
+    await tester.pumpAndSettle();
+    expect(submitted, hasLength(1));
+
+    await tester.tap(find.text('open-comment-input'));
+    await tester.pumpAndSettle();
+    final field = tester.widget<CupertinoTextField>(
+      find.byKey(TestKeys.commentTextField),
+    );
+    expect(field.controller?.text, isEmpty, reason: '提交成功后草稿应已清除');
+  });
+}
+
+Widget _overlayHarness({
+  required String postId,
+  FutureOr<void> Function(CommentComposerPayload payload)? onSubmit,
+}) {
+  return ProviderScope(
+    overrides: [
+      contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+      analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
+      authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+    ],
+    child: CupertinoApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: CupertinoPageScaffold(
+        child: Builder(
+          builder: (context) {
+            return CupertinoButton(
+              onPressed: () => CommentInputOverlay.show(
+                context,
+                postId: postId,
+                onSubmit: onSubmit,
+              ),
+              child: const Text('open-comment-input'),
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
+/// 复现用户主路径：经 commentProvider.addComment（非自定义 onSubmit）提交评论。
+/// alpha mock 下 requiresResolvedPersonaForMutations=false，persona 回退也不应抛
+/// StateError；提交后 mock 记录一次 createComment、provider 状态乐观插入新评论。
+Future<void> testCommentSubmitThroughProvider() async {
+  SharedPreferences.setMockInitialValues(const <String, Object>{});
+  final repo = MockContentRepository();
+  const postId = 'alpha_photo_landscape_single';
+  final container = ProviderContainer(
+    overrides: [
+      contentRepositoryProvider.overrideWithValue(repo),
+      analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
+      authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+    ],
+  );
+  addTearDown(container.dispose);
+
+  final notifier = container.read(commentProviderFamily(postId).notifier);
+  final result = await notifier.addComment('测试发评论是否可用');
+
+  expect(result, isNotNull, reason: 'addComment 应返回云侧确认评论');
+  expect(repo.createCommentCallCount, 1, reason: '应真实调用一次 createComment');
+  expect(repo.lastCommentPostId, postId);
+  expect(repo.lastCommentText, '测试发评论是否可用');
+  final state = container.read(commentProviderFamily(postId));
+  expect(
+    state.comments.any((c) => c.content == '测试发评论是否可用'),
+    isTrue,
+    reason: '乐观插入后评论应出现在列表中',
   );
 }
 

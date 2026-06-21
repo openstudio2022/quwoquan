@@ -62,14 +62,21 @@ def _curl_get_text(url: str, *, timeout: int = DOWNLOAD_TEXT_TIMEOUT_SECONDS) ->
     return proc.stdout
 
 
-def _wikipedia_api_plaintext(url: str) -> str:
+def _wikipedia_title_from_url(url: str) -> tuple[str, str]:
     parsed = urllib.parse.urlparse(url)
     host = parsed.hostname or ""
     if not any(host.endswith(domain) for domain in ("wikipedia.org", "wikivoyage.org")):
-        return ""
+        return "", ""
     if "/wiki/" not in parsed.path:
-        return ""
+        return host, ""
     title = urllib.parse.unquote(parsed.path.split("/wiki/", 1)[1].split("#")[0])
+    return host, title
+
+
+def _wikipedia_api_url(url: str) -> str:
+    host, title = _wikipedia_title_from_url(url)
+    if not host or not title:
+        return ""
     q = urllib.parse.urlencode({
         "action": "query",
         "prop": "extracts",
@@ -78,17 +85,194 @@ def _wikipedia_api_plaintext(url: str) -> str:
         "titles": title,
         "format": "json",
     })
-    api_url = f"https://{parsed.hostname}/w/api.php?{q}"
+    return f"https://{host}/w/api.php?{q}"
+
+
+def _mediawiki_json_loads(raw: str) -> Mapping[str, Any]:
     try:
-        data = json.loads(_curl_get_text(api_url))
-    except Exception:
-        return ""
+        data = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        # Keep the original raw evidence, but parse a repaired copy when
+        # MediaWiki extract text contains a literal malformed \u fragment.
+        repaired = re.sub(r"\\u(?![0-9a-fA-F]{4})", r"\\\\u", raw or "")
+        data = json.loads(repaired or "{}")
+    return data if isinstance(data, Mapping) else {}
+
+
+def _wikipedia_api_extract_payload(url: str) -> tuple[str, str]:
+    api_url = _wikipedia_api_url(url)
+    if not api_url:
+        return "", ""
+    try:
+        raw = _curl_get_text(api_url)
+    except Exception as first_exc:  # noqa: BLE001
+        try:
+            status, body, _ = _http_get_bytes(
+                api_url,
+                timeout=DOWNLOAD_TEXT_TIMEOUT_SECONDS,
+                max_redirects=4,
+                max_retries=2,
+            )
+            raw = body.decode("utf-8", errors="ignore") if status == 200 else ""
+        except Exception as fallback_exc:  # noqa: BLE001
+            raise RuntimeError(
+                f"wikipedia_api fetch failed for {api_url}: {first_exc}; fallback: {fallback_exc}"
+            ) from first_exc
+    if not str(raw or "").strip():
+        status, body, _ = _http_get_bytes(
+            api_url,
+            timeout=DOWNLOAD_TEXT_TIMEOUT_SECONDS,
+            max_redirects=4,
+            max_retries=2,
+        )
+        raw = body.decode("utf-8", errors="ignore") if status == 200 else raw
+    data = _mediawiki_json_loads(raw)
     pages = data.get("query", {}).get("pages") or {}
     for page in pages.values():
         extract = str(page.get("extract") or "").strip()
         if extract:
-            return extract
-    return ""
+            return extract, raw
+    return "", raw
+
+
+def _mediawiki_extmeta_value(meta: Mapping[str, Any], key: str) -> str:
+    value = meta.get(key)
+    if isinstance(value, Mapping):
+        return str(value.get("value") or "").strip()
+    return str(value or "").strip()
+
+
+def _mediawiki_clean_meta_text(value: str) -> str:
+    text = html_lib.unescape(str(value or ""))
+    text = re.sub(r"(?is)<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _mediawiki_file_titles(url: str, *, limit: int = 8) -> tuple[str, list[str]]:
+    host, title = _wikipedia_title_from_url(url)
+    if not host or not title:
+        return "", []
+    q = urllib.parse.urlencode(
+        {
+            "action": "query",
+            "prop": "pageimages|images",
+            "redirects": "1",
+            "titles": title,
+            "pithumbsize": "1600",
+            "imlimit": str(max(1, int(limit))),
+            "format": "json",
+        }
+    )
+    try:
+        data = _mediawiki_json_loads(_curl_get_text(f"https://{host}/w/api.php?{q}") or "{}")
+    except Exception:
+        return host, []
+    titles: list[str] = []
+    pages = ((data.get("query") or {}).get("pages") or {}) if isinstance(data, Mapping) else {}
+    for page in pages.values():
+        if not isinstance(page, Mapping):
+            continue
+        pageimage = str(page.get("pageimage") or "").strip()
+        if pageimage:
+            titles.append(f"File:{pageimage}" if not pageimage.startswith("File:") else pageimage)
+        for image in page.get("images") or []:
+            if isinstance(image, Mapping):
+                titles.append(str(image.get("title") or "").strip())
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw_title in titles:
+        file_title = raw_title.strip()
+        if not file_title or file_title in seen:
+            continue
+        suffix = Path(file_title.split(":", 1)[-1]).suffix.lower()
+        if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
+            continue
+        seen.add(file_title)
+        out.append(file_title)
+        if len(out) >= int(limit):
+            break
+    return host, out
+
+
+def _wikipedia_api_image_assets(url: str, *, limit: int = 3) -> list[dict[str, Any]]:
+    host, titles = _mediawiki_file_titles(url, limit=max(limit * 2, limit))
+    if not host or not titles:
+        return []
+    q = urllib.parse.urlencode(
+        {
+            "action": "query",
+            "prop": "imageinfo",
+            "iiprop": "url|mime|size|extmetadata",
+            "titles": "|".join(titles[:50]),
+            "format": "json",
+        },
+        safe="|:",
+    )
+    try:
+        data = _mediawiki_json_loads(_curl_get_text(f"https://{host}/w/api.php?{q}") or "{}")
+    except Exception:
+        return []
+    pages = ((data.get("query") or {}).get("pages") or {}) if isinstance(data, Mapping) else {}
+    assets: list[dict[str, Any]] = []
+    for page in pages.values():
+        if not isinstance(page, Mapping):
+            continue
+        file_title = str(page.get("title") or "").strip()
+        imageinfo = page.get("imageinfo") or []
+        if not imageinfo or not isinstance(imageinfo[0], Mapping):
+            continue
+        info = imageinfo[0]
+        direct_url = str(info.get("url") or "").strip()
+        if not direct_url:
+            continue
+        meta = info.get("extmetadata") if isinstance(info.get("extmetadata"), Mapping) else {}
+        license_name = (
+            _mediawiki_extmeta_value(meta, "LicenseShortName")
+            or _mediawiki_extmeta_value(meta, "UsageTerms")
+            or _mediawiki_extmeta_value(meta, "License")
+        )
+        credit = (
+            _mediawiki_extmeta_value(meta, "Artist")
+            or _mediawiki_extmeta_value(meta, "Credit")
+            or _mediawiki_extmeta_value(meta, "ObjectName")
+            or "Wikimedia Commons"
+        )
+        terms_url = _mediawiki_extmeta_value(meta, "LicenseUrl") or str(info.get("descriptionurl") or "").strip()
+        if not license_name or not terms_url:
+            continue
+        asset_key = f"{file_title}|{direct_url}"
+        assets.append(
+            {
+                "assetId": "asset_" + hashlib.sha1(asset_key.encode("utf-8")).hexdigest()[:16],
+                "url": direct_url,
+                "requestedUrl": direct_url,
+                "sourceUrl": str(info.get("descriptionurl") or direct_url),
+                "collectionPageUrl": str(info.get("descriptionurl") or direct_url),
+                "license": _mediawiki_clean_meta_text(license_name),
+                "credit": _mediawiki_clean_meta_text(credit),
+                "termsUrl": terms_url,
+                "usageScope": "wikimedia_commons_open_license_publish_candidate",
+                "modelReleaseStatus": "not_required",
+                "contentType": str(info.get("mime") or ""),
+                "width": int(info.get("width") or 0),
+                "height": int(info.get("height") or 0),
+                "sourceCollectionId": "wikimedia_commons:" + hashlib.sha1(file_title.encode("utf-8")).hexdigest()[:16],
+                "creator": _mediawiki_clean_meta_text(credit),
+                "caption": file_title.split(":", 1)[-1].rsplit(".", 1)[0].replace("_", " "),
+                "fileTitle": file_title,
+            }
+        )
+        if len(assets) >= int(limit):
+            break
+    return assets
+
+
+def _wikipedia_api_plaintext(url: str) -> str:
+    try:
+        extract, _raw = _wikipedia_api_extract_payload(url)
+    except Exception:
+        return ""
+    return extract
 
 
 def _html_to_plain_text(html: str) -> str:
@@ -511,10 +695,28 @@ def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -
         )
     if fetchable_override:
         runtime = {**runtime, "sourceFetchableOverride": True}
+    source_extractor = str((source or {}).get("extractor") or "").strip()
+    if source_extractor:
+        runtime = {**runtime, "extractor": source_extractor, "sourceExtractorOverride": True}
+    extractor = str(runtime.get("extractor") or "generic_html")
+    if extractor == "wikipedia_api":
+        text, raw = _wikipedia_api_extract_payload(url)
+        body = raw.encode("utf-8")
+        if not body:
+            raise RuntimeError(f"fetch failed for {url} (wikipedia_api empty response)")
+        assets = _wikipedia_api_image_assets(url)
+        return {
+            "url": url,
+            "statusCode": 200,
+            "htmlBytes": body,
+            "text": text[:50000],
+            "assets": assets,
+            "sha256": hashlib.sha256(body).hexdigest(),
+            "runtime": {**runtime, "rawFormat": "mediawiki_api_json"},
+        }
     status, body, _ = _http_get_bytes(url, timeout=20, max_redirects=4, max_retries=4)
     if status != 200 or not body:
         raise RuntimeError(f"fetch failed for {url} (status={status})")
-    extractor = str(runtime.get("extractor") or "generic_html")
     return {
         "url": url,
         "statusCode": status,

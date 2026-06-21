@@ -92,7 +92,7 @@ class _HomepagePreviewCover extends StatelessWidget {
         height: AppSpacing.oneHundred - AppSpacing.twentyEight,
         child: (coverUrl ?? '').trim().isEmpty
             ? fallback
-            : CircleMediaImage(
+            : AppMediaImage(
                 imageSource: coverUrl!,
                 fit: BoxFit.cover,
                 placeholder: fallback,

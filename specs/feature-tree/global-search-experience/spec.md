@@ -52,12 +52,12 @@
 2. 各域灌数完成（R-S05a~e）：`content.post / entity.homepage / circle.circle / circle.group / user.profile` 经统一 indexer 灌入 `quwoquan_objects`；新增第一方地点对象 `location.place`（复用 geo 维度，与 `entity.homepage` 互斥单源）。
 3. App remote `/v1/search` 接线完成（R-S06）：`RemoteSearchRepository` 走 `CloudHttpClient` + codegen path，透传 `rankReasons / rankPosition / coverWidth / coverHeight / connectionState / intersectionReason / relatedTerms`，`searchRepositoryProvider` 按数据源切换。
 4. 反馈/热力/排序完成（R-S07）：`FeedbackSink / QueryLogSink`、`queryheat` term-heat 派生读模型 `rm_search_term_heat`(TTL 86400)、排序透明化、SLO/告警/AB 切桶。
-5. 搜索信号注入推荐 Feed 完成（R-S07-5，T1/T2 + 真实 Redis 双服务 T3 已证明）：search → Redis Stream `events.search.recommendation_signals` → content-service consumer → `rm_recommend_feature` → FeatureStore → RuleScorer；线上 AB 收益显著性与真集群差异为长稳观察项，不再作为链路闭环缺口。
+5. 搜索信号注入推荐 Feed 完成（R-S07-5，local_contract + 真实 Redis 双服务 api_integration 已证明）：search → Redis Stream `events.search.recommendation_signals` → content-service consumer → `rm_recommend_feature` → FeatureStore → RuleScorer；线上 AB 收益显著性与真集群差异为长稳观察项，不再作为链路闭环缺口。
 
 ### 商用需求口径（统一真相源）
 
 - **两段式数据边界**：`suggest` 阶段做本地快速检索（`chat.contact / chat.conversation / chat.message`、`circle.group` 本地命名空间），即时返回；`result` 阶段的**最终结果只来自云侧**——`content.post`、`entity.homepage`、`location.place`、相关搜索词、小趣（assistant）。本地对象不进入 `result` 最终结果集。
-- **反馈推荐闭环**：查询日志 / term-heat 既参与搜索结果页排序（R-S07，已闭环），也经 Redis 注入推荐 Feed 排序（R-S07-5，待真实 Redis 双服务 T3）。
+- **反馈推荐闭环**：查询日志 / term-heat 既参与搜索结果页排序（R-S07，已闭环），也经 Redis 注入推荐 Feed 排序（R-S07-5，待真实 Redis 双服务 api_integration）。
 - **性能 / 稳定 / 准确**：`suggest` 本地即时；`result` 首批分组 P95 ≤ 1.5s；单域降级不阻塞整页；召回 ES 主 + native 透明回退；敏感 query 阻断；相关性排序透明化（`rankReasons / rankPosition / rankingVersion / experimentBucket`）。
 
 ### 商用完整功能规格（2026-06-16 `/plan-review` 刷新）
@@ -100,7 +100,7 @@
 1. `/v1/search` 成功后记录 query log（best-effort，不阻塞主路径）；`/v1/search/feedback` 记录点击/曝光/反馈。
 2. `queryheat` 基于查询次数、点击、共现、时间衰减计算 `rm_search_term_heat`，TTL 与索引在 metadata/storage 中声明。
 3. term-heat 同时用于搜索结果页排序和相关搜索词生成；`experimentBucket=control|term_heat` 必须可分桶查询。
-4. 搜索信号经 Redis Stream 投影到 `rm_recommend_feature.userFeatures.searchTermAffinity`，并被 Feed scorer 消费；线上 AB 收益为发布后观察项，但链路可消费性必须在 T3/T2 中证明。
+4. 搜索信号经 Redis Stream 投影到 `rm_recommend_feature.userFeatures.searchTermAffinity`，并被 Feed scorer 消费；线上 AB 收益为发布后观察项，但链路可消费性必须在 api_integration/local_contract 中证明。
 
 ### result 阶段云侧对象 taxonomy（澄清）
 

@@ -12,7 +12,7 @@
 | --- | --- | --- | --- |
 | `alpha` | 快速本地/CI，允许 mock 或最小 remote | 图片策略、message sender avatar 防回退、基础路由可用 | 不作为可靠任务最终证明 |
 | `beta` | 本地 beta stack + Android/iOS 模拟器 | 建群首帧、加人、退人、可靠任务、通知、App 显示 | 至少一个模拟器 passed；发布前应覆盖 Android 和 iOS |
-| `local-gamma` | 本地 Docker gamma mirror + seed-box onebox | gamma 配置、remote data source、media base、chat/reliabletask/notification module | `avatar_e2e_report.json`、T3、T4 均 passed |
+| `local-gamma` | 本地 Docker gamma mirror + seed-box onebox | gamma 配置、remote data source、media base、chat/reliabletask/notification module | `avatar_e2e_report.json`、api_integration、user_acceptance 均 passed |
 | `cloud-gamma-pre` | GitHub Actions ECS pre + self-hosted 模拟器 | 真实 `GAMMA_BASE_URL`、真实网关、真实媒体加载、阻断 prod 前置 | pre 阶段失败不得进入 prod |
 | `cloud-gamma-prod-smoke` | ECS prod 就地升级后 smoke | 建群、头像最终更新、sync patch、UI 可见 | smoke failed 必须阻断发布完成结论 |
 

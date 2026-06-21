@@ -42,12 +42,40 @@ class DiscoveryFeedText {
   static const String intersectionTimeBucketLast7Days = '近 7 天';
   static const String intersectionTimeBucketThisMonth = '本月';
   static const String intersectionTimeBucketLastMonth = '上月';
+  static const String intersectionTimeBucketEmpty = '暂无交集';
   static const String myIntersectionsSubtitle = '最近谁和你有了新的共同点';
   static const String intersectionExpandMore = '展开';
   static const String intersectionCollapse = '收起';
-  static const String myIntersectionsEmpty = '你和别人的共同点，会显示在这里';
   static const String intersectionNewBadgeSuffix = '条新增';
   static const String intersectionAffinityLabel = '推荐';
+
+  // ==================== 交集行动建议按钮文案 ====================
+  /// `actionKey` → 行动按钮微文案。
+  ///
+  /// actionKey 闭集真相源 = `intersection_kind_registry.yaml.actionHintLegend`
+  /// （codegen 下发 `intersectionActionKeys` 校验）；按 kind 选哪个 action 由 codegen
+  /// [IntersectionKindMetadata.primaryActionKey] / `actionHints` 决定。本表只承载
+  /// UI 按钮文字（mock G2 模拟云侧下发的 `hint.label`），不再在 Repository / 句式合成器
+  /// 各自硬编码第二份 actionKey→文案 switch。
+  static const Map<String, String> intersectionActionLabels = <String, String>{
+    'follow_person': '关注',
+    'greet_person': '打招呼',
+    'message_person': '发消息',
+    'view_shared_people': '查看共同关注',
+    'join_circle': '加入圈子',
+    'open_discussion': '进入讨论',
+    'open_content': '查看内容',
+    'open_object': '进入主页',
+    'follow_object': '关注对象',
+    'open_route': '查看路线',
+    'create_followup': '写续篇',
+    'ask_assistant': '解释这条交集',
+  };
+
+  /// `actionKey` → 行动按钮文案；未知 key 回退助手解释（与 `ask_assistant` 同义）。
+  static String intersectionActionLabel(String actionKey) =>
+      intersectionActionLabels[actionKey.trim()] ??
+      intersectionActionLabels['ask_assistant']!;
 
   // ==================== 影响明细 sheet ====================
   // 影响明细 sheet（统一交互子契约落地：展示云侧样本，不编造全量）
@@ -56,20 +84,28 @@ class DiscoveryFeedText {
   static const String impactEvidenceSheetFullPendingNote =
       '完整名单将稍后开放，以下仅为云侧部分样本';
   static const String impactEvidenceSheetNoSampleNote = '完整名单将稍后开放，暂未提供可展示样本';
+  // 完整明细分页（R-ID03 端侧下钻闭合）：以被影响内容为载体逐条展示，不暴露具体用户身份。
+  static const String impactEvidenceSheetDetailLabel = '完整来源明细';
+  static const String impactEvidenceSheetLoadMore = '加载更多';
+  static const String impactEvidenceSheetLoadFailed = '影响明细加载失败';
+  static const String impactEvidenceSheetEmptyNote = '暂无可展示的影响明细';
 
   // ==================== 交集生命周期 / 维度 ====================
   // 交集生命周期弱标（§21.3，仅弱标/红点，不进结论句；真相源为服务端 lifecycleState 枚举）
   static const String intersectionLifecycleNew = '新';
   static const String intersectionLifecycleStrengthened = '增强';
   static const String intersectionLifecycleReactivated = '重新活跃';
+  static const String intersectionLifecycleArchived = '历史记录';
   static const Map<String, String> intersectionLifecycleLabels =
       <String, String>{
         'new': intersectionLifecycleNew,
         'strengthened': intersectionLifecycleStrengthened,
         'reactivated': intersectionLifecycleReactivated,
+        // archived 默认不进 inbox（§22.3 端侧过滤），仅历史筛选/对象页弱标展示。
+        'archived': intersectionLifecycleArchived,
       };
 
-  /// 生命周期弱标短文案；stable/weakened 无标（返回空串，端不渲染弱标）。
+  /// 生命周期弱标短文案；stable/weakened/expired 无标（返回空串，端不渲染弱标）。
   static String intersectionLifecycleLabel(String state) =>
       intersectionLifecycleLabels[state.trim()] ?? '';
 

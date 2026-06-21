@@ -160,20 +160,20 @@ class UserProfileCacheEntry {
 
 ## 11. 验收重点
 
-### T1
+### local_contract
 - `POST /users/timestamps` 请求响应结构契约
 - `GET /users/profiles` 批量查询响应结构契约
 
-### T2
+### local_contract
 - 对话页 AppBar 显示对方圆角方形头像（1v1）
 - 消息气泡旁显示发送者圆角方形头像
 - 点击头像跳转用户主页
 
-### T3
+### api_integration
 - 时间戳比对：仅拉取有变化的用户信息
 - 新用户（本地无缓存）首次进入时从云端拉取并缓存
 - WebSocket `user.profile.updated` 事件触发缓存更新
 
-### T4
+### user_acceptance
 - 真机：打开对话页无闪屏，头像从缓存加载流畅
 - 弱网：本地缓存头像正常显示，后台刷新静默失败

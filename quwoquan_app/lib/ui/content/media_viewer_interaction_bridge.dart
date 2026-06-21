@@ -128,10 +128,7 @@ bool effectiveProfileFollowing(WidgetRef ref, String subAccountId) {
   if (relationshipState.hasRelationshipStateFor(subAccountId)) {
     return relationshipState.isFollowing(subAccountId);
   }
-  return ref
-      .read(discoveryStateProvider)
-      .followingUsers
-      .contains(subAccountId);
+  return ref.read(discoveryStateProvider).followingUsers.contains(subAccountId);
 }
 
 int effectivePostLikeCount(
@@ -176,6 +173,7 @@ int effectivePostCommentCount(
 void syncPostLikeIntent(
   WidgetRef ref, {
   required String postId,
+  required bool previousLiked,
   required bool isLiked,
   required int likeCount,
 }) {
@@ -192,14 +190,15 @@ void syncPostLikeIntent(
       .read(clientStateSyncOutboxProvider.notifier)
       .enqueuePostLike(
         postId: postId,
+        currentLiked: previousLiked,
         isLiked: isLiked,
-        flushImmediately: true,
       );
 }
 
 void syncProfileFollowIntent(
   WidgetRef ref, {
   required String subAccountId,
+  required bool previousFollowing,
   required bool isFollowing,
 }) {
   if (!ref.read(authSessionControllerProvider).isAuthenticated) {
@@ -215,8 +214,8 @@ void syncProfileFollowIntent(
       .read(clientStateSyncOutboxProvider.notifier)
       .enqueueFollow(
         subAccountId: subAccountId,
+        currentFollowing: previousFollowing,
         shouldFollow: isFollowing,
-        flushImmediately: true,
       );
 }
 

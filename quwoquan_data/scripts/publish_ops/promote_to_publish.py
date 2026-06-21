@@ -137,6 +137,7 @@ def _resolve_publish_target(manifest: dict, src_name: str) -> tuple[str, str, st
     angle = manifest.get("publishAngle") or infer_format_angle(manifest.get("tagRefs", []))
     title = manifest.get("publishTitle") or src_name
     seq = int(manifest.get("publishSeq", 1))
+    manifest_type = str(manifest.get("contentType") or manifest.get("carrier") or "").strip()
 
     if layout == "campus":
         entity_refs = manifest.get("entityRefs", [])
@@ -149,12 +150,21 @@ def _resolve_publish_target(manifest: dict, src_name: str) -> tuple[str, str, st
             title = school
         return "article", angle, title, seq
 
+    if manifest_type in ("image", "gallery"):
+        return "image", angle, title, seq
+
     if not manifest.get("publishTitle"):
         entity_refs = manifest.get("entityRefs", [])
         if entity_refs:
             entity_name = entity_refs[0].strip("/").split("/")[-1]
             title = f"{entity_name}{angle}指南"
     return "article", angle, title, seq
+
+
+def _is_promotable_post_package(topic_dir: Path, manifest: dict) -> bool:
+    if (topic_dir / "article.md").exists() or (topic_dir / "gallery.md").exists():
+        return True
+    return str(manifest.get("contentType") or manifest.get("carrier") or "") in ("image", "gallery")
 
 
 def promote_from_posts_root(posts_root: Path, dry_run: bool) -> tuple[int, int]:
@@ -168,12 +178,12 @@ def promote_from_posts_root(posts_root: Path, dry_run: bool) -> tuple[int, int]:
     # 以 manifest.json 为锚定位 post 包：只接受对象树下的真实 post 包。
     for manifest_path in sorted(posts_root.rglob("manifest.json")):
         topic_dir = manifest_path.parent
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         # 只接受真正的 post 包（含正文），排除 review/ 等 sidecar 子目录。
-        if not (topic_dir / "article.md").exists() and not (topic_dir / "gallery.md").exists():
+        if not _is_promotable_post_package(topic_dir, manifest):
             continue
         rel = topic_dir.relative_to(posts_root)
         content_type = rel.parts[0] if rel.parts else "article"
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if manifest.get("reviewDecision") not in (None, "approved"):
             print(f"[promote] SKIP (not approved): {rel}")
             skipped += 1

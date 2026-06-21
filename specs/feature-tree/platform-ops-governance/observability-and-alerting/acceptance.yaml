@@ -9,43 +9,53 @@ node:
 scope:
   summary: observability and alerting 验收范围。
   in_scope:
-    - runtime/controlplane 真实指标 dashboard。
-    - userMessage override hit/miss、runtime error response、config sync source/result 告警。
-    - 文案发布、灰度、回滚与审计证据。
+  - runtime/controlplane 真实指标 dashboard。
+  - userMessage override hit/miss、runtime error response、config sync source/result
+    告警。
+  - 文案发布、灰度、回滚与审计证据。
   out_of_scope:
-    - 使用伪造趋势替代真实 metrics。
-    - 在 dashboard 中按具体 errorCode 建高基数序列。
+  - 使用伪造趋势替代真实 metrics。
+  - 在 dashboard 中按具体 errorCode 建高基数序列。
 sit_acceptance:
   SIT1:
     title: observability and alerting 能力 SIT
     story_refs: []
     done_when:
-    - Error Governance dashboard 能关联 override hit/miss、runtime error response 与 config sync fallback。
+    - Error Governance dashboard 能关联 override hit/miss、runtime error response 与 config
+      sync fallback。
     - override 发布窗口内 hit/miss 变化可解释，miss 异常、locale 缺失、disk fallback 有告警。
     - 回滚恢复 baseline 文案，不需要重启服务或端侧升级。
     performance_points:
     - override 发布 p95 <= 60s 生效。
     - fallback baseline 期间错误响应可用性不低于 99.9%。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
     tests:
       planned:
       - file: quwoquan_service/runtime/controlplane/error_message_override_test.go
-        layer: T2_module_interaction
-        command: cd quwoquan_service && go test ./runtime/controlplane -run TestErrorMessageResolver
-        asserts:
-        - controlplane_error_message_override_total hit/miss 按 result/locale 增量。
       - file: specs/feature-tree/platform-ops-governance/observability-and-alerting/spec.md
-        layer: T1_static_contract
-        command: bash agent_ops/scaffold/verify_acceptance_standard.sh
-        asserts:
-        - override dashboard/alert/SLO/rollback 口径已登记为正式规格。
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.platform_ops_governance.observability_and_alerting.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.platform_ops_governance.observability_and_alerting.sit1.sit1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.platform_ops_governance.observability_and_alerting.sit1.sit1_local_contract
+        envs: *id001
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

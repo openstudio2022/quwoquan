@@ -47,6 +47,27 @@ class _HomeFeedVideoScrollSignal {
   }
 }
 
+/// 把 feed 范围内唯一的 [HomeFeedVideoFocusCoordinator] 暴露给子树中的视频卡片，
+/// 保证整张瀑布流共享同一个单活跃仲裁器（任意时刻 ≤1 个视频解码器存活）。
+class _HomeFeedVideoFocusScope extends InheritedWidget {
+  const _HomeFeedVideoFocusScope({
+    required this.coordinator,
+    required super.child,
+  });
+
+  final HomeFeedVideoFocusCoordinator coordinator;
+
+  static HomeFeedVideoFocusCoordinator? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<_HomeFeedVideoFocusScope>()
+        ?.coordinator;
+  }
+
+  @override
+  bool updateShouldNotify(_HomeFeedVideoFocusScope oldWidget) =>
+      !identical(coordinator, oldWidget.coordinator);
+}
+
 class _HomeFeedScrollView extends StatefulWidget {
   const _HomeFeedScrollView({
     required this.pageBackground,
@@ -110,6 +131,9 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
       ValueNotifier<_HomeFeedVideoScrollSignal>(
         _HomeFeedVideoScrollSignal.initial(),
       );
+  // 整张瀑布流共享的单活跃视频仲裁器：无论挂载多少卡片，至多一个视频初始化解码器。
+  final HomeFeedVideoFocusCoordinator _videoFocus =
+      HomeFeedVideoFocusCoordinator();
   Timer? _staleNoticeTimer;
   Timer? _videoScrollSettleTimer;
   Object? _visibleStaleDataError;
@@ -134,6 +158,7 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
     _staleNoticeTimer?.cancel();
     _videoScrollSettleTimer?.cancel();
     _videoScrollSignal.dispose();
+    _videoFocus.dispose();
     _controller.removeListener(_onScroll);
     _controller.dispose();
     super.dispose();
@@ -250,9 +275,12 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
       color: widget.pageBackground,
       child: NotificationListener<ScrollNotification>(
         onNotification: _handleScrollNotification,
-        child: CustomScrollView(
-          controller: _controller,
-          slivers: _buildSlivers(),
+        child: _HomeFeedVideoFocusScope(
+          coordinator: _videoFocus,
+          child: CustomScrollView(
+            controller: _controller,
+            slivers: _buildSlivers(),
+          ),
         ),
       ),
     );
@@ -278,13 +306,9 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
               AppSpacing.containerSm,
             ),
             child: AppTransientErrorNotice(
-              semantic: runtimeErrorSemantic(
+              semantic: _homeCacheFallbackSemantic(
                 context,
-                error: visibleStaleDataError,
-                category: UiErrorCategory.backgroundAction,
-                scope: UiErrorScope.section,
-                allowRetry: false,
-                presentation: UiErrorPresentation.transientNotice,
+                visibleStaleDataError,
               ),
               margin: EdgeInsets.zero,
             ),
@@ -390,6 +414,36 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
     );
     return slivers;
   }
+
+  UiErrorSemantic _homeCacheFallbackSemantic(
+    BuildContext context,
+    Object error,
+  ) {
+    final base = runtimeErrorSemantic(
+      context,
+      error: error,
+      category: UiErrorCategory.backgroundAction,
+      scope: UiErrorScope.section,
+      allowRetry: false,
+      presentation: UiErrorPresentation.transientNotice,
+    );
+    return UiErrorSemantic(
+      category: base.category,
+      scope: base.scope,
+      title: UITextConstants.pageLoadFailedTitle,
+      message: UITextConstants.homeCacheFallback,
+      secondaryMessage: base.secondaryMessage,
+      primaryAction: base.primaryAction,
+      secondaryAction: base.secondaryAction,
+      dismissible: base.dismissible,
+      sourceCode: base.sourceCode,
+      failureKind: base.failureKind,
+      copyKey: 'homeCacheFallback',
+      recoveryAction: base.recoveryAction,
+      presentation: base.presentation,
+      tone: UiErrorTone.caution,
+    );
+  }
 }
 
 /// 触底加载 footer：加载指示 + 频道气质文案（只读，空文案不展示）。
@@ -454,4 +508,3 @@ class _LoadMoreFooter extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // 首页关系流卡片（社交图文风格）
 // ─────────────────────────────────────────────────────────────────────────────
-

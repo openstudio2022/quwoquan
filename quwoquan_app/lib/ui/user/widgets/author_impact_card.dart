@@ -1,14 +1,16 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
-import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/ui/user/widgets/author_impact_evidence.dart';
 import 'package:quwoquan_app/ui/user/widgets/intersection_statement_card.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
@@ -45,6 +47,22 @@ class AuthorImpactCard extends ConsumerWidget {
       summary.total <= 0 ||
       summary.items.every((item) => item.primaryText.trim().isEmpty);
 
+  /// 影响明细分页拉取闭包：经 Provider 注入仓库，按 (subAccountId, impactId) 取真实分页。
+  /// 延迟到 sheet 打开时才 `ref.read`，构建期不触达 Provider。
+  AuthorImpactEvidenceFetcher _evidenceFetcher(
+    WidgetRef ref,
+    AuthorImpactItem item,
+  ) {
+    return ({String cursor = ''}) => ref
+        .read(userProfileRepositoryProvider)
+        .listAuthorImpactEvidence(
+          subAccountId: summary.authorId,
+          impactId: item.impactId,
+          evidenceSnapshotId: item.evidenceSnapshotId,
+          cursor: cursor,
+        );
+  }
+
   IntersectionTargetNavigator _navigator(WidgetRef ref) =>
       IntersectionTargetNavigator(
         onTrack: (target, attribution) {
@@ -56,7 +74,8 @@ class AuthorImpactCard extends ConsumerWidget {
               .read(contentBehaviorTrackerProvider)
               .trackClick(
                 id,
-                referralSource: ReferralSource.organicFeed,
+                // 作者影响力卡展示在用户主页（自/他人）→ 来源为作者主页面，非推荐流。
+                referralSource: ReferralSource.authorProfile,
                 intersectionDimension: attribution.dimension,
                 intersectionSourceRef: attribution.sourceRef,
                 intersectionTagRefs: attribution.tagRefs,
@@ -84,6 +103,10 @@ class AuthorImpactCard extends ConsumerWidget {
       title: isMine
           ? UITextConstants.profileImpactTitleMine
           : UITextConstants.profileImpactTitleOther,
+      footerActionLabel: isMine ? DiscoveryFeedText.intersectionViewAll : null,
+      onFooterAction: isMine
+          ? () => context.push(AppRoutePaths.myIntersections(filter: 'impact'))
+          : null,
       items: _isEmpty
           ? const <IntersectionStatementItem>[]
           : <IntersectionStatementItem>[
@@ -98,25 +121,42 @@ class AuthorImpactCard extends ConsumerWidget {
                   iconKey: item.iconKey,
                   sourceRef: item.source,
                   dimension: item.intersectionDimension,
+                  actionHints: item.actionHints,
                   showAuxiliaryLine: false,
-                  onSpanTap: (span) =>
-                      _onSpanTap(context, navigator, item, span),
+                  onActionHintTap: (hint) => AuthorImpactEvidence.onActionHintTap(
+                    context,
+                    navigator: navigator,
+                    item: item,
+                    hint: hint,
+                    isMine: isMine,
+                    fetchEvidence: _evidenceFetcher(ref, item),
+                  ),
+                  onSpanTap: (span) => AuthorImpactEvidence.onSpanTap(
+                    context,
+                    navigator: navigator,
+                    item: item,
+                    span: span,
+                    isMine: isMine,
+                    fetchEvidence: _evidenceFetcher(ref, item),
+                  ),
                   onVisualTap: (visual) => navigator.open(
                     context,
                     visual.target,
-                    attribution: _attributionFor(item),
+                    attribution: AuthorImpactEvidence.attributionFor(item),
                   ),
-                  onPropagationTap: () => _showEvidence(
+                  onPropagationTap: () => AuthorImpactEvidence.showEvidence(
                     context,
                     navigator: navigator,
                     item: item,
                     isMine: isMine,
+                    fetchEvidence: _evidenceFetcher(ref, item),
                   ),
-                  onTap: () => _showEvidence(
+                  onTap: () => AuthorImpactEvidence.showEvidence(
                     context,
                     navigator: navigator,
                     item: item,
                     isMine: isMine,
+                    fetchEvidence: _evidenceFetcher(ref, item),
                   ),
                 ),
             ],
@@ -132,204 +172,4 @@ class AuthorImpactCard extends ConsumerWidget {
     );
   }
 
-  void _onSpanTap(
-    BuildContext context,
-    IntersectionTargetNavigator navigator,
-    AuthorImpactItem item,
-    IntersectionTextSpan span,
-  ) {
-    // 数字片段进影响明细（展示云侧样本）；名字 / 对象片段进对应主页。
-    if (span.role == 'count') {
-      _showEvidence(context, navigator: navigator, item: item, isMine: isMine);
-      return;
-    }
-    navigator.open(context, span.target, attribution: _attributionFor(item));
-  }
-
-  static IntersectionNavAttribution _attributionFor(AuthorImpactItem item) {
-    final tagRef = item.tagRef.trim();
-    return IntersectionNavAttribution(
-      dimension: item.intersectionDimension,
-      sourceRef: item.source,
-      evidenceId: item.evidenceSnapshotId,
-      tagRefs: tagRef.isEmpty ? const <String>[] : <String>[tagRef],
-    );
-  }
-
-  static Future<void> _showEvidence(
-    BuildContext context, {
-    required IntersectionTargetNavigator navigator,
-    required AuthorImpactItem item,
-    required bool isMine,
-  }) {
-    return showCupertinoModalPopup<void>(
-      context: context,
-      barrierColor: AppColors.black.withValues(alpha: 0.32),
-      builder: (sheetContext) => _AuthorImpactEvidenceSheet(
-        item: item,
-        isMine: isMine,
-        onVisualTap: (visual) {
-          Navigator.of(sheetContext).pop();
-          navigator.open(
-            context,
-            visual.target,
-            attribution: _attributionFor(item),
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// 影响明细底部 sheet：来源摘要 + 云侧样本视觉，不编造完整名单。
-class _AuthorImpactEvidenceSheet extends StatelessWidget {
-  const _AuthorImpactEvidenceSheet({
-    required this.item,
-    required this.isMine,
-    required this.onVisualTap,
-  });
-
-  final AuthorImpactItem item;
-  final bool isMine;
-  final void Function(IntersectionVisual visual) onVisualTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final surface = AppColors.iosProfileSurface(context);
-    final sourceLabel = _sourceLabel();
-    final hint = isMine
-        ? UITextConstants.impactEnumerableHintMine
-        : UITextConstants.impactEnumerableHintOther;
-    final hasVisuals = item.sampleVisuals.isNotEmpty;
-
-    return SafeArea(
-      top: false,
-      child: Container(
-        margin: EdgeInsets.all(AppSpacing.md),
-        padding: EdgeInsets.all(AppSpacing.containerMd),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            // 结论句（单通道真相源，纯文本直出，不在 sheet 内拆字拼装）。
-            Text(
-              item.primaryText.trim(),
-              style: TextStyle(
-                fontSize: AppTypography.iosBody,
-                fontWeight: AppTypography.semiBold,
-                color: AppColors.iosLabel(context),
-              ),
-            ),
-            SizedBox(height: AppSpacing.intraGroupSm),
-            Text(
-              hint,
-              style: TextStyle(
-                fontSize: AppTypography.iosFootnote,
-                color: AppColors.iosSecondaryLabel(context),
-              ),
-            ),
-            SizedBox(height: AppSpacing.containerSm),
-            _MetaRow(
-              label: DiscoveryFeedText.impactEvidenceSheetSourceLabel,
-              value: item.count > 0
-                  ? '$sourceLabel · ${item.count}'
-                  : sourceLabel,
-            ),
-            SizedBox(height: AppSpacing.containerSm),
-            Text(
-              DiscoveryFeedText.impactEvidenceSheetSampleLabel,
-              style: TextStyle(
-                fontSize: AppTypography.iosFootnote,
-                fontWeight: AppTypography.semiBold,
-                color: AppColors.iosSecondaryLabel(context),
-              ),
-            ),
-            SizedBox(height: AppSpacing.intraGroupSm),
-            if (hasVisuals) ...<Widget>[
-              IntersectionVisualCluster(
-                visuals: item.sampleVisuals,
-                maxVisuals: 5,
-                size: AppSpacing.avatarUserMd,
-                onVisualTap: onVisualTap,
-              ),
-              SizedBox(height: AppSpacing.intraGroupSm),
-              Text(
-                DiscoveryFeedText.impactEvidenceSheetFullPendingNote,
-                style: TextStyle(
-                  fontSize: AppTypography.iosCaption2,
-                  color: AppColors.iosTertiaryLabel(context),
-                ),
-              ),
-            ] else
-              Text(
-                DiscoveryFeedText.impactEvidenceSheetNoSampleNote,
-                style: TextStyle(
-                  fontSize: AppTypography.iosCaption2,
-                  color: AppColors.iosTertiaryLabel(context),
-                ),
-              ),
-            SizedBox(height: AppSpacing.containerMd),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoButton.filled(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text(UITextConstants.confirm),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _sourceLabel() {
-    final source = item.source.trim();
-    if (source.isNotEmpty) {
-      return source;
-    }
-    final subtitle = item.subtitleText.trim();
-    if (subtitle.isNotEmpty) {
-      return subtitle;
-    }
-    return isMine
-        ? UITextConstants.profileImpactTitleMine
-        : UITextConstants.profileImpactTitleOther;
-  }
-}
-
-class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            color: AppColors.iosSecondaryLabel(context),
-          ),
-        ),
-        SizedBox(width: AppSpacing.intraGroupSm),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: AppTypography.iosSubheadline,
-              color: AppColors.iosLabel(context),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }

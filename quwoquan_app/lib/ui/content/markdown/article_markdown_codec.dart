@@ -156,7 +156,7 @@ class ArticleMarkdownCodec {
     for (final block in parsed.blocks) {
       switch (block.kind) {
         case QwqMarkdownBlockKind.heading:
-          final inline = _parseEntityInlineText(block.text);
+          final inline = _parseInlineMentions(block.text);
           final text = inline.text.trim();
           if (block.level <= 1 && text == title) {
             break;
@@ -176,7 +176,7 @@ class ArticleMarkdownCodec {
         case QwqMarkdownBlockKind.quote:
         case QwqMarkdownBlockKind.callout:
         case QwqMarkdownBlockKind.card:
-          final inline = _parseEntityInlineText(block.text);
+          final inline = _parseInlineMentions(block.text);
           if (inline.text.trim().isNotEmpty) {
             nodes.add(
               ArticleDocumentNode(
@@ -189,7 +189,7 @@ class ArticleMarkdownCodec {
           }
           break;
         case QwqMarkdownBlockKind.orderedItem:
-          final inline = _parseEntityInlineText(block.text);
+          final inline = _parseInlineMentions(block.text);
           nodes.add(
             ArticleDocumentNode(
               id: block.id.isNotEmpty ? block.id : 'ordered_${seed++}',
@@ -200,7 +200,7 @@ class ArticleMarkdownCodec {
           );
           break;
         case QwqMarkdownBlockKind.bulletItem:
-          final inline = _parseEntityInlineText(block.text);
+          final inline = _parseInlineMentions(block.text);
           nodes.add(
             ArticleDocumentNode(
               id: block.id.isNotEmpty ? block.id : 'bullet_${seed++}',
@@ -254,27 +254,28 @@ class ArticleMarkdownCodec {
     );
   }
 
-  static _EntityInlineParseResult _parseEntityInlineText(String source) {
-    final pattern = RegExp(r'@\[(.+?)\]\(entity:([A-Za-z0-9_:/-]+)\)');
+  static _InlineMentionParseResult _parseInlineMentions(String source) {
+    final pattern = RegExp(r'@\[(.+?)\]\((entity|tag):([A-Za-z0-9_:/-]+)\)');
     final buffer = StringBuffer();
     final spans = <ArticleInlineSpan>[];
     var cursor = 0;
     for (final match in pattern.allMatches(source)) {
       buffer.write(source.substring(cursor, match.start));
       final label = match.group(1) ?? '';
-      final target = match.group(2) ?? '';
-      final targetId = target.startsWith('entity:') ? target : 'entity:$target';
-      final targetType = 'entity';
+      final kind = match.group(2) ?? '';
+      final target = match.group(3) ?? '';
+      final prefix = '$kind:';
+      final targetId = target.startsWith(prefix) ? target : '$prefix$target';
       final start = buffer.length;
       buffer.write(label);
       final end = buffer.length;
-      if (label.isNotEmpty && targetType.isNotEmpty && targetId.isNotEmpty) {
+      if (label.isNotEmpty && kind.isNotEmpty && targetId.isNotEmpty) {
         spans.add(
           ArticleInlineSpan(
             start: start,
             end: end,
-            kind: 'entity',
-            targetType: targetType,
+            kind: kind,
+            targetType: kind,
             targetId: targetId,
             displayText: label,
           ),
@@ -283,10 +284,10 @@ class ArticleMarkdownCodec {
       cursor = match.end;
     }
     if (cursor == 0) {
-      return _EntityInlineParseResult(text: source, spans: const []);
+      return _InlineMentionParseResult(text: source, spans: const []);
     }
     buffer.write(source.substring(cursor));
-    return _EntityInlineParseResult(text: buffer.toString(), spans: spans);
+    return _InlineMentionParseResult(text: buffer.toString(), spans: spans);
   }
 
   static Map<String, String> resolveArticleAssetManifestUrls(
@@ -389,28 +390,29 @@ class ArticleMarkdownCodec {
     String text,
     List<ArticleInlineSpan> spans,
   ) {
-    final entitySpans = spans.where((span) => span.isEntity).toList()
+    final mentionSpans = spans.where((span) => span.isInlineMention).toList()
       ..sort((a, b) => a.start.compareTo(b.start));
-    if (entitySpans.isEmpty) return text;
+    if (mentionSpans.isEmpty) return text;
     final buffer = StringBuffer();
     var cursor = 0;
-    for (final span in entitySpans) {
+    for (final span in mentionSpans) {
       final start = span.start.clamp(0, text.length);
       final end = span.end.clamp(start, text.length);
       if (start < cursor) continue;
       buffer.write(text.substring(cursor, start));
       final label = (span.displayText ?? text.substring(start, end)).trim();
       final targetId = span.targetId?.trim() ?? '';
+      final prefix = '${span.kind}:';
       if (label.isEmpty || targetId.isEmpty) {
         buffer.write(text.substring(start, end));
       } else {
-        final wireTarget = targetId.startsWith('entity:')
-            ? targetId.substring('entity:'.length)
+        final wireTarget = targetId.startsWith(prefix)
+            ? targetId.substring(prefix.length)
             : targetId;
         if (wireTarget.isEmpty) {
           buffer.write(text.substring(start, end));
         } else {
-          buffer.write('@[$label](entity:$wireTarget)');
+          buffer.write('@[$label]($prefix$wireTarget)');
         }
       }
       cursor = end;
@@ -469,8 +471,8 @@ class ArticleMarkdownCodec {
   }
 }
 
-class _EntityInlineParseResult {
-  const _EntityInlineParseResult({required this.text, required this.spans});
+class _InlineMentionParseResult {
+  const _InlineMentionParseResult({required this.text, required this.spans});
 
   final String text;
   final List<ArticleInlineSpan> spans;

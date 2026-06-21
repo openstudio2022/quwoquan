@@ -1,0 +1,36 @@
+{
+  "homepage_bundle": {
+    "objectId": "fixture_homepage_travel_photo_dali",
+    "objectPageTemplate": "travel_photo",
+    "canonicalEntityId": "entity:travel_photo:dali",
+    "tagRefs": [
+      "旅行摄影",
+      "机位",
+      "大理"
+    ],
+    "intersectionReasons_count": 2,
+    "intersectionReasons_dims": [
+      "location",
+      "relationship"
+    ],
+    "intersectionReasons_primary_sample": [
+      "你们都到过这里",
+      "这里有你可能想加入的相关圈子"
+    ]
+  },
+  "circle_impact": {
+    "circleId": "fixture_circle_travel",
+    "items_count": 3,
+    "helpTypes": [
+      "community",
+      "relationship",
+      "spread"
+    ],
+    "primary_samples": [
+      "6人在这里建立了新连接",
+      "18个讨论正在这里发生",
+      "16人最近参与了这里"
+    ]
+  },
+  "guest_summary_http": "400"
+}

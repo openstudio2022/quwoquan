@@ -24,21 +24,31 @@ gwt_acceptance:
     edge_cases: []
     contract_refs: []
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
       planned: []
       recorded:
-      - quwoquan_app/test/app/shell/web_page_max_width_frame_test.dart
-      - quwoquan_app/test/app/shell/web_create_groups_test.dart
-      - quwoquan_app/test/app/shell/web_featured_no_queue_test.dart
-      - quwoquan_app/test/app/shell/web_feed_post_tap_viewer_test.dart
-      - quwoquan_app/test/app/shell/web_chat_frame_test.dart
-      - quwoquan_app/test/app/shell/main_app_shell_widget_test.dart
+      - file: quwoquan_app/test/app/shell/web_page_max_width_frame_test.dart
+      - file: quwoquan_app/test/app/shell/web_create_groups_test.dart
+      - file: quwoquan_app/test/app/shell/web_featured_no_queue_test.dart
+      - file: quwoquan_app/test/app/shell/web_feed_post_tap_viewer_test.dart
+      - file: quwoquan_app/test/app/shell/web_chat_frame_test.dart
+      - file: quwoquan_app/test/app/shell/main_app_shell_widget_test.dart
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.page_horizontal_quality.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.page_horizontal_quality.gwt1_local_contract
+        envs: *id001
+      supporting: []
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

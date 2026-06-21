@@ -7,8 +7,11 @@ description: |
 
   维度与证据组类型为开放字符串（dimension / pointClass / sourceRef），端按字符串解析，
   未来新增交集 kind 不需要改契约，端侧对未知 kind 优雅降级展示 displayText/label + count，
-  不得写死闭集枚举。sourceRef 取值必须先在交集词典 kind 唯一注册表登记
-  （specs/product/intersection-definition-and-application.md §5.4，标准名如
+  不得写死闭集枚举。sourceRef 是 IntersectionPoint 级的「交集 kind 一等引用」（§23：point 投影的 kind 真相源即
+  sourceRef，端查 IntersectionKindMetadata.of(point.sourceRef) 得 iconKey/objectKind/actionHints/tone/vertical，
+  禁止端再按点推导 kind）。sourceRef 取值必须先在交集词典 kind 唯一注册表登记
+  （specs/product/intersection-definition-and-application.md §5.4 与
+  recommendation/rec_model/intersection_kind_registry.yaml，标准名如
   sharedFollowees / sharedCircle / coCommented / coVisitedEntity / followeeInObject，
   无兼容别名），登记后方可在云侧产出与 fixtures 铺设。
 

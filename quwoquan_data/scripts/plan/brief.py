@@ -38,7 +38,7 @@ def resolve_compose_brief(
     continuity_expectations = _normalize_optional_mapping(blueprint.get("continuityExpectations"))
     route_coverage_expectations = _normalize_optional_mapping(blueprint.get("routeCoverageExpectations"))
     recommendation = build_recommendation_manifest(
-        registry, blueprint, subject, refs, tag_refs, condition_context=condition["context"]
+        registry, blueprint, subject, refs, tag_refs, condition_context=condition["context"], creator=creator
     )
     return {
         "templateId": route.template_id,
@@ -64,6 +64,8 @@ def resolve_compose_brief(
             "voiceStyle": creator.get("voiceStyle"),
             "expertiseClaims": creator.get("expertiseClaims", []),
             "mustNotClaim": creator.get("mustNotClaim", []),
+            "coverageScope": creator.get("coverageScope"),
+            "carrierAffinity": creator.get("carrierAffinity"),
         },
         "render": blueprint.get("render"),
         "structure": blueprint.get("structure"),

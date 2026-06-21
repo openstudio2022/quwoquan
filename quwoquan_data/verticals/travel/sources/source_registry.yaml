@@ -38,6 +38,26 @@ sites:
     extractor: wikipedia_api
     licensePolicy: factual_citation_only
     qualityTier: B
+    siteCrawlProfile:
+      crawlAllowed: true
+      contentLanes: [article]
+      allowedPaths:
+        - https://zh.wikivoyage.org/wiki/*
+      fetchMode: mediawiki_api
+      extractor: wikipedia_api
+      rightsPolicy: factual_citation_only
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use
+      rateLimit:
+        mode: conservative
+        maxRequestsPerSecond: 0.5
+        backoffOnStatus: [403, 429]
+      maxDepth: 2
+      maxPagesPerDay: 5000
+      timeWindowDays: 730
+      notes: 维基导游站点线仅作为事实与目的地指南候选来源；正文生产仍须经 content_plan/produce/review，不复现原文。
     notes: 中文维基导游旅行指南，可抓取目的地攻略/交通/游览分区；仅作事实与决策参考，不复现原文。
   - siteId: baidu_baike
     platform: 百度百科
@@ -49,7 +69,7 @@ sites:
     extractor: baidu_baike_html
     licensePolicy: factual_citation_only
     qualityTier: A
-    notes: 中文结构化百科补充源，用于实体事实和章节骨架校验。
+    notes: 百科主页候选源；反抓取不稳定时由 fetch/source_screen 按真实正文快照决定 retained/rejected，不得用空页补证据。
   - siteId: sogou_baike
     platform: 搜狗百科
     category: encyclopedia
@@ -60,11 +80,11 @@ sites:
     extractor: sogou_baike_html
     licensePolicy: factual_citation_only
     qualityTier: B
-    notes: 作为百科补充源，抓取成功才使用。
+    notes: 百科主页候选源；反抓取不稳定时由 fetch/source_screen 按真实正文快照决定 retained/rejected，不得用空页补证据。
   - siteId: scenic_official
     platform: 景区官网
     category: official
-    domains: [ems517.com, sxd.cn, jiuzhai.com, dujiangyan.com.cn, bipenggou.net, snzh.cn, bifengxia.com, djy517.com, njfzm.net, hhhkpb.com, hukouwaterfall.com, shuanglongdong.com, zjshenxianju.com, tongli.net, xitang.com.cn, gthyjng.cn, wyhl.cc, chinaguyao.com, ixsw.cn, dzskyjy.cn, hnzjj.com]
+    domains: [ems517.com, sxd.cn, jiuzhai.com, dujiangyan.com.cn, bipenggou.net, snzh.cn, bifengxia.com, djy517.com, njfzm.net, hhhkpb.com, hukouwaterfall.com, shuanglongdong.com, zjshenxianju.com, tongli.net, xitang.com.cn, gthyjng.cn, wyhl.cc, chinaguyao.com, ixsw.cn, dzskyjy.cn, hnzjj.com, dpm.org.cn, bmy.com.cn, hgscn.com, potalapalace.cn]
     urlPatterns:
       - http://www.ems517.com/new/*
       - https://www.ems517.com/new/*
@@ -94,6 +114,10 @@ sites:
       - https://www.dzskyjy.cn/*
       - https://www.hnzjj.com/*
       - http://www.hnzjj.com/*
+      - https://www.dpm.org.cn/*
+      - https://www.bmy.com.cn/*
+      - https://www.hgscn.com/*
+      - https://www.potalapalace.cn/*
     fetchable: true
     extractor: static_official_html
     licensePolicy: official_terms_required
@@ -268,6 +292,22 @@ sites:
       notes: v1 网站维度受控试点站点；站点线仅产出候选与证据，正文仍走 content_plan/produce/review。
     notes: 去哪儿攻略静态页可稳定抓取，用于路线/门票/避坑类社区攻略证据。
 knownOfficialSites:
+  - entity: 故宫博物院
+    url: https://www.dpm.org.cn/Home.html
+    platform: 景区官网
+    category: official
+  - entity: 秦始皇帝陵博物院景区
+    url: https://www.bmy.com.cn/index.html
+    platform: 景区官网
+    category: official
+  - entity: 黄果树瀑布景区
+    url: https://www.hgscn.com/
+    platform: 景区官网
+    category: official
+  - entity: 布达拉宫景区
+    url: https://www.potalapalace.cn/
+    platform: 景区官网
+    category: official
   - entity: 三星堆博物馆
     url: https://www.sxd.cn/new_service/three-api/home/routeConfig
     platform: 景区官网
@@ -453,6 +493,36 @@ knownHomepageSupportSites:
     url: https://zh.wikipedia.org/wiki/%E5%8F%A4%E6%96%87%E5%8C%96%E8%A1%97
     platform: 维基百科
     category: encyclopedia
+  - entity: 龙门石窟景区
+    sourceId: home_wikipedia_longmen_grottoes
+    url: https://zh.wikipedia.org/wiki/%E9%BE%99%E9%97%A8%E7%9F%B3%E7%AA%9F
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 秦始皇帝陵博物院景区
+    sourceId: home_wikipedia_mausoleum_of_qin_shi_huang
+    url: https://zh.wikipedia.org/wiki/%E7%A7%A6%E5%A7%8B%E7%9A%87%E9%99%B5
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 黄山风景区
+    sourceId: home_wikipedia_huangshan
+    url: https://zh.wikipedia.org/wiki/%E9%BB%84%E5%B1%B1
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 杭州西湖风景区
+    sourceId: home_wikipedia_west_lake
+    url: https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%B9%96
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 鼓浪屿风景名胜区
+    sourceId: home_wikipedia_gulangyu
+    url: https://zh.wikipedia.org/wiki/%E9%BC%93%E6%B5%AA%E5%B6%BC
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 喀纳斯景区
+    sourceId: home_wikipedia_kanas_lake
+    url: https://zh.wikipedia.org/wiki/%E5%96%80%E7%BA%B3%E6%96%AF%E6%B9%96
+    platform: 维基百科
+    category: encyclopedia
   - entity: 春秋淹城旅游区
     sourceId: home_official_yancheng
     url: https://www.yclyq.com/
@@ -603,6 +673,96 @@ knownEntityAliases:
       - 莆田湄洲岛
       - 湄洲妈祖祖庙
       - 妈祖祖庙
+  - entity: 龙门石窟景区
+    aliases:
+      - 龙门石窟
+      - Longmen Grottoes
+      - Longmen Caves
+  - entity: 黄山风景区
+    aliases:
+      - 黄山
+      - Huangshan
+      - Mount Huangshan
+      - Yellow Mountain
+  - entity: 鼓浪屿风景名胜区
+    aliases:
+      - 鼓浪屿
+      - Gulangyu
+      - Kulangsu
+      - Gulangyu Island
+  - entity: 喀纳斯景区
+    aliases:
+      - 喀纳斯
+      - 喀纳斯湖
+      - Kanas
+      - Kanas Lake
+      - Kanas Nature Reserve
+  - entity: 杭州西湖风景区
+    aliases:
+      - 杭州西湖
+      - 西湖
+      - West Lake
+      - West Lake Hangzhou
+  - entity: 秦始皇帝陵博物院景区
+    aliases:
+      - 秦始皇帝陵博物院
+      - 秦始皇陵
+      - 兵马俑
+      - 秦始皇兵马俑
+      - Terracotta Army
+      - Terracotta Army Museum
+      - Mausoleum of the First Qin Emperor
+      - Qin Shi Huang Mausoleum
+      - Emperor Qinshihuang's Mausoleum Site Museum
+knownImageSearchHints:
+  - entity: 秦始皇帝陵博物院景区
+    aliases:
+      - Terracotta Army
+      - Terracotta Army Museum
+      - Mausoleum of the First Qin Emperor
+      - Qin Shi Huang Mausoleum
+      - Emperor Qinshihuang's Mausoleum Site Museum
+    commonsCategories:
+      - Terracotta Army
+      - Mausoleum of the First Qin Emperor
+  - entity: 龙门石窟景区
+    aliases:
+      - Longmen Grottoes
+      - Longmen Caves
+    commonsCategories:
+      - Longmen Grottoes
+  - entity: 黄山风景区
+    aliases:
+      - Huangshan
+      - Mount Huangshan
+      - Yellow Mountain
+    commonsCategories:
+      - Huangshan
+  - entity: 鼓浪屿风景名胜区
+    aliases:
+      - Gulangyu
+      - Kulangsu
+      - Gulangyu Island
+    commonsCategories:
+      - Gulangyu
+  - entity: 喀纳斯景区
+    aliases:
+      - Kanas
+      - Kanas Lake
+      - Kanas Nature Reserve
+    commonsCategories:
+      - Kanas Lake
+knownImageRejectTerms:
+  - entity: 故宫博物院
+    rejectTerms:
+      - national palace museum
+      - nationalpalace
+      - taiwan
+      - taipei
+      - 國立故宮博物院
+      - 国立故宫博物院
+      - 臺北故宮
+      - 台北故宫
 knownArticleSources:
   - entity: 南京市夫子庙－秦淮风光带
     sourceId: article_registry_fuzimiao_qinhuai_route

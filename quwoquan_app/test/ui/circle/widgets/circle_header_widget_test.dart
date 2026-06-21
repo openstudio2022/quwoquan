@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_header.dart';
 
 Widget _wrap(Widget child) => MaterialApp(
@@ -164,6 +166,50 @@ void main() {
       await tester.pump();
 
       expect(find.byType(Wrap), findsNothing);
+    });
+  });
+
+  // ── N8：成员簇归一到统一交集视觉簇（IntersectionVisualCluster），不再裸 URL 自绘 ──
+  group('CircleHeader — 成员视觉簇标准化', () {
+    testWidgets('有 memberVisuals 时渲染统一 IntersectionVisualCluster', (tester) async {
+      await tester.pumpWidget(_wrap(
+        CircleHeader(
+          isDark: false,
+          name: 'Cluster Circle',
+          memberVisuals: <IntersectionVisual>[
+            IntersectionVisual(
+              assetKind: 'avatar',
+              imageUrl: 'media/a.png',
+              displayName: '林清越',
+            ),
+            IntersectionVisual(
+              assetKind: 'avatar',
+              imageUrl: 'media/b.png',
+              displayName: '周野',
+            ),
+          ],
+        ),
+      ));
+      await tester.pump();
+
+      // 统一组件出现，且挂在约定 key 上（替代旧裸 CircleAvatar Stack 自绘）。
+      expect(find.byType(IntersectionVisualCluster), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('circle-header-member-cluster')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('memberVisuals 为空时不渲染视觉簇（G2 不占位）', (tester) async {
+      await tester.pumpWidget(_wrap(
+        const CircleHeader(
+          isDark: false,
+          name: 'No Cluster Circle',
+        ),
+      ));
+      await tester.pump();
+
+      expect(find.byType(IntersectionVisualCluster), findsNothing);
     });
   });
 }

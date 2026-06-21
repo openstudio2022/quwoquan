@@ -5,14 +5,8 @@ import (
 	"strings"
 )
 
-const (
-	HelpRelationship = "relationship"
-	HelpCommunity    = "community"
-	HelpDecision     = "decision"
-	HelpKnowledge    = "knowledge"
-	HelpSpread       = "spread"
-	HelpAudience     = "audience"
-)
+// helpType 标准名常量（HelpRelationship..HelpAudience）由 tools/codegen_impact
+// 从 impact_help_type_registry.yaml 生成于 help_type_table.go（同 package impact，单一真相源）。
 
 // ActorPerspective controls pronouns for author-facing impact statements.
 type ActorPerspective string
@@ -28,38 +22,55 @@ func PrimaryText(helpType string, action string, count int64, perspective ActorP
 	if count <= 0 {
 		return ""
 	}
-	n := strconv.FormatInt(count, 10)
+	subject := representativeSubject(count)
 	switch strings.TrimSpace(helpType) {
 	case HelpRelationship:
 		switch strings.TrimSpace(action) {
 		case "establish_connection":
-			return n + "人在这里建立了新连接"
+			return subject + "在这里建立了新连接"
 		default:
-			return n + "人通过" + actorPronoun(perspective) + "认识新朋友"
+			return subject + "通过" + actorPronoun(perspective) + "建立了新连接"
 		}
 	case HelpCommunity:
 		switch strings.TrimSpace(action) {
 		case "start_discussion":
-			return n + "个讨论正在这里发生"
+			return subject + "带起了新的讨论"
 		default:
-			return n + "人加入相关圈子"
+			return subject + "加入了相关圈子"
 		}
 	case HelpDecision:
-		return n + "人收藏了" + actorPronoun(perspective) + "的内容"
+		switch strings.TrimSpace(action) {
+		case "visit_place":
+			return subject + "通过" + actorPronoun(perspective) + "的内容去了相关地点"
+		default:
+			return subject + "通过" + actorPronoun(perspective) + "的内容关注了相关对象"
+		}
 	case HelpKnowledge:
-		return n + "人因" + actorPronoun(perspective) + "的分享有所收获"
+		switch strings.TrimSpace(action) {
+		case "quote_answer":
+			return subject + "引用了" + actorPronoun(perspective) + "的回答"
+		default:
+			return subject + "读完了" + actorPronoun(perspective) + "的内容"
+		}
 	case HelpSpread:
 		switch strings.TrimSpace(action) {
 		case "active_participation":
-			return n + "人最近参与了这里"
+			return subject + "最近参与了这里"
 		default:
-			return n + "人转发了" + actorPronoun(perspective) + "的内容"
+			return subject + "转发了" + actorPronoun(perspective) + "的内容"
 		}
 	case HelpAudience:
-		return n + "人看过" + actorPronoun(perspective) + "的内容"
+		return subject + "看过" + actorPronoun(perspective) + "的内容"
 	default:
 		return ""
 	}
+}
+
+func representativeSubject(count int64) string {
+	if count <= 1 {
+		return "一位用户"
+	}
+	return "一位用户等" + strconv.FormatInt(count, 10) + "人"
 }
 
 func actorPronoun(perspective ActorPerspective) string {
@@ -86,11 +97,11 @@ func EvidenceText(helpType string, action string, contentTitle string, perspecti
 		return "有人加入了相关圈子"
 	case HelpDecision:
 		if titleClause != "" {
-			return "有人收藏了" + pronoun + "的" + titleClause
+			return "有人通过" + pronoun + "的" + titleClause + "关注了相关对象"
 		}
-		return "有人收藏了" + pronoun + "的内容"
+		return "有人通过" + pronoun + "的内容关注了相关对象"
 	case HelpKnowledge:
-		return "有人因" + pronoun + "的分享有所收获"
+		return "有人读完了" + pronoun + "的内容"
 	case HelpSpread:
 		if titleClause != "" {
 			return "有人转发了" + pronoun + "的" + titleClause

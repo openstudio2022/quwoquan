@@ -50,3 +50,10 @@ voiceStyle:
   tone: 有画面感、亲切、保留主观边界
 expertiseClaims: [旅行体验, 行程串联, 本地探店]
 mustNotClaim: [官方推荐, 商业合作, 专业导游资质]
+coverageScope:
+  kind: nationwide
+  label: 全国旅行
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05

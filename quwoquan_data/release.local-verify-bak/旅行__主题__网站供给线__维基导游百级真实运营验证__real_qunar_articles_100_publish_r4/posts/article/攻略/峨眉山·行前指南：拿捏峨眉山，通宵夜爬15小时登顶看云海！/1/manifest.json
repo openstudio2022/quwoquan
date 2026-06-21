@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_c32bf3e8f3680794",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/峨眉山"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:峨眉山"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfile": {
+      "entityRef": "/entity/地点/景区/峨眉山",
+      "regions": [
+        "山地森林"
+      ],
+      "seasons": [
+        "秋",
+        "旺季",
+        "淡季"
+      ],
+      "altitudeMeters": null,
+      "notes": null,
+      "conditionSource": "entityConditionProfile"
+    },
+    "region": {
+      "name": "山地森林",
+      "label": "山地森林",
+      "source": "entityProfile"
+    },
+    "season": {
+      "name": "秋",
+      "label": "秋",
+      "source": "entityProfile"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7863444",
+    "https://touch.travel.qunar.com/youji/7868354",
+    "https://touch.travel.qunar.com/youji/7868592",
+    "https://touch.travel.qunar.com/youji/7865980"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/峨眉山/1.download/sources/86.qunar_guide_candidate_c32bf3e8f3680794/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "峨眉山·行前指南：拿捏峨眉山，通宵夜爬15小时登顶看云海！",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "峨眉山",
+    "routeEntities": [
+      "峨眉山"
+    ],
+    "beats": [
+      "先从 峨眉山 进入主线。",
+      "我觉得燊海井是自贡市的“灵魂”，远胜过“兔行天下”的美味带来的震撼",
+      "如天气预报所料，此时已开始变天，正值中午，却云雾缭绕起来",
+      "我攻略下午索道排队少，但今天是周末，上山人依然不松活，排队接近1小时",
+      "半夜里，父亲腿抽筋，我原以为是高反，揉一揉脚，不一会儿就完全好了，幸运"
+    ],
+    "sourceNote": "品味川渝,2026自贡游记,自贡旅游/自助游/自由行/游玩攻略-【去哪儿攻略】\n半缘... 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n品味川渝\n半缘君002\n2024/08/01出发\n人物\n家庭\n玩法\n自驾\n人均\n2000元\n前言\n说说这次旅行\n张家界以“双5A”为核心卖点，每年吸引数千万人次来观光旅游。此时的8月，天门山麓紫",
+    "relatedTopics": [
+      "峨眉山",
+      "我觉得燊海井是自贡市的“灵魂”，远胜过“兔行天下”的美味带来的震撼",
+      "如天气预报所料，此时已开始变天，正值中午，却云雾缭绕起来",
+      "我攻略下午索道排队少，但今天是周末，上山人依然不松活，排队接近1小时",
+      "半夜里，父亲腿抽筋，我原以为是高反，揉一揉脚，不一会儿就完全好了，幸运"
+    ],
+    "mustIncludeFacts": [
+      "峨眉山"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-20T00:19:19.818801+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:峨眉山"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "山地森林"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_840be1bd4a70557f",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "峨眉山",
+      "sourceEntityRef": "/entity/地点/景区/峨眉山",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_c32bf3e8f3680794",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 14
+    }
+  ],
+  "articleMarkdownDigest": "sha256:49014d13d157bf9e9a05385a236aaba359f4d6feb4801fd32da0262ae074a1cb"
+}

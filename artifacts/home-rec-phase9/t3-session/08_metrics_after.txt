@@ -1,0 +1,1 @@
+recommendation_feed_patch_emitted_total{patch_type="negative_feedback_removal",reason="negative_dislike"} 1

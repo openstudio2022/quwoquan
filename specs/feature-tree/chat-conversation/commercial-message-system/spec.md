@@ -171,9 +171,9 @@ App 不得在 UI/Provider 中拼接来源、成员数、最近互动或交集文
 
 | 验收意图 | 主证据 | 覆盖 |
 |---|---|---|
-| SIT | T2/T3 | 消息页、联系页、群主页、通知、交集聚合协同。 |
-| contract | T1/T3 | metadata、DTO、Remote/Mock、真实服务 contract 一致。 |
-| UAT | T4 | 商用真机旅程：消息、联系、讨论、聊天信息、通知已读。 |
+| SIT | local_contract/api_integration | 消息页、联系页、群主页、通知、交集聚合协同。 |
+| contract | local_contract/api_integration | metadata、DTO、Remote/Mock、真实服务 contract 一致。 |
+| UAT | user_acceptance | 商用真机旅程：消息、联系、讨论、聊天信息、通知已读。 |
 
 ## 8. 关联文档
 

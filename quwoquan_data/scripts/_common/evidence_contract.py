@@ -72,15 +72,15 @@ STAGE_EVIDENCE_CONTRACT = {
     },
     "agent_draft": {
         "input": "posts/{contentType}/{angle}/{title}/{seq}/3.compose/{writing_pack.json,prompt.md}",
-        "output": "posts/{contentType}/{angle}/{title}/{seq}/4.draft/{draft.article.md,draft_meta.json}",
+        "output": "article/homepage: 4.draft/{draft.article.md,draft_meta.json}; image: 4.draft/draft_meta.json only",
     },
     "review": {
-        "input": "agent draft.article.md + sourcePaths",
+        "input": "article/homepage: agent draft.article.md + sourcePaths; image: sourceCollection/assets/caption evidence pack",
         "output": "posts/{contentType}/{angle}/{title}/{seq}/5.review/{review.json,review_ledger.json,provenance.json}",
     },
     "materialize": {
-        "input": "approved review + agent draft.article.md",
-        "output": "posts/{contentType}/{angle}/{title}/{seq}/{article.md,manifest.json,assets/,_object.json}",
+        "input": "article/homepage: approved review + agent draft.article.md; image: approved image evidence pack",
+        "output": "article/homepage: {article.md,manifest.json,assets/,_object.json}; image: {manifest.json,assets/,_object.json}",
     },
 }
 

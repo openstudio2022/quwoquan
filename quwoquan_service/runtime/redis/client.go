@@ -34,6 +34,7 @@ type Client interface {
 
 	// ── Set ─────────────────────────────────────────────────
 	SAdd(ctx context.Context, key string, members ...string) error
+	SRem(ctx context.Context, key string, members ...string) error
 	SMembers(ctx context.Context, key string) ([]string, error)
 	SIsMember(ctx context.Context, key string, member string) (bool, error)
 

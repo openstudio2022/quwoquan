@@ -3,7 +3,7 @@ entity: TagNode
 
 entities:
   TagNode:
-    description: 路径制标签节点只读投影（源自 publish/v1/tags 离线导入）
+    description: 路径制标签节点只读投影（源自 publish/tags 离线导入）
     fields:
       - name: tagRef
         type: string

@@ -9,64 +9,89 @@ node:
 scope:
   summary: 让消息首页五类筛选与已读同步由真实 inbox 和通知契约驱动。
   journey_scenarios:
-    - commercial-message-system
+  - commercial-message-system
   out_of_scope:
-    - 联系首页关系聚合
+  - 联系首页关系聚合
 gwt_acceptance:
   GWT1:
     title: 五类消息筛选由真实 inbox 和通知 inbox 驱动
     given:
-      - 消息首页存在会话与通知数据。
+    - 消息首页存在会话与通知数据。
     when:
-      - 用户切换全部、未读、群聊、私聊、通知筛选，或执行已读动作。
+    - 用户切换全部、未读、群聊、私聊、通知筛选，或执行已读动作。
     then:
-      - 各筛选结果由真实 read model 或通知 inbox 提供，而不是标题猜测或本地拼接。
-      - 同一会话完成已读后，其未读数在各筛选聚合引用中保持一致。
+    - 各筛选结果由真实 read model 或通知 inbox 提供，而不是标题猜测或本地拼接。
+    - 同一会话完成已读后，其未读数在各筛选聚合引用中保持一致。
     done_when:
-      - 五类筛选和已读同步可由真实服务契约稳定支持。
+    - 五类筛选和已读同步可由真实服务契约稳定支持。
     edge_cases:
-      - 无通知数据时通知筛选仍保持独立契约。
-      - 同一会话同时出现在多个筛选时未读数不会漂移。
+    - 无通知数据时通知筛选仍保持独立契约。
+    - 同一会话同时出现在多个筛选时未读数不会漂移。
     platform_variants:
       iOS: []
       Android: []
     contract_refs:
-      - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
-      - quwoquan_service/contracts/metadata/notification/notification/service.yaml
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+    - quwoquan_service/contracts/metadata/notification/notification/service.yaml
     performance_points: []
-    evidence:
-      primary:
-        - T1_static_contract
-        - T3_service_contract
-      supporting:
-        - T2_module_interaction
     tests:
-      planned:
-        - quwoquan_service/services/chat-service/tests/message_home_projection_contract_test.go
-        - quwoquan_service/services/notification-service/tests/app_message_inbox_contract_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.chat_conversation.commercial_message_system.message_home_filter_contract.gwt1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.chat_conversation.commercial_message_system.message_home_filter_contract.gwt1_api_integration
+        envs: &id002
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.chat_conversation.commercial_message_system.message_home_filter_contract.gwt1_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/message_home_projection_contract_test.go'
+    - '[migrated_from_planned] quwoquan_service/services/notification-service/tests/app_message_inbox_contract_test.go'
 contract_acceptance:
   CONTRACT1:
     title: 消息筛选与通知 inbox 契约来源唯一
     metadata_refs:
-      - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
-      - quwoquan_service/contracts/metadata/notification/notification/service.yaml
+    - quwoquan_service/contracts/metadata/messages/conversation/service.yaml
+    - quwoquan_service/contracts/metadata/notification/notification/service.yaml
     done_when:
-      - 五类筛选、通知 inbox 和已读同步都可映射到 metadata 契约与真实服务投影。
-    evidence:
-      primary:
-        - T1_static_contract
-      supporting:
-        - T3_service_contract
+    - 五类筛选、通知 inbox 和已读同步都可映射到 metadata 契约与真实服务投影。
     tests:
       planned:
-        - make -C quwoquan_service verify-metadata
+      - command: make -C quwoquan_service verify-metadata
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract1_local_contract
+        cases:
+        - local_contract.chat_conversation.commercial_message_system.message_home_filter_contract.contract1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: contract1_api_integration
+        cases:
+        - api_integration.chat_conversation.commercial_message_system.message_home_filter_contract.contract1_api_integration
+        envs: *id002
+    notes: []
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

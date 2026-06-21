@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "海螺沟_seasonal_timing",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "海螺沟·什么时候去最好：【周边游】贡嘎山上的云和太阳 海螺沟里的冬天与夏天",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-ed47769d-b6f2-4863-9bc6-4bc9020f6dfb",
+    "agentId": "agent-f77fb9c4-42a9-4e3b-83ca-7bc68ac4aac7",
+    "sessionTrace": null,
+    "styleFamily": "客观评测风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/海螺沟"
+    ],
+    "articleDigest": "sha256:bee221281989c40769a57f88a320c2748926126c459e124c6bfbe1c40b8a7f6f"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "海螺沟·什么时候去最好：【周边游】贡嘎山上的云和太阳 海螺沟里的冬天与夏天",
+    "styleFamily": "",
+    "promptSha256": "sha256:711cc1ab051ae65c9d857858e963195e38ff98c87485131b099cd69ce31f0746",
+    "writingPackSha256": "sha256:51ab89649c15f1870f080c7081c76b7b6c03c83464f88b9b8f01c1265d6c6d65",
+    "sourceBundleSha256": "sha256:77dd18228cb2dd6b101f86d2eee016440c27080e4720b15064c1c458c323bfa1",
+    "draftSha256": "sha256:38321b02aab87bd300596789bfc558cefe77e48671fb8a3e9972cf3f598a3b8f"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/source.md",
+      "url": "https://zh.wikipedia.org/wiki/%E6%B5%B7%E8%9E%BA%E6%B2%9F"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/04.article_qunar_base_2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7708315"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/07.article_qunar_base_5/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7664441"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/08.article_qunar_base_6/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7646378"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/09.article_qunar_base_7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7637762"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/10.article_qunar_base_8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7632319"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/14.article_qunar_base_12/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7593443"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/17.article_qunar_base_15/source.md",
+      "url": "https://touch.travel.qunar.com/youji/6922547"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/18.article_qunar_base_16/source.md",
+      "url": "https://touch.travel.qunar.com/youji/6873351"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/19.article_open_visual_support/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E6%B5%B7%E8%9E%BA%E6%B2%9F-%E6%9F%8F%E7%A7%A7%E5%9D%AA_-_panoramio_(7).jpg"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/20.article_qunar_review_support/source.md",
+      "url": "https://touch.travel.qunar.com/search?q=%E6%B5%B7%E8%9E%BA%E6%B2%9F"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/22.image_open_license_file_海螺沟_httpscommonswikimediaorgwikifilee6b5b7e89ebae6b29fe69f8fe7a7_a2a5899933/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:%E6%B5%B7%E8%9E%BA%E6%B2%9F-%E6%9F%8F%E7%A7%A7%E5%9D%AA_-_panoramio.jpg"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/23.image_open_license_file_海螺沟_httpscommonswikimediaorgwikifilehailuogouglacierjpg_69d8251a0a/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Hailuogou_glacier.JPG"
+    },
+    {
+      "path": "entities/地点/景区/海螺沟/1.download/sources/24.image_open_license_file_海螺沟_httpscommonswikimediaorgwikifilehailuogouglaciersinsummerjpe_f949c5dddf/source.md",
+      "url": "https://commons.wikimedia.org/wiki/File:Hailuogou_Glaciers_in_Summer.jpeg"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/海螺沟/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/海螺沟/1.download/sources/18.article_qunar_base_16/source.md"
+  ]
+}

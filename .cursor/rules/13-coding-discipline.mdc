@@ -21,7 +21,7 @@ alwaysApply: true
 | 架构师 | **A** | 分层正确、抽象克制、存储无关、可扩展不可逆 |
 | 代码评审 | **R** | 类型安全、元数据驱动、无硬编码、无冗余分支 |
 | 质量审核 | **Q** | 测试一体、Mock↔Remote 一致、门禁绿灯 |
-| 测试人员 | **T** | T1-T4 分层覆盖、契约不漂移、环境数据驱动 |
+| 测试人员 | **T** | 三层测试覆盖、契约不漂移、环境数据驱动 |
 | 使用者 | **U** | 性能无断点、异常有兜底、体验一致 |
 | 运维 | **O** | 可观测、TTL 明确、存储可替换、回滚可行 |
 | 运营 | **M** | 埋点全覆盖、指标可算、AB 可切分、旅程可还原 |
@@ -160,17 +160,16 @@ Remote Repository 必须统一使用 `CloudHttpClient`，不得使用裸 `http.C
 这是最常犯的错误：Mock 测试通过了就认为功能正确，上线后发现 Mock 行为与真实服务不一致。
 
 **军规**：
-- **T1（契约静态）**：验证 Mock 的行为契约与 metadata 定义一致——Mock 返回的字段集、类型、边界值必须与 `fields.yaml` / `service.yaml` 对齐
-- **T2（模块交互）**：验证 Widget/Provider 通过 Mock 工作——但必须覆盖 Mock 的**正常路径 + 异常路径 + 边界条件**
-- **T3（端云集成）**：验证 Remote 实现与真实 API 对齐——**T3 的每个断言必须能在 T2 的 Mock 测试中找到对应断言**
-- **T4（端到端旅程）**：验证用户旅程在真实环境下完整
+- **local_contract（本地契约）**：验证 metadata、DTO、错误码、Mock、Provider、Widget、domain/application 规则与 fixture 行为一致；必须覆盖正常路径、异常路径和边界条件。
+- **api_integration（端云集成）**：验证 RemoteRepository、gateway/API、真实存储、事件/outbox、跨服务一致性与错误响应。
+- **user_acceptance（用户验收）**：验证用户旅程、页面功能、UI/UX、页面生命周期、权限、弱网、灰度发布和 SLO。
 
 **一体性检查**：
 ```
-对于 T3 中验证的每个 API 行为（字段、状态码、错误码）：
-  → T2 中必须有对应的 Mock 测试覆盖相同行为
-  → Mock 的返回值结构必须与 T3 验证的真实返回值结构一致
-  → 如果 T3 发现 Mock 行为偏离，必须同时修复 Mock 和 T2
+对于 api_integration 中验证的每个 API 行为（字段、状态码、错误码）：
+  → local_contract 中必须有对应的 Mock/Provider/Widget/领域规则测试覆盖相同行为
+  → Mock 的返回值结构必须与 api_integration 验证的真实返回值结构一致
+  → 如果 api_integration 发现 Mock 行为偏离，必须同时修复 Mock 和 local_contract
 ```
 
 **历史教训**：审计发现以下分层测试缺口：
@@ -186,8 +185,8 @@ Remote Repository 必须统一使用 `CloudHttpClient`，不得使用裸 `http.C
 1. 在 abstract class 中声明方法签名
 2. 在 MockXxxRepository 中实现（返回 fixture 数据）
 3. 在 RemoteXxxRepository 中实现（调用真实 API）
-4. 写 T2 测试验证 Mock 行为
-5. 写 T3 测试验证 Remote 行为与 Mock 一致
+4. 写 local_contract 测试验证 Mock/Provider/Widget 行为
+5. 写 api_integration 测试验证 Remote 行为与 Mock 一致
 ```
 
 禁止只实现 Remote 不补 Mock，或只补 Mock 不写测试。

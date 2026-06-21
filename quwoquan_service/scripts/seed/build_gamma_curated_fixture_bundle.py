@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,14 @@ SHARED = METADATA_ROOT / "_shared" / "test_fixtures"
 MEDIA_ROOT = SHARED / "media"
 GAMMA_MANIFEST = SHARED / "app_gamma_seed_manifest.json"
 GAMMA_MEDIA_BUNDLE = ROOT / "deploy" / "shared" / "gamma_curated_media_bundle.json"
+
+# 复用内容域评论计数门禁的对齐口径（单一真相源），避免在裁剪后另写一套统计逻辑。
+_CONTRACT_DIR = ROOT / "quwoquan_service" / "scripts" / "contract"
+if str(_CONTRACT_DIR) not in sys.path:
+    sys.path.insert(0, str(_CONTRACT_DIR))
+from verify_content_fixture_comment_counts import (  # noqa: E402
+    realign_payload_counts,
+)
 
 CONTENT_SCENARIO = "content/test_fixtures/scenarios/content_scenarios.json"
 USER_SCENARIO = "user/test_fixtures/scenarios/user_scenarios.json"
@@ -281,6 +290,9 @@ def build_curated_scenarios() -> list[str]:
         ).strip()
         curated_payload["seedSets"] = curated_seed_sets
         curated_payload = prune_seed_payload(relative_path, curated_payload)
+        # 裁剪评论后、写出前重算计数：commentCount/replyCount 必须等于裁剪后实际保留数，
+        # 否则派生产物会把真相源原值带成「卡片显示 26、详情页只有 2」式漂移。
+        realign_payload_counts(curated_payload)
         scenarios = []
         for item in curated_payload.get("scenarios") or []:
             next_item = dict(item)
@@ -404,12 +416,35 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional directory that receives the curated media files.",
     )
+    parser.add_argument(
+        "--scenarios-only",
+        action="store_true",
+        help=(
+            "只重新生成 curated scenario 子集（含计数对齐），不重写 gamma manifest 与 "
+            "media bundle。媒体引用未变、仅需刷新场景数据时使用。"
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     curated_paths = build_curated_scenarios()
+    if args.scenarios_only:
+        if args.output_media_root.strip():
+            raise SystemExit("--scenarios-only 不能与 --output-media-root 同时使用")
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "mode": "scenarios-only",
+                    "curatedScenarios": curated_paths,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
     gamma_manifest = build_gamma_manifest()
     write_json(GAMMA_MANIFEST, gamma_manifest)
     bundle = build_media_bundle(curated_paths)

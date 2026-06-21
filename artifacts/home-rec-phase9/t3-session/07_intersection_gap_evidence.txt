@@ -1,0 +1,13 @@
+# intersection-data gap evidence (captured 2026-06-19T02:47:53Z)
+## user-service follow_edges count
+follow_edges=0
+## content rm_viewer_object_intersection docs (cache; reasonsJson)
+{"_id":"us_01_0000_00000000000000000000000000","reasonsJson":"[]"}
+{"_id":"fixture_user_current","reasonsJson":"[]"}
+{"_id":"probe_user_001","reasonsJson":"[]"}
+{"_id":"us_01_3278_01kvevr8s7s3b0arr7x3p27efe","reasonsJson":"[]"}
+## content intersections/summary as seed viewer fixture_user_current
+{"totalCount":0,"totalNewCount":0,"dimensions":[],"generatedAt":"2026-06-19T02:47:55Z"}
+
+## content intersections/summary as session subAccount us_01_3278
+{"totalCount":0,"totalNewCount":0,"dimensions":[],"generatedAt":"2026-06-19T02:47:55Z"}

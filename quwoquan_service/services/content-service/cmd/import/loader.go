@@ -123,9 +123,6 @@ func loadSampleBundle(path string) (*SampleBundle, error) {
 }
 
 func toSet(items []string) map[string]bool {
-	if len(items) == 0 {
-		return nil
-	}
 	s := make(map[string]bool, len(items))
 	for _, it := range items {
 		s[it] = true
@@ -341,7 +338,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		}
 		if err := postsemantic.ValidateSuppliedRefs(
 			m.SemanticMentions,
-			firstNonEmptyRefs(m.NormalizedEntityRefs, m.EntityRefs),
+			m.EntityRefs,
 			m.TagRefs,
 		); err != nil {
 			return fmt.Errorf("%s: %w", postRef, err)
@@ -379,13 +376,17 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			return err
 		}
 		rawEntityRefs := append([]string(nil), m.EntityRefs...)
-		activeEntityRefs := firstNonEmptyRefs(m.NormalizedEntityRefs, m.EntityRefs)
+		normalizedEntityRefs := firstNonEmptyRefs(m.NormalizedEntityRefs, m.EntityRefs)
 		activeTagRefs := append([]string(nil), m.TagRefs...)
 		if postsemantic.Present(m.SemanticMentions) {
 			projection := postsemantic.Project(m.SemanticMentions)
-			rawEntityRefs = projection.EntityRefs
-			activeEntityRefs = projection.EntityRefs
-			activeTagRefs = projection.TagRefs
+			if len(rawEntityRefs) == 0 {
+				rawEntityRefs = projection.EntityRefs
+			}
+			normalizedEntityRefs = firstNonEmptyRefs(m.NormalizedEntityRefs, projection.EntityRefs)
+			if len(activeTagRefs) == 0 {
+				activeTagRefs = projection.TagRefs
+			}
 		}
 		body := m.Body
 		if strings.EqualFold(strings.TrimSpace(m.ContentType), "image") {
@@ -402,7 +403,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			Angle:                 angle,
 			Seq:                   m.PublishSeq,
 			EntityRefs:            rawEntityRefs,
-			NormalizedEntityRefs:  activeEntityRefs,
+			NormalizedEntityRefs:  normalizedEntityRefs,
 			TagRefs:               activeTagRefs,
 			SemanticMentions:      m.SemanticMentions,
 			AuthorID:              m.AuthorID,

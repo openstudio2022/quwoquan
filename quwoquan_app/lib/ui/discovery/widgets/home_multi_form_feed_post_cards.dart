@@ -132,7 +132,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                     CupertinoButton(
                       padding: EdgeInsets.zero,
                       minimumSize: Size.zero,
-                      onPressed: () => widget.onUserTap(item.authorId),
+                      onPressed: () => widget.onUserTap(profileSubjectId),
                       child: RoundedSquareAvatar(
                         size: AppSpacing.avatarUserSm,
                         imageUrl: item.avatarUrl,
@@ -183,13 +183,16 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                           context,
                           AuthGateReason.follow,
                           () {
+                            final wasFollowing = effectiveProfileFollowing(
+                              ref,
+                              profileSubjectId,
+                            );
+                            final nextFollowing = !wasFollowing;
                             syncProfileFollowIntent(
                               ref,
                               subAccountId: profileSubjectId,
-                              isFollowing: !effectiveProfileFollowing(
-                                ref,
-                                profileSubjectId,
-                              ),
+                              previousFollowing: wasFollowing,
+                              isFollowing: nextFollowing,
                             );
                           },
                         );
@@ -219,8 +222,15 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                   )
                 else if (item.isVideoLike)
                   _HomeFeedVideoAutoPlayGate(
+                    videoId: item.id,
                     scrollSignal: widget.videoScrollSignal,
                     hasPlayableSource: item.mediaVideoUrl.trim().isNotEmpty,
+                    onFastScrollSuppressed: (attributes) => ref
+                        .read(cacheTelemetrySinkProvider)
+                        .record(
+                          'video.init.suppressed_fast_scroll',
+                          attributes,
+                        ),
                     builder: (playback) => _HomeVideoPostCard(
                       item: item,
                       isDark: isDark,
@@ -316,8 +326,10 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
               referralSource: ReferralSource.organicFeed,
               intersectionId: attribution.intersectionId,
               intersectionDimension: attribution.dimension,
+              intersectionSourceRef: attribution.sourceRef,
               intersectionClass: attribution.intersectionClass,
               intersectionTagRefs: attribution.tagRefs,
+              intersectionEvidenceId: attribution.evidenceId,
             );
       },
     );
@@ -331,6 +343,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
         intersectionClass: reason.intersectionClass,
         sourceRef: reason.source,
         tagRefs: reason.tagRefs,
+        evidenceId: reason.pointSummarySnapshotId,
       ),
     );
   }
@@ -355,8 +368,10 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
               referralSource: ReferralSource.organicFeed,
               intersectionId: attribution.intersectionId,
               intersectionDimension: attribution.dimension,
+              intersectionSourceRef: attribution.sourceRef,
               intersectionClass: attribution.intersectionClass,
               intersectionTagRefs: attribution.tagRefs,
+              intersectionEvidenceId: attribution.evidenceId,
             );
       },
     );
@@ -370,6 +385,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
         intersectionClass: reason.intersectionClass,
         sourceRef: reason.source,
         tagRefs: reason.tagRefs,
+        evidenceId: reason.pointSummarySnapshotId,
       ),
     );
     if (opened) return;
@@ -389,6 +405,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
         intersectionClass: reason.intersectionClass,
         sourceRef: reason.source,
         tagRefs: reason.tagRefs,
+        evidenceId: reason.pointSummarySnapshotId,
       ),
     );
   }
@@ -660,7 +677,9 @@ class _PostIntersectionLine extends StatelessWidget {
                 height: AppSpacing.textLineHeightFootnote,
               ),
             ),
-            const SizedBox(width: DiscoveryFeedSpacing.homeFeedIntersectionLabelGap),
+            const SizedBox(
+              width: DiscoveryFeedSpacing.homeFeedIntersectionLabelGap,
+            ),
             Expanded(
               child: InteractiveIntersectionText(
                 spans: reason.primarySpans,
@@ -707,7 +726,9 @@ class _IntersectionGlyphIcon extends StatelessWidget {
           )!;
     return CustomPaint(
       key: const ValueKey('home-intersection-glyph'),
-      size: const Size.square(DiscoveryFeedSpacing.homeFeedIntersectionIconSize),
+      size: const Size.square(
+        DiscoveryFeedSpacing.homeFeedIntersectionIconSize,
+      ),
       painter: _IntersectionGlyphPainter(
         ringColor: Color.lerp(
           AppColors.iosSecondaryLabel(context),

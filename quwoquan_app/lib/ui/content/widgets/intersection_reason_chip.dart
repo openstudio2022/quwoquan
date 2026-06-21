@@ -1,10 +1,16 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/evidence_group.dart';
-import 'package:quwoquan_app/components/object_page/intersection_object_kind.dart';
+import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
+import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
+import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 
 /// 内容卡交集理由位 / post 作者信任徽标（一行克制摘要）。
 ///
@@ -12,13 +18,23 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 /// - 只读消费云侧 [IntersectionReason] 的最强证据组，端不本地拼装事实（G2）；
 /// - 取最强证据组短句 + 计数（如「共同关注 4」），不再用「N 个交集点」空数字；
 /// - 无来源 / 无可展示证据 → 不展示（[fromReasons] 返回 null，调用方据此不插入）。
-class IntersectionReasonChip extends StatelessWidget {
+///
+/// 渲染归一（N5）：
+/// - 槽①类型图标走统一 [IntersectionTypeIcon]（iconKey → sourceRef → dimension 降级链），
+///   不再在本组件按 `kind` 自造第二套图标 switch（消除与 [IntersectionIconResolver] 的分叉）；
+/// - 结论句走统一 [InteractiveIntersectionText]，云侧 `primarySpans` 非空时对象/计数片段
+///   可点击经统一 [IntersectionTargetNavigator] 进对象页 / 维度下钻，埋点保 `tag_click`
+///   语义（[ContentBehaviorTracker.trackTagClick]，推荐 HotPath 1.8 权重）。`referralSource`
+///   由展示面（用户主页 / 圈子 / 实体）透传，精确归因（R23/N10）。
+/// - spans 缺省时降级为纯文本（不可点击片段），整卡点击仍由宿主 `onTap` 处理。
+class IntersectionReasonChip extends ConsumerWidget {
   const IntersectionReasonChip({
     super.key,
     required this.text,
     required this.isDark,
-    this.kind,
+    this.reason,
     this.weightTier = '',
+    this.referralSource,
   });
 
   static const Key chipKey = ValueKey<String>('intersection-reason-chip');
@@ -27,8 +43,13 @@ class IntersectionReasonChip extends StatelessWidget {
 
   final String text;
   final bool isDark;
-  final UnifiedObjectKind? kind;
+
+  /// 最强证据组（导航 target / spans / 图标语义 / 归因的同一真相源），缺省时纯展示降级。
+  final IntersectionReason? reason;
   final String weightTier;
+
+  /// 展示面来源渠道（用户主页 / 圈子 / 实体）；span 点击埋点按此精确归因（N10）。
+  final ReferralSource? referralSource;
 
   /// 交集理由位口径真相源：云侧主交集结论句 [IntersectionReason.primaryText] 直出，
   /// 缺省回退连接说明 connectionSummary；端不本地拼装事实（G2）。
@@ -58,6 +79,7 @@ class IntersectionReasonChip extends StatelessWidget {
   static Widget? fromReasons(
     List<IntersectionReason>? reasons, {
     required bool isDark,
+    ReferralSource? referralSource,
     Key? key,
   }) {
     final text = primaryText(reasons);
@@ -67,76 +89,95 @@ class IntersectionReasonChip extends StatelessWidget {
       key: key,
       text: text,
       isDark: isDark,
+      reason: first,
       weightTier: first?.weightTier ?? '',
-      kind: first == null
-          ? null
-          : UnifiedObjectKind.resolve(
-              objectKind: first.objectKind,
-              relationKind: first.relationKind,
-            ),
+      referralSource: referralSource,
     );
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final resolvedTier = _resolveWeightTier(weightTier);
     final isLight = resolvedTier == _IntersectionReasonWeightTier.light;
     final accent = AppColors.iosAccent(context);
     final foreground = isLight ? AppColors.iosSecondaryLabel(context) : accent;
-    final iconBackground = isLight
-        ? AppColors.iosSecondaryFill(context)
-        : accent.withValues(alpha: isDark ? 0.2 : 0.12);
+    final spans = reason?.primarySpans ?? const <IntersectionTextSpan>[];
+    final fontWeight = isLight
+        ? AppTypography.regular
+        : AppTypography.medium;
     return Row(
+      key: chipKey,
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
+      children: <Widget>[
+        IntersectionTypeIcon(
           key: iconKey,
-          width: AppSpacing.iconSmall,
-          height: AppSpacing.iconSmall,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: iconBackground,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(_icon, size: AppSpacing.iconXSmall, color: foreground),
+          iconKey: reason?.iconKey ?? '',
+          sourceRef: reason?.source ?? '',
+          dimension: reason?.dimension ?? '',
+          size: AppSpacing.iconSmall,
         ),
         SizedBox(width: AppSpacing.intraGroupXs),
         Flexible(
-          child: Text(
+          child: InteractiveIntersectionText(
             key: textKey,
-            text,
+            spans: spans,
+            fallbackText: text,
             maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
+            accentFontWeight: fontWeight,
+            baseStyle: TextStyle(
               fontSize: AppTypography.iosCaption1,
-              fontWeight: isLight
-                  ? AppTypography.regular
-                  : AppTypography.medium,
+              fontWeight: fontWeight,
               color: foreground,
               letterSpacing: -0.04,
             ),
+            onSpanTap: reason == null
+                ? null
+                : (span) => _onSpanTap(context, ref, span),
           ),
         ),
       ],
     );
   }
 
-  IconData get _icon {
-    switch (kind) {
-      case UnifiedObjectKind.person:
-        return CupertinoIcons.person_fill;
-      case UnifiedObjectKind.circle:
-        return CupertinoIcons.person_2_fill;
-      case UnifiedObjectKind.school:
-        return CupertinoIcons.building_2_fill;
-      case UnifiedObjectKind.place:
-        return CupertinoIcons.location_solid;
-      case UnifiedObjectKind.enterprise:
-        return CupertinoIcons.briefcase_fill;
-      case null:
-        return CupertinoIcons.link;
+  /// 结论句对象/计数片段点击：经统一导航器进对象页 / 维度下钻，保 `tag_click` 语义归因。
+  void _onSpanTap(
+    BuildContext context,
+    WidgetRef ref,
+    IntersectionTextSpan span,
+  ) {
+    final current = reason;
+    if (current == null) {
+      return;
     }
+    final spanTarget = span.target;
+    final target = (spanTarget != null && spanTarget.objectId.trim().isNotEmpty)
+        ? spanTarget
+        : IntersectionTargetNavigator.targetForReason(current);
+    final attribution = IntersectionNavAttribution(
+      intersectionId: current.intersectionId,
+      dimension: current.dimension,
+      intersectionClass: current.intersectionClass,
+      sourceRef: current.source,
+      tagRefs: current.tagRefs,
+      evidenceId: current.pointSummarySnapshotId,
+    );
+    final navigator = IntersectionTargetNavigator(
+      onTrack: (navTarget, attr) => ref
+          .read(contentBehaviorTrackerProvider)
+          .trackTagClick(
+            navTarget.objectId,
+            referralSource: referralSource,
+            tags: attr.tagRefs,
+            intersectionId: attr.intersectionId,
+            intersectionDimension: attr.dimension,
+            intersectionSourceRef: attr.sourceRef,
+            intersectionTagRefs: attr.tagRefs,
+            intersectionClass: attr.intersectionClass,
+            intersectionEvidenceId: attr.evidenceId,
+          ),
+    );
+    navigator.open(context, target, attribution: attribution);
   }
 
   static _IntersectionReasonWeightTier _resolveWeightTier(String raw) {

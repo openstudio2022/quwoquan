@@ -172,6 +172,100 @@ func (s *AuthorImpactEvidenceStore) CountByImpact(ctx context.Context, authorID,
 	return s.coll.CountDocuments(ctx, bson.M{"authorId": authorID, "impactId": impactID})
 }
 
+// ListPageWithTotal returns evidence rows and totalCount in one aggregate query
+// to avoid the List + Count read amplification on impact drill-down pages.
+func (s *AuthorImpactEvidenceStore) ListPageWithTotal(ctx context.Context, authorID, impactID, cursor string, limit int64) ([]AuthorImpactEvidenceRaw, string, bool, int64, error) {
+	authorID = strings.TrimSpace(authorID)
+	impactID = strings.TrimSpace(impactID)
+	if authorID == "" || impactID == "" {
+		return nil, "", false, 0, nil
+	}
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	filter := bson.M{"authorId": authorID, "impactId": impactID}
+	if before, beforeID, ok := decodeEvidenceCursor(cursor); ok {
+		filter["$or"] = bson.A{
+			bson.M{"occurredAt": bson.M{"$lt": before}},
+			bson.M{"occurredAt": before, "_id": bson.M{"$lt": beforeID}},
+		}
+	}
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: filter}},
+		{{Key: "$sort", Value: bson.D{{Key: "occurredAt", Value: -1}, {Key: "_id", Value: -1}}}},
+		{{Key: "$facet", Value: bson.M{
+			"items": bson.A{bson.M{"$limit": limit + 1}},
+			"total": bson.A{bson.M{"$count": "count"}},
+		}}},
+	}
+	cur, err := s.coll.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, "", false, 0, err
+	}
+	defer cur.Close(ctx)
+
+	type totalDoc struct {
+		Count int64 `bson:"count"`
+	}
+	type evidenceDoc struct {
+		ID                    bson.ObjectID `bson:"_id"`
+		ImpactID              string        `bson:"impactId"`
+		SourceEventID         string        `bson:"sourceEventId"`
+		ContentID             string        `bson:"contentId"`
+		ContentType           string        `bson:"contentType"`
+		HelpType              string        `bson:"helpType"`
+		Action                string        `bson:"action"`
+		IntersectionDimension string        `bson:"intersectionDimension"`
+		OccurredAt            time.Time     `bson:"occurredAt"`
+	}
+	type facetResult struct {
+		Items []evidenceDoc `bson:"items"`
+		Total []totalDoc    `bson:"total"`
+	}
+	if !cur.Next(ctx) {
+		if err := cur.Err(); err != nil {
+			return nil, "", false, 0, err
+		}
+		return nil, "", false, 0, nil
+	}
+	var facet facetResult
+	if err := cur.Decode(&facet); err != nil {
+		return nil, "", false, 0, err
+	}
+	total := int64(0)
+	if len(facet.Total) > 0 {
+		total = facet.Total[0].Count
+	}
+	hasMore := int64(len(facet.Items)) > limit
+	if hasMore {
+		facet.Items = facet.Items[:limit]
+	}
+	raws := make([]AuthorImpactEvidenceRaw, 0, len(facet.Items))
+	var lastDoc evidenceDoc
+	for _, doc := range facet.Items {
+		lastDoc = doc
+		evidenceID := strings.TrimSpace(doc.SourceEventID)
+		if evidenceID == "" {
+			evidenceID = doc.ID.Hex()
+		}
+		raws = append(raws, AuthorImpactEvidenceRaw{
+			EvidenceID:            evidenceID,
+			ImpactID:              doc.ImpactID,
+			ContentID:             doc.ContentID,
+			ContentType:           doc.ContentType,
+			HelpType:              doc.HelpType,
+			Action:                doc.Action,
+			IntersectionDimension: doc.IntersectionDimension,
+			OccurredAt:            doc.OccurredAt,
+		})
+	}
+	nextCursor := ""
+	if hasMore && len(raws) > 0 {
+		nextCursor = encodeEvidenceCursor(lastDoc.OccurredAt, lastDoc.ID)
+	}
+	return raws, nextCursor, hasMore, total, nil
+}
+
 // ListPage returns one cursor page of evidence facts ordered by occurredAt
 // descending. The returned nextCursor is opaque (base64 of occurredAt|_id).
 func (s *AuthorImpactEvidenceStore) ListPage(ctx context.Context, authorID, impactID, cursor string, limit int64) ([]AuthorImpactEvidenceRaw, string, bool, error) {

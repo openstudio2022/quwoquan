@@ -1,6 +1,7 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/media/media_aspect_ratio.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 /// 组件库中的 Post 预览卡片骨架。
 ///
@@ -90,7 +91,11 @@ class PostPreviewCard extends StatelessWidget {
             children: [
               if (_hasCover)
                 AspectRatio(
-                  aspectRatio: mediaAspectRatio.clamp(9.0 / 16.0, 16.0 / 9.0),
+                  aspectRatio: clampDisplayAspectRatioValue(
+                    mediaAspectRatio,
+                    min: 9.0 / 16.0,
+                    max: 16.0 / 9.0,
+                  ),
                   child: ClipRRect(
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(
@@ -101,13 +106,14 @@ class PostPreviewCard extends StatelessWidget {
                       fit: StackFit.expand,
                       children: [
                         mediaContent ??
-                            CachedNetworkImage(
+                            AppCachedNetworkImage(
                               imageUrl: coverUrl,
                               fit: BoxFit.cover,
-                              placeholder: (context, url) => ColoredBox(
+                              cdnPreset: CdnImagePreset.cover,
+                              placeholder: ColoredBox(
                                 color: fgSecondary.withValues(alpha: 0.12),
                               ),
-                              errorWidget: (context, url, error) => ColoredBox(
+                              errorWidget: ColoredBox(
                                 color: fgSecondary.withValues(alpha: 0.12),
                               ),
                             ),

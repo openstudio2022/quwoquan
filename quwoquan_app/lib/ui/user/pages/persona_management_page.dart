@@ -5,17 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/providers/persona_management_provider.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 class PersonaManagementPage extends ConsumerStatefulWidget {
   const PersonaManagementPage({super.key});
@@ -240,6 +234,23 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                     ),
                   ),
                 ),
+                if (state.items.length <= 1) ...<Widget>[
+                  SizedBox(height: AppSpacing.interGroupSm),
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerMd,
+                    ),
+                    child: Text(
+                      UITextConstants.personaDefaultOnlyHint,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosFootnote,
+                        height: AppSpacing.textLineHeightFootnote,
+                        color: AppColors.iosSecondaryLabel(context),
+                        fontWeight: AppTypography.regular,
+                      ),
+                    ),
+                  ),
+                ],
                 SizedBox(height: AppSpacing.interGroupMd),
                 ...state.items.map(
                   (persona) => Padding(
@@ -279,6 +290,9 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     final quota = ref.read(personaManagementProvider).quota;
     if (quota != null && quota.quotaReached) {
       await notifier.trackQuotaReached(quota.maxSubAccounts);
+      if (!mounted) {
+        return;
+      }
       AppToast.show(
         context,
         UITextConstants.profileSubAccountMaxReachedTemplate.replaceFirst(
@@ -784,6 +798,7 @@ class _PersonaCard extends StatelessWidget {
               : inheritanceLabel);
 
     return ProfileIosSectionCard(
+      key: ValueKey<String>('persona-card-${persona.subAccountId}'),
       addShadow: isCurrent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -854,6 +869,7 @@ class _PersonaCard extends StatelessWidget {
                 ),
               ),
               Container(
+                key: ValueKey<String>('persona-status-${persona.subAccountId}'),
                 padding: EdgeInsets.symmetric(
                   horizontal: AppSpacing.containerSm,
                   vertical: AppSpacing.intraGroupXs,
@@ -887,6 +903,9 @@ class _PersonaCard extends StatelessWidget {
             runSpacing: AppSpacing.intraGroupSm,
             children: <Widget>[
               CupertinoButton(
+                key: ValueKey<String>(
+                  'persona-activate-${persona.subAccountId}',
+                ),
                 padding: EdgeInsets.zero,
                 onPressed: isCurrent || isRetired ? null : onActivate,
                 child: Text(
@@ -898,6 +917,7 @@ class _PersonaCard extends StatelessWidget {
                 ),
               ),
               CupertinoButton(
+                key: ValueKey<String>('persona-edit-${persona.subAccountId}'),
                 padding: EdgeInsets.zero,
                 onPressed: isRetired ? null : onEdit,
                 child: const Text(UITextConstants.profileEditLabel),

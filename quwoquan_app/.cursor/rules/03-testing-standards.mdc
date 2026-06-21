@@ -2,418 +2,51 @@
 globs: *_test.dart,test/**/*.dart
 ---
 
-# 趣我圈App 测试标准
+# 趣我圈 App 测试标准
 
-## 🧪 测试金字塔
+唯一测试分层真相源：`specs/03_TESTING_STRATEGY.md`。
 
-### 测试层级分配
+App 新增测试只使用三层：
 
-```yaml
-单元测试: 70%  - 业务逻辑、工具类、服务类
-Widget测试: 20%  - UI组件、用户交互
-集成测试: 10%  - 端到端功能、API集成
+- `local_contract`：Provider、Widget、Mapper、MockRepository、DTO/wire、错误码 mapper、页面状态机。
+- `api_integration`：RemoteRepository、gateway/API、真实错误响应、真实 seed 数据、端云字段一致性。
+- `user_acceptance`：用户旅程、页面功能、UI/UX 可用性、页面生命周期、权限、弱网、灰度发布验收。
+
+`unit/widget/integration` 只描述技术形态，不再作为仓库测试层级或新增目录名。
+
+## 目录
+
+```text
+quwoquan_app/test/
+  local_contract/<domain>/<capability>/<story>/<case>_test.dart
+  api_integration/<domain>/<capability>/<story>/<case>_test.dart
+  user_acceptance/<journey_id>/<scenario_id>/<case>_test.dart
+  user_acceptance/pages/<domain>/<surface_id>/<case>_test.dart
 ```
 
-### 测试覆盖率目标
+存量 `test/cloud`、`test/ui`、`test/components`、`test/core`、`test/patrol` 只作为迁移映射；新测试不得继续新增旧目录概念。
 
-```yaml
-单元测试覆盖率: >80%
-Widget测试覆盖率: >70%
-集成测试覆盖率: >60%
-整体代码覆盖率: >80%
-```
+## 必守
 
-## ✅ 单元测试规范
+- App 不得单独完成端云链路：`api_integration` 中验证的字段、状态码、错误码、边界行为，必须在 `local_contract` Mock/Provider/Widget 测试中有对应断言。
+- 页面或用户可见能力必须补 `user_acceptance`，覆盖页面功能、UI/UX、生命周期、加载/空态/错误/权限/恢复动作。
+- 环境数据遵守 alpha/beta/gamma/prod 分层：alpha 可用 contract-seeded Mock，beta/gamma/prod 必须走 Remote/gateway/API seed 或真实数据。
+- 生产灰度是 prod rollout stage，不存在独立 `prod-gray` App 包。
+- 禁止空断言、`skip: true` 新增、手写全绿 report、UI 直连 Mock 目录、硬编码 path/surface/operation/error code。
 
-### 测试用例结构
-
-```dart
-// AAA模式: Arrange - Act - Assert
-
-void main() {
-  group('HomeNotifier Tests', () {
-    late MockPostService mockPostService;
-    late HomeNotifier homeNotifier;
-    
-    setUp(() {
-      // Arrange: 准备测试数据
-      mockPostService = MockPostService();
-      homeNotifier = HomeNotifier(mockPostService);
-    });
-    
-    tearDown(() {
-      // Cleanup: 清理资源
-    });
-    
-    test('should load posts successfully', () async {
-      // Arrange
-      final mockPosts = [
-        Post(id: '1', title: 'Test Post 1'),
-        Post(id: '2', title: 'Test Post 2'),
-      ];
-      when(mockPostService.getPosts(page: 1))
-          .thenAnswer((_) async => mockPosts);
-      
-      // Act
-      await homeNotifier.loadPosts();
-      
-      // Assert
-      expect(homeNotifier.state.posts, equals(mockPosts));
-      expect(homeNotifier.state.isLoading, isFalse);
-      expect(homeNotifier.state.error, isNull);
-      verify(mockPostService.getPosts(page: 1)).called(1);
-    });
-    
-    test('should handle error when loading posts fails', () async {
-      // Arrange
-      const errorMessage = 'Network error';
-      when(mockPostService.getPosts(page: 1))
-          .thenThrow(Exception(errorMessage));
-      
-      // Act
-      await homeNotifier.loadPosts();
-      
-      // Assert
-      expect(homeNotifier.state.posts, isEmpty);
-      expect(homeNotifier.state.isLoading, isFalse);
-      expect(homeNotifier.state.error, isNotNull);
-    });
-  });
-}
-```
-
-### Mock使用规范
-
-```dart
-// 使用 @GenerateMocks 生成Mock类
-@GenerateMocks([
-  PostService,
-  UserService,
-  AnalyticsService,
-])
-import 'test_mocks.mocks.dart';
-
-class PostServiceTest {
-  late MockPostService mockPostService;
-  
-  setUp(() {
-    mockPostService = MockPostService();
-  });
-  
-  test('should create post with valid data', () async {
-    // 设置Mock行为
-    when(mockPostService.createPost(any))
-        .thenAnswer((_) async => mockPost);
-    
-    // 执行测试
-    final result = await postService.createPost({
-      'title': 'Test Post',
-      'content': 'Test Content',
-    });
-    
-    // 验证结果
-    expect(result, equals(mockPost));
-    verify(mockPostService.createPost(any)).called(1);
-  });
-}
-```
-
-### 测试覆盖场景
-
-```dart
-// 必须测试的场景：
-// 1. 正常流程
-test('should handle normal case correctly', () async {
-  // 测试正常情况
-});
-
-// 2. 异常流程
-test('should handle error case correctly', () async {
-  // 测试错误情况
-});
-
-// 3. 边界条件
-test('should handle boundary conditions', () async {
-  // 测试边界值
-});
-
-// 4. 参数验证
-test('should validate parameters', () async {
-  // 测试参数验证
-});
-
-// 5. 状态变化
-test('should update state correctly', () async {
-  // 测试状态变化
-});
-```
-
-## 🎨 Widget测试规范
-
-### Widget测试结构
-
-```dart
-void main() {
-  group('PostCard Widget Tests', () {
-    testWidgets('should display post information correctly', (tester) async {
-      // Arrange
-      final post = Post(
-        id: '1',
-        title: 'Test Post',
-        content: 'Test Content',
-        authorName: 'Test Author',
-      );
-      
-      // Act
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            home: Scaffold(
-              body: PostCard(post: post),
-            ),
-          ),
-        ),
-      );
-      
-      // Assert
-      expect(find.text('Test Post'), findsOneWidget);
-      expect(find.text('Test Content'), findsOneWidget);
-      expect(find.text('Test Author'), findsOneWidget);
-    });
-    
-    testWidgets('should handle tap event correctly', (tester) async {
-      // Arrange
-      bool tapped = false;
-      
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            home: Scaffold(
-              body: PostCard(
-                post: post,
-                onTap: () => tapped = true,
-              ),
-            ),
-          ),
-        ),
-      );
-      
-      // Act
-      await tester.tap(find.byType(PostCard));
-      await tester.pump();
-      
-      // Assert
-      expect(tapped, isTrue);
-    });
-  });
-}
-```
-
-### 交互测试
-
-```dart
-testWidgets('should handle user interactions', (tester) async {
-  // 点击测试
-  await tester.tap(find.byIcon(Icons.favorite));
-  await tester.pump();
-  
-  // 滑动测试
-  await tester.drag(find.byType(ListView), const Offset(0, -200));
-  await tester.pump();
-  
-  // 输入测试
-  await tester.enterText(find.byType(TextField), 'Test Input');
-  await tester.pump();
-  
-  // 长按测试
-  await tester.longPress(find.byType(ListTile));
-  await tester.pumpAndSettle();
-  
-  // 验证结果
-  expect(find.text('Test Input'), findsOneWidget);
-});
-```
-
-## 🔗 环境测试规范
-
-### 端到端测试
-
-```dart
-void main() {
-  group('User Journey Tests', () {
-    testWidgets('should complete post creation flow', (tester) async {
-      // Arrange
-      await tester.pumpWidget(MyApp());
-      await tester.pumpAndSettle();
-      
-      // Act - 登录
-      await tester.tap(find.text(UITextConstants.login));
-      await tester.pumpAndSettle();
-      
-      await tester.enterText(find.byType(TextField).first, 'test@example.com');
-      await tester.enterText(find.byType(TextField).last, 'password123');
-      await tester.tap(find.text(UITextConstants.login));
-      await tester.pumpAndSettle();
-      
-      // Act - 创建帖子
-      await tester.tap(find.byIcon(Icons.add));
-      await tester.pumpAndSettle();
-      
-      await tester.enterText(find.byType(TextField).first, 'Test Post Title');
-      await tester.enterText(find.byType(TextField).last, 'Test Post Content');
-      await tester.tap(find.text(UITextConstants.publish));
-      await tester.pumpAndSettle();
-      
-      // Assert
-      expect(find.text('Test Post Title'), findsOneWidget);
-      expect(find.text(UITextConstants.publishSuccess), findsOneWidget);
-    });
-  });
-}
-```
-
-## ⚡ 性能测试规范
-
-### 响应时间测试
-
-```dart
-test('should load posts within acceptable time', () async {
-  // Arrange
-  final stopwatch = Stopwatch()..start();
-  
-  // Act
-  final posts = await postService.getPosts();
-  stopwatch.stop();
-  
-  // Assert
-  expect(stopwatch.elapsedMilliseconds, lessThan(1000)); // 1秒内
-  expect(posts.length, greaterThan(0));
-});
-```
-
-### 内存测试
-
-```dart
-test('should not have memory leaks', () async {
-  // Arrange
-  final initialMemory = await _getMemoryUsage();
-  
-  // Act - 创建大量对象
-  for (int i = 0; i < 1000; i++) {
-    final post = Post(
-      id: '$i',
-      title: 'Post $i',
-      content: 'Content $i',
-    );
-    _processPost(post);
-  }
-  
-  // 等待垃圾回收
-  await Future.delayed(Duration(milliseconds: 100));
-  
-  // Assert
-  final finalMemory = await _getMemoryUsage();
-  final memoryIncrease = finalMemory - initialMemory;
-  
-  expect(memoryIncrease, lessThan(10 * 1024 * 1024)); // 增加不超过10MB
-});
-```
-
-## 🔒 安全测试规范
-
-### 输入验证测试
-
-```dart
-test('should validate user input correctly', () {
-  // Email验证
-  expect(InputValidator.validateEmail('test@example.com'), isNull);
-  expect(InputValidator.validateEmail('invalid-email'), isNotNull);
-  
-  // 密码验证
-  expect(InputValidator.validatePassword('Password123!'), isNull);
-  expect(InputValidator.validatePassword('123'), isNotNull);
-  
-  // SQL注入预防
-  const maliciousInput = "'; DROP TABLE users; --";
-  expect(() => database.query('SELECT * FROM users WHERE name = ?', [maliciousInput]), returnsNormally);
-});
-```
-
-## 📊 测试数据管理
-
-### 测试数据生成
-
-```dart
-class TestDataGenerator {
-  static Post generatePost({
-    String? id,
-    String? title,
-    String? content,
-  }) {
-    return Post(
-      id: id ?? 'test_${Random().nextInt(10000)}',
-      title: title ?? 'Test Post ${Random().nextInt(100)}',
-      content: content ?? 'Test Content',
-      authorId: 'test_user',
-      createdAt: DateTime.now(),
-      likes: Random().nextInt(100),
-      comments: Random().nextInt(50),
-    );
-  }
-  
-  static User generateUser({
-    String? id,
-    String? name,
-    String? email,
-  }) {
-    return User(
-      id: id ?? 'test_${Random().nextInt(10000)}',
-      name: name ?? 'Test User ${Random().nextInt(100)}',
-      email: email ?? 'test${Random().nextInt(100)}@example.com',
-      createdAt: DateTime.now(),
-    );
-  }
-}
-```
-
-## 📋 测试检查清单
-
-### 代码提交前必须检查
-
-- [ ] 所有新增代码都有单元测试
-- [ ] 单元测试覆盖率>80%
-- [ ] 所有Widget都有Widget测试
-- [ ] 关键流程有集成测试
-- [ ] 所有测试都通过
-- [ ] 没有跳过的测试用例
-- [ ] 测试命名清晰描述性强
-- [ ] Mock使用正确合理
-- [ ] 测试数据管理规范
-- [ ] 性能测试达标
-
-### 测试运行命令
+## 推荐命令
 
 ```bash
-# 运行所有测试
-flutter test
-
-# 运行单元测试
-flutter test test/unit
-
-# 运行Widget测试
-flutter test test/widget
-
-# 运行环境测试
-flutter test test/common
-flutter test test/alpha --dart-define=APP_RUNTIME_ENV=alpha
-flutter test test/beta --dart-define=APP_RUNTIME_ENV=beta
-
-# 生成覆盖率报告
-flutter test --coverage
-genhtml coverage/lcov.info -o coverage/html
+make test-local-contract
+make test-api-integration ENV=gamma
+make test-user-acceptance TARGET=gamma-local
+make verify-test-specs
+make verify-app-page-horizontal-quality
+bash agent_ops/gate/gate_repo.sh --scope app
 ```
 
-## 相关文档
+## 命名
 
-- [05_TESTING_RULES.md](mdc:05_TESTING_RULES.md)
-- [04_CODING_RULES.md](mdc:04_CODING_RULES.md)
+- 用例 ID：`<layer>.<domain>.<capability>.<story>.<case>`。
+- 页面用例：`user_acceptance.page.<surface_id>.<state_or_action>`。
+- 文件名：`<story_or_operation>__<case>_test.dart`。

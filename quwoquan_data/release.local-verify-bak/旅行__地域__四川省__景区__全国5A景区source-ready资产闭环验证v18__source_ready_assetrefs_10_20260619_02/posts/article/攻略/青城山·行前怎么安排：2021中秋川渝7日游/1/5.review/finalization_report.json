@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "青城山_planning_consultation",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:934cd599b6ec416f9326b5af72cdef54e98c4f7500a4664bfd56ad9b1067d217",
+  "finalSha256": "sha256:78816840083102f801b008314cffd01740ec4eb3a47da33ef677eae6c719d62d",
+  "draftBodySha256": "sha256:934cd599b6ec416f9326b5af72cdef54e98c4f7500a4664bfd56ad9b1067d217",
+  "finalBodySha256": "sha256:934cd599b6ec416f9326b5af72cdef54e98c4f7500a4664bfd56ad9b1067d217",
+  "composeSnapshotSha256": "sha256:934cd599b6ec416f9326b5af72cdef54e98c4f7500a4664bfd56ad9b1067d217",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

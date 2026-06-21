@@ -23,7 +23,7 @@
 ### acceptance.yaml 评审
 
 - `acceptance.yaml` 已定义 13 条可测量验收项，覆盖统一主线、问题分型、Skill DSL、Markdown-first、过程区、偏好事实、能力面统一、天气试点、鲁棒性与测试责任。
-- `A1~A13` 已具备 `T1~T4` 责任矩阵，足以支撑设计分解和后续 `/dev` 实施。
+- `A1~A13` 已具备 `三层测试` 责任矩阵，足以支撑设计分解和后续 `/dev` 实施。
 
 ### 仍需在设计阶段补充明确的阻断项
 
@@ -457,44 +457,44 @@
 
 - 对应包：1
 - 测试层：
-  - `T1`：Planner / problemClass / stopPolicy contract
-  - `T3`：local/remote/hybrid 行为一致性
+  - `local_contract`：Planner / problemClass / stopPolicy contract
+  - `api_integration`：local/remote/hybrid 行为一致性
 
 ### Story S2：Skill DSL 2.0 与试点 Skill
 
 - 对应包：2
 - 测试层：
-  - `T1`：Skill 结构与字段契约
-  - `T3`：天气/购物/闲聊/fallback 集成闭环
+  - `local_contract`：Skill 结构与字段契约
+  - `api_integration`：天气/购物/闲聊/fallback 集成闭环
 
 ### Story S3：Markdown-first 与过程区
 
 - 对应包：3
 - 测试层：
-  - `T2`：Markdown / 过程区 UI 回归
-  - `T3`：run/stream 端到端渲染一致性
+  - `local_contract`：Markdown / 过程区 UI 回归
+  - `api_integration`：run/stream 端到端渲染一致性
 
 ### Story S4：偏好事实与设置页
 
 - 对应包：4
 - 测试层：
-  - `T1`：偏好事实 schema 与注入逻辑
-  - `T2`：设置页可见/撤销交互
+  - `local_contract`：偏好事实 schema 与注入逻辑
+  - `local_contract`：设置页可见/撤销交互
 
 ### Story S5：通用 fallback 高质量基线
 
 - 对应包：5
 - 测试层：
-  - `T1`：fallback contract
-  - `T3`：低质量搜索、工具失败、远端不可用回退
-  - `T4`：弱网和权限异常真实场景
+  - `local_contract`：fallback contract
+  - `api_integration`：低质量搜索、工具失败、远端不可用回退
+  - `user_acceptance`：弱网和权限异常真实场景
 
 ## 角色职责与多重防护网
 
 - 产品：定义 5 类问题体验目标、过程区交互、偏好设置展示与撤销心智。
 - 架构：定义 Unified Runtime Mainline、Skill DSL 2.0、metadata 边界、灰度策略。
 - 开发：按 TDD 执行 metadata → codegen → runtime → UI → tests。
-- 测试：维护 `T1~T4` 证据矩阵，尤其关注回退、弱网、权限、定位、远端失败。
+- 测试：维护 `三层测试` 证据矩阵，尤其关注回退、弱网、权限、定位、远端失败。
 - 发布：负责 5/25/50/100 放量、监控指标与回滚执行。
 
 多重防护网：

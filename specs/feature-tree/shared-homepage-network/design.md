@@ -354,14 +354,14 @@
 - 已下线提示采用非打断式 banner，不用强弹窗
 - 内容、口碑、问答区块支持 skeleton 和分模块降级
 
-## plan slice 与 T1~T4 证据矩阵映射
+## plan slice 与 三层测试 证据矩阵映射
 
 | Slice | 核心交付 | 主要证据层 |
 |------|----------|-----------|
-| P1 | 能力域、命名、metadata 拓扑冻结 | T1 |
-| P2 | 主档、模板、口碑、认领、下线模型冻结 | T1 / T2 |
-| P3 | 发布挂载、群组消费主页摘要契约冻结 | T2 / T3 |
-| P4 | iOS 体验、SLO、灰度与回滚口径冻结 | T3 / T4 |
+| P1 | 能力域、命名、metadata 拓扑冻结 | local_contract |
+| P2 | 主档、模板、口碑、认领、下线模型冻结 | local_contract / local_contract |
+| P3 | 发布挂载、群组消费主页摘要契约冻结 | local_contract / api_integration |
+| P4 | iOS 体验、SLO、灰度与回滚口径冻结 | api_integration / user_acceptance |
 
 ## 设计结论
 

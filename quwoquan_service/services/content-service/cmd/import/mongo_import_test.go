@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,6 +81,20 @@ func sampleEntities() []EntityDoc {
 	}
 }
 
+func TestRuntimePostIDIsRouteSafeAndStable(t *testing.T) {
+	postRef := "posts/article/体验/甲居藏寨体验/1"
+	id := RuntimePostID(postRef)
+	if id == "" {
+		t.Fatal("RuntimePostID must not be empty")
+	}
+	if id != RuntimePostID(postRef) {
+		t.Fatalf("RuntimePostID must be stable: %q", id)
+	}
+	if id == postRef || strings.Contains(id, "/") {
+		t.Fatalf("RuntimePostID must be API path segment safe, got %q", id)
+	}
+}
+
 func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
@@ -100,6 +115,8 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	}
 	var got struct {
 		ID                   string                   `bson:"_id"`
+		PostID               string                   `bson:"postId"`
+		PostRef              string                   `bson:"postRef"`
 		Title                string                   `bson:"title"`
 		Angle                string                   `bson:"angle"`
 		EntityRefs           []string                 `bson:"entityRefs"`
@@ -126,8 +143,11 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	if got.Title != "甲居藏寨体验" || got.Angle != "体验" || got.ArticleMarkdown == "" {
 		t.Fatalf("fields wrong: %+v", got)
 	}
-	if got.ID != "posts/article/体验/甲居藏寨体验/1" {
-		t.Fatalf("post _id must use stable postRef, got %q", got.ID)
+	if got.ID != RuntimePostID("posts/article/体验/甲居藏寨体验/1") || got.PostID != got.ID || got.PostRef != "posts/article/体验/甲居藏寨体验/1" {
+		t.Fatalf("post identity must use route-safe runtime id and preserve postRef, got %+v", got)
+	}
+	if strings.Contains(got.ID, "/") {
+		t.Fatalf("runtime post id must be path-segment safe, got %q", got.ID)
 	}
 	if len(got.EntityRefs) != 1 || got.EntityRefs[0] != "entity:景区:甲居藏寨" {
 		t.Fatalf("entityRefs wrong: %+v", got.EntityRefs)
@@ -446,7 +466,8 @@ func TestMongoLoadThenUpsertFromPublishTree(t *testing.T) {
 }
 
 // TestMongoUpsertDiscoveryFeed 验证 Path A 同写 rm_discovery_feed：
-// postId=postRef、status/visibility 可召回、sourceTaskId 透传、conditionProfile 从主实体 join 冗余。
+// postId=运行时安全 ID、postRef 保留发布证据、status/visibility 可召回、
+// sourceTaskId 透传、conditionProfile 从主实体 join 冗余。
 func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
@@ -471,6 +492,7 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	}
 	var item struct {
 		PostId           string         `bson:"postId"`
+		PostRef          string         `bson:"postRef"`
 		Status           string         `bson:"status"`
 		Visibility       string         `bson:"visibility"`
 		TagRefs          []string       `bson:"tagRefs"`
@@ -480,8 +502,11 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 		ConditionProfile map[string]any `bson:"conditionProfile"`
 		RecScore         float64        `bson:"recScore"`
 	}
-	if err := feed.FindOne(ctx, bson.M{"postId": "posts/article/体验/甲居藏寨体验/1"}).Decode(&item); err != nil {
+	if err := feed.FindOne(ctx, bson.M{"postId": RuntimePostID("posts/article/体验/甲居藏寨体验/1")}).Decode(&item); err != nil {
 		t.Fatal(err)
+	}
+	if item.PostRef != "posts/article/体验/甲居藏寨体验/1" || strings.Contains(item.PostId, "/") {
+		t.Fatalf("feed identity must be route-safe and preserve postRef: %+v", item)
 	}
 	if item.Status != "published" || item.Visibility != "public" {
 		t.Fatalf("feed item must be discoverable (published/public): %+v", item)
@@ -503,7 +528,7 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 		Status       string `bson:"status"`
 		SourceTaskId string `bson:"sourceTaskId"`
 	}
-	if err := feed.FindOne(ctx, bson.M{"postId": "posts/article/攻略/色达攻略/1"}).Decode(&second); err != nil {
+	if err := feed.FindOne(ctx, bson.M{"postId": RuntimePostID("posts/article/攻略/色达攻略/1")}).Decode(&second); err != nil {
 		t.Fatal(err)
 	}
 	if second.Status != "published" {

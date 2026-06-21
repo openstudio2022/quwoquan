@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "九寨沟_decision_experience",
+  "articleSource": "4.draft/draft.article.md",
+  "draftArticleRef": "4.draft/draft.article.md",
+  "finalArticleRef": "article.md",
+  "composeSnapshotRef": "5.review/compose.json",
+  "draftSha256": "sha256:33d7af9b034d8673ba36a4b972456ced1f023c8147e698af84a9fbbee329e3b2",
+  "finalSha256": "sha256:a414ee7058ec28cefdc3c8d4675341b9bd3cfaae05ae9e3040e5ba3e09671f03",
+  "draftBodySha256": "sha256:33d7af9b034d8673ba36a4b972456ced1f023c8147e698af84a9fbbee329e3b2",
+  "finalBodySha256": "sha256:33d7af9b034d8673ba36a4b972456ced1f023c8147e698af84a9fbbee329e3b2",
+  "composeSnapshotSha256": "sha256:33d7af9b034d8673ba36a4b972456ced1f023c8147e698af84a9fbbee329e3b2",
+  "composeSnapshotMatchesDraft": true,
+  "frontmatterInjected": true,
+  "frontmatterChanged": true,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": true,
+  "normalizationActions": [
+    "frontmatter_injected"
+  ]
+}

@@ -46,6 +46,12 @@ client_projection:
       source: avatarUrl
       aliases: [avatarUrl, avatar, avatarUrlSnapshot]
       default: "''"
+    - name: avatarVersion
+      dart_type: int
+      nullable: false
+      source: avatarVersion
+      aliases: [avatarVersion]
+      default: "0"
     - name: personaContextVersion
       dart_type: String
       nullable: false

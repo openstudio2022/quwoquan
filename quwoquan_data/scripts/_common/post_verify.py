@@ -27,6 +27,8 @@ from _common.io import read_json
 from _common.paths import RELEASE_ROOT
 from _common.schema import validate_result
 
+CURRENT_POST_MANIFEST_SCHEMA = "quwoquan_data.post_manifest"
+
 
 def _import_verifiers():
     from verify.verify_content_quality import verify_posts  # noqa: WPS433
@@ -40,7 +42,24 @@ def _all_posts_roots(scope: str) -> list[Path]:
     roots: list[Path] = []
     if RELEASE_ROOT.exists():
         roots.extend(p for p in sorted(RELEASE_ROOT.rglob("posts")) if p.is_dir())
+    if scope == "current":
+        roots = [root for root in roots if _posts_root_uses_current_schema(root)]
     return _dedupe(roots)
+
+
+def _posts_root_uses_current_schema(posts_root: Path) -> bool:
+    """current scope 只纳入当前 post manifest schema 的 release 根。"""
+    manifests = sorted(posts_root.rglob("manifest.json"))
+    if not manifests:
+        return False
+    for manifest_path in manifests:
+        try:
+            payload = read_json(manifest_path)
+        except Exception:
+            return False
+        if payload.get("schemaVersion") != CURRENT_POST_MANIFEST_SCHEMA:
+            return False
+    return True
 
 
 def _dedupe(roots: list[Path]) -> list[Path]:
@@ -61,10 +80,13 @@ def resolve_posts_roots(*, task: str | None = None, batch: str | None = None, re
     explicit = bool((task and batch) or release)
     if task and batch:
         # 对象优先：成品落 batch 根 posts/{type}/{angle}/{title}/{seq}/。
-        from _common.paths import batch_root
+        from _common.paths import batch_command_root, batch_root
         pr = batch_root(task, batch) / "posts"
         if pr.is_dir():
             roots.append(pr)
+        produce_pr = batch_command_root(task, batch, "produce") / "posts"
+        if produce_pr.is_dir():
+            roots.append(produce_pr)
     if release:
         rel = RELEASE_ROOT / release
         roots.extend(p for p in sorted(rel.rglob("posts")) if p.is_dir())

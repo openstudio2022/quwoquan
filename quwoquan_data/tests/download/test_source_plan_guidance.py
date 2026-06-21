@@ -51,6 +51,7 @@ from download.research_plan import (  # noqa: E402
     _source_reject_should_enter_memory,
     _title_matches_entity,
     _url_looks_like_article,
+    _travel_registry_url_fetchable,
     _verified_homepage_sources_from_source_units,
     _wiki_related_titles,
     _wiki_title,
@@ -59,6 +60,11 @@ from download.research_plan import (  # noqa: E402
     write_auto_research_plans,
 )
 import download.research_plan as research_plan_mod  # noqa: E402
+
+
+def test_auto_research_curl_defaults_support_public_api_scale_probe():
+    assert research_plan_mod._AUTO_RESEARCH_CURL_TIMEOUT_SECONDS >= 25
+    assert research_plan_mod._AUTO_RESEARCH_CURL_RETRIES >= 1
 
 
 def test_prepare_source_plan_includes_registry_guidance_for_travel():
@@ -199,7 +205,7 @@ def test_source_reject_memory_ignores_soft_fetch_policy_failures():
     )
 
 
-def test_download_reject_memory_blocks_failed_homepage_baike_exact_urls():
+def test_download_reject_memory_ignores_registry_fetchable_homepage_baike_soft_failures():
     task = "旅行/地域/测试省/景区/homepage拒绝记忆"
     batch = "reject_memory"
     entity = "沙湖旅游景区"
@@ -225,7 +231,53 @@ def test_download_reject_memory_blocks_failed_homepage_baike_exact_urls():
 
     memory = _download_reject_memory(task, batch, entity, entity_type="地点/景区")
 
-    assert any("baike.baidu.com" in value for value in memory["sourceUrls"])
+    assert not any("baike.baidu.com" in value for value in memory["sourceUrls"])
+
+
+def test_homepage_candidate_gate_allows_registry_fetchable_baike_sources():
+    baidu = _source(
+        source_id="home_baidu_baike",
+        platform="百度百科",
+        url="https://baike.baidu.com/item/%E5%96%80%E7%BA%B3%E6%96%AF%E6%99%AF%E5%8C%BA",
+        category="encyclopedia",
+        discovery_provider="baidu_baike_exact_item_url",
+        match_confidence=0.86,
+    )
+    baidu_verdict = _candidate_gate(baidu, entity_id="喀纳斯景区", lane="homepage")
+    assert baidu_verdict["passed"]
+
+    bare_official = _source(
+        source_id="home_official_bare",
+        platform="景区官网",
+        url="https://example.invalid/kanas",
+        category="official",
+        discovery_provider="curated_official_url",
+        match_confidence=0.9,
+    )
+    bare_verdict = _candidate_gate(bare_official, entity_id="喀纳斯景区", lane="homepage")
+    assert not bare_verdict["passed"]
+    assert "registry-fetchable" in "\n".join(bare_verdict["issues"])
+
+    wiki = _source(
+        source_id="home_wikipedia",
+        platform="维基百科",
+        url="https://zh.wikipedia.org/wiki/%E5%96%80%E7%BA%B3%E6%96%AF%E6%B9%96",
+        category="encyclopedia",
+        discovery_provider="Chinese Wikipedia",
+        match_confidence=0.95,
+    )
+    assert _candidate_gate(wiki, entity_id="喀纳斯景区", lane="homepage")["passed"]
+
+    snapshotted = _source(
+        source_id="home_official_snapshot",
+        platform="景区官网",
+        url="https://example.invalid/kanas",
+        category="official",
+        discovery_provider="curated_official_snapshot",
+        match_confidence=0.9,
+    )
+    snapshotted["body"] = "喀纳斯景区位于新疆阿勒泰，包含湖泊、森林、河湾等核心景观。"
+    assert _candidate_gate(snapshotted, entity_id="喀纳斯景区", lane="homepage")["passed"]
 
 
 def test_homepage_seed_source_requires_encyclopedia_or_official_primary():
@@ -778,6 +830,34 @@ def test_image_collection_gate_rejects_prior_collection_id_only_match():
     )
 
 
+def test_image_collection_gate_rejects_oversized_assets_before_fetch():
+    collection = {
+        "sourceCollectionId": "commons:巨幅图:oversized",
+        "creator": "A",
+        "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Oversized.jpg",
+        "platform": "Wikimedia Commons",
+        "license": "CC BY-SA 4.0",
+        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "authorizationProof": "https://commons.wikimedia.org/wiki/File:Oversized.jpg",
+        "usageScope": "app_publish",
+        "images": [
+            {
+                "url": "https://upload.wikimedia.org/wikipedia/commons/oversized.jpg",
+                "creator": "A",
+                "caption": "巨幅图 scenic view",
+                "relevance": "巨幅图 scenic view",
+                "width": 12000,
+                "height": 9000,
+            }
+        ],
+    }
+
+    verdict = _collection_gate(collection, entity_id="巨幅图")
+
+    assert not verdict["passed"]
+    assert any("pixelCount" in issue for issue in verdict["issues"])
+
+
 def test_image_collection_gate_accepts_verified_entity_alias():
     collection = {
         "sourceCollectionId": "commons:三苏祠:south-gate",
@@ -802,6 +882,36 @@ def test_image_collection_gate_accepts_verified_entity_alias():
 
     assert not without_alias["passed"]
     assert with_alias["passed"], with_alias
+
+
+def test_image_collection_gate_rejects_configured_cross_entity_alias_collision():
+    collection = {
+        "sourceCollectionId": "commons:故宫博物院:national-palace-taiwan",
+        "creator": "A",
+        "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:NationalPalace_MuseumFrontView.jpg",
+        "platform": "Wikimedia Commons",
+        "license": "CC BY 3.0",
+        "termsUrl": "https://creativecommons.org/licenses/by/3.0/",
+        "authorizationProof": "https://commons.wikimedia.org/wiki/File:NationalPalace_MuseumFrontView.jpg",
+        "usageScope": "app_publish",
+        "images": [
+            {
+                "url": "https://upload.wikimedia.org/wikipedia/commons/b/b4/NationalPalace_MuseumFrontView.jpg",
+                "creator": "A",
+                "caption": "National Palace Museum, Taiwan.",
+                "relevance": "National Palace Museum, Taiwan.",
+            }
+        ],
+    }
+
+    verdict = _collection_gate(
+        collection,
+        entity_id="故宫博物院",
+        entity_aliases=["Palace Museum"],
+    )
+
+    assert not verdict["passed"]
+    assert any("relevance" in issue for issue in verdict["issues"])
 
 
 def test_image_collection_gate_accepts_core_name_from_english_scenic_alias():
@@ -975,8 +1085,8 @@ def test_qunar_travelogue_sources_require_entity_route_and_authorized_image():
 
 def test_article_base_candidate_limit_has_research_buffer():
     assert _article_base_candidate_limit(1) == 3
-    assert _article_base_candidate_limit(4) == 10
-    assert _article_base_candidate_limit(10) == 22
+    assert _article_base_candidate_limit(4) == 16
+    assert _article_base_candidate_limit(10) == 32
 
 
 def test_article_plan_source_selection_preserves_supporting_categories():
@@ -1251,6 +1361,17 @@ def test_parallel_auto_research_writes_availability_report():
     assert progress["workers"] == 2
     persisted = read_json(batch_root(task, batch) / "_shared" / "source_unavailable_targets.json")
     assert persisted["ineligibleTargets"][0]["entityId"] == "缺源景区"
+    missing_image_plan = (
+        resolve_entity_object_dir(task, batch, "缺源景区", etype_hint="景区")
+        / "1.download"
+        / "image_source_plan.json"
+    )
+    missing_payload = read_json(missing_image_plan)["payload"]
+    assert missing_payload["sourceUnavailable"][0]["lane"] == "image"
+    diagnostics = missing_payload["imageDiscoveryDiagnostics"]
+    assert diagnostics["requiredImageWorks"] >= 1
+    assert diagnostics["poolCounts"]["acceptedCollections"] == 0
+    assert diagnostics["sourceUnavailable"][0]["nextAction"] == "manual_authorized_gallery_or_target_replacement"
 
 
 def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_categories():
@@ -1383,6 +1504,7 @@ def test_auto_research_image_lane_prefers_non_homepage_alias_matched_image():
         "_wikidata_item_for_entity_search": research_mod._wikidata_item_for_entity_search,
         "_wikidata_entity_aliases": research_mod._wikidata_entity_aliases,
         "_wikidata_commons_images": research_mod._wikidata_commons_images,
+        "_commons_category_images": research_mod._commons_category_images,
         "_official_website": research_mod._official_website,
         "_commons_images": research_mod._commons_images,
         "_openverse_images": research_mod._openverse_images,
@@ -1483,6 +1605,9 @@ def test_auto_research_reuses_prior_verified_image_collections_when_live_discove
         research_mod._wikidata_item_for_entity_search = lambda entity_id: ""
         research_mod._wikidata_entity_aliases = lambda qid: []
         research_mod._wikidata_commons_images = lambda qid, entity_id, entity_aliases=(), limit=10: []
+        research_mod._commons_category_images = (
+            lambda category, entity_id, entity_aliases=(), limit=8: []
+        )
         research_mod._official_website = lambda qid: ""
         research_mod._commons_images = lambda entity_id, entity_aliases=(), limit=10: []
         research_mod._openverse_images = lambda entity_id, entity_aliases=(), limit=12: []
@@ -1510,6 +1635,393 @@ def test_auto_research_reuses_prior_verified_image_collections_when_live_discove
     collections = read_json(plan)["payload"]["collections"]
     assert len(collections) == 2
     assert {collection["discoveryProvider"] for collection in collections} == {"verified_source_pool_reuse"}
+
+
+def test_auto_research_reuses_verified_image_collections_across_tasks_when_live_discovery_empty():
+    import download.research_plan as research_mod
+
+    prior_task = "旅行/地域/测试省/景区/跨任务图库缓存源"
+    task = "旅行/地域/测试省/景区/跨任务图库缓存目标"
+    prior_batch = "cross_task_image_pool_prior"
+    batch = "cross_task_image_pool_current"
+    entity = "黄山风景区"
+    prior_collections = []
+    for index in range(2):
+        collection_id = f"open_license_file:{entity}:cross_task_{index}"
+        prior_collections.append(
+            {
+                "sourceCollectionId": collection_id,
+                "creator": f"Creator {index}",
+                "collectionPageUrl": f"https://commons.wikimedia.org/wiki/File:Huangshan_{index}.jpg",
+                "platform": "Wikimedia Commons",
+                "license": "CC BY-SA 4.0",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "authorizationProof": f"https://commons.wikimedia.org/wiki/File:Huangshan_{index}.jpg",
+                "usageScope": "app_publish",
+                "images": [
+                    {
+                        "url": f"https://img.example/huangshan_{index}.jpg",
+                        "caption": "黄山 Mount Huangshan landscape",
+                        "relevance": "黄山 Mount Huangshan landscape",
+                        "width": 1600,
+                        "height": 1000,
+                    }
+                ],
+            }
+        )
+    prior_plan = (
+        resolve_entity_object_dir(prior_task, prior_batch, entity, etype_hint="景区")
+        / "1.download"
+        / "image_source_plan.json"
+    )
+    prior_plan.parent.mkdir(parents=True, exist_ok=True)
+    write_json(prior_plan, {"payload": {"collections": prior_collections}})
+    originals = {
+        "_wiki_title": research_mod._wiki_title,
+        "_wikidata_item_for_zhwiki": research_mod._wikidata_item_for_zhwiki,
+        "_wikidata_item_for_entity_search": research_mod._wikidata_item_for_entity_search,
+        "_wikidata_entity_aliases": research_mod._wikidata_entity_aliases,
+        "_wikidata_commons_images": research_mod._wikidata_commons_images,
+        "_official_website": research_mod._official_website,
+        "_commons_images": research_mod._commons_images,
+        "_openverse_images": research_mod._openverse_images,
+        "_mediawiki_page_images": research_mod._mediawiki_page_images,
+        "_trusted_external_links": research_mod._trusted_external_links,
+        "_qunar_travelogue_sources": research_mod._qunar_travelogue_sources,
+    }
+    try:
+        research_mod._wiki_title = lambda host, entity_id: entity if host == "zh.wikipedia.org" else ""
+        research_mod._wikidata_item_for_zhwiki = lambda title: ""
+        research_mod._wikidata_item_for_entity_search = lambda entity_id: ""
+        research_mod._wikidata_entity_aliases = lambda qid: []
+        research_mod._wikidata_commons_images = lambda qid, entity_id, entity_aliases=(), limit=10: []
+        research_mod._official_website = lambda qid: ""
+        research_mod._commons_images = lambda entity_id, entity_aliases=(), limit=10: []
+        research_mod._openverse_images = lambda entity_id, entity_aliases=(), limit=12: []
+        research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=6: []
+        research_mod._trusted_external_links = lambda title, limit=4: []
+        research_mod._qunar_travelogue_sources = (
+            lambda entity_id, entity_aliases=(), authorized_images=(), limit=4: []
+        )
+        report = write_auto_research_plans(
+            task,
+            batch,
+            [entity],
+            entity_type="景区",
+            force=True,
+            lanes={"image"},
+        )
+    finally:
+        for name, value in originals.items():
+            setattr(research_mod, name, value)
+
+    assert report["sourceAvailability"]["readyTargets"] == [entity]
+    plan = (
+        resolve_entity_object_dir(task, batch, entity, etype_hint="景区")
+        / "1.download"
+        / "image_source_plan.json"
+    )
+    collections = read_json(plan)["payload"]["collections"]
+    assert len(collections) == 2
+    assert {collection["reuseSourcePlan"] for collection in collections}
+
+
+def test_auto_research_rescues_image_lane_when_first_open_license_discovery_is_empty():
+    import download.research_plan as research_mod
+
+    spec = store.scaffold_spec(
+        vertical="travel",
+        organize_by="地域",
+        key="测试省",
+        category="景区",
+        name="图片救援发现",
+        scope={
+            "region": "测试省",
+            "entityTypes": ["地点/景区"],
+            "coverageTargets": [{"entityType": "地点/景区", "name": "故宫博物院"}],
+        },
+        content={
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityHomepagesPerTarget": 0,
+                "entityArticlesPerTarget": 0,
+                "imageWorksPerTarget": 2,
+            },
+        },
+        created_by="test",
+    )
+    task = spec["taskId"]
+    store.save_spec(spec)
+    batch = "image_rescue_current"
+    entity = "故宫博物院"
+    rescue_images = [
+        {
+            "url": f"https://upload.wikimedia.org/wikipedia/commons/rescue/gugong_{index}.jpg",
+            "platform": "Wikimedia Commons",
+            "license": "CC BY-SA 4.0",
+            "credit": f"Rescue Creator {index}",
+            "sourceUrl": f"https://commons.wikimedia.org/wiki/File:Gugong_{index}.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "licenseSnapshot": "CC BY-SA 4.0 recorded on Wikimedia Commons file page",
+            "authorizationProof": f"https://commons.wikimedia.org/wiki/File:Gugong_{index}.jpg",
+            "usageScope": "app_publish",
+            "width": 1600,
+            "height": 1000,
+            "caption": f"{entity} 开放授权图片 {index}",
+            "relevance": f"{entity} 开放授权图片 {index}",
+            "creator": f"Rescue Creator {index}",
+            "collectionPageUrl": f"https://commons.wikimedia.org/wiki/File:Gugong_{index}.jpg",
+        }
+        for index in range(1, 4)
+    ]
+    originals = {
+        "_wiki_title": research_mod._wiki_title,
+        "_wikidata_item_for_zhwiki": research_mod._wikidata_item_for_zhwiki,
+        "_wikidata_item_for_entity_search": research_mod._wikidata_item_for_entity_search,
+        "_wikidata_entity_aliases": research_mod._wikidata_entity_aliases,
+        "_wikidata_commons_images": research_mod._wikidata_commons_images,
+        "_official_website": research_mod._official_website,
+        "_commons_images": research_mod._commons_images,
+        "_openverse_images": research_mod._openverse_images,
+        "_mediawiki_page_images": research_mod._mediawiki_page_images,
+        "_trusted_external_links": research_mod._trusted_external_links,
+        "_qunar_travelogue_sources": research_mod._qunar_travelogue_sources,
+    }
+    commons_calls = {"count": 0}
+
+    def fake_commons(entity_id, entity_aliases=(), limit=10):
+        _ = entity_aliases
+        assert entity_id == entity
+        commons_calls["count"] += 1
+        if commons_calls["count"] == 1:
+            return []
+        assert limit >= 20
+        return rescue_images
+
+    try:
+        research_mod._wiki_title = lambda host, entity_id: entity if host == "zh.wikipedia.org" else ""
+        research_mod._wikidata_item_for_zhwiki = lambda title: "Q2047427"
+        research_mod._wikidata_item_for_entity_search = lambda entity_id: "Q2047427"
+        research_mod._wikidata_entity_aliases = lambda qid: ["Palace Museum"]
+        research_mod._wikidata_commons_images = lambda qid, entity_id, entity_aliases=(), limit=10: []
+        research_mod._official_website = lambda qid: ""
+        research_mod._commons_images = fake_commons
+        research_mod._openverse_images = lambda entity_id, entity_aliases=(), limit=12: []
+        research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=6: []
+        research_mod._trusted_external_links = lambda title, limit=4: []
+        research_mod._qunar_travelogue_sources = (
+            lambda entity_id, entity_aliases=(), authorized_images=(), limit=4: []
+        )
+        report = write_auto_research_plans(
+            task,
+            batch,
+            [entity],
+            entity_type="景区",
+            force=True,
+            lanes={"image"},
+        )
+    finally:
+        for name, value in originals.items():
+            setattr(research_mod, name, value)
+
+    assert commons_calls["count"] == 2
+    assert report["sourceAvailability"]["readyTargets"] == [entity]
+    assert report["sourceUnavailable"] == []
+    assert report["rescueEvents"] == [
+        {
+            "entityId": entity,
+            "lane": "image",
+            "reason": "open_license_image_discovery_empty_on_first_pass",
+            "images": 3,
+        }
+    ]
+    plan = (
+        resolve_entity_object_dir(task, batch, entity, etype_hint="景区")
+        / "1.download"
+        / "image_source_plan.json"
+    )
+    collections = read_json(plan)["payload"]["collections"]
+    assert len(collections) >= 3
+    assert {
+        image["url"]
+        for collection in collections
+        for image in collection["images"]
+    } >= {image["url"] for image in rescue_images}
+
+
+def test_auto_research_uses_registry_image_aliases_for_visual_discovery():
+    import download.research_plan as research_mod
+
+    spec = store.scaffold_spec(
+        vertical="travel",
+        organize_by="地域",
+        key="测试省",
+        category="景区",
+        name="图片别名发现",
+        scope={
+            "region": "测试省",
+            "entityTypes": ["地点/景区"],
+            "coverageTargets": [{"entityType": "地点/景区", "name": "黄山风景区"}],
+        },
+        content={
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityHomepagesPerTarget": 0,
+                "entityArticlesPerTarget": 0,
+                "imageWorksPerTarget": 2,
+            },
+        },
+        created_by="test",
+    )
+    task = spec["taskId"]
+    store.save_spec(spec)
+    batch = "image_alias_current"
+    entity = "黄山风景区"
+    image_rows = [
+        {
+            "url": f"https://upload.wikimedia.org/wikipedia/commons/huangshan_{index}.jpg",
+            "platform": "Wikimedia Commons",
+            "license": "CC BY-SA 4.0",
+            "credit": f"Huangshan Creator {index}",
+            "sourceUrl": f"https://commons.wikimedia.org/wiki/File:Huangshan_{index}.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "licenseSnapshot": "CC BY-SA 4.0 recorded on Wikimedia Commons file page",
+            "authorizationProof": f"https://commons.wikimedia.org/wiki/File:Huangshan_{index}.jpg",
+            "usageScope": "app_publish",
+            "width": 1600,
+            "height": 1000,
+            "caption": f"Mount Huangshan landscape {index}",
+            "relevance": f"Mount Huangshan landscape {index}",
+            "creator": f"Huangshan Creator {index}",
+            "collectionPageUrl": f"https://commons.wikimedia.org/wiki/File:Huangshan_{index}.jpg",
+        }
+        for index in range(1, 4)
+    ]
+    originals = {
+        "_wiki_title": research_mod._wiki_title,
+        "_wikidata_item_for_zhwiki": research_mod._wikidata_item_for_zhwiki,
+        "_wikidata_item_for_entity_search": research_mod._wikidata_item_for_entity_search,
+        "_wikidata_entity_aliases": research_mod._wikidata_entity_aliases,
+        "_wikidata_commons_images": research_mod._wikidata_commons_images,
+        "_commons_category_images": research_mod._commons_category_images,
+        "_official_website": research_mod._official_website,
+        "_commons_images": research_mod._commons_images,
+        "_openverse_images": research_mod._openverse_images,
+        "_mediawiki_page_images": research_mod._mediawiki_page_images,
+        "_trusted_external_links": research_mod._trusted_external_links,
+        "_qunar_travelogue_sources": research_mod._qunar_travelogue_sources,
+    }
+    seen_aliases = {"value": []}
+
+    def fake_commons(entity_id, entity_aliases=(), limit=10):
+        assert entity_id == entity
+        seen_aliases["value"] = list(entity_aliases)
+        if "Mount Huangshan" not in entity_aliases:
+            return []
+        return image_rows[:limit]
+
+    try:
+        research_mod._wiki_title = lambda host, entity_id: entity if host == "zh.wikipedia.org" else ""
+        research_mod._wikidata_item_for_zhwiki = lambda title: ""
+        research_mod._wikidata_item_for_entity_search = lambda entity_id: ""
+        research_mod._wikidata_entity_aliases = lambda qid: []
+        research_mod._wikidata_commons_images = lambda qid, entity_id, entity_aliases=(), limit=10: []
+        research_mod._commons_category_images = (
+            lambda category, entity_id, entity_aliases=(), limit=8: []
+        )
+        research_mod._official_website = lambda qid: ""
+        research_mod._commons_images = fake_commons
+        research_mod._openverse_images = lambda entity_id, entity_aliases=(), limit=12: []
+        research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=6: []
+        research_mod._trusted_external_links = lambda title, limit=4: []
+        research_mod._qunar_travelogue_sources = (
+            lambda entity_id, entity_aliases=(), authorized_images=(), limit=4: []
+        )
+        report = write_auto_research_plans(
+            task,
+            batch,
+            [entity],
+            entity_type="景区",
+            force=True,
+            lanes={"image"},
+        )
+    finally:
+        for name, value in originals.items():
+            setattr(research_mod, name, value)
+
+    assert "Mount Huangshan" in seen_aliases["value"]
+    assert report["sourceAvailability"]["readyTargets"] == [entity]
+    assert report["sourceUnavailable"] == []
+    plan = (
+        resolve_entity_object_dir(task, batch, entity, etype_hint="景区")
+        / "1.download"
+        / "image_source_plan.json"
+    )
+    collections = read_json(plan)["payload"]["collections"]
+    assert len(collections) >= 2
+    assert {collection["platform"] for collection in collections} == {"Wikimedia Commons"}
+
+
+def test_homepage_only_auto_research_skips_visual_and_article_discovery():
+    import download.research_plan as research_mod
+
+    task = "旅行/地域/测试省/景区/homepage轻量修复"
+    batch = "homepage_only_registry_fix"
+    entity = "故宫博物院"
+    originals = {
+        "_wiki_title_for_entity": research_mod._wiki_title_for_entity,
+        "_wiki_related_titles_for_entity": research_mod._wiki_related_titles_for_entity,
+        "_wikidata_item_for_zhwiki": research_mod._wikidata_item_for_zhwiki,
+        "_wikidata_item_for_entity_search": research_mod._wikidata_item_for_entity_search,
+        "_wikidata_entity_aliases": research_mod._wikidata_entity_aliases,
+        "_official_website": research_mod._official_website,
+        "_verified_image_collections_from_prior_plans": research_mod._verified_image_collections_from_prior_plans,
+        "_discover_open_license_image_pools": research_mod._discover_open_license_image_pools,
+        "_trusted_external_links": research_mod._trusted_external_links,
+        "_qunar_travelogue_sources": research_mod._qunar_travelogue_sources,
+    }
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("homepage-only repair must not run visual/article discovery")
+
+    try:
+        research_mod._wiki_title_for_entity = (
+            lambda host, entity_id, entity_aliases=(): entity if host == "zh.wikipedia.org" else ""
+        )
+        research_mod._wiki_related_titles_for_entity = lambda host, entity_id, entity_aliases=(): []
+        research_mod._wikidata_item_for_zhwiki = lambda title: ""
+        research_mod._wikidata_item_for_entity_search = lambda entity_id: ""
+        research_mod._wikidata_entity_aliases = lambda qid: []
+        research_mod._official_website = lambda qid: ""
+        research_mod._verified_image_collections_from_prior_plans = fail_if_called
+        research_mod._discover_open_license_image_pools = fail_if_called
+        research_mod._trusted_external_links = fail_if_called
+        research_mod._qunar_travelogue_sources = fail_if_called
+        report = write_auto_research_plans(
+            task,
+            batch,
+            [entity],
+            entity_type="景区",
+            force=True,
+            lanes={"homepage"},
+        )
+    finally:
+        for name, value in originals.items():
+            setattr(research_mod, name, value)
+
+    assert report["issues"] == []
+    assert report["sourceUnavailable"] == []
+    assert report["sourceAvailability"]["readyTargets"] == [entity]
+    plan = (
+        resolve_entity_object_dir(task, batch, entity, etype_hint="景区")
+        / "1.download"
+        / "homepage_source_plan.json"
+    )
+    sources = read_json(plan)["payload"]["sources"]
+    source_by_id = {source["source_id"]: source for source in sources}
+    assert set(source_by_id) >= {"home_official", "home_wikipedia"}
+    assert source_by_id["home_official"]["url"] == "https://www.dpm.org.cn/Home.html"
+    assert source_by_id["home_official"]["candidateGate"]["passed"] is True
 
 
 def test_auto_research_marks_image_lane_unavailable_when_unique_publishable_images_insufficient():
@@ -1612,7 +2124,7 @@ def test_auto_research_marks_image_lane_unavailable_when_unique_publishable_imag
     assert report["sourceAvailability"]["readyTargets"] == []
     assert report["sourceAvailability"]["ineligibleTargets"][0]["entityId"] == entity
     assert any(
-        "unique publishable images=1 need>=3" in str(item.get("reason") or "")
+        "unique publishable images=1 need>=2" in str(item.get("reason") or "")
         for item in report["sourceUnavailable"]
     )
 
@@ -1877,6 +2389,24 @@ def test_source_availability_summary_marks_failed_candidate_ineligible():
 
 
 def test_known_official_site_registry_covers_previous_missing_official_sources():
+    assert _known_official_website("故宫博物院") == "https://www.dpm.org.cn/Home.html"
+    assert _travel_registry_url_fetchable("https://www.dpm.org.cn/Home.html")
+    palace = _source(
+        source_id="home_official",
+        platform="景区官网",
+        url="https://www.dpm.org.cn/Home.html",
+        category="official",
+        discovery_provider="travel_source_registry",
+        match_confidence=0.94,
+        source_role="primary",
+    )
+    assert _candidate_gate(palace, entity_id="故宫博物院", lane="homepage")["passed"]
+    assert _known_official_website("秦始皇帝陵博物院景区") == "https://www.bmy.com.cn/index.html"
+    assert _travel_registry_url_fetchable("https://www.bmy.com.cn/index.html")
+    assert _known_official_website("黄果树瀑布景区") == "https://www.hgscn.com/"
+    assert _travel_registry_url_fetchable("https://www.hgscn.com/")
+    assert _known_official_website("布达拉宫景区") == "https://www.potalapalace.cn/"
+    assert _travel_registry_url_fetchable("https://www.potalapalace.cn/")
     assert _known_official_website("毕棚沟") == "http://www.bipenggou.net/"
     assert _known_official_website("碧峰峡") == "http://www.bifengxia.com/info?crid=74&lan=cn&ckey=jqgk_dfbfx"
     assert _known_official_website("蜀南竹海") == "https://www.snzh.cn/"
@@ -1916,9 +2446,27 @@ def test_known_official_site_registry_covers_previous_missing_official_sources()
         and row["platform"] == "维基百科"
         for row in tianjin_support
     )
+    assert {
+        _known_homepage_support_websites(entity)[0]["source_id"]
+        for entity in (
+            "秦始皇帝陵博物院景区",
+            "龙门石窟景区",
+            "黄山风景区",
+            "杭州西湖风景区",
+            "鼓浪屿风景名胜区",
+            "喀纳斯景区",
+        )
+    } == {
+        "home_wikipedia_mausoleum_of_qin_shi_huang",
+        "home_wikipedia_longmen_grottoes",
+        "home_wikipedia_huangshan",
+        "home_wikipedia_west_lake",
+        "home_wikipedia_gulangyu",
+        "home_wikipedia_kanas_lake",
+    }
 
 
-def test_auto_research_curl_json_uses_budget_cap_and_retry_policy():
+def test_auto_research_curl_json_preserves_call_timeout_and_retry_floor():
     original_timeout = research_plan_mod._AUTO_RESEARCH_CURL_TIMEOUT_SECONDS
     original_retries = research_plan_mod._AUTO_RESEARCH_CURL_RETRIES
     original_run = research_plan_mod.subprocess.run
@@ -1926,10 +2474,10 @@ def test_auto_research_curl_json_uses_budget_cap_and_retry_policy():
 
     class _Proc:
         returncode = 0
-        stdout = '{"ok": true}'
+        stdout = b'{"ok": true}'
 
-    def _fake_run(cmd, *, capture_output, text, check):
-        _ = (capture_output, text, check)
+    def _fake_run(cmd, *, capture_output, check):
+        _ = (capture_output, check)
         calls.append(list(cmd))
         return _Proc()
 
@@ -1944,8 +2492,26 @@ def test_auto_research_curl_json_uses_budget_cap_and_retry_policy():
         research_plan_mod.subprocess.run = original_run
 
     cmd = calls[0]
-    assert cmd[cmd.index("--max-time") + 1] == "7"
-    assert cmd[cmd.index("--retry") + 1] == "0"
+    assert cmd[cmd.index("--max-time") + 1] == "25"
+    assert cmd[cmd.index("--retry") + 1] == "1"
+
+
+def test_auto_research_curl_json_tolerates_non_utf8_stdout():
+    original_run = research_plan_mod.subprocess.run
+
+    class _Proc:
+        returncode = 0
+        stdout = b'{"ok": "\\xff"}\xff'
+
+    def _fake_run(cmd, *, capture_output, check):
+        _ = (cmd, capture_output, check)
+        return _Proc()
+
+    try:
+        research_plan_mod.subprocess.run = _fake_run
+        assert research_plan_mod._curl_json("https://example.test/bad-encoding") == {}
+    finally:
+        research_plan_mod.subprocess.run = original_run
 
 
 def test_source_quality_entity_grounding_accepts_common_entity_alias():

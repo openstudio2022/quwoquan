@@ -46,20 +46,41 @@ gwt_acceptance:
     performance_points:
     - route pop first feedback <= 100ms
     - no visible jank during route pop animation
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T3_route_integration
-      - T4_user_journey
     tests:
       planned:
-      - quwoquan_app/test/app/navigation/native_back_navigation_policy_test.dart
-      - quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
-      - quwoquan_app/test/app/navigation/app_router_edge_pop_contract_test.dart
+      - file: quwoquan_app/test/app/navigation/native_back_navigation_policy_test.dart
+      - file: quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.native_edge_gesture_navigation.global_route_edge_pop_contract.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt_global_route_edge_pop_local_contract
+        cases:
+        - local_contract.runtime.native_edge_gesture_navigation.global_route_edge_pop_contract.gwt_global_route_edge_pop_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: route_integration
+        cases:
+        - api_integration.runtime.native_edge_gesture_navigation.global_route_edge_pop_contract.route_integration
+        envs:
+        - beta
+        - gamma
+      - layer: user_acceptance
+        suite: user_journey
+        cases:
+        - user_acceptance.runtime.native_edge_gesture_navigation.global_route_edge_pop_contract.user_journey
+        envs:
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/app/navigation/app_router_edge_pop_contract_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

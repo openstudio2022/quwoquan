@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_f497d054a07f1adb",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "华山风景区·行前指南：华山",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "gpt-5-codex",
+    "agentRunId": "codex-real-site-supply-authoring-20260620-r2-repair1",
+    "agentId": "codex",
+    "sessionTrace": "codex-real-site-supply-authoring-20260620-r2-repair1",
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [],
+    "articleDigest": "sha256:e4ddeff8aafffabc08955285674e037c9bdb4e7212f62548fa4a3ea87d75c188"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "华山风景区·行前指南：华山",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:96e9a0ffb4ff4424b13bf41387e6f50eb6041fd73ce2b73e97855d9bd155050f",
+    "writingPackSha256": "sha256:f4aaef8d80e80bd92fd9324912332a7f27859fb448d0d41bf539eb1f45f9bb03",
+    "sourceBundleSha256": "sha256:15ac687a7090740e25dfa100390c27e6b4d358825848639af892123d988557f5",
+    "draftSha256": "sha256:92485930a43e4bd62135e9fedee09434ccfa82ab7802d338d060fe1998ad86db"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/华山风景区/1.download/sources/10.wikivoyage_zh_candidate_f497d054a07f1adb/source.md",
+      "url": "https://zh.wikivoyage.org/wiki/%E5%8D%8E%E5%B1%B1"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/华山风景区/1.download/sources/10.wikivoyage_zh_candidate_f497d054a07f1adb/source.md"
+  ]
+}

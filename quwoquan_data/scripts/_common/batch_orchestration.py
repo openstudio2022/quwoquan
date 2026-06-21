@@ -1,10 +1,11 @@
 """单会话多实体批处理编排 ——「日产 10 万级」的吞吐路径（不引入外部模型，仍是会话 agent）。
 
-评审痛点：逐实体 prepare→创作→review 往返太慢。批处理把 N 个实体的写作契约聚合成一份
+评审痛点：逐实体 prepare→创作→review 往返太慢。批处理把 N 个文章/主页对象的写作契约聚合成一份
 batch prompt，让同一个会话 agent 在一次会话内产出 N 篇，分别写回各对象 `4.draft/draft.article.md`，
 再统一过 annotate-entities / review 门 + 结构化记录。
 
 CLI 仍不拼接任何正文：只聚合 per-ref writing_pack 摘要 + 回写协议 + 跨篇多样性约束。
+图片作品不进入正文批处理，它们由 sourceCollection/assets/caption 结构化证据包直接物化。
 """
 from __future__ import annotations
 

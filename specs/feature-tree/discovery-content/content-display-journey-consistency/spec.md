@@ -55,6 +55,7 @@
 - 用户点击后 UI 立即乐观更新。
 - 云端持久化不立刻发送，而是进入本地 `sync outbox`。
 - 默认 `10s` 后聚合同步一次；窗口内多次操作按 `latest_wins` 合并。
+- follow / like 在同一 `flush_delay_sec` 窗口内允许立即反向撤销；若最终意图回到云端已确认的原始状态，则直接删除 pending sync，不发云端持久化请求。
 - 默认 `5min` 后重试失败批次；如果等待窗口内又产生新操作，立即合并并触发下一轮批同步。
 - 上述参数归 `sys.client_state_sync.*`，本地有默认值，云端可下发覆盖并本地持久化。
 
@@ -119,7 +120,7 @@
 - 架构：冻结 canonical key、Provider 边界、outbox 同步模型、`sys.*` 配置分层。
 - 客户端：落地 viewer / feed / profile 的 provider 同步、outbox、回写与重试。
 - 云端：保证 `SubAccountProfileView`、`RelationshipCapabilityView`、post projections 与 `sys.*` 配置下发契约一致。
-- 测试：建立 T1~T4 覆盖，重点验证 discovery / circle / viewer / profile 四方闭环。
+- 测试：建立 三层测试 覆盖，重点验证 discovery / circle / viewer / profile 四方闭环。
 
 ## 既有 Story 覆盖矩阵
 
@@ -137,6 +138,7 @@
 
 - 用户点击关注/取消关注后，`UserRelationshipStateProvider` 立即更新内存态。
 - 同步意图写入本地 `sync outbox`，按 `ProfileSubjectId` 聚合最终状态。
+- 若窗口内最终意图回到云端已确认的原始关系态，则删除该 pending entry，不发持久化请求。
 - 达到 `flush_delay_sec` 后批量同步到云端。
 - 失败后保留 pending intent，达到 `retry_delay_sec` 后重试。
 - pending intent 超过 `max_pending_age_sec` 仍未成功时进入人工/诊断可观测路径，但本地 UI 仍以最后用户意图为准，等待 reconcile。
@@ -145,6 +147,7 @@
 
 - like/save/share 等写入 `PostInteractionStateProvider`，立即反馈到 feed / viewer / profile 交叉展示区域。
 - 同步意图按 `PostId` 聚合，只保留最终意图。
+- like 在窗口内若最终回到云端已确认的原始状态，则直接删除 pending entry，不发持久化请求。
 - 批同步成功后更新本地已确认状态；若失败则保留 outbox，等待下一轮 flush。
 
 ## 小趣 / 权限 / 分享边界

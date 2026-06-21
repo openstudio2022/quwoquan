@@ -1,0 +1,70 @@
+version: 1
+read_model: IntersectionRepresentativeActor
+description: |
+  交集/影响力人数句的代表人锚点（统一交互子契约）。
+  所有包含人数的 primaryText 必须由云侧从同一证据快照中选出一个代表人：
+  代表人是用户最可能点击、最能解释这条连接的证据样本。
+
+  隐私红线：
+  - 不可见 actor、被拉黑、未授权通讯录联系人不得下发真实姓名或头像。
+  - 可降级为匿名但可证的锚点，如「一位校友」「一位联系人」。
+  - 端侧只读渲染，不得本地猜测代表人或重排代表人。
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: IntersectionRepresentativeActor
+  base_class: ""
+  output_path: cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart
+  dart_imports:
+    - intersection_target.g.dart
+  fields:
+    - name: actorId
+      dart_type: String
+      nullable: false
+      source: actorId
+      aliases: [actorId]
+      default: "''"
+    - name: displayName
+      dart_type: String
+      nullable: false
+      source: displayName
+      aliases: [displayName]
+      default: "''"
+    - name: avatarUrl
+      dart_type: String
+      nullable: false
+      source: avatarUrl
+      aliases: [avatarUrl]
+      default: "''"
+    - name: relationLabel
+      dart_type: String
+      nullable: false
+      source: relationLabel
+      aliases: [relationLabel]
+      default: "''"
+    - name: privacyState
+      dart_type: String
+      nullable: false
+      source: privacyState
+      aliases: [privacyState]
+      default: "'visible'"
+    - name: target
+      dart_type: IntersectionTarget
+      nullable: true
+      source: target
+      aliases: [target]
+      map_from_string_key_class: IntersectionTarget
+    - name: evidenceRank
+      dart_type: int
+      nullable: false
+      source: evidenceRank
+      aliases: [evidenceRank]
+      default: "0"
+    - name: snapshotVersion
+      dart_type: String
+      nullable: false
+      source: snapshotVersion
+      aliases: [snapshotVersion, representativeActorVersion]
+      default: "''"

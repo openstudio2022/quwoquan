@@ -9,43 +9,59 @@ node:
 scope:
   summary: 推荐准确性评估、在线 AB 和真实流量训练晋升闭环。
   in_scope:
-    - offline replay evaluation。
-    - online AB significance。
-    - real traffic training promotion。
+  - offline replay evaluation。
+  - online AB significance。
+  - real traffic training promotion。
   out_of_scope:
-    - 本轮不实现评估脚本、训练作业或模型发布逻辑。
-    - 深度排序模型平台轨。
+  - 本轮不实现评估脚本、训练作业或模型发布逻辑。
+  - 深度排序模型平台轨。
 sit_acceptance:
   SIT1:
     title: 推荐评估飞轮 SIT
     story_refs:
-      - recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation
-      - recommendation-platform/evaluation-and-flywheel/online-ab-significance
-      - recommendation-platform/evaluation-and-flywheel/real-traffic-training-promotion
+    - recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation
+    - recommendation-platform/evaluation-and-flywheel/online-ab-significance
+    - recommendation-platform/evaluation-and-flywheel/real-traffic-training-promotion
     done_when:
-      - 离线 replay 指标、在线 AB 显著性和真实流量训练晋升均有规格与验收。
-      - 所有指标命名与 recommendation_slo.yaml 对齐。
-      - 深度排序模型平台轨仍作为长期上限，不进入本轮商用门槛。
+    - 离线 replay 指标、在线 AB 显著性和真实流量训练晋升均有规格与验收。
+    - 所有指标命名与 recommendation_slo.yaml 对齐。
+    - 深度排序模型平台轨仍作为长期上限，不进入本轮商用门槛。
     performance_points:
-      - offline_ndcg_at_k >= 0.20
-      - offline_recall_at_k >= 0.25
-      - ab_experiment_validity >= 0.95
-    evidence:
-      primary:
-        - T1_static_contract
-        - T2_module_interaction
-      supporting:
-        - T3_service_contract
+    - offline_ndcg_at_k >= 0.20
+    - offline_recall_at_k >= 0.25
+    - ab_experiment_validity >= 0.95
     tests:
-      planned:
-        - quwoquan_service/scripts/ml/tests/test_replay_evaluation.py
-        - quwoquan_service/scripts/ml/tests/test_ab_significance.py
-        - quwoquan_service/scripts/ml/tests/test_training_promotion_gate.py
+      planned: []
       recorded: []
-    status: specified
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.recommendation_platform.evaluation_and_flywheel.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.recommendation_platform.evaluation_and_flywheel.sit1.sit1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.recommendation_platform.evaluation_and_flywheel.sit1.sit1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_replay_evaluation.py'
+    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_ab_significance.py'
+    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_training_promotion_gate.py'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-    - make gate
+  - make gate

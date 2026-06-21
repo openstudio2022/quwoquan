@@ -20,6 +20,22 @@ class HomeFeedVideoAutoPlayInput {
   final Duration timeSinceHighVelocity;
 }
 
+class HomeFeedVideoFastScrollSuppressionInput {
+  const HomeFeedVideoFastScrollSuppressionInput({
+    required this.hasPlayableSource,
+    required this.visibleFraction,
+    required this.prewarmStableVisibleDuration,
+    required this.scrollVelocityPxPerSecond,
+    required this.timeSinceHighVelocity,
+  });
+
+  final bool hasPlayableSource;
+  final double visibleFraction;
+  final Duration prewarmStableVisibleDuration;
+  final double scrollVelocityPxPerSecond;
+  final Duration timeSinceHighVelocity;
+}
+
 const double homeFeedVideoAutoPlayMinVisibleFraction = 0.72;
 const double homeFeedVideoPrewarmMinVisibleFraction = 0.52;
 const double homeFeedVideoRetainInitializedMinVisibleFraction = 0.34;
@@ -55,4 +71,38 @@ bool shouldAutoPlayHomeFeedVideo(HomeFeedVideoAutoPlayInput input) {
   }
   return input.scrollVelocityPxPerSecond.abs() <=
       homeFeedVideoAutoPlayMaxVelocityPxPerSecond;
+}
+
+bool shouldSuppressHomeFeedVideoFastScroll(
+  HomeFeedVideoFastScrollSuppressionInput input,
+) {
+  if (!input.hasPlayableSource) {
+    return false;
+  }
+  if (input.visibleFraction < homeFeedVideoPrewarmMinVisibleFraction) {
+    return false;
+  }
+  if (input.prewarmStableVisibleDuration <
+      homeFeedVideoAutoPlayMinStableVisibleDuration) {
+    return false;
+  }
+  return input.timeSinceHighVelocity < homeFeedVideoFastScrollCooldown ||
+      input.scrollVelocityPxPerSecond.abs() >
+          homeFeedVideoFastScrollVelocityPxPerSecond;
+}
+
+Map<String, Object?> homeFeedVideoFastScrollSuppressedTelemetryAttributes({
+  required String videoId,
+  required double visibleFraction,
+  required double velocityPxPerSecond,
+  required Duration cooldownRemaining,
+}) {
+  return <String, Object?>{
+    'videoId': videoId,
+    'visibleFraction': visibleFraction,
+    'velocityPxPerSecond': velocityPxPerSecond,
+    'cooldownRemainingMs': cooldownRemaining.isNegative
+        ? 0
+        : cooldownRemaining.inMilliseconds,
+  };
 }

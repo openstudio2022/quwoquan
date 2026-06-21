@@ -1,0 +1,143 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "毕棚沟_image",
+  "contentType": "image",
+  "entityRefs": [
+    "/entity/地点/景区/毕棚沟"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:毕棚沟"
+  ],
+  "tagRefs": [
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "semanticMentions": [],
+  "conditionContext": {
+    "region": {
+      "name": "四川省",
+      "label": "四川省"
+    },
+    "entityProfile": {
+      "entityRef": "/entity/地点/景区/毕棚沟",
+      "regions": [
+        "高原",
+        "山地森林"
+      ],
+      "seasons": [
+        "春",
+        "秋"
+      ],
+      "altitudeMeters": null,
+      "notes": null,
+      "conditionSource": "entityConditionProfile"
+    },
+    "season": {
+      "name": "春",
+      "label": "春",
+      "source": "entityProfile"
+    }
+  },
+  "sourceUrls": [
+    "https://commons.wikimedia.org/wiki/Category%3ABipeng_Valley"
+  ],
+  "assets": [
+    {
+      "assetId": "毕棚沟_cover_3_1c956178",
+      "fileName": "毕棚沟_cover_3_1c956178.jpg",
+      "caption": "Bi Peng Gou - Sichuan, China",
+      "imageLayout": "gallery",
+      "sha256": "sha256:852b4d3d8ae08b7b5afa36692b53960f6c9e32345f0cb5d98cc2c7468a68e4b1",
+      "sourceAssetRef": "entities/地点/景区/毕棚沟/1.download/sources/21.image_open_license_file_毕棚沟_httpscommonswikimediaorgwikifilechina27smistmountainunsplash_77fd64e173/assets/001_毕棚沟_1.jpg",
+      "sourceRef": "entities/地点/景区/毕棚沟/1.download/sources/21.image_open_license_file_毕棚沟_httpscommonswikimediaorgwikifilechina27smistmountainunsplash_77fd64e173/source.md",
+      "alignmentEvidence": "Bi Peng Gou - Sichuan, China",
+      "sourceCollectionId": "open_license_file:毕棚沟:httpscommonswikimediaorgwikifilechina27smistmountainunsplash:77fd64e173",
+      "creator": "Arnaud Jaegers ajaegers",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/Category%3ABipeng_Valley",
+      "license": "CC0",
+      "termsUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "licenseSnapshot": "CC0 recorded on Wikimedia Commons file page",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:China%27s_mist_mountain_(Unsplash).jpg",
+      "usageScope": "app_publish"
+    }
+  ],
+  "template": "journal",
+  "carrier": "image",
+  "generator": "image_evidence_pack",
+  "generatorModel": null,
+  "citedSourceRefs": [
+    "entities/地点/景区/毕棚沟/1.download/sources/21.image_open_license_file_毕棚沟_httpscommonswikimediaorgwikifilechina27smistmountainunsplash_77fd64e173/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "image",
+  "publishAngle": "攻略",
+  "publishTitle": "毕棚沟·Bi Peng Gou - Sichuan, China",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "毕棚沟",
+    "routeEntities": [
+      "毕棚沟"
+    ],
+    "beats": [
+      "Bi Peng Gou - Sichuan, China"
+    ],
+    "mustIncludeFacts": [
+      "毕棚沟 开放许可图片作品",
+      "图片来自同一授权来源集合，禁止跨作者或跨页面混图"
+    ]
+  },
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "sourceBatchId": "source_ready_assetrefs_10_20260619_02",
+  "title": "毕棚沟·Bi Peng Gou - Sichuan, China",
+  "caption": "Bi Peng Gou - Sichuan, China",
+  "sourceCollectionId": "open_license_file:毕棚沟:httpscommonswikimediaorgwikifilechina27smistmountainunsplash:77fd64e173",
+  "creator": "Arnaud Jaegers ajaegers",
+  "collectionPageUrl": "https://commons.wikimedia.org/wiki/Category%3ABipeng_Valley",
+  "license": "CC0",
+  "termsUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+  "authorizationProof": "https://commons.wikimedia.org/wiki/File:China%27s_mist_mountain_(Unsplash).jpg",
+  "page": "https://commons.wikimedia.org/wiki/Category%3ABipeng_Valley",
+  "sourceCollectionUrl": "https://commons.wikimedia.org/wiki/Category%3ABipeng_Valley",
+  "licenseProof": {
+    "license": "CC0",
+    "termsUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "proofUrl": "https://commons.wikimedia.org/wiki/File:China%27s_mist_mountain_(Unsplash).jpg"
+  },
+  "licenseProofRef": "https://commons.wikimedia.org/wiki/File:China%27s_mist_mountain_(Unsplash).jpg",
+  "createdAt": "2026-06-19T22:07:44.290223+00:00",
+  "updatedAt": "2026-06-19T22:19:35.314000+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "四川省"
+    },
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:毕棚沟"
+    }
+  ]
+}

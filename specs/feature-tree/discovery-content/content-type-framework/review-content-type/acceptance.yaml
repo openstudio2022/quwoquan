@@ -7,9 +7,8 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: content-type-framework
 scope:
-  summary: >-
-    在统一内容契约上引入口碑（review）内容类型（方案 A：ContentType 新增枚举值）。口碑=带评分+强 POI
-    绑定的内容类型，复用 publish 写链路、召回管线与统一 ContentSurfaceView；POI 星级聚合作读侧投影。
+  summary: 在统一内容契约上引入口碑（review）内容类型（方案 A：ContentType 新增枚举值）。口碑=带评分+强 POI 绑定的内容类型，复用
+    publish 写链路、召回管线与统一 ContentSurfaceView；POI 星级聚合作读侧投影。
   in_scope:
   - ContentType 新增枚举值 review（端云 DTO/codegen 一致）
   - 口碑字段族 rating(1-5 必填)/reviewAspects + POI 绑定（primaryHomepageId 必填）
@@ -38,17 +37,27 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/contracts/metadata/_shared/types.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_service/services/content-service/tests/review_contract_test.go
-      - quwoquan_app/test/ui/content/post/contract/review_projection_contract_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.review_content_type.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.review_content_type.gwt1_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/review_contract_test.go'
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/post/contract/review_projection_contract_test.dart'
   GWT2:
     title: 口碑写校验 rating 必填且 POI 必填，非法被拒
     given:
@@ -66,16 +75,25 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/content/post/service.yaml
     - quwoquan_service/contracts/metadata/content/post/errors.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_service/services/content-service/tests/review_contract_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.review_content_type.contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.review_content_type.gwt2_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/review_contract_test.go'
   GWT3:
     title: 一人一 POI 一评，部分唯一索引生效
     given:
@@ -91,16 +109,27 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/contracts/metadata/content/post/storage.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_integration
-      supporting: []
     tests:
-      planned:
-      - quwoquan_service/services/content-service/tests/review_contract_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.review_content_type.gwt3_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: integration
+        cases:
+        - api_integration.discovery_content.content_type_framework.review_content_type.integration
+        envs: &id002
+        - beta
+        - gamma
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/review_contract_test.go'
   GWT4:
     title: POI 口碑聚合读模型正确且删除后补偿
     given:
@@ -116,16 +145,25 @@ gwt_acceptance:
     contract_refs: []
     performance_points:
     - POI 聚合读 P99 ≤ 150ms
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_integration
-      supporting: []
     tests:
-      planned:
-      - quwoquan_service/services/content-service/tests/review_aggregate_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.review_content_type.gwt4_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: integration
+        cases:
+        - api_integration.discovery_content.content_type_framework.review_content_type.integration
+        envs: *id002
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/review_aggregate_test.go'
   GWT5:
     title: 统一展示——review 在 ContentSurfaceView 上 contentType 分支呈现
     given:
@@ -136,21 +174,30 @@ gwt_acceptance:
     - review 评分/POI 摘要经 contentType==review 分支呈现，四 surface 口径一致。
     - 不拆表、不新增第二套 model；分支用契约字段判别（非 is/as）。
     done_when:
-    - T1 投影契约 + T2 四 surface 同源断言通过。
+    - local_contract 投影契约 + local_contract 四 surface 同源断言通过。
     edge_cases:
     - 无 reviewAspects 时只读降级。
     contract_refs: []
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
-      planned:
-      - quwoquan_app/test/ui/content/post/contract/review_projection_contract_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.review_content_type.contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt5_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.review_content_type.gwt5_local_contract
+        envs: *id001
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/content/post/contract/review_projection_contract_test.dart'
   GWT6:
     title: 召回与交集——review 进召回通道且交集归因可还原
     given:
@@ -164,16 +211,25 @@ gwt_acceptance:
     edge_cases: []
     contract_refs: []
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_integration
-      supporting: []
     tests:
-      planned:
-      - quwoquan_service/services/content-service/tests/review_aggregate_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt6_local_contract
+        cases:
+        - local_contract.discovery_content.content_type_framework.review_content_type.gwt6_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: integration
+        cases:
+        - api_integration.discovery_content.content_type_framework.review_content_type.integration
+        envs: *id002
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/review_aggregate_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

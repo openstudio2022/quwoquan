@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -337,6 +338,44 @@ func TestAuth_OneTapLogin_UsesServerResolvedPhone(t *testing.T) {
 	}
 	if _, ok := registeredBody["accountHint"].(map[string]any); !ok {
 		t.Fatalf("expected accountHint for registered phone, got %#v", registeredBody)
+	}
+}
+
+func TestAuth_FirstLogin_UsesCloudDefaultNicknamePattern(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	const phone = "+8618013813991"
+	otpCode := requestOtpCode(t, phone)
+	login := doRequest(
+		t,
+		http.MethodPost,
+		"/v1/auth/login/phone",
+		`{"phone":"`+phone+`","otpCode":"`+otpCode+`","deviceId":"ios-default-nickname","platform":"ios","appVersion":"1.0.0","agreementVersion":"2026-06","privacyVersion":"2026-06"}`,
+		nil,
+	)
+	if login.Code != http.StatusOK {
+		t.Fatalf("phone login: expected 200, got %d: %s", login.Code, login.Body.String())
+	}
+	loginBody := parseJSON(t, login)
+	ownerID, _ := loginBody["ownerId"].(string)
+	if ownerID == "" {
+		t.Fatalf("expected ownerId, got %#v", loginBody)
+	}
+
+	var nickname string
+	var nicknameCustomized bool
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT nickname, nickname_customized FROM user_profiles WHERE user_id = $1`,
+		ownerID,
+	).Scan(&nickname, &nicknameCustomized); err != nil {
+		t.Fatalf("query default nickname: %v", err)
+	}
+	if !regexp.MustCompile(`^新同学_[0-9]{13}$`).MatchString(nickname) {
+		t.Fatalf("expected cloud default nickname 新同学_YYMM9位随机数, got %q", nickname)
+	}
+	if nicknameCustomized {
+		t.Fatalf("expected first-login nicknameCustomized=false, got true")
 	}
 }
 

@@ -37,7 +37,7 @@ from pathlib import Path
 
 from _common.io import read_json, write_json
 from _common.media_asset_url import materialize_release_media
-from _common.paths import PUBLISH_ROOT, batch_shared_dir, now_iso, publish_meta_path, release_manifest
+from _common.paths import PUBLISH_ROOT, batch_root, batch_shared_dir, now_iso, publish_meta_path, release_manifest
 from ship.sampler import (
     build_sample_bundle,
     load_publish_records,
@@ -143,6 +143,96 @@ def _source_batch_for_ship(args: argparse.Namespace) -> tuple[str, str] | None:
     return None
 
 
+def _current_batch_post_refs(task_id: str, batch_id: str) -> list[str]:
+    index_path = batch_shared_dir(task_id, batch_id) / "content_object_index.json"
+    if not index_path.is_file():
+        raise SystemExit(f"[ship] --force-current-batch-sample requires content_object_index: {index_path}")
+    index = read_json(index_path)
+    refs = index.get("refs") if isinstance(index.get("refs"), dict) else {}
+    state_path = batch_shared_dir(task_id, batch_id) / "task_workflow_state.json"
+    abandoned_refs: set[str] = set()
+    if state_path.is_file():
+        state = read_json(state_path)
+        for item in state.get("abandonedContentObjects") or []:
+            if isinstance(item, dict) and str(item.get("status") or "abandoned") == "abandoned":
+                ref = str(item.get("ref") or "").strip()
+                if ref:
+                    abandoned_refs.add(ref)
+    post_refs: list[str] = []
+    root = batch_root(task_id, batch_id)
+    for ref, row in refs.items():
+        if not isinstance(row, dict):
+            continue
+        if str(ref or "").strip() in abandoned_refs:
+            continue
+        content_type = str(row.get("contentType") or "").strip()
+        angle = str(row.get("angle") or "").strip()
+        title = str(row.get("title") or "").strip()
+        seq = str(row.get("seq") or "").strip()
+        if content_type and angle and title and seq:
+            post_ref = f"posts/{content_type}/{angle}/{title}/{seq}"
+            if (root / post_ref / "manifest.json").is_file():
+                post_refs.append(post_ref)
+    unique = sorted(set(post_refs))
+    if not unique:
+        raise SystemExit(f"[ship] --force-current-batch-sample found no post refs in {index_path}")
+    return unique
+
+
+def _current_batch_entity_refs(task_id: str, batch_id: str) -> list[str]:
+    root = batch_root(task_id, batch_id) / "entities"
+    if not root.is_dir():
+        return []
+    refs: set[str] = set()
+    for entity_file in sorted(root.rglob("_entity.json")):
+        try:
+            rel = entity_file.parent.relative_to(root)
+        except ValueError:
+            continue
+        parts = [part for part in rel.parts if part]
+        if len(parts) >= 3:
+            refs.add("/".join(parts[:3]))
+    return sorted(refs)
+
+
+def _split_refs(value: str | None) -> list[str]:
+    return [part.strip() for part in str(value or "").split(",") if part.strip()]
+
+
+def _refs_from_file(path_value: str | None) -> list[str]:
+    path_text = str(path_value or "").strip()
+    if not path_text:
+        return []
+    path = Path(path_text)
+    if not path.is_file():
+        raise SystemExit(f"[ship] force post refs file not found: {path}")
+    text = path.read_text(encoding="utf-8")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        data = None
+    if isinstance(data, list):
+        return [str(item).strip() for item in data if str(item).strip()]
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+
+
+def _assert_forced_posts_in_publish_index(
+    forced_post_refs: list[str],
+    posts: list[dict],
+) -> None:
+    if not forced_post_refs:
+        return
+    known_posts = {str(p.get("postRef") or "").strip() for p in posts if str(p.get("postRef") or "").strip()}
+    missing = [ref for ref in forced_post_refs if ref not in known_posts]
+    if missing:
+        preview = ", ".join(missing[:8])
+        raise SystemExit(
+            "[ship] forced post refs missing from publish index: "
+            f"{preview}. Run ship without --skip-promote, promote the release first, "
+            "or remove non-materialized/abandoned refs before importing."
+        )
+
+
 def _write_batch_ship_report(
     args: argparse.Namespace,
     *,
@@ -236,11 +326,30 @@ def handle_ship(args: argparse.Namespace) -> None:
     source_owner = getattr(args, "source_owner", DEFAULT_SOURCE_OWNER)
     approved_by = getattr(args, "approved_by", None)
     release_id = normalize_release_id(getattr(args, "data_release_id", None), env="-".join(envs))
+    force_current_batch = bool(getattr(args, "force_current_batch_sample", False))
+    if force_current_batch and not (args.task and args.batch):
+        raise SystemExit("[ship] --force-current-batch-sample requires --task and --batch")
+    forced_post_refs = sorted(
+        set(_current_batch_post_refs(args.task, args.batch) if force_current_batch else [])
+        | set(_split_refs(getattr(args, "force_post_refs", None)))
+        | set(_refs_from_file(getattr(args, "force_post_refs_file", None)))
+    )
+    _assert_forced_posts_in_publish_index(forced_post_refs, posts)
+    forced_entity_refs = sorted(set(_current_batch_entity_refs(args.task, args.batch) if force_current_batch else []))
+    isolate_forced_sample = bool(getattr(args, "isolate_forced_sample", False))
 
     bundles: list[Path] = []
     summary: list[dict] = []
     for env in envs:
-        bundle = build_sample_bundle(env, manifest, posts, entities)
+        bundle = build_sample_bundle(
+            env,
+            manifest,
+            posts,
+            entities,
+            forced_post_refs=forced_post_refs,
+            forced_entity_refs=forced_entity_refs,
+            isolate_forced_sample=isolate_forced_sample,
+        )
         path = write_sample_bundle(bundle)
         media_manifest = materialize_release_media(
             env=env,
@@ -277,6 +386,9 @@ def handle_ship(args: argparse.Namespace) -> None:
             "releaseId": release_id,
             "posts": bundle["counts"]["posts"],
             "entities": bundle["counts"]["entities"],
+            "forcedPosts": list(bundle.get("forcedPosts") or []),
+            "forcedEntities": list(bundle.get("forcedEntities") or []),
+            "isolatedForcedSample": bool(bundle.get("isolatedForcedSample")),
             "releaseContract": str(release_path),
             "consistencyReport": str(report_path),
         })
@@ -339,4 +451,22 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--approved-by", help="生产硬删除审批人/审批 id")
     p.add_argument("--dry-run", action="store_true", help="生成 release artifact 并让 importer 只报告不写入")
     p.add_argument("--confirm-prod-apply", action="store_true", help="确认对 prod 执行真实写入（dry-run 不需要）")
+    p.add_argument(
+        "--force-current-batch-sample",
+        action="store_true",
+        help="受控发布时强制把当前 task/batch 物化的 post refs 纳入目标环境样本",
+    )
+    p.add_argument(
+        "--force-post-refs",
+        help="受控发布时额外强制纳入的 postRef，逗号分隔；必须已存在于 publish index",
+    )
+    p.add_argument(
+        "--force-post-refs-file",
+        help="受控发布时额外强制纳入的 postRef 文件；支持 JSON array 或一行一个 ref，避免标题含逗号时被拆分",
+    )
+    p.add_argument(
+        "--isolate-forced-sample",
+        action="store_true",
+        help="受控发布时只采 forced post/entity refs，不混入环境默认随机样本",
+    )
     p.set_defaults(handler=handle_ship)

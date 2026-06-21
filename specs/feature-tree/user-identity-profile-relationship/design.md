@@ -207,10 +207,10 @@ spec.md 状态：4 份 spec 已完整基线，acceptance A1-A8 均已定义，�
 2. make verify-metadata（元数据内部一致性）
 3. make codegen（生成 Go struct/repository/handler 骨架）
 4. make codegen-app（生成 Dart DTO/错误码）
-5. 先写失败测试（Red）：T1 契约测试 + T2 Widget 测试骨架
+5. 先写失败测试（Red）：local_contract 契约测试 + local_contract Widget 测试骨架
 6. 实现最小业务逻辑（Green）
 7. 重构（Refactor）
-8. 补齐 T3 云侧契约测试 + T4 旅程测试
+8. 补齐 api_integration 云侧契约测试 + user_acceptance 旅程测试
 ```
 
 每个 Story 完成后自动执行 `make gate`。
@@ -221,83 +221,83 @@ spec.md 状态：4 份 spec 已完整基线，acceptance A1-A8 均已定义，�
 
 ### Story S1：OwnerAccount + SubAccount metadata 基线
 
-**T1（契约/静态）：**
+**local_contract（契约/静态）：**
 - `fields.yaml` 新字段 codegen 后 Dart DTO 字段一致性校验
 - `errors.yaml` 新错误码 round-trip 测试
 - `_shared/request_context.yaml` 追加 `X-Sub-Account-Id` 后 codegen 常量校验
 
-**T2（模块/交互）：**
+**local_contract（模块/交互）：**
 - `PersonaManagementPage` 从本地 mock 切换到 `UserProfileRepository`（Mock 模式）的 Widget 测试
 - 子账号切换后上下文提示 Widget 测试
 
-**T3（端云集成）：**
+**api_integration（端云集成）：**
 - Go 契约测试：`sub_account_isolation_contract_test.go`
   - 创建子账号 → 按 `subAccountId` 读取 → 外部接口不返回 `ownerAccountId`
   - 子账号激活排他性（同时只有一个 active）
 
-**T4（旅程/设备）：**
+**user_acceptance（旅程/设备）：**
 - 多子账号选择器旅程：登录 → 选择子账号 → 进入正确落点
 
 ---
 
 ### Story S2：CredentialBinding（手机号/微信/Apple 并行凭证）
 
-**T1：**
+**local_contract：**
 - `CredentialBinding` DTO 字段与 `fields.yaml` 一致
 - 凭证类型枚举（phone/wechat/apple）codegen 正确
 
-**T2：**
+**local_contract：**
 - 登录入口 Widget 测试：三种方式并行显示，选择后进入正确流程
 - 凭证绑定设置页 Widget 测试：已绑定/未绑定状态正确渲染
 
-**T3：**
+**api_integration：**
 - Go 契约测试：`credential_binding_contract_test.go`
   - 手机号登录成功 → 返回 access/refresh token
   - 同一手机号绑定两个账号 → 409 Conflict
   - 解绑最后一个凭证 → 400 Bad Request
 
-**T4：**
+**user_acceptance：**
 - 真机 Apple/微信 OAuth 授权流程旅程（Patrol）
 
 ---
 
 ### Story S3：ContactDiscoveryRecord（通讯录发现）
 
-**T1：**
+**local_contract：**
 - `ContactDiscoveryRecord` DTO 字段一致性
 - 匹配结果只返回 `subAccountId`，不泄露 `ownerAccountId`
 
-**T2：**
+**local_contract：**
 - 通讯录发现入口 Widget 测试：权限未授权/已授权/匹配结果渲染
 - 发现结果转化为好友/圈子邀请的选择 Widget 测试
 
-**T3：**
+**api_integration：**
 - Go 契约测试：`contact_discovery_contract_test.go`
   - 批量上传哈希手机号 → 返回匹配的 subAccountId 列表
   - 72h 后记录自动过期
   - 匹配结果不含 ownerAccountId
 
-**T4：**
+**user_acceptance：**
 - 真机通讯录权限申请旅程
 
 ---
 
 ### Story S4：InviteRecord（邀请归因）
 
-**T1：**
+**local_contract：**
 - `InviteRecord` DTO 字段一致性
 - 邀请状态枚举 codegen 正确
 
-**T2：**
+**local_contract：**
 - 邀请分享入口 Widget 测试（分享卡片/二维码/短信）
 - 邀请状态跟踪页 Widget 测试
 
-**T3：**
+**api_integration：**
 - Go 契约测试：`invite_attribution_contract_test.go`
   - 生成邀请 → 被邀请人注册 → 归因到正确 subAccountId
   - 邀请过期后无法归因
 
-**T4：**
+**user_acceptance：**
 - 邀请链接点击 → 注册 → 激活 → 归因确认旅程
 
 ---
@@ -342,7 +342,7 @@ spec.md 状态：4 份 spec 已完整基线，acceptance A1-A8 均已定义，�
 - 产品：定义子账号世界观、体验目标、隔离边界与增长路径
 - 架构：定义 OwnerAccount/SubAccount metadata 边界、凭证模型、上下文传递协议
 - 开发：按 TDD 落地 metadata → codegen → 测试先行 → 业务逻辑
-- 测试：建立 T1（契约）→ T2（交互）→ T3（云侧契约）→ T4（旅程）四层证据
+- 测试：建立 local_contract（契约）→ local_contract（交互）→ api_integration（云侧契约）→ user_acceptance（旅程）四层证据
 - 发布：按子能力灰度、设置 SLO 观测指标、定义回滚条件
 
 ---

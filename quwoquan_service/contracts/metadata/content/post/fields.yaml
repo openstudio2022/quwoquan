@@ -667,6 +667,15 @@ entities:
         ops_exposure: read
         description: 评论作者头像快照
 
+      - name: ipLocation
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 评论发表时由服务端从受信代理头解析的省级 IP 属地（仅到省级，原始 IP 不落库；未知留空）
+
       - name: personaContextVersion
         type: int
         constraints: [NULLABLE]
@@ -856,6 +865,15 @@ entities:
         ops_exposure: read
         description: 当前 viewer 对评论的反应状态：none/like/dislike
 
+      - name: authorLiked
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 内容作者是否点赞过该评论（服务端派生，用于「作者赞过」标识）
+
       - name: recommendedScore
         type: float64
         constraints: [NULLABLE]
@@ -874,6 +892,24 @@ entities:
         api_exposure: read
         ops_exposure: read_write
         description: visible/deleted/hidden
+
+      - name: isPinned
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+        description: 是否被内容作者置顶（仅一级评论可置顶，置顶项排在评论区最前）
+
+      - name: pinnedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 置顶时间；用于多条置顶评论的稳定排序（按置顶时间倒序）
 
       - name: canDelete
         type: bool
@@ -902,6 +938,15 @@ entities:
         ops_exposure: read
         description: 当前 viewer 是否可举报该评论
 
+      - name: canPin
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前 viewer 是否可置顶该评论（仅内容作者且为一级评论时为 true）
+
       - name: createdAt
         type: timestamp
         constraints: [NOT_NULL]
@@ -909,6 +954,15 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: deletedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 软删落时间戳（status=deleted 时写入，记录保留可查）；计数仍排除 deleted，支撑 GetCommentCountsDelta 的「此期间删除 M」可解释增量
 
   MediaAsset:
     description: 媒体资源（异步处理管线）
@@ -1649,6 +1703,29 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+      - name: commentId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: parentCommentId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: viewerReaction
+        type: enum
+        enum_ref: CommentReactionType
+        constraints: [NOT_NULL, DEFAULT_NONE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前 viewer 对该互动评论的反应状态：none/like/dislike（互动列表内联赞↔已赞初始态）
       - name: filterKeys
         type: "[]string"
         constraints: [NOT_NULL]

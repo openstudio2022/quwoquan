@@ -137,7 +137,7 @@ abstract class CircleRepository {
 ## Story 与测试层映射
 
 
-| L4 Story                          | T1 单元                             | T2 集成                   | T3 契约                 | T4 E2E   |
+| L4 Story                          | local_contract 单元                             | local_contract 集成                   | api_integration 契约                 | user_acceptance E2E   |
 | --------------------------------- | --------------------------------- | ----------------------- | --------------------- | -------- |
 | features-to-ui-migration-contract | import 检查（零 features/circles/ 引用） | app_router 导航           | —                     | 三页面可正常打开 |
 | circle-repository-contract        | Mock 返回正确类型                       | Provider mock↔remote 切换 | 方法签名与 service.yaml 一致 | —        |

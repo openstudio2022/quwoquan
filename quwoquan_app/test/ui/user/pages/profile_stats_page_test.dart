@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -260,6 +261,12 @@ void main() {
 
       expect(find.text(UITextConstants.circleFans), findsAtLeastNWidgets(1));
       expect(find.text('你的皮炎有点辣'), findsOneWidget);
+      expect(
+        find.byType(CupertinoSlidingSegmentedControl<String>),
+        findsNothing,
+      );
+      final name = tester.widget<Text>(find.text('你的皮炎有点辣'));
+      expect(name.style?.fontWeight, isNot(FontWeight.w800));
 
       await tester.tap(find.text(UITextConstants.contactsTabCircles).last);
       await pumpUntilLoaded(tester);

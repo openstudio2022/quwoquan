@@ -15,24 +15,36 @@ domain_acceptance:
     done_when:
     - 领域边界、上下游依赖、工程映射和服务治理清晰。
     boundary_points: []
-    evidence:
-      primary:
-      - T1_static_contract
-      - T3_service_contract
-      supporting: []
     tests:
       planned:
-      - quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
-      - quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
-      - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+      - file: quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
+      - file: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
       recorded:
-      - quwoquan_service/services/chat-service/tests/event_publish_contract_test.go
-      - quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
-      - quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - quwoquan_app/test/ui/chat/providers/chat_message_provider_test.dart
-      - quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
-      - quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
+      - file: quwoquan_service/services/chat-service/tests/event_publish_contract_test.go
+      - file: quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
+      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
+      - file: quwoquan_app/test/ui/chat/providers/chat_message_provider_test.dart
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
     status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: da1_local_contract
+        cases:
+        - local_contract.chat_conversation.domain_service.da1.da1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: da1_api_integration
+        cases:
+        - api_integration.chat_conversation.domain_service.da1.da1_api_integration
+        envs: &id002
+        - beta
+        - gamma
+      supporting: []
+    notes: []
   DA2:
     title: 商用消息体系真实数据边界验收
     done_when:
@@ -44,22 +56,40 @@ domain_acceptance:
     - Entity/Homepage 不直接拥有 conversation，只通过 related groups 进入群聊。
     - Circle 是成员池，Group/CircleGroup 是协作单元，Conversation 只负责消息。
     - Contact 与 Intersection 均为云端聚合 read model，App 不拼业务事实。
-    evidence:
-      primary:
-      - T1_static_contract
-      - T3_service_contract
-      supporting:
-      - T2_module_interaction
-      - T4_device_journey
     tests:
       planned:
-      - specs/feature-tree/chat-conversation/commercial-message-system/acceptance.yaml
-      - quwoquan_service/services/chat-service/tests/message_home_projection_contract_test.go
-      - quwoquan_service/services/chat-service/tests/contact_home_projection_contract_test.go
-      - quwoquan_service/services/notification-service/tests/app_message_inbox_contract_test.go
-      - quwoquan_app/test/ui/chat/journeys/commercial_message_system_journey_test.dart
+      - file: specs/feature-tree/chat-conversation/commercial-message-system/acceptance.yaml
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: da2_local_contract
+        cases:
+        - local_contract.chat_conversation.domain_service.da2.da2_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: da2_api_integration
+        cases:
+        - api_integration.chat_conversation.domain_service.da2.da2_api_integration
+        envs: *id002
+      supporting:
+      - layer: local_contract
+        suite: da2_local_contract
+        cases:
+        - local_contract.chat_conversation.domain_service.da2.da2_local_contract
+        envs: *id001
+      - layer: user_acceptance
+        suite: device_journey
+        cases:
+        - user_acceptance.chat_conversation.domain_service.da2.device_journey
+        envs:
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/message_home_projection_contract_test.go'
+    - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/contact_home_projection_contract_test.go'
+    - '[migrated_from_planned] quwoquan_service/services/notification-service/tests/app_message_inbox_contract_test.go'
+    - '[migrated_from_planned] quwoquan_app/test/ui/chat/journeys/commercial_message_system_journey_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_post_mutation_wires.g.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
@@ -153,6 +154,72 @@ void main() {
       },
     );
 
+    test(
+      'buildCreatePostPayloadMap derives tagRefs from inline mentions and keeps entity',
+      () {
+        final document = ArticleDocumentData(
+          nodes: <ArticleDocumentNode>[
+            ArticleDocumentNode(
+              id: 'p1',
+              type: ArticleDocumentNodeType.paragraph,
+              text: '城市漫步路线途经灵隐寺',
+              spans: <ArticleInlineSpan>[
+                ArticleInlineSpan(
+                  start: 0,
+                  end: 4,
+                  kind: 'tag',
+                  targetType: 'tag',
+                  targetId: 'tag:topic:city_walk',
+                  displayText: '城市漫步',
+                ),
+                ArticleInlineSpan(
+                  start: 8,
+                  end: 11,
+                  kind: 'entity',
+                  targetType: 'entity',
+                  targetId: 'entity:sight:lingyin',
+                  displayText: '灵隐寺',
+                ),
+              ],
+            ),
+          ],
+        );
+        final state = CreateEditorState.initial().copyWith(
+          title: 'T',
+          body: 'x' * 200,
+          articleDocument: document,
+          settings: const PublishSettings(
+            tagRefs: <String>['Topic/旅行/城市漫步', 'topic:city_walk'],
+            entityRefs: <String>['entity:sight:west_lake'],
+          ),
+        );
+
+        final payload = buildCreatePostPayloadMap(state);
+
+        final tagRefs = (payload['tagRefs'] as List).cast<String>();
+        // 正文 tag span 剥离 tag: 前缀后注入，并与 settings 已有 ref 去重。
+        expect(tagRefs, contains('topic:city_walk'));
+        expect(tagRefs, contains('Topic/旅行/城市漫步'));
+        expect(tagRefs, isNot(contains('tag:topic:city_walk')));
+        expect(
+          tagRefs.where((ref) => ref == 'topic:city_walk').length,
+          1,
+          reason: 'tagRefs 必须去重，正文与 settings 同值只投影一次',
+        );
+
+        // entity 投影不回归：settings + 正文 entity span 同时保留（仍带 entity: 前缀）。
+        final entityRefs = (payload['entityRefs'] as List).cast<String>();
+        expect(entityRefs, contains('entity:sight:west_lake'));
+        expect(entityRefs, contains('entity:sight:lingyin'));
+
+        final markdown = payload['articleMarkdown'] as String;
+        expect(markdown, contains('@[城市漫步](tag:topic:city_walk)'));
+        expect(markdown, contains('@[灵隐寺](entity:sight:lingyin)'));
+        expect(markdown, contains('tag_refs:'));
+        expect(markdown, contains('entity_refs:'));
+      },
+    );
+
     test('article asset manifest requests server-side variant generation', () {
       final document = ArticleDocumentData(
         nodes: const <ArticleDocumentNode>[
@@ -237,6 +304,179 @@ void main() {
       expect(markdown, contains('节点正文第一段。'));
       expect(markdown, isNot(contains('blocks 不应进入 Markdown')));
     });
+
+    test(
+      'semanticMentionsForPayload projects inline entity + tag to published rows',
+      () {
+        final document = ArticleDocumentData(
+          nodes: <ArticleDocumentNode>[
+            ArticleDocumentNode(
+              id: 'p1',
+              type: ArticleDocumentNodeType.paragraph,
+              text: '城市漫步路线途经灵隐寺',
+              spans: <ArticleInlineSpan>[
+                ArticleInlineSpan(
+                  start: 0,
+                  end: 4,
+                  kind: 'tag',
+                  targetType: 'tag',
+                  targetId: 'tag:Topic/旅行/城市漫步',
+                  displayText: '城市漫步',
+                ),
+                ArticleInlineSpan(
+                  start: 8,
+                  end: 11,
+                  kind: 'entity',
+                  targetType: 'entity',
+                  targetId: 'entity:sight:lingyin',
+                  displayText: '灵隐寺',
+                ),
+              ],
+            ),
+          ],
+        );
+        final state = CreateEditorState.initial().copyWith(
+          title: 'T',
+          body: 'x' * 200,
+          articleDocument: document,
+        );
+
+        final mentions = semanticMentionsForPayload(state);
+        final tagRefs = mentions
+            .where((m) => m['kind'] == 'tag')
+            .map((m) => m['targetRef'])
+            .toList();
+        final entityRefs = mentions
+            .where((m) => m['kind'] == 'entity')
+            .map((m) => m['targetRef'])
+            .toList();
+
+        expect(tagRefs, contains('Topic/旅行/城市漫步'));
+        expect(entityRefs, contains('entity:sight:lingyin'));
+        for (final row in mentions) {
+          expect(row['status'], 'published');
+        }
+      },
+    );
+
+    test(
+      'semanticMentionsForPayload dedups and filters invalid / candidate refs',
+      () {
+        final state = CreateEditorState.initial().copyWith(
+          title: 'T',
+          body: 'x' * 200,
+          settings: const PublishSettings(
+            tagRefs: <String>[
+              'Topic/旅行/城市漫步',
+              'Topic/旅行/城市漫步',
+              '单段非法标签',
+            ],
+            entityRefs: <String>[
+              'entity:sight:west_lake',
+              'entity:candidate_pending',
+              'entity:bad',
+            ],
+          ),
+        );
+
+        final mentions = semanticMentionsForPayload(state);
+        final tagRefs = mentions
+            .where((m) => m['kind'] == 'tag')
+            .map((m) => m['targetRef'] as String)
+            .toList();
+        final entityRefs = mentions
+            .where((m) => m['kind'] == 'entity')
+            .map((m) => m['targetRef'] as String)
+            .toList();
+
+        expect(
+          tagRefs.where((r) => r == 'Topic/旅行/城市漫步').length,
+          1,
+          reason: 'semanticMentions 必须按 (kind,targetRef) 去重',
+        );
+        expect(
+          tagRefs,
+          isNot(contains('单段非法标签')),
+          reason: '单段 bare tag（无 / 分段）非法，需过滤',
+        );
+        expect(entityRefs, contains('entity:sight:west_lake'));
+        expect(
+          entityRefs,
+          isNot(contains('entity:candidate_pending')),
+          reason: 'candidate ref 不得作为 published mention',
+        );
+        expect(
+          entityRefs,
+          isNot(contains('entity:bad')),
+          reason: 'entity: 少于 3 段非法，需过滤',
+        );
+      },
+    );
+
+    test(
+      'buildCreatePostPayloadMap injects semanticMentions and wire keeps structured array',
+      () {
+        final document = ArticleDocumentData(
+          nodes: <ArticleDocumentNode>[
+            ArticleDocumentNode(
+              id: 'p1',
+              type: ArticleDocumentNodeType.paragraph,
+              text: '灵隐寺',
+              spans: <ArticleInlineSpan>[
+                ArticleInlineSpan(
+                  start: 0,
+                  end: 3,
+                  kind: 'entity',
+                  targetType: 'entity',
+                  targetId: 'entity:sight:lingyin',
+                  displayText: '灵隐寺',
+                ),
+              ],
+            ),
+          ],
+        );
+        final state = CreateEditorState.initial().copyWith(
+          title: 'T',
+          body: 'x' * 200,
+          articleDocument: document,
+          settings: const PublishSettings(
+            tagRefs: <String>['Topic/旅行/城市漫步'],
+          ),
+        );
+
+        final payload = buildCreatePostPayloadMap(state);
+        expect(payload['semanticMentions'], isA<List>());
+
+        final wire = CreatePostRequestWire.fromMap(
+          Map<String, dynamic>.from(payload),
+        );
+        final body = wire.toWire();
+        expect(
+          body['semanticMentions'],
+          isA<List>(),
+          reason: 'wire 不得把 semanticMentions 数组 stringify',
+        );
+        final rows = (body['semanticMentions'] as List)
+            .cast<Map<String, dynamic>>();
+        expect(
+          rows.any(
+            (r) =>
+                r['kind'] == 'entity' &&
+                r['targetRef'] == 'entity:sight:lingyin',
+          ),
+          isTrue,
+        );
+        expect(
+          rows.any(
+            (r) => r['kind'] == 'tag' && r['targetRef'] == 'Topic/旅行/城市漫步',
+          ),
+          isTrue,
+        );
+        // 顶层只读投影仍被 wire writable_fields 剥离。
+        expect(body.containsKey('tagRefs'), isFalse);
+        expect(body.containsKey('entityRefs'), isFalse);
+      },
+    );
 
     test('draft storage persists Markdown triple and can restore document', () {
       final document = ArticleDocumentData(

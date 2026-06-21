@@ -86,7 +86,7 @@ entities:
         ops_exposure: read
         recommend_feature: true
         tag_ref: true
-        description: 路径制 tagRef 列表；唯一真相源为数据工程 publish/v1/tags
+        description: 路径制 tagRef 列表；唯一真相源为数据工程 publish/tags
 
       - name: memberCount
         type: int

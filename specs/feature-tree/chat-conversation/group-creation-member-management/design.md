@@ -228,9 +228,9 @@
 - 产品内不设计兼容回滚
 - 工程层只保留整版发布回退，不做双轨逻辑
 
-## T1~T4 证据矩阵
+## 三层测试 证据矩阵
 
-| Slice/对象 | T1 | T2 | T3 | T4 |
+| Slice/对象 | local_contract | local_contract | api_integration | user_acceptance |
 |---|---|---|---|---|
 | route / surface / request context | schema contract | — | metadata verify | — |
 | 发起页 / 已选区 / 三行折叠 | — | widget + journey | — | 真机交互 |

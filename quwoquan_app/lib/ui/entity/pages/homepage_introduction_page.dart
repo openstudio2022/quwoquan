@@ -12,7 +12,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_related_gro
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
-import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
+import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/ui/entity/providers/homepage_introduction_provider.dart';
 
 const double _introHeroHeight = AppSpacing.twoHundredTwenty;
@@ -263,7 +263,7 @@ class _IntroductionHero extends StatelessWidget {
           fit: StackFit.expand,
           children: <Widget>[
             if (coverUrl.isNotEmpty)
-              CircleMediaImage(
+              AppMediaImage(
                 imageSource: coverUrl,
                 fit: BoxFit.cover,
                 placeholder: const SizedBox.shrink(),
@@ -498,7 +498,7 @@ class _AssetStrip extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: <Widget>[
-                  CircleMediaImage(
+                  AppMediaImage(
                     imageSource: asset.url,
                     fit: BoxFit.cover,
                     placeholder: ColoredBox(color: AppColors.iosFill(context)),

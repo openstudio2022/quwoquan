@@ -150,25 +150,52 @@ class TestKeys {
 
   // ── Comment Input ───────────────────────────────────────────────────
   static const commentInputBar = ValueKey<String>('comment_input_bar');
+  static const commentInputCapsule = ValueKey<String>('comment_input_capsule');
   static const submitCommentButton = ValueKey<String>('submit_comment_button');
   static const commentTextField = ValueKey<String>('comment_text_field');
   static const commentAtXiaoquButton = ValueKey<String>(
     'comment_at_xiaoqu_button',
   );
   static const commentThreadView = ValueKey<String>('comment_thread_view');
-  static const inlineArticleCommentSection = ValueKey<String>(
-    'inline_article_comment_section',
+  static const commentCountsDeltaNotice = ValueKey<String>(
+    'comment_counts_delta_notice',
   );
   static const immersiveCommentSplitSheet = ValueKey<String>(
     'immersive_comment_split_sheet',
   );
   static const commentToolbar = ValueKey<String>('comment_toolbar');
+  static const commentReplyExpand = ValueKey<String>('comment_reply_expand');
+  static const commentReplyCollapse = ValueKey<String>(
+    'comment_reply_collapse',
+  );
   static const commentInputOverlay = ValueKey<String>('comment_input_overlay');
   static const commentInputOverlayScrim = ValueKey<String>(
     'comment_input_overlay_scrim',
   );
   static const commentRecentEmojiStrip = ValueKey<String>(
     'comment_recent_emoji_strip',
+  );
+  static const commentCharCounter = ValueKey<String>('comment_char_counter');
+  static const commentHighlightedItem = ValueKey<String>(
+    'comment_highlighted_item',
+  );
+  static const commentHighlightedReply = ValueKey<String>(
+    'comment_highlighted_reply',
+  );
+  static const commentSortMenuButton = ValueKey<String>(
+    'comment_sort_menu_button',
+  );
+  static const commentSortMenuOverlay = ValueKey<String>(
+    'comment_sort_menu_overlay',
+  );
+  static const commentSortMenuItemRecommended = ValueKey<String>(
+    'comment_sort_menu_item_recommended',
+  );
+  static const commentSortMenuItemLatest = ValueKey<String>(
+    'comment_sort_menu_item_latest',
+  );
+  static const commentSortMenuItemMostLiked = ValueKey<String>(
+    'comment_sort_menu_item_most_liked',
   );
   static const assistantChatInputField = ValueKey<String>(
     'assistant_chat_input_field',

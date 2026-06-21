@@ -36,7 +36,15 @@ class CloudResponseDecoder {
       items.add(Map<String, dynamic>.from(raw));
     }
     final nextCursor = obj['nextCursor']?.toString();
-    return CursorPage<CloudJsonMap>(items: items, nextCursor: nextCursor);
+    final rawTotalCount = obj['totalCount'] ?? obj['total'];
+    final totalCount = rawTotalCount is num
+        ? rawTotalCount.toInt()
+        : int.tryParse(rawTotalCount?.toString() ?? '');
+    return CursorPage<CloudJsonMap>(
+      items: items,
+      nextCursor: nextCursor,
+      totalCount: totalCount,
+    );
   }
 
   /// 从已解码对象中读取 `key` 对应的 `List<Map>`（忽略非 Map 元素），避免 `List<dynamic>.cast` 主路径。

@@ -19,14 +19,11 @@ import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 
 void main() {
-  Widget _wrapRoot(Widget child) {
-    return ScreenUtilInit(
-      designSize: const Size(393, 852),
-      child: child,
-    );
+  Widget wrapRoot(Widget child) {
+    return ScreenUtilInit(designSize: const Size(393, 852), child: child);
   }
 
-  void _suppressExpectedErrors() {
+  void suppressExpectedErrors() {
     final original = FlutterError.onError;
     FlutterError.onError = (details) {
       final message = details.exceptionAsString();
@@ -40,11 +37,11 @@ void main() {
   }
 
   testWidgets('启动首帧直接展示欢迎页，不等待认证恢复完成', (tester) async {
-    _suppressExpectedErrors();
+    suppressExpectedErrors();
     final blockingStore = _BlockingAuthSessionStore();
 
     await tester.pumpWidget(
-      _wrapRoot(
+      wrapRoot(
         ProviderScope(
           overrides: [
             appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
@@ -73,12 +70,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
-  testWidgets('欢迎序列结束但启动未就绪时继续停留欢迎页，并展示进入中提示', (tester) async {
-    _suppressExpectedErrors();
+  testWidgets('欢迎序列结束但认证仍未恢复时也进入主壳，由页面承接加载态', (tester) async {
+    suppressExpectedErrors();
     final blockingStore = _BlockingAuthSessionStore();
 
     await tester.pumpWidget(
-      _wrapRoot(
+      wrapRoot(
         ProviderScope(
           overrides: [
             appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
@@ -93,16 +90,18 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    expect(find.byType(WelcomeScreen), findsOneWidget);
-    expect(find.text(UITextConstants.welcomeStartupLoadingTitle), findsOneWidget);
-    expect(find.text(UITextConstants.welcomeStartupStageAuth), findsOneWidget);
+    expect(find.byType(WelcomeScreen), findsNothing);
+    expect(find.byType(MainAppShell), findsOneWidget);
+    expect(find.text(UITextConstants.startupStillStartingInline), findsNothing);
+    expect(find.text('正在进入趣我圈'), findsNothing);
+    expect(find.text('恢复账号状态'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
   });
 
   testWidgets('启动条件满足后，欢迎页在3秒序列后进入主壳首页', (tester) async {
-    _suppressExpectedErrors();
+    suppressExpectedErrors();
     final store = _ImmediateAuthSessionStore(
       stored: const StoredAuthSession(
         accessToken: '',
@@ -120,7 +119,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _wrapRoot(
+      wrapRoot(
         ProviderScope(
           overrides: [
             appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
@@ -145,17 +144,19 @@ void main() {
   });
 
   testWidgets('Web 启动先出内容壳，再叠欢迎层且不显示登录 prompt', (tester) async {
-    _suppressExpectedErrors();
+    suppressExpectedErrors();
     final blockingStore = _BlockingAuthSessionStore();
 
     await tester.pumpWidget(
-      _wrapRoot(
+      wrapRoot(
         ProviderScope(
           overrides: [
             appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
             authSessionStoreProvider.overrideWithValue(blockingStore),
             platformTargetProvider.overrideWithValue(AppPlatform.web),
-            platformCapabilitiesProvider.overrideWithValue(CapabilityProfile.web),
+            platformCapabilitiesProvider.overrideWithValue(
+              CapabilityProfile.web,
+            ),
           ],
           child: const QuWoQuanAppRoot(),
         ),
@@ -165,14 +166,17 @@ void main() {
     expect(blockingStore.readStarted, isTrue);
     expect(find.byType(MainAppShell), findsOneWidget);
     expect(find.byType(WelcomeScreen), findsOneWidget);
-    expect(find.text(UITextConstants.welcomeLoginPromptTitle), findsNothing);
+    expect(find.textContaining('登录后，趣我圈'), findsNothing);
+    expect(find.textContaining('先不登录'), findsNothing);
     expect(find.byType(LoginPage), findsNothing);
 
     await tester.pump();
-    await tester.pump(const Duration(seconds: 3));
+    for (var i = 0; i < 140; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
 
     expect(find.byType(MainAppShell), findsOneWidget);
-    expect(find.byType(WelcomeScreen), findsOneWidget);
+    expect(find.byType(WelcomeScreen), findsNothing);
     expect(find.byType(LoginPage), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -180,7 +184,7 @@ void main() {
   });
 
   testWidgets('长期未回访的已登录会话会在恢复时静默 refresh，尽量免登录', (tester) async {
-    _suppressExpectedErrors();
+    suppressExpectedErrors();
     final store = _ImmediateAuthSessionStore(
       stored: const StoredAuthSession(
         accessToken: 'stale-access',
@@ -198,7 +202,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _wrapRoot(
+      wrapRoot(
         ProviderScope(
           overrides: [
             appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
@@ -228,7 +232,7 @@ void main() {
   });
 
   testWidgets('静默 refresh 判定为 token 失效时，清理会话进入重登态', (tester) async {
-    _suppressExpectedErrors();
+    suppressExpectedErrors();
     final store = _ImmediateAuthSessionStore(
       stored: const StoredAuthSession(
         accessToken: 'stale-access',
@@ -246,7 +250,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _wrapRoot(
+      wrapRoot(
         ProviderScope(
           overrides: [
             appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),

@@ -7,72 +7,14 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
+import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 
-enum CommentSortMode { recommended, latest, mostLiked }
+part 'comment_provider_state.dart';
+part 'comment_provider_reply_tree.dart';
+part 'comment_provider_counts_sync.dart';
 
-enum CommentListStatus { idle, loading, loadingMore, error }
-
-class CommentState {
-  final List<CommentDto> comments;
-  final String? nextCursor;
-  final CommentSortMode sortMode;
-  final CommentListStatus status;
-  final String? errorMessage;
-  final List<CommentDto> pendingComments;
-  final int replyPreviewCount;
-  final int replyExpandPageSize;
-  final Set<String> loadingReplyCommentIds;
-  final bool hasNewComments;
-  final bool isRefreshing;
-
-  const CommentState({
-    this.comments = const [],
-    this.nextCursor,
-    this.sortMode = CommentSortMode.recommended,
-    this.status = CommentListStatus.idle,
-    this.errorMessage,
-    this.pendingComments = const [],
-    this.replyPreviewCount = 1,
-    this.replyExpandPageSize = 10,
-    this.loadingReplyCommentIds = const {},
-    this.hasNewComments = false,
-    this.isRefreshing = false,
-  });
-
-  bool get hasMore => nextCursor != null;
-  bool get isLoading => status == CommentListStatus.loading;
-
-  CommentState copyWith({
-    List<CommentDto>? comments,
-    String? Function()? nextCursor,
-    CommentSortMode? sortMode,
-    CommentListStatus? status,
-    String? Function()? errorMessage,
-    List<CommentDto>? pendingComments,
-    int? replyPreviewCount,
-    int? replyExpandPageSize,
-    Set<String>? loadingReplyCommentIds,
-    bool? hasNewComments,
-    bool? isRefreshing,
-  }) {
-    return CommentState(
-      comments: comments ?? this.comments,
-      nextCursor: nextCursor != null ? nextCursor() : this.nextCursor,
-      sortMode: sortMode ?? this.sortMode,
-      status: status ?? this.status,
-      errorMessage: errorMessage != null ? errorMessage() : this.errorMessage,
-      pendingComments: pendingComments ?? this.pendingComments,
-      replyPreviewCount: replyPreviewCount ?? this.replyPreviewCount,
-      replyExpandPageSize: replyExpandPageSize ?? this.replyExpandPageSize,
-      loadingReplyCommentIds:
-          loadingReplyCommentIds ?? this.loadingReplyCommentIds,
-      hasNewComments: hasNewComments ?? this.hasNewComments,
-      isRefreshing: isRefreshing ?? this.isRefreshing,
-    );
-  }
-}
-
-class CommentNotifier extends Notifier<CommentState> {
+class CommentNotifier extends Notifier<CommentState>
+    with _CommentCountsSyncMixin {
   CommentNotifier(this.postId);
 
   static const Duration _pollingInterval = Duration(seconds: 30);
@@ -81,19 +23,33 @@ class CommentNotifier extends Notifier<CommentState> {
   static final Set<CommentNotifier> _activePollingTargets = <CommentNotifier>{};
   static Timer? _sharedPollingTimer;
 
+  @override
   final String postId;
 
+  @override
   ContentRepository get _repo => ref.read(contentRepositoryProvider);
+  @override
   CommentObservability get _observability =>
       ref.read(commentObservabilityProvider);
+  PageLifecycleObservability get _lifecycleObservability =>
+      ref.read(pageLifecycleObservabilityProvider);
 
   @override
   CommentState build() {
     _registerPollingTarget();
     ref.onDispose(_unregisterPollingTarget);
-    return _commentPageCache[_snapshotKey(CommentSortMode.recommended)]
-            ?.state ??
-        const CommentState();
+    final cached =
+        _commentPageCache[_snapshotKey(CommentSortMode.recommended)]?.state;
+    if (cached != null) {
+      // 重新进入详情：清空上次会话的基线/增量解释/新评论标记，
+      // 确保按「本次进入」重新建立 baseline watermark。
+      return cached.copyWith(
+        baselineWatermark: () => null,
+        countsDelta: () => null,
+        hasNewComments: false,
+      );
+    }
+    return const CommentState();
   }
 
   void _registerPollingTarget() {
@@ -114,11 +70,11 @@ class CommentNotifier extends Notifier<CommentState> {
   }
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
+    final requiresResolvedPersonaForMutations = ref
+        .read(contentRepositoryProvider)
+        .requiresResolvedPersonaForMutations;
     final activeContext = await ref.read(activePersonaContextProvider.future);
-    if (ref
-            .read(contentRepositoryProvider)
-            .requiresResolvedPersonaForMutations &&
-        activeContext.isFallback) {
+    if (requiresResolvedPersonaForMutations && activeContext.isFallback) {
       throw StateError('active persona context unavailable');
     }
     return activeContext;
@@ -130,17 +86,38 @@ class CommentNotifier extends Notifier<CommentState> {
     state = state.copyWith(
       status: CommentListStatus.loading,
       errorMessage: () => null,
+      rawError: () => null,
+      appendError: () => null,
+      refreshError: () => null,
       hasNewComments: false,
+    );
+    _lifecycleObservability.recordPageState(
+      pageName: 'comment_thread',
+      route: '/posts/$postId/comments',
+      surface: 'comments',
+      phase: 'onlineLoading',
+      source: 'online',
+      hasCache: state.comments.isNotEmpty,
+      itemCount: state.comments.length,
     );
     try {
       await _hydrateCommentConfig();
       final sortParam = _sortParam(state.sortMode);
       final page = await _repo.listComments(postId: postId, sort: sortParam);
+      if (!ref.mounted) {
+        return;
+      }
       state = state.copyWith(
         comments: page.items,
         nextCursor: () => page.nextCursor,
+        totalCount: page.totalCount,
         status: CommentListStatus.idle,
       );
+      _syncConfirmedCommentTotal(page.totalCount);
+      await _establishCountsBaselineIfNeeded();
+      if (!ref.mounted) {
+        return;
+      }
       _storeSnapshot();
       _trackLatency(
         metricName: CommentMetricNames.listLoadMs,
@@ -149,16 +126,46 @@ class CommentNotifier extends Notifier<CommentState> {
         source: 'initial',
         itemCount: page.items.length,
       );
+      _lifecycleObservability.recordPageState(
+        pageName: 'comment_thread',
+        route: '/posts/$postId/comments',
+        surface: 'comments',
+        phase: page.items.isEmpty ? 'emptySuccess' : 'onlineSuccess',
+        source: 'online',
+        hasCache: false,
+        itemCount: page.items.length,
+      );
     } catch (e) {
+      if (!ref.mounted) {
+        return;
+      }
+      final hasRetainedComments = state.comments.isNotEmpty;
       state = state.copyWith(
-        status: CommentListStatus.error,
+        status: hasRetainedComments
+            ? CommentListStatus.idle
+            : CommentListStatus.error,
         errorMessage: () => runtimeErrorDisplayMessage(e),
+        rawError: () => e,
       );
       _trackLatency(
         metricName: CommentMetricNames.listLoadMs,
         stopwatch: stopwatch,
         result: 'error',
         source: 'initial',
+      );
+      _lifecycleObservability.recordPageState(
+        pageName: 'comment_thread',
+        route: '/posts/$postId/comments',
+        surface: 'comments',
+        phase: hasRetainedComments ? 'cacheFallback' : 'blockingFailure',
+        source: hasRetainedComments ? 'retained' : 'online',
+        copyKey: hasRetainedComments
+            ? 'refreshFailedRetained'
+            : 'commentLoadFailedTitle',
+        error: e,
+        durationMs: stopwatch.elapsedMilliseconds,
+        hasCache: hasRetainedComments,
+        itemCount: state.comments.length,
       );
     }
   }
@@ -167,7 +174,18 @@ class CommentNotifier extends Notifier<CommentState> {
     if (!state.hasMore || state.status == CommentListStatus.loadingMore) {
       return;
     }
-    state = state.copyWith(status: CommentListStatus.loadingMore);
+    final itemCountBefore = state.comments.length;
+    state = state.copyWith(
+      status: CommentListStatus.loadingMore,
+      appendError: () => null,
+    );
+    _lifecycleObservability.recordAppend(
+      pageName: 'comment_thread',
+      result: 'loading',
+      cursorPresent: state.nextCursor != null,
+      hasMore: state.hasMore,
+      itemCountBefore: itemCountBefore,
+    );
     try {
       final sortParam = _sortParam(state.sortMode);
       final page = await _repo.listComments(
@@ -175,14 +193,42 @@ class CommentNotifier extends Notifier<CommentState> {
         cursor: state.nextCursor,
         sort: sortParam,
       );
+      if (!ref.mounted) {
+        return;
+      }
       state = state.copyWith(
         comments: [...state.comments, ...page.items],
         nextCursor: () => page.nextCursor,
+        totalCount: page.totalCount,
         status: CommentListStatus.idle,
       );
+      _syncConfirmedCommentTotal(page.totalCount);
       _storeSnapshot();
+      _lifecycleObservability.recordAppend(
+        pageName: 'comment_thread',
+        result: 'success',
+        cursorPresent: page.nextCursor != null,
+        hasMore: page.nextCursor != null,
+        itemCountBefore: itemCountBefore,
+        itemCountAfter: state.comments.length,
+      );
     } catch (e) {
-      state = state.copyWith(status: CommentListStatus.idle);
+      if (!ref.mounted) {
+        return;
+      }
+      state = state.copyWith(
+        status: CommentListStatus.idle,
+        appendError: () => e,
+      );
+      _lifecycleObservability.recordAppend(
+        pageName: 'comment_thread',
+        result: 'failure',
+        cursorPresent: state.nextCursor != null,
+        hasMore: state.hasMore,
+        itemCountBefore: itemCountBefore,
+        copyKey: 'appendFailedRetry',
+        error: e,
+      );
     }
   }
 
@@ -206,6 +252,10 @@ class CommentNotifier extends Notifier<CommentState> {
       sortMode: mode,
       comments: snapshot?.comments ?? [],
       nextCursor: () => snapshot?.nextCursor,
+      totalCount: snapshot?.totalCount ?? 0,
+      rawError: () => null,
+      appendError: () => null,
+      refreshError: () => null,
       hasNewComments: false,
     );
     await loadComments();
@@ -219,19 +269,30 @@ class CommentNotifier extends Notifier<CommentState> {
       postId: postId,
       sortMode: _sortParam(state.sortMode),
     );
-    state = state.copyWith(isRefreshing: true);
+    state = state.copyWith(isRefreshing: true, refreshError: () => null);
     try {
       final page = await _repo.listComments(
         postId: postId,
         sort: _sortParam(state.sortMode),
       );
+      if (!ref.mounted) {
+        return;
+      }
+      // 用户已确认解释（点击刷新）：推进基线到本次已展示 delta 的 watermark，
+      // 并清空增量，避免下次 poll 重复计数；无已展示 delta 则保持原基线。
+      final advancedWatermark = state.countsDelta?.watermark;
       state = state.copyWith(
         comments: page.items,
         nextCursor: () => page.nextCursor,
+        totalCount: page.totalCount,
         hasNewComments: false,
         isRefreshing: false,
         status: CommentListStatus.idle,
+        countsDelta: () => null,
+        baselineWatermark:
+            advancedWatermark != null ? () => advancedWatermark : null,
       );
+      _syncConfirmedCommentTotal(page.totalCount);
       _storeSnapshot();
       _trackLatency(
         metricName: CommentMetricNames.pollingRefreshMs,
@@ -240,48 +301,29 @@ class CommentNotifier extends Notifier<CommentState> {
         source: 'notice',
         itemCount: page.items.length,
       );
+      _lifecycleObservability.recordRefresh(
+        pageName: 'comment_thread',
+        result: 'success',
+        retained: true,
+        itemCount: page.items.length,
+      );
     } catch (e) {
-      state = state.copyWith(isRefreshing: false);
+      if (!ref.mounted) {
+        return;
+      }
+      state = state.copyWith(isRefreshing: false, refreshError: () => e);
       _trackLatency(
         metricName: CommentMetricNames.pollingRefreshMs,
         stopwatch: stopwatch,
         result: 'error',
         source: 'notice',
       );
-    }
-  }
-
-  Future<void> checkForNewComments() async {
-    if (state.comments.isEmpty ||
-        state.isLoading ||
-        state.isRefreshing ||
-        state.hasNewComments) {
-      return;
-    }
-    final stopwatch = Stopwatch()..start();
-    try {
-      final page = await _repo.listComments(
-        postId: postId,
-        sort: _sortParam(state.sortMode),
-        limit: 1,
-      );
-      final latest = page.items.isEmpty ? null : page.items.first;
-      if (latest != null && latest.id != state.comments.first.id) {
-        state = state.copyWith(hasNewComments: true);
-      }
-      _trackLatency(
-        metricName: CommentMetricNames.pollingRefreshMs,
-        stopwatch: stopwatch,
-        result: 'success',
-        source: 'polling',
-        itemCount: page.items.length,
-      );
-    } catch (e) {
-      _trackLatency(
-        metricName: CommentMetricNames.pollingRefreshMs,
-        stopwatch: stopwatch,
-        result: 'error',
-        source: 'polling',
+      _lifecycleObservability.recordRefresh(
+        pageName: 'comment_thread',
+        result: 'failure',
+        retained: true,
+        copyKey: 'refreshFailedRetained',
+        error: e,
       );
     }
   }
@@ -300,24 +342,30 @@ class CommentNotifier extends Notifier<CommentState> {
         .toList(growable: false);
     final baselineCommentCount = ref
         .read(postInteractionStateProvider)
-        .commentCountFor(postId, fallback: state.comments.length);
+        .commentCountFor(postId, fallback: state.totalCount);
     final activeContext = await _resolveActivePersonaContext();
+    if (!ref.mounted) {
+      return null;
+    }
     final resolvedSubAccountId = subAccountId ?? activeContext.subAccountId;
+    final parentCommentId = replyToCommentId == null
+        ? null
+        : _parentIdForReplyTarget(replyToCommentId);
     final optimistic = CommentDto(
       id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
       postId: postId,
       authorId: resolvedSubAccountId,
       content: content,
       replyToCommentId: replyToCommentId,
-      parentCommentId: replyToCommentId,
+      parentCommentId: parentCommentId,
       attachmentMediaIds: attachmentMediaIds,
       attachments: attachmentMediaIds
           .map(
-            (id) => <String, dynamic>{
-              'mediaId': id,
-              'type': 'image',
-              'url': 'media/comment/$id/v1/comment.png',
-            },
+            (id) => CommentAttachmentDto(
+              mediaId: id,
+              type: 'image',
+              url: 'media/comment/$id/v1/comment.png',
+            ),
           )
           .toList(growable: false),
       mentions: mentionsWire,
@@ -329,9 +377,20 @@ class CommentNotifier extends Notifier<CommentState> {
       avatarUrl: activeContext.avatarUrl,
       createdAt: DateTime.now(),
     );
+    final nextTotalCount = state.totalCount + 1;
     state = state.copyWith(
-      comments: [optimistic, ...state.comments],
+      comments: parentCommentId == null
+          ? [optimistic, ...state.comments]
+          : _appendReplyToParent(
+              state.comments,
+              parentCommentId: parentCommentId,
+              reply: optimistic,
+            ),
       pendingComments: [...state.pendingComments, optimistic],
+      totalCount: nextTotalCount,
+      expandedReplyCommentIds: parentCommentId == null
+          ? state.expandedReplyCommentIds
+          : {...state.expandedReplyCommentIds, parentCommentId},
     );
     ref
         .read(postInteractionStateProvider.notifier)
@@ -352,14 +411,25 @@ class CommentNotifier extends Notifier<CommentState> {
             : resolvedSubAccountId,
         personaContextVersion: activeContext.contextVersion,
       );
+      if (!ref.mounted) {
+        return confirmed;
+      }
       state = state.copyWith(
-        comments: state.comments
-            .map((c) => c.id == optimistic.id ? confirmed : c)
-            .toList(),
+        comments: parentCommentId == null
+            ? state.comments
+                  .map((c) => c.id == optimistic.id ? confirmed : c)
+                  .toList()
+            : _replaceReplyInParent(
+                state.comments,
+                parentCommentId: parentCommentId,
+                pendingReplyId: optimistic.id,
+                confirmed: confirmed,
+              ),
         pendingComments: state.pendingComments
             .where((c) => c.id != optimistic.id)
             .toList(),
       );
+      _syncConfirmedCommentTotal(state.totalCount);
       _trackLatency(
         metricName: CommentMetricNames.submitConfirmMs,
         stopwatch: stopwatch,
@@ -378,11 +448,21 @@ class CommentNotifier extends Notifier<CommentState> {
       );
       return confirmed;
     } catch (e) {
+      if (!ref.mounted) {
+        return null;
+      }
       state = state.copyWith(
-        comments: state.comments.where((c) => c.id != optimistic.id).toList(),
+        comments: parentCommentId == null
+            ? state.comments.where((c) => c.id != optimistic.id).toList()
+            : _removeReplyFromParent(
+                state.comments,
+                parentCommentId: parentCommentId,
+                replyId: optimistic.id,
+              ),
         pendingComments: state.pendingComments
             .where((c) => c.id != optimistic.id)
             .toList(),
+        totalCount: (state.totalCount - 1).clamp(0, 1 << 31).toInt(),
       );
       ref
           .read(postInteractionStateProvider.notifier)
@@ -414,11 +494,20 @@ class CommentNotifier extends Notifier<CommentState> {
 
   Future<void> deleteComment(String commentId) async {
     final original = state.comments;
+    final originalTotalCount = state.totalCount;
+    final parentCommentId = _parentIdForReplyTarget(commentId);
     final baselineCommentCount = ref
         .read(postInteractionStateProvider)
-        .commentCountFor(postId, fallback: original.length);
+        .commentCountFor(postId, fallback: originalTotalCount);
     state = state.copyWith(
-      comments: state.comments.where((c) => c.id != commentId).toList(),
+      comments: parentCommentId == null
+          ? state.comments.where((c) => c.id != commentId).toList()
+          : _removeReplyFromParent(
+              state.comments,
+              parentCommentId: parentCommentId,
+              replyId: commentId,
+            ),
+      totalCount: (state.totalCount - 1).clamp(0, 1 << 31).toInt(),
     );
     ref
         .read(postInteractionStateProvider.notifier)
@@ -429,8 +518,18 @@ class CommentNotifier extends Notifier<CommentState> {
         );
     try {
       await _repo.deleteComment(postId: postId, commentId: commentId);
+      if (!ref.mounted) {
+        return;
+      }
+      _syncConfirmedCommentTotal(state.totalCount);
     } catch (e) {
-      state = state.copyWith(comments: original);
+      if (!ref.mounted) {
+        return;
+      }
+      state = state.copyWith(
+        comments: original,
+        totalCount: originalTotalCount,
+      );
       ref
           .read(postInteractionStateProvider.notifier)
           .rollbackOptimisticComment(
@@ -473,6 +572,9 @@ class CommentNotifier extends Notifier<CommentState> {
         commentId: commentId,
         reaction: reaction,
       );
+      if (!ref.mounted) {
+        return;
+      }
       state = state.copyWith(
         comments: state.comments
             .map((c) => c.id == commentId ? confirmed : c)
@@ -494,6 +596,9 @@ class CommentNotifier extends Notifier<CommentState> {
         reaction: reaction,
       );
     } catch (e) {
+      if (!ref.mounted) {
+        return;
+      }
       state = state.copyWith(comments: original);
       _trackLatency(
         metricName: CommentMetricNames.reactionConfirmMs,
@@ -506,21 +611,118 @@ class CommentNotifier extends Notifier<CommentState> {
     }
   }
 
+  /// 内容作者置顶/取消置顶一级评论。仅一级评论可置顶，置顶后排到列表最前；
+  /// 乐观更新失败时回滚到原顺序并向上抛出（由 UI 用结构化错误码提示）。
+  Future<void> togglePin(String commentId) async {
+    final current = _findComment(commentId);
+    if (current == null) return;
+    final nextPinned = !current.isPinned;
+    final stopwatch = Stopwatch()..start();
+    final original = state.comments;
+    final optimistic = current.copyWith(
+      isPinned: nextPinned,
+      pinnedAt: () => nextPinned ? DateTime.now() : null,
+    );
+    state = state.copyWith(
+      comments: _withPinnedFirst(
+        state.comments
+            .map((c) => c.id == commentId ? optimistic : c)
+            .toList(growable: false),
+      ),
+    );
+    try {
+      final confirmed = await _repo.setCommentPinned(
+        postId: postId,
+        commentId: commentId,
+        pinned: nextPinned,
+      );
+      if (!ref.mounted) {
+        return;
+      }
+      state = state.copyWith(
+        comments: _withPinnedFirst(
+          state.comments
+              .map((c) => c.id == commentId ? confirmed : c)
+              .toList(growable: false),
+        ),
+      );
+      _trackLatency(
+        metricName: CommentMetricNames.pinConfirmMs,
+        stopwatch: stopwatch,
+        result: 'success',
+        commentId: commentId,
+        source: nextPinned ? 'pin' : 'unpin',
+      );
+      _observability.trackAction(
+        eventName: CommentEventNames.pinChanged,
+        postId: postId,
+        commentId: commentId,
+        sortMode: _sortParam(state.sortMode),
+        latencyMs: stopwatch.elapsedMilliseconds,
+        reaction: nextPinned ? 'pin' : 'unpin',
+      );
+    } catch (e) {
+      if (!ref.mounted) {
+        return;
+      }
+      state = state.copyWith(comments: original);
+      _trackLatency(
+        metricName: CommentMetricNames.pinConfirmMs,
+        stopwatch: stopwatch,
+        result: 'error',
+        commentId: commentId,
+        source: nextPinned ? 'pin' : 'unpin',
+      );
+      rethrow;
+    }
+  }
+
+  /// 展开二级回复（分段加载）：
+  /// - 首次展开（未处于展开态）：最多加载 [CommentState.replyFirstExpandPageSize] 条；
+  /// - 后续「展开更多回复」：每页最多 [CommentState.replyExpandPageSize] 条；
+  /// - 服务端已无更多（`replyNextCursor == null`）：仅切到展开显示态，不再请求。
   Future<void> expandReplies(String commentId) async {
     if (state.loadingReplyCommentIds.contains(commentId)) return;
     final parent = _findComment(commentId);
-    if (parent == null || parent.replyNextCursor == null) return;
+    if (parent == null) return;
+    final wasExpanded = state.expandedReplyCommentIds.contains(commentId);
+    // 服务端已无更多回复：仅把显示态切到展开，复用已加载回复。
+    if (parent.replyNextCursor == null) {
+      if (!wasExpanded) {
+        state = state.copyWith(
+          expandedReplyCommentIds: {
+            ...state.expandedReplyCommentIds,
+            commentId,
+          },
+        );
+        _observability.trackAction(
+          eventName: CommentEventNames.replyExpanded,
+          postId: postId,
+          commentId: commentId,
+          sortMode: _sortParam(state.sortMode),
+          replyDepth: 1,
+        );
+      }
+      return;
+    }
     final stopwatch = Stopwatch()..start();
+    final pageSize = wasExpanded
+        ? state.replyExpandPageSize
+        : state.replyFirstExpandPageSize;
     state = state.copyWith(
       loadingReplyCommentIds: {...state.loadingReplyCommentIds, commentId},
+      expandedReplyCommentIds: {...state.expandedReplyCommentIds, commentId},
     );
     try {
       final page = await _repo.listCommentReplies(
         postId: postId,
         commentId: commentId,
         cursor: parent.replyNextCursor,
-        limit: state.replyExpandPageSize,
+        limit: pageSize,
       );
+      if (!ref.mounted) {
+        return;
+      }
       state = state.copyWith(
         comments: state.comments
             .map(
@@ -552,6 +754,9 @@ class CommentNotifier extends Notifier<CommentState> {
         latencyMs: stopwatch.elapsedMilliseconds,
       );
     } catch (e) {
+      if (!ref.mounted) {
+        return;
+      }
       state = state.copyWith(
         loadingReplyCommentIds: state.loadingReplyCommentIds
             .where((id) => id != commentId)
@@ -567,23 +772,45 @@ class CommentNotifier extends Notifier<CommentState> {
     }
   }
 
+  /// 收起二级回复：回到「仅显示 [CommentState.replyPreviewCount] 条」的预览态，
+  /// 已加载的回复保留在内存，再次展开时无需重复请求已加载部分。
+  void collapseReplies(String commentId) {
+    if (!state.expandedReplyCommentIds.contains(commentId)) return;
+    state = state.copyWith(
+      expandedReplyCommentIds: state.expandedReplyCommentIds
+          .where((id) => id != commentId)
+          .toSet(),
+    );
+    _observability.trackAction(
+      eventName: CommentEventNames.replyCollapsed,
+      postId: postId,
+      commentId: commentId,
+      sortMode: _sortParam(state.sortMode),
+      replyDepth: 1,
+    );
+  }
+
   Future<void> _hydrateCommentConfig() async {
     final config = ref.read(commentRemoteConfigProvider);
     state = state.copyWith(
       replyPreviewCount: config.replyPreviewCount,
+      replyFirstExpandPageSize: config.replyFirstExpandPageSize,
       replyExpandPageSize: config.replyExpandPageSize,
+      foldLineCount: config.foldLineCount,
     );
   }
 
-  String _sortParam(CommentSortMode mode) {
-    switch (mode) {
-      case CommentSortMode.recommended:
-        return 'recommended';
-      case CommentSortMode.latest:
-        return 'latest';
-      case CommentSortMode.mostLiked:
-        return 'most_liked';
+  String? _parentIdForReplyTarget(String commentId) {
+    for (final comment in state.comments) {
+      if (comment.id == commentId) return comment.id;
+      for (final reply in comment.replyPreview) {
+        if (reply.id == commentId) {
+          final parentId = reply.parentCommentId?.trim();
+          return parentId?.isNotEmpty == true ? parentId : comment.id;
+        }
+      }
     }
+    return null;
   }
 
   CommentDto? _findComment(String commentId) {
@@ -596,44 +823,6 @@ class CommentNotifier extends Notifier<CommentState> {
     return null;
   }
 
-  CommentDto _applyReaction(CommentDto comment, String reaction) {
-    var likeCount = comment.likeCount;
-    var dislikeCount = comment.dislikeCount;
-    if (comment.viewerReaction == 'like') {
-      likeCount = (likeCount - 1).clamp(0, 1 << 31).toInt();
-    }
-    if (comment.viewerReaction == 'dislike') {
-      dislikeCount = (dislikeCount - 1).clamp(0, 1 << 31).toInt();
-    }
-    if (reaction == 'like') likeCount++;
-    if (reaction == 'dislike') dislikeCount++;
-    return comment.copyWith(
-      likeCount: likeCount,
-      dislikeCount: dislikeCount,
-      viewerReaction: reaction,
-    );
-  }
-
-  void _trackLatency({
-    required String metricName,
-    required Stopwatch stopwatch,
-    required String result,
-    String? commentId,
-    String? source,
-    int? itemCount,
-  }) {
-    stopwatch.stop();
-    _observability.trackLatency(
-      metricName: metricName,
-      postId: postId,
-      durationMs: stopwatch.elapsedMilliseconds,
-      result: result,
-      commentId: commentId,
-      source: source,
-      itemCount: itemCount,
-    );
-  }
-
   String _snapshotKey(CommentSortMode mode) => '$postId:${_sortParam(mode)}';
 
   void _storeSnapshot() {
@@ -641,6 +830,9 @@ class CommentNotifier extends Notifier<CommentState> {
       state: state.copyWith(
         status: CommentListStatus.idle,
         errorMessage: () => null,
+        rawError: () => null,
+        appendError: () => null,
+        refreshError: () => null,
         isRefreshing: false,
       ),
       cachedAt: DateTime.now(),

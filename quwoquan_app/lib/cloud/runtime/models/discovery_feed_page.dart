@@ -12,6 +12,8 @@ class DiscoveryFeedPage {
     this.feedRequestId,
     this.rankingVersion,
     this.reasonVersion,
+    this.cacheFallbackError,
+    this.cacheAgeMs,
   });
 
   final List<PostBaseDto> items;
@@ -25,4 +27,12 @@ class DiscoveryFeedPage {
 
   /// 本次结果的交集理由管线版本。
   final String? reasonVersion;
+
+  /// 远端失败后回退到本地快照时保留原始失败；null 表示本次不是缓存兜底。
+  final Object? cacheFallbackError;
+
+  /// 兜底快照距今毫秒数，仅用于页面生命周期埋点。
+  final int? cacheAgeMs;
+
+  bool get isCacheFallback => cacheFallbackError != null;
 }

@@ -169,6 +169,28 @@ def test_annotate_inline_does_not_nest_inside_parenthesized_entity_link():
     assert annotated == {ref}
 
 
+def test_annotate_inline_canonicalizes_and_strips_agent_authored_entity_links():
+    article = (
+        "[丽江](/entity/地点/景区/丽江古城景区) 的夜色很集中，"
+        "[大唐不夜城](/entity/地点/景区/大唐不夜城) 只保留文字。"
+    )
+    new_article, annotated = annotate_inline(
+        article,
+        {"丽江古城景区": "/entity/地点/景区/丽江古城景区"},
+    )
+
+    assert "[丽江古城景区](/entity/地点/景区/丽江古城景区)" in new_article
+    assert "大唐不夜城](/entity" not in new_article
+    assert "大唐不夜城" in new_article
+    assert annotated == {"/entity/地点/景区/丽江古城景区"}
+    assert annotation_closure_issues(
+        new_article,
+        manifest_entity_refs=["/entity/地点/景区/丽江古城景区"],
+        dictionary={"丽江古城景区": "/entity/地点/景区/丽江古城景区"},
+        required_refs=["/entity/地点/景区/丽江古城景区"],
+    ) == []
+
+
 def _run_all() -> None:
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

@@ -212,7 +212,7 @@ beta_manual_stop_stack() {
   local owner_filter="${2:-}"
   local controller_pid=""
   beta_manual_init
-  for name in flutter-run gateway assistant-service chat-service media-static; do
+  for name in flutter-run gateway assistant-service chat-service media-static media-origin media-edge; do
     beta_manual_stop_process_file "$(beta_manual_process_file "$name")" "$owner_filter"
   done
   if [[ -z "$owner_filter" && -f "$BETA_MANUAL_STATE_DIR/stack.env" ]]; then
@@ -300,6 +300,23 @@ beta_manual_wait_http_ok() {
     sleep 1
   done
   echo "[$BETA_MANUAL_LABEL] $label OK: $url"
+}
+
+beta_manual_wait_http_range_ok() {
+  local url="$1"
+  local label="$2"
+  local timeout="${3:-60}"
+  local deadline=$((SECONDS + timeout))
+  local status=""
+  until [[ "$status" == "206" ]]; do
+    status="$(curl -fsS -r 0-1 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)"
+    if (( SECONDS >= deadline )); then
+      echo "$label range check failed: expected 206, got ${status:-ERR} $url" >&2
+      return 1
+    fi
+    sleep 1
+  done
+  echo "[$BETA_MANUAL_LABEL] $label Range OK: $url"
 }
 
 beta_manual_wait_until_stopped() {

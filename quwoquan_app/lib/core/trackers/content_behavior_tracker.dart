@@ -243,6 +243,53 @@ class ContentBehaviorTracker {
     );
   }
 
+  /// 记录交集证据组 / 内容标签点击（tag_click）。
+  ///
+  /// 语义区别于 [trackClick]：`tag_click` 在推荐 HotPath 有独立强权重（云侧
+  /// `behaviors.yaml` 已登记、`runtime/recommendation/hotpath.go` 权重 1.8），
+  /// 用于交集证据组与内容标签点击；**禁止降级为 `click`**（会丢权重、改变推荐归因）。
+  /// 归因字段与统一交互子契约对齐（intersectionId/dimension/sourceRef/class/tagRefs/evidenceId），
+  /// 统一通道（替代散落的 `behaviorRepository.reportEvents` 直发）但不改信号语义。
+  void trackTagClick(
+    String contentId, {
+    String? contentType,
+    String? authorId,
+    List<String>? tags,
+    String? feedRequestId,
+    int? position,
+    ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
+    String? intersectionId,
+    String? intersectionDimension,
+    String? intersectionSourceRef,
+    List<String>? intersectionTagRefs,
+    String? intersectionClass,
+    String? intersectionEvidenceId,
+  }) {
+    _add(
+      BehaviorEvent(
+        contentId: contentId,
+        action: BehaviorAction.tagClick,
+        state: 'interaction',
+        contentType: contentType,
+        authorId: authorId,
+        tags: tags,
+        feedRequestId: feedRequestId,
+        position: position,
+        referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
+        intersectionId: intersectionId,
+        intersectionDimension: intersectionDimension,
+        intersectionSourceRef: intersectionSourceRef,
+        intersectionTagRefs: intersectionTagRefs,
+        intersectionClass: intersectionClass,
+        intersectionEvidenceId: intersectionEvidenceId,
+      ),
+    );
+  }
+
   /// 记录「不感兴趣」（dislike）。
   void trackDislike(
     String contentId, {

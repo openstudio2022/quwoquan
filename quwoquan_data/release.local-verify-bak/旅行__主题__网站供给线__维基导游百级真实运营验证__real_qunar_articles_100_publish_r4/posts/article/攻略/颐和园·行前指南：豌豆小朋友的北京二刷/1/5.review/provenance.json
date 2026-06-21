@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_59ec8a6352ccac02",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "颐和园·行前指南：豌豆小朋友的北京二刷",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-c6c8e45e-bf3a-4773-a497-ae2dec666244",
+    "agentId": "agent-4d358128-eeb1-427b-9c43-ab5772e0aeee",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/颐和园"
+    ],
+    "articleDigest": "sha256:e66d507c0c6a41128f59a649a9bf15871e76a962e5421fde74315ea64345e7ac"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "颐和园·行前指南：豌豆小朋友的北京二刷",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:8b4f6eca2b7d0e186003366ca69fc2d524283cedcd48cba80ef2623c0bfac20c",
+    "writingPackSha256": "sha256:b202ce0cd57971bc544127bd60ac7bfe3ad649e61c769f275e58b4362c226da8",
+    "sourceBundleSha256": "sha256:ff961e82e321701be56e909d3b68d690d247c9652711aa650d2af6fd1dc028ca",
+    "draftSha256": "sha256:a52ac69d1e9dab12b7914b7316b5ddaa188af2b69b38b33484b3f634fb8af48c"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/06.qunar_guide_candidate_10ce762a8ae4d92a/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7883023"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/19.qunar_guide_candidate_29bc697f3876726d/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7879815"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/26.qunar_guide_candidate_39c2561d2aa9c823/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7874919"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/41.qunar_guide_candidate_59ec8a6352ccac02/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7902914"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/43.qunar_guide_candidate_5b62e653bab69474/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7890364"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/70.qunar_guide_candidate_a31321d5992c863e/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7863644"
+    },
+    {
+      "path": "entities/地点/景区/颐和园/1.download/sources/82.qunar_guide_candidate_b71c523b17e65457/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7872796"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/颐和园/1.download/sources/41.qunar_guide_candidate_59ec8a6352ccac02/source.md"
+  ]
+}

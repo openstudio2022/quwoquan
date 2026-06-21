@@ -119,11 +119,14 @@ def write_source_unit(
     images: Sequence[Mapping[str, Any]] | None = None,
     task_id: str = "",
     batch_id: str = "",
+    build_variants: bool = True,
 ) -> dict[str, Any]:
     """写一个来源单元，返回其 manifest（含 assets.index 摘要）。
 
     images 每项：{bytes|sourcePath, url, license, credit, caption, relevance, contentType}
     图片落 assets/{NNN}_{slug}.{ext}，并写 assets/index.json（含 sha256/relevance）。
+    生产 download 主链路可传 build_variants=False，把 WebP 物理变体延后到
+    media/release 阶段；原图、尺寸、hash、授权链仍在本阶段闭合。
     """
     unit = source_unit_dir(object_dir, ordinal, source_id)
     unit.mkdir(parents=True, exist_ok=True)
@@ -164,14 +167,15 @@ def write_source_unit(
             dims = image_dimensions(body)
             if dims:
                 width, height = dims
-        # 多变体格式化：按 IMAGE_VARIANT_PROFILES 物理压 webp（仅缩小），落同名 .variants/ 子目录。
         variants_meta: list[dict[str, Any]] = []
-        for var in build_local_variants(body or b"", base_name=base_name):
-            var_bytes = var.pop("bytes")
-            var_path = assets_dir / var["fileName"]
-            var_path.parent.mkdir(parents=True, exist_ok=True)
-            var_path.write_bytes(var_bytes)
-            variants_meta.append(var)
+        if build_variants:
+            # 多变体格式化：按 IMAGE_VARIANT_PROFILES 物理压 webp（仅缩小），落同名 .variants/ 子目录。
+            for var in build_local_variants(body or b"", base_name=base_name):
+                var_bytes = var.pop("bytes")
+                var_path = assets_dir / var["fileName"]
+                var_path.parent.mkdir(parents=True, exist_ok=True)
+                var_path.write_bytes(var_bytes)
+                variants_meta.append(var)
         entry = {
             "sourceAssetId": f"{ordinal:03d}_{k:03d}",
             "fileName": file_name,
@@ -200,6 +204,7 @@ def write_source_unit(
             "caption": str(img.get("caption") or ""),
             "relevance": str(img.get("relevance") or relevance or ""),
             "variants": variants_meta,
+            "variantGeneration": "inline" if build_variants else "deferred",
         }
         asset_index.append(entry)
     if asset_index:
@@ -295,7 +300,7 @@ def object_image_candidates(
 ) -> list[dict[str, Any]]:
     """对象的可选图候选（新布局：来源单元 assets/）。
 
-    每项：{path, sourceRef(相对), sourceAssetRef(相对), caption, relevance}。
+    每项：{path, sourceRef(相对), sourceAssetRef(相对), sha256, caption, relevance}。
     """
     out: list[dict[str, Any]] = []
     for unit in iter_source_units(object_dir):
@@ -320,6 +325,7 @@ def object_image_candidates(
                     "path": asset,
                     "sourceRef": source_ref,
                     "sourceAssetRef": relative_batch_ref(asset, task_id, batch_id),
+                    "sha256": meta.get("sha256") or "",
                     "caption": meta.get("caption", ""),
                     "relevance": meta.get("relevance", ""),
                     "sourceTitle": unit_meta.get("title") or "",
@@ -338,6 +344,30 @@ def object_image_candidates(
     return out
 
 
+def source_asset_sha256(source_asset_ref: Any, task_id: str, batch_id: str) -> str:
+    """Return the source-unit sha256 for an asset ref/path, falling back to file bytes."""
+    raw = str(source_asset_ref or "").replace("\\", "/").strip()
+    if not raw:
+        return ""
+    path = Path(raw)
+    if not path.is_absolute():
+        path = batch_root(task_id, batch_id) / raw
+    try:
+        if not path.is_file():
+            return ""
+        idx_path = path.parent / "index.json"
+        if idx_path.is_file():
+            index = read_json(idx_path)
+            for asset in index.get("assets") or []:
+                if isinstance(asset, Mapping) and asset.get("fileName") == path.name:
+                    sha = str(asset.get("sha256") or "").strip().lower()
+                    if sha:
+                        return sha
+        return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    except (OSError, ValueError, TypeError):
+        return ""
+
+
 __all__ = [
     "SOURCE_UNIT_MANIFEST",
     "SOURCE_UNIT_ASSET_INDEX",
@@ -347,4 +377,5 @@ __all__ = [
     "iter_source_units",
     "find_entity_object_dirs",
     "object_image_candidates",
+    "source_asset_sha256",
 ]

@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_0d96b9b9ae750ba0",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "黄山风景区·行前指南：皖赣五日游：黄山西递、瑶里古镇、婺源自驾",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer-2.5-fast",
+    "agentRunId": "run-baef4338-56e5-4123-b4b8-83186fad73be",
+    "agentId": "agent-b54cb02c-af38-440a-b384-fef7efda024c",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/黄山风景区"
+    ],
+    "articleDigest": "sha256:0dc4ad08c907aee3443954da44613db49fa531ae6ac3ce9235d8c9170d874bd0"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "黄山风景区·行前指南：皖赣五日游：黄山西递、瑶里古镇、婺源自驾",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:4adcd2ef1c0bc3faf69be0315ebf93152bab83bee49a449524f416b71e8aa798",
+    "writingPackSha256": "sha256:395b8281c0c5cb932e07f4ca83ab2e641e779c7a03fce2c7e9ef777ffcdde4fa",
+    "sourceBundleSha256": "sha256:0fddf2682d9ee3828c3f132cbd4a55b564511533b8de7f2ed0976619e4a5156d",
+    "draftSha256": "sha256:0d9224d84f5ab054dd4dc61442f6aadcef705aab3affb178de405cee655e38d5"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/04.qunar_guide_candidate_0d96b9b9ae750ba0/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7896321"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/25.qunar_guide_candidate_3663a00c83a4f1ad/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7891068"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/54.qunar_guide_candidate_7128a2ec11884ba0/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7902694"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/57.qunar_guide_candidate_78a02fc8ebb3615c/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7901394"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/64.qunar_guide_candidate_8bfee6dfa70c54e2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7899260"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/93.qunar_guide_candidate_d1dce837ab623b65/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7860188"
+    },
+    {
+      "path": "entities/地点/景区/黄山风景区/1.download/sources/98.qunar_guide_candidate_e170b25063065cf8/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7893555"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/黄山风景区/1.download/sources/04.qunar_guide_candidate_0d96b9b9ae750ba0/source.md",
+    "entities/地点/景区/黄山风景区/1.download/sources/25.qunar_guide_candidate_3663a00c83a4f1ad/source.md",
+    "entities/地点/景区/黄山风景区/1.download/sources/54.qunar_guide_candidate_7128a2ec11884ba0/source.md"
+  ]
+}

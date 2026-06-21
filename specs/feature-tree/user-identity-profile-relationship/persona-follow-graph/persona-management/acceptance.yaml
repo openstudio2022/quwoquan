@@ -7,32 +7,85 @@ node:
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: persona-follow-graph
 scope:
-  summary: persona management 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 分身管理摘要、编辑、同步建议与当前分身切换的端云闭环验收范围。
+  in_scope:
+  - 分身列表、quota 与 active persona context 同源读取
+  - 分身编辑 displayName/userHandle/phone/email/isolationLevel 后的管理摘要回显
+  - profile sync suggestion 的出现、应用与 appliedCount 闭环
+  - 当前分身切换后 activeContext 与页面 current 标识对齐
+  - 管理摘要与 active persona context 显式下发 avatarUrl/avatarVersion，供端侧头像缓存失效消费
+  out_of_scope:
+  - 分身头像图片挑选/上传入口与对象存储端到端
+  - 分身删除/退役的复杂守卫策略（单独归属 `persona-management--persona-lifecycle-contract`）
 gwt_acceptance:
   GWT1:
-    title: persona management GWT
+    title: 分身管理摘要、编辑同步与当前分身切换一致
     given:
-    - 前置条件明确。
+    - 用户已有主分身与至少一个辅助分身。
+    - user-service 可返回 persona management summary、active persona context 与 profile sync suggestion 所需字段。
+    - App 已进入分身管理页。
     when:
-    - 用户或系统动作发生。
+    - 用户浏览分身列表与 quota。
+    - 用户编辑辅助分身的 userHandle/phone/email 等字段并保存。
+    - 用户应用同步建议，或切换当前分身。
     then:
-    - 可观察结果符合预期。
+    - 页面展示 quota、items 与 activeContext，且当前分身标识与 activeContext.subAccountId 一致。
+    - 保存后管理摘要回显最新字段，分身停止继承 owner 对应字段。
+    - 出现 sync suggestion 时，应用后返回 appliedCount 并刷新管理摘要。
+    - persona item 与 active persona context 中的 avatarUrl/avatarVersion 显式可消费，端侧头像缓存键稳定。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
+    - user-service persona summary / update / sync / activate 契约测试通过。
+    - App local_contract 聚合覆盖 repository、provider、page 与分身管理旅程。
+    - App user_acceptance 聚合覆盖分身管理页编辑、同步建议与切换当前分身。
+    edge_cases:
+    - quota 达到上限时不再允许创建，并记录 quota telemetry。
+    - active persona context 缺失时回退到 item.isActive，不产生双 current。
+    - persona avatarVersion 为 0 时仍可渲染头像 URL，但显式版本字段必须存在。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    - quwoquan_service/contracts/metadata/user/user_profile/fields.yaml
+    - quwoquan_service/contracts/metadata/user/user_profile/projections/persona_management_item_wire.yaml
+    - quwoquan_service/contracts/metadata/user/user_profile/projections/active_persona_context_wire.yaml
+    performance_points:
+    - 分身编辑、应用同步与切换当前分身后只做一次 summary reload，不阻塞页面继续交互。
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - 'command: go test ./services/user-service/tests -run Test(GetPersonaManagementSummary_ReturnsQuotaAndActiveContext|UpdatePersona_ReflectsManagementFields|ApplyPersonaProfileSync_ReturnsAppliedCount|ActivatePersona_Transaction) -count=1'
+      - quwoquan_app/test/local_contract/user/persona_management__local_contract_test.dart
+      - quwoquan_app/test/user_acceptance/persona_management__user_acceptance_test.dart
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: persona_management
+        cases:
+        - local_contract.user.persona_management.repository_summary_context
+        - local_contract.user.persona_management.sync_suggestion_and_apply
+        - local_contract.user.persona_management.activate_current_persona
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: persona_management
+        cases:
+        - api_integration.user.persona_management.summary_quota_active_context
+        - api_integration.user.persona_management.update_reflects_fields_and_avatar_version
+        - api_integration.user.persona_management.apply_sync_returns_applied_count
+        - api_integration.user.persona_management.activate_transaction_single_active
+        envs: *id001
+      - layer: user_acceptance
+        suite: persona_management
+        cases:
+        - user_acceptance.user.persona_management.edit_sync_activate_journey
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: persona_management_provider
+        cases:
+        - local_contract.user.persona_management.telemetry_create_activate_retire_quota
+        envs: *id001
+    notes:
+    - 当前 story 只验证 avatarVersion 的读链与缓存失效语义，不声明分身头像上传入口。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -111,8 +111,8 @@
 - A1：历史账号摘要存在时，登录页展示头像、昵称、脱敏手机号，点击主按钮必须请求服务端刷新 token。
 - A2：运营商返回未注册本机号码时，登录页展示号码态，点击主按钮创建默认账号和主分身。
 - A3：没有历史摘要且运营商不可用，或用户点击“其它手机号”，登录页进入手机号 OTP 态，不出现占位 toast。
-- A4：手机号 OTP 12 个高保画面和所有异常逃生路径都有 T2 覆盖。
+- A4：手机号 OTP 12 个高保画面和所有异常逃生路径都有 local_contract 覆盖。
 - A5：未勾选协议不发码、不登录；服务端缺协议版本返回 `consent_required`。
 - A6：端云契约由 metadata 生成，Dart DTO、Go handler/service、测试 fixture 对齐。
-- A7：数据库副作用、consent 留痕、短信 provider audit 和错误结构化均有 T3 证据。
+- A7：数据库副作用、consent 留痕、短信 provider audit 和错误结构化均有 api_integration 证据。
 - A8：iPhone 17、iPad、Web 截图证据覆盖高保和响应式。

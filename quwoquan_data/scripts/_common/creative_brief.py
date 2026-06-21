@@ -105,13 +105,14 @@ def build_creative_brief(
         "不得虚构亲历、资质、官方背书或商业合作",
         "不得改变载体或混用图片来源集合",
         "不得把 pending mention 写成 active refs",
-        "不得复现普通网页连续长句、小标题和作者个人叙事",
+        "不得脱离底稿大修/重写/编故事，或为贴合人设把底稿改到面目全非",
         "不得写成百科罗列、机械清单或营销软文",
     ]
     return {
         "readerPromise": reader_promise,
         "contentAngle": content_angle,
         "voiceStyle": voice_style,
+        "persona": _build_persona(brief.get("creator")),
         "claimPolicy": str(raw.get("claimPolicy") or brief.get("experienceClaimMode") or "editorial_synthesis"),
         "allowedMoves": _clean_list(raw.get("allowedMoves"), limit=10) or _allowed_moves(writing_intent, carrier),
         "mustNotDo": must_not_do,
@@ -119,6 +120,39 @@ def build_creative_brief(
         or ["标题兑现", "信息密度", "可操作性或审美价值", "非模板感", "证据边界清晰"],
         "requiresCreativePlan": bool(raw.get("requiresCreativePlan", True)),
         "requiresSelfCritique": bool(raw.get("requiresSelfCritique", True)),
+    }
+
+
+def _coverage_scope_label(scope: Any) -> str:
+    """把 creator.coverageScope 折叠成 prompt 可读的题材/范围标签。"""
+    if not isinstance(scope, Mapping):
+        return ""
+    kind = str(scope.get("kind") or "")
+    if kind == "nationwide":
+        return "全国范围"
+    regions = [str(x).split("/")[-1] for x in (scope.get("regionRefs") or []) if x]
+    topics = [str(x).split("/")[-1] for x in (scope.get("topicRefs") or []) if x]
+    parts: list[str] = []
+    if regions:
+        parts.append("地域：" + "、".join(regions))
+    if topics:
+        parts.append("题材：" + "、".join(topics))
+    return " ｜ ".join(parts)
+
+
+def _build_persona(creator: Any) -> dict[str, Any]:
+    """从 brief.creator 提取注入 prompt 的人设维度（用于轻量化用词语气适配）。"""
+    if not isinstance(creator, Mapping) or not creator:
+        return {}
+    voice = creator.get("voiceStyle") if isinstance(creator.get("voiceStyle"), Mapping) else {}
+    return {
+        "displayName": creator.get("displayName"),
+        "headline": creator.get("headline"),
+        "creatorArchetype": creator.get("creatorArchetype"),
+        "voiceStyle": dict(voice),
+        "expertiseClaims": [str(x) for x in (creator.get("expertiseClaims") or []) if x],
+        "mustNotClaim": [str(x) for x in (creator.get("mustNotClaim") or []) if x],
+        "coverageScopeLabel": _coverage_scope_label(creator.get("coverageScope")),
     }
 
 

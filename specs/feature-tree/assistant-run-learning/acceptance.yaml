@@ -15,26 +15,38 @@ domain_acceptance:
     done_when:
     - 领域边界、上下游依赖、工程映射和服务治理清晰。
     boundary_points: []
-    evidence:
-      primary:
-      - T1_static_contract
-      - T3_service_contract
-      supporting: []
     tests:
       planned:
-      - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
-      - quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_feedback_test.dart
+      - file: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
       recorded:
-      - quwoquan_service/services/assistant-service/internal/application/chat_mention_service_test.go
-      - quwoquan_service/services/assistant-service/internal/application/service_test.go
-      - quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
-      - quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
-      - quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
-      - quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
-      - quwoquan_service/scripts/contract/verify_assistant_context_contract.py
-      - quwoquan_service/scripts/contract/verify_assistant_security_contract.py
-      - specs/feature-tree/assistant-run-learning/commercial_slo_observability.md
+      - file: quwoquan_service/services/assistant-service/internal/application/chat_mention_service_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/service_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
+      - file: quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
+      - file: quwoquan_service/scripts/contract/verify_assistant_context_contract.py
+      - file: quwoquan_service/scripts/contract/verify_assistant_security_contract.py
+      - file: specs/feature-tree/assistant-run-learning/commercial_slo_observability.md
     status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: da1_local_contract
+        cases:
+        - local_contract.assistant_run_learning.domain_service.da1.da1_local_contract
+        envs:
+        - local
+      - layer: api_integration
+        suite: da1_api_integration
+        cases:
+        - api_integration.assistant_run_learning.domain_service.da1.da1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting: []
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_feedback_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -6,7 +6,7 @@
 - `L2_business_capability`: `content-type-framework`
 - `L3_story`: `creation-tagging-ia`
 
-本场景冻结**创作侧打标信息架构（IA）**：在内容创作流提供 tagRef 打标入口，使 `content.tagRefs` 成为「交集」归因的可信输入。打标对全部内容类型（含口碑 review）**可选、不强制**，由**自动打标（转发识别 + 内容识别）辅助**，手动 UI 作为对自动结果的**确认/修正层**。打标真相源唯一为数据工程 `publish/v1/tags`（路径制 tagRef）；首发标签子集已冻结于 `_shared/tag_ref_migration.yaml` 的 `launch` 项。
+本场景冻结**创作侧打标信息架构（IA）**：在内容创作流提供 tagRef 打标入口，使 `content.tagRefs` 成为「交集」归因的可信输入。打标对全部内容类型（含口碑 review）**可选、不强制**，由**自动打标（转发识别 + 内容识别）辅助**，手动 UI 作为对自动结果的**确认/修正层**。打标真相源唯一为数据工程 `publish/tags`（路径制 tagRef）；首发标签子集已冻结于 `_shared/tag_ref_migration.yaml` 的 `launch` 项。
 
 ## 背景与动机
 
@@ -35,8 +35,8 @@
 - 自动打标的模型/管线（ML/数据工程）**不在本场景**；本场景只冻结端侧消费 `suggestedTagRefs` 的 IA 契约与可修正语义。
 
 ### F4. 交互形态：推荐芯片 + 搜索补充（分阶段）— 冻结
-- **首发态（C2 `publish/v1/tags` 未发布）**：UI = `首发 launch 子集芯片` + `自动建议芯片` 多选，上限 5；纯勾选零输入，不依赖 C2 全量检索。
-- **目标态（C2 发布后灰度开启）**：芯片下方「搜索更多标签」入口，检索源 `publish/v1/tags` 全量树，覆盖 deferred 长尾垂类；以 feature flag 灰度。
+- **首发态（C2 `publish/tags` 未发布）**：UI = `首发 launch 子集芯片` + `自动建议芯片` 多选，上限 5；纯勾选零输入，不依赖 C2 全量检索。
+- **目标态（C2 发布后灰度开启）**：芯片下方「搜索更多标签」入口，检索源 `publish/tags` 全量树，覆盖 deferred 长尾垂类；以 feature flag 灰度。
 
 ### F5. 首发标签子集 — 引用既有冻结
 - 首发子集唯一来源为 `_shared/tag_ref_migration.yaml` 的 `status: launch` 项：`Topic/旅行`、`Topic/摄影`、`Topic/美食餐饮`、`Topic/地理`、`Entity/地点`、`Entity/机构`、`Format/内容载体`（校园 + 旅游尖刀）。
@@ -46,16 +46,16 @@
 - 选定 tagRefs 经 `CreatePost`/`UpdatePost`（draft）的 `writable_fields.tagRefs` 注入（已通）。
 - 验收口径：发布后 `content.tagRefs` 含用户选定 + 已确认的自动标签；该 tagRefs 进入推荐召回与 `IntersectionReason` 归因，使「打标 → content.tagRefs → 交集」可还原。
 
-## 验收映射（A1~An → T1~T4）
+## 验收映射（A1~An → 三层测试）
 
 | 验收 | 描述 | 证据层 |
 |---|---|---|
-| A1 | 各类型编辑页有内联打标区；打标可选，缺标签不拦截发布 | T2 widget |
-| A2 | 芯片集合来自首发 launch 子集 + 自动建议 `suggestedTagRefs`，多选上限 5 | T2 widget |
-| A3 | 自动建议芯片可勾选/取消/删除，修正后 tagRefs 正确 | T2 widget |
-| A4 | 选定 tagRefs 经 CreatePost 注入，发布后 content.tagRefs 一致 | T1 契约 + T2 |
-| A5 | tagRefs 进召回与 IntersectionReason，打标→交集归因可还原 | T2 + T3 |
-| A6 | 搜索补充在 C2 后由 flag 灰度开启，检索源唯一为 publish/v1/tags | T2（flag 关时不渲染） |
+| A1 | 各类型编辑页有内联打标区；打标可选，缺标签不拦截发布 | local_contract widget |
+| A2 | 芯片集合来自首发 launch 子集 + 自动建议 `suggestedTagRefs`，多选上限 5 | local_contract widget |
+| A3 | 自动建议芯片可勾选/取消/删除，修正后 tagRefs 正确 | local_contract widget |
+| A4 | 选定 tagRefs 经 CreatePost 注入，发布后 content.tagRefs 一致 | local_contract 契约 + local_contract |
+| A5 | tagRefs 进召回与 IntersectionReason，打标→交集归因可还原 | local_contract + api_integration |
+| A6 | 搜索补充在 C2 后由 flag 灰度开启，检索源唯一为 publish/tags | local_contract（flag 关时不渲染） |
 
 ## SLO / KPI
 
@@ -69,7 +69,7 @@
 
 - 打标随内容生命周期：draft 可改 tagRefs，published 不可变（与既有内容一致）。
 - 自动建议为辅助态，未经用户确认不得静默写入 published 内容的 tagRefs（避免不可控归因）。
-- tagRef 真相源唯一为 `publish/v1/tags`；端侧不持久化第二套标签字典。
+- tagRef 真相源唯一为 `publish/tags`；端侧不持久化第二套标签字典。
 
 ## 迁移 / 灰度 / 回滚
 
@@ -80,13 +80,13 @@
 ## Out of Scope
 
 - 自动打标模型/管线（转发识别、内容识别）的实现——属 ML/数据工程；本场景只冻结消费 `suggestedTagRefs` 的 IA 契约。
-- `publish/v1/tags` 真相源的发布——属 C2（数据工程）。
+- `publish/tags` 真相源的发布——属 C2（数据工程）。
 - 标签运营后台、标签合并/治理。
 - pageflip 受控文件。
 
 ## 约束
 
-- tagRef 唯一真相源 `publish/v1/tags`（路径制，以 `Topic/Audience/Format/Entity` 开头，`verify_tag_tree.py` R10）；首发子集只引用 `tag_ref_migration` 的 `launch` 项，不另立第二套。
+- tagRef 唯一真相源 `publish/tags`（路径制，以 `Topic/Audience/Format/Entity` 开头，`verify_tag_tree.py` R10）；首发子集只引用 `tag_ref_migration` 的 `launch` 项，不另立第二套。
 - payload 注入复用 `CreatePost.writable_fields.tagRefs`，不新增端点、不硬编码 path/operation/surface（01-arch-constraints §2.2.1）。
 - 遵循 13-coding-discipline：R06 元数据驱动、R15 Mock 隔离（标签 mock 走 Repository/fixture）、R20 创作页埋点（打标曝光/选择/自动建议确认）。
 
@@ -96,7 +96,7 @@
 2. 芯片集合来自首发 launch 子集 + 自动建议，多选 ≤5，自动建议可修正。
 3. 选定 tagRefs 经 CreatePost 注入，发布后 content.tagRefs 一致。
 4. tagRefs 进召回与交集归因，"打标 → content.tagRefs → 交集"可还原。
-5. 搜索补充由 flag 灰度（C2 后），检索源唯一 publish/v1/tags。
+5. 搜索补充由 flag 灰度（C2 后），检索源唯一 publish/tags。
 
 ## 设计决策（冻结）
 
@@ -113,7 +113,7 @@
 
 ### B3-D4 交互形态（分阶段，推荐态）
 - 首发：`launch 子集芯片` + `自动建议芯片` 多选 ≤5，零输入，不依赖 C2。
-- 目标：C2 后 flag 灰度「搜索更多标签」，检索源 `publish/v1/tags` 全量树覆盖 deferred 长尾。
+- 目标：C2 后 flag 灰度「搜索更多标签」，检索源 `publish/tags` 全量树覆盖 deferred 长尾。
 - 取舍：相比单选垂类根（覆盖低、承不住自动多标签）与纯芯片无搜索（长尾覆盖不足），分阶段方案兼顾首发零依赖与目标态高覆盖。
 
 ### B3-D5 首发标签子集
@@ -126,4 +126,4 @@ tagRefs 经 `CreatePost`/`UpdatePost` 注入（已通）；验收以"发布后 c
 1. 复用既有 metadata（tagRefs 字段 + writable_fields 已就绪，无 metadata 增量；若需 `suggestedTagRefs` 读契约再 metadata-first 增量）。
 2. 端侧：编辑页内联打标区（芯片多选 ≤5）+ 自动建议消费 + Repository/fixture 标签源（Mock 隔离）。
 3. 灰度 flag：打标区曝光 + 搜索补充。
-4. 测试：T1 payload 注入契约 / T2 打标 widget（可选/上限/修正/降级）/ T3 召回与交集归因。
+4. 测试：local_contract payload 注入契约 / local_contract 打标 widget（可选/上限/修正/降级）/ api_integration 召回与交集归因。

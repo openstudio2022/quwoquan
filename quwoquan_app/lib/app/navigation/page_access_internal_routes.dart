@@ -20,6 +20,9 @@ abstract final class PageAccessInternalRoutes {
   static const String circleMediaPickerCamera = 'page_internal_circle_media_camera';
   static const String circleMediaPickerGallery = 'page_internal_circle_media_gallery';
 
+  static const String profileMediaPickerCamera = 'page_internal_profile_media_camera';
+  static const String profileMediaPickerGallery = 'page_internal_profile_media_gallery';
+
   static const String globalSurfaceCircleEditCreate = 'page_internal_global_circle_edit_create';
 
   static const String publishLocationSearch = 'page_internal_publish_location_search';

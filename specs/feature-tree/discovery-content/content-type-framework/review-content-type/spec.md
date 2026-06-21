@@ -49,16 +49,16 @@
 - 口碑进入现有推荐召回管线（已消费 `tagRefs`/`entityRefs`/`contentType`/`location`）。
 - 口碑的 `entityRefs`/`tagRefs` 参与 `IntersectionReason` 归因，POI 维度交集可还原。
 
-## 验收映射（A1~An → T1~T4）
+## 验收映射（A1~An → 三层测试）
 
 | 验收 | 描述 | 证据层 |
 |---|---|---|
-| A1 | `ContentType` 含 `review`，端云 DTO/codegen 一致，既有四类型零回归 | T1 契约 + T2 |
-| A2 | review 写校验：`rating∈[1,5]` 必填、`primaryHomepageId` 必填；非法被拒（结构化错误码） | T1 契约 + T2 |
-| A3 | 一人一 POI 一评：重复 review 按 design 决策（更新/拒绝），部分唯一索引生效 | T2 + T3 |
-| A4 | POI 聚合读模型：均分/计数/分布正确；删除口碑后聚合补偿 | T2 + T3 |
-| A5 | 统一展示：review 在 `ContentSurfaceView` 上 `contentType` 分支呈现评分/POI 摘要，四 surface 口径一致 | T1 投影 + T2 |
-| A6 | 召回与交集：review 进召回通道，`entityRefs/tagRefs` 交集归因可还原 | T2 + T3 |
+| A1 | `ContentType` 含 `review`，端云 DTO/codegen 一致，既有四类型零回归 | local_contract 契约 + local_contract |
+| A2 | review 写校验：`rating∈[1,5]` 必填、`primaryHomepageId` 必填；非法被拒（结构化错误码） | local_contract 契约 + local_contract |
+| A3 | 一人一 POI 一评：重复 review 按 design 决策（更新/拒绝），部分唯一索引生效 | local_contract + api_integration |
+| A4 | POI 聚合读模型：均分/计数/分布正确；删除口碑后聚合补偿 | local_contract + api_integration |
+| A5 | 统一展示：review 在 `ContentSurfaceView` 上 `contentType` 分支呈现评分/POI 摘要，四 surface 口径一致 | local_contract 投影 + local_contract |
+| A6 | 召回与交集：review 进召回通道，`entityRefs/tagRefs` 交集归因可还原 | local_contract + api_integration |
 
 ## SLO / KPI
 

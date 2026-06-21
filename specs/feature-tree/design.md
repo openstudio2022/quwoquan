@@ -23,7 +23,7 @@
   quwoquan_app / quwoquan_service / quwoquan_data / agent_ops
 
 契约与测试层
-  contracts/metadata / T1 / T2 / T3 / T4
+  contracts/metadata / local_contract / api_integration / user_acceptance
 ```
 
 ## 全局职责边界
@@ -49,7 +49,7 @@
 - metadata 是字段、错误码、路径、operation、surface、route 的唯一真相源。
 - App UI 不直接依赖 mock 数据，必须通过 Provider / Repository。
 - Go 服务遵循 DDD 分层：`domain <- application <- adapters <- infrastructure`。
-- 测试层只使用 `T1~T4`。
+- 测试工程层只使用 `local_contract`、`api_integration`、`user_acceptance`。
 - `树内计划文档`、`树内任务文档`、Story 设计文档 不再是正式治理文档。
 
 ## 观测与发布治理
@@ -60,4 +60,4 @@
 - 行为埋点和归因链。
 - 弱网、性能、容量边界。
 - 灰度策略和回滚条件。
-- `T3/T4` 发布前证据。
+- `api_integration/user_acceptance` 发布前证据。

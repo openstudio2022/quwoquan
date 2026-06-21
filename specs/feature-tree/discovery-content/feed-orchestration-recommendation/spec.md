@@ -22,7 +22,7 @@
 - 负反馈即时抑制：不感兴趣、减少此类、屏蔽作者进入 behavior → HotPath negative/hidden 语义，并只影响未来窗口。
 - 曝光治理集成规格：served/impressed 双轨、跨页/跨会话去重、疲劳时间衰减、动态曝光预算与复活通道的业务所有权已迁出到平级 L2 `discovery-content/exposure-governance`；本节点只定义 feed 如何消费该能力边界。
 - 北极星与业务 KPI：人均有效消费时长、次日留存、内容完成率、互动率、负反馈率、重复曝光率、内容覆盖率。
-- SIT / GWT / contract 验收与 T1~T4 证据矩阵。
+- SIT / GWT / contract 验收与 三层测试 证据矩阵。
 
 ### Out of Scope
 
@@ -48,7 +48,7 @@
 - A5：交集理由只读服务端 `IntersectionReason.primaryText`，行动回流带 `intersectionDimension` / `intersectionTagRefs`。
 - A6：推荐 SLO/KPI 可观测：延迟、空 feed、fallback、重复曝光率、CTR、停留、完成率、负反馈率。
 - A7：metadata/OpenAPI/codegen/Redis key/recpolicy 与端云实现一致。
-- A8：T1~T4 证据矩阵可形成，已存在测试登记到 `acceptance.yaml`，长期能力只登记为 planned 或 out_of_scope。
+- A8：三层测试 证据矩阵可形成，已存在测试登记到 `acceptance.yaml`，长期能力只登记为 planned 或 out_of_scope。
 
 ## 首页交集与多形态信息流改版（V8）
 

@@ -43,9 +43,10 @@ void main() {
       final gridGroup = inbox.firstWhere((item) => item.id == 'conv_grid_10');
 
       expect(gridGroup.type, 'group');
+      // 群头像迁移为内部 media object key（无外链 host），仍是群派生 URL。
       expect(
         gridGroup.avatarUrl,
-        contains('/media/avatar/s/archived-avatar/conversation/'),
+        contains('media/avatar/s/archived-avatar/conversation/'),
       );
       expect(gridGroup.avatarUrl, isNot(contains('grid_10_member_1')));
       expect(gridGroup.groupAvatarVersion, greaterThan(0));

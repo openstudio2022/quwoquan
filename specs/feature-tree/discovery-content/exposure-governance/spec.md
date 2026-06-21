@@ -38,7 +38,7 @@
 
 - 深度排序模型平台轨（MMoE/PLE/ESMM、双塔 ANN、IPS）。
 - P0 已实现状态分离、去全量化过滤、端侧统一上报、云侧 FeedbackIngestor 与基础观测；P1/P2 的动态预算、生命周期复活、协同召回和模型容量仍按各自 Story 推进。
-- 交集 affinity 概率分模型化、四主页真实数据 T3/T4、精品池全局运营写入能力，按各自 backlog 单独推进。
+- 交集 affinity 概率分模型化、四主页真实数据 api_integration/user_acceptance、精品池全局运营写入能力，按各自 backlog 单独推进。
 
 ## Metadata-First 约束
 
@@ -58,6 +58,6 @@
 - A5：动态曝光预算能表达“少量试投、反馈达标晋级、负反馈淘汰”的状态机。
 - A6：复活召回不绕过去重与合规准入，且可解释复活触发器。
 - A7：曝光健康 SLI 与告警引用 `recommendation_slo.yaml` 同名指标。
-- A8：P0 的 T1/T2 已登记为 recorded；T3/T4 以 local-gamma 和旅程压测补齐，P1/P2 实现测试仍登记为 planned。
+- A8：P0 的 local_contract 已登记为 recorded；api_integration/user_acceptance 以 local-gamma 和旅程压测补齐，P1/P2 实现测试仍登记为 planned。
 - A9：曝光记忆与过滤路径不依赖长窗口全量 `SMembers`，容量按规模分层并有 cardinality budget。
 - A10：七态状态分离，`served`/`visible` 不作训练样本，`training_sample` 仅云侧派生；端侧上报有采样、幂等与归因闭环。

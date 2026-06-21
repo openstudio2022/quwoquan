@@ -71,8 +71,8 @@
 3. 领域已声明 `user-plane / platform-control-plane / product-control-plane`
 4. 领域已声明最低对象集合与最低动作集合
 5. 领域已声明危险动作、审批模式与审计事件
-6. 领域至少有 1 条 `T3` API / contract 集成场景
-7. 领域至少有 1 条 `T4` 真旅程或系统能力场景（实时/弱网/音视频等领域必须具备）
+6. 领域至少有 1 条 `api_integration` API / contract 集成场景
+7. 领域至少有 1 条 `user_acceptance` 真旅程或系统能力场景（实时/弱网/音视频等领域必须具备）
 8. 领域已接入统一门户的搜索、对象跳转、审计或 dashboard 聚合入口
 
 ### R3：冻结全局节点与领域实施批次边界
@@ -90,7 +90,7 @@
 - 同一实施会话负责：
   - 先选一个模板域完成首轮接入
   - 再按统一模板复制到其余领域
-  - 在同一会话内补本领域 `<domain>.yaml`、最小 glue code、`T1~T4` 证据与 `acceptance.yaml`
+  - 在同一会话内补本领域 `<domain>.yaml`、最小 glue code、`三层测试` 证据与 `acceptance.yaml`
 - 全部领域接入完成后，仍由本节点统一做最终集中验收
 
 ### R4：冻结命令、规则与流程增强边界
@@ -124,7 +124,7 @@
 - `L1 / gate`
   - 校验 codegen 消费完整性、缺失对象/动作/route/schema
 - `L2 / gate`
-  - 校验领域是否具备最低 `T1 / T2 / T3`
+  - 校验领域是否具备最低 `local_contract / local_contract / api_integration`
 - `L3 / gate-full`
   - 聚合所有目标领域的接入状态，判断是否进入最终集中验收
 
@@ -222,13 +222,13 @@
 
 ## 四层验收视图
 
-- `T1`
+- `local_contract`
   - `domain_onboarding` schema、领域实例、三类面、对象类型、审批模式、审计事件、deployment profile 的静态完整性
-- `T2`
+- `local_contract`
   - 门户中领域接入状态可见、对象可跳转、风险动作可识别、接入缺项可读
-- `T3`
+- `api_integration`
   - 各领域真实控制面 contract、API contract、Go contract 与 staging 集成闭环
-- `T4`
+- `user_acceptance`
   - 高风险领域的真实旅程：恢复、推荐放量、弱网、音视频、通知、实时恢复等系统能力
 
 ## 验收标准概要

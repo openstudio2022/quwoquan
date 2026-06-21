@@ -6,7 +6,7 @@
 - 一棵树归属。
 - 推荐目标和不优化目标。
 - 离线指标、在线指标、护栏指标。
-- T1 契约/静态、T2 模块、T3 端云推荐链路、T4 用户旅程证据。
+- local_contract 契约/静态、local_contract 模块、api_integration 端云推荐链路、user_acceptance 用户旅程证据。
 
 不产出正式树内计划文档。
 

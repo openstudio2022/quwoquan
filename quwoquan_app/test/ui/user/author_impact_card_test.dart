@@ -9,6 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -213,10 +214,11 @@ void main() {
       );
 
       await tester.pumpWidget(_host(summary, isMine: false));
-      final context = tester.element(find.byType(InteractiveIntersectionText));
+      // 统一交互蓝字采用低饱和 slogan-accent（浅色态），与全 App 交集语言同源，
+      // 不再使用高饱和 iOS systemBlue（避免每条交集句都「喊」）。
       expect(
         _spanByText(tester, '23').style?.color,
-        AppColors.iosAccent(context),
+        AppColors.profileSloganAccentLight,
       );
       expect(
         _spanByText(tester, '23').style?.fontWeight,
@@ -316,7 +318,9 @@ void main() {
       expect(behaviorRepo.recorded.single.contentId, 'u_alan');
     });
 
-    testWidgets('无样本时明细 sheet 降级提示，不渲染样本簇与全量待补脚注', (tester) async {
+    testWidgets('无样本 + 明细分页为空 → sheet 空态文案，不渲染样本簇与全量待补脚注', (tester) async {
+      // 无 sampleVisuals 且云侧明细分页为空（Mock 仓库无命中 impact）→ 空态文案，
+      // 既不回退样本簇也不展示「全量待补」脚注（不造假、不占位）。
       final summary = AuthorImpactSummary(
         authorId: 'u2',
         total: 12,
@@ -333,16 +337,29 @@ void main() {
         ],
       );
 
-      await tester.pumpWidget(_host(summary, isMine: false));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userProfileRepositoryProvider.overrideWithValue(
+              const MockUserProfileRepository(),
+            ),
+          ],
+          child: _host(summary, isMine: false),
+        ),
+      );
       await tester.tap(find.text('12人转发了TA的内容'));
       await tester.pumpAndSettle();
 
       expect(
-        find.text(DiscoveryFeedText.impactEvidenceSheetNoSampleNote),
+        find.text(DiscoveryFeedText.impactEvidenceSheetEmptyNote),
         findsOneWidget,
       );
       expect(
         find.text(DiscoveryFeedText.impactEvidenceSheetFullPendingNote),
+        findsNothing,
+      );
+      expect(
+        find.text(DiscoveryFeedText.impactEvidenceSheetNoSampleNote),
         findsNothing,
       );
       expect(find.byType(IntersectionVisualCluster), findsNothing);

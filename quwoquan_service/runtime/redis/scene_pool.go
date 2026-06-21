@@ -171,6 +171,14 @@ func (c *goRedisClient) SAdd(ctx context.Context, key string, members ...string)
 	return c.rdb.SAdd(ctx, key, args...).Err()
 }
 
+func (c *goRedisClient) SRem(ctx context.Context, key string, members ...string) error {
+	args := make([]interface{}, len(members))
+	for i, m := range members {
+		args[i] = m
+	}
+	return c.rdb.SRem(ctx, key, args...).Err()
+}
+
 func (c *goRedisClient) SMembers(ctx context.Context, key string) ([]string, error) {
 	return c.rdb.SMembers(ctx, key).Result()
 }

@@ -373,6 +373,36 @@ String _uriPathWithQuery(Uri uri) {
   return '$path$query$fragment';
 }
 
+/// 是否为本地文件图片来源（相册 / 拍照选取的临时文件）。
+///
+/// 用于在「本地选图预览 / 刚保存未上传」与「服务端媒体对象键 / 远端 URL」之间
+/// 区分：服务端对象键（`media/...`、`avatar/...`、`/media/...`）与 http(s)/data
+/// 均不是本地文件，需经媒体解析器换成可访问 URL；其余以 `file://` 或文件系统
+/// 绝对路径出现的来源视为本地文件，可直接交给 `FileImage` 渲染。
+bool isLocalFileImageSource(String? source) {
+  final normalized = (source ?? '').trim();
+  if (normalized.isEmpty) {
+    return false;
+  }
+  final lower = normalized.toLowerCase();
+  if (lower.startsWith('http://') ||
+      lower.startsWith('https://') ||
+      lower.startsWith('data:')) {
+    return false;
+  }
+  if (lower.startsWith('file://')) {
+    return true;
+  }
+  if (lower.startsWith('media/') ||
+      lower.startsWith('/media/') ||
+      lower.startsWith('avatar/') ||
+      lower.startsWith('image/') ||
+      lower.startsWith('video/')) {
+    return false;
+  }
+  return normalized.startsWith('/');
+}
+
 bool isPrivateDevContentMediaUrl(String raw) {
   final value = raw.trim();
   if (value.isEmpty) {

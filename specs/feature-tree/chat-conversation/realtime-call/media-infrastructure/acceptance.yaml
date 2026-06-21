@@ -9,11 +9,11 @@ node:
 scope:
   summary: SFU/TURN/录制媒体基础设施与三端来电推送通道（VoIP/FCM/Web Push）。
   in_scope:
-    - LiveKit SFU 房间生命周期与 Token 签发
-    - WS 信令 wire type 端云一致
-    - 来电推送负载契约（VoIP/FCM/Web Push）
+  - LiveKit SFU 房间生命周期与 Token 签发
+  - WS 信令 wire type 端云一致
+  - 来电推送负载契约（VoIP/FCM/Web Push）
   out_of_scope:
-    - 端侧通话 UI（见 call-experience）
+  - 端侧通话 UI（见 call-experience）
 gwt_acceptance:
   GWT1_signaling_wire_type:
     title: WS 信令 wire type 端云一致
@@ -31,18 +31,34 @@ gwt_acceptance:
     - rtc/call_session events.yaml client_ws_type
     performance_points:
     - 信令延迟（发起→来电通知）≤1s。
-    evidence:
-      primary:
-      - T1_static_contract
-      - T3_app_api_integration
-      supporting:
-      - T2_module_interaction
     tests:
-      planned:
-      - quwoquan_service/services/rtc-service/tests/ws_event_wire_type_contract_test.go
-      - quwoquan_app/test/cloud/rtc/rtc_signaling_wire_type_test.dart
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_signaling_wire_type_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.media_infrastructure.gwt1_signaling_wire_type_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: gwt1_signaling_wire_type_api_integration
+        cases:
+        - api_integration.chat_conversation.realtime_call.media_infrastructure.gwt1_signaling_wire_type_api_integration
+        envs: &id002
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: gwt1_signaling_wire_type_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.media_infrastructure.gwt1_signaling_wire_type_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/rtc-service/tests/ws_event_wire_type_contract_test.go'
+    - '[migrated_from_planned] quwoquan_app/test/cloud/rtc/rtc_signaling_wire_type_test.dart'
   GWT2_incoming_push_payload:
     title: 三端来电推送负载契约
     given:
@@ -59,17 +75,31 @@ gwt_acceptance:
     - rtc/call_session events.yaml CallRinging push_policy
     performance_points:
     - 离线推送到达 ≤5s。
-    evidence:
-      primary:
-      - T3_app_api_integration
-      - T4_e2e_journey
-      supporting:
-      - T1_static_contract
     tests:
-      planned:
-      - quwoquan_service/services/rtc-service/tests/incoming_push_payload_contract_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: gwt2_incoming_push_payload_api_integration
+        cases:
+        - api_integration.chat_conversation.realtime_call.media_infrastructure.gwt2_incoming_push_payload_api_integration
+        envs: *id002
+      - layer: user_acceptance
+        suite: e2e_journey
+        cases:
+        - user_acceptance.chat_conversation.realtime_call.media_infrastructure.e2e_journey
+        envs:
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: gwt2_incoming_push_payload_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.media_infrastructure.gwt2_incoming_push_payload_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/rtc-service/tests/incoming_push_payload_contract_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

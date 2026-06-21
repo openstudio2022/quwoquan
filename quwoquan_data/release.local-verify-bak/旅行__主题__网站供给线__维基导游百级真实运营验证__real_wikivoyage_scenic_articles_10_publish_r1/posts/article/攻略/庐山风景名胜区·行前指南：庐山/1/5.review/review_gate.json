@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "quwoquan_data.stage_envelope",
+  "taskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "batchId": "real_wikivoyage_scenic_articles_10_publish_r1",
+  "step": "review_gate",
+  "ref": "candidate_baf63a68d9f3687a",
+  "payload": {
+    "schemaVersion": "quwoquan_data.stage_gate_report",
+    "taskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+    "batchId": "real_wikivoyage_scenic_articles_10_publish_r1",
+    "command": "produce",
+    "step": "review",
+    "ref": "candidate_baf63a68d9f3687a",
+    "status": "green",
+    "passed": true,
+    "issues": [],
+    "evidenceSummary": {
+      "qualityScore": 92.0,
+      "generator": "agent"
+    },
+    "nextStep": "materialize",
+    "fallbackStage": null
+  }
+}

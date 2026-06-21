@@ -7,7 +7,8 @@ node:
   parent_domain_service: global-search-experience
   parent_business_capability: search-provider-routing-and-storage-topology
 scope:
-  summary: canonical search(request) 唯一 contract 验收；含 2026-06-16 商用 response 字段、App RemoteSearchRepository 接线、assistant tool 桥接与错误响应。
+  summary: canonical search(request) 唯一 contract 验收；含 2026-06-16 商用 response 字段、App
+    RemoteSearchRepository 接线、assistant tool 桥接与错误响应。
   in_scope:
   - 单一 search(request) contract，suggest/result 仅以 mode 区分。
   - 商用 response 字段 requestId/rankingVersion/experimentBucket/relatedTerms/rankReasons/rankPosition/coverWidth/coverHeight/connectionState/intersectionReason。
@@ -37,20 +38,31 @@ gwt_acceptance:
     - contracts/metadata/_shared/search_objects.yaml
     performance_points:
     - query-first 扁平结构，支持 AI 多次小查询，不引入过深嵌套。
-    evidence:
-      primary:
-      - T1_contract
-      supporting:
-      - T2_module_interaction
     tests:
       planned: []
       recorded:
-      - quwoquan_service/runtime/search/retrieve_contract_test.go
-      - quwoquan_service/runtime/search/query_first_test.go
-      - quwoquan_service/services/search-service/tests/search_contract_test.go
-    status: passed
+      - file: quwoquan_service/runtime/search/retrieve_contract_test.go
+      - file: quwoquan_service/runtime/search/query_first_test.go
+      - file: quwoquan_service/services/search-service/tests/search_contract_test.go
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.canonical_search_contract.contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.canonical_search_contract.gwt1_local_contract
+        envs: *id001
+    notes: []
   GWT2:
-    title: App result 只消费 canonical 响应（RemoteSearchRepository + RetrieveRequest 映射 + 错误响应）
+    title: App result 只消费 canonical 响应（RemoteSearchRepository + RetrieveRequest 映射
+      + 错误响应）
     given:
     - appDataSourceModeProvider=remote 时 searchRepositoryProvider 返回 RemoteSearchRepository。
     - RetrieveRequest.fromSearchRequest() 单源映射 targets 并剔除 chat 本地命名空间对象。
@@ -68,21 +80,30 @@ gwt_acceptance:
     - contracts/metadata/_shared/search_contract.yaml
     performance_points:
     - result 首批分组 P95 ≤ 1.5s；单域失败不阻塞整页。
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
       recorded:
-      - quwoquan_app/test/ui/search/retrieve_request_mapper_test.dart
-      - quwoquan_app/test/ui/search/search_repository_test.dart
-      - quwoquan_service/services/assistant-service/internal/application/tool/registry_retrieve_contract_test.go
+      - file: quwoquan_app/test/ui/search/retrieve_request_mapper_test.dart
+      - file: quwoquan_app/test/ui/search/search_repository_test.dart
+      - file: quwoquan_service/services/assistant-service/internal/application/tool/registry_retrieve_contract_test.go
     status: implemented
     notes:
-    - App remote 接线（R-S06）以 scoped dart analyze + 部署验证器为证据；App 全量 widget 测试受并发 intersection 重构外部阻塞，page widget 列 planned，待合流后转 recorded（WP-B/WP-C）。
+    - App remote 接线（R-S06）以 scoped dart analyze + 部署验证器为证据；App 全量 widget 测试受并发 intersection
+      重构外部阻塞，page widget 列 planned，待合流后转 recorded（WP-B/WP-C）。
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.canonical_search_contract.gwt2_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.global_search_experience.search_provider_routing_and_storage_topology.canonical_search_contract.contract
+        envs: *id001
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

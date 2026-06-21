@@ -144,3 +144,36 @@ CLI 只生成队列与 gate，**不直接生成正文**；正文只由 Subagent 
 
 > 文件队列适用于开发/小批；规模化时把 `object_queue` 后端切到 Redis Streams/SQS（保持同一状态机语义：lease/heartbeat/deadline/dead/spillover）。
 > 容量规划：`queue_len / (workers × throughput_per_worker) < client_timeout`。
+
+## 10. 队列后端抽象 + per-lane 限流背压 + 成本护栏（运行时工程地基）
+
+> 真相源：`task/object_queue.py`。后端切换、限流、成本护栏不改变 §3 状态机语义与 §8 CLI 表面——同一组 `enqueue/lease/heartbeat/complete/fail/reap/spillover` 在任意后端下语义一致。
+
+### 10.1 队列后端抽象（local_file ↔ reliabletask，不改调用方）
+
+后端由统一标识符切换，调用方代码与 jobId 不变（遵守 R10 存储无关）：
+
+- `QUEUE_BACKEND_LOCAL = "local_file"`：文件队列，开发/小批/十级~千级的真相源（`batches/{batch}/_shared/object_queue/{jobId}.json`）。
+- `QUEUE_BACKEND_RELIABLETASK = "reliabletask"`：生产可靠队列后端，日产万级及以上准入要求（`verify scale-readiness` 在 `daily_target>=10000` 强制 `queueBackend=reliabletask`）。
+- 后端解析：`_backend_name(backend)` 读显式参数或环境变量 `QWQ_OBJECT_QUEUE_BACKEND`，仅接受 `SUPPORTED_QUEUE_BACKENDS`，未知后端抛错（杜绝静默回退）。
+- 路由契约：本地文件队列同时携带 `_reliabletask_ref(...)` 声明式 bridge payload（`taskType=data.content_object.execute` / `queue=reliabletask.data.content_supply` / `dedupeKey=task|batch|job` / `partitionKey` / `payloadAllowlist=object_job`）。服务侧 adapter（`quwoquan_service/runtime/reliabletask`）据此经 MongoStore + RedisReadyIndex 分发，**不改 jobId、不改幂等键、不改状态机**——这就是"千级稳定后切可靠后端，接口不变"的落地接缝。
+
+### 10.2 per-lane 限流与背压（吞吐与外站/计费约束的解耦）
+
+各 lane 独立限流，慢/受限 lane 不拖垮其它 lane：
+
+- `download` lane：受外站 robots/限速约束，`data download` / `scaled-e2e prepare` 以 `--max-workers` 控制并发抓取（实测十级 e2e 即由该 lane 主导吞吐）。
+- `author` lane：受 Cursor API rate + spend 约束，并发档位见 §6（2→4→SLO 达标后提升），外部 SDK 多 worker 见 §9。
+- `import` lane：受 mongo 写入约束，由 release/import 阶段独立节流。
+- 背压：`author` lane 积压超阈值时，controller 暂停上游 `enqueue`（§7 维持 N 活跃的反向约束），避免队列无界增长。
+
+### 10.3 成本护栏（硬熔断）
+
+- 逐 job 预算字段：`DEFAULT_TOKEN_BUDGET` / `DEFAULT_COST_BUDGET_USD`（`>0` 时为 SDK runner 侧硬上限，超出强制 `dead`，不消耗同批其它对象槽位）。
+- 累计护栏：`record_usage` 落 `TokenLedger`；`verify scale-readiness` 以 TokenLedger 为证据投影单对象 token、单位通过成本与缓存命中率，缺失即阻断放量。
+- 断路器与退避：同一失败指纹连续 `DEFAULT_STUCK_THRESHOLD` 轮不变 → 判定卡死直接 `dead`+notify（不空耗 attempts）；`failed→可重取` 之间走 `BACKOFF_BASE_SECONDS` 指数退避 + jitter（防惊群）。
+- 事件可观测：超时/断路/预算超限写 `_notifications.jsonl`，编排循环（Codex 盯盘）可订阅。
+
+### 10.4 与放量准入门的对账
+
+`verify scale-readiness` / `verify site-scale-readiness` 是本节的程序化对账面：source sufficiency、measured throughput、firstPassRate、作品判定纯净性（`nonWorkMaterializedCount`）、semanticMentions 覆盖、TokenLedger、release/import 证据、`queueBackend`/`maxConcurrency` 共同决定档位是否可升。本节任一保证缺证据，对应门即阻断，禁止口头放量。

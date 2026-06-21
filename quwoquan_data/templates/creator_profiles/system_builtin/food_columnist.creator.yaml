@@ -41,3 +41,12 @@ voiceStyle:
   tone: 克制、信息密度高、重产地与时令
 expertiseClaims: [在地物产, 时令饮食, 饮食文化]
 mustNotClaim: [餐厅商业合作, 米其林评级, 官方认证]
+coverageScope:
+  kind: thematic
+  label: 全国风物美食
+  topicRefs:
+    - Topic/美食餐饮
+carrierAffinity:
+  article: 0.7
+  image: 0.3
+  video: 0.05

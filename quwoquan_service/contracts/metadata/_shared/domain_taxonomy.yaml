@@ -5,7 +5,7 @@ description: |
   共享同一套领域 ID。
   唯一真相：本文件。codegen 生成 Go DomainTag 枚举 + Dart DomainTaxonomy 类。
   user_tag_ref 桥接到用户兴趣标签锚点，统一使用路径制 tagRef（唯一标签真相源
-  quwoquan_data/publish/v1/tags），不再引用已废弃的扁平 tag_taxonomy.yaml id。
+  quwoquan_data/publish/tags），不再引用已废弃的扁平 tag_taxonomy.yaml id。
 
 domains:
   - id: travel

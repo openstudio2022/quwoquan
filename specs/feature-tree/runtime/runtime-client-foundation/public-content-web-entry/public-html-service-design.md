@@ -76,7 +76,7 @@ Sitemap: ${PUBLIC_WEB_BASE_URL}/sitemap.xml
 
 ## 测试
 
-- T1：link template 与 `/post/{postId}` 输出一致。
-- T2：renderer snapshot 覆盖 HTML、canonical、OG、JSON-LD、权限过滤。
-- T3：服务层请求 `/post/{postId}`、`robots.txt`、`sitemap.xml`。
-- T4：搜索引擎落地页首屏可读，无强安装遮挡。
+- local_contract：link template 与 `/post/{postId}` 输出一致。
+- local_contract：renderer snapshot 覆盖 HTML、canonical、OG、JSON-LD、权限过滤。
+- api_integration：服务层请求 `/post/{postId}`、`robots.txt`、`sitemap.xml`。
+- user_acceptance：搜索引擎落地页首屏可读，无强安装遮挡。

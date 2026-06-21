@@ -491,15 +491,15 @@ test-contract:
 | Story | 范围 | 验收项 | 测试层 |
 |-------|------|--------|--------|
 | S1: 骨架 + 配置 | `make new-service` + 当前环境集合配置 + process_domain_mapping | -- | -- |
-| S2: Domain 层 | 3 子域 model + repository + event（codegen 对齐 metadata） | A17 | T2 |
-| S3: Infrastructure 层 | PG Store×6 + Mongo Store×1 + Cache×3 + Migration DDL×7 | A5, A6, A7 | T2 |
-| S4: Application 层 | ProfileService + FollowService + BlockService + PersonaService + WorkService + LifeItemService | A1, A2, A3, A4 | T2 |
-| S5: HTTP Adapter + main.go | UserHandler 20+ 路由 + main.go 启动流 + 探针 | A1, A18 | T2 |
-| S6: 云侧契约测试 | L2 测试×7 文件（testmain + helpers + profile/follow/block/persona/cache/error/work_life） | A14 | T2 |
-| S7: 部署流水线 | Dockerfile + Kustomize overlay + CI workflow + Makefile + 配置版本 | A10, A11, A12 | T3 |
-| S8: 端侧 codegen 对齐 | codegen-app + DTO 替换 + UserErrorCode + Remote 错误处理 | A8, A9 | T1 |
-| S9: 端侧测试补充 | L1 DTO 字段契约 + 错误码契约 + L4 旅程测试×4 | A13, A16 | T1, T4 |
-| S10: 集成验证 + 验收 | L3 端云集成 + make gate-full + A1~A18 逐项 | A15, A17, A18 | T3 |
+| S2: Domain 层 | 3 子域 model + repository + event（codegen 对齐 metadata） | A17 | local_contract |
+| S3: Infrastructure 层 | PG Store×6 + Mongo Store×1 + Cache×3 + Migration DDL×7 | A5, A6, A7 | local_contract |
+| S4: Application 层 | ProfileService + FollowService + BlockService + PersonaService + WorkService + LifeItemService | A1, A2, A3, A4 | local_contract |
+| S5: HTTP Adapter + main.go | UserHandler 20+ 路由 + main.go 启动流 + 探针 | A1, A18 | local_contract |
+| S6: 云侧契约测试 | L2 测试×7 文件（testmain + helpers + profile/follow/block/persona/cache/error/work_life） | A14 | local_contract |
+| S7: 部署流水线 | Dockerfile + Kustomize overlay + CI workflow + Makefile + 配置版本 | A10, A11, A12 | api_integration |
+| S8: 端侧 codegen 对齐 | codegen-app + DTO 替换 + UserErrorCode + Remote 错误处理 | A8, A9 | local_contract |
+| S9: 端侧测试补充 | L1 DTO 字段契约 + 错误码契约 + L4 旅程测试×4 | A13, A16 | local_contract, user_acceptance |
+| S10: 集成验证 + 验收 | L3 端云集成 + make gate-full + A1~A18 逐项 | A15, A17, A18 | api_integration |
 
 **推荐实施顺序**：S1 → S2 → S3 → S4 → S5 → S6 → S7 → S8 → S9 → S10
 

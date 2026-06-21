@@ -29,14 +29,14 @@
 ## 典型触发与 E2E
 
 - 用户说“新增 API、字段、错误码、导入器、推荐投影、行为事件、真实存储、服务观测”时，默认加载本文件。
-- 若服务输出被 App 消费，必须同步评估 App codegen、RemoteRepository、Mock/Widget T2 和端云 T3。
+- 若服务输出被 App 消费，必须同步评估 App codegen、RemoteRepository、`local_contract` Mock/Widget 和 `api_integration` 端云证据。
 - 若服务消费数据工程产物或影响环境发布，必须把 Data importer、stackctl 和观测证据纳入出口。
 
 ## Review 与测试要求
 
-- 每个服务改动都要覆盖 `T1` metadata/static、`T2` domain/application 模块、`T3` HTTP/真实存储/消息链路，涉及用户旅程或发布前验证时补 `T4`。
-- 服务端 `T3` 真实 API 行为必须能回到 App 端 `T2` Mock/Provider/Widget 对应断言，避免 Mock 与 Remote 分裂。
-- 错误码链路的 `T1` 覆盖 metadata/codegen/硬编码扫描，`T3` 覆盖 HTTP 响应、trace/request id、Remote 映射输入；涉及用户恢复体验时补 App `T2/T4`。
+- 每个服务改动都要覆盖 `local_contract` metadata/static/domain/application 模块、`api_integration` HTTP/真实存储/消息链路，涉及用户旅程或发布前验证时补 `user_acceptance`。
+- 服务端 `api_integration` 真实 API 行为必须能回到 App 端 `local_contract` Mock/Provider/Widget 对应断言，避免 Mock 与 Remote 分裂。
+- 错误码链路的 `local_contract` 覆盖 metadata/codegen/硬编码扫描，`api_integration` 覆盖 HTTP 响应、trace/request id、Remote 映射输入；涉及用户恢复体验时补 App `user_acceptance`。
 - 内容 importer、推荐 HotPath、行为事件、特征投影、AB 分桶和运营指标必须保持同一 trace/subject/referral 语义，不得新增双轨标识。
 
 ## 推荐验证

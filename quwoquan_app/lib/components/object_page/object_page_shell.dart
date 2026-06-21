@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
@@ -33,6 +34,7 @@ class ObjectPageShell extends StatefulWidget {
     this.onSwipe,
     this.cacheExtentScreens = 4,
     this.toolbarContentHeight,
+    this.identityTransitionDistance,
     this.collapseCurve,
     this.enablePinnedTabOverlay = true,
     this.summaryTrackerKey,
@@ -40,6 +42,9 @@ class ObjectPageShell extends StatefulWidget {
     this.contentHorizontalPadding = 0,
     this.surfaceBridgeOverride,
     this.tabSurfaceBottomPadding,
+    this.tabSurfaceHorizontalPadding = 0,
+    this.tabSurfaceTopRadius = 0,
+    this.scrollBackgroundWithContent = false,
   });
 
   /// ValueKey 前缀（测试探针稳定锚点，如 'circle-shell' / 'profile-shell' / 'homepage-shell'）。
@@ -88,6 +93,10 @@ class ObjectPageShell extends StatefulWidget {
   /// profile 传自适应单行标题高度以匹配紧凑 toolbar。
   final double? toolbarContentHeight;
 
+  /// identity 吸顶过渡距离；为空用默认 pin 过渡。
+  /// profile 可传极短距离，避免大头像与 compact identity 长时间半透明混叠。
+  final double? identityTransitionDistance;
+
   /// identity / 一级页签吸顶过渡曲线；为空用 easeOutCubic。
   final Curve? collapseCurve;
 
@@ -109,6 +118,15 @@ class ObjectPageShell extends StatefulWidget {
 
   /// tab surface 底部内边距；为空用 viewPadding.bottom + interGroupLg。
   final double? tabSurfaceBottomPadding;
+
+  /// 仅作用于 tab 内容 surface 的水平内缩，避免影响 summary 卡片几何。
+  final double tabSurfaceHorizontalPadding;
+
+  /// 仅作用于 tab 内容 surface 的顶部圆角；默认保持历史直边。
+  final double tabSurfaceTopRadius;
+
+  /// 上滑时让封面跟随内容向上离屏；下拉时仍保持顶边固定，只做现有拉伸/回弹。
+  final bool scrollBackgroundWithContent;
 
   double get _surfaceBridge => surfaceBridgeOverride ?? cardRadius;
 
@@ -156,16 +174,17 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
     setState(() => _scrollOffset = next);
   }
 
-  double _baseHeightRatio() =>
-      widget.baseHeightRatio ?? AppSpacing.profileHeaderBaseHeightRatio;
-  double _maxStretchRatio() =>
+  double _baseHeightRatio(BuildContext context) =>
+      widget.baseHeightRatio ??
+      AppSpacing.adaptiveProfileHeaderBaseHeightRatio(context);
+  double _maxStretchRatio(BuildContext context) =>
       widget.maxStretchHeightRatio ??
-      AppSpacing.profileHeaderMaxStretchHeightRatio;
+      AppSpacing.adaptiveProfileHeaderMaxStretchHeightRatio(context);
 
   double _baseBackgroundHeight(BuildContext context) =>
-      MediaQuery.sizeOf(context).height * _baseHeightRatio();
+      MediaQuery.sizeOf(context).height * _baseHeightRatio(context);
   double _maxBackgroundHeight(BuildContext context) =>
-      MediaQuery.sizeOf(context).height * _maxStretchRatio();
+      MediaQuery.sizeOf(context).height * _maxStretchRatio(context);
 
   double _currentBackgroundHeight(BuildContext context) {
     final base = _baseBackgroundHeight(context);
@@ -175,12 +194,16 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
   double _backgroundSpacerHeight(BuildContext context) =>
       max(0.0, _currentBackgroundHeight(context) - _rawPullOffset);
 
+  double _backgroundTop() =>
+      widget.scrollBackgroundWithContent ? -_scrollOffset : 0.0;
+
   double _toolbarHeight(BuildContext context) =>
       AppSpacing.appChromeTopSafeInset(
         MediaQuery.viewPaddingOf(context).top,
         context,
       ) +
-      (widget.toolbarContentHeight ?? AppSpacing.appChromeTopBarHeight(context));
+      (widget.toolbarContentHeight ??
+          AppSpacing.appChromeTopBarHeight(context));
 
   double _pinTransitionDistance() => max(AppSpacing.buttonHeight, 32.0);
 
@@ -189,21 +212,25 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
   double _primaryTabTopAtRest(BuildContext context) =>
       _summaryTopAtRest(context) + _summaryHeight;
 
-  double _curve(double value) =>
-      (widget.collapseCurve ?? Curves.easeOutCubic).transform(
-        value.clamp(0.0, 1.0),
-      );
+  double _curve(double value) => (widget.collapseCurve ?? Curves.easeOutCubic)
+      .transform(value.clamp(0.0, 1.0));
 
   double _identityPinnedProgress(BuildContext context) {
     if (widget.pinMode == ObjectPagePinMode.minimal) {
       // 极简：toolbar 跟随滚动单渐显（无 identity 概念）。
-      final trigger = max(1.0, _baseBackgroundHeight(context) - _toolbarHeight(context));
+      final trigger = max(
+        1.0,
+        _baseBackgroundHeight(context) - _toolbarHeight(context),
+      );
       return _curve(_scrollOffset / trigger);
     }
-    final pinBottom =
-        _baseBackgroundHeight(context) + widget.identityPinExtent;
+    final pinBottom = _baseBackgroundHeight(context) + widget.identityPinExtent;
     final threshold = max(0.0, pinBottom - _toolbarHeight(context));
-    return _curve((_scrollOffset - threshold) / _pinTransitionDistance());
+    final distance = max(
+      widget.identityTransitionDistance ?? _pinTransitionDistance(),
+      1.0,
+    );
+    return _curve((_scrollOffset - threshold) / distance);
   }
 
   double _primaryTabPinnedProgress(BuildContext context) {
@@ -253,17 +280,17 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
     });
   }
 
-  Widget _constrain(Widget child) {
+  Widget _constrain(Widget child, {double? horizontalPadding}) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = AppSpacing.adaptiveFeedMaxContentWidth(
           constraints.maxWidth,
         );
-        final padded = widget.contentHorizontalPadding > 0
+        final resolvedPadding =
+            horizontalPadding ?? widget.contentHorizontalPadding;
+        final padded = resolvedPadding > 0
             ? Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: widget.contentHorizontalPadding,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: resolvedPadding),
                 child: child,
               )
             : child;
@@ -289,9 +316,12 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
         widget.tabSurfaceBottomPadding ??
         (MediaQuery.viewPaddingOf(context).bottom + AppSpacing.interGroupLg);
     return Container(
+      key: ValueKey<String>('${widget.keyPrefix}-tab-surface'),
       decoration: BoxDecoration(
         color: surface,
         borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(widget.tabSurfaceTopRadius),
+          topRight: Radius.circular(widget.tabSurfaceTopRadius),
           bottomLeft: Radius.circular(widget.cardRadius),
           bottomRight: Radius.circular(widget.cardRadius),
         ),
@@ -346,8 +376,9 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
       child: CustomScrollView(
         key: widget.scrollViewKey,
         controller: _scrollController,
-        cacheExtent:
-            MediaQuery.sizeOf(context).height * widget.cacheExtentScreens,
+        scrollCacheExtent: ScrollCacheExtent.pixels(
+          MediaQuery.sizeOf(context).height * widget.cacheExtentScreens,
+        ),
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
         ),
@@ -357,7 +388,10 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
           ),
           SliverToBoxAdapter(
             child: _constrain(
-              KeyedSubtree(key: _summaryKey, child: widget.summaryBuilder(context)),
+              KeyedSubtree(
+                key: _summaryKey,
+                child: widget.summaryBuilder(context),
+              ),
             ),
           ),
           SliverToBoxAdapter(
@@ -366,6 +400,7 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
                 offset: Offset(0, -widget._surfaceBridge),
                 child: _buildTabSurface(context, inlineTabOpacity),
               ),
+              horizontalPadding: widget.tabSurfaceHorizontalPadding,
             ),
           ),
         ],
@@ -380,7 +415,7 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
 
     final stackChildren = <Widget>[
       Positioned(
-        top: 0,
+        top: _backgroundTop(),
         left: 0,
         right: 0,
         child: SizedBox(
@@ -397,14 +432,15 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
       stackChildren.add(
         Positioned(
           top:
-              _backgroundSpacerHeight(context) -
-              _scrollOffset +
-              _rawPullOffset,
+              _backgroundSpacerHeight(context) - _scrollOffset + _rawPullOffset,
           left: 0,
           right: 0,
           child: IgnorePointer(
             child: _constrain(
-              SizedBox(key: widget.summaryTrackerKey, height: AppSpacing.hairline),
+              SizedBox(
+                key: widget.summaryTrackerKey,
+                height: AppSpacing.hairline,
+              ),
             ),
           ),
         ),
@@ -423,9 +459,7 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
               ignoring: primaryTabProgress <= 0,
               child: Opacity(
                 opacity: primaryTabProgress,
-                child: _constrain(
-                  widget.tabBarBuilder!(context, true, 1.0),
-                ),
+                child: _constrain(widget.tabBarBuilder!(context, true, 1.0)),
               ),
             ),
           ),

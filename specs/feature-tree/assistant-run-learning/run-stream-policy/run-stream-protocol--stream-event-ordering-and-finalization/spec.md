@@ -128,4 +128,4 @@
 - A5：过程抽屉完成态首行使用统一摘要模板，来源计数、耗时、完成语义与终态 `AssistantJourney` 一致，耗时为整数秒。
 - A6：无真实 `journey` 内容的消息不渲染过程抽屉；记录重载时与流式完成态恢复结果一致。
 - A7：UI 动效和答案 gate 仅依赖 typed stage / readiness / answer 通道，不再依赖中文 label `contains()`。
-- A8：存在 T1/T2/T4 回归测试，覆盖过程泄漏、终态截断、摘要口径、记录恢复和 current 路径清理。
+- A8：存在 local_contract/user_acceptance 回归测试，覆盖过程泄漏、终态截断、摘要口径、记录恢复和 current 路径清理。

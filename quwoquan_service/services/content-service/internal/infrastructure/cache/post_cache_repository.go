@@ -72,6 +72,30 @@ func (c *PostCacheRepository) FindByID(ctx context.Context, id string) (*postmod
 	return post, true
 }
 
+// AdjustCommentCount delegates the atomic single-field $inc to the inner store
+// and invalidates the cached post snapshot so the next read reflects the new
+// denormalized commentCount accelerator.
+func (c *PostCacheRepository) AdjustCommentCount(ctx context.Context, id string, delta int64) (int64, bool, error) {
+	n, ok, err := c.inner.AdjustCommentCount(ctx, id, delta)
+	if ok {
+		if derr := c.redis.Del(ctx, c.cacheKey(id)); derr != nil {
+			c.logger.Warn("cache invalidate failed", "key", c.cacheKey(id), "err", derr)
+		}
+	}
+	return n, ok, err
+}
+
+// SetCommentCount delegates the drift self-heal $set and invalidates the cache.
+func (c *PostCacheRepository) SetCommentCount(ctx context.Context, id string, count int64) (bool, error) {
+	ok, err := c.inner.SetCommentCount(ctx, id, count)
+	if ok {
+		if derr := c.redis.Del(ctx, c.cacheKey(id)); derr != nil {
+			c.logger.Warn("cache invalidate failed", "key", c.cacheKey(id), "err", derr)
+		}
+	}
+	return ok, err
+}
+
 func (c *PostCacheRepository) ListAll(ctx context.Context) []postmodel.Post {
 	return c.inner.ListAll(ctx)
 }

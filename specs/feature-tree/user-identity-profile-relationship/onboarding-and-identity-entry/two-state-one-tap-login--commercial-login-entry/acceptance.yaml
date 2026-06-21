@@ -9,320 +9,486 @@ node:
 scope:
   summary: 商用登录入口验收：历史账号一键登录、本机号码一键登录/创建、其它手机号验证码登录、高保同构布局、端云契约与数据库副作用。
   in_scope:
-    - LoginPage 两状态同构高保布局与响应式截图
-    - 本地历史账号摘要与服务端二次登录
-    - 运营商 SDK capability/hint/login 链路
-    - 手机号验证码登录全状态 UI 与异常逃生路径
-    - ResolveOneTapLoginHint / LoginOneTap metadata 契约
-    - SendOtp / LoginWithPhone metadata 契约
-    - user-service 账号查询/创建、credential/device/consent 持久化
-    - 登录埋点、SLO、灰度与回滚
+  - LoginPage 两状态同构高保布局与响应式截图
+  - 本地历史账号摘要与服务端二次登录
+  - 运营商 SDK capability/hint/login 链路
+  - 手机号验证码登录全状态 UI 与异常逃生路径
+  - ResolveOneTapLoginHint / LoginOneTap metadata 契约
+  - SendOtp / LoginWithPhone metadata 契约
+  - user-service 账号查询/创建、credential/device/consent 持久化
+  - 登录埋点、SLO、灰度与回滚
   out_of_scope:
-    - 微信、QQ、支付宝、Apple、Passkey 正式 SDK 登录
-    - Web 运营商一键登录可用性承诺
+  - 微信、QQ、支付宝、Apple、Passkey 正式 SDK 登录
+  - Web 运营商一键登录可用性承诺
 gwt_acceptance:
   GWT1:
     title: 历史账号摘要展示并通过服务端二次登录
     given:
-      - App 本地存在 remembered account summary，但 access token 已失效或用户手动退出。
+    - App 本地存在 remembered account summary，但 access token 已失效或用户手动退出。
     when:
-      - 用户打开登录页并点击“一键登录”。
+    - 用户打开登录页并点击“一键登录”。
     then:
-      - 页面展示头像、昵称、脱敏手机号。
-      - 点击主按钮必须调用服务端登录接口刷新 token，不得仅凭本地摘要进入登录态。
-      - 登录成功后回到 redirect 或 AuthContinuation 目标态。
+    - 页面展示头像、昵称、脱敏手机号。
+    - 点击主按钮必须调用服务端登录接口刷新 token，不得仅凭本地摘要进入登录态。
+    - 登录成功后回到 redirect 或 AuthContinuation 目标态。
     done_when:
-      - 历史账号摘要只作为展示线索，真实登录态必须来自服务端 token 刷新。
-      - redirect/AuthContinuation 目标态与登录关闭安全态均被测试覆盖。
+    - 历史账号摘要只作为展示线索，真实登录态必须来自服务端 token 刷新。
+    - redirect/AuthContinuation 目标态与登录关闭安全态均被测试覆盖。
     contract_refs:
-      - quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - quwoquan_app/test/core/auth/auth_session_store_test.dart
-      - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+    - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    - quwoquan_app/test/core/auth/auth_session_store_test.dart
+    - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
     performance_points:
-      - 历史账号二次登录过程中页面必须保持可恢复加载态，不出现本地假登录闪回。
-    evidence:
-      primary: [T2_module_interaction]
-      supporting: [T1_static_contract, T3_app_api_integration]
+    - 历史账号二次登录过程中页面必须保持可恢复加载态，不出现本地假登录闪回。
     tests:
       planned:
-        - quwoquan_app/test/ui/user/login_page_widget_test.dart
-        - quwoquan_app/test/core/auth/auth_session_store_test.dart
-        - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_app/test/core/auth/auth_session_store_test.dart
+      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
       recorded:
-        - cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart test/core/auth/auth_session_store_test.dart test/cloud/user/contract/auth_repository_contract_test.dart
-        - cd quwoquan_app && make verify-app-login-entry-loop-contract
-    status: completed
+      - command: cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
+          test/core/auth/auth_session_store_test.dart test/cloud/user/contract/auth_repository_contract_test.dart
+      - command: cd quwoquan_app && make verify-app-login-entry-loop-contract
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt1_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt1_api_integration
+        envs: &id002
+        - beta
+        - gamma
+    notes: []
   GWT2:
     title: 本机号码一键创建默认账号
     given:
-      - 本地无历史账号摘要，运营商 SDK 返回 vendor、carrierToken 与脱敏手机号。
-      - 服务端 hint 判定该手机号未绑定账号。
+    - 本地无历史账号摘要，运营商 SDK 返回 vendor、carrierToken 与脱敏手机号。
+    - 服务端 hint 判定该手机号未绑定账号。
     when:
-      - 用户勾选协议并点击“本机号码一键登录”。
+    - 用户勾选协议并点击“本机号码一键登录”。
     then:
-      - 服务端创建 owner、primary persona、credential、device、consent record。
-      - 登录结果返回默认昵称、头像或默认头像所需字段。
-      - App 保存 token 与 remembered account summary。
+    - 服务端创建 owner、primary persona、credential、device、consent record。
+    - 登录结果返回默认昵称、头像或默认头像所需字段。
+    - App 保存 token 与 remembered account summary。
     done_when:
-      - 本机号码首次登录在服务端完成账号、persona、credential、device 与 consent 持久化。
-      - App 只消费服务端返回的登录结果并写入 remembered summary。
+    - 本机号码首次登录在服务端完成账号、persona、credential、device 与 consent 持久化。
+    - App 只消费服务端返回的登录结果并写入 remembered summary。
     contract_refs:
-      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-      - quwoquan_service/services/user-service/tests/auth_contract_test.go
-      - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    - quwoquan_service/services/user-service/tests/auth_contract_test.go
+    - quwoquan_app/test/ui/user/login_page_widget_test.dart
     performance_points:
-      - 本机号码 hint 与登录链路必须有超时降级，不阻塞其它登录方式。
-    evidence:
-      primary: [T3_app_api_integration]
-      supporting: [T1_static_contract, T2_module_interaction]
+    - 本机号码 hint 与登录链路必须有超时降级，不阻塞其它登录方式。
     tests:
       planned:
-        - quwoquan_service/services/user-service/tests/auth_contract_test.go
-        - quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
       recorded:
-        - cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
-        - cd quwoquan_service && go test ./services/user-service/tests -run TestAuth_OneTapLogin_UsesServerResolvedPhone
-    status: completed
+      - command: cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
+      - command: cd quwoquan_service && go test ./services/user-service/tests -run
+          TestAuth_OneTapLogin_UsesServerResolvedPhone
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: gwt2_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt2_api_integration
+        envs: *id002
+      supporting:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt2_local_contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt2_local_contract
+        envs: *id001
+    notes: []
   GWT3:
     title: 两状态高保同构与响应式
     given:
-      - 登录页分别进入 returningAccount 与 carrierPhone 状态。
+    - 登录页分别进入 returningAccount 与 carrierPhone 状态。
     when:
-      - 在 iPhone 17、iPad、Web 宽屏尺寸下渲染。
+    - 在 iPhone 17、iPad、Web 宽屏尺寸下渲染。
     then:
-      - Logo、标题、副标题、主按钮、协议、其他登录方式区域位置一致。
-      - Account Area 等高，移动端对齐高保，iPad/Web 居中且不拉伸。
-      - 深浅色、触控区、语义 label 满足无障碍要求。
+    - Logo、标题、副标题、主按钮、协议、其他登录方式区域位置一致。
+    - Account Area 等高，移动端对齐高保，iPad/Web 居中且不拉伸。
+    - 深浅色、触控区、语义 label 满足无障碍要求。
     done_when:
-      - returningAccount 与 carrierPhone 两状态共享同一 LoginFrame 信息架构。
-      - 移动、平板与 Web 宽屏下关键区域不重叠、不拉伸、不漂移。
+    - returningAccount 与 carrierPhone 两状态共享同一 LoginFrame 信息架构。
+    - 移动、平板与 Web 宽屏下关键区域不重叠、不拉伸、不漂移。
     contract_refs:
-      - quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart
+    - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    - quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart
     performance_points:
-      - 状态切换不得触发布局大跳动，首屏登录框即时可见。
-    evidence:
-      primary: [T2_module_interaction]
-      supporting: [T4_e2e_journey]
+    - 状态切换不得触发布局大跳动，首屏登录框即时可见。
     tests:
       planned:
-        - quwoquan_app/test/ui/user/login_page_widget_test.dart
-        - quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart
+      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
       recorded:
-        - cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
+      - command: cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
     status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt3_local_contract
+        envs: *id001
+      supporting:
+      - layer: user_acceptance
+        suite: e2e_journey
+        cases:
+        - user_acceptance.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.e2e_journey
+        envs: &id003
+        - gamma
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart'
   GWT4:
     title: 协议、错误与降级不悬空
     given:
-      - 用户未勾选协议、运营商 SDK 不可用、provider 超时、账号 suspended/deleted 任一条件成立。
+    - 用户未勾选协议、运营商 SDK 不可用、provider 超时、账号 suspended/deleted 任一条件成立。
     when:
-      - 用户打开登录页或点击主按钮。
+    - 用户打开登录页或点击主按钮。
     then:
-      - 未勾选协议时不发请求。
-      - SDK 不可用或 provider 超时在 1.2s 内降级。
-      - 账号 suspended/deleted 展示结构化错误，不创建新账号。
-      - 登录关闭仍回安全态，不触发登录循环。
+    - 未勾选协议时不发请求。
+    - SDK 不可用或 provider 超时在 1.2s 内降级。
+    - 账号 suspended/deleted 展示结构化错误，不创建新账号。
+    - 登录关闭仍回安全态，不触发登录循环。
     done_when:
-      - 协议、SDK 不可用、超时、账号受限和关闭路径均有明确恢复动作。
-      - 任一失败状态都不会绕过结构化错误语义或触发登录回环。
+    - 协议、SDK 不可用、超时、账号受限和关闭路径均有明确恢复动作。
+    - 任一失败状态都不会绕过结构化错误语义或触发登录回环。
     contract_refs:
-      - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
-      - quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
-      - quwoquan_service/services/user-service/tests/auth_contract_test.go
+    - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
+    - quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
+    - quwoquan_service/services/user-service/tests/auth_contract_test.go
     performance_points:
-      - provider 不可用或超时降级目标 <= 1.2s。
-    evidence:
-      primary: [T2_module_interaction, T3_app_api_integration]
-      supporting: [T1_static_contract]
+    - provider 不可用或超时降级目标 <= 1.2s。
     tests:
       planned:
-        - quwoquan_app/test/ui/user/login_page_widget_test.dart
-        - quwoquan_service/services/user-service/tests/auth_contract_test.go
-        - quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
+      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
       recorded:
-        - cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart test/core/auth/auth_gate_matrix_contract_test.dart
-        - cd quwoquan_app && make verify-app-login-entry-loop-contract
-        - cd quwoquan_service && go test ./services/user-service/tests -run TestAuth_OneTapLogin_UsesServerResolvedPhone
-    status: completed
+      - command: cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
+          test/core/auth/auth_gate_matrix_contract_test.dart
+      - command: cd quwoquan_app && make verify-app-login-entry-loop-contract
+      - command: cd quwoquan_service && go test ./services/user-service/tests -run
+          TestAuth_OneTapLogin_UsesServerResolvedPhone
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt4_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt4_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt4_api_integration
+        envs: *id002
+      supporting:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt4_local_contract
+        envs: *id001
+    notes: []
   GWT5:
     title: 无历史摘要且运营商不可用时进入手机号验证码登录
     given:
-      - App 本地不存在 remembered account summary。
-      - 运营商 SDK 不可用、超时或 Web/模拟器不支持。
+    - App 本地不存在 remembered account summary。
+    - 运营商 SDK 不可用、超时或 Web/模拟器不支持。
     when:
-      - 用户打开登录页。
+    - 用户打开登录页。
     then:
-      - 页面在同一 LoginFrame 中展示手机号输入态。
-      - 主按钮为“获取验证码”，手机号非法时禁用。
-      - 其它登录方式区域固定可见，关闭仍回安全态。
+    - 页面在同一 LoginFrame 中展示手机号输入态。
+    - 主按钮为“获取验证码”，手机号非法时禁用。
+    - 其它登录方式区域固定可见，关闭仍回安全态。
     done_when:
-      - 无历史摘要且运营商不可用时，用户在同一 LoginFrame 内可继续用手机号验证码登录。
-      - 关闭、其它登录方式和手机号输入错误态均不触发二次登录弹窗。
+    - 无历史摘要且运营商不可用时，用户在同一 LoginFrame 内可继续用手机号验证码登录。
+    - 关闭、其它登录方式和手机号输入错误态均不触发二次登录弹窗。
     contract_refs:
-      - quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
+    - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    - quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
     performance_points:
-      - 运营商不可用时应快速落到手机号输入态，不显示长时间空白加载。
-    evidence:
-      primary: [T2_module_interaction]
-      supporting: [T1_static_contract]
+    - 运营商不可用时应快速落到手机号输入态，不显示长时间空白加载。
     tests:
       planned:
-        - quwoquan_app/test/ui/user/login_page_widget_test.dart
-        - quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
+      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt5_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt5_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: gwt5_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt5_local_contract
+        envs: *id001
+    notes: []
   GWT6:
     title: 手机号验证码 12 状态同构高保
     given:
-      - 登录页进入手机号验证码登录态。
+    - 登录页进入手机号验证码登录态。
     when:
-      - 用户经历初始、输入中、合法、发送中、已发送、输入验证码、验证码完整、登录中、成功、验证码错误、验证码过期、发送频繁状态。
+    - 用户经历初始、输入中、合法、发送中、已发送、输入验证码、验证码完整、登录中、成功、验证码错误、验证码过期、发送频繁状态。
     then:
-      - Header、Logo、Reason、主按钮、协议、其它登录方式位置稳定。
-      - 验证码显示为 6 个独立方框，支持数字限制、退格与 6 位粘贴。
-      - 错误态就近展示，不用大弹窗。
+    - Header、Logo、Reason、主按钮、协议、其它登录方式位置稳定。
+    - 验证码显示为 6 个独立方框，支持数字限制、退格与 6 位粘贴。
+    - 错误态就近展示，不用大弹窗。
     done_when:
-      - 手机号验证码 12 状态在同一布局骨架内完成，不发生控件错位。
-      - 验证码输入、粘贴、退格与错误恢复均有 widget 或 golden 证据。
+    - 手机号验证码 12 状态在同一布局骨架内完成，不发生控件错位。
+    - 验证码输入、粘贴、退格与错误恢复均有 widget 或 golden 证据。
     contract_refs:
-      - quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart
+    - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    - quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart
     performance_points:
-      - 验证码状态切换不得重建整页导致输入焦点丢失。
-    evidence:
-      primary: [T2_module_interaction]
-      supporting: [T4_e2e_journey]
+    - 验证码状态切换不得重建整页导致输入焦点丢失。
     tests:
       planned:
-        - quwoquan_app/test/ui/user/login_page_widget_test.dart
-        - quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart
+      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt6_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt6_local_contract
+        envs: *id001
+      supporting:
+      - layer: user_acceptance
+        suite: e2e_journey
+        cases:
+        - user_acceptance.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.e2e_journey
+        envs: *id003
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart'
   GWT7:
     title: 手机号验证码异常不拦截用户
     given:
-      - 用户处于未勾选协议、验证码错误、验证码过期、发送频繁、短信服务商失败、网络失败、账号锁定、账号暂停或删除任一异常状态。
+    - 用户处于未勾选协议、验证码错误、验证码过期、发送频繁、短信服务商失败、网络失败、账号锁定、账号暂停或删除任一异常状态。
     when:
-      - 用户继续操作当前登录页。
+    - 用户继续操作当前登录页。
     then:
-      - 页面提供至少一个清晰下一步：勾选协议、修改手机号、修改验证码、重新获取、等待倒计时、换其它方式或关闭。
-      - 除发送中、登录中、成功反馈外，手机号可编辑；编辑手机号会清空验证码与错误。
-      - 登录关闭不回环，登录成功进入 redirect 或 AuthContinuation 目标态。
+    - 页面提供至少一个清晰下一步：勾选协议、修改手机号、修改验证码、重新获取、等待倒计时、换其它方式或关闭。
+    - 除发送中、登录中、成功反馈外，手机号可编辑；编辑手机号会清空验证码与错误。
+    - 登录关闭不回环，登录成功进入 redirect 或 AuthContinuation 目标态。
     done_when:
-      - 每类 OTP 异常都有明确下一步，并保留用户可恢复路径。
-      - 修改手机号会清空验证码与错误，关闭和成功目标态不回环。
+    - 每类 OTP 异常都有明确下一步，并保留用户可恢复路径。
+    - 修改手机号会清空验证码与错误，关闭和成功目标态不回环。
     contract_refs:
-      - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
-      - quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - quwoquan_service/services/user-service/tests/auth_contract_test.go
+    - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
+    - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    - quwoquan_service/services/user-service/tests/auth_contract_test.go
     performance_points:
-      - 错误态恢复必须就近完成，避免弹窗阻断和重复请求。
-    evidence:
-      primary: [T2_module_interaction, T3_app_api_integration]
-      supporting: [T1_static_contract]
+    - 错误态恢复必须就近完成，避免弹窗阻断和重复请求。
     tests:
       planned:
-        - quwoquan_app/test/ui/user/login_page_widget_test.dart
-        - quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
-        - quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt7_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt7_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt7_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt7_api_integration
+        envs: *id002
+      supporting:
+      - layer: local_contract
+        suite: gwt7_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt7_local_contract
+        envs: *id001
+    notes: []
   GWT8:
     title: 手机号验证码登录创建或恢复账号
     given:
-      - 用户输入合法手机号并通过 SendOtp 获得 challenge。
-      - 用户输入 6 位验证码并勾选协议。
+    - 用户输入合法手机号并通过 SendOtp 获得 challenge。
+    - 用户输入 6 位验证码并勾选协议。
     when:
-      - 用户点击登录。
+    - 用户点击登录。
     then:
-      - App 调用 LoginWithPhone，不调用旧 /v1/auth/login 泛用路由。
-      - 服务端校验 OTP 后创建或恢复 owner、primary persona、credential、device、consent record。
-      - App 保存 token 与 remembered account summary。
+    - App 调用 LoginWithPhone，不调用旧 /v1/auth/login 泛用路由。
+    - 服务端校验 OTP 后创建或恢复 owner、primary persona、credential、device、consent record。
+    - App 保存 token 与 remembered account summary。
     done_when:
-      - 手机号验证码登录只走 LoginWithPhone metadata 契约。
-      - 创建与恢复账号的服务端副作用可由真实存储 contract 测试证明。
+    - 手机号验证码登录只走 LoginWithPhone metadata 契约。
+    - 创建与恢复账号的服务端副作用可由真实存储 contract 测试证明。
     contract_refs:
-      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-      - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-      - quwoquan_service/services/user-service/tests/auth_contract_test.go
+    - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+    - quwoquan_service/services/user-service/tests/auth_contract_test.go
     performance_points:
-      - OTP 登录提交时必须保持 loading、防重复提交和结构化失败恢复。
-    evidence:
-      primary: [T3_app_api_integration]
-      supporting: [T1_static_contract, T2_module_interaction]
+    - OTP 登录提交时必须保持 loading、防重复提交和结构化失败恢复。
     tests:
       planned:
-        - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-        - quwoquan_app/test/ui/user/login_page_widget_test.dart
-        - quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: gwt8_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt8_api_integration
+        envs: *id002
+      supporting:
+      - layer: local_contract
+        suite: gwt8_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt8_local_contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt8_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt8_local_contract
+        envs: *id001
+    notes: []
 contract_acceptance:
   CONTRACT1:
     title: metadata/codegen/auth policy 与商用登录契约一致
     done_when:
-      - ResolveOneTapLoginHint 是 public operation。
-      - LoginOneTap request/response 字段由 metadata 生成并被 App RemoteRepository 消费。
-      - SendOtp / LoginWithPhone request/response 字段由 metadata 生成并被 App RemoteRepository 消费。
-      - SendOtp response 可表达 maskedPhone、expiresInSeconds、deliveryStatus、requestId、challengeId、retryAfterSeconds、debugCode。
-      - USER.AUTH carrier/consent/account 状态错误码生成 Dart/Go 常量。
-      - USER.AUTH otp_mismatch/otp_expired 与频控错误可映射到手机号 OTP UI 状态。
-      - 旧未登记 /v1/auth/login 与 credentialType/credentialKey 登录兼容口径不得回归。
-    evidence:
-      primary: [T1_static_contract]
-      supporting: [T3_app_api_integration]
+    - ResolveOneTapLoginHint 是 public operation。
+    - LoginOneTap request/response 字段由 metadata 生成并被 App RemoteRepository 消费。
+    - SendOtp / LoginWithPhone request/response 字段由 metadata 生成并被 App RemoteRepository
+      消费。
+    - SendOtp response 可表达 maskedPhone、expiresInSeconds、deliveryStatus、requestId、challengeId、retryAfterSeconds、debugCode。
+    - USER.AUTH carrier/consent/account 状态错误码生成 Dart/Go 常量。
+    - USER.AUTH otp_mismatch/otp_expired 与频控错误可映射到手机号 OTP UI 状态。
+    - 旧未登记 /v1/auth/login 与 credentialType/credentialKey 登录兼容口径不得回归。
     tests:
       planned:
-        - make verify-app-auth-policy
-        - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-        - quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - command: make verify-app-auth-policy
+      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
       recorded:
-        - make verify-app-auth-policy
-        - cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart
-        - cd quwoquan_service && go test ./services/user-service/tests -run 'TestAuth_OneTapLogin_UsesServerResolvedPhone|TestAuth_RetiredGenericLoginRoute_Removed'
-    status: completed
+      - command: make verify-app-auth-policy
+      - command: cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart
+      - command: cd quwoquan_service && go test ./services/user-service/tests -run
+          'TestAuth_OneTapLogin_UsesServerResolvedPhone|TestAuth_RetiredGenericLoginRoute_Removed'
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract1_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.contract1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: contract1_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.contract1_api_integration
+        envs: *id002
+    notes: []
   CONTRACT2:
     title: 手机号 OTP 服务商与错误语义契约
     done_when:
-      - SendOtp provider failure 返回结构化可恢复错误，App 映射 sendFailed。
-      - rate_limited 带 retryAfter 语义，App 进入倒计时。
-      - LoginWithPhone 缺 agreementVersion/privacyVersion 返回 consent_required。
-      - otp mismatch 保留验证码，otp expired 进入重新获取。
-    evidence:
-      primary: [T1_static_contract, T3_app_api_integration]
-      supporting: [T2_module_interaction]
+    - SendOtp provider failure 返回结构化可恢复错误，App 映射 sendFailed。
+    - rate_limited 带 retryAfter 语义，App 进入倒计时。
+    - LoginWithPhone 缺 agreementVersion/privacyVersion 返回 consent_required。
+    - otp mismatch 保留验证码，otp expired 进入重新获取。
     tests:
       planned:
-        - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-        - quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract2_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.contract2_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: contract2_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.contract2_api_integration
+        envs: *id002
+      supporting:
+      - layer: local_contract
+        suite: contract2_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.contract2_local_contract
+        envs: *id001
+    notes: []
 uat_acceptance:
   UAT1:
     title: 真机与灰度商用证据
     done_when:
-      - iPhone 17 截图覆盖图一/图二。
-      - iPhone 17 截图覆盖手机号验证码 12 状态。
-      - Android/iOS 运营商 SDK smoke 覆盖可用与不可用。
-      - Android/iOS 短信 provider smoke 覆盖发送成功、频控和失败。
-      - Web/iPad 截图覆盖居中 frame。
-      - 登录页曝光、状态解析、主按钮点击、成功、失败、关闭埋点可查。
-      - 灰度与回滚策略写入发布 runbook 或对应商用卡点。
-    evidence:
-      primary: [T4_e2e_journey]
-      supporting: [T2_module_interaction, T3_app_api_integration]
+    - iPhone 17 截图覆盖图一/图二。
+    - iPhone 17 截图覆盖手机号验证码 12 状态。
+    - Android/iOS 运营商 SDK smoke 覆盖可用与不可用。
+    - Android/iOS 短信 provider smoke 覆盖发送成功、频控和失败。
+    - Web/iPad 截图覆盖居中 frame。
+    - 登录页曝光、状态解析、主按钮点击、成功、失败、关闭埋点可查。
+    - 灰度与回滚策略写入发布 runbook 或对应商用卡点。
     tests:
-      planned:
-        - patrol test login_two_state_one_tap_smoke
-        - manual iPhone 17 / Android carrier SDK smoke evidence
+      planned: []
       recorded:
-        - cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
+      - command: cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
     status: partial
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        suite: e2e_journey
+        cases:
+        - user_acceptance.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.e2e_journey
+        envs: *id003
+      supporting:
+      - layer: local_contract
+        suite: uat1_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.uat1_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: uat1_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.uat1_api_integration
+        envs: *id002
+    notes:
+    - '[migrated_from_planned] patrol test login_two_state_one_tap_smoke'
+    - '[migrated_from_planned] manual iPhone 17 / Android carrier SDK smoke evidence'
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
-    - make verify-app-auth-policy
-    - make verify-app-login-entry-loop-contract
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - make verify-app-auth-policy
+  - make verify-app-login-entry-loop-contract
   full_gate:
-    - make gate
+  - make gate

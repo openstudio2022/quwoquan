@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.finalization_report",
+  "ref": "/entity/地点/景区/蜀南竹海",
+  "articleSource": "4.draft/page.md",
+  "draftArticleRef": "4.draft/page.md",
+  "finalArticleRef": "page.md",
+  "composeSnapshotRef": null,
+  "draftSha256": "sha256:1a5a39a48762f8438996c997e0726cc6b9c237668e391606a6487f677cc071ea",
+  "finalSha256": "sha256:1a5a39a48762f8438996c997e0726cc6b9c237668e391606a6487f677cc071ea",
+  "draftBodySha256": "sha256:1a5a39a48762f8438996c997e0726cc6b9c237668e391606a6487f677cc071ea",
+  "finalBodySha256": "sha256:1a5a39a48762f8438996c997e0726cc6b9c237668e391606a6487f677cc071ea",
+  "composeSnapshotSha256": null,
+  "composeSnapshotMatchesDraft": null,
+  "frontmatterInjected": false,
+  "frontmatterChanged": false,
+  "bodyChanged": false,
+  "frontmatterOnlyChange": false,
+  "normalizationActions": [
+    "entity_homepage_draft_materialized"
+  ]
+}

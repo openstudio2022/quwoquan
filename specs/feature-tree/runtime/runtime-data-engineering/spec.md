@@ -27,10 +27,10 @@
 
 ## 约束
 
-- 标签真相源为数据工程 `publish/v1/tags`，不得恢复扁平枚举。
+- 标签真相源为数据工程 `publish/tags`，不得恢复扁平枚举。
 - 实体归一产物必须能映射到运行时 `canonicalEntityId`。
 - seed manifest 必须区分 alpha、beta、gamma、prod 数据策略。
-- 新增数据发布物必须有 T1 校验脚本或 contract fixture。
+- 新增数据发布物必须有 local_contract 校验脚本或 contract fixture。
 
 ## 验收重点
 

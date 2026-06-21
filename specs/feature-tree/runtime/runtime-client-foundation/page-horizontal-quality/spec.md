@@ -5,7 +5,7 @@
 
 | 文档 | 路径 |
 |------|------|
-| 横向维度定义、页面类型 T1–T7、强制校验 v1/v2 | [page-horizontal-quality-spec.md](../page-horizontal-quality-spec.md) |
+| 横向维度定义、页面类型 local_contract–T7、强制校验 v1/v2 | [page-horizontal-quality-spec.md](../page-horizontal-quality-spec.md) |
 | 领域 × 类型 × P1–P8 矩阵 | [page-horizontal-quality-matrix.md](../page-horizontal-quality-matrix.md) |
 | PR 自检清单 | [page_horizontal_quality_pr_checklist.md](../../../../gates/page_horizontal_quality_pr_checklist.md) |
 | v1 自动化校验 | 仓库根 `quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py` + `verify_page_matrix_scan_complete.py`；**`make verify-app-page-horizontal-quality`** |

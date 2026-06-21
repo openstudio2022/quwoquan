@@ -12,13 +12,8 @@ import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 /// - 中央主 slogan：品牌口吻「遇见同趣，绽放热爱」
 /// - 底部小趣寄语：第一人称口吻「✨ 小趣 / 专注你的热爱，剩下的交给我」
 void main() {
-  Widget wrap({VoidCallback? onFinish, WelcomeLoginPromptConfig? loginPrompt}) {
-    return CupertinoApp(
-      home: WelcomeScreen(
-        onFinish: onFinish ?? () {},
-        loginPrompt: loginPrompt,
-      ),
-    );
+  Widget wrap({VoidCallback? onFinish}) {
+    return CupertinoApp(home: WelcomeScreen(onFinish: onFinish ?? () {}));
   }
 
   /// 推进足够时长让欢迎页短动画完成并自动进入首页。
@@ -30,18 +25,6 @@ void main() {
     // 序列内部有多段 await + 动画 + 保底停留，统一给足 buffer，避免假时钟下漏跑。
     for (var i = 0; i < 160; i++) {
       await tester.pump(const Duration(milliseconds: 50));
-    }
-  }
-
-  Future<void> pumpUntilLoginPrompt(WidgetTester tester) async {
-    for (var i = 0; i < 160; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-      if (find
-          .text(UITextConstants.welcomeLoginPromptTitle)
-          .evaluate()
-          .isNotEmpty) {
-        break;
-      }
     }
   }
 
@@ -178,7 +161,7 @@ void main() {
       expect(find.text('1'), findsNothing);
     });
 
-    testWidgets('序列结束但启动未就绪时展示等待面板，不会提前 finish', (tester) async {
+    testWidgets('序列结束但启动未就绪时只展示一行启动提示，不会提前 finish', (tester) async {
       var finishedCount = 0;
       var sequenceCompletedCount = 0;
       await tester.pumpWidget(
@@ -187,22 +170,9 @@ void main() {
             onFinish: () => finishedCount++,
             onSequenceComplete: () => sequenceCompletedCount++,
             startupLoading: const WelcomeStartupLoadingState(
-              title: UITextConstants.welcomeStartupLoadingTitle,
-              subtitle: UITextConstants.welcomeStartupPreparingHome,
-              stages: <WelcomeStartupStageState>[
-                WelcomeStartupStageState(
-                  label: UITextConstants.welcomeStartupStageAuth,
-                  status: WelcomeStartupStageStatus.complete,
-                ),
-                WelcomeStartupStageState(
-                  label: UITextConstants.welcomeStartupStageCloud,
-                  status: WelcomeStartupStageStatus.complete,
-                ),
-                WelcomeStartupStageState(
-                  label: UITextConstants.welcomeStartupStageHome,
-                  status: WelcomeStartupStageStatus.running,
-                ),
-              ],
+              title: '',
+              subtitle: '',
+              hint: UITextConstants.startupStillStartingInline,
             ),
           ),
         ),
@@ -212,150 +182,22 @@ void main() {
 
       expect(sequenceCompletedCount, 1);
       expect(finishedCount, 0);
-      expect(find.text(UITextConstants.welcomeStartupLoadingTitle), findsOneWidget);
-      expect(find.text(UITextConstants.welcomeStartupStageHome), findsOneWidget);
-    });
-
-    testWidgets('未登录时在欢迎页内展示登录与先不登录倒计时', (tester) async {
-      var loginCount = 0;
-      var guestCount = 0;
-      await tester.pumpWidget(
-        wrap(
-          loginPrompt: WelcomeLoginPromptConfig(
-            title: UITextConstants.welcomeLoginPromptTitle,
-            subtitle: UITextConstants.welcomeLoginPromptSubtitle,
-            onLogin: () => loginCount++,
-            onContinueAsGuest: () => guestCount++,
-          ),
-        ),
-      );
-
-      await pumpUntilLoginPrompt(tester);
-
       expect(
-        find.text(UITextConstants.welcomeLoginPromptTitle),
+        find.text(UITextConstants.startupStillStartingInline),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.login), findsOneWidget);
-      expect(find.textContaining('先不登录'), findsOneWidget);
-
-      await tester.tap(find.text(UITextConstants.login));
-      await tester.pump();
-
-      expect(loginCount, 1);
-      expect(guestCount, 0);
+      expect(find.text('正在进入趣我圈'), findsNothing);
+      expect(find.text('恢复账号状态'), findsNothing);
+      expect(find.text('连接云端并同步配置'), findsNothing);
+      expect(find.text('准备首页内容'), findsNothing);
     });
 
-    testWidgets('点击先不登录会继续进入 App', (tester) async {
-      var guestCount = 0;
-      await tester.pumpWidget(
-        wrap(
-          loginPrompt: WelcomeLoginPromptConfig(
-            title: UITextConstants.welcomeLoginPromptTitle,
-            subtitle: UITextConstants.welcomeLoginPromptSubtitle,
-            onLogin: () {},
-            onContinueAsGuest: () => guestCount++,
-          ),
-        ),
-      );
+    testWidgets('欢迎页不再展示登录或先不登录动作', (tester) async {
+      await tester.pumpWidget(wrap());
+      await settle(tester);
 
-      await pumpUntilLoginPrompt(tester);
-      await tester.tap(find.textContaining('先不登录'));
-      await tester.pump();
-
-      expect(guestCount, 1);
-    });
-
-    testWidgets('倒计时结束后自动按先不登录进入 App', (tester) async {
-      var guestCount = 0;
-      await tester.pumpWidget(
-        wrap(
-          loginPrompt: WelcomeLoginPromptConfig(
-            title: UITextConstants.welcomeLoginPromptTitle,
-            subtitle: UITextConstants.welcomeLoginPromptSubtitle,
-            onLogin: () {},
-            onContinueAsGuest: () => guestCount++,
-          ),
-        ),
-      );
-
-      await pumpUntilLoginPrompt(tester);
-      for (var i = 0; i < 6; i++) {
-        await tester.pump(const Duration(seconds: 1));
-      }
-
-      expect(guestCount, 1);
-    });
-
-    testWidgets('未登录时在欢迎页内展示登录与先不登录倒计时', (tester) async {
-      var loginCount = 0;
-      var guestCount = 0;
-      await tester.pumpWidget(
-        wrap(
-          loginPrompt: WelcomeLoginPromptConfig(
-            title: UITextConstants.welcomeLoginPromptTitle,
-            subtitle: UITextConstants.welcomeLoginPromptSubtitle,
-            onLogin: () => loginCount++,
-            onContinueAsGuest: () => guestCount++,
-          ),
-        ),
-      );
-
-      await pumpUntilLoginPrompt(tester);
-
-      expect(
-        find.text(UITextConstants.welcomeLoginPromptTitle),
-        findsOneWidget,
-      );
-      expect(find.text(UITextConstants.login), findsOneWidget);
-      expect(find.textContaining('先不登录'), findsOneWidget);
-
-      await tester.tap(find.text(UITextConstants.login));
-      await tester.pump();
-
-      expect(loginCount, 1);
-      expect(guestCount, 0);
-    });
-
-    testWidgets('点击先不登录会继续进入 App', (tester) async {
-      var guestCount = 0;
-      await tester.pumpWidget(
-        wrap(
-          loginPrompt: WelcomeLoginPromptConfig(
-            title: UITextConstants.welcomeLoginPromptTitle,
-            subtitle: UITextConstants.welcomeLoginPromptSubtitle,
-            onLogin: () {},
-            onContinueAsGuest: () => guestCount++,
-          ),
-        ),
-      );
-
-      await pumpUntilLoginPrompt(tester);
-      await tester.tap(find.textContaining('先不登录'));
-      await tester.pump();
-
-      expect(guestCount, 1);
-    });
-
-    testWidgets('倒计时结束后自动按先不登录进入 App', (tester) async {
-      var guestCount = 0;
-      await tester.pumpWidget(
-        wrap(
-          loginPrompt: WelcomeLoginPromptConfig(
-            title: UITextConstants.welcomeLoginPromptTitle,
-            subtitle: UITextConstants.welcomeLoginPromptSubtitle,
-            onLogin: () {},
-            onContinueAsGuest: () => guestCount++,
-          ),
-        ),
-      );
-
-      await pumpUntilLoginPrompt(tester);
-      for (var i = 0; i < 6; i++) {
-        await tester.pump(const Duration(seconds: 1));
-      }
-
-      expect(guestCount, 1);
+      expect(find.text(UITextConstants.login), findsNothing);
+      expect(find.textContaining('先不登录'), findsNothing);
     });
   });
 }

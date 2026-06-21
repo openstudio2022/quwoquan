@@ -39,14 +39,14 @@
 
 - 用户说“页面、登录、搜索、创作、消息、错误提示、恢复按钮、推荐曝光、行为反馈”时，默认加载本文件。
 - 若同时涉及服务错误码、Remote API、数据导入、推荐反馈或环境发布，必须启用 `docs/agent_context_contract.md` 的跨域 E2E 模式。
-- App 不得单独完成端云链路：T3 Remote 行为必须能回到 T2 Mock/Widget/Provider 断言。
+- App 不得单独完成端云链路：`api_integration` Remote 行为必须能回到 `local_contract` Mock/Widget/Provider 断言。
 
 ## Review 与测试要求
 
 - 每次改动都要按产品、架构、代码评审、质量、测试、用户、运维、运营八角色自检。
-- `T1` 校验 metadata/codegen/静态规则，`T2` 覆盖 provider/widget/Mock 行为，`T3` 覆盖 Remote/API/真实存储或集成环境，`T4` 覆盖用户旅程、权限、弱网、性能或发布前 UAT。
-- Remote 行为的 `T3` 断言必须在 `T2` Mock/Widget/Provider 测试中有对应断言；Mock 不是替代集成测试，而是集成行为的本地分解。
-- 错误码链路的 `T2` 必须覆盖 mapper、Provider 状态、UI 文案、恢复按钮和 Mock 错误响应；`T3` 必须覆盖 RemoteRepository 对服务错误响应的映射。
+- `local_contract` 覆盖 metadata/codegen/静态规则、provider/widget/Mock 行为；`api_integration` 覆盖 Remote/API/真实存储或集成环境；`user_acceptance` 覆盖用户旅程、权限、弱网、性能或发布前 UAT。
+- Remote 行为的 `api_integration` 断言必须在 `local_contract` Mock/Widget/Provider 测试中有对应断言；Mock 不是替代集成测试，而是集成行为的本地分解。
+- 错误码链路的 `local_contract` 必须覆盖 mapper、Provider 状态、UI 文案、恢复按钮和 Mock 错误响应；`api_integration` 必须覆盖 RemoteRepository 对服务错误响应的映射。
 - 新增页面必须同步检查页面矩阵、P1-P8、metadata-driven UI 清单、Mock 隔离、设计系统语义 token 和登录无死循环。
 
 ## 推荐验证

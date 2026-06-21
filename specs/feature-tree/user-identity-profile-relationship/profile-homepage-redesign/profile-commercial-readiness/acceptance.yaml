@@ -34,18 +34,34 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
     performance_points:
     - 我的主页首屏 TTI P95 ≤ 1.5s（缓存命中 ≤ 600ms）
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T3_app_api_integration
     tests:
       planned:
-      - quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
-      - quwoquan_app/test/ui/user/widgets/profile_stats_row_test.dart
+      - file: quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
+      - file: quwoquan_app/test/ui/user/widgets/profile_stats_row_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.user_identity_profile_relationship.profile_homepage_redesign.profile_commercial_readiness.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.profile_homepage_redesign.profile_commercial_readiness.gwt1_local_contract
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.profile_homepage_redesign.profile_commercial_readiness.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

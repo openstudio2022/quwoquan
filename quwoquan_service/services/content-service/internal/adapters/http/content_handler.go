@@ -324,12 +324,7 @@ func (h *ContentHandler) handleListAuthorImpactEvidence(w http.ResponseWriter, r
 		writeJSON(w, http.StatusOK, application.BuildAuthorImpactEvidencePage(nil, nil, nil, impactID, snapshotID, "", 0, false, viewerIsAuthor))
 		return
 	}
-	raws, nextCursor, hasMore, err := h.authorImpactEvidenceStore.ListPage(r.Context(), authorID, impactID, cursor, limit)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	total, err := h.authorImpactEvidenceStore.CountByImpact(r.Context(), authorID, impactID)
+	raws, nextCursor, hasMore, total, err := h.authorImpactEvidenceStore.ListPageWithTotal(r.Context(), authorID, impactID, cursor, limit)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -1035,8 +1030,15 @@ func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Requ
 		))
 		return
 	}
+	// 受信代理头解析客户端 IP，注入 context 供评论属地解析（创建时落库快照）。
+	clientIP := application.ParseTrustedClientIP(
+		r.Header.Get("X-Forwarded-For"),
+		r.Header.Get("X-Real-IP"),
+		r.RemoteAddr,
+	)
+	ctx := application.WithClientIP(r.Context(), clientIP)
 	comment, commentCount, err := h.postService.AddComment(
-		r.Context(),
+		ctx,
 		postID,
 		resolveUserID(r),
 		body.Content,
@@ -1065,12 +1067,12 @@ func (h *ContentHandler) handleListComments(w http.ResponseWriter, r *http.Reque
 			limit = n
 		}
 	}
-	comments, nextCursor, err := h.postService.ListComments(r.Context(), postID, resolveUserID(r), cursor, sort, limit)
+	comments, nextCursor, totalCount, err := h.postService.ListComments(r.Context(), postID, resolveUserID(r), cursor, sort, limit)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	resp := map[string]any{"items": comments}
+	resp := map[string]any{"items": comments, "totalCount": totalCount}
 	if nextCursor != "" {
 		resp["nextCursor"] = nextCursor
 	}
@@ -1092,7 +1094,7 @@ func (h *ContentHandler) handleListCommentReplies(w http.ResponseWriter, r *http
 			limit = n
 		}
 	}
-	comments, nextCursor, err := h.postService.ListCommentReplies(
+	comments, nextCursor, totalCount, err := h.postService.ListCommentReplies(
 		r.Context(),
 		parts[3],
 		parts[5],
@@ -1104,7 +1106,7 @@ func (h *ContentHandler) handleListCommentReplies(w http.ResponseWriter, r *http
 		writeHTTPError(w, r, err)
 		return
 	}
-	resp := map[string]any{"items": comments}
+	resp := map[string]any{"items": comments, "totalCount": totalCount}
 	if nextCursor != "" {
 		resp["nextCursor"] = nextCursor
 	}
@@ -1126,6 +1128,24 @@ func (h *ContentHandler) handleDeleteComment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ContentHandler) handleSetCommentPinned(w http.ResponseWriter, r *http.Request, pinned bool) {
+	path := strings.Trim(r.URL.Path, "/")
+	parts := strings.Split(path, "/")
+	// /v1/content/posts/{postId}/comments/{commentId}/pin
+	if len(parts) < 7 {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid path", "missing commentId for pin"))
+		return
+	}
+	postID := parts[3]
+	commentID := parts[5]
+	comment, err := h.postService.SetCommentPinned(r.Context(), postID, commentID, resolveUserID(r), pinned)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"comment": comment})
 }
 
 func (h *ContentHandler) handleReactToComment(w http.ResponseWriter, r *http.Request, commentID string) {
@@ -1230,7 +1250,7 @@ func (h *ContentHandler) handleListProfileInteractionActivities(w http.ResponseW
 			limit = n
 		}
 	}
-	items, err := h.postService.ListProfileInteractionActivities(r.Context(), subAccountID, direction, limit)
+	items, err := h.postService.ListProfileInteractionActivities(r.Context(), subAccountID, resolveUserID(r), direction, limit)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -1268,6 +1288,42 @@ func (h *ContentHandler) handleGetCounters(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, counters)
+}
+
+// handleGetCommentCountsDelta serves the explainable incremental comment-count
+// contract. The `since` watermark is parsed as RFC3339(/Nano); an empty value
+// seeds the baseline (unbounded-below). A malformed value is a client error.
+func (h *ContentHandler) handleGetCommentCountsDelta(w http.ResponseWriter, r *http.Request, postID string) {
+	var since time.Time
+	if raw := strings.TrimSpace(r.URL.Query().Get("since")); raw != "" {
+		parsed, err := parseSinceWatermark(raw)
+		if err != nil {
+			writeHTTPError(w, r, rterr.NewInvalidArgument(
+				rterr.ModuleContent, "since 参数必须为 RFC3339 时间戳", "invalid since watermark: "+raw,
+			))
+			return
+		}
+		since = parsed
+	}
+	delta, err := h.postService.GetCommentCountsDelta(r.Context(), postID, since)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, delta)
+}
+
+// parseSinceWatermark accepts the RFC3339Nano watermark emitted by a prior
+// response, falling back to plain RFC3339 for client-supplied baselines.
+func parseSinceWatermark(raw string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t.UTC(), nil
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t.UTC(), nil
 }
 
 func (h *ContentHandler) handleGetHelperRead(w http.ResponseWriter, r *http.Request) {
@@ -1432,8 +1488,17 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 	case "DeleteComment":
 		h.handleDeleteComment(w, r)
 		return
+	case "PinComment":
+		h.handleSetCommentPinned(w, r, true)
+		return
+	case "UnpinComment":
+		h.handleSetCommentPinned(w, r, false)
+		return
 	case "GetCounters":
 		h.handleGetCounters(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "GetCommentCountsDelta":
+		h.handleGetCommentCountsDelta(w, r, postIDFromPath(r.URL.Path))
 		return
 	case "GetHelperRead":
 		h.handleGetHelperRead(w, r)

@@ -22,9 +22,11 @@
 | Vertical SOP Owner | 垂类负责人 | 维护垂类 SOP、来源注册、质量 rubric、禁用声明、样例库 | 不为单批放宽通用门槛 | `verticalSopRef`、`scenarioSopRef` |
 | Source Research Agent | 资料研究员 | homepage/article/image/video 分 lane 检索与抽取，生成 evidence packet | 不写最终内容、不把不可抓或无授权来源标成可用 | `ObjectEvidencePacket`、source sufficiency report |
 | Rights & Safety Agent | 法务 / 风控 | 判断 `sourceUseMode`、许可、署名、安全、人脸、商用风险 | 不用“看起来可用”替代授权证明 | rights verdict、safety verdict |
+| Works Classifier Agent | 内容分级官 / 准入判定 | 依 `sourceTier`/`textVolume`/`mediaProfile`/`layoutMixing`/`rightsMode` 判定 work/moment/abandoned 与载体，随记/弃稿留痕不进 produce（省 token） | 不改载体把随记包装成作品、不用“看起来专业”替代来源证据、不静默丢弃疑难（转 `manual_required`） | `works_classification.json`、carrier gate verdict（`_common/works_classifier.py` + `produce/works_gate.py`） |
 | Creative Planner Agent | 策划编辑 | 在 evidence packet 内提出 2-3 个创作方案、读者承诺、结构和标题候选 | 不新增事实、不换来源、不改载体 | `CreativeBrief`、creative plan gate 输入 |
 | Creator Agent | 作者 / 编辑 | 按 creative brief 创作正文、标题、配文、主页介绍或视频脚本 | 不编造亲历、资质、官方背书或商业合作 | draft、`draft_meta` |
 | Self Critic Agent | 作者自检 | 低成本自评标题兑现、信息密度、图文节奏、越界风险 | 不拥有最终通过权 | `author_self_check.json` |
+| Entity-Tag Recognition Agent | 知识标注 / 引用治理 | 从正文识别 `extractedEntities`/`extractedTagCandidates`，规范化对齐 `publish/entities` 与 `publish/tags`，生成 `semanticMentions`，库外候选进治理 `pending_review` | 不把未发布候选写进 active refs、不自造扁平省名/品类标签、不改写正文事实 | `extractedEntities`、`extractedTagCandidates`、`semanticMentions` |
 | Independent Review Agent | 独立审校 | 审核事实、版权、图文一致、作者边界、非模板感和消费价值 | 不继承 creator 的自评结论 | `GateVerdict`、问题指纹 |
 | Optimizer Agent | 修订编辑 | 只针对 review 指定失败点修复 | 不重新选源、不扩大事实边界 | repair draft、repair note |
 | Batch Reducer | 批次总编 | 跑跨稿重复、题材分布、底稿复用、资产复用和作者疲劳门 | 不改写单篇正文 | batch reducer verdict |
@@ -41,9 +43,11 @@
 | `partition plan` | 目标对象、分区键、并发预算 | Controller | 分区计划、对象计划、job plan | quota and partition gate | 配额无法满足、分区不稳定 |
 | `source-ready admission` | 对象计划、source registry | Source Research Agent | 三路独立 source plan | source candidate gate | 无可抓来源、弱匹配、授权不足 |
 | `evidence packet` | source plan、下载抽取结果 | Source Research + Rights | `ObjectEvidencePacket` | evidence sufficiency gate | 底稿不足、图片不足、sourceUseMode 不匹配 |
+| `works classification` | evidence packet、sourceTier、媒体/文字画像、rights verdict | Works Classifier Agent | `works_classification.json`、载体判定 | works classifier carrier gate | 判定为随记/弃稿 → 留痕不进 produce；疑难 → `manual_required` |
 | `creative planning` | evidence packet、SOP、作者画像 | Creative Planner Agent | `CreativeBrief` | creative plan gate | 读者承诺空泛、与同实体其它内容重复 |
 | `authoring` | creative brief、evidence packet | Creator Agent | draft、assets refs、`draft_meta` | draft structure gate | 新增事实越界、载体不匹配 |
 | `self critique` | draft | Self Critic Agent | self-check、修订建议 | self-check completeness gate | 自检缺失或未覆盖关键风险 |
+| `entity-tag recognition` | draft、`draft_meta`、publish/entities、publish/tags | Entity-Tag Recognition Agent | `extractedEntities`、`extractedTagCandidates`、`semanticMentions` | mention consistency gate | 候选未发布即写 active refs、扁平/自造标签 |
 | `independent review` | draft、evidence、rights、self-check | Independent Review Agent | `GateVerdict` | review hard gates | 事实、权利、图文、人格边界任一硬失败 |
 | `optimizer repair` | failed verdict、draft、evidence | Optimizer Agent | repair draft、repair note | same failed gate only | 同一失败指纹超过 2 次 |
 | `batch reduce` | 全部对象 verdict | Batch Reducer | batch verdict | duplicate/diversity/reuse gate | 跨稿重复、底稿或资产复用 |

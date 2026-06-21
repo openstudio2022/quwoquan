@@ -1574,7 +1574,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     final result = <ArticleInlineSpan>[];
     result.addAll(
       existing
-          .where((span) => span.isEntity)
+          .where((span) => span.isInlineMention)
           .map((span) {
             return ArticleInlineSpan(
               start: span.start.clamp(0, maxOffset),

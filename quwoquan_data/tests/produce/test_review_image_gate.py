@@ -67,6 +67,13 @@ def test_clean_assets_pass():
     assert single["humanReview"] is False
 
 
+def test_text_only_article_skips_image_gate():
+    gate = _check_image_gate({"carrier": "article", "publishMediaMode": "text_only", "assets": []})
+    assert gate["passed"] is True
+    assert gate["humanReview"] is False
+    assert any("text-only" in note for note in gate.get("notes", []))
+
+
 def test_unsafe_blocks_revision():
     assets = [{"assetId": "w", "sourcePath": str(_watermark(_TMP / "wm.jpg"))}]
     gate = _check_image_gate({"assets": assets})

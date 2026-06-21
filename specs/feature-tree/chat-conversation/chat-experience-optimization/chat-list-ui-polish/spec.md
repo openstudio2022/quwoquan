@@ -233,18 +233,18 @@
 
 ## 12. 验收重点
 
-### T1
+### local_contract
 
 - 时间格式化、摘要映射、角标计数和减数逻辑具备可单测的纯函数或 typed view-model
 
-### T2
+### local_contract
 
 - 列表行结构、弱分割线、头像灰底、胶囊显隐和空状态在 widget / integration 层稳定可验证
 
-### T3
+### api_integration
 
 - inbox contract、已读递减、`@我` 计数来源与 metadata / codegen 一致
 
-### T4
+### user_acceptance
 
 - 真机对比微信消息列表，确认首屏扫读感、头像辨识度、时间层级和分割线节奏达到行业一流基线

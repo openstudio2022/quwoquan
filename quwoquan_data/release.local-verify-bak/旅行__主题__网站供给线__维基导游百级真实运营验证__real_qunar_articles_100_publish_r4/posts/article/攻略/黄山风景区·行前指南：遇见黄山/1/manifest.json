@@ -1,0 +1,164 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_7128a2ec11884ba0",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/黄山风景区"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:黄山风景区"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfile": {
+      "entityRef": "/entity/地点/景区/黄山风景区",
+      "regions": [
+        "高原"
+      ],
+      "seasons": [
+        "春"
+      ],
+      "altitudeMeters": null,
+      "notes": null,
+      "conditionSource": "entityConditionProfile"
+    },
+    "region": {
+      "name": "高原",
+      "label": "高原",
+      "source": "entityProfile"
+    },
+    "season": {
+      "name": "春",
+      "label": "春",
+      "source": "entityProfile"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7896321",
+    "https://touch.travel.qunar.com/youji/7891068",
+    "https://touch.travel.qunar.com/youji/7902694",
+    "https://touch.travel.qunar.com/youji/7901394",
+    "https://touch.travel.qunar.com/youji/7899260",
+    "https://touch.travel.qunar.com/youji/7860188",
+    "https://touch.travel.qunar.com/youji/7893555"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "claude-4.6-opus-high-thinking",
+  "citedSourceRefs": [
+    "entities/地点/景区/黄山风景区/1.download/sources/54.qunar_guide_candidate_7128a2ec11884ba0/source.md",
+    "entities/地点/景区/黄山风景区/1.download/sources/04.qunar_guide_candidate_0d96b9b9ae750ba0/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "黄山风景区·行前指南：遇见黄山",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "黄山风景区",
+    "routeEntities": [
+      "黄山风景区"
+    ],
+    "beats": [
+      "先从 黄山风景区 进入主线。",
+      "考虑到第一次游玩黄山，为了保障游玩线路的合理性，因此山脚下的住宿就需要具备介绍黄山游玩线路的功能，在经过多方对比，最终选择了【昆仑国际青年旅舍（黄山景区店）】，标间222元/晚，从居住到服务让人非常舒服",
+      "但是，让我觉得最值得推荐的是这家的服务，不光是免费登山杖的提供、免费行李寄存，最让人感到贴心的是【每晚8点】的【黄山旅游线路讲解】，店家很贴心的准备了PPT讲解，包括上下山的线路、交通路线、山上饮食、山顶帐篷租赁等",
+      "光明顶牌子处拍照人排队很多",
+      "第二天五点多就醒了，吃过早饭，才六点半就到了换乘中心，一路都很顺畅，入景区、乘坐大巴都不需要排队"
+    ],
+    "sourceNote": "皖赣五日游：黄山西递、瑶里古镇、婺源自驾,2026黄山游记,黄山旅游/自助游/自由行/游玩攻略-【去哪儿攻略】\n梦回... 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n皖赣五日游：黄山西递、瑶里古镇、婺源自驾\n梦回1980\n2025/08/11出发\n美图\n人物\n家庭\n玩法\n人均\n1500元\n前言\n说说这次旅行\n暑假的8月份，天气",
+    "relatedTopics": [
+      "黄山风景区",
+      "考虑到第一次游玩黄山，为了保障游玩线路的合理性，因此山脚下的住宿就需要具备介绍黄山游玩线路的功能，在经过多方对比，最终选择了【昆仑国际青年旅舍（黄山景区店）】，标间222元/晚，从居住到服务让人非常舒服",
+      "但是，让我觉得最值得推荐的是这家的服务，不光是免费登山杖的提供、免费行李寄存，最让人感到贴心的是【每晚8点】的【黄山旅游线路讲解】，店家很贴心的准备了PPT讲解，包括上下山的线路、交通路线、山上饮食、山顶帐篷租赁等",
+      "光明顶牌子处拍照人排队很多",
+      "第二天五点多就醒了，吃过早饭，才六点半就到了换乘中心，一路都很顺畅，入景区、乘坐大巴都不需要排队"
+    ],
+    "mustIncludeFacts": [
+      "黄山风景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-19T22:36:43.628947+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:黄山风景区"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "高原"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_7973382ab0576bb0",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "黄山风景区",
+      "sourceEntityRef": "/entity/地点/景区/黄山风景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_7128a2ec11884ba0",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 16
+    }
+  ],
+  "articleMarkdownDigest": "sha256:8035658c52ef91df5a0d156e33ce43d90e0b83effa8954b91e0f54fc054c14d3"
+}

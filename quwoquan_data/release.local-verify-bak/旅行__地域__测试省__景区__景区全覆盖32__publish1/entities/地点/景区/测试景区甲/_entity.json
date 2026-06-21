@@ -1,0 +1,10 @@
+{
+  "entityRef": "/entity/地点/景区/测试景区甲",
+  "label": "测试景区甲",
+  "tagRefs": [
+    "四川省",
+    "景区"
+  ],
+  "geoTagRef": "四川省",
+  "sourceTaskId": "旅行/地域/测试省/景区/景区全覆盖32"
+}

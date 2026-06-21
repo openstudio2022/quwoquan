@@ -74,10 +74,10 @@ idle
 
 ## 测试切面
 
-- `T1`：手势策略配置、页面类型、平台和保护窗口契约。
-- `T2`：Widget/Provider 状态机、Page 工厂输出与 back guard 模拟。
-- `T3`：Router/Navigator/back dispatcher 集成。
-- `T4`：iOS / Android Patrol 旅程。
+- `local_contract`：手势策略配置、页面类型、平台和保护窗口契约。
+- `local_contract`：Widget/Provider 状态机、Page 工厂输出与 back guard 模拟。
+- `api_integration`：Router/Navigator/back dispatcher 集成。
+- `user_acceptance`：iOS / Android Patrol 旅程。
 
 ## 性能与观测
 

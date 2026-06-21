@@ -66,6 +66,137 @@ def test_fetch_source_payload_allows_source_level_fetchable_override():
     assert "沈阳世博园" in payload["text"]
 
 
+def test_fetch_source_payload_uses_dpm_official_registry_source():
+    html = "<html><body>故宫博物院 开放时间 在线订票 交通路线 参观须知</body></html>"
+    orig_http = fetch_mod._http_get_bytes
+    orig_curl = fetch_mod._curl_get_text
+    try:
+        fetch_mod._http_get_bytes = lambda url, timeout=20, max_redirects=4, max_retries=4: (
+            200,
+            html.encode("utf-8"),
+            "",
+        )
+        fetch_mod._curl_get_text = lambda url, timeout=90: html
+        payload = fetch_mod.fetch_source_payload("https://www.dpm.org.cn/Home.html")
+    finally:
+        fetch_mod._http_get_bytes = orig_http
+        fetch_mod._curl_get_text = orig_curl
+
+    assert payload["runtime"]["siteId"] == "scenic_official"
+    assert payload["runtime"]["extractor"] == "static_official_html"
+    assert payload["runtime"]["fetchable"] is True
+    assert "故宫博物院" in payload["text"]
+    assert "在线订票" in payload["text"]
+
+
+def test_fetch_source_payload_uses_source_extractor_override():
+    orig_http = fetch_mod._http_get_bytes
+    orig_curl = fetch_mod._curl_get_text
+    try:
+        fetch_mod._http_get_bytes = lambda url, timeout=20, max_redirects=4, max_retries=4: (_ for _ in ()).throw(
+            AssertionError("wikipedia_api should fetch API evidence directly")
+        )
+        fetch_mod._curl_get_text = lambda url, timeout=90: (
+            '{"query":{"pages":{"1":{"extract":"维基导游专用正文"}}}}'
+        )
+        payload = fetch_mod.fetch_source_payload(
+            "https://zh.wikivoyage.org/wiki/雅安",
+            source={"extractor": "wikipedia_api", "fetchable": True},
+        )
+    finally:
+        fetch_mod._http_get_bytes = orig_http
+        fetch_mod._curl_get_text = orig_curl
+    assert payload["runtime"]["extractor"] == "wikipedia_api"
+    assert payload["runtime"]["sourceExtractorOverride"] is True
+    assert payload["runtime"]["rawFormat"] == "mediawiki_api_json"
+    assert payload["text"] == "维基导游专用正文"
+
+
+def test_wikipedia_api_payload_falls_back_to_http_bytes_when_curl_fails():
+    orig_http = fetch_mod._http_get_bytes
+    orig_curl = fetch_mod._curl_get_text
+
+    def fake_http(url: str, timeout=20, max_redirects=4, max_retries=4):
+        _ = (timeout, max_redirects, max_retries)
+        assert "/w/api.php?" in url
+        return (
+            200,
+            '{"query":{"pages":{"1":{"extract":"黄果树瀑布稳定百科正文"}}}}'.encode("utf-8"),
+            "",
+        )
+
+    try:
+        fetch_mod._curl_get_text = lambda url, timeout=90: (_ for _ in ()).throw(
+            RuntimeError("curl transient failure")
+        )
+        fetch_mod._http_get_bytes = fake_http
+        payload = fetch_mod.fetch_source_payload(
+            "https://zh.wikipedia.org/wiki/%E9%BB%84%E6%9E%9C%E6%A0%91%E7%80%91%E5%B8%83"
+        )
+    finally:
+        fetch_mod._http_get_bytes = orig_http
+        fetch_mod._curl_get_text = orig_curl
+
+    assert payload["statusCode"] == 200
+    assert payload["runtime"]["extractor"] == "wikipedia_api"
+    assert payload["runtime"]["rawFormat"] == "mediawiki_api_json"
+    assert payload["text"] == "黄果树瀑布稳定百科正文"
+
+
+def test_wikipedia_api_payload_repairs_malformed_mediawiki_unicode_escape_for_parse_only():
+    raw = '{"query":{"pages":{"1":{"extract":"中国 \\uWikivoyage 旅行正文"}}}}'
+    orig_curl = fetch_mod._curl_get_text
+    try:
+        fetch_mod._curl_get_text = lambda url, timeout=90: raw
+        payload = fetch_mod.fetch_source_payload(
+            "https://zh.wikivoyage.org/wiki/中国",
+            source={"extractor": "wikipedia_api", "fetchable": True},
+        )
+    finally:
+        fetch_mod._curl_get_text = orig_curl
+
+    assert payload["htmlBytes"] == raw.encode("utf-8")
+    assert payload["text"] == "中国 \\uWikivoyage 旅行正文"
+
+
+def test_wikipedia_api_payload_carries_rights_checked_image_assets():
+    def fake_curl(url: str, timeout: int = 90) -> str:
+        if "prop=extracts" in url:
+            return '{"query":{"pages":{"1":{"extract":"九寨沟位于四川省阿坝藏族羌族自治州。"}}}}'
+        if "prop=pageimages%7Cimages" in url or "prop=pageimages|images" in url:
+            return '{"query":{"pages":{"1":{"images":[{"title":"File:Jiuzhaigou.jpg"}]}}}}'
+        if "prop=imageinfo" in url:
+            return (
+                '{"query":{"pages":{"2":{"title":"File:Jiuzhaigou.jpg","imageinfo":[{'
+                '"url":"https://upload.wikimedia.org/wikipedia/commons/a/a1/Jiuzhaigou.jpg",'
+                '"descriptionurl":"https://commons.wikimedia.org/wiki/File:Jiuzhaigou.jpg",'
+                '"mime":"image/jpeg","width":1200,"height":800,'
+                '"extmetadata":{'
+                '"LicenseShortName":{"value":"CC BY-SA 4.0"},'
+                '"LicenseUrl":{"value":"https://creativecommons.org/licenses/by-sa/4.0/"},'
+                '"Artist":{"value":"Example Photographer"}'
+                '}}]}}}}'
+            )
+        raise AssertionError(f"unexpected url {url}")
+
+    orig_curl = fetch_mod._curl_get_text
+    try:
+        fetch_mod._curl_get_text = fake_curl
+        payload = fetch_mod.fetch_source_payload(
+            "https://zh.wikivoyage.org/wiki/九寨沟",
+            source={"extractor": "wikipedia_api", "fetchable": True},
+        )
+    finally:
+        fetch_mod._curl_get_text = orig_curl
+    assert payload["text"].startswith("九寨沟位于")
+    asset = payload["assets"][0]
+    assert asset["license"] == "CC BY-SA 4.0"
+    assert asset["credit"] == "Example Photographer"
+    assert asset["sourceUrl"].startswith("https://commons.wikimedia.org/")
+    assert asset["termsUrl"].startswith("https://creativecommons.org/")
+    assert asset["usageScope"] == "wikimedia_commons_open_license_publish_candidate"
+
+
 def test_static_official_plaintext_reads_ems517_api_payload():
     payload = {
         "code": 0,

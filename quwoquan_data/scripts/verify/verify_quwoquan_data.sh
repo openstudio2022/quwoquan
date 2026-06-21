@@ -18,6 +18,8 @@ python3 quwoquan_data/tests/task/test_object_queue.py
 # 生产级内容供给闭环：current 契约 / reliabletask 后端 / AgentResultEnvelope / token ledger
 python3 quwoquan_data/scripts/cli.py verify single-contract-source
 python3 quwoquan_data/scripts/cli.py verify content-supply-production
+# 作品 vs 随记判定契约：works_classification schema/config/registry 一致性 + 判定 smoke
+python3 quwoquan_data/scripts/cli.py verify works-classification
 python3 quwoquan_data/tests/verify/test_scale_readiness.py
 python3 quwoquan_data/tests/site_supply/test_site_supply_contract.py
 python3 quwoquan_data/tests/verify/test_site_scale_readiness.py
@@ -39,6 +41,8 @@ python3 quwoquan_data/scripts/cli.py template lint
 python3 quwoquan_data/scripts/cli.py template creator-lint
 python3 quwoquan_data/scripts/cli.py template rec-contract
 python3 quwoquan_data/scripts/cli.py template region-season-lint
+# 虚拟作者内容感知匹配：底稿信号(范围/载体/题材)择优 + 区域>全国 + 载体偏向 + 单候选稳定 + 确定性
+python3 quwoquan_data/tests/template/test_creator_match.py
 # 收紧扫描范围：只校验发布面 posts 根
 python3 quwoquan_data/scripts/cli.py verify --scope current
 # 任务工程：committed 任务规格校验（路径↔id、archetype scope、实体类型真相源、重复）

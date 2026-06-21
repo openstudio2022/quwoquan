@@ -1,14 +1,15 @@
-"""下载阶段图片门禁规则：相关性必填(非模板)、每实体最少数量、最小像素尺寸。
+"""下载阶段图片门禁规则：相关性必填(非模板)、最小像素尺寸。
 
 与对象证据链规格一致：每张图必须能说清「与检索对象的真实相关性」，禁止通用模板串
-（如 "{实体} 实景主图"）。数量与像素门保证内容页不会出现单图/糊图。
+（如 "{实体} 实景主图"）。像素门保证内容页不会出现糊图；数量门由当前
+ContentSupplyTask 的载体配额决定，图片作品允许单张高质量图。
 真相源：docs/pipeline_directory_layout_spec.md + 用户图片下载要求。
 """
 from __future__ import annotations
 
 import re
 
-# 每个实体最少要下到的合格图片数（封面 + 至少一张细节）。
+# 旧任务的默认实体图数量；新 separated research 按任务配额动态计算。
 MIN_ENTITY_IMAGES = 2
 
 # 最小像素尺寸门：长边 >= 800，且宽高均 >= 设定下限，避免缩略糊图进内容页。
@@ -100,12 +101,16 @@ def pixel_size_issue(width: int | None, height: int | None, *, asset_id: str) ->
     return None
 
 
-def min_count_issue(downloaded: int, *, entity_id: str) -> str | None:
-    """实体图片数量门：少于 MIN_ENTITY_IMAGES 返回问题串。"""
-    if int(downloaded) < MIN_ENTITY_IMAGES:
+def min_count_issue(downloaded: int, *, entity_id: str, required: int | None = None) -> str | None:
+    """实体图片数量门：少于 required 返回问题串。
+
+    required 为空时仅用于旧任务默认门；新工作流应传入由任务配额计算出的数量。
+    """
+    min_required = MIN_ENTITY_IMAGES if required is None else max(0, int(required))
+    if int(downloaded) < min_required:
         return (
             f"imageCount: {entity_id} 仅下到 {downloaded} 张合格图"
-            f"（要求 ≥{MIN_ENTITY_IMAGES}：封面+细节）"
+            f"（要求 ≥{min_required}）"
         )
     return None
 

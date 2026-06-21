@@ -15,6 +15,7 @@ class AppBottomModalSurface extends StatelessWidget {
     this.maxHeightRatio,
     this.panelMaxWidth,
     this.showHandle = true,
+    this.includeBottomSafeAreaPadding = true,
     this.panelKey,
   });
 
@@ -25,6 +26,7 @@ class AppBottomModalSurface extends StatelessWidget {
   final double? maxHeightRatio;
   final double? panelMaxWidth;
   final bool showHandle;
+  final bool includeBottomSafeAreaPadding;
   final Key? panelKey;
 
   @override
@@ -91,7 +93,9 @@ class AppBottomModalSurface extends StatelessWidget {
                         child: Padding(
                           padding: contentPadding.add(
                             EdgeInsets.only(
-                              bottom: MediaQuery.viewPaddingOf(context).bottom,
+                              bottom: includeBottomSafeAreaPadding
+                                  ? MediaQuery.viewPaddingOf(context).bottom
+                                  : 0,
                             ),
                           ),
                           child: Column(

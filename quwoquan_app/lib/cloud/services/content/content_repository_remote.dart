@@ -244,7 +244,38 @@ class RemoteContentRepository implements ContentRepository {
         .cast<Map<String, dynamic>>()
         .map(CommentDto.fromMap)
         .toList(growable: false);
-    return CommentPage(items: dtos, nextCursor: rawPage.nextCursor);
+    return CommentPage(
+      items: dtos,
+      nextCursor: rawPage.nextCursor,
+      totalCount: rawPage.totalCount,
+    );
+  }
+
+  @override
+  Future<CommentCountsDelta> getCommentCountsDelta({
+    required String postId,
+    DateTime? since,
+  }) async {
+    final query = <String, String>{};
+    if (since != null) {
+      // 半开区间下界，RFC3339（UTC）；为空表示首同步（无下界）。
+      query['since'] = since.toUtc().toIso8601String();
+    }
+    final uri = _uri(
+      ContentApiMetadata.getCommentCountsDeltaPath(postId: postId),
+      queryParameters: query.isEmpty ? null : query,
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.getCommentCountsDelta,
+      ),
+    );
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: ContentRequestPageIds.getCommentCountsDelta,
+    );
+    return CommentCountsDelta.fromMap(obj);
   }
 
   @override
@@ -277,7 +308,11 @@ class RemoteContentRepository implements ContentRepository {
         .cast<Map<String, dynamic>>()
         .map(CommentDto.fromMap)
         .toList(growable: false);
-    return CommentPage(items: dtos, nextCursor: rawPage.nextCursor);
+    return CommentPage(
+      items: dtos,
+      nextCursor: rawPage.nextCursor,
+      totalCount: rawPage.totalCount,
+    );
   }
 
   @override
@@ -351,6 +386,39 @@ class RemoteContentRepository implements ContentRepository {
       decoded,
       context: ContentRequestPageIds.reactToComment,
     );
+    return _commentDtoFromContentWire(obj);
+  }
+
+  @override
+  Future<CommentDto> setCommentPinned({
+    required String postId,
+    required String commentId,
+    required bool pinned,
+  }) async {
+    final path = pinned
+        ? ContentApiMetadata.pinCommentPath(
+            postId: postId,
+            commentId: commentId,
+          )
+        : ContentApiMetadata.unpinCommentPath(
+            postId: postId,
+            commentId: commentId,
+          );
+    final uri = _uri(path);
+    final pageId = pinned
+        ? ContentRequestPageIds.pinComment
+        : ContentRequestPageIds.unpinComment;
+    final decoded = pinned
+        ? await _httpClient.postJson(
+            uri,
+            headers: CloudRequestHeaders.forPage(pageId),
+            body: const <String, dynamic>{},
+          )
+        : await _httpClient.deleteJson(
+            uri,
+            headers: CloudRequestHeaders.forPage(pageId),
+          );
+    final obj = CloudResponseDecoder.asObject(decoded, context: pageId);
     return _commentDtoFromContentWire(obj);
   }
 

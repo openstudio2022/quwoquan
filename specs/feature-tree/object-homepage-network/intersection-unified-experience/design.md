@@ -108,10 +108,10 @@ flowchart LR
 
 ## 测试设计
 
-- T1：新 projection/service 字段、冷却/保鲜 keyspace 登记、behaviors 归因；Mock 与 Remote 字段一致。
-- T2：inbox 清零、≤3 维度展开、卡去按钮/头像名字/红数字、campus/travel 出交集、空态。
-- T3：summary/list/visit/feed-intersections/exposure 与真实 API 对齐，冷却窗口生效。
-- T4：发现交集→进对象页→行动→回流→冷却换新；inbox 自上次新增。
+- local_contract：新 projection/service 字段、冷却/保鲜 keyspace 登记、behaviors 归因；Mock 与 Remote 字段一致。
+- local_contract：inbox 清零、≤3 维度展开、卡去按钮/头像名字/红数字、campus/travel 出交集、空态。
+- api_integration：summary/list/visit/feed-intersections/exposure 与真实 API 对齐，冷却窗口生效。
+- user_acceptance：发现交集→进对象页→行动→回流→冷却换新；inbox 自上次新增。
 
 ## 风险
 
@@ -144,7 +144,7 @@ flowchart LR
 score = valueWeight(tier) × freshness(decay) × confidence × diversityPenalty × cooldownGate
 ```
 
-- `valueWeight(tier)`：T1=1.0 / T2=0.75 / T3=0.5 / T4=0.3（注册表 `valueTierWeights`）。
+- `valueWeight(tier)`：local_contract=1.0 / local_contract=0.75 / api_integration=0.5 / user_acceptance=0.3（注册表 `valueTierWeights`）。
 - `freshness = exp(-ageHours / freshnessHalfLifeHours)`，`policy.yaml` 分维度 TTL 派生半衰期。
 - `confidence`：fact=1.0；affinity=模型分，低于注册表 `confidenceThreshold` 不产出。
 - `diversityPenalty`：同维度/同对象连续命中降权，保证多样性。
@@ -216,7 +216,7 @@ flowchart LR
 - 热（请求期）：小集合求交 + `cache:viewer_intersections`(TTL 900s) + `rec:icool` 冷却 + 上限/截断 + 分页 cursor。
 - 温（高频聚合）：`viewer_object_intersections` 增量物化预投影，按 viewer 分片水平扩展。
 - 冷（离线批）：Lifecycle 状态机、多跳 Propagation、Affinity 打分、**coLiked 大集合求交** —— 分期。
-- coLiked 红线：禁请求期全量，必须预投影/采样/上限，排序最末（T4）。
+- coLiked 红线：禁请求期全量，必须预投影/采样/上限，排序最末（user_acceptance）。
 - 降级开关分级：关概率 → 关频道 → 回退简化卡。
 
 ### 端侧实现（本期 Mock 原型）

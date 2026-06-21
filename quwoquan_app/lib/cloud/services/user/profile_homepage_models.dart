@@ -27,7 +27,9 @@ class SubAccountProfileViewData {
     required this.userHandle,
     required this.username,
     required this.displayName,
+    this.nicknameCustomized = false,
     required this.avatarUrl,
+    this.avatarVersion = 0,
     required this.backgroundUrl,
     required this.bio,
     this.identityTags = const <String>[],
@@ -52,7 +54,12 @@ class SubAccountProfileViewData {
   final String userHandle;
   final String username;
   final String displayName;
+
+  /// 昵称是否被用户自定义过。false = 仍是云侧默认昵称（我的主页展示编辑画笔，
+  /// 引导用户改名）；true = 用户已改名，主页不再展示编辑画笔。
+  final bool nicknameCustomized;
   final String avatarUrl;
+  final int avatarVersion;
   final String backgroundUrl;
   final String bio;
 
@@ -93,8 +100,14 @@ class SubAccountProfileViewData {
         : (w.username.isNotEmpty ? w.username : subAccountId);
     final subjectType = w.subjectType.isNotEmpty ? w.subjectType : 'user';
     final username = w.username.isNotEmpty ? w.username : userHandle;
-    final avatarUrl = resolveAvatarImageUrl(w.avatarUrl);
-    final backgroundUrl = resolveContentMediaUrl(w.backgroundUrl);
+    // 本地选取（相册/拍照）的临时文件路径在 alpha「保存后即时回显」链路中原样保留，
+    // 不经媒体解析器（否则会被当作服务端相对路径拼接成不可访问 URL）。
+    final avatarUrl = isLocalFileImageSource(w.avatarUrl)
+        ? w.avatarUrl
+        : resolveAvatarImageUrl(w.avatarUrl, avatarVersion: w.avatarVersion);
+    final backgroundUrl = isLocalFileImageSource(w.backgroundUrl)
+        ? w.backgroundUrl
+        : resolveContentMediaUrl(w.backgroundUrl);
     return SubAccountProfileViewData(
       subAccountId: subAccountId,
       ownerUserId: w.ownerUserId,
@@ -102,7 +115,9 @@ class SubAccountProfileViewData {
       userHandle: userHandle,
       username: username,
       displayName: displayName,
+      nicknameCustomized: w.nicknameCustomized,
       avatarUrl: avatarUrl,
+      avatarVersion: w.avatarVersion,
       backgroundUrl: backgroundUrl,
       bio: w.bio,
       identityTags: w.identityTags,
@@ -138,7 +153,9 @@ class SubAccountProfileViewData {
       userHandle: userHandle,
       username: username,
       displayName: displayName,
+      nicknameCustomized: nicknameCustomized,
       avatarUrl: avatarUrl,
+      avatarVersion: avatarVersion,
       backgroundUrl: backgroundUrl,
       bio: bio,
       identityTags: identityTags,
@@ -251,6 +268,7 @@ class ProfileUserLikeRowViewData {
     required this.coverUrl,
     required this.likerNickname,
     required this.likerAvatarUrl,
+    this.likerAvatarVersion = 0,
     this.likedAt,
   });
 
@@ -259,6 +277,7 @@ class ProfileUserLikeRowViewData {
   final String coverUrl;
   final String likerNickname;
   final String likerAvatarUrl;
+  final int likerAvatarVersion;
   final DateTime? likedAt;
 
   factory ProfileUserLikeRowViewData.fromProfileUserLikeRowWire(
@@ -269,7 +288,11 @@ class ProfileUserLikeRowViewData {
       title: w.title,
       coverUrl: resolveContentMediaUrl(w.coverUrl),
       likerNickname: w.likerNickname,
-      likerAvatarUrl: resolveAvatarImageUrl(w.likerAvatarUrl),
+      likerAvatarUrl: resolveAvatarImageUrl(
+        w.likerAvatarUrl,
+        avatarVersion: w.likerAvatarVersion,
+      ),
+      likerAvatarVersion: w.likerAvatarVersion,
       likedAt: w.likedAt,
     );
   }
@@ -289,12 +312,14 @@ class ProfileSocialRelationRowViewData {
     required this.subAccountId,
     required this.displayName,
     required this.avatarUrl,
+    this.avatarVersion = 0,
     this.isFollowing = false,
   });
 
   final String subAccountId;
   final String displayName;
   final String avatarUrl;
+  final int avatarVersion;
   final bool isFollowing;
 
   factory ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
@@ -305,7 +330,11 @@ class ProfileSocialRelationRowViewData {
     return ProfileSocialRelationRowViewData(
       subAccountId: id,
       displayName: name,
-      avatarUrl: resolveAvatarImageUrl(w.avatarUrl),
+      avatarUrl: resolveAvatarImageUrl(
+        w.avatarUrl,
+        avatarVersion: w.avatarVersion,
+      ),
+      avatarVersion: w.avatarVersion,
       isFollowing: w.isFollowing,
     );
   }
@@ -333,9 +362,13 @@ class ProfileInteractionActivityViewData {
     required this.activityType,
     required this.direction,
     required this.commentKind,
+    required this.commentId,
+    required this.parentCommentId,
+    this.viewerReaction = 'none',
     required this.actorSubAccountId,
     required this.actorDisplayName,
     required this.actorAvatarUrl,
+    this.actorAvatarVersion = 0,
     required this.targetSubAccountId,
     required this.targetContentId,
     required this.targetContentType,
@@ -343,6 +376,7 @@ class ProfileInteractionActivityViewData {
     required this.displaySubAccountId,
     required this.displayName,
     required this.displayAvatarUrl,
+    this.displayAvatarVersion = 0,
     required this.displayUserRouteId,
     required this.primaryText,
     required this.contextText,
@@ -360,9 +394,16 @@ class ProfileInteractionActivityViewData {
   final String activityType;
   final String direction;
   final String commentKind;
+  final String commentId;
+  final String parentCommentId;
+
+  /// 浏览者（当前登录用户）对该条评论/回复的反应：none/like/dislike。
+  /// 用于「我的主页·互动」内联赞↔已赞态展示。
+  final String viewerReaction;
   final String actorSubAccountId;
   final String actorDisplayName;
   final String actorAvatarUrl;
+  final int actorAvatarVersion;
   final String targetSubAccountId;
   final String targetContentId;
   final String targetContentType;
@@ -370,6 +411,7 @@ class ProfileInteractionActivityViewData {
   final String displaySubAccountId;
   final String displayName;
   final String displayAvatarUrl;
+  final int displayAvatarVersion;
   final String displayUserRouteId;
   final String primaryText;
   final String contextText;
@@ -404,6 +446,10 @@ class ProfileInteractionActivityViewData {
     final displayAvatarUrl = w.displayAvatarUrl.isNotEmpty
         ? w.displayAvatarUrl
         : w.actorAvatarUrl;
+    final actorAvatarVersion = w.actorAvatarVersion;
+    final displayAvatarVersion = w.displayAvatarVersion > 0
+        ? w.displayAvatarVersion
+        : (displayAvatarUrl == w.actorAvatarUrl ? w.actorAvatarVersion : 0);
     final primaryText = w.primaryText;
     final previewObjectId = w.previewObjectId.isNotEmpty
         ? w.previewObjectId
@@ -415,17 +461,27 @@ class ProfileInteractionActivityViewData {
       'all',
       ...w.filterKeys.map((key) => key.trim()).where((key) => key.isNotEmpty),
     }.toList(growable: false);
-    final actorAvatarUrl = resolveAvatarImageUrl(w.actorAvatarUrl);
-    final resolvedDisplayAvatarUrl = resolveAvatarImageUrl(displayAvatarUrl);
+    final actorAvatarUrl = resolveAvatarImageUrl(
+      w.actorAvatarUrl,
+      avatarVersion: actorAvatarVersion,
+    );
+    final resolvedDisplayAvatarUrl = resolveAvatarImageUrl(
+      displayAvatarUrl,
+      avatarVersion: displayAvatarVersion,
+    );
     final previewImageUrl = resolveContentMediaUrl(w.previewImageUrl);
     return ProfileInteractionActivityViewData(
       activityId: activityId,
       activityType: w.activityType,
       direction: w.direction,
       commentKind: w.commentKind,
+      commentId: w.commentId,
+      parentCommentId: w.parentCommentId,
+      viewerReaction: w.viewerReaction,
       actorSubAccountId: w.actorSubAccountId,
       actorDisplayName: actorDisplayName,
       actorAvatarUrl: actorAvatarUrl,
+      actorAvatarVersion: actorAvatarVersion,
       targetSubAccountId: w.targetSubAccountId,
       targetContentId: w.targetContentId,
       targetContentType: w.targetContentType,
@@ -433,6 +489,7 @@ class ProfileInteractionActivityViewData {
       displaySubAccountId: displaySubAccountId,
       displayName: displayName,
       displayAvatarUrl: resolvedDisplayAvatarUrl,
+      displayAvatarVersion: displayAvatarVersion,
       displayUserRouteId: w.displayUserRouteId,
       primaryText: primaryText,
       contextText: w.contextText,
@@ -465,6 +522,7 @@ class ActivePersonaContextViewData {
     required this.subjectType,
     required this.displayName,
     required this.avatarUrl,
+    this.avatarVersion = 0,
     required this.personaContextVersion,
     this.isPrimary = false,
     this.isFallback = false,
@@ -475,6 +533,7 @@ class ActivePersonaContextViewData {
   final String subjectType;
   final String displayName;
   final String avatarUrl;
+  final int avatarVersion;
   final String personaContextVersion;
   final bool isPrimary;
   final bool isFallback;
@@ -516,7 +575,11 @@ class ActivePersonaContextViewData {
       ownerUserId: ownerUserId,
       subjectType: subjectType,
       displayName: displayName,
-      avatarUrl: resolveAvatarImageUrl(w.avatarUrl),
+      avatarUrl: resolveAvatarImageUrl(
+        w.avatarUrl,
+        avatarVersion: w.avatarVersion,
+      ),
+      avatarVersion: w.avatarVersion,
       personaContextVersion: w.personaContextVersion,
       isPrimary: w.isPrimary,
     );
@@ -534,6 +597,7 @@ class ActivePersonaContextViewData {
     required String ownerUserId,
     required String displayName,
     required String avatarUrl,
+    int avatarVersion = 0,
     String subjectType = 'subAccount',
     String personaContextVersion = '',
   }) {
@@ -543,6 +607,7 @@ class ActivePersonaContextViewData {
       subjectType: subjectType,
       displayName: displayName,
       avatarUrl: avatarUrl,
+      avatarVersion: avatarVersion,
       personaContextVersion: personaContextVersion,
       isFallback: true,
     );
@@ -558,6 +623,7 @@ class PersonaManagementItemViewData {
     required this.phone,
     required this.email,
     required this.avatarUrl,
+    this.avatarVersion = 0,
     required this.isolationLevel,
     required this.profileVisibility,
     required this.isPrimary,
@@ -580,6 +646,7 @@ class PersonaManagementItemViewData {
   final String phone;
   final String email;
   final String avatarUrl;
+  final int avatarVersion;
   final String isolationLevel;
   final String profileVisibility;
   final bool isPrimary;
@@ -616,7 +683,11 @@ class PersonaManagementItemViewData {
       userHandle: w.userHandle,
       phone: w.phone,
       email: w.email,
-      avatarUrl: resolveAvatarImageUrl(w.avatarUrl),
+      avatarUrl: resolveAvatarImageUrl(
+        w.avatarUrl,
+        avatarVersion: w.avatarVersion,
+      ),
+      avatarVersion: w.avatarVersion,
       isolationLevel: w.isolationLevel,
       profileVisibility: w.profileVisibility,
       isPrimary: w.isPrimary,
@@ -843,4 +914,3 @@ class UserLifeItem {
 }
 
 // ─── 主页首屏聚合（homepage-bundle，锁定决策 #1：一次聚合 + 交集/影响力并发补充）──
-

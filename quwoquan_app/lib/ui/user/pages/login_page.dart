@@ -16,11 +16,14 @@ import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 import 'package:simple_icons/simple_icons.dart';
+
+part 'login_page_top_bar.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({
@@ -1235,6 +1238,7 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost> {
       reason: widget.reason,
       presentation: _presentation,
       agreementAccepted: _agreementAccepted,
+      allowGuestDismissPop: widget.allowGuestDismissPop,
       isInline: widget.surfaceMode == LoginSurfaceMode.inline,
       phoneController: _phoneController,
       otpController: _otpController,
@@ -1415,6 +1419,7 @@ class LoginFrame extends StatelessWidget {
     required this.onPhoneChanged,
     required this.onOtpChanged,
     required this.onResendOtp,
+    this.allowGuestDismissPop = true,
     this.isInline = false,
   });
 
@@ -1432,6 +1437,10 @@ class LoginFrame extends StatelessWidget {
   final ValueChanged<String> onPhoneChanged;
   final ValueChanged<String> onOtpChanged;
   final VoidCallback onResendOtp;
+
+  /// 关闭语义：强登录入口（`allowGuestDismissPop == false`，关闭走安全兜底而非
+  /// 原路 pop）按 iOS Modal leading 语义用 `xmark`；可 pop 回上一页的软入口用 `back`。
+  final bool allowGuestDismissPop;
   final bool isInline;
 
   @override
@@ -1463,7 +1472,10 @@ class LoginFrame extends StatelessWidget {
                         mainAxisSize: MainAxisSize.max,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          _LoginTopBar(onDismiss: onDismiss),
+                          _LoginTopBar(
+                            onDismiss: onDismiss,
+                            allowGuestDismissPop: allowGuestDismissPop,
+                          ),
                           const SizedBox(
                             height: AppSpacing.loginTopBarToHeroGap,
                           ),
@@ -1617,30 +1629,6 @@ LoginReasonCopy _loginHeroCopyForPresentation(
     ),
     _ => loginReasonCopyForName(routeReason),
   };
-}
-
-class _LoginTopBar extends StatelessWidget {
-  const _LoginTopBar({required this.onDismiss});
-
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Semantics(
-          button: true,
-          label: UITextConstants.loginDismissSemanticLabel,
-          child: AppNavigationBarIconButton(
-            icon: CupertinoIcons.back,
-            onPressed: onDismiss,
-            color: AppColors.iosLabel(context),
-          ),
-        ),
-        const Spacer(),
-      ],
-    );
-  }
 }
 
 class LoginHeroBrand extends StatelessWidget {
@@ -2414,12 +2402,11 @@ class _Avatar extends StatelessWidget {
                 color: AppColors.iosAccent(context),
               ),
             )
-          : Image.network(
-              avatarUrl,
+          : AppAvatarImage(
+              imageUrl: avatarUrl,
+              size: AppSpacing.loginAvatarSize,
               fit: BoxFit.cover,
-              width: AppSpacing.loginAvatarSize,
-              height: AppSpacing.loginAvatarSize,
-              errorBuilder: (_, __, ___) => Text(
+              errorWidget: Text(
                 UITextConstants.loginDefaultAvatarGlyph,
                 style: TextStyle(
                   fontSize: AppTypography.iosProfileTitle,
@@ -2453,7 +2440,10 @@ class PrimaryLoginButton extends StatelessWidget {
       enabled: enabled && !isSubmitting,
       label: label,
       child: CupertinoButton(
-        minSize: AppSpacing.loginPrimaryButtonHeight,
+        minimumSize: const Size(
+          AppSpacing.loginPrimaryButtonHeight,
+          AppSpacing.loginPrimaryButtonHeight,
+        ),
         padding: EdgeInsets.zero,
         color: enabled
             ? AppColors.iosAccent(context)
@@ -2499,7 +2489,7 @@ class LoginAgreementRow extends StatelessWidget {
       children: <Widget>[
         CupertinoButton(
           padding: EdgeInsets.zero,
-          minSize: 44,
+          minimumSize: const Size.square(AppSpacing.minInteractiveSize),
           onPressed: onToggle,
           child: Icon(
             accepted

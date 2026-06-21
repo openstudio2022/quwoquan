@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
@@ -25,6 +26,7 @@ Widget _buildApp() {
       userProfileRepositoryProvider.overrideWithValue(
         const MockUserProfileRepository(),
       ),
+      contentRepositoryProvider.overrideWithValue(MockContentRepository()),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
       ),
@@ -59,19 +61,15 @@ void main() {
     HttpOverrides.global = _NoNetworkHttpOverrides();
   });
 
-  testWidgets('主页创作容器暴露 metadata 定义的四个筛选项', (tester) async {
+  testWidgets('主页创作容器以内联二级页签暴露 metadata 定义的四个筛选项', (tester) async {
     await tester.pumpWidget(_buildApp());
     await _pumpFrames(tester);
 
-    // 二级过滤收敛为最右单一漏斗入口：默认不再展示「筛选」文字或当前过滤名，
-    // 点开入口后在其下方暴露筛选菜单，默认选中「全部」。
-    expect(find.text('筛选'), findsNothing);
-    expect(find.text('全部'), findsNothing);
-    await tester.tap(
+    // 二级过滤改为内联横滑二级页签：四个过滤项常驻可见，默认选中「全部」。
+    expect(
       find.byKey(const ValueKey<String>('profile-works-filter-button')),
+      findsNothing,
     );
-    await _pumpFrames(tester, count: 4);
-
     expect(find.text('全部'), findsOneWidget);
     expect(find.text('图片'), findsOneWidget);
     expect(find.text('视频'), findsOneWidget);
@@ -82,10 +80,6 @@ void main() {
     await tester.pumpWidget(_buildApp());
     await _pumpFrames(tester);
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('profile-works-filter-button')),
-    );
-    await _pumpFrames(tester, count: 4);
     await tester.tap(find.text('长文'));
     await _pumpFrames(tester, count: 4);
 

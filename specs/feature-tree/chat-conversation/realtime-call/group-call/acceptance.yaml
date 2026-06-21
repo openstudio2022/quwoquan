@@ -9,11 +9,11 @@ node:
 scope:
   summary: 2~32 人多人通话：选人发起、加入/离开、通话中邀请、链接入会、信任两态。
   in_scope:
-    - 多人选人规则（≤8 全选、>8 空选）
-    - Join/Leave/Invite 与 32 人上限
-    - 通话中加人与链接入会、信任两态提示
+  - 多人选人规则（≤8 全选、>8 空选）
+  - Join/Leave/Invite 与 32 人上限
+  - 通话中加人与链接入会、信任两态提示
   out_of_scope:
-    - 1v1 状态机（见 one-to-one-call）
+  - 1v1 状态机（见 one-to-one-call）
 gwt_acceptance:
   GWT1_join_leave_limit:
     title: 多人加入、离开与 32 人上限
@@ -32,17 +32,33 @@ gwt_acceptance:
     - rtc/call_session service.yaml LeaveCall
     performance_points:
     - 参与者加入可见延迟 ≤2s。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
     tests:
-      planned:
-      - quwoquan_service/services/rtc-service/tests/multi_party_room_contract_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_join_leave_limit_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.group_call.gwt1_join_leave_limit_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: gwt1_join_leave_limit_api_integration
+        cases:
+        - api_integration.chat_conversation.realtime_call.group_call.gwt1_join_leave_limit_api_integration
+        envs: &id002
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: gwt1_join_leave_limit_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.group_call.gwt1_join_leave_limit_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_service/services/rtc-service/tests/multi_party_room_contract_test.go'
   GWT2_invite_trust:
     title: 通话中加人与信任两态提示
     given:
@@ -60,18 +76,31 @@ gwt_acceptance:
     - rtc/call_session fields.yaml trustRelation
     performance_points:
     - 邀请结果反馈 ≤2s。
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
     tests:
-      planned:
-      - quwoquan_app/test/ui/rtc/widgets/participant_trust_badge_test.dart
-      - quwoquan_service/services/rtc-service/tests/multi_party_room_contract_test.go
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_invite_trust_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.group_call.gwt2_invite_trust_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt2_invite_trust_api_integration
+        cases:
+        - api_integration.chat_conversation.realtime_call.group_call.gwt2_invite_trust_api_integration
+        envs: *id002
+      supporting:
+      - layer: local_contract
+        suite: gwt2_invite_trust_local_contract
+        cases:
+        - local_contract.chat_conversation.realtime_call.group_call.gwt2_invite_trust_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/test/ui/rtc/widgets/participant_trust_badge_test.dart'
+    - '[migrated_from_planned] quwoquan_service/services/rtc-service/tests/multi_party_room_contract_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

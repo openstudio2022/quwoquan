@@ -1,0 +1,141 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "都江堰_image",
+  "contentType": "image",
+  "entityRefs": [
+    "/entity/地点/景区/都江堰"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:都江堰"
+  ],
+  "tagRefs": [
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "semanticMentions": [],
+  "conditionContext": {
+    "region": {
+      "name": "四川省",
+      "label": "四川省"
+    },
+    "entityProfile": {
+      "entityRef": "/entity/地点/景区/都江堰",
+      "regions": [
+        "平原都市"
+      ],
+      "seasons": [
+        "春"
+      ],
+      "altitudeMeters": null,
+      "notes": null,
+      "conditionSource": "entityConditionProfile"
+    },
+    "season": {
+      "name": "春",
+      "label": "春",
+      "source": "entityProfile"
+    }
+  },
+  "sourceUrls": [
+    "https://commons.wikimedia.org/wiki/File:Current_Dujiangyan_Irrigation_System_-_panoramio.jpg"
+  ],
+  "assets": [
+    {
+      "assetId": "都江堰_cover_3_d6302a14",
+      "fileName": "都江堰_cover_3_d6302a14.jpg",
+      "caption": "Current Dujiangyan Irrigation System",
+      "imageLayout": "gallery",
+      "sha256": "sha256:972f0f5e6b315cf3d9bb0f9e1c28ba477f6a3cbdf59a0e6b13b67ee0ab66782c",
+      "sourceAssetRef": "entities/地点/景区/都江堰/1.download/sources/22.image_open_license_file_都江堰_httpscommonswikimediaorgwikifilecurrentdujiangyanirrigations_4463f9ac64/assets/001_都江堰_1.jpg",
+      "sourceRef": "entities/地点/景区/都江堰/1.download/sources/22.image_open_license_file_都江堰_httpscommonswikimediaorgwikifilecurrentdujiangyanirrigations_4463f9ac64/source.md",
+      "alignmentEvidence": "Current Dujiangyan Irrigation System",
+      "sourceCollectionId": "open_license_file:都江堰:httpscommonswikimediaorgwikifilecurrentdujiangyanirrigations:4463f9ac64",
+      "creator": "Colin W",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Current_Dujiangyan_Irrigation_System_-_panoramio.jpg",
+      "license": "CC BY-SA 3.0",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "licenseSnapshot": "CC BY-SA 3.0 recorded on Wikimedia Commons file page",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:Current_Dujiangyan_Irrigation_System_-_panoramio.jpg",
+      "usageScope": "app_publish"
+    }
+  ],
+  "template": "journal",
+  "carrier": "image",
+  "generator": "image_evidence_pack",
+  "generatorModel": null,
+  "citedSourceRefs": [
+    "entities/地点/景区/都江堰/1.download/sources/22.image_open_license_file_都江堰_httpscommonswikimediaorgwikifilecurrentdujiangyanirrigations_4463f9ac64/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "image",
+  "publishAngle": "攻略",
+  "publishTitle": "都江堰·Current Dujiangyan Irrigation System",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "都江堰",
+    "routeEntities": [
+      "都江堰"
+    ],
+    "beats": [
+      "Current Dujiangyan Irrigation System"
+    ],
+    "mustIncludeFacts": [
+      "都江堰 开放许可图片作品",
+      "图片来自同一授权来源集合，禁止跨作者或跨页面混图"
+    ]
+  },
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "sourceBatchId": "source_ready_assetrefs_10_20260619_02",
+  "title": "都江堰·Current Dujiangyan Irrigation System",
+  "caption": "Current Dujiangyan Irrigation System",
+  "sourceCollectionId": "open_license_file:都江堰:httpscommonswikimediaorgwikifilecurrentdujiangyanirrigations:4463f9ac64",
+  "creator": "Colin W",
+  "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Current_Dujiangyan_Irrigation_System_-_panoramio.jpg",
+  "license": "CC BY-SA 3.0",
+  "termsUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+  "authorizationProof": "https://commons.wikimedia.org/wiki/File:Current_Dujiangyan_Irrigation_System_-_panoramio.jpg",
+  "page": "https://commons.wikimedia.org/wiki/File:Current_Dujiangyan_Irrigation_System_-_panoramio.jpg",
+  "sourceCollectionUrl": "https://commons.wikimedia.org/wiki/File:Current_Dujiangyan_Irrigation_System_-_panoramio.jpg",
+  "licenseProof": {
+    "license": "CC BY-SA 3.0",
+    "termsUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "proofUrl": "https://commons.wikimedia.org/wiki/File:Current_Dujiangyan_Irrigation_System_-_panoramio.jpg"
+  },
+  "licenseProofRef": "https://commons.wikimedia.org/wiki/File:Current_Dujiangyan_Irrigation_System_-_panoramio.jpg",
+  "createdAt": "2026-06-19T22:07:46.275606+00:00",
+  "updatedAt": "2026-06-19T22:19:35.996479+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "四川省"
+    },
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:都江堰"
+    }
+  ]
+}

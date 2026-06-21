@@ -9,18 +9,18 @@ node:
 scope:
   summary: Work Browser V1.0 统一沉浸式作品浏览器验收范围。
   in_scope:
-    - workBrowser 统一深链入口
-    - 顶部系统层只保留返回/更多
-    - 更多菜单媒体筛选（全部作品/图片/视频/文章）
-    - 图片点状指示器、视频集胶囊、文章页尾页码
-    - 底部工具栏作者/关注/赞转评 + 交集摘要行
-    - 交集详情 sheet（点击后出现）
-    - WorkBrowserItemDto 强类型契约数据流
-    - 文章深色纸张主题系统、阅读设置与实体标签跳转
+  - workBrowser 统一深链入口
+  - 顶部系统层只保留返回/更多
+  - 更多菜单媒体筛选（全部作品/图片/视频/文章）
+  - 图片点状指示器、视频集胶囊、文章页尾页码
+  - 底部工具栏作者/关注/赞转评 + 交集摘要行
+  - 交集详情 sheet（点击后出现）
+  - WorkBrowserItemDto 强类型契约数据流
+  - 文章深色纸张主题系统、阅读设置与实体标签跳转
   out_of_scope:
-    - 保留旧深链兼容重定向
-    - 评论 Drawer 改版
-    - 收藏入口（V1.0 明确禁止）
+  - 保留旧深链兼容重定向
+  - 评论 Drawer 改版
+  - 收藏入口（V1.0 明确禁止）
 gwt_acceptance:
   GWT1:
     title: 统一作品导航与顶部系统层
@@ -39,59 +39,88 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/contracts/metadata/_shared/app_routes.yaml#workBrowser
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
       recorded:
-      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-    status: completed
+      - command: cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
+        envs: *id001
+    notes: []
   GWT2:
     title: 旧内容深链入口收敛到 workBrowser
     given:
-    - "metadata 中 `workBrowser` 是内容消费唯一深链路由。"
-    - "post link template 的 navigation route_id 指向 `workBrowser`，参数绑定为 `postId -> workId`。"
+    - metadata 中 `workBrowser` 是内容消费唯一深链路由。
+    - post link template 的 navigation route_id 指向 `workBrowser`，参数绑定为 `postId -> workId`。
     when:
     - 执行 app metadata codegen 并扫描 App 路由、UI 调用点与测试桩。
     then:
-    - "`AppRoutePaths` 仅生成 `workBrowser`，不再生成 `articleDetail`、`mediaViewer`、`videoViewer`。"
-    - "`app_router.dart` 只注册 `/works/browser/{workId}` 内容消费入口；无 extra 时按 workId 拉取作品定位队列，有 extra 时复用同一 Work Browser 壳。"
-    - "发现、搜索、圈子、个人主页、评论回原帖入口均调用 `AppRoutePaths.workBrowser(...)`。"
+    - '`AppRoutePaths` 仅生成 `workBrowser`，不再生成 `articleDetail`、`mediaViewer`、`videoViewer`。'
+    - '`app_router.dart` 只注册 `/works/browser/{workId}` 内容消费入口；无 extra 时按 workId 拉取作品定位队列，有
+      extra 时复用同一 Work Browser 壳。'
+    - 发现、搜索、圈子、个人主页、评论回原帖入口均调用 `AppRoutePaths.workBrowser(...)`。
     done_when:
     - metadata/codegen/router/UI/test 中无旧三入口残留。
     edge_cases:
-    - "单帖搜索结果可通过 `workId` 定位作品。"
-    - "圈子与个人主页传入的队列上下文仍保持互动状态回写。"
+    - 单帖搜索结果可通过 `workId` 定位作品。
+    - 圈子与个人主页传入的队列上下文仍保持互动状态回写。
     contract_refs:
     - quwoquan_service/contracts/metadata/_shared/app_routes.yaml#workBrowser
     - quwoquan_service/contracts/metadata/_shared/link_templates.yaml#entities.post.navigation
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - make codegen-app
-      - make -C quwoquan_service verify-metadata
-      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - command: make codegen-app
+      - command: make -C quwoquan_service verify-metadata
+      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
       recorded:
-      - go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service --rtc-service-dir ./services/rtc-service --chat-service-dir ./services/chat-service --user-service-dir ./services/user-service
-      - make -C quwoquan_service verify-metadata
-      - python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py
-      - flutter analyze --no-fatal-warnings --no-fatal-infos <modified workBrowser route files>
-      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      - flutter test test/ui/circle/pages/home_circles_hub_page_test.dart test/ui/circle/widgets/section_widgets_test.dart test/ui/circle/circle_content_identity_widget_test.dart
-      - flutter test test/app/navigation/native_back_navigation_policy_test.dart
-      - bash agent_ops/scaffold/verify_acceptance_standard.sh
-      - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    status: completed
+      - command: make -C quwoquan_service verify-metadata
+      - command: python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py
+      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - command: flutter test test/ui/circle/pages/home_circles_hub_page_test.dart
+          test/ui/circle/widgets/section_widgets_test.dart test/ui/circle/circle_content_identity_widget_test.dart
+      - command: flutter test test/app/navigation/native_back_navigation_policy_test.dart
+      - command: bash agent_ops/scaffold/verify_acceptance_standard.sh
+      - command: bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt2_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
+        envs: *id001
+    notes:
+    - '[migrated_from_recorded] go run ./tools/codegen_app_metadata --metadata-dir
+      contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service
+      --rtc-service-dir ./services/rtc-service --chat-service-dir ./services/chat-service
+      --user-service-dir ./services/user-service'
+    - '[migrated_from_recorded] flutter analyze --no-fatal-warnings --no-fatal-infos
+      <modified workBrowser route files>'
   GWT3:
     title: 三类媒体内部导航状态信息
     given:
@@ -111,17 +140,26 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/contracts/metadata/content/post/projections/work_browser_item.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
       recorded:
-      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-    status: completed
+      - command: cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt3_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
+        envs: *id001
+    notes: []
   GWT4:
     title: 媒体筛选进入更多菜单
     given:
@@ -138,18 +176,27 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/contracts/metadata/content/post/ui_config.yaml#work_format_filters
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
       recorded:
-      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      - cd quwoquan_app && flutter test test/ui/content/post/contract/post_ui_config_contract_test.dart
-    status: completed
+      - command: cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - command: cd quwoquan_app && flutter test test/ui/content/post/contract/post_ui_config_contract_test.dart
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt4_local_contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt4_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
+        envs: *id001
+    notes: []
   GWT5:
     title: 交集作为推荐解释层
     given:
@@ -167,21 +214,30 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/content/post/projections/work_browser_item.yaml
     - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
       recorded:
-      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-    status: completed
+      - command: cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt5_local_contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt5_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
+        envs: *id001
+    notes: []
   GWT6:
     title: WorkBrowserItem 端云契约一致
     given:
-    - "metadata 投影 `work_browser_item` 定义 workId/workType/标题/配文/作者快照/互动计数/mediaItems/交集摘要。"
+    - metadata 投影 `work_browser_item` 定义 workId/workType/标题/配文/作者快照/互动计数/mediaItems/交集摘要。
     when:
     - 执行 metadata verify 与 codegen-app。
     then:
@@ -194,17 +250,26 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/content/post/projections/work_browser_item.yaml
     - quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      supporting:
-      - T2_module_interaction
     tests:
       planned:
-      - make -C quwoquan_service verify-metadata
-      - make codegen-app
+      - command: make -C quwoquan_service verify-metadata
+      - command: make codegen-app
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: gwt6_local_contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt6_local_contract
+        envs: *id001
+    notes: []
   GWT7:
     title: 文章深色纸张主题与阅读设置
     given:
@@ -223,17 +288,26 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/content/post/projections/work_browser_item.yaml
     - quwoquan_service/contracts/metadata/content/post/ui_config.yaml#article_dark_paper_themes
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      supporting:
-      - T1_contract
     tests:
       planned:
-      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
       recorded:
-      - cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-    status: completed
+      - command: cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt7_local_contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt7_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
+        envs: *id001
+    notes: []
   GWT8:
     title: 文章实体标签跳转实体主页
     given:
@@ -242,7 +316,7 @@ gwt_acceptance:
     - 用户点击正文中的实体标签。
     then:
     - 标签以行内高亮呈现，不覆盖正文、不作为浮层。
-    - 点击后通过 metadata 路由进入 `AppRoutePaths.homepageDetail(id: ...)`。
+    - 点击后通过 metadata 路由进入 `AppRoutePaths.homepageDetail(id: '...)`。'
     done_when:
     - codec 测试覆盖实体标签解析为 span。
     - widget/navigation 测试覆盖点击标签进入 `/homepages/{id}`。
@@ -253,18 +327,28 @@ gwt_acceptance:
     - quwoquan_service/contracts/metadata/content/post/projections/content_post_detail_wire.yaml
     - quwoquan_service/contracts/metadata/_shared/app_routes.yaml#homepageDetail
     performance_points: []
-    evidence:
-      primary:
-      - T1_contract
-      - T2_module_interaction
-      supporting: []
     tests:
       planned:
-      - flutter test test/ui/content/markdown/article_markdown_codec_test.dart
-      - flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - command: flutter test test/ui/content/markdown/article_markdown_codec_test.dart
+      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
       recorded:
-      - cd quwoquan_app && flutter test test/ui/content/markdown/article_markdown_codec_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-    status: completed
+      - command: cd quwoquan_app && flutter test test/ui/content/markdown/article_markdown_codec_test.dart
+          test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+    status: pending_evidence
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
+        envs: *id001
+      - layer: local_contract
+        suite: gwt8_local_contract
+        cases:
+        - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt8_local_contract
+        envs: *id001
+      supporting: []
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

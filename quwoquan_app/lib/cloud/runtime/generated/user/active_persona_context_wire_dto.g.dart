@@ -7,6 +7,7 @@ class ActivePersonaContextWireDto {
   final String subjectType;
   final String displayName;
   final String avatarUrl;
+  final int avatarVersion;
   final String personaContextVersion;
   final int personaSnapshotVersion;
   final String sourceSurfaceId;
@@ -19,6 +20,7 @@ class ActivePersonaContextWireDto {
     this.subjectType = '',
     this.displayName = '',
     this.avatarUrl = '',
+    this.avatarVersion = 0,
     this.personaContextVersion = '',
     this.personaSnapshotVersion = 1,
     this.sourceSurfaceId = '',
@@ -33,6 +35,7 @@ class ActivePersonaContextWireDto {
       subjectType: m['subjectType']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? m['avatarUrlSnapshot']?.toString() ?? '',
+      avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
       personaContextVersion: m['personaContextVersion']?.toString() ?? m['contextVersion']?.toString() ?? '',
       personaSnapshotVersion: (m['personaSnapshotVersion'] as num?)?.toInt() ?? 1,
       sourceSurfaceId: m['sourceSurfaceId']?.toString() ?? '',
@@ -48,6 +51,7 @@ class ActivePersonaContextWireDto {
       'subjectType': subjectType,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
+      'avatarVersion': avatarVersion,
       'personaContextVersion': personaContextVersion,
       'personaSnapshotVersion': personaSnapshotVersion,
       'sourceSurfaceId': sourceSurfaceId,
@@ -62,6 +66,7 @@ class ActivePersonaContextWireDto {
     String? subjectType,
     String? displayName,
     String? avatarUrl,
+    int? avatarVersion,
     String? personaContextVersion,
     int? personaSnapshotVersion,
     String? sourceSurfaceId,
@@ -74,6 +79,7 @@ class ActivePersonaContextWireDto {
       subjectType: subjectType ?? this.subjectType,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarVersion: avatarVersion ?? this.avatarVersion,
       personaContextVersion: personaContextVersion ?? this.personaContextVersion,
       personaSnapshotVersion: personaSnapshotVersion ?? this.personaSnapshotVersion,
       sourceSurfaceId: sourceSurfaceId ?? this.sourceSurfaceId,

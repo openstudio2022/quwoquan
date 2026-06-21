@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/object_page/evidence_group.dart';
+import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
@@ -136,7 +137,7 @@ void main() {
       expect(groups.map((g) => g.label), contains('共同关注的人'));
     });
 
-    test('WP1 附录A：fallback icon 仅使用 kind 语义槽位，不影响文案', () {
+    test('WP1 附录A：交集行图标统一经 IntersectionIconResolver 从 kind 语义槽位解析（§21.5.2 单一真相源）', () {
       final reason = IntersectionReason(
         dimension: 'content',
         intersectionPoints: <IntersectionPoint>[
@@ -168,10 +169,14 @@ void main() {
       );
 
       final groups = EvidenceGroup.fromReason(reason);
-      expect(groups[0].fallbackIconKind, 'discussion');
-      expect(groups[1].fallbackIconKind, 'school');
-      expect(groups[2].fallbackIconKind, 'tag');
-      expect(groups[3].fallbackIconKind, 'link');
+      // 图标真相源 = IntersectionIconResolver（端不再自带 fallbackIconKind switch）；
+      // 对象页 _ConnectionLeadingIcon 以同一 resolve(sourceRef: kind, dimension: kind) 解析。
+      IconData iconOf(EvidenceGroup g) =>
+          IntersectionIconResolver.resolve(sourceRef: g.kind, dimension: g.kind);
+      expect(iconOf(groups[0]), CupertinoIcons.chat_bubble_2_fill); // coCommented→discussion
+      expect(iconOf(groups[1]), CupertinoIcons.book_solid); // sameSchool→alumni
+      expect(iconOf(groups[2]), CupertinoIcons.sparkles); // sharedTagSample→interest
+      expect(iconOf(groups[3]), CupertinoIcons.link); // futureKind 未知→通用占位
       expect(groups.map((g) => g.label), contains('共同讨论'));
     });
 
@@ -181,7 +186,7 @@ void main() {
         reasons: [
           IntersectionReason(
             dimension: 'relationship',
-            relationKind: 'person',
+            objectKind: 'person',
             intersectionPoints: <IntersectionPoint>[
               _point(
                 dimension: 'relationship',
@@ -193,7 +198,7 @@ void main() {
           ),
           IntersectionReason(
             dimension: 'content',
-            relationKind: 'circle',
+            objectKind: 'circle',
             intersectionPoints: <IntersectionPoint>[
               _point(
                 dimension: 'content',
@@ -226,7 +231,7 @@ void main() {
         reasons: [
           IntersectionReason(
             dimension: 'future_new_dimension',
-            relationKind: 'place',
+            objectKind: 'place',
             intersectionPoints: <IntersectionPoint>[
               _point(
                 dimension: 'future_new_dimension',
@@ -251,7 +256,7 @@ void main() {
         reasons: [
           IntersectionReason(
             dimension: 'interest',
-            relationKind: 'person',
+            objectKind: 'person',
             intersectionClass: 'affinity',
             intersectionPoints: <IntersectionPoint>[
               _point(
@@ -277,7 +282,7 @@ void main() {
         reasons: [
           IntersectionReason(
             dimension: 'relationship',
-            relationKind: 'person',
+            objectKind: 'person',
             connectionSummary: '北京大学、摄影把你们连在一起',
             intersectionPoints: <IntersectionPoint>[
               _point(dimension: 'relationship', label: '共同关注', count: 4),
@@ -296,7 +301,7 @@ void main() {
       var tapped = false;
       final reason = IntersectionReason(
         dimension: 'relationship',
-        relationKind: 'person',
+        objectKind: 'person',
         connectionSummary: '同校与摄影把你们连在一起',
         intersectionPoints: <IntersectionPoint>[
           _point(dimension: 'relationship', label: '共同关注', count: 4),
@@ -324,7 +329,7 @@ void main() {
         reasons: [
           IntersectionReason(
             dimension: 'relationship',
-            relationKind: 'person',
+            objectKind: 'person',
             intersectionPoints: <IntersectionPoint>[
               _point(dimension: 'relationship', label: '共同关注', count: 4),
               _point(dimension: 'relationship', label: '共同关注扩展', count: 6),
@@ -355,7 +360,7 @@ void main() {
         reasons: [
           IntersectionReason(
             dimension: 'relationship',
-            relationKind: 'person',
+            objectKind: 'person',
             intersectionPoints: <IntersectionPoint>[
               _point(dimension: 'relationship', label: '共同关注', count: 4),
               _point(dimension: 'relationship', label: '共同关注', count: 6),
@@ -382,7 +387,7 @@ void main() {
         reasons: [
           IntersectionReason(
             dimension: 'relationship',
-            relationKind: 'circle',
+            objectKind: 'circle',
             displayName: '摄影圈',
             avatarUrl: '',
             intersectionPoints: <IntersectionPoint>[

@@ -115,6 +115,9 @@ class DiscoveryFeedSpacing {
   /// 首页推荐文章右侧缩略图最大宽度。
   static const double homeFeedArticleSideThumbMaxWidth = 180.0;
 
+  /// 首页推荐文章左文右图缩略图宽高比（width / height）。
+  static const double homeFeedArticleSideThumbAspectRatio = 3 / 2;
+
   /// 首页推荐文章三图变体缩略图高度。
   static const double homeFeedArticleGridImageHeight = 88.0;
 

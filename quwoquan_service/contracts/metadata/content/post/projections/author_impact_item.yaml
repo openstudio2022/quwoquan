@@ -24,6 +24,8 @@ client_projection:
     - ../recommendation/intersection_visual.g.dart
     - ../recommendation/intersection_target.g.dart
     - ../recommendation/intersection_propagation_path.g.dart
+    - ../recommendation/intersection_representative_actor.g.dart
+    - ../recommendation/intersection_action_hint.g.dart
   fields:
     - name: helpType
       dart_type: String
@@ -98,6 +100,18 @@ client_projection:
       source: sampleVisuals
       aliases: [sampleVisuals]
       list_element_dart_class: IntersectionVisual
+    - name: representativeActor
+      dart_type: IntersectionRepresentativeActor
+      nullable: true
+      source: representativeActor
+      aliases: [representativeActor]
+      map_from_string_key_class: IntersectionRepresentativeActor
+    - name: actionHints
+      dart_type: List<IntersectionActionHint>
+      nullable: false
+      source: actionHints
+      aliases: [actionHints]
+      list_element_dart_class: IntersectionActionHint
     - name: countTarget
       dart_type: IntersectionTarget
       nullable: true
@@ -131,3 +145,38 @@ client_projection:
       source: iconKey
       aliases: [iconKey]
       default: "''"
+    # 影响力时间线 + 生命周期（§21.3，只附加，端只读直出）：
+    #   freshAt 为该影响事实物化锚点（ISO8601），供「我的影响力」5 年时间线分桶；
+    #   timeBucket 为服务端归桶结果（today|yesterday|last7Days|thisMonth|lastMonth|year:N），缺省端按 freshAt 兜底；
+    #   lifecycleState 影响事实生命周期态（§21.3 闭集 new|strengthened|stable|weakened|reactivated，仅弱标/红点，不进 primaryText）；
+    #   previousStrength/strengthDelta 支撑 strengthened/weakened/reactivated 判定与 +N 弱标（缺省 0）。
+    - name: freshAt
+      dart_type: String
+      nullable: false
+      source: freshAt
+      aliases: [freshAt]
+      default: "''"
+    - name: timeBucket
+      dart_type: String
+      nullable: false
+      source: timeBucket
+      aliases: [timeBucket]
+      default: "''"
+    - name: lifecycleState
+      dart_type: String
+      nullable: false
+      source: lifecycleState
+      aliases: [lifecycleState]
+      default: "''"
+    - name: previousStrength
+      dart_type: double
+      nullable: false
+      source: previousStrength
+      aliases: [previousStrength]
+      default: "0.0"
+    - name: strengthDelta
+      dart_type: double
+      nullable: false
+      source: strengthDelta
+      aliases: [strengthDelta]
+      default: "0.0"

@@ -19,6 +19,6 @@
 
 ## 与父节点关系
 
-- 父节点 `realtime-call/spec.md` §5 入口体系、§6.1 技术约束、§9 验收重点 T2
+- 父节点 `realtime-call/spec.md` §5 入口体系、§6.1 技术约束、§9 验收重点 local_contract
 - 父节点 `call-experience/spec.md` 定义 UI/UX 职责
 - 详细规格与验收标准见 L2 `realtime-call/spec.md` 及 `realtime-call/acceptance.yaml`。

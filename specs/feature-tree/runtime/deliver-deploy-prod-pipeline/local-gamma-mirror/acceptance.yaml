@@ -7,10 +7,12 @@ node:
   parent_domain_service: runtime
   parent_business_capability: deliver-deploy-prod-pipeline
 scope:
-  summary: gamma-local 作为开发与提交前左移主验证链（gamma 仅本地，无远端 gamma）；真实远端复验由 prod gray-initial rollout stage 承接。
+  summary: gamma-local 作为开发与提交前左移主验证链（gamma 仅本地，无远端 gamma）；真实远端复验由 prod gray-initial
+    rollout stage 承接。
   in_scope:
   - 本地 gamma 语义镜像栈（DB/Redis/核心服务/media/TLS 反代）启停与健康前置检查
-  - 本地 T1->T4 左移：真实 HTTP API、存储副作用、错误码、RemoteRepository 解码与模拟器/真机 Patrol 核心旅程
+  - 本地 local_contract->user_acceptance 左移：真实 HTTP API、存储副作用、错误码、RemoteRepository 解码与模拟器/真机
+    Patrol 核心旅程
   - 提交前报告 artifacts/local-gamma/report.json，指向 deploy/shared/gamma_validation_suites.json
   - 与 prod 同构的工作负载图谱解释（同 Service 名、路由前缀、数据面 Service 名/DSN 变量）
   out_of_scope:
@@ -23,19 +25,23 @@ gwt_acceptance:
     title: gamma-local 提交前左移主验证链
     given:
     - 开发机具备 Docker mirror 栈与至少一台模拟器/浏览器 runner。
-    - 服务以 APP_ENV=gamma 启动，端侧以 APP_RUNTIME_ENV=gamma、APP_DATA_SOURCE=remote 接入本地 mirror endpoint。
+    - 服务以 APP_ENV=gamma 启动，端侧以 APP_RUNTIME_ENV=gamma、APP_DATA_SOURCE=remote 接入本地 mirror
+      endpoint。
     - 测试数据仅来自 app_gamma_seed_manifest.json 与 metadata fixtures。
     when:
     - 提交前运行 make gate-local-gamma。
     then:
     - 启动 gamma 语义镜像栈并完成 CONFIG_VERSION/依赖/health/DNS/TLS/media 前置检查。
-    - 依次执行 T1->T4 并生成 artifacts/local-gamma/report.json；缺 DNS/TLS/设备/服务依赖时状态为 GATE_BLOCK。
+    - 依次执行 local_contract->user_acceptance 并生成 artifacts/local-gamma/report.json；缺
+      DNS/TLS/设备/服务依赖时状态为 GATE_BLOCK。
     done_when:
     - gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
     - gamma-local 通过仅证明提交前左移质量，不替代也不成为 main required check。
     - 不新增运行环境枚举或第二套 seed manifest。
-    - gamma-local 服务名册与 prod workload_topology_inventory 一致；recommendation 各环境统一以 recommendation-service:8000 调用。
-    - edge-media（realtime-gateway/rtc-service/livekit-sfu/coturn）统一在本 compose 以 profile 按需组装；realtime-gateway 实现未就绪以 edge-media-pending 显式占位收敛。
+    - gamma-local 服务名册与 prod workload_topology_inventory 一致；recommendation 各环境统一以
+      recommendation-service:8000 调用。
+    - edge-media（realtime-gateway/rtc-service/livekit-sfu/coturn）统一在本 compose 以 profile
+      按需组装；realtime-gateway 实现未就绪以 edge-media-pending 显式占位收敛。
     edge_cases:
     - 缺设备/DNS/TLS 时必须 GATE_BLOCK 而非静默跳过。
     - dry-run 模式仅产出 dry-run 报告，不得伪装为真实左移通过。
@@ -48,22 +54,53 @@ gwt_acceptance:
     - quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py
     performance_points:
     - gamma-local 为提交前左移链，不计入 main 阻断关键路径预算。
-    evidence:
-      primary:
-      - T3_app_api_integration
-      - T4_end_to_end_journey
-      supporting:
-      - T1_contract
-      - T2_module_interaction
     tests:
       planned:
-      - quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh 启动与 prod 同构工作负载图谱。
-      - quwoquan_app/scripts/gamma/run_local_gamma_t3.py 用 app_gamma_seed_manifest.json 验证真实 API/存储副作用/错误码。
-      - quwoquan_app/scripts/gamma/run_local_gamma_t4.sh 在模拟器/真机完成 Patrol 核心旅程。
-      - quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py 汇总 T1->T4 写 artifacts/local-gamma/report.json。
-      - quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py 校验 gamma-local 服务名册/命名与 prod inventory 一致。
+      - file: quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
+      - file: quwoquan_app/scripts/gamma/run_local_gamma_t3.py
+      - file: quwoquan_app/scripts/gamma/run_local_gamma_t4.sh
+      - file: quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py
+      - file: quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.gwt1_api_integration
+        envs: &id002
+        - beta
+        - gamma
+      - layer: user_acceptance
+        suite: end_to_end_journey
+        cases:
+        - user_acceptance.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.end_to_end_journey
+        envs: &id003
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.contract
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.gwt1_local_contract
+        envs: *id001
+    notes:
+    - '[migrated_from_planned] quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
+      启动与 prod 同构工作负载图谱。'
+    - '[migrated_from_planned] quwoquan_app/scripts/gamma/run_local_gamma_t3.py 用
+      app_gamma_seed_manifest.json 验证真实 API/存储副作用/错误码。'
+    - '[migrated_from_planned] quwoquan_app/scripts/gamma/run_local_gamma_t4.sh 在模拟器/真机完成
+      Patrol 核心旅程。'
+    - '[migrated_from_planned] quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py
+      汇总 local_contract->user_acceptance 写 artifacts/local-gamma/report.json。'
+    - '[migrated_from_planned] quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py
+      校验 gamma-local 服务名册/命名与 prod inventory 一致。'
   GWT2:
     title: 远端复验下沉到 prod gray-initial（gamma-hosted 退役）
     given:
@@ -71,7 +108,8 @@ gwt_acceptance:
     when:
     - 需要云侧手动复验、nightly 或发布前高置信度回归时，统一在 prod gray-initial rollout stage 执行。
     then:
-    - prod gray-initial 执行 hosted deploy、readiness、T3 API contract、assistant/chat-avatar probe。
+    - prod gray-initial 执行 hosted deploy、readiness、api_integration API contract、assistant/chat-avatar
+      probe。
     - 远端复验不承担提交前左移职责，也不与 gamma-local 重复维护第二套验证逻辑。
     done_when:
     - 旧 gamma-hosted 阶段已退役；真实远端复验仅保留在 prod gray-initial，定位与 gamma-local 不重叠。
@@ -82,16 +120,25 @@ gwt_acceptance:
     - deploy/shared/environment_topology_manifest.yaml
     performance_points:
     - prod gray-initial 远端复验置信度优先，不计入提交前左移时延预算。
-    evidence:
-      primary:
-      - T3_app_api_integration
-      supporting:
-      - T4_end_to_end_journey
     tests:
-      planned:
-      - prod gray-initial rollout stage 承接真实远端集成与 curated 媒体路由复验链路。
+      planned: []
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: gwt2_api_integration
+        cases:
+        - api_integration.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.gwt2_api_integration
+        envs: *id002
+      supporting:
+      - layer: user_acceptance
+        suite: end_to_end_journey
+        cases:
+        - user_acceptance.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.end_to_end_journey
+        envs: *id003
+    notes:
+    - '[migrated_from_planned] prod gray-initial rollout stage 承接真实远端集成与 curated 媒体路由复验链路。'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

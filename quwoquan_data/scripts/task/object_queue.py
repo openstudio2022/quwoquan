@@ -760,8 +760,42 @@ def spillover_dead(task_id: str, batch_id: str, *, target_batch_id: str, stage: 
 def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
     """把租到的 job 转成 Subagent 可直接消费的 handoff packet（含 Ralph 自纠环出口约束）。"""
     meta = dict(job.get("meta") or {})
+    content_type = str(job.get("contentType") or meta.get("contentType") or "")
+    carrier = str(job.get("carrier") or meta.get("carrier") or "")
+    is_image = content_type == "image" or carrier in ("image", "gallery")
+    object_packet_refs = {
+        "contentObjectDir": meta.get("contentObjectDir"),
+        "authorJobPacket": "4.draft/author_job_packet.json",
+        "writingPack": "3.compose/writing_pack.json",
+        "draftMeta": "4.draft/draft_meta.json",
+        "selfCheck": "4.draft/author_self_check.json",
+    }
+    if not is_image:
+        object_packet_refs["draft"] = "4.draft/draft.article.md"
+    completion_conditions = (
+        [
+            "4.draft/draft.article.md 不存在",
+            "4.draft/draft_meta.json.generator == image_evidence_pack",
+            "ref_review_gate.passed == true (reviewDecision == approved)",
+        ]
+        if is_image
+        else [
+            "4.draft/draft.article.md 已写且非占位",
+            "4.draft/author_self_check.json 存在",
+            "ref_review_gate.passed == true (reviewDecision == approved)",
+        ]
+    )
+    output_paths = (
+        ["4.draft/draft_meta.json", "5.review/ref_review_gate.json"]
+        if is_image
+        else [
+            "4.draft/draft.article.md",
+            "4.draft/author_self_check.json",
+            "5.review/ref_review_gate.json",
+        ]
+    )
     return {
-        "schemaVersion": "quwoquan_data.lease_packet/1",
+        "schemaVersion": "quwoquan_data.lease_packet",
         "jobId": job.get("jobId"),
         "taskId": job.get("taskId"),
         "batchId": job.get("batchId"),
@@ -771,7 +805,7 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
         "partitionKey": job.get("partitionKey") or job.get("mutexKey") or job.get("ref"),
         "creatorProfileId": job.get("creatorProfileId") or meta.get("creatorProfileId"),
         "creatorArchetype": job.get("creatorArchetype") or meta.get("creatorArchetype"),
-        "contentType": job.get("contentType") or meta.get("contentType"),
+        "contentType": content_type or None,
         "resultEnvelopeRequired": bool(job.get("resultEnvelopeRequired")),
         "resultEnvelopeContract": {
             "schemaVersion": pc.AGENT_RESULT_ENVELOPE_SCHEMA,
@@ -790,13 +824,7 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
         "leaseExpiresEpoch": job.get("leaseExpiresEpoch"),
         "deadlineEpoch": job.get("deadlineEpoch"),
         "maxWallClockSeconds": job.get("maxWallClockSeconds"),
-        "objectPacketRefs": {
-            "contentObjectDir": meta.get("contentObjectDir"),
-            "authorJobPacket": "4.draft/author_job_packet.json",
-            "writingPack": "3.compose/writing_pack.json",
-            "draft": "4.draft/draft.article.md",
-            "selfCheck": "4.draft/author_self_check.json",
-        },
+        "objectPacketRefs": object_packet_refs,
         # 执行合约 5 要素（harness execution contract）：把模糊 LLM 调用收成有界 agent 调用。
         "executionContract": {
             "inputs": [
@@ -814,16 +842,8 @@ def build_lease_packet(job: Mapping[str, Any]) -> dict[str, Any]:
                 "costBudgetUsd": job.get("costBudgetUsd"),
             },
             "permissions": list(job.get("permissions") or DEFAULT_TOOL_PERMISSIONS),
-            "completionConditions": [
-                "4.draft/draft.article.md 已写且非占位",
-                "4.draft/author_self_check.json 存在",
-                "ref_review_gate.passed == true (reviewDecision == approved)",
-            ],
-            "outputPaths": [
-                "4.draft/draft.article.md",
-                "4.draft/author_self_check.json",
-                "5.review/ref_review_gate.json",
-            ],
+            "completionConditions": completion_conditions,
+            "outputPaths": output_paths,
         },
         "ralphLoop": (
             "draft → 跑单 ref review 门 → 读 issues 自修 → 循环，直到 ref_review_gate.passed=approved；"

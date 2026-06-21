@@ -162,6 +162,24 @@ func TestLoadEntitiesFiltered(t *testing.T) {
 	}
 }
 
+func TestEmptySampleBundleFiltersToZeroObjects(t *testing.T) {
+	root := fixturePublish(t)
+	posts, err := LoadPosts(root, toSet(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 0 {
+		t.Fatalf("empty post sample must not load full publish tree: %+v", posts)
+	}
+	ents, err := LoadEntities(root, toSet(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ents) != 0 {
+		t.Fatalf("empty entity sample must not load full publish tree: %+v", ents)
+	}
+}
+
 func TestLoadSampleBundle(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "alpha.json")
@@ -232,6 +250,45 @@ func TestLoadManifestOnlyImagePost(t *testing.T) {
 	}
 	if !post.CreatedAt.Equal(post.PublishedAt) || !post.UpdatedAt.Equal(post.PublishedAt) {
 		t.Fatalf("manifest-only timestamp fallback failed: created=%v updated=%v published=%v", post.CreatedAt, post.UpdatedAt, post.PublishedAt)
+	}
+}
+
+func TestLoadPostsValidatesRawActiveRefsNotNormalizedAliases(t *testing.T) {
+	root := t.TempDir()
+	postDir := filepath.Join(root, "posts/article/攻略/黄山风景区攻略/1")
+	writeFile(t, filepath.Join(postDir, "manifest.json"), `{
+		"contentType":"article",
+		"entityRefs":["/entity/地点/景区/黄山风景区"],
+		"normalizedEntityRefs":["entity:景区:黄山风景区"],
+		"tagRefs":["Topic/旅行"],
+		"semanticMentions":[
+			{"mentionId":"published_entity","kind":"entity","surface":"黄山风景区","location":"body","status":"published","targetRef":"/entity/地点/景区/黄山风景区"},
+			{"mentionId":"published_tag","kind":"tag","surface":"旅行","location":"manifest","status":"published","targetRef":"Topic/旅行"}
+		],
+		"publishTitle":"黄山风景区攻略",
+		"publishAngle":"攻略",
+		"publishSeq":1,
+		"createdAt":"2026-06-13T02:00:00Z",
+		"updatedAt":"2026-06-13T02:00:00Z",
+		"publishedAt":"2026-06-13T02:00:00Z"
+	}`)
+	writeFile(t, filepath.Join(postDir, "article.md"), "# 黄山风景区攻略\n正文\n")
+
+	posts, err := LoadPosts(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 1 {
+		t.Fatalf("posts = %d", len(posts))
+	}
+	if len(posts[0].EntityRefs) != 1 || posts[0].EntityRefs[0] != "/entity/地点/景区/黄山风景区" {
+		t.Fatalf("entity projection wrong: %+v", posts[0].EntityRefs)
+	}
+	if len(posts[0].NormalizedEntityRefs) != 1 || posts[0].NormalizedEntityRefs[0] != "entity:景区:黄山风景区" {
+		t.Fatalf("normalized entity projection wrong: %+v", posts[0].NormalizedEntityRefs)
+	}
+	if len(posts[0].TagRefs) != 1 || posts[0].TagRefs[0] != "Topic/旅行" {
+		t.Fatalf("tag projection wrong: %+v", posts[0].TagRefs)
 	}
 }
 

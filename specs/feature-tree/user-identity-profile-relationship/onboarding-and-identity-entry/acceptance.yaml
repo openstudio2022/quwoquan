@@ -17,20 +17,37 @@ sit_acceptance:
     done_when:
     - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
     - 微信 / Apple 原生登录入口、系统凭据入口、passkey 入口的显隐和降级由 PlatformCapabilities 驱动，不依赖 UI 层平台判断。
-    - Android `Credential Manager` 与 iOS `AuthenticationServices / Password AutoFill` 的客户端接口与产品语义已预留，未开通时统一降级到手机号 OTP。
+    - Android `Credential Manager` 与 iOS `AuthenticationServices / Password AutoFill`
+      的客户端接口与产品语义已预留，未开通时统一降级到手机号 OTP。
     performance_points: []
-    evidence:
-      primary:
-      - T2_module_interaction
-      - T3_app_api_integration
-      supporting:
-      - T1_static_contract
     tests:
       planned:
-      - quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - quwoquan_app/test/core/platform/platform_capabilities_profile_test.dart
+      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_app/test/core/platform/platform_capabilities_profile_test.dart
       recorded: []
     status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.sit1.sit1_api_integration
+        envs:
+        - beta
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.sit1.sit1_local_contract
+        envs: *id001
+    notes: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -40,3 +40,12 @@ voiceStyle:
   tone: 客观、具体、有生活感
 expertiseClaims: [校园生活观察, 校园设施比较, 城市生活体验]
 mustNotClaim: [学校官方身份, 招生承诺, 就业保证]
+coverageScope:
+  kind: thematic
+  label: 校园生活
+  topicRefs:
+    - Topic/教育成长/校园生活
+carrierAffinity:
+  article: 0.65
+  image: 0.25
+  video: 0.1

@@ -1,8 +1,17 @@
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_kind_mapping.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
+import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
+
+// Barrel re-export：消费者继续 import 本文件即可访问 kind 映射与句式合成公开 API；
+// 拆分（R03 体量收敛）对 intersection_repository / T1 合约测试零改动。
+export 'package:quwoquan_app/cloud/services/content/intersection_kind_mapping.dart';
+export 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 
 List<IntersectionReason> rankAndDedupeIntersections(
   List<IntersectionReason> items,
@@ -20,6 +29,24 @@ List<IntersectionReason> rankAndDedupeIntersections(
   return ranked;
 }
 
+/// §22.3 默认交集 inbox 的生命周期显隐规则（端侧单一真相源）：
+/// - `expired` 永不进 UI；
+/// - `archived` 不进默认列表（仅在历史筛选下展示）。
+/// mock 与 remote 列表路径共用本过滤，保证端云显隐一致。
+const Set<String> defaultInboxHiddenLifecycleStates = {'expired', 'archived'};
+
+List<IntersectionReason> filterDefaultInboxLifecycle(
+  List<IntersectionReason> items,
+) {
+  return items
+      .where(
+        (item) => !defaultInboxHiddenLifecycleStates.contains(
+          item.lifecycleState.trim(),
+        ),
+      )
+      .toList(growable: false);
+}
+
 String dedupeKeyForIntersection(IntersectionReason item) {
   final explicit = item.dedupeKey.trim();
   if (explicit.isNotEmpty) return explicit;
@@ -28,9 +55,7 @@ String dedupeKeyForIntersection(IntersectionReason item) {
       : item.relationObjectId.trim().isNotEmpty
       ? item.relationObjectId.trim()
       : item.intersectionId.trim();
-  final objectType = item.objectKind.trim().isNotEmpty
-      ? item.objectKind.trim()
-      : item.relationKind.trim();
+  final objectType = item.objectKind.trim();
   return 'viewer:$objectId:$objectType';
 }
 
@@ -97,10 +122,11 @@ List<IntersectionReason> fallbackInboxReasons() {
           'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
       totalPointCount: 4,
       strength: 0.9,
-      relationKind: 'person',
+      kind: 'sharedFollowees',
       actionType: 'view',
       actionTargetId: 'u_lin',
-      source: 'relationship',
+      source: 'sharedFollowees',
+      lifecycleState: 'new',
       freshAt: _isoMinusHours(3),
     ),
     IntersectionReason(
@@ -109,35 +135,36 @@ List<IntersectionReason> fallbackInboxReasons() {
       intersectionClass: 'fact',
       displayName: '周屿',
       objectKind: 'person',
-      primaryText: '你们互相关注',
+      primaryText: '你关注的2人也关注了周屿',
       weightTier: 'light',
       avatarUrl:
           'media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg',
       totalPointCount: 2,
       strength: 0.7,
-      relationKind: 'person',
+      kind: 'sharedFollowees',
       actionType: 'view',
       actionTargetId: 'u_zhou',
-      source: 'relationship',
+      source: 'sharedFollowees',
+      lifecycleState: 'stable',
       freshAt: _isoMinusHours(96),
     ),
     IntersectionReason(
       dimension: 'identity',
       intersectionId: 'ix_id_1',
       intersectionClass: 'fact',
-      displayName: '新东方校友会',
+      displayName: '新东方',
       objectKind: 'school',
-      primaryText: '同校校友',
+      primaryText: '你和3位校友都来自新东方',
       secondaryText: '3位校友最近活跃',
       weightTier: 'light',
       avatarUrl:
           'media/avatar/s/mock/seed/u_1523050854058-8df90110c9f1/v1/avatar.jpg',
       totalPointCount: 3,
       strength: 0.82,
-      relationKind: 'org',
+      kind: 'sameSchool',
       actionType: 'view',
       actionTargetId: 'fixture_homepage_university_pku',
-      source: 'identity',
+      source: 'sameSchool',
       freshAt: _isoMinusHours(10),
     ),
     IntersectionReason(
@@ -146,16 +173,17 @@ List<IntersectionReason> fallbackInboxReasons() {
       intersectionClass: 'fact',
       displayName: '黄金投资圈',
       objectKind: 'circle',
-      primaryText: '8人和你共看黄金内容',
+      primaryText: '你和8人都讨论过黄金投资圈',
       weightTier: 'heavy',
       avatarUrl:
           'media/avatar/s/mock/seed/u_1611974789855-9c2a0a7236a3/v1/avatar.jpg',
       totalPointCount: 8,
       strength: 0.88,
-      relationKind: 'circle',
+      kind: 'coCommented',
       actionType: 'join',
       actionTargetId: 'circle_gold_invest',
-      source: 'content',
+      source: 'coCommented',
+      lifecycleState: 'reactivated',
       freshAt: _isoMinusHours(30),
     ),
     IntersectionReason(
@@ -164,16 +192,16 @@ List<IntersectionReason> fallbackInboxReasons() {
       intersectionClass: 'fact',
       displayName: '西湖',
       objectKind: 'place',
-      primaryText: '5人有相同旅行足迹',
+      primaryText: '你和5人都去过西湖',
       weightTier: 'light',
       avatarUrl:
           'media/avatar/s/mock/seed/u_1606767341197-3d8e6f0a2a9b/v1/avatar.jpg',
       totalPointCount: 5,
       strength: 0.76,
-      relationKind: 'place',
+      kind: 'coVisitedEntity',
       actionType: 'view',
       actionTargetId: 'homepage_sight_west_lake',
-      source: 'location',
+      source: 'coVisitedEntity',
       freshAt: _isoMinusHours(2),
     ),
     IntersectionReason(
@@ -182,7 +210,7 @@ List<IntersectionReason> fallbackInboxReasons() {
       intersectionClass: 'affinity',
       displayName: '陆衡',
       objectKind: 'person',
-      primaryText: '可能合得来',
+      primaryText: '你可能和陆衡兴趣相投',
       secondaryText: '兴趣相似',
       weightTier: 'light',
       avatarUrl:
@@ -191,195 +219,127 @@ List<IntersectionReason> fallbackInboxReasons() {
       strength: 0.61,
       confidenceLabel: '推荐',
       modelReasonBucket: 'friend_suggestion',
-      relationKind: 'person',
+      kind: 'affinity',
       actionType: 'view',
       actionTargetId: 'u_lu',
-      source: 'interest',
+      source: 'affinity',
       freshAt: _isoMinusHours(20),
     ),
   ]).map(normalizeInboxReason).toList(growable: false);
 }
 
+/// 我的交集行归一（云侧 G2 模拟）：把 fixture/fallback 的紧凑事实补全为
+/// 「代表人在数字前」的结构化富文本 + 可辨识 iconKey + 行动建议 + 去重键。
+///
+/// 单一真相源：已携带 [IntersectionReason.primarySpans] 的（云侧/fixture 直出富文本）
+/// 不二次合成，只补 iconKey/dedupe/action 缺省；否则按 [kind] 闭集模板生成。
+/// 代表人恒为句中蓝色可点名字（纯文本，无头像），数字片段进同维度下钻。
 IntersectionReason normalizeInboxReason(IntersectionReason reason) {
-  switch (reason.intersectionId) {
-    case 'ix_rel_1':
-      return _hifiReason(
-        reason,
-        text: '你和林清越等4位用户都关注「黄金投资圈」',
-        iconKey: 'interest',
-        objectKind: 'circle',
-        sourceRef: 'sharedEntityAttention',
-        objectId: 'fixture_circle_gold_invest',
-        objectName: '黄金投资圈',
-        anchorId: 'fixture_user_lin',
-        anchorName: '林清越',
-        countText: '4',
-        mutualCount: 4,
-        timeBucket: 'today',
-        anchorWeight: 0.96,
-      );
-    case 'ix_id_1':
-      return _hifiReason(
-        reason,
-        text: '你和新东方校友等3位用户都来自「新东方」',
-        iconKey: 'alumni',
-        objectKind: 'school',
-        sourceRef: 'sameSchool',
-        objectId: 'fixture_homepage_university_pku',
-        objectName: '新东方',
-        anchorId: 'fixture_user_article',
-        anchorName: '新东方校友',
-        countText: '3',
-        mutualCount: 3,
-        timeBucket: 'today',
-        anchorWeight: 0.82,
-      );
-    case 'ix_ct_1':
-      return _hifiReason(
-        reason,
-        text: '你和王然等8位用户都参与「黄金投资圈」',
-        iconKey: 'discussion',
-        objectKind: 'circle',
-        sourceRef: 'coCommented',
-        objectId: 'fixture_circle_gold_invest',
-        objectName: '黄金投资圈',
-        anchorId: 'fixture_user_photo',
-        anchorName: '王然',
-        countText: '8',
-        mutualCount: 8,
-        timeBucket: 'yesterday',
-        anchorWeight: 0.74,
-      );
-    case 'ix_loc_1':
-      return _hifiReason(
-        reason,
-        text: '你和张可等5位校友都去过「西湖」',
-        iconKey: 'place',
-        objectKind: 'place',
-        sourceRef: 'coVisitedEntity',
-        objectId: 'homepage_sight_west_lake',
-        objectName: '西湖',
-        anchorId: 'fixture_user_travel',
-        anchorName: '张可',
-        countText: '5',
-        mutualCount: 5,
-        timeBucket: 'today',
-        anchorWeight: 0.78,
-      );
-    case 'ix_circle_1':
-      return _hifiReason(
-        reason,
-        text: '你和周屿等2位用户都在「城市漫游圈」',
-        iconKey: 'circle',
-        objectKind: 'circle',
-        sourceRef: 'sharedCircle',
-        objectId: 'fixture_circle_city',
-        objectName: '城市漫游圈',
-        anchorId: 'fixture_user_zhou',
-        anchorName: '周屿',
-        countText: '2',
-        mutualCount: 2,
-        timeBucket: 'last7Days',
-        anchorWeight: 0.70,
-      );
-    case 'ix_tag_1':
-      return _hifiReason(
-        reason,
-        text: '你和林清越等1位用户都关注「胶片摄影」',
-        iconKey: 'interest',
-        objectKind: 'tag',
-        sourceRef: 'sharedTagSample',
-        objectId: 'tag_film_photo',
-        objectName: '胶片摄影',
-        anchorId: 'fixture_user_lin',
-        anchorName: '林清越',
-        countText: '1',
-        mutualCount: 1,
-        timeBucket: 'last7Days',
-        anchorWeight: 0.68,
-      );
-    default:
-      return reason;
+  final kind = _resolveReasonKind(reason);
+  if (reason.primarySpans.isNotEmpty) {
+    return _ensureInboxDisplayMeta(reason, kind);
   }
-}
-
-IntersectionReason _hifiReason(
-  IntersectionReason reason, {
-  required String text,
-  required String iconKey,
-  required String objectKind,
-  required String sourceRef,
-  required String objectId,
-  required String objectName,
-  required String anchorId,
-  required String anchorName,
-  required String countText,
-  required int mutualCount,
-  required String timeBucket,
-  required double anchorWeight,
-}) {
-  return reason.copyWith(
-    primaryText: text,
-    secondaryText: '',
-    primarySpans: <IntersectionTextSpan>[
-      _plain('你和'),
-      IntersectionTextSpan(
-        text: anchorName,
-        role: 'object',
-        target: IntersectionTarget(
-          objectId: anchorId,
-          objectKind: 'person',
-          routeId: 'userProfile',
-        ),
-      ),
-      _plain('等'),
-      IntersectionTextSpan(
-        text: countText,
-        role: 'count',
-        target: IntersectionTarget(
-          objectId: reason.dimension,
-          routeId: 'myIntersections',
-        ),
-      ),
-      _plain(_tailBeforeObject(sourceRef)),
-      IntersectionTextSpan(
-        text: objectName,
-        role: 'object',
-        target: IntersectionTarget(
-          objectId: objectId,
-          objectKind: objectKind,
-          routeId: _routeIdForObjectKind(objectKind),
-        ),
-      ),
-      _plain('」'),
-    ],
-    objectKind: objectKind,
-    source: sourceRef,
-    actionTargetId: objectId,
-    iconKey: iconKey,
-    timeBucket: timeBucket,
-    dedupeKey: 'viewer:$objectId:$objectKind',
-    anchorUserWeight: anchorWeight,
-    mutualCount: mutualCount,
+  if (kind.isEmpty) {
+    return _ensureInboxDisplayMeta(reason, kind);
+  }
+  final spans = buildInboxStatementSpans(reason, kind);
+  if (spans.isEmpty) {
+    return _ensureInboxDisplayMeta(reason, kind);
+  }
+  return _ensureInboxDisplayMeta(
+    reason.copyWith(
+      primaryText: spans.map((span) => span.text).join(),
+      secondaryText: '',
+      primarySpans: spans,
+    ),
+    kind,
   );
 }
 
-IntersectionTextSpan _plain(String text) =>
-    IntersectionTextSpan(text: text, role: 'plain');
+/// 补全展示元数据：iconKey / dedupeKey / actionHints / mutualCount 缺省回填，
+/// 不覆盖 fixture/云侧已显式提供的值。
+IntersectionReason _ensureInboxDisplayMeta(
+  IntersectionReason reason,
+  String kind,
+) {
+  final meta = IntersectionKindMetadata.of(kind);
+  final objectKind = reason.objectKind.trim().isNotEmpty
+      ? reason.objectKind.trim()
+      : (meta?.objectKind ?? '');
+  final objectId = reason.actionTargetId.trim();
+  // iconKey 回填降级链（与端 IntersectionIconResolver 同源）：reason.iconKey（云侧直出）→
+  // 注册表 kind.iconKey（codegen）→ dimension 末级回退（codegen intersectionIconKeyByDimension，
+  // 覆盖 affinity 等未登记 kind，保证不空图标）。
+  final resolvedIconKey = reason.iconKey.trim().isNotEmpty
+      ? reason.iconKey.trim()
+      : (meta?.iconKey.trim().isNotEmpty ?? false)
+      ? meta!.iconKey.trim()
+      : (intersectionIconKeyByDimension[reason.dimension.trim()] ?? '');
+  return reason.copyWith(
+    iconKey: resolvedIconKey,
+    dedupeKey: reason.dedupeKey.trim().isNotEmpty
+        ? reason.dedupeKey
+        : 'viewer:$objectId:$objectKind',
+    mutualCount: reason.mutualCount > 0
+        ? reason.mutualCount
+        : intersectionMutualCountOf(reason),
+    actionHints: reason.actionHints.isNotEmpty
+        ? reason.actionHints
+        : _genericActionHints(reason, kind),
+  );
+}
 
-String _tailBeforeObject(String sourceRef) {
-  switch (sourceRef) {
-    case 'sharedCircle':
-      return '位用户都在「';
-    case 'coVisitedEntity':
-      return '位校友都去过「';
-    case 'coCommented':
-      return '位用户都参与「';
-    case 'sameSchool':
-      return '位用户都来自「';
-    default:
-      return '位用户都关注「';
+List<IntersectionActionHint> _genericActionHints(
+  IntersectionReason reason,
+  String kind,
+) {
+  final meta = IntersectionKindMetadata.of(kind);
+  final actionKey = meta?.primaryActionKey ?? 'ask_assistant';
+  final objectKind = reason.objectKind.trim().isNotEmpty
+      ? reason.objectKind.trim()
+      : (meta?.objectKind ?? '');
+  final objectId = reason.actionTargetId.trim();
+  return <IntersectionActionHint>[
+    IntersectionActionHint(
+      actionKey: actionKey,
+      label: DiscoveryFeedText.intersectionActionLabel(actionKey),
+      target: objectId.isEmpty
+          ? null
+          : IntersectionTarget(
+              objectId: objectId,
+              objectKind: objectKind,
+              routeId: intersectionRouteIdForObjectKind(objectKind),
+            ),
+      isPrimary: true,
+      priority: 1,
+    ),
+  ];
+}
+
+/// 解析 reason 的标准 kind（一等字段 [IntersectionReason.kind] 为真相源）。
+///
+/// 候选优先级：reason.kind（codegen 解码自 kind/sourceRef 别名）→ 首个 point.sourceRef
+/// （point 级 kind 真相源）→ reason.source（旧 fixture 兼容）。
+/// 解析顺序：
+/// 1. 先取命中 codegen [intersectionKindMetadata] 的注册表标准 kind；
+/// 2. 退而取「非维度名」的非空候选——如 `affinity` 概率推荐类，注册表未登记 kind 但有
+///    合成模板与降级展示语义；维度名（codegen [intersectionDimensionKeys] 闭集）不得被
+///    误当 kind（避免把 source='relationship' 这类维度标签当成 kind）。
+String _resolveReasonKind(IntersectionReason reason) {
+  final candidates = <String>[
+    reason.kind.trim(),
+    for (final point in reason.intersectionPoints) point.sourceRef.trim(),
+    reason.source.trim(),
+  ];
+  for (final candidate in candidates) {
+    if (IntersectionKindMetadata.of(candidate) != null) return candidate;
   }
+  for (final candidate in candidates) {
+    if (candidate.isNotEmpty && !intersectionDimensionKeys.contains(candidate)) {
+      return candidate;
+    }
+  }
+  return '';
 }
 
 IntersectionPoint _point({
@@ -474,29 +434,13 @@ List<IntersectionReason> _withDefaultPointSummaries(
 String _isoMinusHours(int hours) =>
     DateTime.now().toUtc().subtract(Duration(hours: hours)).toIso8601String();
 
-String _routeIdForObjectKind(String objectKind) {
-  switch (objectKind) {
-    case 'person':
-      return 'userProfile';
-    case 'circle':
-      return 'circleDetail';
-    case 'school':
-    case 'place':
-    case 'enterprise':
-      return 'homepageDetail';
-    default:
-      return '';
-  }
-}
-
 int _mutualCountFor(IntersectionReason item) {
   if (item.mutualCount > 0) return item.mutualCount;
+  for (final point in item.intersectionPoints) {
+    if (point.count > 0) return point.count;
+  }
   if (item.totalPointCount > 0) return item.totalPointCount;
-  if (item.intersectionPoints.isEmpty) return 0;
-  return item.intersectionPoints.fold<int>(
-    0,
-    (sum, point) => sum + (point.count > 0 ? point.count : 1),
-  );
+  return 0;
 }
 
 int _objectTypePriority(String objectKind) {

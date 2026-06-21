@@ -21,7 +21,7 @@ Story 不产生 `design.md`；Story 发现设计缺口时，上收到所属业�
 产出：
 - 对应层级 `design.md`。
 - metadata/codegen、数据迁移、feature flag、观测、回滚方案。
-- T1~T4 证据矩阵。
+- 三层测试 证据矩阵。
 
 出口：
 - 设计能被 `/baseline` 或 `/dev` 消费。

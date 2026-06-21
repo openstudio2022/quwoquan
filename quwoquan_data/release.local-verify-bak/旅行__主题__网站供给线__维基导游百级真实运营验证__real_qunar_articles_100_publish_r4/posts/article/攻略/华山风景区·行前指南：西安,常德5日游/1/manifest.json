@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_3d4020bcfa45874e",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/华山风景区"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:华山风景区"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/华山风景区",
+      "reason": "no_condition_profile; uses region/season menu"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7863208",
+    "https://touch.travel.qunar.com/youji/7881215"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer",
+  "citedSourceRefs": [
+    "entities/地点/景区/华山风景区/1.download/sources/22.qunar_guide_candidate_2f63664effc0a746/source.md",
+    "entities/地点/景区/华山风景区/1.download/sources/27.qunar_guide_candidate_3d4020bcfa45874e/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "华山风景区·行前指南：西安,常德5日游",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "华山风景区",
+    "routeEntities": [
+      "华山风景区"
+    ],
+    "beats": [
+      "先从 华山风景区 进入主线。",
+      "金庸先生很喜欢华山",
+      "作为关中八景之首，是值得观赏的一处美景",
+      "因为雾太大，左右都看不见，华山第一险道也不觉得怕了",
+      "准备排队爬老君山玉皇顶，人太多了就爬这一个玉皇顶吧"
+    ],
+    "sourceNote": "华山、老君山、大唐不夜城五日游,2026西安游记,西安旅游/自助游/自由行/游玩攻略-【去哪儿攻略】\n梦回... 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n华山、老君山、大唐不夜城五日游\n梦回桃花源\n2024/08/03出发\n人物\n家庭\n玩法\n摄影\n人均\n2600元\n前言\nD1、16：30出发，446公里到荆州市\nD2、中山公",
+    "relatedTopics": [
+      "华山风景区",
+      "金庸先生很喜欢华山",
+      "作为关中八景之首，是值得观赏的一处美景",
+      "因为雾太大，左右都看不见，华山第一险道也不觉得怕了",
+      "准备排队爬老君山玉皇顶，人太多了就爬这一个玉皇顶吧"
+    ],
+    "mustIncludeFacts": [
+      "华山风景区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-20T00:42:18.147938+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:华山风景区"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_39260b76f2c80172",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "华山风景区",
+      "sourceEntityRef": "/entity/地点/景区/华山风景区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_3d4020bcfa45874e",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 16
+    }
+  ],
+  "articleMarkdownDigest": "sha256:5bae0df6b2970876a02687e2080489dcbf2c72703bd62abf5786fa69f0d45326"
+}

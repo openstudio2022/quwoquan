@@ -51,9 +51,9 @@
 2. 创建群与并发更新的事务边界在设计与合同测试中可区分验证。
 3. `ConversationRosterUpdated` 与 revision 字段在 metadata、Go 常量、Publisher 白名单、App 实时 handler 链路可对齐（`/dev` 补齐实现）。
 
-## T1~T4 映射
+## 三层测试 映射
 
-| 验收项 | T1 | T2 | T3 | T4 |
+| 验收项 | local_contract | local_contract | api_integration | user_acceptance |
 |--------|----|----|----|-----|
 | metadata 字段/枚举/事件 | ✓ | | | |
 | ListMembers sort 行为 | ✓ | ✓ | ✓ | |

@@ -145,7 +145,7 @@ type BehaviorSignal struct {
 	ChannelID      string `json:"channelId,omitempty"`
 	RankingVersion string `json:"rankingVersion,omitempty"`
 	// 交集转化归因（S6）：触发该行为的交集维度（identity/location/content/interest/relationship）
-	// 与路径制 tagRef 锚点（唯一真相源 publish/v1/tags），供推荐回流与交集转化漏斗按维度/tagRef 下钻。
+	// 与路径制 tagRef 锚点（唯一真相源 publish/tags），供推荐回流与交集转化漏斗按维度/tagRef 下钻。
 	IntersectionDimension string   `json:"intersectionDimension,omitempty"`
 	IntersectionTagRefs   []string `json:"intersectionTagRefs,omitempty"`
 	// 交集漏斗归因（曝光/点击/转化）：交集稳定标识 IntersectionID 与类别 IntersectionClass
@@ -203,6 +203,9 @@ var ReferralSourceMultiplier = map[string]float64{
 	"search":            2.0,
 	"push_notification": 0.8,
 	"deep_link":         0.5,
+	// 用户在「我的交集 / 我的影响力」中心主动点击交集对象：强关系探索意图，
+	// 高于 organic_feed / author_profile，与 friend_share 同级。
+	"my_intersections": 1.5,
 }
 
 // DepthLevelCoefficient maps engagementDepth level (0-4) to tag weight coefficient.

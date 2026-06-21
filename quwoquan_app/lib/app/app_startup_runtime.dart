@@ -74,6 +74,31 @@ final class AppStartupRuntime {
     });
   }
 
+  void recordStartupPhase(
+    ProviderReader read, {
+    required String phase,
+    String eventName = 'app_startup_phase',
+    Map<String, dynamic> properties = const <String, dynamic>{},
+  }) {
+    try {
+      final analytics = read(analyticsProvider) as AnalyticsService;
+      unawaited(
+        analytics.trackEvent(
+          AnalyticsEvent(
+            eventType: 'app_startup',
+            eventName: eventName,
+            properties: <String, dynamic>{
+              ..._snapshotProperties(phase: phase),
+              ...properties,
+            },
+          ),
+        ),
+      );
+    } catch (_) {
+      // 启动观测只做 best effort，不能影响进入 App。
+    }
+  }
+
   Future<void> _warmupAfterFirstFrame(ProviderReader read) async {
     unawaited(
       AppExceptionTelemetryService.instance.flushPending().catchError((_) {}),

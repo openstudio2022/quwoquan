@@ -88,7 +88,7 @@ entries:
     summary: >-
       冻结 B3 创作打标 IA（新建 L3 creation-tagging-ia）。决策：打标全类型可选不强制；入口内联各类型编辑页；
       由自动打标（转发识别+内容识别）辅助，手动 UI 作确认/修正层（未确认不静默写入）；交互形态=首发 launch 子集芯片
-      + 自动建议多选≤5（零依赖 C2），C2 发布后 flag 灰度「搜索更多标签」（检索源唯一 publish/v1/tags）；首发标签子集
+      + 自动建议多选≤5（零依赖 C2），C2 发布后 flag 灰度「搜索更多标签」（检索源唯一 publish/tags）；首发标签子集
       唯一引用 tag_ref_migration launch 项；tagRefs 经 CreatePost.writable_fields 注入（已通），验收以发布后
       content.tagRefs 一致 + 进召回/IntersectionReason、打标→交集可还原为准。已落 spec.md+acceptance.yaml、注册 tree_index、结构门禁绿。
     reason: >-
@@ -125,18 +125,18 @@ entries:
     notes:
       - B3 无 metadata 增量：tagRefs 字段 + CreatePost writable_fields 已就绪；若后续需 suggestedTagRefs 读契约再 metadata-first 增量。
       - 自动打标模型/管线（reshare-derived + content-recognition）out of scope（属 ML/数据工程）；B3 只冻结端侧消费 suggestedTagRefs 的 IA 契约。
-      - 搜索补充依赖 C2 publish/v1/tags 发布，故首发态退化为芯片多选、搜索由 flag 灰度，B3 不被 C2 阻塞。
+      - 搜索补充依赖 C2 publish/tags 发布，故首发态退化为芯片多选、搜索由 flag 灰度，B3 不被 C2 阻塞。
       - 准入门清单 B3 状态已回写为冻结。
 
   - timestamp: "2026-05-30T17:40:00+08:00"
     summary: >-
-      C2 确认：tagRef 真相源 quwoquan_data/publish/v1/tags 路径制四分组树（Topic/Audience/Format/Entity，
+      C2 确认：tagRef 真相源 quwoquan_data/publish/tags 路径制四分组树（Topic/Audience/Format/Entity，
       activeVersion 1，2026-05-15）已发布。校验 _shared/tag_ref_migration.yaml 全部 status: launch 目标
       （Topic/旅行·摄影·美食餐饮·地理、Entity/机构、Format/内容载体 共 6 个 tagRef）100% 命中树节点；
       verify_tag_tree.py 0 错误（21 条非阻断 R4 兄弟子串 / R9 子节点偏少警告，均不在首发关键路径），
       已串联门禁 verify_tag_ref_source_of_truth.py 绿。deferred 项按设计延后回填，不进首发召回。
     reason: >-
-      创作打标（B3）的首发芯片集与搜索补充都以 publish/v1/tags 为唯一检索源；进 /dev 前需确认真相源已发布且
+      创作打标（B3）的首发芯片集与搜索补充都以 publish/tags 为唯一检索源；进 /dev 前需确认真相源已发布且
       首发 launch 子集 100% 可解析，避免端侧打标 UI 落地后命中空标签。
     change_type:
       - baseline

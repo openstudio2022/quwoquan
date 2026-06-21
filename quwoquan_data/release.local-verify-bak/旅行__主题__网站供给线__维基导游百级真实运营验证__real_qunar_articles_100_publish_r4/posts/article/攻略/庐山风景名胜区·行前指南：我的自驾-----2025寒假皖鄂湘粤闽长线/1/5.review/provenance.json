@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "quwoquan_data.provenance",
+  "ref": "candidate_0d1ef411fc8c191c",
+  "final": {
+    "contentType": "article",
+    "publishTitle": "庐山风景名胜区·行前指南：我的自驾-----2025寒假皖鄂湘粤闽长线",
+    "publishSeq": 1,
+    "generator": "agent",
+    "model": "composer",
+    "agentRunId": "run-53dc3979-6ebc-4ca2-9e6d-019cc2d25c16",
+    "agentId": "agent-a95c962d-d7b5-401a-b4c7-117e6b716799",
+    "sessionTrace": null,
+    "styleFamily": "实用攻略风",
+    "openingStrategy": "conclusion_first",
+    "entityRefs": [
+      "/entity/地点/景区/庐山风景名胜区"
+    ],
+    "articleDigest": "sha256:f288adaa5be149d0caf44170452016789f59d35218d50c7cdd3c1f6307a62f72"
+  },
+  "agentInput": {
+    "writingPack": "3.compose/writing_pack.json",
+    "prompt": "4.draft/prompt.md",
+    "title": "庐山风景名胜区·行前指南：我的自驾-----2025寒假皖鄂湘粤闽长线",
+    "styleFamily": "实用攻略风",
+    "promptSha256": "sha256:831f6bd27b583b1b750bc9d7c31b1580cb9adfb5605fcb727cce728378ce1ca8",
+    "writingPackSha256": "sha256:268dee1e207c2e124f542405cbc9616736bce5123d72cc4e81f56b4a80ba70fc",
+    "sourceBundleSha256": "sha256:cb26ed66f6c8bb52ca1ba0a6ace443a118bacbf8e2c7be21de8bb52590843c12",
+    "draftSha256": "sha256:6923b4aa2c7c956687b75157bc1d82fe55f16918745773a6001ca38d3827cbdc"
+  },
+  "originalSources": [
+    {
+      "path": "entities/地点/景区/庐山风景名胜区/1.download/sources/03.qunar_guide_candidate_0d1ef411fc8c191c/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7887582"
+    },
+    {
+      "path": "entities/地点/景区/庐山风景名胜区/1.download/sources/16.qunar_guide_candidate_25910256318e81b2/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7875177"
+    },
+    {
+      "path": "entities/地点/景区/庐山风景名胜区/1.download/sources/46.qunar_guide_candidate_5df3de5ed1501f8d/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7871708"
+    },
+    {
+      "path": "entities/地点/景区/庐山风景名胜区/1.download/sources/96.qunar_guide_candidate_dce216df50bbc5f7/source.md",
+      "url": "https://touch.travel.qunar.com/youji/7900464"
+    }
+  ],
+  "gateResults": {
+    "decision": "approved",
+    "checks": {
+      "entityCoverage": true,
+      "provenanceRewrite": true,
+      "evidenceQuality": true,
+      "carrierConsistency": true,
+      "proseStyle": true,
+      "imageGate": true,
+      "travelogueDensity": true,
+      "crossArticleSimilarity": true,
+      "sectionShape": true,
+      "generatorProvenance": true,
+      "factTraceability": true,
+      "baseDraftFidelity": true,
+      "writingIntentConsistency": true,
+      "registerMismatch": true,
+      "contactInfo": true,
+      "mechanicalHeading": true,
+      "creativeGovernance": true
+    }
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/庐山风景名胜区/1.download/sources/03.qunar_guide_candidate_0d1ef411fc8c191c/source.md",
+    "entities/地点/景区/庐山风景名胜区/1.download/sources/16.qunar_guide_candidate_25910256318e81b2/source.md",
+    "entities/地点/景区/庐山风景名胜区/1.download/sources/46.qunar_guide_candidate_5df3de5ed1501f8d/source.md",
+    "entities/地点/景区/庐山风景名胜区/1.download/sources/96.qunar_guide_candidate_dce216df50bbc5f7/source.md"
+  ]
+}

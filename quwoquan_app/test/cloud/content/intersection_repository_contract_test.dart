@@ -19,10 +19,16 @@ void main() {
       final repo = MockIntersectionRepository();
       final summary = await repo.getMyIntersectionSummary();
 
-      expect(summary.totalCount, 8);
+      // 5 维闭集 + 初始全部记为未读新增；不锁易碎的枚举总数（随 mock 实例扩充自适应），
+      // 改用结构不变量：总数==各维度计数之和，防分组/去重漂移。
       expect(summary.dimensions.length, 5);
-      expect(summary.totalNewCount, greaterThan(0));
+      expect(summary.totalCount, greaterThan(0));
       expect(summary.totalNewCount, summary.totalCount);
+      final dimensionSum = summary.dimensions.fold<int>(
+        0,
+        (sum, tally) => sum + tally.count,
+      );
+      expect(summary.totalCount, dimensionSum);
     });
 
     test('打开全部列表（visit 空维度）→ 全部未读清零', () async {
@@ -48,11 +54,22 @@ void main() {
       expect(summary.totalNewCount, greaterThan(0));
     });
 
-    test('分维度列表：自上次新增在前', () async {
+    test('分维度列表：自上次新增在前（不变量，不硬编码条数）', () async {
       final repo = MockIntersectionRepository();
       final items = await repo.listMyIntersections(dimension: 'relationship');
-      expect(items.length, 3);
+      expect(items, isNotEmpty);
       expect(items.every((r) => r.dimension == 'relationship'), isTrue);
+      // 排序不变量：新初始化仓库无已读水位，「新增」= freshAt 非空；
+      // 新增项必须整体排在非新增项之前（一旦出现非新增项，其后不得再现新增项）。
+      var seenStale = false;
+      for (final r in items) {
+        final isNew = r.freshAt.trim().isNotEmpty;
+        if (!isNew) {
+          seenStale = true;
+        } else {
+          expect(seenStale, isFalse, reason: '新增交集必须排在非新增之前');
+        }
+      }
     });
 
     test('我的交集列表下发可展示交集点，摘要数字由列表派生', () async {

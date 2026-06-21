@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "毕棚沟_route_transport",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/毕棚沟"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:毕棚沟"
+  ],
+  "tagRefs": [
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "conditionContext": {
+    "region": {
+      "name": "四川省",
+      "label": "四川省"
+    },
+    "entityProfile": {
+      "entityRef": "/entity/地点/景区/毕棚沟",
+      "regions": [
+        "高原",
+        "山地森林"
+      ],
+      "seasons": [
+        "春",
+        "秋"
+      ],
+      "altitudeMeters": null,
+      "notes": null,
+      "conditionSource": "entityConditionProfile"
+    },
+    "season": {
+      "name": "春",
+      "label": "春",
+      "source": "entityProfile"
+    }
+  },
+  "sourceUrls": [
+    "http://www.bipenggou.net/",
+    "https://touch.travel.qunar.com/youji/7902773",
+    "https://touch.travel.qunar.com/youji/7801857",
+    "https://touch.travel.qunar.com/youji/7765654",
+    "https://touch.travel.qunar.com/youji/7748135",
+    "https://touch.travel.qunar.com/youji/7707845",
+    "https://touch.travel.qunar.com/youji/7707310",
+    "https://touch.travel.qunar.com/youji/7639145",
+    "https://touch.travel.qunar.com/youji/7630263",
+    "https://touch.travel.qunar.com/youji/7626807",
+    "https://touch.travel.qunar.com/youji/7639731",
+    "https://touch.travel.qunar.com/youji/7601882",
+    "https://touch.travel.qunar.com/youji/7565410",
+    "https://touch.travel.qunar.com/youji/7554229",
+    "https://touch.travel.qunar.com/youji/7546588",
+    "https://commons.wikimedia.org/wiki/File:%E5%9B%9B%E5%B7%9D_%E7%90%86%E5%8E%BF-%E6%AF%95%E6%A3%9A%E6%B2%9F_%E5%A4%A7%E9%81%93_-_panoramio.jpg",
+    "https://touch.travel.qunar.com/search?q=%E6%AF%95%E6%A3%9A%E6%B2%9F",
+    "https://commons.wikimedia.org/wiki/Category%3ABipeng_Valley"
+  ],
+  "assets": [
+    {
+      "assetId": "毕棚沟_cover_3_31b661db",
+      "fileName": "毕棚沟_cover_3_31b661db.jpg",
+      "caption": "四川 理县-毕棚沟 停車场",
+      "imageLayout": "fullWidth",
+      "sha256": "sha256:40d4d9b0fb49b072655e4d28cb935e1d6421d9ed670bef67103179a63df1dd06",
+      "sourceAssetRef": "entities/地点/景区/毕棚沟/1.download/sources/05.article_qunar_base_3/assets/001_article_qunar_base_3_1.jpg",
+      "sourceRef": "entities/地点/景区/毕棚沟/1.download/sources/05.article_qunar_base_3/source.md",
+      "alignmentEvidence": "四川 理县-毕棚沟 停車场",
+      "sourceCollectionId": "source_image:毕棚沟:6c55f14fbe8f1e83",
+      "creator": "Nyx Ning",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E5%9B%9B%E5%B7%9D_%E7%90%86%E5%8E%BF-%E6%AF%95%E6%A3%9A%E6%B2%9F_%E5%81%9C%E8%BB%8A%E5%9C%BA_-_panoramio.jpg",
+      "license": "CC BY-SA 3.0",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "licenseSnapshot": "CC BY-SA 3.0 recorded on Wikimedia Commons file page",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E5%9B%9B%E5%B7%9D_%E7%90%86%E5%8E%BF-%E6%AF%95%E6%A3%9A%E6%B2%9F_%E5%81%9C%E8%BB%8A%E5%9C%BA_-_panoramio.jpg",
+      "usageScope": "app_publish"
+    }
+  ],
+  "template": "journal",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5-fast",
+  "citedSourceRefs": [
+    "entities/地点/景区/毕棚沟/1.download/sources/02.home_official/source.md",
+    "entities/地点/景区/毕棚沟/1.download/sources/05.article_qunar_base_3/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "毕棚沟·怎么去与动线：火辣成都，冷艳川西|在毕棚沟鹧鸪山邂逅一场冰雪奇缘",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "毕棚沟",
+    "routeEntities": [
+      "毕棚沟"
+    ],
+    "beats": [
+      "先从 毕棚沟 进入主线。",
+      "初夏的松弛感，在毕棚沟Get到了",
+      "本以为旅程的惊喜已全部解锁，没想到返程时，成灌高速的安德服务区给了我们最后一个“哇塞”",
+      "去到洗手间我才发现又是细节哟，智慧屏实时显示厕位占用情况，感觉位置也挺多的，这个返程高峰时间段，我都没怎么排队",
+      "除了这些基础服务功能，我必须把服务区的大厅单独拎出来说说，刚路过去厕所我就看到两侧店铺很多，单独逛下来，确实没让我失望，中餐、特产、服装、小吃……简直是啥都有，我个人认为和商场差不多了"
+    ],
+    "sourceNote": "毕棚沟风景区 政务信息 | English 首页 映像毕棚沟 四季旅游 动植物宝库 旅游分享 活动资讯 娜姆湖度假酒店 春看山花 山花烂漫 / 绚丽多姿 斑驳世界 / 盎然生机 查看详情 夏季避暑 郁树成荫 / 流水潺潺 清凉世界 / 避暑胜地 查看详情 秋赏红叶 秋高气爽 / 漫山彩林 人间瑶池 / 地上仙境 查看详情 冬玩冰雪 千里冰封 / 万里雪飘 银。",
+    "relatedTopics": [
+      "毕棚沟",
+      "初夏的松弛感，在毕棚沟Get到了",
+      "本以为旅程的惊喜已全部解锁，没想到返程时，成灌高速的安德服务区给了我们最后一个“哇塞”",
+      "去到洗手间我才发现又是细节哟，智慧屏实时显示厕位占用情况，感觉位置也挺多的，这个返程高峰时间段，我都没怎么排队",
+      "除了这些基础服务功能，我必须把服务区的大厅单独拎出来说说，刚路过去厕所我就看到两侧店铺很多，单独逛下来，确实没让我失望，中餐、特产、服装、小吃……简直是啥都有，我个人认为和商场差不多了"
+    ],
+    "mustIncludeFacts": [
+      "毕棚沟 来源提及 怎么去与动线",
+      "毕棚沟 图文底稿来自 火辣成都，冷艳川西|在毕棚沟鹧鸪山邂逅一场冰雪奇缘；文章源图必须来自同一底稿并且全批独占"
+    ]
+  },
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "sourceBatchId": "source_ready_assetrefs_10_20260619_02",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "journal",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T21:09:02.020353+00:00",
+  "updatedAt": "2026-06-19T21:49:09.478299+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:毕棚沟"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "四川省"
+    }
+  ],
+  "articleMarkdownDigest": "sha256:4f73a553314d6dd7ee158560c45e317363c3ade5f936e3ddf6a6be7a3716a8c3"
+}

@@ -1,0 +1,36 @@
+{
+  "label": "都江堰",
+  "domain": "地点",
+  "type": "景区",
+  "sourceTaskId": "旅行/地域/四川省/景区/全国5A景区source-ready资产闭环验证v18",
+  "entityRef": "/entity/地点/景区/都江堰",
+  "summary": "都江堰是中国古代建设并使用至今的大型水利工程，位于四川省都江堰市城西，岷江上游340公里处。",
+  "conditionProfile": {
+    "regions": [
+      "平原都市"
+    ],
+    "seasons": [
+      "春"
+    ],
+    "evidenceRefs": [
+      {
+        "field": "regions",
+        "value": "平原都市",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "都江堰 主页正文概况与空间特征归纳"
+      },
+      {
+        "field": "seasons",
+        "value": "春",
+        "source": "page.md",
+        "path": "page.md",
+        "note": "都江堰 主页正文季节与游览信息归纳"
+      }
+    ]
+  },
+  "sourceRefs": [
+    "entities/地点/景区/都江堰/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/都江堰/1.download/sources/01.home_wikipedia/source.md"
+  ]
+}

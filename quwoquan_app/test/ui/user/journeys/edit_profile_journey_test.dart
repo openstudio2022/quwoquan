@@ -178,7 +178,7 @@ void main() {
       );
 
       await tester.pumpWidget(app);
-      await tester.pumpAndSettle(const Duration(seconds: 5));
+      await _pumpFrames(tester, count: 20);
 
       expect(
         find.byKey(const ValueKey<String>('profile-header-edit')),
@@ -200,11 +200,20 @@ void main() {
         newNickname,
       );
       await _pumpFrames(tester);
+      final longBio = List<String>.filled(220, '趣').join();
+      await tester.enterText(find.byType(CupertinoTextField).at(1), longBio);
+      await _pumpFrames(tester);
+      final bioField = tester.widget<CupertinoTextField>(
+        find.byType(CupertinoTextField).at(1),
+      );
+      expect(bioField.controller?.text.length, 200);
+      expect(find.text('200/200'), findsOneWidget);
 
       await tester.tap(find.text('保存'));
-      await tester.pumpAndSettle(const Duration(seconds: 5));
+      await _pumpFrames(tester, count: 20);
 
       expect(find.text(newNickname), findsAtLeastNWidgets(1));
+      await tester.pump(const Duration(seconds: 4));
     });
   });
 }

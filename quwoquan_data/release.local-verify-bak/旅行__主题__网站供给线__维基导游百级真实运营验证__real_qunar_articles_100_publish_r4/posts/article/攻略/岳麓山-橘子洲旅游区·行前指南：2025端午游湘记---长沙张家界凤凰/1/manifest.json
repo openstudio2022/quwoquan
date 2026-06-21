@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "quwoquan_data.post_manifest",
+  "topicId": "candidate_3348b656ed9cb554",
+  "contentType": "article",
+  "entityRefs": [
+    "/entity/地点/景区/岳麓山-橘子洲旅游区"
+  ],
+  "normalizedEntityRefs": [
+    "entity:景区:岳麓山-橘子洲旅游区"
+  ],
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容载体/文章/长文",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/行程形态/跟团游",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/旅行主题/文化深度游",
+    "Format/内容角度/科普/知识科普",
+    "Topic/旅行/行程形态/半自由行"
+  ],
+  "publishMediaMode": "text_only",
+  "conditionContext": {
+    "entityProfileFallback": {
+      "entityRef": "/entity/地点/景区/岳麓山-橘子洲旅游区",
+      "reason": "no_condition_profile; uses region/season menu"
+    },
+    "region": {
+      "name": "高原/高海拔",
+      "label": "高原/高海拔",
+      "source": "site_candidate_evidence",
+      "evidenceTerms": [
+        "海拔"
+      ],
+      "evidenceRef": "entities/地点/景区/岳麓山-橘子洲旅游区/1.download/sources/24.qunar_guide_candidate_3348b656ed9cb554/source.md"
+    }
+  },
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7891242"
+  ],
+  "assets": [],
+  "template": "gentle",
+  "carrier": "article",
+  "generator": "agent",
+  "generatorModel": "composer-2.5",
+  "citedSourceRefs": [
+    "entities/地点/景区/岳麓山-橘子洲旅游区/1.download/sources/24.qunar_guide_candidate_3348b656ed9cb554/source.md"
+  ],
+  "reviewDecision": "approved",
+  "publishLayout": "entity",
+  "publishAngle": "攻略",
+  "publishTitle": "岳麓山-橘子洲旅游区·行前指南：2025端午游湘记---长沙张家界凤凰",
+  "publishSeq": 1,
+  "storySpine": {
+    "primaryEntity": "岳麓山-橘子洲旅游区",
+    "routeEntities": [
+      "岳麓山-橘子洲旅游区"
+    ],
+    "beats": [
+      "先从 岳麓山-橘子洲旅游区 进入主线。",
+      "来长沙，茶颜喝了，橘子洲去了，湘菜吃了，是不是还差一份小龙虾，一查有好多好多家 ，推荐的也好多好多了，顿时懵了，不知道去谁家，最后闭着眼睛指到谁算谁吧，红小子家，虾是很新鲜，味道也还行，就是有点淡，可能我们北方人口重吧，点的香辣和蒜蓉，吃完抽奖，还抽了三玻璃杯",
+      "天门山最经典的路线为A线（A线全线基本为下坡路，妈妈73年的丝毫不费力气走完），需提前预定并在规定时间内入园，门票258元，含天门山往返索道，园内环保车及七段穿山扶梯，入园后需另外付费有玻璃栈道鞋套5元/人，天门洞景点后的五段穿山扶梯，32元/人（后五段扶梯的钱，绝对花的值，否则步行走下999台阶），优惠票116元（在入园之前还碎碎念门票真贵，当坐上上山索道时，叹道门票值啊），天门山索道全长，乘坐约30分钟",
+      "取车成功后，前往张家界国家森林公园，门票390元/人，买的是一票到底三索一梯不限次数，其实三索一梯单程就行，本想着张家界都传怎么怎么好，那样就不差那几时块钱了 ，事实告诉我，草率了，不要轻信别人的，今天路线为东线武陵源进出：东门进→百龙天梯→袁家界→迷魂台→乾坤柱（阿凡达）→天下第一桥→停车场→天子山→御笔峰→仙女散花→环保车→索道下山（这个路线是我在网上比较多日，少走路景点优的一条路线，但走下来还是好累好累）",
+      "虽然说是三索一梯不累，但无论是坐索道还是百龙天梯，都需要爬好多好多的楼梯，爬到你吐"
+    ],
+    "sourceNote": "2025端午游湘记---长沙张家界凤凰,2026长沙游记,长沙旅游/自助游/自由行/游玩攻略-【去哪儿攻略】\n红杏... 邀您来去哪儿攻略\n体验更流畅，还能赢积分换大奖\n马上下载\n首页\n游记详情\n2025端午游湘记---长沙张家界凤凰\n红杏8810\n2025/05/21出发\n人物\n家庭\n人均\n5500元\n前言\n我欲因之梦寥廓\n芙蓉国离尽朝晖\n湖南，探寻湘江的",
+    "relatedTopics": [
+      "岳麓山-橘子洲旅游区",
+      "来长沙，茶颜喝了，橘子洲去了，湘菜吃了，是不是还差一份小龙虾，一查有好多好多家 ，推荐的也好多好多了，顿时懵了，不知道去谁家，最后闭着眼睛指到谁算谁吧，红小子家，虾是很新鲜，味道也还行，就是有点淡，可能我们北方人口重吧，点的香辣和蒜蓉，吃完抽奖，还抽了三玻璃杯",
+      "天门山最经典的路线为A线（A线全线基本为下坡路，妈妈73年的丝毫不费力气走完），需提前预定并在规定时间内入园，门票258元，含天门山往返索道，园内环保车及七段穿山扶梯，入园后需另外付费有玻璃栈道鞋套5元/人，天门洞景点后的五段穿山扶梯，32元/人（后五段扶梯的钱，绝对花的值，否则步行走下999台阶），优惠票116元（在入园之前还碎碎念门票真贵，当坐上上山索道时，叹道门票值啊），天门山索道全长，乘坐约30分钟",
+      "取车成功后，前往张家界国家森林公园，门票390元/人，买的是一票到底三索一梯不限次数，其实三索一梯单程就行，本想着张家界都传怎么怎么好，那样就不差那几时块钱了 ，事实告诉我，草率了，不要轻信别人的，今天路线为东线武陵源进出：东门进→百龙天梯→袁家界→迷魂台→乾坤柱（阿凡达）→天下第一桥→停车场→天子山→御笔峰→仙女散花→环保车→索道下山（这个路线是我在网上比较多日，少走路景点优的一条路线，但走下来还是好累好累）",
+      "虽然说是三索一梯不累，但无论是坐索道还是百龙天梯，都需要爬好多好多的楼梯，爬到你吐"
+    ],
+    "mustIncludeFacts": [
+      "岳麓山-橘子洲旅游区"
+    ]
+  },
+  "sourceTaskId": "旅行/主题/网站供给线/维基导游百级真实运营验证",
+  "sourceBatchId": "real_qunar_articles_100_publish_r4",
+  "articleMarkdownVersion": "qwq-rich-md/1",
+  "articleRenderProfile": {
+    "template": "gentle",
+    "fontPreset": "clean"
+  },
+  "createdAt": "2026-06-19T22:03:52.637025+00:00",
+  "updatedAt": "2026-06-19T23:23:15.609849+00:00",
+  "intersectionHints": [
+    {
+      "dimension": "content",
+      "source": "entityRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "entity:景区:岳麓山-橘子洲旅游区"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容角度/攻略/行前指南"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容角度/攻略/行前指南"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Format/内容载体/文章/长文"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Format/内容载体/文章/长文"
+    },
+    {
+      "dimension": "interest",
+      "source": "tagRef",
+      "tagRefs": [
+        "Topic/旅行/玩法/观光游览"
+      ],
+      "actionType": "join",
+      "actionTargetId": "Topic/旅行/玩法/观光游览"
+    },
+    {
+      "dimension": "location",
+      "source": "geoTagRef",
+      "tagRefs": [],
+      "actionType": "view_object",
+      "actionTargetId": "高原/高海拔"
+    }
+  ],
+  "pendingEntityMentions": [
+    {
+      "candidateId": "entity_candidate_4a69a26bb3059edb",
+      "kind": "entity",
+      "status": "pending_review",
+      "surface": "岳麓山-橘子洲旅游区",
+      "sourceEntityRef": "/entity/地点/景区/岳麓山-橘子洲旅游区",
+      "source": "publish_filter.filtered_entity_without_homepage",
+      "sourceRef": "candidate_3348b656ed9cb554",
+      "entityType": "地点/景区",
+      "location": "body",
+      "rangeStart": 11,
+      "rangeEnd": 21
+    }
+  ],
+  "articleMarkdownDigest": "sha256:05d186bc38ca1f1cec5b0b17a99f75463ee2e302a8ea71f9e84ac835ad823a2e"
+}

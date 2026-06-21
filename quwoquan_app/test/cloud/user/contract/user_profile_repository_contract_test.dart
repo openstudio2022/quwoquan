@@ -38,7 +38,6 @@ void main() {
         repo.updateProfile(
           const ProfileEditUpdatePayload(
             nickname: '新昵称',
-            username: 'u',
             bio: 'b',
           ),
         ),
@@ -373,7 +372,6 @@ void main() {
         repo.updateProfile(
           const ProfileEditUpdatePayload(
             nickname: '',
-            username: '',
             bio: '',
           ),
         ),

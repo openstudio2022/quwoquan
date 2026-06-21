@@ -1,9 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
 
@@ -19,6 +20,7 @@ class RecordPostCard extends ConsumerWidget {
     required this.isDark,
     required this.onTap,
     this.showAuthor = true,
+    this.referralSource,
   });
 
   final PostBaseDto post;
@@ -27,6 +29,9 @@ class RecordPostCard extends ConsumerWidget {
 
   /// 作者位（用户主页主人即自己时可关闭）。
   final bool showAuthor;
+
+  /// 展示面来源渠道（透传给交集句片段点击埋点，精确归因，N5/N10）。
+  final ReferralSource? referralSource;
 
   double get _imageAspectRatio {
     final ratio = post.aspectRatio;
@@ -86,6 +91,7 @@ class RecordPostCard extends ConsumerWidget {
       header: IntersectionReasonChip.fromReasons(
         post.intersectionReasons,
         isDark: isDark,
+        referralSource: referralSource,
       ),
       footer: Row(
         children: <Widget>[
@@ -122,13 +128,16 @@ class RecordPostCard extends ConsumerWidget {
             height: diameter,
             child: avatar.isEmpty
                 ? ColoredBox(color: fgSecondary.withValues(alpha: 0.12))
-                : CachedNetworkImage(
+                : AppAvatarImage(
                     imageUrl: avatar,
+                    size: diameter,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) =>
-                        ColoredBox(color: fgSecondary.withValues(alpha: 0.12)),
-                    errorWidget: (context, url, error) =>
-                        ColoredBox(color: fgSecondary.withValues(alpha: 0.12)),
+                    placeholder: ColoredBox(
+                      color: fgSecondary.withValues(alpha: 0.12),
+                    ),
+                    errorWidget: ColoredBox(
+                      color: fgSecondary.withValues(alpha: 0.12),
+                    ),
                   ),
           ),
         ),
