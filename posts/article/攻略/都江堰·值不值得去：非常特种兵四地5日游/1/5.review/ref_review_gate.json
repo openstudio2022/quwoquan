@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "quwoquan_data.ref_review_gate",
+  "ref": "都江堰_decision_experience",
+  "passed": false,
+  "reviewDecision": "blocked_input_missing",
+  "issues": [
+    "input_missing: 4.draft/author_job_packet.json 不存在，无法读取写作契约",
+    "input_missing: 3.compose/writing_pack.json 不存在，无法获取 mustIncludeFacts/assets/sourcePaths",
+    "input_missing: 4.draft/prompt.md 不存在",
+    "input_missing: 2.quality/* 与 1.download/sources 证据目录不存在",
+    "exitGate: draft.article.md 未写入（输入缺失阻断创作）",
+    "exitGate: author_self_check 已写入但 status=blocked_input_missing，不得标 approved"
+  ],
+  "generatedAt": "2026-06-22T13:59:59.464312+00:00"
+}
