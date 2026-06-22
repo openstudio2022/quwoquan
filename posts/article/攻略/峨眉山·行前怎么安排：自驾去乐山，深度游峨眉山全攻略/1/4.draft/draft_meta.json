@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "quwoquan_data.draft_meta",
+  "ref": "峨眉山_planning_consultation",
+  "generator": "agent",
+  "model": "claude-4.6-sonnet-high-thinking",
+  "generatedAt": "2026-06-22T14:05:00+00:00",
+  "citedSourcePaths": [
+    "posts/article/攻略/峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略/1/1.download/sources/01.qunar_base/source.md"
+  ],
+  "coveredFacts": [
+    "成都到乐山大佛自驾约1.5小时",
+    "乐山大佛通高71米，位于三江汇流处",
+    "参观大佛后驾车到峨眉山约1小时",
+    "峨眉山金顶海拔超过3000米",
+    "生态猴区猴子500余只",
+    "万年寺历史1600余年",
+    "数游峨眉体验中心面积约2000平方米",
+    "只有峨眉山演出分云之上/云之中/云之下三部分"
+  ],
+  "styleFamily": "journal",
+  "openingStrategy": "conclusion_first",
+  "creativePlan": {
+    "candidates": [
+      {"planId": "A", "angle": "三天自驾骨架优先", "structure": "结论→动线→日程→取舍"},
+      {"planId": "B", "angle": "大佛与金顶体力分配", "structure": "结论→体力→换乘→收尾"},
+      {"planId": "C", "angle": "文化体验穿插", "structure": "结论→演出数游→猴群寺院"}
+    ],
+    "selectedPlanId": "A",
+    "selectionReason": "底稿本身按 Day1-3 组织，读者最需要的是顺序与换乘取舍而非单点描写。"
+  },
+  "selfCritique": {
+    "readerPromise": "首段直接给出三天骨架与核心取舍，符合 planning_consultation。",
+    "titlePromise": "覆盖自驾、乐山、峨眉山深度游三个标题关键词。",
+    "informationDensity": "8 条 mustIncludeFacts 均已落入正文，无空泛口号段。",
+    "evidenceBoundary": "仅使用本 ref 底稿与可核验事实，未虚构亲历。",
+    "personaBoundary": "平台编辑型视角，未冒充底稿作者贺贺。"
+  }
+}

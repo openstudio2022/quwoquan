@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "quwoquan_data.author_self_check",
+  "ref": "峨眉山_planning_consultation",
+  "ok": true,
+  "checkedAt": "2026-06-22T14:05:00+00:00",
+  "writingIntent": "planning_consultation",
+  "checks": {
+    "mustIncludeFactsCovered": true,
+    "openingStrategyApplied": true,
+    "requireLikePresent": true,
+    "requireDislikePresent": true,
+    "decisionPointsCount": 3,
+    "noPrivateContact": true,
+    "noBannedRegisterTerms": true,
+    "noMechanicalHeadings": true,
+    "noPlaceholderDraft": true,
+    "imageReferenceClosure": "n/a_text_only",
+    "singleRefIsolation": true
+  },
+  "coveredFacts": [
+    "成都到乐山大佛自驾约1.5小时",
+    "乐山大佛通高71米，位于三江汇流处",
+    "参观大佛后驾车到峨眉山约1小时",
+    "峨眉山金顶海拔超过3000米",
+    "生态猴区猴子500余只",
+    "万年寺历史1600余年",
+    "数游峨眉体验中心面积约2000平方米",
+    "只有峨眉山演出分云之上/云之中/云之下三部分"
+  ],
+  "notes": "正文已独立表达，未引用同批其它文章；无 asset 引用因 writing_pack.assets 为空。"
+}

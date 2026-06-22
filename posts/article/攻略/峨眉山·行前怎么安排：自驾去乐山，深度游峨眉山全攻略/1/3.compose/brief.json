@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "quwoquan_data.compose_brief",
+  "ref": "峨眉山_planning_consultation",
+  "titleHint": "峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略",
+  "templateId": "travel.entity.guide",
+  "carrier": "article",
+  "writingIntent": "planning_consultation",
+  "styleFamily": "journal",
+  "openingStrategy": "conclusion_first",
+  "publishMediaMode": "text_only",
+  "baseSourceRef": "posts/article/攻略/峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略/1/1.download/sources/01.qunar_base/source.md",
+  "sourceUseMode": "factual_reference_only",
+  "mustIncludeFacts": [
+    "成都到乐山大佛自驾约1.5小时",
+    "乐山大佛通高71米，位于三江汇流处",
+    "参观大佛后驾车到峨眉山约1小时",
+    "峨眉山金顶海拔超过3000米",
+    "生态猴区猴子500余只",
+    "万年寺历史1600余年",
+    "数游峨眉体验中心面积约2000平方米",
+    "只有峨眉山演出分云之上/云之中/云之下三部分"
+  ],
+  "bannedRegisterTerms": ["看展", "展厅", "展陈"],
+  "wordCount": {"min": 700, "max": 1600},
+  "creativeBrief": {
+    "readerPromise": "帮助读者在出发前判断自驾串联乐山与峨眉山的顺序、换乘与体力风险。",
+    "contentAngle": "计划前咨询/攻略",
+    "openingStrategy": "conclusion_first"
+  }
+}

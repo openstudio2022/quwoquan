@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "quwoquan_data.writing_pack",
+  "ref": "峨眉山_planning_consultation",
+  "kind": "entity",
+  "title": "峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略",
+  "byline": "平台编辑型",
+  "carrier": "article",
+  "publishLayout": "article",
+  "templateId": "travel.entity.guide",
+  "wordCount": {"min": 700, "max": 1600},
+  "mustIncludeFacts": [
+    "成都到乐山大佛自驾约1.5小时",
+    "乐山大佛通高71米，位于三江汇流处",
+    "参观大佛后驾车到峨眉山约1小时",
+    "峨眉山金顶海拔超过3000米",
+    "生态猴区猴子500余只",
+    "万年寺历史1600余年",
+    "数游峨眉体验中心面积约2000平方米",
+    "只有峨眉山演出分云之上/云之中/云之下三部分"
+  ],
+  "sectionIntents": [
+    "结论先行：三天自驾骨架",
+    "成都到乐山再到峨眉的自驾动线",
+    "景区内换乘、猴群与寺院取舍",
+    "从底稿细节收束行前判断"
+  ],
+  "narrativeContract": {
+    "requireMotivation": true,
+    "requireLike": true,
+    "requireDislike": true,
+    "minDecisionPoints": 2,
+    "forbidStandaloneTips": true
+  },
+  "styleFamily": "journal",
+  "creativeBrief": {
+    "readerPromise": "帮助读者在出发前判断自驾串联乐山与峨眉山的顺序、换乘与体力风险。",
+    "contentAngle": "计划前咨询/攻略",
+    "voiceStyle": "平台编辑型",
+    "openingStrategy": "conclusion_first",
+    "allowedMoves": ["结论先行", "步骤式组织", "选择对比", "风险提醒融入段内"],
+    "mustNotDo": ["虚构亲历", "照搬底稿长句", "写私人联系方式", "用清单式机械小标题"]
+  },
+  "evidencePoints": [
+    {
+      "entityName": "峨眉山",
+      "topExcerpt": "成都出发自驾串联乐山大佛与峨眉山金顶的三日骨架",
+      "likes": ["世界遗产连玩的密度", "雪芽制茶的慢节奏"],
+      "pains": ["三天行程任何一环超时都会挤压金顶", "猴群讨食需要心理预期"]
+    }
+  ],
+  "assets": [],
+  "sourceUrls": ["https://touch.travel.qunar.com/youji/7868592"],
+  "sourcePaths": [
+    "posts/article/攻略/峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略/1/1.download/sources/01.qunar_base/source.md"
+  ],
+  "writingIntent": "planning_consultation",
+  "baseSourceRef": "posts/article/攻略/峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略/1/1.download/sources/01.qunar_base/source.md",
+  "sourceUseMode": "factual_reference_only",
+  "bannedRegisterTerms": ["看展", "展厅", "展陈"]
+}
