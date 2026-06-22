@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "quwoquan_data.writing_pack",
+  "ref": "四姑娘山_planning_consultation",
+  "title": "四姑娘山·行前怎么安排：（房车旅行）四川阿坝、成都、都江堰、四姑娘山4天",
+  "writingIntent": "planning_consultation",
+  "carrier": "article",
+  "baseSourceRef": "1.download/sources/01.ctrip_base/source.md",
+  "sourceUseMode": "factual_reference_only",
+  "sourcePaths": [
+    "1.download/sources/01.ctrip_base/source.md",
+    "2.quality/evidence_summary.json"
+  ],
+  "sourceUrls": [
+    "https://you.ctrip.com/travels/Chengdu104/4172451.html"
+  ],
+  "mustIncludeFacts": [
+    "4天房车环线串联成都、都江堰、古尔沟、理小路、四姑娘山双桥沟与卧龙",
+    "成都至都江堰约80公里、都江堰至古尔沟约150公里",
+    "理小路为理县至小金县96公里省道450线，海拔约2000至3600米",
+    "四姑娘山双桥沟全长30余公里、面积216.6平方公里，环保车70元/人",
+    "四姑娘山风景名胜区距成都约220公里",
+    "返程建议预留21:00后航班或车次",
+    "毕棚沟观光车下段与上段各60元/人需另计"
+  ],
+  "bannedRegisterTerms": [],
+  "creativeBrief": {
+    "readerPromise": "把四天房车川西小环线的顺序、里程、门票与取舍一次说清",
+    "tone": "行前咨询，结论先行，独立表达"
+  },
+  "assets": [
+    {
+      "assetId": "四姑娘山_cover_wikipedia",
+      "fileName": "四姑娘山_cover_wikipedia.jpg",
+      "entityName": "四姑娘山",
+      "imageLayout": "fullWidth",
+      "caption": "四姑娘山四座相连雪峰，邛崃山脉段典型山形",
+      "sourceRef": "entities/地点/景区/四姑娘山/1.download/sources/01.home_wikipedia/source.md",
+      "license": "CC BY-SA 3.0"
+    }
+  ],
+  "conditionContext": {
+    "region": {"name": "四川省", "label": "四川省"},
+    "season": {"name": "秋", "label": "秋", "source": "sourceArticle"}
+  }
+}

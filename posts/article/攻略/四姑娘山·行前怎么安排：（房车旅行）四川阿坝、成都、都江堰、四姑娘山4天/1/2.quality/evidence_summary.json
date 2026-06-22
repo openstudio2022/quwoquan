@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "quwoquan_data.evidence_summary",
+  "ref": "四姑娘山_planning_consultation",
+  "primarySourceRef": "1.download/sources/01.ctrip_base/source.md",
+  "sourceUseMode": "factual_reference_only",
+  "qualityScore": 8.0,
+  "rejectSourceRefs": []
+}
