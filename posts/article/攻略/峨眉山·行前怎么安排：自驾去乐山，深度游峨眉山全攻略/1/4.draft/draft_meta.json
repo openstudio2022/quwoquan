@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "quwoquan_data.draft_meta",
+  "ref": "峨眉山_planning_consultation",
+  "generator": "agent",
+  "model": "composer-2.5",
+  "styleFamily": "travel-guide",
+  "openingStrategy": "conclusion_first",
+  "citedSourcePaths": [
+    "posts/article/攻略/峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略/1/1.download/sources/01.base/source.md"
+  ],
+  "coveredFacts": [
+    "三天两夜行程骨架：第一天乐山大佛，第二天峨眉低中山区，第三天金顶",
+    "乐山大佛通高约71米",
+    "峨眉山万佛顶海拔3099米",
+    "零公里以上禁止自驾车驶入景区道路",
+    "成都方向城际高铁至峨眉山站约1.5小时",
+    "3-5月与9-11月较适宜联游"
+  ],
+  "creativePlan": {
+    "concepts": [
+      {"id": "c1", "title": "三天切分法", "hook": "先定大佛/半山/金顶三日顺序"},
+      {"id": "c2", "title": "换乘链优先", "hook": "从自驾禁入零公里倒推停车与观光车"}
+    ],
+    "selectedPlanId": "c1",
+    "selectionReason": "底稿骨架本身是三天两夜联游，读者最需要的是顺序而非单点介绍",
+    "readerPromise": "在自驾联游骨架里一次排清停车、换乘与体力",
+    "unusedFacts": ["普通列车到峨眉站耗时更长（正文仅保留高铁对比以控篇幅）"]
+  },
+  "selfCritique": {
+    "readerPromise": "pass",
+    "titlePromise": "pass",
+    "informationDensity": "pass",
+    "evidenceBoundary": "pass",
+    "personaBoundary": "pass"
+  },
+  "updatedAt": "2026-06-22T13:00:00+00:00"
+}

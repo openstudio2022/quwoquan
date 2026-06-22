@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "quwoquan_data.author_job_packet",
+  "ref": "峨眉山_planning_consultation",
+  "writingIntent": "planning_consultation",
+  "baseSourceRef": "posts/article/攻略/峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略/1/1.download/sources/01.base/source.md",
+  "title": "峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略",
+  "carrier": "article",
+  "contentObjectDir": "posts/article/攻略/峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略/1",
+  "promptRef": "4.draft/prompt.md",
+  "writingPackRef": "3.compose/writing_pack.json",
+  "sourcePaths": [
+    "posts/article/攻略/峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略/1/1.download/sources/01.base/source.md"
+  ],
+  "sourceUrls": [],
+  "mustIncludeFacts": [
+    "三天两夜行程骨架：第一天乐山大佛，第二天峨眉低中山区，第三天金顶",
+    "乐山大佛通高约71米",
+    "峨眉山万佛顶海拔3099米",
+    "零公里以上禁止自驾车驶入景区道路",
+    "成都方向城际高铁至峨眉山站约1.5小时",
+    "3-5月与9-11月较适宜联游"
+  ],
+  "bannedRegisterTerms": ["看展", "展厅", "展陈"],
+  "creativeBrief": {
+    "readerPromise": "在「自驾去乐山+深度游峨眉」骨架里，帮读者把停车换乘、三天顺序与体力分配一次排清楚"
+  },
+  "assets": [],
+  "exitGates": [
+    "writingIntentConsistency",
+    "imageReferenceClosure",
+    "skeletonSimilarity",
+    "registerMismatch",
+    "sourceRejectBlock",
+    "contactInfo",
+    "mechanicalHeading",
+    "creativeGovernance"
+  ],
+  "executionContract": {
+    "inputs": [
+      "4.draft/author_job_packet.json",
+      "3.compose/writing_pack.json",
+      "2.quality/*",
+      "5.review/repair_report.json"
+    ],
+    "budget": {
+      "maxWallClockSeconds": 1200,
+      "maxAttempts": 2,
+      "stuckThreshold": 3
+    },
+    "permissions": ["read_ref_packet", "search_web", "write_draft", "run_review_gate"],
+    "completionConditions": [
+      "4.draft/draft.article.md 已写且非占位",
+      "4.draft/author_self_check.json 存在",
+      "ref_review_gate.passed == true (reviewDecision == approved)"
+    ],
+    "outputPaths": [
+      "4.draft/draft.article.md",
+      "4.draft/author_self_check.json",
+      "5.review/ref_review_gate.json"
+    ]
+  },
+  "isolation": "single-ref: 只读本 ref 的 packet/SOP/source，禁止读取同批其它文章正文作为底稿"
+}

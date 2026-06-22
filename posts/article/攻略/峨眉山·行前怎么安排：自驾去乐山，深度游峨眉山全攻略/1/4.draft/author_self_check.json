@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "quwoquan_data.author_self_check",
+  "ref": "峨眉山_planning_consultation",
+  "ok": true,
+  "checkedAt": "2026-06-22T13:00:00+00:00",
+  "writingIntent": "planning_consultation",
+  "singleIntent": true,
+  "factsCovered": [
+    "三天两夜行程骨架：第一天乐山大佛，第二天峨眉低中山区，第三天金顶",
+    "乐山大佛通高约71米",
+    "峨眉山万佛顶海拔3099米",
+    "零公里以上禁止自驾车驶入景区道路",
+    "成都方向城际高铁至峨眉山站约1.5小时",
+    "3-5月与9-11月较适宜联游"
+  ],
+  "assetsInBody": [],
+  "noContactInfo": true,
+  "noMechanicalHeadings": true,
+  "noCrossArticleSkeleton": true,
+  "notes": "结构桶覆盖 order/transport/ticket/tradeoff；无 asset 引用因 writing_pack.assets 为空"
+}

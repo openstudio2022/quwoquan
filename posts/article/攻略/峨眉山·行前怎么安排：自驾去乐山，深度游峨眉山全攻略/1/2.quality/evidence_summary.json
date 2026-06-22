@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "quwoquan_data.evidence_summary",
+  "ref": "峨眉山_planning_consultation",
+  "baseSourceRef": "posts/article/攻略/峨眉山·行前怎么安排：自驾去乐山，深度游峨眉山全攻略/1/1.download/sources/01.base/source.md",
+  "rightsClass": "factual_reference_only",
+  "factsExtracted": [
+    "三天两夜：Day1乐山大佛，Day2峨眉低中山区，Day3金顶返程",
+    "乐山大佛通高约71米，1996年与峨眉山同列世界遗产",
+    "万佛顶海拔3099米，零公里以上禁止自驾车驶入",
+    "城际高铁成都至峨眉山站约1.5小时",
+    "3-5月、9-11月为适宜联游季节"
+  ]
+}
