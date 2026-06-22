@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "quwoquan_data.author_self_check",
+  "ref": "四姑娘山_decision_experience",
+  "reviewDecision": "approved",
+  "generator": "agent",
+  "model": "composer-2.5",
+  "checks": {
+    "writingIntentSingle": true,
+    "mustIncludeFactsCovered": [
+      "四姑娘山 来源提及 值不值得去",
+      "四姑娘山 图文底稿来自 3日游；文章源图必须来自同一底稿并且全批独占"
+    ],
+    "assetInsertedInBody": true,
+    "assetIdsUsed": ["四姑娘山_cover_3_2afafa3d"],
+    "noCrossArticleSkeleton": true,
+    "noPrivateContact": true,
+    "noMechanicalHeadings": true,
+    "decisionExperienceBuckets": ["audience", "value", "feeling", "tradeoff"],
+    "citedSourcePaths": [
+      "posts/article/攻略/四姑娘山·值不值得去：3日游/1/1.download/sources/07.article_qunar_3day_base/source.md",
+      "entities/地点/景区/四姑娘山/1.download/sources/01.home_wikipedia/source.md"
+    ]
+  },
+  "notes": "基于本 ref writing_pack 与 07.article_qunar_3day_base 事实独立成文；未读取同批其它文章正文。"
+}

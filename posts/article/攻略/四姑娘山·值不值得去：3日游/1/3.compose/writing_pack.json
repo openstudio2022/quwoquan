@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "quwoquan_data.writing_pack",
+  "ref": "四姑娘山_decision_experience",
+  "title": "四姑娘山·值不值得去：3日游",
+  "kind": "entity",
+  "carrier": "article",
+  "writingIntent": "decision_experience",
+  "styleFamily": "travel.decision",
+  "templateId": "travel.entity.decision",
+  "baseSourceRef": "posts/article/攻略/四姑娘山·值不值得去：3日游/1/1.download/sources/07.article_qunar_3day_base/source.md",
+  "sourceUseMode": "factual_reference_only",
+  "baseSourceReusePolicy": "single_ref_exclusive",
+  "sourcePaths": [
+    "posts/article/攻略/四姑娘山·值不值得去：3日游/1/1.download/sources/07.article_qunar_3day_base/source.md",
+    "entities/地点/景区/四姑娘山/1.download/sources/01.home_wikipedia/source.md"
+  ],
+  "sourceUrls": [
+    "https://cd.bendibao.com/tour/202261/138470.shtm",
+    "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%A7%91%E5%A8%98%E5%B1%B1"
+  ],
+  "mustIncludeFacts": [
+    "四姑娘山 来源提及 值不值得去",
+    "四姑娘山 图文底稿来自 3日游；文章源图必须来自同一底稿并且全批独占"
+  ],
+  "bannedRegisterTerms": ["看展", "展厅", "展陈", "策展"],
+  "creativeBrief": {
+    "readerPromise": "在「3日游」骨架里，帮你判断四姑娘山这趟短途是否值得专程安排",
+    "primaryEntity": "四姑娘山",
+    "angle": "值不值得去",
+    "tone": "consultative, honest tradeoffs"
+  },
+  "assets": [
+    {
+      "assetId": "四姑娘山_cover_3_2afafa3d",
+      "fileName": "四姑娘山_cover_3_2afafa3d.jpg",
+      "caption": "摄于四姑娘山景区——三条沟的雪山背景，多半在猫鼻梁或双桥沟远端第一次看清",
+      "imageLayout": "fullWidth",
+      "sourceRef": "posts/article/攻略/四姑娘山·值不值得去：3日游/1/1.download/sources/07.article_qunar_3day_base/source.md",
+      "sourceAssetRef": "posts/article/攻略/四姑娘山·值不值得去：3日游/1/1.download/sources/07.article_qunar_3day_base/assets/001_article_qunar_3day_base_1.jpg",
+      "license": "CC BY 2.0",
+      "creator": "George N"
+    }
+  ]
+}
