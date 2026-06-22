@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "quwoquan_data.draft_meta",
+  "ref": "峨眉山_image",
+  "generator": "image_evidence_pack",
+  "model": "composer-2.5",
+  "title": "峨眉山·​摄于峨眉山风景区",
+  "caption": "​摄于峨眉山风景区",
+  "selectedAssetIds": [
+    "峨眉山_cover_3_7b599a12"
+  ],
+  "citedSourcePaths": [
+    "2.quality/sources/22.image_open_license_file_峨眉山/source.md"
+  ],
+  "coveredFacts": [
+    "峨眉山 开放许可图片作品",
+    "图片来自同一授权来源集合，禁止跨作者或跨页面混图"
+  ],
+  "articleContract": "structured_image_only",
+  "creativePlan": {
+    "selectedPlanId": "single_open_license_landscape",
+    "selectionReason": "单张金顶开放许可图即可呈现峨眉山风景区的空间层次",
+    "candidates": [
+      {
+        "planId": "title_only",
+        "summary": "仅保留标题"
+      },
+      {
+        "planId": "single_open_license_landscape",
+        "summary": "标题+一句摄于说明"
+      }
+    ]
+  },
+  "selfCritique": {
+    "readerPromise": "读者能直接看到峨眉山风景区实景",
+    "titlePromise": "标题点明地点与拍摄语境",
+    "informationDensity": "低文字、高图像信息",
+    "evidenceBoundary": "仅使用同一 Commons 文件页授权图片",
+    "personaBoundary": "无亲历叙事"
+  },
+  "sessionTrace": "cursor-cloud-author-峨眉山_image"
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "quwoquan_data.source_evidence",
+  "ref": "峨眉山_image",
+  "sources": [
+    {
+      "sourceId": "22.image_open_license_file_峨眉山",
+      "platform": "wikimedia_commons",
+      "sourceCategory": "image_open_license_file",
+      "sourceUseMode": "licensed_adaptation",
+      "url": "https://commons.wikimedia.org/wiki/File:Golden_Summit_(Jinding)_(17264931860).jpg",
+      "license": "CC BY 2.0",
+      "creator": "Min Zhou",
+      "quality": "A"
+    }
+  ]
+}

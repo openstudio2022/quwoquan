@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "quwoquan_data.writing_pack",
+  "ref": "峨眉山_image",
+  "title": "峨眉山·​摄于峨眉山风景区",
+  "carrier": "image",
+  "contentType": "image",
+  "writingIntent": "gallery_presentation",
+  "baseSourceRef": "2.quality/sources/22.image_open_license_file_峨眉山/source.md",
+  "sourceUseMode": "licensed_adaptation",
+  "sourcePaths": [
+    "2.quality/sources/22.image_open_license_file_峨眉山/source.md"
+  ],
+  "sourceUrls": [
+    "https://commons.wikimedia.org/wiki/File:Golden_Summit_(Jinding)_(17264931860).jpg"
+  ],
+  "mustIncludeFacts": [
+    "峨眉山 开放许可图片作品",
+    "图片来自同一授权来源集合，禁止跨作者或跨页面混图"
+  ],
+  "captionPolicy": {
+    "titleMaxChars": 80,
+    "captionMaxChars": 300
+  },
+  "creativeBrief": {
+    "readerPromise": "用一张开放许可实景图呈现峨眉山风景区的空间层次",
+    "primaryEntity": "峨眉山",
+    "angle": "攻略"
+  },
+  "assets": [
+    {
+      "assetId": "峨眉山_cover_3_7b599a12",
+      "fileName": "峨眉山_cover_3_7b599a12.jpg",
+      "caption": "​摄于峨眉山风景区",
+      "imageLayout": "gallery",
+      "sourcePath": "/workspace/posts/image/攻略/峨眉山·​摄于峨眉山风景区/1/assets/峨眉山_cover_3_7b599a12.jpg",
+      "sourceRef": "2.quality/sources/22.image_open_license_file_峨眉山/source.md",
+      "sourceAssetRef": "1.download/sources/22.image_open_license_file_峨眉山/assets/001_峨眉山_1.jpg",
+      "sourceCollectionId": "open_license_file:峨眉山:golden_summit_jinding_17264931860",
+      "creator": "Min Zhou",
+      "license": "CC BY 2.0",
+      "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:Golden_Summit_(Jinding)_(17264931860).jpg",
+      "termsUrl": "https://creativecommons.org/licenses/by/2.0",
+      "authorizationProof": "https://commons.wikimedia.org/wiki/File:Golden_Summit_(Jinding)_(17264931860).jpg"
+    }
+  ]
+}
