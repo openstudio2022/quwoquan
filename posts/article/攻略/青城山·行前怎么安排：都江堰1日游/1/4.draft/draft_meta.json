@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "quwoquan_data.draft_meta",
+  "ref": "青城山_planning_consultation",
+  "generator": "agent",
+  "model": "composer-2.5",
+  "styleFamily": "route-guide",
+  "openingStrategy": "conclusion_first",
+  "citedSourcePaths": ["1.download/sources/01.qunar_dujiangyan_1day/source.md"],
+  "coveredFacts": [
+    "犀浦-青城山站",
+    "摆渡车35/20元",
+    "门票80元",
+    "早九点进山",
+    "15:39高铁",
+    "左上右下",
+    "2-3小时/4.5小时",
+    "天师洞-上清宫",
+    "人均约300元"
+  ],
+  "creativePlan": {
+    "candidates": [
+      { "id": "A", "hook": "15:39硬截止倒推行前顺序", "risk": "像时刻表" },
+      { "id": "B", "hook": "从标题都江堰1日游澄清实际问道动线", "risk": "读者困惑" },
+      { "id": "C", "hook": "从摆渡车与站前住宿切入", "risk": "缺少园内取舍" }
+    ],
+    "selectedPlanId": "B",
+    "selectionReason": "先澄清一日骨架实为青城山闭环，再展开交通、票务、动线与时段，符合 planning_consultation。"
+  },
+  "selfCritique": {
+    "readerPromise": "已给出顺序、交通、门票、时段与左上/索道取舍。",
+    "titlePromise": "标题承诺行前怎么安排，正文覆盖站前住宿、摆渡、入园动线与高铁衔接。",
+    "informationDensity": "含80/35/20/300、9点/15:39、2-3h/4.5h等可回溯数值。",
+    "evidenceBoundary": "未编造底稿未出现的票价；无私人联系方式。",
+    "personaBoundary": "第三方规划视角，未虚构亲历身份。"
+  },
+  "createdAt": "2026-06-22T12:45:00+00:00"
+}

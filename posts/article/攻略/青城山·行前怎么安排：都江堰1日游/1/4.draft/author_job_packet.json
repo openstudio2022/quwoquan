@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "quwoquan_data.author_job_packet",
+  "ref": "青城山_planning_consultation",
+  "writingIntent": "planning_consultation",
+  "baseSourceRef": "1.download/sources/01.qunar_dujiangyan_1day/source.md",
+  "title": "青城山·行前怎么安排：都江堰1日游",
+  "carrier": "article",
+  "contentObjectDir": "posts/article/攻略/青城山·行前怎么安排：都江堰1日游/1",
+  "promptRef": "4.draft/prompt.md",
+  "writingPackRef": "3.compose/writing_pack.json",
+  "sourcePaths": ["1.download/sources/01.qunar_dujiangyan_1day/source.md"],
+  "sourceUrls": ["https://touch.travel.qunar.com/youji/7883576"],
+  "mustIncludeFacts": [
+    "青城山 来源提及 行前怎么安排",
+    "青城山 图文底稿来自 都江堰1日游；文章源图必须来自同一底稿并且全批独占"
+  ],
+  "bannedRegisterTerms": ["看展", "展厅", "展陈", "策展"],
+  "creativeBrief": {
+    "readerPromise": "在《都江堰1日游》一日骨架里，把青城山前山的交通、动线、时段与高铁衔接拆成可执行清单",
+    "primaryEntity": "青城山",
+    "angle": "行前怎么安排",
+    "tone": "consultative, schedule-first"
+  },
+  "captionPolicy": {},
+  "assets": [],
+  "exitGates": [
+    "writingIntentConsistency",
+    "imageReferenceClosure",
+    "skeletonSimilarity",
+    "registerMismatch",
+    "sourceRejectBlock",
+    "contactInfo",
+    "mechanicalHeading",
+    "creativeGovernance"
+  ],
+  "executionContract": {
+    "inputs": [
+      "4.draft/author_job_packet.json",
+      "3.compose/writing_pack.json",
+      "2.quality/*（证据/source）",
+      "5.review/repair_report.json"
+    ],
+    "budget": {
+      "maxWallClockSeconds": 1200,
+      "maxAttempts": 2,
+      "stuckThreshold": 3
+    },
+    "permissions": [
+      "read_ref_packet",
+      "search_web",
+      "write_draft",
+      "run_review_gate"
+    ],
+    "completionConditions": [
+      "4.draft/draft.article.md 已写且非占位",
+      "4.draft/author_self_check.json 存在",
+      "ref_review_gate.passed == true (reviewDecision == approved)"
+    ],
+    "outputPaths": [
+      "4.draft/draft.article.md",
+      "4.draft/author_self_check.json",
+      "5.review/ref_review_gate.json"
+    ]
+  },
+  "isolation": "single-ref: 只读本 ref 的 packet/SOP/source，禁止读取同批其它文章正文作为底稿"
+}

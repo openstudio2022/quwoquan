@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "quwoquan_data.author_self_check",
+  "ref": "青城山_planning_consultation",
+  "passed": true,
+  "checks": {
+    "writingIntentSingle": true,
+    "mustIncludeFactsCovered": true,
+    "openingStrategyApplied": true,
+    "planningBucketsMin3": true,
+    "noContactInfo": true,
+    "noMechanicalHeadings": true,
+    "noBatchCrossRead": true,
+    "textOnlyAssetsEmpty": true
+  },
+  "notes": "仅读本 ref packet/source（7883576 事实摘录）；编排器 compose 输入未推送，已按对象路径重建 source 与 writing_pack 后成稿。"
+}

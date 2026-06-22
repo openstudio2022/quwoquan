@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "quwoquan_data.source_screen",
+  "ref": "青城山_planning_consultation",
+  "baseSourceRef": "1.download/sources/01.qunar_dujiangyan_1day/source.md",
+  "sourceUrl": "https://touch.travel.qunar.com/youji/7883576",
+  "sourceTitle": "都江堰1日游",
+  "entity": "青城山",
+  "sourceUseMode": "factual_reference_only",
+  "qualityScore": 8,
+  "screenedAt": "2026-06-22T12:45:00+00:00"
+}
