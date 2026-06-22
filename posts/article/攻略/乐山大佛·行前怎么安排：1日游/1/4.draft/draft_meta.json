@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "quwoquan_data.draft_meta",
+  "ref": "乐山大佛_planning_consultation",
+  "generator": "agent",
+  "model": "composer-2.5",
+  "createdAt": "2026-06-22T14:30:00+00:00",
+  "citedSourcePaths": [
+    "1.download/sources/01.qunar_youji_7857744/source.md"
+  ],
+  "citedSourceRefs": [
+    "1.download/sources/01.qunar_youji_7857744/source.md"
+  ],
+  "coveredFacts": [
+    "乐山大佛",
+    "1日游",
+    "成都东站",
+    "乐山站",
+    "乐山大佛游客中心",
+    "船票70元或75元",
+    "游船",
+    "栈道",
+    "张公桥",
+    "跷脚牛肉",
+    "甜皮鸭",
+    "打车"
+  ],
+  "sessionTrace": "cloud-agent-author-7690"
+}

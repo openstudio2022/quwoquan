@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "quwoquan_data.writing_pack",
+  "ref": "乐山大佛_planning_consultation",
+  "kind": "article",
+  "title": "乐山大佛·行前怎么安排：1日游",
+  "carrier": "article",
+  "publishLayout": "entity",
+  "templateId": "景区_攻略_article",
+  "wordCount": { "min": 700, "max": 1600 },
+  "writingIntent": "planning_consultation",
+  "styleFamily": "route-guide",
+  "baseSourceRef": "1.download/sources/01.qunar_youji_7857744/source.md",
+  "sourceUseMode": "factual_reference_only",
+  "sourcePaths": ["1.download/sources/01.qunar_youji_7857744/source.md"],
+  "sourceUrls": ["https://touch.travel.qunar.com/youji/7857744"],
+  "mustIncludeFacts": [
+    "乐山大佛",
+    "1日游",
+    "成都东站",
+    "乐山站",
+    "乐山大佛游客中心",
+    "船票70元或75元",
+    "游船",
+    "栈道",
+    "张公桥",
+    "跷脚牛肉",
+    "甜皮鸭",
+    "打车"
+  ],
+  "bannedRegisterTerms": ["看展", "展厅", "展陈"],
+  "assets": [],
+  "narrativeContract": {
+    "requireMotivation": true,
+    "requireLike": true,
+    "requireDislike": true,
+    "minDecisionPoints": 2,
+    "forbidStandaloneTips": true
+  },
+  "creativeBrief": {
+    "readerPromise": "把乐山大佛压缩成成都出发可执行的1日游：交通、入园二选一、美食段与返程节奏。",
+    "primaryEntity": "乐山大佛",
+    "openingStrategy": "conclusion_first"
+  },
+  "sectionIntents": [
+    "1日游结论：高铁+打车骨架",
+    "上午张公桥与跷脚牛肉怎么排",
+    "大佛游船与栈道怎么二选一",
+    "傍晚东大路美食与返程",
+    "体力与时间取舍"
+  ],
+  "evidencePoints": [
+    { "fact": "成都东站高铁至乐山站，市区打车串联", "source": "1.download/sources/01.qunar_youji_7857744/source.md" },
+    { "fact": "乐山大佛游客中心船票约70-75元，正面停靠15-20分钟", "source": "1.download/sources/01.qunar_youji_7857744/source.md" },
+    { "fact": "栈道步行可近看大佛及地宫等，体力消耗更大", "source": "1.download/sources/01.qunar_youji_7857744/source.md" },
+    { "fact": "张公桥跷脚牛肉两人套餐约58元；东大路甜皮鸭半只约60余元", "source": "1.download/sources/01.qunar_youji_7857744/source.md" }
+  ]
+}

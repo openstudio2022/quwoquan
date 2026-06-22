@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "quwoquan_data.compose_brief",
+  "ref": "乐山大佛_planning_consultation",
+  "titleHint": "乐山大佛·行前怎么安排：1日游",
+  "writingIntent": "planning_consultation",
+  "templateId": "景区_攻略_article",
+  "carrier": "article",
+  "baseSourceRef": "1.download/sources/01.qunar_youji_7857744/source.md",
+  "mustIncludeFacts": [
+    "乐山大佛",
+    "1日游",
+    "成都东站",
+    "乐山站",
+    "乐山大佛游客中心",
+    "船票70元或75元",
+    "游船",
+    "栈道",
+    "张公桥",
+    "跷脚牛肉",
+    "甜皮鸭",
+    "打车"
+  ]
+}

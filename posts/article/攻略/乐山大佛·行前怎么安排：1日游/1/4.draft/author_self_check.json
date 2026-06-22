@@ -1,6 +1,6 @@
 {
   "schemaVersion": "quwoquan_data.author_self_check",
-  "ref": "都江堰_planning_consultation",
+  "ref": "乐山大佛_planning_consultation",
   "passed": true,
   "checks": {
     "writingIntentSingle": true,
@@ -13,5 +13,5 @@
     "noBatchCrossRead": true,
     "assetRefsFromPack": true
   },
-  "notes": "仅读本 ref packet/source；facts 已对照 1.download/sources/01.qunar_youji_7901034/source.md"
+  "notes": "仅读本 ref packet/source；facts 已对照 1.download/sources/01.qunar_youji_7857744/source.md"
 }
