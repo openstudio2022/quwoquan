@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "quwoquan_data.content_object_index",
+  "refs": {
+    "青城山_planning_consultation": {
+      "contentType": "article",
+      "angle": "攻略",
+      "title": "青城山·行前怎么安排：都江堰1日游",
+      "seq": 1
+    }
+  }
+}

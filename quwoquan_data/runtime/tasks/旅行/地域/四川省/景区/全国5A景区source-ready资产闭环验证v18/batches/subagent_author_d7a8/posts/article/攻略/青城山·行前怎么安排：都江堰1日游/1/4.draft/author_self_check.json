@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "quwoquan_data.author_self_check",
+  "ref": "青城山_planning_consultation",
+  "ok": true,
+  "checks": {
+    "writingIntentPlanning": true,
+    "mustIncludeFactsCovered": true,
+    "imageInBody": true,
+    "noBannedRegister": true,
+    "noContactInfo": true,
+    "noMechanicalHeadings": true,
+    "singleRefIsolation": true,
+    "notPlaceholder": true
+  },
+  "coveredFacts": [
+    "青城山 来源提及 行前怎么安排",
+    "青城山 图文底稿来自 都江堰1日游；文章源图必须来自同一底稿并且全批独占"
+  ],
+  "assetRefsUsed": ["青城山_cover_3_4f25d42d"],
+  "citedSourcePaths": [
+    "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/青城山/1.download/sources/04.article_qunar_都江堰1日游/source.md"
+  ],
+  "notes": "planning_consultation 结构覆盖交通/票务/顺序/取舍；小标题口语化；正文含 asset:// 封面图。"
+}

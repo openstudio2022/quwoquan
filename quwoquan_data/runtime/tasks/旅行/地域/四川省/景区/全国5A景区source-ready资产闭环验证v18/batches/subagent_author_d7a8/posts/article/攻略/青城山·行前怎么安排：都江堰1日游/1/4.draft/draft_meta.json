@@ -1,0 +1,56 @@
+{
+  "ref": "青城山_planning_consultation",
+  "generator": "agent",
+  "model": "composer-2.5",
+  "sessionTrace": "subagent-author-d7a8",
+  "agentRunId": null,
+  "agentId": null,
+  "styleFamily": null,
+  "openingStrategy": null,
+  "citedSourcePaths": [
+    "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/青城山/1.download/sources/04.article_qunar_都江堰1日游/source.md"
+  ],
+  "coveredFacts": [
+    "青城山 来源提及 行前怎么安排",
+    "青城山 图文底稿来自 都江堰1日游；文章源图必须来自同一底稿并且全批独占"
+  ],
+  "extractedEntities": [],
+  "extractedTags": [],
+  "creativePlan": {
+    "concepts": [
+      {
+        "planId": "concept_a",
+        "titleCandidate": "[青城山](/entity/地点/景区/青城山)·行前怎么安排：都江堰1日游",
+        "structure": "结论或场景切入后，用证据组织成有取舍的正文。",
+        "readerValue": "读者出发前能按底稿证据排好青城山一日问道：交通、摆渡、门票、动线与时段取舍。"
+      },
+      {
+        "planId": "concept_b",
+        "titleCandidate": "[青城山](/entity/地点/景区/青城山)·行前怎么安排：都江堰1日游",
+        "structure": "用对比和问答方式展开，但仍严格保留证据边界。",
+        "readerValue": "读者出发前能按底稿证据排好青城山一日问道：交通、摆渡、门票、动线与时段取舍。"
+      }
+    ],
+    "selectedPlanId": "concept_a",
+    "selectionReason": "更能兑现 readerPromise，且不需要新增事实或来源。",
+    "readerPromise": "读者出发前能按底稿证据排好青城山一日问道：交通、摆渡、门票、动线与时段取舍。",
+    "styleFamily": null,
+    "openingStrategy": null,
+    "unusedFacts": []
+  },
+  "selfCritique": {
+    "readerPromise": "读者出发前能按底稿证据排好青城山一日问道：交通、摆渡、门票、动线与时段取舍。",
+    "titlePromise": "标题与正文主线一致。",
+    "informationDensity": "每个主体段落提供新的事实、判断或读者收益。",
+    "imageTextRhythm": "图片只使用 writing_pack 允许的 asset。",
+    "evidenceBoundary": "未使用未准入来源，数字和具体事实来自证据。",
+    "personaBoundary": "使用平台编辑/资料整理口吻，不伪装真实自然人亲历。"
+  },
+  "promptSha256": null,
+  "writingPackSha256": "sha256:72b2be4a5701d6dbb8e0cc6aca73b1b146867dfc4a19a029bf01068f70f46532",
+  "sourceBundleSha256": "sha256:52cf8a620ee3889c561c5e8879dd563ff60ab4b3a58b658e3e72f7c5dcb769c4",
+  "draftSha256": "sha256:5cc6e3468231a80021f34477ea6b924fa23a3a40da0b9e055798075b3069c0c6",
+  "createdAt": "2026-06-22T13:21:20.086581+00:00",
+  "updatedAt": "2026-06-22T13:21:51.320575+00:00"
+}

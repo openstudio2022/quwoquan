@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "quwoquan_data.author_job_packet",
+  "ref": "青城山_planning_consultation",
+  "writingIntent": "planning_consultation",
+  "baseSourceRef": "entities/地点/景区/青城山/1.download/sources/04.article_qunar_都江堰1日游/source.md",
+  "title": "青城山·行前怎么安排：都江堰1日游",
+  "carrier": "article",
+  "contentObjectDir": "posts/article/攻略/青城山·行前怎么安排：都江堰1日游/1",
+  "promptRef": "4.draft/prompt.md",
+  "writingPackRef": "3.compose/writing_pack.json",
+  "sourcePaths": [
+    "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/青城山/1.download/sources/04.article_qunar_都江堰1日游/source.md"
+  ],
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7883576"
+  ],
+  "mustIncludeFacts": [
+    "青城山 来源提及 行前怎么安排",
+    "青城山 图文底稿来自 都江堰1日游；文章源图必须来自同一底稿并且全批独占"
+  ],
+  "bannedRegisterTerms": [
+    "看展",
+    "展厅",
+    "展陈"
+  ],
+  "creativeBrief": {
+    "readerPromise": "读者出发前能按底稿证据排好青城山一日问道：交通、摆渡、门票、动线与时段取舍。",
+    "openingStrategy": "conclusion_first"
+  },
+  "captionPolicy": {},
+  "assets": [
+    {
+      "assetId": "青城山_cover_3_4f25d42d",
+      "entityName": null,
+      "imageLayout": "fullWidth",
+      "caption": "青城前山石阶与林雾：一日问道前先把摆渡、动线与下山时段算清楚。",
+      "sourceCollectionId": "source_image:青城山:都江堰1日游",
+      "creator": "Einar Fredriksen",
+      "license": "CC BY-SA 2.0"
+    }
+  ],
+  "exitGates": [
+    "writingIntentConsistency",
+    "imageReferenceClosure",
+    "skeletonSimilarity",
+    "registerMismatch",
+    "sourceRejectBlock",
+    "contactInfo",
+    "mechanicalHeading",
+    "creativeGovernance"
+  ],
+  "executionContract": {
+    "inputs": [
+      "4.draft/author_job_packet.json",
+      "3.compose/writing_pack.json",
+      "2.quality/*",
+      "5.review/repair_report.json"
+    ],
+    "budget": {
+      "maxWallClockSeconds": 1200,
+      "maxAttempts": 2,
+      "stuckThreshold": 3
+    },
+    "permissions": [
+      "read_ref_packet",
+      "search_web",
+      "write_draft",
+      "run_review_gate"
+    ],
+    "completionConditions": [
+      "4.draft/draft.article.md 已写且非占位",
+      "4.draft/author_self_check.json 存在",
+      "ref_review_gate.passed == true (reviewDecision == approved)"
+    ],
+    "outputPaths": [
+      "4.draft/draft.article.md",
+      "4.draft/author_self_check.json",
+      "5.review/ref_review_gate.json"
+    ]
+  },
+  "isolation": "single-ref: 只读本 ref 的 packet/SOP/source，禁止读取同批其它文章正文作为底稿"
+}

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "quwoquan_data.writing_pack",
+  "ref": "青城山_planning_consultation",
+  "kind": "article",
+  "title": "青城山·行前怎么安排：都江堰1日游",
+  "byline": "旅行编辑部",
+  "carrier": "article",
+  "publishLayout": "entity",
+  "templateId": "travel.journal.guide",
+  "wordCount": {
+    "min": 700,
+    "max": 1600
+  },
+  "forbiddenPhrases": [],
+  "mustIncludeFacts": [
+    "青城山 来源提及 行前怎么安排",
+    "青城山 图文底稿来自 都江堰1日游；文章源图必须来自同一底稿并且全批独占"
+  ],
+  "conditionContext": {
+    "region": {
+      "name": "四川省",
+      "label": "四川省"
+    }
+  },
+  "sectionIntents": [
+    "交通与落脚",
+    "时段与动线",
+    "体力与取舍"
+  ],
+  "narrativeContract": {
+    "requireMotivation": true,
+    "requireLike": true,
+    "requireDislike": true,
+    "minDecisionPoints": 2,
+    "forbidStandaloneTips": true
+  },
+  "styleFamily": "实用攻略风",
+  "creativeBrief": {
+    "readerPromise": "读者出发前能按底稿证据排好青城山一日问道：交通、摆渡、门票、动线与时段取舍。",
+    "openingStrategy": "conclusion_first"
+  },
+  "evidencePoints": [
+    {
+      "entityName": "青城山",
+      "topExcerpt": "住高铁站对面、摆渡车进山门、左上右下全程靠腿",
+      "mainline": [
+        "犀浦-青城山高铁",
+        "摆渡35双程",
+        "门票80",
+        "左上右下2-3h"
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "assetId": "青城山_cover_3_4f25d42d",
+      "fileName": "青城山_cover_3_4f25d42d.jpg",
+      "caption": "青城前山石阶与林雾：一日问道前先把摆渡、动线与下山时段算清楚。",
+      "imageLayout": "fullWidth",
+      "sourceRef": "entities/地点/景区/青城山/1.download/sources/04.article_qunar_都江堰1日游/source.md",
+      "sourceCollectionId": "source_image:青城山:都江堰1日游",
+      "creator": "Einar Fredriksen",
+      "license": "CC BY-SA 2.0"
+    }
+  ],
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7883576"
+  ],
+  "sourcePaths": [
+    "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md",
+    "entities/地点/景区/青城山/1.download/sources/04.article_qunar_都江堰1日游/source.md"
+  ],
+  "writingIntent": "planning_consultation",
+  "baseSourceRef": "entities/地点/景区/青城山/1.download/sources/04.article_qunar_都江堰1日游/source.md",
+  "bannedRegisterTerms": [
+    "看展",
+    "展厅",
+    "展陈"
+  ]
+}
