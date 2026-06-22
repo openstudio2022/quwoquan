@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "quwoquan_data.writing_pack",
+  "ref": "九寨沟_decision_experience",
+  "title": "九寨沟·值不值得去",
+  "carrier": "article",
+  "writingIntent": "decision_experience",
+  "styleFamily": "scenic-decision",
+  "baseSourceRef": "entities/地点/景区/九寨沟/1.download/sources/22.article_wikivoyage_base/source.md",
+  "sourcePaths": [
+    "entities/地点/景区/九寨沟/1.download/sources/22.article_wikivoyage_base/source.md",
+    "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikivoyage.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F",
+    "https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F"
+  ],
+  "mustIncludeFacts": [
+    "九寨沟 来源提及 值不值得去",
+    "九寨沟 图文底稿来自 article_wikivoyage_base；文章源图必须来自同一底稿并且全批独占"
+  ],
+  "bannedRegisterTerms": ["看展", "展厅", "展陈", "策展"],
+  "creativeBrief": {
+    "readerPromise": "帮犹豫的人判断九寨沟是否值得专程前往，而不是罗列景点清单",
+    "tone": "冷静权衡、有取舍、不营销",
+    "openingGuidance": "先给结论倾向，再展开理由与劝退点"
+  },
+  "conditionContext": {
+    "region": {"name": "四川省", "label": "四川省"},
+    "season": {"name": "春", "label": "春", "source": "entityProfile"}
+  },
+  "assets": [
+    {
+      "assetId": "九寨沟_cover_3_3c6ef10a",
+      "entityName": "九寨沟",
+      "imageLayout": "fullWidth",
+      "caption": "树正寨一带，沟谷与藏寨相依的高原尺度",
+      "sourceCollectionId": "source_image:九寨沟:b1e7411741eee3b5",
+      "creator": "chensiyuan",
+      "license": "CC BY-SA 4.0"
+    }
+  ]
+}

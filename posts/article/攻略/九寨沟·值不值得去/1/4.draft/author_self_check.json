@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "quwoquan_data.author_self_check",
+  "ref": "九寨沟_decision_experience",
+  "attempt": 1,
+  "status": "ready_for_review",
+  "checks": {
+    "mainlineUnique": true,
+    "writingIntent": "decision_experience",
+    "imagesInBody": true,
+    "assetIdsUsed": ["九寨沟_cover_3_3c6ef10a"],
+    "mustIncludeFactsCovered": [
+      "九寨沟 来源提及 值不值得去",
+      "九寨沟 图文底稿来自 article_wikivoyage_base；文章源图必须来自同一底稿并且全批独占"
+    ],
+    "noCrossBatchTemplate": true,
+    "noPrivateContact": true,
+    "noMechanicalHeadings": true,
+    "noBannedRegisterTerms": true
+  },
+  "citedSourcePaths": [
+    "entities/地点/景区/九寨沟/1.download/sources/22.article_wikivoyage_base/source.md",
+    "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/source.md"
+  ],
+  "notes": "正文以 decision_experience 主线写取舍；封面图已插入 figure 块；事实来自 wikivoyage 底稿与百科补充。"
+}

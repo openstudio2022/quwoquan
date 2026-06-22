@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "quwoquan_data.author_job_packet",
+  "ref": "九寨沟_decision_experience",
+  "writingIntent": "decision_experience",
+  "baseSourceRef": "entities/地点/景区/九寨沟/1.download/sources/22.article_wikivoyage_base/source.md",
+  "title": "九寨沟·值不值得去",
+  "carrier": "article",
+  "contentObjectDir": "posts/article/攻略/九寨沟·值不值得去/1",
+  "promptRef": "4.draft/prompt.md",
+  "writingPackRef": "3.compose/writing_pack.json",
+  "sourcePaths": [
+    "entities/地点/景区/九寨沟/1.download/sources/22.article_wikivoyage_base/source.md",
+    "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikivoyage.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F",
+    "https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F"
+  ],
+  "mustIncludeFacts": [
+    "九寨沟 来源提及 值不值得去",
+    "九寨沟 图文底稿来自 article_wikivoyage_base；文章源图必须来自同一底稿并且全批独占"
+  ],
+  "bannedRegisterTerms": ["看展", "展厅", "展陈", "策展"],
+  "creativeBrief": {
+    "readerPromise": "帮犹豫的人判断九寨沟是否值得专程前往，而不是罗列景点清单",
+    "tone": "冷静权衡、有取舍、不营销",
+    "openingGuidance": "先给结论倾向，再展开理由与劝退点"
+  },
+  "captionPolicy": {},
+  "assets": [
+    {
+      "assetId": "九寨沟_cover_3_3c6ef10a",
+      "entityName": "九寨沟",
+      "imageLayout": "fullWidth",
+      "caption": "树正寨一带，沟谷与藏寨相依的高原尺度",
+      "sourceCollectionId": "source_image:九寨沟:b1e7411741eee3b5",
+      "creator": "chensiyuan",
+      "license": "CC BY-SA 4.0"
+    }
+  ],
+  "exitGates": [
+    "writingIntentConsistency",
+    "imageReferenceClosure",
+    "skeletonSimilarity",
+    "registerMismatch",
+    "sourceRejectBlock",
+    "contactInfo",
+    "mechanicalHeading",
+    "creativeGovernance"
+  ],
+  "executionContract": {
+    "inputs": [
+      "4.draft/author_job_packet.json",
+      "3.compose/writing_pack.json",
+      "2.quality/*",
+      "5.review/repair_report.json"
+    ],
+    "budget": {
+      "maxWallClockSeconds": 1200,
+      "maxAttempts": 2,
+      "stuckThreshold": 3
+    },
+    "permissions": [
+      "read_ref_packet",
+      "search_web",
+      "write_draft",
+      "run_review_gate"
+    ],
+    "completionConditions": [
+      "4.draft/draft.article.md 已写且非占位",
+      "4.draft/author_self_check.json 存在",
+      "ref_review_gate.passed == true (reviewDecision == approved)"
+    ],
+    "outputPaths": [
+      "4.draft/draft.article.md",
+      "4.draft/author_self_check.json",
+      "5.review/ref_review_gate.json"
+    ]
+  },
+  "isolation": "single-ref: 只读本 ref 的 packet/SOP/source，禁止读取同批其它文章正文作为底稿"
+}

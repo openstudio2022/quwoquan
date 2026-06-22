@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "quwoquan_data.repair_report",
+  "ref": "九寨沟_decision_experience",
+  "stage": "author",
+  "attempt": 1,
+  "issues": [],
+  "fallbackStage": null,
+  "notes": "首轮创作，无上游 repair 指令"
+}

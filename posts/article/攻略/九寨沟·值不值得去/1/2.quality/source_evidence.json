@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "quwoquan_data.source_evidence",
+  "ref": "九寨沟_decision_experience",
+  "sources": [
+    {
+      "sourceRef": "entities/地点/景区/九寨沟/1.download/sources/22.article_wikivoyage_base/source.md",
+      "sourceUrl": "https://zh.wikivoyage.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F",
+      "sourceKind": "article_wikivoyage_base",
+      "sourceUseMode": "licensed_adaptation",
+      "license": "CC BY-SA 4.0",
+      "relevanceScore": 0.95
+    },
+    {
+      "sourceRef": "entities/地点/景区/九寨沟/1.download/sources/01.home_wikipedia/source.md",
+      "sourceUrl": "https://zh.wikipedia.org/wiki/%E4%B9%9D%E5%AF%A8%E6%B2%9F",
+      "sourceKind": "home_wikipedia",
+      "sourceUseMode": "factual_reference_only",
+      "relevanceScore": 0.88
+    }
+  ],
+  "mustIncludeFacts": [
+    "九寨沟 来源提及 值不值得去",
+    "九寨沟 图文底稿来自 article_wikivoyage_base；文章源图必须来自同一底稿并且全批独占"
+  ]
+}
