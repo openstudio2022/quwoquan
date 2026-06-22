@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "quwoquan_data.writing_pack",
+  "ref": "都江堰_planning_consultation",
+  "kind": "article",
+  "title": "都江堰·行前怎么安排：彭水.成都.都江堰.乐山.赤水.遵义 渝蜀贵自驾穷游漫记",
+  "carrier": "article",
+  "publishLayout": "entity",
+  "templateId": "景区_攻略_article",
+  "wordCount": { "min": 700, "max": 1600 },
+  "writingIntent": "planning_consultation",
+  "styleFamily": "route-guide",
+  "baseSourceRef": "1.download/sources/01.qunar_youji_7901034/source.md",
+  "sourceUseMode": "factual_reference_only",
+  "sourcePaths": ["1.download/sources/01.qunar_youji_7901034/source.md"],
+  "sourceUrls": ["https://touch.travel.qunar.com/youji/7901034"],
+  "mustIncludeFacts": [
+    "都江堰",
+    "8天",
+    "人均约2000元",
+    "秦堰楼",
+    "鱼嘴分水",
+    "深淘滩，低作堰",
+    "住成都早出晚归",
+    "7号门"
+  ],
+  "bannedRegisterTerms": ["看展", "展厅", "展陈"],
+  "assets": [],
+  "narrativeContract": {
+    "requireMotivation": true,
+    "requireLike": true,
+    "requireDislike": true,
+    "minDecisionPoints": 2,
+    "forbidStandaloneTips": true
+  },
+  "creativeBrief": {
+    "readerPromise": "把都江堰嵌进渝蜀贵八天自驾里，给出可执行的顺序、交通、入园动线与体力取舍。",
+    "primaryEntity": "都江堰",
+    "openingStrategy": "conclusion_first"
+  },
+  "sectionIntents": [
+    "八天环线里都江堰该占哪一天",
+    "为何住成都而非景区",
+    "10月4日单日往返交通与入园顺序",
+    "园内下坡动线与索桥排队取舍",
+    "与后续乐山黔北段的体力衔接"
+  ],
+  "evidencePoints": [
+    { "fact": "8天家庭自驾人均约2000元", "source": "1.download/sources/01.qunar_youji_7901034/source.md" },
+    { "fact": "10月4日从成都约1小时到都江堰，秦堰楼入园顺坡下行", "source": "1.download/sources/01.qunar_youji_7901034/source.md" },
+    { "fact": "国庆都江堰周边酒店价格翻倍，改住成都早出晚归", "source": "1.download/sources/01.qunar_youji_7901034/source.md" },
+    { "fact": "放弃安澜索桥长队，7号门出园", "source": "1.download/sources/01.qunar_youji_7901034/source.md" }
+  ]
+}

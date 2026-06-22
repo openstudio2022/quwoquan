@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "quwoquan_data.draft_meta",
+  "ref": "都江堰_planning_consultation",
+  "generator": "agent",
+  "model": "composer-2.5",
+  "styleFamily": "route-guide",
+  "openingStrategy": "conclusion_first",
+  "citedSourcePaths": ["1.download/sources/01.qunar_youji_7901034/source.md"],
+  "coveredFacts": [
+    "都江堰",
+    "8天",
+    "人均约2000元",
+    "秦堰楼",
+    "鱼嘴分水",
+    "深淘滩，低作堰",
+    "住成都早出晚归",
+    "7号门"
+  ],
+  "creativePlan": {
+    "candidates": [
+      { "id": "A", "hook": "八天环线结论先行，压成单日往返", "risk": "略像行程表" },
+      { "id": "B", "hook": "从国庆酒店溢价切入住宿策略", "risk": "都江堰信息偏晚" },
+      { "id": "C", "hook": "从秦堰楼入园动线切入", "risk": "缺少全线路径" }
+    ],
+    "selectedPlanId": "A",
+    "selectionReason": "读者先拿到八天位置与10月4日单日安排，再展开交通、入园与园内取舍，符合 planning_consultation。"
+  },
+  "selfCritique": {
+    "readerPromise": "已说明都江堰在八天中的日期、交通、入园顺序与索桥/7号门取舍。",
+    "titlePromise": "标题承诺行前安排，正文覆盖顺序、住宿、交通、门票动线与体力取舍。",
+    "informationDensity": "含8天、2000元、10月3-4日、1小时车程、秦堰楼、鱼嘴、7号门等可回溯事实。",
+    "evidenceBoundary": "未编造未在 source 出现的票价数字；未写私人联系方式。",
+    "personaBoundary": "以第三方规划视角写作，未虚构亲历身份。"
+  },
+  "createdAt": "2026-06-22T12:30:00+00:00"
+}

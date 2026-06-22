@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "quwoquan_data.author_job_packet",
+  "ref": "都江堰_planning_consultation",
+  "writingIntent": "planning_consultation",
+  "baseSourceRef": "1.download/sources/01.qunar_youji_7901034/source.md",
+  "title": "都江堰·行前怎么安排：彭水.成都.都江堰.乐山.赤水.遵义 渝蜀贵自驾穷游漫记",
+  "carrier": "article",
+  "contentObjectDir": "posts/article/攻略/都江堰·行前怎么安排：彭水.成都.都江堰.乐山.赤水.遵义 渝蜀贵自驾穷游漫记/1",
+  "promptRef": "4.draft/prompt.md",
+  "writingPackRef": "3.compose/writing_pack.json",
+  "sourcePaths": [
+    "1.download/sources/01.qunar_youji_7901034/source.md"
+  ],
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7901034"
+  ],
+  "mustIncludeFacts": [
+    "都江堰",
+    "8天",
+    "人均约2000元",
+    "秦堰楼",
+    "鱼嘴分水",
+    "深淘滩，低作堰",
+    "住成都早出晚归",
+    "7号门"
+  ],
+  "bannedRegisterTerms": [
+    "看展",
+    "展厅",
+    "展陈"
+  ],
+  "creativeBrief": {
+    "readerPromise": "把都江堰嵌进渝蜀贵八天自驾里，给出可执行的顺序、交通、入园动线与体力取舍。",
+    "primaryEntity": "都江堰",
+    "openingStrategy": "conclusion_first"
+  },
+  "captionPolicy": {},
+  "assets": [],
+  "exitGates": [
+    "writingIntentConsistency",
+    "imageReferenceClosure",
+    "skeletonSimilarity",
+    "registerMismatch",
+    "sourceRejectBlock",
+    "contactInfo",
+    "mechanicalHeading",
+    "creativeGovernance"
+  ],
+  "executionContract": {
+    "inputs": [
+      "4.draft/author_job_packet.json",
+      "3.compose/writing_pack.json",
+      "2.quality/*",
+      "5.review/repair_report.json"
+    ],
+    "budget": {
+      "maxWallClockSeconds": 1200,
+      "maxAttempts": 2,
+      "stuckThreshold": 3
+    },
+    "permissions": [
+      "read_ref_packet",
+      "search_web",
+      "write_draft",
+      "run_review_gate"
+    ],
+    "completionConditions": [
+      "4.draft/draft.article.md 已写且非占位",
+      "4.draft/author_self_check.json 存在",
+      "ref_review_gate.passed == true (reviewDecision == approved)"
+    ],
+    "outputPaths": [
+      "4.draft/draft.article.md",
+      "4.draft/author_self_check.json",
+      "5.review/ref_review_gate.json"
+    ]
+  },
+  "isolation": "single-ref: 只读本 ref 的 packet/SOP/source，禁止读取同批其它文章正文作为底稿"
+}

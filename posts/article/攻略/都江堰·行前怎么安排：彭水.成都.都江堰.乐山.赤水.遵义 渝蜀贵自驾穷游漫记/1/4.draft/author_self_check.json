@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "quwoquan_data.author_self_check",
+  "ref": "都江堰_planning_consultation",
+  "passed": true,
+  "checks": {
+    "writingIntentSingle": true,
+    "mustIncludeFactsCovered": true,
+    "openingStrategyApplied": true,
+    "likeAndDislikePresent": true,
+    "decisionPointsMin2": true,
+    "noContactInfo": true,
+    "noMechanicalHeadings": true,
+    "noBatchCrossRead": true,
+    "assetRefsFromPack": true
+  },
+  "notes": "仅读本 ref packet/source；facts 已对照 1.download/sources/01.qunar_youji_7901034/source.md"
+}
