@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "quwoquan_data.author_self_check",
+  "ref": "乐山大佛_decision_experience",
+  "status": "blocked_input_missing",
+  "generatedAt": "2026-06-22T14:09:44.962049+00:00",
+  "attempt": 1,
+  "checks": {
+    "readAuthorJobPacket": false,
+    "readWritingPack": false,
+    "readPrompt": false,
+    "readSourceEvidence": false,
+    "draftWritten": false,
+    "draftMetaGeneratorAgent": false,
+    "mustIncludeFactsCovered": false,
+    "imagesInserted": false,
+    "noCrossBatchSkeleton": true,
+    "noContactInfo": true,
+    "noMechanicalHeadings": true
+  },
+  "missingInputs": [
+    "4.draft/author_job_packet.json",
+    "3.compose/writing_pack.json",
+    "4.draft/prompt.md",
+    "2.quality/*",
+    "1.download/sources/*/source.md",
+    "5.review/repair_report.json"
+  ],
+  "blocker": "compose 阶段输入未物化到对象目录；Subagent 无法在缺少 author_job_packet / writing_pack / prompt / source 证据链时合法创作或自审通过。",
+  "recommendedFallbackStage": "produce_compose",
+  "ralphLoopOutcome": "exit_blocked"
+}
