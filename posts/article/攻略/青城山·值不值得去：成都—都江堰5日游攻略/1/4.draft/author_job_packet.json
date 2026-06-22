@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "quwoquan_data.author_job_packet",
+  "ref": "青城山_decision_experience",
+  "writingIntent": "decision_experience",
+  "baseSourceRef": "entities/地点/景区/青城山/1.download/sources/07.article_qunar_base_4/source.md",
+  "title": "青城山·值不值得去：成都—都江堰5日游攻略",
+  "carrier": "article",
+  "contentObjectDir": "posts/article/攻略/青城山·值不值得去：成都—都江堰5日游攻略/1",
+  "promptRef": "4.draft/prompt.md",
+  "writingPackRef": "3.compose/writing_pack.json",
+  "sourcePaths": [
+    "entities/地点/景区/青城山/1.download/sources/07.article_qunar_base_4/source.md",
+    "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md"
+  ],
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7884821",
+    "https://zh.wikipedia.org/wiki/%E9%9D%92%E5%9F%8E%E5%B1%B1"
+  ],
+  "mustIncludeFacts": [
+    "青城山 来源提及 值不值得去",
+    "青城山 图文底稿来自 成都—都江堰5日游攻略；文章源图必须来自同一底稿并且全批独占"
+  ],
+  "bannedRegisterTerms": ["看展", "展厅", "展陈", "策展"],
+  "creativeBrief": {
+    "readerPromise": "在「成都—都江堰5日游」骨架里，帮你判断青城山这一整天值不值得单独留出来",
+    "primaryEntity": "青城山",
+    "angle": "值不值得去",
+    "tone": "consultative, honest tradeoffs"
+  },
+  "captionPolicy": {},
+  "assets": [
+    {
+      "assetId": "青城山_cover_3_07492472",
+      "entityName": "青城山",
+      "imageLayout": "fullWidth",
+      "caption": "前山常见云雾低绕——「青城天下幽」多半出现在你真正走上古道、离开换乘节点之后",
+      "sourceCollectionId": null,
+      "creator": "Kcx36",
+      "license": "CC BY-SA 4.0"
+    }
+  ],
+  "exitGates": [
+    "writingIntentConsistency",
+    "imageReferenceClosure",
+    "skeletonSimilarity",
+    "registerMismatch",
+    "sourceRejectBlock",
+    "contactInfo",
+    "mechanicalHeading",
+    "creativeGovernance"
+  ],
+  "executionContract": {
+    "inputs": [
+      "4.draft/author_job_packet.json",
+      "3.compose/writing_pack.json",
+      "2.quality/*（证据/source）",
+      "5.review/repair_report.json"
+    ],
+    "budget": {
+      "maxWallClockSeconds": 1200,
+      "maxAttempts": 2,
+      "stuckThreshold": 3
+    },
+    "permissions": [
+      "read_ref_packet",
+      "search_web",
+      "write_draft",
+      "run_review_gate"
+    ],
+    "completionConditions": [
+      "4.draft/draft.article.md 已写且非占位",
+      "4.draft/author_self_check.json 存在",
+      "ref_review_gate.passed == true (reviewDecision == approved)"
+    ],
+    "outputPaths": [
+      "4.draft/draft.article.md",
+      "4.draft/author_self_check.json",
+      "5.review/ref_review_gate.json"
+    ]
+  },
+  "isolation": "single-ref: 只读本 ref 的 packet/SOP/source，禁止读取同批其它文章正文作为底稿"
+}

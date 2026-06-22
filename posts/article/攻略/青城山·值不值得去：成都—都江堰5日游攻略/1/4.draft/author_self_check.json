@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "quwoquan_data.author_self_check",
+  "ref": "青城山_decision_experience",
+  "reviewDecision": "approved",
+  "generator": "agent",
+  "model": "composer-2.5",
+  "checks": {
+    "writingIntentSingle": true,
+    "mustIncludeFactsCovered": [
+      "青城山 来源提及 值不值得去",
+      "青城山 图文底稿来自 成都—都江堰5日游攻略；文章源图必须来自同一底稿并且全批独占"
+    ],
+    "assetInsertedInBody": true,
+    "assetIdsUsed": ["青城山_cover_3_07492472"],
+    "noCrossArticleSkeleton": true,
+    "noPrivateContact": true,
+    "noMechanicalHeadings": true,
+    "decisionExperienceBuckets": ["audience", "value", "feeling", "tradeoff"],
+    "citedSourcePaths": [
+      "entities/地点/景区/青城山/1.download/sources/07.article_qunar_base_4/source.md"
+    ]
+  },
+  "notes": "基于本 ref writing_pack 与 07.article_qunar_base_4 事实独立成文；未读取同批其它文章正文。"
+}

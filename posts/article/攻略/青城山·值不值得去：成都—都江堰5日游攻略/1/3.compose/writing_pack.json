@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "quwoquan_data.writing_pack",
+  "ref": "青城山_decision_experience",
+  "title": "青城山·值不值得去：成都—都江堰5日游攻略",
+  "kind": "entity",
+  "carrier": "article",
+  "writingIntent": "decision_experience",
+  "styleFamily": "travel.decision",
+  "templateId": "travel.entity.decision",
+  "baseSourceRef": "entities/地点/景区/青城山/1.download/sources/07.article_qunar_base_4/source.md",
+  "sourceUseMode": "factual_reference_only",
+  "baseSourceReusePolicy": "multi_intent_source_bundle",
+  "sourcePaths": [
+    "entities/地点/景区/青城山/1.download/sources/07.article_qunar_base_4/source.md",
+    "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md"
+  ],
+  "sourceUrls": [
+    "https://touch.travel.qunar.com/youji/7884821",
+    "https://zh.wikipedia.org/wiki/%E9%9D%92%E5%9F%8E%E5%B1%B1"
+  ],
+  "mustIncludeFacts": [
+    "青城山 来源提及 值不值得去",
+    "青城山 图文底稿来自 成都—都江堰5日游攻略；文章源图必须来自同一底稿并且全批独占"
+  ],
+  "bannedRegisterTerms": ["看展", "展厅", "展陈", "策展"],
+  "creativeBrief": {
+    "readerPromise": "在「成都—都江堰5日游」骨架里，帮你判断青城山这一整天值不值得单独留出来",
+    "primaryEntity": "青城山",
+    "angle": "值不值得去",
+    "tone": "consultative, honest tradeoffs"
+  },
+  "assets": [
+    {
+      "assetId": "青城山_cover_3_07492472",
+      "fileName": "青城山_cover_3_07492472.jpg",
+      "caption": "前山常见云雾低绕——「青城天下幽」多半出现在你真正走上古道、离开换乘节点之后",
+      "imageLayout": "fullWidth",
+      "sourceRef": "entities/地点/景区/青城山/1.download/sources/07.article_qunar_base_4/source.md",
+      "sourceAssetRef": "entities/地点/景区/青城山/1.download/sources/07.article_qunar_base_4/assets/001_article_qunar_base_4_1.jpg",
+      "license": "CC BY-SA 4.0",
+      "creator": "Kcx36"
+    }
+  ]
+}

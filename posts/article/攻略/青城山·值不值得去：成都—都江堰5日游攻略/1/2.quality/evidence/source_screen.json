@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "quwoquan_data.source_screen",
+  "ref": "青城山_decision_experience",
+  "sources": [
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/07.article_qunar_base_4/source.md",
+      "decision": "accept",
+      "sourceUseMode": "factual_reference_only",
+      "reason": "factual itinerary evidence for 5-day chengdu-dujiangyan plan"
+    },
+    {
+      "path": "entities/地点/景区/青城山/1.download/sources/01.home_wikipedia/source.md",
+      "decision": "accept",
+      "sourceUseMode": "factual_reference_only",
+      "reason": "entity stable facts"
+    }
+  ],
+  "rejectSourceRefs": []
+}
