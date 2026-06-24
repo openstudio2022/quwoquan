@@ -47,6 +47,11 @@ commercial_maturity:
         - recommendation_feed_availability
         - behavior_ingest_drop_rate
         - hotpath_buffer_drop_total
+        - recommendation_attribution_bucket_coverage
+        - attribution_negative_feedback_rate
+        - attribution_ctr_by_recall_path
+        - scenario_consumption_rate
+        - supply_source_share_floor
     operations_maturity:
       objective: 人工加权、置顶、精品、热点与违规下架实时剔除具备入口和审计。
       primary_slis:
@@ -61,6 +66,19 @@ commercial_maturity:
 routes:
   content_feed: /v1/content/feed
   content_behaviors: /v1/content/behaviors
+
+dashboards:
+  recommendation_commercial_maturity: deploy/monitoring/dashboards/l2_recommendation_commercial_maturity.json
+
+alerts:
+  recommendation_commercial_alerting:
+    source: deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model
+    rules:
+      - RecommendationAttributionUnknownRateHigh
+      - RecommendationAttributionNegativeFeedbackBySupplySourceHigh
+      - RecommendationAttributionCTRByRecallPathLow
+      - RecommendationScenarioConsumptionRateLow
+      - RecommendationSupplySourceShareImbalance
 
 metrics:
   http_requests_total: http_server_requests_total
@@ -78,6 +96,7 @@ metrics:
   feed_rule_hits_total: rec_pipeline_rule_hits_total
   feed_model_timeouts_total: rec_pipeline_model_timeouts_total
   feed_served_total: recommendation_feed_served_total
+  feed_served_by_attribution_total: recommendation_feed_served_by_attribution_total
   feed_impressed_total: recommendation_feed_impressed_total
   feed_duplicate_exposure_total: recommendation_feed_duplicate_exposure_total
   feed_negative_feedback_total: recommendation_feed_negative_feedback_total
@@ -103,6 +122,7 @@ metrics:
   feed_training_sample_total: recommendation_feed_training_sample_total
   behavior_ingest_total: recommendation_behavior_ingest_total
   behavior_ingest_dropped_total: recommendation_behavior_ingest_dropped_total
+  behavior_by_attribution_total: recommendation_behavior_by_attribution_total
   hotpath_dropped_total: rec_hotpath_dropped_total
   exposure_filter_smembers_fallback_total: recommendation_exposure_filter_smembers_fallback_total
   exposure_redis_payload_bytes: recommendation_exposure_redis_payload_bytes
@@ -203,6 +223,36 @@ slis:
     objective_only: true
     objective_min: 0.05
 
+  - id: recommendation_attribution_bucket_coverage
+    description: 推荐 served 与 behavior 事件具备可用归因分桶的比例；P0+ 指标按 channel/vertical/supply_source/recall_path/ranking_version/reason_version/intersection_class 切分。
+    source: 1 - sum(rate(recommendation_behavior_by_attribution_total{channel="unknown",recall_path="unknown"}[5m])) / sum(rate(recommendation_behavior_by_attribution_total[5m]))
+    objective_min: 0.95
+    measured: true
+
+  - id: attribution_negative_feedback_rate
+    description: P0+ bounded attribution 维度上的负反馈率，按 channel/vertical/supply_source 切分，用于定位 UGC 与数据工程供给质量异常。
+    source: sum(rate(recommendation_behavior_by_attribution_total{state="negative"}[30m])) by (channel, vertical, supply_source) / sum(rate(recommendation_behavior_by_attribution_total{state="impressed"}[30m])) by (channel, vertical, supply_source)
+    objective_max: 0.08
+    measured: true
+
+  - id: attribution_ctr_by_recall_path
+    description: P0+ bounded attribution 维度上的 CTR，按 channel/vertical/recall_path 切分，用于定位协同召回、热门、新内容和兜底召回的效果退化。
+    source: sum(rate(recommendation_behavior_by_attribution_total{state="click"}[30m])) by (channel, vertical, recall_path) / sum(rate(recommendation_behavior_by_attribution_total{state="impressed"}[30m])) by (channel, vertical, recall_path)
+    objective_min: 0.03
+    measured: true
+
+  - id: scenario_consumption_rate
+    description: 旅行与精品场景中 click/dwell 相对 served 的消费率，用于发现垂类或精品沉浸流断崖。
+    source: sum(rate(recommendation_behavior_by_attribution_total{state=~"click|dwell",channel=~"travel|premium_stream"}[30m])) by (channel) / sum(rate(recommendation_feed_served_by_attribution_total{channel=~"travel|premium_stream"}[30m])) by (channel)
+    objective_min: 0.02
+    measured: true
+
+  - id: supply_source_share_floor
+    description: UGC 与数据工程供给在 served 中的最低 share，用于发现单一供给来源异常吞没推荐池。
+    source: min(sum(rate(recommendation_feed_served_by_attribution_total{supply_source=~"ugc|data_engineering"}[1h])) by (supply_source)) / sum(rate(recommendation_feed_served_by_attribution_total{supply_source=~"ugc|data_engineering"}[1h]))
+    objective_min: 0.05
+    measured: true
+
   - id: ranking_calibration_error
     description: 推荐预估分与真实点击/完成率的校准误差，按 channel/segment/scorer_variant 切分。
     source: recommendation_offline_eval_metric_value{metric="calibration_error"}
@@ -265,7 +315,7 @@ slis:
     objective_min: 0.95
 
   - id: click_through_rate
-    description: feed 点击率，七态 click 作为分子；按 channel/segment/recall_path 可切分。
+    description: feed 点击率，七态 click 作为分子；P0+ 后可按 channel/vertical/supply_source/recall_path/ranking_version/reason_version/intersection_class 切分。
     source: recommendation_feed_engagement_total{action="click"} / recommendation_feed_impressed_total
     objective_min: 0.05
     measured: true
@@ -326,4 +376,4 @@ ab:
     - activity_segment
     - experiment_bucket
 
-alerts_source: deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_recommendation
+alerts_source: deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model

@@ -27,14 +27,14 @@ uat_acceptance:
         suite: user_journey
         cases:
         - user_acceptance.specs.feature_tree.uat1.user_journey
-        envs: &id001
-        - gamma
+        envs:
+        - gamma_local
       supporting:
       - layer: api_integration
         suite: cross_service_integration
         cases:
         - api_integration.specs.feature_tree.uat1.cross_service_integration
-        envs: &id002
+        envs: &id001
         - beta
         - gamma
     notes: []
@@ -73,19 +73,20 @@ uat_acceptance:
         suite: user_journey
         cases:
         - user_acceptance.specs.feature_tree.uat_edge_swipe.user_journey
-        envs: *id001
+        envs:
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: uat_edge_swipe_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_edge_swipe.uat_edge_swipe_local_contract
-        envs: &id003
+        envs: &id002
         - local
       - layer: api_integration
         suite: route_integration
         cases:
         - api_integration.specs.feature_tree.uat_edge_swipe.route_integration
-        envs: *id002
+        envs: *id001
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/content/edge_gesture/immersive_media_edge_swipe_back_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/app/navigation/home_edge_swipe_exit_guard_test.dart'
@@ -126,23 +127,24 @@ uat_acceptance:
         suite: user_journey
         cases:
         - user_acceptance.specs.feature_tree.uat_external_acquisition.user_journey
-        envs: *id001
+        envs:
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: uat_external_acquisition_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_external_acquisition.uat_external_acquisition_local_contract
-        envs: *id003
+        envs: *id002
       - layer: local_contract
         suite: uat_external_acquisition_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_external_acquisition.uat_external_acquisition_local_contract
-        envs: *id003
+        envs: *id002
       - layer: api_integration
         suite: cross_service_integration
         cases:
         - api_integration.specs.feature_tree.uat_external_acquisition.cross_service_integration
-        envs: *id002
+        envs: *id001
     notes:
     - '[migrated_from_planned] quwoquan_app/test/runtime/deeplink/deep_link_resolver_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/ui/share/object_share_panel_test.dart'
@@ -174,22 +176,22 @@ uat_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/chat-service/tests/direct_conversation_relationship_gate_test.go
-      - file: quwoquan_service/services/chat-service/tests/send_message_relationship_gate_test.go
-      - file: quwoquan_service/services/chat-service/tests/group_lifecycle_contract_test.go
-      - file: quwoquan_service/services/chat-service/tests/conversation_error_contract_test.go
-      - file: quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
-      - file: quwoquan_service/services/chat-service/tests/message_sync_contract_test.go
-      - file: quwoquan_app/test/cloud/chat/contract/chat_repository_contract_test.dart
-      - file: quwoquan_app/test/ui/chat/widgets/chat_page_widget_test.dart
-      - file: quwoquan_app/test/ui/chat/widgets/start_group_chat_page_widget_test.dart
-      - file: quwoquan_app/test/ui/chat/widgets/chat_settings_page_widget_test.dart
-      - file: quwoquan_app/test/ui/chat/pages/chat_conversation_page_realtime_journey_test.dart
-      - file: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
-      - file: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
-      - file: quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart
-      - file: quwoquan_app/test/cloud/circle/contract/circle_group_dto_contract_test.dart
-      - file: quwoquan_service/services/rtc-service/tests/one_to_one_relationship_gate_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/direct_conversation_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/send_message_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/group_lifecycle_contract__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/conversation_error_contract__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/assistant_mentioned_stream_contract__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/message_sync_contract__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/cloud/chat/contract/chat_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_settings_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/chat/pages/chat_conversation_page_realtime_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/chat/journeys/chat_assistant_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/circle/contract/circle_group_dto_contract__local_contract_test.dart
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/one_to_one_relationship_gate__api_integration_test.go
     status: partial
     test_evidence:
       primary:
@@ -197,23 +199,24 @@ uat_acceptance:
         suite: user_journey
         cases:
         - user_acceptance.specs.feature_tree.uat_message_social_connection.user_journey
-        envs: *id001
+        envs:
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: uat_message_social_connection_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_message_social_connection.uat_message_social_connection_local_contract
-        envs: *id003
+        envs: *id002
       - layer: local_contract
         suite: uat_message_social_connection_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_message_social_connection.uat_message_social_connection_local_contract
-        envs: *id003
+        envs: *id002
       - layer: api_integration
         suite: cross_service_integration
         cases:
         - api_integration.specs.feature_tree.uat_message_social_connection.cross_service_integration
-        envs: *id002
+        envs: *id001
     notes: []
   UAT_ASSISTANT_OMNIPRESENT_PRIVATE_ASSISTANT:
     title: 无处不在的小趣私人助理商用主线
@@ -244,21 +247,18 @@ uat_acceptance:
       - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
       - file: quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
       recorded:
-      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - file: quwoquan_app/test/ui/chat/providers/chat_message_provider_test.dart
-      - file: quwoquan_app/test/ui/assistant/widgets/assistant_half_sheet_personalization_provider_test.dart
-      - file: quwoquan_app/test/ui/assistant/personal_content_access_provider_test.dart
-      - file: quwoquan_service/services/chat-service/tests/event_publish_contract_test.go
-      - file: quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
-      - file: quwoquan_service/services/assistant-service/internal/application/chat_mention_service_test.go
-      - file: quwoquan_service/services/assistant-service/internal/application/service_test.go
-      - file: quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
-      - file: quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
-      - file: quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
-      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
-      - file: quwoquan_service/scripts/contract/verify_assistant_context_contract.py
-      - file: quwoquan_service/scripts/contract/verify_assistant_security_contract.py
-      - file: specs/feature-tree/assistant-run-learning/commercial_slo_observability.md
+      - file: quwoquan_app/test/local_contract/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/providers/chat_message_provider__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/assistant/widgets/assistant_half_sheet_personalization_provider__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/assistant/personal_content_access_provider__local_contract_test.dart
+      - file: quwoquan_service/services/chat-service/tests/api_integration/event_publish_contract__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/assistant_mentioned_stream_contract__api_integration_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/chat_mention_service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/skill_subscription_service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/infrastructure/chatclient/client__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
     status: partial
     test_evidence:
       primary:
@@ -266,25 +266,29 @@ uat_acceptance:
         suite: user_journey
         cases:
         - user_acceptance.specs.feature_tree.uat_assistant_omnipresent_private_assistant.user_journey
-        envs: *id001
+        envs:
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: uat_assistant_omnipresent_private_assistant_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_assistant_omnipresent_private_assistant.uat_assistant_omnipresent_private_assistant_local_contract
-        envs: *id003
+        envs: *id002
       - layer: local_contract
         suite: uat_assistant_omnipresent_private_assistant_local_contract
         cases:
         - local_contract.specs.feature_tree.uat_assistant_omnipresent_private_assistant.uat_assistant_omnipresent_private_assistant_local_contract
-        envs: *id003
+        envs: *id002
       - layer: api_integration
         suite: cross_service_integration
         cases:
         - api_integration.specs.feature_tree.uat_assistant_omnipresent_private_assistant.cross_service_integration
-        envs: *id002
+        envs: *id001
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_feedback_test.dart'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/contract/verify_assistant_context_contract.py'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/contract/verify_assistant_security_contract.py'
+    - '[migrated_from_recorded_reference] specs/feature-tree/assistant-run-learning/commercial_slo_observability.md'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -112,6 +112,15 @@ func (f *FeedbackRecorder) RecordEngagement(ctx context.Context, signal Behavior
 	if recScore == 0 {
 		recScore = f.lookupImpressionScore(ctx, signal.UserID, signal.ContentID)
 	}
+	contextMap := recEngagementContext(signal.Duration, recScore, signal.Tags, signal.FeedRequestID, signal.ReferralSource, signal.ContentType, signal.AuthorID)
+	contextMap["channelId"] = signal.ChannelID
+	contextMap["rankingVersion"] = signal.RankingVersion
+	contextMap["reasonVersion"] = signal.ReasonVersion
+	contextMap["recallPath"] = signal.RecallPath
+	contextMap["contentVertical"] = signal.ContentVertical
+	contextMap["supplySource"] = signal.SupplySource
+	contextMap["intersectionSourceRef"] = signal.IntersectionSourceRef
+	contextMap["intersectionClass"] = signal.IntersectionClass
 	return f.recorder.RecordEvent(ctx, learning.Event{
 		EventID:    fmt.Sprintf("rec_eng_%s_%s_%d", signal.UserID, signal.ContentID, time.Now().UnixNano()),
 		EventType:  "rec_engagement",
@@ -123,8 +132,10 @@ func (f *FeedbackRecorder) RecordEngagement(ctx context.Context, signal Behavior
 			"sessionId":     signal.EffectiveSessionID(),
 			"feedSessionId": signal.FeedSessionID,
 			"action":        signal.Action,
+			"channelId":     signal.ChannelID,
+			"recallPath":    signal.RecallPath,
 		},
-		Context: recEngagementContext(signal.Duration, recScore, signal.Tags, signal.FeedRequestID, signal.ReferralSource, signal.ContentType, signal.AuthorID),
+		Context: contextMap,
 	})
 }
 

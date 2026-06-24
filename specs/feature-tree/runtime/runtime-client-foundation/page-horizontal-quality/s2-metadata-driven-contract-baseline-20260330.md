@@ -167,7 +167,6 @@
 | 路径 | 类型 | 矩阵 P2 | 清单 status | 域 | target_dto | 备注（清单） |
 |------|------|---------|-------------|-----|------------|----------------|
 | `lib/ui/settings/pages/settings_page.dart` | local_contract | ✓ | compliant | settings | N/A | 以本地/Cupertino 为主；云上外观设置走 codegen 错误码路径 |
-| `lib/ui/settings/pages/developer_settings_page.dart` | local_contract | — | exempt | settings |  | 开发者工具；无产品云契约 |
 
 ### user
 

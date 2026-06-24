@@ -1,6 +1,8 @@
-/// L1c Journey Test: 创作→选位置→云端超时→内联错误
+/// L1c Journey Test: 创作→选位置→云端超时→统一全屏页态错误
 ///
 /// 规范：specs/ux/error-and-permission-semantics.md
+/// 决策：进入选位置页即首屏加载失败、无任何可展示内容 → 全屏 emptyPage（AppPageErrorState）。
+/// 页态类别为 pageLoad，按 `ui_error_semantics` 统一为通用标题/说明，不泄漏领域技术文案。
 /// 特性树：cloud-network-error-display-contract
 library;
 
@@ -19,7 +21,6 @@ import 'package:quwoquan_app/core/services/fake_location_permission_checker.dart
 import 'package:quwoquan_app/ui/content/entry/pages/publish_location_selector_page.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/l10n/app_localizations_zh.dart';
 
 class _StubCloudHttpClient extends CloudHttpClient {
   _StubCloudHttpClient(this.handler) : super(client: http.Client());
@@ -51,7 +52,7 @@ Position _fakePosition() => Position(
 
 void main() {
   testWidgets(
-    '创作入口→选位置→云端超时→展示内联错误和重试',
+    '创作入口→选位置→云端超时→展示统一全屏页态错误和重试',
     (tester) async {
       final checker = FakeLocationPermissionChecker(
         result: LocationPermissionResult.granted,
@@ -65,7 +66,7 @@ void main() {
           code: IntegrationLocationErrorCode.upstreamTimeout.code,
         );
       });
-      final locationService = CreateLocationService(
+      final locationService = RemoteCreateLocationService(
         locationPermissionChecker: checker,
         httpClient: httpClient,
         baseUrl: 'http://test',
@@ -100,16 +101,22 @@ void main() {
       await tester.tap(find.text('选位置'));
       await tester.pumpAndSettle();
 
-      final l10n = AppLocalizationsZh();
+      // pageLoad 类别（首屏无内容）统一走全屏 AppPageErrorState，
+      // 标题/说明为通用文案，而非领域专用的 locationUpstreamTimeout 内联文案。
       expect(
-        find.text(l10n.locationUpstreamTimeout),
+        find.text(UITextConstants.pageLoadFailedTitle),
         findsOneWidget,
-        reason: '云端超时应展示内联错误占位',
+        reason: '云端超时首屏失败应展示统一全屏页态标题',
+      );
+      expect(
+        find.text(UITextConstants.pageLoadFailedMessage),
+        findsOneWidget,
+        reason: 'pageLoad 类别 timeout 走统一页态说明文案，不泄漏领域技术文案',
       );
       expect(
         find.widgetWithText(CupertinoButton, UITextConstants.tryAgain),
         findsOneWidget,
-        reason: '应展示内联重试按钮（与错误文案同区）',
+        reason: '应展示统一页态重试主操作',
       );
     },
   );

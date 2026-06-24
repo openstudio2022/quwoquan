@@ -1,0 +1,223 @@
+{
+  "dashboard": {
+    "title": "L2 — 推荐商用成熟度",
+    "uid": "qwq-l2-recommendation-commercial",
+    "tags": [
+      "quwoquan",
+      "l2",
+      "recommendation",
+      "commercial-maturity",
+      "attribution"
+    ],
+    "timezone": "browser",
+    "refresh": "30s",
+    "description": "Non-deep recommendation commercial maturity dashboard. It uses P0+ bounded attribution metrics only; offline replay, AB significance and deep ranking are out of scope.",
+    "templating": {
+      "list": [
+        {
+          "name": "channel",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(recommendation_feed_served_by_attribution_total, channel)",
+          "includeAll": true,
+          "multi": true,
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          }
+        },
+        {
+          "name": "vertical",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(recommendation_feed_served_by_attribution_total, vertical)",
+          "includeAll": true,
+          "multi": true,
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          }
+        },
+        {
+          "name": "supply_source",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(recommendation_feed_served_by_attribution_total, supply_source)",
+          "includeAll": true,
+          "multi": true,
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          }
+        },
+        {
+          "name": "recall_path",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(recommendation_feed_served_by_attribution_total, recall_path)",
+          "includeAll": true,
+          "multi": true,
+          "current": {
+            "text": "All",
+            "value": "$__all"
+          }
+        }
+      ]
+    },
+    "panels": [
+      {
+        "title": "Served volume by channel and vertical",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "description": "Home, travel, premium and other feed surfaces should stay visible without relying on objective-only metrics.",
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_feed_served_by_attribution_total{channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\"}[5m])) by (channel, vertical)",
+            "legendFormat": "{{ channel }} / {{ vertical }}"
+          }
+        ]
+      },
+      {
+        "title": "CTR by recall_path",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        },
+        "description": "Click is the explicit seven-state click signal, not an interaction alias.",
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_behavior_by_attribution_total{state=\"click\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\"}[5m])) by (recall_path) / clamp_min(sum(rate(recommendation_behavior_by_attribution_total{state=\"impressed\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\"}[5m])) by (recall_path), 0.001)",
+            "legendFormat": "{{ recall_path }}"
+          }
+        ]
+      },
+      {
+        "title": "Negative feedback rate by supply_source",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        },
+        "description": "Compares UGC and data engineering supply without high-cardinality source ids.",
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_behavior_by_attribution_total{state=\"negative\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\"}[5m])) by (supply_source) / clamp_min(sum(rate(recommendation_behavior_by_attribution_total{state=\"impressed\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\"}[5m])) by (supply_source), 0.001)",
+            "legendFormat": "{{ supply_source }}"
+          }
+        ]
+      },
+      {
+        "title": "Unknown attribution rate",
+        "type": "stat",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        },
+        "description": "Rises when app, service or persistence loses bounded attribution fields.",
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_behavior_by_attribution_total{channel=\"unknown\",recall_path=\"unknown\"}[5m])) / clamp_min(sum(rate(recommendation_behavior_by_attribution_total[5m])), 0.001)",
+            "legendFormat": "unknown attribution"
+          }
+        ]
+      },
+      {
+        "title": "Travel and premium consumption",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        },
+        "description": "Focuses on the two P0 scenario routes: travel vertical and premium stream.",
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_behavior_by_attribution_total{state=~\"click|dwell\",channel=~\"travel|premium_stream\",vertical=~\"travel_photography|premium\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\"}[5m])) by (channel, recall_path)",
+            "legendFormat": "{{ channel }} / {{ recall_path }}"
+          }
+        ]
+      },
+      {
+        "title": "Intersection fact vs affinity CTR",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        },
+        "description": "Fact intersection should be evaluated separately from affinity explanations.",
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_behavior_by_attribution_total{state=\"click\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\",intersection_class=~\"fact|affinity\"}[5m])) by (intersection_class) / clamp_min(sum(rate(recommendation_behavior_by_attribution_total{state=\"impressed\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\",intersection_class=~\"fact|affinity\"}[5m])) by (intersection_class), 0.001)",
+            "legendFormat": "{{ intersection_class }}"
+          }
+        ]
+      },
+      {
+        "title": "Reason version CTR",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        },
+        "description": "Detects whether primaryText explanation generation changes move click behavior.",
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_behavior_by_attribution_total{state=\"click\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\",reason_version!=\"unknown\"}[5m])) by (reason_version) / clamp_min(sum(rate(recommendation_behavior_by_attribution_total{state=\"impressed\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\",reason_version!=\"unknown\"}[5m])) by (reason_version), 0.001)",
+            "legendFormat": "{{ reason_version }}"
+          }
+        ]
+      },
+      {
+        "title": "Served share by supply_source",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        },
+        "description": "Tracks UGC versus data engineering supply share after quality and eligibility gates.",
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_feed_served_by_attribution_total{channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\"}[5m])) by (supply_source) / clamp_min(sum(rate(recommendation_feed_served_by_attribution_total{channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\"}[5m])), 0.001)",
+            "legendFormat": "{{ supply_source }}"
+          }
+        ]
+      },
+      {
+        "title": "Ranking and reason version served mix",
+        "type": "timeseries",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 32
+        },
+        "description": "Separates ranking_version and reason_version rollout effects before AB significance is available.",
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_feed_served_by_attribution_total{channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\",ranking_version!=\"unknown\",reason_version!=\"unknown\"}[5m])) by (ranking_version, reason_version)",
+            "legendFormat": "{{ ranking_version }} / {{ reason_version }}"
+          }
+        ]
+      }
+    ]
+  }
+}

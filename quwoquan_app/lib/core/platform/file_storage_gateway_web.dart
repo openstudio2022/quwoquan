@@ -51,6 +51,10 @@ class WebFileStorageGateway implements FileStorageGateway {
   @override
   Future<void> ensureDirectory(String path) async =>
       _unavailable('ensureDirectory');
+
+  @override
+  Future<List<FileSystemEntry>> listDirectory(String path) async =>
+      _unavailable('listDirectory');
 }
 
 FileStorageGateway createPlatformFileStorageGateway() =>

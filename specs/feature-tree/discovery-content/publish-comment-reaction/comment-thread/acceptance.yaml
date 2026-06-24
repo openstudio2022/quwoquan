@@ -45,7 +45,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
@@ -65,7 +67,14 @@ gwt_acceptance:
         suite: device_journey
         cases:
         - user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey
-        envs: &id002
+        envs:
+        - gamma_local
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt1_api_integration
+        envs:
+        - beta
         - gamma
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/content/article_inline_comment_section_test.dart'
@@ -90,7 +99,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
@@ -104,7 +115,15 @@ gwt_acceptance:
         suite: device_journey
         cases:
         - user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey
-        envs: *id002
+        envs:
+        - gamma_local
+      - layer: api_integration
+        suite: gwt2_api_integration
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt2_api_integration
+        envs:
+        - beta
+        - gamma
     notes:
     - '[migrated_from_planned] quwoquan_app/test/components/comment_system/immersive_comment_split_sheet_test.dart'
   GWT3:
@@ -129,7 +148,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
@@ -142,7 +163,7 @@ gwt_acceptance:
         suite: gwt3_api_integration
         cases:
         - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt3_api_integration
-        envs: &id003
+        envs: &id002
         - beta
         - gamma
       supporting:
@@ -150,7 +171,8 @@ gwt_acceptance:
         suite: device_journey
         cases:
         - user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey
-        envs: *id002
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/content/providers/comment_provider_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/auth/comment_login_continuation_test.dart'
@@ -180,8 +202,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/services/content/comment_sort_consistency__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -199,7 +222,7 @@ gwt_acceptance:
         suite: gwt4_api_integration
         cases:
         - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt4_api_integration
-        envs: *id003
+        envs: *id002
       supporting: []
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/content/providers/comment_reply_pagination_test.dart'
@@ -225,7 +248,8 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - file: quwoquan_app/test/local_contract/cloud/services/content/comment_sort_consistency__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
@@ -238,7 +262,7 @@ gwt_acceptance:
         suite: gwt5_api_integration
         cases:
         - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt5_api_integration
-        envs: *id003
+        envs: *id002
       supporting:
       - layer: local_contract
         suite: gwt5_local_contract
@@ -270,8 +294,8 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -284,7 +308,7 @@ gwt_acceptance:
         suite: gwt6_api_integration
         cases:
         - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt6_api_integration
-        envs: *id003
+        envs: *id002
       supporting:
       - layer: local_contract
         suite: gwt6_local_contract
@@ -316,9 +340,10 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
-      - file: quwoquan_app/test/cloud/content/contract/comment_dto_contract_test.dart
-      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -331,13 +356,14 @@ gwt_acceptance:
         suite: device_journey
         cases:
         - user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey
-        envs: *id002
+        envs:
+        - gamma_local
       supporting:
       - layer: api_integration
         suite: gwt7_api_integration
         cases:
         - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt7_api_integration
-        envs: *id003
+        envs: *id002
     notes:
     - '[migrated_from_planned] quwoquan_app/test/components/comment_system/comment_composer_panel_test.dart'
     - '[migrated_from_planned] quwoquan_app/integration_test/comment_composer_journey_test.dart'
@@ -363,11 +389,10 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/contract_fixture_seed_test.go
-      - file: quwoquan_service/contracts/metadata/_shared/test_fixtures/app_alpha_seed_manifest.json
-      - file: quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json
-      - file: quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json
+      - file: quwoquan_app/test/local_contract/cloud/services/content/mock_comment_seed__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -385,16 +410,21 @@ gwt_acceptance:
         suite: gwt8_api_integration
         cases:
         - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt8_api_integration
-        envs: *id003
+        envs: *id002
       - layer: user_acceptance
         suite: device_journey
         cases:
         - user_acceptance.discovery_content.publish_comment_reaction.comment_thread.device_journey
-        envs: *id002
+        envs:
+        - gamma_local
       supporting: []
     notes:
     - '[migrated_from_planned] quwoquan_service/services/content-service/tests/comment_seed_contract_test.go'
     - '[migrated_from_planned] quwoquan_app/integration_test/comment_thread_journey_test.dart'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/services/content-service/tests/contract_fixture_seed_test.go'
+    - '[migrated_from_recorded_reference] quwoquan_service/contracts/metadata/_shared/test_fixtures/app_alpha_seed_manifest.json'
+    - '[migrated_from_recorded_reference] quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json'
+    - '[migrated_from_recorded_reference] quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json'
   GWT9:
     title: 我的-互动评论类点击深链进入评论区并滚动定位高亮
     given:
@@ -417,8 +447,8 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/ui/user/widgets/profile_interaction_tab_test.dart
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -455,8 +485,8 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/cloud/content/contract/comment_dto_contract_test.dart
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -495,8 +525,8 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/profile_interaction_tab_test.dart
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -533,9 +563,10 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/internal/application/comment_display_fields_test.go
-      - file: quwoquan_app/test/cloud/content/contract/comment_dto_contract_test.dart
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/comment_display_fields__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/comment_pin_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
@@ -553,7 +584,7 @@ gwt_acceptance:
         suite: gwt12_api_integration
         cases:
         - api_integration.discovery_content.publish_comment_reaction.comment_thread.gwt12_api_integration
-        envs: *id003
+        envs: *id002
       supporting: []
     notes:
     - '[migrated_from_planned] quwoquan_app/integration_test/comment_pin_journey_test.dart'
@@ -580,9 +611,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/internal/application/comment_display_fields_test.go
-      - file: quwoquan_app/test/cloud/content/contract/comment_dto_contract_test.dart
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/comment_display_fields__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -620,10 +651,10 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/internal/application/comment_display_fields_test.go
-      - file: quwoquan_app/test/cloud/content/contract/comment_dto_contract_test.dart
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/profile_interaction_tab_test.dart
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/comment_display_fields__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:

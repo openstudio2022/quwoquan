@@ -12,8 +12,11 @@ scope:
   - offline replay evaluation。
   - online AB significance。
   - real traffic training promotion。
+  - 非深排 P0 指标分桶：qualityScore、supplySource、vertical、recallPath、intersectionClass。
+  - P0+ 推荐商用归因看板：首页、旅行、精品、UGC、数据工程供给、recall_path、intersectionClass 和 reasonVersion。
+  - P1a 推荐商用归因告警：unknown attribution、负反馈、CTR、旅行/精品消费和供给来源失衡。
   out_of_scope:
-  - 本轮不实现评估脚本、训练作业或模型发布逻辑。
+  - 本轮不实现深排评估脚本、训练作业或模型发布逻辑。
   - 深度排序模型平台轨。
 sit_acceptance:
   SIT1:
@@ -22,9 +25,13 @@ sit_acceptance:
     - recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation
     - recommendation-platform/evaluation-and-flywheel/online-ab-significance
     - recommendation-platform/evaluation-and-flywheel/real-traffic-training-promotion
+    - recommendation-platform/evaluation-and-flywheel/recommendation-observability-dashboard
+    - recommendation-platform/evaluation-and-flywheel/recommendation-commercial-alerting
     done_when:
     - 离线 replay 指标、在线 AB 显著性和真实流量训练晋升均有规格与验收。
     - 所有指标命名与 recommendation_slo.yaml 对齐。
+    - P0+ 推荐商用归因看板源文件、SLO 入口与 local_contract 契约一致。
+    - P1a 商用归因告警源文件、SLO 入口与 local_contract 契约一致。
     - 深度排序模型平台轨仍作为长期上限，不进入本轮商用门槛。
     performance_points:
     - offline_ndcg_at_k >= 0.20
@@ -32,8 +39,10 @@ sit_acceptance:
     - ab_experiment_validity >= 0.95
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_service/services/content-service/tests/local_contract/internal/application/recommendation_dashboard_contract__local_contract_test.go
+      - quwoquan_service/services/content-service/tests/local_contract/internal/application/recommendation_alerts_contract__local_contract_test.go
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -59,6 +68,9 @@ sit_acceptance:
     - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_replay_evaluation.py'
     - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_ab_significance.py'
     - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_training_promotion_gate.py'
+    - P0 已在 local_contract 覆盖质量分、协同召回、旅行/精品路由和 primaryText 显示；线上指标仍需按首页/旅行/精品/UGC/数据工程/recallPath/intersectionClass 分桶验收。
+    - P1 已新增 recommendation-observability-dashboard 覆盖 P0+ 真实 emitter 分桶指标；离线 replay、在线 AB 与训练晋升仍为独立未完成能力。
+    - P1a 已新增 recommendation-commercial-alerting 覆盖 P0+ 真实 emitter 告警；低流量分桶仍不能替代 AB 显著性。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

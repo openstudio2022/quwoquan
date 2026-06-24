@@ -33,6 +33,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
+// 发布选点服务（content/entry）。注：实现暂位于 lib/ui/.../services，理想位置应为
+// lib/cloud/services/integration（属既有分层债，待用户确认后登记 backlog 再收敛）；
+// mode-switch provider 须集中在 core 以满足 verify_ui_app_data_source_mode_ratchet
+// （禁止 lib/ui 引用 appDataSourceModeProvider）。
+import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 import 'package:quwoquan_app/cloud/services/notification/app_message_repository.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_visit_repository.dart';
@@ -43,11 +48,13 @@ import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/block_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/call_settings_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/contact_discovery_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/invite_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/keyword_block_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/following_subject_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_media_upload_gateway.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_sync_repository.dart';
@@ -390,6 +397,21 @@ final opsEventRepositoryProvider = Provider<OpsEventRepository>((ref) {
     return repo;
   }
   return MockOpsEventRepository();
+});
+
+/// 发布选点服务：按数据源模式在 Mock/Remote 间切换。
+///
+/// - mock（alpha/开发）→ [MockCreateLocationService]：本地 canonical POI，不发 HTTP、
+///   不依赖系统定位，杜绝「附近地点访问失败」整页断点。
+/// - remote（beta/gamma/prod）→ [RemoteCreateLocationService]：经 gateway/API + 系统定位。
+final createLocationServiceProvider = Provider<CreateLocationService>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  if (mode == AppDataSourceMode.remote) {
+    return RemoteCreateLocationService(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    );
+  }
+  return MockCreateLocationService();
 });
 
 /// AppLog 上传服务 — 定期将本地 ndjson 日志批量上传到 OpsEvent 后端。

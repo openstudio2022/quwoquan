@@ -69,21 +69,21 @@ gwt_acceptance:
         suite: gwt1_api_integration
         cases:
         - api_integration.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.gwt1_api_integration
-        envs: &id002
-        - beta
+        envs:
         - gamma
       - layer: user_acceptance
         suite: end_to_end_journey
         cases:
         - user_acceptance.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.end_to_end_journey
-        envs: &id003
-        - gamma
+        envs:
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: contract
         cases:
         - local_contract.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.contract
         envs: &id001
+        - alpha
         - local
       - layer: local_contract
         suite: gwt1_local_contract
@@ -130,13 +130,15 @@ gwt_acceptance:
         suite: gwt2_api_integration
         cases:
         - api_integration.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.gwt2_api_integration
-        envs: *id002
+        envs:
+        - prod_gray_initial
       supporting:
       - layer: user_acceptance
         suite: end_to_end_journey
         cases:
         - user_acceptance.runtime.deliver_deploy_prod_pipeline.local_gamma_mirror.end_to_end_journey
-        envs: *id003
+        envs:
+        - prod_gray_initial
     notes:
     - '[migrated_from_planned] prod gray-initial rollout stage 承接真实远端集成与 curated 媒体路由复验链路。'
 execution:

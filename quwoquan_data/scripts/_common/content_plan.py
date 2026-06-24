@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from _common.base_draft import load_base_draft_text
+from _common import ops_governance as og
 from _common.content_object import BRIEF_FILE, content_object_stage_dir, load_index
+from _common.creator_assignment import creator_assignment_issues, creator_assignment_required
 from _common.image_asset_strategy import image_count_is_hard_quota
 from _common.io import read_json
 from _common.image_safety import assess_image_publish_prefilter
@@ -221,6 +223,38 @@ def _article_source_category(meta: Mapping[str, Any]) -> str:
     ).strip()
 
 
+def _entity_focus_issues(*, ref: str, carrier: str, source_meta: Mapping[str, Any], item: Mapping[str, Any] | None = None) -> list[str]:
+    issues: list[str] = []
+    verdict = str(
+        (item or {}).get("entityFocusVerdict")
+        or source_meta.get("entityFocusVerdict")
+        or source_meta.get("focusVerdict")
+        or ""
+    ).strip().lower()
+    if verdict in {"weak", "supporting_only", "mismatch", "off_entity"}:
+        issues.append(
+            f"item[{ref}]: entity_focus_gate blocked {carrier} primary source "
+            f"(verdict={verdict}); weak/off-entity sourceUnit may only be supporting evidence"
+        )
+    raw_score = (
+        (item or {}).get("entityFocusScore")
+        if (item or {}).get("entityFocusScore") is not None
+        else source_meta.get("entityFocusScore")
+    )
+    try:
+        score = float(raw_score)
+    except (TypeError, ValueError):
+        score = None
+    # 聚焦度阈值的唯一真相源在 _common.entity_focus（与 download/选源/准出口径一致）。
+    from _common.entity_focus import ENTITY_FOCUS_STRONG_FLOOR
+    if score is not None and score < ENTITY_FOCUS_STRONG_FLOOR:
+        issues.append(
+            f"item[{ref}]: entity_focus_gate score {score:.2f} < {ENTITY_FOCUS_STRONG_FLOOR:.2f}; "
+            "primary source must be about the target entity, not a loose mention"
+        )
+    return issues
+
+
 def _source_asset_ref(
     task_id: str, batch_id: str, root: Path, source_ref: str, row: Mapping[str, Any]
 ) -> str:
@@ -270,6 +304,7 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
         or per_target_galleries
         or int(quotas.get("entityHomepagesPerTarget") or 0)
     )
+    require_creator_assignment = creator_assignment_required(spec)
     targets = [
         str(target.get("name") or "").strip()
         for target in ((spec.get("scope") or {}).get("coverageTargets") or [])
@@ -344,8 +379,17 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                 f"(minus abandoned {abandoned_image_n} => {effective_want_gallery}) "
                 f"but packet has {gallery_n}"
             )
-        if want_route and route_n != want_route:
-            issues.append(f"routeArticles quota {want_route} but packet has {route_n}")
+        if want_route:
+            # 网站角度环线：底稿是"覆盖>=3地点的多地点游记"，其供给天然稀疏。
+            # 开启 allowContentQuotaShortfall 时，routeArticles 视为上限而非地板：
+            # 有多少合格多地点底稿就成多少篇环线，不足额属正常诚实弃稿，不卡死；
+            # 但不得超额（route_n > want_route）。严格模式下仍要求精确达额。
+            route_shortfall_ok = allow_content_quota_shortfall(spec)
+            if route_n > want_route or (not route_shortfall_ok and route_n != want_route):
+                issues.append(
+                    f"routeArticles quota {want_route} but packet has {route_n}"
+                    + ("" if not route_shortfall_ok else " (ceiling; route shortfall allowed)")
+                )
 
     root = batch_root(task_id, batch_id)
     index = load_index(task_id, batch_id)
@@ -446,6 +490,13 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             issues.append(f"item[{ref}]: kind must be entity|route, got {kind!r}")
         carrier = _item_carrier(item)
         raw_carrier = str(item.get("carrier") or item.get("contentType") or "article")
+        if require_creator_assignment and carrier in {"article", "image", "video"}:
+            for creator_issue in creator_assignment_issues(
+                item,
+                carrier=carrier,
+                prefix=f"item[{ref}].creatorAssignment",
+            ):
+                issues.append(creator_issue)
         image_work_mode = carrier == "image" and (raw_carrier == "image" or separated_research)
         if not image_work_mode and not title:
             issues.append(f"item[{ref}]: missing title")
@@ -509,6 +560,13 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                             source_meta = read_json(source_meta_path)
                         except (OSError, ValueError, TypeError):
                             source_meta = {}
+                        for focus_issue in _entity_focus_issues(
+                            ref=ref,
+                            carrier="image",
+                            source_meta=source_meta if isinstance(source_meta, Mapping) else {},
+                            item=item,
+                        ):
+                            issues.append(focus_issue)
                         if str(source_meta.get("researchLane") or "") != "image":
                             issues.append(
                                 f"item[{ref}]: image asset must come from researchLane=image: "
@@ -570,6 +628,17 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             issues.append(f"item[{ref}]: article baseSourceRef required for scaled task")
         if carrier != "image" and base_source_ref:
             source_meta = _source_meta(root, base_source_ref)
+            # 单实体聚焦门只约束 kind=entity 文章底稿；kind=route（网站角度环线）
+            # 本就用跨多个地点的多地点游记作底稿，由 routeCoverage/entityRefs>=3 把关，
+            # 不能用单实体聚焦门拦截，否则环线底稿会被误判 off_entity 而无法成稿。
+            if kind != "route":
+                for focus_issue in _entity_focus_issues(
+                    ref=ref,
+                    carrier="article",
+                    source_meta=source_meta,
+                    item=item,
+                ):
+                    issues.append(focus_issue)
             actual_mode = str(source_meta.get("sourceUseMode") or "").strip()
             if actual_mode == "blocked":
                 issues.append(f"item[{ref}]: baseSourceRef points to blocked source")
@@ -641,6 +710,20 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             ]
             if declared_asset_refs and len(set(declared_asset_refs)) != len(declared_asset_refs):
                 issues.append(f"item[{ref}]: article assetRefs contains duplicates")
+            for atomic_issue in og.source_unit_atomicity_issues(
+                base_source_ref=base_source_ref,
+                asset_refs=declared_asset_refs,
+                supporting_refs=item.get("sourceUnitRefs") or [],
+            ):
+                issues.append(f"item[{ref}]: {atomic_issue}")
+                og.append_conflict(
+                    task_id,
+                    batch_id,
+                    conflict_type="source_unit_atomicity",
+                    subject=str(base_source_ref),
+                    refs=[str(ref)],
+                    reason=atomic_issue,
+                )
             for asset_ref in declared_asset_refs:
                 asset_path = root / asset_ref
                 source_dir = (root / base_source_ref).parent
@@ -796,6 +879,14 @@ def load_writing_intent_overrides(task_id: str, batch_id: str) -> dict[str, dict
             "carrier",
             "sourceCollectionId",
             "assetRefs",
+            "authorId",
+            "creatorProfileId",
+            "creatorArchetype",
+            "creatorProfileVersion",
+            "creatorDisclosure",
+            "experienceClaimMode",
+            "authorQualitySignals",
+            "creator",
         ):
             if item.get(field) not in (None, ""):
                 row[field] = item.get(field)

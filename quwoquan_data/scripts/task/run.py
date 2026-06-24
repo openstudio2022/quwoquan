@@ -17,7 +17,7 @@
 DAG（stage 序）：
   download_plan(checkpoint，但默认由 CLI auto_research 自动检索三路 source_plan 后即满足，无需 Agent 暂停)
   -> download_fetch(auto)
-  -> build_prepare(auto 下发主页契约) -> build_homepage(checkpoint，但实体主页由确定性 builder 自动物化三件套并过采纳门，无需 Agent 暂停)
+  -> build_prepare(auto 下发主页契约+人读 prompt.md+占位 4.draft/page.md) -> build_homepage(checkpoint：Agent 在底稿基础上轻改创作 4.draft/page.md，finalize 把关贴合度/模板指纹后补资产物化三件套并过采纳门)
   -> build_validate(auto 采纳门)
   -> content_plan(checkpoint:Agent 证据驱动篇目+注册+brief，首个需 Agent 语义介入的暂停点)
   -> produce_plan(auto 校验 brief 或 legacy 每实体 brief)
@@ -917,6 +917,7 @@ def reset_stage_retries(
     *,
     stage: str,
     reason: str,
+    reset_react_rewinds: bool = False,
 ) -> dict[str, Any]:
     """Clear retry ledgers for an operator-confirmed infrastructure recovery."""
     stage_name = str(stage or "").strip()
@@ -983,12 +984,45 @@ def reset_stage_retries(
             infra_counts.pop(name, None)
     state["retryCounts"] = retry_counts
     state["infrastructureRetryCounts"] = infra_counts
-    # retry-stage is an infrastructure recovery tool.  ReAct rewind counters are
-    # quality-loop evidence and must survive operator retries; otherwise a
-    # Cursor bridge failure can accidentally grant extra Ralph-loop attempts.
+    reset_react_keys: list[str] = []
+    if reset_react_rewinds:
+        for name in list(react_rewinds):
+            if name in tail_stages:
+                react_rewinds.pop(name, None)
+                reset_react_keys.append(name)
+    # retry-stage is primarily an infrastructure recovery tool.  ReAct rewind
+    # counters survive by default; a quality-contract code repair must opt in to
+    # clearing them so the recovery record stays auditable.
     state["reactRewinds"] = react_rewinds
     rewound_completed = _rewind_to(completed_before, stage_name)
     state["completed"] = [name for name in STAGE_NAMES if name in rewound_completed]
+    invalidated_content_refs: list[str] = []
+    if stage_name in {"download_plan", "download_fetch", "build_prepare", "build_homepage", "build_validate", "content_plan", "produce_plan", "produce_compose"}:
+        try:
+            from _common import content_object
+
+            ctx = PipelineContext(
+                task_id=task_id,
+                batch_id=batch_id,
+                entity_ids=[],
+                spec=store.load_spec(task_id),
+            )
+            abandoned_refs = _abandoned_content_refs(state)
+            candidate_refs = [
+                ref for ref in content_object.iter_content_refs(task_id, batch_id)
+                if ref not in abandoned_refs
+            ]
+            _purge_author_queue_for_stale_workflow(ctx, refs=candidate_refs, reason=f"retry-stage->{stage_name}")
+            invalidated_content_refs = [
+                ref for ref in candidate_refs
+                if _invalidate_ref_for_retry(ctx, ref)
+            ]
+        except Exception as exc:  # noqa: BLE001
+            state["failedObjects"] = [f"{stage_name}: retry invalidation failed: {exc}"]
+            state["status"] = "manual_required"
+            state["nextAction"] = f"retry {stage_name}: content invalidation failed"
+            save_workflow_state(state)
+            raise
     state["waitingCheckpoint"] = None
     state["failedObjects"] = []
     active_auto = state.get("activeAutoResearch")
@@ -1016,6 +1050,8 @@ def reset_stage_retries(
             "previous": previous,
             "reactivatedEntities": sorted(reactivated_entities),
             "reactivatedContentRefs": sorted(reactivated_content_refs),
+            "invalidatedContentRefs": sorted(invalidated_content_refs),
+            "resetReactRewinds": sorted(reset_react_keys),
             "recoveredAt": store.now_iso(),
         }
     )
@@ -1026,6 +1062,8 @@ def reset_stage_retries(
         "previous": previous,
         "reactivatedEntities": sorted(reactivated_entities),
         "reactivatedContentRefs": sorted(reactivated_content_refs),
+        "invalidatedContentRefs": sorted(invalidated_content_refs),
+        "resetReactRewinds": sorted(reset_react_keys),
         "retryCounts": state.get("retryCounts") or {},
         "infrastructureRetryCounts": state.get("infrastructureRetryCounts") or {},
         "reactRewinds": state.get("reactRewinds") or {},
@@ -1073,95 +1111,6 @@ def _compose_brief_gate_failures(ctx: PipelineContext, refs: Sequence[str]) -> t
         elif fallback_stage is None:
             fallback_stage = candidate_fallback or "compose"
     return failures, fallback_stage
-
-
-def _source_asset_ref_for_recompose(asset: Mapping[str, Any], task_id: str, batch_id: str) -> str:
-    raw = str(asset.get("sourceAssetRef") or asset.get("sourcePath") or "").replace("\\", "/").strip()
-    if not raw or "/assets/" not in raw:
-        return ""
-    path = Path(raw)
-    if path.is_absolute():
-        try:
-            path.resolve().relative_to(batch_root(task_id, batch_id).resolve())
-        except (OSError, ValueError):
-            return raw
-        return relative_batch_ref(path, task_id, batch_id)
-    return raw
-
-
-def _asset_identity_keys_for_recompose(asset: Mapping[str, Any], task_id: str, batch_id: str) -> list[str]:
-    keys: list[str] = []
-    source_asset_value = asset.get("sourceAssetRef") or asset.get("sourcePath")
-    source_asset_ref = _source_asset_ref_for_recompose(asset, task_id, batch_id)
-    if source_asset_ref:
-        keys.append(f"sourceAssetRef:{source_asset_ref}")
-    sha = str(asset.get("sha256") or "").strip().lower()
-    if not sha:
-        from _common.source_unit import source_asset_sha256
-
-        sha = source_asset_sha256(source_asset_value, task_id, batch_id)
-    if sha:
-        keys.append(f"sha256:{sha}")
-    return keys
-
-
-def _duplicate_source_asset_recompose_refs(ctx: PipelineContext) -> set[str]:
-    """Refs that must re-run compose because another post already owns the same source asset."""
-    from _common import content_object
-    from _common.draft_io import read_writing_pack, writing_pack_path
-
-    def _owner_rank(ref: str) -> tuple[int, str]:
-        coords = content_object.content_coords(ctx.task_id, ctx.batch_id, ref) or {}
-        content_type = str(coords.get("contentType") or "")
-        if content_type == "image":
-            return (0, ref)
-        return (1, ref)
-
-    refs_by_asset: dict[str, list[str]] = defaultdict(list)
-    for ref in content_object.iter_content_refs(ctx.task_id, ctx.batch_id):
-        seen_for_ref: set[str] = set()
-        pack_path = writing_pack_path(ctx.task_id, ctx.batch_id, ref)
-        pack_mtime: float | None = None
-        try:
-            if pack_path.is_file():
-                pack_mtime = pack_path.stat().st_mtime
-        except OSError:
-            pack_mtime = None
-        pack = read_writing_pack(ctx.task_id, ctx.batch_id, ref) or {}
-        for asset in pack.get("assets") or []:
-            if isinstance(asset, Mapping):
-                seen_for_ref.update(_asset_identity_keys_for_recompose(asset, ctx.task_id, ctx.batch_id))
-        try:
-            manifest_path = content_object.content_object_dir(ctx.task_id, ctx.batch_id, ref) / "manifest.json"
-        except KeyError:
-            manifest_path = None
-        if manifest_path and manifest_path.is_file():
-            skip_manifest = False
-            try:
-                skip_manifest = pack_mtime is not None and pack_mtime > manifest_path.stat().st_mtime
-            except OSError:
-                skip_manifest = False
-            if not skip_manifest:
-                try:
-                    manifest = read_json(manifest_path)
-                except (OSError, ValueError, TypeError):
-                    manifest = {}
-                for asset in manifest.get("assets") or []:
-                    if isinstance(asset, Mapping):
-                        seen_for_ref.update(_asset_identity_keys_for_recompose(asset, ctx.task_id, ctx.batch_id))
-        for asset_key in sorted(seen_for_ref):
-            refs_by_asset[asset_key].append(ref)
-
-    recompose: set[str] = set()
-    for refs in refs_by_asset.values():
-        distinct = sorted(set(refs))
-        if len(distinct) > 1:
-            # Keep the semantically strongest owner stable. Image works own
-            # image-lane assets before articles; articles can usually choose
-            # another support visual during compose.
-            owner = min(distinct, key=_owner_rank)
-            recompose.update(ref for ref in distinct if ref != owner)
-    return recompose
 
 
 def _apply_abandoned_entities(
@@ -4462,10 +4411,8 @@ def _homepage_pending_entities(ctx: PipelineContext) -> list[str]:
     a single slow/failed Cursor job can multiply token cost and overwrite stable
     evidence. The validator remains the source of truth, not Agent self-report.
     """
-    from build.homepage import region_keys, season_keys, validate_entity_page
+    from build.homepage import validate_entity_page
 
-    region_set = set(region_keys())
-    season_set = set(season_keys())
     pending: list[str] = []
     for target in ((_active_spec(ctx).get("scope") or {}).get("coverageTargets") or []):
         name = str(target.get("name") or "").strip()
@@ -4481,8 +4428,6 @@ def _homepage_pending_entities(ctx: PipelineContext) -> list[str]:
             domain,
             etype,
             name,
-            region_set=region_set,
-            season_set=season_set,
         )
         if issues:
             pending.append(name)
@@ -4605,7 +4550,7 @@ def _finalize_existing_managed_author_outputs(ctx: PipelineContext, state: Mappi
         enriched_meta.update(
             {
                 "ref": ref,
-                "generator": meta.get("generator") or "agent",
+                "generator": "agent",
                 "model": meta.get("model") or ctx.model,
                 "agentRunId": outcome.get("runId") or meta.get("agentRunId"),
                 "agentId": outcome.get("agentId") or meta.get("agentId"),
@@ -4616,6 +4561,76 @@ def _finalize_existing_managed_author_outputs(ctx: PipelineContext, state: Mappi
                 "draftSha256": facts.get("draftSha256"),
                 "updatedAt": store.now_iso(),
                 "finalizedFromAgentRunHistory": True,
+            }
+        )
+        write_json(draft_meta_path(ctx.task_id, ctx.batch_id, ref), enriched_meta)
+        finalized += 1
+    return finalized
+
+
+def _finalize_existing_object_queue_author_outputs(ctx: PipelineContext, refs: list[str]) -> int:
+    """补齐外部 fanout/object_queue author-runner 已成功草稿的 provenance。
+
+    外部 runner 的业务真相源是 object_queue。只有 job=STATE_SUCCEEDED 且
+    draft.article.md 已真实落盘、非占位时，才允许把 pending meta 升级为
+    generator=agent；这避免把队列状态或空回复误认成 author 完成。
+    """
+    from _common.content_review import generator_provenance_issues
+    from _common.draft_io import (
+        compute_draft_provenance_facts,
+        draft_article_path,
+        draft_meta_path,
+        is_placeholder,
+        read_draft_meta,
+        read_writing_pack,
+    )
+    from task import object_queue as oq
+
+    finalized = 0
+    for ref in refs:
+        job_id = oq.stable_job_id(ctx.task_id, ctx.batch_id, ref, "author")
+        try:
+            job = read_json(oq._job_path(ctx.task_id, ctx.batch_id, job_id))  # noqa: SLF001 - workflow consumes queue truth.
+        except Exception:  # noqa: BLE001
+            continue
+        if str(job.get("state") or "") != oq.STATE_SUCCEEDED:
+            continue
+        try:
+            article_path = draft_article_path(ctx.task_id, ctx.batch_id, ref)
+        except KeyError:
+            continue
+        if not article_path.is_file():
+            continue
+        article = article_path.read_text(encoding="utf-8")
+        if is_placeholder(article):
+            continue
+        meta = read_draft_meta(ctx.task_id, ctx.batch_id, ref) or {}
+        if not generator_provenance_issues(meta):
+            continue
+        pack = read_writing_pack(ctx.task_id, ctx.batch_id, ref) or {}
+        cited_paths = meta.get("citedSourcePaths") or pack.get("sourcePaths") or []
+        facts = compute_draft_provenance_facts(
+            ctx.task_id,
+            ctx.batch_id,
+            ref,
+            article_markdown=article,
+            cited_source_paths=[str(item) for item in cited_paths],
+        )
+        enriched_meta = dict(meta)
+        enriched_meta.update(
+            {
+                "ref": ref,
+                "generator": "agent",
+                "model": meta.get("model") or ctx.model,
+                "agentRunId": meta.get("agentRunId") or job.get("lastAgentRunId"),
+                "agentId": meta.get("agentId") or job.get("lastAgentId"),
+                "citedSourcePaths": [str(item) for item in cited_paths],
+                "promptSha256": facts.get("promptSha256"),
+                "writingPackSha256": facts.get("writingPackSha256"),
+                "sourceBundleSha256": facts.get("sourceBundleSha256"),
+                "draftSha256": facts.get("draftSha256"),
+                "updatedAt": store.now_iso(),
+                "finalizedFromObjectQueue": True,
             }
         )
         write_json(draft_meta_path(ctx.task_id, ctx.batch_id, ref), enriched_meta)
@@ -4654,6 +4669,12 @@ def _drafts_authored(ctx: PipelineContext) -> tuple[bool, list[str]]:
         active_refs = [ref for ref in active_refs if ref not in abandoned_refs]
     if not active_refs:
         return True, []
+    object_queue_finalized = _finalize_existing_object_queue_author_outputs(ctx, active_refs)
+    if object_queue_finalized:
+        state = load_workflow_state(ctx.task_id, ctx.batch_id)
+        state["heartbeatAt"] = store.now_iso()
+        state["lastObjectQueueAuthorFinalizeCount"] = object_queue_finalized
+        save_workflow_state(state)
     pending: list[str] = []
     for ref in active_refs:
         if ref in abandoned_refs:
@@ -4971,7 +4992,13 @@ def _invalidate_ref_for_retry(ctx: PipelineContext, ref: str) -> bool:
             cited_source_paths=[str(path) for path in (pack.get("sourcePaths") or []) if path],
         )
     else:
-        write_placeholder_draft(ctx.task_id, ctx.batch_id, ref)
+        write_placeholder_draft(
+            ctx.task_id,
+            ctx.batch_id,
+            ref,
+            allow_agent_downgrade=True,
+            downgrade_reason="explicit workflow retry invalidated upstream compose/author evidence",
+        )
 
     author_self_check = draft_dir / "author_self_check.json"
     if author_self_check.is_file():
@@ -5077,15 +5104,34 @@ def _prepare_produce_review_retry(ctx: PipelineContext, result: StageResult, tar
     reset = [ref for ref in refs if _invalidate_ref_for_retry(ctx, ref)]
     requeued = oq.requeue_refs(ctx.task_id, ctx.batch_id, reset, "author", reason="produce_review_retry") if reset else []
     missing = [ref for ref in reset if ref not in set(requeued)]
-    for ref in missing:
-        pack = read_writing_pack(ctx.task_id, ctx.batch_id, ref) or {}
-        oq.enqueue_ref_job(
-            ctx.task_id,
-            ctx.batch_id,
-            ref,
-            "author",
-            mutex_key=str(pack.get("baseSourceRef") or ref),
-        )
+    if missing:
+        from _common import content_object
+        from _common.creator_assignment import creator_assignment_issues, creator_from_payload
+
+        for ref in missing:
+            pack = read_writing_pack(ctx.task_id, ctx.batch_id, ref) or {}
+            brief = content_object.read_brief_object(ctx.task_id, ctx.batch_id, ref) or {}
+            carrier = str(pack.get("carrier") or "article")
+            # 复用 author 入队的同一 creator 解析链（pack -> brief），不重造（R24/R25）。
+            creator = creator_from_payload(pack) or creator_from_payload(brief)
+            meta: dict[str, Any] = {"baseSourceRef": pack.get("baseSourceRef") or ref}
+            # 仅当有完整 registry creator 装配时才声明 contentType（触发 enqueue 严格 creator 门）。
+            # managed 模式全程无 creator 装配：省略 contentType/carrier，对齐 enqueue_partition_leaves，
+            # 让 author 执行阶段按 pack/brief/plan 默认解析 creator，避免 fanout 专用门在重试路径误崩。
+            if creator and not creator_assignment_issues(
+                creator,
+                carrier="image" if carrier == "gallery" else carrier,
+            ):
+                meta["contentType"] = carrier
+                meta.update(creator)
+            oq.enqueue_ref_job(
+                ctx.task_id,
+                ctx.batch_id,
+                ref,
+                "author",
+                mutex_key=str(pack.get("baseSourceRef") or ref),
+                meta=meta,
+            )
     if reset:
         print(
             "[task run] 已为 produce_review 回退重置待重写 ref: "
@@ -5387,13 +5433,20 @@ def _clear_compose_base_draft_assignments(
     ledger: dict[str, Any],
     selected_refs: list[str],
     overrides: Mapping[str, Mapping[str, Any]],
+    *,
+    image_refs: set[str] | None = None,
 ) -> tuple[dict[str, Any], list[str], bool]:
     """Clear stale base-draft assignments for refs/sources that will be recomposed.
 
     Re-runs must be driven by the current content plan, not by half-written state
     from an earlier attempt.  The source-side clear matters when an old ref used
     to occupy the source that the current content plan now assigns to another ref.
+
+    底稿共用策略与 content_plan 对齐（content_plan 对 carrier==image 豁免
+    one-source-one-work）：图文同源是正常现象，image/gallery 作品可与文章或其它图片
+    作品共用同一底稿；只有两个对象都是长文类载体时复用同一底稿才算违规凑数。
     """
+    image_set = set(image_refs or ())
     selected = set(selected_refs)
     selected_sources: dict[str, str] = {}
     duplicate_sources: list[str] = []
@@ -5403,7 +5456,12 @@ def _clear_compose_base_draft_assignments(
         if not source_ref:
             continue
         previous = selected_sources.get(source_ref)
-        if previous and previous != ref:
+        if (
+            previous
+            and previous != ref
+            and ref not in image_set
+            and previous not in image_set
+        ):
             duplicate_sources.append(f"{source_ref} -> {previous}, {ref}")
         selected_sources[source_ref] = ref
 
@@ -5436,8 +5494,8 @@ def _run_produce_compose(ctx: PipelineContext) -> StageResult:
 
     overrides = load_writing_intent_overrides(ctx.task_id, ctx.batch_id)
     expected_refs = list(iter_content_refs(ctx.task_id, ctx.batch_id))
-    duplicate_asset_refs = _duplicate_source_asset_recompose_refs(ctx)
     pending_refs: list[str] = []
+    image_pending_refs: set[str] = set()
     for ref in expected_refs:
         needs_prepare = False
         coords = content_object.content_coords(ctx.task_id, ctx.batch_id, ref) or {}
@@ -5464,8 +5522,6 @@ def _run_produce_compose(ctx: PipelineContext) -> StageResult:
                         needs_prepare = True
                 except OSError:
                     needs_prepare = True
-        if ref in duplicate_asset_refs:
-            needs_prepare = True
         if expected_content_type and pack:
             actual_content_type = _content_type_for_carrier(pack.get("carrier"))
             if actual_content_type != expected_content_type:
@@ -5508,6 +5564,8 @@ def _run_produce_compose(ctx: PipelineContext) -> StageResult:
                         break
         if needs_prepare:
             pending_refs.append(ref)
+            if is_image:
+                image_pending_refs.add(ref)
     if expected_refs and not pending_refs:
         return StageResult(
             "produce_compose",
@@ -5525,7 +5583,7 @@ def _run_produce_compose(ctx: PipelineContext) -> StageResult:
 
         ledger = load_base_draft_ledger(ctx.task_id, ctx.batch_id)
         ledger, duplicate_sources, ledger_changed = _clear_compose_base_draft_assignments(
-            ledger, selected_refs, overrides
+            ledger, selected_refs, overrides, image_refs=image_pending_refs
         )
         if duplicate_sources:
             return StageResult(
@@ -5543,23 +5601,7 @@ def _run_produce_compose(ctx: PipelineContext) -> StageResult:
         stage="compose-brief", refs=",".join(selected_refs), batch_size=1,
         allow_partial=False, materialize=False,
     )
-    previous_ignore_refs = os.environ.get("QWQ_COMPOSE_IGNORE_ASSET_REFS")
-    previous_repair_started_at = os.environ.get("QWQ_COMPOSE_REPAIR_STARTED_AT")
-    duplicate_ignore_refs = ",".join(sorted(duplicate_asset_refs))
-    if duplicate_ignore_refs:
-        os.environ["QWQ_COMPOSE_IGNORE_ASSET_REFS"] = duplicate_ignore_refs
-        os.environ["QWQ_COMPOSE_REPAIR_STARTED_AT"] = str(time.time())
-    try:
-        handle_produce(ns)
-    finally:
-        if previous_ignore_refs is None:
-            os.environ.pop("QWQ_COMPOSE_IGNORE_ASSET_REFS", None)
-        else:
-            os.environ["QWQ_COMPOSE_IGNORE_ASSET_REFS"] = previous_ignore_refs
-        if previous_repair_started_at is None:
-            os.environ.pop("QWQ_COMPOSE_REPAIR_STARTED_AT", None)
-        else:
-            os.environ["QWQ_COMPOSE_REPAIR_STARTED_AT"] = previous_repair_started_at
+    handle_produce(ns)
     gate_failures, fallback_stage = _compose_brief_gate_failures(ctx, selected_refs)
     if gate_failures:
         deterministic_failed_refs = [
@@ -5923,7 +5965,8 @@ def _run_produce_review(ctx: PipelineContext) -> StageResult:
         allow_partial=True, materialize=True,
     )
     handle_produce(ns)
-    issues = _produce_exit_issues(ctx, active_refs)
+    issues = _materialize_reviewed_refs(ctx, active_refs)
+    issues.extend(_produce_exit_issues(ctx, active_refs))
     abandoned_short_refs = _abandon_release_base_draft_shortfalls(
         ctx,
         issues,
@@ -5941,7 +5984,8 @@ def _run_produce_review(ctx: PipelineContext) -> StageResult:
                 fallback_stage="content_plan",
                 issues=issues,
             )
-        issues = _produce_exit_issues(ctx, active_refs)
+        issues = _materialize_reviewed_refs(ctx, active_refs)
+        issues.extend(_produce_exit_issues(ctx, active_refs))
     for ref in refs:
         if ref in abandoned_refs:
             continue
@@ -6001,16 +6045,40 @@ def _clean_content_plan_outputs(ctx: PipelineContext) -> None:
         save_workflow_state(state)
 
 
-def _article_source_quality_sort_key(row: Mapping[str, Any]) -> tuple[int, int, int, str]:
-    """Quality-first article candidate ordering without platform/source-class bias."""
+def _entity_name_from_source_dir(source_dir: Path) -> str:
+    """从来源单元路径推导目标实体名（entities/.../{name}/1.download/sources/...）。"""
+    parts = source_dir.parts
+    for index, part in enumerate(parts):
+        if part == "1.download" and index > 0:
+            return parts[index - 1]
+    return ""
+
+
+# 实体聚焦度的唯一真相源在 _common.entity_focus（download/选源/规划门/准出口径共用）。
+from _common.entity_focus import (  # noqa: E402
+    entity_focus_aliases as _entity_focus_aliases,
+    entity_focus_score as _entity_focus_score,
+    classify_entity_focus as _classify_entity_focus,
+    coverage_targets_mentioned as _coverage_targets_mentioned,
+    verdict_is_primary_eligible as _verdict_is_primary_eligible,
+    ENTITY_FOCUS_STRONG_FLOOR as _ENTITY_FOCUS_STRONG_FLOOR,
+    VERDICT_STRONG as _VERDICT_STRONG,
+    VERDICT_OFF_ENTITY as _VERDICT_OFF_ENTITY,
+)
+
+
+def _article_source_quality_sort_key(row: Mapping[str, Any]) -> tuple[int, int, int, int, str]:
+    """实体聚焦优先、再质量、再长度的 article 候选排序（无平台/来源类别偏置）。"""
     from _common.content_plan import ARTICLE_MIN_BASE_DRAFT_CHARS
 
+    focus = float(row.get("entityFocusScore") or 0.0)
+    focus_bucket = int(max(0.0, min(focus, 1.0)) * 20)  # 5% 一档，避免微小噪声扰动排序
     source_quality = int(float(row.get("sourceQualityScore") or row.get("qualityScore") or 0) * 1000)
     image_count = len(row.get("rows") or []) if isinstance(row.get("rows"), list) else 0
     text_len = int(row.get("textLen") or 0)
     length_score = min(max(text_len, 0), ARTICLE_MIN_BASE_DRAFT_CHARS)
     source_id = str(row.get("sourceId") or "")
-    return (-source_quality, -length_score, -image_count, source_id)
+    return (-focus_bucket, -source_quality, -length_score, -image_count, source_id)
 
 
 def _content_capacity_gate_for_entity(
@@ -6108,6 +6176,12 @@ def _content_capacity_gate_for_entity(
     article_rejects: dict[str, int] = defaultdict(int)
     article_image_soft_warnings: dict[str, int] = defaultdict(int)
     image_rejects: dict[str, int] = defaultdict(int)
+    # 其它覆盖目标：用于多地点环线判定（底稿突出提及 >=2 个兄弟目标 → 单实体弃稿）。
+    sibling_target_names = tuple(
+        str(target.get("name") or "").strip()
+        for target in ((spec.get("scope") or {}).get("coverageTargets") or [])
+        if str(target.get("name") or "").strip()
+    )
 
     for source_dir in sorted(path for path in sources_dir.iterdir() if path.is_dir()):
         meta_path = source_dir / "meta.json"
@@ -6127,9 +6201,21 @@ def _content_capacity_gate_for_entity(
                 continue
             article_raw_count += 1
             source_ref = _source_ref(source_dir)
-            text_len = len(re.sub(r"\s+", "", load_base_draft_text(ctx.task_id, ctx.batch_id, source_ref)))
+            base_body = load_base_draft_text(ctx.task_id, ctx.batch_id, source_ref)
+            text_len = len(re.sub(r"\s+", "", base_body))
             if text_len < ARTICLE_MIN_BASE_DRAFT_CHARS:
                 article_rejects["text_too_short"] += 1
+                continue
+            entity_name = _entity_name_from_source_dir(source_dir)
+            focus_score, focus_verdict = _classify_entity_focus(
+                base_body,
+                entity_name,
+                title=str(meta.get("title") or ""),
+                sibling_names=sibling_target_names,
+            )
+            if not _verdict_is_primary_eligible(focus_verdict):
+                # 标题/正文未明确指代此实体（多地点环线/跑题）：不得作单实体文章底稿，弃稿。
+                article_rejects["entity_focus_off_topic"] += 1
                 continue
             if not rows:
                 article_image_soft_warnings["no_source_assets"] += 1
@@ -6145,6 +6231,8 @@ def _content_capacity_gate_for_entity(
                         or 0
                     ),
                     "textLen": text_len,
+                    "entityFocusScore": focus_score,
+                    "entityFocusVerdict": focus_verdict,
                     "rows": rows,
                 }
             )
@@ -6266,6 +6354,7 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
     """
     from _common.base_draft import load_base_draft_text
     from _common.content_object import write_brief_object
+    from _common.creator_assignment import creator_assignment_from_profile, creator_assignment_required
     from _common.image_safety import assess_image_publish_prefilter
     from _common.content_plan import (
         ARTICLE_MIN_BASE_DRAFT_CHARS,
@@ -6331,11 +6420,37 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
         if str(target.get("name") or "").strip()
     ]
     task_region = str(((active_spec.get("scope") or {}).get("region") or "")).strip()
-    condition_context = (
-        {"region": {"name": task_region, "label": task_region}}
-        if task_region
-        else {}
-    )
+    require_creator_assignment = creator_assignment_required(active_spec)
+    registry = None
+    if require_creator_assignment:
+        from template.registry import TemplateRegistry
+
+        registry = TemplateRegistry.load()
+
+    def _creator_assignment_for(*, carrier: str, target: str, intent: str = "") -> dict[str, Any]:
+        if not require_creator_assignment:
+            return {}
+        from template.creator import match_creator
+
+        archetype = "landscape_photographer" if carrier == "image" else "travel_blogger"
+        tags = ["Topic/旅行", f"Topic/地理/行政区/中国/{task_region}"] if task_region else ["Topic/旅行"]
+        if carrier == "image":
+            tags.append("Topic/旅行/玩法/摄影旅拍")
+        profile = match_creator(
+            registry,
+            {
+                "carrier": carrier,
+                "vertical": "travel",
+                "creatorPersona": {"archetype": archetype},
+            },
+            carrier=carrier,
+            tag_refs=tags,
+            region=task_region,
+            vertical="travel",
+            seed=f"{ctx.task_id}|{ctx.batch_id}|{target}|{intent}|{carrier}",
+            preferred_archetype=archetype,
+        )
+        return creator_assignment_from_profile(profile)
     used_asset_refs: set[str] = set()
     used_asset_shas: set[str] = set()
     used_collection_ids: set[str] = set()
@@ -6421,9 +6536,24 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                     continue
                 article_raw_count += 1
                 source_ref = _source_ref(source_dir)
-                text_len = len(re.sub(r"\s+", "", load_base_draft_text(ctx.task_id, ctx.batch_id, source_ref)))
+                base_body = load_base_draft_text(ctx.task_id, ctx.batch_id, source_ref)
+                text_len = len(re.sub(r"\s+", "", base_body))
                 if text_len < ARTICLE_MIN_BASE_DRAFT_CHARS:
                     _reject_article("text_too_short", source_id, f"{text_len}<{ARTICLE_MIN_BASE_DRAFT_CHARS}")
+                    continue
+                focus_score, focus_verdict = _classify_entity_focus(
+                    base_body,
+                    target,
+                    title=str(meta.get("title") or ""),
+                    sibling_names=targets,
+                )
+                if not _verdict_is_primary_eligible(focus_verdict):
+                    # 标题/正文未明确指代此实体（多地点环线/跑题）：不得作单实体文章底稿，弃稿。
+                    _reject_article(
+                        "entity_focus_off_topic",
+                        source_id,
+                        f"focus={focus_score:.2f}<{_ENTITY_FOCUS_STRONG_FLOOR:.2f} verdict={focus_verdict}",
+                    )
                     continue
                 if not rows:
                     _soft_warn_article_image("no_source_assets", source_id)
@@ -6442,6 +6572,8 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                             or 0
                         ),
                         "textLen": text_len,
+                        "entityFocusScore": focus_score,
+                        "entityFocusVerdict": focus_verdict,
                         "rows": rows,
                     }
                 )
@@ -6553,6 +6685,62 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
             claimed_shas.update(sha for sha in shas if sha)
             claimed_collections.update(cid for cid in collections if cid)
 
+        protected_article_refs: set[str] = set()
+        protected_article_shas: set[str] = set()
+        protected_article_collections: set[str] = set()
+        for candidate in article_candidates:
+            refs, shas, collections, _asset_refs = _article_asset_claims(candidate)
+            _claim(
+                refs,
+                shas,
+                collections,
+                claimed_refs=protected_article_refs,
+                claimed_shas=protected_article_shas,
+                claimed_collections=protected_article_collections,
+            )
+
+        picked_images: list[dict[str, Any]] = []
+        for candidate in image_candidates:
+            refs, shas, collections = _image_claims(candidate)
+            if _claims_conflict(
+                refs,
+                shas,
+                collections,
+                claimed_refs=protected_article_refs,
+                claimed_shas=protected_article_shas,
+                claimed_collections=protected_article_collections,
+            ) or _claims_conflict(
+                refs,
+                shas,
+                collections,
+                claimed_refs=used_asset_refs,
+                claimed_shas=used_asset_shas,
+                claimed_collections=used_collection_ids,
+            ):
+                _reject_image(
+                    "source_asset_reused",
+                    str(candidate.get("sourceId") or candidate.get("sourceRef") or ""),
+                    str(candidate.get("assetRef") or ""),
+                )
+                continue
+            picked_images.append(candidate)
+            _claim(
+                refs,
+                shas,
+                collections,
+                claimed_refs=used_asset_refs,
+                claimed_shas=used_asset_shas,
+                claimed_collections=used_collection_ids,
+            )
+            if len(picked_images) >= per_target_images:
+                break
+        if len(picked_images) < minimum_per_target_images:
+            for index in range(len(picked_images) + 1, minimum_per_target_images + 1):
+                ref = f"{target}_image" if per_target_images == 1 else f"{target}_image_{index}"
+                abandoned_content[ref] = (
+                    f"source_unavailable: usable image collections "
+                    f"{len(picked_images)} < {minimum_per_target_images}"
+                )
         picked_articles: list[dict[str, Any]] = []
         for candidate in article_candidates:
             source_ref = str(candidate.get("sourceRef") or "").strip()
@@ -6598,41 +6786,6 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                     f"{len(picked_articles)} < {per_target_articles}; raw={article_raw_count}; "
                     f"qualified={len(article_candidates)}; rejects={{ {reject_summary} }}; "
                     f"missing writingIntent={intent}"
-                )
-        picked_images: list[dict[str, Any]] = []
-        for candidate in image_candidates:
-            refs, shas, collections = _image_claims(candidate)
-            if _claims_conflict(
-                refs,
-                shas,
-                collections,
-                claimed_refs=used_asset_refs,
-                claimed_shas=used_asset_shas,
-                claimed_collections=used_collection_ids,
-            ):
-                _reject_image(
-                    "source_asset_reused",
-                    str(candidate.get("sourceId") or candidate.get("sourceRef") or ""),
-                    str(candidate.get("assetRef") or ""),
-                )
-                continue
-            picked_images.append(candidate)
-            _claim(
-                refs,
-                shas,
-                collections,
-                claimed_refs=used_asset_refs,
-                claimed_shas=used_asset_shas,
-                claimed_collections=used_collection_ids,
-            )
-            if len(picked_images) >= per_target_images:
-                break
-        if len(picked_images) < minimum_per_target_images:
-            for index in range(len(picked_images) + 1, minimum_per_target_images + 1):
-                ref = f"{target}_image" if per_target_images == 1 else f"{target}_image_{index}"
-                abandoned_content[ref] = (
-                    f"source_unavailable: usable image collections "
-                    f"{len(picked_images)} < {minimum_per_target_images}"
                 )
         def _normalized_quality_score(candidate: Mapping[str, Any]) -> float:
             try:
@@ -6700,24 +6853,25 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
         }
         for intent, candidate in zip(article_intents, picked_articles):
             ref = f"{target}_{intent}"
-            source_title = str(candidate["title"]).strip()
+            # titleHint 是稳定路由坐标 + 发布标题占位（设计：{实体名}·{角度}）。
+            # 禁止把来源网页/游记的原标题逐字拼进来——那会泄露原作者标题并违背去平台痕迹原则；
+            # 标题角度由 Agent 在 creativePlan 中按底稿与读者承诺兑现。
             title = f"{target}·{intent_titles.get(intent, intent)}"
-            if source_title and not source_title.startswith("article_"):
-                title += f"：{source_title[:40]}"
             entity_ref = f"/entity/{etype}/{target}"
+            creator_assignment = _creator_assignment_for(carrier="article", target=target, intent=intent)
             brief = {
                 "titleHint": title,
                 "carrier": "article",
                 "entityRefs": [entity_ref],
                 "mustIncludeFacts": [
                     f"{target} 来源提及 {intent_titles.get(intent, intent)}",
-                    f"{target} 文字底稿来自 {source_title or candidate['sourceId']}；若使用配图，必须来自已授权且全批独占资产",
+                    f"{target} 文字底稿来自来源单元 {candidate['sourceId']}；若使用配图，必须来自已授权资产（图文同源底稿，跨内容复用同一底稿图片属正常，无需全批独占）",
                 ],
                 "templateId": "travel.entity.guide",
                 "writingIntent": intent,
                 "baseSourceRef": candidate["sourceRef"],
                 "assetRefs": list(candidate.get("assetRefs") or []),
-                "conditionContext": condition_context,
+                **creator_assignment,
             }
             if not brief["assetRefs"]:
                 brief["publishMediaMode"] = "text_only"
@@ -6737,6 +6891,9 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                     "baseSourceRef": candidate["sourceRef"],
                     "assetRefs": list(candidate.get("assetRefs") or []),
                     "sourceUseMode": candidate["sourceUseMode"],
+                    "entityFocusScore": float(candidate.get("entityFocusScore") or 0.0),
+                    "entityFocusVerdict": str(candidate.get("entityFocusVerdict") or _VERDICT_STRONG),
+                    **creator_assignment,
                 }
             )
             if not items[-1]["assetRefs"]:
@@ -6762,6 +6919,7 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                 caption_title = f"{caption_title}·视角{image_caption_seen[caption_key]}"
             title = f"{target}·{caption_title}"
             entity_ref = f"/entity/{etype}/{target}"
+            creator_assignment = _creator_assignment_for(carrier="image", target=target, intent="image")
             brief = {
                 "titleHint": title,
                 "carrier": "image",
@@ -6774,7 +6932,7 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                 "sourceCollectionId": candidate["collectionId"],
                 "assetRefs": [candidate["assetRef"]],
                 "caption": candidate["caption"][:300],
-                "conditionContext": condition_context,
+                **creator_assignment,
             }
             write_brief_object(ctx.task_id, ctx.batch_id, ref, brief, content_type="image")
             items.append(
@@ -6790,6 +6948,7 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                     "rationale": "确定性选择 image research lane 下同一 sourceCollectionId 的授权图片集合",
                     "sourceCollectionId": candidate["collectionId"],
                     "assetRefs": [candidate["assetRef"]],
+                    **creator_assignment,
                 }
             )
     write_json(
@@ -7241,30 +7400,32 @@ def _checkpoint_build_homepage(ctx: PipelineContext) -> StageResult:
     ok, issues = _homepages_done(ctx)
     if ok:
         return StageResult("build_homepage", CHECKPOINT, "done", "实体主页三件套已就绪")
-    materialize_issues: list[str] = []
+    finalize_issues: list[str] = []
     try:
         from build.homepage import materialize_entity_pages
 
-        materialize_issues = materialize_entity_pages(ctx.task_id, ctx.batch_id, _active_spec(ctx))
+        finalize_issues = materialize_entity_pages(ctx.task_id, ctx.batch_id, _active_spec(ctx))
     except Exception as exc:  # noqa: BLE001
-        materialize_issues = [f"deterministic homepage materialize failed: {type(exc).__name__}: {exc}"]
+        finalize_issues = [f"homepage finalize failed: {type(exc).__name__}: {exc}"]
     ok, issues = _homepages_done(ctx)
     if ok:
         return StageResult(
             "build_homepage",
             CHECKPOINT,
             "done",
-            "实体主页三件套已由确定性 builder 物化并通过采纳门",
+            "实体主页三件套已 finalize（Agent 正文 + 资产闭环）并通过采纳门",
         )
-    combined_issues = list(materialize_issues or []) + list(issues)
+    combined_issues = list(finalize_issues or []) + list(issues)
     hint = (
-        f"[CHECKPOINT build_homepage] Agent 按 SOP 为 coverage 实体物化主页三件套：\n"
-        f"  契约: entities/<domain>/<type>/<name>/3.compose/entity_page_input.json\n"
-        f"  产出: page.md(≥800字) + _entity.json(含 conditionProfile) + manifest.json\n"
+        f"[CHECKPOINT build_homepage] Agent 在底稿基础上轻改创作实体主页正文（不脚本拼接）：\n"
+        f"  人读指令: entities/<domain>/<type>/<name>/4.draft/prompt.md\n"
+        f"  结构化契约: entities/<domain>/<type>/<name>/3.compose/entity_page_input.json\n"
+        f"  写回正文: entities/<domain>/<type>/<name>/4.draft/page.md（覆盖占位，去空白≥350字，保留底稿原句最小改）\n"
+        f"  finalize 自动补封面资产/manifest 并把关贴合度+模板指纹，无需手写 asset:// 或 manifest。\n"
         f"  采纳门未过项:\n    - " + "\n    - ".join(issues[:10]) + "\n"
         f"  完成后: qwq-data data workflow run --task {ctx.task_id} --batch {ctx.batch_id} --resume"
     )
-    return StageResult("build_homepage", CHECKPOINT, "waiting", "等待 Agent 写实体主页", hint, issues=combined_issues)
+    return StageResult("build_homepage", CHECKPOINT, "waiting", "等待 Agent 写实体主页正文", hint, issues=combined_issues)
 
 
 def _checkpoint_produce_author(ctx: PipelineContext) -> StageResult:
@@ -7676,6 +7837,30 @@ def _mark_workflow_interrupted(
     save_workflow_state(state)
 
 
+def _managed_checkpoint_interruption_is_resumable(
+    ctx: PipelineContext,
+    state: Mapping[str, Any],
+    *,
+    stage: str,
+) -> bool:
+    """Whether a managed checkpoint already persisted a resumable interruption."""
+
+    if not ctx.managed:
+        return False
+    if str(state.get("status") or "") != "repairing":
+        return False
+    marker = state.get("managedCheckpointInterruption")
+    if isinstance(marker, Mapping) and str(marker.get("stage") or "") == stage:
+        return bool(marker.get("resumable"))
+    last_run = state.get("lastAgentRun")
+    if not isinstance(last_run, Mapping):
+        return False
+    return (
+        str(last_run.get("stage") or "") == stage
+        and str(last_run.get("status") or "") == "interrupted"
+    )
+
+
 @contextmanager
 def _workflow_signal_guard(ctx: PipelineContext):
     """Persist workflow interruption before SIGTERM/SIGINT tears down the process."""
@@ -7861,15 +8046,26 @@ def run_pipeline(ctx: PipelineContext) -> int:
                 result = runner(ctx)
             except KeyboardInterrupt as exc:
                 interrupt_reason = str(exc).strip() or "KeyboardInterrupt"
-                _mark_workflow_interrupted(
+                interrupted_state = load_workflow_state(ctx.task_id, ctx.batch_id)
+                if _managed_checkpoint_interruption_is_resumable(
                     ctx,
+                    interrupted_state,
                     stage=stage_name,
-                    completed=completed,
-                    reason=(
-                        f"{stage_name}: interrupted; workflow stopped before "
-                        f"checkpoint completion; {interrupt_reason}"
-                    ),
-                )
+                ):
+                    interrupted_state["completed"] = sorted(completed)
+                    interrupted_state["interruptReason"] = interrupt_reason
+                    interrupted_state["heartbeatAt"] = store.now_iso()
+                    save_workflow_state(interrupted_state)
+                else:
+                    _mark_workflow_interrupted(
+                        ctx,
+                        stage=stage_name,
+                        completed=completed,
+                        reason=(
+                            f"{stage_name}: interrupted; workflow stopped before "
+                            f"checkpoint completion; {interrupt_reason}"
+                        ),
+                    )
                 raise
             except Exception as exc:  # noqa: BLE001
                 result = StageResult(
@@ -8166,15 +8362,27 @@ def _agent_active_throughput(state: Mapping[str, Any]) -> dict[str, Any]:
     finished = 0
     infra_failures = 0
     planned = 0
+    max_worker_count = 0
     for row in author_runs:
         scheduler = row.get("scheduler") if isinstance(row.get("scheduler"), Mapping) else {}
         try:
             elapsed += float((scheduler or {}).get("elapsedSeconds") or 0)
         except (TypeError, ValueError):
             pass
+        try:
+            worker_count = int((scheduler or {}).get("effectiveWorkerCount") or 0)
+        except (TypeError, ValueError):
+            worker_count = 0
+        max_worker_count = max(max_worker_count, worker_count)
         finished += int(row.get("finishedCount") or 0)
         infra_failures += int(row.get("infrastructureFailures") or 0)
         planned += int(row.get("plannedJobCount") or row.get("jobCount") or 0)
+    aggregate_per_hour = round((finished / elapsed) * 3600, 4) if elapsed > 0 else 0.0
+    # Per-worker unit rate is the aggregate author throughput divided by the
+    # concurrency actually realized during the trial.  It is the only rate that
+    # can be linearly projected onto a committed reliabletask worker fleet.
+    realized_workers = max(1, max_worker_count)
+    per_worker_per_hour = round(aggregate_per_hour / realized_workers, 4) if aggregate_per_hour else 0.0
     return {
         "measurementMode": "agent_run_history",
         "authorRunCount": len(author_runs),
@@ -8182,7 +8390,9 @@ def _agent_active_throughput(state: Mapping[str, Any]) -> dict[str, Any]:
         "plannedAuthorJobs": planned,
         "finishedAuthorJobs": finished,
         "infrastructureFailures": infra_failures,
-        "finishedAuthorJobsPerHour": round((finished / elapsed) * 3600, 4) if elapsed > 0 else 0.0,
+        "finishedAuthorJobsPerHour": aggregate_per_hour,
+        "effectiveWorkerCount": realized_workers,
+        "perWorkerObjectsPerHour": per_worker_per_hour,
     }
 
 
@@ -8239,7 +8449,7 @@ def _write_workflow_execution_metrics(ctx: PipelineContext, state: dict[str, Any
                 supply_task_id=ctx.task_id,
                 batch_id=ctx.batch_id,
                 job_id=f"artifact:{ref}",
-                creator_profile_id=str((ctx.spec.get("creatorProfileId") or "system_editor")),
+                creator_profile_id=str(writing_pack.get("creatorProfileId") or (ctx.spec.get("creatorProfileId") or "system_editor")),
                 content_type=content_type,
                 budget_tokens=max(default_budget, used),
                 used_tokens=used,
@@ -8352,10 +8562,17 @@ def _managed_preflight(task_id: str, batch_id: str, spec: dict, args: argparse.N
     if str(getattr(args, "runtime", "local")) != "local":
         issues.append("--managed production runs require --runtime local")
     elif not getattr(args, "agent_runner", None):
-        conflicts = _managed_workspace_conflicts_for_provider(
-            _managed_local_workspace_conflicts(Path.cwd()),
-            agent_provider,
-        )
+        from _common import ops_governance as og
+
+        lease_issue = og.active_controller_issue(task_id, batch_id)
+        if lease_issue:
+            issues.append(lease_issue)
+            conflicts = []
+        else:
+            conflicts = _managed_workspace_conflicts_for_provider(
+                _managed_local_workspace_conflicts(Path.cwd()),
+                agent_provider,
+            )
         cleanup_report: dict[str, Any] | None = None
         if conflicts and bool(getattr(args, "force_clean_workspace_agent_state", False)):
             cross_task_conflicts = _cross_task_managed_data_cli_conflicts(
@@ -8610,6 +8827,16 @@ _MANAGED_LOCAL_DESTRUCTIVE_MARKERS = (
 )
 
 
+def _managed_process_monitor_command(command: str) -> bool:
+    stripped = command.strip()
+    return (
+        stripped.startswith("rg ")
+        or " rg " in command
+        or "| rg " in command
+        or ("ps " in command and "rg " in command)
+    )
+
+
 def _managed_local_workspace_conflicts(workspace: Path) -> list[dict[str, Any]]:
     """Find live same-workspace data jobs that can corrupt local Cursor runs.
 
@@ -8629,16 +8856,26 @@ def _managed_local_workspace_conflicts(workspace: Path) -> list[dict[str, Any]]:
         if pid <= 0 or pid in ignore_pids:
             continue
         command = str(row.get("command") or "")
+        monitor_command = _managed_process_monitor_command(command)
         kind = ""
         if "cursor-sdk-bridge" in command and workspace_text in command:
             kind = "cursor_sdk_bridge"
         elif (
+            "_managed_agent_worker_main" in command
+            and "from task.run import _managed_agent_worker_main" in command
+        ):
+            kind = "managed_agent_worker"
+        elif (
+            not monitor_command
+            and
             ("quwoquan_data/scripts/cli.py" in command or "scripts/cli.py" in command)
             and any(marker in command for marker in _MANAGED_LOCAL_DATA_CLI_MARKERS)
             and any(marker in command for marker in _MANAGED_LOCAL_DESTRUCTIVE_MARKERS)
         ):
             kind = "destructive_data_cli"
         elif (
+            not monitor_command
+            and
             ("quwoquan_data/scripts/cli.py" in command or "scripts/cli.py" in command)
             and any(marker in command for marker in _MANAGED_LOCAL_DATA_CLI_MARKERS)
         ):
@@ -9579,10 +9816,13 @@ def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
             prompts.append(
                 base
                 + f"\n对象: {entity}\n对象目录: {obj}\n"
-                "读取 3.compose/entity_page_input.json、已下载 source.md/source.clean.md、SOP 和图片资产，"
-                "只为该实体完成 page.md、_entity.json、manifest.json 以及要求的 4.draft/5.review 证据。"
-                "主页必须多来源事实综合、独立表达，不得轻改百科原文；至少引用一张已过权利和安全门的真实图。"
-                "运行该实体适用的 build validate/review，修复到 validator 通过。"
+                "读取 4.draft/prompt.md、3.compose/entity_page_input.json 与已下载 source.md/source.clean.md、SOP，"
+                "在底稿（primaryEvidenceRef）基础上做适度润色+事实校正+PII/平台痕迹清理+人设/体裁适配，"
+                "把正文写回 4.draft/page.md（覆盖占位，去空白≥350字）；licensed_adaptation 与 factual_reference_only "
+                "同等以底稿为骨架轻改、保留底稿信息顺序与关键事实细节、多数语句在底稿原句上做最小改动，不得脱离底稿从零另写、"
+                "也不得整篇零加工照搬，不得机械模板凑字。"
+                "不要手写 page.md/asset:///_entity.json/manifest.json：finalize 会据正文与已授权真实图自动补齐配图与三件套。"
+                "完成后运行 build validate（--resume），修复到 validator 通过。"
             )
         return prompts
     if stage == "content_plan":
@@ -9608,17 +9848,21 @@ def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
             f"\n精确配额: {json.dumps(quotas, ensure_ascii=False)}；requiredAngles={required_angles}。"
             "\n每个 coverageTarget 必须满足 entityArticlesPerTarget 篇文章；"
             "imageWorksPerTarget 是图片作品期望上限和评分饱和值，图片不足不应阻断合格实体，"
-            "但已选图片必须逐资产权利清晰且全批独占。不得沿用旧 2+2 示例。若现有 content_plan_packet 与规则冲突，直接重写。"
+            "但已选图片必须逐资产权利清晰合规（无需全批独占，跨内容复用同一底稿图片属正常）。不得沿用旧 2+2 示例。若现有 content_plan_packet 与规则冲突，直接重写。"
             "\n类型按底稿形态路由："
             "实体主页主底稿来自 Wiki/百科/知识图谱/官网等实体介绍源，政府/文旅/媒体只作 supporting evidence；"
             "文章底稿来自 article_research，UGC、社区、媒体、官方和垂类专业文章同等按质量、事实密度、文字完整度和权利风险筛选；"
-            "源图是加分与可选证据，article 必须写 baseSourceRef 且一稿一用，若使用 assetRefs 则资产必须合规且全批独占，"
+            "源图是加分与可选证据，article 必须写 baseSourceRef 且一稿一用，若使用 assetRefs 则资产必须权利合规（图文同源底稿，图片可跨内容复用，无需全批独占），"
             "无合格源图的优质文字底稿可写 publishMediaMode=text_only；"
             "图片作品底稿是 image_research 的图片集合，carrier=image，只写 sourceCollectionId/assetRefs，"
             "同一作品只能使用同一作者/页面/专辑/授权凭证下 1..20 张图，标题<=80字且可空，配文<=300字且可空。"
             "\n文章只能引用 article_research；图片只能引用 image_research；homepage 来源不得拿来当文章/图片底稿。"
             "同一 baseSourceRef 在整个批次只能被一篇文章使用，严禁输出 baseSourceReusePolicy 或 "
             "multi_intent_source_bundle；如果可用 article base 不足，必须停留在 content_plan 修复，不能复用底稿凑数。"
+            "\n每个 article/image/video 内容对象必须绑定平台 creator assignment，字段至少包含 "
+            "authorId、creatorProfileId、creatorArchetype、creatorProfileVersion、creatorDisclosure、"
+            "experienceClaimMode、authorQualitySignals；creator 必须来自系统 creator registry，"
+            "不得由 author 临时发明，不得把 sourceUnit 图片/网页作者当作平台发布 author。"
             "写 _shared/content_plan_packet.json（schemaVersion=quwoquan_data.content_plan_packet），"
             "注册 content_object，并写每项 3.compose/brief.json。"
             "ref/title 必须由证据归纳；evidenceRefs 必须存在，blocked/reject 来源不可引用。"
@@ -9634,6 +9878,7 @@ def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
             writing_pack_path,
         )
         from _common import content_object
+        from _common.base_draft import base_draft_is_adaptable
         from _common.handoff import build_author_job_packet
         from _common.io import write_json
 
@@ -9670,6 +9915,28 @@ def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
                     "creativePlan 和 selfCritique；完成后不要运行批次发布。"
                 )
                 continue
+            source_use_mode = str(pack.get("sourceUseMode") or "factual_reference_only").strip()
+            if base_draft_is_adaptable(source_use_mode):
+                author_source_contract = (
+                    "\n严格以 prompt/writing_pack 的「底稿」为初稿骨架做轻编辑：保留原叙述顺序、主要自然段和核心句群，"
+                    "只做去语病、去平台痕迹、私人信息脱敏、事实校正与轻量人设适配。"
+                    "不要把底稿逐段同义改写成新文；与主题相关且没有广告/隐私/平台痕迹的句群必须先贴回正文，再做必要小修。"
+                    "成稿应保留至少 60% 的相关底稿原句群/三连字符覆盖；不要为了显得更像编辑稿而摘要化、概括化或大面积换词。"
+                    "底稿里的路线、时段、感受、餐饮、排队、交通和现场动作行，除非明显错误/广告/隐私，否则优先保留原表达。"
+                    "不要用百科、官网或其它支持来源重新写一篇新文章；这些来源只能校正事实或补一句上下文。"
+                    "Review Gate 会检查 baseDraftFidelity 55%~99.5%，低于 55% 会被判定为脱离底稿。"
+                    "如果删除广告/保险/平台活动/无关城市段落，必须把与标题、writingIntent 和景区体验直接相关的底稿段落尽量贴回正文。"
+                    "draft_meta.selfCritique 必须包含 baseDraftFidelityStrategy，说明保留、删除和轻改的依据。"
+                    "去除原平台名/原作者署名/水印（以虚拟创作者身份发布）并保留来源归因。"
+                )
+            else:
+                author_source_contract = (
+                    "\n严格按 prompt/writing_pack 的「事实参考材料」创作：只抽取事实、路线顺序、条件、取舍依据和带单位数字，"
+                    "正文必须用独立表达重新组织。"
+                    "不要逐段同义改写，不要保留来源连续长句、自然段、原小标题或作者表达；"
+                    "可以保留地点名、公开数字、必要短事实短语和已经核验的专有名词。"
+                    "draft_meta.selfCritique 必须包含 sourceUseModeBoundary，说明只取了哪些事实、哪些表达已独立改写。"
+                )
             prompts.append(
                 base
                 + "\n[AGENT_LANE:article]"
@@ -9680,14 +9947,14 @@ def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
                 + f"\n写入: {draft_meta_path(ctx.task_id, ctx.batch_id, ref)}"
                 + "\n必须用文件写入/编辑工具真实覆盖上述两个路径，并在最终回复前重新读取确认文件存在；"
                 "不得只在回复中声称已写入，也不得把正文贴在回复里替代落盘。"
-                + "\n严格依据证据独立创作；普通网页只取事实，不复现原句/原结构；授权来源按许可改编并保留归因。"
-                "若对象 5.review/repair_report.json 存在，必须先逐项修复其中问题。逐条覆盖 prompt/author_job_packet 的 "
+                + author_source_contract
+                + "若对象 5.review/repair_report.json 存在，必须先逐项修复其中问题。逐条覆盖 prompt/author_job_packet 的 "
                 "mustIncludeFacts；article 载体必须有连贯散文段落和至少三个结构层次。"
                 "正文必须显式落下 review 可识别的编辑信号：首段用所选 openingStrategy 的真实钩子开场"
                 "（例如 conclusion_first 用“先说结论/直接说/一句话”，question_hook 用真实问题，scene_immersion 用具体时间/天气/动作），"
                 "正文必须分别出现具体喜欢/打动点，以及不足/遗憾/劝退/不建议/失望/踩雷等负向取舍表达，并至少写 2 处“如果你…建议…”式决策判断。"
                 "禁止把取舍判断写成固定小标题，尤其不要使用“它到底适合谁/这条线适合谁/这趟适合谁/到底适合谁/适合谁”。"
-                "收尾必须从本篇底稿的一个具体细节自然落下，不得使用同批通用总结句、口号式劝行、固定适配人群段或统一结论模板。"
+                "收尾必须从本篇素材的一个具体细节自然落下，不得使用同批通用总结句、口号式劝行、固定适配人群段或统一结论模板。"
                 "除非 prompt 明确证明为允许公开的官方号码，否则正文不得写电话号码。"
                 "只引用 prompt/author_job_packet 中的 assetId 和 sourcePath。draft_meta 必须 generator=agent，记录 model、"
                 "citedSourcePaths、coveredFacts、styleFamily、openingStrategy、creativePlan、selfCritique。"
@@ -9875,7 +10142,7 @@ def _finalize_managed_author_outputs(
         enriched_meta.update(
             {
                 "ref": ref,
-                "generator": meta.get("generator") or "agent",
+                "generator": "agent",
                 "model": meta.get("model") or ctx.model,
                 "agentRunId": outcome.get("runId") or meta.get("agentRunId"),
                 "agentId": outcome.get("agentId") or meta.get("agentId"),
@@ -9900,6 +10167,7 @@ def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
     estimated_waves = (len(prompts) + max(worker_count, 1) - 1) // max(worker_count, 1)
     state = load_workflow_state(ctx.task_id, ctx.batch_id)
     state["status"] = "waiting_agent"
+    state["waitingCheckpoint"] = stage
     state["owner"] = f"managed-local:{stage}"
     state["heartbeatAt"] = store.now_iso()
     state["nextAction"] = f"running {len(prompts)} agent job(s) for {stage}"
@@ -10053,19 +10321,31 @@ def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
     except KeyboardInterrupt as exc:
         interrupted = True
         interrupt_reason = str(exc) or "KeyboardInterrupt"
+        cancelled_queued_count = len(queued)
+        cancelled_active_count = len(futures)
         queued.clear()
         for future in futures:
             future.cancel()
         terminated_subprocesses = _terminate_managed_agent_subprocesses()
         if str(ctx.runtime) == "local":
             _terminate_workspace_cursor_bridges(Path.cwd())
+        outcomes.sort(key=lambda item: int(item.get("jobIndex", 0)))
+        if stage == "produce_author":
+            _finalize_managed_author_outputs(ctx, prompts, outcomes)
+        finished_count = sum(str(out.get("status")) == "finished" for out in outcomes)
+        started_count = sum(bool(out.get("started")) for out in outcomes)
+        infrastructure_failures = sum(not bool(out.get("started")) for out in outcomes)
         state = load_workflow_state(ctx.task_id, ctx.batch_id)
         state.pop("activeAgentScheduler", None)
-        state["status"] = "manual_required"
-        state["failedObjects"] = [
-            f"{stage}: interrupted; cancelled queued managed agent jobs; {interrupt_reason}"
-        ]
-        state["nextAction"] = f"{stage}: interrupted ({interrupt_reason})"
+        resumable_author_interrupt = stage == "produce_author"
+        state["status"] = "repairing" if resumable_author_interrupt else "manual_required"
+        retry_hint = (
+            f"{stage}: interrupted; resume will retry remaining agent job(s); "
+            f"finished={finished_count}, cancelledQueued={cancelled_queued_count}, "
+            f"cancelledActive={cancelled_active_count}; {interrupt_reason}"
+        )
+        state["failedObjects"] = [retry_hint]
+        state["nextAction"] = retry_hint if resumable_author_interrupt else f"{stage}: interrupted ({interrupt_reason})"
         state["heartbeatAt"] = store.now_iso()
         interrupted_at = store.now_iso()
         partial_record = {
@@ -10087,8 +10367,16 @@ def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
                 "interruptedAt": interrupted_at,
                 "elapsedSeconds": round(max(0.0, time.monotonic() - checkpoint_started_mono), 3),
             },
-            "startedCount": sum(bool(out.get("started")) for out in outcomes),
-            "infrastructureFailures": sum(not bool(out.get("started")) for out in outcomes),
+            "refs": [
+                str(out.get("ref"))
+                for out in outcomes
+                if str(out.get("ref") or "").strip()
+            ],
+            "startedCount": started_count,
+            "finishedCount": finished_count,
+            "infrastructureFailures": infrastructure_failures,
+            "cancelledQueuedJobCount": cancelled_queued_count,
+            "cancelledActiveJobCount": cancelled_active_count,
             "terminatedSubprocessPids": terminated_subprocesses,
             "outcomes": outcomes,
             "finishedAt": interrupted_at,
@@ -10098,6 +10386,25 @@ def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
             history.append(partial_record)
             state["agentRunHistory"] = list(_dedupe_agent_runs(history))[-20:]
         state["lastAgentRun"] = partial_record
+        if resumable_author_interrupt:
+            state["managedCheckpointInterruption"] = {
+                "stage": stage,
+                "reason": interrupt_reason,
+                "resumable": True,
+                "finishedCount": finished_count,
+                "plannedJobCount": len(prompts),
+                "cancelledQueuedJobCount": cancelled_queued_count,
+                "cancelledActiveJobCount": cancelled_active_count,
+                "interruptedAt": interrupted_at,
+            }
+            state["controllerYield"] = {
+                "stage": stage,
+                "reason": "managed checkpoint interrupted after partial author progress",
+                "hint": retry_hint,
+                "yieldedAt": state["heartbeatAt"],
+            }
+        else:
+            state.pop("managedCheckpointInterruption", None)
         save_workflow_state(state)
         raise
     finally:
@@ -10156,6 +10463,7 @@ def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
     state = load_workflow_state(ctx.task_id, ctx.batch_id)
     state["owner"] = "managed-local"
     state["heartbeatAt"] = store.now_iso()
+    state.pop("managedCheckpointInterruption", None)
     ref_limit = _managed_checkpoint_ref_limit()
     limited_slice_progress = (
         stage == "produce_author"
@@ -10229,6 +10537,30 @@ def run_managed_pipeline(ctx: PipelineContext) -> int:
             return 10
         retries = state.setdefault("retryCounts", {})
         used = int(retries.get(stage, 0))
+        retry_blocked_author_progress = (
+            stage == "produce_author"
+            and used >= MAX_REACT_REWINDS
+            and isinstance(state.get("lastAgentRun"), Mapping)
+            and str((state.get("lastAgentRun") or {}).get("stage") or "") == stage
+            and int((state.get("lastAgentRun") or {}).get("finishedCount") or 0) > 0
+        )
+        if retry_blocked_author_progress:
+            last_run = state.get("lastAgentRun") or {}
+            failed_refs = _managed_author_failure_refs(
+                list((last_run.get("outcomes") or []) if isinstance(last_run, Mapping) else [])
+            )
+            retries.pop(stage, None)
+            state["retryCounts"] = retries
+            state["status"] = "repairing"
+            state["failedObjects"] = failed_refs or list(_checkpoint_is_done(ctx, stage)[1])
+            state["nextAction"] = (
+                f"retry remaining {stage} refs after partial author progress; "
+                f"finished={int((last_run or {}).get('finishedCount') or 0)}, "
+                f"remaining={len(state['failedObjects'])}"
+            )
+            state["heartbeatAt"] = store.now_iso()
+            save_workflow_state(state)
+            used = 0
         if used >= MAX_REACT_REWINDS:
             _ok, issues = _checkpoint_is_done(ctx, stage)
             state["status"] = "manual_required"
@@ -10254,10 +10586,41 @@ def run_managed_pipeline(ctx: PipelineContext) -> int:
 
         state = load_workflow_state(ctx.task_id, ctx.batch_id)
         last_run = state.get("lastAgentRun") or {}
+        finished_count = int(last_run.get("finishedCount") or 0)
+        if stage == "produce_author" and finished_count > 0:
+            retries = state.setdefault("retryCounts", {})
+            retries.pop(stage, None)
+            state["retryCounts"] = retries
+            infra = state.setdefault("infrastructureRetryCounts", {})
+            infra.pop(stage, None)
+            state["infrastructureRetryCounts"] = infra
+            failed_refs = _managed_author_failure_refs(
+                list((last_run.get("outcomes") or []) if isinstance(last_run, Mapping) else [])
+            )
+            state["status"] = "repairing"
+            state["failedObjects"] = failed_refs or list(_checkpoint_is_done(ctx, stage)[1])
+            state["nextAction"] = (
+                f"retry remaining {stage} refs after partial author progress: "
+                f"finished={finished_count}, remaining={len(state['failedObjects'])}"
+            )
+            state["heartbeatAt"] = store.now_iso()
+            if _managed_yield_after_ref_slice():
+                state["controllerYield"] = {
+                    "stage": stage,
+                    "reason": "managed ref slice partially completed",
+                    "hint": state["nextAction"],
+                    "yieldedAt": state["heartbeatAt"],
+                }
+                save_workflow_state(state)
+                print(f"[task run] controller yield after partial managed slice at checkpoint '{stage}'")
+                return 10
+            state.pop("controllerYield", None)
+            save_workflow_state(state)
+            time.sleep(2)
+            continue
         infrastructure_failures = int(last_run.get("infrastructureFailures") or 0)
         if infrastructure_failures:
             infra = state.setdefault("infrastructureRetryCounts", {})
-            finished_count = int(last_run.get("finishedCount") or 0)
             if stage == "produce_author" and finished_count > 0:
                 # Cursor bridge failures are infrastructure noise, not content
                 # failures.  Large author waves may still make real progress
@@ -10558,8 +10921,21 @@ def handle_run(args: argparse.Namespace) -> None:
     try:
         with _workflow_signal_guard(ctx):
             if managed:
-                with _managed_local_workspace_guard(ctx):
-                    code = run_managed_pipeline(ctx)
+                from _common import ops_governance as og
+
+                with og.controller_lease(task_id, batch_id) as controller:
+                    setattr(ctx, "controller_run_id", controller.get("controllerRunId"))
+                    state = load_workflow_state(task_id, batch_id)
+                    state["controller"] = {
+                        "controllerRunId": controller.get("controllerRunId"),
+                        "role": controller.get("role"),
+                        "pid": controller.get("pid"),
+                        "startedAt": controller.get("startedAt"),
+                    }
+                    state["heartbeatAt"] = store.now_iso()
+                    save_workflow_state(state)
+                    with _managed_local_workspace_guard(ctx):
+                        code = run_managed_pipeline(ctx)
             else:
                 code = run_pipeline(ctx)
     except KeyboardInterrupt:

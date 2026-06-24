@@ -27,9 +27,7 @@ DEFAULT_BASELINE = ROOT / "specs" / "gates" / "ui_app_data_source_mode_baseline.
 
 # Paths relative to lib/ — excluded from ratchet (permanent carve-out).
 EXEMPT_REL = frozenset(
-    {
-        "ui/settings/pages/developer_settings_page.dart",
-    }
+    {}
 )
 
 

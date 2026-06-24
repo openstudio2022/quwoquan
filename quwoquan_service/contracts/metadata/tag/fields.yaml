@@ -29,6 +29,14 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+      - name: displayLabel
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 面向端侧展示的短名，例如 广东省 -> 广东、深圳市 -> 深圳
       - name: labelEn
         type: string
         constraints: [NULLABLE]
@@ -51,6 +59,15 @@ entities:
         api_exposure: read
         ops_exposure: read
         description: 祖先 tagRef 路径（自顶向下）
+      - name: parentTagRef
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        tag_ref: true
+        description: 直接父节点 tagRef，用于 children 查询
       - name: depth
         type: int
         constraints: [NOT_NULL, DEFAULT_0]
@@ -58,6 +75,22 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+      - name: releaseId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 导入该标签节点的数据发布批次
+      - name: lifecycleStatus
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: active | deprecated；children 只返回 active 节点
       - name: createdAt
         type: timestamp
         constraints: [NOT_NULL]
@@ -165,6 +198,19 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+  TagChildView:
+    description: children(parentTagRef) 返回直接子节点视图，用于行政区选择等标签层级浏览
+    fields:
+      - { name: tagRef, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, tag_ref: true }
+      - { name: label, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: displayLabel, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: labelEn, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: parentTagRef, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, tag_ref: true }
+      - { name: depth, type: int, constraints: [NOT_NULL, DEFAULT_0], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: hasChildren, type: bool, constraints: [NOT_NULL, DEFAULT_FALSE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: releaseId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: lifecycleStatus, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
 
   SharedTagView:
     description: shared-tags 结果项（交集锚点）

@@ -3,6 +3,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 import 'package:quwoquan_app/components/content/media_post_card.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -27,23 +29,32 @@ class VideoPostCard extends MediaPostCard {
   @override
   Widget buildMediaContent(BuildContext context, bool isDark) {
     final videoUrl = post.mediaVideoUrl;
-    final thumbnailUrl = post.mediaThumbnailUrl.isNotEmpty
-        ? post.mediaThumbnailUrl
-        : null;
+    final thumbnailUrl = post.mediaVideoCoverUrl;
 
     final dm = post.durationMs;
-    final durationSecs =
-        dm != null && dm > 0 ? (dm / 1000).round() : null;
+    final durationSecs = dm != null && dm > 0 ? (dm / 1000).round() : null;
 
     if (videoUrl.isEmpty) {
       return const SizedBox.shrink(); // 不显示任何内容
     }
 
-    return _buildVideoContent(context, isDark, videoUrl, thumbnailUrl, durationSecs);
+    return _buildVideoContent(
+      context,
+      isDark,
+      videoUrl,
+      thumbnailUrl.isEmpty ? null : thumbnailUrl,
+      durationSecs,
+    );
   }
 
   /// 构建视频内容
-  Widget _buildVideoContent(BuildContext context, bool isDark, String videoUrl, String? thumbnailUrl, int? duration) {
+  Widget _buildVideoContent(
+    BuildContext context,
+    bool isDark,
+    String videoUrl,
+    String? thumbnailUrl,
+    int? duration,
+  ) {
     return GestureDetector(
       onTap: () => onPostTap(post, 0),
       child: LayoutBuilder(
@@ -51,10 +62,10 @@ class VideoPostCard extends MediaPostCard {
           // 获取屏幕高度
           final screenHeight = MediaQuery.of(context).size.height;
           final maxHeight = screenHeight * 2 / 3; // 最大高度不超过屏幕2/3
-          
+
           // 获取视频的长宽比信息（这里模拟，实际应该从视频元数据获取）
           final videoAspectRatio = _getVideoAspectRatio(post);
-          
+
           // 计算视频容器的高度
           double containerHeight;
           if (videoAspectRatio > 1) {
@@ -70,31 +81,32 @@ class VideoPostCard extends MediaPostCard {
               containerHeight = maxHeight;
             }
           }
-          
+
           return Container(
             width: double.infinity,
             height: containerHeight,
-            color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.backgroundSecondary,
+            ),
             child: Stack(
               children: [
                 // 视频缩略图或背景
                 if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
-                  Image.network(
-                    thumbnailUrl,
+                  AppCachedNetworkImage(
+                    imageUrl: thumbnailUrl,
+                    imageUrlCandidates: resolveContentMediaUrlCandidates(
+                      thumbnailUrl,
+                    ),
                     fit: BoxFit.cover,
                     width: double.infinity,
                     height: double.infinity,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return _buildLoadingPlaceholder(context, isDark);
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return _buildVideoPlaceholder(context, isDark);
-                    },
+                    placeholder: _buildLoadingPlaceholder(context, isDark),
+                    errorWidget: _buildVideoPlaceholder(context, isDark),
                   )
                 else
                   _buildVideoPlaceholder(context, isDark),
-                
+
                 // 播放按钮覆盖层
                 Positioned.fill(
                   child: Container(
@@ -106,11 +118,15 @@ class VideoPostCard extends MediaPostCard {
                         width: (AppSpacing.avatarSize * 2).w,
                         height: (AppSpacing.avatarSize * 2).w,
                         decoration: BoxDecoration(
-                          color: AppColors.white.withValues(alpha: 0.9), // 使用语义标签
+                          color: AppColors.white.withValues(
+                            alpha: 0.9,
+                          ), // 使用语义标签
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.black.withValues(alpha: 0.2), // 使用语义标签
+                              color: AppColors.black.withValues(
+                                alpha: 0.2,
+                              ), // 使用语义标签
                               blurRadius: AppSpacing.sm.r, // 使用语义标签
                               offset: const Offset(0, AppSpacing.xs), // 使用语义标签
                             ),
@@ -180,7 +196,6 @@ class VideoPostCard extends MediaPostCard {
     return DesignSemanticConstants.verticalAspectRatio;
   }
 
-
   /// 构建视频占位符
   Widget _buildVideoPlaceholder(BuildContext context, bool isDark) {
     return Container(
@@ -194,14 +209,20 @@ class VideoPostCard extends MediaPostCard {
             Icon(
               Icons.video_library_outlined,
               size: AppSpacing.iconLarge, // 使用语义标签
-              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundTertiary,
+              ),
             ),
             SizedBox(height: AppSpacing.md.h), // 使用语义标签
             Text(
               UITextConstants.loading, // 使用语义字符串
               style: TextStyle(
                 fontSize: AppTypography.base, // 使用语义标签
-                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundSecondary,
+                ),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -231,7 +252,10 @@ class VideoPostCard extends MediaPostCard {
               UITextConstants.loading, // 使用语义字符串
               style: TextStyle(
                 fontSize: AppTypography.sm, // 使用语义标签
-                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundSecondary,
+                ),
               ),
             ),
           ],
@@ -239,5 +263,4 @@ class VideoPostCard extends MediaPostCard {
       ),
     );
   }
-
 }

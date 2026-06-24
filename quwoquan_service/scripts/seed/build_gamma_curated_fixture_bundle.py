@@ -66,6 +66,8 @@ CURATED_CONTENT_POST_IDS = {
     "fixture_post_outdoor_001",
 }
 CURATED_CONTENT_COMMENT_IDS = {"fixture_comment_photo_001"}
+# alpha-dev-lite 专用对象交集夹具 id（intersection_object_evidence 契约测试），不进 gamma。
+CURATED_OBJECT_INTERSECTION_DROP_IDS = {"u_lin", "c_photo", "e_pku"}
 CURATED_MAX_IMAGES_PER_POST = 4
 CURATED_USER_IDS = {
     "fixture_user_current",
@@ -153,6 +155,18 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
     seed_sets = payload.get("seedSets") or {}
 
     if relative_path == CONTENT_SCENARIO:
+        # 对象页交集 seed：alpha-dev-lite 专用短 id 对象（u_lin/c_photo/e_pku，
+        # intersection_object_evidence 契约测试夹具）不进 gamma curated 子集——
+        # gamma 只保留 fixture_* 真实首页对象交集，避免测试夹具污染云侧 seed。
+        intersection_seed = seed_sets.get("intersection_core")
+        if isinstance(intersection_seed, dict):
+            object_intersections = intersection_seed.get("objectIntersections")
+            if isinstance(object_intersections, dict):
+                intersection_seed["objectIntersections"] = {
+                    key: value
+                    for key, value in object_intersections.items()
+                    if key not in CURATED_OBJECT_INTERSECTION_DROP_IDS
+                }
         seed = seed_sets.get("content_discovery_core") or {}
         seed["posts"] = [
             row for row in seed.get("posts", [])

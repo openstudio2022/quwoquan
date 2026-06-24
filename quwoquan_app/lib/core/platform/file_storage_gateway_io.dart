@@ -56,6 +56,24 @@ class IoFileStorageGateway implements FileStorageGateway {
   Future<void> ensureDirectory(String path) async {
     await Directory(path).create(recursive: true);
   }
+
+  @override
+  Future<List<FileSystemEntry>> listDirectory(String path) async {
+    final dir = Directory(path);
+    if (!await dir.exists()) {
+      return const <FileSystemEntry>[];
+    }
+    final entries = <FileSystemEntry>[];
+    await for (final entity in dir.list(followLinks: false)) {
+      entries.add(
+        FileSystemEntry(
+          path: entity.path,
+          isDirectory: entity is Directory,
+        ),
+      );
+    }
+    return entries;
+  }
 }
 
 FileStorageGateway createPlatformFileStorageGateway() =>

@@ -7,6 +7,7 @@ class TagRequestPageIds {
   static const Map<String, String> operationToPageId = <String, String>{
     'InvertedObjects': 'tag.inverted.objects',
     'ListDimensions': 'tag.list.dimensions',
+    'ListTagChildren': 'tag.list.tag.children',
     'RelatedObjects': 'tag.related.objects',
     'RelatedTags': 'tag.related.tags',
     'ResolveTag': 'tag.resolve.tag',
@@ -21,6 +22,7 @@ class TagRequestPageIds {
 
   static const String invertedObjects = 'tag.inverted.objects';
   static const String listDimensions = 'tag.list.dimensions';
+  static const String listTagChildren = 'tag.list.tag.children';
   static const String relatedObjects = 'tag.related.objects';
   static const String relatedTags = 'tag.related.tags';
   static const String resolveTag = 'tag.resolve.tag';

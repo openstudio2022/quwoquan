@@ -15,14 +15,10 @@ creatorPersona:
   mustNotClaim: [最低价承诺, 商业合作]
 editorialIntent: 给预算敏感的学生和年轻旅行者拆解交通、住宿和取舍。
 render: { articleTemplate: journal, fontPreset: clean }
-conditionAxes:
-  region: { applicable: true, slot: 地区交通与成本 }
-  season: { applicable: true, slot: 淡旺季价格窗口 }
 narrativeMode:
   kind: budget_route
   openingFocus: budget_judgement
   transitionPolicy: budget_tradeoff
-  factsHeading: 这些钱能省，那些钱不能省
   closingFocus: budget_choice
 evidenceRequirements:
   fact:
@@ -45,7 +41,6 @@ routeCoverageExpectations:
 structure:
   required: [预算总览, 交通省钱, 住宿取舍, 必花与可省, 风险提醒]
   optional: [公共交通替代, 拼车建议]
-hooks: ["预算有限也能走{name}，但这些钱不能省"]
 mustIncludeFacts: [预算区间, 交通成本, 住宿选择, 必花项]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 最低价]
 wordCount: { min: 900, max: 1800 }
@@ -63,4 +58,3 @@ openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }
 decisionPoints: { required: true, minPoints: 2 }
 tipsEmbeddingPolicy: { mode: inline, forbidStandaloneBlock: true }
-sopExampleRef: sop/article.md

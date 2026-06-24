@@ -7,14 +7,14 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: feed-orchestration-recommendation
 scope:
-  summary: 端侧推荐反馈统一上报通道、七态分级、采样合并、clientEventId 幂等与 feedRequestId/channelId/rankingVersion
-    归因闭环，降低云侧流量冲击。
+  summary: 端侧推荐反馈统一上报通道、七态分级、采样合并、clientEventId 幂等与 feedRequestId/channelId/rankingVersion/reasonVersion/recallPath/contentVertical/supplySource
+    归因闭环，降低云侧流量冲击并支撑推荐分桶评估。
   in_scope:
   - 统一 BehaviorReporter 通道与双通道合并。
   - 可见性阈值、端侧聚合采样、分级上报。
   - clientEventId 幂等与 feedRequestId 归因闭环。
-  - 全事件携带 referralSource/position/channelId/rankingVersion 归因字段（common_fields），served/impressed
-    双轨记账（阶段五）。
+  - 全事件携带 referralSource/position/channelId/rankingVersion/reasonVersion/recallPath/contentVertical/supplySource
+    归因字段（common_fields + P0+ attribution），served/impressed 双轨记账（阶段五）。
   out_of_scope:
   - P0 不实现离线训练样本生成、长期本地持久队列或平台级事件总线。
   - 训练样本端侧声明。
@@ -31,8 +31,9 @@ gwt_acceptance:
     - impressed 与 visible 严格区分：弱可见 visible 不计入曝光分母，特征宽表 typeImpressions 仅计 impressed/dwell，click
       独立计入 typeEngagements。
     done_when:
-    - 统一通道、可见性阈值、采样合并、分级上报、clientEventId 幂等与 feedRequestId/channelId/rankingVersion
+    - 统一通道、可见性阈值、采样合并、分级上报、clientEventId 幂等与 feedRequestId/channelId/rankingVersion/reasonVersion/recallPath/contentVertical/supplySource
       归因在规格中冻结。
+    - click 作为七态独立状态上报，不得被端侧降级为 interaction；CTR 分子仍取 click。
     - 七态 served/visible/impressed/click/dwell/interaction/negative 语义齐全且强类型，端云 DTO↔struct↔YAML
       对齐。
     edge_cases:
@@ -45,10 +46,11 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/cloud/behavior/contract/behavior_repository_contract_test.dart
-      - file: quwoquan_app/test/cloud/content/content_behavior_tracker_test.dart
-      - file: quwoquan_app/test/core/trackers/intersection_attribution_test.dart
-      - file: quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
+      - file: quwoquan_app/test/local_contract/cloud/behavior/contract/behavior_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/content_behavior_tracker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/trackers/intersection_attribution__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_behavior_contract__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/observability_attribution__local_contract_test.go
     status: implemented
     test_evidence:
       primary:

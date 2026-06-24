@@ -7,42 +7,130 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: content-type-framework
 scope:
-  summary: creation mode and surface ia unification 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 创作入口与媒体编辑器 IA 收敛验收；本轮补充图片/视频子流程分流。
+  in_scope:
+  - 创作首层动作语义与媒体编辑器双编辑器心智。
+  - 图片和视频在媒体工具内的发布意图分流。
+  - 图片路径不暴露一键成片、拍视频或录像语义。
+  - 本地草稿页、自动保存、继续编辑与清稿时机统一。
+  out_of_scope:
+  - 重做图片编辑器内部工具。
+  - 新增外部分享 SDK。
+  - 新增 metadata 字段。
 gwt_acceptance:
   GWT1:
-    title: creation mode and surface ia unification GWT
+    title: 媒体编辑器内部图片与视频子流程互斥且语义清晰
     given:
-    - 前置条件明确。
+    - 用户从创作入口进入媒体编辑器。
+    - 当前 entry mode 为图片或视频之一。
     when:
-    - 用户或系统动作发生。
+    - 用户进入相册选择、拍摄、底部操作和发布前状态。
     then:
-    - 可观察结果符合预期。
+    - 图片 entry mode 下，相册选择器和拍摄页只表达图片发布，不展示“一键成片”“拍视频”“录像”等视频语义。
+    - 视频 entry mode 下，可使用视频选择和成片能力，但不复用图片路径的“编辑图片/完成(n)”按钮语义。
+    - 图片与视频互斥，切换类型前必须删空当前媒体，不存在图片和视频混合发布草稿。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - "用户能够明确区分图片作品发布与视频/成片发布，且发布 payload 的 `contentType` 与当前 entry mode 一致。"
+    edge_cases:
+    - 从旧草稿恢复时，根据草稿媒体类型进入正确子流程。
+    - 从相机拍照回填后仍保持图片 entry mode。
+    contract_refs:
+    - specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md
+    - quwoquan_app/lib/components/media/picker/create_media_picker_page.dart
+    - quwoquan_app/lib/components/media/camera/camera_capture_page.dart
+    performance_points:
+    - 入口到媒体工具可交互 warm P95 <= 1.2s。
     tests:
-      planned: []
+      planned:
+      - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: creation_media_mode_split
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.image_mode_hides_video_actions
+        envs: &id001
+        - local
+      supporting:
+      - layer: api_integration
+        suite: photo_publish_upload_bind_roundtrip
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.post_create_update.photo_upload_bind_publish_roundtrip
+        envs:
+        - gamma
+      - layer: user_acceptance
+        suite: photo_creation_journey
+        cases:
+        - user_acceptance.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.user_distinguishes_photo_from_video_publish
+        envs:
+        - gamma_local
+    notes:
+    - 2026-06-22 已记录图片/视频 picker 动作互斥与发布 payload contentType 互斥合同。
+  GWT2:
+    title: 续草稿进入统一本地草稿页并保持保存/清除时机一致
+    given:
+    - 用户已通过创作入口产生至少一条图片、视频或长文草稿，且草稿仍保存在当前设备。
+    - 本地草稿可能完整，也可能只剩标题、配文或部分媒体引用。
+    when:
+    - 用户从底栏 `+` 动作面板点击“续草稿”，进入本地草稿页并选择任一草稿继续编辑。
+    - 用户在创作页内继续编辑、切到子页面、切后台、关闭创作页或发布内容。
+    then:
+    - “续草稿”进入全屏本地草稿页，不再使用底部 sheet 草稿列表。
+    - 本地草稿页按最近更新时间倒序展示草稿卡片，卡片能区分图片、视频、长文；图片/视频缺素材时仍保留原类型并显示占位。
+    - 只有当草稿发生编辑变化时才进入自动保存；dirty 状态下最多每 10 秒自动保存一次。
+    - 切到相册、相机、图片编辑、视频编辑、位置、圈子、发布确认等子页面，或创作页失焦 / App 退后台时，会立即保存一次当前草稿。
+    - 关闭创作页时弹出“是否保存草稿”确认：保存=写回最新状态，放弃=清除当前草稿，取消=继续编辑且不清稿。
+    - 图片、视频、长文发布成功后立即清除对应草稿；发布失败、上传失败、仅切换子页面或切后台都不得误清稿。
+    done_when:
+    - 用户能从同一本地草稿入口恢复三类草稿，并且保存/清除时机与退出确认语义一致，不出现误清稿或旧状态覆盖新状态。
+    edge_cases:
+    - 游客点击“续草稿”先进入登录门；关闭登录返回安全态，登录成功回到本地草稿页或目标草稿。
+    - 用户选择“放弃”后，后台自动保存或失焦保存不得把刚清掉的草稿写回。
+    - 图片/视频文件缺失时，草稿页提供可理解的占位与删除/返回动作，不得直接崩溃或 silently 丢草稿。
+    contract_refs:
+    - quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+    - quwoquan_app/lib/ui/content/entry/models/create_editor_models.dart
+    - quwoquan_app/lib/ui/content/entry/services/create_draft_local_storage.dart
+    - quwoquan_app/lib/core/auth/auth_gate.dart
+    performance_points:
+    - 草稿自动保存成功率 >= 99.9%。
+    - 杀进程恢复到可继续编辑 P95 <= 2s。
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_repository__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/create_draft_autosave_timing__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/content/localDrafts/localDrafts_page__user_acceptance_test.dart
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
-        suite: contract
+        suite: create_local_draft_repository
         cases:
-        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.contract
-        envs: &id001
-        - local
-      - layer: local_contract
-        suite: gwt1_local_contract
-        cases:
-        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.gwt1_local_contract
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.local_draft_repository_preserves_flow_kind_and_order
         envs: *id001
-      supporting: []
-    notes: []
+      - layer: local_contract
+        suite: create_draft_autosave_timing
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.dirty_state_saves_every_10s_and_flushes_on_blur
+        envs: *id001
+      supporting:
+      - layer: user_acceptance
+        suite: local_drafts_page
+        cases:
+        - user_acceptance.page.localDrafts.load_success
+        - user_acceptance.page.localDrafts.empty_permission_error
+        - user_acceptance.page.localDrafts.primary_cta
+        - user_acceptance.page.localDrafts.trace_context
+        - user_acceptance.page.localDrafts.resume_delete_and_publish_clear
+        envs:
+        - gamma_local
+    notes:
+    - 2026-06-22 待以本地草稿页 + 新仓储 + 时机矩阵实现收口。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

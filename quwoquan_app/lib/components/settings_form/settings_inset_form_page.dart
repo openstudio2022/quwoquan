@@ -14,11 +14,13 @@ Widget _settingsInsetPageChrome({
   required String title,
   required VoidCallback onBack,
   required Widget body,
+  Widget? middle,
   Widget? trailing,
   bool resizeToAvoidBottomInset = true,
 }) {
-  final barBg =
-      SettingsSemanticConstants.insetFormNavigationBarBackground(isDark);
+  final barBg = SettingsSemanticConstants.insetFormNavigationBarBackground(
+    isDark,
+  );
   final borderColor =
       SettingsSemanticConstants.insetFormNavigationBarBorderColor(isDark);
   final trail = trailing;
@@ -26,8 +28,9 @@ Widget _settingsInsetPageChrome({
   return AnnotatedRegion<SystemUiOverlayStyle>(
     value: SettingsSemanticConstants.pageChromeOverlayStyle(isDark),
     child: AppScaffold(
-      backgroundColor:
-          SettingsSemanticConstants.insetFormPageBackground(isDark),
+      backgroundColor: SettingsSemanticConstants.insetFormPageBackground(
+        isDark,
+      ),
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       navigationBar: AppNavigationBar(
         automaticallyImplyLeading: false,
@@ -39,12 +42,14 @@ Widget _settingsInsetPageChrome({
           icon: CupertinoIcons.back,
           onPressed: onBack,
         ),
-        middle: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-        ),
+        middle:
+            middle ??
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+            ),
         trailing: trail == null
             ? null
             : IconTheme.merge(
@@ -70,6 +75,7 @@ class SettingsInsetFormPageScaffold extends StatelessWidget {
     required this.title,
     required this.onBack,
     required this.body,
+    this.middle,
     this.trailing,
     this.resizeToAvoidBottomInset = true,
   });
@@ -78,6 +84,7 @@ class SettingsInsetFormPageScaffold extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
   final Widget body;
+  final Widget? middle;
   final Widget? trailing;
   final bool resizeToAvoidBottomInset;
 
@@ -88,6 +95,7 @@ class SettingsInsetFormPageScaffold extends StatelessWidget {
       title: title,
       onBack: onBack,
       body: body,
+      middle: middle,
       trailing: trailing,
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
     );
@@ -104,6 +112,7 @@ class SettingsInsetMemberPickerPageScaffold extends StatelessWidget {
     required this.title,
     required this.onBack,
     required this.body,
+    this.middle,
     this.trailing,
     this.resizeToAvoidBottomInset = true,
   });
@@ -112,6 +121,7 @@ class SettingsInsetMemberPickerPageScaffold extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
   final Widget body;
+  final Widget? middle;
   final Widget? trailing;
   final bool resizeToAvoidBottomInset;
 
@@ -122,6 +132,7 @@ class SettingsInsetMemberPickerPageScaffold extends StatelessWidget {
       title: title,
       onBack: onBack,
       body: body,
+      middle: middle,
       trailing: trailing,
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
     );
@@ -145,10 +156,8 @@ class SettingsInsetGroupedSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final surface =
-        SettingsSemanticConstants.insetFormSectionSurface(isDark);
-    final radius =
-        SettingsSemanticConstants.insetFormSectionCornerRadius;
+    final surface = SettingsSemanticConstants.insetFormSectionSurface(isDark);
+    final radius = SettingsSemanticConstants.insetFormSectionCornerRadius;
     final vertical = density == SettingsInsetSectionDensity.compact
         ? SettingsSemanticConstants.insetFormSectionPaddingVerticalCompact
         : SettingsSemanticConstants.insetFormSectionPaddingVerticalStandard;
@@ -199,6 +208,7 @@ class SettingsInsetGroupedSection extends StatelessWidget {
 enum SettingsInsetSectionDensity {
   /// 与帖子更多功能列表行高接近的紧凑内边距。
   compact,
+
   /// 成员网格等需要略多上下留白。
   standard,
 }
@@ -212,10 +222,7 @@ class SettingsInsetFormSectionDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = SettingsSemanticConstants.insetFormSectionDividerColor(isDark);
-    return Container(
-      height: AppSpacing.hairline,
-      color: c,
-    );
+    return Container(height: AppSpacing.hairline, color: c);
   }
 }
 

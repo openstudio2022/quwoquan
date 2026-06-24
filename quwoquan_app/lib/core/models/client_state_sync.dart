@@ -82,7 +82,7 @@ class ClientStateSyncOutboxEntry {
 
   factory ClientStateSyncOutboxEntry.fromMap(Map<String, dynamic> map) {
     final desiredBoolValue = map['desiredBoolValue'] == true;
-    final legacyNeedsRemoteSync = map['needsRemoteSync'] != false;
+    final priorNeedsRemoteSync = map['needsRemoteSync'] != false;
     return ClientStateSyncOutboxEntry(
       coalesceKey: (map['coalesceKey'] ?? '').toString(),
       objectType: (map['objectType'] ?? '').toString(),
@@ -94,7 +94,7 @@ class ClientStateSyncOutboxEntry {
           DateTime.now().toUtc(),
       confirmedBoolValue:
           _boolOrNull(map['confirmedBoolValue'] ?? map['baselineBoolValue']) ??
-          (legacyNeedsRemoteSync ? !desiredBoolValue : desiredBoolValue),
+          (priorNeedsRemoteSync ? !desiredBoolValue : desiredBoolValue),
       retryCount: _int(map['retryCount'], 0),
     );
   }

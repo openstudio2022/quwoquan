@@ -19,6 +19,8 @@ class ProfileHeader extends StatelessWidget {
     this.verified = false,
     this.showEdit = false,
     this.onEdit,
+    this.showQrCode = false,
+    this.onQrCode,
     this.showUploadAvatarPrompt = false,
     this.showIdentityTagPrompt = false,
   });
@@ -36,6 +38,8 @@ class ProfileHeader extends StatelessWidget {
   /// 我的主页昵称右侧编辑入口。
   final bool showEdit;
   final VoidCallback? onEdit;
+  final bool showQrCode;
+  final VoidCallback? onQrCode;
   final bool showUploadAvatarPrompt;
   final bool showIdentityTagPrompt;
 
@@ -56,7 +60,9 @@ class ProfileHeader extends StatelessWidget {
         ? (avatarUrl ?? '')
         : resolveAvatarImageUrl(avatarUrl);
     final hasAvatar = resolvedAvatarUrl.isNotEmpty;
-    final avatarImage = hasAvatar ? mediaImageProvider(resolvedAvatarUrl) : null;
+    final avatarImage = hasAvatar
+        ? mediaImageProvider(resolvedAvatarUrl)
+        : null;
     final avatar = Container(
       key: const ValueKey<String>('profile-header-avatar'),
       decoration: BoxDecoration(
@@ -157,6 +163,26 @@ class ProfileHeader extends StatelessWidget {
                       CupertinoIcons.checkmark_seal_fill,
                       size: AppSpacing.iconSmall,
                       color: AppColors.iosAccent(context),
+                    ),
+                  ],
+                  if (showQrCode && onQrCode != null) ...[
+                    SizedBox(width: AppSpacing.intraGroupXs),
+                    CupertinoButton(
+                      key: const ValueKey<String>('profile-header-qr-code'),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.intraGroupXs,
+                        vertical: AppSpacing.intraGroupXs,
+                      ),
+                      minimumSize: const Size(
+                        AppSpacing.buttonHeightSm,
+                        AppSpacing.buttonHeightSm,
+                      ),
+                      onPressed: onQrCode,
+                      child: Icon(
+                        CupertinoIcons.qrcode,
+                        size: AppSpacing.iconMedium,
+                        color: fg.withValues(alpha: 0.88),
+                      ),
                     ),
                   ],
                   if (showEdit && onEdit != null) ...[

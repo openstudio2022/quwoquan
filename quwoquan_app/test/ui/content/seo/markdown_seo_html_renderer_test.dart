@@ -2,13 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/ui/content/seo/markdown_seo_html_renderer.dart';
 
 void main() {
   group('MarkdownSeoHtmlRenderer', () {
     const renderer = MarkdownSeoHtmlRenderer();
+    String resolvedMedia(String raw) => resolveContentMediaUrl(raw);
 
     test('renders safe HTML and SEO metadata from QWQ markdown', () {
       final doc = renderer.render(
@@ -71,7 +72,7 @@ asset://cover
       expect(
         doc.html,
         contains(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/seo/post_seo_1/v1/cover.jpg',
+          resolvedMedia('media/image/s/seo/post_seo_1/v1/cover.jpg'),
         ),
       );
       expect(doc.html, contains('data-asset-id="cover"'));
@@ -84,7 +85,7 @@ asset://cover
       expect(
         doc.referencedAssetUrls,
         contains(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/seo/post_seo_1/v1/bridge.jpg',
+          resolvedMedia('media/image/s/seo/post_seo_1/v1/bridge.jpg'),
         ),
       );
     });
@@ -135,7 +136,9 @@ asset://cover
       expect(
         doc.html,
         contains(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+          resolvedMedia(
+            'media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
+          ),
         ),
       );
       expect(doc.html, contains('data-asset-id="cover"'));
@@ -179,7 +182,7 @@ asset://cover
       expect(
         doc.html,
         contains(
-          'src="${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/seo/post_variants/v1/cover-display.webp"',
+          'src="${resolvedMedia("media/image/s/seo/post_variants/v1/cover-display.webp")}"',
         ),
       );
       expect(doc.html, contains('data-asset-id="cover"'));
@@ -187,7 +190,7 @@ asset://cover
       expect(
         doc.referencedAssetUrls,
         contains(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/seo/post_variants/v1/cover-display.webp',
+          resolvedMedia('media/image/s/seo/post_variants/v1/cover-display.webp'),
         ),
       );
     });
@@ -252,7 +255,7 @@ coverImage: asset://cover
       expect(doc.html, contains('data-asset-id="cover"'));
       expect(
         doc.html,
-        contains('src="${CloudRuntimeConfig.mediaImageCdnBaseUrl}/'),
+        contains(resolvedMedia('media/image/s/runtime-preview/cover.jpg')),
       );
       expect(doc.referencedAssetUrls, isNotEmpty);
       expect(doc.jsonLd['identifier'], 'sha256:pilot-daocheng');

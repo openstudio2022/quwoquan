@@ -10,6 +10,7 @@ import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dar
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -194,25 +195,136 @@ void main() {
       await _pumpFrames(tester, count: 10);
 
       expect(find.text(UITextConstants.editProfile), findsOneWidget);
+      final navTitleBottom = tester
+          .getBottomLeft(find.text(UITextConstants.editProfile))
+          .dy;
+      final coverTop = tester
+          .getTopLeft(find.text(UITextConstants.editProfileCoverLabel))
+          .dy;
+      expect(
+        coverTop,
+        greaterThan(navTitleBottom),
+        reason: '资料编辑字段必须完整落在 iOS 导航栏下方，不能被顶栏遮挡',
+      );
+      expect(
+        find.byType(ProfileIosGroupedSection),
+        findsNWidgets(4),
+        reason: '编辑资料主表单必须拆成媒体、基础资料、账号社交、扩展资料四个区块',
+      );
 
+      final orderedLabels = <String>[
+        UITextConstants.editProfileCoverLabel,
+        UITextConstants.editProfileAvatarLabel,
+        UITextConstants.editProfileNicknameLabel,
+        UITextConstants.editProfileGenderLabel,
+        UITextConstants.editProfileBirthdayLabel,
+        UITextConstants.editProfileRegionLabel,
+        UITextConstants.editProfilePhoneLabel,
+        UITextConstants.editProfileQuwoquanIdLabel,
+        UITextConstants.editProfileQrCodeLabel,
+        UITextConstants.editProfileBioLabel,
+        UITextConstants.editProfileTagsLabel,
+      ];
+      var previousTop = -1.0;
+      for (final label in orderedLabels) {
+        final top = tester.getTopLeft(find.text(label).first).dy;
+        expect(top, greaterThan(previousTop), reason: '$label 字段顺序不正确');
+        previousTop = top;
+      }
+
+      final coverPreviewSize = tester.getSize(
+        find.byKey(const ValueKey<String>('edit-profile-cover-preview')),
+      );
+      final avatarPreviewSize = tester.getSize(
+        find.byKey(const ValueKey<String>('edit-profile-avatar-preview')),
+      );
+      expect(
+        coverPreviewSize,
+        avatarPreviewSize,
+        reason: '封面与头像缩略图必须使用同一媒体预览语义尺寸',
+      );
+      expect(
+        coverPreviewSize.width,
+        coverPreviewSize.height,
+        reason: '媒体行缩略图必须保持稳定正方形槽位，避免右侧宽度漂移',
+      );
+      expect(
+        find.text(UITextConstants.editProfileFillCtaValue),
+        findsAtLeastNWidgets(1),
+        reason: '未填写资料应使用可行动的中性补全提示',
+      );
+      expect(
+        find.text(UITextConstants.editProfileSelectCtaValue),
+        findsAtLeastNWidgets(1),
+        reason: '选择型空值应以简短好处提示用户补充',
+      );
+      expect(
+        find.text(UITextConstants.editProfileGenderUnsetValue),
+        findsAtLeastNWidgets(1),
+        reason: '未设置性别时不应默认显示为不展示',
+      );
+      expect(
+        find.byIcon(CupertinoIcons.doc_on_doc),
+        findsNothing,
+        reason: '趣我圈号行只展示系统分配的号，不显示额外图标',
+      );
+
+      await tester.tap(find.text(UITextConstants.editProfileGenderLabel).first);
+      await _pumpFrames(tester, count: 8);
+      expect(find.text(UITextConstants.editProfileGenderMale), findsWidgets);
+      expect(find.text(UITextConstants.editProfileGenderFemale), findsWidgets);
+      expect(find.byIcon(CupertinoIcons.person_2), findsNothing);
+      await tester.tap(
+        find.text(UITextConstants.editProfileGenderUnspecified).last,
+      );
+      await _pumpFrames(tester, count: 8);
+
+      await tester.tap(find.text(UITextConstants.editProfileRegionLabel).first);
+      await _pumpFrames(tester, count: 8);
+      expect(find.text(UITextConstants.editProfileRegionTitle), findsOneWidget);
+      expect(find.text('广东'), findsOneWidget);
+      await tester.tap(find.text('广东'));
+      await _pumpFrames(tester, count: 8);
+      expect(find.text('深圳'), findsOneWidget);
+      expect(
+        find.byIcon(CupertinoIcons.chevron_forward),
+        findsNothing,
+        reason: '广东二级城市是最终选择项，不应再显示继续选择箭头',
+      );
+      await tester.scrollUntilVisible(
+        find.text('云浮'),
+        500,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await _pumpFrames(tester, count: 4);
+      expect(find.text('云浮'), findsOneWidget);
+      await tester.tap(find.text('云浮'));
+      await _pumpFrames(tester, count: 8);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('edit-profile-nickname-row')),
+      );
+      await _pumpFrames(tester, count: 8);
+      expect(find.text(UITextConstants.editProfileNicknameLabel), findsWidgets);
       await tester.enterText(
         find.byType(CupertinoTextField).first,
         newNickname,
       );
       await _pumpFrames(tester);
-      final longBio = List<String>.filled(220, '趣').join();
-      await tester.enterText(find.byType(CupertinoTextField).at(1), longBio);
-      await _pumpFrames(tester);
-      final bioField = tester.widget<CupertinoTextField>(
-        find.byType(CupertinoTextField).at(1),
+      await tester.tap(
+        find.byKey(const ValueKey<String>('edit-profile-text-save')),
       );
-      expect(bioField.controller?.text.length, 200);
-      expect(find.text('200/200'), findsOneWidget);
+      await _pumpFrames(tester, count: 8);
 
-      await tester.tap(find.text('保存'));
+      await tester.tap(find.byKey(const ValueKey<String>('edit-profile-save')));
       await _pumpFrames(tester, count: 20);
 
       expect(find.text(newNickname), findsAtLeastNWidgets(1));
+      expect(
+        mockRepo._updatedProfile['regionTagRef'],
+        'Topic/地理/行政区/中国/广东省/云浮市',
+      );
+      expect(mockRepo._updatedProfile.containsKey('regionCode'), isFalse);
       await tester.pump(const Duration(seconds: 4));
     });
   });

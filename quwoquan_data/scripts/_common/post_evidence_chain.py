@@ -53,11 +53,13 @@ def _normalized_ref(task_id: str, batch_id: str, raw: str, resolved: Path | None
     text = str(raw or "").strip()
     if not text:
         return ""
-    batch_prefix = f"batches/{batch_id}/"
+    # 顶层批次目录名 = {intentLabel}-{taskHash}__{batch_id}（取自真实 batch 根，含任务消歧哈希）。
+    batch_dir = batch_root(task_id, batch_id).name
+    batch_prefix = f"batches/{batch_dir}/"
     if text.startswith(batch_prefix):
         return text[len(batch_prefix) :]
     normalized = text.replace("\\", "/")
-    marker = f"/batches/{batch_id}/"
+    marker = f"/batches/{batch_dir}/"
     if marker in normalized:
         return normalized.split(marker, 1)[1]
     if resolved is not None:

@@ -1,0 +1,68 @@
+version: 2
+node:
+  id: premium-stream-recommendation
+  level: L3_story
+  path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation
+  title: premium stream recommendation
+  parent_domain_service: discovery-content
+  parent_business_capability: feed-orchestration-recommendation
+scope:
+  summary: 精品/沉浸式内容流的非深排 P0 路由、质量准入边界与 primaryText 解释契约。
+  in_scope:
+  - premium/similar/featured/immersive/精品 路由到 FeedSimilar + premium_stream。
+  - premium preset、质量分和交集融合排序。
+  - 精品解释标题与 primaryText-only 呈现。
+  out_of_scope:
+  - 未经 product-ops 全局 featured/质量准入的 PremiumPoolSource。
+  - 同步 scorer 调用。
+  - 深排平台、双塔 ANN、IPS/Thompson。
+gwt_acceptance:
+  GWT1:
+    title: 精品流式体验路由与解释契约
+    given:
+    - 用户进入精品/沉浸式内容流，内容具备质量分和交集理由。
+    when:
+    - content-service 请求推荐引擎，App 展示精品详情解释。
+    then:
+    - 推荐场景为 similar/premium_stream，App 标题展示“与你相关的线索”，主句只显示 primaryText。
+    done_when:
+    - 路由、排序、解释和未启用 PremiumPoolSource 的边界均可测试。
+    edge_cases:
+    - primaryText 缺失时不显示解释占位。
+    - secondaryText 只在详情列表辅助展示，不作为主句兜底。
+    contract_refs:
+    - specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md
+    - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+    performance_points:
+    - negative_feedback_rate <= 0.08
+    - content_coverage_rate >= 0.30
+    tests:
+      planned: []
+      recorded:
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed_service_negative_fallback__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/content/widgets/intersection_reason_chip_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.feed_orchestration_recommendation.premium_stream_recommendation.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting:
+      - layer: user_acceptance
+        suite: gwt1_user_acceptance
+        cases:
+        - user_acceptance.discovery_content.feed_orchestration_recommendation.premium_stream_recommendation.gwt1_user_acceptance
+        envs:
+        - gamma_local
+    notes:
+    - P0 已覆盖 FeedService premium_stream 路由与 App primaryText-only 解释；全局 featured 精品池仍需 product-ops 写入后启用。
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

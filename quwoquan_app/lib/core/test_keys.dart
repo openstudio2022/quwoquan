@@ -127,6 +127,16 @@ class TestKeys {
   static const modalBottomSheetQuickActionsRail = ValueKey<String>(
     'modal_bottom_sheet_quick_actions_rail',
   );
+  static const mediaPickerAlbumDropdownPanel = ValueKey<String>(
+    'media_picker_album_dropdown_panel',
+  );
+  static const desktopPickerChooseFolderButton = ValueKey<String>(
+    'desktop_picker_choose_folder_button',
+  );
+  static const desktopPickerGrid = ValueKey<String>('desktop_picker_grid');
+  static const desktopPickerConfirmButton = ValueKey<String>(
+    'desktop_picker_confirm_button',
+  );
 
   // ── Feed / Grid ──────────────────────────────────────────────────────
   static const photoFeedGrid = ValueKey<String>('photo_feed_grid');
@@ -157,8 +167,8 @@ class TestKeys {
     'comment_at_xiaoqu_button',
   );
   static const commentThreadView = ValueKey<String>('comment_thread_view');
-  static const commentCountsDeltaNotice = ValueKey<String>(
-    'comment_counts_delta_notice',
+  static const commentEntryConsistencyNotice = ValueKey<String>(
+    'comment_entry_consistency_notice',
   );
   static const immersiveCommentSplitSheet = ValueKey<String>(
     'immersive_comment_split_sheet',
@@ -253,6 +263,8 @@ class TestKeys {
   static const createDraftPickerPanel = ValueKey<String>(
     'create_draft_picker_panel',
   );
+  static const localDraftPage = ValueKey<String>('local_draft_page');
+  static const localDraftEmptyState = ValueKey<String>('local_draft_empty_state');
   static const createIdentityMoment = ValueKey<String>(
     'create_identity_moment',
   );

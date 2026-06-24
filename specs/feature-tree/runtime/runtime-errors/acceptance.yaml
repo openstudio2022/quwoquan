@@ -73,7 +73,7 @@ sit_acceptance:
         cases:
         - user_acceptance.runtime.runtime_errors.sit1.uat_journey
         envs:
-        - gamma
+        - gamma_local
     notes: []
 execution:
   local_gate:

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
@@ -72,6 +73,10 @@ void main() {
     return ContentSurfaceViewMapper.fromDto(postBaseDtoFromMap(raw), wire: raw);
   }
 
+  String resolvedAvatar(String raw) => resolveAvatarImageUrl(raw);
+
+  String resolvedMedia(String raw) => resolveContentMediaUrl(raw);
+
   // ─────────────────────────────────────────────────────────────────────────
   // ContentSurfaceViewMapper.fromDto — 公共字段
   // ─────────────────────────────────────────────────────────────────────────
@@ -94,9 +99,7 @@ void main() {
       expect(r.author.displayName, equals('摄影师'));
       expect(
         r.author.avatarUrl,
-        equals(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/avatar/s/test/content/ph1/v1/avatar.jpg',
-        ),
+        equals(resolvedAvatar('media/avatar/s/test/content/ph1/v1/avatar.jpg')),
       );
     });
 
@@ -105,9 +108,7 @@ void main() {
         ..['authorBackgroundUrl'] = 'media/image/s/test/content/ph1/v1/bg.jpg';
       expect(
         surfaceOf(raw).author.backgroundUrl,
-        equals(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/content/ph1/v1/bg.jpg',
-        ),
+        equals(resolvedMedia('media/image/s/test/content/ph1/v1/bg.jpg')),
       );
     });
 
@@ -192,9 +193,7 @@ void main() {
       final r = surfaceOf(minPhoto);
       expect(
         r.cover?.url,
-        equals(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/content/ph1/v1/cover.jpg',
-        ),
+        equals(resolvedMedia('media/image/s/test/content/ph1/v1/cover.jpg')),
       );
       expect(r.cover?.aspectRatio, closeTo(1200 / 900, 0.001));
     });
@@ -203,15 +202,11 @@ void main() {
       final r = surfaceOf(minVideo);
       expect(
         r.video?.url,
-        equals(
-          '${CloudRuntimeConfig.mediaVideoCdnBaseUrl}/media/video/s/test/content/vd1/v1/video.mp4',
-        ),
+        equals(resolvedMedia('media/video/s/test/content/vd1/v1/video.mp4')),
       );
       expect(
         r.video?.thumbnailUrl,
-        equals(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/content/vd1/v1/thumb.jpg',
-        ),
+        equals(resolvedMedia('media/image/s/test/content/vd1/v1/thumb.jpg')),
       );
       expect(r.video?.durationMs, equals(45000));
     });
@@ -296,9 +291,7 @@ void main() {
       expect(r.images, isNotEmpty);
       expect(
         r.images.first,
-        equals(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/content/art1/v1/cover.jpg',
-        ),
+        equals(resolvedMedia('media/image/s/test/content/art1/v1/cover.jpg')),
       );
     });
 
@@ -346,23 +339,17 @@ void main() {
           .toList();
       expect(
         imageNodes.map((node) => node.imageUrl),
-        contains(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/article/manifest/v1/cover.jpg',
-        ),
+        contains(resolvedMedia('media/image/s/test/article/manifest/v1/cover.jpg')),
       );
       expect(
         imageNodes.map((node) => node.imageUrl),
-        contains(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/article/manifest/v1/fig1.jpg',
-        ),
+        contains(resolvedMedia('media/image/s/test/article/manifest/v1/fig1.jpg')),
       );
       expect(
         r.pages.first.fragments
             .where((fragment) => fragment.asset != null)
             .map((fragment) => fragment.asset!.imageUrl),
-        contains(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/article/manifest/v1/cover.jpg',
-        ),
+        contains(resolvedMedia('media/image/s/test/article/manifest/v1/cover.jpg')),
       );
     });
 
@@ -386,7 +373,7 @@ void main() {
       expect(figures, hasLength(1));
       expect(
         figures.single.imageUrl,
-        '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/article/direct/v1/fig1.jpg',
+        resolvedMedia('media/image/s/test/article/direct/v1/fig1.jpg'),
       );
     });
 
@@ -418,7 +405,7 @@ void main() {
           (block) =>
               block.type == 'wrapped_paragraph' &&
               block.imageUrl ==
-                  '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/test/article/document/v1/doc.jpg',
+                  resolvedMedia('media/image/s/test/article/document/v1/doc.jpg'),
         ),
         isTrue,
       );
@@ -495,7 +482,9 @@ void main() {
             .where((node) => node.isFigure)
             .map((node) => node.imageUrl),
         contains(
-          '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
+          resolvedMedia(
+            'media/image/s/archived-image/post/chuanxi_v2_峨眉山周末_自驾/v1/cover.jpg',
+          ),
         ),
       );
       expect(r.pages, isNotEmpty);

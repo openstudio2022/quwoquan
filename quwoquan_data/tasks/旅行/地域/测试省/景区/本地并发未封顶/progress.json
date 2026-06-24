@@ -1,7 +1,7 @@
 {
   "schemaVersion": "quwoquan.task.progress",
   "taskId": "旅行/地域/测试省/景区/本地并发未封顶",
-  "updatedAt": "2026-06-20T18:10:34.647162+00:00",
+  "updatedAt": "2026-06-24T13:09:26.526407+00:00",
   "coverage": {
     "entities": {
       "done": [],
@@ -10,7 +10,6 @@
     "categoriesDone": []
   },
   "anglesByEntity": {},
-  "conditionCells": [],
   "openGaps": [],
   "counts": {
     "entities": 0,

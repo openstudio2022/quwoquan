@@ -1,7 +1,7 @@
 # 推荐系统商用成熟度规划
 
-> 版本：2026-06-16  
-> 范围：纯规划交付，不实现算法、服务或端侧代码。  
+> 版本：2026-06-24
+> 范围：非深排商用成熟度 P0 已进入实现；深排平台仍为 out of scope。
 > 承接：`/Users/zhaoyuxi/.cursor/plans/推荐系统全链路自检与规划_90b5be26.plan.md` 与 `specs/changelog/CR-20260616-041-recommendation-baseline-readiness.yaml`。
 
 ## 1. 结论
@@ -10,6 +10,14 @@ H2 负反馈即时抑制已经完成，`dislike`、`hide_author`、`hide_content
 
 新一轮商用成熟度门槛不把深度排序模型平台轨作为前置。当前阶段应以成熟的非深度推荐工程能力达成商用可用：动态曝光治理、协同召回、排序校准、时间衰减、离线 replay 评估、在线 AB、KPI/SLO 观测、运营干预与冷启动质量分。
 
+2026-06-24 P0 实施基线：不做 MMoE/PLE/ESMM、双塔 ANN、IPS/Thompson，也不把 `/v1/score` 同步塞进 feed 读路径。本轮落地质量分投影消费、物化协同召回读取、旅行垂类路由、精品流式路由、候选级交集融合和 `primaryText` 唯一解释显示。全局 featured 精品池需 product-ops 写入、审计、过期和回滚完成后再启用。
+
+2026-06-24 P0+ 下阶段开发已切入“推荐观测与反馈归因闭环”：feed 下发与行为上报统一携带 `feedRequestId/channelId/vertical/recallPath/rankingVersion/reasonVersion/supplySource/intersectionSourceRef/intersectionClass` 等 bounded attribution 字段，并新增 served/behavior 分桶指标。该切口继续排除深排平台，目标是让运营、测试和算法评估能按首页、旅行、精品、UGC、数据工程、召回路径和交集类别切分效果。
+
+2026-06-25 P1 已进入“商用归因看板”实现：新增 `recommendation-observability-dashboard` L3 Story 与 Grafana dashboard 源文件，将 P0+ 真实 emitter 指标固定为首页/旅行/精品/UGC/数据工程/recall_path/intersectionClass/reasonVersion 的复盘入口。该阶段仍不把 objective_only 指标包装成已观测能力，不包含离线 replay、在线 AB 平台、真实流量训练晋升或 product-ops 精品池入口。
+
+2026-06-25 P1a 已进入“商用归因告警”实现：新增 `recommendation-commercial-alerting` L3 Story 与 Prometheus 告警规则，覆盖 unknown attribution、按供给来源的负反馈异常、按召回路径的 CTR 异常、旅行/精品消费断崖和 UGC/数据工程供给 share 失衡。该阶段仍只消费 P0+ 真实 emitter，不把离线 replay、AB 显著性或深排平台纳入本轮。
+
 ## 2. 已完成任务自检
 
 ### 已完成并作为后续基础
@@ -17,6 +25,7 @@ H2 负反馈即时抑制已经完成，`dislike`、`hide_author`、`hide_content
 - `phase1-negative-feedback`：强负反馈即时抑制已落地，强负反馈只影响未来窗口，不回写用户已看窗口。
 - `phase0-baseline-readiness`：推荐编排与运行时的基线规格已回填，`recommendation_slo.yaml` 已作为推荐 SLO 真相源建立。
 - `runtime-recommendation` 基线：HotPath、SessionCache、Engine、Rule/CascadeScorer、MMR/UCB1 等归属清晰，深度模型平台轨已排除在当前商用门槛之外。
+- `phase-p0plus-attribution-observability`：P0+ 已完成 feed item 推荐归因下发、App 行为回传、content-service raw event 持久化、learning context 与 Prometheus 分桶指标；同时修正 App `trackClick` 误报 `interaction` 的七态契约漂移，点击重新作为独立 `click` 状态进入 CTR 分子。
 
 ### 从长期项提升为商用成熟度必备
 
@@ -24,7 +33,7 @@ H2 负反馈即时抑制已经完成，`dislike`、`hide_author`、`hide_content
 - `phase2-collab-recall`：未上深度学习时，itemCF/swing i2i 与 u2i 是提升相关性的关键非深度召回。
 - `phase2-calibration-time`：排序分校准和统计量时间衰减决定混排阈值、曝光预算和长期内容是否被过往均值钉死。
 - `phase2-offline-eval`：没有 replay、NDCG、Recall@K、覆盖率和多样性指标，就无法证明“越用越准”。
-- `phase2-business-kpi`、`phase2-exposure-obs`：CTR、停留、完成率、负反馈率、重复曝光率、覆盖率、曝光基尼必须可观测。
+- `phase2-business-kpi`、`phase2-exposure-obs`：CTR、停留、完成率、负反馈率、重复曝光率、覆盖率、曝光基尼必须可观测；P0+ 已让 served 与 behavior 可按 bounded attribution 分桶，但覆盖率、收益 lift 与线上看板仍需在下一阶段继续验证。
 - `phase2-ops-intervention`：商用推荐必须支持人工加权、置顶、精品、热点、违规下架实时剔除。
 - `phase1-quality-recscore` 与 `phase1-interest-onboarding`：冷启动必须依赖内容质量分和新用户兴趣先验，不能退化为纯时间流。
 
@@ -95,7 +104,9 @@ flowchart TD
 - `bash agent_ops/scaffold/verify_feature_tree_refactor.sh`
 - `bash agent_ops/scaffold/verify_acceptance_standard.sh`
 
-## 8. 本轮不执行
+## 8. 历史规划段：2026-06-17 本轮不执行
+
+> 本段为 2026-06-17 曝光治理规格冻结时的执行范围记录；2026-06-24 非深排 P0/P0+ 已按新的 `/dev` 计划进入实现，不再沿用“不实现代码”的限制。
 
 - 不实现任何 Go、Dart、Python 算法或服务逻辑。
 - 不改用户端 UI。
@@ -120,3 +131,33 @@ flowchart TD
 ### 9.3 第一切片
 
 状态分离 + 上报抗冲击 + served/跨会话疲劳存储；其 T1/T2/T3 未闭合前，不进入动态曝光预算、生命周期复活、协同召回实现。
+
+## 10. P0/P0+ 到 P1a 完成复盘（2026-06-25）
+
+### 10.1 已完成目标
+
+- 数据供给：UGC 与数据工程内容进入同一推荐输入，`qualityScore/recScore/contentVertical/supplySource` 等字段投影到 feed 契约，读路径只消费投影结果。
+- 召回：物化协同召回 i2i/u2i 接入读路径，召回路径归一为 `collab_i2i/collab_u2i`，保留 `disable_collaborative_recall_sources` 回滚。
+- 场景：首页 discovery、旅行 `travel_photography`、精品 `premium_stream` 路由落地；精品池写入未闭合前不启用全局 featured pool。
+- 排序：候选级质量分、垂类、供给来源、交集 fact/affinity 特征进入融合；fact 权重高于 affinity，affinity 必须带置信标签。
+- 解释：首页 post 删除“推荐理由”标签与旧交集图标，只显示云侧 `IntersectionReason.primaryText`；精品详情标题改为“与你相关的线索”。
+- 观测归因：P0+ 已让 feed 下发、行为上报、raw event、learning context 和 Prometheus 指标带上 bounded attribution，覆盖 `channel/vertical/supply_source/recall_path/ranking_version/reason_version/intersection_class`。
+- 商用看板：P1 已新增 `deploy/monitoring/dashboards/l2_recommendation_commercial_maturity.json`，只消费 `recommendation_feed_served_by_attribution_total` 与 `recommendation_behavior_by_attribution_total`，覆盖 served、CTR、负反馈率、unknown attribution、旅行/精品消费、fact/affinity 交集解释、reason version 和供给来源占比。
+- 商用告警：P1a 已新增 `recommendation-commercial-alerting`，只消费 P0+ 真实 emitter，覆盖 unknown attribution、供给来源负反馈异常、召回路径 CTR 异常、旅行/精品消费断崖、UGC/数据工程供给 share 失衡；同时将 `alerts_source` 对齐到实际 Prometheus group `quwoquan_rec_model`。
+
+### 10.2 剩余风险
+
+- 精品池运营入口仍未完全闭合：product-ops 全局 featured/质量准入、审计、过期、回滚和下架实时剔除完成前，不能宣称精品池召回成熟。
+- 离线评估仍有 objective_only：`collaborative_recall_lift`、`offline_ndcg_at_k`、`offline_recall_at_k`、覆盖率和多样性需要 replay 数据集与报告固化。
+- AB 分析模板待补：P1a 已有商用归因告警，但还没有按最小样本量、SRM、显著性和分桶稳定性输出可执行分析模板。
+- 数据工程质量分覆盖需真实统计：`quality_score_coverage >= 0.95` 必须用真实 eligible content 分母验证，而不是只靠单元测试。
+- 真实流量鲁棒性待压测：行为上报 drop、HotPath buffer、协同物化表缺失、召回源回滚和下架剔除需要 gamma/local-gamma 长链路验证。
+- 看板不等于商用成熟闭环：当前看板用于诊断和运营复盘，不能替代 replay、AB 显著性或 UAT 长旅程；低流量分桶只能辅助排查，不能直接作为策略晋升依据。
+
+### 10.3 下一阶段开发任务
+
+- P1b 离线 replay：建立非深排 replay 数据集，输出 Recall@K、NDCG@K、coverage、diversity、collaborative_recall_lift 与 fact/affinity 解释效果报告。
+- P1c AB 分析模板：冻结最小样本量、SRM、显著性、分桶稳定性和策略晋升/回滚报告字段。
+- P1d 运营精品池：落 product-ops featured pool 写入、质量准入、审计、过期、回滚、下架实时剔除和 UAT。
+- P1e 鲁棒性验证：补协同物化表缺失、质量分缺失、行为上报失败、HotPath 背压、召回源回滚和负反馈收敛的 api_integration/user_acceptance。
+- P2 校准与时间衰减：在不引入深排平台的前提下推进分数校准、时间衰减统计量、分群参数和策略回放。

@@ -1,0 +1,65 @@
+{
+  "outputDir": "artifacts/startup_first_frame/verify-20260624T003654-android-native-startup-activity/20260624T003654",
+  "passed": false,
+  "results": [
+    {
+      "platform": "android",
+      "device": "emulator-5554",
+      "passed": false,
+      "visibleByMs": 3000,
+      "firstVisibleMs": 500,
+      "blueScreenDetected": false,
+      "flutterUiDisplayedMaxMs": 3000,
+      "timings": {
+        "android_startup_activity_handoff": 722,
+        "android_native_welcome_overlay_installed": 180,
+        "android_flutter_engine_configured": 2187,
+        "android_flutter_ui_displayed": 4178
+      },
+      "screenshots": [
+        {
+          "path": "artifacts/startup_first_frame/verify-20260624T003654-android-native-startup-activity/20260624T003654/android-0500ms.png",
+          "offsetMs": 500,
+          "foregroundRatio": 0.35927,
+          "stddevAvg": 45.959,
+          "medianRgb": [
+            225,
+            147,
+            180
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_first_frame/verify-20260624T003654-android-native-startup-activity/20260624T003654/android-2000ms.png",
+          "offsetMs": 2000,
+          "foregroundRatio": 0.22272,
+          "stddevAvg": 22.646,
+          "medianRgb": [
+            15,
+            130,
+            250
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_first_frame/verify-20260624T003654-android-native-startup-activity/20260624T003654/android-3000ms.png",
+          "offsetMs": 3000,
+          "foregroundRatio": 0.25715,
+          "stddevAvg": 31.068,
+          "medianRgb": [
+            15,
+            131,
+            247
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        }
+      ]
+    }
+  ]
+}

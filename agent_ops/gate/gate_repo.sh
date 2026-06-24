@@ -16,7 +16,11 @@ fi
 
 bash agent_ops/scaffold/verify_global_increment_constraints.sh
 python3 agent_ops/gate/verify_agent_context_contract.py
+python3 agent_ops/scaffold/verify_test_specs.py
 python3 agent_ops/scaffold/verify_test_directory_inventory.py
+python3 agent_ops/scaffold/verify_test_no_fake.py
+python3 agent_ops/scaffold/verify_test_coverage_map.py
+python3 agent_ops/gate/verify_local_dependency_purity.py
 
 run_service() {
   echo "[gate] quwoquan_service"
@@ -77,7 +81,7 @@ run_app() {
   command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
   dart tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
   dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
-  (cd quwoquan_app && flutter pub get)
+  (cd quwoquan_app && flutter pub get --offline)
   # 仅分析主 App 业务代码与测试；vendor/plugins/** 属于 path overrides 的第三方依赖，
   # 其 example/test/pigeons 不应作为 quwoquan_app 主工程门禁输入。
   (cd quwoquan_app && flutter analyze lib test --no-fatal-warnings --no-fatal-infos)
@@ -240,8 +244,13 @@ run_app() {
 run_portal() {
   echo "[gate] ops-portal"
   command -v npm >/dev/null 2>&1 || { echo "[gate] FAIL: npm not found in PATH" 1>&2; exit 1; }
+  if [[ ! -f package-lock.json ]]; then
+    echo "[gate] FAIL: package-lock.json missing at repo root — dependency upgrades must be explicit and lockfile-backed" 1>&2
+    exit 1
+  fi
   if [[ ! -d node_modules ]]; then
-    npm install
+    echo "[gate] FAIL: node_modules missing — run an explicit 'npm ci' from repo root when intentionally refreshing Node dependencies" 1>&2
+    exit 1
   fi
   npm run ops-portal:test
   npm run ops-portal:build
@@ -255,9 +264,9 @@ run_data() {
 echo "[gate] repo quality gate (scope=$scope)"
 
 run_patrol_local() {
-  # L4 Patrol（本地调试用，CI 由 FTL workflow 承载）
+  # user_acceptance Patrol（本地调试用，CI 由 FTL workflow 承载）
   if ! command -v patrol >/dev/null 2>&1; then
-    echo "[gate] SKIP: patrol CLI not found — L4 skipped (install: dart pub global activate patrol_cli)"
+    echo "[gate] SKIP: patrol CLI not found — user_acceptance patrol skipped (install: dart pub global activate patrol_cli)"
     return 0
   fi
   echo "[gate] user_acceptance Patrol (local device)"
@@ -293,4 +302,3 @@ case "$scope" in
 esac
 
 echo "[gate] OK"
-

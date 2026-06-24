@@ -55,6 +55,10 @@ python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_avatar_rendering_poli
 python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_media_url_policy.py"
 python3 "${ROOT_DIR}/quwoquan_service/scripts/media/verify_media_variant_registry_metadata.py"
 
+echo "[runtime-media] alpha HTTPS media fixture surface gate"
+QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP=skip bash "${ROOT_DIR}/agent_ops/deploy/alpha/start_alpha_mock_stack.sh" up
+python3 "${ROOT_DIR}/agent_ops/gate/verify_alpha_media_fixture_surface.py"
+
 echo "[runtime-media] flutter test realtime/cache coverage"
 (
   cd "${ROOT_DIR}/quwoquan_app"

@@ -145,6 +145,9 @@ domain_operation_page_ids:
     FollowUser: user.follow
     GetAppearanceSettings: user.settings.appearance.get
     GetMeProfile: user.get.me.profile
+    GetProfileEditSnapshot: user.profile.edit.snapshot
+    GetProfileQrCard: user.profile.qr.card
+    ResolveProfileQrToken: user.profile.qr.resolve
     GetNotificationSettings: user.notification_settings.get
     GetPersonaManagementSummary: user.personas.summary
     GetPrivacySettings: user.settings.privacy.get
@@ -170,6 +173,8 @@ domain_operation_page_ids:
     UpdatePersona: user.personas.update
     UpdatePrivacySettings: user.settings.privacy.patch
     UpdateUserProfile: user.profile.edit
+    BindPhoneCredential: user.credential.phone.bind
+    BindCarrierPhoneCredential: user.credential.carrier_phone.bind
 
 standalone_page_ids:
   globalSearchLanding: global.search.landing
@@ -182,6 +187,7 @@ standalone_page_ids:
   homepageClaim: entity.homepage.claim.page
   homepageMaintenance: entity.homepage.maintenance.page
   homepageStatusReport: entity.homepage.status_report.page
+  profileCareerInterests: user.profile.career_interests
   createLocationNearby: create.location.nearby
   createLocationSearch: create.location.search
   mediaUploadInit: media.upload.init

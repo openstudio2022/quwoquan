@@ -194,7 +194,12 @@ def _mediawiki_file_titles(url: str, *, limit: int = 8) -> tuple[str, list[str]]
     return host, out
 
 
-def _wikipedia_api_image_assets(url: str, *, limit: int = 3) -> list[dict[str, Any]]:
+# 维基/Commons 图片候选上限：下载所有与底稿相符的真实图（图标/SVG 已按扩展名/安全门排除），
+# 不是只取 1-3 张。可经 QWQ_WIKI_IMAGE_CANDIDATE_LIMIT 调整。
+WIKI_IMAGE_CANDIDATE_LIMIT = max(1, int(os.environ.get("QWQ_WIKI_IMAGE_CANDIDATE_LIMIT", "12")))
+
+
+def _wikipedia_api_image_assets(url: str, *, limit: int = WIKI_IMAGE_CANDIDATE_LIMIT) -> list[dict[str, Any]]:
     host, titles = _mediawiki_file_titles(url, limit=max(limit * 2, limit))
     if not host or not titles:
         return []
@@ -737,14 +742,23 @@ def _parse_retry_after(raw: str | None, *, attempt: int) -> float:
     return float(min(2 ** (attempt + 1), 30))
 
 
-def _curl_get_bytes(url: str, *, timeout: int = DOWNLOAD_BYTES_TIMEOUT_SECONDS) -> tuple[int, bytes, str]:
+def _curl_get_bytes(
+    url: str,
+    *,
+    timeout: int = DOWNLOAD_BYTES_TIMEOUT_SECONDS,
+    max_bytes: int = 0,
+) -> tuple[int, bytes, str]:
     """curl 回退：本机 http.client 对 Wikimedia CDN 偶发 SSL EOF 时仍可下图。"""
+    size_guard: list[str] = []
+    if int(max_bytes or 0) > 0:
+        size_guard = ["--max-filesize", str(int(max_bytes))]
     with tempfile.NamedTemporaryFile() as body_file:
         proc = subprocess.run(
             [
                 "curl", "-sS", "-L", "-A", _USER_AGENT,
                 "--retry", str(DOWNLOAD_CURL_RETRIES), "--retry-delay", "1", "--retry-all-errors",
                 "--max-time", str(timeout),
+                *size_guard,
                 "-o", body_file.name,
                 "-w", "%{http_code}",
                 url,
@@ -769,6 +783,7 @@ def _http_get_bytes(
     timeout: int = DOWNLOAD_BYTES_TIMEOUT_SECONDS,
     max_redirects: int = 4,
     max_retries: int = 4,
+    max_bytes: int = 0,
 ) -> tuple[int, bytes, str]:
     """GET 返回 (status, body, content_type)。
 
@@ -776,7 +791,7 @@ def _http_get_bytes(
     退避重试（公共源批量抓取常见），避免单次限流即放弃下载。
     """
     if os.environ.get("QWQ_DOWNLOAD_USE_HTTP_CLIENT", "0") != "1":
-        return _curl_get_bytes(url, timeout=timeout)
+        return _curl_get_bytes(url, timeout=timeout, max_bytes=max_bytes)
 
     current = url
     status, body, content_type = 0, b"", ""
@@ -807,7 +822,21 @@ def _http_get_bytes(
                 time.sleep(delay)
                 attempt += 1
                 continue
-            body = resp.read()
+            content_length = resp.getheader("Content-Length")
+            if int(max_bytes or 0) > 0 and content_length:
+                try:
+                    if int(content_length) > int(max_bytes):
+                        conn.close()
+                        return status, b"", resp.getheader("Content-Type", "") or ""
+                except ValueError:
+                    pass
+            if int(max_bytes or 0) > 0:
+                body = resp.read(int(max_bytes) + 1)
+                if len(body) > int(max_bytes):
+                    conn.close()
+                    return status, b"", resp.getheader("Content-Type", "") or ""
+            else:
+                body = resp.read()
             content_type = resp.getheader("Content-Type", "") or ""
             conn.close()
             break
@@ -815,10 +844,10 @@ def _http_get_bytes(
             return status, body, content_type
     except Exception:
         pass
-    return _curl_get_bytes(url, timeout=timeout)
+    return _curl_get_bytes(url, timeout=timeout, max_bytes=max_bytes)
 
 
-def _fetch_image_payload_once(url: str, *, min_bytes: int = 3000) -> dict | None:
+def _fetch_image_payload_once(url: str, *, min_bytes: int = 3000, max_bytes: int = 0) -> dict | None:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme == "file":
         try:
@@ -839,10 +868,12 @@ def _fetch_image_payload_once(url: str, *, min_bytes: int = 3000) -> dict | None
             return None
     else:
         try:
-            status, body, content_type = _http_get_bytes(url)
+            status, body, content_type = _http_get_bytes(url, max_bytes=max_bytes)
         except Exception:
             return None
     if status != 200 or len(body) < min_bytes:
+        return None
+    if int(max_bytes or 0) > 0 and len(body) > int(max_bytes):
         return None
     ext = sniff_image_ext(body, content_type)
     if ext is None:
@@ -856,14 +887,14 @@ def _fetch_image_payload_once(url: str, *, min_bytes: int = 3000) -> dict | None
     }
 
 
-def fetch_image_payload(url: str, *, min_bytes: int = 3000) -> dict | None:
+def fetch_image_payload(url: str, *, min_bytes: int = 3000, max_bytes: int = 0) -> dict | None:
     """下载单张图片但不落盘，返回 {url, ext, bytes, contentType, sha256}。
 
     供来源单元写入器（write_source_unit）把图片直接落进来源 assets/，
     避免对象级散落 images/。非 200 / 过小 / 非图片 / 网络异常一律返回 None。
     """
     for candidate in candidate_image_urls(url):
-        payload = _fetch_image_payload_once(candidate, min_bytes=min_bytes)
+        payload = _fetch_image_payload_once(candidate, min_bytes=min_bytes, max_bytes=max_bytes)
         if payload is not None:
             payload["requestedUrl"] = url
             payload["normalizedFromUrl"] = url if candidate != url else ""
@@ -871,14 +902,21 @@ def fetch_image_payload(url: str, *, min_bytes: int = 3000) -> dict | None:
     return None
 
 
-def fetch_image(url: str, images_dir: Path, *, index: int, min_bytes: int = 3000) -> dict | None:
+def fetch_image(
+    url: str,
+    images_dir: Path,
+    *,
+    index: int,
+    min_bytes: int = 3000,
+    max_bytes: int = 0,
+) -> dict | None:
     """下载单张图片到 images_dir/img_<index>.<ext>。
 
     仅落真实图片二进制（按魔数判定，拒 HTML/错误页）；非 200 / 过小 / 非图片 / 网络异常
     一律返回 None（不抛），由调用方决定是否记账或重试。
     """
     images_dir.mkdir(parents=True, exist_ok=True)
-    payload = fetch_image_payload(url, min_bytes=min_bytes)
+    payload = fetch_image_payload(url, min_bytes=min_bytes, max_bytes=max_bytes)
     if payload is None:
         return None
     body = payload["bytes"]

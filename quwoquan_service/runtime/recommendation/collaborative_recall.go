@@ -1,10 +1,13 @@
 package recommendation
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 const (
-	RecallPathCollaborativeI2I = "collaborative_i2i"
-	RecallPathCollaborativeU2I = "collaborative_u2i"
+	RecallPathCollaborativeI2I = "collab_i2i"
+	RecallPathCollaborativeU2I = "collab_u2i"
 )
 
 // CollaborativeCandidateStore reads already-materialized itemCF/Swing/u2i
@@ -76,6 +79,7 @@ func (s *CollaborativeRecallSource) Recall(ctx context.Context, req RecallReques
 	if i2iLimit > 0 {
 		i2i, err := s.store.GetI2ICandidates(ctx, collaborativeSeedIDs(req), i2iLimit*2)
 		if err == nil {
+			i2i = filterCollaborativeVertical(i2i, req.Vertical)
 			appendCollaborative(&out, seen, i2i, RecallPathCollaborativeI2I, quota, i2iLimit)
 		}
 	}
@@ -83,6 +87,7 @@ func (s *CollaborativeRecallSource) Recall(ctx context.Context, req RecallReques
 		u2iLimit := minPositive(s.maxU2ICandidates, quota-len(out))
 		u2i, err := s.store.GetU2ICandidates(ctx, req.UserID, u2iLimit*2)
 		if err == nil {
+			u2i = filterCollaborativeVertical(u2i, req.Vertical)
 			appendCollaborative(&out, seen, u2i, RecallPathCollaborativeU2I, quota, u2iLimit)
 		}
 	}
@@ -93,8 +98,13 @@ func (s *CollaborativeRecallSource) Recall(ctx context.Context, req RecallReques
 }
 
 func collaborativeSeedIDs(req RecallRequest) []string {
-	seeds := make([]string, 0, 3)
-	for _, raw := range []string{req.FeedRequestID, req.HomepageID, req.TopicID} {
+	seeds := make([]string, 0, len(req.SeedContentIDs)+2)
+	for _, raw := range req.SeedContentIDs {
+		if raw != "" {
+			seeds = append(seeds, raw)
+		}
+	}
+	for _, raw := range []string{req.HomepageID, req.TopicID} {
 		if raw != "" {
 			seeds = append(seeds, raw)
 		}
@@ -118,6 +128,31 @@ func appendCollaborative(out *[]ContentCandidate, seen map[string]struct{}, item
 		seen[c.ContentID] = struct{}{}
 		*out = append(*out, c)
 		added++
+	}
+}
+
+func filterCollaborativeVertical(items []ContentCandidate, vertical string) []ContentCandidate {
+	vertical = normalizeRecallVertical(vertical)
+	if vertical == "" || len(items) == 0 {
+		return items
+	}
+	out := items[:0]
+	for _, item := range items {
+		if normalizeRecallVertical(item.ContentVertical) == vertical {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func normalizeRecallVertical(raw string) string {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "", "all", "home", "discovery":
+		return ""
+	case "travel", "travel_photography", "旅行", "旅游":
+		return "travel_photography"
+	default:
+		return strings.TrimSpace(strings.ToLower(raw))
 	}
 }
 

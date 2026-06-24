@@ -39,7 +39,8 @@ void main() {
         find.byType(WelcomeFlowerMark),
       );
       expect(flower.petalProgresses, hasLength(8));
-      expect(flower.petalProgresses.every((value) => value > 0.4), isTrue);
+      expect(flower.petalProgresses.every((value) => value > 0.2), isTrue);
+      expect(flower.petalProgresses.every((value) => value < 0.4), isTrue);
 
       await settle(tester);
     });
@@ -190,6 +191,36 @@ void main() {
       expect(find.text('恢复账号状态'), findsNothing);
       expect(find.text('连接云端并同步配置'), findsNothing);
       expect(find.text('准备首页内容'), findsNothing);
+    });
+
+    testWidgets('重放态启动提示在花瓣动效期间保持单行', (tester) async {
+      var finishedCount = 0;
+      var sequenceCompletedCount = 0;
+      await tester.pumpWidget(
+        CupertinoApp(
+          home: WelcomeScreen(
+            onFinish: () => finishedCount++,
+            onSequenceComplete: () => sequenceCompletedCount++,
+            startupLoading: const WelcomeStartupLoadingState(
+              title: '',
+              subtitle: '',
+              hint: UITextConstants.startupStillStartingInline,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      final hint = tester.widget<Text>(
+        find.text(UITextConstants.startupStillStartingInline),
+      );
+      expect(hint.maxLines, 1);
+      expect(hint.overflow, TextOverflow.ellipsis);
+      expect(finishedCount, 0);
+      expect(sequenceCompletedCount, 0);
+
+      await settle(tester);
     });
 
     testWidgets('欢迎页不再展示登录或先不登录动作', (tester) async {

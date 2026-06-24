@@ -8,7 +8,16 @@ import UIKit
   private let videoEditingPlugin = VideoEditingPlugin()
   private let personalAssistantNativeApiPlugin = PersonalAssistantNativeApiPlugin()
 
+  override func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+    NSLog("QWQStartup ios_did_finish_launching")
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    NSLog("QWQStartup ios_implicit_flutter_engine_initialized")
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     registerMethodChannels(binaryMessenger: engineBridge.applicationRegistrar.messenger())
   }

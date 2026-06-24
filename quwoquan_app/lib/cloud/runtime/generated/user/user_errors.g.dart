@@ -57,6 +57,12 @@ enum UserErrorCode {
   retiredSubAccountGuard('USER.SUB_ACCOUNT.retired_guard', '该分身已退役，当前操作不可继续', 400),
   deleteEmptySubAccountOnly('USER.SUB_ACCOUNT.delete_empty_only', '空白分身请直接删除，无需退役', 400),
   subAccountHandleTaken('USER.SUB_ACCOUNT.handle_taken', '该分身号已被占用，请换一个', 409),
+  subAccountHandleReadonly('USER.SUB_ACCOUNT.handle_readonly', '趣我圈号由系统分配，暂不支持手动修改', 400),
+  profileInvalidRegion('USER.PROFILE.invalid_region', '请选择有效的省市地区', 400),
+  profileInvalidTagRef('USER.PROFILE.invalid_tag_ref', '所选标签不可用，请重新选择', 400),
+  profileInvalidMediaAsset('USER.PROFILE.invalid_media_asset', '图片上传未完成，请重新选择并保存', 400),
+  profileQrTokenInvalid('USER.PROFILE.qr_token_invalid', '二维码已失效，请让对方重新分享', 404),
+  profileQrTokenExpired('USER.PROFILE.qr_token_expired', '二维码已过期，请让对方重新分享', 410),
 ;
 
   final String code;

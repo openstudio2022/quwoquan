@@ -31,6 +31,7 @@ func (s *MongoCandidateSource) Recall(ctx context.Context, req rtrec.RecallReque
 	if len(req.Tags) > 0 {
 		filter["tagRefs"] = bson.M{"$in": req.Tags}
 	}
+	applyVerticalFilter(filter, req.Vertical)
 
 	opts := options.Find().
 		SetSort(bson.D{{Key: "recScore", Value: -1}, {Key: "publishedAt", Value: -1}}).
@@ -40,49 +41,60 @@ func (s *MongoCandidateSource) Recall(ctx context.Context, req rtrec.RecallReque
 		filter["_id"] = bson.M{"$lt": req.Cursor}
 	}
 
-	cursor, err := s.coll.Find(ctx, filter, opts)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var results []discoveryFeedDoc
-	if err := cursor.All(ctx, &results); err != nil {
-		return nil, err
-	}
-
-	out := make([]rtrec.ContentCandidate, 0, len(results))
-	for _, doc := range results {
-		out = append(out, rtrec.ContentCandidate{
-			ContentID:    doc.PostID,
-			ContentType:  doc.ContentType,
-			AuthorID:     doc.AuthorID,
-			Title:        doc.Title,
-			Tags:         doc.Tags,
-			EntityRefs:   doc.EntityRefs,
-			PublishedAt:  doc.PublishedAt,
-			ViewCount:    doc.ViewCount,
-			LikeCount:    doc.LikeCount,
-			CommentCount: doc.CommentCount,
-			ShareCount:   doc.ShareCount,
-			RecallPath:   "mongo_discovery",
-		})
-	}
-	return out, nil
+	return queryDiscoveryFeed(ctx, s.coll, filter, opts, "mongo_discovery")
 }
 
 type discoveryFeedDoc struct {
-	PostID        string    `bson:"postId"`
-	ContentType   string    `bson:"contentType"`
-	AuthorID      string    `bson:"authorId"`
-	Title         string    `bson:"title"`
-	Tags          []string  `bson:"tagRefs"`
-	EntityRefs    []string  `bson:"entityRefs"`
-	CoverURL      string    `bson:"coverUrl"`
-	LikeCount     int64     `bson:"likeCount"`
-	CommentCount  int64     `bson:"commentCount"`
-	ShareCount    int64     `bson:"shareCount"`
-	ViewCount     int64     `bson:"viewCount"`
-	PublishedAt   time.Time `bson:"publishedAt"`
-	RecScore      float64   `bson:"recScore"`
+	PostID                      string    `bson:"postId"`
+	ContentType                 string    `bson:"contentType"`
+	AuthorID                    string    `bson:"authorId"`
+	Title                       string    `bson:"title"`
+	Tags                        []string  `bson:"tagRefs"`
+	EntityRefs                  []string  `bson:"entityRefs"`
+	CoverURL                    string    `bson:"coverUrl"`
+	LikeCount                   int64     `bson:"likeCount"`
+	CommentCount                int64     `bson:"commentCount"`
+	ShareCount                  int64     `bson:"shareCount"`
+	ViewCount                   int64     `bson:"viewCount"`
+	PublishedAt                 time.Time `bson:"publishedAt"`
+	RecScore                    float64   `bson:"recScore"`
+	QualityScore                float64   `bson:"qualityScore"`
+	ContentVertical             string    `bson:"contentVertical"`
+	SupplySource                string    `bson:"supplySource"`
+	IntersectionFactStrength    float64   `bson:"intersectionFactStrength"`
+	IntersectionFreshness       float64   `bson:"intersectionFreshness"`
+	AffinityIntersectionScore   float64   `bson:"affinityIntersectionScore"`
+	IntersectionSourceRefTop    string    `bson:"intersectionSourceRefTop"`
+	IntersectionConfidenceLabel string    `bson:"intersectionConfidenceLabel"`
+	IntersectionClass           string    `bson:"intersectionClass"`
+}
+
+func candidateFromDiscoveryDoc(doc discoveryFeedDoc, recallPath string) rtrec.ContentCandidate {
+	qualityScore := doc.QualityScore
+	if qualityScore <= 0 {
+		qualityScore = doc.RecScore
+	}
+	return rtrec.ContentCandidate{
+		ContentID:                   doc.PostID,
+		ContentType:                 doc.ContentType,
+		AuthorID:                    doc.AuthorID,
+		Title:                       doc.Title,
+		Tags:                        doc.Tags,
+		EntityRefs:                  doc.EntityRefs,
+		PublishedAt:                 doc.PublishedAt,
+		ViewCount:                   doc.ViewCount,
+		LikeCount:                   doc.LikeCount,
+		CommentCount:                doc.CommentCount,
+		ShareCount:                  doc.ShareCount,
+		RecallPath:                  recallPath,
+		QualityScore:                qualityScore,
+		ContentVertical:             doc.ContentVertical,
+		SupplySource:                doc.SupplySource,
+		IntersectionFactStrength:    doc.IntersectionFactStrength,
+		IntersectionFreshness:       doc.IntersectionFreshness,
+		AffinityIntersectionScore:   doc.AffinityIntersectionScore,
+		IntersectionSourceRefTop:    doc.IntersectionSourceRefTop,
+		IntersectionConfidenceLabel: doc.IntersectionConfidenceLabel,
+		IntersectionClass:           doc.IntersectionClass,
+	}
 }

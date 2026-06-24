@@ -24,10 +24,13 @@ import 'package:quwoquan_app/core/providers/app_providers.dart'
         appResourceCacheProfileProvider,
         cacheTelemetrySinkProvider,
         appLogUploaderProvider,
+        mediaDownloadCacheProvider,
+        postObjectCacheProvider,
         realtimeConnectionManagerProvider;
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
@@ -134,12 +137,25 @@ class QuWoQuanAppRoot extends ConsumerStatefulWidget {
 
 class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     with WidgetsBindingObserver {
+  static const int _maxStartupWelcomeReplayCount = 2;
+  static const Duration _androidNativeWelcomeSequenceComplete = Duration(
+    milliseconds: 1500,
+  );
+
   bool _routerEnabled = false;
+  bool _startupShellReady = false;
+  Duration? _startupNativeSequenceElapsed;
+  int _startupWelcomeReplayIndex = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (ref.read(platformTargetProvider) == AppPlatform.android) {
+      unawaited(_loadStartupNativeSequenceElapsed());
+    } else {
+      _startupNativeSequenceElapsed = Duration.zero;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppStartupRuntime.instance.markFirstFramePainted();
@@ -185,13 +201,27 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   void didHaveMemoryPressure() {
     super.didHaveMemoryPressure();
     AppImageCacheController.trimForMemoryPressure();
-    ref.read(cacheTelemetrySinkProvider).record(
-      'resource.bytes_cleared',
-      <String, Object?>{
-        'reason': 'memory_pressure',
-        'profile': AppResourceCacheProfile.compact.name,
-      },
-    );
+    final mediaDownloadCache = ref.read(mediaDownloadCacheProvider);
+    mediaDownloadCache.cancelQueuedPrefetches();
+    final clearedPostDetails = ref
+        .read(postObjectCacheProvider)
+        .clearRecentDetails();
+    ref
+        .read(feedPerformanceObservabilityProvider)
+        .recordMediaDownloadQueue(
+          profile: AppResourceCacheProfile.compact.name,
+          activeDownloads: mediaDownloadCache.activeDownloadCount,
+          queuedDownloads: mediaDownloadCache.queuedDownloadCount,
+          inflightDownloads: mediaDownloadCache.inflightDownloadCount,
+          cacheSizeBytes: mediaDownloadCache.currentCacheSizeBytes,
+        );
+    ref
+        .read(cacheTelemetrySinkProvider)
+        .record('resource.bytes_cleared', <String, Object?>{
+          'reason': 'memory_pressure',
+          'profile': AppResourceCacheProfile.compact.name,
+          'postDetails': clearedPostDetails,
+        });
   }
 
   @override
@@ -227,6 +257,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   }
 
   void _initializeApp() {
+    var shellReady = false;
     try {
       _syncWindowDerivedState();
       ref
@@ -247,9 +278,56 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       AppStartupRuntime.instance.schedulePostFirstFrameWarmup(
         (provider) => ref.read(provider),
       );
-    } catch (e) {
-      // 初始化错误由上层观测处理
+      shellReady = true;
+    } catch (e, stack) {
+      logQuwoquanAppException(
+        source: 'startup_initialize_app',
+        exceptionText: e.toString(),
+        stackText: stack.toString(),
+      );
+    } finally {
+      _setStartupShellReady(shellReady);
     }
+  }
+
+  void _setStartupShellReady(bool ready) {
+    if (_startupShellReady == ready) {
+      return;
+    }
+    if (!mounted) {
+      _startupShellReady = ready;
+      return;
+    }
+    setState(() => _startupShellReady = ready);
+  }
+
+  Future<void> _loadStartupNativeSequenceElapsed() async {
+    final elapsed = await AppStartupRuntime.instance.nativeStartupElapsed(
+      attempts: 1,
+      retryDelay: const Duration(milliseconds: 50),
+    );
+    final effectiveElapsed = elapsed > Duration.zero
+        ? elapsed
+        : _androidNativeWelcomeSequenceComplete;
+    if (!mounted) {
+      _startupNativeSequenceElapsed = effectiveElapsed;
+      return;
+    }
+    setState(() => _startupNativeSequenceElapsed = effectiveElapsed);
+  }
+
+  void _markFlutterWelcomeReady() {
+    if (ref.read(platformTargetProvider) != AppPlatform.android) {
+      return;
+    }
+    final elapsed = _startupWelcomeReplayIndex == 0
+        ? (_startupNativeSequenceElapsed ?? Duration.zero)
+        : Duration.zero;
+    unawaited(
+      AppStartupRuntime.instance.markFlutterWelcomeReady(
+        sequenceElapsed: elapsed,
+      ),
+    );
   }
 
   void _syncWindowDerivedState() {
@@ -361,28 +439,84 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         child: child ?? const SizedBox.shrink(),
       ),
       home: WelcomeScreen(
+        key: ValueKey(
+          'startup-welcome-$_startupWelcomeReplayIndex-'
+          '${_startupNativeSequenceElapsed?.inMilliseconds ?? -1}',
+        ),
         deferSequenceStart: true,
+        sequenceEnabled:
+            _startupWelcomeReplayIndex > 0 ||
+            _startupNativeSequenceElapsed != null,
+        initialSequenceElapsed: _startupWelcomeReplayIndex == 0
+            ? (_startupNativeSequenceElapsed ?? Duration.zero)
+            : Duration.zero,
+        onFlutterWelcomeReady: _markFlutterWelcomeReady,
+        startupLoading: _startupWelcomeReplayIndex > 0
+            ? const WelcomeStartupLoadingState(
+                title: '',
+                subtitle: '',
+                hint: UITextConstants.startupStillStartingInline,
+              )
+            : null,
+        onSequenceComplete: _handleStartupWelcomeSequenceComplete,
         onFinish: _completeStartupWelcome,
       ),
     );
   }
 
-  void _completeStartupWelcome() {
+  void _handleStartupWelcomeSequenceComplete() {
+    if (_startupShellReady ||
+        _startupWelcomeReplayIndex >= _maxStartupWelcomeReplayCount) {
+      _completeStartupWelcome(degraded: !_startupShellReady);
+      return;
+    }
+
+    final nextReplayIndex = _startupWelcomeReplayIndex + 1;
+    AppStartupRuntime.instance.recordStartupPhase(
+      (provider) => ref.read(provider),
+      phase: 'welcome_replay',
+      eventName: 'startup_welcome_sequence',
+      properties: <String, dynamic>{
+        'replayIndex': nextReplayIndex,
+        'replayCount': nextReplayIndex,
+        'hintVisible': true,
+        'copyKey': 'startupStillStartingInline',
+        'hintHeightPx': AppSpacing.radiusTwentyFour,
+        'result': 'replay',
+      },
+    );
+
+    if (mounted) {
+      setState(() => _startupWelcomeReplayIndex = nextReplayIndex);
+    } else {
+      _startupWelcomeReplayIndex = nextReplayIndex;
+    }
+  }
+
+  void _completeStartupWelcome({bool degraded = false}) {
     if (_routerEnabled) {
       return;
     }
     ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
+    unawaited(
+      AppStartupRuntime.instance.completeNativeWelcomeOverlay(
+        degraded: degraded,
+        replayCount: _startupWelcomeReplayIndex,
+      ),
+    );
     AppStartupRuntime.instance.recordStartupPhase(
       (provider) => ref.read(provider),
       phase: 'welcome_completed',
       eventName: 'startup_welcome_sequence',
-      properties: const <String, dynamic>{
-        'replayIndex': 0,
-        'replayCount': 0,
-        'hintVisible': false,
+      properties: <String, dynamic>{
+        'replayIndex': _startupWelcomeReplayIndex,
+        'replayCount': _startupWelcomeReplayIndex,
+        'hintVisible': _startupWelcomeReplayIndex > 0,
         'copyKey': 'startupStillStartingInline',
-        'hintHeightPx': 0,
-        'result': 'entered',
+        'hintHeightPx': _startupWelcomeReplayIndex > 0
+            ? AppSpacing.radiusTwentyFour
+            : 0,
+        'result': degraded ? 'degraded' : 'entered',
       },
     );
     if (mounted) {

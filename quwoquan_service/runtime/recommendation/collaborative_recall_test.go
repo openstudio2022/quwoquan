@@ -6,11 +6,13 @@ import (
 )
 
 type stubCollaborativeStore struct {
-	i2i []ContentCandidate
-	u2i []ContentCandidate
+	i2i       []ContentCandidate
+	u2i       []ContentCandidate
+	lastSeeds []string
 }
 
-func (s *stubCollaborativeStore) GetI2ICandidates(_ context.Context, _ []string, limit int) ([]ContentCandidate, error) {
+func (s *stubCollaborativeStore) GetI2ICandidates(_ context.Context, seeds []string, limit int) ([]ContentCandidate, error) {
+	s.lastSeeds = append([]string(nil), seeds...)
 	if limit > len(s.i2i) {
 		limit = len(s.i2i)
 	}
@@ -25,7 +27,7 @@ func (s *stubCollaborativeStore) GetU2ICandidates(_ context.Context, _ string, l
 }
 
 func TestCollaborativeRecallSource_ReadsMaterializedI2IAndU2IWithQuota(t *testing.T) {
-	src := NewCollaborativeRecallSource(&stubCollaborativeStore{
+	store := &stubCollaborativeStore{
 		i2i: []ContentCandidate{
 			{ContentID: "shared", ContentType: "article"},
 		},
@@ -33,14 +35,20 @@ func TestCollaborativeRecallSource_ReadsMaterializedI2IAndU2IWithQuota(t *testin
 			{ContentID: "shared", ContentType: "article"},
 			{ContentID: "u2i-1", ContentType: "video"},
 		},
-	}, CollaborativeRecallConfig{
+	}
+	src := NewCollaborativeRecallSource(store, CollaborativeRecallConfig{
 		Enabled:          true,
 		MaxI2ICandidates: 2,
 		MaxU2ICandidates: 2,
 		QuotaPct:         50,
 	})
 
-	candidates, err := src.Recall(context.Background(), RecallRequest{UserID: "u1", Limit: 4})
+	candidates, err := src.Recall(context.Background(), RecallRequest{
+		UserID:         "u1",
+		Limit:          4,
+		SeedContentIDs: []string{"seed_1"},
+		FeedRequestID:  "frq_not_a_content_seed",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,6 +60,9 @@ func TestCollaborativeRecallSource_ReadsMaterializedI2IAndU2IWithQuota(t *testin
 	}
 	if candidates[1].ContentID != "u2i-1" || candidates[1].RecallPath != RecallPathCollaborativeU2I {
 		t.Fatalf("u2i duplicate should be skipped and next materialized candidate used, got %+v", candidates)
+	}
+	if len(store.lastSeeds) != 1 || store.lastSeeds[0] != "seed_1" {
+		t.Fatalf("i2i seeds must come from served content IDs, got %v", store.lastSeeds)
 	}
 }
 

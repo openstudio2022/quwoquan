@@ -66,11 +66,11 @@ func (v *VectorRecallWithEmbedding) Recall(ctx context.Context, req rtrec.Recall
 		return nil, nil
 	}
 
-	return v.source.RecallByVector(ctx, embedding, req.Limit)
+	return v.source.RecallByVector(ctx, embedding, req.Limit, req.Vertical)
 }
 
 // RecallByVector performs Atlas Vector Search with a pre-computed query vector.
-func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []float64, limit int) ([]rtrec.ContentCandidate, error) {
+func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []float64, limit int, vertical string) ([]rtrec.ContentCandidate, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -87,18 +87,27 @@ func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []f
 		},
 		bson.M{
 			"$project": bson.M{
-				"_id":          1,
-				"authorId":     1,
-				"contentType":  1,
-				"title":        1,
-				"tagRefs":      1,
-				"entityRefs":   1,
-				"publishedAt":  1,
-				"viewCount":    1,
-				"likeCount":    1,
-				"commentCount": 1,
-				"shareCount":   1,
-				"score":        bson.M{"$meta": "vectorSearchScore"},
+				"_id":                  1,
+				"authorId":             1,
+				"contentType":          1,
+				"title":                1,
+				"tagRefs":              1,
+				"entityRefs":           1,
+				"contentVertical":      1,
+				"sourceTaskId":         1,
+				"coverUrl":             1,
+				"thumbnailUrl":         1,
+				"videoUrl":             1,
+				"mediaUrls":            1,
+				"authorQualitySignals": 1,
+				"status":               1,
+				"visibility":           1,
+				"publishedAt":          1,
+				"viewCount":            1,
+				"likeCount":            1,
+				"commentCount":         1,
+				"shareCount":           1,
+				"score":                bson.M{"$meta": "vectorSearchScore"},
 			},
 		},
 	}
@@ -110,18 +119,27 @@ func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []f
 	defer cursor.Close(ctx)
 
 	type vectorDoc struct {
-		ID           string    `bson:"_id"`
-		AuthorID     string    `bson:"authorId"`
-		ContentType  string    `bson:"contentType"`
-		Title        string    `bson:"title"`
-		Tags         []string  `bson:"tagRefs"`
-		EntityRefs   []string  `bson:"entityRefs"`
-		PublishedAt  time.Time `bson:"publishedAt"`
-		ViewCount    int64     `bson:"viewCount"`
-		LikeCount    int64     `bson:"likeCount"`
-		CommentCount int64     `bson:"commentCount"`
-		ShareCount   int64     `bson:"shareCount"`
-		Score        float64   `bson:"score"`
+		ID                   string         `bson:"_id"`
+		AuthorID             string         `bson:"authorId"`
+		ContentType          string         `bson:"contentType"`
+		Title                string         `bson:"title"`
+		Tags                 []string       `bson:"tagRefs"`
+		EntityRefs           []string       `bson:"entityRefs"`
+		ContentVertical      string         `bson:"contentVertical"`
+		SourceTaskID         string         `bson:"sourceTaskId"`
+		CoverURL             string         `bson:"coverUrl"`
+		ThumbnailURL         string         `bson:"thumbnailUrl"`
+		VideoURL             string         `bson:"videoUrl"`
+		MediaURLs            []string       `bson:"mediaUrls"`
+		AuthorQualitySignals map[string]any `bson:"authorQualitySignals"`
+		Status               string         `bson:"status"`
+		Visibility           string         `bson:"visibility"`
+		PublishedAt          time.Time      `bson:"publishedAt"`
+		ViewCount            int64          `bson:"viewCount"`
+		LikeCount            int64          `bson:"likeCount"`
+		CommentCount         int64          `bson:"commentCount"`
+		ShareCount           int64          `bson:"shareCount"`
+		Score                float64        `bson:"score"`
 	}
 
 	var docs []vectorDoc
@@ -131,19 +149,43 @@ func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []f
 
 	out := make([]rtrec.ContentCandidate, 0, len(docs))
 	for _, doc := range docs {
+		projection := BuildRecommendationProjectionFields(map[string]any{
+			"authorId":             doc.AuthorID,
+			"contentType":          doc.ContentType,
+			"tagRefs":              doc.Tags,
+			"entityRefs":           doc.EntityRefs,
+			"contentVertical":      doc.ContentVertical,
+			"sourceTaskId":         doc.SourceTaskID,
+			"coverUrl":             doc.CoverURL,
+			"thumbnailUrl":         doc.ThumbnailURL,
+			"videoUrl":             doc.VideoURL,
+			"mediaUrls":            doc.MediaURLs,
+			"authorQualitySignals": doc.AuthorQualitySignals,
+			"status":               doc.Status,
+			"visibility":           doc.Visibility,
+		})
+		contentVertical, _ := projection["contentVertical"].(string)
+		if want := normalizedVertical(vertical); want != "" && normalizedVertical(contentVertical) != want {
+			continue
+		}
+		qualityScore, _ := projection["qualityScore"].(float64)
+		supplySource, _ := projection["supplySource"].(string)
 		out = append(out, rtrec.ContentCandidate{
-			ContentID:    doc.ID,
-			ContentType:  doc.ContentType,
-			AuthorID:     doc.AuthorID,
-			Title:        doc.Title,
-			Tags:         doc.Tags,
-			EntityRefs:   doc.EntityRefs,
-			PublishedAt:  doc.PublishedAt,
-			ViewCount:    doc.ViewCount,
-			LikeCount:    doc.LikeCount,
-			CommentCount: doc.CommentCount,
-			ShareCount:   doc.ShareCount,
-			RecallPath:   "vector_recall",
+			ContentID:       doc.ID,
+			ContentType:     doc.ContentType,
+			AuthorID:        doc.AuthorID,
+			Title:           doc.Title,
+			Tags:            doc.Tags,
+			EntityRefs:      doc.EntityRefs,
+			PublishedAt:     doc.PublishedAt,
+			ViewCount:       doc.ViewCount,
+			LikeCount:       doc.LikeCount,
+			CommentCount:    doc.CommentCount,
+			ShareCount:      doc.ShareCount,
+			RecallPath:      "vector_recall",
+			QualityScore:    qualityScore,
+			ContentVertical: contentVertical,
+			SupplySource:    supplySource,
 		})
 	}
 	return out, nil

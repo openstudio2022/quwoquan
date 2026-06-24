@@ -31,8 +31,8 @@ _CONVERSATION_AVATAR_ALIASES = {
 class LocalMediaOriginHandler(SimpleHTTPRequestHandler):
     root_dir = Path(".")
     server_label = "local-media-origin"
-    # alpha / prod-sim 的 mock 会话使用 `media/avatar/conversation/<id>/v1/mock.png`
-    # 占位路径，需要 alias 到群组合成头像；gamma-local 用真实 curated 资产，关闭。
+    # alpha / prod-sim 的 mock 会话使用会话头像占位路径，需要 alias 到群组合成
+    # 头像；gamma-local 用真实 curated 资产，关闭。
     conversation_avatar_alias_enabled = False
 
     def do_GET(self) -> None:
@@ -78,14 +78,35 @@ class LocalMediaOriginHandler(SimpleHTTPRequestHandler):
         if not self.conversation_avatar_alias_enabled:
             return None
         parts = Path(path.lstrip("/")).parts
-        if len(parts) != 6:
+        conversation_id = self._conversation_avatar_alias_id(parts)
+        if conversation_id is None:
             return None
-        if parts[:3] != ("media", "avatar", "conversation"):
-            return None
-        if parts[4] != "v1" or parts[5] != "mock.png":
-            return None
-        conversation_id = parts[3]
         return _CONVERSATION_AVATAR_ALIASES.get(conversation_id, _DEFAULT_GROUP_AVATAR)
+
+    @staticmethod
+    def _conversation_avatar_alias_id(parts: tuple[str, ...]) -> str | None:
+        # 旧 alpha/prod-sim 占位路径：
+        #   /media/avatar/conversation/<conversation_id>/v1/mock.png
+        if (
+            len(parts) == 6
+            and parts[:3] == ("media", "avatar", "conversation")
+            and parts[4] == "v1"
+            and parts[5] == "mock.png"
+        ):
+            return parts[3]
+
+        # 当前 App mock 合约路径：
+        #   /media/avatar/s/archived-avatar/conversation/<conversation_id>/v1/mock.png
+        if (
+            len(parts) == 8
+            and parts[:5]
+            == ("media", "avatar", "s", "archived-avatar", "conversation")
+            and parts[6] == "v1"
+            and parts[7] == "mock.png"
+        ):
+            return parts[5]
+
+        return None
 
     def _serve_alias(self, relative_path: str, *, include_body: bool) -> None:
         file_path = self.root_dir / relative_path

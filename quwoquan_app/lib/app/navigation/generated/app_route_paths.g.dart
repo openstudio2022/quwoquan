@@ -41,13 +41,18 @@ class AppRoutePaths {
   static const String createEntrySegment = 'create-entry';
 
   static const String createPathTemplate = '/create';
-  static String create({String? type}) {
+  static String create({String? type, String? tab, String? draftId}) {
     return _buildPath(createPathTemplate, <String, String>{
     }, <String, String?>{
       'type': type,
+      'tab': tab,
+      'draftId': draftId,
     });
   }
   static const String createSegment = 'create';
+
+  static const String localDrafts = '/create/drafts';
+  static const String localDraftsSegment = 'drafts';
 
   static const String createEditImagePathTemplate = '/create/edit-image';
   static String createEditImage({String? path, String? source, String? index, String? total}) {
@@ -204,11 +209,17 @@ class AppRoutePaths {
   static const String settings = '/settings';
   static const String settingsSegment = 'settings';
 
-  static const String settingsDeveloper = '/settings/developer';
-  static const String settingsDeveloperSegment = 'developer';
+  static const String settingsPermissions = '/settings/permissions';
+  static const String settingsPermissionsSegment = 'permissions';
+
+  static const String settingsAbout = '/settings/about';
+  static const String settingsAboutSegment = 'about';
 
   static const String profileEdit = '/profile/edit';
   static const String profileEditSegment = 'edit';
+
+  static const String profileCareerInterests = '/profile/career-interests';
+  static const String profileCareerInterestsSegment = 'career-interests';
 
   static const String profilePersonas = '/profile/personas';
   static const String profilePersonasSegment = 'personas';
@@ -360,6 +371,38 @@ class AppRoutePaths {
 
   static const String rtcPickParticipants = '/rtc/pick-participants';
   static const String rtcPickParticipantsSegment = 'pick-participants';
+
+  static const String addContact = '/add-contact';
+  static const String addContactSegment = 'add-contact';
+
+  static const String addContactSearchPathTemplate = '/add-contact/search';
+  static String addContactSearch({String? query}) {
+    return _buildPath(addContactSearchPathTemplate, <String, String>{
+    }, <String, String?>{
+      'query': query,
+    });
+  }
+  static const String addContactSearchSegment = 'search';
+
+  static const String addContactScan = '/add-contact/scan';
+  static const String addContactScanSegment = 'scan';
+
+  static const String addContactPhone = '/add-contact/phone';
+  static const String addContactPhoneSegment = 'phone';
+
+  static const String addContactConfirmPathTemplate = '/add-contact/confirm';
+  static String addContactConfirm({String? handle, String? userId, String? source}) {
+    return _buildPath(addContactConfirmPathTemplate, <String, String>{
+    }, <String, String?>{
+      'handle': handle,
+      'userId': userId,
+      'source': source,
+    });
+  }
+  static const String addContactConfirmSegment = 'confirm';
+
+  static const String myQrCode = '/me/qr-code';
+  static const String myQrCodeSegment = 'qr-code';
 
   static String _buildPath(String template, Map<String, String> params, Map<String, String?> query) {
     var path = template;

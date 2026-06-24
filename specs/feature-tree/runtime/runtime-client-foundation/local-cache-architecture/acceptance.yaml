@@ -49,30 +49,7 @@ gwt_acceptance:
       - command: flutter test test/ui/discovery/home_feed_video_autoplay_policy_test.dart
       - command: flutter test test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
       - command: python3 quwoquan_app/scripts/media/verify_app_network_image_surface.py
-      recorded:
-      - command: flutter analyze quwoquan_app/lib/core/widgets/app_cached_network_image.dart
-          quwoquan_app/lib/core/services/cache/cache_telemetry_sink.dart quwoquan_app/lib/core/services/cache/content_cache_services.dart
-          quwoquan_app/lib/core/services/cache/cached_content_repository.dart quwoquan_app/lib/core/services/cache/cache_management_service.dart
-          quwoquan_app/lib/cloud/media/media_download_cache.dart quwoquan_app/lib/core/providers/app_providers.dart
-          quwoquan_app/lib/core/providers/app_providers_client_sync.dart quwoquan_app/lib/quwoquan_app_shell.dart
-          quwoquan_app/lib/components/comment_system/comment_input_overlay.dart quwoquan_app/lib/components/comment_system/comment_thread_view.dart
-          quwoquan_app/lib/ui/circle/widgets/section_members.dart quwoquan_app/lib/ui/content/widgets/record_post_card.dart
-          quwoquan_app/lib/ui/search/pages/global_search_page.dart quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
-          quwoquan_app/lib/ui/user/pages/login_page.dart quwoquan_app/lib/ui/user/widgets/profile_interaction_tab.dart
-          quwoquan_app/lib/ui/chat/widgets/message/chat_message_bubble.dart quwoquan_app/test/core/services/content_cache_services_test.dart
-          quwoquan_app/test/core/widgets/app_cached_network_image_test.dart quwoquan_app/test/cloud/media/media_download_cache_test.dart
-      - command: flutter analyze quwoquan_app/lib/ui/discovery/models/home_feed_video_autoplay_policy.dart
-          quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_post_cards.dart
-          quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_media.dart quwoquan_app/test/core/providers/resource_cache_profile_provider_test.dart
-          quwoquan_app/test/ui/discovery/home_feed_video_autoplay_policy_test.dart
-          quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
-      - command: flutter test test/core/services/content_cache_services_test.dart
-          test/core/widgets/app_cached_network_image_test.dart test/core/providers/resource_cache_profile_provider_test.dart
-          test/cloud/media/media_download_cache_test.dart test/ui/user/providers/profile_state_provider_test.dart
-          test/ui/discovery/home_feed_video_focus_coordinator_test.dart test/ui/discovery/home_feed_video_autoplay_policy_test.dart
-          test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
-      - command: python3 quwoquan_app/scripts/media/verify_app_network_image_surface.py
-      - command: python3 quwoquan_app/scripts/runtime/verify_lib_dart_io_budget.py
+      recorded: []
     status: partial
     test_evidence:
       primary:
@@ -100,8 +77,30 @@ gwt_acceptance:
         cases:
         - user_acceptance.runtime.runtime_client_foundation.local_cache_architecture.user_journey
         envs:
-        - gamma
-    notes: []
+        - gamma_local
+    notes:
+    - '[migrated_from_recorded_command] flutter analyze quwoquan_app/lib/core/widgets/app_cached_network_image.dart
+      quwoquan_app/lib/core/services/cache/cache_telemetry_sink.dart quwoquan_app/lib/core/services/cache/content_cache_services.dart
+      quwoquan_app/lib/core/services/cache/cached_content_repository.dart quwoquan_app/lib/core/services/cache/cache_management_service.dart
+      quwoquan_app/lib/cloud/media/media_download_cache.dart quwoquan_app/lib/core/providers/app_providers.dart
+      quwoquan_app/lib/core/providers/app_providers_client_sync.dart quwoquan_app/lib/quwoquan_app_shell.dart
+      quwoquan_app/lib/components/comment_system/comment_input_overlay.dart quwoquan_app/lib/components/comment_system/comment_thread_view.dart
+      quwoquan_app/lib/ui/circle/widgets/section_members.dart quwoquan_app/lib/ui/content/widgets/record_post_card.dart
+      quwoquan_app/lib/ui/search/pages/global_search_page.dart quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
+      quwoquan_app/lib/ui/user/pages/login_page.dart quwoquan_app/lib/ui/user/widgets/profile_interaction_tab.dart
+      quwoquan_app/lib/ui/chat/widgets/message/chat_message_bubble.dart quwoquan_app/test/core/services/content_cache_services_test.dart
+      quwoquan_app/test/core/widgets/app_cached_network_image_test.dart quwoquan_app/test/cloud/media/media_download_cache_test.dart'
+    - '[migrated_from_recorded_command] flutter analyze quwoquan_app/lib/ui/discovery/models/home_feed_video_autoplay_policy.dart
+      quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_post_cards.dart
+      quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_media.dart quwoquan_app/test/core/providers/resource_cache_profile_provider_test.dart
+      quwoquan_app/test/ui/discovery/home_feed_video_autoplay_policy_test.dart quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart'
+    - '[migrated_from_recorded_command] flutter test test/core/services/content_cache_services_test.dart
+      test/core/widgets/app_cached_network_image_test.dart test/core/providers/resource_cache_profile_provider_test.dart
+      test/cloud/media/media_download_cache_test.dart test/ui/user/providers/profile_state_provider_test.dart
+      test/ui/discovery/home_feed_video_focus_coordinator_test.dart test/ui/discovery/home_feed_video_autoplay_policy_test.dart
+      test/ui/discovery/home_intersection_multiform_feed_widget_test.dart'
+    - '[migrated_from_recorded_command] python3 quwoquan_app/scripts/media/verify_app_network_image_surface.py'
+    - '[migrated_from_recorded_command] python3 quwoquan_app/scripts/runtime/verify_lib_dart_io_budget.py'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

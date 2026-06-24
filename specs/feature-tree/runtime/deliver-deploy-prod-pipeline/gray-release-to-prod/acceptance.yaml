@@ -7,45 +7,73 @@ node:
   parent_domain_service: runtime
   parent_business_capability: deliver-deploy-prod-pipeline
 scope:
-  summary: gray release to prod 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: prod 仅有一个生产环境；gray-initial / carry-on / full 只是 prod rollout stage。发布前
+    真实远端复验统一收敛到 prod gray-initial，不引入 prod-gray 第二环境。
+  in_scope:
+  - prod gray-initial 的 hosted deploy、只读/幂等 api_integration 与 Journey/Page
+    user_acceptance
+  - rollout stage 配置、SLO 决策、审批与回滚证据
+  - 与 local-gamma-mirror 的职责边界收敛
+  out_of_scope:
+  - 提交前本地左移链路
+  - 新增生产环境枚举或第二套发布拓扑
 gwt_acceptance:
   GWT1:
-    title: gray release to prod GWT
+    title: prod gray-initial 承接真实远端复验
     given:
-    - 前置条件明确。
+    - local-gamma-mirror 已完成提交前左移验证。
+    - pre-release gate、包纯度、环境拓扑、host allowlist 与 deploy contract 已通过。
     when:
-    - 用户或系统动作发生。
+    - 触发 gray release 到 prod 的 Stage 1 初始灰度。
     then:
-    - 可观察结果符合预期。
+    - 发布仅在 prod 环境语义下执行，gray-initial 作为 rollout stage 承接真实远端复验。
+    - gray-initial 必须执行只读/幂等 api_integration 与 Journey/Page user_acceptance，不得
+      以 local-gamma 或 beta/gamma 结果直接代替。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
+    - 生产灰度口径已统一为 prod rollout stage，不再出现 prod-gray 第二环境。
+    - 发布前只认 prod_gray_initial 的远端证据，和 local-gamma-mirror 职责不重叠。
+    edge_cases:
+    - gray-initial 不可用时必须 GATE_BLOCK，不能回退为“只看 beta/gamma”。
+    - 只读/幂等 api_integration 才能进入 prod_gray_initial 自动链，写操作需显式审批。
+    contract_refs:
+    - deploy/shared/environment_topology_manifest.yaml
+    - deploy/shared/gamma_validation_suites.json
+    - deploy/shared/workload_topology_inventory.yaml
     performance_points: []
     tests:
-      planned: []
+      planned:
+      - file: agent_ops/acceptance/api_integration/test_prod_deploy_contract__api_integration_test.py
+      - file: agent_ops/acceptance/api_integration/test_prod_plane_runtime_stack__api_integration_test.py
+      - file: agent_ops/acceptance/api_integration/test_resolve_prod_release_state__api_integration_test.py
       recorded: []
     status: pending
     test_evidence:
       primary:
-      - layer: local_contract
-        suite: contract
+      - layer: api_integration
+        suite: prod_gray_initial_release_contract
         cases:
-        - local_contract.runtime.deliver_deploy_prod_pipeline.gray_release_to_prod.contract
+        - api_integration.runtime.deliver_deploy_prod_pipeline.gray_release_to_prod.prod_gray_initial_release_contract
         envs: &id001
-        - local
-      - layer: local_contract
-        suite: gwt1_local_contract
+        - prod_gray_initial
+      - layer: user_acceptance
+        suite: prod_gray_initial_journey_page_matrix
         cases:
-        - local_contract.runtime.deliver_deploy_prod_pipeline.gray_release_to_prod.gwt1_local_contract
-        envs: *id001
-      supporting: []
-    notes: []
+        - user_acceptance.runtime.deliver_deploy_prod_pipeline.gray_release_to_prod.prod_gray_initial_journey_page_matrix
+        envs:
+        - prod_gray_initial
+      supporting:
+      - layer: local_contract
+        suite: gray_release_stage_contract
+        cases:
+        - local_contract.runtime.deliver_deploy_prod_pipeline.gray_release_to_prod.gray_release_stage_contract
+        envs:
+        - alpha
+        - local
+    notes:
+    - 2026-06-22 口径收敛：生产只有 prod，一个 rollout stage 命名为 prod_gray_initial；不新增 prod-gray。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
   - bash agent_ops/scaffold/verify_acceptance_standard.sh
   full_gate:
-  - make gate
+  - make gate-full

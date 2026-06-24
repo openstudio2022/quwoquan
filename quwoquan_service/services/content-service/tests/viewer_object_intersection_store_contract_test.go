@@ -17,15 +17,13 @@ import (
 )
 
 func TestViewerObjectIntersectionStore_RoundTrip(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("mongo unavailable")
-	}
 	ctx := context.Background()
-	coll := mongoDB.Collection("rm_viewer_object_intersection")
+	db := requireMongoDB(t)
+	coll := db.Collection("rm_viewer_object_intersection")
 	_, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^vois_"}})
 	t.Cleanup(func() { _, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^vois_"}}) })
 
-	store := recinfra.NewMongoViewerIntersectionStore(mongoDB, slog.Default())
+	store := recinfra.NewMongoViewerIntersectionStore(db, slog.Default())
 	want := []application.IntersectionReasonView{
 		{
 			IntersectionID:    "vois_r1",
@@ -97,11 +95,9 @@ func (m *materializeFactSource) ObjectReasons(context.Context, string, string, s
 // TestViewerObjectIntersectionMaterialization_PersistsGraphLifecycle 是切片⑥的 T3 证据：
 // 经真实 Mongo 读模型写路径，Graph 边权与 Lifecycle 弱标必须被真算并精确固化、读穿透零回算复现。
 func TestViewerObjectIntersectionMaterialization_PersistsGraphLifecycle(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("mongo unavailable")
-	}
 	ctx := context.Background()
-	coll := mongoDB.Collection("rm_viewer_object_intersection")
+	db := requireMongoDB(t)
+	coll := db.Collection("rm_viewer_object_intersection")
 	_, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^voim_"}})
 	t.Cleanup(func() { _, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^voim_"}}) })
 
@@ -118,7 +114,7 @@ func TestViewerObjectIntersectionMaterialization_PersistsGraphLifecycle(t *testi
 			},
 		},
 	}}
-	store := recinfra.NewMongoViewerIntersectionStore(mongoDB, slog.Default())
+	store := recinfra.NewMongoViewerIntersectionStore(db, slog.Default())
 	src := recinfra.NewReadModelIntersectionSource(compute, store, map[string]int{"relationship": 7})
 
 	got, err := src.FactReasons(ctx, "voim_viewer", "")
@@ -143,18 +139,16 @@ func TestViewerObjectIntersectionMaterialization_PersistsGraphLifecycle(t *testi
 }
 
 func TestViewerObjectIntersectionReadThrough_FreshHitZeroCompute(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("mongo unavailable")
-	}
 	ctx := context.Background()
-	coll := mongoDB.Collection("rm_viewer_object_intersection")
+	db := requireMongoDB(t)
+	coll := db.Collection("rm_viewer_object_intersection")
 	_, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^voirt_"}})
 	t.Cleanup(func() { _, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^voirt_"}}) })
 
 	compute := &countingFactSource{reasons: []application.IntersectionReasonView{
 		{IntersectionID: "voirt_r", IntersectionClass: "fact", Dimension: "content"},
 	}}
-	store := recinfra.NewMongoViewerIntersectionStore(mongoDB, slog.Default())
+	store := recinfra.NewMongoViewerIntersectionStore(db, slog.Default())
 	src := recinfra.NewReadModelIntersectionSource(compute, store, map[string]int{"content": 7})
 
 	if _, err := src.FactReasons(ctx, "voirt_viewer", ""); err != nil {

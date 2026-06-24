@@ -17,10 +17,10 @@ func seedLaunchSubset(t *testing.T) {
 	cleanCollections(t)
 	ctx := context.Background()
 	nodes := []*model.TagNode{
-		{TagRef: "Topic/旅行", Group: "Topic", Label: "旅行", LabelEn: "Travel"},
-		{TagRef: "Topic/摄影", Group: "Topic", Label: "摄影", LabelEn: "Photography"},
-		{TagRef: "Topic/美食餐饮", Group: "Topic", Label: "美食餐饮", LabelEn: "Food"},
-		{TagRef: "Entity/机构/学校/北京大学", Group: "Entity", Label: "北京大学", LabelEn: "Peking University"},
+		tagNode("Topic/旅行", "旅行", "Travel"),
+		tagNode("Topic/摄影", "摄影", "Photography"),
+		tagNode("Topic/美食餐饮", "美食餐饮", "Food"),
+		tagNode("Entity/机构/学校/北京大学", "北京大学", "Peking University"),
 	}
 	for _, n := range nodes {
 		if _, err := tagNodeStore.Create(ctx, n); err != nil {
@@ -37,6 +37,83 @@ func seedLaunchSubset(t *testing.T) {
 			t.Fatalf("seed object_tag_index %s: %v", o.ObjectID, err)
 		}
 	}
+}
+
+func tagNode(tagRef, label, labelEn string) *model.TagNode {
+	parentTagRef := ""
+	parts := bytes.Split([]byte(tagRef), []byte("/"))
+	if len(parts) > 1 {
+		parentTagRef = string(bytes.Join(parts[:len(parts)-1], []byte("/")))
+	}
+	return &model.TagNode{
+		TagRef:          tagRef,
+		Group:           string(parts[0]),
+		Label:           label,
+		DisplayLabel:    label,
+		LabelEn:         labelEn,
+		ParentTagRef:    parentTagRef,
+		Depth:           len(parts) - 1,
+		ReleaseID:       "test-release",
+		LifecycleStatus: "active",
+	}
+}
+
+func seedAdminRegionSubset(t *testing.T) {
+	t.Helper()
+	cleanCollections(t)
+	ctx := context.Background()
+	nodes := []*model.TagNode{
+		tagNode("Topic/地理", "地理", "Geography"),
+		tagNode("Topic/地理/行政区", "行政区", "Administrative Region"),
+		tagNode("Topic/地理/行政区/中国", "中国", "China"),
+	}
+	for _, label := range []string{
+		"北京市", "天津市", "河北省", "山西省", "内蒙古自治区", "辽宁省", "吉林省", "黑龙江省",
+		"上海市", "江苏省", "浙江省", "安徽省", "福建省", "江西省", "山东省", "河南省",
+		"湖北省", "湖南省", "广东省", "广西壮族自治区", "海南省", "重庆市", "四川省", "贵州省",
+		"云南省", "西藏自治区", "陕西省", "甘肃省", "青海省", "宁夏回族自治区", "新疆维吾尔自治区",
+		"香港特别行政区", "澳门特别行政区", "台湾省",
+	} {
+		n := tagNode("Topic/地理/行政区/中国/"+label, label, "")
+		n.DisplayLabel = displayLabelForTest(label)
+		nodes = append(nodes, n)
+	}
+	for _, label := range []string{
+		"广州市", "深圳市", "珠海市", "汕头市", "佛山市", "韶关市", "湛江市", "肇庆市", "江门市", "茂名市",
+		"惠州市", "梅州市", "汕尾市", "河源市", "阳江市", "清远市", "东莞市", "中山市", "潮州市", "揭阳市", "云浮市",
+	} {
+		n := tagNode("Topic/地理/行政区/中国/广东省/"+label, label, "")
+		n.DisplayLabel = displayLabelForTest(label)
+		nodes = append(nodes, n)
+	}
+	for _, label := range []string{
+		"东城区", "西城区", "朝阳区", "丰台区", "石景山区", "海淀区", "门头沟区", "房山区",
+		"通州区", "顺义区", "昌平区", "大兴区", "怀柔区", "平谷区", "密云区", "延庆区",
+	} {
+		n := tagNode("Topic/地理/行政区/中国/北京市/"+label, label, "")
+		n.DisplayLabel = displayLabelForTest(label)
+		nodes = append(nodes, n)
+	}
+	for _, n := range nodes {
+		if _, err := tagNodeStore.Create(ctx, n); err != nil {
+			t.Fatalf("seed admin tag_node %s: %v", n.TagRef, err)
+		}
+	}
+}
+
+func displayLabelForTest(label string) string {
+	switch label {
+	case "北京市":
+		return "北京"
+	case "广东省":
+		return "广东"
+	}
+	for _, suffix := range []string{"市", "区", "省"} {
+		if bytes.HasSuffix([]byte(label), []byte(suffix)) {
+			return string(bytes.TrimSuffix([]byte(label), []byte(suffix)))
+		}
+	}
+	return label
 }
 
 // T3：resolve 返回首发子集 tagRef 定义（tagref_resolvable）。
@@ -89,6 +166,105 @@ func TestListDimensions(t *testing.T) {
 	}
 	if dims[0].Group != "Topic" || dims[0].DimensionID != "Topic/主题" {
 		t.Fatalf("unexpected first dimension: %+v", dims[0])
+	}
+}
+
+func TestListTagChildrenReturnsDirectAdminRegionChildren(t *testing.T) {
+	seedAdminRegionSubset(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/tag/children?parentTagRef=Topic/地理/行政区/中国&limit=500", nil)
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var provinces []struct {
+		TagRef       string `json:"tagRef"`
+		DisplayLabel string `json:"displayLabel"`
+		Depth        int    `json:"depth"`
+		HasChildren  bool   `json:"hasChildren"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &provinces); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(provinces) != 34 {
+		t.Fatalf("expected 34 provincial nodes, got %d", len(provinces))
+	}
+	foundGuangdong := false
+	for _, province := range provinces {
+		if province.TagRef == "Topic/地理/行政区/中国/广东省" {
+			foundGuangdong = province.DisplayLabel == "广东" && province.Depth == 4 && province.HasChildren
+		}
+	}
+	if !foundGuangdong {
+		t.Fatalf("expected Guangdong province child with displayLabel and hasChildren, got %+v", provinces)
+	}
+}
+
+func TestListTagChildrenGuangdongAndBeijingAreCompleteDirectLevel(t *testing.T) {
+	seedAdminRegionSubset(t)
+	for _, tc := range []struct {
+		name      string
+		parentRef string
+		wantCount int
+		wantRef   string
+		wantLabel string
+	}{
+		{
+			name:      "guangdong prefecture cities",
+			parentRef: "Topic/地理/行政区/中国/广东省",
+			wantCount: 21,
+			wantRef:   "Topic/地理/行政区/中国/广东省/深圳市",
+			wantLabel: "深圳",
+		},
+		{
+			name:      "beijing districts",
+			parentRef: "Topic/地理/行政区/中国/北京市",
+			wantCount: 16,
+			wantRef:   "Topic/地理/行政区/中国/北京市/朝阳区",
+			wantLabel: "朝阳",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/v1/tag/children?parentTagRef="+tc.parentRef+"&limit=500", nil)
+			testHandler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+			}
+			var children []struct {
+				TagRef       string `json:"tagRef"`
+				DisplayLabel string `json:"displayLabel"`
+				ParentTagRef string `json:"parentTagRef"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &children); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if len(children) != tc.wantCount {
+				t.Fatalf("expected %d children, got %d", tc.wantCount, len(children))
+			}
+			found := false
+			for _, child := range children {
+				if child.ParentTagRef != tc.parentRef {
+					t.Fatalf("expected direct child parent %s, got %+v", tc.parentRef, child)
+				}
+				if child.TagRef == tc.wantRef && child.DisplayLabel == tc.wantLabel {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("expected child %s with label %s, got %+v", tc.wantRef, tc.wantLabel, children)
+			}
+		})
+	}
+}
+
+func TestListTagChildrenUnknownParentReturns404(t *testing.T) {
+	seedAdminRegionSubset(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/tag/children?parentTagRef=Topic/地理/行政区/中国/不存在", nil)
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown parent, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

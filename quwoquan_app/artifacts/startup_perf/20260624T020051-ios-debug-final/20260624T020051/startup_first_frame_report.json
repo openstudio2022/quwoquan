@@ -1,0 +1,85 @@
+{
+  "outputDir": "artifacts/startup_perf/20260624T020051-ios-debug-final/20260624T020051",
+  "passed": true,
+  "results": [
+    {
+      "platform": "ios",
+      "device": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+      "passed": true,
+      "visibleByMs": 200,
+      "firstVisibleMs": 200,
+      "screenshots": [
+        {
+          "path": "artifacts/startup_perf/20260624T020051-ios-debug-final/20260624T020051/ios-0200ms.png",
+          "offsetMs": 200,
+          "foregroundRatio": 0.06456,
+          "stddevAvg": 20.172,
+          "medianRgb": [
+            0,
+            134,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_perf/20260624T020051-ios-debug-final/20260624T020051/ios-0500ms.png",
+          "offsetMs": 500,
+          "foregroundRatio": 0.06456,
+          "stddevAvg": 20.172,
+          "medianRgb": [
+            0,
+            134,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_perf/20260624T020051-ios-debug-final/20260624T020051/ios-1000ms.png",
+          "offsetMs": 1000,
+          "foregroundRatio": 0.06456,
+          "stddevAvg": 20.172,
+          "medianRgb": [
+            0,
+            134,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_perf/20260624T020051-ios-debug-final/20260624T020051/ios-1500ms.png",
+          "offsetMs": 1500,
+          "foregroundRatio": 0.06924,
+          "stddevAvg": 20.146,
+          "medianRgb": [
+            10,
+            132,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_perf/20260624T020051-ios-debug-final/20260624T020051/ios-2000ms.png",
+          "offsetMs": 2000,
+          "foregroundRatio": 0.22728,
+          "stddevAvg": 31.698,
+          "medianRgb": [
+            15,
+            132,
+            248
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        }
+      ]
+    }
+  ]
+}

@@ -18,8 +18,13 @@ class RemoteTagRepository implements TagRepository {
     '${CloudRuntimeConfig.gatewayBaseUrl}$path',
   ).replace(queryParameters: params);
 
-  Never _fail(int statusCode, String body) =>
-      throw Exception('Tag API error: $statusCode $body');
+  Never _fail(int statusCode, String body, String path) {
+    throw CloudErrorMapper.fromStatusCode(
+      statusCode,
+      body: body,
+      requestPath: path,
+    );
+  }
 
   List<T> _asEntityList<T>(
     Object? decoded,
@@ -27,7 +32,11 @@ class RemoteTagRepository implements TagRepository {
     String context,
   ) {
     if (decoded is! List) {
-      throw Exception('Tag API error: expected list response at $context');
+      throw CloudErrorMapper.invalidResponse(
+        message: 'Tag API expected list response at $context',
+        requestPath: context,
+        functionModule: 'tag_repository_remote',
+      );
     }
     final out = <T>[];
     for (final e in decoded) {
@@ -50,7 +59,7 @@ class RemoteTagRepository implements TagRepository {
       _uri(path, params),
       headers: CloudRequestHeaders.forPage(pageId),
     );
-    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body);
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body, path);
     return _asEntityList(json.decode(resp.body), fromJson, path);
   }
 
@@ -64,7 +73,7 @@ class RemoteTagRepository implements TagRepository {
       _uri(path, params),
       headers: CloudRequestHeaders.forPage(pageId),
     );
-    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body);
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body, path);
     return fromJson(
       CloudResponseDecoder.asObject(json.decode(resp.body), context: path),
     );
@@ -84,7 +93,7 @@ class RemoteTagRepository implements TagRepository {
       },
       body: json.encode(body),
     );
-    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body);
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body, path);
     return _asEntityList(json.decode(resp.body), fromJson, path);
   }
 
@@ -102,11 +111,32 @@ class RemoteTagRepository implements TagRepository {
       },
       body: json.encode(body),
     );
-    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body);
+    if (resp.statusCode != 200) _fail(resp.statusCode, resp.body, path);
     return fromJson(
       CloudResponseDecoder.asObject(json.decode(resp.body), context: path),
     );
   }
+
+  @override
+  Future<List<TagChild>> listChildren(
+    String parentTagRef, {
+    int limit = TagApiDefaults.childrenLimit,
+  }) {
+    return _getList(
+      TagApiMetadata.listTagChildrenPath,
+      TagRequestPageIds.listTagChildren,
+      TagChild.fromJson,
+      <String, String>{'parentTagRef': parentTagRef, 'limit': '$limit'},
+    );
+  }
+
+  @override
+  Future<TagResolve> resolveTag(String tagRef) => _getObject(
+    TagApiMetadata.resolveTagPath,
+    TagRequestPageIds.resolveTag,
+    TagResolve.fromJson,
+    <String, String>{'tagRef': tagRef},
+  );
 
   @override
   Future<List<TagDimension>> listDimensions() => _getList(

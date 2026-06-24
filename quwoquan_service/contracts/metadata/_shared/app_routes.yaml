@@ -25,7 +25,9 @@ routes:
     path: /create-entry
   - id: create
     path: /create
-    query_params: [type]
+    query_params: [type, tab, draftId]
+  - id: localDrafts
+    path: /create/drafts
   - id: createEditImage
     path: /create/edit-image
     query_params: [path, source, index, total]
@@ -74,10 +76,14 @@ routes:
     path: /assistant/skills
   - id: settings
     path: /settings
-  - id: settingsDeveloper
-    path: /settings/developer
+  - id: settingsPermissions
+    path: /settings/permissions
+  - id: settingsAbout
+    path: /settings/about
   - id: profileEdit
     path: /profile/edit
+  - id: profileCareerInterests
+    path: /profile/career-interests
   - id: profilePersonas
     path: /profile/personas
   - id: profileComments
@@ -118,3 +124,18 @@ routes:
     path: /rtc/video/{callId}
   - id: rtcPickParticipants
     path: /rtc/pick-participants
+  # 添加联系人（底栏 + 入口）：主页 / 搜索 / 扫一扫 / 手机通讯录 / 确认 / 我的二维码
+  - id: addContact
+    path: /add-contact
+  - id: addContactSearch
+    path: /add-contact/search
+    query_params: [query]
+  - id: addContactScan
+    path: /add-contact/scan
+  - id: addContactPhone
+    path: /add-contact/phone
+  - id: addContactConfirm
+    path: /add-contact/confirm
+    query_params: [handle, userId, source]
+  - id: myQrCode
+    path: /me/qr-code

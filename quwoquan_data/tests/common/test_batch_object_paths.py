@@ -45,9 +45,13 @@ from _common.paths import (  # noqa: E402
     batch_root,
     batch_shared_dir,
     batch_workflow_packet_path,
+    batches_root,
+    iter_task_batch_dirs,
     publish_data,
     relative_batch_ref,
     source_unit_dir,
+    task_discriminator,
+    task_intent_label,
 )
 
 TASK = "旅行/地域/四川省/景区/景区全覆盖"
@@ -154,6 +158,45 @@ def test_collect_task_entity_objects_blocks_dual_scenic_location_trees():
         assert "dual trees coexist" in str(exc)
     else:
         raise AssertionError("expected dual scenic-location tree conflict")
+
+
+def test_top_level_batch_dir_disambiguates_same_name_tasks_sharing_batch():
+    """fanout 同名分区任务共享 batchId 时，顶层批次目录必须靠 taskHash 消歧、不得塌缩。
+
+    回归 `runtime/batches/<intentLabel>__<batch>` 单凭人读标签时，
+    `四川省/.../全国景点主页` 与 `云南省/.../全国景点主页` 共享 `fanout_demo`
+    会塌缩到同一目录、内容对象互相串扰。
+    """
+    t1 = "旅行/地域/四川省/景区/全国景点主页"
+    t2 = "旅行/地域/云南省/景区/全国景点主页"
+    b = "fanout_demo"
+    d1 = batch_root(t1, b)
+    d2 = batch_root(t2, b)
+    assert d1 != d2, (d1, d2)
+    assert d1.parent == d2.parent == batches_root()
+    # 人读前缀（intentLabel）相同（同名任务）；taskHash 不同 → 目录唯一。
+    assert task_intent_label(t1) == task_intent_label(t2), (t1, t2)
+    assert task_discriminator(t1) != task_discriminator(t2), (t1, t2)
+    # 首个 __ 之后必须还原出共享 batchId。
+    assert d1.name.split("__", 1)[1] == b == d2.name.split("__", 1)[1], (d1.name, d2.name)
+
+
+def test_iter_task_batch_dirs_filters_same_name_tasks_by_manifest_taskid():
+    """同名任务的批次互不串扰：iter_task_batch_dirs 仅返回本任务批次（前缀任务唯一 + manifest.taskId）。"""
+    from _common.io import write_json as _write_json
+
+    t1 = "旅行/地域/四川省/景区/同名覆盖"
+    t2 = "旅行/地域/贵州省/景区/同名覆盖"
+    b = "fanout_same"
+    for tid in (t1, t2):
+        d = batch_root(tid, b)
+        d.mkdir(parents=True, exist_ok=True)
+        _write_json(d / "batch_manifest.json", {"taskId": tid, "batchId": b})
+    dirs1 = iter_task_batch_dirs(t1)
+    dirs2 = iter_task_batch_dirs(t2)
+    assert [d.name for d in dirs1] == [batch_root(t1, b).name], dirs1
+    assert [d.name for d in dirs2] == [batch_root(t2, b).name], dirs2
+    assert set(dirs1).isdisjoint(set(dirs2))
 
 
 def _run_all() -> None:

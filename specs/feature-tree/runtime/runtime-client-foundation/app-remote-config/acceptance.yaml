@@ -47,7 +47,7 @@ gwt_acceptance:
       planned:
       - file: quwoquan_app/test/core/providers/app_remote_config_provider_test.dart
       recorded:
-      - file: quwoquan_app/test/core/providers/app_remote_config_provider_test.dart
+      - file: quwoquan_app/test/local_contract/core/providers/app_remote_config_provider__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -92,7 +92,7 @@ gwt_acceptance:
       planned:
       - file: quwoquan_app/test/core/providers/app_remote_config_provider_test.dart
       recorded:
-      - file: quwoquan_app/test/core/providers/app_remote_config_provider_test.dart
+      - file: quwoquan_app/test/local_contract/core/providers/app_remote_config_provider__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -130,8 +130,7 @@ gwt_acceptance:
       planned:
       - command: python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py
       recorded:
-      - file: quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py
-      - file: quwoquan_app/test/ui/content/post/contract/content_runtime_config_provider_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/post/contract/content_runtime_config_provider__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -148,6 +147,7 @@ gwt_acceptance:
       supporting: []
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/content/providers/comment_provider_test.dart'
+    - '[migrated_from_recorded_noncanonical] quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py'
   GWT4:
     title: 服务端快照可缓存可回滚
     given:
@@ -177,7 +177,8 @@ gwt_acceptance:
       planned:
       - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
       recorded:
-      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - file: quwoquan_app/test/local_contract/core/providers/app_remote_config_provider__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:

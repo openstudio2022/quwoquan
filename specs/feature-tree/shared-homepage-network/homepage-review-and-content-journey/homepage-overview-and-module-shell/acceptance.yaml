@@ -34,8 +34,10 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-      - file: quwoquan_app/test/components/object_page/object_intersection_card_test.dart
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart
+      - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
     status: completed
     test_evidence:
       primary:
@@ -56,6 +58,13 @@ gwt_acceptance:
         cases:
         - user_acceptance.shared_homepage_network.homepage_review_and_content_journey.homepage_overview_and_module_shell.journey
         envs:
+        - gamma_local
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.shared_homepage_network.homepage_review_and_content_journey.homepage_overview_and_module_shell.gwt1_api_integration
+        envs:
+        - beta
         - gamma
     notes: []
 execution:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
@@ -30,7 +31,11 @@ from _common.paths import DATA_ROOT, RUNTIME_ROOT, batch_root, relative_batch_re
 from _common.io import read_json, write_json
 from _common.review_ledger import entities_path
 from _common.draft_io import is_placeholder, read_draft_article, read_draft_meta, read_writing_pack
-from _common.post_evidence_chain import build_finalization_report, build_source_refs_snapshot
+from _common.post_evidence_chain import (
+    SOURCE_REFS_SCHEMA,
+    build_finalization_report,
+    build_source_refs_snapshot,
+)
 from _common.provenance import build_provenance
 from _common.intersection_signal import build_intersection_hints
 from _common.entity_annotation import annotate_inline, normalize_link_ref
@@ -180,10 +185,12 @@ def _relativize_ref(value: str, task_id: str, batch_id: str) -> str:
     if not s:
         return s
     base = batch_root(task_id, batch_id).resolve()
-    batch_prefix = f"batches/{batch_id}/"
+    # 顶层批次目录名 = {intentLabel}-{taskHash}__{batch_id}（取自真实 batch 根，含任务消歧哈希）。
+    batch_dir = base.name
+    batch_prefix = f"batches/{batch_dir}/"
     if s.startswith(batch_prefix):
         return s[len(batch_prefix) :]
-    marker = f"/batches/{batch_id}/"
+    marker = f"/batches/{batch_dir}/"
     normalized_full = s.replace("\\", "/")
     if marker in normalized_full:
         return normalized_full.split(marker, 1)[1]
@@ -247,28 +254,6 @@ def _materialized_alignment_evidence(asset: Mapping[str, Any]) -> str:
             return value
     caption = str(asset.get("caption") or "").strip()
     return f"图片说明与正文关联：{caption}" if caption else ""
-
-
-def _publication_condition_context(raw: object) -> object:
-    """发布契约字段投影：保留 entityProfile，同时提供顶层 region/season 授权字段。"""
-    if not isinstance(raw, dict):
-        return raw
-    context = dict(raw)
-    top_regions = [str(v) for v in (context.get("regions") or []) if v]
-    top_seasons = [str(v) for v in (context.get("seasons") or []) if v]
-    if top_regions and not context.get("region"):
-        context["region"] = top_regions[0]
-    if top_seasons and not context.get("season"):
-        context["season"] = top_seasons[0]
-    profile = context.get("entityProfile")
-    if isinstance(profile, dict):
-        regions = [str(v) for v in (profile.get("regions") or []) if v]
-        seasons = [str(v) for v in (profile.get("seasons") or []) if v]
-        if regions and not context.get("region"):
-            context["region"] = regions[0]
-        if seasons and not context.get("season"):
-            context["season"] = seasons[0]
-    return context
 
 
 def _annotate_manifest_entities(article_md: str, entity_refs: list[str]) -> str:
@@ -529,7 +514,23 @@ def _resolve_materialized_article(
         if annotated != article_md:
             actions.append("entity_annotations_injected")
             article_md = annotated
+    if str(compose_payload.get("publishMediaMode") or "").strip() == "text_only":
+        stripped = _strip_text_only_asset_markup(article_md)
+        if stripped != article_md:
+            actions.append("text_only_asset_markup_removed")
+            article_md = stripped
     return article_md, actions
+
+
+def _strip_text_only_asset_markup(article_md: str) -> str:
+    """Remove draft image markup when release downgraded an article to text-only."""
+    text = str(article_md or "")
+    text = re.sub(r"(?ms)^:::figure\b.*?^:::\s*", "", text)
+    text = re.sub(r"(?m)^coverImage:\s*asset://[^\n]+\n?", "", text)
+    text = re.sub(r"(?m)^!\[[^\]]*\]\(asset://[^)]+\)\s*$\n?", "", text)
+    text = re.sub(r"(?m)^asset://[^\s]+\s*$\n?", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip() + ("\n" if text.strip() else "")
 
 
 MATERIALIZED_FINAL_ENTRIES = (
@@ -567,6 +568,42 @@ def prune_materialized_refs(task_id: str, batch_id: str, refs: list[str] | set[s
         if post_dir.exists():
             content_object.write_content_object_index(task_id, batch_id, ref)
     return removed
+
+
+def _materialized_source_refs_snapshot(
+    task_id: str,
+    batch_id: str,
+    *,
+    base_source_ref: str,
+    cited_source_refs: list[str],
+    source_paths: list[str],
+    is_image: bool,
+) -> dict[str, Any]:
+    """构造成品 `1.download/source_refs.json`。
+
+    文章/主页严格要求来源可回查（缺失即抛错，与既有行为一致）。图片作品的
+    引证可能含二进制资产或外链集合，缺单条引证不应阻断成品物化——降级为最小
+    索引快照（保留 cited/sourcePaths，sources 留空并记原因），保证 1.download 闭环。
+    """
+    try:
+        return build_source_refs_snapshot(
+            task_id,
+            batch_id,
+            base_source_ref=base_source_ref,
+            cited_source_refs=cited_source_refs,
+            source_paths=source_paths,
+        )
+    except FileNotFoundError as exc:
+        if not is_image:
+            raise
+        return {
+            "schemaVersion": SOURCE_REFS_SCHEMA,
+            "baseSourceRef": None,
+            "citedSourceRefs": list(cited_source_refs),
+            "sourcePaths": list(source_paths),
+            "sources": [],
+            "note": f"image evidence ref unresolved, indexed without mirror: {exc}",
+        }
 
 
 def materialize_posts(
@@ -756,7 +793,6 @@ def materialize_posts(
             or creator_payload.get("experienceClaimMode"),
             "authorQualitySignals": compose_payload.get("authorQualitySignals")
             or creator_payload.get("authorQualitySignals"),
-            "conditionContext": _publication_condition_context(compose_payload.get("conditionContext")),
             "sourceUrls": source_urls,
             "assets": [
                 {
@@ -878,17 +914,22 @@ def materialize_posts(
         review_dir = post_dir / "5.review"
         review_dir.mkdir(parents=True, exist_ok=True)
         write_json(review_dir / "provenance.json", provenance)
-        if not is_image:
-            source_refs = build_source_refs_snapshot(
+        # 所有成品（含图片作品）都必须自持 `1.download/source_refs.json`，
+        # 否则图片作品永远缺 1.download，阶段树不完整、无法回查来源。
+        download_dir = post_dir / "1.download"
+        download_dir.mkdir(parents=True, exist_ok=True)
+        write_json(
+            download_dir / "source_refs.json",
+            _materialized_source_refs_snapshot(
                 task_id,
                 batch_id,
-                base_source_ref=str(writing_pack.get("baseSourceRef") or ""),
+                base_source_ref="" if is_image else str(writing_pack.get("baseSourceRef") or ""),
                 cited_source_refs=manifest["citedSourceRefs"],
                 source_paths=provenance_compose["sourcePaths"],
-            )
-            download_dir = post_dir / "1.download"
-            download_dir.mkdir(parents=True, exist_ok=True)
-            write_json(download_dir / "source_refs.json", source_refs)
+                is_image=is_image,
+            ),
+        )
+        if not is_image:
             write_json(
                 review_dir / "finalization_report.json",
                 build_finalization_report(
@@ -901,6 +942,7 @@ def materialize_posts(
                 ),
             )
         else:
+            # 图片作品没有 draft->final 文章差异，finalization_report 仅适用于文章/主页。
             finalization_path = review_dir / "finalization_report.json"
             if finalization_path.exists():
                 finalization_path.unlink()

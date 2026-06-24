@@ -2,7 +2,7 @@
 
 覆盖：
 - 契约字段对齐：hint 字段集 ⊆ intersection_reason.yaml 的 client_projection.fields。
-- build_intersection_hints：entityRefs→content、非地理 tag→interest、region→location。
+- build_intersection_hints：entityRefs→content、非地理 tag→interest。
 - 完备性门：缺维度/不足条数/枚举非法/锚点悬空/off-contract 字段均报。
 - materialize 端到端：产出 manifest.intersectionHints 且完备性门全绿。
 
@@ -45,7 +45,6 @@ _MANIFEST = {
     "entityRefs": ["/entity/地点/景区/九寨沟"],
     "normalizedEntityRefs": ["entity:景区:九寨沟"],
     "tagRefs": ["主题/山水风光", "Format/内容角度/攻略"],
-    "conditionContext": {"region": "四川"},
 }
 
 
@@ -55,10 +54,10 @@ def test_hint_fields_align_with_contract():
     assert set(HINT_FIELDS) <= contract, set(HINT_FIELDS) - contract
 
 
-def test_build_hints_covers_content_interest_location():
+def test_build_hints_covers_content_interest():
     hints = build_intersection_hints(_MANIFEST)
     dims = {h["dimension"] for h in hints}
-    assert {"content", "interest", "location"} <= dims, dims
+    assert {"content", "interest"} <= dims, dims
     assert intersection_hint_issues(hints, _MANIFEST) == []
 
 
@@ -121,7 +120,6 @@ def _seed_and_materialize() -> Path:
             "entityRefs": ["/entity/地点/景区/九寨沟"],
             "normalizedEntityRefs": ["entity:景区:九寨沟"],
             "tagRefs": ["主题/山水风光", "Format/内容角度/攻略"],
-            "conditionContext": {"region": "四川"},
             "assets": [],
         },
     )

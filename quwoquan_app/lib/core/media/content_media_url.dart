@@ -324,7 +324,8 @@ bool _looksLikeBareHostUrl(String source) {
 
 bool _isPrivateDevHost(String host) {
   final lower = host.toLowerCase();
-  return lower == 'localhost' ||
+  return _isLocalEnvTestHost(lower) ||
+      lower == 'localhost' ||
       lower == '127.0.0.1' ||
       lower == '::1' ||
       lower == '10.0.2.2' ||
@@ -337,6 +338,21 @@ List<String> _localHostBaseCandidates(String base) {
     return const <String>[];
   }
   final uri = Uri.tryParse(normalized);
+  final host = uri?.host.toLowerCase() ?? '';
+  if (_isLocalEnvTestHost(host)) {
+    return _uniqueNonEmpty(<String>[
+      uri!
+          .replace(host: 'localhost')
+          .toString()
+          .replaceFirst(RegExp(r'/+$'), ''),
+      uri
+          .replace(host: '127.0.0.1')
+          .toString()
+          .replaceFirst(RegExp(r'/+$'), ''),
+      uri.replace(host: '10.0.2.2').toString().replaceFirst(RegExp(r'/+$'), ''),
+      normalized,
+    ]);
+  }
   if (uri == null || !_isPrivateDevHost(uri.host)) {
     return <String>[normalized];
   }
@@ -414,3 +430,6 @@ bool isPrivateDevContentMediaUrl(String raw) {
   }
   return _isPrivateDevHost(uri.host);
 }
+
+bool _isLocalEnvTestHost(String host) =>
+    host.toLowerCase().endsWith('.quwoquan-env.test');

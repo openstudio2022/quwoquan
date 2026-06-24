@@ -5,12 +5,18 @@ class UserProfileTabConfig {
   final String id;
   final String labelKey;
   final bool isDefault;
+  /// 限制该一级 Tab 仅在指定主页模式（mine/other）可见；空表示全模式可见。
+  final List<String> modes;
 
   const UserProfileTabConfig({
     required this.id,
     required this.labelKey,
     required this.isDefault,
+    this.modes = const <String>[],
   });
+
+  /// 在指定模式下是否可见（空 modes 全模式可见）。
+  bool visibleInMode(String mode) => modes.isEmpty || modes.contains(mode);
 }
 
 class UserProfileSubTabConfig {
@@ -55,6 +61,36 @@ class UserProfileScrollMotionConfig {
   });
 }
 
+class UserCareerInterestCategoryConfig {
+  final String id;
+  final String tagRef;
+  final String labelKey;
+
+  const UserCareerInterestCategoryConfig({
+    required this.id,
+    required this.tagRef,
+    required this.labelKey,
+  });
+}
+
+class UserCareerInterestCatalogConfig {
+  final String occupationRootRef;
+  final String interestRootRef;
+  final int maxInterestCount;
+  final String defaultInterestCategoryId;
+  final List<UserCareerInterestCategoryConfig> occupationCategories;
+  final List<UserCareerInterestCategoryConfig> interestCategories;
+
+  const UserCareerInterestCatalogConfig({
+    required this.occupationRootRef,
+    required this.interestRootRef,
+    required this.maxInterestCount,
+    required this.defaultInterestCategoryId,
+    required this.occupationCategories,
+    required this.interestCategories,
+  });
+}
+
 // ignore: avoid_classes_with_only_static_members
 class UserProfileUIConfig {
   const UserProfileUIConfig._();
@@ -65,9 +101,12 @@ class UserProfileUIConfig {
 
   static const UserProfileScrollMotionConfig scrollMotion = UserProfileScrollMotionConfig(compactIdentityBar: true, primaryTabStickyBelowToolbar: true, secondaryTabInlineScroll: true, reboundCurve: "easeOutBack", collapseCurve: "easeOutCubic");
 
+  static const UserCareerInterestCatalogConfig careerInterestCatalog = UserCareerInterestCatalogConfig(occupationRootRef: "Audience/用户/职业", interestRootRef: "Audience/用户/兴趣偏好", maxInterestCount: 30, defaultInterestCategoryId: "all", occupationCategories: <UserCareerInterestCategoryConfig>[UserCareerInterestCategoryConfig(id: "product_ops", tagRef: "Audience/用户/职业/产品运营", labelKey: "career_occupation_category_product_ops"), UserCareerInterestCategoryConfig(id: "engineering", tagRef: "Audience/用户/职业/研发技术", labelKey: "career_occupation_category_engineering"), UserCareerInterestCategoryConfig(id: "design", tagRef: "Audience/用户/职业/设计创意", labelKey: "career_occupation_category_design"), UserCareerInterestCategoryConfig(id: "student", tagRef: "Audience/用户/职业/学生", labelKey: "career_occupation_category_student"), UserCareerInterestCategoryConfig(id: "freelance", tagRef: "Audience/用户/职业/自由职业", labelKey: "career_occupation_category_freelance")], interestCategories: <UserCareerInterestCategoryConfig>[UserCareerInterestCategoryConfig(id: "all", tagRef: "", labelKey: "career_interest_category_all"), UserCareerInterestCategoryConfig(id: "travel_photo", tagRef: "Audience/用户/兴趣偏好/旅行摄影", labelKey: "career_interest_category_travel_photo"), UserCareerInterestCategoryConfig(id: "campus", tagRef: "Audience/用户/兴趣偏好/校园", labelKey: "career_interest_category_campus"), UserCareerInterestCategoryConfig(id: "life", tagRef: "Audience/用户/兴趣偏好/生活", labelKey: "career_interest_category_life"), UserCareerInterestCategoryConfig(id: "art", tagRef: "Audience/用户/兴趣偏好/艺术", labelKey: "career_interest_category_art"), UserCareerInterestCategoryConfig(id: "tech", tagRef: "Audience/用户/兴趣偏好/科技", labelKey: "career_interest_category_tech")]);
+
   static const List<UserProfileTabConfig> profileTabs = <UserProfileTabConfig>[
-    UserProfileTabConfig(id: "creations", labelKey: "profile_tab_creations", isDefault: true),
-    UserProfileTabConfig(id: "interaction", labelKey: "profile_tab_interaction", isDefault: false),
+    UserProfileTabConfig(id: "creations", labelKey: "profile_tab_creations", isDefault: true, modes: <String>[]),
+    UserProfileTabConfig(id: "interaction", labelKey: "profile_tab_interaction", isDefault: false, modes: <String>[]),
+    UserProfileTabConfig(id: "footprint", labelKey: "profile_tab_footprint", isDefault: false, modes: <String>["mine"]),
   ];
 
   static const List<UserProfileSubTabConfig> creationSubTabs = <UserProfileSubTabConfig>[

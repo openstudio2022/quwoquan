@@ -7,7 +7,7 @@
         meta.json            # url/title/sourceKind/relevance（与对象相关性）
         source.md            # 原文
         source.clean.md      # 清洗正文
-        page.html            # 存档（可选）
+        page.html / page.raw.json  # 原始抓取快照（HTML 存 page.html，MediaWiki API JSON 存 page.raw.json）
         source.quality.json  # 来源质量
         assets/{NNN}_{slug}.{ext}   # 该来源自带图片
         assets/index.json    # 每图 sourceAssetId/fileName/url/sha256/license/relevance/variants
@@ -19,10 +19,12 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shutil
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from _common.io import read_json, write_json
+from _common import ops_governance as og
 from _common.image_variants import build_local_variants, image_dimensions
 from _common.paths import (
     STAGE_DOWNLOAD,
@@ -43,6 +45,23 @@ def slugify(value: str) -> str:
     """可读 slug：保留中文/字母数字，连续非法折叠为 _。"""
     s = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff]+", "_", str(value or "")).strip("_")
     return s or "asset"
+
+
+_SOURCE_RAW_SNAPSHOT_NAMES = ("page.raw.json", "page.html")
+
+
+def source_unit_raw_snapshot_name(raw_format: str = "") -> str:
+    """原始抓取快照文件名：MediaWiki API JSON 存 page.raw.json，其它（HTML）存 page.html。"""
+    return "page.raw.json" if str(raw_format or "").strip() == "mediawiki_api_json" else "page.html"
+
+
+def find_source_unit_raw_snapshot(unit: Path) -> Path | None:
+    """返回来源单元已有的原始快照文件（兼容 page.raw.json 与 page.html）。"""
+    for name in _SOURCE_RAW_SNAPSHOT_NAMES:
+        candidate = unit / name
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def resolve_entity_object_dir(
@@ -117,6 +136,8 @@ def write_source_unit(
     target_ref: str = "",
     relevance: str = "",
     images: Sequence[Mapping[str, Any]] | None = None,
+    asset_funnel: Mapping[str, Any] | None = None,
+    raw_format: str = "",
     task_id: str = "",
     batch_id: str = "",
     build_variants: bool = True,
@@ -134,7 +155,8 @@ def write_source_unit(
     if clean_md:
         (unit / "source.clean.md").write_text(clean_md, encoding="utf-8")
     if html_bytes is not None:
-        (unit / "page.html").write_bytes(html_bytes)
+        # 原始快照按真实格式命名：MediaWiki API 返回 JSON，不能再误命名为 page.html。
+        (unit / source_unit_raw_snapshot_name(raw_format)).write_bytes(html_bytes)
     if quality is not None:
         write_json(unit / "source.quality.json", dict(quality))
 
@@ -209,10 +231,29 @@ def write_source_unit(
         asset_index.append(entry)
     if asset_index:
         (unit / "assets").mkdir(parents=True, exist_ok=True)
-        write_json(unit / SOURCE_UNIT_ASSET_INDEX, {"assets": asset_index})
+        index_payload: dict[str, Any] = {"assets": asset_index}
+        if asset_funnel:
+            # 候选/丢弃可审计：记录原始候选数、保留数、按原因聚合的丢弃明细与去重数。
+            index_payload["funnel"] = dict(asset_funnel)
+        write_json(unit / SOURCE_UNIT_ASSET_INDEX, index_payload)
+    elif assets_dir.exists():
+        # 本轮没有图片通过权利/抓取/像素/安全/相关性门时，旧 assets 不能继续作为可消费证据。
+        shutil.rmtree(assets_dir)
 
+    source_ref = ""
+    if task_id and batch_id:
+        try:
+            source_ref = relative_batch_ref(unit / "source.md", task_id, batch_id)
+        except Exception:  # noqa: BLE001
+            source_ref = ""
+    snapshot_hash = "sha256:" + hashlib.sha256(source_md.encode("utf-8")).hexdigest()
     manifest = {
         "schemaVersion": "quwoquan_data.source_unit",
+        "sourceUnitId": og.source_unit_id(
+            canonical_url=url,
+            snapshot_hash=snapshot_hash,
+            source_ref=source_ref or str(unit),
+        ),
         "sourceId": source_id,
         "ordinal": ordinal,
         "sourceKind": source_category or platform or "web",
@@ -224,6 +265,7 @@ def write_source_unit(
         "researchLane": research_lane,
         "license": license_value,
         "url": url,
+        "snapshotHash": snapshot_hash,
         "title": title,
         "relevance": {
             "targetRef": target_ref,
@@ -231,6 +273,20 @@ def write_source_unit(
         },
         "assetCount": len(asset_index),
     }
+    # 实体聚焦度落盘（单一真相源 _common.entity_focus）：仅文本 article 底稿需要，
+    # 供选源弃稿门、content_plan 门与 scale_readiness 准出口径共同消费。图片相关性
+    # 另有图像门把关，不在此落 verdict 以免误伤。
+    if str(research_lane or "").strip() == "article":
+        from _common.entity_focus import classify_entity_focus
+
+        entity_name = str(target_ref or "").rstrip("/").rsplit("/", 1)[-1]
+        focus_score, focus_verdict = classify_entity_focus(
+            source_md, entity_name, title=title
+        )
+        manifest["entityFocusScore"] = focus_score
+        manifest["entityFocusVerdict"] = focus_verdict
+    if asset_funnel:
+        manifest["assetFunnel"] = dict(asset_funnel)
     write_json(unit / SOURCE_UNIT_MANIFEST, manifest)
     return manifest
 

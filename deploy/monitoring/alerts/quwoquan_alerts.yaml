@@ -148,7 +148,8 @@ groups:
     # emitter 状态：
     # - P0 已激活：recommendation_feed_served/impressed/visible/dwell/interaction/negative、
     #   recommendation_behavior_ingest(_dropped)、rec_hotpath_dropped、
-    #   recommendation_exposure_filter_smembers_fallback。
+    #   recommendation_exposure_filter_smembers_fallback、recommendation_feed_served_by_attribution_total、
+    #   recommendation_behavior_by_attribution_total。
     # - 仍为预置告警：ExposureGini / ContentCoverage / PolicyTakedownEjection / ABValidity
     #   等 P1/P2 指标，真实 emitter 落地前不代表已具备触发数据。
     rules:
@@ -342,6 +343,66 @@ groups:
         annotations:
           summary: "推荐负反馈率 > 8%"
           description: "dislike/report/hide 等负反馈 / impressed 占比 {{ $value | humanizePercentage }}，超出 SLO（negative_feedback_rate<=0.08）。"
+
+      - alert: RecommendationAttributionUnknownRateHigh
+        expr: |
+          sum(rate(recommendation_behavior_by_attribution_total{channel="unknown",recall_path="unknown"}[10m]))
+          / (sum(rate(recommendation_behavior_by_attribution_total[10m])) + 0.001) > 0.05
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐归因 unknown rate > 5%"
+          description: "P0+ bounded attribution 丢失占比 {{ $value | humanizePercentage }}，低于 recommendation_attribution_bucket_coverage>=0.95 的商用门槛。"
+
+      - alert: RecommendationAttributionNegativeFeedbackBySupplySourceHigh
+        expr: |
+          sum(rate(recommendation_behavior_by_attribution_total{state="negative",supply_source!="unknown"}[30m])) by (channel, vertical, supply_source)
+          / clamp_min(sum(rate(recommendation_behavior_by_attribution_total{state="impressed",supply_source!="unknown"}[30m])) by (channel, vertical, supply_source), 0.001) > 0.08
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐负反馈按供给来源异常（{{ $labels.channel }}/{{ $labels.vertical }}/{{ $labels.supply_source }}）"
+          description: "bounded attribution 负反馈率 {{ $value | humanizePercentage }} 超过 8%，需排查 UGC/数据工程供给质量、审核准入或场景路由。"
+
+      - alert: RecommendationAttributionCTRByRecallPathLow
+        expr: |
+          sum(rate(recommendation_behavior_by_attribution_total{state="click",recall_path!="unknown"}[30m])) by (channel, vertical, recall_path)
+          / clamp_min(sum(rate(recommendation_behavior_by_attribution_total{state="impressed",recall_path!="unknown"}[30m])) by (channel, vertical, recall_path), 0.001) < 0.03
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐 CTR 按召回路径低于 3%（{{ $labels.channel }}/{{ $labels.vertical }}/{{ $labels.recall_path }}）"
+          description: "bounded attribution CTR {{ $value | humanizePercentage }} 低于 recall_path 分桶护栏，需排查协同召回、热门、新内容或兜底召回质量。"
+
+      - alert: RecommendationScenarioConsumptionRateLow
+        expr: |
+          sum(rate(recommendation_behavior_by_attribution_total{state=~"click|dwell",channel=~"travel|premium_stream"}[30m])) by (channel)
+          / clamp_min(sum(rate(recommendation_feed_served_by_attribution_total{channel=~"travel|premium_stream"}[30m])) by (channel), 0.001) < 0.02
+        for: 30m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐旅行/精品场景消费率低于 2%（{{ $labels.channel }}）"
+          description: "travel 或 premium_stream 的 click/dwell 相对 served 消费率 {{ $value | humanizePercentage }} 过低，可能场景路由、精品排序预设或内容池质量退化。"
+
+      - alert: RecommendationSupplySourceShareImbalance
+        expr: |
+          min(sum(rate(recommendation_feed_served_by_attribution_total{supply_source=~"ugc|data_engineering"}[1h])) by (supply_source))
+          / clamp_min(sum(rate(recommendation_feed_served_by_attribution_total{supply_source=~"ugc|data_engineering"}[1h])), 0.001) < 0.05
+        for: 1h
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐 UGC/数据工程供给 share 失衡"
+          description: "UGC 与 data_engineering 中较低一侧 served share {{ $value | humanizePercentage }} 低于 5%，需排查供给投影、质量分准入或路由配比。"
 
   - name: quwoquan_search
     # 搜索 SLO 告警（SLI/SLO 真相源：quwoquan_service/services/search-service/

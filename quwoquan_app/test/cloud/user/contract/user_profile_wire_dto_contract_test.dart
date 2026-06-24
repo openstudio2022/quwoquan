@@ -122,12 +122,12 @@ void main() {
         'nickname': '朋友',
         'avatarUrl': 'https://a.test/1.jpg',
         'avatarVersion': 4,
-        'isFollowing': true,
+        'relationState': 'following',
       });
       expect(dto.subAccountId, 'rel_1');
       expect(dto.displayName, '朋友');
       expect(dto.avatarVersion, 4);
-      expect(dto.isFollowing, isTrue);
+      expect(dto.relationState, 'following');
     });
   });
 

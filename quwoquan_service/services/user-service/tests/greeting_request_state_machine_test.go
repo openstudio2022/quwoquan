@@ -7,9 +7,7 @@ import (
 )
 
 func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "gr_req", "req")
 	createTestProfile(t, "gr_tgt", "tgt")
@@ -148,9 +146,7 @@ func TestGreeting_IgnoreAndCancel(t *testing.T) {
 }
 
 func TestGreeting_MutualSenderRejected(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "gr4_req", "req4")
 	createTestProfile(t, "gr4_tgt", "tgt4")
@@ -189,9 +185,7 @@ func TestGreeting_MutualSenderRejected(t *testing.T) {
 }
 
 func TestGreeting_BlockedSenderRejected(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "gr3_req", "req3")
 	createTestProfile(t, "gr3_tgt", "tgt3")

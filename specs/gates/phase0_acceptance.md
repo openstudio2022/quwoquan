@@ -12,10 +12,9 @@
 - 删除 `quwoquan_data/tasks/README.md` 的 migrate-history 引用
 - 13 个 committed `task.yaml` 的 `provenance.createdBy: migrate_history` → `bootstrap`
 
-### T0-2 sop few-shot 接线（逻辑自治）
-- `_common/writing_pack.py`：新增 `_load_sop_fewshot`（只读 `DATA_ROOT/sopExampleRef` 的 example.md + 同目录 guide.md，缺失优雅跳过）
-- `build_writing_pack` 注入 `sopExampleRef`/`sopFewshot`；`render_prompt_md` 渲染"写作范例与规范(few-shot)"段
-- sop 保持全局单一真相源（`sop/主页/<域>/<类型>/`），不物理拷进任务
+### T0-2 sop 真相源收敛（逻辑自治）
+- `sop/主页/<域>/<类型>/` 保持为实体类型真相源，不物理拷进任务
+- 内容创作已回到“底稿原创改写 + 结构质量契约”主线，不再注入 few-shot 范例段
 
 ### T0-3 修 download 默认零源 bug
 - `download/source_inputs.py`：`curated_sources_for_entity` 兼容顶层 `sources` / `payload.sources` / `payload.existingSources`，并兼容 source_id/url 字段名
@@ -28,7 +27,6 @@
 | 真相源残引清零 | `rg migrate_history quwoquan_data/scripts quwoquan_data/tasks` | 0 命中（验收文档可保留过往说明） |
 | 任务规格合法 | `cli.py task lint` | OK（13 任务） |
 | 子命令已移除 | `cli.py task --help` | 无 migrate-history |
-| sop 注入回归 | `tests/bootstrap/test_sop_injection.py` | 4 PASS |
 | download 零源回归 | `tests/download/test_download_source_plan.py` | 2 PASS |
 | 全量门禁 | `make verify-quwoquan-data` | PASSED |
 

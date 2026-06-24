@@ -5,7 +5,7 @@
 #   （ui/**/pages/*_page.dart、welcome_screen、components/**/*_page.dart、app/shell）
 # 双向校验：quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py（矩阵路径 ⊆ 本清单 ui_pages）
 version: 1
-updated: "2026-04-12"
+updated: "2026-06-25"
 policy:
   mock_remote_same_return_types: true
   ui_domain_rows_should_be_codegen_dto: true
@@ -200,6 +200,12 @@ domains:
         target_dto: ContentPublishDraftComposite
         target_read_projection: PostReadPresentation
         target_edit_draft: ContentPublishDraftComposite
+      - path: quwoquan_app/lib/ui/content/entry/pages/local_draft_page.dart
+        status: compliant
+        note: 本地草稿页消费 CreateDraftStoreState/CreateDraft，继续编辑统一回写 create 路由 draftId；缺图/缺视频走 provider+gateway 恢复态，不在 UI 层拼第二套假数据
+        target_dto: ContentPublishDraftComposite
+        target_read_projection: PostReadPresentation
+        target_edit_draft: ContentPublishDraftComposite
       - path: quwoquan_app/lib/ui/content/entry/pages/publish_location_selector_page.dart
         status: compliant
         note: 帖子 ReadPresentation N/A；强类型 LocationPoiDto + PublishSettings；主帖预览/元数据在 create 链 draftPreview
@@ -279,7 +285,7 @@ domains:
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/my_profile_page.dart
         status: compliant
-        note: 2026-06-17 首屏固定为封面→身份(✎)→Slogan→单行统计→我的连接→我的影响力→记录/圈子/互动；连接/影响力消费 metadata/codegen 的 primaryText/subtitleText，记录筛选为全部/图片/视频/长文；未登录态登录 CTA 消费 AuthSessionState
+        note: 2026-06-17 首屏固定为封面→身份(✎)→Slogan→单行统计→我的连接→我的影响力→记录/互动/足迹（V5：圈子降为统计数字，足迹=浏览历史 mine-only）；连接/影响力消费 metadata/codegen 的 primaryText/subtitleText，记录筛选为全部/图片/视频/长文；未登录态登录 CTA 消费 AuthSessionState
         target_dto: UserProfileDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
@@ -305,15 +311,43 @@ domains:
         target_dto: N/A
       - path: quwoquan_app/lib/ui/user/pages/edit_profile_page.dart
         status: compliant
-        note: ProfileEditUpdatePayload → updateProfile（Map 仅 Repository 边界）
-        target_dto: UserProfileDto
+        note: ProfileEditSnapshotData/ProfileQrCardData 读取本人私有编辑快照与二维码卡片，App 使用 pretty_qr_code 渲染服务 HTTPS payload；ProfileEditUpdatePayload 写昵称、性别、生日、regionTagRef、签名、职业/兴趣 tagRefs；地区选择经 TagRepository.listChildren 读取 tag-service 行政区 direct children；手机号绑定走 AuthRepository.bindPhoneWithOtp/bindCarrierPhone，Map 仅 Repository 边界
+        target_dto: ProfileEditSnapshotWireDto
+      - path: quwoquan_app/lib/ui/user/pages/career_interest_page.dart
+        status: compliant
+        note: 资料编辑职业/兴趣独立页；读取 ProfileEditSnapshotData，候选经 TagRepository.listChildren/resolveTag，保存写 ProfileEditUpdatePayload(occupationTagRef, interestTagRefs)
+        target_dto: ProfileEditSnapshotWireDto + ProfileEditUpdatePayload
+      - path: quwoquan_app/lib/ui/user/pages/add_contact_page.dart
+        status: compliant
+        note: 添加联系人主页经 UserProfileRepository.getProfileQrCard 获取 ProfileQrCardData，直接嵌入真实二维码卡片；扫码、手机联系人和搜索入口继续走 metadata route/codegen path
+        target_dto: ProfileQrCardData
+      - path: quwoquan_app/lib/ui/user/pages/contact_search_result_page.dart
+        status: compliant
+        note: 趣我圈号/昵称搜索经 UserProfileRepository.searchSocialRelations，列表行使用 SocialRelationSearchItemView + ContactCandidateVm，添加联系人经 followUser
+        target_dto: SocialRelationSearchItemView
+      - path: quwoquan_app/lib/ui/user/pages/contact_confirm_page.dart
+        status: compliant
+        note: 扫码/搜索/手机号来源确认页，经 UserProfileRepository.getSubAccountProfile + RelationshipCapabilityRepository.getCapability 判定添加能力，添加动作经 followUser
+        target_dto: SubAccountProfileViewData + RelationshipCapabilityDto
+      - path: quwoquan_app/lib/ui/user/pages/my_qr_code_page.dart
+        status: compliant
+        note: 独立我的二维码页，经 UserProfileRepository.getProfileQrCard 获取 ProfileQrCardData，并复用 MyQrCardView 渲染真实 HTTPS payload
+        target_dto: ProfileQrCardData
+      - path: quwoquan_app/lib/ui/user/pages/scan_contact_qr_page.dart
+        status: compliant
+        note: 扫一扫页经 mobile_scanner 读取二维码，QrPayloadParser 解析 HTTPS payload，UserProfileRepository.resolveProfileQrToken 返回 ProfileQrResolveWireDto 后跳添加确认页
+        target_dto: ProfileQrResolveWireDto
+      - path: quwoquan_app/lib/ui/user/pages/phone_contacts_page.dart
+        status: compliant
+        note: 手机联系人页仅上传 ContactHashService 规范化哈希，ContactDiscoveryRepository.initiate 返回 ContactDiscoveryMatchWireDto，添加动作经 followUser
+        target_dto: ContactDiscoveryMatchWireDto
       - path: quwoquan_app/lib/ui/user/pages/persona_management_page.dart
         status: compliant
         note: UserRepository.getPersonaManagementSummary；PersonaDtoSurface = PersonaManagementItemViewData；创建/更新分身走 UserProfileRepository + PersonaCreateRequestDto/PersonaUpdateRequestDto
         target_dto: PersonaDto
       - path: quwoquan_app/lib/ui/user/pages/profile_stats_page.dart
         status: compliant
-        note: listProfileCircles→listUserCircles 返回 CircleDto；关注/粉丝行为 ProfileSocialRelationRowViewData（手写读模型，见 repository_p2_notes）
+        note: 2026-06-25 stats 详情页收口为 iOS segmented toolbar + 三 tab 云侧分页搜索；圈子列表消费 CircleDto，粉丝/关注列表消费 ProfileSocialRelationRowViewData（username/userHandle/profileVisibility/relationState/followedAt/relationshipCapability），动作矩阵只读 viewer->row capability，query/cursor/limit 在 Repository 边界透传
         target_dto: UserProfileDto
       - path: quwoquan_app/lib/ui/user/pages/profile_comments_page.dart
         status: compliant
@@ -424,11 +458,16 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/settings/pages/settings_page.dart
         status: compliant
-        note: 以本地/Cupertino 为主；云上外观设置走 codegen 错误码路径；账号退出/切换经 AuthRepository 与 AuthSessionState
+        note: 我的主页设置中枢；云上外观设置走 codegen 错误码路径；账号退出/切换经 AuthRepository 与 AuthSessionState；权限管理与关于页为本地 Inset 预留/信息页
         target_dto: N/A
-      - path: quwoquan_app/lib/ui/settings/pages/developer_settings_page.dart
+      - path: quwoquan_app/lib/ui/settings/pages/settings_permissions_page.dart
         status: exempt
-        note: 开发者工具；无产品云契约
+        note: 权限管理预留页；联系人/圈子/实体三层只读占位，本轮不接云端权限契约
+        target_dto: N/A
+      - path: quwoquan_app/lib/ui/settings/pages/settings_about_page.dart
+        status: exempt
+        note: 关于页；展示 PackageInfo 版本，无产品云契约
+        target_dto: N/A
 
   - id: rtc
     metadata_hint: contracts/metadata/rtc/call_session
@@ -525,6 +564,9 @@ domains:
       - path: quwoquan_app/lib/app/shell/web_main_app_shell_auth.dart
         status: exempt
         note: web_main_app_shell.dart 的 part helper；仅承载 PC Web 登录守卫与规格类，不是独立页面
+      - path: quwoquan_app/lib/app/shell/web_main_app_shell_state.dart
+        status: exempt
+        note: web_main_app_shell.dart 的 part helper；仅承载 PC Web 宽屏壳状态与构建拆分，不是独立页面
       - path: quwoquan_app/lib/core/links/app_public_content_links.dart
         status: compliant
         note: 公网 origin 薄层；路径由 _shared/link_templates.yaml → lib/cloud/runtime/generated/link_templates.g.dart（AppLinkTemplates）；门禁 quwoquan_app/scripts/runtime/verify_link_templates_route_ids.py
@@ -547,6 +589,9 @@ domains:
       - path: quwoquan_app/lib/components/media/picker/create_media_picker_page.dart
         status: exempt
         note: 本地选择器
+      - path: quwoquan_app/lib/components/media/picker/desktop/desktop_image_picker_page.dart
+        status: exempt
+        note: 桌面本机图片选择器；数据源为本机文件系统扫描，无云行模型
       - path: quwoquan_app/lib/components/media/picker/one_tap_movie_preview_page.dart
         status: exempt
         note: 本地预览

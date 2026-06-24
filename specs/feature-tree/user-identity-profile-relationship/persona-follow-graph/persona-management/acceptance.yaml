@@ -22,7 +22,8 @@ gwt_acceptance:
     title: 分身管理摘要、编辑同步与当前分身切换一致
     given:
     - 用户已有主分身与至少一个辅助分身。
-    - user-service 可返回 persona management summary、active persona context 与 profile sync suggestion 所需字段。
+    - user-service 可返回 persona management summary、active persona context 与 profile
+      sync suggestion 所需字段。
     - App 已进入分身管理页。
     when:
     - 用户浏览分身列表与 quota。
@@ -51,9 +52,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - 'command: go test ./services/user-service/tests -run Test(GetPersonaManagementSummary_ReturnsQuotaAndActiveContext|UpdatePersona_ReflectsManagementFields|ApplyPersonaProfileSync_ReturnsAppliedCount|ActivatePersona_Transaction) -count=1'
-      - quwoquan_app/test/local_contract/user/persona_management__local_contract_test.dart
-      - quwoquan_app/test/user_acceptance/persona_management__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/user/persona_management__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/persona_management__user_acceptance_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/persona_contract__api_integration_test.go
     status: completed
     test_evidence:
       primary:
@@ -72,12 +73,14 @@ gwt_acceptance:
         - api_integration.user.persona_management.update_reflects_fields_and_avatar_version
         - api_integration.user.persona_management.apply_sync_returns_applied_count
         - api_integration.user.persona_management.activate_transaction_single_active
-        envs: *id001
+        envs:
+        - gamma
       - layer: user_acceptance
         suite: persona_management
         cases:
         - user_acceptance.user.persona_management.edit_sync_activate_journey
-        envs: *id001
+        envs:
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: persona_management_provider
@@ -86,6 +89,9 @@ gwt_acceptance:
         envs: *id001
     notes:
     - 当前 story 只验证 avatarVersion 的读链与缓存失效语义，不声明分身头像上传入口。
+    - '[migrated_from_recorded_command] go test ./services/user-service/tests -run
+      Test(GetPersonaManagementSummary_ReturnsQuotaAndActiveContext|UpdatePersona_ReflectsManagementFields|ApplyPersonaProfileSync_ReturnsAppliedCount|ActivatePersona_Transaction)
+      -count=1'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

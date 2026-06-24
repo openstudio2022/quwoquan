@@ -21,6 +21,8 @@ class FeedItemDto {
   final String? videoUrl;
   final List<String> imageUrls;
   final int? durationMs;
+  final String? coverStrategy;
+  final int? coverFrameTimeMs;
   final int? width;
   final int? height;
   final int likeCount;
@@ -43,6 +45,8 @@ class FeedItemDto {
   final String? articleMarkdownDigest;
   final Map<String, dynamic>? articleRenderProfile;
   final String? contentVertical;
+  final String? recallPath;
+  final String? supplySource;
   final String? paperThemeMode;
   final String? paperTexture;
   final List<Map<String, dynamic>>? cards;
@@ -69,6 +73,8 @@ class FeedItemDto {
     this.videoUrl,
     required this.imageUrls,
     this.durationMs,
+    this.coverStrategy,
+    this.coverFrameTimeMs,
     this.width,
     this.height,
     required this.likeCount,
@@ -91,6 +97,8 @@ class FeedItemDto {
     this.articleMarkdownDigest,
     this.articleRenderProfile,
     this.contentVertical,
+    this.recallPath,
+    this.supplySource,
     this.paperThemeMode,
     this.paperTexture,
     this.cards,
@@ -115,10 +123,12 @@ class FeedItemDto {
       title: m['title']?.toString() ?? null,
       body: m['body']?.toString() ?? m['description']?.toString() ?? m['content']?.toString() ?? null,
       coverUrl: m['coverUrl']?.toString() ?? m['cover']?.toString() ?? m['thumbnail']?.toString() ?? m['thumbnailUrl']?.toString() ?? '',
-      thumbnailUrl: m['coverUrl']?.toString() ?? m['thumbnailUrl']?.toString() ?? m['thumbnail']?.toString() ?? '',
+      thumbnailUrl: m['thumbnailUrl']?.toString() ?? m['thumbnail']?.toString() ?? m['coverUrl']?.toString() ?? '',
       videoUrl: m['videoUrl']?.toString() ?? m['video_url']?.toString() ?? null,
       imageUrls: _parseStringList(m['mediaUrls']) ?? _parseStringList(m['images']) ?? _parseStringList(m['imageUrls']) ?? _parseStringList(m['image_urls']) ?? <String>[],
       durationMs: (m['durationMs'] as num?)?.toInt() ?? (m['duration_ms'] as num?)?.toInt() ?? (m['duration'] as num?)?.toInt() ?? null,
+      coverStrategy: m['coverStrategy']?.toString() ?? m['cover_strategy']?.toString() ?? null,
+      coverFrameTimeMs: (m['coverFrameTimeMs'] as num?)?.toInt() ?? (m['cover_frame_time_ms'] as num?)?.toInt() ?? null,
       width: (m['width'] as num?)?.toInt() ?? (m['imageWidth'] as num?)?.toInt() ?? (m['image_width'] as num?)?.toInt() ?? (m['w'] as num?)?.toInt() ?? null,
       height: (m['height'] as num?)?.toInt() ?? (m['imageHeight'] as num?)?.toInt() ?? (m['image_height'] as num?)?.toInt() ?? (m['h'] as num?)?.toInt() ?? null,
       likeCount: (m['likeCount'] as num?)?.toInt() ?? (m['likesCount'] as num?)?.toInt() ?? (m['likes'] as num?)?.toInt() ?? (m['like_count'] as num?)?.toInt() ?? 0,
@@ -141,6 +151,8 @@ class FeedItemDto {
       articleMarkdownDigest: m['articleMarkdownDigest']?.toString() ?? null,
       articleRenderProfile: _parseStringKeyMap(m['articleRenderProfile']) ?? null,
       contentVertical: m['contentVertical']?.toString() ?? m['categoryId']?.toString() ?? m['category']?.toString() ?? m['vertical']?.toString() ?? null,
+      recallPath: m['recallPath']?.toString() ?? m['recall_path']?.toString() ?? null,
+      supplySource: m['supplySource']?.toString() ?? m['supply_source']?.toString() ?? null,
       paperThemeMode: m['paperThemeMode']?.toString() ?? null,
       paperTexture: m['paperTexture']?.toString() ?? m['articlePaperTexture']?.toString() ?? null,
       cards: _parseMapList(m['cards']),
@@ -170,6 +182,8 @@ class FeedItemDto {
       'videoUrl': videoUrl,
       'imageUrls': imageUrls,
       'durationMs': durationMs,
+      'coverStrategy': coverStrategy,
+      'coverFrameTimeMs': coverFrameTimeMs,
       'width': width,
       'height': height,
       'likeCount': likeCount,
@@ -192,6 +206,8 @@ class FeedItemDto {
       'articleMarkdownDigest': articleMarkdownDigest,
       'articleRenderProfile': articleRenderProfile,
       'contentVertical': contentVertical,
+      'recallPath': recallPath,
+      'supplySource': supplySource,
       'paperThemeMode': paperThemeMode,
       'paperTexture': paperTexture,
       'cards': cards,
@@ -220,6 +236,8 @@ class FeedItemDto {
     String? videoUrl,
     List<String>? imageUrls,
     int? durationMs,
+    String? coverStrategy,
+    int? coverFrameTimeMs,
     int? width,
     int? height,
     int? likeCount,
@@ -242,6 +260,8 @@ class FeedItemDto {
     String? articleMarkdownDigest,
     Map<String, dynamic>? articleRenderProfile,
     String? contentVertical,
+    String? recallPath,
+    String? supplySource,
     String? paperThemeMode,
     String? paperTexture,
     List<Map<String, dynamic>>? cards,
@@ -268,6 +288,8 @@ class FeedItemDto {
       videoUrl: videoUrl ?? this.videoUrl,
       imageUrls: imageUrls ?? this.imageUrls,
       durationMs: durationMs ?? this.durationMs,
+      coverStrategy: coverStrategy ?? this.coverStrategy,
+      coverFrameTimeMs: coverFrameTimeMs ?? this.coverFrameTimeMs,
       width: width ?? this.width,
       height: height ?? this.height,
       likeCount: likeCount ?? this.likeCount,
@@ -290,6 +312,8 @@ class FeedItemDto {
       articleMarkdownDigest: articleMarkdownDigest ?? this.articleMarkdownDigest,
       articleRenderProfile: articleRenderProfile ?? this.articleRenderProfile,
       contentVertical: contentVertical ?? this.contentVertical,
+      recallPath: recallPath ?? this.recallPath,
+      supplySource: supplySource ?? this.supplySource,
       paperThemeMode: paperThemeMode ?? this.paperThemeMode,
       paperTexture: paperTexture ?? this.paperTexture,
       cards: cards ?? this.cards,

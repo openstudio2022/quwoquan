@@ -655,17 +655,13 @@ void main() {
     });
 
     test('createPersona → POST /v1/user/personas', () async {
-      await repo.createPersona(displayName: '摄影分身', userHandle: 'photo_handle');
+      await repo.createPersona(displayName: '摄影分身');
       expect(log.last.method, 'POST');
       expect(log.last.path, UserApiMetadata.createPersonaPath);
     });
 
     test('updatePersona → PATCH /v1/user/personas/{id}', () async {
-      await repo.updatePersona(
-        'persona_1',
-        displayName: '新分身名',
-        userHandle: 'new_handle',
-      );
+      await repo.updatePersona('persona_1', displayName: '新分身名');
       expect(log.last.method, 'PATCH');
       expect(
         log.last.path,

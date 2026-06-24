@@ -14,6 +14,7 @@ class TagApiMetadata {
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'InvertedObjects': '/v1/tag/inverted',
     'ListDimensions': '/v1/tag/dimensions',
+    'ListTagChildren': '/v1/tag/children',
     'RelatedObjects': '/v1/tag/related-objects',
     'RelatedTags': '/v1/tag/related',
     'ResolveTag': '/v1/tag/resolve',
@@ -29,6 +30,7 @@ class TagApiMetadata {
   static const Map<String, String> operationToMethod = <String, String>{
     'InvertedObjects': 'GET',
     'ListDimensions': 'GET',
+    'ListTagChildren': 'GET',
     'RelatedObjects': 'GET',
     'RelatedTags': 'GET',
     'ResolveTag': 'GET',
@@ -45,6 +47,7 @@ class TagApiMetadata {
   static const Map<String, String> operationToAuthMode = <String, String>{
     'InvertedObjects': 'public',
     'ListDimensions': 'public',
+    'ListTagChildren': 'public',
     'RelatedObjects': 'public',
     'RelatedTags': 'public',
     'ResolveTag': 'public',
@@ -67,6 +70,7 @@ class TagApiMetadata {
 
   static const String invertedObjectsOperation = 'InvertedObjects';
   static const String listDimensionsOperation = 'ListDimensions';
+  static const String listTagChildrenOperation = 'ListTagChildren';
   static const String relatedObjectsOperation = 'RelatedObjects';
   static const String relatedTagsOperation = 'RelatedTags';
   static const String resolveTagOperation = 'ResolveTag';
@@ -80,6 +84,7 @@ class TagApiMetadata {
 
   static const String invertedObjectsPath = '/v1/tag/inverted';
   static const String listDimensionsPath = '/v1/tag/dimensions';
+  static const String listTagChildrenPath = '/v1/tag/children';
   static const String relatedObjectsPath = '/v1/tag/related-objects';
   static const String relatedTagsPath = '/v1/tag/related';
   static const String resolveTagPath = '/v1/tag/resolve';

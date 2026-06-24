@@ -1,0 +1,21 @@
+{
+  "capturedAt": "2026-06-22T12:31:03.928764Z",
+  "target": "test/patrol/environment/basic_viability_test.dart",
+  "deviceId": "emulator-5554",
+  "command": [
+    "patrol",
+    "test",
+    "-t",
+    "test/patrol/environment/basic_viability_test.dart",
+    "-d",
+    "emulator-5554",
+    "--dart-define=RUN_T4_PATROL=true",
+    "--dart-define=APP_RUNTIME_ENV=prod",
+    "--dart-define=APP_DATA_SOURCE=remote",
+    "--dart-define=API_CONTRACT_ENV=prod",
+    "--dart-define=CLOUD_GATEWAY_BASE_URL=https://api.example.com",
+    "--dart-define=API_CONTRACT_BASE_URL=https://api.example.com",
+    "--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=https://ops.example.com",
+    "--dart-define=TEST_AUTH_TOKEN=test-token"
+  ]
+}

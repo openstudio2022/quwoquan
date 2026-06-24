@@ -55,6 +55,7 @@ class _CommentThreadItem extends ConsumerWidget {
             _CommentReactionGroup(
               likeSelected: comment.viewerReaction == 'like',
               dislikeSelected: comment.viewerReaction == 'dislike',
+              showDeleteAction: comment.canDelete,
               likeCount: comment.likeCount,
               dislikeCount: comment.dislikeCount,
               onLike: () =>
@@ -63,12 +64,19 @@ class _CommentThreadItem extends ConsumerWidget {
                         .read(commentProviderFamily(postId).notifier)
                         .toggleLike(comment.id);
                   }),
-              onDislike: () =>
-                  runWhenLoggedIn(ref, context, AuthGateReason.like, () {
-                    ref
+              onDislike: comment.canDelete
+                  ? null
+                  : () =>
+                        runWhenLoggedIn(ref, context, AuthGateReason.like, () {
+                          ref
+                              .read(commentProviderFamily(postId).notifier)
+                              .toggleDislike(comment.id);
+                        }),
+              onDelete: comment.canDelete
+                  ? () => ref
                         .read(commentProviderFamily(postId).notifier)
-                        .toggleDislike(comment.id);
-                  }),
+                        .deleteComment(comment.id)
+                  : null,
             ),
           ],
         ),
@@ -112,10 +120,7 @@ class _CommentThreadItem extends ConsumerWidget {
         Row(
           children: [
             if (comment.isPinned) ...[
-              _Badge(
-                label: UITextConstants.commentPinnedBadge,
-                isDark: isDark,
-              ),
+              _Badge(label: UITextConstants.commentPinnedBadge, isDark: isDark),
               SizedBox(width: AppSpacing.xs),
             ],
             Expanded(
@@ -169,11 +174,6 @@ class _CommentThreadItem extends ConsumerWidget {
           isDark: isDark,
           onReply: canReplyToComment
               ? () => onReplySelected?.call(comment)
-              : null,
-          onDelete: comment.canDelete
-              ? () => ref
-                    .read(commentProviderFamily(postId).notifier)
-                    .deleteComment(comment.id)
               : null,
           onPin: comment.canPin
               ? () => runWhenLoggedIn(ref, context, AuthGateReason.like, () {

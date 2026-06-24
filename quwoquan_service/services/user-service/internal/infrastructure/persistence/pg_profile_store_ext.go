@@ -23,7 +23,7 @@ func NewPgProfileStore(pool *pgxpool.Pool) *PgProfileStore {
 	return &PgProfileStore{pgProfileStoreBase{pool: pool}}
 }
 
-const userProfileNullableSafeCols = `user_id, COALESCE(account_state, 'active'), COALESCE(identity_origin, ''), logical_shard, COALESCE(anonymous_retention_policy, ''), COALESCE(phone, ''), COALESCE(nickname, ''), COALESCE(nickname_customized, false), COALESCE(avatar_url, ''), COALESCE(avatar_asset_id, ''), avatar_version, COALESCE(background_url, ''), COALESCE(bio, ''), COALESCE(identity_tags, ''), COALESCE(gender, ''), birth_date, COALESCE(region, ''), COALESCE(status, 'active'), profile_version, follower_count, following_count, post_count, circle_count, like_count, COALESCE(owner_display_name, ''), sub_account_count, created_at, updated_at`
+const userProfileNullableSafeCols = `user_id, COALESCE(account_state, 'active'), COALESCE(identity_origin, ''), logical_shard, COALESCE(anonymous_retention_policy, ''), COALESCE(phone, ''), COALESCE(nickname, ''), COALESCE(nickname_customized, false), COALESCE(avatar_url, ''), COALESCE(avatar_asset_id, ''), avatar_version, COALESCE(background_url, ''), COALESCE(background_asset_id, ''), COALESCE(bio, ''), COALESCE(identity_tags, ''), COALESCE(gender, ''), birth_date::text, COALESCE(region, ''), COALESCE(region_code, ''), COALESCE(status, 'active'), profile_version, follower_count, following_count, post_count, circle_count, like_count, COALESCE(owner_display_name, ''), sub_account_count, created_at, updated_at`
 
 type userProfileScanner interface {
 	Scan(dest ...any) error
@@ -44,11 +44,13 @@ func scanNullableSafeUserProfile(scanner userProfileScanner) (*model.UserProfile
 		&e.AvatarAssetID,
 		&e.AvatarVersion,
 		&e.BackgroundURL,
+		&e.BackgroundAssetID,
 		&e.Bio,
 		&e.IdentityTags,
 		&e.Gender,
 		&e.BirthDate,
 		&e.Region,
+		&e.RegionCode,
 		&e.Status,
 		&e.ProfileVersion,
 		&e.FollowerCount,
@@ -102,11 +104,12 @@ func (s *PgProfileStore) Update(ctx context.Context, p *model.UserProfile) error
 	}
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE user_profiles
-		SET nickname=$2, nickname_customized=$3, avatar_url=$4, avatar_asset_id=$5, avatar_version=$6,
-		    background_url=$7, bio=$8, gender=$9, birth_date=$10, region=$11, profile_version=$12, updated_at=$13
-		WHERE user_id=$1`,
+			SET nickname=$2, nickname_customized=$3, avatar_url=$4, avatar_asset_id=$5, avatar_version=$6,
+			    background_url=$7, background_asset_id=$8, bio=$9, gender=$10, birth_date=$11,
+			    region=$12, region_code=$13, profile_version=$14, updated_at=$15
+			WHERE user_id=$1`,
 		p.UserID, p.Nickname, p.NicknameCustomized, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion,
-		p.BackgroundURL, p.Bio, p.Gender, p.BirthDate, p.Region, p.ProfileVersion, p.UpdatedAt)
+		p.BackgroundURL, p.BackgroundAssetID, p.Bio, p.Gender, p.BirthDate, p.Region, p.RegionCode, p.ProfileVersion, p.UpdatedAt)
 	if err != nil {
 		return err
 	}

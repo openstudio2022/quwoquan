@@ -23,9 +23,23 @@ class _CreateEntryRoutePage extends ConsumerWidget {
         context.pop();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final navContext = router.routerDelegate.navigatorKey.currentContext;
-          if (navContext != null) {
-            unawaited(presentCreateDraftPickerAndGo(navContext, router));
+          if (navContext == null) {
+            return;
           }
+          if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+            unawaited(
+              requireLogin(
+                ref,
+                navContext,
+                AuthGateReason.createPost,
+                redirect: AppRoutePaths.localDrafts,
+                dismissFallback: AppRoutePaths.home,
+                allowGuestDismissPop: false,
+              ),
+            );
+            return;
+          }
+          unawaited(presentCreateDraftPickerAndGo(navContext, router));
         });
       },
       onCreateCircle: () {
@@ -35,6 +49,24 @@ class _CreateEntryRoutePage extends ConsumerWidget {
             return;
           }
           GlobalQuickActionSheet.openCreateCircle(context);
+        });
+      },
+      onAddContact: () {
+        context.pop();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) {
+            return;
+          }
+          GlobalQuickActionSheet.openAddContact(context);
+        });
+      },
+      onStartGroupChat: () {
+        context.pop();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) {
+            return;
+          }
+          GlobalQuickActionSheet.openStartGroupChat(context);
         });
       },
     );

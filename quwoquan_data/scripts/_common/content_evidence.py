@@ -113,6 +113,163 @@ _TRANSITION_MARKERS = (
 )
 _FORBIDDEN_EXCERPT_MARKERS = ("来源平台：", "url:", "platform:", "title:", "entity:", "retained:")
 _MANUAL_SOURCE_PLAN_RE = re.compile(r"(?mi)^manual_source_plan_note:\s.*$")
+
+# 样板/导航/页脚/广告行标记：来源单元净化与底稿正文提取共用同一份唯一真相源，
+# 避免在 base_draft / content_evidence 各维护一份漂移列表（编码军规 R25/single-source）。
+SOURCE_BOILERPLATE_MARKERS: tuple[str, ...] = (
+    "登录",
+    "注册",
+    "联系客服",
+    "我的订单",
+    "举报",
+    "点赞",
+    "写点评",
+    "上一页",
+    "下一页",
+    "回到顶部",
+    "用户问答",
+    "附近景点",
+    "推荐景点",
+    "附近美食",
+    "附近购物",
+    "热门旅游目的地推荐",
+    "旅游攻略导航",
+    "微信小程序",
+    "扫码前往",
+    "扫码",
+    "值机选座",
+    "退票改签",
+    "报销凭证",
+    "AI行程助手",
+    "特价机票",
+    "企业商旅",
+    "体验更流畅",
+    "赢积分换大奖",
+    "PICC",
+    "中国人民保险",
+    "中国人保",
+    "人保守护",
+    "优游保",
+    "境内自驾游保险",
+    "保单管理",
+    "增值服务",
+    "在线理赔",
+    "在线客服",
+    "新冠",
+    "友情链接",
+    "查看更多",
+    "查看地图",
+    "打开微信扫一扫",
+    "页面存档",
+    "互联网档案馆",
+    "Toggle navigation",
+)
+
+# 维基/百科常见的"非正文尾节"，命中该节标题后整节剔除（含其子节），
+# 直到出现一个不在剔除集合内的同级或更高级标题。
+_CLEAN_DROP_SECTIONS: tuple[str, ...] = (
+    "参见",
+    "參見",
+    "参考文献",
+    "參考文獻",
+    "参考资料",
+    "參考資料",
+    "参考来源",
+    "參考來源",
+    "注释",
+    "註釋",
+    "注脚",
+    "註腳",
+    "脚注",
+    "腳註",
+    "外部链接",
+    "外部連結",
+    "延伸阅读",
+    "延伸閱讀",
+    "扩展阅读",
+    "擴展閱讀",
+    "相关条目",
+    "相關條目",
+    "相关链接",
+    "相關連結",
+    "分类",
+    "分類",
+    "图集",
+    "圖集",
+    "来源",
+    "來源",
+)
+# 行内引用/失链标记：[1]、[12]、[来源请求]、[註 3]、[失效链接] 等。
+_CITATION_MARKER_RE = re.compile(
+    r"\[(?:\d{1,3}"
+    r"|来源请求|來源請求|需要更新|引用错误|引用錯誤"
+    r"|失效链接|失效連結|永久失效链接|永久失效連結"
+    r"|註\s*\d+|注\s*\d+|n\s*\d+|a\s*\d+)\]"
+)
+# MediaWiki explaintext(默认 exsectionformat=wiki)的小节标题：== 标题 == / === 标题 ===。
+_WIKI_HEADING_RE = re.compile(r"^\s*(={2,6})\s*(.+?)\s*=*\s*$")
+
+
+def source_line_is_boilerplate(line: str) -> bool:
+    """判断一行是否为导航/页脚/广告/纯链接等样板噪声（净化与底稿提取共用）。"""
+    compact = re.sub(r"\s+", "", line)
+    letters = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", compact)
+    if not letters:
+        return True
+    if any(marker in line for marker in SOURCE_BOILERPLATE_MARKERS):
+        return True
+    if "http" in compact.lower():
+        return True
+    if re.fullmatch(r"[\d./:+\-—~～()（） ]+", compact):
+        return True
+    if compact.startswith(("IP属地", "第", "共")) and any(ch.isdigit() for ch in compact):
+        return True
+    return False
+
+
+def clean_source_markdown(text: str, *, raw_format: str = "") -> str:
+    """结构化净化来源正文，产出 source.clean.md。
+
+    在 anonymize（脱敏/去平台/去元信息）基础上再做：
+    - 剔除维基/百科尾节（参考文献/外部链接/参见/注释/分类等，含子节）；
+    - 去除行内引用/失链标记（[1]、[来源请求]、[失效链接]…）；
+    - 去除导航/页脚/广告/纯链接等样板行；
+    - 折叠多余空行。
+
+    raw_format 预留给来源类型分流（如 mediawiki_api_json），当前净化规则对各来源通用。
+    """
+    anon = anonymize_source_markdown(text)
+    anon = _CITATION_MARKER_RE.sub("", anon)
+    kept: list[str] = []
+    dropping = False
+    drop_level = 0
+    for raw_line in anon.splitlines():
+        line = raw_line.rstrip()
+        heading = _WIKI_HEADING_RE.match(line)
+        if heading:
+            level = len(heading.group(1))
+            name = heading.group(2).strip()
+            if dropping and level > drop_level:
+                continue
+            if any(name == sec or name.startswith(sec) for sec in _CLEAN_DROP_SECTIONS):
+                dropping = True
+                drop_level = level
+                continue
+            dropping = False
+            drop_level = 0
+            if name:
+                kept.append(name)
+            continue
+        if dropping:
+            continue
+        if not line.strip():
+            kept.append("")
+            continue
+        if source_line_is_boilerplate(line):
+            continue
+        kept.append(line.strip())
+    cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    return cleaned
 _ENTITY_SUFFIXES = (
     "风景名胜旅游区",
     "风景名胜区",
@@ -275,6 +432,10 @@ def score_source_markdown(source_id: str, text: str, *, entity_name: str | None 
         score += 1
         reasons.append("entity_grounded")
 
+    content_score = score
+    # 详尽且实体相关的正文（detail_rich + entity_grounded）即便残留页眉页脚/导航/外链，
+    # 也只是 source.clean.md 还没清干净的「噪声」，不该被惩罚直接打成 Reject。
+    substantive = entity_grounded and len(compact) > 260
     penalties = 0
     platform_hits = sum(body.count(marker) for marker in _PLATFORM_MARKERS)
     if platform_hits:
@@ -293,12 +454,19 @@ def score_source_markdown(source_id: str, text: str, *, entity_name: str | None 
         reasons.append("url_visible")
 
     score = max(score - penalties, 0)
+    if not reasons:
+        reasons.append("empty_or_unfetchable_body")
     if score >= 7:
         quality = "A-story"
     elif score >= 4:
         quality = "B-fact"
     elif score >= 2:
         quality = "C-context"
+    elif substantive and content_score >= 4:
+        # 实质达标但被噪声惩罚跌破阈值：保底为 C-context（可用上下文），不误杀。
+        quality = "C-context"
+        score = 2
+        reasons.append("noise_penalized_kept_as_context")
     else:
         quality = "Reject"
 

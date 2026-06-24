@@ -1,6 +1,7 @@
 schemaVersion: quwoquan.task.spec
 taskId: 旅行/地域/四川省/景区/可baseline试跑
 title: 可baseline试跑
+intentLabel: 可baseline试跑
 taskArchetype: region_category_coverage
 vertical: travel
 organizeBy: 地域
@@ -19,7 +20,7 @@ scope:
     name: 都江堰
   reserveCoverageTargets: []
 provenance:
-  createdAt: '2026-06-20T18:10:34.238053+00:00'
+  createdAt: '2026-06-24T13:09:26.463995+00:00'
   createdBy: test
 content:
   modalityContract: separated_research
@@ -46,7 +47,7 @@ content:
     routeArticles: 0
 acceptance:
   minEntities: 2
-  minPostsPerEntity: 4
+  minPostsPerEntity: 5
   requiredAngles:
   - planning_consultation
   - decision_experience

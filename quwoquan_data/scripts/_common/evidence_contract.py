@@ -80,7 +80,11 @@ STAGE_EVIDENCE_CONTRACT = {
     },
     "materialize": {
         "input": "article/homepage: approved review + agent draft.article.md; image: approved image evidence pack",
-        "output": "article/homepage: {article.md,manifest.json,assets/,_object.json}; image: {manifest.json,assets/,_object.json}",
+        "output": (
+            "article/homepage: {1.download/source_refs.json,article.md,manifest.json,assets/,_object.json,"
+            "5.review/{provenance.json,finalization_report.json}}; "
+            "image: {1.download/source_refs.json,manifest.json,assets/,_object.json,5.review/provenance.json}"
+        ),
     },
 }
 

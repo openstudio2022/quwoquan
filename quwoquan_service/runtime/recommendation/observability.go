@@ -36,6 +36,16 @@ type PipelineMetrics struct {
 }
 
 var (
+	attributionLabelNames = []string{
+		"channel",
+		"vertical",
+		"supply_source",
+		"recall_path",
+		"ranking_version",
+		"reason_version",
+		"intersection_class",
+	}
+
 	pipelineRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: "rec",
 		Subsystem: "pipeline",
@@ -132,6 +142,11 @@ var (
 		Help: "Total content items served by recommendation feed.",
 	})
 
+	feedServedByAttributionTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_feed_served_by_attribution_total",
+		Help: "Total content items served by bounded recommendation attribution labels.",
+	}, attributionLabelNames)
+
 	feedImpressedTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "recommendation_feed_impressed_total",
 		Help: "Total content items reaching true client-side impression threshold.",
@@ -171,6 +186,11 @@ var (
 		Name: "recommendation_behavior_ingest_dropped_total",
 		Help: "Total behavior events dropped by FeedbackIngestor.",
 	}, []string{"reason"})
+
+	behaviorByAttributionTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "recommendation_behavior_by_attribution_total",
+		Help: "Total accepted behavior events by bounded recommendation attribution labels.",
+	}, append([]string{"state", "action"}, attributionLabelNames...))
 
 	hotPathDroppedTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "rec_hotpath_dropped_total",
@@ -381,6 +401,20 @@ func RecordServedItems(count int) {
 	}
 }
 
+func RecordServedItemsByAttribution(items []FeedItem, channelID string, rankingVersion string, reasonVersion string) {
+	for _, item := range items {
+		feedServedByAttributionTotal.WithLabelValues(attributionLabels(
+			channelID,
+			item.ContentVertical,
+			item.SupplySource,
+			item.RecallPath,
+			rankingVersion,
+			reasonVersion,
+			"",
+		)...).Inc()
+	}
+}
+
 func RecordBehaviorIngest(signal BehaviorSignal) {
 	state := normalizeFeedbackState(signal)
 	if state == "" {
@@ -392,6 +426,7 @@ func RecordBehaviorIngest(signal BehaviorSignal) {
 	}
 	behaviorIngestTotal.Inc()
 	feedStateTotal.WithLabelValues(state, action).Inc()
+	behaviorByAttributionTotal.WithLabelValues(append([]string{state, action}, attributionLabelsFromSignal(signal)...)...).Inc()
 	switch state {
 	case "visible":
 		feedVisibleTotal.Inc()
@@ -413,6 +448,41 @@ func RecordBehaviorIngest(signal BehaviorSignal) {
 	if isCompletionSignal(signal) {
 		feedCompletionTotal.Inc()
 	}
+}
+
+func attributionLabelsFromSignal(signal BehaviorSignal) []string {
+	return attributionLabels(
+		signal.ChannelID,
+		signal.ContentVertical,
+		signal.SupplySource,
+		signal.RecallPath,
+		signal.RankingVersion,
+		signal.ReasonVersion,
+		signal.IntersectionClass,
+	)
+}
+
+func attributionLabels(channelID, vertical, supplySource, recallPath, rankingVersion, reasonVersion, intersectionClass string) []string {
+	return []string{
+		boundedAttributionLabel(channelID, "unknown"),
+		boundedAttributionLabel(vertical, "general"),
+		boundedAttributionLabel(supplySource, "unknown"),
+		boundedAttributionLabel(recallPath, "unknown"),
+		boundedAttributionLabel(rankingVersion, "unknown"),
+		boundedAttributionLabel(reasonVersion, "unknown"),
+		boundedAttributionLabel(intersectionClass, "none"),
+	}
+}
+
+func boundedAttributionLabel(value string, fallback string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return fallback
+	}
+	if len(value) > 64 {
+		return "other"
+	}
+	return value
 }
 
 // RecordDuplicateExposureFiltered 记录曝光过滤拦截到的重复曝光候选数（按 served/impressed 拆分）。

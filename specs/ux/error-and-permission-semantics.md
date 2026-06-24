@@ -22,8 +22,10 @@
 | 严重度 | 场景 | 展示方式 | 说明 |
 |--------|------|----------|------|
 | **阻塞性** | 页面/列表首次加载失败、无数据可降级 | 内联占位（Inline Placeholder） | 整块内容区被错误态替换，持久显示 |
-| **次要** | 提交失败、单次操作失败、可重试的瞬时错误 | SnackBar（冒泡） | 底部/浮动冒泡，3–5 秒自动消失，可带操作 |
-| **可忽略** | 后台静默失败、有降级方案 | 不提示或极轻量 SnackBar | 如缓存命中后忽略网络错误 |
+| **次要** | 提交失败、单次操作失败、可重试的瞬时错误 | 弹窗 `actionDialog` 或轻提示 `AppToast` | 需用户决策（重试/确认）→ 弹窗；无需决策 → `AppToast` 冒泡 3 秒自动消失 |
+| **可忽略** | 后台静默失败、有降级方案 | 不提示或极轻量 `AppToast` | 如缓存命中后忽略网络错误 |
+
+> 术语说明：本项目端侧**没有** Material `SnackBar` / `ScaffoldMessenger`（`lib/**` 全量为空）。所有"冒泡/轻提示"统一指基于 `OverlayEntry` 的 `AppToast`（`lib/core/widgets/app_toast.dart`）。历史文档中"SnackBar"一律等价理解为 `AppToast`，新代码禁止引入 Material `SnackBar`。
 
 ### 1.3 语义 Token（设计系统）
 
@@ -55,12 +57,16 @@
 - 主操作：**重试**（调用原加载逻辑）
 - 禁止使用 SnackBar 作为阻塞性错误的唯一展示方式
 
-#### 1.4.2 SnackBar（次要错误）
+#### 1.4.2 弹窗 / 轻提示（次要错误）
 
-- `behavior: SnackBarBehavior.floating`
-- `margin: EdgeInsets.all(AppSpacing.interGroupMd)`（或 `context.safeGetContainerSpacing`）
-- 可带 `action: SnackBarAction(label: '重试', ...)`
-- 禁止用于**阻塞性**错误（页面首次加载失败、权限未开启等）
+次要错误按"是否需要用户决策"二选一：
+
+- **需要决策（提交/发布/删除失败可重试）** → `AppActionErrorFeedback.show`（居中 `CupertinoAlertDialog`，标题 + 正文 + 主操作`再试一次` + 取消）。无主操作时自动退化为 `AppToast`。
+- **无需决策（纯通知、约束提示）** → `AppToast.show`（`OverlayEntry` 冒泡，3 秒自动消失，无按钮）。
+
+约束：
+- 禁止用于**阻塞性**错误（页面首次加载失败、权限未开启等）。
+- 禁止引入 Material `SnackBar`；轻提示一律走 `AppToast`。
 
 ### 1.5 文案与错误码映射
 
@@ -200,6 +206,72 @@ networkUnavailable      # 暂时无法加载，请检查网络后重试
 - `AppPageErrorState` 只用于首屏无数据的阻塞错误，不得用于已有内容刷新失败或分页失败。
 - `AppSectionErrorCard` 必须是弱强调，不得使用红色大标题或惊叹图标。
 - 列表页必须为刷新失败和分页失败提供专用载体，禁止把 `staleDataError` / `appendError` 渲染成整页错误卡。
+
+### 1.13 错误展示载体决策矩阵（权威边界 · 全屏 vs 弹窗）
+
+> 本节是"什么时候全屏、什么时候弹窗、什么时候卡片/footer/横幅/toast"的**唯一权威边界**。
+> 代码层真相源是 `UiErrorSemanticResolver._presentationFor`（`quwoquan_app/lib/core/errors/ui_error_semantics.dart`）。
+> 本表必须与该函数保持一致；任何调整先改本表，再改 `_presentationFor`，最后补/改测试。
+
+#### 1.13.1 presentation → 渲染组件 → 视觉形态
+
+| `UiErrorPresentation` | 渲染组件（`app_error_states.dart`） | 视觉形态 | 是否阻塞 | 是否丢失上下文 |
+|---|---|---|---|---|
+| `emptyPage` | `AppPageErrorState` | **全屏**（顶栏下方内容区铺满，柔和插图 + 标题 + 副文案 + 主/次操作） | 阻塞整页 | 进入即失败，本无内容 |
+| `sectionSoftCard` | `AppSectionErrorCard` | 区块内软卡片（弱强调，无插图） | 仅区块 | 否，其余内容可用 |
+| `appendFooter` | `AppListAppendErrorFooter` | 列表尾部错误行 | 仅"加载更多" | 否 |
+| `transientNotice` | `AppTransientErrorNotice` | 顶部轻量胶囊横幅 | 不阻塞 | 否，保留已有内容 |
+| `actionDialog` | `AppActionErrorFeedback`（`CupertinoAlertDialog`，无主操作时退化 `AppToast`） | **居中弹窗** | 弹层阻塞、保留底层页面 | **否（关键：保留用户已输入上下文）** |
+| `gateCard` | `AppInlineGateState` | 登录/权限引导卡 | 按场景 | 否 |
+| `inlineField` | 字段内联提示 | 字段下方文字 | 否 | 否 |
+| —（纯通知） | `AppToast` | 底部冒泡 toast | 否 | 否 |
+
+#### 1.13.2 category × scope → presentation（与 `_presentationFor` 一一对应）
+
+判定按优先级自上而下短路：
+
+1. `scope == inlineField` → `inlineField`
+2. `category ∈ {authRequired, permissionRequired}` → `gateCard`
+3. `category == listAppend` → `appendFooter`
+4. `category == backgroundAction` → `transientNotice`
+5. `scope ∈ {dialog, global}` 或 `category ∈ {submit, rateLimited}` → `actionDialog`
+6. `scope == section` 或 `category == sectionLoad` → `sectionSoftCard`
+7. 其余（默认，含 `category == pageLoad` 且 `scope == page`）→ `emptyPage`
+
+#### 1.13.3 全屏 vs 弹窗 决策树（强制）
+
+```
+是字段级校验？ ── 是 ──► inlineField
+   │否
+需要登录/权限恢复？ ── 是 ──► gateCard（引导卡，去登录/去设置）
+   │否
+是"加载更多"分页失败？ ── 是 ──► appendFooter
+   │否
+是后台/刷新静默失败、且已有内容？ ── 是 ──► transientNotice（横幅，不替换内容）
+   │否
+是用户主动一次性动作（提交/发布/删除/重试/限流），
+或处于 dialog/global 浮层上下文，
+或页面有不可丢失的已输入上下文？ ── 是 ──► actionDialog（弹窗；保留底层页面与输入）
+   │否
+仅某区块失败、整体可用？ ── 是 ──► sectionSoftCard
+   │否
+进入页面即失败且当前无任何内容可展示？ ── 是 ──► emptyPage（全屏）
+```
+
+#### 1.13.4 关键边界判据（评审与门禁口径）
+
+- **全屏 `emptyPage` 仅用于**：被动加载（非用户主动提交）失败 + 当前无内容 + 整页阻塞。例：附近位置页首加载失败、详情页首加载失败。
+- **弹窗 `actionDialog` 仅用于**：用户主动触发的一次性动作失败，且**必须保留底层页面与用户已输入内容**。例：发布设置页"确认发布"失败——用户已填好可见性/位置/圈子，**禁止用全屏覆盖**，必须弹窗让其重试或取消。
+- **互斥红线**：
+  - 含用户输入的表单/sheet 的提交失败 **禁止** 用 `emptyPage`（会丢输入）。
+  - 进入即失败的空页 **禁止** 仅用 `AppToast`（无可恢复主操作、无上下文）。
+  - 阻塞性错误 **禁止** 仅用 `AppToast` / `transientNotice`。
+- **主操作必达**：`emptyPage` 与 `actionDialog` 必须带主操作（`再试一次` / `去登录` / `去设置`）；`actionDialog` 无主操作时退化为 `AppToast`。
+
+#### 1.13.5 回归防护
+
+- 单测守护：`quwoquan_app/test/core/errors/ui_error_semantics_test.dart` 的"错误展示载体决策矩阵"测试组必须逐条断言 1.13.2 的 7 条映射（覆盖每个 `category × scope` 组合到目标 `presentation`），任何对 `_presentationFor` 的改动若未同步本表与测试即失败。
+- 静态门禁：`quwoquan_app/scripts/runtime/verify_unified_error_semantics_ratchet.py` 继续阻断"页面直接消费 raw 异常字符串 / 失败态裸 `AppToast` 字面量 / 旧式加载失败标题 / 惊叹图标"等回归。
 
 ---
 
@@ -387,7 +459,7 @@ test/
 
 路径：`test/ui/content/entry/journeys/entry_location_error_journey_test.dart`
 
-### 5.6 L4 Patrol（可选）
+### 5.6 user_acceptance Patrol（可选）
 
 - 真机/模拟器：进入位置选择 → 拒绝权限 → 断言「去设置」按钮可见
 - 点击「去设置」→ 断言能打开系统设置（不断言返回后状态）

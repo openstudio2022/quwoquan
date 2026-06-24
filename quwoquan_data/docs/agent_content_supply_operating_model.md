@@ -16,6 +16,31 @@
 
 ## 2. 组织角色
 
+### 2.1 公司化层级与授权
+
+内容供给运行时采用五层公司化治理，不再依赖隐式“谁跑到谁负责”：
+
+| 层级 | 公司角色 | 系统角色 | 职责 | 硬边界 |
+| --- | --- | --- | --- | --- |
+| L0 | 经营层 / 运营专家 | Supply Planner | 冻结目标、范围、质量标准、切片轴、候选超采样和放量节奏 | 不写运行产物，不抢救单 job |
+| L1 | CEO / 总调度器 | Batch Controller | 同一 `task+batch` 唯一 controller；拆分任务、发放授权、监控 SLO、批后裁决 | 不写正文，不直接处理 worker job |
+| L2 | 区域/网站负责人 | Partition Agent | 管一个省、市州、网站、栏目或主题 slice；只管理自己的下级 | 不改全局计划，不跨 slice |
+| L3 | 执行经理 | Object/Subagent | 管一个景点、URL 分片、sourceUnit 或内容 ref | 不自扩范围，不合并不同网页 |
+| L4 | 质检/法务/总编 | Gate + Reconciler | 准入、准出、冲突 ledger、批后复核和裁决 | 运行中不要求人工确认 |
+
+治理规则：
+
+- 授权只能自上而下；每个 job 必须有 `controllerRunId`、`assignmentId`、`assignmentPath`、owner、deadline、heartbeat、gate 和 nextAction。
+- `AssignmentLedger` 是职责边界真相源；未授权读写、缺父级授权、跨 owner 覆盖均为 `GATE_BLOCK`。
+- 同一 `task+batch` 只能有一个 active controller；第二 controller 直接阻断，不等待锁、不抢写状态。
+- 冲突只写 `conflict_ledger.jsonl`，批后由 Reconciler 裁决；运行中不得向人发确认请求。
+- 失败必须落 `failure_ledger.jsonl`，类别限定为 `retry.infra`、`retry.data`、`repair.quality`、`abandon`、`conflict`、`blocked.gate`、`manual_review`。
+- 批后必须生成质量目标报告，给出目标满足率、abandon 原因、conflict 类型和下一轮动作：升档、同档重跑优化、或回入口重规划。
+- 百级成功率只按“通过 source/content/review/release 全部质量门的对象数 / 100”计，不把 placeholder、brief、未 author 或未 publish 对象计为成功。
+- 百级准入必须先证明 `source-ready` 对象容量不低于目标的 1.2 倍，且 Cursor SDK 真实 `Agent.prompt` startup probe 通过；任一缺失即 `GATE_BLOCK`，不进入 author-runner。
+
+四川百级默认切片为 `四川省 -> 市/州 -> 区县/景点 -> sourceUnit -> 内容对象`；网站线可切为 `网站 -> 栏目/frontier -> URL -> sourceUnit -> 内容对象`；混合线以地理主轴叠加 source lane 与内容对象。
+
 | 角色 | 类似公司职能 | 核心职责 | 禁止事项 | 主要产物 |
 | --- | --- | --- | --- | --- |
 | Supply Portfolio Controller | 经营计划 / PMO | 定义垂类、场景、目标量、载体比例、作者池、预算和放量节奏 | 不直接写正文、不绕过 gate | `SupplyPlanPacket`、批次计划、放量报告 |
@@ -149,6 +174,8 @@ Creative Planner 必须先提出 2-3 个方案，再选择一个最符合 `reade
 | Release Gate | manifest、assets、provenance、refs、import 投影闭合 | 阻断 release/import |
 | Feedback Gate | 举报、事实过期、低消费价值触发修订或下线 | 创建 revision task |
 
+百级以上批次还必须输出漏斗报告：`targeted`、`sourceReady`、`homepagePassed`、`contentPlanned`、`authored`、`reviewPassed`、`published`，并按 `article/image/video/homepage` 分解。漏斗是下一轮规划输入；运行中不向人请求确认，冲突与短缺只写 ledger，批后裁决。
+
 ## 8. 失败与重试
 
 - **内容质量失败**：同一对象同一失败指纹最多修复 2 次，仍失败则 `manual_required`。
@@ -180,6 +207,8 @@ Creative Planner 必须先提出 2-3 个方案，再选择一个最符合 `reade
 进入商用放量前必须同时满足：
 
 - 硬门通过率 100%。
+- 百级目标满足率 `>= 90%`，且 `sourceReadyObjectCapacity >= target * 1.2`；`75%-90%` 只能同档优化候选池/来源策略，`<75%` 回入口规划。
+- `cursorStartup.ready=true`，且 probe 类型为真实 `Agent.prompt`，不能只用 import/network 探测替代。
 - 事实回溯率不低于当前垂类阈值，旅游/知识类默认不低于 95%。
 - 图片/视频授权完整率 100%。
 - active `entityRefs/tagRefs` 无待确认污染。

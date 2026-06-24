@@ -13,11 +13,16 @@
 
 ## 本轮基线范围（2026-06-16）
 
-本轮只冻结需求基线与开发准入，不实现长期算法能力。
+2026-06-24 非深排 P0 已进入实现：质量分投影消费、物化协同召回读取、旅行垂类路由、精品流式路由、候选级交集融合和 primaryText-only 解释进入主链路；长期深排平台仍不进入本轮。
 
 ### In Scope
 
 - 四维规格：内容 × 用户 × 时间 × 交集在召回、排序、去重、反馈、评估中的落点。
+- 质量分冷启动：UGC、BulkImport、数据工程 importer 同口径投影 `qualityScore/recScore/contentVertical/supplySource/semanticMentionCoverage/mediaCompleteness`，读路径只消费投影结果。
+- 非深度协同召回：只读 `rm_collaborative_i2i/u2i` 物化表，`recallPath=collab_i2i/collab_u2i`，支持 `disable_collaborative_recall_sources` 回滚。
+- 旅行垂类：`subCategory=travel` 归一为 `vertical=travel_photography`，召回和 fallback 都不得混入非旅行内容。
+- 精品流式：`type=premium|similar|featured|immersive|精品` 归一为 `FeedSimilar + premium_stream`，使用 premium preset 和质量分/交集融合；全局 featured 精品池未写入前不启用 PremiumPoolSource。
+- P0+ 观测归因闭环：feed 下发、App 行为上报、content-service raw event、learning context 和 Prometheus 分桶指标统一携带 `feedRequestId/channelId/contentVertical/supplySource/recallPath/rankingVersion/reasonVersion/intersectionSourceRef/intersectionClass`，支持按首页、旅行、精品、UGC、数据工程、召回路径和交集类别评价效果。
 - 流式 feed 体验：下拉刷新 vs 续接、触底加载、没有更多、新内容提示、已读位点、空/错/降级/加载四态、推荐理由展示。
 - 负反馈即时抑制：不感兴趣、减少此类、屏蔽作者进入 behavior → HotPath negative/hidden 语义，并只影响未来窗口。
 - 曝光治理集成规格：served/impressed 双轨、跨页/跨会话去重、疲劳时间衰减、动态曝光预算与复活通道的业务所有权已迁出到平级 L2 `discovery-content/exposure-governance`；本节点只定义 feed 如何消费该能力边界。
@@ -27,9 +32,10 @@
 ### Out of Scope
 
 - 深度排序模型平台轨（MMoE/PLE/ESMM、双塔 ANN、IPS 反事实训练）。
-- 协同过滤召回真实实现（itemCF/swing/u2i）和离线物化作业；本轮只冻结规格与验收。
+- 协同过滤离线物化作业与 replay 评估脚本。
+- 同步 `/v1/score` 塞进 feed 读路径。
 - Thompson Sampling、内容生命周期复活、Bloom/Cuckoo/Count-Min 等海量阶段曝光基础设施实现。
-- UGC 媒体上传、审核准入、质量分离线投影、发布事件驱动导入等 Phase 1 业务实现。
+- UGC 媒体上传、审核准入等 Phase 1 业务实现。
 
 ## 端云边界
 
@@ -45,8 +51,8 @@
 - A2：同 session 跨页不重复；served/impressed 语义分离，端侧真实曝光继续作为训练与疲劳信号。
 - A3：强负反馈只影响未来窗口，下一批推荐中同内容/作者/类型/标签明显下降或被过滤。
 - A4：无行为新用户有非空冷启动内容，首刷可由兴趣 onboarding 或默认探索保底支撑。
-- A5：交集理由只读服务端 `IntersectionReason.primaryText`，行动回流带 `intersectionDimension` / `intersectionTagRefs`。
-- A6：推荐 SLO/KPI 可观测：延迟、空 feed、fallback、重复曝光率、CTR、停留、完成率、负反馈率。
+- A5：交集理由只读服务端 `IntersectionReason.primaryText`；首页不显示“推荐理由”标签和旧交集图标，无 `primaryText` 不占位。
+- A6：推荐 SLO/KPI 可观测：延迟、空 feed、fallback、重复曝光率、CTR、停留、完成率、负反馈率；P0+ 归因指标必须能按 `channel/vertical/supply_source/recall_path/ranking_version/reason_version/intersection_class` 分桶。
 - A7：metadata/OpenAPI/codegen/Redis key/recpolicy 与端云实现一致。
 - A8：三层测试 证据矩阵可形成，已存在测试登记到 `acceptance.yaml`，长期能力只登记为 planned 或 out_of_scope。
 

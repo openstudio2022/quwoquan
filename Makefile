@@ -68,6 +68,7 @@
 .PHONY: codegen-ops-portal
 .PHONY: codegen-control-plane-runtime
 .PHONY: codegen-content-service
+.PHONY: codegen-chat-service
 .PHONY: bootstrap-service-config
 .PHONY: new-service
 .PHONY: config-gray-rollout
@@ -78,6 +79,8 @@
 .PHONY: stackctl-up
 .PHONY: stackctl-down
 .PHONY: stackctl-status
+
+PYTEST_RUNNER ?= $(shell if [ -x quwoquan_data/.venv/bin/python ]; then printf '%s' quwoquan_data/.venv/bin/python; else printf '%s' python3; fi)
 .PHONY: stackctl-health
 .PHONY: stackctl-inspect
 .PHONY: stackctl-doctor
@@ -429,6 +432,11 @@ verify-app-assistant-search-weak-typing-ratchet:
 gate:
 	@$(MAKE) verify-global-increment-constraints
 	@$(MAKE) verify-agent-context-contract
+	@$(MAKE) verify-test-specs
+	@$(MAKE) verify-test-directory-layout
+	@$(MAKE) verify-test-no-fake
+	@$(MAKE) verify-test-coverage-map
+	@$(MAKE) test-local-contract
 	@bash quwoquan_service/scripts/deploy/verify_deployment_domain_mapping.sh
 	@bash quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
 	@$(MAKE) verify-workload-topology-inventory
@@ -518,6 +526,9 @@ codegen-ops-portal:
 codegen-control-plane-runtime:
 	@$(MAKE) -C quwoquan_service codegen-control-plane-runtime
 
+codegen-chat-service:
+	@$(MAKE) -C quwoquan_service codegen-chat-service
+
 codegen-content-service:
 	@$(MAKE) -C quwoquan_service codegen-content-service
 
@@ -573,7 +584,8 @@ config-slo-gate:
 
 .PHONY: l2-content gate-full test-api-contract test-api-contract-chat
 .PHONY: verify-test-specs verify-test-no-fake verify-test-coverage-map verify-test-directory-layout
-.PHONY: generate-test-directory-inventory generate-app-canonical-test-wrappers
+.PHONY: generate-test-directory-inventory generate-app-canonical-test-wrappers generate-canonical-test-bridges
+.PHONY: normalize-acceptance-recorded-paths
 .PHONY: test-local-contract test-api-integration test-user-acceptance
 
 # 本地 L2 契约测试（content-service，需 MongoDB 在 localhost:27017）
@@ -585,25 +597,38 @@ verify-test-specs:
 	@python3 agent_ops/scaffold/verify_test_specs.py
 
 verify-test-no-fake:
-	@python3 agent_ops/scaffold/verify_test_specs.py
+	@python3 agent_ops/scaffold/verify_test_no_fake.py
 
 verify-test-coverage-map:
-	@python3 agent_ops/scaffold/verify_test_specs.py
+	@python3 agent_ops/scaffold/verify_test_coverage_map.py
 
 verify-test-directory-layout:
 	@python3 agent_ops/scaffold/verify_test_directory_inventory.py
+
+verify-test-remote-env:
+	@python3 agent_ops/scaffold/verify_test_remote_env.py --suite "$${MODE:?set MODE=api_integration|user_acceptance}" --env "$${ENV:-gamma}" --target "$${TARGET:-gamma-local}"
 
 generate-test-directory-inventory:
 	@python3 agent_ops/scaffold/generate_test_directory_inventory.py
 
 generate-app-canonical-test-wrappers:
-	@python3 agent_ops/scaffold/generate_app_canonical_test_wrappers.py
+	@python3 agent_ops/scaffold/generate_canonical_test_bridges.py
+
+generate-canonical-test-bridges:
+	@python3 agent_ops/scaffold/generate_canonical_test_bridges.py
+
+normalize-acceptance-recorded-paths:
+	@python3 agent_ops/scaffold/normalize_acceptance_recorded_paths.py
 
 test-local-contract:
 	@$(MAKE) verify-test-specs
 	@$(MAKE) verify-test-directory-layout
+	@$(MAKE) verify-test-no-fake
+	@$(MAKE) verify-test-coverage-map
 	@bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
 	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/
+	@cd quwoquan_service && go test ./services/.../tests/local_contract -count=1
+	@$(PYTEST_RUNNER) -m pytest quwoquan_data/tests/local_contract agent_ops/tests/local_contract -q
 
 # api_integration：按统一环境名解析 HTTP 基址。API_CONTRACT_ENV 默认为 gamma。
 # 变量格式：{ALPHA|BETA|GAMMA|PROD}_BASE_URL 与 *_PRODUCT_OPS_BASE_URL。
@@ -647,38 +672,96 @@ test-api-contract-chat:
 		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN
 
+test-app-api-integration:
+	@ENV_NAME="$${ENV:-gamma}"; \
+	case "$$ENV_NAME" in \
+		beta) BASE_URL="$${BETA_BASE_URL:-}"; AUTH_TOKEN="$${BETA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		gamma) BASE_URL="$${GAMMA_BASE_URL:-}"; AUTH_TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		prod) BASE_URL="$${PROD_BASE_URL:-}"; AUTH_TOKEN="$${PROD_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		*) echo "[api_integration] FAIL: ENV must be one of beta|gamma|prod, got $$ENV_NAME"; exit 2 ;; \
+	esac; \
+	if [ -z "$$BASE_URL" ]; then \
+		echo "[api_integration] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL"; \
+		exit 2; \
+	fi; \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/beta/ \
+		--dart-define=APP_RUNTIME_ENV=beta \
+		--dart-define=APP_DATA_SOURCE=remote \
+		--dart-define=CLOUD_GATEWAY_BASE_URL=$$BASE_URL \
+		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN && \
+	ASSISTANT_SCENARIO_FIXTURE_B64="$$(python3 - <<'PY'\nimport base64\nfrom pathlib import Path\npath = Path('quwoquan_service/contracts/metadata/assistant/test_fixtures/scenarios/assistant_scenarios.json')\nprint(base64.b64encode(path.read_bytes()).decode('ascii'))\nPY\n)" && \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/gamma/assistant_alpha_beta_simulator__api_integration_test.dart \
+		--dart-define=APP_RUNTIME_ENV=beta \
+		--dart-define=APP_DATA_SOURCE=remote \
+		--dart-define=CLOUD_GATEWAY_BASE_URL=$$BASE_URL \
+		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN \
+		--dart-define=ASSISTANT_SCENARIO_FIXTURE_JSON_B64=$$ASSISTANT_SCENARIO_FIXTURE_B64 && \
+	ASSISTANT_EVAL_FIXTURE_B64="$$(python3 - <<'PY'\nimport base64\nfrom pathlib import Path\npath = Path('quwoquan_service/contracts/metadata/assistant/test_fixtures/scenarios/assistant_skill_eval_scenarios.json')\nprint(base64.b64encode(path.read_bytes()).decode('ascii'))\nPY\n)" && \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/gamma/assistant_skill_comparison__api_integration_test.dart \
+		--dart-define=APP_RUNTIME_ENV=beta \
+		--dart-define=APP_DATA_SOURCE=remote \
+		--dart-define=CLOUD_GATEWAY_BASE_URL=$$BASE_URL \
+		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN \
+		--dart-define=ASSISTANT_SCENARIO_FIXTURE_JSON_B64=$$ASSISTANT_EVAL_FIXTURE_B64
+
 test-api-integration:
 	@$(MAKE) verify-test-directory-layout
-	@cd quwoquan_service && go test ./services/user-service/tests/api_integration -count=1
-	@cd quwoquan_service && go test ./services/content-service/tests/api_integration -count=1
-	@cd quwoquan_service && go test ./services/chat-service/tests/api_integration -count=1
+	@$(MAKE) verify-test-remote-env MODE=api_integration ENV="$${ENV:-gamma}"
+	@$(MAKE) test-app-api-integration ENV="$${ENV:-gamma}"
+	@cd quwoquan_service && go test ./services/.../tests/api_integration -count=1
+	@$(PYTEST_RUNNER) -m pytest quwoquan_data/tests/api_integration agent_ops/acceptance/api_integration -q
 	@$(MAKE) test-api-contract API_CONTRACT_ENV="$${ENV:-gamma}"
 	@$(MAKE) test-api-contract-chat API_CONTRACT_ENV="$${ENV:-gamma}"
 
 test-user-acceptance:
+	@$(MAKE) verify-test-remote-env MODE=user_acceptance TARGET="$${TARGET:-gamma-local}"
 	@TARGET_NAME="$${TARGET:-gamma-local}"; \
 	case "$$TARGET_NAME" in \
-		local) python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/user_acceptance/ ;; \
+		local) python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/user_acceptance/ && $(PYTEST_RUNNER) -m pytest quwoquan_data/tests/user_acceptance agent_ops/acceptance/user_acceptance -q ;; \
 		gamma-local) $(MAKE) gate-local-gamma LOCAL_GAMMA_SKIP_GATE=1 ;; \
 		prod-hosted) \
 			if [ -z "$${PROD_BASE_URL:-}" ] || [ -z "$${PROD_PRODUCT_OPS_BASE_URL:-}" ]; then \
 				echo "[user_acceptance] FAIL: PROD_BASE_URL and PROD_PRODUCT_OPS_BASE_URL are required for prod-hosted"; \
 				exit 2; \
 			fi; \
-			$(MAKE) test-api-integration ENV=prod ;; \
+			TEST_TOKEN="$${PROD_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}"; \
+			if [ -z "$$TEST_TOKEN" ]; then \
+				echo "[user_acceptance] FAIL: PROD_TEST_AUTH_TOKEN or TEST_AUTH_TOKEN is required for prod-hosted"; \
+				exit 2; \
+			fi; \
+			DRY_RUN_FLAG=""; \
+			if [ "$${USER_ACCEPTANCE_DRY_RUN:-0}" = "1" ]; then \
+				DRY_RUN_FLAG="--dry-run"; \
+			elif ! command -v patrol >/dev/null 2>&1; then \
+				echo "[user_acceptance] GATE_BLOCK: patrol CLI not found; install patrol or set USER_ACCEPTANCE_DRY_RUN=1 for wiring-only verification"; \
+				exit 2; \
+			fi; \
+			python3 agent_ops/deploy/smoke/run_environment_patrol_smoke.py \
+				--report "$${PROD_USER_ACCEPTANCE_REPORT:-artifacts/device-matrix/environment-smoke/prod_gray_initial_report.json}" \
+				--env-name prod-gray-initial \
+				--runtime-env prod \
+				--api-contract-env prod \
+				--data-source remote \
+				--gateway-base-url "$${PROD_BASE_URL}" \
+				--product-ops-base-url "$${PROD_PRODUCT_OPS_BASE_URL}" \
+				--media-base-url "$${PROD_MEDIA_BASE_URL:-}" \
+				--test-auth-token "$$TEST_TOKEN" \
+				$$DRY_RUN_FLAG ;; \
 		*) echo "[user_acceptance] FAIL: TARGET must be local, gamma-local or prod-hosted, got $$TARGET_NAME"; exit 2 ;; \
 	esac
 
 # gate-full: local_contract + api_integration + user_acceptance（daily CI / pre-release）
 # PR 日常开发用 make gate；pre-release 用 make gate-full。
 gate-full:
-	@bash agent_ops/gate/gate_repo.sh
+	@$(MAKE) gate
 	@if [ -n "$${PROD_BASE_URL:-}" ] && [ -n "$${PROD_PRODUCT_OPS_BASE_URL:-}" ]; then \
-		echo "[gate-full] PROD_* set; running prod remote API contract (remote gamma retired)"; \
-		$(MAKE) test-api-contract API_CONTRACT_ENV=prod; \
+		echo "[gate-full] PROD_* set; running prod gray-initial api_integration + user_acceptance"; \
+		$(MAKE) test-api-integration ENV=prod; \
+		$(MAKE) test-user-acceptance TARGET=prod-hosted; \
 	else \
-		echo "[gate-full] PROD_* not set; running local gamma api_integration/user_acceptance mirror gate"; \
-		$(MAKE) gate-local-gamma LOCAL_GAMMA_SKIP_GATE=1; \
+		echo "[gate-full] PROD_* not set; running gamma-local api_integration + user_acceptance"; \
+		$(MAKE) test-api-integration ENV=gamma; \
+		$(MAKE) test-user-acceptance TARGET=gamma-local; \
 	fi
 
 # Deploy to beta integration K8s. CLOUD_PROVIDER=aliyun|volcengine|huaweicloud (default: aliyun).

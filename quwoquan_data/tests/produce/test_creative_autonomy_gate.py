@@ -73,12 +73,31 @@ def test_prompt_limits_numeric_facts_to_source_allowlist():
     assert "3500元" not in prompt
 
 
-def test_prompt_blocks_region_locked_terms_without_condition_context():
-    prompt = render_prompt_md(_pack())
-    assert "地域条件边界" in prompt
-    assert "conditionContext.region" in prompt
-    assert "海拔" in prompt
-    assert "高反" in prompt
+def test_prompt_makes_base_draft_light_edit_contract_explicit():
+    pack = _pack()
+    pack["sourceUseMode"] = "licensed_adaptation"
+    pack["baseDraftText"] = "第一段写真实出行动机和现场观察。\n\n第二段写喜欢点和不足点。"
+    prompt = render_prompt_md(pack)
+
+    assert "底稿编辑硬合同" in prompt
+    assert "先把下方底稿当作初稿骨架处理" in prompt
+    assert "baseDraftFidelity" in prompt
+    assert "baseDraftFidelityStrategy" in prompt
+    assert "不要用百科/官网/其它来源重新写一篇新文章" in prompt
+
+
+def test_prompt_for_factual_reference_uses_base_draft_light_edit_contract():
+    """产品裁定 full light-edit：factual_reference_only 与 licensed 同走底稿轻改合同。"""
+    pack = _pack()
+    pack["sourceUseMode"] = "factual_reference_only"
+    pack["baseDraftText"] = "第一段写真实出行动机和现场观察。\n\n第二段写喜欢点和不足点。"
+    prompt = render_prompt_md(pack)
+
+    assert "底稿编辑硬合同" in prompt
+    assert "先把下方底稿当作初稿骨架处理" in prompt
+    assert "baseDraftFidelity" in prompt
+    assert "baseDraftFidelityStrategy" in prompt
+    assert "事实引用硬合同" not in prompt
 
 
 def test_creative_governance_requires_plan_and_self_critique():

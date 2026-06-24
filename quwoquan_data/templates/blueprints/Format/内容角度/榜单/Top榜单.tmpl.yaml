@@ -18,7 +18,6 @@ render: { articleTemplate: journal, fontPreset: clean }
 structure:
   required: [榜单标准, 逐项推荐, 横向对比, 怎么选择, 避坑提醒]
   optional: [地图分布, 预算区间]
-hooks: ["这份{name}榜单，先说清楚我们按什么标准选", "{name}怎么选？先看这几个差异"]
 mustIncludeFacts: [入选理由, 适合人群, 交通或位置, 优缺点]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 官方榜单]
 wordCount: { min: 1200, max: 2400 }
@@ -32,4 +31,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/article.md

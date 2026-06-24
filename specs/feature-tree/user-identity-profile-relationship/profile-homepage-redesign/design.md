@@ -347,7 +347,7 @@ lib/ui/user/
 │   ├── profile_creations_tab.dart  # 创作 Tab 内容（SubTab + 过滤）（profile_resonance_card.dart 已按 F13 删除，交集统一 ObjectIntersectionCard）
 │   ├── profile_circles_tab.dart    # 圈子 Tab 内容
 │   ├── profile_interaction_tab.dart # 互动 Tab 内容
-│   ├── profile_lifestyle_tab.dart  # 生活 Tab 内容
+│   ├── profile_footprint_tab.dart  # 足迹 Tab 内容（浏览历史，mine-only；生活 Tab 已按 V5 废止）
 │   ├── creation_visibility_popup.dart # 可见性过滤 popup
 │   └── circle_card.dart            # 圈子卡片
 ├── providers/
@@ -414,7 +414,7 @@ lib/ui/user/
 | S2: ProfileShell 核心框架 | ProfileShell + Header + ActionBar + StatsRow | A1, A11, A12 | local_contract+local_contract+user_acceptance |
 | S3: 创作 Tab（SubTab + Visibility） | ProfileCreationsTab + popup | A3 | local_contract+local_contract+user_acceptance |
 | S4: 圈子 Tab | ProfileCirclesTab + CircleCard + Repository | A4 | local_contract+local_contract |
-| S5: 互动 Tab + 生活 Tab | Interaction + Lifestyle | A9, A10 | local_contract |
+| S5: 互动 Tab + 足迹 Tab | Interaction + Footprint（浏览历史，mine-only） | A9, A10 | local_contract |
 | S6: 一级 Tab 导航 | CenteredScrollableTabBar 集成 + 默认选中 | A2 | local_contract+local_contract+user_acceptance |
 | S7: 目录迁移 | features/profile/ → ui/user/ + router 更新 | A5 | local_contract+user_acceptance |
 | S8: 视觉审计 + 测试覆盖 | Token 替换 + verify_dart_semantic + 测试补全 | A7, A8 | local_contract+local_contract |
@@ -452,11 +452,12 @@ lib/ui/user/
 - 变更范围：`RemoteUserProfileRepository` 实现
 - 风险：无，架构预留了 Mock/Remote 切换
 
-### E2: 生活 Tab 后端 API 升级
+### E2: 足迹 Tab 浏览历史能力增强
 
-当前 `listUserLifeItems` 返回混合列表，未来按 `[足迹, 书影音, 味蕾, 爱物]` 分类查询：
-- 触发条件：content-service 支持 `lifeItemCategory` 参数
-- 变更范围：Repository 方法签名 + 端侧过滤逻辑
+V5 足迹 Tab 复用既有浏览历史（`GET /v1/content/footprint`）。未来可演进：
+- 触发条件：浏览历史需支持按内容形态/时间窗筛选或去重聚合。
+- 变更范围：footprint 浏览历史 Provider + 端侧过滤逻辑（不引入 `UserLifeItem`）。
+- 说明：历史「生活 Tab（书影音/味蕾/爱物，基于 `UserLifeItem`）」在 V5 已废止为 profile 一级 Tab；`UserLifeItem` 域保留为独立后端能力，演进不在本主页范围。
 
 ### E3: 更多个人主页模式
 

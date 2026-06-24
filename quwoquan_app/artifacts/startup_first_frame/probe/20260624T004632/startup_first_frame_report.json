@@ -1,0 +1,26 @@
+{
+  "outputDir": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260624T004632",
+  "passed": true,
+  "results": [
+    {
+      "platform": "web",
+      "passed": true,
+      "screenshots": [
+        {
+          "path": "artifacts/startup_first_frame/web-final/web-mobile-393x852.png",
+          "offsetMs": null,
+          "foregroundRatio": 0.31207,
+          "stddevAvg": 37.417,
+          "medianRgb": [
+            16,
+            25,
+            47
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        }
+      ]
+    }
+  ]
+}

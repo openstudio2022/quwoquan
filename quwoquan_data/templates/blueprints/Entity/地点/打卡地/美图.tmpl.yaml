@@ -18,7 +18,6 @@ render: { articleTemplate: journal, fontPreset: clean }
 structure:
   required: [封面主图, 最佳机位, 光线时段, 图集说明, 拍摄限制]
   optional: [穿搭建议, 周边机位]
-hooks: ["{name}怎么拍，关键在这几个角度"]
 mustIncludeFacts: [机位, 光线时段, 到达方式, 拍摄限制]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 500, max: 1200 }
@@ -32,4 +31,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/主页/地点/打卡地/example.md

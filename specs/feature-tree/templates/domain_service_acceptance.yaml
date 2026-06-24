@@ -36,7 +36,7 @@ domain_acceptance:
           suite: domain_user_acceptance
           cases:
             - user_acceptance.journey-id.scenario-id.domain_effect
-          envs: [gamma]
+          envs: [gamma_local, prod_gray_initial]
     tests:
       planned:
         - command: replace-with-real-domain-gate-or-test-command

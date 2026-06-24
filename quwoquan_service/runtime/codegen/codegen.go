@@ -95,6 +95,20 @@ func (g *Generator) GenerateDomainModelOnly(aggregateName string) error {
 	return g.renderToFile("go_model", data, subDir, fileName)
 }
 
+// GenerateDomainEventsOnly writes only the Go domain event constants file for the aggregate root package.
+func (g *Generator) GenerateDomainEventsOnly(aggregateName string) error {
+	agg, err := g.reg.GetAggregate(aggregateName)
+	if err != nil {
+		return err
+	}
+	data, err := g.buildTemplateData(aggregateName, agg)
+	if err != nil {
+		return err
+	}
+	subDir := filepath.Join("domain", data.PackageName, "event")
+	return g.renderToFile("go_events", data, subDir, "events.go")
+}
+
 type templateData struct {
 	PackageName   string
 	AggregateRoot string
@@ -125,13 +139,13 @@ type entityData struct {
 }
 
 type fieldData struct {
-	Name        string
-	GoName      string
-	GoType      string
-	JSONTag     string
-	BSONTag     string
-	IsPK        bool
-	IsRequired  bool
+	Name       string
+	GoName     string
+	GoType     string
+	JSONTag    string
+	BSONTag    string
+	IsPK       bool
+	IsRequired bool
 }
 
 type eventData struct {

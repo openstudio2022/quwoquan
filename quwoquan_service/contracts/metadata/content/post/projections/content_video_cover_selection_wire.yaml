@@ -34,3 +34,27 @@ client_projection:
       nullable: true
       source: manualCoverAssetId
       aliases: [manualCoverAssetId]
+
+    - name: thumbnailUrl
+      dart_type: String
+      nullable: false
+      source: thumbnailUrl
+      aliases: [thumbnailUrl, thumbnail, coverUrl, cover]
+      default: "''"
+      description: "本次选择后可展示的视频未播放态主封面 URL"
+
+    - name: coverUrl
+      dart_type: String
+      nullable: false
+      source: coverUrl
+      aliases: [coverUrl, cover, thumbnailUrl, thumbnail]
+      default: "''"
+      description: "通用封面 URL；视频时与 thumbnailUrl 同源或作兼容回退"
+
+    - name: coverFrameTimeMs
+      dart_type: int
+      nullable: true
+      source: coverFrameTimeMs
+      aliases: [coverFrameTimeMs, cover_frame_time_ms]
+      default: "null"
+      description: "选择的封面帧时间点（毫秒）；默认首帧为 0"

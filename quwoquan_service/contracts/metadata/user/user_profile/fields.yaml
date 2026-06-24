@@ -129,6 +129,16 @@ entities:
         recommend_feature: false
         description: owner 基线主页头图 URL
 
+      - name: backgroundAssetId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        description: 用户主页头图资产主键；作为封面图真相源的稳定引用
+
       - name: bio
         type: string
         constraints: [NULLABLE]
@@ -190,6 +200,16 @@ entities:
         ops_exposure: read
         recommend_feature: true
         description: 地区（ipResidenceProfile 落库）
+
+      - name: regionTagRef
+        type: tag_ref
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: true
+        description: 省市两级结构化行政区 tagRef，公开展示由 tag-service 派生
 
       - name: status
         type: enum
@@ -966,6 +986,97 @@ entities:
     unique_constraints:
       - columns: [deviceFingerprintHash]
         description: 同一设备指纹只能绑定到一个 owner
+
+  ProfileQrToken:
+    description: 我的二维码可撤销 token 存储；仅保存 token hash，不保存手机号、ownerId 或 bearer token
+    fields:
+      - name: tokenId
+        type: string
+        constraints: [PK]
+        classification: INTERNAL
+        log_policy: mask
+        api_exposure: drop
+        ops_exposure: mask
+
+      - name: tokenHash
+        type: string
+        constraints: [NOT_NULL, UK]
+        classification: INTERNAL
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: mask
+
+      - name: ownerUserId
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: subAccountId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: userHandle
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: styleVersion
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: status
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: expiresAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: revokedAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
 
   UserAuth:
     description: 认证凭证（安全隔离，不缓存到 Redis）
@@ -1994,14 +2105,6 @@ entities:
         api_exposure: read_write
         ops_exposure: read
 
-      - name: userHandle
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
       - name: phone
         type: string
         constraints: [NULLABLE]
@@ -2026,6 +2129,15 @@ entities:
         api_exposure: read_write
         ops_exposure: read
 
+      - name: avatarAssetId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 头像媒体资产 ID；服务校验 owner/scope/status 后绑定并派生 URL
+
       - name: backgroundUrl
         type: string
         constraints: [NULLABLE]
@@ -2033,6 +2145,15 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
+
+      - name: backgroundAssetId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 封面媒体资产 ID；服务校验 owner/scope/status 后绑定并派生 URL
 
       - name: bio
         type: string
@@ -2066,6 +2187,33 @@ entities:
         log_policy: mask
         api_exposure: read_write
         ops_exposure: read
+
+      - name: regionTagRef
+        type: tag_ref
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+        description: 省市两级结构化行政区 tagRef，必须位于 Topic/地理/行政区/中国/ 下，公开展示由 tag-service 派生
+
+      - name: occupationTagRef
+        type: tag_ref
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 用户职业标签，V1 单选，必须由 tag-service validateRefs 校验
+
+      - name: interestTagRefs
+        type: "[]tag_ref"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 用户兴趣标签，V1 多选，必须由 tag-service validateRefs 校验
 
       - name: callerRingtoneId
         type: string
@@ -2124,6 +2272,318 @@ entities:
         classification: PUBLIC
         log_policy: allow
         api_exposure: read_write
+        ops_exposure: read
+
+  ProfileQrCardWire:
+    description: 我的二维码卡片 wire；payload 为公开主页 HTTPS link + 可撤销 token 摘要，不包含手机号或 bearer token
+    fields:
+      - name: publicProfileUrl
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: qrPayload
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: qrTokenId
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+
+      - name: styleVersion
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: avatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: displayName
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: region
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read
+
+      - name: shareText
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: expiresAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  ProfileQrResolveWire:
+    description: 公开二维码扫码解析结果；只返回规范主页目标与扫码状态
+    fields:
+      - name: subAccountId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: userHandle
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: publicProfileUrl
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: scanStatus
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  ProfileCredentialSummaryWire:
+    description: 本人资料编辑页私有凭证摘要，只返回脱敏展示值
+    fields:
+      - name: credentialType
+        type: enum
+        enum_ref: CredentialType
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: displayLabel
+        type: string
+        constraints: [NOT_NULL]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+
+      - name: isBound
+        type: bool
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  ProfileEditSnapshotWire:
+    description: 本人资料编辑页私有快照，合并 owner/profile、active persona、凭证摘要、QR 摘要和标签选择
+    fields:
+      - name: ownerUserId
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: subAccountId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: avatarUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: avatarAssetId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: avatarVersion
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: backgroundUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: backgroundAssetId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: nickname
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: displayName
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: gender
+        type: enum
+        enum_ref: Gender
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: birthDate
+        type: date
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: drop
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: region
+        type: string
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: regionTagRef
+        type: tag_ref
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+        description: 省市两级结构化行政区 tagRef；客户端保存 tagRef，不提交任意展示文案
+
+      - name: userHandle
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 系统分配的趣我圈号，只读，不允许客户端 PATCH
+
+      - name: bio
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: identityTags
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: occupationTagRef
+        type: tag_ref
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: interestTagRefs
+        type: "[]tag_ref"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: phoneCredential
+        type: ProfileCredentialSummaryWire
+        constraints: [NULLABLE]
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+
+      - name: qrCard
+        type: ProfileQrCardWire
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
         ops_exposure: read
 
   ProfileUpdateProposal:

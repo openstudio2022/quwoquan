@@ -12,6 +12,7 @@ import (
 	followmodel "quwoquan_service/services/user-service/internal/domain/follow/model"
 	followrepo "quwoquan_service/services/user-service/internal/domain/follow/repository"
 	followtelemetry "quwoquan_service/services/user-service/internal/domain/follow/telemetry"
+	usermodel "quwoquan_service/services/user-service/internal/domain/user/model"
 	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
 	"quwoquan_service/services/user-service/internal/generated"
 )
@@ -75,6 +76,9 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /startupz", h.handleHealthz)
 
 	mux.HandleFunc("GET /v1/user/profile/{userId}", h.handleGetProfile)
+	mux.HandleFunc("GET /v1/user/profile/edit-snapshot", h.handleGetProfileEditSnapshot)
+	mux.HandleFunc("GET /v1/user/profile/qr-card", h.handleGetProfileQRCard)
+	mux.HandleFunc("GET /v1/public/profile/qr/resolve", h.handleResolveProfileQRToken)
 	mux.HandleFunc("PATCH /v1/user/profile", h.handleUpdateProfile)
 	mux.HandleFunc("POST /v1/user/sync", h.handlePullUserSync)
 	mux.HandleFunc("GET /v1/me", h.handleGetMeProfile)
@@ -136,15 +140,17 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/auth/logout", h.handleLogout)
 	mux.HandleFunc("GET /v1/owner/credentials", h.handleListCredentials)
 	mux.HandleFunc("POST /v1/owner/credentials/bind", h.handleBindCredential)
+	mux.HandleFunc("POST /v1/owner/credentials/phone/bind", h.handleBindPhoneCredential)
+	mux.HandleFunc("POST /v1/owner/credentials/carrier-phone/bind", h.handleBindCarrierPhoneCredential)
 	mux.HandleFunc("DELETE /v1/owner/credentials/{credType}", h.handleUnbindCredential)
 	mux.HandleFunc("GET /v1/user/credentials", h.handleListCredentials)
 	mux.HandleFunc("POST /v1/user/credentials", h.handleBindCredential)
 	mux.HandleFunc("DELETE /v1/user/credentials/{credType}", h.handleUnbindCredential)
 
-	// Contact Discovery
-	mux.HandleFunc("POST /v1/user/contact-discovery", h.handleInitiateContactDiscovery)
-	mux.HandleFunc("GET /v1/user/contact-discovery/latest", h.handleGetLatestContactDiscovery)
-	mux.HandleFunc("DELETE /v1/user/contact-discovery/{id}", h.handleDismissContactDiscovery)
+	// Contact Discovery (paths owned by user_profile service.yaml: /v1/owner/...)
+	mux.HandleFunc("POST /v1/owner/contact-discovery", h.handleInitiateContactDiscovery)
+	mux.HandleFunc("GET /v1/owner/contact-discovery/latest", h.handleGetLatestContactDiscovery)
+	mux.HandleFunc("DELETE /v1/owner/contact-discovery/{id}", h.handleDismissContactDiscovery)
 
 	// Invites
 	mux.HandleFunc("POST /v1/user/invites", h.handleGenerateInvite)
@@ -197,7 +203,89 @@ func (h *UserHandler) handleUpdateProfile(w http.ResponseWriter, r *http.Request
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, profile)
+	writeJSON(w, http.StatusOK, profileUpdateResponse(profile))
+}
+
+func profileUpdateResponse(profile *usermodel.UserProfile) map[string]any {
+	if profile == nil {
+		return map[string]any{}
+	}
+	return map[string]any{
+		"userId":             profile.UserID,
+		"accountState":       profile.AccountState,
+		"nickname":           profile.Nickname,
+		"nicknameCustomized": profile.NicknameCustomized,
+		"avatarUrl":          profile.AvatarURL,
+		"avatarAssetId":      profile.AvatarAssetID,
+		"avatarVersion":      profile.AvatarVersion,
+		"backgroundUrl":      profile.BackgroundURL,
+		"backgroundAssetId":  profile.BackgroundAssetID,
+		"bio":                profile.Bio,
+		"identityTags":       profile.IdentityTags,
+		"gender":             profile.Gender,
+		"birthDate":          profile.BirthDate,
+		"region":             profile.Region,
+		"regionTagRef":       profile.RegionCode,
+		"status":             profile.Status,
+		"profileVersion":     profile.ProfileVersion,
+		"updatedAt":          profile.UpdatedAt,
+	}
+}
+
+func (h *UserHandler) handleGetProfileEditSnapshot(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
+		return
+	}
+	credentials, err := h.auth.ListCredentials(r.Context(), userID)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	view, err := h.profile.GetEditSnapshot(r.Context(), userID, credentials)
+	if err != nil {
+		if hasUserErrorCode(err, "USER.USER.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
+			return
+		}
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *UserHandler) handleGetProfileQRCard(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
+		return
+	}
+	view, err := h.profile.GetQRCard(r.Context(), userID)
+	if err != nil {
+		if hasUserErrorCode(err, "USER.USER.not_found") {
+			writeNotFound(w, r, userErrorDebugMessage(err))
+			return
+		}
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *UserHandler) handleResolveProfileQRToken(w http.ResponseWriter, r *http.Request) {
+	handle := strings.TrimSpace(r.URL.Query().Get("handle"))
+	token := strings.TrimSpace(r.URL.Query().Get("qr"))
+	if token == "" {
+		writeHTTPError(w, r, generated.AppErrorFromProfileQrTokenInvalid("qr token required"))
+		return
+	}
+	view, err := h.profile.ResolveProfileQRToken(r.Context(), handle, token)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 
 func (h *UserHandler) handleGetMeProfile(w http.ResponseWriter, r *http.Request) {
@@ -1471,6 +1559,50 @@ func (h *UserHandler) handleBindCredential(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
+func (h *UserHandler) handleBindPhoneCredential(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, r, "X-Client-User-Id required")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, r, "invalid body")
+		return
+	}
+	phone, _ := body["phone"].(string)
+	otpCode, _ := body["otpCode"].(string)
+	label, _ := body["displayLabel"].(string)
+	if err := h.auth.BindPhoneCredential(r.Context(), userID, phone, otpCode, label); err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (h *UserHandler) handleBindCarrierPhoneCredential(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromHeader(r)
+	if userID == "" {
+		writeInvalidArg(w, r, "X-Client-User-Id required")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		writeInvalidArg(w, r, "invalid body")
+		return
+	}
+	vendor, _ := body["vendor"].(string)
+	carrierToken, _ := body["carrierToken"].(string)
+	deviceID, _ := body["deviceId"].(string)
+	platform, _ := body["platform"].(string)
+	label, _ := body["displayLabel"].(string)
+	if err := h.auth.BindCarrierPhoneCredential(r.Context(), userID, vendor, carrierToken, deviceID, platform, label); err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
 func (h *UserHandler) handleUnbindCredential(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
@@ -1560,151 +1692,6 @@ func (h *UserHandler) handleGetSubAccountProfile(w http.ResponseWriter, r *http.
 		return
 	}
 	writeJSON(w, http.StatusOK, profile)
-}
-
-func (h *UserHandler) buildRelationshipCapabilityView(
-	ctx context.Context,
-	viewerID, targetID string,
-	rel *followrepo.Relationship,
-	isBlocked, isBlockedBy bool,
-) map[string]any {
-	relationState := "not_following"
-	canFollow := true
-	canUnfollow := false
-	canFollowBack := false
-	canGreet := true
-	canCreateDirectConversation := false
-	canSendMessage := false
-	canStartVoiceCall := false
-	canStartVideoCall := false
-	isMutual := false
-	hasPendingGreeting := false
-	hasFormalConversation := false
-
-	switch {
-	case viewerID == targetID:
-		relationState = "self"
-		canFollow = false
-		canGreet = false
-	case rel != nil && rel.IsMutual:
-		relationState = "mutual"
-		isMutual = true
-		canFollow = false
-		canUnfollow = true
-		canGreet = false
-		canCreateDirectConversation = true
-		canSendMessage = true
-		canStartVoiceCall = true
-		canStartVideoCall = true
-	case rel != nil && rel.IsFollowing:
-		relationState = "following"
-		canFollow = false
-		canUnfollow = true
-	case rel != nil && rel.IsFollowedBy:
-		relationState = "followed_by"
-		canFollowBack = true
-	}
-
-	if h.greeting != nil && viewerID != targetID {
-		hasPendingGreeting, _ = h.greeting.HasPendingBetween(ctx, viewerID, targetID)
-		hasFormalConversation, _ = h.greeting.HasFormalConversation(ctx, viewerID, targetID)
-	}
-	if hasFormalConversation {
-		canSendMessage = true
-	}
-	if hasPendingGreeting {
-		canGreet = false
-	}
-
-	if isBlocked || isBlockedBy {
-		canFollow = false
-		canFollowBack = false
-		canGreet = false
-		canCreateDirectConversation = false
-		canSendMessage = false
-		canStartVoiceCall = false
-		canStartVideoCall = false
-	}
-
-	return map[string]any{
-		"viewerSubAccountId":          viewerID,
-		"targetSubAccountId":          targetID,
-		"relationState":               relationState,
-		"isMutual":                    isMutual,
-		"canFollow":                   canFollow,
-		"canUnfollow":                 canUnfollow,
-		"canFollowBack":               canFollowBack,
-		"canGreet":                    canGreet,
-		"canOpenConversation":         canCreateDirectConversation || hasFormalConversation,
-		"canCreateDirectConversation": canCreateDirectConversation,
-		"canSendMessage":              canSendMessage,
-		"hasPendingGreeting":          hasPendingGreeting,
-		"hasFormalConversation":       hasFormalConversation,
-		"canStartVoiceCall":           canStartVoiceCall,
-		"canStartVideoCall":           canStartVideoCall,
-		"isBlocked":                   isBlocked,
-		"isBlockedBy":                 isBlockedBy,
-	}
-}
-
-// --- Contact Discovery ---
-
-func (h *UserHandler) handleInitiateContactDiscovery(w http.ResponseWriter, r *http.Request) {
-	userID := userIDFromHeader(r)
-	if userID == "" {
-		writeInvalidArg(w, r, "X-Client-User-Id required")
-		return
-	}
-	body, err := readBody(r)
-	if err != nil {
-		writeInvalidArg(w, r, "invalid body")
-		return
-	}
-	rawPhones, _ := body["hashedPhones"].([]any)
-	phones := make([]string, 0, len(rawPhones))
-	for _, p := range rawPhones {
-		if s, ok := p.(string); ok {
-			phones = append(phones, s)
-		}
-	}
-	record, err := h.contactDiscovery.Initiate(r.Context(), userID, phones)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusAccepted, record)
-}
-
-func (h *UserHandler) handleGetLatestContactDiscovery(w http.ResponseWriter, r *http.Request) {
-	userID := userIDFromHeader(r)
-	if userID == "" {
-		writeInvalidArg(w, r, "X-Client-User-Id required")
-		return
-	}
-	record, err := h.contactDiscovery.GetLatest(r.Context(), userID)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	if record == nil {
-		writeNotFound(w, r, "resource not found")
-		return
-	}
-	writeJSON(w, http.StatusOK, record)
-}
-
-func (h *UserHandler) handleDismissContactDiscovery(w http.ResponseWriter, r *http.Request) {
-	userID := userIDFromHeader(r)
-	if userID == "" {
-		writeInvalidArg(w, r, "X-Client-User-Id required")
-		return
-	}
-	id := r.PathValue("id")
-	if err := h.contactDiscovery.Dismiss(r.Context(), userID, id); err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
 // --- Invites ---

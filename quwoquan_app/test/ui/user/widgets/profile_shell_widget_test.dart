@@ -26,6 +26,8 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
+import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
+import 'package:quwoquan_app/ui/user/widgets/other_profile_intersection_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
 import '../../../support/harness/profile_shell_scroll_utils.dart';
@@ -82,7 +84,7 @@ class _FailingHomepageBundleRepository extends MockUserProfileRepository {
 class _DefaultNicknameProfileRepository extends MockUserProfileRepository {
   const _DefaultNicknameProfileRepository();
 
-  static const String defaultNickname = '新同学_2606000000001';
+  static const String defaultNickname = '新同学_260622_6698692';
 
   @override
   Future<SubAccountProfileViewData> getUserProfile(String userId) async {
@@ -215,9 +217,7 @@ void main() {
       expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
     });
 
-    testWidgets('默认昵称态展示头像/封面/简介/标签引导与改名画笔，且不出现探索者/趣我圈号', (
-      tester,
-    ) async {
+    testWidgets('默认昵称态展示头像/封面/简介/标签引导与改名画笔，且不出现探索者/趣我圈号', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -231,7 +231,7 @@ void main() {
       );
       await _pumpFrames(tester);
 
-      // 默认昵称（云侧「前缀_YYMM9位随机数」）直接展示，不再回退到「探索者」占位。
+      // 默认昵称（云侧「前缀_YYMMDD_7位尾号」）直接展示，不再回退到「探索者」占位。
       expect(
         find.text(_DefaultNicknameProfileRepository.defaultNickname),
         findsWidgets,
@@ -313,7 +313,7 @@ void main() {
       expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
     });
 
-    testWidgets('渲染记录、互动主 Tab，圈子进入统计区', (tester) async {
+    testWidgets('mine 渲染记录、互动、足迹主 Tab，圈子进入统计区', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -327,13 +327,40 @@ void main() {
         findsOneWidget,
       );
       expect(_inlinePrimaryTab('互动'), findsOneWidget);
+      // V5：足迹=浏览历史，仅本人主页可见（ui_config modes: [mine]）。
       expect(
         _inlinePrimaryTab(UITextConstants.profileTabFootprint),
-        findsNothing,
+        findsOneWidget,
       );
       expect(_inlinePrimaryTab('圈子'), findsNothing);
       expect(_inlinePrimaryTab('生活'), findsNothing);
       expect(find.text(UITextConstants.contactsTabCircles), findsOneWidget);
+    });
+
+    testWidgets('other 仅渲染记录、互动主 Tab，足迹隐私门控不出现', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          userId: 'u_lin',
+          capabilityRepository: _StaticCapabilityRepository(),
+        ),
+      );
+      await _pumpFrames(tester);
+      await revealProfilePrimaryTabs(tester);
+      expect(
+        _inlinePrimaryTab(UITextConstants.profileTabCreations),
+        findsOneWidget,
+      );
+      expect(_inlinePrimaryTab('互动'), findsOneWidget);
+      // 他人主页禁止展示浏览历史足迹。
+      expect(
+        _inlinePrimaryTab(UITextConstants.profileTabFootprint),
+        findsNothing,
+      );
     });
 
     testWidgets('mine 模式四段式文案不串入 other 口径', (tester) async {
@@ -348,6 +375,33 @@ void main() {
       expect(find.text(UITextConstants.profileImpactTitleMine), findsOneWidget);
       expect(find.text(UITextConstants.profileWhyRecommendTitle), findsNothing);
       expect(find.text(UITextConstants.profileImpactTitleOther), findsNothing);
+    });
+
+    testWidgets('other 模式默认空数据也保留交集与影响力模块空态', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          capabilityRepository: _StaticCapabilityRepository(),
+        ),
+      );
+      await _pumpFrames(tester);
+
+      expect(find.byKey(OtherProfileIntersectionCard.cardKey), findsOneWidget);
+      expect(find.byKey(OtherProfileIntersectionCard.emptyKey), findsOneWidget);
+      expect(
+        find.text(UITextConstants.profileIntersectionEmptyOther),
+        findsOneWidget,
+      );
+      expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
+      expect(find.byKey(AuthorImpactCard.emptyKey), findsOneWidget);
+      expect(
+        find.text(UITextConstants.profileImpactEmptyOther),
+        findsOneWidget,
+      );
     });
 
     testWidgets('other 模式四段式文案不串入 mine 口径', (tester) async {
@@ -403,6 +457,7 @@ void main() {
         find.text(UITextConstants.profileImpactTitleOther),
         findsOneWidget,
       );
+      expect(find.byKey(OtherProfileIntersectionCard.cardKey), findsOneWidget);
       expect(find.text(DiscoveryFeedText.myIntersectionsTitle), findsNothing);
       expect(find.text(UITextConstants.profileImpactTitleMine), findsNothing);
     });

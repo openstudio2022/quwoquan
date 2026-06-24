@@ -15,13 +15,9 @@ creatorPersona:
   mustNotClaim: [官方推荐, 商业合作]
 editorialIntent: 以真实体验和感官细节描述景区，但保留事实边界。
 render: { articleTemplate: journal, fontPreset: handwritten }
-conditionAxes:
-  region: { applicable: true, slot: 地形适应 }
-  season: { applicable: true, slot: 季节体验 }
 structure:
   required: [初见印象, 核心体验, 意外收获, 离开时的感受]
   optional: [同行者故事, 再次来访的理由]
-hooks: ["在{name}，我最没想到的是这一段"]
 mustIncludeFacts: [到达时间, 停留时长, 体验路线]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 600, max: 1500 }
@@ -34,4 +30,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/主页/地点/景区/example.md

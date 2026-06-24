@@ -8,14 +8,53 @@ MEDIA_DIR="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/m
 eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile alpha-local --format shell-defaults)"
 
 ACTION="${1:-up}"
+PUBLIC_HOST_SETUP_MODE="${QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP:-require}"
+PUBLIC_API_HOST="alpha-api.quwoquan-env.test"
+PUBLIC_PRODUCT_OPS_HOST="alpha-product-ops.quwoquan-env.test"
+PUBLIC_MEDIA_HOSTS=(
+  "alpha-avatar.quwoquan-env.test"
+  "alpha-image.quwoquan-env.test"
+  "alpha-video.quwoquan-env.test"
+  "alpha-upload.quwoquan-env.test"
+)
+PUBLIC_HOSTS=(
+  "$PUBLIC_API_HOST"
+  "$PUBLIC_PRODUCT_OPS_HOST"
+  "${PUBLIC_MEDIA_HOSTS[@]}"
+)
+LOCAL_API_HOST="alpha-api.localhost"
+LOCAL_PRODUCT_OPS_HOST="alpha-product-ops.localhost"
+LOCAL_MEDIA_HOSTS=(
+  "alpha-avatar.localhost"
+  "alpha-image.localhost"
+  "alpha-video.localhost"
+  "alpha-upload.localhost"
+)
 API_EDGE_PORT="${API_EDGE_PORT}"
 PRODUCT_OPS_PORT="${PRODUCT_OPS_PORT}"
 MEDIA_EDGE_PORT="${MEDIA_EDGE_PORT}"
 MEDIA_ORIGIN_PORT="${MEDIA_ORIGIN_PORT}"
-API_BASE_URL="http://127.0.0.1:${API_EDGE_PORT}"
-PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_PORT}"
-MEDIA_BASE_URL="http://127.0.0.1:${MEDIA_EDGE_PORT}"
+CONTENT_PORT="${CONTENT_PORT}"
+PRODUCT_OPS_SERVICE_PORT="${PRODUCT_OPS_SERVICE_PORT}"
+MEDIA_PROCESSOR_PORT="${MEDIA_PROCESSOR_PORT}"
+API_BASE_URL="https://${PUBLIC_API_HOST}:${API_EDGE_PORT}"
+PRODUCT_OPS_BASE_URL="https://${PUBLIC_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT}"
+MEDIA_BASE_URL="https://alpha-image.quwoquan-env.test:${MEDIA_EDGE_PORT}"
 MEDIA_ORIGIN_BASE_URL="http://127.0.0.1:${MEDIA_ORIGIN_PORT}"
+INTERNAL_API_BASE_URL="http://127.0.0.1:${CONTENT_PORT}"
+INTERNAL_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}"
+INTERNAL_MEDIA_BASE_URL="http://127.0.0.1:${MEDIA_PROCESSOR_PORT}"
+# Keep the Caddy-compatible CA path stable for Android debug resource wiring,
+# while the actual TLS public plane is served by the repo-owned Python proxy.
+TLS_DATA_DIR="$STATE_DIR/caddy-data"
+TLS_CA_DIR="$TLS_DATA_DIR/caddy/pki/authorities/local"
+TLS_ROOT_KEY="$TLS_CA_DIR/root.key"
+TLS_ROOT_CERT="$TLS_CA_DIR/root.crt"
+TLS_DIR="$STATE_DIR/tls"
+TLS_OPENSSL_CONFIG="$TLS_DIR/alpha-local-openssl.cnf"
+TLS_LEAF_KEY="$TLS_DIR/alpha-local.key"
+TLS_LEAF_CSR="$TLS_DIR/alpha-local.csr"
+TLS_LEAF_CERT="$TLS_DIR/alpha-local.crt"
 
 mkdir -p "$STATE_DIR"
 
@@ -97,6 +136,284 @@ wait_http_range_ok() {
   done
 }
 
+stop_tls_proxy() {
+  stop_bg tls-api
+  stop_bg tls-product-ops
+  stop_bg tls-media
+}
+
+prepare_tls_material() {
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "[alpha] FAIL: openssl not found; cannot generate local TLS certificates" >&2
+    exit 2
+  fi
+  mkdir -p "$TLS_CA_DIR" "$TLS_DIR"
+  if [[ ! -f "$TLS_ROOT_CERT" || ! -f "$TLS_ROOT_KEY" ]]; then
+    openssl genrsa -out "$TLS_ROOT_KEY" 2048 >/dev/null 2>&1
+    openssl req -x509 -new -nodes \
+      -key "$TLS_ROOT_KEY" \
+      -sha256 \
+      -days 3650 \
+      -subj "/CN=quwoquan alpha local root" \
+      -out "$TLS_ROOT_CERT" >/dev/null 2>&1
+  fi
+  cat >"$TLS_OPENSSL_CONFIG" <<EOF
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = alpha-api.localhost
+
+[v3_req]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = ${PUBLIC_API_HOST}
+DNS.2 = ${LOCAL_API_HOST}
+DNS.3 = ${PUBLIC_PRODUCT_OPS_HOST}
+DNS.4 = ${LOCAL_PRODUCT_OPS_HOST}
+DNS.5 = ${PUBLIC_MEDIA_HOSTS[0]}
+DNS.6 = ${PUBLIC_MEDIA_HOSTS[1]}
+DNS.7 = ${PUBLIC_MEDIA_HOSTS[2]}
+DNS.8 = ${PUBLIC_MEDIA_HOSTS[3]}
+DNS.9 = ${LOCAL_MEDIA_HOSTS[0]}
+DNS.10 = ${LOCAL_MEDIA_HOSTS[1]}
+DNS.11 = ${LOCAL_MEDIA_HOSTS[2]}
+DNS.12 = ${LOCAL_MEDIA_HOSTS[3]}
+DNS.13 = localhost
+IP.1 = 127.0.0.1
+IP.2 = 10.0.2.2
+IP.3 = ::1
+EOF
+  openssl req -new \
+    -keyout "$TLS_LEAF_KEY" \
+    -out "$TLS_LEAF_CSR" \
+    -nodes \
+    -config "$TLS_OPENSSL_CONFIG" >/dev/null 2>&1
+  openssl x509 -req \
+    -in "$TLS_LEAF_CSR" \
+    -CA "$TLS_ROOT_CERT" \
+    -CAkey "$TLS_ROOT_KEY" \
+    -CAcreateserial \
+    -out "$TLS_LEAF_CERT" \
+    -days 825 \
+    -sha256 \
+    -extensions v3_req \
+    -extfile "$TLS_OPENSSL_CONFIG" >/dev/null 2>&1
+}
+
+start_tls_proxy() {
+  prepare_tls_material
+  stop_tls_proxy
+  start_bg tls-api \
+    python3 "$ROOT_DIR/agent_ops/deploy/lib/tls_reverse_proxy.py" \
+      --listen-host 127.0.0.1 \
+      --listen-port "$API_EDGE_PORT" \
+      --target-base-url "$INTERNAL_API_BASE_URL" \
+      --cert-file "$TLS_LEAF_CERT" \
+      --key-file "$TLS_LEAF_KEY"
+  start_bg tls-product-ops \
+    python3 "$ROOT_DIR/agent_ops/deploy/lib/tls_reverse_proxy.py" \
+      --listen-host 127.0.0.1 \
+      --listen-port "$PRODUCT_OPS_PORT" \
+      --target-base-url "$INTERNAL_PRODUCT_OPS_BASE_URL" \
+      --cert-file "$TLS_LEAF_CERT" \
+      --key-file "$TLS_LEAF_KEY"
+  start_bg tls-media \
+    python3 "$ROOT_DIR/agent_ops/deploy/lib/tls_reverse_proxy.py" \
+      --listen-host 127.0.0.1 \
+      --listen-port "$MEDIA_EDGE_PORT" \
+      --target-base-url "$INTERNAL_MEDIA_BASE_URL" \
+      --cert-file "$TLS_LEAF_CERT" \
+      --key-file "$TLS_LEAF_KEY"
+}
+
+wait_https_ok() {
+  local host="$1"
+  local port="$2"
+  local path="$3"
+  local timeout="${4:-30}"
+  local deadline=$((SECONDS + timeout))
+  until curl -fsS "https://${host}:${port}${path}" >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      return 1
+    fi
+    sleep 0.5
+  done
+}
+
+wait_https_range_ok() {
+  local host="$1"
+  local port="$2"
+  local path="$3"
+  local timeout="${4:-30}"
+  local deadline=$((SECONDS + timeout))
+  local status=""
+  until [[ "$status" == "206" ]]; do
+    status="$(
+      curl -fsS \
+        -r 0-1 \
+        -o /dev/null \
+        -w '%{http_code}' \
+        "https://${host}:${port}${path}" 2>/dev/null || true
+    )"
+    if (( SECONDS >= deadline )); then
+      return 1
+    fi
+    sleep 0.5
+  done
+}
+
+wait_https_with_ca_ok() {
+  local host="$1"
+  local port="$2"
+  local path="$3"
+  local timeout="${4:-30}"
+  local deadline=$((SECONDS + timeout))
+  until curl -fsS \
+    --cacert "$TLS_ROOT_CERT" \
+    "https://${host}:${port}${path}" >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      return 1
+    fi
+    sleep 0.5
+  done
+}
+
+wait_https_with_ca_range_ok() {
+  local host="$1"
+  local port="$2"
+  local path="$3"
+  local timeout="${4:-30}"
+  local deadline=$((SECONDS + timeout))
+  local status=""
+  until [[ "$status" == "206" ]]; do
+    status="$(
+      curl -fsS \
+        --cacert "$TLS_ROOT_CERT" \
+        -r 0-1 \
+        -o /dev/null \
+        -w '%{http_code}' \
+        "https://${host}:${port}${path}" 2>/dev/null || true
+    )"
+    if (( SECONDS >= deadline )); then
+      return 1
+    fi
+    sleep 0.5
+  done
+}
+
+admin_shell() {
+  local command="$1"
+  if sudo -n true >/dev/null 2>&1; then
+    sudo sh -c "$command"
+    return 0
+  fi
+  if [[ "${QWQ_ALPHA_LOCAL_ALLOW_ADMIN_PROMPT:-1}" == "1" ]] &&
+     [[ "$(uname -s)" == "Darwin" ]] &&
+     command -v osascript >/dev/null 2>&1; then
+    local quoted
+    quoted="$(python3 - "$command" <<'PY'
+import json
+import sys
+
+print(json.dumps(sys.argv[1]))
+PY
+)"
+    osascript -e "do shell script ${quoted} with administrator privileges"
+    return 0
+  fi
+  echo "[alpha] GATE_BLOCK: alpha HTTPS public hosts require /etc/hosts management." >&2
+  echo "[alpha] Run once with admin rights, or set QWQ_ALPHA_LOCAL_ALLOW_ADMIN_PROMPT=1 to allow the macOS password prompt." >&2
+  return 1
+}
+
+flush_host_cache() {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    dscacheutil -flushcache >/dev/null 2>&1 || true
+    killall -HUP mDNSResponder >/dev/null 2>&1 || true
+  fi
+}
+
+ensure_public_hosts_mapping() {
+  local tmp_hosts
+  tmp_hosts="$(mktemp "${TMPDIR:-/tmp}/quwoquan-alpha-hosts.XXXXXX")"
+  python3 - "$tmp_hosts" "${PUBLIC_HOSTS[@]}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+out_path = Path(sys.argv[1])
+hosts = sys.argv[2:]
+hosts_path = Path("/etc/hosts")
+begin = "# BEGIN quwoquan alpha local public plane"
+end = "# END quwoquan alpha local public plane"
+block = f"{begin}\n127.0.0.1 {' '.join(hosts)}\n::1 {' '.join(hosts)}\n{end}\n"
+
+current = hosts_path.read_text(encoding="utf-8", errors="replace")
+next_text = re.sub(
+    rf"{re.escape(begin)}.*?{re.escape(end)}\n?",
+    "",
+    current,
+    flags=re.S,
+).rstrip() + "\n\n" + block
+out_path.write_text(next_text, encoding="utf-8")
+PY
+  chmod 0644 "$tmp_hosts"
+
+  local needs_update=0
+  if ! cmp -s "$tmp_hosts" /etc/hosts; then
+    needs_update=1
+  fi
+  if (( needs_update == 1 )); then
+    admin_shell "/bin/cp '$tmp_hosts' /etc/hosts"
+    flush_host_cache
+  fi
+  rm -f "$tmp_hosts"
+
+  python3 - "${PUBLIC_HOSTS[@]}" <<'PY'
+import socket
+import sys
+
+failed = []
+for host in sys.argv[1:]:
+    resolved = sorted({item[4][0] for item in socket.getaddrinfo(host, None)})
+    if not any(address.startswith("127.") or address == "::1" for address in resolved):
+        failed.append(f"{host} -> {', '.join(resolved)}")
+if failed:
+    print("[alpha] GATE_BLOCK: alpha public hosts do not resolve to loopback:", file=sys.stderr)
+    for item in failed:
+        print(f"  - {item}", file=sys.stderr)
+    raise SystemExit(1)
+PY
+}
+
+install_local_ca_trust() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return 0
+  fi
+  if command -v security >/dev/null 2>&1; then
+    security add-trusted-cert \
+      -r trustRoot \
+      -p ssl \
+      -k "$HOME/Library/Keychains/login.keychain-db" \
+      "$TLS_ROOT_CERT" >/dev/null 2>&1 || {
+        echo "[alpha] GATE_BLOCK: failed to trust alpha local root CA in the user keychain: $TLS_ROOT_CERT" >&2
+        return 1
+      }
+  fi
+  if command -v xcrun >/dev/null 2>&1; then
+    if xcrun simctl list devices booted -j >/dev/null 2>&1; then
+      xcrun simctl keychain booted add-root-cert "$TLS_ROOT_CERT" >/dev/null 2>&1 || true
+    fi
+  fi
+}
+
 write_report() {
   python3 - "$STATE_DIR/report.json" "$API_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$MEDIA_ORIGIN_BASE_URL" <<'PY'
 import json
@@ -118,14 +435,18 @@ PY
 
 status_one() {
   local name="$1"
-  local url="$2"
+  local host="$2"
+  local port="$3"
+  local path="$4"
   if [[ -f "$STATE_DIR/${name}.pid" ]] && kill -0 "$(cat "$STATE_DIR/${name}.pid")" >/dev/null 2>&1; then
     echo "[alpha] ${name}: running pid=$(cat "$STATE_DIR/${name}.pid")"
   else
     echo "[alpha] ${name}: not-running"
   fi
   if command -v curl >/dev/null 2>&1; then
-    wait_http_ok "$url" 3 >/dev/null 2>&1 && echo "[alpha] ${name}: health ok ${url}" || echo "[alpha] ${name}: health pending ${url}"
+    wait_https_ok "$host" "$port" "$path" 3 >/dev/null 2>&1 &&
+      echo "[alpha] ${name}: health ok https://${host}:${port}${path}" ||
+      echo "[alpha] ${name}: health pending https://${host}:${port}${path}"
   fi
 }
 
@@ -135,6 +456,7 @@ case "$ACTION" in
     stop_bg product-ops
     stop_bg media-edge
     stop_bg media-origin
+    stop_tls_proxy
     start_bg media-origin \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/local_media_origin.py" \
         --listen-host 127.0.0.1 \
@@ -146,38 +468,64 @@ case "$ACTION" in
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
     wait_http_range_ok "$MEDIA_ORIGIN_BASE_URL/media/video/s/archived-video/beta-sample.mp4" 30
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/conversation/conv_002/v1/mock.png" 30
+    wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
+    wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
     start_bg media-edge \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/http_reverse_proxy.py" \
         --listen-host 127.0.0.1 \
-        --listen-port "$MEDIA_EDGE_PORT" \
+        --listen-port "$MEDIA_PROCESSOR_PORT" \
         --target-base-url "$MEDIA_ORIGIN_BASE_URL"
-    wait_http_ok "$MEDIA_BASE_URL/healthz" 30
-    wait_http_ok "$MEDIA_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-    wait_http_range_ok "$MEDIA_BASE_URL/media/video/s/archived-video/beta-sample.mp4" 30
-    wait_http_ok "$MEDIA_BASE_URL/media/avatar/conversation/conv_002/v1/mock.png" 30
+    wait_http_ok "$INTERNAL_MEDIA_BASE_URL/healthz" 30
+    wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
+    wait_http_range_ok "$INTERNAL_MEDIA_BASE_URL/media/video/s/archived-video/beta-sample.mp4" 30
+    wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/avatar/conversation/conv_002/v1/mock.png" 30
+    wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
+    wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
     start_bg api-edge \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/mock_public_plane.py" \
         --listen-host 127.0.0.1 \
-        --listen-port "$API_EDGE_PORT" \
+        --listen-port "$CONTENT_PORT" \
         --mode api \
         --runtime-env alpha \
         --data-source mock \
         --gateway-base-url "$API_BASE_URL" \
         --product-ops-base-url "$PRODUCT_OPS_BASE_URL" \
         --media-base-url "$MEDIA_BASE_URL"
-    wait_http_ok "$API_BASE_URL/healthz" 30
-    wait_http_ok "$API_BASE_URL/v1/config/app" 30
+    wait_http_ok "$INTERNAL_API_BASE_URL/healthz" 30
+    wait_http_ok "$INTERNAL_API_BASE_URL/v1/config/app" 30
     start_bg product-ops \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/mock_public_plane.py" \
         --listen-host 127.0.0.1 \
-        --listen-port "$PRODUCT_OPS_PORT" \
+        --listen-port "$PRODUCT_OPS_SERVICE_PORT" \
         --mode product-ops \
         --runtime-env alpha \
         --data-source mock \
         --gateway-base-url "$API_BASE_URL" \
         --product-ops-base-url "$PRODUCT_OPS_BASE_URL" \
         --media-base-url "$MEDIA_BASE_URL"
-    wait_http_ok "$PRODUCT_OPS_BASE_URL/healthz" 30
+    wait_http_ok "$INTERNAL_PRODUCT_OPS_BASE_URL/healthz" 30
+    start_tls_proxy
+    if [[ "$PUBLIC_HOST_SETUP_MODE" == "skip" ]]; then
+      wait_https_with_ca_ok "localhost" "$API_EDGE_PORT" "/healthz" 30
+      wait_https_with_ca_ok "localhost" "$API_EDGE_PORT" "/v1/config/app" 30
+      wait_https_with_ca_ok "localhost" "$PRODUCT_OPS_PORT" "/healthz" 30
+      wait_https_with_ca_ok "localhost" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
+      wait_https_with_ca_range_ok "localhost" "$MEDIA_EDGE_PORT" "/media/video/s/archived-video/beta-sample.mp4" 30
+      wait_https_with_ca_ok "localhost" "$MEDIA_EDGE_PORT" "/media/avatar/conversation/conv_002/v1/mock.png" 30
+      wait_https_with_ca_ok "localhost" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
+      wait_https_with_ca_ok "localhost" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
+    else
+      ensure_public_hosts_mapping
+      install_local_ca_trust
+      wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/healthz" 30
+      wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/v1/config/app" 30
+      wait_https_ok "$PUBLIC_PRODUCT_OPS_HOST" "$PRODUCT_OPS_PORT" "/healthz" 30
+      wait_https_ok "alpha-image.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
+      wait_https_range_ok "alpha-video.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/video/s/archived-video/beta-sample.mp4" 30
+      wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/conversation/conv_002/v1/mock.png" 30
+      wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
+      wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
+    fi
     write_report
     echo "[alpha] mock public plane ready: $API_BASE_URL, $MEDIA_BASE_URL"
     ;;
@@ -186,14 +534,19 @@ case "$ACTION" in
     stop_bg product-ops
     stop_bg media-edge
     stop_bg media-origin
+    stop_tls_proxy
     rm -f "$STATE_DIR/report.json"
     echo "[alpha] mock public plane stopped"
     ;;
   status)
-    status_one api-edge "$API_BASE_URL/healthz"
-    status_one product-ops "$PRODUCT_OPS_BASE_URL/healthz"
-    status_one media-edge "$MEDIA_BASE_URL/healthz"
-    status_one media-origin "$MEDIA_ORIGIN_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+    status_one api-edge "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/healthz"
+    status_one product-ops "$PUBLIC_PRODUCT_OPS_HOST" "$PRODUCT_OPS_PORT" "/healthz"
+    status_one media-edge "alpha-image.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+    if command -v curl >/dev/null 2>&1; then
+      wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 3 >/dev/null 2>&1 &&
+        echo "[alpha] media-origin: health ok ${MEDIA_ORIGIN_BASE_URL}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" ||
+        echo "[alpha] media-origin: health pending ${MEDIA_ORIGIN_BASE_URL}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+    fi
     ;;
   *)
     echo "Unknown action: $ACTION" >&2

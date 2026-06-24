@@ -75,6 +75,26 @@ void main() {
       );
     });
 
+    test('expands secure local env domains to HTTPS loopback candidates', () {
+      expect(
+        resolveAvatarImageUrlCandidates(
+          'media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
+          gatewayBaseUrl: 'https://alpha-api.quwoquan-env.test:17000',
+          avatarCdnBaseUrl: 'https://alpha-avatar.quwoquan-env.test:17100',
+        ),
+        <String>[
+          'https://localhost:17100/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
+          'https://127.0.0.1:17100/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
+          'https://10.0.2.2:17100/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
+          'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
+          'https://localhost:17000/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
+          'https://127.0.0.1:17000/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
+          'https://10.0.2.2:17000/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
+          'https://alpha-api.quwoquan-env.test:17000/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
+        ],
+      );
+    });
+
     test(
       'rejects non-url placeholder text so UI uses fallback intentionally',
       () {

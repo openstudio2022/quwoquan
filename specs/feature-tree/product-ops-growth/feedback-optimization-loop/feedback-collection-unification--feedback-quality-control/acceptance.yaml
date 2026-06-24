@@ -39,10 +39,7 @@ gwt_acceptance:
     - 衰减作业为批处理离线路径，不在 GetFeed 关键路径。
     tests:
       planned: []
-      recorded:
-      - file: services/content-service/internal/infrastructure/recommendation/interest_profile_test.go
-      - file: scripts/recommendation/test_rec_policy_advisor.py
-      - file: scripts/recommendation/verify_behavior_action_consistency.py
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -58,7 +55,10 @@ gwt_acceptance:
         - local_contract.product_ops_growth.feedback_optimization_loop.feedback_collection_unification_feedback_quality_control.gwt1_local_contract
         envs: *id001
       supporting: []
-    notes: []
+    notes:
+    - '[migrated_from_recorded_noncanonical] services/content-service/internal/infrastructure/recommendation/interest_profile_test.go'
+    - '[migrated_from_recorded_noncanonical] scripts/recommendation/test_rec_policy_advisor.py'
+    - '[migrated_from_recorded_noncanonical] scripts/recommendation/verify_behavior_action_consistency.py'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

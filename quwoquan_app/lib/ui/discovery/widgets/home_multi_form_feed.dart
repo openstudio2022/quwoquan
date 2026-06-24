@@ -64,6 +64,7 @@ part 'home_multi_form_feed_scroll.dart';
 part 'home_multi_form_feed_post_cards.dart';
 part 'home_multi_form_feed_states.dart';
 part 'home_multi_form_feed_media.dart';
+part 'home_multi_form_feed_media_autoplay.dart';
 part 'home_multi_form_feed_media_grid.dart';
 part 'home_multi_form_feed_actions.dart';
 
@@ -254,6 +255,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
               feedRequestId: feedSession.currentFeedRequestId,
               channelId: channelId,
               rankingVersion: feedSession.currentRankingVersion,
+              reasonVersion: feedSession.currentReasonVersion,
+              recallPath: dto.recallPath,
+              contentVertical: dto.contentVertical,
+              supplySource: dto.supplySource,
             );
       });
       if (dto.isArticleLike && shouldShowFollowingArticles) {
@@ -278,6 +283,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
                     referralSource: ReferralSource.organicFeed,
                     channelId: channelId,
                     rankingVersion: feedSession.currentRankingVersion,
+                    reasonVersion: feedSession.currentReasonVersion,
+                    recallPath: dto.recallPath,
+                    contentVertical: dto.contentVertical,
+                    supplySource: dto.supplySource,
                   );
               onPostTap?.call(dto, 0, feedPosts: feedPosts);
             },
@@ -338,6 +347,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
                   referralSource: ReferralSource.organicFeed,
                   channelId: channelId,
                   rankingVersion: feedSession.currentRankingVersion,
+                  reasonVersion: feedSession.currentReasonVersion,
+                  recallPath: dto.recallPath,
+                  contentVertical: dto.contentVertical,
+                  supplySource: dto.supplySource,
                 );
             if (!(effectiveDisableViewerOnTap && dto.hasImages)) {
               onPostTap?.call(dto, imgIndex, feedPosts: feedPosts);
@@ -347,6 +360,9 @@ class HomeMultiFormFeed extends ConsumerWidget {
             CommentViewer.showModal(
               context: context,
               postId: dto.id,
+              entryObservedCommentCount: ref
+                  .read(postInteractionStateProvider)
+                  .commentCountFor(dto.id, fallback: dto.commentCount),
               onShareTap: () => _showShare(
                 context,
                 ref,
@@ -435,6 +451,24 @@ class HomeMultiFormFeed extends ConsumerWidget {
       headerSliver: headerSliver,
       onReachBottom: () =>
           ref.read(discoveryFeedMapProvider.notifier).appendNextPage(channelId),
+      onResourceSample: () {
+        final profile = ref.read(appResourceCacheProfileProvider);
+        final imageCache = PaintingBinding.instance.imageCache;
+        final downloadCache = ref.read(mediaDownloadCacheProvider);
+        final observability = ref.read(feedPerformanceObservabilityProvider);
+        observability.recordImageCacheBudget(
+          profile: profile.name,
+          currentSizeBytes: imageCache.currentSizeBytes,
+          maxSizeBytes: imageCache.maximumSizeBytes,
+        );
+        observability.recordMediaDownloadQueue(
+          profile: profile.name,
+          activeDownloads: downloadCache.activeDownloadCount,
+          queuedDownloads: downloadCache.queuedDownloadCount,
+          inflightDownloads: downloadCache.inflightDownloadCount,
+          cacheSizeBytes: downloadCache.currentCacheSizeBytes,
+        );
+      },
     );
 
     // 顶部「有更新」轻量入口：浮于 feed 之上，不挤占版式、不打断阅读位置；
@@ -545,6 +579,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
                 referralSource: ReferralSource.organicFeed,
                 channelId: channelId,
                 rankingVersion: feedSession.currentRankingVersion,
+                reasonVersion: feedSession.currentReasonVersion,
+                recallPath: post.recallPath,
+                contentVertical: post.contentVertical,
+                supplySource: post.supplySource,
               );
           // 任务 A · 负反馈即时反馈：卡片立即从信息流消失并给出降级提示。
           _dismissFeedPost(
@@ -567,6 +605,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
                 referralSource: ReferralSource.organicFeed,
                 channelId: channelId,
                 rankingVersion: feedSession.currentRankingVersion,
+                reasonVersion: feedSession.currentReasonVersion,
+                recallPath: post.recallPath,
+                contentVertical: post.contentVertical,
+                supplySource: post.supplySource,
               );
           _dismissFeedPost(
             context,
@@ -593,6 +635,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
                 referralSource: ReferralSource.organicFeed,
                 channelId: channelId,
                 rankingVersion: feedSession.currentRankingVersion,
+                reasonVersion: feedSession.currentReasonVersion,
+                recallPath: post.recallPath,
+                contentVertical: post.contentVertical,
+                supplySource: post.supplySource,
               );
           _dismissFeedPost(
             context,
@@ -603,11 +649,22 @@ class HomeMultiFormFeed extends ConsumerWidget {
         },
         onReport: () {
           runWhenLoggedIn(ref, context, AuthGateReason.report, () {
+            final feedSession = ref.read(feedSessionProvider.notifier);
             ref
                 .read(behaviorRepositoryProvider)
                 .reportSingle(
                   contentId: post.id,
                   action: BehaviorAction.report,
+                  contentType: post.type,
+                  authorId: post.authorId,
+                  referralSource: ReferralSource.organicFeed,
+                  feedRequestId: feedSession.currentFeedRequestId,
+                  channelId: channelId,
+                  rankingVersion: feedSession.currentRankingVersion,
+                  reasonVersion: feedSession.currentReasonVersion,
+                  recallPath: post.recallPath,
+                  contentVertical: post.contentVertical,
+                  supplySource: post.supplySource,
                 );
             ref
                 .read(reportRepositoryProvider)

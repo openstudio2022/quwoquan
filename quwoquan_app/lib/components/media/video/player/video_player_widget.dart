@@ -188,6 +188,11 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
             error: error,
             stackTrace: stackTrace,
           );
+          debugPrint(
+            '[VideoPlayerWidget] candidate init failed '
+            'index=${index + 1}/${candidates.length}; '
+            'source=${source.label}; candidate=$candidate; error=$error',
+          );
           continue;
         }
         if (!mounted || generation != _videoInitGeneration) {
@@ -303,6 +308,10 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
         error: error,
         stackTrace: stackTrace,
       );
+      debugPrint(
+        '[VideoPlayerWidget] local candidate range probe failed; '
+        'uri=$uri; error=$error',
+      );
       return false;
     }
   }
@@ -351,6 +360,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
                 imageUrlCandidates: resolveContentMediaUrlCandidates(
                   thumbnailUrl,
                 ),
+                cdnPreset: CdnImagePreset.cover,
                 fit: BoxFit.cover,
                 placeholder: const SizedBox.shrink(),
                 errorWidget: const SizedBox.shrink(),
@@ -401,6 +411,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
               imageUrlCandidates: resolveContentMediaUrlCandidates(
                 thumbnailUrl,
               ),
+              cdnPreset: CdnImagePreset.cover,
               fit: BoxFit.cover,
               placeholder: const SizedBox.shrink(),
               errorWidget: const SizedBox.shrink(),

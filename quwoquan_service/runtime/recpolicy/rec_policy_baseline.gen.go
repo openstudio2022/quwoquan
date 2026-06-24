@@ -143,9 +143,17 @@ scorer:
   # 形成 searchIntentBoost；FeatureStore 24h 新鲜度剔除，避免长期污染。
   searchIntentFactor: 0.4
   negativePenaltyFactor: 0.1
+  # 内容质量分只消费异步投影到 rm_discovery_feed 的 qualityScore/recScore，
+  # 读路径禁止同步打分；用于无行为内容冷启动和数据工程/UGC 同口径质量准入。
+  qualityScoreFactor: 1.0
   # 交集信号融合系数（单点注入）：社交/交集来源候选按 viewer 揭示的同 kind 参与度
   # 给 socialPrior 一个有界提升。交集事实信号权重高于纯热度，但不覆盖确证事实。
   intersectionSignalFactor: 0.3
+  # 候选级交集融合：fact strength/freshness > affinity；affinity 必须由物化层带
+  # confidenceLabel 后才允许进入候选特征，且只作 advisory lift。
+  intersectionFactFactor: 0.45
+  intersectionFreshnessFactor: 0.20
+  intersectionAffinityFactor: 0.15
   # rerank 多样性 / 冷启约束
   maxAuthorPerFeed: 3
   coldStartAgeHours: 24.0
@@ -198,7 +206,7 @@ exposureGovernance:
     nearDupJaccardMax: 0.8
     softFallbackMinFillPct: 80
   collaborativeRecall:
-    enabled: false
+    enabled: true
     maxI2ICandidates: 80
     maxU2ICandidates: 80
     quotaPct: 15

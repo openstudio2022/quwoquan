@@ -43,6 +43,33 @@ def test_detects_write_agent_draft_call_in_regular_script():
     assert any("calls write_agent_draft directly" in issue for issue in issues), issues
 
 
+def test_detects_mechanical_homepage_body_builder():
+    """重新引入脚本拼主页正文骨架（如 _compose_homepage_body）→ FAIL。"""
+    tmp = Path(tempfile.mkdtemp(prefix="runtime_draft_gate_hp_"))
+    _with_file(
+        tmp,
+        "quwoquan_data/scripts/build/homepage.py",
+        "def _compose_homepage_body(name, facts):\n"
+        "    return '# ' + name + '\\n\\n' + '。'.join(facts)\n",
+    )
+    issues = scan(tmp)
+    assert any("mechanical homepage body builder" in issue for issue in issues), issues
+
+
+def test_allows_legit_homepage_helpers():
+    """主页正当辅助（prompt 渲染 / summary 映射 / 门体）不得误伤。"""
+    tmp = Path(tempfile.mkdtemp(prefix="runtime_draft_gate_hp_ok_"))
+    _with_file(
+        tmp,
+        "quwoquan_data/scripts/build/homepage.py",
+        "def _render_entity_page_prompt(payload):\n    return '写回 page.md'\n\n"
+        "def _homepage_summary(name, facts):\n    return name + ' 概况'\n\n"
+        "def _homepage_gate_body(page_text):\n    return page_text\n",
+    )
+    issues = scan(tmp)
+    assert issues == [], issues
+
+
 def test_allows_definition_module_and_tests():
     tmp = Path(tempfile.mkdtemp(prefix="runtime_draft_gate_ok_"))
     _with_file(

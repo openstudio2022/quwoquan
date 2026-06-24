@@ -20,6 +20,9 @@ class VideoPostDto extends PostBaseDto {
   final String? body;
   final String videoUrl;
   final String thumbnailUrl;
+  final String coverUrl;
+  final String? coverStrategy;
+  final int? coverFrameTimeMs;
   final int? width;
   final int? height;
   final int? durationMs;
@@ -29,6 +32,9 @@ class VideoPostDto extends PostBaseDto {
   @override final DateTime createdAt;
   @override final DateTime? updatedAt;
   @override final DateTime? publishedAt;
+  final String? contentVertical;
+  final String? recallPath;
+  final String? supplySource;
   @override final List<IntersectionReason>? intersectionReasons;
 
   const VideoPostDto({
@@ -46,6 +52,9 @@ class VideoPostDto extends PostBaseDto {
     this.body,
     required this.videoUrl,
     required this.thumbnailUrl,
+    required this.coverUrl,
+    this.coverStrategy,
+    this.coverFrameTimeMs,
     this.width,
     this.height,
     this.durationMs,
@@ -55,6 +64,9 @@ class VideoPostDto extends PostBaseDto {
     required this.createdAt,
     this.updatedAt,
     this.publishedAt,
+    this.contentVertical,
+    this.recallPath,
+    this.supplySource,
     this.intersectionReasons,
   });
 
@@ -74,6 +86,9 @@ class VideoPostDto extends PostBaseDto {
       body: m['body']?.toString() ?? m['description']?.toString() ?? m['content']?.toString() ?? m['caption']?.toString() ?? null,
       videoUrl: m['videoUrl']?.toString() ?? m['video_url']?.toString() ?? m['url']?.toString() ?? '',
       thumbnailUrl: m['thumbnailUrl']?.toString() ?? m['thumbnail']?.toString() ?? m['coverUrl']?.toString() ?? m['cover']?.toString() ?? '',
+      coverUrl: m['coverUrl']?.toString() ?? m['cover']?.toString() ?? m['thumbnailUrl']?.toString() ?? m['thumbnail']?.toString() ?? '',
+      coverStrategy: m['coverStrategy']?.toString() ?? m['cover_strategy']?.toString() ?? null,
+      coverFrameTimeMs: (m['coverFrameTimeMs'] as num?)?.toInt() ?? (m['cover_frame_time_ms'] as num?)?.toInt() ?? null,
       width: (m['width'] as num?)?.toInt() ?? (m['videoWidth'] as num?)?.toInt() ?? (m['video_width'] as num?)?.toInt() ?? (m['w'] as num?)?.toInt() ?? null,
       height: (m['height'] as num?)?.toInt() ?? (m['videoHeight'] as num?)?.toInt() ?? (m['video_height'] as num?)?.toInt() ?? (m['h'] as num?)?.toInt() ?? null,
       durationMs: (m['durationMs'] as num?)?.toInt() ?? (m['duration_ms'] as num?)?.toInt() ?? (m['duration'] as num?)?.toInt() ?? null,
@@ -83,6 +98,9 @@ class VideoPostDto extends PostBaseDto {
       createdAt: _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
       updatedAt: _parseDateTime(m['updatedAt']) ?? _parseDateTime(m['updated_at']) ?? null,
       publishedAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['published_at']) ?? null,
+      contentVertical: m['contentVertical']?.toString() ?? m['categoryId']?.toString() ?? m['category']?.toString() ?? m['vertical']?.toString() ?? null,
+      recallPath: m['recallPath']?.toString() ?? m['recall_path']?.toString() ?? null,
+      supplySource: m['supplySource']?.toString() ?? m['supply_source']?.toString() ?? null,
       intersectionReasons: m['intersectionReasons'] == null ? null : _parseProjectionDtoList(m['intersectionReasons'], IntersectionReason.fromMap),
     );
   }
@@ -104,6 +122,9 @@ class VideoPostDto extends PostBaseDto {
       'body': body,
       'videoUrl': videoUrl,
       'thumbnailUrl': thumbnailUrl,
+      'coverUrl': coverUrl,
+      'coverStrategy': coverStrategy,
+      'coverFrameTimeMs': coverFrameTimeMs,
       'width': width,
       'height': height,
       'durationMs': durationMs,
@@ -113,6 +134,9 @@ class VideoPostDto extends PostBaseDto {
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'publishedAt': publishedAt,
+      'contentVertical': contentVertical,
+      'recallPath': recallPath,
+      'supplySource': supplySource,
       'intersectionReasons': intersectionReasons,
     };
   }
@@ -132,6 +156,9 @@ class VideoPostDto extends PostBaseDto {
     String? body,
     String? videoUrl,
     String? thumbnailUrl,
+    String? coverUrl,
+    String? coverStrategy,
+    int? coverFrameTimeMs,
     int? width,
     int? height,
     int? durationMs,
@@ -141,6 +168,9 @@ class VideoPostDto extends PostBaseDto {
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? publishedAt,
+    String? contentVertical,
+    String? recallPath,
+    String? supplySource,
     List<IntersectionReason>? intersectionReasons,
   }) {
     return VideoPostDto(
@@ -158,6 +188,9 @@ class VideoPostDto extends PostBaseDto {
       body: body ?? this.body,
       videoUrl: videoUrl ?? this.videoUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      coverUrl: coverUrl ?? this.coverUrl,
+      coverStrategy: coverStrategy ?? this.coverStrategy,
+      coverFrameTimeMs: coverFrameTimeMs ?? this.coverFrameTimeMs,
       width: width ?? this.width,
       height: height ?? this.height,
       durationMs: durationMs ?? this.durationMs,
@@ -167,6 +200,9 @@ class VideoPostDto extends PostBaseDto {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       publishedAt: publishedAt ?? this.publishedAt,
+      contentVertical: contentVertical ?? this.contentVertical,
+      recallPath: recallPath ?? this.recallPath,
+      supplySource: supplySource ?? this.supplySource,
       intersectionReasons: intersectionReasons ?? this.intersectionReasons,
     );
   }

@@ -4,6 +4,9 @@ part of 'content_repository.dart';
 // 发现流归类与 identity/type 匹配）。与 content_repository_mock.dart 同库（part），
 // 共享私有实例状态；拆出仅为收敛主文件行数（R03），不构成第二数据源（R15/R24）。
 
+const String _mockContentDefaultAuthorAvatarUrl =
+    'media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png';
+
 List<PostBaseDto>? _contractSeedPosts() {
   final seed = ContractFixtureRuntimeLoader.contentSeedSet();
   final posts = seed?['posts'];
@@ -67,8 +70,7 @@ extension _MockContentPosts on MockContentRepository {
       'id': postId,
       'authorId': 'mock_user',
       'displayName': 'Mock User',
-      'authorAvatarUrl':
-          'media/avatar/s/archived-avatar/content/default/v1/avatar.jpg',
+      'authorAvatarUrl': _mockContentDefaultAuthorAvatarUrl,
       'body': '',
       'mediaUrls': <String>[],
       'likeCount': 0,
@@ -110,8 +112,7 @@ extension _MockContentPosts on MockContentRepository {
     final base = <String, dynamic>{
       'authorId': authorId,
       'displayName': displayName,
-      'authorAvatarUrl':
-          'media/avatar/s/archived-avatar/content/default/v1/avatar.jpg',
+      'authorAvatarUrl': _mockContentDefaultAuthorAvatarUrl,
       'authorBackgroundUrl':
           'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       'createdAt': '2025-12-20T10:00:00Z',
@@ -197,8 +198,7 @@ extension _MockContentPosts on MockContentRepository {
     final base = <String, dynamic>{
       'authorId': authorId,
       'displayName': displayName,
-      'authorAvatarUrl':
-          'media/avatar/s/archived-avatar/content/default/v1/avatar.jpg',
+      'authorAvatarUrl': _mockContentDefaultAuthorAvatarUrl,
       'authorBackgroundUrl':
           'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
     };
@@ -290,11 +290,11 @@ extension _MockContentPosts on MockContentRepository {
     return null;
   }
 
-  List<PostBaseDto> _resolveDiscoveryPosts({
+  Future<List<PostBaseDto>> _resolveDiscoveryPosts({
     required String category,
     String? identity,
     String? type,
-  }) {
+  }) async {
     final requestedIdentity = (identity ?? '').trim();
     final requestedType = _normalizeFeedType(type);
     if (_shouldServeAlphaShowcaseFeed(
@@ -319,10 +319,32 @@ extension _MockContentPosts on MockContentRepository {
         .toList(growable: false);
   }
 
-  List<PostBaseDto> _alphaShowcasePosts() {
-    return ContentMockData.seededShowcaseFeedItems
+  Future<List<PostBaseDto>> _alphaShowcasePosts() async {
+    final showcase = await ContentMockData.seededShowcaseFeedItemsAsync();
+    return showcase
         .map((item) => postBaseDtoFromMap(item.toDiscoveryWireMap()))
         .toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>?> _alphaShowcasePostWireById(
+    String postId,
+  ) async {
+    final trimmed = postId.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final showcase = await ContentMockData.seededShowcaseFeedItemsAsync();
+    for (final item in showcase) {
+      if (item.id == trimmed) {
+        final row = item.toDiscoveryWireMap();
+        if ((row['contentType']?.toString() ?? row['type']?.toString() ?? '') ==
+            'article') {
+          return ContentMockData.articleWireByPostId(trimmed) ?? row;
+        }
+        return row;
+      }
+    }
+    return null;
   }
 
   bool _shouldServeAlphaShowcaseFeed({

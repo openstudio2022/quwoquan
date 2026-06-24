@@ -18,7 +18,6 @@ render: { articleTemplate: journal, fontPreset: clean }
 structure:
   required: [封面主图, 地理线索, 图集分组, 拍摄提示, 图注说明]
   optional: [器材与焦段, 季节光线]
-hooks: ["用一组图看懂{name}的光线和地貌", "{name}最值得停下来的几个画面"]
 mustIncludeFacts: [拍摄地点, 季节, 光线时段, 图片来源, 授权状态]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 国家地理]
 wordCount: { min: 500, max: 1200 }
@@ -33,4 +32,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/image.md

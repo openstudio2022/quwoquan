@@ -148,7 +148,6 @@ class CreateActionSheet extends StatelessWidget {
               ? (constraints.maxHeight -
                         AppSpacing.buttonHeight -
                         AppSpacing.interGroupSm -
-                        AppSpacing.createEntrySheetHandleHeight -
                         AppSpacing.createActionSheetGroupTrailingGap)
                     .clamp(AppSpacing.minInteractiveSize * 2, double.infinity)
                     .toDouble()
@@ -158,8 +157,6 @@ class CreateActionSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _SheetDragHandle(isDark: isDark),
-              SizedBox(height: AppSpacing.containerSm),
               ConstrainedBox(
                 constraints: BoxConstraints(maxHeight: maxActionHeight),
                 child: ListView(
@@ -262,28 +259,6 @@ class _SheetActionGroup extends StatelessWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-class _SheetDragHandle extends StatelessWidget {
-  const _SheetDragHandle({required this.isDark});
-
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: AppSpacing.createEntrySheetHandleWidth,
-        height: AppSpacing.createEntrySheetHandleHeight,
-        decoration: BoxDecoration(
-          color: SettingsSemanticConstants.createSheetDragHandleColor(isDark),
-          borderRadius: BorderRadius.circular(
-            AppSpacing.createEntrySheetHandleHeight,
-          ),
-        ),
-      ),
     );
   }
 }

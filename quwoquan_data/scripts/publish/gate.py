@@ -286,6 +286,28 @@ def _post_contract_issues(leaf: Path, root: Path, manifest: dict) -> list[str]:
         assets = manifest.get("assets")
         if not isinstance(assets, list) or not assets:
             issues.append(f"{rel}: video work must contain at least one asset")
+            assets = assets if isinstance(assets, list) else []
+        video_assets = [
+            asset
+            for asset in assets
+            if isinstance(asset, dict) and str(asset.get("kind") or "").strip() == "video"
+        ]
+        if not video_assets:
+            issues.append(f"{rel}: video work must contain a kind=video asset")
+        for asset in video_assets:
+            asset_id = str(asset.get("assetId") or asset.get("fileName") or "<unknown>").strip()
+            has_video_ref = any(
+                str(asset.get(field) or "").strip()
+                for field in ("cdnUrl", "objectKey", "videoUrl", "videoAssetId")
+            )
+            if not has_video_ref:
+                issues.append(f"{rel}: video asset {asset_id} missing videoUrl/objectKey/cdnUrl")
+            has_cover_ref = any(
+                str(asset.get(field) or "").strip()
+                for field in ("thumbnailUrl", "coverUrl")
+            )
+            if not has_cover_ref:
+                issues.append(f"{rel}: video asset {asset_id} missing thumbnailUrl or coverUrl")
     else:
         if not article_path.is_file():
             issues.append(f"{rel}: article work missing article.md")

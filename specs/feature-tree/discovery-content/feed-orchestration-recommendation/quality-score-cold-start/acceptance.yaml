@@ -10,8 +10,9 @@ scope:
   summary: 内容质量分和 recScore 投影驱动无行为内容冷启动。
   in_scope:
   - 内容质量分来源、异步投影、训练 item 特征字段、质量分覆盖率。
+  - UGC、BulkImport 与数据工程 importer 同一投影公式。
   out_of_scope:
-  - 本轮不实现质量分作业、importer 或投影逻辑。
+  - 同步质量模型 RPC、深度质量模型。
 gwt_acceptance:
   GWT1:
     title: 内容质量分冷启动 GWT
@@ -22,7 +23,7 @@ gwt_acceptance:
     then:
     - 内容按质量分、探索和多样性参与召回排序，不退化为纯时间流。
     done_when:
-    - 质量分来源、投影字段、覆盖率指标和读路径零打分约束均冻结。
+    - 质量分来源、投影字段、覆盖率指标和读路径零打分约束均落地。
     edge_cases:
     - 质量分缺失时使用保守默认值并进入缺失指标，不得伪造高分。
     contract_refs:
@@ -33,8 +34,11 @@ gwt_acceptance:
     - cold_start_non_empty_rate >= 0.999
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/projection_fields__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/quality_score_fusion__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/cmd/import/mongo_import__local_contract_test.go
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -57,8 +61,8 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_planned] quwoquan_service/services/content-service/tests/post_quality_score_projection_contract_test.go'
-    - '[migrated_from_planned] quwoquan_service/runtime/recommendation/cold_start_quality_score_test.go'
+    - local_contract 已覆盖质量分投影、缺失保守默认、recScore 镜像、冷启动排序消费。
+    - api_integration/user_acceptance 的线上覆盖率指标仍需 gamma 数据验证。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

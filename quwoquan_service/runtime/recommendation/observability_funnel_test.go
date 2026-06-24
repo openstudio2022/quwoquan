@@ -90,3 +90,58 @@ func TestRecordDuplicateExposureFiltered(t *testing.T) {
 		t.Errorf("impressed dup delta = %v, want 2", got)
 	}
 }
+
+func TestRecordServedItemsByAttribution(t *testing.T) {
+	labels := []string{
+		"discovery",
+		"travel_photography",
+		"data_engineering",
+		"collab_i2i",
+		"rank-v1",
+		"reason-v1",
+		"none",
+	}
+	before := testutil.ToFloat64(feedServedByAttributionTotal.WithLabelValues(labels...))
+
+	RecordServedItemsByAttribution([]FeedItem{{
+		ContentID:       "post_attr_1",
+		ContentVertical: "travel_photography",
+		SupplySource:    "data_engineering",
+		RecallPath:      "collab_i2i",
+	}}, "discovery", "rank-v1", "reason-v1")
+
+	if got := testutil.ToFloat64(feedServedByAttributionTotal.WithLabelValues(labels...)) - before; got != 1 {
+		t.Fatalf("served attribution delta = %v, want 1", got)
+	}
+}
+
+func TestRecordBehaviorIngest_AttributionLabels(t *testing.T) {
+	labels := []string{
+		"click",
+		"click",
+		"travel",
+		"travel_photography",
+		"data_engineering",
+		"collab_u2i",
+		"rank-v2",
+		"reason-v2",
+		"fact",
+	}
+	before := testutil.ToFloat64(behaviorByAttributionTotal.WithLabelValues(labels...))
+
+	RecordBehaviorIngest(BehaviorSignal{
+		Action:            "click",
+		State:             "click",
+		ChannelID:         "Travel",
+		ContentVertical:   "Travel_Photography",
+		SupplySource:      "Data_Engineering",
+		RecallPath:        "Collab_U2I",
+		RankingVersion:    "Rank-V2",
+		ReasonVersion:     "Reason-V2",
+		IntersectionClass: "Fact",
+	})
+
+	if got := testutil.ToFloat64(behaviorByAttributionTotal.WithLabelValues(labels...)) - before; got != 1 {
+		t.Fatalf("behavior attribution delta = %v, want 1", got)
+	}
+}

@@ -18,6 +18,7 @@ class AppRequestPageIds {
     'homepageStatusReport': 'entity.homepage.status_report.page',
     'mediaUploadComplete': 'media.upload.complete',
     'mediaUploadInit': 'media.upload.init',
+    'profileCareerInterests': 'user.profile.career_interests',
     'rtcSignal': 'rtc.signal',
     'suggestHomepage': 'entity.homepage.suggest.page',
   };
@@ -35,6 +36,7 @@ class AppRequestPageIds {
   static const String homepageStatusReport = 'entity.homepage.status_report.page';
   static const String mediaUploadComplete = 'media.upload.complete';
   static const String mediaUploadInit = 'media.upload.init';
+  static const String profileCareerInterests = 'user.profile.career_interests';
   static const String rtcSignal = 'rtc.signal';
   static const String suggestHomepage = 'entity.homepage.suggest.page';
 }

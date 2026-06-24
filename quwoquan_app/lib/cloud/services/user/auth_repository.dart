@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
@@ -9,6 +11,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
+part 'auth_repository_remote.dart';
 
 /// 一次发码的结果（脱敏号码 + 有效期；调试码仅非生产返回）。
 class OtpSendResultData {
@@ -150,6 +153,22 @@ abstract class AuthRepository {
     String? displayLabel,
   });
 
+  /// 绑定本人手机号。必须先完成 `sourceOperation=bind_phone` 的 OTP 验证。
+  Future<void> bindPhoneWithOtp({
+    required String phone,
+    required String otpCode,
+    String? displayLabel,
+  });
+
+  /// 绑定运营商本机号码。App 仅上传运营商授权 token。
+  Future<void> bindCarrierPhone({
+    required String vendor,
+    required String carrierToken,
+    required String deviceId,
+    required String platform,
+    String? displayLabel,
+  });
+
   /// 解绑凭证（最后一个凭证禁止解绑）。
   Future<void> unbindCredential(String credentialType);
 
@@ -173,6 +192,17 @@ abstract class AuthRepository {
 }
 
 class MockAuthRepository implements AuthRepository {
+  final Map<String, String> _mockAccountDisplayNames = <String, String>{};
+  final List<OwnerCredentialRowDto> _credentials = <OwnerCredentialRowDto>[
+    OwnerCredentialRowDto.fromMap(<String, dynamic>{
+      'id': 'mock_cred_1',
+      'credentialType': 'phone',
+      'displayLabel': '138****0001',
+      'isActive': true,
+      'boundAt': DateTime.now().toIso8601String(),
+    }),
+  ];
+
   @override
   Future<OtpSendResultData> sendOtp({
     required String phone,
@@ -234,6 +264,7 @@ class MockAuthRepository implements AuthRepository {
     required String privacyVersion,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
+    final displayName = _defaultDisplayNameFor('one_tap:$carrierToken');
     return AuthLoginResultDto.fromMap(<String, dynamic>{
       'accessToken': 'mock_one_tap_token_${carrierToken.hashCode}',
       'refreshToken': 'mock_one_tap_refresh',
@@ -243,7 +274,7 @@ class MockAuthRepository implements AuthRepository {
       'accountState': 'active',
       'identityOrigin': 'phone',
       'accountHint': <String, dynamic>{
-        'displayName': '趣友3909',
+        'displayName': displayName,
         'avatarUrl': '',
         'maskedPhone': '138****3909',
         'identityOrigin': 'phone',
@@ -261,13 +292,14 @@ class MockAuthRepository implements AuthRepository {
   }) async {
     await Future.delayed(const Duration(milliseconds: 120));
     final registered = carrierToken.contains('registered');
+    final displayName = _defaultDisplayNameFor('one_tap:$carrierToken');
     return OneTapLoginHintDto.fromMap(<String, dynamic>{
       'state': registered ? 'registered' : 'new_phone',
       'maskedPhone': '138****3909',
       'registered': registered,
       'accountHint': registered
           ? <String, dynamic>{
-              'displayName': '趣友3909',
+              'displayName': displayName,
               'avatarUrl': '',
               'maskedPhone': '138****3909',
               'identityOrigin': 'phone',
@@ -409,22 +441,63 @@ class MockAuthRepository implements AuthRepository {
     required String credentialType,
     required String credentialKey,
     String? displayLabel,
-  }) async {}
+  }) async {
+    _upsertCredential(
+      credentialType: credentialType,
+      displayLabel: displayLabel ?? _maskPhone(credentialKey),
+    );
+  }
+
+  @override
+  Future<void> bindPhoneWithOtp({
+    required String phone,
+    required String otpCode,
+    String? displayLabel,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 180));
+    _upsertCredential(
+      credentialType: 'phone',
+      displayLabel: displayLabel ?? _maskPhone(phone),
+    );
+  }
+
+  @override
+  Future<void> bindCarrierPhone({
+    required String vendor,
+    required String carrierToken,
+    required String deviceId,
+    required String platform,
+    String? displayLabel,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 180));
+    _upsertCredential(
+      credentialType: 'carrier_phone',
+      displayLabel: displayLabel ?? '138****3909',
+    );
+  }
 
   @override
   Future<void> unbindCredential(String credentialType) async {}
 
   @override
   Future<List<OwnerCredentialRowDto>> listCredentials() async {
-    return [
+    return List<OwnerCredentialRowDto>.unmodifiable(_credentials);
+  }
+
+  void _upsertCredential({
+    required String credentialType,
+    required String displayLabel,
+  }) {
+    _credentials.removeWhere((row) => row.credentialType == credentialType);
+    _credentials.add(
       OwnerCredentialRowDto.fromMap(<String, dynamic>{
-        'id': 'mock_cred_1',
-        'credentialType': 'phone',
-        'displayLabel': '138****0001',
+        'id': 'mock_${credentialType}_cred',
+        'credentialType': credentialType,
+        'displayLabel': displayLabel,
         'isActive': true,
         'boundAt': DateTime.now().toIso8601String(),
       }),
-    ];
+    );
   }
 
   @override
@@ -461,454 +534,26 @@ class MockAuthRepository implements AuthRepository {
 
   @override
   Future<void> deletePersona(String subAccountId) async {}
+
+  String _defaultDisplayNameFor(String key) {
+    final normalized = key.trim().isEmpty ? 'mock_current' : key.trim();
+    return _mockAccountDisplayNames.putIfAbsent(
+      normalized,
+      () => _buildMockDefaultNickname(normalized),
+    );
+  }
 }
 
-class RemoteAuthRepository implements AuthRepository {
-  RemoteAuthRepository({CloudHttpClient? httpClient, String? baseUrl})
-    : _client = httpClient ?? CloudHttpClient(),
-      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
-
-  final CloudHttpClient _client;
-  final String _baseUrl;
-
-  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
-
-  String _loginPathForCredentialType(String credentialType) {
-    switch (credentialType.trim().toLowerCase()) {
-      case 'phone':
-        return UserApiMetadata.loginWithPhonePath;
-      case 'wechat':
-        return UserApiMetadata.loginWithWechatPath;
-      case 'alipay':
-        return UserApiMetadata.loginWithAlipayPath;
-      case 'qq':
-        return UserApiMetadata.loginWithQqPath;
-      case 'apple':
-        return UserApiMetadata.loginWithApplePath;
-      default:
-        throw ArgumentError.value(
-          credentialType,
-          'credentialType',
-          'Unsupported credential type',
-        );
-    }
-  }
-
-  String _loginPageIdForCredentialType(String credentialType) {
-    switch (credentialType.trim().toLowerCase()) {
-      case 'phone':
-        return UserRequestPageIds.loginWithPhone;
-      case 'wechat':
-        return UserRequestPageIds.loginWithWechat;
-      case 'alipay':
-        return UserRequestPageIds.loginWithAlipay;
-      case 'qq':
-        return UserRequestPageIds.loginWithQq;
-      case 'apple':
-        return UserRequestPageIds.loginWithApple;
-      default:
-        throw ArgumentError.value(
-          credentialType,
-          'credentialType',
-          'Unsupported credential type',
-        );
-    }
-  }
-
-  AuthLoginResultDto _authResultFromResponse(Object? resp, String context) {
-    return AuthLoginResultDto.fromMap(
-      CloudResponseDecoder.asObject(resp, context: context),
-    );
-  }
-
-  @override
-  Future<OtpSendResultData> sendOtp({
-    required String phone,
-    String? deviceId,
-    String? platform,
-    String? appVersion,
-    String? sourceOperation,
-  }) async {
-    final context = UserRequestPageIds.sendOtp;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.sendOtpPath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{
-        'phone': phone,
-        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
-        if (platform != null && platform.isNotEmpty) 'platform': platform,
-        if (appVersion != null && appVersion.isNotEmpty)
-          'appVersion': appVersion,
-        if (sourceOperation != null && sourceOperation.isNotEmpty)
-          'sourceOperation': sourceOperation,
-      },
-    );
-    return OtpSendResultData.fromMap(
-      CloudResponseDecoder.asObject(resp, context: context),
-    );
-  }
-
-  @override
-  Future<AuthLoginResultDto> login({
-    required String credentialType,
-    required String credentialKey,
-    String? otpCode,
-    String? displayLabel,
-    String? deviceId,
-    String? platform,
-    String? appVersion,
-    String? agreementVersion,
-    String? privacyVersion,
-  }) async {
-    final normalizedType = credentialType.trim().toLowerCase();
-    final body = switch (normalizedType) {
-      'phone' => <String, dynamic>{
-        'phone': credentialKey,
-        if (otpCode != null && otpCode.isNotEmpty) 'otpCode': otpCode,
-        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
-        if (platform != null && platform.isNotEmpty) 'platform': platform,
-        if (appVersion != null && appVersion.isNotEmpty)
-          'appVersion': appVersion,
-        if (agreementVersion != null && agreementVersion.isNotEmpty)
-          'agreementVersion': agreementVersion,
-        if (privacyVersion != null && privacyVersion.isNotEmpty)
-          'privacyVersion': privacyVersion,
-      },
-      'wechat' => <String, dynamic>{
-        'wechatCode': credentialKey,
-        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
-        if (platform != null && platform.isNotEmpty) 'platform': platform,
-      },
-      'alipay' => <String, dynamic>{
-        'alipayAuthCode': credentialKey,
-        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
-        if (platform != null && platform.isNotEmpty) 'platform': platform,
-      },
-      'qq' => <String, dynamic>{
-        'qqAuthCode': credentialKey,
-        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
-        if (platform != null && platform.isNotEmpty) 'platform': platform,
-      },
-      'apple' => <String, dynamic>{
-        'appleIdToken': credentialKey,
-        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
-        if (platform != null && platform.isNotEmpty) 'platform': platform,
-      },
-      _ => throw ArgumentError.value(
-        credentialType,
-        'credentialType',
-        'Unsupported credential type',
-      ),
-    };
-    if (displayLabel != null) {
-      body['displayLabel'] = displayLabel;
-    }
-    final resp = await _client.postJson(
-      _uri(_loginPathForCredentialType(credentialType)),
-      headers: CloudRequestHeaders.forPage(
-        _loginPageIdForCredentialType(credentialType),
-      ),
-      body: body,
-    );
-    return _authResultFromResponse(
-      resp,
-      _loginPageIdForCredentialType(credentialType),
-    );
-  }
-
-  @override
-  Future<AuthLoginResultDto> loginOneTap({
-    required String vendor,
-    required String carrierToken,
-    required String deviceId,
-    required String platform,
-    String? appVersion,
-    required String agreementVersion,
-    required String privacyVersion,
-  }) async {
-    final context = UserRequestPageIds.loginOneTap;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.loginOneTapPath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{
-        'vendor': vendor,
-        'carrierToken': carrierToken,
-        'deviceId': deviceId,
-        'platform': platform,
-        if (appVersion != null && appVersion.isNotEmpty)
-          'appVersion': appVersion,
-        'agreementVersion': agreementVersion,
-        'privacyVersion': privacyVersion,
-      },
-    );
-    return _authResultFromResponse(resp, context);
-  }
-
-  @override
-  Future<OneTapLoginHintDto> resolveOneTapLoginHint({
-    required String vendor,
-    required String carrierToken,
-    required String deviceId,
-    required String platform,
-    String? appVersion,
-  }) async {
-    final context = UserRequestPageIds.resolveOneTapLoginHint;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.resolveOneTapLoginHintPath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{
-        'vendor': vendor,
-        'carrierToken': carrierToken,
-        'deviceId': deviceId,
-        'platform': platform,
-        if (appVersion != null && appVersion.isNotEmpty)
-          'appVersion': appVersion,
-      },
-    );
-    return OneTapLoginHintDto.fromMap(
-      CloudResponseDecoder.asObject(resp, context: context),
-    );
-  }
-
-  @override
-  Future<AuthLoginResultDto> loginWechat({
-    required String wechatCode,
-    required String deviceId,
-    required String platform,
-  }) async {
-    final context = UserRequestPageIds.loginWithWechat;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.loginWithWechatPath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{
-        'wechatCode': wechatCode,
-        'deviceId': deviceId,
-        'platform': platform,
-      },
-    );
-    return _authResultFromResponse(resp, context);
-  }
-
-  @override
-  Future<AuthLoginResultDto> loginAlipay({
-    required String alipayAuthCode,
-    required String deviceId,
-    required String platform,
-  }) async {
-    final context = UserRequestPageIds.loginWithAlipay;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.loginWithAlipayPath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{
-        'alipayAuthCode': alipayAuthCode,
-        'deviceId': deviceId,
-        'platform': platform,
-      },
-    );
-    return _authResultFromResponse(resp, context);
-  }
-
-  @override
-  Future<AuthLoginResultDto> loginQq({
-    required String qqAuthCode,
-    required String deviceId,
-    required String platform,
-  }) async {
-    final context = UserRequestPageIds.loginWithQq;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.loginWithQqPath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{
-        'qqAuthCode': qqAuthCode,
-        'deviceId': deviceId,
-        'platform': platform,
-      },
-    );
-    return _authResultFromResponse(resp, context);
-  }
-
-  @override
-  Future<AuthLoginResultDto> loginApple({
-    required String appleIdToken,
-    required String deviceId,
-    required String platform,
-  }) async {
-    final context = UserRequestPageIds.loginWithApple;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.loginWithApplePath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{
-        'appleIdToken': appleIdToken,
-        'deviceId': deviceId,
-        'platform': platform,
-      },
-    );
-    return _authResultFromResponse(resp, context);
-  }
-
-  @override
-  Future<AuthLoginResultDto> loginPasskey({
-    required String passkeyAssertion,
-    required String deviceId,
-    required String platform,
-    String? displayLabel,
-  }) async {
-    final context = UserRequestPageIds.loginWithPasskey;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.loginWithPasskeyPath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{
-        'passkeyAssertion': passkeyAssertion,
-        'deviceId': deviceId,
-        'platform': platform,
-        if (displayLabel != null && displayLabel.isNotEmpty)
-          'displayLabel': displayLabel,
-      },
-    );
-    return _authResultFromResponse(resp, context);
-  }
-
-  @override
-  Future<AuthLoginResultDto> loginAnonymous({
-    required String installId,
-    required String deviceFingerprintHash,
-    required String platform,
-    required String appVersion,
-  }) async {
-    final context = UserRequestPageIds.loginAnonymous;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.loginAnonymousPath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{
-        'installId': installId,
-        'deviceFingerprintHash': deviceFingerprintHash,
-        'platform': platform,
-        'appVersion': appVersion,
-      },
-    );
-    return _authResultFromResponse(resp, context);
-  }
-
-  @override
-  Future<AuthLoginResultDto> refreshToken(String refreshToken) async {
-    final context = UserRequestPageIds.refreshToken;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.refreshTokenPath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{'refreshToken': refreshToken},
-    );
-    return _authResultFromResponse(resp, context);
-  }
-
-  @override
-  Future<void> logout({String? refreshToken, String? deviceId}) async {
-    await _client.postJson(
-      _uri(UserApiMetadata.logoutPath),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.logout),
-      body: <String, dynamic>{
-        if (refreshToken != null && refreshToken.isNotEmpty)
-          'refreshToken': refreshToken,
-        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
-      },
-    );
-  }
-
-  @override
-  Future<void> bindCredential({
-    required String credentialType,
-    required String credentialKey,
-    String? displayLabel,
-  }) async {
-    final body = <String, dynamic>{
-      'credentialType': credentialType,
-      'credentialKey': credentialKey,
-    };
-    if (displayLabel != null) {
-      body['displayLabel'] = displayLabel;
-    }
-    await _client.postJson(
-      _uri(UserApiMetadata.bindCredentialPath),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.bindCredential),
-      body: body,
-    );
-  }
-
-  @override
-  Future<void> unbindCredential(String credentialType) async {
-    await _client.deleteJson(
-      _uri(
-        UserApiMetadata.unbindCredentialPath(credentialType: credentialType),
-      ),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.unbindCredential),
-    );
-  }
-
-  @override
-  Future<List<OwnerCredentialRowDto>> listCredentials() async {
-    final resp = await _client.getJson(
-      _uri(UserApiMetadata.listCredentialsPath),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listCredentials),
-    );
-    final data = CloudResponseDecoder.asObject(
-      resp,
-      context: UserRequestPageIds.listCredentials,
-    );
-    return CloudResponseDecoder.mapList(
-      data,
-      'credentials',
-    ).map(OwnerCredentialRowDto.fromMap).toList(growable: false);
-  }
-
-  @override
-  Future<List<PersonaManagementItemViewData>> listPersonas() async {
-    final resp = await _client.getJson(
-      _uri(UserApiMetadata.listPersonasPath),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listPersonas),
-    );
-    final data = CloudResponseDecoder.asObject(
-      resp,
-      context: UserRequestPageIds.listPersonas,
-    );
-    return CloudResponseDecoder.mapList(
-      data,
-      'items',
-    ).map(PersonaManagementItemViewData.fromMap).toList(growable: false);
-  }
-
-  @override
-  Future<PersonaManagementItemViewData> createPersona({
-    required String displayName,
-    String isolationLevel = 'open',
-  }) async {
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.createPersonaPath),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.createPersona),
-      body: {'displayName': displayName, 'isolationLevel': isolationLevel},
-    );
-    return PersonaManagementItemViewData.fromMap(
-      CloudResponseDecoder.asObject(
-        resp,
-        context: UserRequestPageIds.createPersona,
-      ),
-    );
-  }
-
-  @override
-  Future<void> activatePersona(String subAccountId) async {
-    await _client.postJson(
-      _uri(UserApiMetadata.activatePersonaPath(subAccountId: subAccountId)),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.activatePersona),
-      body: {},
-    );
-  }
-
-  @override
-  Future<void> deletePersona(String subAccountId) async {
-    await _client.deleteJson(
-      _uri(UserApiMetadata.deleteEmptyPersonaPath(subAccountId: subAccountId)),
-      headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.deleteEmptyPersona,
-      ),
-    );
-  }
+String _buildMockDefaultNickname(String entropySource) {
+  final now = DateTime.now();
+  final datePart =
+      '${(now.year % 100).toString().padLeft(2, '0')}'
+      '${now.month.toString().padLeft(2, '0')}'
+      '${now.day.toString().padLeft(2, '0')}';
+  final millisOfDay =
+      (((now.hour * 60) + now.minute) * 60 + now.second) * 1000 +
+      now.millisecond;
+  final entropy = entropySource.hashCode.abs() % 1000;
+  final suffix = (millisOfDay + entropy + Random().nextInt(1000)) % 10000000;
+  return '新同学_${datePart}_${suffix.toString().padLeft(7, '0')}';
 }

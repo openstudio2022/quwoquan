@@ -117,6 +117,7 @@ def write_task_manifest(task_id: str, spec: Mapping[str, Any] | None) -> Path:
     manifest = {
         "schemaVersion": TASK_MANIFEST_SCHEMA,
         "taskId": task_id,
+        "intentLabel": str(spec.get("intentLabel") or "").strip(),
         "vertical": str(spec.get("vertical") or ""),
         "organizeBy": str(spec.get("organizeBy") or scope_in.get("organizeBy") or ""),
         "scope": {

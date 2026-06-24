@@ -38,8 +38,10 @@
         "payloadAllowlist": { "const": "object_job" }
       }
     },
+    "authorId": { "type": ["string", "null"] },
     "creatorProfileId": { "type": ["string", "null"] },
     "creatorArchetype": { "type": ["string", "null"] },
+    "creatorProfileVersion": { "type": ["string", "null"] },
     "contentType": { "type": ["string", "null"] },
     "state": { "enum": ["queued", "leased", "succeeded", "failed", "blocked", "dead", "spilled"] },
     "attempt": { "type": "integer", "minimum": 0 },

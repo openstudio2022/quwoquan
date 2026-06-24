@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
+from _common.base_draft import load_base_draft_text
+from _common.draft_io import is_placeholder
 from _common.download_diagnostics import download_diagnostics
 from _common.image_asset_strategy import (
     OPEN_LICENSE_PUBLISH,
@@ -20,6 +22,12 @@ from _common.image_asset_strategy import (
 from _common.io import read_json, write_json
 from _common.paths import batch_root, release_root
 from _common.release_integrity import scan_runtime_batch_integrity
+from verify.scale_readiness_capacity import (
+    creator_load_report as _creator_load_report,
+    resolve_agent_active as _resolve_agent_active,
+    throughput_projection as _throughput_projection,
+    token_ledger_paths as _token_ledger_paths,
+)
 
 
 SCHEMA = "quwoquan_data.scale_readiness"
@@ -29,6 +37,7 @@ MIN_FIRST_PASS_RATE = 0.70
 MAX_TRIAL_ABANDONED_CONTENT_RATIO = 0.05
 STRUCTURAL_IMAGE_SHORTAGE_MIN_COUNT = 5
 STRUCTURAL_IMAGE_SHORTAGE_RATIO = 0.30
+DEFAULT_SCALE_SOURCE_READY_MULTIPLIER = 1.2
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -46,6 +55,10 @@ def _load_json_if_exists(path: Path) -> dict[str, Any]:
     except (OSError, ValueError, TypeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _compact_len(value: str) -> int:
+    return len("".join(str(value or "").split()))
 
 
 def _quotas(spec: Mapping[str, Any]) -> dict[str, int]:
@@ -80,6 +93,171 @@ def _expected_objects(spec: Mapping[str, Any], audit: Mapping[str, Any]) -> dict
         "image": count * quotas["image"],
         "routeArticle": quotas["routeArticle"],
         "total": count * (quotas["homepage"] + quotas["article"] + quotas["image"]) + quotas["routeArticle"],
+    }
+
+
+def _content_plan_item_count(root: Path) -> dict[str, int]:
+    packet = _load_json_if_exists(root / "_shared" / "content_plan_packet.json")
+    items = packet.get("items") if isinstance(packet.get("items"), list) else []
+    rows = {"total": len(items), "article": 0, "image": 0, "video": 0, "route": 0}
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        carrier = str(item.get("carrier") or item.get("contentType") or "article")
+        kind = str(item.get("kind") or "")
+        if carrier in {"image", "gallery"}:
+            rows["image"] += 1
+        elif carrier == "video":
+            rows["video"] += 1
+        else:
+            rows["article"] += 1
+        if kind == "route":
+            rows["route"] += 1
+    return rows
+
+
+def _authored_object_count(root: Path) -> dict[str, int]:
+    rows = {"total": 0, "article": 0}
+    posts_root = root / "posts"
+    if not posts_root.is_dir():
+        return rows
+    for draft in sorted(posts_root.rglob("4.draft/draft.article.md")):
+        try:
+            text = draft.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if is_placeholder(text):
+            continue
+        meta = _load_json_if_exists(draft.parent / "draft_meta.json")
+        if str(meta.get("generator") or "") != "agent":
+            continue
+        rows["total"] += 1
+        rows["article"] += 1
+    return rows
+
+
+def _homepage_passed_count(root: Path) -> int:
+    count = 0
+    entities_root = root / "entities"
+    if not entities_root.is_dir():
+        return 0
+    for report_path in sorted(entities_root.rglob("5.review/finalization_report.json")):
+        report = _load_json_if_exists(report_path)
+        if not report:
+            continue
+        status = str(report.get("status") or report.get("decision") or "").lower()
+        if status in {"passed", "approved", "done", "accepted", "success", "succeeded"} or bool(report.get("passed")):
+            count += 1
+            continue
+        entity_dir = report_path.parent.parent
+        if (
+            (entity_dir / "_entity.json").is_file()
+            and (entity_dir / "page.md").is_file()
+            and (entity_dir / "manifest.json").is_file()
+            and (entity_dir / "5.review" / "review.json").is_file()
+            and (entity_dir / "5.review" / "provenance.json").is_file()
+            and str(report.get("draftArticleRef") or "") == "4.draft/page.md"
+            and str(report.get("finalArticleRef") or "") == "page.md"
+            and str(report.get("draftSha256") or "").strip()
+            and str(report.get("finalSha256") or "").strip()
+        ):
+            count += 1
+    return count
+
+
+def _quality_target_report(root: Path) -> dict[str, Any]:
+    return _load_json_if_exists(root / "_shared" / "quality_target_report.json")
+
+
+def _source_unit_lane(meta: Mapping[str, Any], source_dir: Path) -> str:
+    lane = str(meta.get("researchLane") or "").strip().lower()
+    if lane in {"homepage", "article", "image", "video"}:
+        return lane
+    category = str(meta.get("category") or meta.get("sourceCategory") or "").lower()
+    source_id = str(meta.get("sourceId") or source_dir.name).lower()
+    if "home" in source_id or "baike" in source_id or "official" in source_id or category in {"encyclopedia", "official"}:
+        return "homepage"
+    if "image" in source_id or "photo" in source_id or category in {"image", "photo"}:
+        return "image"
+    return "article"
+
+
+def _source_admission_report(
+    task_id: str,
+    batch_id: str,
+    spec: Mapping[str, Any],
+    root: Path,
+) -> dict[str, Any]:
+    quotas = _quotas(spec)
+    targets = [
+        str(target.get("name") or "").strip()
+        for target in ((spec.get("scope") or {}).get("coverageTargets") or [])
+        if isinstance(target, Mapping) and str(target.get("name") or "").strip()
+    ]
+    per_entity: list[dict[str, Any]] = []
+    ready_capacity = 0
+    source_ready_entities = 0
+    for name in targets:
+        entity_dirs = sorted((root / "entities").glob(f"*/**/{name}/1.download/sources"))
+        counts = {"homepage": 0, "article": 0, "image": 0, "video": 0}
+        focus_blocked = 0
+        for sources_dir in entity_dirs:
+            for source_dir in sorted(path for path in sources_dir.iterdir() if path.is_dir()):
+                meta = _load_json_if_exists(source_dir / "meta.json")
+                focus = str(meta.get("entityFocusVerdict") or meta.get("focusVerdict") or "").lower()
+                if focus in {"weak", "supporting_only", "mismatch", "off_entity"}:
+                    focus_blocked += 1
+                    continue
+                lane = _source_unit_lane(meta, source_dir)
+                source_ref = (source_dir / "source.md").relative_to(root).as_posix() if (source_dir / "source.md").is_file() else ""
+                if lane == "article":
+                    if source_ref and _compact_len(load_base_draft_text(task_id, batch_id, source_ref)) >= 600:
+                        counts["article"] += 1
+                elif lane == "image":
+                    index = _load_json_if_exists(source_dir / "assets" / "index.json")
+                    assets = index.get("assets") if isinstance(index.get("assets"), list) else []
+                    if assets:
+                        counts["image"] += 1
+                elif lane == "homepage":
+                    if source_ref and _compact_len(load_base_draft_text(task_id, batch_id, source_ref)) >= 120:
+                        counts["homepage"] += 1
+                elif lane == "video":
+                    counts["video"] += 1
+        needed = {
+            "homepage": max(0, quotas["homepage"]),
+            "article": max(0, quotas["article"]),
+            "image": max(0, quotas["image"]),
+        }
+        source_ready = all(counts[lane] >= needed[lane] for lane in needed if needed[lane] > 0)
+        if source_ready:
+            source_ready_entities += 1
+        capacity = (
+            min(counts["homepage"], needed["homepage"])
+            + min(counts["article"], needed["article"])
+            + min(counts["image"], needed["image"])
+        )
+        ready_capacity += capacity
+        per_entity.append(
+            {
+                "entity": name,
+                "sourceReady": source_ready,
+                "counts": counts,
+                "needed": needed,
+                "readyCapacity": capacity,
+                "focusBlockedSourceUnits": focus_blocked,
+            }
+        )
+    return {
+        "schemaVersion": "quwoquan_data.source_ready_admission/1",
+        "targetEntityCount": len(targets),
+        "sourceReadyEntityCount": source_ready_entities,
+        "sourceReadyObjectCapacity": ready_capacity,
+        "requiredPerEntity": {
+            "homepage": quotas["homepage"],
+            "article": quotas["article"],
+            "image": quotas["image"],
+        },
+        "perEntity": per_entity,
     }
 
 
@@ -126,6 +304,7 @@ def _abandonment_reason_summary(audit: Mapping[str, Any]) -> dict[str, Any]:
         "imageOpenLicenseShortage": 0,
         "imageRightsOrLicense": 0,
         "imageFetchOrQuality": 0,
+        "entityFocusGap": 0,
         "articleSourceShortage": 0,
         "homepageSourceShortage": 0,
         "workflowInterrupted": 0,
@@ -157,7 +336,10 @@ def _abandonment_reason_summary(audit: Mapping[str, Any]) -> dict[str, Any]:
             or "too small" in lowered
         ):
             add("imageFetchOrQuality", text)
-        elif "article sources" in lowered or "article research needs" in lowered:
+        elif "entity_focus_off_topic" in lowered or "entity_focus_gate" in lowered:
+            # 诚实弃稿：实体角度无聚焦底稿（多地点环线/跑题），非流水线失败。
+            add("entityFocusGap", text)
+        elif "article sources" in lowered or "article base sources" in lowered or "article research needs" in lowered:
             add("articleSourceShortage", text)
         elif "homepage" in lowered and ("sources" in lowered or "research needs" in lowered):
             add("homepageSourceShortage", text)
@@ -245,17 +427,6 @@ def _image_strategy_readiness(
         "structuralOpenLicenseShortage": structural_shortage,
         "structuralShortageThreshold": threshold,
     }
-
-
-def _token_ledger_paths(root: Path) -> list[str]:
-    names = []
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
-            continue
-        lowered = path.name.lower()
-        if "token" in lowered and "ledger" in lowered and path.suffix == ".json":
-            names.append(str(path))
-    return names
 
 
 def _release_exists(release_id: str | None) -> bool:
@@ -354,6 +525,9 @@ def build_scale_readiness_report(
     batch_id: str,
     *,
     daily_target: int = DEFAULT_DAILY_TARGET,
+    target_goal: int | None = None,
+    min_pass_rate: float = 0.0,
+    source_ready_goal: int | None = None,
     release_id: str | None = None,
     require_import: bool = True,
     mode: str = "commercial",
@@ -370,6 +544,14 @@ def build_scale_readiness_report(
     mode = "trial" if str(mode or "").strip() == "trial" else "commercial"
     expected = _expected_objects(spec, audit)
     targets = _target_count(spec, audit)
+    target_goal_value = int(target_goal or 0)
+    if target_goal_value < 0:
+        target_goal_value = 0
+    min_pass_rate_value = float(min_pass_rate or 0.0)
+    if min_pass_rate_value < 0:
+        min_pass_rate_value = 0.0
+    if min_pass_rate_value > 1:
+        min_pass_rate_value = min_pass_rate_value / 100.0
     scope = spec.get("scope") or {}
     base_targets = scope.get("coverageTargets") if isinstance(scope.get("coverageTargets"), list) else []
     base_target_count = len(base_targets)
@@ -383,7 +565,13 @@ def build_scale_readiness_report(
     replacement_closed = targets >= required_active_targets
     runtime_integrity = scan_runtime_batch_integrity(task_id, batch_id)
     runtime_stats = runtime_integrity.get("stats") if isinstance(runtime_integrity, Mapping) else {}
+    planned_counts = _content_plan_item_count(root)
+    authored_counts = _authored_object_count(root)
+    homepage_passed = _homepage_passed_count(root)
+    source_admission = _source_admission_report(task_id, batch_id, spec, root)
+    quality_target = _quality_target_report(root)
     quality_coverage = _content_quality_coverage(root)
+    creator_load = _creator_load_report(root, spec, target_goal=target_goal_value)
     token_ledgers = _token_ledger_paths(root)
     import_paths = _import_evidence_paths(root)
     ship_paths = _ship_evidence_paths(root)
@@ -406,6 +594,9 @@ def build_scale_readiness_report(
 
     if not bool(env_report.get("ready")):
         blockers.append("env ready evidence missing or failed")
+    cursor_startup = env_report.get("cursorStartup") if isinstance(env_report.get("cursorStartup"), Mapping) else {}
+    if target_goal_value and not bool(cursor_startup.get("ready")):
+        blockers.append("Cursor SDK startup probe missing or failed;百级不得进入 author-runner")
     status = str(state.get("status") or "")
     if status != "succeeded":
         blockers.append(f"workflow status must be succeeded for scale; got {status or 'missing'}")
@@ -485,6 +676,22 @@ def build_scale_readiness_report(
     actual_images = _safe_int((runtime_stats or {}).get("imageCount"))
     actual_videos = _safe_int((runtime_stats or {}).get("videoCount"))
     actual_posts = _safe_int((runtime_stats or {}).get("postCount"))
+    published_total = actual_posts + homepage_passed
+    target_passed = _safe_int(quality_target.get("qualityPassedObjectCount"), published_total)
+    target_rate = round(target_passed / target_goal_value, 4) if target_goal_value else 0.0
+    if target_goal_value and target_rate < min_pass_rate_value:
+        blockers.append(
+            f"quality target satisfaction {target_rate:.2%} < {min_pass_rate_value:.0%} "
+            f"({target_passed}/{target_goal_value})"
+        )
+    computed_source_ready_goal = source_ready_goal
+    if computed_source_ready_goal is None and target_goal_value:
+        computed_source_ready_goal = int(round(target_goal_value * DEFAULT_SCALE_SOURCE_READY_MULTIPLIER))
+    if computed_source_ready_goal and _safe_int(source_admission.get("sourceReadyObjectCapacity")) < int(computed_source_ready_goal):
+        blockers.append(
+            "source-ready object capacity "
+            f"{source_admission.get('sourceReadyObjectCapacity')} < required {int(computed_source_ready_goal)}"
+        )
     article_shortfall_closed = (
         mode == "trial"
         and actual_articles + _safe_int(abandoned_content_by_type.get("article")) >= expected["article"]
@@ -539,20 +746,57 @@ def build_scale_readiness_report(
         blockers.append("staging/gamma import evidence missing")
     required_throughput_per_hour = int(daily_target) / 24
     measured_throughput = state.get("throughput") if isinstance(state.get("throughput"), Mapping) else None
+    resolved_agent_active = _resolve_agent_active(measured_throughput, state)
+    throughput_projection = _throughput_projection(
+        resolved_agent_active,
+        queue_backend=str(queue_backend or ""),
+        max_concurrency=max_concurrency,
+        required_per_hour=required_throughput_per_hour,
+    )
+    measured_objects_per_hour = 0.0
     if not measured_throughput:
         blockers.append("measured throughput evidence missing; cannot project daily capacity")
     else:
         try:
-            objects_per_hour = float(measured_throughput.get("objectsPerHour") or 0)
+            measured_objects_per_hour = float(measured_throughput.get("objectsPerHour") or 0)
         except (TypeError, ValueError):
-            objects_per_hour = 0.0
-        if objects_per_hour < required_throughput_per_hour:
-            blockers.append(
-                f"measured throughput {objects_per_hour:.4f} objects/hour "
-                f"< required {required_throughput_per_hour:.4f} objects/hour"
+            measured_objects_per_hour = 0.0
+        effective_per_hour = max(measured_objects_per_hour, throughput_projection["projectedObjectsPerHour"])
+        if effective_per_hour < required_throughput_per_hour:
+            if throughput_projection["available"]:
+                blockers.append(
+                    f"projected daily capacity {throughput_projection['projectedObjectsPerHour']:.4f} objects/hour "
+                    f"(perWorker {throughput_projection['perWorkerObjectsPerHour']:.4f} x committedConcurrency "
+                    f"{throughput_projection['committedConcurrency']}) "
+                    f"< required {required_throughput_per_hour:.4f} objects/hour"
+                )
+            else:
+                blockers.append(
+                    f"measured throughput {measured_objects_per_hour:.4f} objects/hour "
+                    f"< required {required_throughput_per_hour:.4f} objects/hour"
+                )
+        elif throughput_projection["available"] and measured_objects_per_hour < required_throughput_per_hour:
+            warnings.append(
+                "daily capacity met by per-worker projection "
+                f"({throughput_projection['projectedObjectsPerHour']:.2f} obj/h = "
+                f"{throughput_projection['perWorkerObjectsPerHour']:.2f} x "
+                f"{throughput_projection['committedConcurrency']} committed workers), "
+                f"not by trial wall-clock throughput ({measured_objects_per_hour:.2f} obj/h); "
+                "linear scaling across the committed reliabletask fleet is an explicit unproven assumption"
             )
     if expected["total"] <= 0:
         blockers.append("expected content object count is zero")
+    if creator_load["required"] and creator_load["assignmentIssueCount"]:
+        blockers.append(
+            "creator assignment gate failed: "
+            f"{creator_load['assignmentIssueCount']} issue(s); "
+            f"samples={creator_load['assignmentIssues'][:5]}"
+        )
+    if target_goal_value >= 100 and creator_load["overloadedCreatorProfileIds"]:
+        blockers.append(
+            "creator load exceeds publishCadence.maxDailyPosts=1 for scale: "
+            + ", ".join(creator_load["overloadedCreatorProfileIds"][:10])
+        )
     if expected["total"] and daily_target / max(expected["total"], 1) > 1000:
         warnings.append("trial sample is too small to extrapolate linearly to requested daily target")
 
@@ -580,6 +824,42 @@ def build_scale_readiness_report(
         "passed": not blockers,
         "decision": "go" if not blockers else "no_go",
         "expectedObjects": expected,
+        "qualityTarget": {
+            "targetGoal": target_goal_value,
+            "minPassRate": min_pass_rate_value,
+            "qualityPassedObjectCount": target_passed,
+            "targetSatisfactionRate": target_rate,
+            "sourceReadyGoal": int(computed_source_ready_goal or 0),
+            "sourceReadyMultiplier": DEFAULT_SCALE_SOURCE_READY_MULTIPLIER,
+        },
+        "funnel": {
+            "targeted": target_goal_value or expected["total"],
+            "sourceReady": _safe_int(source_admission.get("sourceReadyObjectCapacity")),
+            "homepagePassed": homepage_passed,
+            "contentPlanned": planned_counts["total"],
+            "authored": authored_counts["total"],
+            "reviewPassed": actual_posts,
+            "published": published_total,
+            "byObjectType": {
+                "article": {
+                    "planned": planned_counts["article"],
+                    "authored": authored_counts["article"],
+                    "published": actual_articles,
+                },
+                "image": {
+                    "planned": planned_counts["image"],
+                    "published": actual_images,
+                },
+                "video": {
+                    "planned": planned_counts["video"],
+                    "published": actual_videos,
+                },
+                "homepage": {
+                    "published": homepage_passed,
+                },
+            },
+        },
+        "sourceAdmission": source_admission,
         "abandonment": {
             "entityCount": abandoned_count,
             "contentObjectCount": abandoned_content_count,
@@ -614,6 +894,7 @@ def build_scale_readiness_report(
             "stats": runtime_stats or {},
         },
         "contentQualityCoverage": quality_coverage,
+        "creatorLoad": creator_load,
         "sourceSufficiency": lanes,
         "workflowState": {
             key: state.get(key)
@@ -631,11 +912,13 @@ def build_scale_readiness_report(
             "requiredThroughputPerHour": round(required_throughput_per_hour, 4),
             "requiredThroughputPerMinute": round(int(daily_target) / 1440, 4),
             "measuredThroughput": measured_throughput,
+            "throughputProjection": throughput_projection,
             "firstPassRate": first_pass_rate,
         },
         "envReady": {
             "ready": bool(env_report.get("ready")),
             "reportPath": str(root / "_shared" / "env_ready_report.json") if env_report else "",
+            "cursorStartup": dict(cursor_startup or {}),
             "issues": (
                 ((env_report.get("preflight") or {}).get("issues") or env_report.get("issues") or [])[:20]
                 if isinstance(env_report, Mapping)

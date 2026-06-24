@@ -15,6 +15,7 @@ class PlatformCapabilities {
     required this.hasLocalFileSystem,
     required this.mediaLibrary,
     required this.camera,
+    required this.contacts,
     required this.realtimeCommunication,
     required this.incomingCallUi,
     required this.webPushIncomingCall,
@@ -39,6 +40,13 @@ class PlatformCapabilities {
 
   /// Live camera capture.
   final bool camera;
+
+  /// System address book (device contacts) read access.
+  ///
+  /// True on mobile (iOS/Android). False on web / desktop and the initial ohos
+  /// baseline (no flutter_contacts support yet); business code hides the
+  /// "phone contacts" entry and degrades gracefully when this is false.
+  final bool contacts;
 
   /// Real-time audio/video (WebRTC / LiveKit) availability.
   final bool realtimeCommunication;
@@ -100,6 +108,7 @@ class PlatformCapabilities {
     bool? hasLocalFileSystem,
     bool? mediaLibrary,
     bool? camera,
+    bool? contacts,
     bool? realtimeCommunication,
     bool? incomingCallUi,
     bool? webPushIncomingCall,
@@ -119,6 +128,7 @@ class PlatformCapabilities {
       hasLocalFileSystem: hasLocalFileSystem ?? this.hasLocalFileSystem,
       mediaLibrary: mediaLibrary ?? this.mediaLibrary,
       camera: camera ?? this.camera,
+      contacts: contacts ?? this.contacts,
       realtimeCommunication:
           realtimeCommunication ?? this.realtimeCommunication,
       incomingCallUi: incomingCallUi ?? this.incomingCallUi,
@@ -154,6 +164,7 @@ class CapabilityProfile {
     hasLocalFileSystem: true,
     mediaLibrary: true,
     camera: true,
+    contacts: true,
     realtimeCommunication: true,
     incomingCallUi: true,
     webPushIncomingCall: false,
@@ -174,6 +185,7 @@ class CapabilityProfile {
     hasLocalFileSystem: false,
     mediaLibrary: true,
     camera: true,
+    contacts: false,
     realtimeCommunication: true,
     incomingCallUi: false,
     webPushIncomingCall: true,
@@ -196,6 +208,7 @@ class CapabilityProfile {
     hasLocalFileSystem: true,
     mediaLibrary: true,
     camera: true,
+    contacts: false,
     realtimeCommunication: false,
     incomingCallUi: false,
     webPushIncomingCall: false,
@@ -216,6 +229,7 @@ class CapabilityProfile {
     hasLocalFileSystem: true,
     mediaLibrary: false,
     camera: false,
+    contacts: false,
     realtimeCommunication: true,
     incomingCallUi: false,
     webPushIncomingCall: false,

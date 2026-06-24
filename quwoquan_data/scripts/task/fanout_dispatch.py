@@ -19,12 +19,82 @@ from typing import Any, Mapping
 
 from _common.command_packet import build_packet, write_packet
 from _common import fanout_strategies as fs
+from _common import ops_governance as og
 from _common.io import read_json, write_json, write_ndjson
 from _common.paths import fanout_dispatch_state_path, task_baseline_freeze_packet_path, task_catalog, task_shared_dir
 from task import object_queue as oq
 from task import store
 
 DISPATCH_STATE_VERSION = "quwoquan_data.fanout_dispatch_state/1"
+
+
+def _plan_controller_run_id(plan: Mapping[str, Any]) -> str:
+    explicit = str(plan.get("controllerRunId") or "").strip()
+    return explicit or f"plan:{plan.get('planId')}"
+
+
+def _job_assignment(
+    plan: Mapping[str, Any],
+    unit: Mapping[str, Any],
+    *,
+    ref: str,
+    role: str,
+    scope: Mapping[str, Any],
+    allowed_write_roots: list[str],
+    budget: Mapping[str, Any],
+) -> dict[str, Any]:
+    controller_run_id = _plan_controller_run_id(plan)
+    partition_path = [str(item) for item in (unit.get("partitionPath") or []) if str(item).strip()]
+    batch_assignment = og.build_assignment(
+        task_id=str(unit["taskId"]),
+        batch_id=str(unit["batchId"]),
+        controller_run_id=controller_run_id,
+        assignment_path=["batch"],
+        role="batch_controller",
+        scope={
+            "sliceType": "batch",
+            "planId": str(plan.get("planId") or ""),
+            "taskId": str(unit["taskId"]),
+            "batchId": str(unit["batchId"]),
+        },
+        allowed_read_roots=["_shared"],
+        allowed_write_roots=["_shared"],
+        budget={"maxAttempts": 1},
+    )
+    batch_assignment = og.append_assignment(str(unit["taskId"]), str(unit["batchId"]), batch_assignment)
+    slice_path = partition_path or ["sourceTask"]
+    partition_assignment = og.build_assignment(
+        task_id=str(unit["taskId"]),
+        batch_id=str(unit["batchId"]),
+        controller_run_id=controller_run_id,
+        assignment_path=[*slice_path],
+        role="partition_agent",
+        parent_assignment_id=str(batch_assignment["assignmentId"]),
+        scope={
+            "sliceType": "partition",
+            "partitionPath": slice_path,
+            "planId": str(plan.get("planId") or ""),
+        },
+        allowed_read_roots=["_shared"],
+        allowed_write_roots=["_shared"],
+        budget={"maxAttempts": 1},
+    )
+    partition_assignment = og.append_assignment(str(unit["taskId"]), str(unit["batchId"]), partition_assignment)
+    assignment_path = [*slice_path, ref]
+    assignment = og.build_assignment(
+        task_id=str(unit["taskId"]),
+        batch_id=str(unit["batchId"]),
+        controller_run_id=controller_run_id,
+        assignment_path=assignment_path,
+        role=role,
+        parent_assignment_id=str(partition_assignment["assignmentId"]),
+        scope=scope,
+        allowed_read_roots=["_shared", *allowed_write_roots],
+        allowed_write_roots=allowed_write_roots,
+        budget=budget,
+    )
+    og.append_assignment(str(unit["taskId"]), str(unit["batchId"]), assignment)
+    return assignment
 
 
 def content_ref_author_mode(plan: Mapping[str, Any]) -> bool:
@@ -50,15 +120,7 @@ def _partition_region(unit: Mapping[str, Any], source_spec: Mapping[str, Any] | 
 
 def _inherit_content(plan: Mapping[str, Any], source_spec: Mapping[str, Any] | None) -> dict[str, Any] | None:
     if source_spec and isinstance(source_spec.get("content"), Mapping):
-        inherited = dict(source_spec.get("content") or {})
-        cond_axes = inherited.get("conditionAxes")
-        if isinstance(cond_axes, Mapping):
-            trimmed_axes = {k: v for k, v in dict(cond_axes).items() if k != "regions"}
-            if trimmed_axes:
-                inherited["conditionAxes"] = trimmed_axes
-            else:
-                inherited.pop("conditionAxes", None)
-        return inherited
+        return dict(source_spec.get("content") or {})
     defaults = plan.get("defaults") or {}
     content: dict[str, Any] = {}
     if defaults.get("angles"):
@@ -249,6 +311,20 @@ def enqueue_partition_leaves(plan: Mapping[str, Any], unit: Mapping[str, Any]) -
         ref = str(leaf.get("ref") or "").strip()
         if not ref:
             continue
+        assignment = _job_assignment(
+            plan,
+            unit,
+            ref=ref,
+            role="object_subagent",
+            scope={
+                "sliceType": "coverage_leaf",
+                "entityType": leaf.get("entityType"),
+                "name": leaf.get("name"),
+                "ref": ref,
+            },
+            allowed_write_roots=["_shared/object_queue"],
+            budget=budget,
+        )
         jobs.append(
             oq.enqueue_ref_job(
                 str(unit["taskId"]),
@@ -267,6 +343,14 @@ def enqueue_partition_leaves(plan: Mapping[str, Any], unit: Mapping[str, Any]) -
                     "partitionPath": list(unit.get("partitionPath") or []),
                     "entityType": leaf.get("entityType"),
                     "name": leaf.get("name"),
+                    "requireGovernance": True,
+                    "controllerRunId": assignment["controllerRunId"],
+                    "assignmentId": assignment["assignmentId"],
+                    "assignmentPath": assignment["assignmentPath"],
+                    "owner": assignment["role"],
+                    "allowedReadRoots": assignment["allowedReadRoots"],
+                    "allowedWriteRoots": assignment["allowedWriteRoots"],
+                    "assignment": assignment,
                 },
             )
         )
@@ -283,13 +367,15 @@ def sync_content_author_jobs(
 ) -> dict[str, Any]:
     """在 produce_compose 之后按内容对象 ref 准备 author packet 并入队。"""
     from _common import content_object
-    from _common.draft_io import draft_article_path, draft_package_dir, is_placeholder, read_writing_pack
+    from _common.creator_assignment import CREATOR_ASSIGNMENT_FIELDS, creator_from_payload
+    from _common.draft_io import draft_article_path, draft_package_dir, is_placeholder, read_writing_pack, write_writing_pack
     from _common.handoff import build_author_job_packet
 
     task_id = str(target["taskId"])
     batch_id = str(target["batchId"])
     defaults = plan.get("defaults") or {}
     budget = defaults.get("budget") or {}
+    default_creator = creator_from_payload(defaults.get("creatorAssignment") or defaults)
     queue_backend = defaults.get("queueBackend")
     stage_name = str(defaults.get("stage") or "author")
     prepared_refs: list[str] = []
@@ -308,11 +394,18 @@ def sync_content_author_jobs(
         pack = read_writing_pack(task_id, batch_id, ref) or {}
         if not brief or not pack:
             continue
+        effective_pack = dict(pack)
+        creator_assignment = creator_from_payload(effective_pack) or default_creator
+        for field in CREATOR_ASSIGNMENT_FIELDS:
+            if field in creator_assignment and effective_pack.get(field) in (None, "", {}):
+                effective_pack[field] = creator_assignment[field]
+        if effective_pack != pack:
+            write_writing_pack(task_id, batch_id, ref, effective_pack)
         authored = article_path.is_file() and not is_placeholder(article_path.read_text(encoding="utf-8"))
         packet = build_author_job_packet(
             ref=ref,
             brief=brief,
-            writing_pack=pack,
+            writing_pack=effective_pack,
             prompt_rel="4.draft/prompt.md",
             content_object_rel=content_object.content_object_rel(task_id, batch_id, ref),
         )
@@ -323,20 +416,50 @@ def sync_content_author_jobs(
             "partitionPath": list(partition_path or []),
             "contentRef": ref,
             "contentObjectDir": object_dir,
-            "title": pack.get("title"),
-            "writingIntent": pack.get("writingIntent"),
-            "baseSourceRef": pack.get("baseSourceRef"),
-            "sourcePaths": list(pack.get("sourcePaths") or []),
-            "carrier": pack.get("carrier"),
+            "title": effective_pack.get("title"),
+            "writingIntent": effective_pack.get("writingIntent"),
+            "baseSourceRef": effective_pack.get("baseSourceRef"),
+            "sourcePaths": list(effective_pack.get("sourcePaths") or []),
+            "carrier": effective_pack.get("carrier"),
             "promptRef": "4.draft/prompt.md",
             "writingPackRef": "3.compose/writing_pack.json",
         }
+        job_meta.update(creator_assignment)
+        assignment_unit = {**dict(target), "partitionPath": list(partition_path or [])}
+        assignment = _job_assignment(
+            plan,
+            assignment_unit,
+            ref=ref,
+            role="author_subagent",
+            scope={
+                "sliceType": "content_ref",
+                "ref": ref,
+                "contentObjectDir": object_dir,
+                "baseSourceRef": effective_pack.get("baseSourceRef"),
+            },
+            allowed_write_roots=[str(object_dir)],
+            budget=budget,
+        )
+        job_meta.update(
+            {
+                "requireGovernance": True,
+                "controllerRunId": assignment["controllerRunId"],
+                "assignmentId": assignment["assignmentId"],
+                "assignmentPath": assignment["assignmentPath"],
+                "owner": assignment["role"],
+                "allowedReadRoots": assignment["allowedReadRoots"],
+                "allowedWriteRoots": assignment["allowedWriteRoots"],
+                "sourceUnitId": og.source_unit_id(source_ref=str(effective_pack.get("baseSourceRef") or "")),
+                "sourceUnitIdRequired": bool(effective_pack.get("baseSourceRef")),
+                "assignment": assignment,
+            }
+        )
         refreshed = oq.refresh_job_definition(
             task_id,
             batch_id,
             ref,
             stage_name,
-            mutex_key=str(pack.get("baseSourceRef") or ref),
+            mutex_key=str(effective_pack.get("baseSourceRef") or ref),
             max_attempts=int(budget.get("maxAttempts") or oq.DEFAULT_MAX_ATTEMPTS),
             max_startup_failures=int(budget.get("maxStartupFailures") or oq.DEFAULT_MAX_STARTUP_FAILURES),
             max_wall_clock_seconds=int(budget.get("maxWallClockSeconds") or oq.DEFAULT_MAX_WALL_CLOCK_SECONDS),
@@ -357,7 +480,7 @@ def sync_content_author_jobs(
                 batch_id,
                 ref,
                 stage_name,
-                mutex_key=str(pack.get("baseSourceRef") or ref),
+                mutex_key=str(effective_pack.get("baseSourceRef") or ref),
                 max_attempts=int(budget.get("maxAttempts") or oq.DEFAULT_MAX_ATTEMPTS),
                 max_startup_failures=int(budget.get("maxStartupFailures") or oq.DEFAULT_MAX_STARTUP_FAILURES),
                 max_wall_clock_seconds=int(budget.get("maxWallClockSeconds") or oq.DEFAULT_MAX_WALL_CLOCK_SECONDS),
@@ -374,7 +497,7 @@ def sync_content_author_jobs(
                 batch_id,
                 ref,
                 stage_name,
-                mutex_key=str(pack.get("baseSourceRef") or ref),
+                mutex_key=str(effective_pack.get("baseSourceRef") or ref),
                 max_attempts=int(budget.get("maxAttempts") or oq.DEFAULT_MAX_ATTEMPTS),
                 max_startup_failures=int(budget.get("maxStartupFailures") or oq.DEFAULT_MAX_STARTUP_FAILURES),
                 max_wall_clock_seconds=int(budget.get("maxWallClockSeconds") or oq.DEFAULT_MAX_WALL_CLOCK_SECONDS),

@@ -306,7 +306,8 @@ Widget _interactionTabRouterApp(
           'entrySource:${state.uri.queryParameters['commentEntrySource'] ?? ''};'
           'targetCommentId:${state.uri.queryParameters['targetCommentId'] ?? ''};'
           'targetParentCommentId:${state.uri.queryParameters['targetParentCommentId'] ?? ''};'
-          'targetReplyId:${state.uri.queryParameters['targetReplyId'] ?? ''}',
+          'targetReplyId:${state.uri.queryParameters['targetReplyId'] ?? ''};'
+          'replyToCommentId:${state.uri.queryParameters['replyToCommentId'] ?? ''}',
         ),
       ),
     ],
@@ -948,7 +949,8 @@ void main() {
     expect(
       find.text(
         '作品页:post_clickable;filter:article;openComments:;'
-        'entrySource:;targetCommentId:;targetParentCommentId:;targetReplyId:',
+        'entrySource:;targetCommentId:;targetParentCommentId:;targetReplyId:;'
+        'replyToCommentId:',
       ),
       findsOneWidget,
     );
@@ -975,7 +977,8 @@ void main() {
     expect(
       find.text(
         '作品页:post_video-clickable;filter:video;openComments:;'
-        'entrySource:;targetCommentId:;targetParentCommentId:;targetReplyId:',
+        'entrySource:;targetCommentId:;targetParentCommentId:;targetReplyId:;'
+        'replyToCommentId:',
       ),
       findsOneWidget,
     );
@@ -1002,7 +1005,8 @@ void main() {
     expect(
       find.text(
         '作品页:post_image-clickable;filter:image;openComments:;'
-        'entrySource:;targetCommentId:;targetParentCommentId:;targetReplyId:',
+        'entrySource:;targetCommentId:;targetParentCommentId:;targetReplyId:;'
+        'replyToCommentId:',
       ),
       findsOneWidget,
     );
@@ -1044,7 +1048,7 @@ void main() {
       find.text(
         '作品页:post_comment-deeplink;filter:image;openComments:true;'
         'entrySource:profile-interaction;targetCommentId:comment_top_1;'
-        'targetParentCommentId:;targetReplyId:',
+        'targetParentCommentId:;targetReplyId:;replyToCommentId:',
       ),
       findsOneWidget,
     );
@@ -1094,7 +1098,8 @@ void main() {
       find.text(
         '作品页:post_reply-deeplink;filter:image;openComments:true;'
         'entrySource:profile-interaction;targetCommentId:;'
-        'targetParentCommentId:comment_top_1;targetReplyId:comment_reply_9',
+        'targetParentCommentId:comment_top_1;targetReplyId:comment_reply_9;'
+        'replyToCommentId:',
       ),
       findsOneWidget,
     );
@@ -1132,7 +1137,10 @@ void main() {
 
     final likeKey = const ValueKey<String>('profile-interaction-like-cmt');
     expect(find.byKey(likeKey), findsOneWidget);
-    expect(find.text(UITextConstants.profileInteractionLikeComment), findsOneWidget);
+    expect(
+      find.text(UITextConstants.profileInteractionLikeComment),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(likeKey));
     await _pumpFrames(tester);
@@ -1140,7 +1148,10 @@ void main() {
     expect(content.reactCalls, 1);
     expect(content.lastReactCommentId, 'comment_top_1');
     expect(content.lastReactReaction, 'like');
-    expect(find.text(UITextConstants.profileInteractionCommentLiked), findsOneWidget);
+    expect(
+      find.text(UITextConstants.profileInteractionCommentLiked),
+      findsOneWidget,
+    );
     expect(
       find.descendant(
         of: find.byKey(likeKey),
@@ -1150,17 +1161,12 @@ void main() {
     );
   });
 
-  testWidgets('评论类活动「回复评论」内联展开并提交 createComment(postId, replyToCommentId)', (
-    tester,
-  ) async {
+  testWidgets('评论类活动「回复评论」直接进入评论详情并携带 replyToCommentId', (tester) async {
     _setPhoneSize(tester);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    addTearDown(AppToast.dismiss);
-
-    final content = _RecordingContentRepository();
     await tester.pumpWidget(
-      _interactionTabActionsApp(
+      _interactionTabRouterApp(
         _InteractionContractRepository(
           received: [
             _interaction(
@@ -1176,35 +1182,24 @@ void main() {
           ],
           sent: const <ProfileInteractionActivityViewData>[],
         ),
-        contentRepository: content,
       ),
     );
     await _pumpFrames(tester);
 
-    final replyChipKey = const ValueKey<String>('profile-interaction-reply-cmt');
-    final replyFieldKey = const ValueKey<String>(
-      'profile-interaction-reply-field-cmt',
+    final replyChipKey = const ValueKey<String>(
+      'profile-interaction-reply-cmt',
     );
-    final replySubmitKey = const ValueKey<String>(
-      'profile-interaction-reply-submit-cmt',
-    );
-
-    expect(find.byKey(replyFieldKey), findsNothing);
     await tester.tap(find.byKey(replyChipKey));
-    await _pumpFrames(tester);
-    expect(find.byKey(replyFieldKey), findsOneWidget);
+    await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(replyFieldKey), '谢谢你，我会继续努力');
-    await tester.tap(find.byKey(replySubmitKey));
-    await _pumpFrames(tester);
-
-    expect(content.createCommentCalls, 1);
-    expect(content.lastCreatePostId, 'post_target_9');
-    expect(content.lastCreateReplyToCommentId, 'comment_top_1');
-    expect(content.lastCreateContent, '谢谢你，我会继续努力');
-    // 提交成功后回复框收起。
-    expect(find.byKey(replyFieldKey), findsNothing);
-    AppToast.dismiss();
+    expect(
+      find.text(
+        '作品页:post_target_9;filter:image;openComments:true;'
+        'entrySource:profile-interaction;targetCommentId:comment_top_1;'
+        'targetParentCommentId:;targetReplyId:;replyToCommentId:comment_top_1',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('点赞类活动「私信」通过 chat 仓库发送预置感谢私信', (tester) async {
@@ -1289,7 +1284,10 @@ void main() {
     await tester.tap(find.byKey(thankKey));
     await _pumpFrames(tester);
 
-    expect(find.text(UITextConstants.profileInteractionThanked), findsOneWidget);
+    expect(
+      find.text(UITextConstants.profileInteractionThanked),
+      findsOneWidget,
+    );
     expect(
       find.descendant(
         of: find.byKey(thankKey),

@@ -117,7 +117,7 @@
 | 面 | 主表达 | 槽①类型图标 | 槽②句内头像 | 槽③对象封面 | 槽④lifecycle | 传播视图 | 落地路径 |
 |---|---|---|---|---|---|---|---|
 | A 我的主页 | 我的连接 + 我的影响力 | ✓ iconKey/dimension | ✓ 人名前 | ✓ 对象 | ✓ 分桶弱标(新/增强/重新活跃) | ✓ author_impact 路径节点 + 再传播 | `lib/ui/user/widgets/my_intersection_inbox_card.dart` / `author_impact_card.dart` |
-| B 用户主页(他人) | 为什么推荐TA + TA帮助了很多人 | ✓ | ✓ | ✓ | ✓ 证据组叠 | ○ TA 影响力 | `lib/components/object_page/intersection_entity.dart` / `object_page/**` |
+| B 用户主页(他人) | 为什么推荐TA + TA的影响力 | ✓ | ✓ | ✓ | ✓ 证据组叠 | ○ TA 影响力 | `lib/components/object_page/intersection_entity.dart` / `object_page/**` |
 | C 实体主页 | 为什么推荐这里 + 记录流单句 | ✓ | ○ | ✓ 封面缩略 | ○ | — | 复用 B 的 `IntersectionEntity` / ObjectIntersectionSection |
 | D 圈子主页 | 为什么推荐这个圈子 + 圈子帮助了很多人 | ✓ | ✓ | ✓ | ○ | ✓ circle_impact 接统一三件套(解决 G4) | `lib/ui/circle/widgets/circle_shell_builders.dart` |
 | E 首页 post | post 卡内单句 chip | ○ | ○ | — | 仅「新」红点 | — | post chip / `home_multi_form_feed`（紧凑面，不复活 spotlight） |

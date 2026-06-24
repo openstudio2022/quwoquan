@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +12,12 @@ class FeedPerformanceMetricNames {
       'home_feed_video_autoplay_startup_ms';
   static const String videoAutoplayFailed = 'home_feed_video_autoplay_failed';
   static const String feedLoadFailed = 'home_feed_load_failed';
+  static const String frameJankRatio = 'home_feed_frame_jank_ratio';
+  static const String imageCacheBytes = 'home_feed_image_cache_bytes';
+  static const String activeVideoControllerCount =
+      'home_feed_active_video_controller_count';
+  static const String mediaDownloadQueue = 'home_feed_media_download_queue';
+  static const String postCacheHitSource = 'home_feed_post_cache_hit_source';
 
   const FeedPerformanceMetricNames._();
 }
@@ -145,6 +153,120 @@ class FeedPerformanceObservability {
             'contentId': contentId,
             'candidatesTried': candidatesTried,
             'result': 'failed',
+          },
+        ),
+      ),
+    );
+  }
+
+  void recordFrameJankRatio({
+    required String surfaceId,
+    required int sampledFrames,
+    required int jankyFrames,
+    required double ratio,
+  }) {
+    final normalizedSurface = surfaceId.trim();
+    if (normalizedSurface.isEmpty || sampledFrames <= 0) {
+      return;
+    }
+    unawaited(
+      _analytics.trackEvent(
+        AnalyticsEvent(
+          eventType: 'feed_metric',
+          eventName: FeedPerformanceMetricNames.frameJankRatio,
+          properties: <String, dynamic>{
+            'surfaceId': normalizedSurface,
+            'sampledFrames': sampledFrames,
+            'jankyFrames': jankyFrames.clamp(0, sampledFrames),
+            'ratio': ratio.clamp(0, 1),
+          },
+        ),
+      ),
+    );
+  }
+
+  void recordImageCacheBudget({
+    required String profile,
+    required int currentSizeBytes,
+    required int maxSizeBytes,
+  }) {
+    unawaited(
+      _analytics.trackEvent(
+        AnalyticsEvent(
+          eventType: 'feed_metric',
+          eventName: FeedPerformanceMetricNames.imageCacheBytes,
+          properties: <String, dynamic>{
+            'profile': profile,
+            'currentSizeBytes': currentSizeBytes < 0 ? 0 : currentSizeBytes,
+            'maxSizeBytes': maxSizeBytes < 0 ? 0 : maxSizeBytes,
+          },
+        ),
+      ),
+    );
+  }
+
+  void recordActiveVideoControllerCount({
+    required String surfaceId,
+    required int activeCount,
+  }) {
+    final normalizedSurface = surfaceId.trim();
+    if (normalizedSurface.isEmpty) {
+      return;
+    }
+    unawaited(
+      _analytics.trackEvent(
+        AnalyticsEvent(
+          eventType: 'feed_metric',
+          eventName: FeedPerformanceMetricNames.activeVideoControllerCount,
+          properties: <String, dynamic>{
+            'surfaceId': normalizedSurface,
+            'activeCount': activeCount < 0 ? 0 : activeCount,
+          },
+        ),
+      ),
+    );
+  }
+
+  void recordMediaDownloadQueue({
+    required String profile,
+    required int activeDownloads,
+    required int queuedDownloads,
+    required int inflightDownloads,
+    required int cacheSizeBytes,
+  }) {
+    unawaited(
+      _analytics.trackEvent(
+        AnalyticsEvent(
+          eventType: 'feed_metric',
+          eventName: FeedPerformanceMetricNames.mediaDownloadQueue,
+          properties: <String, dynamic>{
+            'profile': profile,
+            'activeDownloads': activeDownloads < 0 ? 0 : activeDownloads,
+            'queuedDownloads': queuedDownloads < 0 ? 0 : queuedDownloads,
+            'inflightDownloads': inflightDownloads < 0 ? 0 : inflightDownloads,
+            'cacheSizeBytes': cacheSizeBytes < 0 ? 0 : cacheSizeBytes,
+          },
+        ),
+      ),
+    );
+  }
+
+  void recordPostCacheHitSource({
+    required String source,
+    required String cacheClass,
+  }) {
+    final normalizedSource = source.trim();
+    if (normalizedSource.isEmpty) {
+      return;
+    }
+    unawaited(
+      _analytics.trackEvent(
+        AnalyticsEvent(
+          eventType: 'feed_metric',
+          eventName: FeedPerformanceMetricNames.postCacheHitSource,
+          properties: <String, dynamic>{
+            'source': normalizedSource,
+            'cacheClass': cacheClass.trim().isEmpty ? 'unknown' : cacheClass,
           },
         ),
       ),

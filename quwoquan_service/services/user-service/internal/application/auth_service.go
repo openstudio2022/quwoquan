@@ -117,7 +117,7 @@ func NewAuthService(
 }
 
 // WithDefaultNicknamePrefix 注入系统默认昵称前缀（云侧可配置）。
-// 首次创建用户时默认昵称为 "{prefix}_{YYMM}{9位随机数}"。
+// 首次创建用户时默认昵称为 "{prefix}_{YYMMDD}_{7位尾号}"。
 func WithDefaultNicknamePrefix(prefix string) AuthServiceOption {
 	return func(s *AuthService) {
 		if p := strings.TrimSpace(prefix); p != "" {
@@ -789,6 +789,45 @@ func (s *AuthService) BindCredential(ctx context.Context, ownerID, credType, cre
 	return s.profiles.Update(ctx, profile)
 }
 
+func (s *AuthService) BindPhoneCredential(ctx context.Context, ownerID, phone, otpCode, displayLabel string) error {
+	normalized := normalizePhoneCredentialKey(phone)
+	if normalized == "" {
+		return generated.AppErrorFromInvalidArgument("phone is required")
+	}
+	if err := s.verifyOtp(ctx, normalized, otpCode); err != nil {
+		return err
+	}
+	if strings.TrimSpace(displayLabel) == "" {
+		displayLabel = maskPhoneForDisplay(normalized)
+	}
+	return s.BindCredential(ctx, ownerID, credentialPhone, normalized, displayLabel)
+}
+
+func (s *AuthService) BindCarrierPhoneCredential(ctx context.Context, ownerID, vendor, carrierToken, deviceID, platform, displayLabel string) error {
+	resolver := s.oneTapResolver
+	if resolver == nil {
+		return generated.AppErrorFromCarrierUnavailable("one tap resolver unavailable")
+	}
+	phone, resolvedLabel, err := resolver.ResolvePhone(ctx, vendor, carrierToken)
+	if err != nil {
+		return mapCarrierResolverError(err)
+	}
+	normalized := normalizePhoneCredentialKey(phone)
+	if normalized == "" {
+		return generated.AppErrorFromCarrierTokenInvalid("one tap phone is empty")
+	}
+	if strings.TrimSpace(displayLabel) == "" {
+		displayLabel = strings.TrimSpace(resolvedLabel)
+	}
+	if strings.TrimSpace(displayLabel) == "" {
+		displayLabel = maskPhoneForDisplay(normalized)
+	}
+	if err := s.persistLoginDevice(ctx, ownerID, deviceID, platform, ""); err != nil {
+		return generated.AppErrorFromInternalError(fmt.Sprintf("persist carrier bind device: %v", err))
+	}
+	return s.BindCredential(ctx, ownerID, credentialCarrierPhone, normalized, displayLabel)
+}
+
 // UnbindCredential deactivates a credential, but prevents removing the last one.
 func (s *AuthService) UnbindCredential(ctx context.Context, ownerID, credType string) (err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.UnbindCredential",
@@ -855,6 +894,7 @@ func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey,
 	persona := &model.Persona{
 		UserID:                   ownerID,
 		SubAccountID:             subAccountID,
+		UserHandle:               systemUserHandleForSubAccount(subAccountID),
 		DisplayName:              profile.Nickname,
 		Phone:                    profile.Phone,
 		IsPrimary:                true,
@@ -1044,26 +1084,32 @@ func generateCredentialBindingID() string {
 
 // buildDefaultNickname 生成首次创建用户的系统默认昵称：
 //
-//	{prefix}_{YYMM}{9位随机数}
+//	{prefix}_{YYMMDD}_{7位尾号}
 //
-// 前缀云侧可配置（默认「新同学」）；年月与随机数之间不再加分隔符；
-// 昵称允许重复，唯一性由 ownerID/subAccountId/userHandle 承担。
+// 前缀云侧可配置（默认「新同学」）；7 位尾号混合时/分/秒/毫秒与随机扰动，
+// 在允许重复的前提下尽量降低近时刻碰撞概率。昵称唯一性仍由
+// ownerID/subAccountId/userHandle 承担。
 func (s *AuthService) buildDefaultNickname() string {
 	prefix := strings.TrimSpace(s.nicknamePrefix)
 	if prefix == "" {
 		prefix = defaultNewUserNicknamePrefix
 	}
-	yymm := time.Now().Format("0601")
-	return fmt.Sprintf("%s_%s%09d", prefix, yymm, randomNineDigitSuffix())
+	now := time.Now()
+	yymmdd := now.Format("060102")
+	return fmt.Sprintf("%s_%s_%07d", prefix, yymmdd, defaultNicknameSevenDigitSuffix(now))
 }
 
-// randomNineDigitSuffix 返回 [0, 1e9) 的随机整数，用于默认昵称尾缀。
-func randomNineDigitSuffix() int64 {
-	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000_000))
+// defaultNicknameSevenDigitSuffix 混合毫秒级时钟与随机熵，返回 [0, 1e7) 的 7 位尾号。
+func defaultNicknameSevenDigitSuffix(now time.Time) int64 {
+	millisOfDay := int64(now.Hour())*3_600_000 +
+		int64(now.Minute())*60_000 +
+		int64(now.Second())*1_000 +
+		int64(now.Nanosecond()/1_000_000)
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000))
 	if err != nil {
-		return time.Now().UnixNano() % 1_000_000_000
+		return (millisOfDay + now.UnixNano()%1_000) % 10_000_000
 	}
-	return n.Int64()
+	return (millisOfDay + n.Int64()) % 10_000_000
 }
 
 func extractOwnerRootPrefix(ownerID string) string {
@@ -1164,109 +1210,6 @@ type OtpSendResult struct {
 	DeliveryStatus    string `json:"deliveryStatus"`
 	RetryAfterSeconds int    `json:"retryAfterSeconds,omitempty"`
 	DebugCode         string `json:"debugCode,omitempty"`
-}
-
-// SendOtp 校验号码、限频后创建 OTP challenge，并通过 integration-service 提交短信发送。
-func (s *AuthService) SendOtp(ctx context.Context, phone, deviceID, platform, appVersion, sourceOperation string) (_ *OtpSendResult, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "user.SendOtp",
-		attribute.String("platform", strings.TrimSpace(platform)),
-		attribute.String("source.operation", strings.TrimSpace(sourceOperation)))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	normalized := normalizePhoneCredentialKey(phone)
-	if len(normalized) < 5 {
-		return nil, generated.AppErrorFromInvalidArgument("phone required")
-	}
-	if s.otp == nil {
-		return nil, generated.AppErrorFromInternalError("otp store unavailable")
-	}
-	if s.otpChallenges == nil {
-		return nil, generated.AppErrorFromInternalError("otp challenge store unavailable")
-	}
-	allowed, retryAfter, err := s.otp.AllowSend(ctx, normalized)
-	if err != nil {
-		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp allow-send: %v", err))
-	}
-	if !allowed {
-		return nil, generated.AppErrorFromOtpRateLimited("otp send throttled").
-			WithRecovery("retry", retryAfter)
-	}
-	code, err := generateOtpCode()
-	if err != nil {
-		return nil, generated.AppErrorFromInternalError("otp generate")
-	}
-	challengeID, err := generateToken()
-	if err != nil {
-		return nil, generated.AppErrorFromInternalError("otp challenge id generate")
-	}
-	requestID, err := generateToken()
-	if err != nil {
-		return nil, generated.AppErrorFromInternalError("otp request id generate")
-	}
-	expiresAt := time.Now().UTC().Add(time.Duration(otpCodeExpirySeconds) * time.Second)
-	challenge := OtpChallenge{
-		ChallengeID:    "otp_ch_" + strings.TrimRight(challengeID, "="),
-		RequestID:      "otp_req_" + strings.TrimRight(requestID, "="),
-		Phone:          normalized,
-		PhoneHash:      hashOTPPhone(normalized),
-		CodeHash:       hashOTPCode("otp_ch_"+strings.TrimRight(challengeID, "="), normalized, code),
-		Status:         OtpChallengeStatusPendingDispatch,
-		IdempotencyKey: "otp:" + normalized + ":" + expiresAt.Format("200601021504"),
-		ExpiresAt:      expiresAt,
-	}
-	challenge, err = s.otpChallenges.CreateChallenge(ctx, challenge)
-	if err != nil {
-		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp challenge save: %v", err))
-	}
-	result := &OtpSendResult{
-		MaskedPhone:      maskPhoneForDisplay(normalized),
-		ExpiresInSeconds: int(otpCodeExpirySeconds),
-		RequestID:        challenge.RequestID,
-		ChallengeID:      challenge.ChallengeID,
-		DeliveryStatus:   "queued",
-	}
-	now := time.Now().UTC()
-	passThroughAllowed := s.otpPassThrough.Allows(now)
-	// 受控放通：gamma 对接真实上游，但命中白名单的测试号跳过真实下发，回填真实验证码（仍可被严格校验）。
-	sandboxAllowed := s.otpSandbox.AllowsPhone(normalized, now)
-	switch {
-	case sandboxAllowed:
-		span.SetAttributes(attribute.Bool("otp.sandbox_pass_through", true))
-		result.DeliveryStatus = "sandbox"
-		_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
-	case s.externalClient != nil:
-		if _, err := s.externalClient.SubmitSMSOTP(ctx, SMSOTPDispatchRequest{
-			RequestID:      challenge.RequestID,
-			ChallengeID:    challenge.ChallengeID,
-			Phone:          normalized,
-			PhoneHash:      challenge.PhoneHash,
-			MaskedPhone:    result.MaskedPhone,
-			Code:           code,
-			IdempotencyKey: challenge.IdempotencyKey,
-			ExpiresAt:      expiresAt,
-		}); err != nil {
-			if !passThroughAllowed {
-				_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, err.Error())
-				return nil, generated.AppErrorFromOtpProviderFailed(fmt.Sprintf("otp integration submit: %v", err))
-			}
-			result.DeliveryStatus = "pass_through"
-			_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
-		} else {
-			_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
-			result.DeliveryStatus = "queued"
-		}
-	case passThroughAllowed:
-		result.DeliveryStatus = "pass_through"
-		_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
-	default:
-		_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, "external interaction client unavailable")
-		return nil, generated.AppErrorFromOtpProviderFailed("otp external interaction client unavailable")
-	}
-	// 放通(alpha/beta) 与全局 debug reveal 回填明文；受控放通(gamma) 只对白名单回填。
-	if passThroughAllowed || sandboxAllowed || s.otpDebugReveal {
-		result.DebugCode = code
-	}
-	return result, nil
 }
 
 // verifyOtp 校验验证码：只信任持久化 challenge 状态、hash、过期与一次性消费标记。
@@ -1392,6 +1335,9 @@ func (s *SubAccountService) ListSubAccounts(ctx context.Context, ownerID string)
 
 // CreateSubAccount creates a new isolated sub-account for the owner.
 func (s *SubAccountService) CreateSubAccount(ctx context.Context, ownerID string, data map[string]any) (*model.Persona, error) {
+	if _, ok := data["userHandle"]; ok {
+		return nil, generated.AppErrorFromSubAccountHandleReadonly("userHandle is system assigned")
+	}
 	primary, _ := s.personas.FindActiveByUserID(ctx, ownerID)
 	if primary == nil {
 		personas, err := s.personas.FindByUserID(ctx, ownerID)
@@ -1407,6 +1353,7 @@ func (s *SubAccountService) CreateSubAccount(ctx context.Context, ownerID string
 	p := &model.Persona{
 		UserID:                   ownerID,
 		SubAccountID:             newSubAccountID,
+		UserHandle:               systemUserHandleForSubAccount(newSubAccountID),
 		IsolationLevel:           defaultIsolationLevel,
 		InheritsProfileFromOwner: true,
 		OverriddenProfileFields:  encodeProfileFieldList(nil),
@@ -1414,9 +1361,6 @@ func (s *SubAccountService) CreateSubAccount(ctx context.Context, ownerID string
 	}
 	if v, ok := data["displayName"].(string); ok {
 		p.DisplayName = strings.TrimSpace(v)
-	}
-	if v, ok := data["userHandle"].(string); ok {
-		p.UserHandle = strings.TrimSpace(v)
 	}
 	if v, ok := data["avatarUrl"].(string); ok {
 		p.AvatarURL = strings.TrimSpace(v)
@@ -1448,6 +1392,9 @@ func (s *SubAccountService) CreateSubAccount(ctx context.Context, ownerID string
 }
 
 func (s *SubAccountService) UpdatePersona(ctx context.Context, ownerID, personaID string, data map[string]any) (*model.Persona, error) {
+	if profileMutationRequestsUserHandle(data) {
+		return nil, generated.AppErrorFromSubAccountHandleReadonly("userHandle is system assigned")
+	}
 	persona, err := s.personas.FindBySubAccountID(ctx, personaID)
 	if err != nil {
 		return nil, err
@@ -1466,10 +1413,6 @@ func (s *SubAccountService) UpdatePersona(ctx context.Context, ownerID, personaI
 	if v, ok := data["displayName"].(string); ok {
 		persona.DisplayName = strings.TrimSpace(v)
 		changedFields = append(changedFields, "displayName")
-	}
-	if v, ok := data["userHandle"].(string); ok {
-		persona.UserHandle = strings.TrimSpace(v)
-		changedFields = append(changedFields, "userHandle")
 	}
 	if v, ok := data["phone"].(string); ok {
 		persona.Phone = strings.TrimSpace(v)
@@ -1865,105 +1808,6 @@ func (s *SubAccountService) resolvePublicPersona(ctx context.Context, handleOrPe
 	return s.personas.FindBySubAccountID(ctx, handleOrPersonaID)
 }
 
-func buildPublicSubAccountProfileView(owner *model.UserProfile, persona *model.Persona) map[string]any {
-	view := buildSubAccountProfileView(owner, persona)
-	delete(view, "ownerUserId")
-	return view
-}
-
-func hasPublicLeakage(view map[string]any) bool {
-	for _, key := range []string{"ownerUserId", "ownerAccountId", "ownerId"} {
-		if value, ok := view[key]; ok && strings.TrimSpace(fmt.Sprint(value)) != "" && fmt.Sprint(value) != "<nil>" {
-			return true
-		}
-	}
-	return false
-}
-
-func buildSubAccountProfileView(owner *model.UserProfile, persona *model.Persona) map[string]any {
-	if owner == nil && persona == nil {
-		return map[string]any{}
-	}
-	if owner == nil {
-		owner = &model.UserProfile{UserID: persona.UserID}
-	}
-	subjectType := "user"
-	subAccountID := ""
-	userHandle := strings.TrimSpace(owner.UserID)
-	displayName := owner.Nickname
-	avatarURL := owner.AvatarURL
-	avatarVersion := owner.AvatarVersion
-	backgroundURL := owner.BackgroundURL
-	isolationLevel := defaultIsolationLevel
-	overriddenFields := []string{}
-	updatedAt := owner.UpdatedAt
-	// nicknameCustomized 以 owner 基线为真相源；非主分身若自定义过展示名亦视为已定制。
-	nicknameCustomized := owner.NicknameCustomized
-
-	if persona != nil {
-		subjectType = "persona"
-		subAccountID = persona.SubAccountID
-		userHandle = resolvedPersonaUserHandle(persona)
-		if persona.DisplayName != "" {
-			displayName = persona.DisplayName
-			overriddenFields = append(overriddenFields, "displayName")
-		}
-		if persona.UserHandle != "" {
-			overriddenFields = append(overriddenFields, "userHandle")
-		}
-		if persona.AvatarURL != "" {
-			avatarURL = persona.AvatarURL
-			avatarVersion = resolvedPersonaAvatarVersion(persona)
-			overriddenFields = append(overriddenFields, "avatarUrl")
-		}
-		if persona.BackgroundURL != "" {
-			backgroundURL = persona.BackgroundURL
-			overriddenFields = append(overriddenFields, "backgroundUrl")
-		}
-		if !persona.IsPrimary && strings.TrimSpace(persona.DisplayName) != "" {
-			nicknameCustomized = true
-		}
-		isolationLevel = defaultString(persona.IsolationLevel, defaultIsolationLevel)
-		updatedAt = persona.UpdatedAt
-	}
-	if displayName == "" {
-		displayName = owner.OwnerDisplayName
-	}
-	if displayName == "" {
-		displayName = owner.UserID
-	}
-	if updatedAt.IsZero() {
-		updatedAt = time.Now().UTC()
-	}
-
-	return map[string]any{
-		"ownerUserId":        owner.UserID,
-		"subjectType":        subjectType,
-		"subAccountId":       subAccountID,
-		"userId":             defaultString(subAccountID, owner.UserID),
-		"userHandle":         userHandle,
-		"username":           userHandle,
-		"displayName":        displayName,
-		"nickname":           displayName,
-		"nicknameCustomized": nicknameCustomized,
-		"avatarUrl":          avatarURLWithVersion(avatarURL, avatarVersion),
-		"avatarVersion":      avatarVersion,
-		"backgroundUrl":      backgroundURL,
-		"bio":                owner.Bio,
-		"identityTags":       parsePgTextArray(owner.IdentityTags),
-		"followerCount":      owner.FollowerCount,
-		"followingCount":     owner.FollowingCount,
-		"postCount":          owner.PostCount,
-		"circleCount":        owner.CircleCount,
-		"likeCount":          owner.LikeCount,
-		"isolationLevel":     isolationLevel,
-		"profileVisibility":  profileVisibilityFromIsolation(isolationLevel),
-		"inheritsFromOwner":  persona != nil && persona.InheritsProfileFromOwner,
-		"overriddenFields":   overriddenFields,
-		"updatedAt":          updatedAt.Format(time.RFC3339),
-	}
-}
-
 func BuildPersonaManagementItem(persona model.Persona) map[string]any {
 	return BuildPersonaManagementItemWithHistory(persona, false)
 }
@@ -2106,7 +1950,7 @@ func normalizeProfileFields(fields []string) []string {
 	result := make([]string, 0, len(fields))
 	for _, field := range fields {
 		switch strings.TrimSpace(field) {
-		case "displayName", "userHandle", "phone", "email", "avatarUrl":
+		case "displayName", "phone", "email", "avatarUrl":
 			if _, exists := seen[field]; exists {
 				continue
 			}
@@ -2115,6 +1959,49 @@ func normalizeProfileFields(fields []string) []string {
 		}
 	}
 	return result
+}
+
+func profileMutationRequestsUserHandle(data map[string]any) bool {
+	if _, ok := data["userHandle"]; ok {
+		return true
+	}
+	raw, ok := data["fieldsMask"]
+	if !ok {
+		return false
+	}
+	switch list := raw.(type) {
+	case []any:
+		for _, item := range list {
+			if strings.TrimSpace(fmt.Sprint(item)) == "userHandle" {
+				return true
+			}
+		}
+	case []string:
+		for _, item := range list {
+			if strings.TrimSpace(item) == "userHandle" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func systemUserHandleForSubAccount(subAccountID string) string {
+	normalized := strings.ToLower(strings.TrimSpace(subAccountID))
+	var b strings.Builder
+	for _, r := range normalized {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	value := b.String()
+	if value == "" {
+		return "qwuser"
+	}
+	if len(value) > 24 {
+		value = value[len(value)-24:]
+	}
+	return "qw" + value
 }
 
 func mergeProfileFields(existing, next []string) []string {
@@ -2339,8 +2226,6 @@ func applyFieldsFromSource(target *model.Persona, source *model.Persona, fields 
 		switch field {
 		case "displayName":
 			target.DisplayName = source.DisplayName
-		case "userHandle":
-			target.UserHandle = source.UserHandle
 		case "phone":
 			target.Phone = source.Phone
 		case "email":

@@ -30,31 +30,35 @@ func (s *MongoBulkImportStore) UpsertDiscoveryFeedItem(ctx context.Context, item
 	if publishedAt.IsZero() {
 		publishedAt = time.Now().UTC()
 	}
+	set := bson.M{
+		"postId":                item.PostID,
+		"title":                 item.Title,
+		"contentType":           item.ContentType,
+		"authorId":              item.AuthorID,
+		"creatorProfileId":      item.CreatorProfileID,
+		"creatorArchetype":      item.CreatorArchetype,
+		"creatorProfileVersion": item.CreatorProfileVersion,
+		"creatorDisclosure":     item.CreatorDisclosure,
+		"experienceClaimMode":   item.ExperienceClaimMode,
+		"authorQualitySignals":  item.AuthorQualitySignals,
+		"tagRefs":               item.Tags,
+		"entityRefs":            item.EntityRefs,
+		"semanticMentions":      item.SemanticMentions,
+		"status":                "published",
+		"visibility":            "public",
+		"publishedAt":           publishedAt,
+		"coverUrl":              item.CoverURL,
+		"bodyLength":            item.BodyLength,
+		"sourceTaskId":          item.SourceTaskID,
+		"conditionProfile":      item.ConditionProfile,
+		"updatedAt":             time.Now().UTC(),
+	}
+	for key, value := range BuildRecommendationProjectionFields(set) {
+		set[key] = value
+	}
 	opts := options.UpdateOne().SetUpsert(true)
 	_, err := s.feedColl.UpdateOne(ctx, bson.M{"postId": item.PostID}, bson.M{
-		"$set": bson.M{
-			"postId":                item.PostID,
-			"title":                 item.Title,
-			"contentType":           item.ContentType,
-			"authorId":              item.AuthorID,
-			"creatorProfileId":      item.CreatorProfileID,
-			"creatorArchetype":      item.CreatorArchetype,
-			"creatorProfileVersion": item.CreatorProfileVersion,
-			"creatorDisclosure":     item.CreatorDisclosure,
-			"experienceClaimMode":   item.ExperienceClaimMode,
-			"authorQualitySignals":  item.AuthorQualitySignals,
-			"tagRefs":               item.Tags,
-			"entityRefs":            item.EntityRefs,
-			"semanticMentions":      item.SemanticMentions,
-			"status":                "published",
-			"visibility":            "public",
-			"publishedAt":           publishedAt,
-			"coverUrl":              item.CoverURL,
-			"bodyLength":            item.BodyLength,
-			"sourceTaskId":          item.SourceTaskID,
-			"conditionProfile":      item.ConditionProfile,
-			"updatedAt":             time.Now().UTC(),
-		},
+		"$set": set,
 		"$setOnInsert": bson.M{
 			"viewCount":    int64(0),
 			"likeCount":    int64(0),

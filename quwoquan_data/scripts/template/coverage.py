@@ -54,29 +54,20 @@ def coverage_summary(registry: TemplateRegistry, vertical: str | None = None) ->
         "audiences": sorted(audiences),
         "creatorArchetypes": sorted(creators),
         "bySubject": dict(sorted(by_subject.items())),
-        "conditionMatrix": _condition_matrix(registry, vertical),
+        "audienceMatrix": _audience_matrix(registry, vertical),
     }
 
 
-def _condition_matrix(registry: TemplateRegistry, vertical: str | None) -> dict[str, Any]:
-    """受众 × 地域 × 季节 覆盖矩阵：暴露孤儿受众与可条件化模板。"""
-    regions = sorted((registry.catalogs.get("region_catalog", {}).get("regions", {}) or {}).keys())
-    seasons = sorted((registry.catalogs.get("season_catalog", {}).get("seasons", {}) or {}).keys())
+def _audience_matrix(registry: TemplateRegistry, vertical: str | None) -> dict[str, Any]:
+    """受众覆盖矩阵：暴露定义却无任何模板引用的孤儿受众。"""
     defined_audiences = set((registry.catalogs.get("audience_catalog", {}).get("audiences", {}) or {}).keys())
 
-    region_ready: list[str] = []
-    season_ready: list[str] = []
     referenced_audiences: set[str] = set()
-    for template_id, blueprint in sorted(registry.blueprints.items()):
+    for blueprint in registry.blueprints.values():
         if vertical and blueprint.get("vertical") != vertical:
             continue
         for audience in blueprint.get("audiences", []) or []:
             referenced_audiences.add(str(audience))
-        axes = blueprint.get("conditionAxes") or {}
-        if (axes.get("region") or {}).get("applicable"):
-            region_ready.append(template_id)
-        if (axes.get("season") or {}).get("applicable"):
-            season_ready.append(template_id)
 
     scope_audiences = defined_audiences
     if vertical:
@@ -87,9 +78,5 @@ def _condition_matrix(registry: TemplateRegistry, vertical: str | None) -> dict[
     orphan_audiences = sorted(scope_audiences - referenced_audiences)
 
     return {
-        "regions": regions,
-        "seasons": seasons,
-        "regionAwareTemplates": region_ready,
-        "seasonAwareTemplates": season_ready,
         "orphanAudiences": orphan_audiences,
     }

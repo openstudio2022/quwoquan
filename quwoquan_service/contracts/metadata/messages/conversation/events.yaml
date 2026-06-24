@@ -99,6 +99,14 @@ events:
     payload_fields: [conversationId, assistantMemberId, assistantSkillId, invitedBy]
     realtime_channel: "rt:conversation:{conversationId}"
 
+  - name: AssistantRemoved
+    description: 小趣助手被移出会话（memberType=assistant 的成员删除）
+    producer: chat-service
+    consumers: [realtime-gateway]
+    channel: event_store
+    payload_fields: [conversationId, assistantMemberId, assistantSkillId, removedBy]
+    realtime_channel: "rt:conversation:{conversationId}"
+
   - name: AssistantMentioned
     description: 在消息中 @小趣，触发助手处理（assistant-service 消费后生成回复）
     producer: chat-service

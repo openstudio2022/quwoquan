@@ -48,7 +48,10 @@ elif host == "localhost" or all(part.isdigit() for part in host.split(".")):
     print(host)
 else:
     parts = host.split(".")
-    print(".".join(parts[-2:]) if len(parts) >= 2 else host)
+    if host.endswith(".quwoquan-env.test") and len(parts) >= 3:
+        print(".".join(parts[-3:]))
+    else:
+        print(".".join(parts[-2:]) if len(parts) >= 2 else host)
 PY
 )"
 

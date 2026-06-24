@@ -14,15 +14,13 @@ import (
 )
 
 func TestIntersectionWatermarkStore_RoundTripAndMonotonic(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("mongo unavailable")
-	}
 	ctx := context.Background()
-	coll := mongoDB.Collection("rm_intersection_watermark")
+	db := requireMongoDB(t)
+	coll := db.Collection("rm_intersection_watermark")
 	_, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^wm_"}})
 	t.Cleanup(func() { _, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^wm_"}}) })
 
-	store := recinfra.NewMongoWatermarkStore(mongoDB, slog.Default())
+	store := recinfra.NewMongoWatermarkStore(db, slog.Default())
 
 	// 空记录读 → 空 map。
 	if got, err := store.LoadWatermarks(ctx, "wm_viewer"); err != nil || len(got) != 0 {

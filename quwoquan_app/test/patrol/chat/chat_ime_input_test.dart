@@ -1,4 +1,4 @@
-/// T4 Patrol E2E: 真实 IME 中文输入发送消息
+/// user_acceptance Patrol: 真实 IME 中文输入发送消息
 ///
 /// 守护：flutter_test 无法覆盖的真实输入法（IME）中文输入场景。
 /// 验证中文 composing → commit → 发送 → 消息出现的完整链路。
@@ -23,7 +23,7 @@ void main() {
     ($) async {
       assert(
         _apiContractEnv == 'gamma',
-        'T4 tests must run with API_CONTRACT_ENV=gamma',
+        'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
       );
 
       // 导航到聊天页
@@ -59,7 +59,7 @@ void main() {
     ($) async {
       assert(
         _apiContractEnv == 'gamma',
-        'T4 tests must run with API_CONTRACT_ENV=gamma',
+        'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
       );
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());

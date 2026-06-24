@@ -10,7 +10,8 @@ scope:
   summary: 用户资料读取与编辑保存闭环验收范围。
   in_scope:
   - 首次创建资料后的默认昵称、用户号与 nicknameCustomized 语义
-  - App 我的主页进入编辑资料、修改昵称/简介、保存后主页刷新
+  - App 我的主页进入编辑资料，按封面、头像、昵称、性别、生日、地区、手机号、趣我圈号、我的二维码、签名、标签顺序完成编辑与保存
+  - 手机号凭证绑定、系统分配趣我圈号只读展示、二维码分享落地、职业/兴趣标签体系校验
   - 聊天消息记录快照继续消费历史 senderDisplayName/avatar snapshot，不被资料更新回写历史消息
   out_of_scope:
   - 真实图片上传链路的对象存储端到端验证
@@ -24,11 +25,11 @@ gwt_acceptance:
     - 聊天消息已有发送者名称与头像记录快照。
     when:
     - 云侧生成默认昵称与 ownerId。
-    - 用户修改昵称和简介并保存。
+    - 用户修改昵称和签名并保存。
     - App 回到我的主页，并消费聊天消息 DTO。
     then:
-    - 默认昵称满足「新同学_YYMM9位随机数」云侧格式，nicknameCustomized=false。
-    - 编辑资料保存后主页展示新昵称，简介长度按 UI 契约截断。
+    - 默认昵称满足「新同学_YYMMDD_7位尾号」云侧格式，nicknameCustomized=false。
+    - 编辑资料保存后主页展示新昵称，签名长度按 60 字 UI/服务契约截断或拒绝。
     - 历史聊天消息继续优先展示 senderDisplayNameSnapshot 和 senderAvatarUrlSnapshot。
     done_when:
     - 服务端默认昵称契约测试通过。
@@ -36,7 +37,7 @@ gwt_acceptance:
     - App user_acceptance 聚合测试覆盖我的主页浏览、编辑资料保存与聊天快照读取。
     edge_cases:
     - 昵称允许重复但首次创建 nicknameCustomized=false。
-    - 简介超过 200 字时 UI 截断并显示计数。
+    - 签名超过 60 字时 UI 截断或阻止保存并显示剩余字数。
     - 历史消息快照不被资料更新反向改写。
     contract_refs:
     - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
@@ -47,10 +48,10 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - command: go test ./services/user-service/tests -run TestAuth_FirstLogin_UsesCloudDefaultNicknamePattern
-          -count=1
       - file: quwoquan_app/test/local_contract/user/profile_identity_sync/profile_creation_update__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/profile_identity_sync/create_update_chat_sync__user_acceptance_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
     status: completed
     test_evidence:
       primary:
@@ -65,13 +66,13 @@ gwt_acceptance:
         cases:
         - api_integration.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.user_profile_creation
         envs:
-        - local
+        - gamma
       - layer: user_acceptance
         suite: profile_identity_sync
         cases:
         - user_acceptance.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_identity_sync
         envs:
-        - local
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: chat_message_snapshot
@@ -79,7 +80,110 @@ gwt_acceptance:
         - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.chat_message_snapshot
         envs:
         - local
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] go test ./services/user-service/tests -run
+      TestAuth_FirstLogin_UsesCloudDefaultNicknamePattern -count=1'
+  GWT2:
+    title: 商用资料编辑页字段顺序、私有凭证与二维码闭环
+    given:
+    - 用户已登录并拥有 active persona。
+    - 服务端已为 active persona 系统分配 userHandle/趣我圈号。
+    - tag-service 提供职业与兴趣 tagRef 校验。
+    when:
+    - 用户从我的主页进入编辑资料页。
+    - 用户选择封面/头像单图、设置性别、生日、地区、签名、职业与兴趣标签。
+    - 未绑定手机号用户进入手机号页，先尝试运营商一键绑定，失败后使用手机号 OTP 绑定。
+    - 用户打开我的二维码页并分享给他人扫码。
+    then:
+    - 编辑页字段顺序固定为封面、头像、昵称、性别、生日、地区、手机号、趣我圈号、我的二维码、签名、标签。
+    - 编辑页拆分为媒体、基础资料、账号社交、扩展资料四个 iOS 分组区块；封面和头像为紧凑预览行且使用同一媒体预览语义尺寸，不与普通信息行混在同一视觉区块。
+    - 普通字段右侧值、未填写轻提示、系统只读值、图标与 chevron 使用统一右侧槽位和语义 token；未填写提示用简短好处文案和弱视觉权重，不使用蓝色加粗按钮式 CTA。
+    - 趣我圈号为只读展示，只显示系统分配的号，不显示编辑 chevron 或额外复制图标。
+    - 手机号只来自 owner credential 摘要，公开 profile 不包含 phone。
+    - 生日按 YYYY-MM-DD 自然日期保存；端侧性别入口仅暴露 male/female/unspecified，用户未设置时仅显示轻提示，历史或远端 other 值按未设置轻提示兜底；地区保存省市显示值与 regionCode。
+    - QR payload 是公开主页 HTTPS link，由真实开源二维码 SDK 渲染，扫码后进入用户主页；陌生人展示加联系人/打招呼，联系人展示语音/私信。
+    - 职业单选和兴趣多选均通过 tag-service validateRefs，App 不维护第二套标签真相源。
+    done_when:
+    - App local_contract 覆盖字段顺序、四区块分组、媒体预览同宽、未填写简短好处提示、性别默认不显示“不展示”且无 other 入口、单图选择返回、签名 60 字、趣我圈号只读纯文本、手机号绑定状态和 QR 页真实 SDK 渲染。
+    - Service api_integration 覆盖 GetProfileEditSnapshot、GetProfileQrCard、BindPhoneCredential、BindCarrierPhoneCredential、UpdateUserProfile 标签字段。
+    - user_acceptance 覆盖我的主页进入编辑资料、保存后主页/聊天头像快照刷新、二维码扫码 CTA。
+    edge_cases:
+    - 未绑定手机号且一键绑定不可用时，必须可恢复到 OTP 绑定。
+    - 无生日时不得默认填今天。
+    - 直辖市按“北京 北京”等结构存储，UI 可展示“北京”。
+    - QR 保存到相册和真实运营商一键绑定属于设备/环境验收项，不能用本地单测宣称通过。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    - quwoquan_service/contracts/metadata/user/user_profile/projections/profile_edit_snapshot_wire.yaml
+    - quwoquan_service/contracts/metadata/user/user_profile/projections/profile_qr_card_wire.yaml
+    - quwoquan_service/contracts/metadata/tag/service.yaml
+    performance_points:
+    - 编辑快照首屏 P95 < 800ms；保存 P95 < 1.5s；二维码卡片 P95 < 800ms。
+    tests:
+      planned:
+      - layer: local_contract
+        file: quwoquan_app/test/local_contract/ui/user/pages/edit_profile_page__local_contract_test.dart
+      - layer: local_contract
+        file: quwoquan_app/test/local_contract/cloud/user/contract/user_profile_repository_contract__local_contract_test.dart
+      - layer: api_integration
+        file: quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
+      - layer: api_integration
+        file: quwoquan_service/services/user-service/tests/api_integration/credential_contract__api_integration_test.go
+      - layer: api_integration
+        file: quwoquan_service/services/user-service/tests/api_integration/persona_contract__api_integration_test.go
+      - layer: local_contract
+        file: quwoquan_app/test/local_contract/cloud/integration/remote_api_path_contract__local_contract_test.dart
+      - layer: user_acceptance
+        file: quwoquan_app/test/user_acceptance/ui/user/journeys/edit_profile_journey__user_acceptance_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/user_profile_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/integration/remote_api_path_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/persona_management_page__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/edit_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/edit_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/credential_contract__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/persona_contract__api_integration_test.go
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: user_profile_repository_contract
+        cases:
+        - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_edit_payload_and_qr_payload_required
+        envs:
+        - local
+      - layer: api_integration
+        suite: profile_crud_contract
+        cases:
+        - api_integration.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_edit_snapshot_qr_token_and_profile_patch_contract
+        envs:
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: edit_profile_page
+        cases:
+        - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_edit_field_order_and_sections
+        envs:
+        - local
+      - layer: api_integration
+        suite: profile_crud_contract
+        cases:
+        - api_integration.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.profile_update_contract
+        envs:
+        - gamma
+      - layer: api_integration
+        suite: credential_contract
+        cases:
+        - api_integration.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update.private_phone_credential_binding_contract
+        envs:
+        - gamma
+    notes:
+    - App 侧 remote path 与 profile repository 契约测试已覆盖 userHandle 不可写、profile edit payload fieldsMask、二维码 payload 必填和远端路径。
+    - 服务直接测试已覆盖私有编辑快照、QR token 签发/解析/无效 token、persona create/update 携带 userHandle 拒绝。
+    - App persona management Widget 测试已恢复通过，覆盖趣我圈号只读展示相关入口。
+    - 编辑资料 Journey 与 user_acceptance 桥接已通过，覆盖我的主页进入编辑资料、修改昵称、保存并回显。
+    - persona api_integration 聚合桥接当前受本地 Mongo/Docker 生命周期阻断，直接 userHandle 只读服务测试已通过。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

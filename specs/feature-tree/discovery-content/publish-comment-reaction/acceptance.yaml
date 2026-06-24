@@ -61,7 +61,7 @@ sit_acceptance:
         cases:
         - user_acceptance.discovery_content.publish_comment_reaction.sit1.device_journey
         envs:
-        - gamma
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/content/providers/comment_provider_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/components/comment_system/immersive_comment_split_sheet_test.dart'

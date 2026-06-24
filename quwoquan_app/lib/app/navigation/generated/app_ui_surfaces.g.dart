@@ -287,6 +287,16 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface localDrafts = AppUiSurface(
+    id: 'localDrafts',
+    owner: 'content',
+    routeId: 'localDrafts',
+    pathTemplate: '/create/drafts',
+    description: '本地草稿页：续草稿统一入口，展示图片/视频/长文草稿并支持继续编辑、删除与恢复',
+    operationIds: <String>[
+    ],
+  );
+
   static const AppUiSurface homepagePicker = AppUiSurface(
     id: 'homepagePicker',
     owner: 'entity',
@@ -417,6 +427,97 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface profileCareerInterests = AppUiSurface(
+    id: 'profileCareerInterests',
+    owner: 'user',
+    routeId: 'profileCareerInterests',
+    pathTemplate: '/profile/career-interests',
+    description: '我的资料页职业身份与兴趣标签编辑页（职业/兴趣均来自 tag-service 标签体系）',
+    operationIds: <String>[
+      'GetProfileEditSnapshot',
+      'UpdateUserProfile',
+      'ResolveTag',
+      'ListTagChildren',
+      'ValidateTagRefs',
+    ],
+  );
+
+  static const AppUiSurface addContact = AppUiSurface(
+    id: 'addContact',
+    owner: 'user',
+    routeId: 'addContact',
+    pathTemplate: '/add-contact',
+    description: '添加联系人主页（搜索 / 扫一扫 / 手机联系人入口 + 我的二维码名片）',
+    operationIds: <String>[
+      'GetProfileQrCard',
+    ],
+  );
+
+  static const AppUiSurface addContactSearch = AppUiSurface(
+    id: 'addContactSearch',
+    owner: 'user',
+    routeId: 'addContactSearch',
+    pathTemplate: '/add-contact/search',
+    description: '按趣我圈号 / 昵称搜索并添加联系人',
+    operationIds: <String>[
+      'SearchSocialRelations',
+      'GetRelationshipCapability',
+      'FollowUser',
+    ],
+  );
+
+  static const AppUiSurface addContactScan = AppUiSurface(
+    id: 'addContactScan',
+    owner: 'user',
+    routeId: 'addContactScan',
+    pathTemplate: '/add-contact/scan',
+    description: '扫描对方二维码名片（相机 / 图库），解析后进入联系人确认',
+    operationIds: <String>[
+      'ResolveProfileQrToken',
+      'GetProfileQrCard',
+    ],
+  );
+
+  static const AppUiSurface addContactPhone = AppUiSurface(
+    id: 'addContactPhone',
+    owner: 'user',
+    routeId: 'addContactPhone',
+    pathTemplate: '/add-contact/phone',
+    description: '手机通讯录匹配已注册趣我圈用户并添加',
+    operationIds: <String>[
+      'InitiateContactDiscovery',
+      'GetLatestContactDiscovery',
+      'DismissContactDiscovery',
+      'GetSubAccountProfile',
+      'GetRelationshipCapability',
+      'FollowUser',
+    ],
+  );
+
+  static const AppUiSurface addContactConfirm = AppUiSurface(
+    id: 'addContactConfirm',
+    owner: 'user',
+    routeId: 'addContactConfirm',
+    pathTemplate: '/add-contact/confirm',
+    description: '添加联系人确认页（来源 扫码 / 通讯录 / 搜索）',
+    operationIds: <String>[
+      'GetSubAccountProfile',
+      'GetRelationshipCapability',
+      'FollowUser',
+    ],
+  );
+
+  static const AppUiSurface myQrCode = AppUiSurface(
+    id: 'myQrCode',
+    owner: 'user',
+    routeId: 'myQrCode',
+    pathTemplate: '/me/qr-code',
+    description: '我的二维码名片（让对方扫码添加为联系人）',
+    operationIds: <String>[
+      'GetProfileQrCard',
+    ],
+  );
+
   static const List<AppUiSurface> all = <AppUiSurface>[
     chatList,
     startGroupChat,
@@ -436,6 +537,7 @@ class AppUiSurfaces {
     globalSearchSuggestions,
     globalSearchNetworkResults,
     locationPlaceLanding,
+    localDrafts,
     homepagePicker,
     suggestHomepage,
     homepageDetail,
@@ -446,6 +548,13 @@ class AppUiSurfaces {
     circleDetail,
     myFootprint,
     userProfile,
+    profileCareerInterests,
+    addContact,
+    addContactSearch,
+    addContactScan,
+    addContactPhone,
+    addContactConfirm,
+    myQrCode,
   ];
 
   static const Map<String, AppUiSurface> byId = <String, AppUiSurface>{
@@ -467,6 +576,7 @@ class AppUiSurfaces {
     'globalSearchSuggestions': globalSearchSuggestions,
     'globalSearchNetworkResults': globalSearchNetworkResults,
     'locationPlaceLanding': locationPlaceLanding,
+    'localDrafts': localDrafts,
     'homepagePicker': homepagePicker,
     'suggestHomepage': suggestHomepage,
     'homepageDetail': homepageDetail,
@@ -477,5 +587,12 @@ class AppUiSurfaces {
     'circleDetail': circleDetail,
     'myFootprint': myFootprint,
     'userProfile': userProfile,
+    'profileCareerInterests': profileCareerInterests,
+    'addContact': addContact,
+    'addContactSearch': addContactSearch,
+    'addContactScan': addContactScan,
+    'addContactPhone': addContactPhone,
+    'addContactConfirm': addContactConfirm,
+    'myQrCode': myQrCode,
   };
 }

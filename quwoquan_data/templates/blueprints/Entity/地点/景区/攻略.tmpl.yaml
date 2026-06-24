@@ -18,7 +18,6 @@ render: { articleTemplate: journal, fontPreset: clean }
 structure:
   required: [交通方式, 门票信息, 推荐路线, 最佳季节, 注意事项]
   optional: [住宿推荐, 周边美食, 摄影建议]
-hooks: ["第一次去{name}，最该提前知道的5件事"]
 mustIncludeFacts: [门票价格, 开放时间, 到达方式]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 800, max: 2000 }
@@ -31,4 +30,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/主页/地点/景区/example.md

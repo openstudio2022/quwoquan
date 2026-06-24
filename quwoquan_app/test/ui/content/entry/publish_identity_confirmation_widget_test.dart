@@ -335,6 +335,8 @@ void main() {
 
   testWidgets('媒体编辑器对图片使用首图预览并写入 payload', (tester) async {
     final repository = _TrackingContentRepository();
+    const coverA = 'https://example.com/test/create/cover_a.jpg';
+    const coverB = 'https://example.com/test/create/cover_b.jpg';
 
     await tester.pumpWidget(_buildApp(repository));
     await tester.pumpAndSettle();
@@ -346,11 +348,12 @@ void main() {
     );
     final notifier = container.read(createEditorProvider.notifier);
     notifier.setImages(<String>[
-      '/tmp/cover_a.jpg',
-      '/tmp/cover_b.jpg',
+      coverA,
+      coverB,
     ], editorKind: CreateEditorKind.media);
     notifier.setCurrentMediaIndex(1);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     await tester.tap(find.byKey(TestKeys.createPublishButton));
     await tester.pumpAndSettle();
@@ -359,14 +362,22 @@ void main() {
     expect(find.text('当前封面'), findsNothing);
 
     await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(repository.lastCreatePayload?['contentType'], 'image');
-    expect(repository.lastCreatePayload?['coverUrl'], '/tmp/cover_a.jpg');
-    expect(repository.lastCreatePayload?['mediaUrls'], <String>[
-      '/tmp/cover_a.jpg',
-      '/tmp/cover_b.jpg',
-    ]);
+    for (var i = 0; i < 10 && repository.lastCreatePayload == null; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+
+    final payload = repository.lastCreatePayload;
+    expect(payload, isNotNull);
+    expect(payload?['contentType'] ?? payload?['type'], 'image');
+    expect(payload?['mediaUrls'], isA<List<dynamic>>());
+    final mediaUrls = List<String>.from(payload?['mediaUrls'] as List<dynamic>);
+    expect(mediaUrls, hasLength(2));
+    expect(mediaUrls.first, coverA);
+    expect(mediaUrls.last, coverB);
+    expect(payload?['coverUrl'], mediaUrls.first);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
   });

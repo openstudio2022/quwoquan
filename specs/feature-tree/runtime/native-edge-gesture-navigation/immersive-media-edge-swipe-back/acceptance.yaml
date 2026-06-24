@@ -63,7 +63,7 @@ gwt_acceptance:
         cases:
         - user_acceptance.runtime.native_edge_gesture_navigation.immersive_media_edge_swipe_back.user_journey
         envs:
-        - gamma
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/content/edge_gesture/immersive_media_edge_swipe_back_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/patrol/edge_swipe_navigation_e2e_test.dart'

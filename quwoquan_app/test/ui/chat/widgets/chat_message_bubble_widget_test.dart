@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/platform/app_font_families.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
 
@@ -40,6 +42,18 @@ void main() {
       await tester.pump();
 
       expect(find.text('你好世界'), findsAtLeastNWidgets(1));
+    });
+
+    testWidgets('文本消息显式声明 emoji-capable fallback 字体栈', (tester) async {
+      final message = _message(content: '新年快乐！😄');
+      await tester.pumpWidget(_wrapBubble(message: message, isRight: true));
+      await tester.pump();
+
+      final text = tester.widget<SelectableText>(find.byType(SelectableText).first);
+      expect(
+        text.style?.fontFamilyFallback,
+        contains(BundledFontFamilies.notoColorEmoji),
+      );
     });
 
     testWidgets('发送者名称正确显示（左侧气泡）', (tester) async {
@@ -105,7 +119,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('旅行回顾.mp4'), findsAtLeastNWidgets(1));
-      expect(find.byType(Image), findsAtLeastNWidgets(1));
+      expect(find.byType(AppCachedNetworkImage), findsAtLeastNWidgets(1));
       expect(
         find.byIcon(Icons.play_circle_fill_rounded),
         findsAtLeastNWidgets(1),
@@ -122,7 +136,7 @@ void main() {
       await tester.pumpWidget(_wrapBubble(message: imageMessage, isRight: true));
       await tester.pump();
 
-      expect(find.byType(Image), findsOneWidget);
+      expect(find.byType(AppCachedNetworkImage), findsOneWidget);
       expect(find.text(UITextConstants.chatPreviewFile), findsNothing);
       expect(find.text(UITextConstants.chatPreviewVideo), findsNothing);
     });
@@ -136,7 +150,7 @@ void main() {
       await tester.pumpWidget(_wrapBubble(message: imageMessage, isRight: true));
       await tester.pump();
 
-      expect(find.byType(Image), findsOneWidget);
+      expect(find.byType(AppCachedNetworkImage), findsOneWidget);
     });
 
     testWidgets('撤回后的语音消息不再展示播放气泡', (tester) async {

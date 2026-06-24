@@ -180,6 +180,7 @@ scenarios:
     stories:
       - discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
       - user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification
+      - user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor
     acceptance_refs:
       - specs/feature-tree/acceptance.yaml#UAT1
     boundary_notes:

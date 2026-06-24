@@ -51,8 +51,7 @@ class IntersectionReasonChip extends ConsumerWidget {
   /// 展示面来源渠道（用户主页 / 圈子 / 实体）；span 点击埋点按此精确归因（N10）。
   final ReferralSource? referralSource;
 
-  /// 交集理由位口径真相源：云侧主交集结论句 [IntersectionReason.primaryText] 直出，
-  /// 缺省回退连接说明 connectionSummary；端不本地拼装事实（G2）。
+  /// 交集理由位口径真相源：云侧主交集结论句 [IntersectionReason.primaryText] 直出。
   /// 无来源 / 无可展示结论句 → null（不展示）。
   /// 所有承载交集理由位的 surface 必须经此函数解析（四口径一致）。
   static String? primaryText(List<IntersectionReason>? reasons) {
@@ -60,8 +59,6 @@ class IntersectionReasonChip extends ConsumerWidget {
     final first = reasons.first;
     final primary = first.primaryText.trim();
     if (primary.isNotEmpty) return primary;
-    final summary = first.connectionSummary.trim();
-    if (summary.isNotEmpty) return summary;
     return null;
   }
 
@@ -102,9 +99,7 @@ class IntersectionReasonChip extends ConsumerWidget {
     final accent = AppColors.iosAccent(context);
     final foreground = isLight ? AppColors.iosSecondaryLabel(context) : accent;
     final spans = reason?.primarySpans ?? const <IntersectionTextSpan>[];
-    final fontWeight = isLight
-        ? AppTypography.regular
-        : AppTypography.medium;
+    final fontWeight = isLight ? AppTypography.regular : AppTypography.medium;
     return Row(
       key: chipKey,
       mainAxisSize: MainAxisSize.min,

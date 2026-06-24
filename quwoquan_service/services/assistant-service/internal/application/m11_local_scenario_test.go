@@ -81,12 +81,13 @@ func TestM11ReactiveP0SkillInferenceForBetaQuestions(t *testing.T) {
 		t.Fatalf("LoadAssistantScenarioPack() error = %v", err)
 	}
 	cases := pack.AssistantTurnScenariosFor("beta")
+	cases = deterministicHanScenarioCases(cases)
+	if len(cases) == 0 {
+		t.Fatal("assistant beta scenarios should include deterministic Han questions")
+	}
 
 	for _, tc := range cases {
 		t.Run(tc.ID, func(t *testing.T) {
-			if !containsHan(tc.Question) {
-				t.Skip("非中文自由输入依赖模型语义改写，不由 deterministic fallback 断言")
-			}
 			selection, err := DefaultSkillRuntime{}.SelectSkill(context.Background(), assistant.AssistantTurn{
 				Input: assistant.AssistantTurnInput{Text: tc.Question},
 			})
@@ -101,6 +102,16 @@ func TestM11ReactiveP0SkillInferenceForBetaQuestions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func deterministicHanScenarioCases(cases []AssistantScenarioFixture) []AssistantScenarioFixture {
+	filtered := make([]AssistantScenarioFixture, 0, len(cases))
+	for _, tc := range cases {
+		if containsHan(tc.Question) {
+			filtered = append(filtered, tc)
+		}
+	}
+	return filtered
 }
 
 func containsHan(text string) bool {

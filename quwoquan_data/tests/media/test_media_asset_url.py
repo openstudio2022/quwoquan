@@ -189,10 +189,20 @@ def test_materialize_release_media_records_video_stage_one_variants():
 
     assert manifest["counts"]["videoAssets"] == 1
     video_asset = manifest["assets"][0]
-    assert set(video_asset["variants"]) >= {"adaptive", "original"}
+    assert set(video_asset["variants"]) >= {"thumbnail", "adaptive", "original"}
     assert video_asset["variants"]["adaptive"]["cdnUrl"].startswith("https://video.example.com/")
+    assert video_asset["thumbnailUrl"] == video_asset["coverUrl"]
+    assert video_asset["thumbnailUrl"].endswith("?variant=thumb&t=0")
+    assert video_asset["coverStrategy"] == "first_frame"
+    assert video_asset["coverFrameTimeMs"] == 0
     assert video_asset["variants"]["original"]["cdnUrl"] == ""
     assert video_asset["variants"]["original"]["requiresAccess"] is True
+
+    updated_post_manifest = read_json(post_dir / "manifest.json")
+    updated_video_asset = updated_post_manifest["assets"][0]
+    assert updated_video_asset["thumbnailUrl"] == video_asset["thumbnailUrl"]
+    assert updated_video_asset["coverUrl"] == video_asset["thumbnailUrl"]
+    assert updated_video_asset["coverStrategy"] == "first_frame"
 
 
 def test_collision_ledger_blocks_same_object_key_with_different_sha():

@@ -45,10 +45,7 @@ gwt_acceptance:
       - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
       - file: quwoquan_app/test/core/auth/auth_session_store_test.dart
       - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
-          test/core/auth/auth_session_store_test.dart test/cloud/user/contract/auth_repository_contract_test.dart
-      - command: cd quwoquan_app && make verify-app-login-entry-loop-contract
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -71,7 +68,10 @@ gwt_acceptance:
         envs: &id002
         - beta
         - gamma
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
+      test/core/auth/auth_session_store_test.dart test/cloud/user/contract/auth_repository_contract_test.dart'
+    - '[migrated_from_recorded_command] cd quwoquan_app && make verify-app-login-entry-loop-contract'
   GWT2:
     title: 本机号码一键创建默认账号
     given:
@@ -96,10 +96,7 @@ gwt_acceptance:
       planned:
       - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
       - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
-      - command: cd quwoquan_service && go test ./services/user-service/tests -run
-          TestAuth_OneTapLogin_UsesServerResolvedPhone
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -119,7 +116,10 @@ gwt_acceptance:
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt2_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart'
+    - '[migrated_from_recorded_command] cd quwoquan_service && go test ./services/user-service/tests
+      -run TestAuth_OneTapLogin_UsesServerResolvedPhone'
   GWT3:
     title: 两状态高保同构与响应式
     given:
@@ -141,8 +141,7 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
+      recorded: []
     status: partial
     test_evidence:
       primary:
@@ -156,10 +155,11 @@ gwt_acceptance:
         suite: e2e_journey
         cases:
         - user_acceptance.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.e2e_journey
-        envs: &id003
-        - gamma
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart'
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart'
   GWT4:
     title: 协议、错误与降级不悬空
     given:
@@ -185,12 +185,7 @@ gwt_acceptance:
       - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
       - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
       - file: quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
-          test/core/auth/auth_gate_matrix_contract_test.dart
-      - command: cd quwoquan_app && make verify-app-login-entry-loop-contract
-      - command: cd quwoquan_service && go test ./services/user-service/tests -run
-          TestAuth_OneTapLogin_UsesServerResolvedPhone
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -210,7 +205,12 @@ gwt_acceptance:
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.gwt4_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
+      test/core/auth/auth_gate_matrix_contract_test.dart'
+    - '[migrated_from_recorded_command] cd quwoquan_app && make verify-app-login-entry-loop-contract'
+    - '[migrated_from_recorded_command] cd quwoquan_service && go test ./services/user-service/tests
+      -run TestAuth_OneTapLogin_UsesServerResolvedPhone'
   GWT5:
     title: 无历史摘要且运营商不可用时进入手机号验证码登录
     given:
@@ -285,7 +285,8 @@ gwt_acceptance:
         suite: e2e_journey
         cases:
         - user_acceptance.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.e2e_journey
-        envs: *id003
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart'
   GWT7:
@@ -396,11 +397,7 @@ contract_acceptance:
       - command: make verify-app-auth-policy
       - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
       - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
-      recorded:
-      - command: make verify-app-auth-policy
-      - command: cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart
-      - command: cd quwoquan_service && go test ./services/user-service/tests -run
-          'TestAuth_OneTapLogin_UsesServerResolvedPhone|TestAuth_RetiredGenericLoginRoute_Removed'
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -415,7 +412,11 @@ contract_acceptance:
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.contract1_api_integration
         envs: *id002
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] make verify-app-auth-policy'
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart'
+    - '[migrated_from_recorded_command] cd quwoquan_service && go test ./services/user-service/tests
+      -run ''TestAuth_OneTapLogin_UsesServerResolvedPhone|TestAuth_RetiredGenericLoginRoute_Removed'''
   CONTRACT2:
     title: 手机号 OTP 服务商与错误语义契约
     done_when:
@@ -461,8 +462,7 @@ uat_acceptance:
     - 灰度与回滚策略写入发布 runbook 或对应商用卡点。
     tests:
       planned: []
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
+      recorded: []
     status: partial
     test_evidence:
       primary:
@@ -470,7 +470,8 @@ uat_acceptance:
         suite: e2e_journey
         cases:
         - user_acceptance.user_identity_profile_relationship.onboarding_and_identity_entry.two_state_one_tap_login_commercial_login_entry.e2e_journey
-        envs: *id003
+        envs:
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: uat1_local_contract
@@ -485,6 +486,7 @@ uat_acceptance:
     notes:
     - '[migrated_from_planned] patrol test login_two_state_one_tap_smoke'
     - '[migrated_from_planned] manual iPhone 17 / Android carrier SDK smoke evidence'
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_acceptance_standard.sh

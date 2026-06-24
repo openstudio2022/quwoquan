@@ -1,19 +1,19 @@
 name: quwoquan_app
 description: 趣我圈 - 跨多设备社交媒体应用
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+1
 
 environment:
-  sdk: '>=3.12.0 <4.0.0'
-  flutter: '>=3.44.0'
+  sdk: '>=3.12.2 <4.0.0'
+  flutter: '>=3.44.3'
 
 dependencies:
   flutter:
     sdk: flutter
   
   # 状态管理
-  flutter_riverpod: ^3.3.1
-  riverpod: ^3.2.1
+  flutter_riverpod: ^3.3.2
+  riverpod: ^3.3.2
   
   # UI相关
   cupertino_icons: ^1.0.9
@@ -30,7 +30,7 @@ dependencies:
   dio: ^5.9.2
   
   # 工具类
-  path_provider: ^2.1.5
+  path_provider: ^2.1.6
   shared_preferences: ^2.5.5
   
   # 图片处理
@@ -53,24 +53,26 @@ dependencies:
   yaml: ^3.1.3
   crypto: ^3.0.7
   url_launcher: ^6.3.2
+  package_info_plus: ^10.1.0
+  pretty_qr_code: ^3.6.0
   share_plus: ^13.1.0
-  geolocator: ^14.0.2
+  geolocator: ^14.0.3
   flutter_markdown_plus: ^1.0.7
   markdown: ^7.3.1
-  file_picker: ^12.0.0-beta.5
+  file_picker: ^12.0.0-beta.7
   permission_handler: ^12.0.2
   
   # 语音消息
-  record: ^7.0.0
+  record: ^7.1.0
   just_audio: ^0.10.5
   audio_session: ^0.2.3
   connectivity_plus: ^7.1.1
 
   # 实时音视频通话
-  livekit_client: ^2.7.0
+  livekit_client: ^2.8.1
   flutter_callkit_incoming: ^3.1.1
   web_socket_channel: ^3.0.3
-  webview_flutter: ^4.13.1
+  webview_flutter: ^4.14.0
   sqflite: ^2.4.2+1
 
   # Repository 抽象（Mock/Remote 共用）；见 packages/quwoquan_cloud_contracts
@@ -83,19 +85,24 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   simple_icons: ^16.23.0
 
+  # 添加联系人：二维码扫描(含图库识别) / 系统通讯录读取 / 中文转拼音首字母分组
+  mobile_scanner: ^7.2.0
+  flutter_contacts: ^2.2.2
+  lpinyin: ^2.0.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   webview_flutter_platform_interface: ^2.15.1
   flutter_lints: ^6.0.0
-  # L4 Patrol E2E（真实设备 / Firebase Test Lab）
+  # user_acceptance Patrol（真实设备 / Firebase Test Lab）
   patrol: ^4.5.0
   integration_test:
     sdk: flutter
   build_runner: ^2.15.0
   test: ^1.31.1
   # VM/CI 单测 in-memory 库；在新版链路下与 sqlite3 v3 保持一致
-  sqflite_common_ffi: ^2.4.0+3
+  sqflite_common_ffi: ^2.4.2
 
 dependency_overrides:
   audio_session:
@@ -112,6 +119,8 @@ dependency_overrides:
     path: vendor/plugins/image_picker_android
   livekit_client:
     path: vendor/plugins/livekit_client
+  mobile_scanner:
+    path: vendor/plugins/mobile_scanner
   package_info_plus:
     path: vendor/plugins/package_info_plus
   patrol:
@@ -134,10 +143,10 @@ dependency_overrides:
     path: vendor/plugins/webview_flutter_android
   # chewie 1.14 / share_plus 13 需要较新的传递依赖；上游 geolocator / livekit 尚未对齐
   win32: ^6.3.0
-  vector_math: ^2.3.0
+  vector_math: ^2.4.0
   characters: ^1.4.1
   matcher: ^0.12.20
-  meta: ^1.18.2
+  meta: ^1.18.3
   test: ^1.31.1
   test_api: ^0.7.12
   test_core: ^0.6.18
@@ -146,7 +155,7 @@ dependency_overrides:
 
 flutter:
   config:
-    # patrol / video_thumbnail / livekit_client / flutter_webrtc 尚未支持 SwiftPM
+    # patrol / video_thumbnail 等插件在 vendored 形态下仍走 CocoaPods；livekit_client 已补 iOS Package.swift
     enable-swift-package-manager: false
   generate: true
   uses-material-design: true
@@ -183,3 +192,14 @@ flutter:
 
 patrol:
   test_directory: test/patrol
+
+hooks:
+  user_defines:
+    sqlite3:
+      # App 运行时不允许依赖外部 GitHub release 下载原生 SQLite 资产。
+      # quwoquan_app 主链路只在主机单测中经由 sqflite_common_ffi 间接触达 sqlite3，
+      # 移动端实际运行仍使用 sqflite 原生插件，因此统一切到系统 SQLite。
+      source: system
+      name: sqlite3
+      name_android: sqlite
+      name_windows: winsqlite3

@@ -1,8 +1,0 @@
-{
-  "sourceCollectionId": "fixture:collection:a",
-  "creator": "测试摄影师1",
-  "collectionPageUrl": "https://img.invalid/collection/1",
-  "license": "CC-BY-SA 4.0",
-  "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-  "authorizationProof": "https://source.invalid/fixture:collection:a/license"
-}

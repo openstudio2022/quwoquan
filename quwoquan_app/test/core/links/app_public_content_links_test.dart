@@ -6,7 +6,7 @@ void main() {
     test('builds entity homepage public URL from link template', () {
       expect(
         AppPublicContentLinks.entityHomepageWebUrl('hp_bipenggou'),
-        'https://127.0.0.1:17000/homepages/hp_bipenggou',
+        'https://alpha-api.quwoquan-env.test:17000/homepages/hp_bipenggou',
       );
     });
   });

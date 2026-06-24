@@ -1,0 +1,71 @@
+id: CR-20260624-059-recommendation-non-deep-commercial-p0
+title: 推荐系统非深排商用成熟度 P0 落地
+slug: recommendation-non-deep-commercial-p0
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/quality-score-cold-start
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/collaborative-recall
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/personalized-ranking--ranking-signal-fusion
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/travel-vertical-recommendation
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation
+  - specs/feature-tree/discovery-content/exposure-governance
+  - specs/feature-tree/recommendation-platform/evaluation-and-flywheel
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+  - quwoquan_service/scripts/ml/feature_registry.yaml
+
+entries:
+  - timestamp: "2026-06-24T20:00:00+08:00"
+    summary: |
+      按“非深排商用成熟度 P0”计划补齐推荐主链路：质量分/recScore 投影、
+      协同物化召回读取、首页/旅行/精品场景路由、排序融合质量分与交集 fact/affinity、
+      App 首页/精品解释 primaryText-only 呈现，并新增旅行垂类和精品流式两个 L3 Story。
+    reason: |
+      当前推荐底座已有框架但存在 recScore 恒 0、协同召回未有效装配、交集特征未候选级融合、
+      首页/精品解释 UI 与 primaryText 契约漂移、评估指标缺分桶等商用断点。
+      本轮先用非深度工程闭环补 P0，不引入深排平台。
+    change_type:
+      - implementation
+      - feature-tree
+      - metadata
+      - acceptance
+      - app-ui
+      - tests
+    changed_documents:
+      - path: docs/recommendation-commercial-maturity-plan.md
+        sections:
+          - 结论
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md
+        sections:
+          - 本轮基线范围
+          - 验收标准
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/travel-vertical-recommendation
+        sections:
+          - spec.md
+          - acceptance.yaml
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation
+        sections:
+          - spec.md
+          - acceptance.yaml
+      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+        sections:
+          - scorer
+          - exposureGovernance.collaborativeRecall
+      - path: quwoquan_service/scripts/ml/feature_registry.yaml
+        sections:
+          - content_feed.item_features
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: true
+    notes:
+      - 深排平台不进入本轮：不做 MMoE/PLE/ESMM、双塔 ANN、IPS/Thompson，不把 /v1/score 同步塞进 feed 读路径。
+      - PremiumPoolSource 需等待 product-ops 全局 featured/质量准入、审计、过期和回滚写入完成后再启用。
+      - local_contract 已覆盖质量分投影、协同物化读取、旅行/精品路由、fact > affinity 和 primaryText-only UI；gamma 指标仍需按首页/旅行/精品/UGC/数据工程/recallPath/intersectionClass 分桶验收。

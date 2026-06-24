@@ -85,7 +85,8 @@ def test_article_markdown_package_uses_qwq_rich_markdown_triple():
 def test_article_markdown_asset_refs_are_declared_in_manifest():
     markdown, manifest = _build_fixture()
 
-    markdown_asset_ids = set(re.findall(r"asset://([A-Za-z0-9_\-.]+)", markdown))
+    # asset id 形如「实体_角色_批次_hash」，实体名为中文，正则用 \w（默认匹配 Unicode）。
+    markdown_asset_ids = set(re.findall(r"asset://([\w\-.]+)", markdown))
     manifest_asset_ids = {asset["assetId"] for asset in manifest["assets"]}
 
     assert markdown_asset_ids

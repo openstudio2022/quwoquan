@@ -419,26 +419,42 @@ func (s *MemberService) InviteAssistant(ctx context.Context, req InviteAssistant
 	return nil
 }
 
-func (s *MemberService) RemoveAssistant(ctx context.Context, conversationId string) error {
-	assistant, err := s.repo.FindAssistantMember(ctx, conversationId)
+type RemoveAssistantRequest struct {
+	ConversationId string
+	RemovedBy      string
+}
+
+func (s *MemberService) RemoveAssistant(ctx context.Context, req RemoveAssistantRequest) error {
+	assistant, err := s.repo.FindAssistantMember(ctx, req.ConversationId)
 	if err != nil {
 		return errors.New("no assistant in conversation")
 	}
 
-	if err := s.repo.DeleteMember(ctx, conversationId, assistant.UserId); err != nil {
+	if err := s.repo.DeleteMember(ctx, req.ConversationId, assistant.UserId); err != nil {
 		return err
 	}
 
-	newCount, err := s.repo.CountMembers(ctx, conversationId)
+	newCount, err := s.repo.CountMembers(ctx, req.ConversationId)
 	if err != nil {
 		return err
 	}
-	if err := s.repo.BumpMembersRosterRevision(ctx, conversationId, &newCount); err != nil {
+	if err := s.repo.BumpMembersRosterRevision(ctx, req.ConversationId, &newCount); err != nil {
 		return err
 	}
 
-	_ = s.cache.InvalidateConversation(ctx, conversationId)
-	s.scheduleRosterUpdatedPublish(conversationId)
+	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
+
+	go func() {
+		if err := s.publisher.PublishDomainEvent(context.Background(), event.AssistantRemoved, req.ConversationId, req.RemovedBy, map[string]any{
+			"assistantMemberId": assistant.ID,
+			"assistantSkillId":  assistant.AssistantSkillId,
+			"removedBy":         req.RemovedBy,
+		}); err != nil {
+			slog.Error("publish AssistantRemoved failed", "err", err, "conversationId", req.ConversationId)
+		}
+	}()
+
+	s.scheduleRosterUpdatedPublish(req.ConversationId)
 	return nil
 }
 
@@ -492,7 +508,8 @@ func (s *MemberService) ListGroupCandidates(
 		if _, ok := seen[contactID]; ok {
 			continue
 		}
-		if normalizeRelationState(hit.RelationState) != "mutual" {
+		relationState, blocked := s.resolveCandidateRelation(ctx, userID, contactID, hit.RelationState)
+		if blocked || relationState != "mutual" {
 			continue
 		}
 		seen[contactID] = struct{}{}
@@ -504,7 +521,7 @@ func (s *MemberService) ListGroupCandidates(
 			"bio":             hit.Bio,
 			"metFrom":         hit.MetFrom,
 			"lastInteraction": hit.LastInteraction,
-			"relationState":   hit.RelationState,
+			"relationState":   relationState,
 			"source":          hit.Source,
 			"subtitle":        hit.Subtitle,
 			"highlightText":   hit.HighlightText,
@@ -518,6 +535,36 @@ func (s *MemberService) ListGroupCandidates(
 		}
 	}
 	return items, nil
+}
+
+// resolveCandidateRelation backfills authoritative relationship state for
+// conversation-sourced candidates before the mutual-only filter runs.
+func (s *MemberService) resolveCandidateRelation(
+	ctx context.Context,
+	viewerID string,
+	contactID string,
+	fallback string,
+) (string, bool) {
+	if s.relationships == nil {
+		return normalizeRelationState(fallback), false
+	}
+	capability, err := s.relationships.GetCapability(ctx, viewerID, contactID)
+	if err != nil {
+		slog.Warn(
+			"relationship gate check failed for group candidates",
+			"err", err,
+			"viewerID", viewerID,
+			"contactID", contactID,
+		)
+		return normalizeRelationState(fallback), false
+	}
+	if capability.IsBlocked || capability.IsBlockedBy {
+		return "blocked", true
+	}
+	if capability.IsMutual {
+		return "mutual", false
+	}
+	return "not_mutual", false
 }
 
 func (s *MemberService) SearchContacts(

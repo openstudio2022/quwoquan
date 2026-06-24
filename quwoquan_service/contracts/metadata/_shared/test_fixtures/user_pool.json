@@ -204,7 +204,7 @@
   "users": [
     {
       "userId": "fixture_user_current",
-      "displayName": "契约当前用户",
+      "displayName": "新同学_260622_6698692",
       "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
       "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
       "avatarMedia": {
@@ -225,7 +225,7 @@
         "sizeBytes": 2570495,
         "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
       },
-      "bio": "用于 alpha/beta/gamma 的当前用户主页。",
+      "bio": "",
       "subAccountRefs": [
         "fixture_persona_daily",
         "fixture_persona_work"

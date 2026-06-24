@@ -31,18 +31,28 @@ func (s *PostRepositorySource) Recall(ctx context.Context, req rtrec.RecallReque
 			p.TagRefs = projection.TagRefs
 			p.EntityRefs = projection.EntityRefs
 		}
+		projection := BuildRecommendationProjectionFields(postProjectionPayload(p))
+		contentVertical, _ := projection["contentVertical"].(string)
+		if vertical := normalizedVertical(req.Vertical); vertical != "" && normalizedVertical(contentVertical) != vertical {
+			continue
+		}
+		qualityScore, _ := projection["qualityScore"].(float64)
+		supplySource, _ := projection["supplySource"].(string)
 		out = append(out, rtrec.ContentCandidate{
-			ContentID:    p.ID,
-			ContentType:  p.ContentType,
-			AuthorID:     p.AuthorId,
-			Title:        p.Title,
-			Tags:         candidateTagsFromAny(p.TagRefs),
-			EntityRefs:   candidateTagsFromAny(p.EntityRefs),
-			PublishedAt:  p.PublishedAt,
-			ViewCount:    p.ViewCount,
-			LikeCount:    p.LikeCount,
-			CommentCount: p.CommentCount,
-			ShareCount:   p.ShareCount,
+			ContentID:       p.ID,
+			ContentType:     p.ContentType,
+			AuthorID:        p.AuthorId,
+			Title:           p.Title,
+			Tags:            candidateTagsFromAny(p.TagRefs),
+			EntityRefs:      candidateTagsFromAny(p.EntityRefs),
+			PublishedAt:     p.PublishedAt,
+			ViewCount:       p.ViewCount,
+			LikeCount:       p.LikeCount,
+			CommentCount:    p.CommentCount,
+			ShareCount:      p.ShareCount,
+			QualityScore:    qualityScore,
+			ContentVertical: contentVertical,
+			SupplySource:    supplySource,
 		})
 	}
 	return out, nil
@@ -70,5 +80,24 @@ func candidateTagsFromAny(v any) []string {
 		return out
 	default:
 		return nil
+	}
+}
+
+func postProjectionPayload(p postmodel.Post) map[string]any {
+	return map[string]any{
+		"authorId":             p.AuthorId,
+		"contentType":          p.ContentType,
+		"tagRefs":              candidateTagsFromAny(p.TagRefs),
+		"entityRefs":           candidateTagsFromAny(p.EntityRefs),
+		"semanticMentions":     p.SemanticMentions,
+		"contentVertical":      p.ContentVertical,
+		"sourceTaskId":         p.SourceTaskId,
+		"coverUrl":             p.CoverUrl,
+		"thumbnailUrl":         p.ThumbnailUrl,
+		"videoUrl":             p.VideoUrl,
+		"mediaUrls":            p.MediaUrls,
+		"authorQualitySignals": p.AuthorQualitySignals,
+		"status":               p.Status,
+		"visibility":           p.Visibility,
 	}
 }

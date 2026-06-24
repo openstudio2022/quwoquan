@@ -672,6 +672,7 @@ class RemoteContentRepository implements ContentRepository {
   @override
   Future<ContentMediaInitUploadResponseDto> initMediaUpload({
     String mediaType = 'image',
+    String assetScope = 'draft',
   }) async {
     final uri = _uri(ContentApiMetadata.initMediaUploadPath);
     final decoded = await _httpClient.postJson(
@@ -679,7 +680,7 @@ class RemoteContentRepository implements ContentRepository {
       headers: CloudRequestHeaders.forPage(
         ContentRequestPageIds.initMediaUpload,
       ),
-      body: {'mediaType': mediaType},
+      body: {'mediaType': mediaType, 'assetScope': assetScope},
     );
     return ContentMediaInitUploadResponseDto.fromMap(
       CloudResponseDecoder.asObject(
@@ -726,6 +727,23 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
+  Future<void> bindMediaAssetsToPost({
+    required String postId,
+    required List<String> assetIds,
+  }) async {
+    final uri = _uri(
+      ContentApiMetadata.bindMediaAssetsToPostPath(postId: postId),
+    );
+    await _httpClient.postJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(
+        ContentRequestPageIds.bindMediaAssetsToPost,
+      ),
+      body: {'assetIds': assetIds},
+    );
+  }
+
+  @override
   Future<ContentMediaAssetWireDto> getMediaAsset({
     required String mediaId,
   }) async {
@@ -768,6 +786,7 @@ class RemoteContentRepository implements ContentRepository {
   Future<ContentVideoCoverSelectionWireDto> selectManualVideoCover({
     required String mediaId,
     required String coverAssetId,
+    int coverFrameTimeMs = 0,
   }) async {
     final uri = _uri(
       ContentApiMetadata.selectManualVideoCoverPath(mediaId: mediaId),
@@ -777,7 +796,10 @@ class RemoteContentRepository implements ContentRepository {
       headers: CloudRequestHeaders.forPage(
         ContentRequestPageIds.selectManualVideoCover,
       ),
-      body: {'coverAssetId': coverAssetId},
+      body: {
+        'coverAssetId': coverAssetId,
+        'coverFrameTimeMs': coverFrameTimeMs,
+      },
     );
     return ContentVideoCoverSelectionWireDto.fromMap(
       CloudResponseDecoder.asObject(

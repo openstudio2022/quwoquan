@@ -38,6 +38,8 @@ class MediaDownloadCache {
   int _currentSize = 0;
   int _activeDownloads = 0;
   final Queue<_DownloadRequest> _downloadQueue = Queue<_DownloadRequest>();
+  final Map<String, Completer<String?>> _inflightByKey =
+      <String, Completer<String?>>{};
 
   String? _cacheDir;
 
@@ -128,12 +130,49 @@ class MediaDownloadCache {
   /// Pre-downloads a file without waiting for the result.
   void prefetch(String url) {
     if (isCached(url)) return;
-    _download(url);
+    unawaited(_download(url, isPrefetch: true));
   }
 
-  Future<String?> _download(String url) async {
+  int get activeDownloadCount => _activeDownloads;
+
+  int get queuedDownloadCount => _downloadQueue.length;
+
+  int get inflightDownloadCount => _inflightByKey.length;
+
+  void cancelQueuedPrefetches({String? url}) {
+    final normalized = url?.trim();
+    final retained = Queue<_DownloadRequest>();
+    while (_downloadQueue.isNotEmpty) {
+      final request = _downloadQueue.removeFirst();
+      final matchesUrl = normalized == null || request.url == normalized;
+      if (request.isPrefetch && matchesUrl) {
+        _inflightByKey.remove(request.key);
+        if (!request.completer.isCompleted) {
+          request.completer.complete(null);
+        }
+        continue;
+      }
+      retained.add(request);
+    }
+    _downloadQueue.addAll(retained);
+  }
+
+  Future<String?> _download(String url, {bool isPrefetch = false}) async {
+    final key = _keyFromUrl(url);
+    final existing = _inflightByKey[key];
+    if (existing != null) {
+      return existing.future;
+    }
     final completer = Completer<String?>();
-    _downloadQueue.add(_DownloadRequest(url: url, completer: completer));
+    _inflightByKey[key] = completer;
+    _downloadQueue.add(
+      _DownloadRequest(
+        key: key,
+        url: url,
+        completer: completer,
+        isPrefetch: isPrefetch,
+      ),
+    );
     _processDownloadQueue();
     return completer.future;
   }
@@ -148,9 +187,12 @@ class MediaDownloadCache {
 
   Future<void> _executeDownload(_DownloadRequest request) async {
     try {
+      if (!_inflightByKey.containsKey(request.key)) {
+        return;
+      }
       final response = await _client.get(Uri.parse(request.url));
       if (response.statusCode != 200) {
-        request.completer.complete(null);
+        _completeRequest(request, null);
         return;
       }
 
@@ -170,12 +212,19 @@ class MediaDownloadCache {
       _currentSize += fileSize;
 
       _evictIfNeeded();
-      request.completer.complete(localPath);
+      _completeRequest(request, localPath);
     } catch (_) {
-      request.completer.complete(null);
+      _completeRequest(request, null);
     } finally {
+      _inflightByKey.remove(request.key);
       _activeDownloads--;
       _processDownloadQueue();
+    }
+  }
+
+  void _completeRequest(_DownloadRequest request, String? value) {
+    if (!request.completer.isCompleted) {
+      request.completer.complete(value);
     }
   }
 
@@ -219,6 +268,13 @@ class MediaDownloadCache {
       return;
     } finally {
       _entries.clear();
+      _downloadQueue.clear();
+      for (final completer in _inflightByKey.values) {
+        if (!completer.isCompleted) {
+          completer.complete(null);
+        }
+      }
+      _inflightByKey.clear();
       _currentSize = 0;
       _telemetrySink.record('resource.bytes_cleared', <String, Object?>{
         'bytes': clearedBytes,
@@ -257,8 +313,15 @@ class _CacheEntry {
 }
 
 class _DownloadRequest {
+  final String key;
   final String url;
   final Completer<String?> completer;
+  final bool isPrefetch;
 
-  _DownloadRequest({required this.url, required this.completer});
+  _DownloadRequest({
+    required this.key,
+    required this.url,
+    required this.completer,
+    required this.isPrefetch,
+  });
 }

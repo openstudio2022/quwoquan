@@ -26,6 +26,7 @@ import cv2  # noqa: E402
 from produce.route_workflow import (  # noqa: E402
     _check_image_gate,
     _check_carrier_consistency,
+    _check_evidence_quality,
     _check_image_source_scope,
     _image_caption_from_article,
     _review_fallback_stage,
@@ -72,6 +73,17 @@ def test_text_only_article_skips_image_gate():
     assert gate["passed"] is True
     assert gate["humanReview"] is False
     assert any("text-only" in note for note in gate.get("notes", []))
+
+
+def test_text_only_article_skips_evidence_asset_requirement():
+    gate = _check_evidence_quality(
+        "这是一篇已经由 agent 写好的长文，发布降级为纯文本时不需要配图。",
+        {"mustIncludeFacts": []},
+        {"recommendation": "use", "evidenceBundle": {}},
+        {"carrier": "article", "publishMediaMode": "text_only", "assets": []},
+    )
+
+    assert "compose payload missing assets" not in gate["issues"]
 
 
 def test_unsafe_blocks_revision():

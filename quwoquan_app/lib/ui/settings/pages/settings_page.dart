@@ -1,14 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
+import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/services/cache/cache_management_service.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/ui/settings/widgets/settings_account_commercial_section.dart';
 import 'package:quwoquan_app/ui/settings/widgets/settings_appearance_labels.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -17,13 +18,9 @@ class SettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appearanceState = ref.watch(appearanceSettingsControllerProvider);
-    final contentAccessState = ref.watch(personalContentAccessProvider);
     final snapshot = appearanceState.snapshot;
     final isDark = ref.watch(isDarkProvider);
     final authSession = ref.watch(authSessionControllerProvider);
-    final personaManagementEnabled = ref.watch(
-      personaManagementFeatureFlagProvider,
-    );
 
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
@@ -48,88 +45,88 @@ class SettingsPage extends ConsumerWidget {
             children: <Widget>[
               SettingsInsetGroupedSection(
                 isDark: isDark,
-                header: '偏好',
+                header: UITextConstants.settingsAccountSection,
                 child: Column(
                   children: <Widget>[
-                    _SettingsRow(
-                      icon: CupertinoIcons.paintbrush,
-                      label: '外观与字号',
-                      trailingText: _appearanceSummary(
-                        snapshot,
-                        appearanceState,
-                      ),
-                      onTap: () => showCupertinoModalPopup<void>(
-                        context: context,
-                        barrierColor: AppColors.transparent,
-                        builder: (_) => const _AppearanceSettingsSheet(),
-                      ),
+                    _SettingsActionRow(
+                      isDark: isDark,
+                      icon: CupertinoIcons.person_crop_circle,
+                      label: UITextConstants.profileEditLabel,
+                      onTap: () {
+                        _trackSettingsClick(
+                          ref,
+                          'settings_profile_edit_click',
+                          targetKey: 'profile_edit',
+                        );
+                        context.push(AppRoutePaths.profileEdit);
+                      },
                     ),
                     SettingsInsetFormSectionDivider(isDark: isDark),
-                    _SettingsRow(
-                      icon: CupertinoIcons.bell,
-                      label: '通知',
-                      onTap: () => _showPendingNotice(context, '通知'),
-                    ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
-                    _SettingsRow(
-                      icon: CupertinoIcons.lock_shield,
-                      label: '${AppConceptConstants.assistantLabel}读取创作内容',
-                      trailingText: _personalContentAccessSummary(
-                        contentAccessState,
-                      ),
-                      onTap: () => _showPersonalContentAccessDialog(
-                        context,
-                        ref,
-                        contentAccessState,
-                      ),
+                    _SettingsActionRow(
+                      isDark: isDark,
+                      icon: CupertinoIcons.person_2,
+                      label: UITextConstants.profilePersonasLabel,
+                      onTap: () => context.push(AppRoutePaths.profilePersonas),
                     ),
                   ],
                 ),
               ),
-              SizedBox(
-                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
-              ),
-              SettingsAccountCommercialSection(
-                isDark: isDark,
-                isAuthenticated: authSession.isAuthenticated,
-              ),
-              SizedBox(
-                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
-              ),
+              _sectionGap(),
               SettingsInsetGroupedSection(
                 isDark: isDark,
-                header: '其他',
+                header: UITextConstants.settingsPrivacySection,
+                child: _SettingsActionRow(
+                  isDark: isDark,
+                  icon: CupertinoIcons.lock_shield,
+                  label: UITextConstants.settingsPermissionManagement,
+                  onTap: () {
+                    _trackSettingsClick(
+                      ref,
+                      'settings_permission_open',
+                      targetKey: 'settings_permissions',
+                    );
+                    context.push(AppRoutePaths.settingsPermissions);
+                  },
+                ),
+              ),
+              _sectionGap(),
+              SettingsInsetGroupedSection(
+                isDark: isDark,
+                header: UITextConstants.settingsAppearanceSection,
+                child: _SettingsActionRow(
+                  isDark: isDark,
+                  icon: CupertinoIcons.moon,
+                  label: UITextConstants.settingsDarkMode,
+                  trailingText: _darkModeSummary(snapshot, appearanceState),
+                  onTap: () => _showDarkModeSheet(context, ref, snapshot),
+                ),
+              ),
+              _sectionGap(),
+              SettingsInsetGroupedSection(
+                isDark: isDark,
+                header: UITextConstants.settingsAboutSection,
+                child: _SettingsActionRow(
+                  isDark: isDark,
+                  icon: CupertinoIcons.info,
+                  label: UITextConstants.settingsAboutQuwoquan,
+                  onTap: () {
+                    _trackSettingsClick(
+                      ref,
+                      'settings_about_open',
+                      targetKey: 'settings_about',
+                    );
+                    context.push(AppRoutePaths.settingsAbout);
+                  },
+                ),
+              ),
+              _sectionGap(),
+              SettingsInsetGroupedSection(
+                isDark: isDark,
                 child: Column(
                   children: <Widget>[
-                    if (personaManagementEnabled) ...<Widget>[
-                      _SettingsRow(
-                        icon: CupertinoIcons.person_2,
-                        label: UITextConstants.personaSettingsEntry,
-                        onTap: () =>
-                            context.push(AppRoutePaths.profilePersonas),
-                      ),
-                      SettingsInsetFormSectionDivider(isDark: isDark),
-                    ],
-                    _SettingsRow(
-                      icon: CupertinoIcons.sparkles,
-                      label: AppConceptConstants.assistantLabel,
-                      onTap: () =>
-                          context.push(AppRoutePaths.assistantManagement),
-                    ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
-                    _SettingsRow(
-                      icon: CupertinoIcons.archivebox,
-                      label: '存储与缓存',
-                      trailingText: _cacheUsageSummary(ref),
-                      onTap: () => showCupertinoModalPopup<void>(
-                        context: context,
-                        barrierColor: AppColors.transparent,
-                        builder: (_) => const _CacheManagementSheet(),
-                      ),
-                    ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
                     if (authSession.isAuthenticated) ...<Widget>[
-                      _SettingsRow(
+                      _SettingsActionRow(
+                        isDark: isDark,
                         icon: CupertinoIcons.person_crop_circle_badge_plus,
                         label: UITextConstants.switchAccount,
                         onTap: () => _handleLogout(
@@ -140,14 +137,16 @@ class SettingsPage extends ConsumerWidget {
                         ),
                       ),
                       SettingsInsetFormSectionDivider(isDark: isDark),
-                      _SettingsRow(
+                      _SettingsActionRow(
+                        isDark: isDark,
                         icon: CupertinoIcons.square_arrow_right,
                         label: UITextConstants.logout,
+                        isDestructive: true,
                         onTap: () => _confirmLogout(context, ref),
                       ),
-                      SettingsInsetFormSectionDivider(isDark: isDark),
-                    ] else ...<Widget>[
-                      _SettingsRow(
+                    ] else
+                      _SettingsActionRow(
+                        isDark: isDark,
                         icon: CupertinoIcons.person_crop_circle_badge_checkmark,
                         label: UITextConstants.profileLoginNow,
                         onTap: () => openLoginPage(
@@ -157,20 +156,6 @@ class SettingsPage extends ConsumerWidget {
                           dismissFallback: AppRoutePaths.settings,
                         ),
                       ),
-                      SettingsInsetFormSectionDivider(isDark: isDark),
-                    ],
-                    _SettingsRow(
-                      icon: CupertinoIcons.lab_flask,
-                      label: '开发者',
-                      onTap: () =>
-                          context.push(AppRoutePaths.settingsDeveloper),
-                    ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
-                    _SettingsRow(
-                      icon: CupertinoIcons.info,
-                      label: '关于',
-                      onTap: () => _showPendingNotice(context, '关于'),
-                    ),
                   ],
                 ),
               ),
@@ -181,92 +166,86 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 
-  static String _appearanceSummary(
+  static Widget _sectionGap() {
+    return SizedBox(
+      height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+    );
+  }
+
+  static String _darkModeSummary(
     AppearanceSettingsSnapshot snapshot,
     AppearanceSettingsState state,
   ) {
-    final base =
-        '${settingsThemeModeLabel(snapshot.themeMode)} · '
-        '${settingsFontSizePresetLabel(snapshot.fontSizePreset)}';
-    return state.hasPendingSync ? '$base · 待同步' : base;
+    final base = settingsDarkModeLabel(snapshot.themeMode);
+    return state.hasPendingSync
+        ? UITextConstants.settingsPendingSync(base)
+        : base;
   }
 
-  static String _personalContentAccessSummary(
-    PersonalContentAccessState state,
-  ) {
-    if (state.isSyncing) return '同步中';
-    if (state.isHydrating) return '加载中';
-    return state.summaryLabel;
+  static void _trackSettingsClick(
+    WidgetRef ref,
+    String eventName, {
+    required String targetKey,
+  }) {
+    unawaited(
+      ref
+          .read(analyticsProvider)
+          .trackEvent(
+            AnalyticsEvent(
+              eventType: 'settings',
+              eventName: eventName,
+              properties: <String, dynamic>{
+                'pageName': 'settings',
+                'routeId': AppRoutePaths.settings,
+                'surfaceId': 'settings_homepage',
+                'targetType': 'settings_action',
+                'targetKey': targetKey,
+              },
+            ),
+          ),
+    );
   }
 
-  static String _cacheUsageSummary(WidgetRef ref) {
-    final usage = ref.read(cacheManagementServiceProvider).estimateUsage();
-    if (usage.totalTrackedObjects == 0) {
-      return '可清理';
-    }
-    return '${usage.totalTrackedObjects} 项';
-  }
-
-  static Future<void> _showPersonalContentAccessDialog(
+  static Future<void> _showDarkModeSheet(
     BuildContext context,
     WidgetRef ref,
-    PersonalContentAccessState state,
+    AppearanceSettingsSnapshot snapshot,
   ) async {
-    if (state.isHydrating || state.isSyncing) {
-      return;
-    }
-    final enable = !state.granted;
-    final confirmed = await showCupertinoDialog<bool>(
+    final selected = await showCupertinoModalPopup<AppearanceThemeMode>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: Text('${AppConceptConstants.assistantLabel}读取创作内容'),
-        content: Text(
-          enable
-              ? '允许后，${AppConceptConstants.assistantLabel}可在授权范围内读取你的点滴与作品，用于上下文记忆和长期知识引用。'
-              : '关闭后，${AppConceptConstants.assistantLabel}将停止使用你的创作内容，并回退到不含个人创作内容的旧检索链路。',
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text(UITextConstants.settingsDarkMode),
+        actions: AppearanceThemeMode.values
+            .map(
+              (mode) => CupertinoActionSheetAction(
+                isDefaultAction: snapshot.themeMode == mode,
+                onPressed: () => Navigator.of(ctx).pop(mode),
+                child: Text(settingsDarkModeLabel(mode)),
+              ),
+            )
+            .toList(),
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text(UITextConstants.logoutCancel),
         ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(enable ? '允许' : '关闭'),
-          ),
-        ],
       ),
     );
-    if (confirmed != true) {
+    if (selected == null || selected == snapshot.themeMode) {
       return;
     }
-    await ref.read(personalContentAccessProvider.notifier).setGranted(enable);
-  }
-
-  static void _showPendingNotice(BuildContext context, String label) {
-    showCupertinoDialog<void>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: Text(label),
-        content: const Text('该功能待接入'),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
+    await ref
+        .read(appearanceSettingsControllerProvider.notifier)
+        .updateSettings(
+          themeMode: selected,
+          fontSizePreset: snapshot.fontSizePreset,
+          applyScope: AppearanceApplyScope.allAccounts,
+        );
   }
 
   static Future<void> _confirmLogout(
     BuildContext context,
     WidgetRef ref,
   ) async {
-    // 默认软退出（保留本机登录信息，有效期内免验证码快速登录）；
-    // 第二项为彻底退出（清除本机登录信息，下次需重新验证）。默认不清除。
     final choice = await showCupertinoModalPopup<_LogoutChoice>(
       context: context,
       builder: (ctx) => CupertinoActionSheet(
@@ -309,7 +288,6 @@ class SettingsPage extends ConsumerWidget {
   }) async {
     final controller = ref.read(authSessionControllerProvider.notifier);
     if (clearLocalCredential) {
-      // 彻底退出：向远端吊销 refresh token，并清除本机全部登录凭证。
       final session = ref.read(authSessionControllerProvider);
       try {
         await ref
@@ -319,11 +297,10 @@ class SettingsPage extends ConsumerWidget {
               deviceId: session.installId,
             );
       } catch (_) {
-        // 本地退出优先保障用户可控；远端吊销失败由下次 refresh 兜底。
+        // 本地退出优先，远端吊销失败由下次 refresh 兜底。
       }
       await controller.hardLogout();
     } else {
-      // 软退出：不向远端吊销，保留快速登录凭证，仅失效本机活跃会话。
       await controller.softLogout();
     }
     if (!context.mounted) {
@@ -342,8 +319,6 @@ class SettingsPage extends ConsumerWidget {
     if (!navigateToLogin) {
       return;
     }
-    // 退出登录是「强入口」：用 replace + 禁止 guest pop，关闭只安全回首页，
-    // 不会 pop 回 settings 这类需要账号的页面再次触发守卫。
     openLoginPage(
       context,
       reasonName: AuthPromptReason.manualLoggedOut.name,
@@ -355,679 +330,82 @@ class SettingsPage extends ConsumerWidget {
 
 enum _LogoutChoice { soft, hard }
 
-class _AppearanceSettingsSheet extends ConsumerStatefulWidget {
-  const _AppearanceSettingsSheet();
-
-  @override
-  ConsumerState<_AppearanceSettingsSheet> createState() =>
-      _AppearanceSettingsSheetState();
-}
-
-class _AppearanceSettingsSheetState
-    extends ConsumerState<_AppearanceSettingsSheet> {
-  bool _syncAllAccounts = true;
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = ref.read(appearanceSettingsControllerProvider.notifier);
-    final state = ref.watch(appearanceSettingsControllerProvider);
-    final snapshot = state.snapshot;
-    final accessibility = ref.watch(accessibilityProvider);
-    final sheetIsDark = ref.watch(isDarkProvider);
-    final backgroundColor =
-        SettingsSemanticConstants.conversationSheetPanelBackground(sheetIsDark);
-
-    return AppBottomModalSurface(
-      onDismiss: () => Navigator.of(context).pop(),
-      backgroundColor: backgroundColor,
-      maxHeightRatio: 0.78,
-      contentPadding: EdgeInsets.fromLTRB(
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-        0,
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              0,
-              AppSpacing.md,
-              0,
-              AppSpacing.sm,
-            ),
-            child: Row(
-              children: <Widget>[
-                Text(
-                  '外观与字号',
-                  style: CupertinoTheme.of(context).textTheme.navTitleTextStyle,
-                ),
-                const Spacer(),
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('完成'),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                0,
-                AppSpacing.sm,
-                0,
-                AppSpacing.lg,
-              ),
-              children: <Widget>[
-                _SettingsGroup(
-                  title: '主题模式',
-                  children: AppearanceThemeMode.values
-                      .map(
-                        (mode) => _SelectionRow(
-                          label: settingsThemeModeLabel(mode),
-                          selected: snapshot.themeMode == mode,
-                          onTap: () => controller.updateSettings(
-                            themeMode: mode,
-                            fontSizePreset: snapshot.fontSizePreset,
-                            applyScope: _syncAllAccounts
-                                ? AppearanceApplyScope.allAccounts
-                                : AppearanceApplyScope.currentSubAccount,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-                SizedBox(height: AppSpacing.md),
-                _SettingsGroup(
-                  title: '字号',
-                  children: AppearanceFontSizePreset.values
-                      .map(
-                        (preset) => _SelectionRow(
-                          label: settingsFontSizePresetLabel(preset),
-                          subtitle: settingsFontSizePresetDescription(preset),
-                          selected: snapshot.fontSizePreset == preset,
-                          onTap: () => controller.updateSettings(
-                            themeMode: snapshot.themeMode,
-                            fontSizePreset: preset,
-                            applyScope: _syncAllAccounts
-                                ? AppearanceApplyScope.allAccounts
-                                : AppearanceApplyScope.currentSubAccount,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-                SizedBox(height: AppSpacing.md),
-                _SettingsGroup(
-                  title: '作用范围',
-                  children: <Widget>[
-                    _SwitchRow(
-                      label: '同步到所有账号',
-                      value: _syncAllAccounts,
-                      subtitle: _syncAllAccounts
-                          ? '勾选后写入 Owner 默认值，并让全部子账号收敛到新的统一默认值'
-                          : '关闭后仅当前子账号生效，不改写 Owner 默认值',
-                      onChanged: (value) {
-                        setState(() {
-                          _syncAllAccounts = value;
-                        });
-                      },
-                    ),
-                    if (snapshot.hasSubAccountOverride)
-                      _ActionRow(
-                        label: '恢复继承 Owner 默认',
-                        onTap: controller.inheritOwnerDefault,
-                      ),
-                  ],
-                ),
-                SizedBox(height: AppSpacing.md),
-                _SettingsGroup(
-                  title: '当前状态',
-                  children: <Widget>[
-                    _InfoRow(
-                      label: '来源',
-                      value: settingsSourceLabel(snapshot.source),
-                    ),
-                    _InfoRow(
-                      label: '同步状态',
-                      value: state.hasPendingSync ? '待同步，将在恢复时重试' : '已同步',
-                    ),
-                    _InfoRow(label: '版本', value: snapshot.version.toString()),
-                    _InfoRow(
-                      label: '更新时间',
-                      value: snapshot.updatedAt
-                          .toLocal()
-                          .toIso8601String()
-                          .substring(0, 19)
-                          .replaceFirst('T', ' '),
-                    ),
-                    _InfoRow(
-                      label: '粗体文本',
-                      value: accessibility.boldText ? '跟随系统：开' : '跟随系统：关',
-                    ),
-                    _InfoRow(
-                      label: '高对比度',
-                      value: accessibility.highContrast ? '跟随系统：开' : '跟随系统：关',
-                    ),
-                  ],
-                ),
-                if (state.lastError != null) ...<Widget>[
-                  SizedBox(height: AppSpacing.intraGroupLg),
-                  Text(
-                    '最近一次同步失败，已保留本地设置，恢复后会继续重试。',
-                    style: CupertinoTheme.of(context).textTheme.textStyle
-                        .copyWith(
-                          color: CupertinoColors.systemRed.resolveFrom(context),
-                          fontSize: AppTypography.smPlus,
-                        ),
-                  ),
-                ],
-                if (state.isLoading) ...<Widget>[
-                  SizedBox(height: AppSpacing.md),
-                  const Center(child: CupertinoActivityIndicator()),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CacheManagementSheet extends ConsumerStatefulWidget {
-  const _CacheManagementSheet();
-
-  @override
-  ConsumerState<_CacheManagementSheet> createState() =>
-      _CacheManagementSheetState();
-}
-
-class _CacheManagementSheetState extends ConsumerState<_CacheManagementSheet> {
-  CacheClearResult? _lastResult;
-  bool _isClearing = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = ref.watch(isDarkProvider);
-    final backgroundColor =
-        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
-    final usage = ref.read(cacheManagementServiceProvider).estimateUsage();
-
-    return AppBottomModalSurface(
-      onDismiss: () => Navigator.of(context).pop(),
-      backgroundColor: backgroundColor,
-      maxHeightRatio: 0.82,
-      contentPadding: EdgeInsets.fromLTRB(
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-        0,
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              0,
-              AppSpacing.md,
-              0,
-              AppSpacing.sm,
-            ),
-            child: Row(
-              children: <Widget>[
-                Text(
-                  '存储与缓存',
-                  style: CupertinoTheme.of(context).textTheme.navTitleTextStyle,
-                ),
-                const Spacer(),
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('完成'),
-                ),
-              ],
-            ),
-          ),
-          Flexible(
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.fromLTRB(
-                0,
-                AppSpacing.sm,
-                0,
-                AppSpacing.lg,
-              ),
-              children: <Widget>[
-                _SettingsGroup(
-                  title: '缓存占用',
-                  children: <Widget>[
-                    _InfoRow(label: 'Post 对象', value: '${usage.postObjects}'),
-                    _InfoRow(label: '查询快照', value: '${usage.querySnapshots}'),
-                    _InfoRow(label: '用户资料', value: '${usage.userProfiles}'),
-                    _InfoRow(label: '最近会话', value: '${usage.conversations}'),
-                  ],
-                ),
-                SizedBox(height: AppSpacing.lg),
-                _SettingsGroup(
-                  title: '分层清理',
-                  children: <Widget>[
-                    _ActionRow(
-                      label: '清理临时图片和视频',
-                      onTap: () => _confirmAndClear(
-                        CacheClearLevel.temporaryMedia,
-                        '只会删除可重建的图片和视频字节；文字、头像 URL、标题和对象版本会保留。',
-                      ),
-                    ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
-                    _ActionRow(
-                      label: '清理离线内容',
-                      onTap: () => _confirmAndClear(
-                        CacheClearLevel.offlineContent,
-                        '会删除可重建的离线详情和查询快照；草稿、待发送消息、待同步操作会保留。',
-                      ),
-                    ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
-                    _ActionRow(
-                      label: '清理搜索和浏览记录',
-                      onTap: () => _confirmAndClear(
-                        CacheClearLevel.searchAndBrowseHistory,
-                        '会删除最近查询和浏览快照；关注和会话引用的对象不会被删除。',
-                      ),
-                    ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
-                    _ActionRow(
-                      label: '清理全部本地缓存',
-                      onTap: () => _confirmAndClear(
-                        CacheClearLevel.allRebuildable,
-                        '会删除全部可重建缓存；账号凭证、创作草稿、待发送消息和待同步操作不会删除。',
-                      ),
-                    ),
-                  ],
-                ),
-                if (_isClearing) ...<Widget>[
-                  SizedBox(height: AppSpacing.lg),
-                  const Center(child: CupertinoActivityIndicator()),
-                ],
-                if (_lastResult != null) ...<Widget>[
-                  SizedBox(height: AppSpacing.lg),
-                  _SettingsGroup(
-                    title: '最近一次清理',
-                    children: <Widget>[
-                      _InfoRow(
-                        label: '移除对象',
-                        value: '${_lastResult!.objectsRemoved}',
-                      ),
-                      _InfoRow(
-                        label: '保护对象',
-                        value: '${_lastResult!.protectedObjects}',
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _confirmAndClear(CacheClearLevel level, String message) async {
-    final confirmed = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('确认清理缓存'),
-        content: Text(message),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('清理'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) {
-      return;
-    }
-    setState(() => _isClearing = true);
-    final currentUserId = ref.read(currentUserIdProvider).trim();
-    final result = await ref
-        .read(cacheManagementServiceProvider)
-        .clear(
-          level,
-          protectedUserIds: {if (currentUserId.isNotEmpty) currentUserId},
-        );
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _lastResult = result;
-      _isClearing = false;
-    });
-  }
-}
-
-/// Sheet 内分组（非全屏 Inset 页，保留圆角白底块）。
-class _SettingsGroup extends StatelessWidget {
-  const _SettingsGroup({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final sectionColor = AppColors.iosGroupedSurface(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Padding(
-          padding: EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.sm),
-          child: Text(
-            title,
-            style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-              fontSize: AppTypography.smPlus,
-              color: CupertinoColors.secondaryLabel.resolveFrom(context),
-            ),
-          ),
-        ),
-        Container(
-          decoration: BoxDecoration(
-            color: sectionColor,
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(children: children),
-        ),
-      ],
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
+class _SettingsActionRow extends StatelessWidget {
+  const _SettingsActionRow({
+    required this.isDark,
     required this.icon,
     required this.label,
-    required this.onTap,
     this.trailingText,
+    this.onTap,
+    this.isDestructive = false,
   });
 
+  final bool isDark;
   final IconData icon;
   final String label;
   final String? trailingText;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool isDestructive;
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-      fontSize: AppTypography.iosSubheadline,
-      fontWeight: AppTypography.regular,
-    );
-    final accent = AppColors.iosAccent(context);
+    final labelColor = isDestructive
+        ? AppColors.iosDestructive(context)
+        : SettingsSemanticConstants.labelColor(isDark);
+    final secondaryColor = SettingsSemanticConstants.secondaryColor(isDark);
+    final trailing = trailingText;
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
       onPressed: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.fourteen,
-        ),
-        child: Row(
-          children: <Widget>[
-            Container(
-              width: AppSpacing.buttonHeightSm,
-              height: AppSpacing.buttonHeightSm,
-              decoration: BoxDecoration(
-                color: AppColors.iosTintedFill(context),
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.largeBorderRadius,
-                ),
-              ),
-              child: Icon(icon, size: AppSpacing.iconSmall, color: accent),
-            ),
-            SizedBox(width: AppSpacing.intraGroupLg),
-            Expanded(
-              child: Text(label, style: titleStyle, textAlign: TextAlign.left),
-            ),
-            if (trailingText != null) ...<Widget>[
-              Flexible(
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: AppSpacing.minInteractiveSize,
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(icon, size: AppSpacing.iconMedium, color: secondaryColor),
+              SizedBox(width: AppSpacing.containerSm),
+              Expanded(
                 child: Text(
-                  trailingText!,
+                  label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: CupertinoTheme.of(context).textTheme.textStyle
-                      .copyWith(
-                        fontSize: AppTypography.smPlus,
-                        color: CupertinoColors.secondaryLabel.resolveFrom(
-                          context,
-                        ),
-                      ),
+                  style: TextStyle(
+                    fontSize: AppTypography.iosSubheadline,
+                    fontWeight: AppTypography.regular,
+                    color: labelColor,
+                  ),
                 ),
               ),
-              SizedBox(width: AppSpacing.sm),
+              if (trailing != null && trailing.trim().isNotEmpty) ...<Widget>[
+                SizedBox(width: AppSpacing.intraGroupSm),
+                Flexible(
+                  child: Text(
+                    trailing,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosSubheadline,
+                      color: secondaryColor,
+                    ),
+                  ),
+                ),
+              ],
+              if (onTap != null) ...<Widget>[
+                SizedBox(width: AppSpacing.intraGroupSm),
+                Icon(
+                  CupertinoIcons.chevron_forward,
+                  size: AppSpacing.iconSmall,
+                  color: secondaryColor,
+                ),
+              ],
             ],
-            Icon(
-              CupertinoIcons.chevron_forward,
-              size: AppSpacing.iconSmall,
-              color: CupertinoColors.systemGrey2,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SelectionRow extends StatelessWidget {
-  const _SelectionRow({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.subtitle,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final String? subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.fourteen,
-        ),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    label,
-                    style: CupertinoTheme.of(context).textTheme.textStyle
-                        .copyWith(
-                          fontSize: AppTypography.lg,
-                          fontWeight: AppTypography.semiBold,
-                        ),
-                    textAlign: TextAlign.left,
-                  ),
-                  if (subtitle != null) ...<Widget>[
-                    SizedBox(height: AppSpacing.xs),
-                    Text(
-                      subtitle!,
-                      style: CupertinoTheme.of(context).textTheme.textStyle
-                          .copyWith(
-                            fontSize: AppTypography.smPlus,
-                            color: CupertinoColors.secondaryLabel.resolveFrom(
-                              context,
-                            ),
-                          ),
-                      textAlign: TextAlign.left,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Icon(
-              selected
-                  ? CupertinoIcons.check_mark_circled_solid
-                  : CupertinoIcons.circle,
-              color: selected
-                  ? AppColors.iosAccent(context)
-                  : CupertinoColors.systemGrey3.resolveFrom(context),
-              size: AppSpacing.iconMedium,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  const _SwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.subtitle,
-  });
-
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  final String? subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => onChanged(!value),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.fourteen,
-        ),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    label,
-                    style: CupertinoTheme.of(context).textTheme.textStyle
-                        .copyWith(
-                          fontSize: AppTypography.lg,
-                          fontWeight: AppTypography.semiBold,
-                        ),
-                  ),
-                  if (subtitle != null) ...<Widget>[
-                    SizedBox(height: AppSpacing.xs),
-                    Text(
-                      subtitle!,
-                      style: CupertinoTheme.of(context).textTheme.textStyle
-                          .copyWith(
-                            fontSize: AppTypography.smPlus,
-                            color: CupertinoColors.secondaryLabel.resolveFrom(
-                              context,
-                            ),
-                          ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            SizedBox(width: AppSpacing.intraGroupLg),
-            CupertinoSwitch(
-              value: value,
-              onChanged: onChanged,
-              activeTrackColor:
-                  SettingsSemanticConstants.switchActiveTrackColor,
-              inactiveTrackColor:
-                  SettingsSemanticConstants.switchInactiveTrackColor(isDark),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionRow extends StatelessWidget {
-  const _ActionRow({required this.label, required this.onTap});
-
-  final String label;
-  final Future<void> Function() onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.intraGroupLg,
-      ),
-      onPressed: onTap,
-      alignment: Alignment.centerLeft,
-      child: Text(
-        label,
-        style: CupertinoTheme.of(context).textTheme.actionTextStyle,
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final secondaryColor = CupertinoColors.secondaryLabel.resolveFrom(context);
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.intraGroupLg,
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              label,
-              style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                fontSize: AppTypography.lg,
-                color: secondaryColor,
-              ),
-            ),
           ),
-          SizedBox(width: AppSpacing.intraGroupLg),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                fontSize: AppTypography.lg,
-                fontWeight: AppTypography.semiBold,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

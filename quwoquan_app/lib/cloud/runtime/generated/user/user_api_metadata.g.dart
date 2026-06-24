@@ -12,6 +12,7 @@ class UserApiMetadata {
     '/v1/invites',
     '/v1/me',
     '/v1/owner',
+    '/v1/public',
     '/v1/user',
     '/v1/users',
   ];
@@ -21,7 +22,9 @@ class UserApiMetadata {
     'ActivatePersona': '/v1/user/personas/{subAccountId}/activate',
     'ApplyPersonaProfileSync': '/v1/user/personas/{subAccountId}/profile-sync',
     'ApplyProposal': '/v1/user/profile/proposals/{id}/apply',
+    'BindCarrierPhoneCredential': '/v1/owner/credentials/carrier-phone/bind',
     'BindCredential': '/v1/owner/credentials/bind',
+    'BindPhoneCredential': '/v1/owner/credentials/phone/bind',
     'BlockUser': '/v1/user/sub-accounts/{targetSubAccountId}/block',
     'CancelGreetingRequest': '/v1/user/greeting-request/{requestId}',
     'ClearRecentSearches': '/v1/user/search/recent',
@@ -42,6 +45,8 @@ class UserApiMetadata {
     'GetPersonaLifecycleGuard': '/v1/user/personas/{subAccountId}/lifecycle-guard',
     'GetPersonaManagementSummary': '/v1/user/personas/summary',
     'GetPrivacySettings': '/v1/user/settings/privacy',
+    'GetProfileEditSnapshot': '/v1/user/profile/edit-snapshot',
+    'GetProfileQrCard': '/v1/user/profile/qr-card',
     'GetRelationship': '/v1/user/sub-accounts/{subAccountId}/relationship',
     'GetRelationshipCapability': '/v1/user/sub-accounts/{subAccountId}/relationship/capability',
     'GetSubAccountProfile': '/v1/user/{subAccountId}',
@@ -79,6 +84,7 @@ class UserApiMetadata {
     'RejectProposal': '/v1/user/profile/proposals/{id}/reject',
     'ReplyGreetingRequest': '/v1/user/greeting-request/{requestId}/reply',
     'ResolveOneTapLoginHint': '/v1/auth/login/one-tap/hint',
+    'ResolveProfileQrToken': '/v1/public/profile/qr/resolve',
     'RetirePersona': '/v1/user/personas/{subAccountId}/retire',
     'SearchSocialRelations': '/v1/user/search/social-relations',
     'SendGreetingRequest': '/v1/user/greeting-request',
@@ -100,7 +106,9 @@ class UserApiMetadata {
     'ActivatePersona': 'POST',
     'ApplyPersonaProfileSync': 'POST',
     'ApplyProposal': 'POST',
+    'BindCarrierPhoneCredential': 'POST',
     'BindCredential': 'POST',
+    'BindPhoneCredential': 'POST',
     'BlockUser': 'POST',
     'CancelGreetingRequest': 'DELETE',
     'ClearRecentSearches': 'DELETE',
@@ -121,6 +129,8 @@ class UserApiMetadata {
     'GetPersonaLifecycleGuard': 'GET',
     'GetPersonaManagementSummary': 'GET',
     'GetPrivacySettings': 'GET',
+    'GetProfileEditSnapshot': 'GET',
+    'GetProfileQrCard': 'GET',
     'GetRelationship': 'GET',
     'GetRelationshipCapability': 'GET',
     'GetSubAccountProfile': 'GET',
@@ -158,6 +168,7 @@ class UserApiMetadata {
     'RejectProposal': 'POST',
     'ReplyGreetingRequest': 'POST',
     'ResolveOneTapLoginHint': 'POST',
+    'ResolveProfileQrToken': 'GET',
     'RetirePersona': 'POST',
     'SearchSocialRelations': 'GET',
     'SendGreetingRequest': 'POST',
@@ -180,7 +191,9 @@ class UserApiMetadata {
     'ActivatePersona': 'required',
     'ApplyPersonaProfileSync': 'required',
     'ApplyProposal': 'public',
+    'BindCarrierPhoneCredential': 'required',
     'BindCredential': 'required',
+    'BindPhoneCredential': 'required',
     'BlockUser': 'public',
     'CancelGreetingRequest': 'required',
     'ClearRecentSearches': 'required',
@@ -201,6 +214,8 @@ class UserApiMetadata {
     'GetPersonaLifecycleGuard': 'required',
     'GetPersonaManagementSummary': 'required',
     'GetPrivacySettings': 'required',
+    'GetProfileEditSnapshot': 'required',
+    'GetProfileQrCard': 'required',
     'GetRelationship': 'public',
     'GetRelationshipCapability': 'public',
     'GetSubAccountProfile': 'public',
@@ -238,6 +253,7 @@ class UserApiMetadata {
     'RejectProposal': 'public',
     'ReplyGreetingRequest': 'required',
     'ResolveOneTapLoginHint': 'public',
+    'ResolveProfileQrToken': 'optional',
     'RetirePersona': 'required',
     'SearchSocialRelations': 'required',
     'SendGreetingRequest': 'required',
@@ -266,7 +282,9 @@ class UserApiMetadata {
   static const String activatePersonaOperation = 'ActivatePersona';
   static const String applyPersonaProfileSyncOperation = 'ApplyPersonaProfileSync';
   static const String applyProposalOperation = 'ApplyProposal';
+  static const String bindCarrierPhoneCredentialOperation = 'BindCarrierPhoneCredential';
   static const String bindCredentialOperation = 'BindCredential';
+  static const String bindPhoneCredentialOperation = 'BindPhoneCredential';
   static const String blockUserOperation = 'BlockUser';
   static const String cancelGreetingRequestOperation = 'CancelGreetingRequest';
   static const String clearRecentSearchesOperation = 'ClearRecentSearches';
@@ -287,6 +305,8 @@ class UserApiMetadata {
   static const String getPersonaLifecycleGuardOperation = 'GetPersonaLifecycleGuard';
   static const String getPersonaManagementSummaryOperation = 'GetPersonaManagementSummary';
   static const String getPrivacySettingsOperation = 'GetPrivacySettings';
+  static const String getProfileEditSnapshotOperation = 'GetProfileEditSnapshot';
+  static const String getProfileQrCardOperation = 'GetProfileQrCard';
   static const String getRelationshipOperation = 'GetRelationship';
   static const String getRelationshipCapabilityOperation = 'GetRelationshipCapability';
   static const String getSubAccountProfileOperation = 'GetSubAccountProfile';
@@ -324,6 +344,7 @@ class UserApiMetadata {
   static const String rejectProposalOperation = 'RejectProposal';
   static const String replyGreetingRequestOperation = 'ReplyGreetingRequest';
   static const String resolveOneTapLoginHintOperation = 'ResolveOneTapLoginHint';
+  static const String resolveProfileQrTokenOperation = 'ResolveProfileQrToken';
   static const String retirePersonaOperation = 'RetirePersona';
   static const String searchSocialRelationsOperation = 'SearchSocialRelations';
   static const String sendGreetingRequestOperation = 'SendGreetingRequest';
@@ -363,7 +384,9 @@ class UserApiMetadata {
       'id': id,
     });
   }
+  static const String bindCarrierPhoneCredentialPath = '/v1/owner/credentials/carrier-phone/bind';
   static const String bindCredentialPath = '/v1/owner/credentials/bind';
+  static const String bindPhoneCredentialPath = '/v1/owner/credentials/phone/bind';
   static const String blockUserPathTemplate = '/v1/user/sub-accounts/{targetSubAccountId}/block';
   static String blockUserPath({required String targetSubAccountId}) {
     return _fillPath(blockUserPathTemplate, <String, String>{
@@ -429,6 +452,8 @@ class UserApiMetadata {
   }
   static const String getPersonaManagementSummaryPath = '/v1/user/personas/summary';
   static const String getPrivacySettingsPath = '/v1/user/settings/privacy';
+  static const String getProfileEditSnapshotPath = '/v1/user/profile/edit-snapshot';
+  static const String getProfileQrCardPath = '/v1/user/profile/qr-card';
   static const String getRelationshipPathTemplate = '/v1/user/sub-accounts/{subAccountId}/relationship';
   static String getRelationshipPath({required String subAccountId}) {
     return _fillPath(getRelationshipPathTemplate, <String, String>{
@@ -542,6 +567,7 @@ class UserApiMetadata {
     });
   }
   static const String resolveOneTapLoginHintPath = '/v1/auth/login/one-tap/hint';
+  static const String resolveProfileQrTokenPath = '/v1/public/profile/qr/resolve';
   static const String retirePersonaPathTemplate = '/v1/user/personas/{subAccountId}/retire';
   static String retirePersonaPath({required String subAccountId}) {
     return _fillPath(retirePersonaPathTemplate, <String, String>{

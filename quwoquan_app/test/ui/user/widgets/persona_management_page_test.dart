@@ -36,14 +36,13 @@ class _StubUserRepository implements UserRepository {
   @override
   Future<PersonaManagementItemViewData> createPersona({
     required String displayName,
-    String? userHandle,
     String isolationLevel = 'open',
     String? purposeHint,
   }) async {
     final created = <String, dynamic>{
       'subAccountId': 'created_persona',
       'displayName': displayName,
-      'userHandle': userHandle ?? '',
+      'userHandle': 'qw_created_persona',
       'phone': '13800000000',
       'email': '',
       'isolationLevel': isolationLevel,
@@ -141,7 +140,6 @@ class _StubUserRepository implements UserRepository {
   Future<PersonaManagementItemViewData> updatePersona(
     String subAccountId, {
     String? displayName,
-    String? userHandle,
     String? phone,
     String? email,
     String? avatarUrl,
@@ -156,7 +154,6 @@ class _StubUserRepository implements UserRepository {
     );
     final updated = Map<String, dynamic>.from(_items[index]);
     if (displayName != null) updated['displayName'] = displayName;
-    if (userHandle != null) updated['userHandle'] = userHandle;
     if (phone != null) updated['phone'] = phone;
     if (email != null) updated['email'] = email;
     updated['inheritsProfileFromOwner'] = false;
@@ -164,7 +161,6 @@ class _StubUserRepository implements UserRepository {
         fieldsMask ??
         <String>[
           if (displayName != null) 'displayName',
-          if (userHandle != null) 'userHandle',
           if (phone != null) 'phone',
           if (email != null) 'email',
         ];
@@ -232,10 +228,7 @@ void main() {
 
       await tester.tap(find.text(UITextConstants.profileEditLabel).first);
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byType(CupertinoTextField).at(1),
-        'new_handle',
-      );
+      await tester.enterText(find.byType(CupertinoTextField).at(0), '新主分身');
       await tester.tap(find.text(UITextConstants.confirm));
       await tester.pumpAndSettle();
 
@@ -253,7 +246,7 @@ void main() {
       await tester.tap(find.text(UITextConstants.profileEditLabel).first);
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.byType(CupertinoTextField).at(2),
+        find.byType(CupertinoTextField).at(1),
         '13900000000',
       );
       await tester.tap(find.text(UITextConstants.confirm));

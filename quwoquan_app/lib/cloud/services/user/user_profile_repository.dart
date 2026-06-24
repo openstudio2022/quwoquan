@@ -2,7 +2,9 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
@@ -18,7 +20,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_create_request_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_update_request_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/owner_credential_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_edit_snapshot_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_interaction_activity_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_card_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_bundle_wire_dto.g.dart';
@@ -28,6 +34,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_normalize
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
@@ -39,238 +46,12 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 part 'user_profile_contract_seed_helpers.dart';
+part 'user_profile_contract_seed_helpers_interactions.dart';
+part 'user_profile_repository_helpers.dart';
+part 'user_profile_repository_contract.dart';
 part 'user_profile_repository_remote.dart';
 
-PersonaDto _personaDtoFromWire(Map<String, dynamic> json) {
-  final m = Map<String, dynamic>.from(json);
-  m.putIfAbsent('id', () => '');
-  m.putIfAbsent('userId', () => '');
-  m.putIfAbsent('displayName', () => '');
-  m.putIfAbsent('createdAt', () => '');
-  m.putIfAbsent('updatedAt', () => '');
-  return PersonaDto.fromJson(m);
-}
-
-List<ProfileInteractionActivityViewData> _interactionViewDataListFromWires(
-  Iterable<Map<String, dynamic>> wires, {
-  required int limit,
-}) {
-  final items = wires
-      .map(
-        (m) =>
-            ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-              ProfileInteractionActivityWireDto.fromMap(m),
-            ),
-      )
-      .toList(growable: false);
-  final sorted = [...items]
-    ..sort((a, b) {
-      final aTime = a.createdAt;
-      final bTime = b.createdAt;
-      if (aTime == null && bTime == null) {
-        return a.activityId.compareTo(b.activityId);
-      }
-      if (aTime == null) return 1;
-      if (bTime == null) return -1;
-      return bTime.compareTo(aTime);
-    });
-  return sorted.take(limit).toList(growable: false);
-}
-
-/// JSON 编码前去掉 null，避免 PATCH 误传「显式 null」覆盖服务端字段。
-Map<String, dynamic> _omitNullMapValues(Map<String, dynamic> source) {
-  return Map<String, dynamic>.fromEntries(
-    source.entries.where((e) => e.value != null),
-  );
-}
-
-/// 用户档案读取 / 主页 Tab 数据 / 统计 / 关系检索。
-///
-/// R02：单接口 ≤10 方法。
-abstract class ProfileReadRepository {
-  // ── 档案 ──────────────────────────────────────────────────────────────────
-  Future<SubAccountProfileViewData> getUserProfile(String userId);
-
-  /// 主页首屏聚合（GetUserHomepageBundle，锁定决策 #1）：一次返回 profile / stats /
-  /// relationshipCapability / tabCounts / viewerContext / cacheVersion，消除首屏串行
-  /// 阻塞。交集卡与影响力 evidence 属 content 域，由端侧并发补充，不进 bundle。
-  Future<UserHomepageBundleViewData> getUserHomepageBundle(String subAccountId);
-
-  // ── 主页 Tab 数据 ─────────────────────────────────────────────────────────
-  Future<List<PostBaseDto>> listUserPosts(
-    String userId, {
-    int limit = CloudApiDefaults.pageLimit,
-  });
-  Future<List<UserWorkItem>> listUserWorks(String userId);
-  Future<List<UserLifeItem>> listUserLifeItems(String userId);
-  Future<List<CircleDto>> listUserCircles(
-    String userId, {
-    int limit = CloudApiDefaults.userCirclesLimit,
-  });
-  Future<UserProfileStatsViewData> getUserStats(String userId);
-
-  /// 创作者影响力摘要（GetAuthorImpact，codegen DTO；displayText 云侧产出端只读直出）。
-  Future<AuthorImpactSummary> getAuthorImpact(String userId);
-
-  /// 创作者单条影响（impactId）的完整证据分页明细（ListAuthorImpactEvidence；R-ID03 端侧下钻闭合）。
-  ///
-  /// 端只读云侧分页结果（occurredAt 倒序，cursor opaque token，触底 hasMore=false），
-  /// 以被影响内容为载体、不暴露产生影响的具体用户身份。alpha Mock 从同一
-  /// `intersection_core` seed 对应的 [AuthorImpactItem] 派生分页明细，不新造第二套业务列表。
-  Future<AuthorImpactEvidencePage> listAuthorImpactEvidence({
-    required String subAccountId,
-    required String impactId,
-    String evidenceSnapshotId = '',
-    String cursor = '',
-    int limit = 20,
-  });
-
-  Future<List<SocialRelationSearchItemView>> searchSocialRelations({
-    required String query,
-    int limit = CloudApiDefaults.pageLimit,
-  });
-}
-
-/// 用户档案编辑 / 最近搜索维护。
-///
-/// R02：单接口 ≤10 方法。
-abstract class ProfileEditRepository {
-  Future<void> updateProfile(ProfileEditUpdatePayload data);
-
-  Future<List<RecentSearchEntryView>> listRecentSearches();
-
-  Future<RecentSearchEntryView> upsertRecentSearch({
-    required String query,
-    required SearchScope scope,
-    String? facet,
-  });
-
-  Future<void> deleteRecentSearch(String entryId);
-
-  Future<void> clearRecentSearches();
-}
-
-/// 用户关注 / 粉丝 / 关系 / 点赞 / 互动。
-///
-/// R02：单接口 ≤10 方法。
-abstract class ProfileRelationshipRepository {
-  // ── 关注 / 粉丝 ──────────────────────────────────────────────────────────
-  Future<void> followUser(
-    String targetUserId, {
-    String? ownerUserId,
-    String? subAccountId,
-    String? subAccountContextVersion,
-  });
-  Future<void> unfollowUser(
-    String targetUserId, {
-    String? ownerUserId,
-    String? subAccountId,
-    String? subAccountContextVersion,
-  });
-  Future<List<ProfileSocialRelationRowViewData>> listFollowing(
-    String userId, {
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  });
-  Future<List<ProfileSocialRelationRowViewData>> listFollowers(
-    String userId, {
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  });
-  Future<RelationshipViewData> getRelationship(String userId);
-  Future<List<ProfileUserLikeRowViewData>> listUserLikes(
-    String userId, {
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  });
-
-  // ── 互动（收到/发出）──────────────────────────────────────────────────────
-  Future<List<ProfileInteractionActivityViewData>> listUserInteractionReceived(
-    String userId, {
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  });
-  Future<List<ProfileInteractionActivityViewData>> listUserInteractionSent(
-    String userId, {
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  });
-}
-
-/// 用户分身（persona）管理。
-///
-/// R02：单接口 ≤10 方法。
-abstract class ProfilePersonaRepository {
-  // ── 分身 ──────────────────────────────────────────────────────────────────
-  Future<List<PersonaDto>> listPersonas();
-  Future<PersonaDto> createPersona(PersonaCreateRequestDto request);
-  Future<void> updatePersona(
-    String subAccountId,
-    PersonaUpdateRequestDto request,
-  );
-  Future<void> deletePersona(String subAccountId);
-  Future<void> activatePersona(String subAccountId);
-}
-
-/// 用户主页 Repository。
-///
-/// 接口方法与 contracts/metadata/user/user_profile/service.yaml、
-/// contracts/metadata/user/follow_edge/service.yaml routes 一一对应。
-///
-/// 由 4 个 ≤10 方法子接口组合（R02）。既有消费方继续依赖 `UserProfileRepository`
-/// 不变；新消费方可只依赖所需子接口。下方的便捷默认方法由子类（Mock / Remote）
-/// 经 `extends` 继承。
-abstract class UserProfileRepository
-    implements
-        ProfileReadRepository,
-        ProfileEditRepository,
-        ProfileRelationshipRepository,
-        ProfilePersonaRepository {
-  const UserProfileRepository();
-
-  Future<SubAccountProfileViewData> getSubAccountProfile(String userId) async {
-    final profile = await getUserProfile(userId);
-    final stats = await getUserStats(userId);
-    return profile.mergeStats(stats);
-  }
-
-  Future<List<CircleDto>> listProfileCircles(
-    String userId, {
-    int limit = CloudApiDefaults.userCirclesLimit,
-  }) async {
-    return listUserCircles(userId, limit: limit);
-  }
-
-  Future<List<ProfileInteractionActivityViewData>>
-  listProfileInteractionReceivedView(
-    String userId, {
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    return listUserInteractionReceived(userId, cursor: cursor, limit: limit);
-  }
-
-  Future<List<ProfileInteractionActivityViewData>>
-  listProfileInteractionSentView(
-    String userId, {
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    return listUserInteractionSent(userId, cursor: cursor, limit: limit);
-  }
-}
-
 // ─── Mock 实现（本地数据，不发 HTTP）──────────────────────────────────────────
-
-/// Mock 当前用户资料的唯一解析入口。
-///
-/// `MockUserProfileRepository`、`MockUserRepository` 等 mock 链路都必须复用它，
-/// 避免再次出现「主页资料已更新，但 active persona 仍读旧静态 JSON」的双真相源。
-SubAccountProfileWireDto resolveMockUserProfileWire(String userId) {
-  return MockUserProfileRepository._profileOverrides[userId] ??
-      _contractProfileWireByUserId[userId] ??
-      SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
-}
 
 class MockUserProfileRepository extends UserProfileRepository {
   const MockUserProfileRepository();
@@ -341,6 +122,64 @@ class MockUserProfileRepository extends UserProfileRepository {
   }
 
   @override
+  Future<ProfileEditSnapshotData> getProfileEditSnapshot() async {
+    final profile = await getUserProfile(kMockCurrentSubAccountId);
+    return ProfileEditSnapshotData.fromProfile(
+      profile: profile,
+      credentials: await listCredentialsForProfileEdit(),
+    );
+  }
+
+  Future<List<OwnerCredentialRowDto>> listCredentialsForProfileEdit() async {
+    return <OwnerCredentialRowDto>[
+      OwnerCredentialRowDto.fromMap(<String, dynamic>{
+        'id': 'mock_cred_1',
+        'credentialType': 'phone',
+        'displayLabel': '138****0001',
+        'isActive': true,
+        'boundAt': DateTime.now().toIso8601String(),
+      }),
+    ];
+  }
+
+  @override
+  Future<ProfileQrCardData> getProfileQrCard() async {
+    final snapshot = await getProfileEditSnapshot();
+    return snapshot.qrCard ?? ProfileQrCardData.mockFromSnapshot(snapshot);
+  }
+
+  @override
+  Future<ProfileQrResolveWireDto> resolveProfileQrToken({
+    required String token,
+    String handle = '',
+  }) async {
+    final normalizedToken = token.trim();
+    if (normalizedToken.isEmpty) {
+      throw Exception('resolveProfileQrToken: empty qr token');
+    }
+    final normalizedHandle = handle.trim().toLowerCase();
+    final rows = _contractProfileRows();
+    Map<String, dynamic>? hit;
+    if (normalizedHandle.isNotEmpty) {
+      for (final row in rows) {
+        if ((row['userId'] ?? '').toString().toLowerCase() ==
+            normalizedHandle) {
+          hit = row;
+          break;
+        }
+      }
+    }
+    hit ??= rows.isNotEmpty ? rows.first : null;
+    final subAccountId = hit?['userId']?.toString() ?? normalizedHandle;
+    return ProfileQrResolveWireDto(
+      subAccountId: subAccountId,
+      userHandle: subAccountId,
+      publicProfileUrl: 'https://app.quwoquan.com/u/$subAccountId',
+      scanStatus: 'accepted',
+    );
+  }
+
+  @override
   Future<void> updateProfile(ProfileEditUpdatePayload data) async {
     if (data.isEmpty) {
       return;
@@ -369,6 +208,17 @@ class MockUserProfileRepository extends UserProfileRepository {
     final backgroundUrl = data.backgroundUrl;
     if (backgroundUrl != null) {
       next = next.copyWith(backgroundUrl: backgroundUrl);
+    }
+    final identityTags = <String>[
+      if (data.occupationTagRef != null &&
+          data.occupationTagRef!.trim().isNotEmpty)
+        data.occupationTagRef!.trim(),
+      ...?data.interestTagRefs
+          ?.where((tag) => tag.trim().isNotEmpty)
+          .map((tag) => tag.trim()),
+    ];
+    if (data.occupationTagRef != null || data.interestTagRefs != null) {
+      next = next.copyWith(identityTags: identityTags);
     }
     next = next.copyWith(updatedAt: DateTime.now());
     _profileOverrides[subAccountId] = next;
@@ -404,15 +254,18 @@ class MockUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<List<CircleDto>> listUserCircles(
+  Future<CursorPage<CircleDto>> listUserCirclesPage(
     String userId, {
+    String? query,
+    String? cursor,
     int limit = CloudApiDefaults.userCirclesLimit,
   }) async {
     final contractCircles = _contractProfileWireByUserId.containsKey(userId)
         ? _contractUserCircles()
         : const <CircleDto>[];
     if (contractCircles.isNotEmpty) {
-      return contractCircles.take(limit).toList(growable: false);
+      final filtered = _filterCirclesByQuery(contractCircles, query: query);
+      return _paginateItems(filtered, cursor: cursor, limit: limit);
     }
     final t = DateTime.parse('2025-01-01T00:00:00Z');
     final circles = <CircleDto>[
@@ -450,7 +303,8 @@ class MockUserProfileRepository extends UserProfileRepository {
         updatedAt: t,
       ),
     ];
-    return circles.take(limit).toList(growable: false);
+    final filtered = _filterCirclesByQuery(circles, query: query);
+    return _paginateItems(filtered, cursor: cursor, limit: limit);
   }
 
   @override
@@ -484,7 +338,7 @@ class MockUserProfileRepository extends UserProfileRepository {
     required String impactId,
     String evidenceSnapshotId = '',
     String cursor = '',
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
     // 真相源：同一 intersection_core seed 的 AuthorImpactSummary。按 impactId /
     // evidenceSnapshotId 定位对应 AuthorImpactItem，再从该 item 自身派生可枚举明细行
@@ -498,7 +352,9 @@ class MockUserProfileRepository extends UserProfileRepository {
       );
     }
     final allRows = _deriveEvidenceRows(item);
-    final clampedLimit = limit <= 0 ? 20 : (limit > 50 ? 50 : limit);
+    final clampedLimit = limit <= 0
+        ? CloudApiDefaults.pageLimit
+        : (limit > 50 ? 50 : limit);
     final offset = int.tryParse(cursor) ?? 0;
     final start = offset < 0 ? 0 : offset;
     final end = (start + clampedLimit) > allRows.length
@@ -594,7 +450,10 @@ class MockUserProfileRepository extends UserProfileRepository {
         .where((user) {
           final displayName = (user['displayName'] ?? '').toString();
           final headline = (user['bio'] ?? '').toString();
-          return displayName.toLowerCase().contains(normalizedQuery) ||
+          // 趣我圈号(userHandle≈userId) 精确命中 + 昵称/资料模糊，端云语义一致。
+          final handle = (user['userId'] ?? '').toString().toLowerCase();
+          return handle == normalizedQuery ||
+              displayName.toLowerCase().contains(normalizedQuery) ||
               headline.toLowerCase().contains(normalizedQuery);
         })
         .take(limit)
@@ -686,61 +545,89 @@ class MockUserProfileRepository extends UserProfileRepository {
   }) async {}
 
   @override
-  Future<List<ProfileSocialRelationRowViewData>> listFollowing(
+  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowingPage(
     String userId, {
+    String? query,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final contractRows = _contractFollowingWiresFor(userId);
+    final contractRows = _filterRelationWiresByQuery(
+      _contractFollowingWiresFor(userId),
+      query: query,
+    );
     if (contractRows.isNotEmpty) {
-      return contractRows
-          .take(limit)
+      return _paginateItems(
+        contractRows
+            .map(
+              (m) =>
+                  ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+                    ProfileSocialRelationRowWireDto.fromMap(m),
+                  ),
+            )
+            .toList(growable: false),
+        cursor: cursor,
+        limit: limit,
+      );
+    }
+    final filtered = _filterRelationWiresByQuery(
+      _mockFollowingWiresFor(userId),
+      query: query,
+    );
+    return _paginateItems(
+      filtered
           .map(
             (m) =>
                 ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
                   ProfileSocialRelationRowWireDto.fromMap(m),
                 ),
           )
-          .toList(growable: false);
-    }
-    return _mockFollowingWiresFor(userId)
-        .take(limit)
-        .map(
-          (m) =>
-              ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
-                ProfileSocialRelationRowWireDto.fromMap(m),
-              ),
-        )
-        .toList(growable: false);
+          .toList(growable: false),
+      cursor: cursor,
+      limit: limit,
+    );
   }
 
   @override
-  Future<List<ProfileSocialRelationRowViewData>> listFollowers(
+  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowersPage(
     String userId, {
+    String? query,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final contractRows = _contractFollowerWiresFor(userId);
+    final contractRows = _filterRelationWiresByQuery(
+      _contractFollowerWiresFor(userId),
+      query: query,
+    );
     if (contractRows.isNotEmpty) {
-      return contractRows
-          .take(limit)
+      return _paginateItems(
+        contractRows
+            .map(
+              (m) =>
+                  ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+                    ProfileSocialRelationRowWireDto.fromMap(m),
+                  ),
+            )
+            .toList(growable: false),
+        cursor: cursor,
+        limit: limit,
+      );
+    }
+    final filtered = _filterRelationWiresByQuery(
+      _mockFollowerWiresFor(userId),
+      query: query,
+    );
+    return _paginateItems(
+      filtered
           .map(
             (m) =>
                 ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
                   ProfileSocialRelationRowWireDto.fromMap(m),
                 ),
           )
-          .toList(growable: false);
-    }
-    return _mockFollowerWiresFor(userId)
-        .take(limit)
-        .map(
-          (m) =>
-              ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
-                ProfileSocialRelationRowWireDto.fromMap(m),
-              ),
-        )
-        .toList(growable: false);
+          .toList(growable: false),
+      cursor: cursor,
+      limit: limit,
+    );
   }
 
   @override
@@ -915,7 +802,7 @@ class MockUserProfileRepository extends UserProfileRepository {
             ? 'mutual'
             : item['following'] == true
             ? 'following'
-            : 'none',
+            : 'not_following',
         'isFollowing': item['following'] == true,
         'isFollowedBy': item['mutualFollow'] == true,
         'isMutual': item['mutualFollow'] == true,

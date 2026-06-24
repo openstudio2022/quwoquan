@@ -44,6 +44,7 @@ func (s *PersonaService) Create(ctx context.Context, userID string, data map[str
 	p := &model.Persona{
 		UserID:       userID,
 		SubAccountID: subAccountID,
+		UserHandle:   subAccountID,
 		Status:       "active",
 	}
 	if v, ok := data["displayName"].(string); ok {

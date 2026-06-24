@@ -24,8 +24,6 @@ from _common.entity_annotation import annotation_publish_issues
 from _common.intersection_signal import intersection_hint_issues
 from _common.provenance import provenance_issues
 from produce.materialize import _normalized_runtime_entity_refs
-from template.condition import REGION_LOCKED_TERMS
-
 # asset:// 引用 token：允许中文实体名（assetId 可读化后含中文）。
 _ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9_./\u4e00-\u9fff-]+)")
 
@@ -130,13 +128,6 @@ def verify_posts(posts_root: Path, *, post_rels: set[str] | None = None) -> list
         issues.extend(_normalized_entity_ref_issues(manifest_path, manifest))
         if not manifest.get("sourceTaskId"):
             issues.append(f"{manifest_path}: missing sourceTaskId provenance (task trace/hydrate 必需)")
-
-        found_region_terms = sorted({term for term in REGION_LOCKED_TERMS if term in article})
-        if found_region_terms and not _authorized_region(manifest):
-            issues.append(
-                f"{article_path}: region-locked terms {found_region_terms} require "
-                "conditionContext.region in manifest (地域专有现象必须由 region 条件授权)"
-            )
 
         issues.extend(asset_closure_issues(post_dir, manifest))
         # 出处强制门：交付 post 必须有完整且一致的 provenance.json。
@@ -260,16 +251,6 @@ def asset_closure_issues(post_dir: Path, manifest: dict) -> list[str]:
                     f"{post_dir}: asset sha256 mismatch for {file_name}: manifest={expected} disk={actual}"
                 )
     return issues
-
-
-def _authorized_region(manifest: dict) -> bool:
-    context = manifest.get("conditionContext")
-    if not isinstance(context, dict) or not context:
-        recommendation = manifest.get("recommendation")
-        context = recommendation.get("conditionContext", {}) if isinstance(recommendation, dict) else {}
-    if not isinstance(context, dict):
-        return False
-    return bool(context.get("region"))
 
 
 def main() -> None:

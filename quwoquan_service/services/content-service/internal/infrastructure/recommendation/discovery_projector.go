@@ -102,28 +102,44 @@ func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEv
 	}
 
 	set := bson.M{
-		"postId":             postID,
-		"authorId":           strVal(event.Payload, "authorId"),
-		"contentType":        strVal(event.Payload, "contentType"),
-		"contentIdentity":    strVal(event.Payload, "contentIdentity"),
-		"title":              strVal(event.Payload, "title"),
-		"tagRefs":            anySlice(event.Payload, "tagRefs"),
-		"coverUrl":           strVal(event.Payload, "coverUrl"),
-		"status":             normalizedStatus(event.Payload),
-		"visibility":         normalizeVisibility(strVal(event.Payload, "visibility")),
-		"assistantUsePolicy": strVal(event.Payload, "assistantUsePolicy"),
-		"circleIds":          anySlice(event.Payload, "circleIds"),
-		"entityRefs":         anySlice(event.Payload, "entityRefs"),
-		"sourceTaskId":       strVal(event.Payload, "sourceTaskId"),
+		"postId":               postID,
+		"authorId":             strVal(event.Payload, "authorId"),
+		"creatorProfileId":     strVal(event.Payload, "creatorProfileId"),
+		"creatorDisclosure":    anyMap(event.Payload, "creatorDisclosure"),
+		"experienceClaimMode":  strVal(event.Payload, "experienceClaimMode"),
+		"authorQualitySignals": anyMap(event.Payload, "authorQualitySignals"),
+		"contentType":          strVal(event.Payload, "contentType"),
+		"contentIdentity":      strVal(event.Payload, "contentIdentity"),
+		"title":                strVal(event.Payload, "title"),
+		"tagRefs":              anySlice(event.Payload, "tagRefs"),
+		"coverUrl":             strVal(event.Payload, "coverUrl"),
+		"thumbnailUrl":         strVal(event.Payload, "thumbnailUrl"),
+		"videoUrl":             strVal(event.Payload, "videoUrl"),
+		"coverStrategy":        strVal(event.Payload, "coverStrategy"),
+		"coverFrameTimeMs":     int64Val(event.Payload, "coverFrameTimeMs"),
+		"durationMs":           int64Val(event.Payload, "durationMs"),
+		"width":                int64Val(event.Payload, "width"),
+		"height":               int64Val(event.Payload, "height"),
+		"mediaItems":           event.Payload["mediaItems"],
+		"status":               normalizedStatus(event.Payload),
+		"visibility":           normalizeVisibility(strVal(event.Payload, "visibility")),
+		"assistantUsePolicy":   strVal(event.Payload, "assistantUsePolicy"),
+		"circleIds":            anySlice(event.Payload, "circleIds"),
+		"entityRefs":           anySlice(event.Payload, "entityRefs"),
+		"semanticMentions":     event.Payload["semanticMentions"],
+		"contentVertical":      strVal(event.Payload, "contentVertical"),
+		"sourceTaskId":         strVal(event.Payload, "sourceTaskId"),
 		// conditionProfile 为实体级画像：在线 Post 事件 payload 暂不携带，
 		// 由绑定实体（canonicalEntityId→entity.conditionProfile）派生后注入；冷启动 cmd/import 路径直接冗余。
 		"conditionProfile": anyMap(event.Payload, "conditionProfile"),
+	}
+	for key, value := range BuildRecommendationProjectionFields(set) {
+		set[key] = value
 	}
 	setOnInsert := bson.M{
 		"likeCount":    int64(0),
 		"commentCount": int64(0),
 		"viewCount":    int64(0),
-		"recScore":     0.0,
 	}
 	// 时间语义：createdAt 仅首次插入置位（来自 Post.CreatedAt，永不被后续事件覆盖）；
 	// publishedAt 由首次发布事件携带（PostPublished 仅触发一次，值来自 set-once 的 Post.PublishedAt）；
@@ -205,6 +221,23 @@ func strVal(m map[string]any, key string) string {
 func boolVal(m map[string]any, key string) bool {
 	v, _ := m[key].(bool)
 	return v
+}
+
+func int64Val(m map[string]any, key string) int64 {
+	switch v := m[key].(type) {
+	case int:
+		return int64(v)
+	case int32:
+		return int64(v)
+	case int64:
+		return v
+	case float32:
+		return int64(v)
+	case float64:
+		return int64(v)
+	default:
+		return 0
+	}
 }
 
 func normalizedStatus(payload map[string]any) string {

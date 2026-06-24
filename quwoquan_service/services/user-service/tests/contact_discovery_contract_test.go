@@ -4,17 +4,29 @@ import (
 	"context"
 	"net/http"
 	"testing"
+
+	"quwoquan_service/services/user-service/internal/domain/user/phonematch"
 )
 
-// T3 ContactDiscovery 隐私隔离契约测试
+// ContactDiscovery 隐私隔离 + 端云一致哈希契约测试。
+//
+// 端云一致：credential_key 存规范化明文手机号，服务端经 phonematch.Hash 派生哈希
+// 与发起者上传的哈希比对；测试上传 phonematch.Hash(phone) 复刻客户端行为。
+
+const (
+	cdOpenPhone   = "13800138001"
+	cdSemiPhone   = "13800138002"
+	cdStrictPhone = "13800138003"
+	cdHiddenPhone = "13800138009"
+)
 
 func TestContactDiscovery_InitiateAndGetLatest(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "cd_owner", "cd_user")
 
-	// 发起通讯录发现
-	rec := doRequest(t, http.MethodPost, "/v1/user/contact-discovery",
-		`{"hashedPhones":["hash_p1","hash_p2","hash_p3"]}`,
+	// 发起通讯录发现（无注册命中）
+	rec := doRequest(t, http.MethodPost, "/v1/owner/contact-discovery",
+		`{"hashedPhones":["`+phonematch.Hash(cdOpenPhone)+`"]}`,
 		authHeaders("cd_owner"))
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("initiate: expected 202, got %d: %s", rec.Code, rec.Body.String())
@@ -43,7 +55,7 @@ func TestContactDiscovery_InitiateAndGetLatest(t *testing.T) {
 	}
 
 	// 获取最新记录
-	rec = doRequest(t, http.MethodGet, "/v1/user/contact-discovery/latest", "", authHeaders("cd_owner"))
+	rec = doRequest(t, http.MethodGet, "/v1/owner/contact-discovery/latest", "", authHeaders("cd_owner"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get latest: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -52,23 +64,23 @@ func TestContactDiscovery_InitiateAndGetLatest(t *testing.T) {
 func TestContactDiscovery_MatchesOnlyOpenSubAccounts(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	// 注册三个用户：open、semi、strict 隔离级别
+	// 注册三个用户：open、semi、strict 隔离级别（credential_key 存明文手机号）
 	createTestProfile(t, "target_open", "target_open_user")
 	createTestPersonaFull(t, "p_open", "target_open", "sa_open", "OpenSub", "open", true, true)
-	createTestCredential(t, "c_open", "target_open", "phone", "hash_open_phone")
+	createTestCredential(t, "c_open", "target_open", "phone", cdOpenPhone)
 
 	createTestProfile(t, "target_semi", "target_semi_user")
 	createTestPersonaFull(t, "p_semi", "target_semi", "sa_semi", "SemiSub", "semi", true, true)
-	createTestCredential(t, "c_semi", "target_semi", "phone", "hash_semi_phone")
+	createTestCredential(t, "c_semi", "target_semi", "phone", cdSemiPhone)
 
 	createTestProfile(t, "target_strict", "target_strict_user")
 	createTestPersonaFull(t, "p_strict", "target_strict", "sa_strict", "StrictSub", "strict", true, true)
-	createTestCredential(t, "c_strict", "target_strict", "phone", "hash_strict_phone")
+	createTestCredential(t, "c_strict", "target_strict", "phone", cdStrictPhone)
 
-	// 发起者上传三个手机号哈希
+	// 发起者上传三个手机号哈希（与客户端同一算法）
 	createTestProfile(t, "initiator", "initiator_user")
-	rec := doRequest(t, http.MethodPost, "/v1/user/contact-discovery",
-		`{"hashedPhones":["hash_open_phone","hash_semi_phone","hash_strict_phone"]}`,
+	rec := doRequest(t, http.MethodPost, "/v1/owner/contact-discovery",
+		`{"hashedPhones":["`+phonematch.Hash(cdOpenPhone)+`","`+phonematch.Hash(cdSemiPhone)+`","`+phonematch.Hash(cdStrictPhone)+`"]}`,
 		authHeaders("initiator"))
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("initiate: expected 202, got %d: %s", rec.Code, rec.Body.String())
@@ -85,11 +97,33 @@ func TestContactDiscovery_MatchesOnlyOpenSubAccounts(t *testing.T) {
 
 	// open 子账号必须匹配到
 	if !matchedSet["sa_open"] {
-		t.Error("open isolation sub-account should appear in contact discovery matches")
+		t.Errorf("open isolation sub-account should appear in matches; got %v", matched)
 	}
 	// strict 子账号绝不能出现
 	if matchedSet["sa_strict"] {
 		t.Error("strict isolation sub-account must NOT appear in contact discovery matches")
+	}
+
+	// matches[] 富化投影：回显发起者自己上传的 hashedPhone + 关系能力位
+	matches, _ := result["matches"].([]any)
+	var openMatch map[string]any
+	for _, raw := range matches {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if item["subAccountId"] == "sa_open" {
+			openMatch = item
+		}
+	}
+	if openMatch == nil {
+		t.Fatalf("expected matches[] to contain sa_open projection; got %v", matches)
+	}
+	if openMatch["hashedPhone"] != phonematch.Hash(cdOpenPhone) {
+		t.Errorf("matches[].hashedPhone must echo initiator's uploaded hash, got %v", openMatch["hashedPhone"])
+	}
+	if _, ok := openMatch["relationshipCapability"].(map[string]any); !ok {
+		t.Errorf("matches[] must carry relationshipCapability to drive 添加/已添加")
 	}
 }
 
@@ -98,8 +132,8 @@ func TestContactDiscovery_Dismiss(t *testing.T) {
 	createTestProfile(t, "dismiss_owner", "dismiss_user")
 
 	// 发起
-	rec := doRequest(t, http.MethodPost, "/v1/user/contact-discovery",
-		`{"hashedPhones":["hash_dismiss_p"]}`,
+	rec := doRequest(t, http.MethodPost, "/v1/owner/contact-discovery",
+		`{"hashedPhones":["`+phonematch.Hash(cdHiddenPhone)+`"]}`,
 		authHeaders("dismiss_owner"))
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("initiate: %d", rec.Code)
@@ -108,7 +142,7 @@ func TestContactDiscovery_Dismiss(t *testing.T) {
 	recordID, _ := result["id"].(string)
 
 	// 关闭
-	rec = doRequest(t, http.MethodDelete, "/v1/user/contact-discovery/"+recordID, "", authHeaders("dismiss_owner"))
+	rec = doRequest(t, http.MethodDelete, "/v1/owner/contact-discovery/"+recordID, "", authHeaders("dismiss_owner"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("dismiss: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -128,12 +162,12 @@ func TestContactDiscovery_NeverExposesOwnerAccountId(t *testing.T) {
 	// 被发现方
 	createTestProfile(t, "hidden_owner", "hidden_user")
 	createTestPersonaFull(t, "hidden_p", "hidden_owner", "sa_hidden", "HiddenSub", "open", true, true)
-	createTestCredential(t, "hidden_cred", "hidden_owner", "phone", "hash_hidden_phone")
+	createTestCredential(t, "hidden_cred", "hidden_owner", "phone", cdHiddenPhone)
 
 	// 发现方
 	createTestProfile(t, "finder_owner", "finder_user")
-	rec := doRequest(t, http.MethodPost, "/v1/user/contact-discovery",
-		`{"hashedPhones":["hash_hidden_phone"]}`, authHeaders("finder_owner"))
+	rec := doRequest(t, http.MethodPost, "/v1/owner/contact-discovery",
+		`{"hashedPhones":["`+phonematch.Hash(cdHiddenPhone)+`"]}`, authHeaders("finder_owner"))
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("initiate: %d: %s", rec.Code, rec.Body.String())
 	}
@@ -144,8 +178,10 @@ func TestContactDiscovery_NeverExposesOwnerAccountId(t *testing.T) {
 		t.Error("ownerAccountId must NOT appear in contact discovery response")
 	}
 	matched, _ := result["matchedSubAccountIds"].([]any)
+	if len(matched) == 0 {
+		t.Error("expected hidden_owner's open sub-account to be discovered")
+	}
 	for _, m := range matched {
-		// 确认匹配到的是 subAccountId（sa_hidden），不是 owner ID
 		if s, ok := m.(string); ok && s == "hidden_owner" {
 			t.Error("owner ID (hidden_owner) must NOT be in matchedSubAccountIds")
 		}

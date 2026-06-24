@@ -30,9 +30,7 @@ gwt_acceptance:
       - file: quwoquan_data/scripts/template/condition.py
       - file: quwoquan_data/scripts/verify/verify_content_quality.py
       recorded:
-      - file: quwoquan_data/tests/template/test_template_cli.py
-      - file: quwoquan_data/scripts/template/condition.py
-      - file: quwoquan_data/scripts/verify/verify_content_quality.py
+      - file: quwoquan_data/tests/local_contract/template/test_template_cli__local_contract_test.py
     status: pending
     test_evidence:
       primary:
@@ -48,7 +46,9 @@ gwt_acceptance:
         - local_contract.runtime.runtime_data_engineering.geo_content_trinity.gwt1_local_contract
         envs: *id001
       supporting: []
-    notes: []
+    notes:
+    - '[migrated_from_recorded_noncanonical] quwoquan_data/scripts/template/condition.py'
+    - '[migrated_from_recorded_noncanonical] quwoquan_data/scripts/verify/verify_content_quality.py'
   GWT2:
     title: partial delivery and failed entity reference isolation
     given:
@@ -77,14 +77,34 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_data/tests/annotate/test_annotate_publish_filter.py
-      - file: quwoquan_data/tests/workflow/test_task_run_pipeline.py
+      - file: quwoquan_data/tests/local_contract/task/test_workflow_state_machine__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_download_checkpoint_repair__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_download_auto_research__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_replacement_screening__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/produce/test_task_author_review__local_contract_test.py
+      - file: quwoquan_data/tests/api_integration/ship/test_task_publish_release__api_integration_test.py
+      - file: quwoquan_data/tests/user_acceptance/workflow/test_task_run_operator_journey__user_acceptance_test.py
       - file: quwoquan_data/tests/verify/test_scale_readiness.py
       - file: quwoquan_data/tests/task/test_trial_review.py
       recorded:
-      - file: quwoquan_data/tests/annotate/test_annotate_publish_filter.py
-      - file: quwoquan_data/tests/workflow/test_task_run_pipeline.py
-      - file: quwoquan_data/tests/verify/test_scale_readiness.py
-      - file: quwoquan_data/tests/task/test_trial_review.py
+      - file: quwoquan_data/tests/local_contract/annotate/test_annotate_publish_filter__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/build/test_homepage_prepare__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/common/test_auto_content_plan__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/common/test_content_plan_source_contract__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/produce/test_task_author_review__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_download_auto_research__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_download_checkpoint_repair__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_download_fast_fail_policy__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_download_repair_prompt__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_managed_local_runtime__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_managed_preflight_workspace__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_replacement_screening__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_workflow_state_machine__local_contract_test.py
+      - file: quwoquan_data/tests/api_integration/ship/test_task_publish_release__api_integration_test.py
+      - file: quwoquan_data/tests/user_acceptance/workflow/test_task_run_operator_journey__user_acceptance_test.py
+      - file: quwoquan_data/tests/local_contract/verify/test_scale_readiness__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py
+      - file: quwoquan_data/tests/api_integration/ship/test_data_release_consistency__api_integration_test.py
     status: completed
     test_evidence:
       primary:

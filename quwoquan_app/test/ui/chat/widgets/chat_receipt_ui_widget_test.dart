@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/chat_message_bubble.dart';
@@ -9,19 +10,21 @@ Widget _wrapBubble({
   bool receiptEnabled = false,
   int memberCount = 2,
 }) {
-  return MaterialApp(
-    home: Scaffold(
-      body: SingleChildScrollView(
-        child: ChatMessageBubble(
-          message: message,
-          isRight: isRight,
-          bubbleColor: Colors.blue.shade100,
-          textColor: Colors.black,
-          isSelectionMode: false,
-          isSelected: false,
-          onLongPressStart: (_) {},
-          receiptEnabled: receiptEnabled,
-          memberCount: memberCount,
+  return ProviderScope(
+    child: MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: ChatMessageBubble(
+            message: message,
+            isRight: isRight,
+            bubbleColor: Colors.blue.shade100,
+            textColor: Colors.black,
+            isSelectionMode: false,
+            isSelected: false,
+            onLongPressStart: (_) {},
+            receiptEnabled: receiptEnabled,
+            memberCount: memberCount,
+          ),
         ),
       ),
     ),

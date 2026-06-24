@@ -27,6 +27,7 @@ LITE_REFS: dict[str, list[str]] = {
     "content/test_fixtures/scenarios/content_scenarios.json": [
         "content_discovery_core",
         "home_showcase_core",
+        "intersection_core",
     ],
     "social/circle/test_fixtures/scenarios/circle_scenarios.json": [
         "circle_core",
@@ -137,6 +138,16 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
             if row_id(row, "id", "commentId") in LITE_CONTENT_COMMENT_IDS
             or row_id(row, "postId", "contentId", "post_id") in LITE_CONTENT_POST_IDS
         ]
+
+        # 交集 seed 在 alpha-dev-lite 仅保留对象页交集（objectIntersections）：
+        # 端侧 Mock 的「我的交集」inbox / 频道 channelReasons 仍走行内 canonical 回退，
+        # 不因 lite 引入 fixture 而改变 inbox 行为（避免 inbox 测试级联漂移）。
+        # 对象页交集（getObjectIntersections）从此 seed 真实下发，删除 Mock 内硬编码证据组后唯一真相源。
+        intersection_seed = seed_sets.get("intersection_core")
+        if isinstance(intersection_seed, dict):
+            seed_sets["intersection_core"] = {
+                "objectIntersections": intersection_seed.get("objectIntersections", {}),
+            }
 
     if relative_path == "user/test_fixtures/scenarios/user_scenarios.json":
         profile_seed = seed_sets["user_profile_core"]

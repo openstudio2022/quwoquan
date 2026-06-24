@@ -1,0 +1,75 @@
+id: CR-20260624-058-profile-edit-commercial-form
+title: 个人资料编辑页商业表单与二维码卡片闭环
+slug: profile-edit-commercial-form
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update
+  - specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign
+  - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph
+
+entries:
+  - timestamp: "2026-06-24T18:30:00+08:00"
+    summary: |
+      将我的主页编辑资料页重构为固定字段顺序的商业表单：封面、头像、昵称、性别、生日、地区、手机号、趣我圈号、我的二维码、签名、标签。
+      页面拆分为媒体、基础资料、账号社交、扩展资料四个 iOS 分组区块；普通字段右侧值统一进入右对齐槽位，封面与头像使用紧凑预览行。
+      趣我圈号改为服务端系统分配的只读公开标识，资料页仅展示和复制，不向用户开放编辑。
+      新增私有资料编辑快照、二维码卡片、手机号绑定凭证、职业与兴趣标签、真实二维码 SDK 渲染和扫码主页入口的端云契约基线。
+    reason: |
+      原编辑页只覆盖封面、头像、昵称和 bio，无法支撑手机号凭证、二维码社交、职业/兴趣标签、生日/地区/性别等商用资料闭环。
+      若继续在 UI 内临时拼字段，会形成公开资料、owner 凭证、persona handle 和标签体系的第二真相源，因此本轮按 metadata-first 扩展契约和页面。
+    change_type:
+      - refine
+      - ux-spec
+      - metadata
+      - app-feature
+      - service-contract
+      - local-contract
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md
+        sections:
+          - 个人资料编辑商业表单
+          - 端云契约与存储
+      - path: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/acceptance.yaml
+        sections:
+          - GWT1 用户修改公开资料后我的主页立即展示最新资料
+          - GWT2 用户按商业字段顺序编辑资料且私有凭证不进入公开主页
+      - path: specs/gates/metadata_driven_ui_gap_inventory.yaml
+        sections:
+          - edit_profile_page
+      - path: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+        sections:
+          - user/edit_profile_page
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "通过：make -C quwoquan_service verify-metadata（保留既有 response_entity 元数据警告，不属于本轮 profile 契约断点）"
+      - "通过：make -C quwoquan_service codegen-app && make -C quwoquan_service codegen-storage"
+      - "通过：go test ./services/user-service/tests -run '^(TestGetProfileEditSnapshot_ReturnsCommercialFields|TestGetProfileQRCard_IssuesOpaqueResolvableToken|TestResolveProfileQRToken_InvalidToken|TestCreatePersona_UserHandleReadonly|TestUpdatePersona_UserHandleReadonly|TestUpdatePersona_ReflectsManagementFields)$' -count=1"
+      - "通过：go test ./services/user-service/tests/api_integration -run '^TestProfileCrudContractApiIntegrationTest$' -count=1"
+      - "通过：go test ./services/user-service/internal/application ./services/user-service/internal/infrastructure/persistence ./services/user-service/internal/adapters/http"
+      - "通过：cd quwoquan_app && flutter test test/cloud/integration/remote_api_path_contract_test.dart"
+      - "通过：cd quwoquan_app && flutter test test/cloud/user/contract/user_profile_repository_contract_test.dart"
+      - "通过：cd quwoquan_app && flutter test test/local_contract/cloud/user/contract/user_profile_repository_contract__local_contract_test.dart test/local_contract/cloud/integration/remote_api_path_contract__local_contract_test.dart"
+      - "通过：cd quwoquan_app && flutter test test/ui/user/widgets/persona_management_page_test.dart"
+      - "通过：cd quwoquan_app && flutter test test/ui/user/journeys/edit_profile_journey_test.dart"
+      - "通过：cd quwoquan_app && flutter test test/user_acceptance/ui/user/journeys/edit_profile_journey__user_acceptance_test.dart"
+      - "通过：make verify-app-page-horizontal-quality"
+      - "通过：make verify-app-mock-isolation"
+      - "通过：make verify-app-login-entry-loop-contract"
+      - "通过：git diff --check"
+      - "阻断：persona api_integration 桥接聚合测试依赖本地 Mongo/Docker 生命周期；直接 userHandle 只读服务测试已通过"
+    notes:
+      - 二维码 V1 使用服务签发的 HTTPS 主页链接与 opaque qrToken；服务仅存 token hash，支持 active/revoked/expiry/styleVersion，App 展示层使用 pretty_qr_code 渲染真实二维码，底层依赖 Dart qr 编码库。
+      - 编辑资料页三次 UI 收口：封面/头像采用同一媒体预览语义尺寸；右侧取值改为普通值、待填写 CTA、系统只读值三类语义 token；性别端侧入口仅保留男/女/不展示。
+      - 编辑资料页四次 UI 收口：未填写项不再使用蓝色加粗 CTA，改为弱视觉短好处提示；性别未设置显示轻提示；趣我圈号只展示系统号，不显示复制图标。
+      - 真实运营商一键绑定和保存二维码到系统相册依赖设备与平台能力，本地仅验证降级链路。
+      - 职业/兴趣 V1 必须经 tag-service 校验，App 不维护第二套云外标签真相源。

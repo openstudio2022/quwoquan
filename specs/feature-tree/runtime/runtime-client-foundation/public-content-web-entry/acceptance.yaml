@@ -43,7 +43,7 @@ gwt_acceptance:
       planned:
       - file: quwoquan_app/test/ui/content/share/content_share_template_public_link_test.dart
       recorded:
-      - file: quwoquan_app/test/ui/content/share/content_share_template_public_link_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/share/content_share_template_public_link__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -84,7 +84,7 @@ gwt_acceptance:
       planned:
       - file: quwoquan_app/test/ui/content/seo/markdown_seo_html_renderer_test.dart
       recorded:
-      - file: quwoquan_app/test/ui/content/seo/markdown_seo_html_renderer_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/seo/markdown_seo_html_renderer__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -122,9 +122,8 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_service/runtime/publicweb/renderer_test.go
-      recorded:
-      - file: quwoquan_service/runtime/publicweb/renderer_test.go
-    status: implemented
+      recorded: []
+    status: pending_evidence
     test_evidence:
       primary:
       - layer: local_contract
@@ -148,6 +147,7 @@ gwt_acceptance:
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/web/seo_object_pages_snapshot_test.dart'
     - '[migrated_from_planned] quwoquan_service/services/content-service/tests/public_seo_render_contract_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/publicweb/renderer_test.go'
   GWT4:
     title: 智能中转页按 UA 分流唤起或下载
     given:
@@ -171,9 +171,8 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_service/runtime/publicweb/transfer_test.go
-      recorded:
-      - file: quwoquan_service/runtime/publicweb/transfer_test.go
-    status: implemented
+      recorded: []
+    status: pending_evidence
     test_evidence:
       primary:
       - layer: api_integration
@@ -189,6 +188,7 @@ gwt_acceptance:
         envs: *id001
     notes:
     - '[migrated_from_planned] quwoquan_service/services/content-service/tests/transfer_page_ua_routing_contract_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/publicweb/transfer_test.go'
   GWT5:
     title: 安装转化入口对 4 类对象统一可用
     given:
@@ -208,10 +208,8 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned: []
-      recorded:
-      - file: quwoquan_service/runtime/publicweb/renderer_test.go
-      - file: quwoquan_service/runtime/publicweb/transfer_test.go
-    status: implemented
+      recorded: []
+    status: pending_evidence
     test_evidence:
       primary:
       - layer: local_contract
@@ -222,6 +220,8 @@ gwt_acceptance:
       supporting: []
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/web/install_conversion_cta_test.dart'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/publicweb/renderer_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/publicweb/transfer_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

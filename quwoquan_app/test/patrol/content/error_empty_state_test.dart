@@ -1,4 +1,4 @@
-/// T4 Patrol E2E: 错误/空状态展示
+/// user_acceptance Patrol: 错误/空状态展示
 ///
 /// 对应 e2e.yaml 场景：error_empty_state_ui [test_type: ui_journey]
 ///
@@ -26,7 +26,7 @@ void main() {
 
       // 自启动后首页壳应渲染（落地 tab = HomePage；DiscoveryPage 已不在主导航）。
       // 注：本用例当前仅守护「首页可渲染」基线；具体 post_not_found / 空态 / 错误态
-      // 断言依赖详情页与可控错误注入，留待 T4 环境补齐（如实标注，未伪造覆盖）。
+      // 断言依赖详情页与可控错误注入，留待 Patrol user_acceptance 环境补齐（如实标注，未伪造覆盖）。
       await waitForHomeShell($);
       expect($(find.byKey(homeSearchChromeKey)).visible, isTrue);
     },

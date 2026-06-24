@@ -414,6 +414,17 @@ final contentRepositoryProvider = Provider<ContentRepository>((ref) {
   );
 });
 
+final profileMediaUploadGatewayProvider = Provider<ProfileMediaUploadGateway>((
+  ref,
+) {
+  return cloudRepositoryImplForMode(
+    ref.watch(appDataSourceModeProvider),
+    remote: () =>
+        ContentProfileMediaUploadGateway(ref.watch(contentRepositoryProvider)),
+    mock: () => const MockProfileMediaUploadGateway(),
+  );
+});
+
 /// Content 子接口 Provider（R02）。
 ///
 /// `ContentRepository` 由 6 个 ≤10 方法子接口组合，同一实例同时满足全部子接口。
@@ -506,7 +517,10 @@ final userProfileCacheProvider = Provider<UserProfileCacheService>((ref) {
 });
 
 final postObjectCacheProvider = Provider<PostObjectCacheService>((ref) {
-  return PostObjectCacheService();
+  final profile = ref.watch(appResourceCacheProfileProvider);
+  return PostObjectCacheService(
+    maxMemoryEntries: profile.maxPostObjectCacheEntries,
+  );
 });
 
 final contentQuerySnapshotStoreProvider = Provider<ContentQuerySnapshotStore>((
@@ -664,6 +678,19 @@ final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
     mock: MockInviteRepository.new,
   );
 });
+
+/// ContactDiscovery Repository（通讯录批量哈希匹配）
+final contactDiscoveryRepositoryProvider =
+    Provider<ContactDiscoveryRepository>((ref) {
+      final mode = ref.watch(appDataSourceModeProvider);
+      return cloudRepositoryImplForMode(
+        mode,
+        remote: () => RemoteContactDiscoveryRepository(
+          httpClient: ref.watch(cloudHttpClientProvider),
+        ),
+        mock: MockContactDiscoveryRepository.new,
+      );
+    });
 
 /// Behavior Repository（行为上报，驱动实时推荐）
 final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
@@ -893,7 +920,10 @@ final mediaUploadManagerProvider = Provider<MediaUploadManager>((ref) {
 
 /// Media Download Cache（LRU 媒体下载缓存，默认 200MB）
 final mediaDownloadCacheProvider = Provider<MediaDownloadCache>((ref) {
+  final profile = ref.watch(appResourceCacheProfileProvider);
   return MediaDownloadCache(
+    maxCacheSizeMb: profile.maxMediaDownloadCacheSizeMb,
+    maxConcurrentDownloads: profile.maxConcurrentMediaDownloads,
     telemetrySink: ref.watch(cacheTelemetrySinkProvider),
   );
 });

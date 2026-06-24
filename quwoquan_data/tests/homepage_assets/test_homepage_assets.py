@@ -43,7 +43,6 @@ def _seed_entity(root: Path, *, with_manifest: bool = True) -> Path:
         "type": "景区",
         "sourceTaskId": "旅行/地域/四川省/景区/景区全覆盖",
         "tagRefs": ["Topic/旅行/季节/秋", "Topic/旅行/场景/徒步"],
-        "conditionProfile": {"regions": ["山地"], "seasons": ["秋"]},
     })
     if with_manifest:
         write_json(entity_dir / "manifest.json", {"tagRefs": [], "assets": []})

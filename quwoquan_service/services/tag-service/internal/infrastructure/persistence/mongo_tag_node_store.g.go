@@ -35,6 +35,14 @@ func (s *mongoTagNodeStoreBase) EnsureIndexes(ctx context.Context) error {
 			},
 			Options: options.Index().SetName("idx_tag_group"),
 		},
+		{
+			Keys: bson.D{
+				{Key: "parentTagRef", Value: 1},
+				{Key: "lifecycleStatus", Value: 1},
+				{Key: "tagRef", Value: 1},
+			},
+			Options: options.Index().SetName("idx_parent_lifecycle_tagref"),
+		},
 	}
 	_, err := s.coll.Indexes().CreateMany(ctx, models)
 	return err

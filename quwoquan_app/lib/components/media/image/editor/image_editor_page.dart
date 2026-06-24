@@ -23,11 +23,13 @@ import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_f
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_recommendation_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_recommender.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
+import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_matrix.dart';
 import 'package:quwoquan_app/components/media/image/editor/panels/hsl/image_editor_hsl_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/panels/local/image_editor_local_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/panels/image_editor_operation_panel.dart';
 import 'package:quwoquan_app/components/media/image/editor/panels/image_editor_rotate_overlay.dart';
 import 'package:quwoquan_app/components/media/image/editor/shared/editor_session_ops_strip.dart';
+import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
 import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_tool_constants.dart';
 import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_pro_tool_entries.dart';
 
@@ -45,6 +47,8 @@ class ImageEditorPage extends ConsumerStatefulWidget {
     this.index = 0,
     this.total = 1,
     this.imagePaths,
+    this.initialFilterPresetId,
+    this.initialFilterStrength,
     this.onBack,
     this.onDone,
   });
@@ -56,6 +60,8 @@ class ImageEditorPage extends ConsumerStatefulWidget {
 
   /// 多图时传入全部路径，用于大图左右滑动与缩略图联动
   final List<String>? imagePaths;
+  final String? initialFilterPresetId;
+  final double? initialFilterStrength;
 
   /// 嵌入式时使用：返回/取消时调用，不执行 context.pop
   final VoidCallback? onBack;
@@ -102,8 +108,20 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   void initState() {
     super.initState();
     _syncPaths(resetIndex: true);
+    _primeInitialFilterSelection();
     _loadImageAspectRatio(_currentPath);
     _initFilterConfig();
+  }
+
+  void _primeInitialFilterSelection() {
+    final presetId = widget.initialFilterPresetId?.trim();
+    if (presetId == null || presetId.isEmpty || presetId == 'original') {
+      return;
+    }
+    final strength = (widget.initialFilterStrength ?? 100).clamp(0, 100);
+    _selectedFilterPresetId = presetId;
+    _filterIntensity = strength.toDouble();
+    _filterStrengthByPresetId[presetId] = strength.toDouble();
   }
 
   @override
@@ -2156,51 +2174,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   List<double> _buildFilterColorMatrix(
     ImageEditorFilterPreset preset,
     double strength,
-  ) {
-    final ratio = (strength / 100).clamp(0.0, 1.0);
-    final scaledValues = <String, double>{
-      for (final entry in preset.params.entries)
-        entry.key: _boostFilterParam(entry.key, entry.value) * ratio,
-    };
-    var matrix = _buildBaseColorMatrixFromValues(scaledValues);
-    final hue = (preset.params['hue'] ?? 0) * ratio;
-    if (hue.abs() > 0.001) {
-      matrix = _multiplyColorMatrices(_hueRotationMatrix(hue), matrix);
-    }
-    return matrix;
-  }
-
-  double _boostFilterParam(String key, double value) {
-    final abs = value.abs();
-    double factor;
-    switch (key) {
-      case 'contrast':
-      case 'saturation':
-      case 'vibrance':
-      case 'temperature':
-      case 'tint':
-      case 'hue':
-        factor = 1.45;
-        break;
-      case 'fade':
-      case 'grain':
-      case 'structure':
-      case 'sharpen':
-      case 'texture':
-        factor = 1.55;
-        break;
-      case 'highlight':
-      case 'shadow':
-      case 'lightSense':
-      case 'brightness':
-      case 'exposure':
-      default:
-        factor = 1.30;
-        break;
-    }
-    if (abs >= 45) factor += 0.12;
-    return (value * factor).clamp(-100.0, 100.0).toDouble();
-  }
+  ) => buildImageEditorFilterColorMatrix(preset, strength);
 
   Widget _wrapWithFilterAdjustments(Widget imageWidget) {
     final preset = _selectedFilterPreset;
@@ -2893,6 +2867,30 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     setState(() => _selectedToolIndex = null);
   }
 
+  /// 缩略图条拖拽重排：保持当前预览图不变，回写新顺序（[onDone] 会带出完整 _paths）。
+  /// newIndex 为 Flutter 标准插入位（0..length）。
+  void _reorderThumbnails(int oldIndex, int newIndex) {
+    if (oldIndex < 0 ||
+        oldIndex >= _paths.length ||
+        newIndex < 0 ||
+        newIndex > _paths.length ||
+        oldIndex == newIndex) {
+      return;
+    }
+    final currentPath = _currentPath;
+    final next = List<String>.of(_paths);
+    final moved = next.removeAt(oldIndex);
+    final target = oldIndex < newIndex ? newIndex - 1 : newIndex;
+    next.insert(target, moved);
+    final nextCurrent = next.indexOf(currentPath);
+    setState(() {
+      _paths = next;
+      _currentIndex = nextCurrent < 0 ? target : nextCurrent;
+    });
+    _pageController?.jumpToPage(_currentIndex);
+    _scrollThumbToIndex(_currentIndex);
+  }
+
   void _scrollThumbToIndex(int index) {
     final c = _thumbScrollController;
     if (c == null || !c.hasClients) return;
@@ -2914,6 +2912,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       true,
       ColorType.borderPrimary,
     ).withValues(alpha: 0.3);
+    final horizontalPad =
+        AppSpacing.semantic[DesignSemanticConstants
+            .container]?[DesignSemanticConstants.sm] ??
+        AppSpacing.containerSm;
     return Container(
       height: thumbSize + AppSpacing.sm * 2,
       padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -2921,54 +2923,49 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         color: bg,
         border: Border(top: BorderSide(color: borderColor)),
       ),
-      child: ListView.builder(
+      // 统一拖拽重排：长按缩略图起拖 + 兄弟实时让位 + 松手提交，复用 MediaReorderableView。
+      // tap 仍切换预览页；外部 _thumbScrollController 保留「切页自动滚动到选中缩略图」。
+      child: MediaReorderableView(
+        layout: MediaReorderableLayout.strip,
         controller: _thumbScrollController,
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(
-          horizontal:
-              AppSpacing.semantic[DesignSemanticConstants
-                  .container]?[DesignSemanticConstants.sm] ??
-              AppSpacing.containerSm,
-        ),
         itemCount: _paths.length,
-        itemBuilder: (context, index) {
+        spacing: AppSpacing.intraGroupSm,
+        itemSize: Size(thumbSize, thumbSize),
+        padding: EdgeInsets.symmetric(horizontal: horizontalPad),
+        onReorder: _reorderThumbnails,
+        itemBuilder: (context, index, isDragging) {
           final path = _paths[index];
           final isSelected = index == _currentIndex;
-          return Padding(
-            padding: EdgeInsets.only(
-              right: index < _paths.length - 1 ? AppSpacing.intraGroupSm : 0,
-            ),
-            child: GestureDetector(
-              onTap: () {
-                _pageController?.jumpToPage(index);
-                setState(() => _currentIndex = index);
-                _scrollThumbToIndex(index);
-              },
-              child: Container(
-                width: thumbSize,
-                height: thumbSize,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.semantic[DesignSemanticConstants
-                            .button]?[DesignSemanticConstants.sm] ??
-                        AppSpacing.smallBorderRadius,
-                  ),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.primaryColor
-                        : fgSecondary.withValues(alpha: 0.3),
-                    width: isSelected ? 2 : 1,
-                  ),
+          return GestureDetector(
+            onTap: () {
+              _pageController?.jumpToPage(index);
+              setState(() => _currentIndex = index);
+              _scrollThumbToIndex(index);
+            },
+            child: Container(
+              width: thumbSize,
+              height: thumbSize,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.semantic[DesignSemanticConstants
+                          .button]?[DesignSemanticConstants.sm] ??
+                      AppSpacing.smallBorderRadius,
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    (AppSpacing.semantic[DesignSemanticConstants
-                                .button]?[DesignSemanticConstants.sm] ??
-                            AppSpacing.smallBorderRadius) -
-                        1,
-                  ),
-                  child: _buildThumbnailImage(path, fgSecondary),
+                border: Border.all(
+                  color: isSelected
+                      ? AppColors.primaryColor
+                      : fgSecondary.withValues(alpha: 0.3),
+                  width: isSelected ? 2 : 1,
                 ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(
+                  (AppSpacing.semantic[DesignSemanticConstants
+                              .button]?[DesignSemanticConstants.sm] ??
+                          AppSpacing.smallBorderRadius) -
+                      1,
+                ),
+                child: _buildThumbnailImage(path, fgSecondary),
               ),
             ),
           );
@@ -3982,6 +3979,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       result = imageEditorMultiImageDonePopPayload(
         currentIndex: _currentIndex,
         path: _currentPath,
+        paths: List<String>.from(_paths),
       );
     } else {
       result = _currentPath;

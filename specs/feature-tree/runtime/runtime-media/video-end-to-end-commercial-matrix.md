@@ -23,10 +23,11 @@ Dry-run / CI 契约回归 / 本地 mock onebox **不计入**该结论；它们�
 下列步骤须在 **beta / local-gamma / cloud-gamma-pre / cloud-gamma-prod-smoke** 中至少各跑通一次（可按环境裁剪观测深度，不得裁剪「真实远端 + 真实 UI」）：
 
 1. **上传事务**：InitUpload → 客户端 PUT → CompleteUpload → **Poll/Get** 直至资产就绪（含转码任务语义若启用）。
-2. **发帖**：CreateDraft / PublishPost（或等价 API）携带稳定 `videoRef`（及封面），避免仅靠瞬时 URL。
-3. **分发**：Feed / 会话卡片等入口可见预览；**viewport / 静音策略**与详情页一致且不误导（参见既有播放器与 Feed UX 契约）。
-4. **播放**：详情页完整播放；弱网下至少记录一次 **缓冲/失败/恢复** 的可观测证据（可与 `t4-release-rehearsal.md` 中 VOD 项对齐）。
-5. **多端**：同一帖子在第二设备或第二账号可见一致引用（至少在 gamma-pre smoke 中覆盖）。
+2. **封面合同**：默认首帧或用户手工选帧必须落为远端可访问的 `thumbnailUrl` / 同源 `coverUrl`；报告需记录 `coverStrategy`、`coverFrameTimeMs`（若手工选帧）和封面资源锚点。
+3. **发帖**：CreateDraft / PublishPost（或等价 API）携带稳定 `videoRef`（及封面），避免仅靠瞬时 URL。
+4. **分发**：Feed / 会话卡片等入口可见预览；未播放态必须展示 `thumbnailUrl` 或同源 `coverUrl`，不得展示无关 seed 图、作者头像、地点图或把 `videoUrl` 当图片 URL；**viewport / 静音策略**与详情页一致且不误导（参见既有播放器与 Feed UX 契约）。
+5. **播放**：详情页完整播放；弱网下至少记录一次 **缓冲/失败/恢复** 的可观测证据（可与 `t4-release-rehearsal.md` 中 VOD 项对齐）。
+6. **多端**：同一帖子在第二设备或第二账号可见一致引用（至少在 gamma-pre smoke 中覆盖）。
 
 ## 证据与报告口径
 
@@ -34,6 +35,16 @@ Dry-run / CI 契约回归 / 本地 mock onebox **不计入**该结论；它们�
 - **必须**：每条报告含环境（网关 base、media base、`commitSha` / `githubRunId`）、设备维度、`postId`/`videoRef` 锚点、服务端摘录（任务状态或 API 摘录，按最小侵入原则）、UI 摘录（截图或结构化断言导出）。
 - **统一 schema**：优先复用群头像 E2E 报告的顶层字段约定（`schemaVersion`、`scenario`、`status`、`environment`、`serviceEvidence`、`uiEvidence`、`steps`）；视频场景下扩展 `media`/`post` 块，而非另起互不兼容格式。
 - **`make gate-runtime-media-full`**：仍仅代表 runtime-media **文档包 + 既定自动化门禁 + `RUNTIME_MEDIA_T4_EVIDENCE`**；**不**等价于本节全矩阵完成。
+
+## 本轮视频封面工程闭环边界
+
+本轮视频创作与展示开发的准出目标是把 App / Service / Data 三路视频封面收敛到同一合同：
+
+- 创作者默认首帧或手工选帧后，发布 payload、Post、DiscoveryFeed、WorkBrowser media item 均可表达 `videoUrl + thumbnailUrl/coverUrl`。
+- 首页、视频卡、作品浏览器和沉浸播放器未播放态只消费该合同，不做端侧临时抽帧，也不使用无关图片兜底。
+- 数据工程 video manifest 和 service importer 与用户上传视频使用同一封面字段与 gate。
+
+这些自动化、契约和本地/集成验证只代表**工程闭环**。在 beta、local-gamma、cloud-gamma-pre、cloud-gamma-prod-smoke 四项均产出非 dry-run passed 报告前，本文件的商用全矩阵状态仍为 `GATE_BLOCK`。
 
 ## 仓库内可自动化闭环（不冒充商用矩阵）
 

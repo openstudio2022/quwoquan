@@ -7,27 +7,44 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: feed-orchestration-recommendation
 scope:
-  summary: personalized ranking  ranking signal fusion 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 多路排序信号融合；质量分、垂类、供给来源与交集 fact/affinity 只经统一 Rule/CascadeScorer 注入。
+  in_scope:
+  - qualityScore/recScore 投影消费。
+  - intersectionFactStrength/intersectionFreshness/affinityIntersectionScore 候选级融合。
+  - fact > affinity，affinity 必须有 confidenceLabel。
+  - contentVertical/supplySource/recallPath 观测分桶。
+  out_of_scope:
+  - intersection-only ranker。
+  - 同步 /v1/score 读路径打分。
+  - MMoE/PLE/ESMM、双塔 ANN、IPS/Thompson 深排平台。
 gwt_acceptance:
   GWT1:
     title: personalized ranking  ranking signal fusion GWT
     given:
-    - 前置条件明确。
+    - 候选来自 tag/hot/social/collab_i2i/collab_u2i/explore 等多路召回，且 rm_discovery_feed 已投影质量分、垂类、供给来源和交集候选特征。
     when:
-    - 用户或系统动作发生。
+    - Engine 组装 ContentCandidate 并执行统一排序。
     then:
-    - 可观察结果符合预期。
+    - 高质量冷启动内容获得保守提升；fact 交集高于 affinity；无 confidenceLabel 的 affinity 不加分；排序不调用同步 scorer RPC。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - policy.yaml、feature_registry、ContentCandidate、RuleScorer 和 App 解释显示均对齐。
+    edge_cases:
+    - affinityIntersectionScore 存在但 confidenceLabel 缺失时不参与融合。
+    - primaryText 缺失时首页/精品不渲染推荐解释占位。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
+    - quwoquan_service/scripts/ml/feature_registry.yaml
+    performance_points:
+    - negative_feedback_rate <= 0.08
+    - content_coverage_rate >= 0.30
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/intersection_fusion__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/quality_score_fusion__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/content/widgets/intersection_reason_chip_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -41,8 +58,15 @@ gwt_acceptance:
         cases:
         - local_contract.discovery_content.feed_orchestration_recommendation.personalized_ranking_ranking_signal_fusion.gwt1_local_contract
         envs: *id001
-      supporting: []
-    notes: []
+      supporting:
+      - layer: local_contract
+        suite: ui_explain_contract
+        cases:
+        - local_contract.discovery_content.feed_orchestration_recommendation.primary_text_explain_contract
+        envs: *id001
+    notes:
+    - P0 已覆盖规则融合、qualityScore 冷启动、fact > affinity、affinity confidenceLabel 门、首页/精品 primaryText 显示契约。
+    - api_integration/user_acceptance 仍需 gamma 数据验证 feedRequestId/rankingVersion/reasonVersion 与行为分桶。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -51,8 +51,12 @@ type BehaviorEventInput struct {
 	FeedRequestID   string   `json:"feedRequestId"`
 	CommentLength   int      `json:"commentLength"`
 	// 阶段五归因：feed 下发频道与精排版本，全事件携带（behaviors.yaml common_fields），贯穿 HotPath / 事件存储 / 特征投影。
-	ChannelID      string `json:"channelId"`
-	RankingVersion string `json:"rankingVersion"`
+	ChannelID       string `json:"channelId"`
+	RankingVersion  string `json:"rankingVersion"`
+	ReasonVersion   string `json:"reasonVersion"`
+	RecallPath      string `json:"recallPath"`
+	ContentVertical string `json:"contentVertical"`
+	SupplySource    string `json:"supplySource"`
 	// 交集转化归因（S6）：触发交集行动（follow/join_circle/add_contact）的维度与路径制 tagRef。
 	IntersectionDimension string   `json:"intersectionDimension"`
 	IntersectionTagRefs   []string `json:"intersectionTagRefs"`
@@ -195,33 +199,39 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			feedPos = eventInput.Position
 		}
 		signal := rtrec.BehaviorSignal{
-			ClientEventID:         strings.TrimSpace(eventInput.ClientEventID),
-			State:                 strings.TrimSpace(eventInput.State),
-			UserID:                userID,
-			DeviceActorID:         strings.TrimSpace(eventInput.DeviceActorID),
-			SessionID:             strings.TrimSpace(eventInput.SessionID),
-			FeedSessionID:         strings.TrimSpace(eventInput.FeedSessionID),
-			ContentID:             contentID,
-			Action:                action,
-			ContentType:           contentType,
-			Tags:                  tags,
-			Duration:              duration,
-			Timestamp:             occurredAt,
-			AuthorID:              authorID,
-			ReferralSource:        strings.TrimSpace(eventInput.ReferralSource),
-			EngagementDepth:       eventInput.EngagementDepth,
-			ConsumedRatio:         eventInput.ConsumedRatio,
-			TotalUnits:            eventInput.TotalUnits,
-			EntityRefs:            eventInput.EntityRefs,
-			FeedRequestID:         strings.TrimSpace(eventInput.FeedRequestID),
-			Position:              feedPos,
-			CommentLength:         eventInput.CommentLength,
-			ChannelID:             strings.TrimSpace(eventInput.ChannelID),
-			RankingVersion:        strings.TrimSpace(eventInput.RankingVersion),
-			IntersectionDimension: strings.TrimSpace(eventInput.IntersectionDimension),
-			IntersectionTagRefs:   eventInput.IntersectionTagRefs,
-			IntersectionID:        strings.TrimSpace(eventInput.IntersectionID),
-			IntersectionClass:     strings.TrimSpace(eventInput.IntersectionClass),
+			ClientEventID:          strings.TrimSpace(eventInput.ClientEventID),
+			State:                  strings.TrimSpace(eventInput.State),
+			UserID:                 userID,
+			DeviceActorID:          strings.TrimSpace(eventInput.DeviceActorID),
+			SessionID:              strings.TrimSpace(eventInput.SessionID),
+			FeedSessionID:          strings.TrimSpace(eventInput.FeedSessionID),
+			ContentID:              contentID,
+			Action:                 action,
+			ContentType:            contentType,
+			Tags:                   tags,
+			Duration:               duration,
+			Timestamp:              occurredAt,
+			AuthorID:               authorID,
+			ReferralSource:         strings.TrimSpace(eventInput.ReferralSource),
+			EngagementDepth:        eventInput.EngagementDepth,
+			ConsumedRatio:          eventInput.ConsumedRatio,
+			TotalUnits:             eventInput.TotalUnits,
+			EntityRefs:             eventInput.EntityRefs,
+			FeedRequestID:          strings.TrimSpace(eventInput.FeedRequestID),
+			Position:               feedPos,
+			CommentLength:          eventInput.CommentLength,
+			ChannelID:              strings.TrimSpace(eventInput.ChannelID),
+			RankingVersion:         strings.TrimSpace(eventInput.RankingVersion),
+			ReasonVersion:          strings.TrimSpace(eventInput.ReasonVersion),
+			RecallPath:             strings.TrimSpace(eventInput.RecallPath),
+			ContentVertical:        strings.TrimSpace(eventInput.ContentVertical),
+			SupplySource:           strings.TrimSpace(eventInput.SupplySource),
+			IntersectionDimension:  strings.TrimSpace(eventInput.IntersectionDimension),
+			IntersectionTagRefs:    eventInput.IntersectionTagRefs,
+			IntersectionID:         strings.TrimSpace(eventInput.IntersectionID),
+			IntersectionClass:      strings.TrimSpace(eventInput.IntersectionClass),
+			IntersectionSourceRef:  strings.TrimSpace(eventInput.IntersectionSourceRef),
+			IntersectionEvidenceID: strings.TrimSpace(eventInput.IntersectionEvidenceID),
 		}
 		if s.feedbackIngestor != nil {
 			accepted, err := s.feedbackIngestor.AcceptEvent(ctx, signal)
@@ -259,6 +269,10 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			"commentLength":          eventInput.CommentLength,
 			"channelId":              strings.TrimSpace(eventInput.ChannelID),
 			"rankingVersion":         strings.TrimSpace(eventInput.RankingVersion),
+			"reasonVersion":          strings.TrimSpace(eventInput.ReasonVersion),
+			"recallPath":             strings.TrimSpace(eventInput.RecallPath),
+			"contentVertical":        strings.TrimSpace(eventInput.ContentVertical),
+			"supplySource":           strings.TrimSpace(eventInput.SupplySource),
 			"intersectionDimension":  signal.IntersectionDimension,
 			"intersectionTagRefs":    signal.IntersectionTagRefs,
 			"intersectionSourceRef":  strings.TrimSpace(eventInput.IntersectionSourceRef),
@@ -303,6 +317,10 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 				CommentLength:          sig.CommentLength,
 				ChannelID:              sig.ChannelID,
 				RankingVersion:         sig.RankingVersion,
+				ReasonVersion:          sig.ReasonVersion,
+				RecallPath:             sig.RecallPath,
+				ContentVertical:        sig.ContentVertical,
+				SupplySource:           sig.SupplySource,
 				IntersectionDimension:  sig.IntersectionDimension,
 				IntersectionTagRefs:    sig.IntersectionTagRefs,
 				IntersectionID:         sig.IntersectionID,

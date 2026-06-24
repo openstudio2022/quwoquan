@@ -159,4 +159,143 @@ void main() {
     expect(semantic.copyKey, 'homepageLoadFailedTitle');
     expect(semantic.primaryAction, isNull);
   });
+
+  // 错误展示载体决策矩阵：守护 specs/ux/error-and-permission-semantics.md §1.13.2
+  // 与 UiErrorSemanticResolver._presentationFor 的一一对应。任何改动需同步本组断言。
+  group('错误展示载体决策矩阵', () {
+    Future<UiErrorSemantic> resolveCase(
+      WidgetTester tester, {
+      required UiErrorCategory category,
+      required UiErrorScope scope,
+    }) async {
+      late BuildContext capturedContext;
+      await tester.pumpWidget(
+        CupertinoApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) {
+              capturedContext = context;
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+      return UiErrorSemanticResolver.resolve(
+        capturedContext,
+        error: CloudException(
+          type: CloudErrorType.network,
+          message: 'network',
+        ),
+        category: category,
+        scope: scope,
+      );
+    }
+
+    testWidgets('规则1 inlineField scope → inlineField', (tester) async {
+      final semantic = await resolveCase(
+        tester,
+        category: UiErrorCategory.validation,
+        scope: UiErrorScope.inlineField,
+      );
+      expect(semantic.presentation, UiErrorPresentation.inlineField);
+    });
+
+    testWidgets('规则2 authRequired/permissionRequired → gateCard', (
+      tester,
+    ) async {
+      final auth = await resolveCase(
+        tester,
+        category: UiErrorCategory.authRequired,
+        scope: UiErrorScope.page,
+      );
+      expect(auth.presentation, UiErrorPresentation.gateCard);
+      final perm = await resolveCase(
+        tester,
+        category: UiErrorCategory.permissionRequired,
+        scope: UiErrorScope.page,
+      );
+      expect(perm.presentation, UiErrorPresentation.gateCard);
+    });
+
+    testWidgets('规则3 listAppend → appendFooter', (tester) async {
+      final semantic = await resolveCase(
+        tester,
+        category: UiErrorCategory.listAppend,
+        scope: UiErrorScope.page,
+      );
+      expect(semantic.presentation, UiErrorPresentation.appendFooter);
+    });
+
+    testWidgets('规则4 backgroundAction → transientNotice', (tester) async {
+      final semantic = await resolveCase(
+        tester,
+        category: UiErrorCategory.backgroundAction,
+        scope: UiErrorScope.section,
+      );
+      expect(semantic.presentation, UiErrorPresentation.transientNotice);
+    });
+
+    testWidgets('规则5 submit/rateLimited 或 dialog/global scope → actionDialog', (
+      tester,
+    ) async {
+      final submit = await resolveCase(
+        tester,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      expect(submit.presentation, UiErrorPresentation.actionDialog);
+      final rate = await resolveCase(
+        tester,
+        category: UiErrorCategory.rateLimited,
+        scope: UiErrorScope.page,
+      );
+      expect(rate.presentation, UiErrorPresentation.actionDialog);
+      final dialogScope = await resolveCase(
+        tester,
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.dialog,
+      );
+      expect(dialogScope.presentation, UiErrorPresentation.actionDialog);
+    });
+
+    testWidgets('规则6 section scope 或 sectionLoad → sectionSoftCard', (
+      tester,
+    ) async {
+      final byScope = await resolveCase(
+        tester,
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.section,
+      );
+      expect(byScope.presentation, UiErrorPresentation.sectionSoftCard);
+      final byCategory = await resolveCase(
+        tester,
+        category: UiErrorCategory.sectionLoad,
+        scope: UiErrorScope.page,
+      );
+      expect(byCategory.presentation, UiErrorPresentation.sectionSoftCard);
+    });
+
+    testWidgets('规则7 默认 pageLoad + page → emptyPage(全屏)', (tester) async {
+      final semantic = await resolveCase(
+        tester,
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.page,
+      );
+      expect(semantic.presentation, UiErrorPresentation.emptyPage);
+    });
+
+    testWidgets('红线 提交失败即使在 section scope 也走弹窗而非全屏(保留用户输入)', (
+      tester,
+    ) async {
+      final semantic = await resolveCase(
+        tester,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.section,
+      );
+      expect(semantic.presentation, UiErrorPresentation.actionDialog);
+      expect(semantic.presentation, isNot(UiErrorPresentation.emptyPage));
+    });
+  });
 }

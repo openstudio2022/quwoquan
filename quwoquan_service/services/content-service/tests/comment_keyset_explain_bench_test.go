@@ -206,9 +206,6 @@ func seedTopLevelComments(t testing.TB, store *persistence.MongoCommentStore, po
 // returns the complete >10k set against real Mongo indexes — the retired
 // pageByScan (SetLimit(10000)) silently truncated here.
 func TestCommentMongoStore_DeepPageBeyond10kNoTruncation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("deep-page L2 test skipped in -short")
-	}
 	t.Cleanup(func() { cleanPosts(t) })
 	ctx := context.Background()
 	store := persistence.NewMongoCommentStore(mongoDB, slog.Default())
@@ -344,14 +341,12 @@ func parseWatermark(t *testing.T, v any) time.Time {
 // BenchmarkCommentListTopLevel_DeepPage measures a deep keyset page (resuming
 // ~80% into a 5k set). With keyset seek this is O(pageSize) regardless of depth.
 func BenchmarkCommentListTopLevel_DeepPage(b *testing.B) {
-	if mongoDB == nil {
-		b.Skip("mongo unavailable")
-	}
 	ctx := context.Background()
-	store := persistence.NewMongoCommentStore(mongoDB, slog.Default())
+	db := requireMongoDB(b)
+	store := persistence.NewMongoCommentStore(db, slog.Default())
 	postID := fmt.Sprintf("bench_top_%d", time.Now().UnixNano())
 	b.Cleanup(func() {
-		_, _ = mongoDB.Collection(commentsCollName).DeleteMany(ctx, bson.M{"postId": postID})
+		_, _ = db.Collection(commentsCollName).DeleteMany(ctx, bson.M{"postId": postID})
 	})
 	const total = 5000
 	seedTopLevelComments(b, store, postID, total)
@@ -383,19 +378,17 @@ func BenchmarkCommentListTopLevel_DeepPage(b *testing.B) {
 
 // BenchmarkCommentListReplies_DeepPage measures a deep reply keyset page.
 func BenchmarkCommentListReplies_DeepPage(b *testing.B) {
-	if mongoDB == nil {
-		b.Skip("mongo unavailable")
-	}
 	ctx := context.Background()
-	store := persistence.NewMongoCommentStore(mongoDB, slog.Default())
+	db := requireMongoDB(b)
+	store := persistence.NewMongoCommentStore(db, slog.Default())
 	postID := fmt.Sprintf("bench_rep_%d", time.Now().UnixNano())
 	parentID := postID + "_parent"
 	b.Cleanup(func() {
-		_, _ = mongoDB.Collection(commentsCollName).DeleteMany(ctx, bson.M{"postId": postID})
+		_, _ = db.Collection(commentsCollName).DeleteMany(ctx, bson.M{"postId": postID})
 	})
 	base := time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC)
 	parent := newMigComment(parentID, postID, "", base, 1, 0)
-	if _, err := mongoDB.Collection(commentsCollName).InsertOne(ctx, parent); err != nil {
+	if _, err := db.Collection(commentsCollName).InsertOne(ctx, parent); err != nil {
 		b.Fatalf("seed parent: %v", err)
 	}
 	const replies = 5000
@@ -403,7 +396,7 @@ func BenchmarkCommentListReplies_DeepPage(b *testing.B) {
 	for i := 0; i < replies; i++ {
 		buf = append(buf, newMigComment(fmt.Sprintf("%s_r%07d", postID, i), postID, parentID, base.Add(time.Duration(i+1)*time.Millisecond), 0, 0))
 	}
-	if _, err := mongoDB.Collection(commentsCollName).InsertMany(ctx, buf); err != nil {
+	if _, err := db.Collection(commentsCollName).InsertMany(ctx, buf); err != nil {
 		b.Fatalf("seed replies: %v", err)
 	}
 	if _, err := store.CountReplies(ctx, postID, parentID); err != nil {
@@ -437,17 +430,15 @@ func BenchmarkCommentListReplies_DeepPage(b *testing.B) {
 // hot path (AdjustCommentCount) that replaced the per-write CountDocuments +
 // full-document rewrite.
 func BenchmarkPostCommentCount_AtomicHotWrite(b *testing.B) {
-	if mongoDB == nil {
-		b.Skip("mongo unavailable")
-	}
 	ctx := context.Background()
-	store := persistence.NewMongoPostStore(mongoDB.Collection("posts"))
+	db := requireMongoDB(b)
+	store := persistence.NewMongoPostStore(db.Collection("posts"))
 	postID := fmt.Sprintf("bench_cnt_%d", time.Now().UnixNano())
 	b.Cleanup(func() {
-		_, _ = mongoDB.Collection("posts").DeleteMany(ctx, bson.M{"_id": postID})
+		_, _ = db.Collection("posts").DeleteMany(ctx, bson.M{"_id": postID})
 	})
 	seed := postmodel.Post{ID: postID, AuthorId: "bench", ContentType: "image", Status: "published", CreatedAt: time.Now().UTC()}
-	if _, err := mongoDB.Collection("posts").InsertOne(ctx, seed); err != nil {
+	if _, err := db.Collection("posts").InsertOne(ctx, seed); err != nil {
 		b.Fatalf("seed post: %v", err)
 	}
 

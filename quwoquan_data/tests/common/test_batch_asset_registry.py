@@ -149,6 +149,40 @@ def test_verify_asset_id_zero_collision_cli_passes():
     assert batch_root(TASK, batch).is_dir()
 
 
+def test_verify_asset_id_zero_collision_counts_image_manifest_without_gallery():
+    batch = "registry_image_cli"
+    write_batch_manifest(TASK, batch, command="task_run")
+    from _common.batch_manifest import load_batch_manifest
+
+    global_seq = int(load_batch_manifest(TASK, batch)["globalBatchSeq"])
+    registry = BatchAssetRegistry(task_id=TASK, batch_id=batch, global_batch_seq=global_seq)
+    cover = allocate_post_asset_id(
+        entity_name="峨眉山",
+        role="cover",
+        ref="峨眉山_image",
+        global_batch_seq=global_seq,
+        registry=registry,
+    )
+    obj = batch_root(TASK, batch) / "posts" / "image" / "攻略" / "峨眉山·云海" / "1"
+    obj.mkdir(parents=True, exist_ok=True)
+    (obj / "assets").mkdir(parents=True, exist_ok=True)
+    (obj / "assets" / f"{cover}.jpg").write_bytes(b"image")
+    write_json(obj / "_object.json", {"ref": "峨眉山_image", "contentType": "image"})
+    write_json(
+        obj / "manifest.json",
+        {"contentType": "image", "assets": [{"assetId": cover, "fileName": f"{cover}.jpg"}]},
+    )
+
+    cli = SCRIPTS_ROOT / "verify" / "verify_asset_id_zero_collision.py"
+    result = subprocess.run(
+        [sys.executable, str(cli), "--task", TASK, "--batch", batch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+
+
 def _run_all() -> None:
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

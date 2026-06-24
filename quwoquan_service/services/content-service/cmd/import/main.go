@@ -26,6 +26,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
 
 func main() {
@@ -270,7 +272,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 		if len(runtimeEntityRefs) == 0 {
 			runtimeEntityRefs = p.EntityRefs
 		}
-		mediaURLs, mediaItems, coverURL := importedMediaFields(p.Assets)
+		media := importedMediaFields(p.Assets)
 		body := p.ArticleMarkdown
 		summary := p.ArticleDigest
 		if p.ContentType == "image" {
@@ -295,7 +297,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			"licenseProof":          p.LicenseProof,
 			"template":              p.Template, "generatorModel": p.GeneratorModel, "articleTemplate": p.Template,
 			"body": body, "summary": summary,
-			"mediaUrls": mediaURLs, "mediaItems": mediaItems, "coverUrl": coverURL,
+			"mediaUrls": media.MediaURLs, "mediaItems": media.MediaItems, "coverUrl": media.CoverURL,
 			"articleMarkdown": p.ArticleMarkdown, "articleDigest": p.ArticleDigest, "articleMarkdownDigest": p.ArticleDigest,
 			"articleAssetManifest": p.ArticleAssetManifest,
 			"sourceTaskId":         p.SourceTaskId,
@@ -308,6 +310,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			"visibility": "public",
 			"sourceHash": newHash,
 		}
+		applyImportedVideoFields(doc, media)
 		for k, v := range releaseFields(opts, now, "active") {
 			doc[k] = v
 		}
@@ -460,17 +463,35 @@ func conditionProfileIndex(entities []EntityDoc) map[string]map[string]any {
 	return idx
 }
 
-func importedMediaFields(assets []AssetManifestItem) ([]string, []bson.M, string) {
+type importedMediaSummary struct {
+	MediaURLs        []string
+	MediaItems       []bson.M
+	CoverURL         string
+	ThumbnailURL     string
+	VideoURL         string
+	CoverStrategy    string
+	CoverFrameTimeMs int64
+	DurationMs       int64
+	Width            int64
+	Height           int64
+}
+
+func importedMediaFields(assets []AssetManifestItem) importedMediaSummary {
 	urls := make([]string, 0, len(assets))
 	items := make([]bson.M, 0, len(assets))
-	coverURL := ""
+	summary := importedMediaSummary{}
 	for _, asset := range assets {
 		url := asset.CDNURL
 		if url == "" {
 			continue
 		}
-		if coverURL == "" {
-			coverURL = url
+		isVideoAsset := strings.EqualFold(strings.TrimSpace(asset.Kind), "video")
+		if summary.CoverURL == "" {
+			if asset.CoverURL != "" {
+				summary.CoverURL = asset.CoverURL
+			} else {
+				summary.CoverURL = url
+			}
 		}
 		urls = append(urls, url)
 		item := bson.M{
@@ -490,9 +511,75 @@ func importedMediaFields(assets []AssetManifestItem) ([]string, []bson.M, string
 		if asset.Height > 0 {
 			item["height"] = asset.Height
 		}
+		if asset.DurationMs > 0 {
+			item["durationMs"] = asset.DurationMs
+		}
+		if asset.ThumbnailURL != "" {
+			item["thumbnailUrl"] = asset.ThumbnailURL
+		}
+		if asset.CoverURL != "" {
+			item["coverUrl"] = asset.CoverURL
+		}
+		if asset.CoverStrategy != "" {
+			item["coverStrategy"] = asset.CoverStrategy
+		}
+		if asset.CoverFrameTimeMs > 0 {
+			item["coverFrameTimeMs"] = asset.CoverFrameTimeMs
+		}
+		if isVideoAsset {
+			item["coverStrategy"] = firstNonEmptyString(asset.CoverStrategy, "first_frame")
+			item["coverFrameTimeMs"] = asset.CoverFrameTimeMs
+		}
 		items = append(items, item)
+		if isVideoAsset && summary.VideoURL == "" {
+			summary.VideoURL = url
+			summary.ThumbnailURL = firstNonEmptyString(asset.ThumbnailURL, asset.CoverURL)
+			summary.CoverURL = firstNonEmptyString(asset.CoverURL, asset.ThumbnailURL, summary.CoverURL)
+			summary.CoverStrategy = firstNonEmptyString(asset.CoverStrategy, "first_frame")
+			summary.CoverFrameTimeMs = asset.CoverFrameTimeMs
+			summary.DurationMs = asset.DurationMs
+			summary.Width = asset.Width
+			summary.Height = asset.Height
+		}
 	}
-	return urls, items, coverURL
+	summary.MediaURLs = urls
+	summary.MediaItems = items
+	return summary
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func applyImportedVideoFields(target bson.M, media importedMediaSummary) {
+	if media.VideoURL == "" {
+		return
+	}
+	target["videoUrl"] = media.VideoURL
+	if media.ThumbnailURL != "" {
+		target["thumbnailUrl"] = media.ThumbnailURL
+	}
+	if media.CoverURL != "" {
+		target["coverUrl"] = media.CoverURL
+	}
+	if media.CoverStrategy != "" {
+		target["coverStrategy"] = media.CoverStrategy
+	}
+	target["coverFrameTimeMs"] = media.CoverFrameTimeMs
+	if media.DurationMs > 0 {
+		target["durationMs"] = media.DurationMs
+	}
+	if media.Width > 0 {
+		target["width"] = media.Width
+	}
+	if media.Height > 0 {
+		target["height"] = media.Height
+	}
 }
 
 // UpsertDiscoveryFeed 把发布主线内容同写发现流 ReadModel（rm_discovery_feed）。
@@ -554,23 +641,27 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			"updatedAt":             p.UpdatedAt,
 			"publishedAt":           p.PublishedAt,
 		}
-		mediaURLs, mediaItems, coverURL := importedMediaFields(p.Assets)
-		if len(mediaURLs) > 0 {
-			set["mediaUrls"] = mediaURLs
-			set["mediaItems"] = mediaItems
-			set["coverUrl"] = coverURL
+		media := importedMediaFields(p.Assets)
+		if len(media.MediaURLs) > 0 {
+			set["mediaUrls"] = media.MediaURLs
+			set["mediaItems"] = media.MediaItems
+			set["coverUrl"] = media.CoverURL
+			applyImportedVideoFields(set, media)
+		}
+		for key, value := range recinfra.BuildRecommendationProjectionFields(set) {
+			set[key] = value
 		}
 		for k, v := range releaseFields(opts, now, "active") {
 			set[k] = v
 		}
-		if err := removeLegacyDiscoveryFeedIdentity(ctx, coll, p.PostRef, postID, opts); err != nil {
+		if err := removePriorDiscoveryFeedIdentity(ctx, coll, p.PostRef, postID, opts); err != nil {
 			return n, err
 		}
 		if _, err := coll.UpdateOne(ctx,
 			bson.M{"postId": postID},
 			bson.M{"$set": set, "$setOnInsert": bson.M{
 				"likeCount": int64(0), "commentCount": int64(0),
-				"viewCount": int64(0), "recScore": 0.0,
+				"viewCount": int64(0),
 			}},
 			options.UpdateOne().SetUpsert(true),
 		); err != nil {
@@ -581,7 +672,7 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 	return n, nil
 }
 
-func removeLegacyDiscoveryFeedIdentity(ctx context.Context, coll *mongo.Collection, postRef string, runtimeID string, opts ImportOptions) error {
+func removePriorDiscoveryFeedIdentity(ctx context.Context, coll *mongo.Collection, postRef string, runtimeID string, opts ImportOptions) error {
 	filter := bson.M{"postId": postRef}
 	if opts.SourceOwner != "" {
 		filter["sourceOwner"] = opts.SourceOwner

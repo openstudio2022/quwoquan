@@ -139,7 +139,6 @@
 | path | domain | entry | dual_theme | exemption_reason | owner | evidence |
 |------|--------|-------|------------|------------------|-------|----------|
 | `lib/ui/settings/pages/settings_page.dart` | settings | GoRoute | full | | TBD | `isDarkProvider`。 |
-| `lib/ui/settings/pages/developer_settings_page.dart` | settings | GoRoute | full | | TBD | `isDarkProvider`（P2/P3 可标 —，双色仍接主题）。 |
 
 ---
 

@@ -6,6 +6,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 
+const String _defaultNicknameSample = '新同学_260622_6698692';
+final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
+
 class _StubCloudHttpClient extends CloudHttpClient {
   _StubCloudHttpClient({this.onPostJson, this.onDeleteJson})
     : super(client: http.Client());
@@ -158,7 +161,7 @@ void main() {
             'maskedPhone': '138****3909',
             'registered': true,
             'accountHint': <String, dynamic>{
-              'displayName': '趣友3909',
+              'displayName': _defaultNicknameSample,
               'avatarUrl': '',
               'maskedPhone': '138****3909',
               'identityOrigin': 'phone',
@@ -183,7 +186,10 @@ void main() {
 
       expect(result.state, 'registered');
       expect(result.registered, isTrue);
-      expect(result.accountHint?['displayName'], '趣友3909');
+      expect(
+        result.accountHint?['displayName'],
+        matches(_defaultNicknamePattern),
+      );
     });
 
     test('一键登录透传协议版本和 appVersion 并解析 accountHint', () async {
@@ -207,7 +213,7 @@ void main() {
             'accountState': 'active',
             'identityOrigin': 'phone',
             'accountHint': <String, dynamic>{
-              'displayName': '趣友3909',
+              'displayName': _defaultNicknameSample,
               'maskedPhone': '138****3909',
             },
           };
@@ -328,10 +334,7 @@ void main() {
       final client = _StubCloudHttpClient(
         onPostJson: (uri, headers, body) async {
           expect(uri.path, UserApiMetadata.loginWithQqPath);
-          expect(
-            headers['X-Client-Page-Id'],
-            UserRequestPageIds.loginWithQq,
-          );
+          expect(headers['X-Client-Page-Id'], UserRequestPageIds.loginWithQq);
           expect(body['qqAuthCode'], 'qq-auth-code');
           expect(body['deviceId'], 'install-id-qq');
           expect(body['platform'], 'ios');

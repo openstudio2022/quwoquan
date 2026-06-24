@@ -16,6 +16,12 @@ from task import store
 
 DEFAULT_MANDATORY = ["四姑娘山", "毕棚沟", "稻城亚丁", "海螺沟", "墨石公园"]
 DEFAULT_SOURCE_TASK_ID = "旅行/地域/四川省/景区/景区精选"
+DEFAULT_ARTICLE_ANGLES = [
+    "planning_consultation",
+    "decision_experience",
+    "route_transport",
+    "seasonal_timing",
+]
 
 
 def _split_csv(value: str | None) -> list[str]:
@@ -305,12 +311,14 @@ def build_multimodal_spec(
     category: str,
     targets: list[dict[str, str]],
     created_by: str,
+    intent_label: str | None = None,
     reserve_targets: list[dict[str, str]] | None = None,
     entity_articles_per_target: int = 4,
     image_works_per_target: int = 1,
 ) -> dict[str, Any]:
     entity_articles_per_target = max(0, int(entity_articles_per_target))
     image_works_per_target = max(0, int(image_works_per_target))
+    required_article_angles = DEFAULT_ARTICLE_ANGLES[:entity_articles_per_target]
     spec = store.scaffold_spec(
         vertical="travel",
         organize_by="地域",
@@ -318,6 +326,7 @@ def build_multimodal_spec(
         category=category,
         name=name,
         title=title,
+        intent_label=intent_label,
         scope={
             "region": region,
             "entityTypes": ["地点/景区"],
@@ -350,13 +359,8 @@ def build_multimodal_spec(
         },
         acceptance={
             "minEntities": len(targets),
-            "minPostsPerEntity": entity_articles_per_target,
-            "requiredAngles": [
-                "planning_consultation",
-                "decision_experience",
-                "route_transport",
-                "seasonal_timing",
-            ],
+            "minPostsPerEntity": entity_articles_per_target + image_works_per_target,
+            "requiredAngles": required_article_angles,
             "scoredAngles": (["image"] if image_works_per_target else []),
         },
         created_by=created_by,
@@ -696,6 +700,7 @@ def handle_select_targets(args: argparse.Namespace) -> None:
         region=args.region,
         category=args.category,
         targets=targets,
+        intent_label=getattr(args, "intent_label", None),
         reserve_targets=report.get("reserveTargets") or [],
         created_by=args.owner or "task select-targets",
         entity_articles_per_target=int(getattr(args, "entity_articles_per_target", 4) or 0),

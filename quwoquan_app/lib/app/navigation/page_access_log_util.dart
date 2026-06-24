@@ -278,6 +278,17 @@ String pageNameFromRouteLocation(String location) {
   if (path == AppRoutePaths.welcome) return 'welcome';
   if (path == AppRoutePaths.startGroupChat) return 'start_group_chat';
   if (path == AppRoutePaths.createEntry) return 'create_entry';
+  if (path == AppRoutePaths.addContactScan) return 'add_contact_scan';
+  if (path == AppRoutePaths.addContactPhone) return 'add_contact_phone';
+  if (path == AppRoutePaths.addContactSearchPathTemplate) {
+    return 'add_contact_search';
+  }
+  if (path == AppRoutePaths.addContactConfirmPathTemplate) {
+    return 'add_contact_confirm';
+  }
+  if (path == AppRoutePaths.addContact) return 'add_contact';
+  if (path == AppRoutePaths.myQrCode) return 'my_qr_code';
+  if (path == AppRoutePaths.localDrafts) return 'local_drafts';
   if (path == AppRoutePaths.globalSearch) return 'global_search';
   if (path == AppRoutePaths.globalSearchNetworkResultsPathTemplate ||
       path.startsWith('${AppRoutePaths.globalSearch}/network')) {
@@ -315,7 +326,8 @@ String pageNameFromRouteLocation(String location) {
   if (path == AppRoutePaths.assistantManagement) return 'assistant_management';
   if (path == AppRoutePaths.assistantSkills) return 'assistant_skills';
   if (path == AppRoutePaths.settings) return 'settings';
-  if (path == AppRoutePaths.settingsDeveloper) return 'settings_developer';
+  if (path == AppRoutePaths.settingsPermissions) return 'settings_permissions';
+  if (path == AppRoutePaths.settingsAbout) return 'settings_about';
   if (path == AppRoutePaths.profileEdit) return 'profile_edit';
   if (path == AppRoutePaths.profilePersonas) return 'profile_personas';
   if (path == AppRoutePaths.profileComments) return 'profile_comments';

@@ -1,0 +1,30 @@
+# chat-service HTTP 路由 codegen 清单（tools/codegen_chat_service 消费）。
+# 真相源：contracts/metadata/messages/conversation/service.yaml 的 api_routes。
+#
+# 生成的 generated_routes.go 是「catch-all 兜底分发」：它按 method+template 解析
+# service.yaml 中除 manual_operations 外的全部 operation，并按约定分发到
+# ChatHandler.handle<Operation>(w, r)。manual_operations 中的 operation 由
+# ChatHandler.Routes() / registerMediaUploadRoutes / registerInternalRoutes 用
+# Go 1.22 method-pattern 显式注册（更具体的 pattern 在 ServeMux 中优先于 "/"），
+# 因此不进入生成分发；未实现 handler 的 operation 也列入此处避免悬挂分发。
+service_yaml: messages/conversation/service.yaml
+routes_output: adapters/http/generated_routes.go
+
+manual_operations:
+  # 声明但暂未实现 handler（不进入生成分发，避免引用不存在的方法）
+  - ListConversationTimestamps
+  - BatchGetConversations
+  # Routes() 中以 Go 1.22 method-pattern 显式注册（方法歧义/后加）
+  - UpdateConversationTitle
+  - TransferOwnership
+  - UpdateGroupAdmins
+  - DissolveConversation
+  - ListMessageHome
+  - ListContactHome
+  - GetGroupHome
+  - SearchConversations
+  - SearchMessages
+  # registerMediaUploadRoutes 注册（handler 命名为 handleInitChatMediaUpload 等，不走约定）
+  - InitChatUpload
+  - CompleteChatUpload
+  - AbortChatUpload

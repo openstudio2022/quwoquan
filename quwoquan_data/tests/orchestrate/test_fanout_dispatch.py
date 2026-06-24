@@ -48,6 +48,22 @@ def _seed_source_task(task_id: str = "旅行/地域/四川省/景区/源任务")
     return task_id
 
 
+def _creator_assignment() -> dict:
+    return {
+        "authorId": "builtin_travel_blogger_chuanxi",
+        "creatorProfileId": "qwq_creator_travel_blogger_chuanxi_001",
+        "creatorArchetype": "travel_blogger",
+        "creatorProfileVersion": "1.0.0",
+        "creatorDisclosure": {
+            "type": "platform_virtual_creator",
+            "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+            "visible": True,
+        },
+        "experienceClaimMode": "editorial_synthesis",
+        "authorQualitySignals": {"qualityScore": 0.86, "fatigueScore": 0.2, "riskTier": "low"},
+    }
+
+
 def _frozen_plan(plan_id: str) -> dict:
     source_task_id = _seed_source_task(f"旅行/地域/四川省/景区/{plan_id}_源任务")
     plan = fp.new_plan(
@@ -59,6 +75,7 @@ def _frozen_plan(plan_id: str) -> dict:
             "concurrency": 3,
             "entityType": "地点/景区",
             "taskName": f"{plan_id}_全国景点主页",
+            "creatorAssignment": _creator_assignment(),
         },
         source_task_id=source_task_id,
     )
@@ -110,8 +127,6 @@ def test_dispatch_creates_partition_baseline_and_inherits_region():
     yn_spec = store.load_spec(yn_task)
     assert str((spec.get("scope") or {}).get("region") or "") == "四川省"
     assert (spec.get("content") or {}).get("angles") == ["攻略", "体验"], spec
-    assert "regions" not in (((spec.get("content") or {}).get("conditionAxes")) or {}), spec
-    assert "regions" not in (((yn_spec.get("content") or {}).get("conditionAxes")) or {}), yn_spec
     assert ((spec.get("content") or {}).get("quotas") or {}).get("entityArticles") == 1, spec
     assert ((spec.get("content") or {}).get("quotas") or {}).get("routeArticles") == 1, spec
     assert ((yn_spec.get("content") or {}).get("quotas") or {}).get("entityArticles") == 1, yn_spec
@@ -174,7 +189,7 @@ def test_rollup_aggregates_partitions():
     from task import fanout_rollup
     from task import object_queue as _oq
     from _common import content_object
-    from _common.draft_io import write_placeholder_draft, write_prompt, write_writing_pack
+    from _common.draft_io import write_agent_draft, write_placeholder_draft, write_prompt, write_writing_pack
     from _common.io import read_json
     from _common.paths import fanout_summary_path
 
@@ -255,6 +270,16 @@ def test_rollup_aggregates_partitions():
     fd.sync_content_author_jobs(plan, {"taskId": yn, "batchId": batch}, partition_path=["云南省"])
 
     job = _oq.acquire_lease(sc, batch, worker="w", stage="author")
+    write_agent_draft(
+        sc,
+        batch,
+        "route_九寨沟",
+        "# 九寨沟\n\n这是一篇已由测试 agent 完成的正文。",
+        model="runner-test",
+        cited_source_paths=[brief["baseSourceRef"]],
+        covered_facts=["九寨沟 事实"],
+        session_trace="done-session",
+    )
     _oq.complete_job(sc, "fanout_p_rollup", job["jobId"], job["lease"])
 
     report = fanout_rollup.rollup("p_rollup")

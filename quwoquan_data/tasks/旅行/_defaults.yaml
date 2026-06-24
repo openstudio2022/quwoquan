@@ -8,9 +8,3 @@ content:
   - 通用
   carriers:
   - article
-  conditionAxes:
-    seasons:
-    - 春
-    - 夏
-    - 秋
-    - 冬

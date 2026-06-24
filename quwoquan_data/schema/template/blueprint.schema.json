@@ -34,33 +34,12 @@
     "editorialIntent": { "type": "string" },
     "render": { "type": "object" },
     "structure": { "type": "object" },
-    "hooks": { "type": "array", "items": { "type": "string" } },
     "mustIncludeFacts": { "type": "array", "items": { "type": "string" } },
     "forbiddenPhrases": { "type": "array", "items": { "type": "string" } },
     "wordCount": { "type": "object" },
     "imagePlan": { "type": "array" },
     "crossRefs": { "type": "object" },
     "recommendation": { "type": "object" },
-    "conditionAxes": {
-      "type": "object",
-      "description": "声明地域/季节条件修饰维是否适用，以及注入正文的中性段名。内容来自 region_catalog/season_catalog。",
-      "properties": {
-        "region": {
-          "type": "object",
-          "properties": {
-            "applicable": { "type": "boolean" },
-            "slot": { "type": "string" }
-          }
-        },
-        "season": {
-          "type": "object",
-          "properties": {
-            "applicable": { "type": "boolean" },
-            "slot": { "type": "string" }
-          }
-        }
-      }
-    },
     "narrativeMode": { "type": "object" },
     "evidenceRequirements": { "type": "object" },
     "continuityExpectations": { "type": "object" },
@@ -93,7 +72,6 @@
         "captionMaxChars": { "type": "integer" },
         "galleryLayout": { "type": "string" }
       }
-    },
-    "sopExampleRef": { "type": "string" }
+    }
   }
 }

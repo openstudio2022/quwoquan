@@ -2,12 +2,12 @@ schemaVersion: app-runtime-config
 runtime:
   appRuntimeEnv: alpha
   appDataSource: mock
-  gatewayBaseUrl: https://127.0.0.1:17000
-  realtimeBaseUrl: ws://127.0.0.1:17000
-  mediaAvatarCdnBaseUrl: https://127.0.0.1:17100
-  mediaImageCdnBaseUrl: https://127.0.0.1:17100
-  mediaVideoCdnBaseUrl: https://127.0.0.1:17100
-  mediaUploadBaseUrl: https://127.0.0.1:17100
+  gatewayBaseUrl: https://alpha-api.quwoquan-env.test:17000
+  realtimeBaseUrl: wss://alpha-api.quwoquan-env.test:17000
+  mediaAvatarCdnBaseUrl: https://alpha-avatar.quwoquan-env.test:17100
+  mediaImageCdnBaseUrl: https://alpha-image.quwoquan-env.test:17100
+  mediaVideoCdnBaseUrl: https://alpha-video.quwoquan-env.test:17100
+  mediaUploadBaseUrl: https://alpha-upload.quwoquan-env.test:17100
   currentUserId: ""
 seed:
   enabled: false

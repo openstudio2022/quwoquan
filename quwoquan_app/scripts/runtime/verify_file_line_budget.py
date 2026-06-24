@@ -7,11 +7,12 @@ allowlist 冻结基线，之后任何文件超过其登记上限、或新出现�
 扫描范围：
   - quwoquan_app/lib/**/*.dart
   - quwoquan_service/**/*.go
+  - quwoquan_data/scripts/**/*.py
 
 排除（生成物 / l10n / 测试 / mock / vendor）：
-  - *.g.dart / *.g.go / *_test.go
+  - *.g.dart / *.g.go / *_test.go / __pycache__
   - quwoquan_app/lib/l10n/app_localizations*.dart
-  - 任意 mock / generated / vendor / test / tests 目录段
+  - 任意 mock / generated / vendor / test / tests / runtime / runs 目录段
 
 allowlist：specs/gates/file_line_budget_allowlist.yaml
   block_threshold: 1000
@@ -39,10 +40,25 @@ DEFAULT_BLOCK_THRESHOLD = 1000
 SCAN_ROOTS = [
     (ROOT / "quwoquan_app" / "lib", "*.dart"),
     (ROOT / "quwoquan_service", "*.go"),
+    (ROOT / "quwoquan_data" / "scripts", "*.py"),
 ]
 
 # 排除的目录段（任意一段命中即排除）。
-EXCLUDE_DIR_SEGMENTS = {"mock", "generated", "vendor", "test", "tests", ".dart_tool"}
+EXCLUDE_DIR_SEGMENTS = {
+    "mock",
+    "generated",
+    "vendor",
+    "test",
+    "tests",
+    ".dart_tool",
+    "__pycache__",
+    ".pytest_cache",
+    ".venv",
+    ".qwq_test_venv",
+    "runtime",
+    "runs",
+    "dist",
+}
 
 
 def is_excluded(rel: str, name: str) -> bool:
@@ -88,6 +104,8 @@ def load_allowlist() -> dict:
 def reason_for(rel: str) -> str:
     if "pageflip" in rel or rel.endswith("article_read_only_book_deck.dart"):
         return "pageflip-locked (受 11/12 号几何规则严管，专项后置，禁止本轮拆分)"
+    if rel.startswith("quwoquan_data/scripts/"):
+        return "data-oversized-budget (CLI-first 模块拆分，后续逐步降)"
     if rel.endswith(".go"):
         return "go-oversized-budget (同 package 多文件拆分，后续逐步降)"
     return "oversized-budget (子 widget / part / extension 拆分，后续逐步降)"

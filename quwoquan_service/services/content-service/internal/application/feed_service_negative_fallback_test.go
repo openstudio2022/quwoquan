@@ -33,6 +33,18 @@ func (r fallbackFeedReader) ListPublished(_ context.Context, _ int, _ string) []
 	return out
 }
 
+type captureRecallSource struct {
+	last       rtrec.RecallRequest
+	candidates []rtrec.ContentCandidate
+}
+
+func (s *captureRecallSource) Recall(_ context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
+	s.last = req
+	out := make([]rtrec.ContentCandidate, len(s.candidates))
+	copy(out, s.candidates)
+	return out, nil
+}
+
 // TestListFeed_FallbackPath_FiltersDislikedContent 复现并守护 T3 鉴权会话核验暴露的缺陷：
 // 生产读路径用 *SessionCache 包裹 *HotPath，仓库兜底分页路径依赖
 // engine.LoadFeedbackExclusions.NegativeContentIDs 剔除 dislike/not_interested 单条内容。
@@ -82,5 +94,56 @@ func TestListFeed_FallbackPath_FiltersDislikedContent(t *testing.T) {
 	}
 	if !sawOK {
 		t.Fatalf("non-disliked content must still surface via fallback path, items=%+v", resp.Items)
+	}
+}
+
+func TestListFeed_TravelVerticalRoutesRecommendationAndFallback(t *testing.T) {
+	ctx := context.Background()
+	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
+	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)
+	source := &captureRecallSource{candidates: []rtrec.ContentCandidate{
+		{ContentID: "p_travel", ContentType: "image", ContentVertical: "travel_photography", PublishedAt: time.Now()},
+	}}
+	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source})
+	reader := fallbackFeedReader{posts: []postmodel.Post{
+		{ID: "p_travel", ContentType: "image", AuthorId: "author_a", ContentVertical: "travel_photography", TagRefs: []string{"Topic/旅行"}, Status: "published", Visibility: "public"},
+		{ID: "p_general", ContentType: "image", AuthorId: "author_b", TagRefs: []string{"Topic/美食"}, Status: "published", Visibility: "public"},
+	}}
+	svc := NewFeedService(engine, reader)
+
+	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_route", SessionID: "s_route", SubCategory: "travel", Limit: 10})
+	if err != nil {
+		t.Fatalf("ListFeed: %v", err)
+	}
+	if source.last.Vertical != "travel_photography" || source.last.Surface != "travel_photography" || source.last.FeedType != rtrec.FeedDiscovery {
+		t.Fatalf("travel route not propagated: %+v", source.last)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_travel" {
+		t.Fatalf("travel feed must only include travel vertical content, got %+v", resp.Items)
+	}
+}
+
+func TestListFeed_PremiumStreamRoutesToSimilarPresetSurface(t *testing.T) {
+	ctx := context.Background()
+	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
+	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)
+	source := &captureRecallSource{candidates: []rtrec.ContentCandidate{
+		{ContentID: "p_premium", ContentType: "article", PublishedAt: time.Now()},
+	}}
+	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source})
+	reader := fallbackFeedReader{posts: []postmodel.Post{
+		{ID: "p_premium", ContentType: "article", AuthorId: "author_p", Status: "published", Visibility: "public"},
+	}}
+	svc := NewFeedService(engine, reader)
+
+	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_premium", SessionID: "s_premium", Type: "premium", Limit: 10})
+	if err != nil {
+		t.Fatalf("ListFeed: %v", err)
+	}
+	if source.last.FeedType != rtrec.FeedSimilar || source.last.Surface != "premium_stream" {
+		t.Fatalf("premium stream route not propagated: %+v", source.last)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_premium" {
+		t.Fatalf("premium feed item missing: %+v", resp.Items)
 	}
 }

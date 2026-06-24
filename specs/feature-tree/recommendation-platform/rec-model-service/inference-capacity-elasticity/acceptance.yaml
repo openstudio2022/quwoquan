@@ -36,10 +36,8 @@ gwt_acceptance:
     - model_fallback_rate < 0.05
     tests:
       planned: []
-      recorded:
-      - file: quwoquan_service/services/rec-model-service/tests/test_inference_capacity.py
-      - file: quwoquan_service/services/rec-model-service/tests/test_score_api.py
-    status: implemented
+      recorded: []
+    status: pending_evidence
     test_evidence:
       primary:
       - layer: local_contract
@@ -63,6 +61,8 @@ gwt_acceptance:
         envs: *id001
     notes:
     - '[migrated_from_planned] quwoquan_service/runtime/recommendation/cascade_scorer_budget_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/services/rec-model-service/tests/test_inference_capacity.py'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/services/rec-model-service/tests/test_score_api.py'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

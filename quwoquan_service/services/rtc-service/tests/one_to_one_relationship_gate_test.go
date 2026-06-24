@@ -23,10 +23,7 @@ func (g rtcStubRelationshipGate) GetCapability(context.Context, string, string) 
 
 func newGateTestOrchestrator(t *testing.T, gate application.RelationshipGate) *application.CallOrchestrator {
 	t.Helper()
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
-	callStore := persistence.NewMongoCallStore(mongoDB)
+	callStore := persistence.NewMongoCallStore(requireMongoDB(t))
 	callCache := rtccache.NewCallStateCache(redisRouter.Scene("general"))
 	domainSvc := callsession.NewCallSessionService()
 	tokenSvc := application.NewTokenService("testkey", "testsecret")

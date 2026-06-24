@@ -35,6 +35,7 @@ from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
     batch_command_root,
     batch_entity_object_dir,
+    batch_root,
     ensure_batch_layout,
     ensure_task_layout,
 )
@@ -297,8 +298,11 @@ def test_materialize_relativizes_repo_absolute_runtime_paths():
     )
     write_prompt(task, batch, "repo_ref", "# repo 路径攻略\n\n提示。")
     write_stage_result(task, batch, "produce", "review", "repo_ref", {"decision": "approved", "checks": {}})
+    # 顶层批次布局：repo 相对路径走 runtime/batches/<intentLabel>__<batch>/...，
+    # 相对化 marker = /batches/<intentLabel>__<batch>/。
+    batch_dir_name = batch_root(task, batch).name
     repo_relative = (
-        f"quwoquan_data/runtime/tasks/{task}/batches/{batch}/"
+        f"quwoquan_data/runtime/batches/{batch_dir_name}/"
         "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
     )
     write_stage_result(
@@ -325,14 +329,7 @@ def test_materialize_relativizes_repo_absolute_runtime_paths():
     )
     from _common.draft_io import write_agent_draft
 
-    source_abs = (
-        Path(os.environ["QWQ_RUNTIME_ROOT"])
-        / "tasks"
-        / task
-        / "batches"
-        / batch
-        / "entities/地点/景区/九寨沟/1.download/sources/01.base"
-    )
+    source_abs = batch_root(task, batch) / "entities/地点/景区/九寨沟/1.download/sources/01.base"
     source_abs.mkdir(parents=True, exist_ok=True)
     (source_abs / "source.md").write_text("# source\n\nrepo relative source", encoding="utf-8")
     write_agent_draft(

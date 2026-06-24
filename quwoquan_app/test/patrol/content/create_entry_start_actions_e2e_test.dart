@@ -1,4 +1,4 @@
-/// T4 Patrol E2E: 动作优先创作入口
+/// user_acceptance Patrol: 动作优先创作入口
 ///
 /// 守护：发现页创作按钮进入三动作入口，再进入统一编辑器。
 library;

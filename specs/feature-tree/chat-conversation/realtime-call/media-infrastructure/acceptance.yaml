@@ -91,7 +91,7 @@ gwt_acceptance:
         cases:
         - user_acceptance.chat_conversation.realtime_call.media_infrastructure.e2e_journey
         envs:
-        - gamma
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: gwt2_incoming_push_payload_local_contract

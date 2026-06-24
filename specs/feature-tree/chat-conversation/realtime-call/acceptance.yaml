@@ -33,7 +33,7 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/ui/rtc/widgets/call_participant_picker_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
     status: partial
     test_evidence:
       primary:
@@ -65,8 +65,8 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/ui/rtc/providers/call_session_provider_lifecycle_test.dart
-      - file: quwoquan_service/services/rtc-service/tests/call_lifecycle_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/rtc/providers/call_session_provider_lifecycle__local_contract_test.dart
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/call_lifecycle_contract__api_integration_test.go
     status: partial
     test_evidence:
       primary:
@@ -102,7 +102,7 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/rtc-service/tests/room_management_contract_test.go
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/room_management_contract__api_integration_test.go
     status: partial
     test_evidence:
       primary:
@@ -139,8 +139,8 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/cloud/rtc/incoming_call_coordinator_test.dart
-      - file: quwoquan_app/test/core/platform/platform_capabilities_incoming_call_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/rtc/incoming_call_coordinator__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/platform/platform_capabilities_incoming_call__local_contract_test.dart
     status: partial
     test_evidence:
       primary:
@@ -153,8 +153,8 @@ sit_acceptance:
         suite: e2e_journey
         cases:
         - user_acceptance.chat_conversation.realtime_call.sit4_incoming_platform_matrix.e2e_journey
-        envs: &id003
-        - gamma
+        envs:
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: sit4_incoming_platform_matrix_local_contract
@@ -177,9 +177,9 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/cloud/rtc/rtc_signaling_wire_test.dart
-      - file: quwoquan_app/test/cloud/rtc/rtc_ws_payload_parse_test.dart
-      - file: quwoquan_app/test/cloud/rtc/rtc_call_ringing_payload_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/rtc/rtc_signaling_wire__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/rtc/rtc_ws_payload_parse__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/rtc/rtc_call_ringing_payload_contract__local_contract_test.dart
     status: partial
     test_evidence:
       primary:
@@ -216,8 +216,8 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/ui/rtc/widgets/call_permission_card_test.dart
-      - file: quwoquan_app/test/cloud/rtc/rtc_errors_test.dart
+      - file: quwoquan_app/test/local_contract/ui/rtc/widgets/call_permission_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/rtc/rtc_errors__local_contract_test.dart
     status: partial
     test_evidence:
       primary:
@@ -246,9 +246,9 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/app/shell/active_call_shell_mount_test.dart
-      - file: quwoquan_app/test/ui/rtc/widgets/active_call_bar_test.dart
-      - file: quwoquan_app/test/ui/rtc/widgets/pip_call_overlay_test.dart
+      - file: quwoquan_app/test/local_contract/app/shell/active_call_shell_mount__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/rtc/widgets/active_call_bar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/rtc/widgets/pip_call_overlay__local_contract_test.dart
     status: partial
     test_evidence:
       primary:
@@ -261,7 +261,8 @@ sit_acceptance:
         suite: e2e_journey
         cases:
         - user_acceptance.chat_conversation.realtime_call.sit7_global_lifecycle_pip.e2e_journey
-        envs: *id003
+        envs:
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: sit7_global_lifecycle_pip_local_contract

@@ -9,7 +9,9 @@ class UserRequestPageIds {
     'ActivatePersona': 'user.personas.activate',
     'ApplyPersonaProfileSync': 'user.personas.profile_sync',
     'ApplyProposal': 'user.apply.proposal',
+    'BindCarrierPhoneCredential': 'user.credential.carrier_phone.bind',
     'BindCredential': 'user.bind.credential',
+    'BindPhoneCredential': 'user.credential.phone.bind',
     'BlockUser': 'user.block.create',
     'CancelGreetingRequest': 'user.cancel.greeting.request',
     'ClearRecentSearches': 'user.search.history.clear',
@@ -30,6 +32,8 @@ class UserRequestPageIds {
     'GetPersonaLifecycleGuard': 'user.personas.lifecycle_guard',
     'GetPersonaManagementSummary': 'user.personas.summary',
     'GetPrivacySettings': 'user.settings.privacy.get',
+    'GetProfileEditSnapshot': 'user.profile.edit.snapshot',
+    'GetProfileQrCard': 'user.profile.qr.card',
     'GetRelationship': 'user.relationship',
     'GetRelationshipCapability': 'user.get.relationship.capability',
     'GetSubAccountProfile': 'user.get.sub.account.profile',
@@ -67,6 +71,7 @@ class UserRequestPageIds {
     'RejectProposal': 'user.reject.proposal',
     'ReplyGreetingRequest': 'user.reply.greeting.request',
     'ResolveOneTapLoginHint': 'user.resolve.one.tap.login.hint',
+    'ResolveProfileQrToken': 'user.profile.qr.resolve',
     'RetirePersona': 'user.personas.retire',
     'SearchSocialRelations': 'user.social.search',
     'SendGreetingRequest': 'user.send.greeting.request',
@@ -87,7 +92,9 @@ class UserRequestPageIds {
   static const String activatePersona = 'user.personas.activate';
   static const String applyPersonaProfileSync = 'user.personas.profile_sync';
   static const String applyProposal = 'user.apply.proposal';
+  static const String bindCarrierPhoneCredential = 'user.credential.carrier_phone.bind';
   static const String bindCredential = 'user.bind.credential';
+  static const String bindPhoneCredential = 'user.credential.phone.bind';
   static const String blockUser = 'user.block.create';
   static const String cancelGreetingRequest = 'user.cancel.greeting.request';
   static const String clearRecentSearches = 'user.search.history.clear';
@@ -108,6 +115,8 @@ class UserRequestPageIds {
   static const String getPersonaLifecycleGuard = 'user.personas.lifecycle_guard';
   static const String getPersonaManagementSummary = 'user.personas.summary';
   static const String getPrivacySettings = 'user.settings.privacy.get';
+  static const String getProfileEditSnapshot = 'user.profile.edit.snapshot';
+  static const String getProfileQrCard = 'user.profile.qr.card';
   static const String getRelationship = 'user.relationship';
   static const String getRelationshipCapability = 'user.get.relationship.capability';
   static const String getSubAccountProfile = 'user.get.sub.account.profile';
@@ -145,6 +154,7 @@ class UserRequestPageIds {
   static const String rejectProposal = 'user.reject.proposal';
   static const String replyGreetingRequest = 'user.reply.greeting.request';
   static const String resolveOneTapLoginHint = 'user.resolve.one.tap.login.hint';
+  static const String resolveProfileQrToken = 'user.profile.qr.resolve';
   static const String retirePersona = 'user.personas.retire';
   static const String searchSocialRelations = 'user.social.search';
   static const String sendGreetingRequest = 'user.send.greeting.request';

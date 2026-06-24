@@ -386,10 +386,7 @@ class LocalParticipant extends Participant<LocalTrackPublication> {
       }
 
       if ([TrackSource.camera, TrackSource.screenShareVideo].contains(track.source)) {
-        final degradationPreference = publishOptions.degradationPreference ??
-            getDefaultDegradationPreference(
-              track,
-            );
+        final degradationPreference = publishOptions.degradationPreference ?? DegradationPreference.maintainResolution;
         await track.setDegradationPreference(degradationPreference);
       }
 
@@ -487,10 +484,7 @@ class LocalParticipant extends Participant<LocalTrackPublication> {
       }
 
       if ([TrackSource.camera, TrackSource.screenShareVideo].contains(track.source)) {
-        final degradationPreference = publishOptions.degradationPreference ??
-            getDefaultDegradationPreference(
-              track,
-            );
+        final degradationPreference = publishOptions.degradationPreference ?? DegradationPreference.maintainResolution;
         await track.setDegradationPreference(degradationPreference);
       }
 
@@ -546,8 +540,6 @@ class LocalParticipant extends Participant<LocalTrackPublication> {
       logger.warning('Publication not found $trackSid');
       return;
     }
-    await pub.dispose();
-
     final track = pub.track;
     if (track != null) {
       if (room.roomOptions.stopLocalTrackOnUnpublish) {
@@ -593,17 +585,6 @@ class LocalParticipant extends Participant<LocalTrackPublication> {
     }
 
     await pub.dispose();
-  }
-
-  DegradationPreference getDefaultDegradationPreference(LocalVideoTrack track) {
-    // a few of reasons we have different default paths:
-    // 1. without this, Chrome seems to aggressively resize the SVC video stating `quality-limitation: bandwidth` even when BW isn't an issue
-    // 2. since we are overriding contentHint to motion (to workaround L1T3 publishing), it overrides the default degradationPreference to `balanced`
-    final VideoDimensions dimensions = track.currentOptions.params.dimensions;
-    if (track.source == TrackSource.screenShareVideo || dimensions.height >= 1080) {
-      return DegradationPreference.maintainResolution;
-    }
-    return DegradationPreference.balanced;
   }
 
   /// Convenience method to unpublish all tracks.

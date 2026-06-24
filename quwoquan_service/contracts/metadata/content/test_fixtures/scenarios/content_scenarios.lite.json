@@ -431,7 +431,7 @@
           "identity": "moment",
           "authorId": "fixture_user_current",
           "subAccountId": "fixture_user_current",
-          "displayName": "契约当前用户",
+          "displayName": "新同学_260622_6698692",
           "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
@@ -469,7 +469,7 @@
           "commentCount": 1,
           "shareCount": 6,
           "createdAt": "2026-05-01T07:00:00Z",
-          "authorDisplayNameSnapshot": "契约当前用户",
+          "authorDisplayNameSnapshot": "新同学_260622_6698692",
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
@@ -563,7 +563,7 @@
           "identity": "work",
           "authorId": "fixture_user_current",
           "subAccountId": "fixture_user_current",
-          "displayName": "契约当前用户",
+          "displayName": "新同学_260622_6698692",
           "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
@@ -578,7 +578,7 @@
           ],
           "title": "窗边 #1",
           "summary": "把桌面重新整理了一遍。，用于 heroPost 视觉与作者头像同源验证。",
-          "body": "共享池真实图片样本，主题=生活方式，作者=契约当前用户，圈子=契约生活方式。",
+          "body": "共享池真实图片样本，主题=生活方式，作者=新同学_260622_6698692，圈子=契约生活方式。",
           "coverUrl": "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
           "thumbnailUrl": "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
           "mediaUrls": [
@@ -601,7 +601,7 @@
           "commentCount": 0,
           "shareCount": 2,
           "createdAt": "2026-05-19T08:00:00Z",
-          "authorDisplayNameSnapshot": "契约当前用户",
+          "authorDisplayNameSnapshot": "新同学_260622_6698692",
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
@@ -681,7 +681,7 @@
           "_id": "fixture_comment_fixture_article_001",
           "postId": "fixture_article_001",
           "authorId": "fixture_user_current",
-          "authorDisplayNameSnapshot": "契约当前用户",
+          "authorDisplayNameSnapshot": "新同学_260622_6698692",
           "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "content": "共享池评论样本 #6",
@@ -7540,6 +7540,417 @@
           "replyCount": 0
         }
       ]
+    },
+    "intersection_core": {
+      "objectIntersections": {
+        "fixture_homepage_travel_route_erhai": [
+          {
+            "intersectionId": "objix_erhai_followee",
+            "vertical": "travel_photography",
+            "dimension": "location",
+            "intersectionClass": "fact",
+            "objectKind": "route",
+            "relationObjectId": "fixture_homepage_travel_route_erhai",
+            "actionType": "view_object",
+            "actionTargetId": "fixture_homepage_travel_route_erhai",
+            "source": "relationship",
+            "primaryText": "周屿等3位你关注的人走过洱海环线",
+            "primarySpans": [
+              {
+                "text": "周屿",
+                "role": "object",
+                "target": {
+                  "objectId": "fixture_user_zhou",
+                  "objectKind": "person",
+                  "routeId": "userProfile"
+                }
+              },
+              {
+                "text": "等3位你关注的人走过洱海环线",
+                "role": "plain"
+              }
+            ],
+            "intersectionPoints": [
+              {
+                "pointId": "objix_erhai_followee_p0",
+                "pointClass": "fact",
+                "dimension": "location",
+                "label": "关注的人来过",
+                "displayText": "周屿等3位你关注的人走过洱海环线",
+                "sourceRef": "followeeVisited",
+                "visibility": "public",
+                "count": 3,
+                "sampleText": "周屿"
+              }
+            ]
+          },
+          {
+            "intersectionId": "objix_erhai_covisited",
+            "vertical": "travel_photography",
+            "dimension": "location",
+            "intersectionClass": "fact",
+            "objectKind": "route",
+            "relationObjectId": "fixture_homepage_travel_route_erhai",
+            "actionType": "view_object",
+            "actionTargetId": "fixture_homepage_travel_route_erhai",
+            "source": "relationship",
+            "primaryText": "你和林清越等6人都走过洱海环线",
+            "primarySpans": [
+              {
+                "text": "你和",
+                "role": "plain"
+              },
+              {
+                "text": "林清越",
+                "role": "object",
+                "target": {
+                  "objectId": "fixture_user_lin",
+                  "objectKind": "person",
+                  "routeId": "userProfile"
+                }
+              },
+              {
+                "text": "等6人都走过洱海环线",
+                "role": "plain"
+              }
+            ],
+            "intersectionPoints": [
+              {
+                "pointId": "objix_erhai_covisited_p0",
+                "pointClass": "fact",
+                "dimension": "location",
+                "label": "共同走过",
+                "displayText": "你和林清越等6人都走过洱海环线",
+                "sourceRef": "coVisitedEntity",
+                "visibility": "public",
+                "count": 6,
+                "sampleText": "林清越"
+              }
+            ]
+          }
+        ],
+        "fixture_homepage_travel_spot_duanqiao": [
+          {
+            "intersectionId": "objix_duanqiao_covisited",
+            "vertical": "travel_photography",
+            "dimension": "location",
+            "intersectionClass": "fact",
+            "objectKind": "photo_spot",
+            "relationObjectId": "fixture_homepage_travel_spot_duanqiao",
+            "actionType": "view_object",
+            "actionTargetId": "fixture_homepage_travel_spot_duanqiao",
+            "source": "relationship",
+            "primaryText": "你和周屿等4人都在断桥晨雾机位拍过照",
+            "primarySpans": [
+              {
+                "text": "你和",
+                "role": "plain"
+              },
+              {
+                "text": "周屿",
+                "role": "object",
+                "target": {
+                  "objectId": "fixture_user_zhou",
+                  "objectKind": "person",
+                  "routeId": "userProfile"
+                }
+              },
+              {
+                "text": "等4人都在断桥晨雾机位拍过照",
+                "role": "plain"
+              }
+            ],
+            "intersectionPoints": [
+              {
+                "pointId": "objix_duanqiao_covisited_p0",
+                "pointClass": "fact",
+                "dimension": "location",
+                "label": "共同机位",
+                "displayText": "你和周屿等4人都在断桥晨雾机位拍过照",
+                "sourceRef": "coVisitedEntity",
+                "visibility": "public",
+                "count": 4,
+                "sampleText": "周屿"
+              }
+            ]
+          }
+        ],
+        "u_lin": [
+          {
+            "intersectionId": "objix_user_u_lin",
+            "dimension": "relationship",
+            "intersectionClass": "fact",
+            "objectKind": "person",
+            "relationObjectId": "u_lin",
+            "actionType": "view_object",
+            "actionTargetId": "u_lin",
+            "source": "relationship",
+            "connectionSummary": "林清越、老同学 李航 把你们连在一起",
+            "primaryText": "林清越等4人是你们共同关注的人",
+            "primarySpans": [
+              {
+                "text": "林清越",
+                "role": "object",
+                "target": {
+                  "objectId": "fixture_user_lin",
+                  "objectKind": "person",
+                  "routeId": "userProfile"
+                }
+              },
+              {
+                "text": "等4人是你们共同关注的人",
+                "role": "plain"
+              }
+            ],
+            "intersectionPoints": [
+              {
+                "pointId": "objix_user_u_lin_p0",
+                "pointClass": "fact",
+                "dimension": "relationship",
+                "label": "共同关注的人",
+                "displayText": "共同关注的人",
+                "sourceRef": "sharedFollowees",
+                "visibility": "public",
+                "count": 4,
+                "sampleText": "林清越",
+                "sampleAvatarUrls": [
+                  "media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg",
+                  "media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg"
+                ]
+              },
+              {
+                "pointId": "objix_user_u_lin_p1",
+                "pointClass": "fact",
+                "dimension": "relationship",
+                "label": "共同联系人",
+                "displayText": "共同联系人",
+                "sourceRef": "commonContact",
+                "visibility": "public",
+                "count": 2,
+                "sampleText": "老同学 李航",
+                "sampleAvatarUrls": [
+                  "media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg"
+                ]
+              },
+              {
+                "pointId": "objix_user_u_lin_p2",
+                "pointClass": "fact",
+                "dimension": "content",
+                "label": "共同讨论",
+                "displayText": "共同讨论",
+                "sourceRef": "coCommented",
+                "visibility": "public",
+                "count": 3,
+                "sampleText": "故宫夜景"
+              },
+              {
+                "pointId": "objix_user_u_lin_p3",
+                "pointClass": "fact",
+                "dimension": "interest",
+                "label": "都爱摄影",
+                "displayText": "都爱摄影",
+                "sourceRef": "sharedTagSample",
+                "visibility": "public",
+                "count": 0,
+                "sampleText": ""
+              },
+              {
+                "pointId": "objix_user_u_lin_p4",
+                "pointClass": "recommended",
+                "dimension": "interest",
+                "label": "可能合得来",
+                "displayText": "可能合得来",
+                "sourceRef": "affinity",
+                "visibility": "public",
+                "count": 0,
+                "sampleText": ""
+              }
+            ]
+          }
+        ],
+        "c_photo": [
+          {
+            "intersectionId": "objix_circle_c_photo",
+            "dimension": "relationship",
+            "intersectionClass": "fact",
+            "objectKind": "circle",
+            "relationObjectId": "c_photo",
+            "actionType": "view_object",
+            "actionTargetId": "c_photo",
+            "source": "relationship",
+            "connectionSummary": "周屿、老同学 李航 把你们连在一起",
+            "primaryText": "周屿等6位你关注的人在这",
+            "primarySpans": [
+              {
+                "text": "周屿",
+                "role": "object",
+                "target": {
+                  "objectId": "fixture_user_zhou",
+                  "objectKind": "person",
+                  "routeId": "userProfile"
+                }
+              },
+              {
+                "text": "等6位你关注的人在这",
+                "role": "plain"
+              }
+            ],
+            "intersectionPoints": [
+              {
+                "pointId": "objix_circle_c_photo_p0",
+                "pointClass": "fact",
+                "dimension": "relationship",
+                "label": "关注的人在这",
+                "displayText": "关注的人在这",
+                "sourceRef": "followeeInObject",
+                "visibility": "public",
+                "count": 6,
+                "sampleText": "周屿",
+                "sampleAvatarUrls": [
+                  "media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg",
+                  "media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg"
+                ]
+              },
+              {
+                "pointId": "objix_circle_c_photo_p1",
+                "pointClass": "fact",
+                "dimension": "relationship",
+                "label": "联系人在这",
+                "displayText": "联系人在这",
+                "sourceRef": "commonContact",
+                "visibility": "public",
+                "count": 3,
+                "sampleText": "老同学 李航",
+                "sampleAvatarUrls": [
+                  "media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg"
+                ]
+              },
+              {
+                "pointId": "objix_circle_c_photo_p2",
+                "pointClass": "fact",
+                "dimension": "relationship",
+                "label": "关注的人常来",
+                "displayText": "关注的人常来",
+                "sourceRef": "followeeInObject",
+                "visibility": "public",
+                "count": 3,
+                "sampleText": "林清越",
+                "sampleAvatarUrls": [
+                  "media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg"
+                ]
+              },
+              {
+                "pointId": "objix_circle_c_photo_p3",
+                "pointClass": "fact",
+                "dimension": "interest",
+                "label": "都聊摄影",
+                "displayText": "都聊摄影",
+                "sourceRef": "sharedTagSample",
+                "visibility": "public",
+                "count": 0,
+                "sampleText": ""
+              },
+              {
+                "pointId": "objix_circle_c_photo_p4",
+                "pointClass": "recommended",
+                "dimension": "interest",
+                "label": "你可能感兴趣",
+                "displayText": "你可能感兴趣",
+                "sourceRef": "affinity",
+                "visibility": "public",
+                "count": 0,
+                "sampleText": ""
+              }
+            ]
+          }
+        ],
+        "e_pku": [
+          {
+            "intersectionId": "objix_entity_e_pku",
+            "dimension": "location",
+            "intersectionClass": "fact",
+            "objectKind": "place",
+            "relationObjectId": "e_pku",
+            "actionType": "view_object",
+            "actionTargetId": "e_pku",
+            "source": "relationship",
+            "connectionSummary": "周屿、同事 苏黎 把你们连在一起",
+            "primaryText": "周屿等9位你关注的人来过",
+            "primarySpans": [
+              {
+                "text": "周屿",
+                "role": "object",
+                "target": {
+                  "objectId": "fixture_user_zhou",
+                  "objectKind": "person",
+                  "routeId": "userProfile"
+                }
+              },
+              {
+                "text": "等9位你关注的人来过",
+                "role": "plain"
+              }
+            ],
+            "intersectionPoints": [
+              {
+                "pointId": "objix_entity_e_pku_p0",
+                "pointClass": "fact",
+                "dimension": "location",
+                "label": "关注的人来过",
+                "displayText": "关注的人来过",
+                "sourceRef": "followeeVisited",
+                "visibility": "public",
+                "count": 9,
+                "sampleText": "周屿",
+                "sampleAvatarUrls": [
+                  "media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg",
+                  "media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg",
+                  "media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg"
+                ]
+              },
+              {
+                "pointId": "objix_entity_e_pku_p1",
+                "pointClass": "fact",
+                "dimension": "location",
+                "label": "联系人来过",
+                "displayText": "联系人来过",
+                "sourceRef": "followeeVisited",
+                "visibility": "public",
+                "count": 4,
+                "sampleText": "同事 苏黎",
+                "sampleAvatarUrls": [
+                  "media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg"
+                ]
+              },
+              {
+                "pointId": "objix_entity_e_pku_p2",
+                "pointClass": "fact",
+                "dimension": "relationship",
+                "label": "关注的人加入",
+                "displayText": "关注的人加入",
+                "sourceRef": "followeeInObject",
+                "visibility": "public",
+                "count": 6,
+                "sampleText": "校友摄影圈",
+                "sampleAvatarUrls": [
+                  "media/avatar/s/mock/seed/u_1499952127939-9bbf5af6c51c/v1/avatar.jpg"
+                ]
+              },
+              {
+                "pointId": "objix_entity_e_pku_p3",
+                "pointClass": "recommended",
+                "dimension": "interest",
+                "label": "可能想去",
+                "displayText": "可能想去",
+                "sourceRef": "affinity",
+                "visibility": "public",
+                "count": 0,
+                "sampleText": ""
+              }
+            ]
+          }
+        ]
+      }
     }
   },
   "scenarios": [

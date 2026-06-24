@@ -18,7 +18,6 @@ render: { articleTemplate: gentle, fontPreset: handwritten }
 structure:
   required: [清晨或傍晚, 一条校园路线, 食堂或自习, 一个生活细节, 给新生的话]
   optional: [社团, 操场, 图书馆]
-hooks: ["在{name}的一天，可以从这条路开始"]
 mustIncludeFacts: [校园路线, 生活场景, 主观体验边界]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 700, max: 1500 }
@@ -31,4 +30,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/主页/机构/学校/example.md

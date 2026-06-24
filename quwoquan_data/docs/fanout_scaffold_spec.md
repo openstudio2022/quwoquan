@@ -17,6 +17,10 @@
 - 两阶段：**A 分解+冻结**（agent 驱动、可澄清）→ 用户确认 → **B 确定性分层调度**（执行冻结计划，幂等可重放）。
 - 复用既有基建，不另起炉灶：`task/run.py` DAG、`task/object_queue.py`、`_common/handoff.py`
   执行合约、Ralph 出口门、单一 gate library、`.cursor/hooks.json` sensor。
+- 冻结计划进入阶段 B 后，运行中不再请求人工确认；所有冲突写 ledger，批后 Reconciler 裁决。
+- L1 Batch Controller 是同一 `task+batch` 唯一治理者，必须先拿非阻塞 controller lease；第二 controller 直接 `GATE_BLOCK`。
+- L1 通过 `AssignmentLedger` 向 L2/L3 下发明确 scope、owner、读写根、预算、deadline；Partition Agent 和 Object/Subagent 不得自行扩展职责边界。
+- 支持切片轴：地理（全国→省→市州→区县→景点）、网站（网站→栏目/frontier→URL→sourceUnit）、内容对象（homepage/article/image/video）和混合轴。四川百级默认采用地理主轴：`四川省 -> 市/州 -> 区县/景点 -> sourceUnit -> 内容对象`。
 
 ```mermaid
 flowchart TD
@@ -25,8 +29,8 @@ flowchart TD
   mode -->|fanout| decomp["task decompose: planner agent 需求澄清+发现式分解"]
   decomp --> tree["fanout_plan.json(分片计划树, 可冻结)"]
   tree --> confirm{"用户确认/冻结门"}
-  confirm -->|frozen| dispatch["task run --mode fanout: 走冻结计划"]
-  dispatch --> part1["分区1..N: task new + plan brief + object-queue enqueue 叶子"]
+  confirm -->|frozen| dispatch["task run --mode fanout: controller lease + AssignmentLedger"]
+  dispatch --> part1["分区1..N: task new + plan brief + object-queue enqueue 授权叶子"]
   part1 --> runner["cursor-sdk 多 worker: lease-next -> cloud agent(叶子) -> ref_review_gate -> complete"]
   runner --> reduce["分区 reducer + 回退受影响 ref"]
   reduce --> rollup["roll-up: 全局进度/SLO/dead-spillover"]

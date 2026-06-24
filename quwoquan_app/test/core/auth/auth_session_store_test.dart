@@ -4,6 +4,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+const String _defaultNicknameSample = '新同学_260622_6698692';
+final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -47,7 +50,7 @@ void main() {
         'accountState': 'active',
         'identityOrigin': 'phone',
         'accountHint': <String, dynamic>{
-          'displayName': '趣友3909',
+          'displayName': _defaultNicknameSample,
           'avatarUrl': 'https://cdn.example.com/avatar.png',
           'maskedPhone': '138****3909',
         },
@@ -61,7 +64,7 @@ void main() {
 
       expect(stored.rememberedLoginMethod, AuthRememberedLoginMethod.phoneOtp);
       expect(stored.rememberedLoginMaskedIdentifier, '138****3909');
-      expect(stored.rememberedDisplayName, '趣友3909');
+      expect(stored.rememberedDisplayName, matches(_defaultNicknamePattern));
       expect(stored.rememberedAvatarUrl, 'https://cdn.example.com/avatar.png');
     },
   );
@@ -156,34 +159,29 @@ void main() {
     expect(stored.hasValidQuickLoginCredential, isFalse);
   });
 
-  test(
-    'saveLoginResult(phoneOtp) 记住完整手机号，软退出保留供自动预填',
-    () async {
-      final store = AuthSessionStore(
-        secureStorage: const FlutterSecureStorage(),
-      );
-      await store.saveLoginResult(
-        AuthLoginResultDto.fromMap(<String, dynamic>{
-          'accessToken': 'access-phone',
-          'refreshToken': 'refresh-phone',
-          'ownerId': 'owner-phone',
-          'identityOrigin': 'phone',
-        }),
-        rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
-        rememberedLoginMaskedIdentifier: '180****9016',
-        rememberedLoginIdentifier: '18000009016',
-      );
+  test('saveLoginResult(phoneOtp) 记住完整手机号，软退出保留供自动预填', () async {
+    final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
+    await store.saveLoginResult(
+      AuthLoginResultDto.fromMap(<String, dynamic>{
+        'accessToken': 'access-phone',
+        'refreshToken': 'refresh-phone',
+        'ownerId': 'owner-phone',
+        'identityOrigin': 'phone',
+      }),
+      rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
+      rememberedLoginMaskedIdentifier: '180****9016',
+      rememberedLoginIdentifier: '18000009016',
+    );
 
-      final afterLogin = await store.read();
-      expect(afterLogin.rememberedLoginIdentifier, '18000009016');
+    final afterLogin = await store.read();
+    expect(afterLogin.rememberedLoginIdentifier, '18000009016');
 
-      // 软退出保留完整号（过期后再登录可自动预填 + 自动发码）。
-      await store.softLogout();
-      final afterSoft = await store.read();
-      expect(afterSoft.rememberedLoginIdentifier, '18000009016');
-      expect(afterSoft.rememberedLoginMaskedIdentifier, '180****9016');
-    },
-  );
+    // 软退出保留完整号（过期后再登录可自动预填 + 自动发码）。
+    await store.softLogout();
+    final afterSoft = await store.read();
+    expect(afterSoft.rememberedLoginIdentifier, '18000009016');
+    expect(afterSoft.rememberedLoginMaskedIdentifier, '180****9016');
+  });
 
   test('彻底退出清除本机完整手机号', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());

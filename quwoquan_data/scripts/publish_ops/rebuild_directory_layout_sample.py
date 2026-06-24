@@ -59,11 +59,6 @@ ENTITIES = {
             "建议清晨上金顶看日出，午后转至清音阁、一线天等中低山区域；雨雾多发，需带防滑与保暖装备。\n\n"
             "适宜季节以春（4-5 月杜鹃）与秋（10 月红叶、能见度高）为佳；夏季多雨、冬季金顶易冰雪封山。"
         ),
-        "condition": {
-            "regions": ["高原边缘", "亚高山"],
-            "seasons": ["春", "秋"],
-            "altitudeMeters": 3099,
-        },
     },
     "海螺沟": {
         "source_md": (
@@ -72,11 +67,6 @@ ENTITIES = {
             "清晨晴天常能看到贡嘎雪山被照亮；午后可在山下泡温泉缓解徒步疲劳。"
             "全程海拔变化大，需防高原反应、强紫外线与昼夜温差；秋季红叶与彩林窗口短而集中。"
         ),
-        "condition": {
-            "regions": ["高原"],
-            "seasons": ["秋"],
-            "altitudeMeters": 2940,
-        },
     },
 }
 
@@ -188,13 +178,6 @@ def _build_entity(
         "domain": "地点",
         "type": "景区",
         "sourceTaskId": task,
-        "conditionProfile": {
-            "regions": spec["condition"]["regions"],
-            "seasons": spec["condition"]["seasons"],
-            "altitudeMeters": spec["condition"]["altitudeMeters"],
-            "evidenceRefs": [{"field": "seasons", "path": source_ref, "note": "百科概述：春秋为佳"},
-                             {"field": "regions", "path": source_ref, "note": "百科概述：高原/亚高山"}],
-        },
         "tagRefs": [],
     })
     write_json(obj / "manifest.json", {

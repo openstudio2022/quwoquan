@@ -13,7 +13,8 @@ scope:
   - i2i/u2i 召回源与多路召回配额融合。
   - replay 评估与回滚层。
   out_of_scope:
-  - P1 先实现读取已物化 `i2i/u2i` 的召回源与多路配额融合；离线物化作业和 replay 评估脚本按后续数据工程切片补齐。
+  - 离线物化作业和 replay 评估脚本按后续数据工程切片补齐。
+  - feed 读路径同步共现计算。
   - 双塔 ANN。
 gwt_acceptance:
   GWT1:
@@ -36,10 +37,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/runtime/recommendation/collaborative_recall_test.go
-      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation
-      - file: quwoquan_service/services/content-service/cmd/api
-    status: implemented
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/collaborative_recall__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/cmd/api/main__local_contract_test.go
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -63,6 +63,10 @@ gwt_acceptance:
         - gamma
     notes:
     - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_collaborative_recall_replay.py'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/collaborative_recall_test.go'
+    - '[migrated_from_recorded_reference] quwoquan_service/services/content-service/internal/infrastructure/recommendation'
+    - '[migrated_from_recorded_reference] quwoquan_service/services/content-service/cmd/api'
+    - 'P0 已覆盖物化读取、collab_i2i/collab_u2i recallPath、SeedContentIDs、rollback flag；离线物化/replay 仍为后续数据工程任务。'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

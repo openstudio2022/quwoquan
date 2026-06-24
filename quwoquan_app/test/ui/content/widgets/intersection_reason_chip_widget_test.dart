@@ -76,7 +76,10 @@ Widget _routedChip(Widget chip, {required ContentBehaviorTracker tracker}) {
   final router = GoRouter(
     initialLocation: '/',
     routes: <RouteBase>[
-      GoRoute(path: '/', builder: (context, state) => Center(child: chip)),
+      GoRoute(
+        path: '/',
+        builder: (context, state) => Center(child: chip),
+      ),
       GoRoute(
         path: '/user/:username',
         builder: (context, state) => const Text('user-profile-route'),
@@ -84,9 +87,7 @@ Widget _routedChip(Widget chip, {required ContentBehaviorTracker tracker}) {
     ],
   );
   return ProviderScope(
-    overrides: [
-      contentBehaviorTrackerProvider.overrideWithValue(tracker),
-    ],
+    overrides: [contentBehaviorTrackerProvider.overrideWithValue(tracker)],
     child: CupertinoApp.router(routerConfig: router),
   );
 }
@@ -102,12 +103,12 @@ void main() {
       );
     });
 
-    test('primaryText 缺省 → 回退云侧连接说明 connectionSummary，不在端侧拼接计数', () {
+    test('primaryText 缺省 → null，不用 connectionSummary 兜底', () {
       expect(
         IntersectionReasonChip.primaryText(<IntersectionReason>[
           _reason(connectionSummary: '你和 TA 都来自同一校园'),
         ]),
-        '你和 TA 都来自同一校园',
+        isNull,
       );
     });
 
@@ -164,10 +165,7 @@ void main() {
       await tester.pumpWidget(_wrap(widget!));
 
       expect(find.byType(IntersectionTypeIcon), findsOneWidget);
-      expect(
-        find.byKey(IntersectionReasonChip.iconKey),
-        findsOneWidget,
-      );
+      expect(find.byKey(IntersectionReasonChip.iconKey), findsOneWidget);
     });
   });
 

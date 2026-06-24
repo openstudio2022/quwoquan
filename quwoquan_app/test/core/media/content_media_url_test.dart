@@ -142,24 +142,21 @@ void main() {
       expect(candidates.join('\n'), isNot(contains('/mock/seed/')));
     });
 
-    test(
-      'rewrites malformed archived seed images to archived fixture images',
-      () {
-        final candidates = resolveContentMediaUrlCandidates(
-          'media/image/s/archived-image/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
-          gatewayBaseUrl: 'https://127.0.0.1:18080',
-          imageCdnBaseUrl: 'https://127.0.0.1:18088',
-        );
-        expect(candidates, isNotEmpty);
-        expect(
-          candidates.first,
-          startsWith(
-            'https://127.0.0.1:18088/media/image/s/archived-image/post/fixture_',
-          ),
-        );
-        expect(candidates.join('\n'), isNot(contains('/archived-image/seed/')));
-      },
-    );
+    test('rewrites malformed archived seed images to archived fixture images', () {
+      final candidates = resolveContentMediaUrlCandidates(
+        'media/image/s/archived-image/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
+        gatewayBaseUrl: 'https://127.0.0.1:18080',
+        imageCdnBaseUrl: 'https://127.0.0.1:18088',
+      );
+      expect(candidates, isNotEmpty);
+      expect(
+        candidates.first,
+        startsWith(
+          'https://127.0.0.1:18088/media/image/s/archived-image/post/fixture_',
+        ),
+      );
+      expect(candidates.join('\n'), isNot(contains('/archived-image/seed/')));
+    });
 
     test('rewrites archived mock videos to archived playable sample', () {
       final candidates = resolveContentMediaUrlCandidates(
@@ -211,6 +208,26 @@ void main() {
       );
     });
 
+    test('expands secure local env domains to HTTPS loopback candidates', () {
+      expect(
+        resolveContentMediaUrlCandidates(
+          'media/image/s/archived-image/post/demo/v1/cover.png',
+          gatewayBaseUrl: 'https://alpha-api.quwoquan-env.test:17000',
+          imageCdnBaseUrl: 'https://alpha-image.quwoquan-env.test:17100',
+        ),
+        <String>[
+          'https://localhost:17100/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://127.0.0.1:17100/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://10.0.2.2:17100/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://alpha-image.quwoquan-env.test:17100/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://localhost:17000/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://127.0.0.1:17000/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://10.0.2.2:17000/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://alpha-api.quwoquan-env.test:17000/media/image/s/archived-image/post/demo/v1/cover.png',
+        ],
+      );
+    });
+
     test('keeps prod-hosted remote https media base candidates', () {
       expect(
         resolveContentMediaUrlCandidates(
@@ -247,6 +264,12 @@ void main() {
       expect(
         isPrivateDevContentMediaUrl(
           'https://10.0.2.2:18080/media/image/s/archived-image/post/demo/v1/cover.png',
+        ),
+        isTrue,
+      );
+      expect(
+        isPrivateDevContentMediaUrl(
+          'https://alpha-image.quwoquan-env.test:17100/media/image/s/archived-image/post/demo/v1/cover.png',
         ),
         isTrue,
       );

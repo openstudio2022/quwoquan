@@ -33,7 +33,8 @@ void main() {
               'entrySource:${q[MediaViewerCommentContext.queryEntrySource] ?? ''};'
               'targetCommentId:${q[MediaViewerCommentContext.queryTargetCommentId] ?? ''};'
               'targetParentCommentId:${q[MediaViewerCommentContext.queryTargetParentCommentId] ?? ''};'
-              'targetReplyId:${q[MediaViewerCommentContext.queryTargetReplyId] ?? ''}',
+              'targetReplyId:${q[MediaViewerCommentContext.queryTargetReplyId] ?? ''};'
+              'replyToCommentId:${q[MediaViewerCommentContext.queryReplyToCommentId] ?? ''}',
             );
           },
         ),
@@ -64,7 +65,8 @@ void main() {
     expect(
       find.text(
         '作品页:post_pc_1;openComments:true;entrySource:profile-comments;'
-        'targetCommentId:my_top_comment_1;targetParentCommentId:;targetReplyId:',
+        'targetCommentId:my_top_comment_1;targetParentCommentId:;targetReplyId:;'
+        'replyToCommentId:',
       ),
       findsOneWidget,
     );

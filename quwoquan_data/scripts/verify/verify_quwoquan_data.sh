@@ -3,6 +3,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
+PYTEST_RUNNER="${PYTEST_RUNNER:-$ROOT/quwoquan_data/.venv/bin/python}"
+if [ ! -x "$PYTEST_RUNNER" ]; then
+  PYTEST_RUNNER="${PYTHON:-python3}"
+fi
 
 # CLI-first ratchet：拦截新增直跑业务入口脚本（必须经 qwq-data 暴露给 skill）
 python3 quwoquan_data/scripts/verify/verify_cli_first.py
@@ -10,7 +14,8 @@ python3 quwoquan_data/scripts/cli.py verify data-role-gate
 python3 quwoquan_data/scripts/verify/verify_no_flat_roots.py
 # 单一门库 quality_gates：writingIntent 契约 + 图文闭环 + 写作主线一致性 + 模板骨架相似度 + 语域 + source reject 阻断
 python3 quwoquan_data/tests/common/test_quality_gates.py
-# 扫描门：禁止 scripts/tasks/runtime 复用测试专用正文骨架 agent_draft_kit（脚本拼正文反模式）
+# 扫描门：禁止 scripts/tasks/runtime 复用测试专用正文骨架 agent_draft_kit（脚本拼文章正文反模式），
+#         并禁止重新引入「脚本拼实体主页正文」机械骨架函数（主页 page.md 须 Agent 创作）。
 python3 quwoquan_data/scripts/verify/verify_no_runtime_draft_kit.py
 python3 quwoquan_data/tests/verify/test_no_runtime_draft_kit.py
 # object-stage job 队列：幂等/lease/崩溃恢复/同源互斥/失败升级
@@ -21,7 +26,14 @@ python3 quwoquan_data/scripts/cli.py verify content-supply-production
 # 作品 vs 随记判定契约：works_classification schema/config/registry 一致性 + 判定 smoke
 python3 quwoquan_data/scripts/cli.py verify works-classification
 python3 quwoquan_data/tests/verify/test_scale_readiness.py
-python3 quwoquan_data/tests/site_supply/test_site_supply_contract.py
+"$PYTEST_RUNNER" -m pytest -q \
+  quwoquan_data/tests/local_contract/site_supply/test_cli_works_classifier__local_contract_test.py \
+  quwoquan_data/tests/local_contract/site_supply/test_content_plan_bridge__local_contract_test.py \
+  quwoquan_data/tests/local_contract/site_supply/test_crawler_search__local_contract_test.py \
+  quwoquan_data/tests/local_contract/site_supply/test_downstream_evidence__local_contract_test.py \
+  quwoquan_data/tests/local_contract/site_supply/test_fetch_evidence__local_contract_test.py \
+  quwoquan_data/tests/local_contract/site_supply/test_frontier_rollup__local_contract_test.py \
+  quwoquan_data/tests/local_contract/site_supply/test_target_resolution__local_contract_test.py
 python3 quwoquan_data/tests/verify/test_site_scale_readiness.py
 # Subagent handoff packet 与出口门（single ref gate + batch reducer gate + 执行合约 5 要素）
 python3 quwoquan_data/tests/common/test_handoff.py
@@ -32,7 +44,10 @@ python3 quwoquan_data/tests/common/test_content_drift.py
 # Harness sensor 钩子：subagentStart / beforeShellExecution / afterFileEdit（observe-only 始终 allow）
 python3 quwoquan_data/tests/task/test_harness_hooks.py
 # 证据准入门：source_screen=reject 来源不得进入 content_plan
-python3 quwoquan_data/tests/common/test_content_plan_source_reject.py
+"$PYTEST_RUNNER" -m pytest -q \
+  quwoquan_data/tests/local_contract/common/test_base_draft_fidelity__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_content_plan_distribution__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_content_plan_source_gate__local_contract_test.py
 # golden set 标定：好稿/坏稿语义门拦截率/误杀率达标
 python3 quwoquan_data/scripts/verify/measure_gate_goldenset.py
 # 契约门：会话 agent = 唯一模型执行者（禁外部 LLM SDK/端点 + 交付正文 agent-only 防线）
@@ -40,7 +55,7 @@ python3 quwoquan_data/tests/common/test_agent_executor_contract.py
 python3 quwoquan_data/scripts/cli.py template lint
 python3 quwoquan_data/scripts/cli.py template creator-lint
 python3 quwoquan_data/scripts/cli.py template rec-contract
-python3 quwoquan_data/scripts/cli.py template region-season-lint
+python3 quwoquan_data/scripts/cli.py template audience-lint
 # 虚拟作者内容感知匹配：底稿信号(范围/载体/题材)择优 + 区域>全国 + 载体偏向 + 单候选稳定 + 确定性
 python3 quwoquan_data/tests/template/test_creator_match.py
 # 收紧扫描范围：只校验发布面 posts 根
@@ -58,9 +73,8 @@ python3 quwoquan_data/tests/ship/test_ship_sampling.py
 python3 quwoquan_data/tests/ship/test_data_release_consistency.py
 # 垂类规模化成熟度：coverage registry / 版权门 / queue / post-activation / benchmark
 python3 quwoquan_data/tests/vertical/test_vertical_maturity.py
-# Phase 0：sop few-shot 注入 + download 预置 source_plan 可消费（默认零源 bug 回归）
+# Phase 0：download 预置 source_plan 可消费（默认零源 bug 回归）
 python3 quwoquan_data/tests/bootstrap/test_phase0_reverify.py
-python3 quwoquan_data/tests/bootstrap/test_sop_injection.py
 python3 quwoquan_data/tests/download/test_download_source_plan.py
 # Phase 1：download 真实下图（sniff/curated/fetch_image/handler 接线）
 python3 quwoquan_data/tests/download/test_download_images.py
@@ -72,9 +86,27 @@ python3 quwoquan_data/scripts/cli.py homepage-assets --dirty-only --fail-on-issu
 # 历史脏数据：工程污染主页 / 伪图片 / 悬空 asset 必须清零
 python3 quwoquan_data/tests/quality/test_dirty_data_cleanup.py
 python3 quwoquan_data/scripts/cli.py quality dirty-scan --fail-on-issues
-# Phase 1：无人值守 workflow 编排 DAG（checkpoint 暂停/resume 推进/--until 早停/task_workflow_state 幂等）
-python3 quwoquan_data/tests/cli/test_data_cli.py
-python3 quwoquan_data/tests/workflow/test_task_run_pipeline.py
+# Phase 1：无人值守 workflow 编排 DAG（三层测试：local_contract/api_integration/user_acceptance）
+"$PYTEST_RUNNER" -m pytest -q \
+  quwoquan_data/tests/local_contract/cli/test_cli_environment__local_contract_test.py \
+  quwoquan_data/tests/local_contract/cli/test_cli_finalize_author__local_contract_test.py \
+  quwoquan_data/tests/local_contract/cli/test_cli_verify_audit__local_contract_test.py \
+  quwoquan_data/tests/local_contract/cli/test_cli_workflow_commands__local_contract_test.py
+"$PYTEST_RUNNER" -m pytest -q \
+  quwoquan_data/tests/local_contract/build/test_homepage_prepare__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_auto_content_plan__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_content_plan_source_contract__local_contract_test.py \
+  quwoquan_data/tests/local_contract/produce/test_task_author_review__local_contract_test.py \
+  quwoquan_data/tests/local_contract/task/test_download_auto_research__local_contract_test.py \
+  quwoquan_data/tests/local_contract/task/test_download_checkpoint_repair__local_contract_test.py \
+  quwoquan_data/tests/local_contract/task/test_download_fast_fail_policy__local_contract_test.py \
+  quwoquan_data/tests/local_contract/task/test_download_repair_prompt__local_contract_test.py \
+  quwoquan_data/tests/local_contract/task/test_managed_local_runtime__local_contract_test.py \
+  quwoquan_data/tests/local_contract/task/test_managed_preflight_workspace__local_contract_test.py \
+  quwoquan_data/tests/local_contract/task/test_replacement_screening__local_contract_test.py \
+  quwoquan_data/tests/local_contract/task/test_workflow_state_machine__local_contract_test.py \
+  quwoquan_data/tests/api_integration/ship/test_task_publish_release__api_integration_test.py \
+  quwoquan_data/tests/user_acceptance/workflow/test_task_run_operator_journey__user_acceptance_test.py
 # Phase 1：HITL 最小化（明确违规自动丢弃/明确合格自动采纳/仅模糊项转人工）
 python3 quwoquan_data/tests/integration/test_hitl_autopass.py
 # Phase 1：实体 composer 红绿契约 + entityRef 全路径回归（发布门主实体不被误过滤）
@@ -114,6 +146,8 @@ python3 quwoquan_data/tests/verify/test_directory_evidence_gate.py
 python3 quwoquan_data/tests/download/test_image_download_gates.py
 # 标签可点击态：tag 本体保持语义定义，link target 由 publish index 派生
 python3 quwoquan_data/tests/publish/test_tag_link_targets.py
+# 行政区标签层级：V1 中国两级选择依赖 34 省级、广东完整地级市、北京区县 direct children
+python3 quwoquan_data/tests/local_contract/publish/test_admin_region_tags__local_contract_test.py
 # 结构化出处：5.review/provenance.json 统一回查入口（agent 输入/最终结果/原始源/证据源/门结果）+ 强制完整性/一致性门
 python3 quwoquan_data/tests/common/test_provenance.py
 # 实体标注：词典 grounding + inline 机械标注（首次出现/frontmatter 安全）+ ref 闭环强校验 + 发布强制覆盖门

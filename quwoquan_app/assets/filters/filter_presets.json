@@ -1,6 +1,7 @@
 {
   "version": 2,
   "categories": [
+    { "id": "camera_photo", "label": "拍照", "sort": 1, "enabled": true },
     { "id": "texture", "label": "质感", "sort": 10, "enabled": true },
     { "id": "portrait", "label": "人像", "sort": 20, "enabled": true },
     { "id": "fresh_natural", "label": "清新自然", "sort": 30, "enabled": true },
@@ -12,6 +13,13 @@
     { "id": "seasons", "label": "四季变幻", "sort": 90, "enabled": true }
   ],
   "presets": [
+    { "id": "original", "categoryId": "camera_photo", "name": "原图", "sort": 1, "enabled": true, "defaultStrength": 0, "params": {} },
+    { "id": "vivid", "categoryId": "camera_photo", "name": "鲜明", "sort": 2, "enabled": true, "defaultStrength": 80, "params": { "contrast": 12, "saturation": 16, "vibrance": 10, "lightSense": 4 } },
+    { "id": "warm", "categoryId": "camera_photo", "name": "鲜暖", "sort": 3, "enabled": true, "defaultStrength": 78, "params": { "temperature": 14, "saturation": 10, "highlight": 4, "lightSense": 4 } },
+    { "id": "cool", "categoryId": "camera_photo", "name": "鲜冷", "sort": 4, "enabled": true, "defaultStrength": 78, "params": { "temperature": -14, "tint": -3, "saturation": 8, "contrast": 6 } },
+    { "id": "dramatic", "categoryId": "camera_photo", "name": "戏剧", "sort": 5, "enabled": true, "defaultStrength": 82, "params": { "contrast": 22, "shadow": -8, "highlight": -8, "structure": 8 } },
+    { "id": "mono", "categoryId": "camera_photo", "name": "黑白", "sort": 6, "enabled": true, "defaultStrength": 100, "params": { "saturation": -100, "contrast": 14, "structure": 8 } },
+
     { "id": "texture_crisp", "categoryId": "texture", "name": "清透", "sort": 1, "enabled": true, "defaultStrength": 80, "params": { "contrast": 12, "structure": 10, "sharpen": 8, "fade": -4 } },
     { "id": "texture_detail", "categoryId": "texture", "name": "细节拉满", "sort": 2, "enabled": true, "defaultStrength": 84, "params": { "structure": 16, "texture": 14, "contrast": 10, "sharpen": 10 } },
     { "id": "texture_soft_haze", "categoryId": "texture", "name": "柔雾", "sort": 3, "enabled": true, "defaultStrength": 76, "params": { "contrast": -8, "fade": 12, "highlight": 8, "temperature": 4 } },

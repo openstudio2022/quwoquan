@@ -42,8 +42,7 @@ gwt_acceptance:
     tests:
       planned:
       - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -59,7 +58,8 @@ gwt_acceptance:
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
   GWT2:
     title: 旧内容深链入口收敛到 workBrowser
     given:
@@ -86,15 +86,7 @@ gwt_acceptance:
       - command: make codegen-app
       - command: make -C quwoquan_service verify-metadata
       - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded:
-      - command: make -C quwoquan_service verify-metadata
-      - command: python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py
-      - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      - command: flutter test test/ui/circle/pages/home_circles_hub_page_test.dart
-          test/ui/circle/widgets/section_widgets_test.dart test/ui/circle/circle_content_identity_widget_test.dart
-      - command: flutter test test/app/navigation/native_back_navigation_policy_test.dart
-      - command: bash agent_ops/scaffold/verify_acceptance_standard.sh
-      - command: bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -121,6 +113,14 @@ gwt_acceptance:
       --user-service-dir ./services/user-service'
     - '[migrated_from_recorded] flutter analyze --no-fatal-warnings --no-fatal-infos
       <modified workBrowser route files>'
+    - '[migrated_from_recorded_command] make -C quwoquan_service verify-metadata'
+    - '[migrated_from_recorded_command] python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py'
+    - '[migrated_from_recorded_command] flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
+    - '[migrated_from_recorded_command] flutter test test/ui/circle/pages/home_circles_hub_page_test.dart
+      test/ui/circle/widgets/section_widgets_test.dart test/ui/circle/circle_content_identity_widget_test.dart'
+    - '[migrated_from_recorded_command] flutter test test/app/navigation/native_back_navigation_policy_test.dart'
+    - '[migrated_from_recorded_command] bash agent_ops/scaffold/verify_acceptance_standard.sh'
+    - '[migrated_from_recorded_command] bash agent_ops/scaffold/verify_feature_tree_refactor.sh'
   GWT3:
     title: 三类媒体内部导航状态信息
     given:
@@ -143,8 +143,7 @@ gwt_acceptance:
     tests:
       planned:
       - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -159,7 +158,8 @@ gwt_acceptance:
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
   GWT4:
     title: 媒体筛选进入更多菜单
     given:
@@ -179,9 +179,7 @@ gwt_acceptance:
     tests:
       planned:
       - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      - command: cd quwoquan_app && flutter test test/ui/content/post/contract/post_ui_config_contract_test.dart
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -196,7 +194,9 @@ gwt_acceptance:
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/content/post/contract/post_ui_config_contract_test.dart'
   GWT5:
     title: 交集作为推荐解释层
     given:
@@ -217,8 +217,7 @@ gwt_acceptance:
     tests:
       planned:
       - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -233,7 +232,8 @@ gwt_acceptance:
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
   GWT6:
     title: WorkBrowserItem 端云契约一致
     given:
@@ -291,8 +291,7 @@ gwt_acceptance:
     tests:
       planned:
       - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -307,7 +306,8 @@ gwt_acceptance:
         cases:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
   GWT8:
     title: 文章实体标签跳转实体主页
     given:
@@ -331,9 +331,7 @@ gwt_acceptance:
       planned:
       - command: flutter test test/ui/content/markdown/article_markdown_codec_test.dart
       - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/content/markdown/article_markdown_codec_test.dart
-          test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -348,7 +346,9 @@ gwt_acceptance:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.gwt8_local_contract
         envs: *id001
       supporting: []
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/content/markdown/article_markdown_codec_test.dart
+      test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

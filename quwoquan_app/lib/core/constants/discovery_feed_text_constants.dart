@@ -26,11 +26,13 @@ class DiscoveryFeedText {
   static const String intersectionMoreLabel = '全部连接';
   // Work Browser 作者区交集入口与详情解释层（V1.0：N 个交集 › → 弹出推荐解释）
   static String intersectionEntrySummary(int count) => '$count 个交集';
-  static const String intersectionDetailTitle = '为什么推荐给你';
+  static const String intersectionDetailTitle = '与你相关的线索';
   static const String homeFeedIntersectionReasonLabel = '推荐理由';
 
   // ==================== 我的交集收件箱 ====================
-  static const String myIntersectionsTitle = '我的交集';
+  // V5 口径（user-profile-intersection-redesign S2b / 主任务 V5 成功标准）：
+  // 我的主页交集模块统一命名「我的连接」，与他人主页「我与TA的交集」并列为列表入口。
+  static const String myIntersectionsTitle = '我的连接';
   static const String intersectionViewAll = '查看全部';
   static const String intersectionFilterAll = '全部';
   static const String intersectionFilterPeople = '人';

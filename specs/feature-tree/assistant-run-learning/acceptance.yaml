@@ -19,15 +19,12 @@ domain_acceptance:
       planned:
       - file: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
       recorded:
-      - file: quwoquan_service/services/assistant-service/internal/application/chat_mention_service_test.go
-      - file: quwoquan_service/services/assistant-service/internal/application/service_test.go
-      - file: quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
-      - file: quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
-      - file: quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client_test.go
-      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
-      - file: quwoquan_service/scripts/contract/verify_assistant_context_contract.py
-      - file: quwoquan_service/scripts/contract/verify_assistant_security_contract.py
-      - file: specs/feature-tree/assistant-run-learning/commercial_slo_observability.md
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/chat_mention_service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/skill_subscription_service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/infrastructure/chatclient/client__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
     status: partial
     test_evidence:
       primary:
@@ -47,6 +44,9 @@ domain_acceptance:
       supporting: []
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_feedback_test.dart'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/contract/verify_assistant_context_contract.py'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/contract/verify_assistant_security_contract.py'
+    - '[migrated_from_recorded_reference] specs/feature-tree/assistant-run-learning/commercial_slo_observability.md'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-06-22T12:41:06.894872Z",
+  "suite": "environment-page-smoke",
+  "environment": "prod-gray-initial",
+  "device": {
+    "id": "dry-run-device",
+    "name": "Dry Run Device",
+    "targetPlatform": "ios",
+    "sdk": "dry-run",
+    "emulator": true,
+    "screenClass": "phone"
+  },
+  "extra": {
+    "target": "test/patrol/environment/basic_viability_test.dart",
+    "runtimeEnv": "prod"
+  }
+}

@@ -32,7 +32,7 @@ enums:
   MediaStatus: [uploaded, processing, ready, failed]
   MediaType: [image, video, audio]
   MediaCoverStrategy: [first_frame, manual]
-  MediaAssetScope: [draft, published, cold_start, comment_attachment]
+  MediaAssetScope: [draft, published, cold_start, comment_attachment, profile_avatar, profile_cover]
   MediaAssetSourceKind: [user_upload, ai_generated, cold_start_crawl, remote_import]
   UserStatus: [active, suspended, deleted]
   Gender: [male, female, other, unspecified]

@@ -3,14 +3,12 @@
 
 class PersonaCreateRequestDto {
   final String displayName;
-  final String? userHandle;
   final String? avatarUrl;
   final String? isolationLevel;
   final String? purposeHint;
 
   PersonaCreateRequestDto({
     this.displayName = '',
-    this.userHandle,
     this.avatarUrl,
     this.isolationLevel,
     this.purposeHint,
@@ -19,7 +17,6 @@ class PersonaCreateRequestDto {
   factory PersonaCreateRequestDto.fromMap(Map<String, dynamic> m) {
     return PersonaCreateRequestDto(
       displayName: m['displayName']?.toString() ?? '',
-      userHandle: m['userHandle']?.toString() ?? null,
       avatarUrl: m['avatarUrl']?.toString() ?? null,
       isolationLevel: m['isolationLevel']?.toString() ?? null,
       purposeHint: m['purposeHint']?.toString() ?? null,
@@ -29,7 +26,6 @@ class PersonaCreateRequestDto {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'displayName': displayName,
-      'userHandle': userHandle,
       'avatarUrl': avatarUrl,
       'isolationLevel': isolationLevel,
       'purposeHint': purposeHint,
@@ -38,14 +34,12 @@ class PersonaCreateRequestDto {
 
   PersonaCreateRequestDto copyWith({
     String? displayName,
-    String? userHandle,
     String? avatarUrl,
     String? isolationLevel,
     String? purposeHint,
   }) {
     return PersonaCreateRequestDto(
       displayName: displayName ?? this.displayName,
-      userHandle: userHandle ?? this.userHandle,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       isolationLevel: isolationLevel ?? this.isolationLevel,
       purposeHint: purposeHint ?? this.purposeHint,

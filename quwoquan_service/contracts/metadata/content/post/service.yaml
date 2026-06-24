@@ -39,7 +39,7 @@ api_routes:
     operation: CreatePost
     description: 创建内容（可草稿或直发）
     request_entity: Post
-    writable_fields: [contentType, contentIdentity, title, body, summary, semanticMentions, rating, reviewAspects, mediaUrls, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    writable_fields: [contentType, contentIdentity, title, body, summary, semanticMentions, rating, reviewAspects, mediaUrls, mediaItems, coverUrl, thumbnailUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
     security:
       auth_mode: required
       principal: owner
@@ -64,7 +64,7 @@ api_routes:
     path: /v1/content/posts/{postId}
     operation: UpdatePost
     description: 更新内容（仅 draft 可改；published 后不可变）
-    writable_fields: [contentType, contentIdentity, title, body, summary, semanticMentions, rating, reviewAspects, mediaUrls, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    writable_fields: [contentType, contentIdentity, title, body, summary, semanticMentions, rating, reviewAspects, mediaUrls, mediaItems, coverUrl, thumbnailUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
     security:
       auth_mode: required
       principal: owner
@@ -206,17 +206,23 @@ api_routes:
   - method: GET
     path: /v1/content/sub-accounts/{subAccountId}/interactions/received
     operation: ListProfileInteractionActivitiesReceived
-    description: 个人主页收到的互动活动（赞/评论/转发）
+    description: 个人主页收到的互动活动（赞/评论/转发）；cursor 为 opaque keyset token（createdAt+activityId 倒序），按 occurredAt 倒序 keyset 分页 + 触底结束态
     query_params: [cursor, limit]
     response_entity: ProfileInteractionActivityView
+    # 响应契约（框架级 response_body）：分页列表，items 承载 ProfileInteractionActivityWire；附 nextCursor/hasMore。
+    response_body: ProfileInteractionActivityWire
+    response_body_kind: page
     auth: required
 
   - method: GET
     path: /v1/content/sub-accounts/{subAccountId}/interactions/sent
     operation: ListProfileInteractionActivitiesSent
-    description: 个人主页发出的互动活动（赞/评论/转发）
+    description: 个人主页发出的互动活动（赞/评论/转发）；cursor 为 opaque keyset token（createdAt+activityId 倒序），按 occurredAt 倒序 keyset 分页 + 触底结束态
     query_params: [cursor, limit]
     response_entity: ProfileInteractionActivityView
+    # 响应契约（框架级 response_body）：分页列表，items 承载 ProfileInteractionActivityWire；附 nextCursor/hasMore。
+    response_body: ProfileInteractionActivityWire
+    response_body_kind: page
     auth: required
 
   - method: GET
@@ -226,6 +232,9 @@ api_routes:
     query_params: [limit]
     response_entity: AuthorImpactSummary
     response_fields: [authorId, total, items]
+    # 响应契约（框架级 response_body）：整页为单读模型对象（端 _decodeObject → AuthorImpactSummary.fromMap）。
+    response_body: AuthorImpactSummary
+    response_body_kind: object
     auth: required
 
   - method: GET
@@ -399,12 +408,14 @@ api_routes:
     path: /v1/content/media/{mediaId}/cover:auto
     operation: SelectAutoVideoCover
     description: 视频封面默认策略（首帧）
+    response_entity: ContentVideoCoverSelectionWire
     auth: required
 
   - method: POST
     path: /v1/content/media/{mediaId}/cover:manual
     operation: SelectManualVideoCover
     description: 手工指定视频封面
+    response_entity: ContentVideoCoverSelectionWire
     auth: required
 
   - method: POST

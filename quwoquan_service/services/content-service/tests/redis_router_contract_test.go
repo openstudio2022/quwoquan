@@ -10,13 +10,11 @@ import (
 )
 
 func TestRedisRouter_DualSceneIsolation(t *testing.T) {
-	if testRouter == nil {
-		t.Skip("testRouter not initialized")
-	}
 	ctx := context.Background()
+	router := requireTestRouter(t)
 
-	rec := testRouter.Scene("rec")
-	gen := testRouter.Scene("general")
+	rec := router.Scene("rec")
+	gen := router.Scene("general")
 
 	_ = rec.Set(ctx, "rec:isolation:k1", "rec-only", time.Minute)
 	_ = gen.Set(ctx, "cache:isolation:k1", "gen-only", time.Minute)
@@ -43,35 +41,29 @@ func TestRedisRouter_DualSceneIsolation(t *testing.T) {
 }
 
 func TestRedisRouter_PrefixRoutingToCorrectScene(t *testing.T) {
-	if testRouter == nil {
-		t.Skip("testRouter not initialized")
-	}
 	ctx := context.Background()
+	router := requireTestRouter(t)
 
 	recKey := "rec:session_signals:{test_user}:test_session"
 	genKey := "cache:post:test_post"
 
-	_ = testRouter.ForKey(recKey).Set(ctx, recKey, "rec-data", time.Minute)
-	_ = testRouter.ForKey(genKey).Set(ctx, genKey, "gen-data", time.Minute)
+	_ = router.ForKey(recKey).Set(ctx, recKey, "rec-data", time.Minute)
+	_ = router.ForKey(genKey).Set(ctx, genKey, "gen-data", time.Minute)
 
-	v1, _ := testRouter.Scene("rec").Get(ctx, recKey)
+	v1, _ := router.Scene("rec").Get(ctx, recKey)
 	if v1 != "rec-data" {
 		t.Errorf("rec prefix route: got %q, want %q", v1, "rec-data")
 	}
 
-	v2, _ := testRouter.Scene("general").Get(ctx, genKey)
+	v2, _ := router.Scene("general").Get(ctx, genKey)
 	if v2 != "gen-data" {
 		t.Errorf("general prefix route: got %q, want %q", v2, "gen-data")
 	}
 }
 
 func TestRedisRouter_RecSceneBacksMiniredis(t *testing.T) {
-	if testRouter == nil {
-		t.Skip("testRouter not initialized")
-	}
 	ctx := context.Background()
-
-	rec := testRouter.Scene("rec")
+	rec := requireTestRouter(t).Scene("rec")
 
 	if err := rec.Ping(ctx); err != nil {
 		t.Fatalf("rec scene Ping: %v (should be backed by miniredis)", err)
@@ -85,12 +77,8 @@ func TestRedisRouter_RecSceneBacksMiniredis(t *testing.T) {
 }
 
 func TestRedisRouter_GeneralSceneBacksMemory(t *testing.T) {
-	if testRouter == nil {
-		t.Skip("testRouter not initialized")
-	}
 	ctx := context.Background()
-
-	gen := testRouter.Scene("general")
+	gen := requireTestRouter(t).Scene("general")
 
 	if err := gen.Ping(ctx); err != nil {
 		t.Fatalf("general scene Ping: %v", err)

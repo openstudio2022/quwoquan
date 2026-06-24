@@ -12,10 +12,11 @@ scope:
   - 首页 feed 首屏、翻页、刷新、续接、四态与推荐理由展示规格。
   - 端侧行为回流到推荐 HotPath/FeedbackRecorder 的契约与测试。
   - 交集理由同源消费、发现流多形态布局、关注对象列表与曝光/点击归因。
+  - 非深排 P0：质量分投影消费、协同物化召回读取、旅行垂类和精品流式路由。
   - served/impressed 双轨、跨页去重、负反馈即时抑制和曝光健康 SLI 的集成边界；曝光治理策略所有权归属 `discovery-content/exposure-governance`。
   out_of_scope:
   - 深度排序模型平台轨（MMoE/PLE/ESMM、双塔 ANN、IPS）。
-  - 协同过滤召回真实实现与离线物化作业。
+  - 协同过滤离线物化作业和 replay 评估脚本。
   - Thompson Sampling、生命周期复活、Bloom/Cuckoo/Count-Min 等海量曝光基础设施实现。
 sit_acceptance:
   SIT1:
@@ -24,6 +25,8 @@ sit_acceptance:
     - discovery-content/feed-orchestration-recommendation/unified-items-cursor
     - discovery-content/feed-orchestration-recommendation/personalized-ranking
     - discovery-content/feed-orchestration-recommendation/personalized-ranking--ranking-signal-fusion
+    - discovery-content/feed-orchestration-recommendation/travel-vertical-recommendation
+    - discovery-content/feed-orchestration-recommendation/premium-stream-recommendation
     - discovery-content/feed-orchestration-recommendation/realtime-feed-baseline
     - discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling
     done_when:
@@ -37,6 +40,8 @@ sit_acceptance:
     - 端侧反馈经单一 BehaviorReporter 通道分级上报（强信号即时、弱信号采样合并），clientEventId 幂等、feedRequestId
       归因闭环，不双通道重复上报。
     - 推荐 SLO/KPI 有真相源，至少覆盖 feed 延迟、空结果率、fallback 率、重复曝光率、CTR、停留、完成率与负反馈率。
+    - P0+ 推荐归因闭环可观测：feed 下发与行为上报携带 channel/vertical/supply_source/recall_path/ranking_version/reason_version/intersection_class
+      分桶，served 与 behavior 指标可按首页、旅行、精品、UGC、数据工程、召回路径和交集类别切分。
     - 曝光记忆、动态曝光预算、生命周期复活和活跃度自适应只引用 exposure-governance 规格，不在本节点维护第二套规则。
     performance_points:
     - Feed P95 <= 200ms、P99 <= 400ms（模型超时可降级）。
@@ -47,19 +52,21 @@ sit_acceptance:
       - file: quwoquan_app/test/patrol/discovery/feed_load_test.dart
       - file: quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
       recorded:
-      - file: quwoquan_app/test/ui/discovery/home_feed_layout_policy_test.dart
-      - file: quwoquan_app/test/ui/discovery/home_channel_template_routing_test.dart
-      - file: quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
-      - file: quwoquan_app/test/ui/discovery/following_subject_strip_test.dart
-      - file: quwoquan_app/test/ui/discovery/post/contract/discovery_feed_query_contract_test.dart
-      - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
-      - file: quwoquan_app/test/cloud/behavior/contract/behavior_repository_contract_test.dart
-      - file: quwoquan_app/test/cloud/content/content_behavior_tracker_test.dart
-      - file: quwoquan_app/test/cloud/content/post/contract/post_behavior_tracker_contract_test.dart
-      - file: quwoquan_service/runtime/recommendation/engine_test.go
-      - file: quwoquan_service/runtime/recommendation/intersection_fusion_test.go
-      - file: quwoquan_service/runtime/recommendation/rerank_mmr_test.go
-      - file: quwoquan_service/runtime/recommendation/ucb_explore_test.go
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_feed_layout_policy__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_channel_template_routing__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/following_subject_strip__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/post/contract/discovery_feed_query_contract__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/discovery/post/journeys/discovery_post_feed_load_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/behavior/contract/behavior_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/content_behavior_tracker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/post/contract/post_behavior_tracker_contract__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_feed_contract__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_behavior_contract__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/quality_score_fusion__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/collaborative_recall__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/observability_attribution__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed_service_negative_fallback__local_contract_test.go
     status: implemented
     test_evidence:
       primary:
@@ -87,8 +94,12 @@ sit_acceptance:
         cases:
         - user_acceptance.discovery_content.feed_orchestration_recommendation.sit1.e2e_journey
         envs:
-        - gamma
-    notes: []
+        - gamma_local
+    notes:
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/engine_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/intersection_fusion_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/rerank_mmr_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/ucb_explore_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

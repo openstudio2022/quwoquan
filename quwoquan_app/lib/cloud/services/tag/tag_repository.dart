@@ -4,6 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/tag/mock/tag_mock_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/tag/tag_api_metadata.g.dart';
@@ -15,6 +16,7 @@ part 'tag_repository_remote.dart';
 /// 标签 API 默认分页常量
 class TagApiDefaults {
   TagApiDefaults._();
+  static const int childrenLimit = 500;
   static const int suggestLimit = 20;
   static const int searchLimit = 50;
   static const int relatedLimit = 20;
@@ -22,10 +24,24 @@ class TagApiDefaults {
   static const int minCooccurCount = 1;
 }
 
+class TagTaxonomyRefs {
+  TagTaxonomyRefs._();
+  static const String chinaAdminRegionRoot = 'Topic/地理/行政区/中国';
+  static const String careerOccupationRoot = 'Audience/用户/职业';
+  static const String careerInterestRoot = 'Audience/用户/兴趣偏好';
+}
+
 /// 标签体系 Repository（场景2: 内容创作 + 场景3: 推荐搜索 + 场景4: 关系图谱）
 ///
 /// API 定义见 contracts/metadata/tag/service.yaml
 abstract class TagRepository {
+  // ── 公共标签层级 ──────────────────────────────────────────
+  Future<List<TagChild>> listChildren(
+    String parentTagRef, {
+    int limit = TagApiDefaults.childrenLimit,
+  });
+  Future<TagResolve> resolveTag(String tagRef);
+
   // ── 场景2: 内容创作 ──────────────────────────────────────────
   Future<List<TagDimension>> listDimensions();
   Future<List<TagSuggestion>> suggest(
@@ -102,6 +118,72 @@ class SharedTagView {
     label: json['label'] as String? ?? '',
     strength: (json['strength'] as num?)?.toDouble() ?? 0.0,
     source: json['source'] as String? ?? '',
+  );
+}
+
+/// 标签解析结果（tag-service /v1/tag/resolve 返回项）。
+class TagResolve {
+  final String tagRef;
+  final String group;
+  final String label;
+  final String labelEn;
+  final String aliases;
+  final String ancestors;
+
+  const TagResolve({
+    required this.tagRef,
+    required this.group,
+    required this.label,
+    this.labelEn = '',
+    this.aliases = '',
+    this.ancestors = '',
+  });
+
+  factory TagResolve.fromJson(Map<String, dynamic> json) => TagResolve(
+    tagRef: json['tagRef'] as String? ?? '',
+    group: json['group'] as String? ?? '',
+    label: json['label'] as String? ?? '',
+    labelEn: json['labelEn'] as String? ?? '',
+    aliases: json['aliases'] as String? ?? '',
+    ancestors: json['ancestors'] as String? ?? '',
+  );
+}
+
+/// 标签层级直接子节点（tag-service /v1/tag/children 返回项）。
+class TagChild {
+  final String tagRef;
+  final String label;
+  final String displayLabel;
+  final String labelEn;
+  final String parentTagRef;
+  final int depth;
+  final bool hasChildren;
+  final String releaseId;
+  final String lifecycleStatus;
+
+  const TagChild({
+    required this.tagRef,
+    required this.label,
+    required this.displayLabel,
+    required this.labelEn,
+    required this.parentTagRef,
+    required this.depth,
+    required this.hasChildren,
+    required this.releaseId,
+    required this.lifecycleStatus,
+  });
+
+  factory TagChild.fromJson(Map<String, dynamic> json) => TagChild(
+    tagRef: json['tagRef'] as String? ?? '',
+    label: json['label'] as String? ?? '',
+    displayLabel:
+        json['displayLabel'] as String? ?? json['label'] as String? ?? '',
+    labelEn: json['labelEn'] as String? ?? '',
+    parentTagRef: json['parentTagRef'] as String? ?? '',
+    depth: (json['depth'] as num?)?.toInt() ?? 0,
+    hasChildren: json['hasChildren'] as bool? ?? false,
+    releaseId: json['releaseId'] as String? ?? '',
+    lifecycleStatus: json['lifecycleStatus'] as String? ?? '',
   );
 }
 

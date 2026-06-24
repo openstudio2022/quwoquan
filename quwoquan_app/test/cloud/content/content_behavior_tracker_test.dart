@@ -221,8 +221,8 @@ void main() {
       expect(event.referralSource, equals(ReferralSource.organicFeed));
     });
 
-    // ── 阶段五归因：channelId / rankingVersion 全事件透传（common_fields）──
-    test('impression 透传 channelId/rankingVersion 回流', () async {
+    // ── 阶段五 + P0+：推荐归因字段全事件透传（common_fields + attribution）──
+    test('impression 透传推荐归因字段回流', () async {
       tracker.trackImpression(
         'post_ch',
         feedRequestId: 'frq_01H',
@@ -230,6 +230,10 @@ void main() {
         referralSource: ReferralSource.organicFeed,
         channelId: 'following',
         rankingVersion: 'rank-v3',
+        reasonVersion: 'reason-v2',
+        recallPath: 'collab_i2i',
+        contentVertical: 'travel_photography',
+        supplySource: 'data_engineering',
       );
       await tracker.flush();
 
@@ -237,10 +241,14 @@ void main() {
       expect(event.state, equals('impressed'));
       expect(event.channelId, equals('following'));
       expect(event.rankingVersion, equals('rank-v3'));
+      expect(event.reasonVersion, equals('reason-v2'));
+      expect(event.recallPath, equals('collab_i2i'));
+      expect(event.contentVertical, equals('travel_photography'));
+      expect(event.supplySource, equals('data_engineering'));
       expect(event.feedRequestId, equals('frq_01H'));
     });
 
-    test('click 透传 channelId/rankingVersion 回流', () async {
+    test('click 独立七态并透传推荐归因字段回流', () async {
       tracker.trackClick(
         'post_ch2',
         feedRequestId: 'frq_02H',
@@ -248,13 +256,22 @@ void main() {
         referralSource: ReferralSource.organicFeed,
         channelId: 'video',
         rankingVersion: 'rank-v9',
+        reasonVersion: 'reason-v9',
+        recallPath: 'collab_u2i',
+        contentVertical: 'general',
+        supplySource: 'ugc',
       );
       await tracker.flush();
 
       final event = repo.recorded.single;
       expect(event.action, BehaviorAction.click);
+      expect(event.state, equals('click'));
       expect(event.channelId, equals('video'));
       expect(event.rankingVersion, equals('rank-v9'));
+      expect(event.reasonVersion, equals('reason-v9'));
+      expect(event.recallPath, equals('collab_u2i'));
+      expect(event.contentVertical, equals('general'));
+      expect(event.supplySource, equals('ugc'));
     });
 
     // ── N7：交集证据组点击统一通道，保 tag_click 语义（推荐 HotPath 1.8 权重）──
@@ -294,39 +311,42 @@ void main() {
     });
 
     // ── 七态漏斗：visible（弱可见）与 impressed（达阈值）状态严格区分，归因字段全透传 ──
-    test('七态漏斗：visible 未达阈值 vs impressed 达阈值，状态区分且 channelId/rankingVersion 透传', () async {
-      tracker.trackQualifiedImpression(
-        'post_visible',
-        visibleFraction: 0.3,
-        visibleDuration: const Duration(milliseconds: 400),
-        feedRequestId: 'frq_07',
-        channelId: 'recommend',
-        rankingVersion: 'rank-v7',
-      );
-      tracker.trackQualifiedImpression(
-        'post_impressed',
-        visibleFraction: 0.8,
-        visibleDuration: const Duration(milliseconds: 1500),
-        feedRequestId: 'frq_07',
-        channelId: 'recommend',
-        rankingVersion: 'rank-v7',
-      );
-      await tracker.flush();
+    test(
+      '七态漏斗：visible 未达阈值 vs impressed 达阈值，状态区分且 channelId/rankingVersion 透传',
+      () async {
+        tracker.trackQualifiedImpression(
+          'post_visible',
+          visibleFraction: 0.3,
+          visibleDuration: const Duration(milliseconds: 400),
+          feedRequestId: 'frq_07',
+          channelId: 'recommend',
+          rankingVersion: 'rank-v7',
+        );
+        tracker.trackQualifiedImpression(
+          'post_impressed',
+          visibleFraction: 0.8,
+          visibleDuration: const Duration(milliseconds: 1500),
+          feedRequestId: 'frq_07',
+          channelId: 'recommend',
+          rankingVersion: 'rank-v7',
+        );
+        await tracker.flush();
 
-      final visible = repo.recorded.firstWhere(
-        (e) => e.contentId == 'post_visible',
-      );
-      final impressed = repo.recorded.firstWhere(
-        (e) => e.contentId == 'post_impressed',
-      );
-      expect(visible.state, equals('visible'));
-      expect(impressed.state, equals('impressed'));
-      for (final event in <BehaviorEvent>[visible, impressed]) {
-        expect(event.feedRequestId, equals('frq_07'));
-        expect(event.channelId, equals('recommend'));
-        expect(event.rankingVersion, equals('rank-v7'));
-      }
-    });
+        final visible = repo.recorded.firstWhere(
+          (e) => e.contentId == 'post_visible',
+        );
+        final impressed = repo.recorded.firstWhere(
+          (e) => e.contentId == 'post_impressed',
+        );
+        expect(visible.state, equals('visible'));
+        expect(impressed.state, equals('impressed'));
+        for (final event in <BehaviorEvent>[visible, impressed]) {
+          expect(event.feedRequestId, equals('frq_07'));
+          expect(event.channelId, equals('recommend'));
+          expect(event.rankingVersion, equals('rank-v7'));
+        }
+      },
+    );
 
     test('follow 交集行动回流 dimension + tagRefs（B3 归因）', () async {
       tracker.trackFollow(

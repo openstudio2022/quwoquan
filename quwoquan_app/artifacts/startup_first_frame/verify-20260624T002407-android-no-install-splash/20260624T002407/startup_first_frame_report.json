@@ -1,0 +1,64 @@
+{
+  "outputDir": "artifacts/startup_first_frame/verify-20260624T002407-android-no-install-splash/20260624T002407",
+  "passed": false,
+  "results": [
+    {
+      "platform": "android",
+      "device": "emulator-5554",
+      "passed": false,
+      "visibleByMs": 3000,
+      "firstVisibleMs": null,
+      "blueScreenDetected": false,
+      "flutterUiDisplayedMaxMs": 3000,
+      "timings": {
+        "android_native_welcome_overlay_installed": 87,
+        "android_flutter_engine_configured": 2720,
+        "android_flutter_ui_displayed": 5620
+      },
+      "screenshots": [
+        {
+          "path": "artifacts/startup_first_frame/verify-20260624T002407-android-no-install-splash/20260624T002407/android-0500ms.png",
+          "offsetMs": 500,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            242,
+            248,
+            255
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/verify-20260624T002407-android-no-install-splash/20260624T002407/android-2000ms.png",
+          "offsetMs": 2000,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            242,
+            248,
+            255
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/verify-20260624T002407-android-no-install-splash/20260624T002407/android-3000ms.png",
+          "offsetMs": 3000,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            242,
+            248,
+            255
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        }
+      ]
+    }
+  ]
+}

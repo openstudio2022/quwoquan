@@ -59,8 +59,8 @@ sit_acceptance:
         suite: end_to_end_journey
         cases:
         - user_acceptance.runtime.deliver_deploy_prod_pipeline.sit1.end_to_end_journey
-        envs: &id003
-        - gamma
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] `deploy/shared/gamma_validation_suites.json` 新增 `mainline_auto_prod`
       profile，并由 workflow / verify 脚本消费。'
@@ -89,12 +89,7 @@ sit_acceptance:
     - 成本优化走标准 K8s 能力（requests/limits + bin-packing + HPA + cluster-autoscaler），低峰可缩容降本。
     tests:
       planned: []
-      recorded:
-      - file: deploy/shared/workload_topology_inventory.yaml
-      - file: quwoquan_service/scripts/deploy/verify_strangler_contract_invariants.py
-      - file: quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
-      - file: quwoquan_service/scripts/deploy/verify_gamma_local_prod_isomorphism.py
-      - file: deploy/kustomization/aliyun-prod/kustomization.yaml
+      recorded: []
       pending_evidence:
       - api_integration/user_acceptance：真实 ACK 集群 stackctl deploy/health/inspect/doctor
         全链与用户主链路无感漂移，待生产账号环境执行（本地无云账号不虚标）。
@@ -121,7 +116,8 @@ sit_acceptance:
         suite: end_to_end_journey
         cases:
         - user_acceptance.runtime.deliver_deploy_prod_pipeline.sit2.end_to_end_journey
-        envs: *id003
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] process_domain_mapping / module_package_mapping / aliyun-prod
       kustomization 对 seed-box 单元、独立 workload、拆分单元的 inventory 解释一致（local_contract）。'
@@ -133,6 +129,11 @@ sit_acceptance:
       + 用户主链路无感知漂移（local_contract/user_acceptance）。'
     - '[migrated_from_planned] 反模式门禁：拒绝多业务容器共享 Pod 当常态、sidecar 承载领域职责、集群内自建 DB StatefulSet
       默认、硬编码 DB 连接/跨域直连。'
+    - '[migrated_from_recorded_reference] deploy/shared/workload_topology_inventory.yaml'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/deploy/verify_strangler_contract_invariants.py'
+    - '[migrated_from_recorded_reference] quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/deploy/verify_gamma_local_prod_isomorphism.py'
+    - '[migrated_from_recorded_reference] deploy/kustomization/aliyun-prod/kustomization.yaml'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

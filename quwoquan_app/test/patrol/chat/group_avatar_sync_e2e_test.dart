@@ -1,4 +1,4 @@
-/// T4 Patrol E2E: 群头像同步旅程入口
+/// user_acceptance Patrol: 群头像同步旅程入口
 library;
 
 import 'package:flutter/widgets.dart';

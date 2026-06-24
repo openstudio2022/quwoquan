@@ -371,8 +371,8 @@ func TestAuth_FirstLogin_UsesCloudDefaultNicknamePattern(t *testing.T) {
 	).Scan(&nickname, &nicknameCustomized); err != nil {
 		t.Fatalf("query default nickname: %v", err)
 	}
-	if !regexp.MustCompile(`^新同学_[0-9]{13}$`).MatchString(nickname) {
-		t.Fatalf("expected cloud default nickname 新同学_YYMM9位随机数, got %q", nickname)
+	if !regexp.MustCompile(`^新同学_[0-9]{6}_[0-9]{7}$`).MatchString(nickname) {
+		t.Fatalf("expected cloud default nickname 新同学_YYMMDD_7位尾号, got %q", nickname)
 	}
 	if nicknameCustomized {
 		t.Fatalf("expected first-login nicknameCustomized=false, got true")

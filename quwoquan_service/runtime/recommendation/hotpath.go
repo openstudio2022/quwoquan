@@ -142,8 +142,12 @@ type BehaviorSignal struct {
 	CommentLength   int       `json:"commentLength,omitempty"`
 	// 阶段五归因：feed 下发频道与精排版本，全事件携带，使 HotPath / served-impressed 双轨记账与
 	// 特征投影可按频道与精排版本分桶（AB / replay）。与 App BehaviorEvent.channelId/rankingVersion 对齐。
-	ChannelID      string `json:"channelId,omitempty"`
-	RankingVersion string `json:"rankingVersion,omitempty"`
+	ChannelID       string `json:"channelId,omitempty"`
+	RankingVersion  string `json:"rankingVersion,omitempty"`
+	ReasonVersion   string `json:"reasonVersion,omitempty"`
+	RecallPath      string `json:"recallPath,omitempty"`
+	ContentVertical string `json:"contentVertical,omitempty"`
+	SupplySource    string `json:"supplySource,omitempty"`
 	// 交集转化归因（S6）：触发该行为的交集维度（identity/location/content/interest/relationship）
 	// 与路径制 tagRef 锚点（唯一真相源 publish/tags），供推荐回流与交集转化漏斗按维度/tagRef 下钻。
 	IntersectionDimension string   `json:"intersectionDimension,omitempty"`
@@ -151,8 +155,10 @@ type BehaviorSignal struct {
 	// 交集漏斗归因（曝光/点击/转化）：交集稳定标识 IntersectionID 与类别 IntersectionClass
 	// （fact|affinity）。与 App BehaviorEvent.intersectionId/intersectionClass 字段对齐（R08
 	// 端云一致性），使「交集曝光 → 点击 → 转化」可按同一 intersectionId 与事实/概率类别下钻。
-	IntersectionID    string `json:"intersectionId,omitempty"`
-	IntersectionClass string `json:"intersectionClass,omitempty"`
+	IntersectionID         string `json:"intersectionId,omitempty"`
+	IntersectionClass      string `json:"intersectionClass,omitempty"`
+	IntersectionSourceRef  string `json:"intersectionSourceRef,omitempty"`
+	IntersectionEvidenceID string `json:"intersectionEvidenceId,omitempty"`
 }
 
 // EffectiveSessionID returns the feed-scoped session ID for recommendation

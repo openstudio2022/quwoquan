@@ -115,18 +115,9 @@ void main() {
     });
 
     test('referralSourceForObjectType 按对象面精确映射（去 organicFeed 一刀切）', () {
-      expect(
-        referralSourceForObjectType('user'),
-        ReferralSource.authorProfile,
-      );
-      expect(
-        referralSourceForObjectType('circle'),
-        ReferralSource.circlePost,
-      );
-      expect(
-        referralSourceForObjectType('entity'),
-        ReferralSource.entityPage,
-      );
+      expect(referralSourceForObjectType('user'), ReferralSource.authorProfile);
+      expect(referralSourceForObjectType('circle'), ReferralSource.circlePost);
+      expect(referralSourceForObjectType('entity'), ReferralSource.entityPage);
       expect(
         referralSourceForObjectType('homepage'),
         ReferralSource.entityPage,
@@ -176,7 +167,7 @@ void main() {
       expect(json['feedRequestId'], 'req-uuid-123');
     });
 
-    test('channelId / rankingVersion / position 透传到 JSON（阶段五归因 common_fields）', () {
+    test('推荐归因字段透传到 JSON（阶段五 common_fields + P0+ attribution）', () {
       final json = BehaviorEvent(
         contentId: 'post_1',
         action: BehaviorAction.click,
@@ -185,23 +176,39 @@ void main() {
         position: 7,
         channelId: 'following',
         rankingVersion: 'rank-v3',
+        reasonVersion: 'reason-v2',
+        recallPath: 'collab_i2i',
+        contentVertical: 'travel_photography',
+        supplySource: 'data_engineering',
       ).toJson();
       expect(json['feedRequestId'], 'frq_01H');
       expect(json['referralSource'], 'organic_feed');
       expect(json['position'], 7);
       expect(json['channelId'], 'following');
       expect(json['rankingVersion'], 'rank-v3');
+      expect(json['reasonVersion'], 'reason-v2');
+      expect(json['recallPath'], 'collab_i2i');
+      expect(json['contentVertical'], 'travel_photography');
+      expect(json['supplySource'], 'data_engineering');
     });
 
-    test('空 channelId / rankingVersion 不写入 JSON（避免脏空串污染归因）', () {
+    test('空推荐归因字段不写入 JSON（避免脏空串污染归因）', () {
       final json = BehaviorEvent(
         contentId: 'post_1',
         action: BehaviorAction.impression,
         channelId: '',
         rankingVersion: '',
+        reasonVersion: '',
+        recallPath: '',
+        contentVertical: '',
+        supplySource: '',
       ).toJson();
       expect(json.containsKey('channelId'), isFalse);
       expect(json.containsKey('rankingVersion'), isFalse);
+      expect(json.containsKey('reasonVersion'), isFalse);
+      expect(json.containsKey('recallPath'), isFalse);
+      expect(json.containsKey('contentVertical'), isFalse);
+      expect(json.containsKey('supplySource'), isFalse);
     });
 
     test('hide_author / hide_content_type 透传 authorId 与 contentType', () {

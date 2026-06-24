@@ -94,6 +94,22 @@ func TestCreatePersona_Success(t *testing.T) {
 	}
 }
 
+func TestCreatePersona_UserHandleReadonly(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "persona_user_handle_create", "persona_user_handle")
+
+	rec := doRequest(t, http.MethodPost, "/v1/user/personas",
+		`{"displayName":"Shadow","userHandle":"client_handle"}`,
+		authHeaders("persona_user_handle_create"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	result := parseJSON(t, rec)
+	if result["code"] != "USER.SUB_ACCOUNT.handle_readonly" {
+		t.Fatalf("expected handle_readonly error, got %#v", result)
+	}
+}
+
 func TestActivatePersona_Transaction(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "persona_user_2", "persona_user2")
@@ -178,7 +194,7 @@ func TestUpdatePersona_ReflectsManagementFields(t *testing.T) {
 		t,
 		http.MethodPatch,
 		"/v1/user/personas/pa_edit_sa",
-		`{"displayName":"After","userHandle":"after_handle","phone":"13800138000","email":"after@example.com","avatarUrl":"https://example.com/avatar-after.png","isolationLevel":"semi"}`,
+		`{"displayName":"After","phone":"13800138000","email":"after@example.com","avatarUrl":"https://example.com/avatar-after.png","isolationLevel":"semi"}`,
 		authHeaders("persona_user_5"),
 	)
 	if rec.Code != http.StatusOK {
@@ -188,8 +204,8 @@ func TestUpdatePersona_ReflectsManagementFields(t *testing.T) {
 	if result["displayName"] != "After" {
 		t.Fatalf("expected displayName=After, got %v", result["displayName"])
 	}
-	if result["userHandle"] != "after_handle" {
-		t.Fatalf("expected userHandle=after_handle, got %v", result["userHandle"])
+	if result["userHandle"] != "pa_edit_sa" {
+		t.Fatalf("expected userHandle to remain system assigned, got %v", result["userHandle"])
 	}
 	if result["phone"] != "13800138000" {
 		t.Fatalf("expected phone reflected, got %v", result["phone"])
@@ -219,6 +235,27 @@ func TestUpdatePersona_ReflectsManagementFields(t *testing.T) {
 	}
 	if avatarVersion != 1 {
 		t.Fatalf("expected persisted avatar_version=1, got %d", avatarVersion)
+	}
+}
+
+func TestUpdatePersona_UserHandleReadonly(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "persona_user_handle_update", "persona_user_handle_update")
+	createTestPersonaFull(t, "pa_readonly", "persona_user_handle_update", "pa_readonly_sa", "Before", "open", true, true)
+
+	rec := doRequest(
+		t,
+		http.MethodPatch,
+		"/v1/user/personas/pa_readonly_sa",
+		`{"userHandle":"after_handle"}`,
+		authHeaders("persona_user_handle_update"),
+	)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	result := parseJSON(t, rec)
+	if result["code"] != "USER.SUB_ACCOUNT.handle_readonly" {
+		t.Fatalf("expected handle_readonly error, got %#v", result)
 	}
 }
 
@@ -331,9 +368,7 @@ func TestGetPersonaLifecycleGuard_HistoryRequiresRetire(t *testing.T) {
 }
 
 func TestGetPersonaLifecycleGuard_RecordsMongoHistoryFallbackMetric(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("mongo unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	usertelemetry.Reset()
 	t.Cleanup(usertelemetry.Reset)

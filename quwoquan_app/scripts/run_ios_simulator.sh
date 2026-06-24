@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# iOS 模拟器运行脚本（无需代码签名）
-
 set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+APP_DIR="$ROOT_DIR/quwoquan_app"
 
 echo "正在查找可用的 iOS 模拟器..."
 
@@ -92,5 +93,8 @@ if [ "$DEVICE_STATE" != "Booted" ]; then
     open -a Simulator >/dev/null 2>&1 || true
 fi
 
-echo "正在运行 Flutter 应用..."
-flutter run -d "$DEVICE_ID"
+echo "正在运行 alpha HTTPS mock stack..."
+bash "$ROOT_DIR/agent_ops/deploy/alpha/start_alpha_mock_stack.sh" up
+
+echo "正在通过 env-package-backed alpha 入口启动 Flutter 应用..."
+exec bash "$APP_DIR/run.sh" -d "$DEVICE_ID"

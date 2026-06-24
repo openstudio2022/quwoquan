@@ -69,7 +69,7 @@ func TestListProfileInteractionActivitiesProjectsReceivedContractFields(t *testi
 		t.Fatalf("comment owner post: %v", err)
 	}
 
-	items, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", 20)
+	items, _, _, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", "", 20)
 	if err != nil {
 		t.Fatalf("list received: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestListProfileInteractionActivitiesWiresCommentIdentity(t *testing.T) {
 		t.Fatalf("add reply comment: %v", err)
 	}
 
-	items, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", 20)
+	items, _, _, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", "", 20)
 	if err != nil {
 		t.Fatalf("list received: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestListProfileInteractionActivitiesProjectsSentContractFields(t *testing.T
 		t.Fatalf("like target post: %v", err)
 	}
 
-	items, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "sent", 20)
+	items, _, _, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "sent", "", 20)
 	if err != nil {
 		t.Fatalf("list sent: %v", err)
 	}
@@ -203,6 +203,77 @@ func TestListProfileInteractionActivitiesProjectsSentContractFields(t *testing.T
 		item.PreviewText != "海边视频" ||
 		item.PreviewRouteId != "workBrowser" {
 		t.Fatalf("sent projection mismatch: %#v", item)
+	}
+}
+
+// TestListProfileInteractionActivitiesKeysetCursorPaginates 验证 keyset 游标分页：
+// 逐页无重叠覆盖全集、hasMore/nextCursor 配对、触底结束态、确定性全序（含 createdAt 相等时的
+// activityId tiebreak 路径），证明已替换旧的“内存排序 + 硬上限 50 静默丢尾”。
+func TestListProfileInteractionActivitiesKeysetCursorPaginates(t *testing.T) {
+	ctx := context.Background()
+	svc := newProfileInteractionTestService()
+
+	actors := []string{"actor_a", "actor_b", "actor_c", "actor_d", "actor_e"}
+	for _, a := range actors {
+		if _, _, err := svc.LikePost(ctx, "post_owner_image", a, ""); err != nil {
+			t.Fatalf("like by %s: %v", a, err)
+		}
+	}
+
+	seen := map[string]bool{}
+	cursor := ""
+	pages := 0
+	total := 0
+	for {
+		items, next, hasMore, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", cursor, 2)
+		if err != nil {
+			t.Fatalf("page %d: %v", pages, err)
+		}
+		pages++
+		for _, it := range items {
+			if seen[it.ActivityId] {
+				t.Fatalf("duplicate activity across pages: %s", it.ActivityId)
+			}
+			seen[it.ActivityId] = true
+			total++
+		}
+		if !hasMore {
+			if next != "" {
+				t.Fatalf("exhausted page must not emit nextCursor, got %q", next)
+			}
+			break
+		}
+		if next == "" {
+			t.Fatalf("hasMore page must emit nextCursor")
+		}
+		if len(items) != 2 {
+			t.Fatalf("non-final page expected full limit 2, got %d", len(items))
+		}
+		cursor = next
+		if pages > 10 {
+			t.Fatalf("pagination did not terminate")
+		}
+	}
+	if total != len(actors) {
+		t.Fatalf("expected %d total interactions across pages, got %d", len(actors), total)
+	}
+
+	// 确定性全序：相同输入两次首页拉取必须一致（keyset 依赖确定性 tiebreak）。
+	first1, _, _, _ := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", "", 2)
+	first2, _, _, _ := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", "", 2)
+	if len(first1) != 2 || len(first2) != 2 ||
+		first1[0].ActivityId != first2[0].ActivityId ||
+		first1[1].ActivityId != first2[1].ActivityId {
+		t.Fatalf("first page not deterministic: %#v vs %#v", first1, first2)
+	}
+
+	// 损坏游标等价首页（不报错、不吞默认），与首页结果一致。
+	corrupted, _, _, err := svc.ListProfileInteractionActivities(ctx, "profile_owner", "profile_owner", "received", "not-a-valid-cursor", 2)
+	if err != nil {
+		t.Fatalf("corrupted cursor must not error: %v", err)
+	}
+	if len(corrupted) != 2 || corrupted[0].ActivityId != first1[0].ActivityId {
+		t.Fatalf("corrupted cursor must fall back to first page: %#v", corrupted)
 	}
 }
 

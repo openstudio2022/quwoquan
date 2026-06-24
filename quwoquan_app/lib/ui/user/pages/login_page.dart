@@ -1865,7 +1865,7 @@ class PhoneOtpPanel extends StatelessWidget {
     final message = _messageForState();
     return AutofillGroup(
       child: Column(
-        key: ValueKey<String>('phoneOtp-${state.phase.name}'),
+        key: const ValueKey<String>('phoneOtp-panel'),
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
           PhoneNumberField(
@@ -2245,12 +2245,22 @@ class _OtpCodeBoxesBodyState extends State<_OtpCodeBoxesBody> {
           children: <Widget>[
             LayoutBuilder(
               builder: (context, constraints) {
-                final gap = AppSpacing.loginOtpBoxGap;
+                final defaultGap = AppSpacing.loginOtpBoxGap;
                 final availableWidth = constraints.maxWidth.isFinite
                     ? constraints.maxWidth
-                    : AppSpacing.loginOtpBoxSize * 6 + gap * 5;
+                    : AppSpacing.loginOtpBoxSize * 6 + defaultGap * 5;
+                final minimumBoxWidth = AppSpacing.loginOtpBoxMinSize * 6;
+                // 窄宽度下优先压缩格间距，保证 6 格仍在同一行内且尽量维持 44x44 热区。
+                final gap = availableWidth <= minimumBoxWidth
+                    ? AppSpacing.zero
+                    : ((availableWidth - minimumBoxWidth) / 5).clamp(
+                        AppSpacing.zero,
+                        defaultGap,
+                      );
                 final boxSize = ((availableWidth - gap * 5) / 6).clamp(
-                  AppSpacing.loginOtpBoxMinSize,
+                  availableWidth >= minimumBoxWidth
+                      ? AppSpacing.loginOtpBoxMinSize
+                      : AppSpacing.zero,
                   AppSpacing.loginOtpBoxSize,
                 );
                 return Row(

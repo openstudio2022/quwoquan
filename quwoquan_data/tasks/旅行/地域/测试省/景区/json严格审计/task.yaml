@@ -1,6 +1,7 @@
 schemaVersion: quwoquan.task.spec
 taskId: 旅行/地域/测试省/景区/json严格审计
 title: json严格审计
+intentLabel: json严格审计
 taskArchetype: region_category_coverage
 vertical: travel
 organizeBy: 地域
@@ -17,7 +18,7 @@ scope:
     name: 缺源景区
   reserveCoverageTargets: []
 provenance:
-  createdAt: '2026-06-20T18:10:34.152245+00:00'
+  createdAt: '2026-06-24T13:09:26.406319+00:00'
   createdBy: test
 content:
   modalityContract: separated_research
@@ -44,7 +45,7 @@ content:
     routeArticles: 0
 acceptance:
   minEntities: 1
-  minPostsPerEntity: 4
+  minPostsPerEntity: 5
   requiredAngles:
   - planning_consultation
   - decision_experience

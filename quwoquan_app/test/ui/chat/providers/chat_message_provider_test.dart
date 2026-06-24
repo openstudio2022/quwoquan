@@ -7,6 +7,8 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 
+final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
+
 void main() {
   group('ChatMessageNotifier', () {
     test('loadMessages fills missing sender snapshots from members', () async {
@@ -37,7 +39,7 @@ void main() {
           '/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png',
         ),
       );
-      expect(selfMessage.senderName, '契约当前用户');
+      expect(selfMessage.senderName, matches(_defaultNicknamePattern));
       expect(
         selfMessage.senderAvatar,
         contains(

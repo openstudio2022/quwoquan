@@ -15,9 +15,6 @@ import (
 
 func newGateTestMessageService(t *testing.T, gate application.RelationshipGate) (*application.ConversationService, *application.MessageService) {
 	t.Helper()
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
 	mr, err := miniredis.Run()
 	if err != nil {
 		t.Fatalf("miniredis: %v", err)
@@ -30,7 +27,7 @@ func newGateTestMessageService(t *testing.T, gate application.RelationshipGate) 
 		DefaultScene: "general",
 	})
 	t.Cleanup(func() { _ = router.Close() })
-	store := persistence.NewMongoChatStore(mongoDB)
+	store := persistence.NewMongoChatStore(requireMongoDB(t))
 	cache := chatcache.NewConversationCache(router.Scene("general"))
 	convSvc := application.NewConversationService(store, cache, nil, testProfileResolver{}, application.AllowRelationshipGateForTest(), nil, nil, nil)
 	msgSvc := application.NewMessageService(store, cache, nil, gate)

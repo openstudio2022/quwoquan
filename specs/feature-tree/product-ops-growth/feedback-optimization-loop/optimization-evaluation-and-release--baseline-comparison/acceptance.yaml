@@ -38,9 +38,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned: []
-      recorded:
-      - file: scripts/recommendation/test_rec_policy_advisor.py
-      - file: runtime/recommendation/engine_test.go
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -56,7 +54,9 @@ gwt_acceptance:
         - local_contract.product_ops_growth.feedback_optimization_loop.optimization_evaluation_and_release_baseline_comparison.gwt1_local_contract
         envs: *id001
       supporting: []
-    notes: []
+    notes:
+    - '[migrated_from_recorded_noncanonical] scripts/recommendation/test_rec_policy_advisor.py'
+    - '[migrated_from_recorded_noncanonical] runtime/recommendation/engine_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

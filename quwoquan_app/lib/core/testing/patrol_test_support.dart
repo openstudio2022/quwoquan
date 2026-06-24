@@ -7,7 +7,7 @@ import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/app_bootstrap.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 
-/// T4 Patrol tests should only run under `patrol test`.
+/// Patrol user_acceptance tests should only run under `patrol test`.
 ///
 /// We guard them behind an explicit dart-define so `flutter test` can run the
 /// regular test suite without trying to execute native Patrol flows.
@@ -18,7 +18,7 @@ const String kPatrolT4CurrentUserId = String.fromEnvironment(
 );
 const String _patrolT4AuthToken = String.fromEnvironment(
   'TEST_AUTH_TOKEN',
-  defaultValue: 'local-t4-token',
+  defaultValue: 'local-patrol-token',
 );
 
 bool _patrolAppStarted = false;
@@ -38,7 +38,7 @@ Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
     );
   }
   // gamma 远端冷启动会带来持续中的初始化任务，直接等待全局 settle
-  // 容易把 T4 卡死在启动阶段。这里仅给首帧和首轮路由足够时间，
+  // 容易把 Patrol user_acceptance 卡死在启动阶段。这里仅给首帧和首轮路由足够时间，
   // 后续由具体用例等待目标元素出现。
   await $.pump();
   await $.pump(const Duration(milliseconds: 300));
@@ -55,13 +55,13 @@ final class _PatrolAuthSessionController extends AuthSessionController {
   AuthSessionState build() => AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: _patrolT4AuthToken.isEmpty
-        ? 'local-t4-token'
+        ? 'local-patrol-token'
         : _patrolT4AuthToken,
-    refreshToken: 'local-t4-refresh-token',
+    refreshToken: 'local-patrol-refresh-token',
     ownerId: kPatrolT4CurrentUserId,
     activeSubAccountId: kPatrolT4CurrentUserId,
     accountState: 'active',
-    identityOrigin: 'patrol-t4',
-    installId: 'patrol-t4-install',
+    identityOrigin: 'patrol-user-acceptance',
+    installId: 'patrol-user-acceptance-install',
   );
 }

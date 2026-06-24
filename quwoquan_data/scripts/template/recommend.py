@@ -15,14 +15,12 @@ def build_recommendation_manifest(
     entity_refs: list[str],
     tag_refs: list[str],
     *,
-    condition_context: dict[str, Any] | None = None,
     creator: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     # 复用 route 已按内容信号匹配出的作者，保证 brief 与 recommendation 同一虚拟作者。
     if creator is None:
         creator = choose_creator(registry, blueprint)
     merged_tags = list(dict.fromkeys(tag_refs + collect_tag_refs(blueprint) + creator.get("recommendationTagRefs", [])))
-    context = condition_context or {}
     manifest = {
         "contentType": _content_type(blueprint),
         "authorId": creator["authorId"],
@@ -38,11 +36,6 @@ def build_recommendation_manifest(
             "tagCount": len(merged_tags),
         },
     }
-    if context:
-        manifest["conditionContext"] = {
-            "region": (context.get("region") or {}).get("name"),
-            "season": (context.get("season") or {}).get("name"),
-        }
     return manifest
 
 

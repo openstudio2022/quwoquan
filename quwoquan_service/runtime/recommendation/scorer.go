@@ -134,6 +134,12 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		}
 		detail["exploreBoost"] = exploreBoost
 
+		// Projected item quality: only consume rm_discovery_feed qualityScore.
+		// Missing/zero quality stays conservative and does not trigger read-path
+		// recomputation.
+		qualityScore := clamp01(c.QualityScore)
+		detail["qualityScore"] = qualityScore
+
 		// User engagement rate bonus (active users get slightly different treatment)
 		engagementBonus := 0.0
 		if user != nil && user.EngagementRate > 0 {
@@ -165,6 +171,15 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 				socialPrior += math.Log1p(float64(user.SharedCircleCount)) * sc.IntersectionSignalFactor
 			}
 		}
+		intersectionFact := math.Log1p(nonNegative(c.IntersectionFactStrength))*sc.IntersectionFactFactor +
+			clamp01(c.IntersectionFreshness)*sc.IntersectionFreshnessFactor
+		intersectionAffinity := 0.0
+		if strings.TrimSpace(c.IntersectionConfidenceLabel) != "" {
+			intersectionAffinity = clamp01(c.AffinityIntersectionScore) * sc.IntersectionAffinityFactor
+		}
+		socialPrior += intersectionFact + intersectionAffinity
+		detail["intersectionFact"] = intersectionFact
+		detail["intersectionAffinity"] = intersectionAffinity
 		detail["socialPrior"] = socialPrior
 
 		// Negative penalty: suppress content with tags that accumulated negative
@@ -249,7 +264,7 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 			w.AuthorAffinity*authorAffinity +
 			w.Popularity*popularity +
 			w.Freshness*freshness +
-			w.ExploreBoost*exploreBoost +
+			w.ExploreBoost*(exploreBoost+qualityScore*sc.QualityScoreFactor) +
 			w.DwellBonus*(engagementBonus+enerBoost) +
 			w.SocialPrior*socialPrior +
 			w.EntityAffinity*entityAffinity +
@@ -334,6 +349,13 @@ func ucbExplorationRadius(views, totalViews int64) float64 {
 	return radius
 }
 
+func nonNegative(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	return v
+}
+
 // ---------------------------------------------------------------------------
 // RemoteModelScorer — calls external ML model service
 // ---------------------------------------------------------------------------
@@ -359,17 +381,26 @@ type ModelPredictRequest struct {
 
 // CandidateInput is the candidate feature vector sent to the model.
 type CandidateInput struct {
-	ContentID    string   `json:"contentId"`
-	ContentType  string   `json:"contentType"`
-	AuthorID     string   `json:"authorId"`
-	Tags         []string `json:"tagRefs"`
-	EntityRefs   []string `json:"entityRefs,omitempty"`
-	AgeHours     float64  `json:"ageHours"`
-	ViewCount    int64    `json:"viewCount"`
-	LikeCount    int64    `json:"likeCount"`
-	CommentCount int64    `json:"commentCount"`
-	ShareCount   int64    `json:"shareCount"`
-	RecallPath   string   `json:"recallPath"`
+	ContentID                   string   `json:"contentId"`
+	ContentType                 string   `json:"contentType"`
+	AuthorID                    string   `json:"authorId"`
+	Tags                        []string `json:"tagRefs"`
+	EntityRefs                  []string `json:"entityRefs,omitempty"`
+	AgeHours                    float64  `json:"ageHours"`
+	ViewCount                   int64    `json:"viewCount"`
+	LikeCount                   int64    `json:"likeCount"`
+	CommentCount                int64    `json:"commentCount"`
+	ShareCount                  int64    `json:"shareCount"`
+	RecallPath                  string   `json:"recallPath"`
+	QualityScore                float64  `json:"qualityScore,omitempty"`
+	ContentVertical             string   `json:"contentVertical,omitempty"`
+	SupplySource                string   `json:"supplySource,omitempty"`
+	IntersectionFactStrength    float64  `json:"intersectionFactStrength,omitempty"`
+	IntersectionFreshness       float64  `json:"intersectionFreshness,omitempty"`
+	AffinityIntersectionScore   float64  `json:"affinityIntersectionScore,omitempty"`
+	IntersectionSourceRefTop    string   `json:"intersectionSourceRefTop,omitempty"`
+	IntersectionConfidenceLabel string   `json:"intersectionConfidenceLabel,omitempty"`
+	IntersectionClass           string   `json:"intersectionClass,omitempty"`
 }
 
 // ModelPredictResponse is the model service response.
@@ -412,17 +443,26 @@ func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFea
 			ageHours = 0
 		}
 		inputs[i] = CandidateInput{
-			ContentID:    c.ContentID,
-			ContentType:  c.ContentType,
-			AuthorID:     c.AuthorID,
-			Tags:         c.Tags,
-			EntityRefs:   c.EntityRefs,
-			AgeHours:     ageHours,
-			ViewCount:    c.ViewCount,
-			LikeCount:    c.LikeCount,
-			CommentCount: c.CommentCount,
-			ShareCount:   c.ShareCount,
-			RecallPath:   c.RecallPath,
+			ContentID:                   c.ContentID,
+			ContentType:                 c.ContentType,
+			AuthorID:                    c.AuthorID,
+			Tags:                        c.Tags,
+			EntityRefs:                  c.EntityRefs,
+			AgeHours:                    ageHours,
+			ViewCount:                   c.ViewCount,
+			LikeCount:                   c.LikeCount,
+			CommentCount:                c.CommentCount,
+			ShareCount:                  c.ShareCount,
+			RecallPath:                  c.RecallPath,
+			QualityScore:                c.QualityScore,
+			ContentVertical:             c.ContentVertical,
+			SupplySource:                c.SupplySource,
+			IntersectionFactStrength:    c.IntersectionFactStrength,
+			IntersectionFreshness:       c.IntersectionFreshness,
+			AffinityIntersectionScore:   c.AffinityIntersectionScore,
+			IntersectionSourceRefTop:    c.IntersectionSourceRefTop,
+			IntersectionConfidenceLabel: c.IntersectionConfidenceLabel,
+			IntersectionClass:           c.IntersectionClass,
 		}
 	}
 

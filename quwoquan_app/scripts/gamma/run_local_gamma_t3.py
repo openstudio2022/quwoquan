@@ -577,11 +577,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("LOCAL_GAMMA_GATEWAY_BASE_URL", "http://127.0.0.1:19000"),
+        default=os.environ.get(
+            "LOCAL_GAMMA_GATEWAY_BASE_URL",
+            "https://gamma-api.quwoquan-env.test:19000",
+        ),
     )
     parser.add_argument(
         "--product-ops-base-url",
-        default=os.environ.get("LOCAL_GAMMA_PRODUCT_OPS_BASE_URL", "http://127.0.0.1:19010"),
+        default=os.environ.get(
+            "LOCAL_GAMMA_PRODUCT_OPS_BASE_URL",
+            "https://gamma-product-ops.quwoquan-env.test:19010",
+        ),
     )
     parser.add_argument("--report", default="artifacts/local-gamma/t3_report.json")
     parser.add_argument(

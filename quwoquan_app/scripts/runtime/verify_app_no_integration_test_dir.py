@@ -22,7 +22,10 @@ def main() -> int:
         print("BLOCK: quwoquan_app/integration_test 不再允许 Dart 测试入口:", file=sys.stderr)
         for path in dart_files:
             print(f"  - {path.relative_to(ROOT)}", file=sys.stderr)
-        print("请迁移到 quwoquan_app/test/common|alpha|beta|gamma|patrol。", file=sys.stderr)
+        print(
+            "请迁移到 quwoquan_app/test/local_contract、quwoquan_app/test/api_integration 或 quwoquan_app/test/user_acceptance。",
+            file=sys.stderr,
+        )
         return 1
     print("app_no_integration_test_dir: OK")
     return 0

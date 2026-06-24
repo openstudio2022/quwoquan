@@ -47,7 +47,7 @@
 | 校验 | 命令 | 结果 |
 |---|---|---|
 | 编排器注册 | `cli.py task run --help` | OK（DAG 10 stage 可见） |
-| 编排器 DAG/checkpoint/resume/ReAct 回退 | `tests/workflow/test_task_run_pipeline.py` | 5 PASS |
+| 编排器 DAG/checkpoint/resume/ReAct 回退 | `tests/local_contract/task/test_workflow_state_machine__local_contract_test.py` + `tests/user_acceptance/workflow/test_task_run_operator_journey__user_acceptance_test.py` | PASS |
 | HITL 最小化 | `tests/integration/test_hitl_autopass.py` | 4 PASS |
 | 实体主页链路 | `tests/build/test_build_homepage.py` | PASS（既有） |
 | 全量门禁 | `make verify-quwoquan-data` | PASSED |

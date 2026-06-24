@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-06-02T00:36:07.441879Z
+updated_at: 2026-06-24T17:28:36.143048Z
 features:
     - id: assistant-run-learning
       name: assistant-run-learning
@@ -210,6 +210,56 @@ features:
               domain: ""
               status: specified
               tags: []
+        - id: commercial-message-system
+          name: commercial-message-system
+          level: L2_business_capability
+          path: chat-conversation/commercial-message-system
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: commercial-remote-only-message-system
+              name: commercial-remote-only-message-system
+              level: L3_story
+              path: chat-conversation/commercial-message-system/commercial-remote-only-message-system
+              domain: ""
+              status: specified
+              tags: []
+            - id: contact-home-commercial-ia
+              name: contact-home-commercial-ia
+              level: L3_story
+              path: chat-conversation/commercial-message-system/contact-home-commercial-ia
+              domain: ""
+              status: specified
+              tags: []
+            - id: contact-home-relationship-projection
+              name: contact-home-relationship-projection
+              level: L3_story
+              path: chat-conversation/commercial-message-system/contact-home-relationship-projection
+              domain: ""
+              status: specified
+              tags: []
+            - id: group-home-chat-info-contract
+              name: group-home-chat-info-contract
+              level: L3_story
+              path: chat-conversation/commercial-message-system/group-home-chat-info-contract
+              domain: ""
+              status: specified
+              tags: []
+            - id: message-home-commercial-ia
+              name: message-home-commercial-ia
+              level: L3_story
+              path: chat-conversation/commercial-message-system/message-home-commercial-ia
+              domain: ""
+              status: specified
+              tags: []
+            - id: message-home-filter-contract
+              name: message-home-filter-contract
+              level: L3_story
+              path: chat-conversation/commercial-message-system/message-home-filter-contract
+              domain: ""
+              status: specified
+              tags: []
         - id: contact-and-session-governance
           name: contact-and-session-governance
           level: L2_business_capability
@@ -243,56 +293,6 @@ features:
               name: session-governance-actions--governance-action-policy
               level: L3_story
               path: chat-conversation/contact-and-session-governance/session-governance-actions--governance-action-policy
-              domain: ""
-              status: specified
-              tags: []
-        - id: commercial-message-system
-          name: commercial-message-system
-          level: L2_business_capability
-          path: chat-conversation/commercial-message-system
-          domain: ""
-          status: specified
-          tags: []
-          children:
-            - id: message-home-commercial-ia
-              name: message-home-commercial-ia
-              level: L3_story
-              path: chat-conversation/commercial-message-system/message-home-commercial-ia
-              domain: ""
-              status: specified
-              tags: []
-            - id: contact-home-commercial-ia
-              name: contact-home-commercial-ia
-              level: L3_story
-              path: chat-conversation/commercial-message-system/contact-home-commercial-ia
-              domain: ""
-              status: specified
-              tags: []
-            - id: message-home-filter-contract
-              name: message-home-filter-contract
-              level: L3_story
-              path: chat-conversation/commercial-message-system/message-home-filter-contract
-              domain: ""
-              status: specified
-              tags: []
-            - id: contact-home-relationship-projection
-              name: contact-home-relationship-projection
-              level: L3_story
-              path: chat-conversation/commercial-message-system/contact-home-relationship-projection
-              domain: ""
-              status: specified
-              tags: []
-            - id: group-home-chat-info-contract
-              name: group-home-chat-info-contract
-              level: L3_story
-              path: chat-conversation/commercial-message-system/group-home-chat-info-contract
-              domain: ""
-              status: specified
-              tags: []
-            - id: commercial-remote-only-message-system
-              name: commercial-remote-only-message-system
-              level: L3_story
-              path: chat-conversation/commercial-message-system/commercial-remote-only-message-system
               domain: ""
               status: specified
               tags: []
@@ -1009,105 +1009,6 @@ features:
               domain: ""
               status: specified
               tags: []
-        - id: feed-orchestration-recommendation
-          name: feed-orchestration-recommendation
-          level: L2_business_capability
-          path: discovery-content/feed-orchestration-recommendation
-          domain: ""
-          status: specified
-          tags: []
-          children:
-            - id: feed-fallback-degrade
-              name: feed-fallback-degrade
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/feed-fallback-degrade
-              domain: ""
-              status: specified
-              tags: []
-            - id: feed-fallback-degrade--downstream-timeout-fallback
-              name: feed-fallback-degrade--downstream-timeout-fallback
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/feed-fallback-degrade--downstream-timeout-fallback
-              domain: ""
-              status: specified
-              tags: []
-            - id: feedback-ingestion-sampling
-              name: feedback-ingestion-sampling
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling
-              domain: ""
-              status: specified
-              tags: []
-            - id: collaborative-recall
-              name: collaborative-recall
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/collaborative-recall
-              domain: ""
-              status: specified
-              tags: []
-            - id: interest-onboarding-prior
-              name: interest-onboarding-prior
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/interest-onboarding-prior
-              domain: ""
-              status: specified
-              tags: []
-            - id: personalized-ranking
-              name: personalized-ranking
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/personalized-ranking
-              domain: ""
-              status: specified
-              tags: []
-            - id: personalized-ranking--ranking-signal-fusion
-              name: personalized-ranking--ranking-signal-fusion
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/personalized-ranking--ranking-signal-fusion
-              domain: ""
-              status: specified
-              tags: []
-            - id: quality-score-cold-start
-              name: quality-score-cold-start
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/quality-score-cold-start
-              domain: ""
-              status: specified
-              tags: []
-            - id: ranking-calibration
-              name: ranking-calibration
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/ranking-calibration
-              domain: ""
-              status: specified
-              tags: []
-            - id: realtime-feed-baseline
-              name: realtime-feed-baseline
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/realtime-feed-baseline
-              domain: ""
-              status: specified
-              tags: []
-            - id: time-decay-contextual-ranking
-              name: time-decay-contextual-ranking
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/time-decay-contextual-ranking
-              domain: ""
-              status: specified
-              tags: []
-            - id: unified-items-cursor
-              name: unified-items-cursor
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/unified-items-cursor
-              domain: ""
-              status: specified
-              tags: []
-            - id: unified-items-cursor--feed-dto-cursor-contract
-              name: unified-items-cursor--feed-dto-cursor-contract
-              level: L3_story
-              path: discovery-content/feed-orchestration-recommendation/unified-items-cursor--feed-dto-cursor-contract
-              domain: ""
-              status: specified
-              tags: []
         - id: exposure-governance
           name: exposure-governance
           level: L2_business_capability
@@ -1169,6 +1070,119 @@ features:
               name: served-dedup-write-behind
               level: L3_story
               path: discovery-content/exposure-governance/served-dedup-write-behind
+              domain: ""
+              status: specified
+              tags: []
+        - id: feed-orchestration-recommendation
+          name: feed-orchestration-recommendation
+          level: L2_business_capability
+          path: discovery-content/feed-orchestration-recommendation
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: collaborative-recall
+              name: collaborative-recall
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/collaborative-recall
+              domain: ""
+              status: specified
+              tags: []
+            - id: feed-fallback-degrade
+              name: feed-fallback-degrade
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/feed-fallback-degrade
+              domain: ""
+              status: specified
+              tags: []
+            - id: feed-fallback-degrade--downstream-timeout-fallback
+              name: feed-fallback-degrade--downstream-timeout-fallback
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/feed-fallback-degrade--downstream-timeout-fallback
+              domain: ""
+              status: specified
+              tags: []
+            - id: feedback-ingestion-sampling
+              name: feedback-ingestion-sampling
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling
+              domain: ""
+              status: specified
+              tags: []
+            - id: interest-onboarding-prior
+              name: interest-onboarding-prior
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/interest-onboarding-prior
+              domain: ""
+              status: specified
+              tags: []
+            - id: personalized-ranking
+              name: personalized-ranking
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/personalized-ranking
+              domain: ""
+              status: specified
+              tags: []
+            - id: personalized-ranking--ranking-signal-fusion
+              name: personalized-ranking--ranking-signal-fusion
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/personalized-ranking--ranking-signal-fusion
+              domain: ""
+              status: specified
+              tags: []
+            - id: premium-stream-recommendation
+              name: premium-stream-recommendation
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/premium-stream-recommendation
+              domain: ""
+              status: specified
+              tags: []
+            - id: quality-score-cold-start
+              name: quality-score-cold-start
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/quality-score-cold-start
+              domain: ""
+              status: specified
+              tags: []
+            - id: ranking-calibration
+              name: ranking-calibration
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/ranking-calibration
+              domain: ""
+              status: specified
+              tags: []
+            - id: realtime-feed-baseline
+              name: realtime-feed-baseline
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/realtime-feed-baseline
+              domain: ""
+              status: specified
+              tags: []
+            - id: time-decay-contextual-ranking
+              name: time-decay-contextual-ranking
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/time-decay-contextual-ranking
+              domain: ""
+              status: specified
+              tags: []
+            - id: travel-vertical-recommendation
+              name: travel-vertical-recommendation
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/travel-vertical-recommendation
+              domain: ""
+              status: specified
+              tags: []
+            - id: unified-items-cursor
+              name: unified-items-cursor
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/unified-items-cursor
+              domain: ""
+              status: specified
+              tags: []
+            - id: unified-items-cursor--feed-dto-cursor-contract
+              name: unified-items-cursor--feed-dto-cursor-contract
+              level: L3_story
+              path: discovery-content/feed-orchestration-recommendation/unified-items-cursor--feed-dto-cursor-contract
               domain: ""
               status: specified
               tags: []
@@ -1552,17 +1566,17 @@ features:
               domain: ""
               status: specified
               tags: []
-            - id: search-storage-topology-and-elasticity
-              name: search-storage-topology-and-elasticity
-              level: L3_story
-              path: global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity
-              domain: ""
-              status: specified
-              tags: []
             - id: search-risky-config-gray-release
               name: search-risky-config-gray-release
               level: L3_story
               path: global-search-experience/search-provider-routing-and-storage-topology/search-risky-config-gray-release
+              domain: ""
+              status: specified
+              tags: []
+            - id: search-storage-topology-and-elasticity
+              name: search-storage-topology-and-elasticity
+              level: L3_story
+              path: global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity
               domain: ""
               status: specified
               tags: []
@@ -1582,27 +1596,6 @@ features:
           status: specified
           tags: []
           children:
-            - id: intersection-sentence-unification
-              name: intersection-sentence-unification
-              level: L3_story
-              path: object-homepage-network/intersection-unified-experience/intersection-sentence-unification
-              domain: ""
-              status: specified
-              tags: []
-            - id: home-recommend-intersection-redesign
-              name: home-recommend-intersection-redesign
-              level: L3_story
-              path: object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign
-              domain: ""
-              status: specified
-              tags: []
-            - id: user-profile-intersection-redesign
-              name: user-profile-intersection-redesign
-              level: L3_story
-              path: object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign
-              domain: ""
-              status: specified
-              tags: []
             - id: circle-homepage-intersection-redesign
               name: circle-homepage-intersection-redesign
               level: L3_story
@@ -1617,10 +1610,31 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: home-recommend-intersection-redesign
+              name: home-recommend-intersection-redesign
+              level: L3_story
+              path: object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign
+              domain: ""
+              status: specified
+              tags: []
             - id: intersection-algorithm-closure
               name: intersection-algorithm-closure
               level: L3_story
               path: object-homepage-network/intersection-unified-experience/intersection-algorithm-closure
+              domain: ""
+              status: specified
+              tags: []
+            - id: intersection-sentence-unification
+              name: intersection-sentence-unification
+              level: L3_story
+              path: object-homepage-network/intersection-unified-experience/intersection-sentence-unification
+              domain: ""
+              status: specified
+              tags: []
+            - id: user-profile-intersection-redesign
+              name: user-profile-intersection-redesign
+              level: L3_story
+              path: object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign
               domain: ""
               status: specified
               tags: []
@@ -1748,35 +1762,6 @@ features:
       status: specified
       tags: []
       children:
-        - id: outbound-share-distribution
-          name: outbound-share-distribution
-          level: L2_business_capability
-          path: product-ops-growth/outbound-share-distribution
-          domain: ""
-          status: specified
-          tags: []
-          children:
-            - id: object-share-cards
-              name: object-share-cards
-              level: L3_story
-              path: product-ops-growth/outbound-share-distribution/object-share-cards
-              domain: ""
-              status: specified
-              tags: []
-            - id: share-channel-panel
-              name: share-channel-panel
-              level: L3_story
-              path: product-ops-growth/outbound-share-distribution/share-channel-panel
-              domain: ""
-              status: specified
-              tags: []
-            - id: share-attribution-and-token
-              name: share-attribution-and-token
-              level: L3_story
-              path: product-ops-growth/outbound-share-distribution/share-attribution-and-token
-              domain: ""
-              status: specified
-              tags: []
         - id: event-ingestion-and-analytics
           name: event-ingestion-and-analytics
           level: L2_business_capability
@@ -1885,6 +1870,35 @@ features:
               domain: ""
               status: specified
               tags: []
+        - id: outbound-share-distribution
+          name: outbound-share-distribution
+          level: L2_business_capability
+          path: product-ops-growth/outbound-share-distribution
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: object-share-cards
+              name: object-share-cards
+              level: L3_story
+              path: product-ops-growth/outbound-share-distribution/object-share-cards
+              domain: ""
+              status: specified
+              tags: []
+            - id: share-attribution-and-token
+              name: share-attribution-and-token
+              level: L3_story
+              path: product-ops-growth/outbound-share-distribution/share-attribution-and-token
+              domain: ""
+              status: specified
+              tags: []
+            - id: share-channel-panel
+              name: share-channel-panel
+              level: L3_story
+              path: product-ops-growth/outbound-share-distribution/share-channel-panel
+              domain: ""
+              status: specified
+              tags: []
         - id: product-control-plane-foundation
           name: product-control-plane-foundation
           level: L2_business_capability
@@ -1900,6 +1914,49 @@ features:
       status: specified
       tags: []
       children:
+        - id: evaluation-and-flywheel
+          name: evaluation-and-flywheel
+          level: L2_business_capability
+          path: recommendation-platform/evaluation-and-flywheel
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: offline-replay-evaluation
+              name: offline-replay-evaluation
+              level: L3_story
+              path: recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation
+              domain: ""
+              status: specified
+              tags: []
+            - id: online-ab-significance
+              name: online-ab-significance
+              level: L3_story
+              path: recommendation-platform/evaluation-and-flywheel/online-ab-significance
+              domain: ""
+              status: specified
+              tags: []
+            - id: real-traffic-training-promotion
+              name: real-traffic-training-promotion
+              level: L3_story
+              path: recommendation-platform/evaluation-and-flywheel/real-traffic-training-promotion
+              domain: ""
+              status: specified
+              tags: []
+            - id: recommendation-commercial-alerting
+              name: recommendation-commercial-alerting
+              level: L3_story
+              path: recommendation-platform/evaluation-and-flywheel/recommendation-commercial-alerting
+              domain: ""
+              status: specified
+              tags: []
+            - id: recommendation-observability-dashboard
+              name: recommendation-observability-dashboard
+              level: L3_story
+              path: recommendation-platform/evaluation-and-flywheel/recommendation-observability-dashboard
+              domain: ""
+              status: specified
+              tags: []
         - id: rec-model-service
           name: rec-model-service
           level: L2_business_capability
@@ -1936,6 +1993,13 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: inference-capacity-elasticity
+              name: inference-capacity-elasticity
+              level: L3_story
+              path: recommendation-platform/rec-model-service/inference-capacity-elasticity
+              domain: ""
+              status: specified
+              tags: []
             - id: inference-deployment
               name: inference-deployment
               level: L3_story
@@ -1947,13 +2011,6 @@ features:
               name: inference-deployment--docker-and-cloud
               level: L3_story
               path: recommendation-platform/rec-model-service/inference-deployment--docker-and-cloud
-              domain: ""
-              status: specified
-              tags: []
-            - id: inference-capacity-elasticity
-              name: inference-capacity-elasticity
-              level: L3_story
-              path: recommendation-platform/rec-model-service/inference-capacity-elasticity
               domain: ""
               status: specified
               tags: []
@@ -1986,35 +2043,6 @@ features:
               domain: ""
               status: specified
               tags: []
-        - id: evaluation-and-flywheel
-          name: evaluation-and-flywheel
-          level: L2_business_capability
-          path: recommendation-platform/evaluation-and-flywheel
-          domain: ""
-          status: specified
-          tags: []
-          children:
-            - id: offline-replay-evaluation
-              name: offline-replay-evaluation
-              level: L3_story
-              path: recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation
-              domain: ""
-              status: specified
-              tags: []
-            - id: online-ab-significance
-              name: online-ab-significance
-              level: L3_story
-              path: recommendation-platform/evaluation-and-flywheel/online-ab-significance
-              domain: ""
-              status: specified
-              tags: []
-            - id: real-traffic-training-promotion
-              name: real-traffic-training-promotion
-              level: L3_story
-              path: recommendation-platform/evaluation-and-flywheel/real-traffic-training-promotion
-              domain: ""
-              status: specified
-              tags: []
     - id: runtime
       name: runtime
       level: L1_domain_service
@@ -2029,10 +2057,7 @@ features:
           path: runtime/deliver-deploy-prod-pipeline
           domain: ""
           status: specified
-          tags:
-            - aliyun-ack
-            - modular-monolith-first
-            - split-ready
+          tags: []
           children:
             - id: daily-merge-release-strategy
               name: daily-merge-release-strategy
@@ -2155,6 +2180,13 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: app-remote-config
+              name: app-remote-config
+              level: L3_story
+              path: runtime/runtime-client-foundation/app-remote-config
+              domain: ""
+              status: specified
+              tags: []
             - id: app-theme-infrastructure
               name: app-theme-infrastructure
               level: L3_story
@@ -2197,13 +2229,6 @@ features:
               domain: ""
               status: specified
               tags: []
-            - id: external-inbound-deeplink-routing
-              name: external-inbound-deeplink-routing
-              level: L3_story
-              path: runtime/runtime-client-foundation/external-inbound-deeplink-routing
-              domain: ""
-              status: specified
-              tags: []
             - id: error-permission-display-semantics
               name: error-permission-display-semantics
               level: L3_story
@@ -2225,6 +2250,13 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: external-inbound-deeplink-routing
+              name: external-inbound-deeplink-routing
+              level: L3_story
+              path: runtime/runtime-client-foundation/external-inbound-deeplink-routing
+              domain: ""
+              status: specified
+              tags: []
             - id: ios-native-page-enforcement
               name: ios-native-page-enforcement
               level: L3_story
@@ -2239,13 +2271,6 @@ features:
               domain: ""
               status: specified
               tags: []
-            - id: app-remote-config
-              name: app-remote-config
-              level: L3_story
-              path: runtime/runtime-client-foundation/app-remote-config
-              domain: ""
-              status: specified
-              tags: []
             - id: metadata-driven-client-data-contract
               name: metadata-driven-client-data-contract
               level: L3_story
@@ -2257,13 +2282,6 @@ features:
               name: page-horizontal-quality
               level: L3_story
               path: runtime/runtime-client-foundation/page-horizontal-quality
-              domain: ""
-              status: specified
-              tags: []
-            - id: public-content-web-entry
-              name: public-content-web-entry
-              level: L3_story
-              path: runtime/runtime-client-foundation/public-content-web-entry
               domain: ""
               status: specified
               tags: []
@@ -2292,6 +2310,13 @@ features:
               name: page-layout-semantics--top-toolbar-and-selection-pattern
               level: L3_story
               path: runtime/runtime-client-foundation/page-layout-semantics--top-toolbar-and-selection-pattern
+              domain: ""
+              status: specified
+              tags: []
+            - id: public-content-web-entry
+              name: public-content-web-entry
+              level: L3_story
+              path: runtime/runtime-client-foundation/public-content-web-entry
               domain: ""
               status: specified
               tags: []
@@ -3138,6 +3163,13 @@ features:
           status: specified
           tags: []
           children:
+            - id: four-environment-commercial-login-maturity
+              name: four-environment-commercial-login-maturity
+              level: L3_story
+              path: user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity
+              domain: ""
+              status: specified
+              tags: []
             - id: onboarding-consent-flow
               name: onboarding-consent-flow
               level: L3_story
@@ -3163,13 +3195,6 @@ features:
               name: post-login-landing--landing-bootstrap-context
               level: L3_story
               path: user-identity-profile-relationship/onboarding-and-identity-entry/post-login-landing--landing-bootstrap-context
-              domain: ""
-              status: specified
-              tags: []
-            - id: four-environment-commercial-login-maturity
-              name: four-environment-commercial-login-maturity
-              level: L3_story
-              path: user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity
               domain: ""
               status: specified
               tags: []
@@ -3277,6 +3302,13 @@ features:
               name: profile-commercial-readiness
               level: L3_story
               path: user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness
+              domain: ""
+              status: specified
+              tags: []
+            - id: career-interest-profile-editor
+              name: career-interest-profile-editor
+              level: L3_story
+              path: user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor
               domain: ""
               status: specified
               tags: []

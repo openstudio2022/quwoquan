@@ -53,11 +53,12 @@ func (s *ContactDiscoveryService) Initiate(ctx context.Context, ownerID string, 
 	}
 
 	// Synchronous match (for simplicity; in production this would be async)
-	matched, err := s.discoveries.FindSubAccountIDsByPhoneHashes(ctx, hashedPhones)
+	matches, err := s.discoveries.FindPhoneMatches(ctx, hashedPhones)
 	if err != nil {
 		// Best-effort: complete with empty result rather than fail
-		matched = []string{}
+		matches = []model.ContactPhoneMatch{}
 	}
+	matched := subAccountIDsFromMatches(matches)
 	if err := s.discoveries.Complete(ctx, record.ID, matched); err != nil {
 		return nil, err
 	}
@@ -66,6 +67,26 @@ func (s *ContactDiscoveryService) Initiate(ctx context.Context, ownerID string, 
 	record.MatchCount = int64(len(matched))
 
 	return record, nil
+}
+
+// MatchesFor recomputes the enriched matches[] for an initiator's uploaded
+// hashes (used to render GetLatest/Initiate responses). Relationship capability
+// is layered on by the HTTP adapter, which owns the follow/block services.
+func (s *ContactDiscoveryService) MatchesFor(ctx context.Context, hashedPhones []string) ([]model.ContactPhoneMatch, error) {
+	if len(hashedPhones) == 0 {
+		return []model.ContactPhoneMatch{}, nil
+	}
+	return s.discoveries.FindPhoneMatches(ctx, hashedPhones)
+}
+
+func subAccountIDsFromMatches(matches []model.ContactPhoneMatch) []string {
+	ids := make([]string, 0, len(matches))
+	for _, m := range matches {
+		if m.SubAccountID != "" {
+			ids = append(ids, m.SubAccountID)
+		}
+	}
+	return ids
 }
 
 // GetLatest returns the latest discovery result for an owner.

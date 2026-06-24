@@ -31,26 +31,31 @@ class ArticleFontStack {
   final List<String> fontFamilyFallback;
 }
 
-bool _usesAppleSystemFonts() {
+bool _usesAppleSystemFonts([AppPlatform? platform]) {
+  final resolved = platform;
+  if (resolved != null) {
+    return resolved == AppPlatform.ios;
+  }
   return !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.macOS);
 }
 
 String? resolveAppThemeFontFamily([AppPlatform? platform]) {
-  if (_usesAppleSystemFonts()) {
+  if (_usesAppleSystemFonts(platform)) {
     return null;
   }
   return BundledFontFamilies.notoSansSc;
 }
 
 List<String> resolveAppThemeFontFallbacks([AppPlatform? platform]) {
-  if (_usesAppleSystemFonts()) {
+  if (_usesAppleSystemFonts(platform)) {
     return const [
       '.SF Pro Text',
       'PingFang SC',
       'Helvetica Neue',
       BundledFontFamilies.notoSansSc,
+      BundledFontFamilies.notoColorEmoji,
     ];
   }
   final resolved = platform ?? currentAppPlatform;

@@ -41,12 +41,12 @@ gwt_acceptance:
     tests:
       planned:
       - artifact: artifacts/stackctl/prod/search_config_gray_release_report.json
-      recorded:
-      - file: releases/config/search-service/v2026.06.16.0.yaml
-      - artifact: artifacts/stackctl/gamma/search_rollback_rehearsal.md
+      recorded: []
     status: partial
     notes:
     - 本地 release config 与风险灰度文档已补齐；真实 prod-hosted rollout 需用户确认后执行。
+    - '[migrated_from_recorded_reference] releases/config/search-service/v2026.06.16.0.yaml'
+    - '[migrated_from_recorded_artifact] artifacts/stackctl/gamma/search_rollback_rehearsal.md'
     test_evidence:
       primary:
       - layer: local_contract

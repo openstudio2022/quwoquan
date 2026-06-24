@@ -90,12 +90,17 @@ void main() {
       expect(find.text('23人加入相关圈子'), findsNothing);
     });
 
-    testWidgets('other 空摘要整卡收起（不造假、不占位）', (tester) async {
+    testWidgets('other 空摘要展示稳定空态，不再整卡消失', (tester) async {
       await tester.pumpWidget(
         _host(AuthorImpactSummary(authorId: 'u2'), isMine: false),
       );
 
-      expect(find.byKey(AuthorImpactCard.cardKey), findsNothing);
+      expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
+      expect(find.byKey(AuthorImpactCard.emptyKey), findsOneWidget);
+      expect(
+        find.text(UITextConstants.profileImpactEmptyOther),
+        findsOneWidget,
+      );
     });
 
     testWidgets('other 非空摘要展示「TA的影响」，主页只直出云侧 primaryText', (tester) async {

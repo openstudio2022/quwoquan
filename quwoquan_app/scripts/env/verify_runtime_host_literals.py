@@ -13,6 +13,7 @@ APP_LIB = ROOT / "quwoquan_app" / "lib"
 URL_RE = re.compile(r"https?://[^\s'\"`)>]+")
 ALLOWED_PUBLIC_HOSTS = {"schema.org"}
 ALLOWED_PRIVATE_HOSTS = {"localhost", "127.0.0.1", "::1", "10.0.2.2"}
+ALLOWED_PUBLIC_HOST_SUFFIXES = (".quwoquan-env.test",)
 
 
 def _is_comment_only_line(line: str) -> bool:
@@ -23,6 +24,12 @@ def _is_comment_only_line(line: str) -> bool:
 def _is_allowed_host(host: str) -> bool:
     normalized = host.strip("[]").lower()
     if normalized in ALLOWED_PUBLIC_HOSTS or normalized in ALLOWED_PRIVATE_HOSTS:
+        return True
+    if any(
+        normalized.endswith(suffix)
+        and normalized[: -len(suffix)].strip(".")
+        for suffix in ALLOWED_PUBLIC_HOST_SUFFIXES
+    ):
         return True
     try:
         ipaddress.ip_address(normalized)

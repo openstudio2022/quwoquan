@@ -32,6 +32,7 @@ func (s *TagRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) (
 	}
 
 	filter := bson.M{"tagRefs": bson.M{"$in": req.Tags}}
+	applyVerticalFilter(filter, req.Vertical)
 	opts := options.Find().
 		SetSort(bson.D{{Key: "recScore", Value: -1}, {Key: "publishedAt", Value: -1}}).
 		SetLimit(int64(limit))
@@ -62,6 +63,7 @@ func (s *HotRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) (
 	filter := bson.M{
 		"publishedAt": bson.M{"$gte": cutoff},
 	}
+	applyVerticalFilter(filter, req.Vertical)
 
 	opts := options.Find().
 		SetSort(bson.D{
@@ -89,9 +91,11 @@ func (s *ExploreRecallSource) Recall(ctx context.Context, req rtrec.RecallReques
 		limit = 10
 	}
 
-	pipeline := bson.A{
-		bson.M{"$sample": bson.M{"size": limit}},
+	pipeline := bson.A{}
+	if vertical := normalizedVertical(req.Vertical); vertical != "" {
+		pipeline = append(pipeline, bson.M{"$match": bson.M{"contentVertical": vertical}})
 	}
+	pipeline = append(pipeline, bson.M{"$sample": bson.M{"size": limit}})
 
 	cursor, err := s.coll.Aggregate(ctx, pipeline)
 	if err != nil {
@@ -106,20 +110,7 @@ func (s *ExploreRecallSource) Recall(ctx context.Context, req rtrec.RecallReques
 
 	out := make([]rtrec.ContentCandidate, 0, len(docs))
 	for _, doc := range docs {
-		out = append(out, rtrec.ContentCandidate{
-			ContentID:    doc.PostID,
-			ContentType:  doc.ContentType,
-			AuthorID:     doc.AuthorID,
-			Title:        doc.Title,
-			Tags:         doc.Tags,
-			EntityRefs:   doc.EntityRefs,
-			PublishedAt:  doc.PublishedAt,
-			ViewCount:    doc.ViewCount,
-			LikeCount:    doc.LikeCount,
-			CommentCount: doc.CommentCount,
-			ShareCount:   doc.ShareCount,
-			RecallPath:   "explore_recall",
-		})
+		out = append(out, candidateFromDiscoveryDoc(doc, "explore_recall"))
 	}
 	return out, nil
 }
@@ -173,6 +164,7 @@ func (s *AuthorRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest
 	}
 
 	filter := bson.M{"authorId": bson.M{"$in": authorIDs}}
+	applyVerticalFilter(filter, req.Vertical)
 	opts := options.Find().
 		SetSort(bson.D{{Key: "publishedAt", Value: -1}}).
 		SetLimit(int64(limit))
@@ -200,20 +192,24 @@ func queryDiscoveryFeed(
 
 	out := make([]rtrec.ContentCandidate, 0, len(docs))
 	for _, doc := range docs {
-		out = append(out, rtrec.ContentCandidate{
-			ContentID:    doc.PostID,
-			ContentType:  doc.ContentType,
-			AuthorID:     doc.AuthorID,
-			Title:        doc.Title,
-			Tags:         doc.Tags,
-			EntityRefs:   doc.EntityRefs,
-			PublishedAt:  doc.PublishedAt,
-			ViewCount:    doc.ViewCount,
-			LikeCount:    doc.LikeCount,
-			CommentCount: doc.CommentCount,
-			ShareCount:   doc.ShareCount,
-			RecallPath:   recallPath,
-		})
+		out = append(out, candidateFromDiscoveryDoc(doc, recallPath))
 	}
 	return out, nil
+}
+
+func applyVerticalFilter(filter bson.M, raw string) {
+	if vertical := normalizedVertical(raw); vertical != "" {
+		filter["contentVertical"] = vertical
+	}
+}
+
+func normalizedVertical(raw string) string {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "", "all", "discovery", "home":
+		return ""
+	case "travel", "travel_photography", "旅行", "旅游":
+		return "travel_photography"
+	default:
+		return strings.TrimSpace(strings.ToLower(raw))
+	}
 }

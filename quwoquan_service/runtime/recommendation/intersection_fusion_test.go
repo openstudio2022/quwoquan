@@ -89,3 +89,69 @@ func TestRuleScorer_IntersectionSignalNoUserNoPanic(t *testing.T) {
 		t.Fatalf("nil user must yield zero socialPrior, got %.6f", got)
 	}
 }
+
+func TestRuleScorer_CandidateIntersectionFactOutranksAffinity(t *testing.T) {
+	scorer := &RuleScorer{}
+	now := time.Now()
+	cands := []ContentCandidate{
+		{
+			ContentID:                "fact",
+			ContentType:              "article",
+			PublishedAt:              now,
+			IntersectionFactStrength: 1,
+			IntersectionFreshness:    1,
+			IntersectionClass:        "fact",
+		},
+		{
+			ContentID:                   "affinity",
+			ContentType:                 "article",
+			PublishedAt:                 now,
+			AffinityIntersectionScore:   1,
+			IntersectionConfidenceLabel: "high",
+			IntersectionClass:           "affinity",
+		},
+	}
+	features := &ScoringFeatures{
+		Weights:       recpolicy.Baseline().WeightPresets[recpolicy.Baseline().DefaultPreset],
+		Scorer:        recpolicy.Baseline().Scorer,
+		Deterministic: true,
+	}
+	scored, err := scorer.ScoreBatch(context.Background(), features, cands)
+	if err != nil {
+		t.Fatalf("score: %v", err)
+	}
+	byID := map[string]ScoredCandidate{}
+	for _, s := range scored {
+		byID[s.Candidate.ContentID] = s
+	}
+	if !(byID["fact"].Score > byID["affinity"].Score) {
+		t.Fatalf("fact intersection must outrank affinity: fact=%.4f affinity=%.4f", byID["fact"].Score, byID["affinity"].Score)
+	}
+	if !(byID["fact"].Detail["intersectionFact"] > byID["affinity"].Detail["intersectionAffinity"]) {
+		t.Fatalf("fact detail must be stronger than affinity: fact=%v affinity=%v", byID["fact"].Detail, byID["affinity"].Detail)
+	}
+}
+
+func TestRuleScorer_AffinityIntersectionRequiresConfidenceLabel(t *testing.T) {
+	scorer := &RuleScorer{}
+	now := time.Now()
+	cands := []ContentCandidate{{
+		ContentID:                 "affinity_without_label",
+		ContentType:               "article",
+		PublishedAt:               now,
+		AffinityIntersectionScore: 1,
+		IntersectionClass:         "affinity",
+	}}
+	features := &ScoringFeatures{
+		Weights:       recpolicy.Baseline().WeightPresets[recpolicy.Baseline().DefaultPreset],
+		Scorer:        recpolicy.Baseline().Scorer,
+		Deterministic: true,
+	}
+	scored, err := scorer.ScoreBatch(context.Background(), features, cands)
+	if err != nil {
+		t.Fatalf("score: %v", err)
+	}
+	if got := scored[0].Detail["intersectionAffinity"]; math.Abs(got) > 1e-12 {
+		t.Fatalf("affinity without confidenceLabel must be ignored, got %.6f", got)
+	}
+}

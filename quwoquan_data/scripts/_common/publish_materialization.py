@@ -11,7 +11,12 @@ from typing import Any
 
 from _common.entity_object import collect_task_entity_objects
 from _common.io import read_json, write_ndjson
-from _common.paths import batch_post_roots, task_entities, task_root, task_tags
+from _common.paths import (
+    batch_post_roots,
+    iter_task_batch_ids,
+    task_entities,
+    task_tags,
+)
 
 
 def _entity_row(entity_dir: Path, task_id: str, *, entity_rel: str) -> dict[str, Any] | None:
@@ -48,10 +53,8 @@ def _entity_row(entity_dir: Path, task_id: str, *, entity_rel: str) -> dict[str,
 def _candidate_batches(task_id: str, batch_id: str) -> list[str]:
     if batch_id.strip():
         return [batch_id]
-    batches_dir = task_root(task_id) / "batches"
-    if not batches_dir.is_dir():
-        return []
-    return sorted(p.name for p in batches_dir.iterdir() if p.is_dir())
+    # 顶层 runtime/batches/ 反查（依据 batch_manifest.taskId），不再扫任务根 batches/。
+    return iter_task_batch_ids(task_id)
 
 
 def _collect_task_publish_inputs(task_id: str, batch_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], int]:

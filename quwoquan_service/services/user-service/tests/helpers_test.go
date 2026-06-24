@@ -113,7 +113,7 @@ func cleanAll(t *testing.T) {
 	ctx := context.Background()
 	_, _ = pgPool.Exec(ctx, `TRUNCATE user_profiles, user_auth, personas, user_settings, block_edges,
 		greeting_requests, user_works, user_life_items, credential_bindings, anonymous_device_bindings,
-		contact_discovery_records, invite_records CASCADE`)
+		contact_discovery_records, invite_records, profile_qr_tokens CASCADE`)
 	if mongoDB != nil {
 		// Clear documents but DO NOT Drop the collections: dropping a collection
 		// also drops its indexes (e.g. follow_edges' unique idx_follow_unique,
@@ -169,9 +169,7 @@ func authHeadersForPersona(userID, subAccountID string) map[string]string {
 
 func seedPersonaPostHistory(t *testing.T, subAccountID string) {
 	t.Helper()
-	if mongoDB == nil {
-		t.Skip("mongo unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	_, err := mongoDB.Collection("posts").InsertOne(context.Background(), bson.M{
 		"_id":                       "post_" + subAccountID,
 		"authorId":                  subAccountID,
@@ -187,9 +185,7 @@ func seedPersonaPostHistory(t *testing.T, subAccountID string) {
 
 func seedPersonaCommentHistory(t *testing.T, subAccountID string) {
 	t.Helper()
-	if mongoDB == nil {
-		t.Skip("mongo unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	_, err := mongoDB.Collection("comments").InsertOne(context.Background(), bson.M{
 		"_id":                       "comment_" + subAccountID,
 		"postId":                    "post_for_" + subAccountID,
@@ -206,9 +202,7 @@ func seedPersonaCommentHistory(t *testing.T, subAccountID string) {
 
 func seedPersonaChatHistory(t *testing.T, subAccountID string) {
 	t.Helper()
-	if mongoDB == nil {
-		t.Skip("mongo unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	_, err := mongoDB.Collection("messages").InsertOne(context.Background(), bson.M{
 		"_id":                       "message_" + subAccountID,
 		"conversationId":            "conv_" + subAccountID,
@@ -227,9 +221,7 @@ func seedPersonaChatHistory(t *testing.T, subAccountID string) {
 
 func seedPersonaNotificationHistory(t *testing.T, subAccountID string) {
 	t.Helper()
-	if mongoDB == nil {
-		t.Skip("mongo unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	_, err := mongoDB.Collection("notifications").InsertOne(context.Background(), bson.M{
 		"_id":          "notification_" + subAccountID,
 		"userId":       "viewer_" + subAccountID,

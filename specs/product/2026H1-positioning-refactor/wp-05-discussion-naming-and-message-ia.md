@@ -1,5 +1,9 @@
 # WP5 · 「讨论」命名统一与消息页 IA（端云）
 
+> ⚠️ **命名回滚（2026H2 · 「发起群聊商用重构」会话）**：本包对 **chat-conversation 群会话** 的「群聊→讨论」改名已被回滚。消息域群会话前台词回到 **「群聊」**，详见 `00_GLOBAL_TERMINOLOGY.md` §18.6。
+> 本文档下列涉及 chat 群会话的「讨论」改名条目（消息/联系二级胶囊、发起入口、群管理文案、Web 消息 Tab、`startGroupChat`/`exitGroupChat` 等）**以 §18.6 为准（保留「群聊」）**。
+> 仍然有效的「讨论」口径：实体主页「讨论」Tab、圈子内容「讨论」Tab、全局检索跨对象聚合「讨论」分区、交集「共同讨论」。`group` 作为 wire/filter/type 机器值不变。
+
 > 树归属：`chat-conversation/commercial-message-system`（修订）+ `global-search-experience`（搜索分组改名）
 > 影响 Journey：`message-social-connection`、`message-group-entry-matrix`、`global-search-query-and-filter`
 > 验收意图：GWT + SIT；测试证据：T1 / T2

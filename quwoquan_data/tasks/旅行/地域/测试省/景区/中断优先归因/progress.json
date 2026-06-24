@@ -1,7 +1,7 @@
 {
   "schemaVersion": "quwoquan.task.progress",
   "taskId": "旅行/地域/测试省/景区/中断优先归因",
-  "updatedAt": "2026-06-20T18:10:34.695367+00:00",
+  "updatedAt": "2026-06-24T13:09:26.566712+00:00",
   "coverage": {
     "entities": {
       "done": [],
@@ -10,7 +10,6 @@
     "categoriesDone": []
   },
   "anglesByEntity": {},
-  "conditionCells": [],
   "openGaps": [],
   "counts": {
     "entities": 0,

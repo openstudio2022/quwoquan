@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
@@ -129,7 +130,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ReorderableListView), findsNothing);
-    expect(find.byType(Wrap), findsWidgets);
+    // 媒体区现由统一拖拽组件 MediaReorderableView（网格布局）承载多行拖拽重排，
+    // 替换旧的 Wrap + LongPressDraggable 实现。
+    expect(find.byType(MediaReorderableView), findsOneWidget);
     expect(find.text('封面'), findsNothing);
     expect(find.textContaining('轻点任意图片设为封面'), findsNothing);
     expect(find.textContaining('视频会自动使用封面帧'), findsNothing);
@@ -160,8 +163,11 @@ void main() {
     ], editorKind: CreateEditorKind.media);
     await tester.pumpAndSettle();
 
-    final firstTile = find.byWidgetPredicate(
-      (widget) => widget is LongPressDraggable<String>,
+    // MediaReorderableView 网格内每个可拖拽 tile 由 AnimatedPositioned 承载（让位动画），
+    // 末尾「添加」格与首个 tile 同处第一行，校验二者顶端对齐即验证宫格首行布局。
+    final firstTile = find.descendant(
+      of: find.byType(MediaReorderableView),
+      matching: find.byType(AnimatedPositioned),
     );
     final firstTileTop = tester.getTopLeft(firstTile.first).dy;
     final addButtonTop = tester
@@ -204,14 +210,16 @@ void main() {
       editorKind: CreateEditorKind.media,
       thumbnail: '/tmp/demo_cover.jpg',
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.byKey(TestKeys.createMediaAddButton), findsNothing);
     expect(find.text('轻点视频编辑，支持裁切、静音和精细选帧'), findsOneWidget);
     expect(find.text('更换视频'), findsOneWidget);
 
     await tester.tap(find.byIcon(CupertinoIcons.play_fill));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('视频编辑'), findsOneWidget);
   });

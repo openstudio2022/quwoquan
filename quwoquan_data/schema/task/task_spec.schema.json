@@ -97,14 +97,6 @@
             "imageWorksPerTarget": { "type": "integer", "minimum": 0 },
             "entityHomepagesPerTarget": { "type": "integer", "minimum": 0 }
           }
-        },
-        "conditionAxes": {
-          "type": "object",
-          "description": "可选 override：地域/季节条件维。默认不写，继承地域/环线级 _defaults.yaml（该地域真实地形全谱 + 四季/旱雨季）；仅当确有地形/季节限制时 override，且必须是继承全谱子集（lint 校验）。每篇精确条件由实体 conditionProfile 在 plan/brief 注入",
-          "properties": {
-            "regions": { "type": "array", "items": { "type": "string" }, "description": "地域条件维（高原/沿海海岛...）" },
-            "seasons": { "type": "array", "items": { "type": "string" }, "description": "季节条件维（春/夏/秋/冬/雨季/旺季...）" }
-          }
         }
       }
     },

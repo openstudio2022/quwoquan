@@ -88,6 +88,7 @@ class _HomeFeedScrollView extends StatefulWidget {
     required this.staleDataError,
     required this.onRetryInitialLoad,
     required this.onReachBottom,
+    required this.onResourceSample,
     this.moodCopy = '',
     this.headerSliver,
     this.segmentBuilder,
@@ -111,6 +112,7 @@ class _HomeFeedScrollView extends StatefulWidget {
   final Object? staleDataError;
   final VoidCallback onRetryInitialLoad;
   final VoidCallback onReachBottom;
+  final VoidCallback onResourceSample;
 
   /// 频道气质文案（来自 ContentUIConfig.homeChannels.moodCopyKey 解析，只读）；空则不展示。
   final String moodCopy;
@@ -226,6 +228,7 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
       return false;
     }
     if (notification is ScrollEndNotification) {
+      widget.onResourceSample();
       _lastScrollPixels = notification.metrics.pixels;
       _lastScrollSampleAt = now;
       _publishVideoScrollSignal(

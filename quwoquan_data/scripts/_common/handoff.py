@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from _common.creator_assignment import creator_from_payload
 from _common import public_contacts as pc
 from _common import quality_gates as qg
 from _common.io import write_json
@@ -96,6 +97,7 @@ def build_author_job_packet(
 ) -> dict[str, Any]:
     carrier = writing_pack.get("carrier") or brief.get("carrier")
     is_image = str(carrier or "") in ("image", "gallery")
+    creator_assignment = creator_from_payload(writing_pack) or creator_from_payload(brief)
     assets = [
         {
             "assetId": a.get("assetId"),
@@ -124,6 +126,7 @@ def build_author_job_packet(
         "mustIncludeFacts": list(writing_pack.get("mustIncludeFacts") or []),
         "bannedRegisterTerms": list(writing_pack.get("bannedRegisterTerms") or []),
         "creativeBrief": writing_pack.get("creativeBrief") or {},
+        "creatorAssignment": creator_assignment,
         "captionPolicy": writing_pack.get("captionPolicy") or ({"titleMaxChars": 80, "captionMaxChars": 300} if is_image else {}),
         "assets": assets,
         "exitGates": [

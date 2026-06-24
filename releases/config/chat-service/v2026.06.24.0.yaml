@@ -1,0 +1,16 @@
+config:
+  version: "v2026.06.24.0"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+
+service:
+  name: chat-service
+
+# Group avatar secure public media release snapshot.
+# This snapshot records the rollout that moves chat-service runtime media
+# public links from local HTTP media-edge routing to the secure public avatar
+# plane for packaged envs. Actual host/port values remain environment-owned in
+# committed service configs, topology manifests, and env packages.
+runtime:
+  media:
+    group_avatar_public_plane: secure_public_avatar_edge

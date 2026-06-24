@@ -18,7 +18,6 @@ render: { articleTemplate: gentle, fontPreset: clean }
 structure:
   required: [进入前准备, 推荐动线, 必停讲解点, 避开人流策略, 参观后延伸]
   optional: [儿童老人版本, 雨天版本]
-hooks: ["去{name}，别只按地图走，按这条导览线更顺"]
 mustIncludeFacts: [导览动线, 停留时长, 讲解点, 人流避开策略]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 900, max: 1800 }
@@ -31,4 +30,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/主页/地点/景区/example.md

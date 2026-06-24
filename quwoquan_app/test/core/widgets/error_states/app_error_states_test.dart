@@ -42,6 +42,59 @@ void main() {
     expect(retryCount, 1);
   });
 
+  testWidgets('AppPageErrorState 的返回动作使用中性色胶囊按钮', (tester) async {
+    await tester.pumpWidget(
+      const CupertinoApp(
+        home: AppPageErrorState(
+          semantic: UiErrorSemantic(
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            title: UITextConstants.temporarilyUnavailable,
+            message: UITextConstants.checkNetworkAndTryAgain,
+            primaryAction: UiErrorAction(
+              type: UiErrorActionType.retry,
+              label: UITextConstants.tryAgain,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text(UITextConstants.back), findsOneWidget);
+    final backButtonDecoration = tester.widget<DecoratedBox>(
+      find
+          .ancestor(
+            of: find.text(UITextConstants.back),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is DecoratedBox &&
+                  widget.decoration is BoxDecoration &&
+                  (widget.decoration as BoxDecoration).border != null,
+            ),
+          )
+          .first,
+    );
+    final decoration = backButtonDecoration.decoration as BoxDecoration;
+    expect(decoration.border, isNotNull);
+    final backButtonSize = tester.getSize(
+      find
+          .ancestor(
+            of: find.text(UITextConstants.back),
+            matching: find.byType(CupertinoButton),
+          )
+          .first,
+    );
+    final retryButtonSize = tester.getSize(
+      find
+          .ancestor(
+            of: find.text(UITextConstants.tryAgain),
+            matching: find.byType(CupertinoButton),
+          )
+          .first,
+    );
+    expect(backButtonSize.width, retryButtonSize.width);
+  });
+
   testWidgets('AppTransientErrorNotice 渲染刷新失败轻提示', (tester) async {
     await tester.pumpWidget(
       const CupertinoApp(

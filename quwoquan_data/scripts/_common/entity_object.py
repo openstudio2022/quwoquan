@@ -15,6 +15,7 @@ from _common.paths import (
     OBJECT_STAGES,
     batch_entity_object_dir,
     batch_root,
+    iter_task_batch_ids as _paths_iter_task_batch_ids,
     object_index_path,
     task_data,
     task_root,
@@ -118,10 +119,8 @@ def entity_type_conflict_issues_for_rows(rows: list[dict[str, Any]]) -> list[str
 
 
 def iter_task_batch_ids(task_id: str) -> list[str]:
-    batches_dir = task_root(task_id) / "batches"
-    if not batches_dir.is_dir():
-        return []
-    return sorted(path.name for path in batches_dir.iterdir() if path.is_dir())
+    """该任务的所有批次 batchId（顶层 runtime/batches/，反查依据 batch_manifest.taskId）。"""
+    return _paths_iter_task_batch_ids(task_id)
 
 
 def _entity_surface_mtime(entity_dir: Path) -> float:

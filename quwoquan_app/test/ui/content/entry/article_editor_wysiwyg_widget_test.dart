@@ -336,6 +336,7 @@ class _EditorHarnessState extends State<_EditorHarness> {
     final blocks = buildArticleBlocksFromDocument(document);
     state = CreateEditorState(
       editorKind: CreateEditorKind.text,
+      draftFlowKind: CreateDraftFlowKind.article,
       mediaKind: CreateMediaKind.none,
       imagePaths: extractArticleImagePathsFromDocument(document),
       videoPath: '',
@@ -345,6 +346,9 @@ class _EditorHarnessState extends State<_EditorHarness> {
       videoTrimStartMs: 0,
       videoTrimEndMs: 0,
       videoCoverTimeMs: 0,
+      videoCoverStrategy: 'first_frame',
+      videoWidth: 0,
+      videoHeight: 0,
       videoMuted: false,
       currentMediaIndex: 0,
       title: document.title,

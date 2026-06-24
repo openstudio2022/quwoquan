@@ -317,7 +317,7 @@ def test_handle_download_produces_source_unit_from_preset_plan():
                 "sha256": "sha",
             }
 
-        def _fake_image_fetch(url, *, min_bytes=3000):
+        def _fake_image_fetch(url, *, min_bytes=3000, max_bytes=0):
             body = img_a if url.endswith("a.jpg") else img_b
             import hashlib as _h
 
@@ -472,7 +472,7 @@ def test_lane_scoped_homepage_download_preserves_other_lanes():
             "sha256": "sha-source",
         }
 
-    def _fake_image_fetch(url, *, min_bytes=3000):
+    def _fake_image_fetch(url, *, min_bytes=3000, max_bytes=0):
         image_calls.append(url)
         import hashlib as _h
 

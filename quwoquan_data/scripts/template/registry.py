@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from _common.paths import DATA_ROOT, PUBLISH_ROOT
+from _common.paths import DATA_ROOT, PUBLISH_ROOT, SERVICE_CONTRACTS_METADATA_ROOT
 
 
 TEMPLATES_ROOT = DATA_ROOT / "templates"
@@ -15,7 +15,8 @@ CATALOGS_ROOT = TEMPLATES_ROOT / "_registry" / "catalogs"
 ROUTING_ROOT = TEMPLATES_ROOT / "_registry" / "routing"
 BLUEPRINTS_ROOT = TEMPLATES_ROOT / "blueprints"
 CREATORS_ROOT = TEMPLATES_ROOT / "creator_profiles" / "system_builtin"
-UI_CONFIG_PATH = DATA_ROOT.parent / "quwoquan_service" / "contracts" / "metadata" / "content" / "post" / "ui_config.yaml"
+# ui_config 是服务侧受版本控制的契约真相源，跟代码走，禁止随 QWQ_DATA_ROOT 漂移。
+UI_CONFIG_PATH = SERVICE_CONTRACTS_METADATA_ROOT / "content" / "post" / "ui_config.yaml"
 
 
 def load_yaml(path: Path) -> dict[str, Any]:

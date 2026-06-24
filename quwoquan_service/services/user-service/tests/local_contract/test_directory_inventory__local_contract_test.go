@@ -15,12 +15,12 @@ func TestUserServiceTestDirectoryInventory(t *testing.T) {
 		t.Fatalf("read test directory inventory: %v", err)
 	}
 	text := string(payload)
-	legacyPaths := []string{
+	sourcePaths := []string{
 		"quwoquan_service/services/user-service/tests/auth_contract_test.go",
 	}
-	for _, token := range legacyPaths {
+	for _, token := range sourcePaths {
 		if !strings.Contains(text, token) {
-			t.Fatalf("inventory missing legacy path %q", token)
+			t.Fatalf("inventory missing source path %q", token)
 		}
 	}
 	canonicalPaths := []string{

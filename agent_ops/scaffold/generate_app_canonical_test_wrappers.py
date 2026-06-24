@@ -25,10 +25,10 @@ def build_wrapper(target_path: Path, source_path: Path) -> str:
     return (
         HEADER
         + "\n"
-        + f"import '{rel_import}' as legacy_test;\n"
+        + f"import '{rel_import}' as source_test;\n"
         + "\n"
         + "void main() {\n"
-        + "  legacy_test.main();\n"
+        + "  source_test.main();\n"
         + "}\n"
     )
 

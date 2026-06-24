@@ -25,6 +25,14 @@ URL_FIELDS = (
     "mediaVideo",
     "mediaUpload",
 )
+SECURE_HTTP_FIELDS = (
+    "api",
+    "productOps",
+    "mediaAvatar",
+    "mediaImage",
+    "mediaVideo",
+    "mediaUpload",
+)
 REQUIRED_SUBNETS = ("edge", "media", "service", "data")
 REQUIRED_APP_POLICY = (
     "runtimeEnv",
@@ -89,15 +97,8 @@ def validate_environment_topology(manifest: dict[str, Any]) -> list[str]:
                 value = str(public_bases.get(field, "")).strip()
                 if not value:
                     issues.append(f"{env_name}: publicBases.{field} is required")
-                elif not (
-                    value.startswith("http://")
-                    or value.startswith("https://")
-                    or value.startswith("ws://")
-                    or value.startswith("wss://")
-                ):
-                    issues.append(
-                        f"{env_name}: publicBases.{field} must include http(s)/ws(s) scheme",
-                    )
+                else:
+                    issues.extend(_validate_public_base_url(f"{env_name}: publicBases.{field}", field, value))
 
         subnets = env.get("subnets")
         if not isinstance(subnets, dict):
@@ -176,6 +177,14 @@ def validate_environment_topology(manifest: dict[str, Any]) -> list[str]:
                 value = str(public_bases.get(field, "")).strip()
                 if not value:
                     issues.append(f"{target_name}: publicBases.{field} is required")
+                else:
+                    issues.extend(
+                        _validate_public_base_url(
+                            f"{target_name}: publicBases.{field}",
+                            field,
+                            value,
+                        )
+                    )
         backend = str(target.get("backend", "")).strip()
         if backend not in {"local", "ssh-hosted"}:
             issues.append(
@@ -220,3 +229,17 @@ def service_artifact_policy(manifest: dict[str, Any], env_name: str) -> dict[str
 
 def _looks_like_cidr(value: str) -> bool:
     return bool(re.match(r"^\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}$", value))
+
+
+def _validate_public_base_url(label: str, field: str, value: str) -> list[str]:
+    if field == "realtime":
+        if value.startswith("wss://"):
+            return []
+        return [f"{label} must use secure wss://"]
+    if field in SECURE_HTTP_FIELDS:
+        if value.startswith("https://"):
+            return []
+        return [f"{label} must use secure https://"]
+    if value.startswith(("http://", "https://", "ws://", "wss://")):
+        return []
+    return [f"{label} must include http(s)/ws(s) scheme"]

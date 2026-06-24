@@ -3,49 +3,93 @@ node:
   id: profile-read-update--profile-field-contract
   level: L3_story
   path: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update--profile-field-contract
-  title: profile read update  profile field contract
+  title: profile read update profile field contract
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: auth-profile-snapshot
 scope:
-  summary: profile read update  profile field contract 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 编辑资料字段契约，地区字段统一使用 tag-service 行政区标签引用。
+  in_scope:
+    - ProfileEditSnapshotWire.region + regionTagRef
+    - PATCH /v1/user/profile regionTagRef
+    - tag-service ListTagChildren 行政区 direct children
+    - Data publish/tags 行政区发布产物完整性
+  out_of_scope:
+    - 普通省份第三层区县选择
+    - 境外行政区完整填充
 gwt_acceptance:
   GWT1:
-    title: profile read update  profile field contract GWT
+    title: 用户选择广东深圳后资料保存 regionTagRef 并回显地区
     given:
-    - 前置条件明确。
+      - 用户已登录并进入我的主页编辑资料页
+      - tag-service 可返回 Topic/地理/行政区/中国 的 34 个省级节点
     when:
-    - 用户或系统动作发生。
+      - 用户进入地区选择页
+      - 用户选择 广东 → 深圳
+      - 用户保存编辑资料
     then:
-    - 可观察结果符合预期。
+      - App 提交 payload.regionTagRef = Topic/地理/行政区/中国/广东省/深圳市
+      - App 不提交 regionCode，也不提交任意非空 region 展示文案
+      - user-service 派生 region = 广东 深圳
+      - ProfileEditSnapshotWire 返回 region + regionTagRef
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+      - 我的主页/编辑页能展示新地区
+    edge_cases:
+      - 未知 parentTagRef 返回结构化 404
+      - 非行政区 tagRef 返回 USER.PROFILE.invalid_region
+      - 直辖市第二级展示区县，如 北京 → 朝阳
+    contract_refs:
+      - quwoquan_service/contracts/metadata/tag/service.yaml#ListTagChildren
+      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml#UpdateUserProfile
+      - quwoquan_service/contracts/metadata/user/user_profile/projections/profile_edit_snapshot_wire.yaml
+    performance_points:
+      - ListTagChildren limit 上限 500
+      - App 地区选择只调用两次 children 接口
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+        - file: quwoquan_data/tests/local_contract/publish/test_admin_region_tags__local_contract_test.py
+        - file: quwoquan_service/services/tag-service/tests/local_contract/internal/application/tag_service__local_contract_test.go
+        - file: quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
+        - file: quwoquan_service/services/user-service/tests/local_contract/internal/infrastructure/integration/tag_service_region_resolver__local_contract_test.go
+        - file: quwoquan_app/test/local_contract/cloud/tag/tag_repository_consistency__local_contract_test.dart
+        - file: quwoquan_app/test/user_acceptance/ui/user/journeys/edit_profile_journey__user_acceptance_test.dart
+    status: implemented
     test_evidence:
       primary:
-      - layer: local_contract
-        suite: contract
-        cases:
-        - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update_profile_field_contract.contract
-        envs: &id001
-        - local
-      - layer: local_contract
-        suite: gwt1_local_contract
-        cases:
-        - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update_profile_field_contract.gwt1_local_contract
-        envs: *id001
-      supporting: []
-    notes: []
+        - layer: local_contract
+          suite: contract
+          cases:
+            - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update_profile_field_contract.region_tag_ref_contract
+          envs: &local_envs
+            - local
+        - layer: api_integration
+          suite: tag_user_profile_region
+          cases:
+            - api_integration.tag_service.children.admin_regions
+            - api_integration.user_service.patch_profile.region_tag_ref
+          envs:
+            - gamma
+        - layer: user_acceptance
+          suite: edit_profile_region_journey
+          cases:
+            - user_acceptance.my_profile.edit_profile.select_region.save
+          envs:
+            - gamma_local
+      supporting:
+        - layer: local_contract
+          suite: data_publish_tags
+          cases:
+            - local_contract.user_identity_profile_relationship.auth_profile_snapshot.profile_read_update_profile_field_contract.admin_region_direct_children_publish_integrity
+          envs: *local_envs
+    notes:
+      - 线上读取源为 Mongo tag_nodes serving projection；publish/tags 是源头真相。
+      - App Mock 与 Remote 必须走同一 TagRepository.listChildren 接口。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+    - python3 quwoquan_data/tests/local_contract/publish/test_admin_region_tags__local_contract_test.py
+    - make -C quwoquan_service verify-metadata
+    - make -C quwoquan_service codegen-app
+    - go test ./services/tag-service/tests ./services/user-service/tests
+    - cd quwoquan_app && flutter test test/cloud/tag/tag_repository_consistency_test.dart test/ui/user/journeys/edit_profile_journey_test.dart
   full_gate:
-  - make gate
+    - make gate

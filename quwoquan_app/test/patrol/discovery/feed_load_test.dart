@@ -1,4 +1,4 @@
-/// T4 Patrol E2E: 发现页 Feed 加载旅程
+/// user_acceptance Patrol: 发现页 Feed 加载旅程
 ///
 /// 对应 e2e.yaml 场景：discovery_feed_load_and_render [test_type: ui_journey]
 ///
@@ -45,7 +45,7 @@ void main() {
 
       assert(
         _apiContractEnv == 'gamma',
-        'T4 tests must run with API_CONTRACT_ENV=gamma',
+        'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
       );
 
       // ── 等待首页真实 feed 卡片渲染（默认推荐频道可能是双列发现卡）───────

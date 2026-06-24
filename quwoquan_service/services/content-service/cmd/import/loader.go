@@ -34,6 +34,11 @@ type AssetManifestItem struct {
 	Role                 string `json:"role,omitempty" bson:"role,omitempty"`
 	Width                int64  `json:"width,omitempty" bson:"width,omitempty"`
 	Height               int64  `json:"height,omitempty" bson:"height,omitempty"`
+	DurationMs           int64  `json:"durationMs,omitempty" bson:"durationMs,omitempty"`
+	ThumbnailURL         string `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
+	CoverURL             string `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
+	CoverStrategy        string `json:"coverStrategy,omitempty" bson:"coverStrategy,omitempty"`
+	CoverFrameTimeMs     int64  `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
 	SourceCollectionID   string `json:"sourceCollectionId,omitempty" bson:"sourceCollectionId,omitempty"`
 }
 
@@ -334,6 +339,23 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 				if asset.SourceCollectionID != "" && asset.SourceCollectionID != m.SourceCollectionID {
 					return fmt.Errorf("%s: image asset sourceCollectionId does not match work manifest", postRef)
 				}
+			}
+		}
+		if strings.EqualFold(strings.TrimSpace(m.ContentType), "video") {
+			if len(m.Assets) == 0 || len(m.Assets) > 20 {
+				return fmt.Errorf("%s: video manifest assets must contain 1..20 items", postRef)
+			}
+			hasVideo := false
+			for _, asset := range m.Assets {
+				if err := validateAssetItem(asset, postRef); err != nil {
+					return err
+				}
+				if strings.EqualFold(strings.TrimSpace(asset.Kind), "video") {
+					hasVideo = true
+				}
+			}
+			if !hasVideo {
+				return fmt.Errorf("%s: video manifest requires a video asset", postRef)
 			}
 		}
 		if err := postsemantic.ValidateSuppliedRefs(

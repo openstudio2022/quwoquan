@@ -18,11 +18,13 @@ type UserProfile struct {
 	AvatarAssetID            string    `json:"avatarAssetId" db:"avatar_asset_id"`
 	AvatarVersion            int       `json:"avatarVersion" db:"avatar_version"`
 	BackgroundURL            string    `json:"backgroundUrl" db:"background_url"`
+	BackgroundAssetID        string    `json:"backgroundAssetId" db:"background_asset_id"`
 	Bio                      string    `json:"bio" db:"bio"`
 	IdentityTags             string    `json:"identityTags" db:"identity_tags"`
 	Gender                   string    `json:"gender" db:"gender"`
 	BirthDate                *string   `json:"birthDate" db:"birth_date"`
 	Region                   string    `json:"region" db:"region"`
+	RegionCode               string    `json:"regionCode" db:"region_code"`
 	Status                   string    `json:"status" db:"status"`
 	ProfileVersion           int       `json:"profileVersion" db:"profile_version"`
 	FollowerCount            int64     `json:"followerCount" db:"follower_count"`

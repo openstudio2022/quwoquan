@@ -37,7 +37,16 @@ class RoundedSquareAvatar extends StatelessWidget {
     Widget avatar = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: hasImage
-          ? _buildNetworkImageWithFallback(imageCandidates, 0, radius, isDark)
+          ? AppCachedNetworkImage(
+              imageUrl: imageCandidates.first,
+              imageUrlCandidates: imageCandidates,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              cdnPreset: CdnImagePreset.avatar,
+              placeholder: _buildLoadingPlaceholder(radius, isDark),
+              errorWidget: _buildFallback(radius, isDark),
+            )
           : _buildFallback(radius, isDark),
     );
 
@@ -46,33 +55,6 @@ class RoundedSquareAvatar extends StatelessWidget {
     }
 
     return avatar;
-  }
-
-  Widget _buildNetworkImageWithFallback(
-    List<String> candidates,
-    int index,
-    double radius,
-    bool isDark,
-  ) {
-    return AppCachedNetworkImage(
-      imageUrl: candidates[index],
-      width: size,
-      height: size,
-      fit: BoxFit.cover,
-      placeholder: _buildLoadingPlaceholder(radius, isDark),
-      errorWidget: () {
-        final next = index + 1;
-        if (next < candidates.length) {
-          return _buildNetworkImageWithFallback(
-            candidates,
-            next,
-            radius,
-            isDark,
-          );
-        }
-        return _buildFallback(radius, isDark);
-      }(),
-    );
   }
 
   Widget _buildLoadingPlaceholder(double radius, bool isDark) {

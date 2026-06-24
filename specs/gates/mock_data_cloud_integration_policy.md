@@ -85,7 +85,7 @@
    - 正式包 **不** 定义 `ALLOW_MOCK=1` 之类开关。
 
 3. **UI 入口**  
-   - `DeveloperSettingsPage` 中数据源切换：**`kDebugMode` 或 flavor 门控**，Release **不编译/不展示**。
+   - 设置页不提供开发者数据源切换入口；调试入口如需恢复，必须走独立 dev flavor / `main_dev.dart`，不得挂回商用 `/settings` IA 或深链。
 
 4. **静态门禁**  
    - Release 构建流水线：`flutter build ... --dart-define=APP_DATA_SOURCE=remote` + （可选）**第二构建**验证 Mock 未链接（依赖 P4 拆分）。
@@ -121,7 +121,7 @@
 
 | 类别 | 是否视为「不得进发布的测试代码」 | 说明 |
 |------|-----------------------------------|------|
-| `test/` | **是**（不进业务包） | 端侧测试统一位于 `test/common|alpha|beta|gamma|patrol` |
+| `test/` | **是**（不进业务包） | 端侧测试统一位于 `test/local_contract`、`test/api_integration`、`test/user_acceptance` |
 | `TestKeys`、语义化 `Key` | **否**（允许） | 自动化 / 可及性用，**非**单元测试源码 |
 | `debugPrint`、断言 | **否**（允许，但应克制） | 不替代正式日志管线；大量调试输出应门控 |
 | `Mock*Repository`、`*MockData` | **实现上在 lib 内** | **运行时** Release 默认不走；**字节级剔除** 依赖 P4 |
@@ -255,4 +255,4 @@ quwoquan_app/test/support/
 | 2026-03-29 | 新增 §9：Mock/Remote/配置目录目标；`test/support` 隔离根与移植速查表 |
 | 2026-03-30 | **§5.1 功能规格**：冻结「发布态 R1–R6 / 开发测试态 D1–D4 / 测试代码用语边界」验收表；明确 R1–R6 为运行时与工程边界、物理零 Mock 属 P4 |
 | 2026-04-12 | §6 增补：`verify_ui_app_data_source_mode_ratchet`、`verify_lib_no_test_only_symbols`、Makefile 目标与正式构建 define；索引表增加棘轮脚本 |
-| 2026-04-12 | **P1 进展**：`mockDataSourceActiveProvider` / `remoteDataSourceActiveProvider` 收敛于 [`app_content_repository.dart`](../../quwoquan_app/lib/core/services/app_content_repository.dart)；`lib/ui/**`（豁免开发者设置页）对 `AppDataSourceMode.mock` / `appDataSourceModeProvider` 的散落引用棘轮基线已 **清零**（见 [`ui_app_data_source_mode_baseline.json`](./ui_app_data_source_mode_baseline.json)）；[`app_content_repository_provider`](../../quwoquan_app/lib/cloud/services/app_content/app_content_repository_provider.dart) 改为依 `remoteDataSourceActiveProvider` 选型 |
+| 2026-04-12 | **P1 进展**：`mockDataSourceActiveProvider` / `remoteDataSourceActiveProvider` 收敛于 [`app_content_repository.dart`](../../quwoquan_app/lib/core/services/app_content_repository.dart)；`lib/ui/**` 对 `AppDataSourceMode.mock` / `appDataSourceModeProvider` 的散落引用棘轮基线已 **清零**（见 [`ui_app_data_source_mode_baseline.json`](./ui_app_data_source_mode_baseline.json)）；[`app_content_repository_provider`](../../quwoquan_app/lib/cloud/services/app_content/app_content_repository_provider.dart) 改为依 `remoteDataSourceActiveProvider` 选型 |

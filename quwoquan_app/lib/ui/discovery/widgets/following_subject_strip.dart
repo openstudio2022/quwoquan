@@ -325,6 +325,7 @@ class _FollowingSubjectAvatar extends StatelessWidget {
                 )
               : AppCachedNetworkImage(
                   imageUrl: url,
+                  cdnPreset: CdnImagePreset.thumbnail,
                   fit: BoxFit.cover,
                   errorWidget: Icon(
                     _fallbackIcon(item.subjectType),

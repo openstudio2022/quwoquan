@@ -14,6 +14,32 @@ func (f *fakeNodeReader) FindByTagRef(_ context.Context, tagRef string) (*model.
 	return f.nodes[tagRef], nil
 }
 
+func (f *fakeNodeReader) ListChildren(_ context.Context, parentTagRef string, limit int64) ([]model.TagNode, error) {
+	out := make([]model.TagNode, 0)
+	for _, node := range f.nodes {
+		if node.ParentTagRef == parentTagRef && node.LifecycleStatus == "active" {
+			out = append(out, *node)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].TagRef < out[j].TagRef
+	})
+	if limit > 0 && int64(len(out)) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (f *fakeNodeReader) CountActiveChildren(_ context.Context, parentTagRef string) (int64, error) {
+	var count int64
+	for _, node := range f.nodes {
+		if node.ParentTagRef == parentTagRef && node.LifecycleStatus == "active" {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (f *fakeNodeReader) ListAll(_ context.Context) ([]model.TagNode, error) {
 	out := make([]model.TagNode, 0, len(f.nodes))
 	for _, node := range f.nodes {

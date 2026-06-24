@@ -41,22 +41,15 @@ domain_acceptance:
       - artifact: artifacts/search-load/<prod-sim-or-real-cluster>/search_repeatability_multi_replica_report.json
       - artifact: artifacts/stackctl/prod/<run-id>/search_release_verify_report.json
       recorded:
-      - file: quwoquan_service/runtime/search/retrieve_contract_test.go
-      - file: quwoquan_service/runtime/search/core_test.go
-      - file: quwoquan_service/runtime/search/sort_stable_test.go
-      - file: quwoquan_service/services/search-service/tests/search_contract_test.go
-      - file: quwoquan_service/services/search-service/tests/storage_ttl_contract_test.go
-      - file: quwoquan_service/services/content-service/internal/application/place_search_projection_test.go
-      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
-      - file: quwoquan_app/test/ui/search/retrieve_request_mapper_test.dart
-      - file: quwoquan_app/test/ui/search/search_repository_test.dart
-      - file: quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
-      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
-      - file: quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
-      - artifact: artifacts/local-gamma/search_smoke_report.json
-      - artifact: artifacts/local-gamma/search_signal_t3_report.json
-      - artifact: artifacts/local-gamma/search_repeatability_golden_diff.json
-      - artifact: artifacts/stackctl/gamma/search_rollback_rehearsal.md
+      - file: quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
+      - file: quwoquan_service/services/search-service/tests/api_integration/storage_ttl_contract__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/place_search_projection__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/search_signal_consumer__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/search/retrieve_request_mapper__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/search_repository__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/search/journeys/cross_domain_search_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
     status: partial
     notes:
     - search 域 local_contract/user_acceptance 已 recorded：Flutter search suite 50/50；user_acceptance
@@ -65,6 +58,13 @@ domain_acceptance:
       + search_signal_consumer/runtime recommendation tests）。
     - 保持 partial 的原因不是功能链路缺口，而是商用发布阻断仍未闭合：R-S06-S-1 真集群 measured 容量、多副本 repeatability；R-S06-S-2
       写时增量/backfill 长稳；R-S06-S-3 search-service module/config/backlog 版本落盘与 CI 干净检出。
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/retrieve_contract_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/core_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/sort_stable_test.go'
+    - '[migrated_from_recorded_artifact] artifacts/local-gamma/search_smoke_report.json'
+    - '[migrated_from_recorded_artifact] artifacts/local-gamma/search_signal_t3_report.json'
+    - '[migrated_from_recorded_artifact] artifacts/local-gamma/search_repeatability_golden_diff.json'
+    - '[migrated_from_recorded_artifact] artifacts/stackctl/gamma/search_rollback_rehearsal.md'
     test_evidence:
       primary:
       - layer: local_contract

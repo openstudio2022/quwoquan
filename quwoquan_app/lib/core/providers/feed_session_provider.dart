@@ -5,9 +5,7 @@ const _uuid = Uuid();
 const _sessionTimeoutMinutes = 30;
 
 class _FeedSessionState {
-  _FeedSessionState()
-      : sessionId = _uuid.v4(),
-        _lastActivity = DateTime.now();
+  _FeedSessionState() : sessionId = _uuid.v4(), _lastActivity = DateTime.now();
 
   final String sessionId;
   DateTime _lastActivity;
@@ -25,6 +23,7 @@ class FeedSessionNotifier extends Notifier<String> {
   _FeedSessionState _state = _FeedSessionState();
   String _currentFeedRequestId = _uuid.v4();
   String _currentRankingVersion = '';
+  String _currentReasonVersion = '';
 
   @override
   String build() {
@@ -51,12 +50,19 @@ class FeedSessionNotifier extends Notifier<String> {
   /// 尚未接入服务端 feed envelope 的面（搜索/圈子/个人作品等）为空字符串。
   String get currentRankingVersion => _currentRankingVersion;
 
+  /// 当前 feed 会话归因的理由生成版本（服务端 envelope.reasonVersion）。
+  String get currentReasonVersion => _currentReasonVersion;
+
   /// 采纳服务端 GET /v1/content/feed 下发的权威 feedRequestId。
   ///
   /// 首页发现流加载/分页后调用，使 [currentFeedRequestId] 与服务端 envelope 对齐，
   /// 后续曝光/点击/打开等行为事件复用同一归因 id。空值忽略（保留上一个有效 id）。
   /// 同步采纳 envelope.rankingVersion（非空才覆盖），使行为事件可按精排版本归因。
-  void adoptServerFeedRequestId(String? feedRequestId, {String? rankingVersion}) {
+  void adoptServerFeedRequestId(
+    String? feedRequestId, {
+    String? rankingVersion,
+    String? reasonVersion,
+  }) {
     final normalized = feedRequestId?.trim() ?? '';
     if (normalized.isEmpty) {
       return;
@@ -65,6 +71,10 @@ class FeedSessionNotifier extends Notifier<String> {
     final normalizedRanking = rankingVersion?.trim() ?? '';
     if (normalizedRanking.isNotEmpty) {
       _currentRankingVersion = normalizedRanking;
+    }
+    final normalizedReason = reasonVersion?.trim() ?? '';
+    if (normalizedReason.isNotEmpty) {
+      _currentReasonVersion = normalizedReason;
     }
   }
 
@@ -79,5 +89,6 @@ class FeedSessionNotifier extends Notifier<String> {
   }
 }
 
-final feedSessionProvider =
-    NotifierProvider<FeedSessionNotifier, String>(FeedSessionNotifier.new);
+final feedSessionProvider = NotifierProvider<FeedSessionNotifier, String>(
+  FeedSessionNotifier.new,
+);

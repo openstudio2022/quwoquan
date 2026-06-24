@@ -46,10 +46,9 @@ gwt_acceptance:
       - file: quwoquan_app/test/app/shell/main_app_shell_widget_test.dart
       - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
       recorded:
-      - command: make verify-app-login-entry-loop-contract
-      - file: quwoquan_app/test/core/auth/required_route_gate_test.dart
-      - file: quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
-      - file: quwoquan_app/test/app/shell/web_auth_entry_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/auth/required_route_gate__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/auth/auth_gate_matrix_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/shell/web_auth_entry_contract__local_contract_test.dart
     status: partial
     test_evidence:
       primary:
@@ -65,7 +64,8 @@ gwt_acceptance:
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.welcome_entry_routing_login_state_entry_policy.contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] make verify-app-login-entry-loop-contract'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

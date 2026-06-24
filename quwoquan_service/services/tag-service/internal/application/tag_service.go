@@ -2,12 +2,15 @@ package application
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 
 	model "quwoquan_service/services/tag-service/internal/domain/tag/model"
 	"quwoquan_service/services/tag-service/internal/domain/tag/repository"
 )
+
+var ErrTagParentNotFound = errors.New("parent tagRef not found")
 
 // TagResolveView 对齐 service.yaml ResolveTag 响应。
 type TagResolveView struct {
@@ -17,6 +20,19 @@ type TagResolveView struct {
 	LabelEn   string `json:"labelEn"`
 	Aliases   string `json:"aliases"`
 	Ancestors string `json:"ancestors"`
+}
+
+// TagChildView 对齐 service.yaml ListTagChildren 响应。
+type TagChildView struct {
+	TagRef          string `json:"tagRef"`
+	Label           string `json:"label"`
+	DisplayLabel    string `json:"displayLabel"`
+	LabelEn         string `json:"labelEn"`
+	ParentTagRef    string `json:"parentTagRef"`
+	Depth           int    `json:"depth"`
+	HasChildren     bool   `json:"hasChildren"`
+	ReleaseID       string `json:"releaseId"`
+	LifecycleStatus string `json:"lifecycleStatus"`
 }
 
 // SharedTagView 对齐 service.yaml SharedTags 响应（交集锚点）。
@@ -107,6 +123,51 @@ func (s *TagService) Resolve(ctx context.Context, tagRef string) (*TagResolveVie
 		Aliases:   node.Aliases,
 		Ancestors: node.Ancestors,
 	}, nil
+}
+
+// ListChildren 列出 active 直接子节点；parent 不存在时返回 ErrTagParentNotFound。
+func (s *TagService) ListChildren(ctx context.Context, parentTagRef string, limit int) ([]TagChildView, error) {
+	parentTagRef = strings.TrimSpace(parentTagRef)
+	if parentTagRef == "" {
+		return []TagChildView{}, nil
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 500
+	}
+	parent, err := s.nodes.FindByTagRef(ctx, parentTagRef)
+	if err != nil {
+		return nil, err
+	}
+	if parent == nil {
+		return nil, ErrTagParentNotFound
+	}
+	children, err := s.nodes.ListChildren(ctx, parentTagRef, int64(limit))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TagChildView, 0, len(children))
+	for _, child := range children {
+		count, err := s.nodes.CountActiveChildren(ctx, child.TagRef)
+		if err != nil {
+			return nil, err
+		}
+		displayLabel := strings.TrimSpace(child.DisplayLabel)
+		if displayLabel == "" {
+			displayLabel = strings.TrimSpace(child.Label)
+		}
+		out = append(out, TagChildView{
+			TagRef:          child.TagRef,
+			Label:           child.Label,
+			DisplayLabel:    displayLabel,
+			LabelEn:         child.LabelEn,
+			ParentTagRef:    child.ParentTagRef,
+			Depth:           child.Depth,
+			HasChildren:     count > 0,
+			ReleaseID:       child.ReleaseID,
+			LifecycleStatus: child.LifecycleStatus,
+		})
+	}
+	return out, nil
 }
 
 // ListDimensions 返回创作标签面板的固定维度目录。

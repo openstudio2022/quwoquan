@@ -10,7 +10,7 @@
 > `全部 / 图片 / 视频 / 文字`，其中底层类型仍为 `article`，展示筛选用“文字”。
 > “文章”只用于正式内容类型或详情语境，“长文”只用于编辑创作语境。
 >
-> 交集表达以用户可解释语言为准：他人主页为 `你们的交集`，我的主页为 `我的新交集`；
+> 交集表达以用户可解释语言为准：他人主页为 `我与TA的交集`，我的主页为 `我的连接`；
 > 影响模块为 `TA的影响力` / `我的影响力`，均采用纵向列表；可点击文字、一级 Tab 选中态与
 > 「查看全部」弱入口使用克制蓝色阶，类型图标使用非品牌蓝低饱和语义色。
 
@@ -18,7 +18,7 @@
 >
 > 1. **一级 Tab 收敛为 3 个**：`[记录 | 互动 | 足迹]`；`圈子`作为统计数字进入`粉丝 / 关注 / 圈子`三 Tab 详情页，`足迹`承载浏览历史列表。
 > 2. **profile 内容形式只有三类**：文章 / 图片 / 视频（均为 `contentIdentity=work` 作品）。**profile 不存在「微趣」概念**；`moment/micro`（点滴微动态）是 content/discovery 域的独立活跃概念，不进 profile 创作 Tab。历史 spec/commercial-readiness 中创作含「微趣」的表述在 V5 一律废止。
-> 3. **交集卡为真闭环**：`你们的交集` 卡由 tag-service `shared-tags` 真实倒排数据驱动（`object_tag_index` 打标管道），统一到 `IntersectionReason`；历史 `resonance`（共鸣）旧链路全部删除，不保留。
+> 3. **交集卡为真闭环**：`我与TA的交集` 卡由 tag-service `shared-tags` 真实倒排数据驱动（`object_tag_index` 打标管道），统一到 `IntersectionReason`；历史 `resonance`（共鸣）旧链路全部删除，不保留。
 
 ## 背景与动机
 
@@ -74,13 +74,15 @@
   - 私密作品封面叠加锁标
   - 选中非「全部」时，Tab 文字旁显示筛选指示器
 
-### F4: 圈子统计详情
+### F4: 主页统计详情页（粉丝 / 关注 / 圈子）
 
-- 圈子不再作为主页一级 Tab；展示用户已加入的全部圈子（我的主页）或公开圈子（他人主页）
-- 入口来自统计区「圈子」数字，与「粉丝 / 关注」共享同一个统计详情页；详情页一级 Tab 为 `[粉丝 | 关注 | 圈子]`
-- 卡片形式：圈子封面 + 圈子名
-- 点击跳转到 `circle_detail_page`
-- 空态：友好提示「还没加入圈子」或「Ta 还没加入圈子」
+- 统计详情页为主页统计行进入的**统一二级关系页**；单一路由保持 `/profile/stats?type=fans|following|circles&userId=...`，永久固定三 Tab，不新增第四个「获赞」Tab。
+- 顶部 chrome 与资料编辑/设置页同源，使用 `SettingsInsetMemberPickerPageScaffold` 语义：leading 为 iOS chevron back，middle 为等宽 segmented selector `[粉丝 | 关注 | 圈子]`；正文区不得再放第二条 tab strip，不使用 underline 选中样式。
+- 搜索条作为列表首块紧贴顶栏下方；粉丝/关注/圈子三页签分别独立记忆 `query / scroll offset / cursor / loaded items`，切回时恢复对应状态。
+- 粉丝/关注列表统一为 `头像 + displayName + @handle + 关系/可见性辅助信息 + trailing 动作`；trailing 按钮完全由 `RelationshipCapability` 驱动，禁止页面本地拼 `isFollowing` 布尔。
+- `following / mutual` 按钮点击进入 iOS action sheet，仅提供 `取消关注 / 发消息 / 取消`；`self / blocked / restricted` 行不显示或禁用关系动作。
+- 圈子列表展示用户已加入的全部圈子（我的主页）或公开可见圈子（他人主页）；行结构为 `封面/头像 + 圈名 + 成员数/创作数 + 可见性 + chevron`，本期默认只做浏览与跳转，不伪造 membership 按钮。
+- 首屏必须具备 skeleton、下拉刷新、cursor 分页、分页尾部 loading、inline retry、owner/other 分型空态、private/blocked 权限卡；`viewerContext.canViewFullProfile=false` 时直接命中权限态，不渲染假列表。
 
 ### F5: 互动 Tab
 
@@ -88,13 +90,15 @@
 - 方向切换：`[收到 | 发出]`（我的主页）/ 仅 `[Ta收到]` 公开部分（他人主页）
 - 互动列表：头像 + 用户名 + 互动内容摘要 + 时间
 
-### F6: 生活 Tab（按新架构重做）
+### F6: 足迹 Tab（浏览历史，仅本人可见）
 
-- 子分类：`[足迹 | 书影音 | 味蕾 | 爱物]`，由 codegen `profile_tabs.lifestyle.sub_tabs` 驱动（端侧枚举与 sub_tab id 对齐，不硬编码）。
-- 数据源：`UserProfileRepository.listUserLifeItems`，元素为 **codegen `UserLifeItem` DTO**（`user/user_life_item` 域，端云一套字段），`category` 收敛为 `enum_ref: LifeItemCategory`（footprint/soul/taste/private）。
-- Mock 走 contract fixture seed（`user/test_fixtures` + seed manifest），**删除 `UserProfileMockData.lifeItemsFor` 硬编码假数据**。
-- 网格视图 + 生活记录卡片；所有文案语义化（`UITextConstants`/l10n），零硬编码中文。
-- 重做废止历史孤儿 `ProfileLifestyleTab` 手写模型与 `LifestyleSubTab` 脱离 ui_config 的实现。
+- V5 收敛：历史「生活」一级 Tab（`[足迹 | 书影音 | 味蕾 | 爱物]` 基于 `UserLifeItem`）在 V5 **废止为 profile 一级 Tab**；`足迹`提升为独立一级 Tab，承载**浏览历史**（只读消费轨迹），不再依赖 `UserLifeItem`。
+- 一级 Tab `footprint` 由 codegen `profile_tabs`（`user/user_profile/ui_config.yaml`）驱动，端侧不得硬编码 Tab id/文案。
+- 隐私门控：`modes: [mine]`，**仅本人主页可见**；他人主页一级 Tab 仅 `记录 / 互动`，不出现足迹（浏览历史不对他人下发）。`ProfileShell` 按 `mode` 过滤一级 Tab，由 `UserProfileTabConfig.visibleInMode(mode)` 强约束。
+- 数据源：复用既有浏览历史能力（`GET /v1/content/footprint`），**不新增后端 API、不读取 `UserLifeItem`**。
+- 列表视图；所有文案语义化（`UITextConstants`/l10n），零硬编码中文。
+- 废止历史孤儿 `ProfileLifestyleTab` 手写模型与脱离 ui_config 的 `LifestyleSubTab` 实现；`UserProfileUIConfig.lifestyleSubTabs` 在 V5 为空。
+- 说明：`user/user_life_item`（书影音/味蕾/爱物）**保留为独立后端能力域**，但在 V5 **不作为 profile 一级 Tab 暴露**，避免在主页制造第二套 Tab 真相源。
 
 ### F7: 目录迁移与 features/ 清退
 
@@ -107,6 +111,8 @@
 
 - 推进 `contracts/metadata/user/user_profile/fields.yaml` → `codegen-app` → `user_profile_dto.g.dart`
 - 扩展 `UserProfileRepository`：新增 `listUserCircles()` / `getUserStats()`
+- `ProfileSocialRelationRowWire` 补齐 `username / userHandle / profileVisibility / relationState / followedAt / relationshipCapability`，明确其语义为 **viewer -> row 主体** 的关系能力，而非主页主体对 row 的关系。
+- `ListFollowers / ListFollowing / ListUserCircles` 一律支持 `query + cursor + limit`；统计详情页搜索必须走云侧当前 subject 范围过滤，不接受单页本地 `contains` 伪搜索。
 - Mock 数据补齐圈子列表和统计数据
 
 ### F9: 私人助理入口移除
@@ -126,17 +132,17 @@
 
 ### F11: 四层测试覆盖（三层测试）
 
-- local_contract: 契约/单测（UserProfile DTO、`UserLifeItem` DTO + `LifeItemCategory` 枚举、`IntersectionReason` 5 维度闭集、tag `shared-tags` 契约字段、`ObjectTagIndexWriter` upsert 幂等）
-- local_contract: Widget/Provider（ProfileShell mine/other 渲染、创作 SubTab 切换与可见性过滤、圈子/互动/生活 Tab、交集卡 mine 不展示/other 有交集展示/无交集不占位、`ProfileActionBar` 五态、Mock 异常/边界）
-- api_integration: 端云集成（gamma 真打 `shared-tags` 对已打标对象非空并映射成 `IntersectionReason`、life-items Remote 字段对齐、relationship 五态；每条 api_integration 断言在 local_contract 有对应 Mock 断言）
-- user_acceptance: 端到端旅程（我的/他人主页完整旅程、交集卡点击→归因上报→跳转、四 Tab 切换与可见性过滤）
+- local_contract: 契约/单测（UserProfile DTO、`profile_tabs` 收敛为 `记录/互动/足迹` 且 footprint 隐私门控、`IntersectionReason` 5 维度闭集、tag `shared-tags` 契约字段、`ObjectTagIndexWriter` upsert 幂等；`UserLifeItem` DTO 作为保留后端域单独契约测试，不作为 profile 一级 Tab）
+- local_contract: Widget/Provider（ProfileShell mine/other 渲染、创作 SubTab 切换与可见性过滤、互动 Tab、足迹 Tab 隐私门控 mine 渲染/other 不渲染、交集卡 mine 不展示/other 有交集展示/无交集稳定空态、`ProfileActionBar` 五态、Mock 异常/边界）
+- api_integration: 端云集成（gamma 真打 `shared-tags` 对已打标对象非空并映射成 `IntersectionReason`、ProfileInteractionActivities keyset 分页、relationship 五态；每条 api_integration 断言在 local_contract 有对应 Mock 断言）
+- user_acceptance: 端到端旅程（我的/他人主页完整旅程、交集卡点击→归因上报→跳转、`记录/互动/足迹` 一级 Tab 切换、足迹他人主页不可见、可见性过滤）
 
-### F12: 你们的交集卡（真闭环）
+### F12: 我与TA的交集卡（真闭环）
 
 - `ProfileShell` other 模式渲染 `ObjectIntersectionCard`，数据经 `objectSharedReasonsProvider` → `TagRepository.sharedTags`（真打 `/v1/tag/shared-tags`）→ `IntersectionReason`。
 - 云侧打通 `object_tag_index` 对象打标管道（tag-service 新增 `ObjectTagIndexWriter` + Mongo upsert + 离线批量导入工具），数据源为 `content/post.tagRefs`、`social/circle.tags`、`user/user_profile.interestTags`，使 gamma/prod 对真实对象出非空交集。
 - 交集卡 `onReasonTap` 上报 `BehaviorEvent.intersectionDimension/intersectionTagRefs`（统一归因，废止旧 `reasonType` 闭集）。
-- 无可解析交集时不占位（不造假）。
+- 无可解析交集时展示稳定空态（不造假、不隐藏模块）。
 
 ### F13: resonance 旧链路彻底清理（不兼容）
 
@@ -145,9 +151,18 @@
 - 结构化 `profile_state_provider.dart` 空 catch（R17）。
 - 「我的交集/共鸣」语义统一由 `IntersectionReason` + `ObjectIntersectionCard` 表达，不保留第二数据通路。
 
+### F14: 职业与兴趣资料页（career-interest-profile-editor）
+
+- 在“编辑资料”中新增独立 `职业与兴趣` 页面，路径 `/profile/career-interests`，页面结构固定为 `职业身份 / 我的标签 / 全部兴趣`，不再展示推荐标签。
+- 职业与兴趣标签均以 `quwoquan_data/publish/tags` 为唯一真相源：职业使用 `Audience/用户/职业`，兴趣使用 `Audience/用户/兴趣偏好`；端侧通过 tag-service `ListTagChildren / ResolveTag / ValidateTagRefs` 查询与校验，不维护第二套枚举。
+- 保存接口复用 `GET /v1/user/profile/edit-snapshot` 与 `PATCH /v1/user/profile`，字段为单选 `occupationTagRef` 与有序 `interestTagRefs`；兴趣最多 30 个、允许 0 个，重复输入去重保序。
+- UX 对齐高保：顶部 `< 职业与兴趣 保存`，职业单行入口；我的标签默认编辑态，支持 `×` 删除、长按拖拽排序、轻微摇曳；全部兴趣为分类胶囊 Tab + 4 列文字标签网格，添加后从全部兴趣隐藏。
+- 保存成功后 user-service 将职业与兴趣 tagRefs 投影到 tag-service 约定的 `object_tag_index` `user` 对象索引，供 `shared-tags`、推荐解释与小趣助手偏好理解使用。
+- 环境集成：alpha 使用同源 contract/mock fixture；beta/gamma 通过 tag import 与 object index import/backfill 灌入；prod 发布包包含同一标签树与幂等导入/回填入口。
+
 ## 不做什么（Out of Scope）
 
-- **O1**: 用户档案编辑页重构（`edit_profile_page.dart` 保持现有实现）
+- **O1**: 用户档案编辑页整体重构（`edit_profile_page.dart` 保持现有实现），但 `career-interest-profile-editor` 是明确例外：职业与兴趣从旧内嵌标签页升级为独立页面与端云标签闭环。
 - **O2**: 分身管理页重构（`persona_management_page.dart` 保持现有实现）
 - **O3**: 大范围重写统计详情页之外的数据契约；`profile_stats_page.dart` 仅升级为粉丝/关注/圈子三 Tab 容器，继续复用现有 Repository 与列表能力
 - **O4**: 圈子推荐算法（圈子 Tab 仅展示已加入列表，不含推荐）
@@ -156,7 +171,7 @@
 - **O7**: object_tag_index 的**事件驱动增量管道**完整落地（V5 落地 `ObjectTagIndexWriter` 接口 + 离线批量回填；MQ consumer / user `InterestTagsUpdated` 事件化作为收敛后续，见 CR-20260531-027）
 - **O8**: user-service / content-service / circle-service 既有 Go 业务逻辑重写（V5 仅在 tag-service 内新增打标写能力 + 跨源读取回填，不改三个源服务的写路径）
 
-> 说明：历史 spec 的 O3（resonance 仅迁移）、O6（生活 Tab 不重构）、O8（Go 云侧不实现）在 V5 **已反转为范围内**（见 F6/F12/F13），因为 V5 全量口径要求生活 Tab 重做、交集真闭环、resonance 清理。
+> 说明：历史 spec 的 O3（resonance 仅迁移）、O8（Go 云侧不实现）在 V5 **已反转为范围内**（见 F12/F13），因为 V5 全量口径要求交集真闭环、resonance 清理。历史 O6「生活 Tab 不重构」在 V5 进一步**反转方向**：不再重做生活 Tab，而是**废止生活一级 Tab**，由 `足迹`（浏览历史，mine-only）取代为一级 Tab（见 F6）。
 
 ## 适用范围与约束
 
@@ -181,7 +196,7 @@
 - **不适用情形**：
   - Go 云侧 Handler 实现不在本 spec 范围
   - 端侧 Web/Desktop 适配（仅 mobile）
-  - 生活 Tab 的后端新增 API
+  - 足迹 Tab 复用既有浏览历史 API（`GET /v1/content/footprint`），不新增后端 API
 
 ## 对标输入与吸收结论
 
@@ -192,7 +207,7 @@
 | 一级 Tab | [作品, 收藏, 喜欢] | 不借鉴 | 抖音纯视频，极简三栏；趣我圈多内容形态+圈子，需更丰富分类 |
 | 公开/私密过滤 | 点击已选中 Tab 弹出筛选 | **借鉴** | 交互自然、不占额外空间，完全适用 |
 | 私密标识 | 封面加锁标 | **借鉴** | 视觉清晰，用户认知成本低 |
-| 网格布局 | 3列等比 | 部分借鉴 | 创作 Tab 用2列瀑布流（与发现页一致），生活 Tab 用3列 |
+| 网格布局 | 3列等比 | 部分借鉴 | 创作 Tab 用2列瀑布流（与发现页一致）；足迹 Tab 为浏览历史列表，非网格 |
 | 2级触达 | 从4级优化到2级 | **借鉴** | Tab + SubTab = 2级，高效 |
 | 收藏/喜欢独立 Tab | 与作品平级 | 不借鉴 | 收纳到互动 Tab 子维度，避免一级 Tab 过多 |
 
@@ -210,7 +225,7 @@
 | 主页首屏 TTI | P95 ≤ 1.5s（缓存命中 ≤ 600ms） | 进入 `/profile`、`/user/:id` 到首屏可交互 |
 | 背景拉伸回弹 | ≤ 300ms 无掉帧 | 弹簧阻尼回弹 |
 | Tab 切换响应 | P95 ≤ 200ms | 一级/二级 Tab |
-| 交集卡解析 | shared-tags 请求 P95 ≤ 500ms | 失败/空集时不占位、不阻塞首屏 |
+| 交集卡解析 | shared-tags 请求 P95 ≤ 500ms | 失败/空集时展示稳定空态、不阻塞首屏 |
 | 交集卡曝光率（KPI） | other 主页交集卡曝光占比可观测 | 北极星「交集」可见度 |
 | 交集行动转化（KPI） | 交集卡点击→关注/私信转化可归因 | 经 `intersectionDimension/intersectionTagRefs` |
 
@@ -224,7 +239,7 @@
 ### 数据生命周期
 
 - `UserLifeItem`：用户主动创建/编辑/删除；删除即从列表移除（无软删保留承诺）。
-- `interestTags`：声明式用户兴趣，用户可改；变更后经打标管道刷新 `object_tag_index`（离线批量周期回填，事件化为后续）。
+- `occupationTagRef / interestTags`：声明式用户职业与兴趣，用户可改；变更后经 user-service 写时投影或离线 backfill 刷新 `object_tag_index`，标签定义只来自 tag-service 导入产物。
 - `object_tag_index`：派生倒排数据，源对象删除/改标后由回填管道幂等 upsert 修正；非权威真相，可重建。
 - 行为归因事件（`BehaviorEvent`）：按现有 behavior 域保留策略与 TTL，不在本 spec 新增留存承诺。
 
@@ -245,12 +260,12 @@
 
 核心维度（详见 acceptance.yaml）：
 1. ProfileShell 统一组件 mine/other 差异正确
-2. 一级 Tab 结构 [创作|圈子|互动|生活] 渲染与交互（codegen 驱动）
-3. 创作 Tab 二级分类（图片/视频/文字，无微趣）与可见性过滤
-4. 圈子 Tab 已加入圈子卡片展示与跳转
-5. 生活 Tab 重做：codegen DTO + 4 sub_tab + contract seed + 零硬编码
-6. 端云 DTO codegen 对齐（含 `UserLifeItem`/`LifeItemCategory`）
-7. 你们的交集卡真闭环（shared-tags 真数据 + 归因）
+2. 一级 Tab 结构 [记录|互动|足迹] 渲染与交互（codegen 驱动），圈子降为统计数字
+3. 创作（记录）Tab 二级分类（图片/视频/文字，无微趣）与可见性过滤
+4. 圈子统计详情页展示已加入圈子卡片与跳转（圈子非一级 Tab）
+5. 足迹 Tab：浏览历史只读列表 + 隐私门控（`modes: [mine]`，他人主页不可见）+ 零硬编码
+6. 端云 DTO codegen 对齐（含 `UserProfile` DTO；`UserLifeItem` 域保留为独立后端能力，不作为 profile 一级 Tab）
+7. 我与TA的交集卡真闭环（shared-tags 真数据 + 归因）
 8. resonance 旧链路零残留
 9. 四层测试覆盖（三层测试）
 10. 视觉一致性：零硬编码，全语义 Token

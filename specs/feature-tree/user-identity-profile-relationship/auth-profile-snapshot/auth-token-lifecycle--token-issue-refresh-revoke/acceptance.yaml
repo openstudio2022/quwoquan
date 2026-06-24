@@ -44,10 +44,9 @@ gwt_acceptance:
       - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
       - file: quwoquan_app/test/core/platform/native_auth_bridge_test.dart
       recorded:
-      - command: make verify-app-auth-policy
-      - file: quwoquan_app/test/cloud/runtime/cloud_http_client_refresh_test.dart
-      - file: quwoquan_app/test/core/auth/auth_session_controller_test.dart
-      - file: quwoquan_app/test/app/app_startup_welcome_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/runtime/cloud_http_client_refresh__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/auth/auth_session_controller__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
     status: partial
     test_evidence:
       primary:
@@ -70,7 +69,8 @@ gwt_acceptance:
         cases:
         - local_contract.user_identity_profile_relationship.auth_profile_snapshot.auth_token_lifecycle_token_issue_refresh_revoke.contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] make verify-app-auth-policy'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

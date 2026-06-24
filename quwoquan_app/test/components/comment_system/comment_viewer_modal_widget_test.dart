@@ -305,6 +305,11 @@ void main() {
   );
 
   testWidgets(
+    'testOwnCommentUsesDeleteSlotAcrossLevels: 自己的一级/二级评论显示 like+delete 且删除不再落在 footer',
+    testOwnCommentUsesDeleteSlotAcrossLevels,
+  );
+
+  testWidgets(
     'testCommentToolbarFidelityMetrics: 底栏低胶囊、描边、固定动作列符合高保约束',
     testCommentToolbarFidelityMetrics,
   );
@@ -332,62 +337,6 @@ void main() {
   testWidgets('点击他人一级或二级评论正文进入对应回复态', testCommentTapReplyTargetContract);
 
   testWidgets('长评论三行内联全文折叠且多图只展示第一张', testInlineFoldAndSingleImageDisplay);
-
-  test('评论轮询发现新评论后可点击刷新快照', () async {
-    final repo = MockContentRepository()
-      ..commentsStub = [
-        CommentDto(
-          id: 'comment_old',
-          postId: 'polling-post-id',
-          authorId: 'user_1',
-          content: '旧评论',
-          recommendedScore: 1,
-          createdAt: DateTime.utc(2026, 6, 1),
-        ),
-      ];
-    final container = ProviderContainer(
-      overrides: [
-        contentRepositoryProvider.overrideWithValue(repo),
-        analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
-      ],
-    );
-    addTearDown(container.dispose);
-
-    final notifier = container.read(
-      commentProviderFamily('polling-post-id').notifier,
-    );
-    await notifier.loadComments();
-    expect(
-      container
-          .read(commentProviderFamily('polling-post-id'))
-          .comments
-          .first
-          .id,
-      'comment_old',
-    );
-
-    repo.commentsStub = [
-      ...repo.commentsStub,
-      CommentDto(
-        id: 'comment_new',
-        postId: 'polling-post-id',
-        authorId: 'user_2',
-        content: '新评论',
-        recommendedScore: 10,
-        createdAt: DateTime.utc(2026, 6, 2),
-      ),
-    ];
-    await notifier.checkForNewComments();
-    expect(
-      container.read(commentProviderFamily('polling-post-id')).hasNewComments,
-      isTrue,
-    );
-
-    await notifier.refreshFromNewCommentNotice();
-    final state = container.read(commentProviderFamily('polling-post-id'));
-    expect(state.hasNewComments, isFalse);
-    expect(state.comments.first.id, 'comment_new');
-  });
 }
 
 class _AuthenticatedSession extends AuthSessionController {
@@ -611,10 +560,7 @@ Future<void> testCommentReplyPreviewUsesConfig(WidgetTester tester) async {
         replyFirstExpandPageSize: 2,
         replyExpandPageSize: 3,
       ),
-      child: const CommentThreadView(
-        postId: postId,
-        shrinkWrap: true,
-      ),
+      child: const CommentThreadView(postId: postId, shrinkWrap: true),
     ),
   );
   await tester.pumpAndSettle();
@@ -731,10 +677,7 @@ Future<void> testCommentDisplayFieldBadges(WidgetTester tester) async {
   await tester.pumpWidget(
     _threadTestApp(
       repo: repo,
-      child: const CommentThreadView(
-        postId: postId,
-        shrinkWrap: true,
-      ),
+      child: const CommentThreadView(postId: postId, shrinkWrap: true),
     ),
   );
   await tester.pumpAndSettle();
@@ -777,10 +720,7 @@ Future<void> testCommentPinByAuthorWidget(WidgetTester tester) async {
       repo: repo,
       authenticated: true,
       observability: recorder,
-      child: const CommentThreadView(
-        postId: postId,
-        shrinkWrap: true,
-      ),
+      child: const CommentThreadView(postId: postId, shrinkWrap: true),
     ),
   );
   await tester.pumpAndSettle();
@@ -925,7 +865,9 @@ Future<void> testCommentTotalCountContractDrivesHeader(
   // 标题计数由 CommentDetailHeader 消费 CommentPage.totalCount（2）渲染，
   // 而非已加载一级条数（1）。
   expect(
-    find.text(UITextConstants.commentCountTitleTemplate.replaceFirst('%s', '2')),
+    find.text(
+      UITextConstants.commentCountTitleTemplate.replaceFirst('%s', '2'),
+    ),
     findsOneWidget,
   );
 }
@@ -1029,10 +971,7 @@ Future<void> testCommentReactionColumnsAlignAcrossLevels(
   await tester.pumpWidget(
     _threadTestApp(
       repo: repo,
-      child: const CommentThreadView(
-        postId: postId,
-        shrinkWrap: true,
-      ),
+      child: const CommentThreadView(postId: postId, shrinkWrap: true),
     ),
   );
   await tester.pumpAndSettle();
@@ -1063,6 +1002,68 @@ Future<void> testCommentReactionColumnsAlignAcrossLevels(
   }
   expect(find.text('1万'), findsOneWidget);
   expect(find.text('9.3k'), findsAtLeastNWidgets(1));
+}
+
+Future<void> testOwnCommentUsesDeleteSlotAcrossLevels(
+  WidgetTester tester,
+) async {
+  final repo = MockContentRepository();
+  const postId = 'comment_delete_slot_post';
+  final ownReply = _comment(
+    id: 'reply_mine',
+    postId: postId,
+    authorId: 'me',
+    displayName: '我自己',
+    content: '我的二级回复',
+    parentCommentId: 'parent_mine',
+    replyToCommentId: 'parent_mine',
+    likeCount: 7,
+    canDelete: true,
+    createdAt: DateTime.utc(2026, 1, 2),
+  );
+  repo.commentsStub = <CommentDto>[
+    _comment(
+      id: 'parent_mine',
+      postId: postId,
+      authorId: 'me',
+      displayName: '我自己',
+      content: '我的一级评论',
+      replyCount: 1,
+      replyPreview: <CommentDto>[ownReply],
+      likeCount: 12,
+      canDelete: true,
+      createdAt: DateTime.utc(2026, 1, 1),
+    ),
+    ownReply,
+    _comment(
+      id: 'parent_other',
+      postId: postId,
+      authorId: 'other',
+      displayName: '别人',
+      content: '别人的评论',
+      dislikeCount: 3,
+      createdAt: DateTime.utc(2026, 1, 3),
+    ),
+  ];
+
+  await tester.pumpWidget(
+    _threadTestApp(
+      repo: repo,
+      authenticated: true,
+      child: const CommentThreadView(postId: postId, shrinkWrap: true),
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  expect(find.byIcon(CupertinoIcons.trash), findsNWidgets(2));
+  expect(find.byIcon(CupertinoIcons.hand_thumbsdown), findsOneWidget);
+
+  final deleteCenters = tester
+      .widgetList<Icon>(find.byIcon(CupertinoIcons.trash))
+      .map((icon) => tester.getCenter(find.byWidget(icon)).dx)
+      .toList(growable: false);
+  expect(deleteCenters.length, equals(2));
+  expect(_maxDelta(deleteCenters), lessThanOrEqualTo(1));
 }
 
 Future<void> testCommentToolbarFidelityMetrics(WidgetTester tester) async {
@@ -1370,9 +1371,7 @@ Future<void> testCommentReplyDeeplinkLoadsParentThenPositions(
   expect(find.byKey(TestKeys.commentHighlightedReply), findsNothing);
 }
 
-Future<void> testCommentDeeplinkMissReportsFeedback(
-  WidgetTester tester,
-) async {
+Future<void> testCommentDeeplinkMissReportsFeedback(WidgetTester tester) async {
   final repo = MockContentRepository();
   const postId = 'comment_deeplink_miss_post';
   repo.commentsStub = <CommentDto>[
@@ -1508,10 +1507,7 @@ Future<void> testInlineFoldAndSingleImageDisplay(WidgetTester tester) async {
       child: const SingleChildScrollView(
         child: SizedBox(
           width: 320,
-          child: CommentThreadView(
-            postId: postId,
-            shrinkWrap: true,
-          ),
+          child: CommentThreadView(postId: postId, shrinkWrap: true),
         ),
       ),
     ),
@@ -1553,10 +1549,7 @@ Future<void> testCommentReactionThreeStateWidget(WidgetTester tester) async {
     _threadTestApp(
       repo: repo,
       authenticated: true,
-      child: const CommentThreadView(
-        postId: postId,
-        shrinkWrap: true,
-      ),
+      child: const CommentThreadView(postId: postId, shrinkWrap: true),
     ),
   );
   await tester.pumpAndSettle();

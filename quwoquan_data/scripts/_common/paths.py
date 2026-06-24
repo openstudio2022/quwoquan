@@ -12,14 +12,31 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import functools
+import hashlib
+import json
 import os
+import re
 from pathlib import Path
 
-DATA_ROOT = Path(os.environ.get("QWQ_DATA_ROOT", Path(__file__).resolve().parents[2]))
+# 代码仓库 data 根：schema 是受版本控制、不可手改的契约真相源，必须跟代码走，
+# 不随运行时 QWQ_DATA_ROOT 漂移；隔离/多环境只覆盖运行时数据根，不应丢失契约。
+_REPO_DATA_ROOT = Path(__file__).resolve().parents[2]
+# 仓库根（quwoquan_data 的上级）：服务侧 contracts/metadata 等跨工程契约真相源都挂在这里，
+# 同样受版本控制、跟代码走，禁止用 DATA_ROOT.parent 推导（隔离根下会漂移到 /tmp/quwoquan_service）。
+REPO_ROOT = _REPO_DATA_ROOT.parent
+# 服务侧 metadata 契约根（字段/错误码/path/ui_config 等唯一真相源），跨工程消费统一走此常量。
+SERVICE_CONTRACTS_METADATA_ROOT = Path(
+    os.environ.get(
+        "QWQ_SERVICE_CONTRACTS_METADATA_ROOT",
+        REPO_ROOT / "quwoquan_service" / "contracts" / "metadata",
+    )
+)
+DATA_ROOT = Path(os.environ.get("QWQ_DATA_ROOT", _REPO_DATA_ROOT))
 RUNTIME_ROOT = Path(os.environ.get("QWQ_RUNTIME_ROOT", DATA_ROOT / "runtime"))
 PUBLISH_ROOT = Path(os.environ.get("QWQ_PUBLISH_ROOT", DATA_ROOT / "publish"))
 RELEASE_ROOT = Path(os.environ.get("QWQ_RELEASE_ROOT", DATA_ROOT / "release"))
-SCHEMA_ROOT = DATA_ROOT / "schema"
+SCHEMA_ROOT = Path(os.environ.get("QWQ_SCHEMA_ROOT", _REPO_DATA_ROOT / "schema"))
 SOP_ROOT = DATA_ROOT / "sop"
 
 TASKS_ROOT = RUNTIME_ROOT / "tasks"
@@ -41,7 +58,6 @@ TASK_SHARED_LEDGER_FILENAMES = (
 )
 TASK_ROOT_ALLOWED_ENTRIES = frozenset({
     "entities",
-    "batches",
     "_shared",
     "task_manifest.json",
 })
@@ -316,8 +332,143 @@ def task_tags(task_id: str) -> Path:
 
 
 # ─── batch 级路径 ─────────────────────────────────────────────────
+# 批次工作区上提到顶层 `runtime/batches/{intentLabel}-{taskHash}__{batch}/`（不再挂任务根）。
+# - intentLabel = ≤16 字人类可读任务意图标签（committed task.yaml.intentLabel，缺省回退 taskId 末段）。
+# - taskHash = 归一 taskId 的稳定短哈希（8 hex），消歧「同名不同分区任务共用 batchId」碰撞
+#   （fanout 各分区叶任务名相同且共享 fanout_<plan> 批次，旧的 tasks/<taskId>/batches 由 taskId 路径天然区分，
+#    上提到顶层后必须由 taskHash 重新提供任务唯一性）。
+# - batch→task 反查唯一依据仍是 batch_manifest.json.taskId；taskHash 只保证目录唯一与候选过滤精确。
+_LABEL_STRIP_RE = re.compile(r"[\s/\\:]+")
+_INTENT_LABEL_MAX = 16
+_TASK_HASH_LEN = 8
+
+
+def task_discriminator(task_id: str) -> str:
+    """归一 taskId 的稳定短哈希（8 hex），用于顶层批次目录消歧。
+
+    纯函数、与 committed 规格无关 → 任务全生命周期稳定，无读写时序/缓存分叉风险。
+    """
+    norm = normalize_task_id(task_id)
+    return hashlib.sha1(norm.encode("utf-8")).hexdigest()[:_TASK_HASH_LEN]
+
+
+def sanitize_intent_label(text: str) -> str:
+    """清洗任务意图标签：去路径分隔/空白，截断到 ≤16 字（按字符数）。"""
+    cleaned = _LABEL_STRIP_RE.sub("", str(text or "").strip())
+    return cleaned[:_INTENT_LABEL_MAX]
+
+
+@functools.lru_cache(maxsize=8192)
+def _committed_intent_label(task_id_norm: str) -> str:
+    """读取 committed task.yaml.intentLabel（lru 缓存；写规格后须 cache_clear）。"""
+    spec_path = committed_task_spec(task_id_norm)
+    if not spec_path.is_file():
+        return ""
+    try:
+        import yaml  # 惰性导入：低层路径模块不强依赖 yaml
+
+        data = yaml.safe_load(spec_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return ""
+    if isinstance(data, dict):
+        return str(data.get("intentLabel") or "").strip()
+    return ""
+
+
+def task_intent_label(task_id: str) -> str:
+    """顶层批次目录前缀：≤16 字人类可读任务意图标签。
+
+    真相源 committed `task.yaml.intentLabel`（运行期不可变 → 纯解析、稳定）；
+    缺省回退 taskId 末段清洗截断。不分配序号、不写第二索引文件。
+    """
+    norm = normalize_task_id(task_id)
+    label = _committed_intent_label(norm)
+    if not label:
+        label = norm.split("/")[-1] if norm else ""
+    return sanitize_intent_label(label) or "task"
+
+
+def clear_intent_label_cache() -> None:
+    """committed task.yaml 写入后调用，避免 intentLabel 解析读到旧缓存。"""
+    _committed_intent_label.cache_clear()
+
+
+def batches_root() -> Path:
+    """顶层批次工作区根（跨任务扁平）：runtime/batches/。"""
+    return RUNTIME_ROOT / "batches"
+
+
+def task_dir_prefix(task_id: str) -> str:
+    """顶层批次目录的任务唯一前缀：`{intentLabel}-{taskHash}__`。
+
+    含 taskHash → 该前缀任务唯一，可直接用于候选目录精确过滤与 batchId 还原。
+    """
+    return f"{task_intent_label(task_id)}-{task_discriminator(task_id)}__"
+
+
+def batch_dir_name(task_id: str, batch_id: str) -> str:
+    return f"{task_dir_prefix(task_id)}{batch_id}"
+
+
 def batch_root(task_id: str, batch_id: str) -> Path:
-    return task_root(task_id) / "batches" / batch_id
+    return batches_root() / batch_dir_name(task_id, batch_id)
+
+
+def iter_task_batch_dirs(task_id: str) -> list[Path]:
+    """列出某任务的所有批次目录（反查唯一依据 batch_manifest.taskId）。
+
+    前缀 `{intentLabel}-{taskHash}__` 任务唯一 → 候选过滤已可精确定位；
+    仍读 `batch_manifest.json.taskId` 做归属确认（manifest 为反查唯一真相源，
+    建目录中途 manifest 尚未写时按前缀归属为候选）。
+    """
+    root = batches_root()
+    if not root.is_dir():
+        return []
+    norm = normalize_task_id(task_id)
+    prefix = task_dir_prefix(task_id)
+    out: list[Path] = []
+    for d in sorted(root.iterdir()):
+        if not d.is_dir() or not d.name.startswith(prefix):
+            continue
+        manifest = d / "batch_manifest.json"
+        if manifest.is_file():
+            try:
+                data = json.loads(manifest.read_text(encoding="utf-8"))
+            except Exception:
+                data = {}
+            mtid = normalize_task_id(str((data or {}).get("taskId") or "")) if isinstance(data, dict) else ""
+            if mtid and mtid != norm:
+                continue
+        out.append(d)
+    return out
+
+
+def iter_task_batch_ids(task_id: str) -> list[str]:
+    """列出某任务的所有批次 batchId（去掉 `{intentLabel}-{taskHash}__` 前缀）。"""
+    prefix = task_dir_prefix(task_id)
+    return [d.name[len(prefix):] for d in iter_task_batch_dirs(task_id)]
+
+
+def iter_all_batch_dirs() -> list[Path]:
+    """跨任务列出全部批次目录（verify/scan/dirty/审计消费）。"""
+    root = batches_root()
+    if not root.is_dir():
+        return []
+    return sorted(d for d in root.iterdir() if d.is_dir())
+
+
+def batch_task_id(batch_dir: Path) -> str:
+    """从批次目录读取归属 taskId（反查唯一依据）。"""
+    manifest = batch_dir / "batch_manifest.json"
+    if not manifest.is_file():
+        return ""
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    if isinstance(data, dict):
+        return normalize_task_id(str(data.get("taskId") or ""))
+    return ""
 
 
 def batch_command_root(task_id: str, batch_id: str, command: str) -> Path:

@@ -317,9 +317,7 @@ func TestSearchSocialRelations_DoesNotExposeOwnerUserID(t *testing.T) {
 }
 
 func TestRelationshipCapabilityView_States(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("mongo unavailable; skip follow-edge capability state transitions")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "viewer_rel", "viewer_rel")
 	createTestProfile(t, "target_rel", "target_rel")

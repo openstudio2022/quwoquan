@@ -69,6 +69,9 @@ def handle_verify(args: argparse.Namespace) -> None:
             args.task,
             args.batch,
             daily_target=int(args.daily_target),
+            target_goal=int(getattr(args, "target", 0) or 0) or None,
+            min_pass_rate=float(getattr(args, "min_pass_rate", 0.0) or 0.0),
+            source_ready_goal=int(getattr(args, "source_ready_goal", 0) or 0) or None,
             release_id=getattr(args, "release", None),
             require_import=not bool(getattr(args, "allow_missing_import", False)),
             mode=str(getattr(args, "mode", "commercial") or "commercial"),
@@ -319,12 +322,15 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("single-contract-source", help="校验内容供给生产契约只有一个无版本真源")
     sub.add_parser("content-supply-production", help="校验生产级内容供给 current 契约与队列/envelope/账本闭环")
     sub.add_parser("works-classification", help="校验作品 vs 随记判定 schema/config/registry 一致性 + 判定 smoke")
-    pri = sub.add_parser("release-integrity", help="校验 release 级证据链、一稿一用和跨作品资产独占")
+    pri = sub.add_parser("release-integrity", help="校验 release 级证据链、一稿一用与跨作品资产溯源完整性")
     pri.add_argument("--release", required=True, help="Release ID under release/")
     psr = sub.add_parser("scale-readiness", help="校验批次是否具备日产万级/商用放量证据")
     psr.add_argument("--task", required=True, help="Task ID")
     psr.add_argument("--batch", required=True, help="Batch ID")
     psr.add_argument("--daily-target", type=int, default=10000, help="目标日产内容对象数，默认 10000")
+    psr.add_argument("--target", type=int, default=0, help="本批目标质量对象数；百级用 100")
+    psr.add_argument("--min-pass-rate", type=float, default=0.0, help="本批目标满足率门槛；百级用 0.9")
+    psr.add_argument("--source-ready-goal", type=int, default=0, help="source-ready 对象容量门槛；不传时按 target*1.2")
     psr.add_argument("--mode", choices=["trial", "commercial"], default="commercial", help="trial 允许已替补 abandoned；commercial 要求零未替补失败")
     psr.add_argument("--release", help="可选 isolated release ID，用于证明 release verify 入口存在")
     psr.add_argument("--allow-missing-import", action="store_true", help="仅本地试跑时允许缺少 staging/gamma import 证据")

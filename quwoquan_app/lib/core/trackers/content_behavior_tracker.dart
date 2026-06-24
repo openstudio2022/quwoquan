@@ -63,6 +63,10 @@ class ContentBehaviorTracker {
     ReferralSource? referralSource,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
     String? intersectionId,
     String? intersectionDimension,
     String? intersectionSourceRef,
@@ -81,6 +85,10 @@ class ContentBehaviorTracker {
       referralSource: referralSource,
       channelId: channelId,
       rankingVersion: rankingVersion,
+      reasonVersion: reasonVersion,
+      recallPath: recallPath,
+      contentVertical: contentVertical,
+      supplySource: supplySource,
       intersectionId: intersectionId,
       intersectionDimension: intersectionDimension,
       intersectionSourceRef: intersectionSourceRef,
@@ -100,6 +108,10 @@ class ContentBehaviorTracker {
     ReferralSource? referralSource,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
   }) {
     _add(
       BehaviorEvent(
@@ -113,6 +125,10 @@ class ContentBehaviorTracker {
         referralSource: referralSource,
         channelId: channelId,
         rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
       ),
     );
   }
@@ -129,6 +145,10 @@ class ContentBehaviorTracker {
     ReferralSource? referralSource,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
     String? intersectionId,
     String? intersectionDimension,
     String? intersectionSourceRef,
@@ -147,6 +167,10 @@ class ContentBehaviorTracker {
         referralSource: referralSource,
         channelId: channelId,
         rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
       );
       return;
     }
@@ -164,6 +188,10 @@ class ContentBehaviorTracker {
         referralSource: referralSource,
         channelId: channelId,
         rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
         intersectionId: intersectionId,
         intersectionDimension: intersectionDimension,
         intersectionSourceRef: intersectionSourceRef,
@@ -185,6 +213,10 @@ class ContentBehaviorTracker {
     ReferralSource? referralSource,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
   }) {
     if (durationSeconds < 1) return;
     _add(
@@ -200,6 +232,10 @@ class ContentBehaviorTracker {
         referralSource: referralSource,
         channelId: channelId,
         rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
       ),
     );
   }
@@ -214,6 +250,10 @@ class ContentBehaviorTracker {
     ReferralSource? referralSource,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
     String? intersectionId,
     String? intersectionDimension,
     String? intersectionSourceRef,
@@ -225,7 +265,7 @@ class ContentBehaviorTracker {
       BehaviorEvent(
         contentId: contentId,
         action: BehaviorAction.click,
-        state: 'interaction',
+        state: 'click',
         contentType: contentType,
         tags: tags,
         feedRequestId: feedRequestId,
@@ -233,6 +273,10 @@ class ContentBehaviorTracker {
         referralSource: referralSource,
         channelId: channelId,
         rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
         intersectionId: intersectionId,
         intersectionDimension: intersectionDimension,
         intersectionSourceRef: intersectionSourceRef,
@@ -260,6 +304,10 @@ class ContentBehaviorTracker {
     ReferralSource? referralSource,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
     String? intersectionId,
     String? intersectionDimension,
     String? intersectionSourceRef,
@@ -280,6 +328,10 @@ class ContentBehaviorTracker {
         referralSource: referralSource,
         channelId: channelId,
         rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
         intersectionId: intersectionId,
         intersectionDimension: intersectionDimension,
         intersectionSourceRef: intersectionSourceRef,
@@ -301,6 +353,10 @@ class ContentBehaviorTracker {
     ReferralSource? referralSource,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
   }) {
     _add(
       BehaviorEvent(
@@ -315,6 +371,10 @@ class ContentBehaviorTracker {
         referralSource: referralSource,
         channelId: channelId,
         rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
       ),
     );
   }
@@ -330,6 +390,10 @@ class ContentBehaviorTracker {
     ReferralSource? referralSource,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
   }) {
     final normalizedAuthorId = authorId.trim();
     if (normalizedAuthorId.isEmpty) return;
@@ -346,6 +410,10 @@ class ContentBehaviorTracker {
         referralSource: referralSource,
         channelId: channelId,
         rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
       ),
     );
   }
@@ -361,6 +429,10 @@ class ContentBehaviorTracker {
     ReferralSource? referralSource,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
   }) {
     final normalizedType = contentType.trim();
     if (normalizedType.isEmpty) return;
@@ -377,6 +449,10 @@ class ContentBehaviorTracker {
         referralSource: referralSource,
         channelId: channelId,
         rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
       ),
     );
   }
@@ -391,6 +467,10 @@ class ContentBehaviorTracker {
     ReferralSource? referralSource,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
   }) {
     _add(
       BehaviorEvent(
@@ -404,6 +484,10 @@ class ContentBehaviorTracker {
         referralSource: referralSource,
         channelId: channelId,
         rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
       ),
     );
   }
@@ -419,6 +503,10 @@ class ContentBehaviorTracker {
     ReferralSource? referralSource,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
   }) {
     _add(
       BehaviorEvent(
@@ -433,6 +521,10 @@ class ContentBehaviorTracker {
         referralSource: referralSource,
         channelId: channelId,
         rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
       ),
     );
   }
@@ -596,6 +688,10 @@ class ContentBehaviorTracker {
       position: event.position,
       channelId: event.channelId,
       rankingVersion: event.rankingVersion,
+      reasonVersion: event.reasonVersion,
+      recallPath: event.recallPath,
+      contentVertical: event.contentVertical,
+      supplySource: event.supplySource,
       commentLength: event.commentLength,
       authorId: event.authorId,
       referralSource: event.referralSource,

@@ -57,18 +57,22 @@
   同时校验总量和逐实体分布；**禁止** `plannedRefs` 作为第二真相源。
 - **篇目真相源**：`batches/{batch}/_shared/content_plan_packet.json` + `content_object_index.json`。
 - **时机**：`content_plan` 在 `build_validate` 之后、`produce_compose` 之前；ref/title 由已下载 `evidenceRefs` 归纳，禁止 download 前预置 `XX攻略` / 营销线路名再凑来源。
+- **Source-ready admission**：百级及以上在冻结批次前必须证明候选池产能，而不是等 `build_prepare` 才淘汰。每个候选目标至少要有 homepage/article/image 三路可用 sourceUnit；目标容量不足时先激活已验证 reserve，reserve 用尽后才 `abandon` 并记录 `capacity_ceiling_delta`。
 - **B 组线路**：仅当 ≥2 条独立来源出现联游/顺路叙述，或地理邻接且有共享交通/季节证据时立项；不足则 `repair` 回 `download_plan` 补检索，禁止模板大环线填空。
 
 ### 来源权利模式
 
+- **SourceUnit 原子性**：一个 URL 快照生成一个 `sourceUnitId`；`source.md`、`source.clean.md`、`assets/index.json` 与物理资产共同构成同一 sourceUnit。文章、图片、视频作品判断必须来自同一个 sourceUnit 内的正文、图片、权利、图文一致和实体匹配证据；不得 A 网页拿文字、B 网页拿图片、C 网页拿评价后合成一个内容对象。实体主页可保留多个候选（百科/官方等），但每个候选都必须独立 sourceUnit 化并分别过门。
+- **跨网页拼装硬阻断**：`content_plan` 中 `baseSourceRef`、`assetRefs`、`sourceUnitRefs` 不在同一 sourceUnit 时直接产生 issue，并写 `conflict_ledger.jsonl` 等待批后复核，不进入下游创作。
+- **Entity focus gate**：sourceUnit 还必须证明目标实体是主体。`entityFocusVerdict=weak/supporting_only/mismatch/off_entity` 或 `entityFocusScore < 0.50` 的网页只能作为 supporting evidence，不能作为 article `baseSourceRef` 或 image work 主证据。
 - `licensed_adaptation`：自有、明确授权、CC 或公版；必须保存 license、terms、credit 与授权快照。**遵从原创、适度润色而非重写，优质原文可大面积保留**。
-- `factual_reference_only`：未授权普通网页，只采可核验客观事实（票价/海拔/交通等不受版权保护信息）；作者个人独创叙事与独特文学表达须自行组织、避免成段逐句搬运。
+- `factual_reference_only`：普通网页/百科/攻略经下载与 source gate 准入后，可作为一篇一用的 `baseSourceRef` 底稿；生产阶段仍以最高质量底稿为骨架做适度润色、事实校正、PII/平台痕迹清理和人设轻量适配，禁止脱离底稿总结式重写或编造亲历。
 - `blocked`：权利不明、禁止商用、抓取失败或探针页，不得进入 content_plan。
-- **版权合规靠来源准入，不靠生产环节强制重写**：能否大面积保留优质原文由 `sourceUseMode` 决定，授权来源放开保留、未授权来源只采客观事实；不得用「重写洗稿」掩盖未授权搬运。
-- `baseDraftFidelity`（机械文字留存率门）只对 `licensed_adaptation` 生效（下限 55% 防从零另写；上限放宽到 99.5%，仅兜底「零加工整篇照搬」，要求至少完成 PII 脱敏与去语病，**优质原文可大面积保留，无须为去版权而重写**）；未授权网页不设相似度门。
-- `_long_phrase_hits`（反抄袭逐句搬运门，≥28 字）**只对 `factual_reference_only` 生效**，拦未授权网页机械整句搬运；`licensed_adaptation` 不触发该门。
+- **版权合规靠来源准入，不靠生产环节强制重写**：进入 `baseDraftText` 的来源统一执行「底稿轻改」范式；不得用「独立重写」把证据链改散，也不得用「重写洗稿」掩盖未准入来源。
+- `baseDraftFidelity`（机械文字留存率门）对所有 article/route 底稿生效（下限 55% 防从零另写；上限放宽到 99.5%，仅兜底「零加工整篇照搬」，要求至少完成 PII 脱敏、去语病/错字和人设用词语气适配，**优质原文可大面积保留，无须为去版权而重写**）；`sourceUseMode` 只保留供授权快照/署名留痕，不再决定是否启用本门。
+- `_long_phrase_hits`（反抄袭逐句搬运门，≥28 字）不再作为 article/route 主硬门；来源痕迹、PII、事实回溯、跨稿重复和 `baseDraftFidelity` 共同兜底。
 - **个人身份信息脱敏（所有来源）**：手机号/微信/QQ/身份证/车牌/私人住址等一律替代处理或隐去（`contactInfo` 门拦成品 PII），不得原样保留，也不得因含 PII 就删整段有效内容。
-- **原创忠实（所有来源）**：无论权利模式，成品都必须以**最高质量底稿**为骨架、从多事实源补关键事实并适度润色去语病，**不得直接总结/综述、不得脱离来源大修或编造情节与数据**；由 rubric 软轨 `originalityFidelity` 维度 + 事实回溯（旅游/知识类 ≥95%）+ 跨稿重复门共同保障，与机械 `baseDraftFidelity` 正交。
+- **原创忠实（所有来源）**：无论权利模式，成品都必须以**最高质量底稿**为骨架、从多事实源补关键事实并适度润色去语病，**不得直接总结/综述、不得脱离来源大修或编造情节与数据**；由机械 `baseDraftFidelity` + rubric 软轨 `originalityFidelity` 维度 + 事实回溯（旅游/知识类 ≥95%）+ 跨稿重复门共同保障。
 - **可读性**：对齐主要来源体裁（加工而非重写腔调）；禁止百科罗列、机械收尾、独立「实用信息」清单块。
 - **发布 tagRefs**：`brief.json` / manifest 的 `tagRefs` 必须指向 `publish/tags/**/_definition.json` 已存在路径；禁止扁平的省名/品类名（如 `<region>`/`<category>`）等未发布 tag（`ship` dangling_post_tag_ref）。
 - **线路 title**：`publishTitle` / frontmatter `title` 不得嵌入乱序实体名片段，否则 `verify_content_semantics` 的 routeCoverage progression 会在全文（含 frontmatter）判失败。
@@ -89,7 +93,7 @@ Cursor 只允许三类执行面：
 - 队列按阶段分层，`download / build / produce / publish` 之间使用显式 handoff packet，不共享隐式上下文。
 - 主 Agent 是编排与裁决面，不能成为串行瓶颈；当并发升高时，只扩 Orchestrator 和 Subagent 池，不扩主 Agent 职责。
 - 重试预算必须显式定义：对象失败只回灌对象本身，批次失败只回灌共享前置，不允许全局锁回滚整批。
-- 人工介入阈值必须显式定义：图片 unsafe、草稿风格不合规、事实证据缺口等问题分别进入 repair 或人工复核，不可混为“待观察”。
+- 人工介入阈值必须显式定义：图片 unsafe、草稿风格不合规、事实证据缺口等问题分别进入 repair、abandon、conflict ledger 或批后人工复核，不可混为“待观察”；运行中不发起人工确认。
 
 ### 1.3.1 网站维度内容供给线（site-supply）
 
@@ -190,7 +194,7 @@ AI 不可以自主决定：
 
 ### post 最小发布契约（manifest.json）
 
-只保留发布/渲染/出处必需字段：`topicId/contentType/entityRefs/tagRefs/conditionContext/sourceUrls/assets/template/carrier/generator/generatorModel/citedSourceRefs/reviewDecision/articleMarkdown*/articleRenderProfile/publish*/storySpine/sourceTaskId/sourceBatchId`。
+只保留发布/渲染/出处必需字段：`topicId/contentType/entityRefs/tagRefs/sourceUrls/assets/template/carrier/generator/generatorModel/citedSourceRefs/reviewDecision/articleMarkdown*/articleRenderProfile/publish*/storySpine/sourceTaskId/sourceBatchId`。
 中间态（`sourceQuality/relatedSearchPlan/evidenceBundle/sourcePaths`）不进发布契约；最终追责快照只保留在 `5.review/provenance.json`，对象根不再保留根级副本。
 
 ### 阶段产物最小契约
@@ -199,7 +203,7 @@ AI 不可以自主决定：
 
 - `task_download/inputs/source_plan/*.json`：人工或工具给定 source 列表，保留；这是离线复跑入口。
 - `task_download/sources/**`：原文、图片与 `source.quality.json`，保留；review 事实回溯和图片门会读取。
-- `posts/{type}/{angle}/{title}/{seq}/3.compose/writing_pack.json`：只保留 `ref/kind/title/byline/carrier/templateId/wordCount/forbiddenPhrases/mustIncludeFacts/conditionContext/sectionIntents/narrativeContract/styleFamily/evidencePoints/assets/sopExampleRef`；SOP 全文、opening guidance、source 明细从真相源即时读取，不落包。
+- `posts/{type}/{angle}/{title}/{seq}/3.compose/writing_pack.json`：只保留 `ref/kind/title/byline/carrier/templateId/wordCount/forbiddenPhrases/mustIncludeFacts/sectionIntents/narrativeContract/styleFamily/evidencePoints/assets`；opening guidance、source 明细从真相源即时读取，不落包。
 - `posts/{type}/{angle}/{title}/{seq}/4.draft/prompt.md`、`article.md`、`draft_meta.json`：保留；分别是模型输入、人写正文和生成出处。
 - `posts/{type}/{angle}/{title}/{seq}/5.review/{ledger.json,review.json,review_gate.json,repair_report.json,provenance.json}`：保留最小 envelope；`review` 落盘只存 decision/issues/check pass 状态，完整诊断留在 `review_gate/repair_report`。
 - `posts/{type}/{angle}/{title}/{seq}/`：保留；这是 materialize 成品包，必须包含 `article.md/manifest.json/assets/` 与可选 `5.review/` sidecar。`gallery.md` 仅在 gallery carrier 时作为展示层出现，article 载体不得写入。

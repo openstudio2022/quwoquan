@@ -53,7 +53,6 @@ from produce.entity_workflow import (  # noqa: E402
     is_entity_brief,
     review_entity_draft,
 )
-from produce.route_workflow import load_compose_brief  # noqa: E402
 from produce.materialize import materialize_posts  # noqa: E402
 from produce.handler import handle_produce  # noqa: E402
 from helpers.agent_draft_kit import entity_article  # noqa: E402
@@ -132,7 +131,6 @@ def _entity_brief() -> dict:
         "wordCount": {"min": 700, "max": 1600},
         "imagePlan": [{"slot": "外观", "imageLayout": "fullWidth"}, {"slot": "展陈细节", "imageLayout": "wrapRight"}],
         "tagRefs": ["Format/内容角度/体验/亲身体验", "Format/内容载体/文章/长文", "Topic/旅行/玩法/博物馆展览"],
-        "conditionContext": {},
     }
 
 
@@ -212,32 +210,6 @@ def test_normalize_entity_refs_full_path():
     # 输出必须被 publish_filter 解析为完整三段（修复前会解析失败 → 过滤）
     domain, etype, name = _parse_entity_ref(normalize_entity_refs(["稻城亚丁"], "地点/景区")[0])
     assert (domain, etype, name) == ("地点", "景区", "稻城亚丁")
-
-
-def test_load_compose_brief_hydrates_entity_condition_context_from_profile():
-    _seed_sources()
-    task_root = Path(os.environ["QWQ_RUNTIME_ROOT"]) / "tasks" / TASK / "entities" / "地点" / "博物馆" / ENTITY
-    task_root.mkdir(parents=True, exist_ok=True)
-    write_json(
-        task_root / "_entity.json",
-        {
-            "label": ENTITY,
-            "conditionProfile": {
-                "regions": ["平原都市"],
-                "seasons": ["秋"],
-                "altitudeMeters": 500,
-                "notes": "城市平原展馆，无高反风险",
-            },
-        },
-    )
-    brief = _entity_brief()
-    brief.pop("conditionContext", None)
-    write_brief_object(TASK, BATCH, REF, brief, content_type="article")
-    hydrated = load_compose_brief(TASK, BATCH, REF)
-    context = hydrated.get("conditionContext") or {}
-    assert context["region"]["name"] == "平原都市"
-    assert context["season"]["name"] == "秋"
-    assert context["entityProfile"]["altitudeMeters"] == 500
 
 
 def test_entity_placeholder_blocks_then_agent_draft_green():

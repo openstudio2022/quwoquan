@@ -9,8 +9,6 @@ import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart'
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
@@ -28,6 +26,7 @@ import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_card.dart';
+import 'package:quwoquan_app/ui/user/widgets/other_profile_intersection_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_completeness_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_header.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_stats_row.dart';
@@ -35,8 +34,11 @@ import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_slogan_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_footprint_tab.dart';
 
 part 'profile_shell_builders.dart';
+part 'profile_shell_builders_parts.dart';
+part 'profile_shell_builders_more.dart';
 
 /// 用户主页壳层（V3 统一对象页骨架 ObjectPageShell + full 吸顶模式）。
 /// 几何/滚动/吸顶由 ObjectPageShell 收口；本壳提供用户主页业务插槽与二级页签。
@@ -98,6 +100,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       return;
     }
     final tabIds = UserProfileUIConfig.profileTabs
+        .where((tab) => tab.visibleInMode(widget.mode.name))
         .map((tab) => tab.id)
         .toList(growable: false);
     final currentIndex = tabIds.indexOf(_activeTabId);

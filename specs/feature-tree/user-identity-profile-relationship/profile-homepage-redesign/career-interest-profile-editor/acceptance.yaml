@@ -1,0 +1,169 @@
+version: 1
+node:
+  id: career-interest-profile-editor
+  level: L3_story
+  path: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor
+  title: career interest profile editor
+  parent_domain_service: user-identity-profile-relationship
+  parent_business_capability: profile-homepage-redesign
+scope:
+  summary: 职业与兴趣资料页端云标签闭环，覆盖标签真相源、端侧 UX、user-service 保存校验与 object_tag_index 投影。
+  in_scope:
+    - /profile/career-interests 独立页面
+    - Audience/用户/职业 与 Audience/用户/兴趣偏好 标签树
+    - ListTagChildren / ResolveTag / ValidateTagRefs 查询校验链路
+    - PATCH /v1/user/profile 保存 occupationTagRef 与有序 interestTagRefs
+    - object_tag_index user 对象投影
+  out_of_scope:
+    - 推荐标签模块
+    - 自由文本标签
+    - Topic/兴趣 旧路径
+gwt_acceptance:
+  GWT1:
+    title: 页面加载与标签同源查询
+    given:
+      - tag-service 已导入职业与兴趣标签树
+      - 用户已有或没有 occupationTagRef / interestTagRefs
+    when:
+      - 用户从编辑资料进入职业与兴趣页
+    then:
+      - 职业分类通过 Audience/用户/职业 子节点查询
+      - 兴趣分类通过 Audience/用户/兴趣偏好 子节点查询
+      - 已选 tagRef 通过 ResolveTag 补文案
+      - 端侧无 Topic/兴趣 旧路径依赖
+    done_when:
+      - 职业与兴趣入口不依赖端侧完整枚举。
+    edge_cases:
+      - 标签层级加载失败展示可重试状态。
+    contract_refs:
+      - tag-service.ListTagChildren
+      - tag-service.ResolveTag
+    performance_points:
+      - 标签层级加载 P95 <= 500ms
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_app/test/local_contract/cloud/tag/profile_career_interest_catalog__local_contract_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+        - layer: local_contract
+          suite: career_interest_catalog
+          cases:
+            - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.catalog
+          envs: &id001
+            - local
+      supporting: []
+    notes: []
+  GWT2:
+    title: 编辑、排序、保存与校验
+    given:
+      - 我的标签少于 30 个
+    when:
+      - 用户删除兴趣、从全部兴趣添加兴趣并拖拽排序后点击保存
+    then:
+      - interestTagRefs 去重保序保存
+      - 超过 30 个兴趣被拒绝
+      - Topic/兴趣 与非法职业/兴趣根被 USER.PROFILE.invalid_tag_ref 拒绝
+    done_when:
+      - PATCH 仅更新触达的职业/兴趣字段，未触达字段不被误清空。
+    edge_cases:
+      - 兴趣为空仍可保存。
+      - 重复兴趣去重并保持首次出现顺序。
+    contract_refs:
+      - user-service.UpdateUserProfile
+      - tag-service.ValidateTagRefs
+    performance_points:
+      - 保存 P95 <= 800ms
+    tests:
+      planned: []
+      recorded:
+        - file: quwoquan_service/services/user-service/tests/local_contract/internal/application/profile_edit_validation__local_contract_test.go
+    status: implemented
+    test_evidence:
+      primary:
+        - layer: local_contract
+          suite: profile_edit_validation
+          cases:
+            - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.validation
+          envs: *id001
+      supporting: []
+    notes: []
+  GWT3:
+    title: 保存后进入交集索引
+    given:
+      - 用户保存职业与兴趣
+    when:
+      - user-service 发布 UserProfileUpdated
+    then:
+      - object_tag_index 中 objectType=user 的 tagRefs 包含职业与兴趣
+      - shared-tags 可用同一 tagRef 计算共同职业/共同兴趣
+    done_when:
+      - 写时投影与离线 backfill 都使用 object_tag_index 同一结构。
+    edge_cases:
+      - 投影失败不改变 profile 主写入结果，可通过 backfill 重建派生索引。
+    contract_refs:
+      - tag-service.object_tag_index
+      - tag-service.SharedTags
+    performance_points:
+      - shared-tags 请求 P95 <= 500ms
+    tests:
+      planned:
+        - file: quwoquan_service/services/tag-service/tests/api_integration/tag_contract__api_integration_test.go
+      recorded:
+        - file: quwoquan_service/services/user-service/tests/local_contract/internal/infrastructure/projection/interest_profile_projector__local_contract_test.go
+        - file: quwoquan_service/services/tag-service/tests/api_integration/tag_contract__api_integration_test.go
+    status: implemented
+    test_evidence:
+      primary:
+        - layer: local_contract
+          suite: user_tag_index_projector
+          cases:
+            - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.tag_index_projector
+          envs: *id001
+      supporting:
+        - layer: api_integration
+          suite: tag_service_shared_tags
+          cases:
+            - api_integration.user_identity_profile_relationship.profile_homepage_redesign.career_interest.shared_tags
+          envs:
+            - beta
+            - gamma
+    notes: []
+  UAT1:
+    title: 我的资料页职业与兴趣管理旅程
+    given:
+      - 用户在我的资料页点击编辑资料
+    when:
+      - 进入职业与兴趣页，选择职业，添加兴趣，排序并保存
+    then:
+      - 返回编辑资料页后 snapshot 回读一致
+      - 我的主页资料展示与交集解释优先使用靠前兴趣
+    done_when:
+      - 用户能完成职业选择、兴趣添加、排序、保存、回读的完整旅程。
+    edge_cases:
+      - 有未保存修改返回时展示保存/继续编辑/放弃修改底部确认。
+    contract_refs:
+      - profile-career-interest-personalization
+    performance_points: []
+    tests:
+      planned:
+        - file: quwoquan_app/test/user_acceptance/ui/user/journeys/profile_career_interest_personalization__user_acceptance_test.dart
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+        - layer: user_acceptance
+          suite: profile_career_interest_personalization
+          cases:
+            - user_acceptance.user_identity_profile_relationship.profile_homepage_redesign.career_interest.journey
+          envs:
+            - gamma_local
+      supporting: []
+    notes: []
+execution:
+  local_gate:
+    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+    - make gate

@@ -31,9 +31,24 @@ func TestErrorCode_UserNotFound(t *testing.T) {
 }
 
 func TestErrorCode_InvalidArgument(t *testing.T) {
-	rec := doRequest(t, http.MethodGet, "/v1/user/profile/", "", nil)
-	if rec.Code == http.StatusOK {
-		t.Skip("empty userId may route differently")
+	headers := map[string]string{
+		"X-Request-Id": "user-req-invalid-1",
+		"X-Trace-Id":   "user-trace-invalid-1",
+	}
+	rec := doRequest(t, http.MethodGet, "/v1/user/blocked", "", headers)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	result := parseJSON(t, rec)
+	if result["code"] != "USER.USER.invalid_argument" {
+		t.Errorf("expected code=USER.USER.invalid_argument, got %v", result["code"])
+	}
+	if rec.Header().Get("X-Request-Id") != "user-req-invalid-1" || rec.Header().Get("X-Trace-Id") != "user-trace-invalid-1" {
+		t.Errorf(
+			"expected request/trace response headers, got request=%q trace=%q",
+			rec.Header().Get("X-Request-Id"),
+			rec.Header().Get("X-Trace-Id"),
+		)
 	}
 }
 

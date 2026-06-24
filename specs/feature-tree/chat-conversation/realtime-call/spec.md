@@ -346,7 +346,7 @@ rtc-service / livekit-sfu / coturn 在所有环境独立部署。
 | 阶段 | 环境 | 策略 | 验证 | 回滚条件 |
 |------|------|------|------|---------|
 | G5a | dev | 全量 | 契约测试 + 手动验证 | git revert |
-| G5b | integration | 全量 | L1~L3 全量 + L4 Patrol | 回滚镜像 |
+| G5b | integration | 全量 | `local_contract/api_integration` 全量 + `user_acceptance` Patrol | 回滚镜像 |
 | G5c | prod 5% | 按 userId hash | 监控 7 项指标 | 自动回滚 |
 | G5d | prod 20% | 扩大 hash | 同上 + 7天稳定性 | 自动回滚 |
 | G5e | prod 50% | 扩大 hash | 同上 + 成本核算 | 自动回滚 |

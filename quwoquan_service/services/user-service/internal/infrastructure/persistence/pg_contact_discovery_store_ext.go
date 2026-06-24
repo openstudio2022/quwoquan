@@ -2,11 +2,13 @@ package persistence
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
+	"quwoquan_service/services/user-service/internal/domain/user/phonematch"
 	"quwoquan_service/services/user-service/internal/domain/user/repository"
 )
 
@@ -49,32 +51,81 @@ func (s *PgContactDiscoveryStore) DeleteExpired(ctx context.Context) (int64, err
 	return tag.RowsAffected(), err
 }
 
-// FindSubAccountIDsByPhoneHashes matches hashed phones against active credential_bindings,
-// returning only subAccountId - never ownerAccountId (privacy isolation).
-func (s *PgContactDiscoveryStore) FindSubAccountIDsByPhoneHashes(ctx context.Context, hashedPhones []string) ([]string, error) {
+// FindPhoneMatches matches the initiator's uploaded hashes against active
+// phone / carrier_phone credentials of non-strict personas. The stored
+// credential_key is normalized plaintext; we hash it here through
+// phonematch.Hash (the single client/server hashing source of truth) and
+// intersect with the uploaded set, so the wire only ever carried hashes and we
+// never persist or return another user's plaintext phone or ownerAccountId.
+//
+// Note: this scans active phone credentials per discovery. Discovery is rate
+// limited (5/owner/day) so this is acceptable for launch scale; an indexed
+// phone_hash column is tracked as a scale-out backlog item.
+func (s *PgContactDiscoveryStore) FindPhoneMatches(ctx context.Context, hashedPhones []string) ([]model.ContactPhoneMatch, error) {
+	if len(hashedPhones) == 0 {
+		return []model.ContactPhoneMatch{}, nil
+	}
+	wanted := make(map[string]struct{}, len(hashedPhones))
+	for _, h := range hashedPhones {
+		if trimmed := strings.TrimSpace(h); trimmed != "" {
+			wanted[trimmed] = struct{}{}
+		}
+	}
+	if len(wanted) == 0 {
+		return []model.ContactPhoneMatch{}, nil
+	}
+
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT p.sub_account_id
+		SELECT cb.credential_key,
+		       p.sub_account_id,
+		       COALESCE(NULLIF(p.user_handle, ''), p.sub_account_id),
+		       COALESCE(NULLIF(p.display_name, ''), NULLIF(up.owner_display_name, ''), NULLIF(up.nickname, ''), p.sub_account_id),
+		       COALESCE(NULLIF(p.avatar_url, ''), NULLIF(up.avatar_url, ''), ''),
+		       GREATEST(COALESCE(p.avatar_version, 0), COALESCE(up.avatar_version, 0)),
+		       COALESCE(up.region, '')
 		FROM credential_bindings cb
 		INNER JOIN personas p ON p.user_id = cb.owner_id AND p.is_active = true
-		WHERE cb.credential_type = 'phone'
-		  AND cb.credential_key = ANY($1)
+		INNER JOIN user_profiles up ON up.user_id = cb.owner_id
+		WHERE cb.credential_type IN ('phone', 'carrier_phone')
 		  AND cb.is_active = true
 		  AND p.isolation_level != 'strict'
-	`, hashedPhones)
+	`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var ids []string
+	matches := make([]model.ContactPhoneMatch, 0)
+	seen := make(map[string]struct{})
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var credentialKey string
+		var m model.ContactPhoneMatch
+		if err := rows.Scan(
+			&credentialKey,
+			&m.SubAccountID,
+			&m.UserHandle,
+			&m.DisplayName,
+			&m.AvatarURL,
+			&m.AvatarVersion,
+			&m.Region,
+		); err != nil {
 			return nil, err
 		}
-		ids = append(ids, id)
+		hash := phonematch.Hash(credentialKey)
+		if hash == "" {
+			continue
+		}
+		if _, ok := wanted[hash]; !ok {
+			continue
+		}
+		if _, dup := seen[m.SubAccountID]; dup {
+			continue
+		}
+		seen[m.SubAccountID] = struct{}{}
+		m.HashedPhone = hash
+		matches = append(matches, m)
 	}
-	return ids, rows.Err()
+	return matches, rows.Err()
 }
 
 func (s *PgContactDiscoveryStore) CountTodayByOwner(ctx context.Context, ownerID string) (int, error) {

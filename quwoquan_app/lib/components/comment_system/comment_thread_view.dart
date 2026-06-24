@@ -113,8 +113,7 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
     if (key == null) return;
     if (_resolvedHighlightKey == key || _highlightResolutionInFlight) return;
     final ready =
-        state.comments.isNotEmpty ||
-        state.status == CommentListStatus.error;
+        state.comments.isNotEmpty || state.status == CommentListStatus.error;
     if (!ready || state.isLoading) return;
     _highlightResolutionInFlight = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -393,30 +392,6 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
     return Column(
       key: TestKeys.commentThreadView,
       children: [
-        if (state.hasNewComments)
-          _NewCommentsNotice(
-            isRefreshing: state.isRefreshing,
-            countsDelta: state.countsDelta,
-            onTap: () => ref
-                .read(commentProviderFamily(widget.postId).notifier)
-                .refreshFromNewCommentNotice(),
-          ),
-        if (state.refreshError != null)
-          AppTransientErrorNotice(
-            semantic: const UiErrorSemantic(
-              category: UiErrorCategory.backgroundAction,
-              scope: UiErrorScope.global,
-              title: UITextConstants.operationFailed,
-              message: UITextConstants.refreshFailedRetained,
-              copyKey: 'refreshFailedRetained',
-              presentation: UiErrorPresentation.transientNotice,
-              tone: UiErrorTone.caution,
-            ),
-            margin: EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.xs,
-            ),
-          ),
         if (state.rawError != null && state.comments.isNotEmpty)
           AppTransientErrorNotice(
             semantic: const UiErrorSemantic(
@@ -584,71 +559,6 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
           ),
         );
       },
-    );
-  }
-}
-
-class _NewCommentsNotice extends StatelessWidget {
-  const _NewCommentsNotice({
-    required this.isRefreshing,
-    required this.onTap,
-    this.countsDelta,
-  });
-
-  final bool isRefreshing;
-  final VoidCallback onTap;
-
-  /// 可解释增量：存在「新增/删除」变化时优先展示「较进入时 新增 N / 删除 M」，
-  /// 否则回退到通用「有新评论，点击刷新」。
-  final CommentCountsDelta? countsDelta;
-
-  /// 依据半开区间增量装配可解释文案；无可解释变化回退通用通知。
-  static String _noticeLabelFor(CommentCountsDelta? delta) {
-    if (delta == null || !delta.hasChanges) {
-      return UITextConstants.commentNewCommentsNotice;
-    }
-    final created = delta.createdSinceCount;
-    final deleted = delta.deletedSinceCount;
-    if (created > 0 && deleted > 0) {
-      return UITextConstants.commentCountsDeltaBothNoticeTemplate
-          .replaceFirst('%s', '$created')
-          .replaceFirst('%s', '$deleted');
-    }
-    if (created > 0) {
-      return UITextConstants.commentCountsDeltaCreatedNoticeTemplate
-          .replaceFirst('%s', '$created');
-    }
-    return UITextConstants.commentCountsDeltaDeletedNoticeTemplate
-        .replaceFirst('%s', '$deleted');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
-      ),
-      child: CupertinoButton(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.xs,
-        ),
-        color: AppColors.primaryColor.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
-        onPressed: isRefreshing ? null : onTap,
-        child: isRefreshing
-            ? const CupertinoActivityIndicator()
-            : Text(
-                key: TestKeys.commentCountsDeltaNotice,
-                _noticeLabelFor(countsDelta),
-                style: TextStyle(
-                  color: AppColors.primaryColor,
-                  fontSize: AppTypography.sm,
-                  fontWeight: AppTypography.semiBold,
-                ),
-              ),
-      ),
     );
   }
 }

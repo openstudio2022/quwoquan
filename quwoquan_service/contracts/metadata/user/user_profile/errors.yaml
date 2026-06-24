@@ -465,3 +465,71 @@ errors:
     user_message:
       zh: "该分身号已被占用，请换一个"
       en: "This persona handle is already taken, please choose another"
+
+  - code: USER.SUB_ACCOUNT.handle_readonly
+    kind: SUB_ACCOUNT
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: subAccountHandleReadonly
+    go_const: ErrSubAccountHandleReadonly
+    user_message:
+      zh: "趣我圈号由系统分配，暂不支持手动修改"
+      en: "Profile handle is system assigned and cannot be changed"
+
+  # ── 资料编辑与二维码错误 ─────────────────────────────────────────────────────
+
+  - code: USER.PROFILE.invalid_region
+    kind: PROFILE
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: profileInvalidRegion
+    go_const: ErrProfileInvalidRegion
+    user_message:
+      zh: "请选择有效的省市地区"
+      en: "Please choose a valid region"
+
+  - code: USER.PROFILE.invalid_tag_ref
+    kind: PROFILE
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: profileInvalidTagRef
+    go_const: ErrProfileInvalidTagRef
+    user_message:
+      zh: "所选标签不可用，请重新选择"
+      en: "Selected tags are unavailable, please choose again"
+
+  - code: USER.PROFILE.invalid_media_asset
+    kind: PROFILE
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: profileInvalidMediaAsset
+    go_const: ErrProfileInvalidMediaAsset
+    user_message:
+      zh: "图片上传未完成，请重新选择并保存"
+      en: "Image upload is incomplete, please choose and save again"
+
+  - code: USER.PROFILE.qr_token_invalid
+    kind: PROFILE
+    reason: not_found
+    http_status: 404
+    recovery_action: surface
+    dart_const: profileQrTokenInvalid
+    go_const: ErrProfileQrTokenInvalid
+    user_message:
+      zh: "二维码已失效，请让对方重新分享"
+      en: "QR code is invalid, please ask for a new share"
+
+  - code: USER.PROFILE.qr_token_expired
+    kind: PROFILE
+    reason: expired
+    http_status: 410
+    recovery_action: surface
+    dart_const: profileQrTokenExpired
+    go_const: ErrProfileQrTokenExpired
+    user_message:
+      zh: "二维码已过期，请让对方重新分享"
+      en: "QR code expired, please ask for a new share"

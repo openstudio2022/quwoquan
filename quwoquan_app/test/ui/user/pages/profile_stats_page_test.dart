@@ -3,10 +3,19 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 
 class _FakeHttpOverrides extends HttpOverrides {
@@ -25,12 +34,14 @@ class _FakeHttpClient implements HttpClient {
   int? maxConnectionsPerHost;
   @override
   String? userAgent;
+
   @override
   void addCredentials(
     Uri url,
     String realm,
     HttpClientCredentials credentials,
   ) {}
+
   @override
   void addProxyCredentials(
     String host,
@@ -38,26 +49,34 @@ class _FakeHttpClient implements HttpClient {
     String realm,
     HttpClientCredentials credentials,
   ) {}
+
   @override
   set authenticate(Future<bool> Function(Uri, String, String?)? f) {}
+
   @override
   set authenticateProxy(
     Future<bool> Function(String, int, String, String?)? f,
   ) {}
+
   @override
   set badCertificateCallback(
     bool Function(X509Certificate, String, int)? callback,
   ) {}
+
   @override
   set connectionFactory(
     Future<ConnectionTask<Socket>> Function(Uri, String?, int?)? f,
   ) {}
+
   @override
   set findProxy(String Function(Uri)? f) {}
+
   @override
   set keyLog(Function(String)? callback) {}
+
   @override
   void close({bool force = false}) {}
+
   @override
   Future<HttpClientRequest> open(
     String method,
@@ -65,38 +84,52 @@ class _FakeHttpClient implements HttpClient {
     int port,
     String path,
   ) => _fakeRequest();
+
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) => _fakeRequest();
+
   @override
   Future<HttpClientRequest> get(String host, int port, String path) =>
       _fakeRequest();
+
   @override
   Future<HttpClientRequest> getUrl(Uri url) => _fakeRequest();
+
   @override
   Future<HttpClientRequest> post(String host, int port, String path) =>
       _fakeRequest();
+
   @override
   Future<HttpClientRequest> postUrl(Uri url) => _fakeRequest();
+
   @override
   Future<HttpClientRequest> put(String host, int port, String path) =>
       _fakeRequest();
+
   @override
   Future<HttpClientRequest> putUrl(Uri url) => _fakeRequest();
+
   @override
   Future<HttpClientRequest> delete(String host, int port, String path) =>
       _fakeRequest();
+
   @override
   Future<HttpClientRequest> deleteUrl(Uri url) => _fakeRequest();
+
   @override
   Future<HttpClientRequest> head(String host, int port, String path) =>
       _fakeRequest();
+
   @override
   Future<HttpClientRequest> headUrl(Uri url) => _fakeRequest();
+
   @override
   Future<HttpClientRequest> patch(String host, int port, String path) =>
       _fakeRequest();
+
   @override
   Future<HttpClientRequest> patchUrl(Uri url) => _fakeRequest();
+
   Future<HttpClientRequest> _fakeRequest() =>
       Future.value(_FakeHttpClientRequest());
 }
@@ -104,6 +137,7 @@ class _FakeHttpClient implements HttpClient {
 class _FakeHttpClientRequest extends Fake implements HttpClientRequest {
   @override
   HttpHeaders get headers => _FakeHttpHeaders();
+
   @override
   Future<HttpClientResponse> close() => Future.value(_FakeHttpClientResponse());
 }
@@ -111,7 +145,7 @@ class _FakeHttpClientRequest extends Fake implements HttpClientRequest {
 class _FakeHttpHeaders extends Fake implements HttpHeaders {}
 
 class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
-  static const _kTransparentPng = [
+  static const _kTransparentPng = <int>[
     0x89,
     0x50,
     0x4E,
@@ -179,13 +213,17 @@ class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
     0x60,
     0x82,
   ];
+
   @override
   int get statusCode => 200;
+
   @override
   int get contentLength => _kTransparentPng.length;
+
   @override
   HttpClientResponseCompressionState get compressionState =>
       HttpClientResponseCompressionState.notCompressed;
+
   @override
   StreamSubscription<List<int>> listen(
     void Function(List<int>)? onData, {
@@ -202,126 +240,801 @@ class _FakeHttpClientResponse extends Fake implements HttpClientResponse {
   }
 }
 
+class _AuthenticatedAuthSessionController extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'test-access-token',
+    refreshToken: 'test-refresh-token',
+    ownerId: 'viewer_001',
+    activeSubAccountId: 'viewer_001',
+    accountState: 'active',
+    identityOrigin: 'widget-test',
+    installId: 'widget-test-install',
+  );
+}
+
+class _GuestAuthSessionController extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.guest,
+    identityOrigin: 'widget-test-guest',
+    installId: 'widget-test-install',
+  );
+}
+
+class _TestUserProfileRepository extends MockUserProfileRepository {
+  _TestUserProfileRepository({
+    required this.bundle,
+    this.followers = const <ProfileSocialRelationRowViewData>[],
+    this.following = const <ProfileSocialRelationRowViewData>[],
+    this.circles = const <CircleDto>[],
+    this.followersError,
+  });
+
+  final UserHomepageBundleViewData bundle;
+  final List<ProfileSocialRelationRowViewData> followers;
+  final List<ProfileSocialRelationRowViewData> following;
+  final List<CircleDto> circles;
+  final Object? followersError;
+
+  @override
+  Future<UserHomepageBundleViewData> getUserHomepageBundle(
+    String subAccountId,
+  ) async {
+    return bundle;
+  }
+
+  @override
+  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowersPage(
+    String userId, {
+    String? query,
+    String? cursor,
+    int limit = 20,
+  }) async {
+    if (followersError != null) {
+      throw followersError!;
+    }
+    return _paginate(_filterRows(followers, query), cursor, limit);
+  }
+
+  @override
+  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowingPage(
+    String userId, {
+    String? query,
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return _paginate(_filterRows(following, query), cursor, limit);
+  }
+
+  @override
+  Future<CursorPage<CircleDto>> listUserCirclesPage(
+    String userId, {
+    String? query,
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return _paginate(_filterCircles(circles, query), cursor, limit);
+  }
+
+  List<ProfileSocialRelationRowViewData> _filterRows(
+    List<ProfileSocialRelationRowViewData> rows,
+    String? query,
+  ) {
+    final normalized = query?.trim().toLowerCase() ?? '';
+    if (normalized.isEmpty) {
+      return rows;
+    }
+    return rows
+        .where((row) {
+          return row.displayName.toLowerCase().contains(normalized) ||
+              row.username.toLowerCase().contains(normalized) ||
+              row.userHandle.toLowerCase().contains(normalized);
+        })
+        .toList(growable: false);
+  }
+
+  List<CircleDto> _filterCircles(List<CircleDto> items, String? query) {
+    final normalized = query?.trim().toLowerCase() ?? '';
+    if (normalized.isEmpty) {
+      return items;
+    }
+    return items
+        .where((circle) => circle.name.toLowerCase().contains(normalized))
+        .toList(growable: false);
+  }
+
+  CursorPage<T> _paginate<T>(List<T> items, String? cursor, int limit) {
+    var start = int.tryParse(cursor ?? '') ?? 0;
+    if (start < 0) {
+      start = 0;
+    }
+    if (start > items.length) {
+      start = items.length;
+    }
+    final end = start + limit < items.length ? start + limit : items.length;
+    return CursorPage<T>(
+      items: items.sublist(start, end),
+      nextCursor: end < items.length ? '$end' : null,
+      totalCount: items.length,
+    );
+  }
+}
+
+UserHomepageBundleViewData _bundle({
+  required String subjectUserId,
+  required int followerCount,
+  required int followingCount,
+  required int circleCount,
+  bool isOwner = false,
+  bool isGuest = false,
+  bool canViewFullProfile = true,
+  String relationToTarget = 'not_following',
+  String displayName = '测试主页',
+  RelationshipCapabilityDto? relationshipCapability,
+}) {
+  final profile = SubAccountProfileViewData(
+    subAccountId: subjectUserId,
+    ownerUserId: isOwner ? subjectUserId : 'owner_$subjectUserId',
+    subjectType: 'user',
+    userHandle: '${subjectUserId}_handle',
+    username: '${subjectUserId}_username',
+    displayName: displayName,
+    avatarUrl: 'https://example.com/$subjectUserId-avatar.png',
+    backgroundUrl: 'https://example.com/$subjectUserId-bg.png',
+    bio: 'bio',
+    followerCount: followerCount,
+    followingCount: followingCount,
+    postCount: 12,
+    circleCount: circleCount,
+    likeCount: 33,
+    isolationLevel: 'public',
+    profileVisibility: 'public',
+    inheritsFromOwner: false,
+    overriddenFields: const <String>[],
+    updatedAt: DateTime(2026, 6, 25),
+  );
+  final stats = UserProfileStatsViewData.fromProfile(profile);
+  return UserHomepageBundleViewData(
+    profile: profile,
+    stats: stats,
+    relationshipCapability: relationshipCapability,
+    tabCounts: UserHomepageTabCountsViewData.fromStats(stats),
+    viewerContext: UserHomepageViewerContextViewData(
+      viewerSubAccountId: isGuest ? '' : 'viewer_001',
+      isOwner: isOwner,
+      isGuest: isGuest,
+      relationToTarget: relationToTarget,
+      canViewFullProfile: canViewFullProfile,
+    ),
+    cacheVersion: 'bundle-$subjectUserId',
+  );
+}
+
+RelationshipCapabilityDto _capability({
+  required String targetId,
+  required String relationState,
+  bool isBlocked = false,
+  bool isBlockedBy = false,
+  bool hasFormalConversation = false,
+}) {
+  return switch (relationState) {
+    'self' => RelationshipCapabilityDto.fromFollowFlags(
+      viewerId: targetId,
+      targetId: targetId,
+      isFollowing: false,
+      isFollowedBy: false,
+      isSelf: true,
+      isBlocked: isBlocked,
+      isBlockedBy: isBlockedBy,
+      hasFormalConversation: hasFormalConversation,
+    ),
+    'mutual' => RelationshipCapabilityDto.fromFollowFlags(
+      viewerId: 'viewer_001',
+      targetId: targetId,
+      isFollowing: true,
+      isFollowedBy: true,
+      isBlocked: isBlocked,
+      isBlockedBy: isBlockedBy,
+      hasFormalConversation: hasFormalConversation,
+    ),
+    'following' => RelationshipCapabilityDto.fromFollowFlags(
+      viewerId: 'viewer_001',
+      targetId: targetId,
+      isFollowing: true,
+      isFollowedBy: false,
+      isBlocked: isBlocked,
+      isBlockedBy: isBlockedBy,
+      hasFormalConversation: hasFormalConversation,
+    ),
+    'followed_by' => RelationshipCapabilityDto.fromFollowFlags(
+      viewerId: 'viewer_001',
+      targetId: targetId,
+      isFollowing: false,
+      isFollowedBy: true,
+      isBlocked: isBlocked,
+      isBlockedBy: isBlockedBy,
+      hasFormalConversation: hasFormalConversation,
+    ),
+    _ => RelationshipCapabilityDto.fromFollowFlags(
+      viewerId: 'viewer_001',
+      targetId: targetId,
+      isFollowing: false,
+      isFollowedBy: false,
+      isBlocked: isBlocked,
+      isBlockedBy: isBlockedBy,
+      hasFormalConversation: hasFormalConversation,
+    ),
+  };
+}
+
+ProfileSocialRelationRowViewData _row({
+  required String id,
+  required String displayName,
+  required String userHandle,
+  String relationState = 'not_following',
+  String profileVisibility = 'public',
+}) {
+  return ProfileSocialRelationRowViewData(
+    subAccountId: id,
+    username: userHandle,
+    userHandle: userHandle,
+    displayName: displayName,
+    avatarUrl: 'https://example.com/$id.png',
+    profileVisibility: profileVisibility,
+    relationState: relationState,
+    relationshipCapability: _capability(
+      targetId: id,
+      relationState: relationState,
+    ),
+  );
+}
+
+CircleDto _circle({
+  required String id,
+  required String name,
+  int memberCount = 0,
+  int postCount = 0,
+  String visibility = 'public',
+}) {
+  final timestamp = DateTime(2026, 6, 25);
+  return CircleDto(
+    id: id,
+    name: name,
+    coverUrl: 'https://example.com/$id-cover.png',
+    ownerId: 'owner_$id',
+    memberCount: memberCount,
+    postCount: postCount,
+    visibility: visibility,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  );
+}
+
+Widget _buildTestApp({
+  required String type,
+  required _TestUserProfileRepository repository,
+  String userId = 'profile_target',
+  bool authenticated = true,
+}) {
+  return ProviderScope(
+    overrides: [
+      userProfileRepositoryProvider.overrideWithValue(repository),
+      authSessionControllerProvider.overrideWith(
+        authenticated
+            ? _AuthenticatedAuthSessionController.new
+            : _GuestAuthSessionController.new,
+      ),
+    ],
+    child: MaterialApp.router(
+      routerConfig: GoRouter(
+        initialLocation: AppRoutePaths.profileStats(type: type, userId: userId),
+        routes: <RouteBase>[
+          GoRoute(
+            path: AppRoutePaths.profileStatsPathTemplate,
+            builder: (_, state) {
+              return ProfileStatsPage(
+                type: state.uri.queryParameters['type'] ?? 'fans',
+                userId: state.uri.queryParameters['userId'] ?? '',
+              );
+            },
+          ),
+          GoRoute(
+            path: AppRoutePaths.loginPathTemplate,
+            builder: (_, state) =>
+                Text('Login ${state.uri.queryParameters['reason'] ?? ''}'),
+          ),
+          GoRoute(
+            path: AppRoutePaths.circles,
+            builder: (_, _) => const Text('Circles Hub'),
+          ),
+          GoRoute(
+            path: AppRoutePaths.circleDetailPathTemplate.replaceAll(
+              '{id}',
+              ':id',
+            ),
+            builder: (_, state) => Text('Circle ${state.pathParameters['id']}'),
+          ),
+          GoRoute(
+            path: AppRoutePaths.userProfilePathTemplate.replaceAll(
+              '{username}',
+              ':username',
+            ),
+            builder: (_, state) =>
+                Text('User ${state.pathParameters['username']}'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Finder _segmentedControl() => find.byWidgetPredicate(
+  (widget) => widget is CupertinoSlidingSegmentedControl,
+);
+
+Finder _segmentedLabel(String label) {
+  return find.descendant(of: _segmentedControl(), matching: find.text(label));
+}
+
+TextEditingController _searchController(WidgetTester tester) {
+  final field = tester.widget<CupertinoSearchTextField>(
+    find.byType(CupertinoSearchTextField),
+  );
+  return field.controller!;
+}
+
+Future<void> _pumpFrames(
+  WidgetTester tester, {
+  int count = 8,
+  Duration step = const Duration(milliseconds: 50),
+}) async {
+  for (var i = 0; i < count; i++) {
+    await tester.pump(step);
+  }
+}
+
+Future<void> _pumpInitialLoad(WidgetTester tester) async {
+  await tester.pump();
+  await _pumpFrames(tester, count: 10);
+}
+
+Future<void> _tapSegment(WidgetTester tester, String label) async {
+  await tester.tap(_segmentedLabel(label));
+  await _pumpFrames(tester);
+}
+
 void main() {
   setUp(() {
     HttpOverrides.global = _FakeHttpOverrides();
+    AuthGate.resetDebounce();
   });
 
-  Widget buildTestApp({required String type, String userId = 'user_001'}) {
-    return ProviderScope(
-      child: MaterialApp.router(
-        routerConfig: GoRouter(
-          initialLocation: '/profile/stats?type=$type&userId=$userId',
-          routes: [
-            GoRoute(
-              path: '/profile/stats',
-              builder: (_, state) {
-                final type = state.uri.queryParameters['type'] ?? 'fans';
-                final userId = state.uri.queryParameters['userId'] ?? '';
-                return ProfileStatsPage(type: type, userId: userId);
-              },
-            ),
-            GoRoute(
-              path: '/circle/:id',
-              builder: (_, state) =>
-                  Text('Circle ${state.pathParameters['id']}'),
-            ),
-            GoRoute(
-              path: '/user/:username',
-              builder: (_, state) =>
-                  Text('User ${state.pathParameters['username']}'),
-            ),
-          ],
+  tearDown(() {
+    HttpOverrides.global = null;
+    AuthGate.resetDebounce();
+  });
+
+  group('ProfileStatsPage 商用重设计', () {
+    testWidgets('顶栏使用 segmented selector，固定三 tab，不包含获赞', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'me',
+          followerCount: 1,
+          followingCount: 1,
+          circleCount: 1,
+          isOwner: true,
         ),
-      ),
-    );
-  }
-
-  Future<void> pumpUntilLoaded(WidgetTester tester) async {
-    for (var i = 0; i < 30; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-      if (find.byType(CircularProgressIndicator).evaluate().isEmpty &&
-          find.text(UITextConstants.noData).evaluate().isEmpty) {
-        if (find.text('极简摄影俱乐部').evaluate().isNotEmpty ||
-            find.text('你的皮炎有点辣').evaluate().isNotEmpty) {
-          break;
-        }
-      }
-      if (find.text('极简摄影俱乐部').evaluate().isNotEmpty ||
-          find.text('你的皮炎有点辣').evaluate().isNotEmpty) {
-        break;
-      }
-    }
-  }
-
-  group('ProfileStatsPage — 统计行与列表 (A3)', () {
-    testWidgets('type=fans 默认落在粉丝 tab，并可切换到圈子 tab', (tester) async {
-      await tester.pumpWidget(buildTestApp(type: 'fans'));
-      await pumpUntilLoaded(tester);
-
-      expect(find.text(UITextConstants.circleFans), findsAtLeastNWidgets(1));
-      expect(find.text('你的皮炎有点辣'), findsOneWidget);
-      expect(
-        find.byType(CupertinoSlidingSegmentedControl<String>),
-        findsNothing,
+        followers: <ProfileSocialRelationRowViewData>[
+          _row(
+            id: 'fan_001',
+            displayName: '你的皮炎有点辣',
+            userHandle: 'yanla',
+            relationState: 'followed_by',
+          ),
+        ],
+        following: <ProfileSocialRelationRowViewData>[
+          _row(
+            id: 'follow_001',
+            displayName: '阿青在路上',
+            userHandle: 'aqing',
+            relationState: 'following',
+          ),
+        ],
+        circles: <CircleDto>[
+          _circle(
+            id: 'circle_001',
+            name: '极简摄影俱乐部',
+            memberCount: 2340,
+            postCount: 128,
+          ),
+        ],
       );
-      final name = tester.widget<Text>(find.text('你的皮炎有点辣'));
-      expect(name.style?.fontWeight, isNot(FontWeight.w800));
 
-      await tester.tap(find.text(UITextConstants.contactsTabCircles).last);
-      await pumpUntilLoaded(tester);
+      await tester.pumpWidget(
+        _buildTestApp(type: 'fans', repository: repository, userId: 'me'),
+      );
+      await _pumpInitialLoad(tester);
+
+      expect(_segmentedControl(), findsOneWidget);
+      expect(_segmentedLabel(UITextConstants.circleFans), findsOneWidget);
+      expect(_segmentedLabel(UITextConstants.follow), findsOneWidget);
+      expect(
+        _segmentedLabel(UITextConstants.contactsTabCircles),
+        findsOneWidget,
+      );
+      expect(find.text('获赞'), findsNothing);
+    });
+
+    testWidgets('三 tab 搜索词独立记忆，切换后可恢复', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'me',
+          followerCount: 2,
+          followingCount: 2,
+          circleCount: 1,
+          isOwner: true,
+        ),
+        followers: <ProfileSocialRelationRowViewData>[
+          _row(
+            id: 'fan_001',
+            displayName: '你的皮炎有点辣',
+            userHandle: 'yanla',
+            relationState: 'followed_by',
+          ),
+          _row(
+            id: 'fan_002',
+            displayName: '摄影阿青',
+            userHandle: 'aqing',
+            relationState: 'not_following',
+          ),
+        ],
+        following: <ProfileSocialRelationRowViewData>[
+          _row(
+            id: 'follow_001',
+            displayName: '阿青在路上',
+            userHandle: 'aqing',
+            relationState: 'following',
+          ),
+          _row(
+            id: 'follow_002',
+            displayName: '旅行收藏家',
+            userHandle: 'travel_notes',
+            relationState: 'mutual',
+          ),
+        ],
+        circles: <CircleDto>[_circle(id: 'circle_001', name: '极简摄影俱乐部')],
+      );
+
+      await tester.pumpWidget(
+        _buildTestApp(type: 'fans', repository: repository, userId: 'me'),
+      );
+      await _pumpInitialLoad(tester);
+
+      await tester.enterText(find.byType(CupertinoSearchTextField), '皮炎');
+      await _pumpFrames(tester, count: 8);
+      expect(_searchController(tester).text, '皮炎');
+      expect(find.text('你的皮炎有点辣'), findsOneWidget);
+      expect(find.text('摄影阿青'), findsNothing);
+
+      await _tapSegment(tester, UITextConstants.follow);
+      expect(_searchController(tester).text, isEmpty);
+
+      await tester.enterText(find.byType(CupertinoSearchTextField), '阿青');
+      await _pumpFrames(tester, count: 8);
+      expect(_searchController(tester).text, '阿青');
+      expect(find.text('阿青在路上'), findsOneWidget);
+      expect(find.text('旅行收藏家'), findsNothing);
+
+      await _tapSegment(tester, UITextConstants.circleFans);
+      expect(_searchController(tester).text, '皮炎');
+      expect(find.text('你的皮炎有点辣'), findsOneWidget);
+      expect(find.text('摄影阿青'), findsNothing);
+    });
+
+    testWidgets('他人关注页点击已关注会打开 action sheet', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'author_001',
+          followerCount: 1,
+          followingCount: 1,
+          circleCount: 0,
+          relationToTarget: 'following',
+          relationshipCapability: _capability(
+            targetId: 'author_001',
+            relationState: 'following',
+          ),
+        ),
+        following: <ProfileSocialRelationRowViewData>[
+          _row(
+            id: 'follow_001',
+            displayName: '阿青在路上',
+            userHandle: 'aqing',
+            relationState: 'following',
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          type: 'following',
+          repository: repository,
+          userId: 'author_001',
+        ),
+      );
+      await _pumpInitialLoad(tester);
+
+      await tester.tap(find.text(UITextConstants.following));
+      await _pumpFrames(tester, count: 6);
+
+      expect(find.text(UITextConstants.profileStatsUnfollow), findsOneWidget);
+      expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+    });
+
+    testWidgets('圈子页展示公开圈子并支持跳转详情', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'author_002',
+          followerCount: 0,
+          followingCount: 0,
+          circleCount: 2,
+          relationToTarget: 'not_following',
+        ),
+        circles: <CircleDto>[
+          _circle(
+            id: 'c_public',
+            name: '极简摄影俱乐部',
+            memberCount: 2340,
+            postCount: 128,
+          ),
+          _circle(id: 'c_travel', name: '旅行手账', memberCount: 86, postCount: 19),
+        ],
+      );
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          type: 'circles',
+          repository: repository,
+          userId: 'author_002',
+        ),
+      );
+      await _pumpInitialLoad(tester);
 
       expect(find.text('极简摄影俱乐部'), findsOneWidget);
       expect(find.text('旅行手账'), findsOneWidget);
-    });
-
-    testWidgets('type=following 默认落在关注 tab', (tester) async {
-      await tester.pumpWidget(buildTestApp(type: 'following'));
-      await pumpUntilLoaded(tester);
-
-      expect(find.text(UITextConstants.follow), findsAtLeastNWidgets(1));
-      expect(find.text('你的皮炎有点辣'), findsOneWidget);
-    });
-
-    testWidgets('type=circles 时渲染圈子列表', (tester) async {
-      await tester.pumpWidget(buildTestApp(type: 'circles'));
-      await pumpUntilLoaded(tester);
-
-      expect(
-        find.text(UITextConstants.contactsTabCircles),
-        findsAtLeastNWidgets(1),
-      );
-      expect(find.text('极简摄影俱乐部'), findsOneWidget);
-      expect(find.text('旅行手账'), findsOneWidget);
-      expect(find.text('128 创作'), findsOneWidget);
-    });
-
-    testWidgets('type=fans 时渲染粉丝列表', (tester) async {
-      await tester.pumpWidget(buildTestApp(type: 'fans'));
-      await pumpUntilLoaded(tester);
-
-      expect(find.text(UITextConstants.circleFans), findsAtLeastNWidgets(1));
-      expect(find.text('你的皮炎有点辣'), findsOneWidget);
-    });
-
-    testWidgets('圈子项点击跳转 circle_detail', (tester) async {
-      await tester.pumpWidget(buildTestApp(type: 'circles'));
-      await pumpUntilLoaded(tester);
 
       await tester.tap(find.text('极简摄影俱乐部'));
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester, count: 8);
 
-      expect(find.text('Circle c1'), findsOneWidget);
+      expect(find.text('Circle c_public'), findsOneWidget);
     });
 
-    testWidgets('用户项点击跳转 user_profile', (tester) async {
-      await tester.pumpWidget(buildTestApp(type: 'following'));
-      await pumpUntilLoaded(tester);
+    testWidgets('我的圈子空态展示发现入口', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'me',
+          followerCount: 0,
+          followingCount: 0,
+          circleCount: 0,
+          isOwner: true,
+        ),
+      );
 
-      await tester.tap(find.text('你的皮炎有点辣'));
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        _buildTestApp(type: 'circles', repository: repository, userId: 'me'),
+      );
+      await _pumpInitialLoad(tester);
 
-      expect(find.text('User u1'), findsOneWidget);
+      expect(
+        find.text(UITextConstants.profileStatsEmptyCirclesMineTitle),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.profileStatsDiscoverCircles),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('隐私主页直接展示权限卡，不渲染伪列表', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'private_user',
+          followerCount: 3,
+          followingCount: 2,
+          circleCount: 1,
+          canViewFullProfile: false,
+        ),
+      );
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          type: 'fans',
+          repository: repository,
+          userId: 'private_user',
+        ),
+      );
+      await _pumpInitialLoad(tester);
+
+      expect(
+        find.text(UITextConstants.profileStatsPrivateTitle),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.profileStatsPrivateBody),
+        findsOneWidget,
+      );
+      expect(find.text('你的皮炎有点辣'), findsNothing);
+    });
+
+    testWidgets('blocked 主页展示 blocked 卡', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'blocked_user',
+          followerCount: 0,
+          followingCount: 0,
+          circleCount: 0,
+          canViewFullProfile: false,
+          relationToTarget: 'blocked',
+          relationshipCapability: _capability(
+            targetId: 'blocked_user',
+            relationState: 'not_following',
+            isBlockedBy: true,
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          type: 'fans',
+          repository: repository,
+          userId: 'blocked_user',
+        ),
+      );
+      await _pumpInitialLoad(tester);
+
+      expect(
+        find.text(UITextConstants.profileStatsBlockedTitle),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.profileStatsBlockedBody),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('self 行不显示关系按钮', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'me',
+          followerCount: 1,
+          followingCount: 0,
+          circleCount: 0,
+          isOwner: true,
+        ),
+        followers: <ProfileSocialRelationRowViewData>[
+          _row(
+            id: 'me',
+            displayName: '我自己',
+            userHandle: 'me',
+            relationState: 'self',
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        _buildTestApp(type: 'fans', repository: repository, userId: 'me'),
+      );
+      await _pumpInitialLoad(tester);
+
+      expect(find.text('我自己'), findsOneWidget);
+      expect(find.text(UITextConstants.followBack), findsNothing);
+      expect(find.text(UITextConstants.following), findsNothing);
+      expect(find.text(UITextConstants.profileStatsMutual), findsNothing);
+    });
+
+    testWidgets('分页滚动到底部后继续加载下一页', (tester) async {
+      final followers = List<ProfileSocialRelationRowViewData>.generate(24, (
+        index,
+      ) {
+        final n = index + 1;
+        return _row(
+          id: 'fan_$n',
+          displayName: '粉丝 ${n.toString().padLeft(2, '0')}',
+          userHandle: 'fan_$n',
+          relationState: 'not_following',
+        );
+      });
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'me',
+          followerCount: followers.length,
+          followingCount: 0,
+          circleCount: 0,
+          isOwner: true,
+        ),
+        followers: followers,
+      );
+
+      await tester.pumpWidget(
+        _buildTestApp(type: 'fans', repository: repository, userId: 'me'),
+      );
+      await _pumpInitialLoad(tester);
+
+      expect(find.text('粉丝 01'), findsOneWidget);
+      expect(find.text('粉丝 21'), findsNothing);
+
+      await tester.scrollUntilVisible(
+        find.text('粉丝 21'),
+        320,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await _pumpFrames(tester, count: 8);
+
+      expect(find.text('粉丝 21'), findsOneWidget);
+      expect(find.text('粉丝 24'), findsOneWidget);
+    });
+
+    testWidgets('首屏列表拉取失败时展示错误态与重试入口', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'me',
+          followerCount: 3,
+          followingCount: 0,
+          circleCount: 0,
+          isOwner: true,
+        ),
+        followersError: Exception('followers failed'),
+      );
+
+      await tester.pumpWidget(
+        _buildTestApp(type: 'fans', repository: repository, userId: 'me'),
+      );
+      await _pumpInitialLoad(tester);
+
+      expect(find.text(UITextConstants.loadFailed), findsOneWidget);
+      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    });
+
+    testWidgets('游客点击关注会进入登录页', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'author_guest',
+          followerCount: 1,
+          followingCount: 0,
+          circleCount: 0,
+          isGuest: true,
+        ),
+        followers: <ProfileSocialRelationRowViewData>[
+          _row(
+            id: 'fan_001',
+            displayName: '你的皮炎有点辣',
+            userHandle: 'yanla',
+            relationState: 'not_following',
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          type: 'fans',
+          repository: repository,
+          userId: 'author_guest',
+          authenticated: false,
+        ),
+      );
+      await _pumpInitialLoad(tester);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.text(UITextConstants.follow),
+        ),
+      );
+      await _pumpFrames(tester, count: 10);
+
+      expect(find.text('Login follow'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
     });
   });
 }

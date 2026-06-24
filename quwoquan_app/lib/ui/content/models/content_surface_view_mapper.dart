@@ -25,9 +25,9 @@ class ContentSurfaceViewMapper {
     final body = read.body.trim().isEmpty ? null : read.body.trim();
 
     final projectedCoverUrl = resolveContentMediaUrl(read.coverUrl);
-    final coverUrl = projectedCoverUrl.isEmpty
-        ? dto.mediaCoverUrl
-        : projectedCoverUrl;
+    final coverUrl = dto.isVideoLike
+        ? dto.mediaVideoCoverUrl
+        : (projectedCoverUrl.isEmpty ? dto.mediaCoverUrl : projectedCoverUrl);
     final cover = coverUrl.isEmpty
         ? null
         : ContentCoverRef(url: coverUrl, aspectRatio: dto.aspectRatio);
@@ -39,9 +39,7 @@ class ContentSurfaceViewMapper {
     final ContentVideoRef? video = dto.hasVideo
         ? ContentVideoRef(
             url: dto.mediaVideoUrl,
-            thumbnailUrl: dto.mediaThumbnailUrl.isEmpty
-                ? dto.primaryVisualUrl
-                : dto.mediaThumbnailUrl,
+            thumbnailUrl: dto.mediaVideoCoverUrl,
             durationMs: dto.durationMs,
             aspectRatio: dto.aspectRatio,
           )

@@ -9,7 +9,6 @@ from template.blueprint import (
     render_template,
     validate_required,
 )
-from template.condition import scan_region_locked_terms, validate_region_season
 from template.creator import validate_creators
 from template.recommend import validate_recommendation_contract
 from template.registry import BLUEPRINTS_ROOT, TemplateRegistry, tag_exists
@@ -98,12 +97,23 @@ def lint_templates(registry: TemplateRegistry) -> list[str]:
                 if not isinstance(policy.get("captionMaxChars"), int):
                     errors.append(f"{label}: imagePolicy.captionMaxChars must be an integer")
 
-        for hit in scan_region_locked_terms(blueprint):
-            errors.append(
-                f"{label}: region-locked term in structure/mustIncludeFacts: {hit}; "
-                "move it to region_catalog and declare conditionAxes instead"
-            )
+    return errors
 
+
+def validate_audiences(registry: TemplateRegistry) -> list[str]:
+    """受众孤儿门：audience_catalog 中定义却无任何模板引用的受众视为债务。"""
+    errors: list[str] = []
+    catalog = registry.catalogs.get("audience_catalog", {})
+    defined = catalog.get("audiences", {})
+    if not isinstance(defined, dict):
+        return errors
+    referenced: set[str] = set()
+    for blueprint in registry.blueprints.values():
+        for audience in blueprint.get("audiences", []) or []:
+            referenced.add(str(audience))
+    for audience_id in defined:
+        if audience_id not in referenced:
+            errors.append(f"audience '{audience_id}' is defined but referenced by no blueprint")
     return errors
 
 
@@ -113,7 +123,7 @@ def lint_all() -> list[str]:
     errors.extend(lint_templates(registry))
     errors.extend(validate_recommendation_contract(registry))
     errors.extend(validate_creators(registry))
-    errors.extend(validate_region_season(registry))
+    errors.extend(validate_audiences(registry))
     errors.extend(validate_source_catalog(registry))
     errors.extend(validate_style_catalog(registry))
     return errors

@@ -1,9 +1,0 @@
-schemaVersion: quwoquan.task.defaults
-content:
-  conditionAxes:
-    regions:
-    - 高原
-    - 雪山
-    - 山地森林
-    - 平原都市
-    - 乡村田园

@@ -55,7 +55,7 @@ gwt_acceptance:
         cases:
         - user_acceptance.discovery_content.feed_orchestration_recommendation.interest_onboarding_prior.e2e_journey
         envs:
-        - gamma
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/welcome/interest_onboarding_prior_test.dart'
     - '[migrated_from_planned] quwoquan_service/runtime/recommendation/cold_start_interest_prior_test.go'

@@ -1,9 +1,0 @@
-schemaVersion: quwoquan.task.defaults
-# 欧洲地域默认：可用地形菜单（西欧平原都市 + 地中海沿海海岛 + 阿尔卑斯山地森林）。
-# 季节继承旅行四季；具体每篇按实体真实所在地与最佳季节在 produce/brief 注入。
-content:
-  conditionAxes:
-    regions:
-    - 平原都市
-    - 沿海海岛
-    - 山地森林

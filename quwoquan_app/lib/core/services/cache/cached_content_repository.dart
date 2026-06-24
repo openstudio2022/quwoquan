@@ -234,7 +234,8 @@ class CachedContentRepository implements ContentRepository {
   @override
   Future<ContentMediaInitUploadResponseDto> initMediaUpload({
     String mediaType = 'image',
-  }) => _delegate.initMediaUpload(mediaType: mediaType);
+    String assetScope = 'draft',
+  }) => _delegate.initMediaUpload(mediaType: mediaType, assetScope: assetScope);
 
   @override
   Future<ContentMediaCompleteUploadResponseDto> completeMediaUpload({
@@ -244,6 +245,14 @@ class CachedContentRepository implements ContentRepository {
   @override
   Future<void> abortMediaUpload({required String sessionId}) {
     return _delegate.abortMediaUpload(sessionId: sessionId);
+  }
+
+  @override
+  Future<void> bindMediaAssetsToPost({
+    required String postId,
+    required List<String> assetIds,
+  }) {
+    return _delegate.bindMediaAssetsToPost(postId: postId, assetIds: assetIds);
   }
 
   @override
@@ -260,10 +269,12 @@ class CachedContentRepository implements ContentRepository {
   Future<ContentVideoCoverSelectionWireDto> selectManualVideoCover({
     required String mediaId,
     required String coverAssetId,
+    int coverFrameTimeMs = 0,
   }) {
     return _delegate.selectManualVideoCover(
       mediaId: mediaId,
       coverAssetId: coverAssetId,
+      coverFrameTimeMs: coverFrameTimeMs,
     );
   }
 

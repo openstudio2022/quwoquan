@@ -46,7 +46,7 @@ class MockContentRepository implements ContentRepository {
     String? sessionId,
     String? feedRequestId,
   }) async {
-    final items = _resolveDiscoveryPosts(
+    final items = await _resolveDiscoveryPosts(
       category: category,
       identity: identity,
       type: type,
@@ -120,6 +120,7 @@ class MockContentRepository implements ContentRepository {
     final raw =
         _contractSeedPostWire(postId) ??
         lookupCanonicalDiscoveryWireRowByPostId(postId) ??
+        await _alphaShowcasePostWireById(postId) ??
         _profilePreviewPostWireById(postId);
     if (raw == null) {
       _throwMockPostNotFound(postId);
@@ -615,15 +616,20 @@ class MockContentRepository implements ContentRepository {
   @override
   Future<ContentMediaInitUploadResponseDto> initMediaUpload({
     String mediaType = 'image',
+    String assetScope = 'draft',
   }) async {
     final ts = DateTime.now().millisecondsSinceEpoch;
+    final normalizedType = mediaType.trim() == 'video' ? 'video' : 'image';
+    final ext = normalizedType == 'video' ? 'mp4' : 'jpg';
+    final sessionId = 'mock_upload_${normalizedType}_$ts';
+    final mediaId = 'mock_media_${normalizedType}_$ts';
     final uploadObjectKey =
-        'upload/media/user/mock/draft/post/mock_user/mock_upload_$ts/mock_media_$ts/original.jpg';
+        'upload/media/user/mock/$assetScope/post/mock_user/$sessionId/$mediaId/original.$ext';
     final uploadUrl =
         '${CloudRuntimeConfig.mediaUploadBaseUrl}/$uploadObjectKey';
     return ContentMediaInitUploadResponseDto(
-      sessionId: 'mock_upload_$ts',
-      mediaId: 'mock_media_$ts',
+      sessionId: sessionId,
+      mediaId: mediaId,
       uploadUrl: uploadUrl,
       presignUrl: uploadUrl,
     );
@@ -633,18 +639,26 @@ class MockContentRepository implements ContentRepository {
   Future<ContentMediaCompleteUploadResponseDto> completeMediaUpload({
     required String sessionId,
   }) async {
+    final isVideo = sessionId.contains('video');
     final objectKey =
-        'media/user/mock/draft/post/mock_user/$sessionId/mock_media_$sessionId/original.jpg';
+        'media/user/mock/draft/post/mock_user/$sessionId/mock_media_$sessionId/original.${isVideo ? 'mp4' : 'jpg'}';
     return ContentMediaCompleteUploadResponseDto(
       sessionId: sessionId,
       status: 'ready',
-      cdnUrl: '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/$objectKey',
+      cdnUrl:
+          '${isVideo ? CloudRuntimeConfig.mediaVideoCdnBaseUrl : CloudRuntimeConfig.mediaImageCdnBaseUrl}/$objectKey',
       assetId: 'mock_media_$sessionId',
     );
   }
 
   @override
   Future<void> abortMediaUpload({required String sessionId}) async {}
+
+  @override
+  Future<void> bindMediaAssetsToPost({
+    required String postId,
+    required List<String> assetIds,
+  }) async {}
 
   @override
   Future<ContentMediaAssetWireDto> getMediaAsset({
@@ -664,9 +678,14 @@ class MockContentRepository implements ContentRepository {
   Future<ContentVideoCoverSelectionWireDto> selectAutoVideoCover({
     required String mediaId,
   }) async {
+    final coverUrl =
+        '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/user/mock/draft/post/mock_user/mock_session/$mediaId/cover.jpg';
     return ContentVideoCoverSelectionWireDto(
       mediaId: mediaId,
       coverStrategy: 'first_frame',
+      thumbnailUrl: coverUrl,
+      coverUrl: coverUrl,
+      coverFrameTimeMs: 0,
     );
   }
 
@@ -674,11 +693,17 @@ class MockContentRepository implements ContentRepository {
   Future<ContentVideoCoverSelectionWireDto> selectManualVideoCover({
     required String mediaId,
     required String coverAssetId,
+    int coverFrameTimeMs = 0,
   }) async {
+    final coverUrl =
+        '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/user/mock/draft/post/mock_user/mock_session/$coverAssetId/original.jpg';
     return ContentVideoCoverSelectionWireDto(
       mediaId: mediaId,
       coverStrategy: 'manual',
       manualCoverAssetId: coverAssetId,
+      thumbnailUrl: coverUrl,
+      coverUrl: coverUrl,
+      coverFrameTimeMs: coverFrameTimeMs,
     );
   }
 

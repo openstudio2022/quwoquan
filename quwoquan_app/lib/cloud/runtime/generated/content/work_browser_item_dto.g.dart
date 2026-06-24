@@ -19,6 +19,7 @@ class WorkBrowserItemDto {
   final int commentCount;
   final int shareCount;
   final String coverUrl;
+  final String thumbnailUrl;
   final List<String> imageUrls;
   final String? videoUrl;
   final int? durationMs;
@@ -49,6 +50,7 @@ class WorkBrowserItemDto {
     this.commentCount = 0,
     this.shareCount = 0,
     this.coverUrl = '',
+    this.thumbnailUrl = '',
     this.imageUrls = const <String>[],
     this.videoUrl,
     this.durationMs,
@@ -81,6 +83,7 @@ class WorkBrowserItemDto {
       commentCount: (m['commentCount'] as num?)?.toInt() ?? (m['commentsCount'] as num?)?.toInt() ?? (m['comment_count'] as num?)?.toInt() ?? 0,
       shareCount: (m['shareCount'] as num?)?.toInt() ?? (m['shares'] as num?)?.toInt() ?? (m['share_count'] as num?)?.toInt() ?? 0,
       coverUrl: m['coverUrl']?.toString() ?? m['cover']?.toString() ?? m['thumbnail']?.toString() ?? m['thumbnailUrl']?.toString() ?? '',
+      thumbnailUrl: m['thumbnailUrl']?.toString() ?? m['thumbnail']?.toString() ?? m['coverUrl']?.toString() ?? m['cover']?.toString() ?? '',
       imageUrls: _parseStringList(m['mediaUrls']) ?? _parseStringList(m['imageUrls']) ?? _parseStringList(m['images']) ?? _parseStringList(m['image_urls']) ?? <String>[],
       videoUrl: m['videoUrl']?.toString() ?? m['video_url']?.toString() ?? null,
       durationMs: (m['durationMs'] as num?)?.toInt() ?? (m['duration_ms'] as num?)?.toInt() ?? (m['duration'] as num?)?.toInt() ?? null,
@@ -114,6 +117,7 @@ class WorkBrowserItemDto {
       'commentCount': commentCount,
       'shareCount': shareCount,
       'coverUrl': coverUrl,
+      'thumbnailUrl': thumbnailUrl,
       'imageUrls': imageUrls,
       'videoUrl': videoUrl,
       'durationMs': durationMs,
@@ -146,6 +150,7 @@ class WorkBrowserItemDto {
     int? commentCount,
     int? shareCount,
     String? coverUrl,
+    String? thumbnailUrl,
     List<String>? imageUrls,
     String? videoUrl,
     int? durationMs,
@@ -176,6 +181,7 @@ class WorkBrowserItemDto {
       commentCount: commentCount ?? this.commentCount,
       shareCount: shareCount ?? this.shareCount,
       coverUrl: coverUrl ?? this.coverUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       imageUrls: imageUrls ?? this.imageUrls,
       videoUrl: videoUrl ?? this.videoUrl,
       durationMs: durationMs ?? this.durationMs,
@@ -213,7 +219,9 @@ class WorkBrowserItemDto {
     WorkBrowserMediaItemDto(
     kind: 'video',
     url: fallback,
-    coverUrl: coverUrl.isEmpty ? null : coverUrl,
+    coverUrl: thumbnailUrl.isNotEmpty
+    ? thumbnailUrl
+    : (coverUrl.isEmpty ? null : coverUrl),
     durationMs: durationMs,
     width: width,
     height: height,

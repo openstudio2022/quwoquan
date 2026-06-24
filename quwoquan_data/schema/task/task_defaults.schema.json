@@ -18,14 +18,7 @@
         "angles": { "type": "array", "items": { "type": "string" }, "description": "内容角度/意图默认集" },
         "audiences": { "type": "array", "items": { "type": "string" }, "description": "受众人格 id 默认集" },
         "carriers": { "type": "array", "items": { "type": "string" }, "description": "载体默认：article/gallery/review/video" },
-        "emphasis": { "type": "array", "items": { "type": "string" }, "description": "内容强调点/选题侧重默认" },
-        "conditionAxes": {
-          "type": "object",
-          "properties": {
-            "regions": { "type": "array", "items": { "type": "string" }, "description": "地域条件维默认（该地域真实地形全谱）" },
-            "seasons": { "type": "array", "items": { "type": "string" }, "description": "季节条件维默认（默认四季）" }
-          }
-        }
+        "emphasis": { "type": "array", "items": { "type": "string" }, "description": "内容强调点/选题侧重默认" }
       }
     },
     "acceptance": {

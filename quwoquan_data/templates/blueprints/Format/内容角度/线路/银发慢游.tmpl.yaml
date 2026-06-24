@@ -15,14 +15,10 @@ creatorPersona:
   mustNotClaim: [医疗建议, 官方背书]
 editorialIntent: 为银发读者设计低强度、少换乘、重舒适和安全边界的慢游线路。
 render: { articleTemplate: gentle, fontPreset: clean }
-conditionAxes:
-  region: { applicable: true, slot: 地区舒适度与医疗 }
-  season: { applicable: true, slot: 季节舒适窗口 }
 narrativeMode:
   kind: senior_route
   openingFocus: comfort_judgement
   transitionPolicy: slow_progression
-  factsHeading: 先把舒适度、安全边界和替代方案讲清楚
   closingFocus: comfort_decision
 evidenceRequirements:
   fact:
@@ -45,7 +41,6 @@ routeCoverageExpectations:
 structure:
   required: [强度判断, 交通与换乘, 休息点, 医疗与厕所, 舒适住宿, 替代方案]
   optional: [陪同者建议, 雨天版本]
-hooks: ["{name}慢慢走，关键是少折腾和有退路"]
 mustIncludeFacts: [步行强度, 换乘次数, 休息点, 医疗点, 住宿舒适度]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 医疗保证]
 wordCount: { min: 900, max: 1800 }
@@ -63,4 +58,3 @@ openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }
 decisionPoints: { required: true, minPoints: 2 }
 tipsEmbeddingPolicy: { mode: inline, forbidStandaloneBlock: true }
-sopExampleRef: sop/article.md

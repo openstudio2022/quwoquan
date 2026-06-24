@@ -49,6 +49,11 @@ abstract class PostBaseDto {
   /// 首次公开时间（仅首次发布置位）；null 表示尚未发布或未知。
   DateTime? get publishedAt => null;
 
+  /// 推荐垂类/召回路径/供给来源为推荐归因字段，UI 不展示，但曝光与互动上报透传。
+  String? get contentVertical => null;
+  String? get recallPath => null;
+  String? get supplySource => null;
+
   /// 是否在创作之后发生过实质更新（决定 UI 是否展示「更新于」）。
   /// 容忍秒级抖动：仅当更新时间比创作时间晚超过 1 秒才算更新。
   bool get hasMeaningfulUpdate {
@@ -103,6 +108,14 @@ abstract class PostBaseDto {
 
   String get mediaThumbnailUrl => resolveContentMediaUrl(thumbnailUrl);
 
+  /// 兼容旧调用口径：视频展示封面优先缩略图，再回退显式 cover。
+  String get mediaVideoCoverUrl {
+    if (mediaThumbnailUrl.isNotEmpty) {
+      return mediaThumbnailUrl;
+    }
+    return mediaCoverUrl;
+  }
+
   bool get hasImages => mediaImageUrls.isNotEmpty;
 
   bool get hasVideo => mediaVideoUrl.isNotEmpty;
@@ -138,7 +151,7 @@ abstract class PostBaseDto {
       if (mediaImageUrls.isNotEmpty) {
         return mediaImageUrls.first;
       }
-      return mediaVideoUrl;
+      return '';
     }
     return primaryImageUrl;
   }

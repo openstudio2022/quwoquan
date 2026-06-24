@@ -185,8 +185,27 @@ List<String> _mediaUrlCandidates(
   final cdn = _normalizeBase(avatarCdnBaseUrl);
   final gateway = _normalizeBase(gatewayBaseUrl);
   return _uniqueNonEmpty(<String>[
-    if (cdn.isNotEmpty) _joinBaseAndPath(cdn, path),
-    if (gateway.isNotEmpty) _joinBaseAndPath(gateway, path),
+    for (final base in _localEnvHostBaseCandidates(cdn))
+      _joinBaseAndPath(base, path),
+    for (final base in _localEnvHostBaseCandidates(gateway))
+      _joinBaseAndPath(base, path),
+  ]);
+}
+
+List<String> _localEnvHostBaseCandidates(String base) {
+  final normalized = _normalizeBase(base);
+  if (normalized.isEmpty) {
+    return const <String>[];
+  }
+  final uri = Uri.tryParse(normalized);
+  if (uri == null || !_isLocalEnvTestHost(uri.host)) {
+    return <String>[normalized];
+  }
+  return _uniqueNonEmpty(<String>[
+    uri.replace(host: 'localhost').toString().replaceFirst(RegExp(r'/+$'), ''),
+    uri.replace(host: '127.0.0.1').toString().replaceFirst(RegExp(r'/+$'), ''),
+    uri.replace(host: '10.0.2.2').toString().replaceFirst(RegExp(r'/+$'), ''),
+    normalized,
   ]);
 }
 
@@ -269,7 +288,10 @@ bool _looksLikeBareHostUrl(String source) {
 }
 
 bool _isLoopbackHost(String host) {
-  return host == 'localhost' || host == '127.0.0.1' || host == '::1';
+  return host == 'localhost' ||
+      host == '127.0.0.1' ||
+      host == '::1' ||
+      _isLocalEnvTestHost(host);
 }
 
 bool _isTrustedRuntimeHost(
@@ -295,3 +317,6 @@ String _uriPathWithQuery(Uri uri) {
   final path = uri.path.isEmpty ? '/' : uri.path;
   return '$path$query$fragment';
 }
+
+bool _isLocalEnvTestHost(String host) =>
+    host.toLowerCase().endsWith('.quwoquan-env.test');

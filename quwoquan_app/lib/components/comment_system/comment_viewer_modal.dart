@@ -11,6 +11,7 @@ class CommentViewer {
   static Future<void> showModal({
     required BuildContext context,
     required String postId,
+    int? entryObservedCommentCount,
     CommentConfig config = const CommentConfig(),
     void Function(String commentId)? onCommentAdded,
     VoidCallback? onClose,
@@ -21,6 +22,7 @@ class CommentViewer {
       barrierColor: AppColors.transparent,
       builder: (ctx) => _CommentSheet(
         postId: postId,
+        entryObservedCommentCount: entryObservedCommentCount,
         config: config,
         onCommentAdded: onCommentAdded,
         onClose: onClose,
@@ -33,6 +35,7 @@ class CommentViewer {
 class _CommentSheet extends StatefulWidget {
   const _CommentSheet({
     required this.postId,
+    this.entryObservedCommentCount,
     required this.config,
     this.onCommentAdded,
     this.onClose,
@@ -40,6 +43,7 @@ class _CommentSheet extends StatefulWidget {
   });
 
   final String postId;
+  final int? entryObservedCommentCount;
   final CommentConfig config;
   final void Function(String commentId)? onCommentAdded;
   final VoidCallback? onClose;
@@ -71,6 +75,7 @@ class _CommentSheetState extends State<_CommentSheet> {
         postId: widget.postId,
         mode: CommentDetailSurfaceMode.cardModal,
         config: widget.config,
+        entryObservedCommentCount: widget.entryObservedCommentCount,
         flexibleThread: true,
         onClose: _dismiss,
         onShareTap: widget.onShareTap,

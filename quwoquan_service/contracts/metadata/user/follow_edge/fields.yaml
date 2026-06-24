@@ -180,6 +180,15 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: userHandle
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 公开主页 handle；兼容别名 username，但主页列表页应优先消费该字段显示 @handle
+
       - name: displayName
         type: string
         constraints: [NOT_NULL]
@@ -221,6 +230,15 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: relationshipCapability
+        type: RelationshipCapabilityView
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前 viewer 对该列表行主体的关系能力位；列表页 follow/button 矩阵唯一真相源
 
   FollowerListItemView:
     description: 粉丝列表项（ListFollowers API）；以 subAccountId 为展示主键
@@ -241,6 +259,15 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: userHandle
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 公开主页 handle；兼容别名 username，但主页列表页应优先消费该字段显示 @handle
+
       - name: displayName
         type: string
         constraints: [NOT_NULL]
@@ -282,6 +309,15 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: relationshipCapability
+        type: RelationshipCapabilityView
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前 viewer 对该列表行主体的关系能力位；列表页 follow/button 矩阵唯一真相源
 
   RelationshipCapabilityView:
     description: 主页按钮矩阵与聊天/通话门禁统一消费的关系能力视图
