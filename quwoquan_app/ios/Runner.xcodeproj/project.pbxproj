@@ -229,6 +229,7 @@
 			buildConfigurationList = 97C147051CF9000F007C117D /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
 				4FC536F46AC933AA5A668518 /* [CP] Check Pods Manifest.lock */,
+				A7B8C9D0E1F2030405060708 /* Prepare Alpha HTTPS Local Plane */,
 				9740EEB61CF901F6004384FC /* Run Script */,
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
@@ -488,6 +489,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "FLUTTER_ROOT=\"${FLUTTER_ROOT:-$(grep -E '^FLUTTER_ROOT=' \"${SRCROOT}/Flutter/Generated.xcconfig\" | cut -d= -f2-)}\"\n/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+		};
+		A7B8C9D0E1F2030405060708 /* Prepare Alpha HTTPS Local Plane */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Prepare Alpha HTTPS Local Plane";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "bash \"${SRCROOT}/../scripts/ios/prepare_alpha_local_https.sh\"\n";
 		};
 		9C5E4EABB9E68540CE2CFB2C /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;

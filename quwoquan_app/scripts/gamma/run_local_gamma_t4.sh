@@ -3,9 +3,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 REPORT="${LOCAL_GAMMA_T4_REPORT:-$ROOT/artifacts/local-gamma/t4_report.json}"
-GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-http://127.0.0.1:19000}"
-PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-http://127.0.0.1:19010}"
-MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:19100}"
+GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-https://gamma-api.quwoquan-env.test:19000}"
+PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-ops.quwoquan-env.test:19010}"
+MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_BASE_URL:-https://gamma-image.quwoquan-env.test:19100}"
 TEST_AUTH_TOKEN="${LOCAL_GAMMA_TEST_AUTH_TOKEN:-${TEST_AUTH_TOKEN:-local-gamma-token}}"
 PATROL_TARGET="${LOCAL_GAMMA_T4_TARGET:-test/patrol/discovery/feed_load_test.dart}"
 DEVICE_ID="${LOCAL_GAMMA_T4_DEVICE_ID:-}"

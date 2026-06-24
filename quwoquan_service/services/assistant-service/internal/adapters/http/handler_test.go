@@ -615,12 +615,13 @@ func TestHandleTurnStream_M11LocalScenarios(t *testing.T) {
 	if len(cases) == 0 {
 		t.Fatal("assistant scenarios should not be empty")
 	}
+	cases = deterministicHanScenarios(cases)
+	if len(cases) == 0 {
+		t.Fatal("assistant beta scenarios should include deterministic Han questions")
+	}
 
 	for _, tc := range cases {
 		t.Run(tc.ID, func(t *testing.T) {
-			if !containsHan(tc.Question) {
-				t.Skip("非中文自由输入依赖模型语义改写，不由 HTTP deterministic 场景断言")
-			}
 			body := createM11TurnAndStream(t, handler, tc.ID, tc.SkillID, tc.DomainID, tc.Question)
 			wantBody := append([]string{"final_answer"}, tc.RemoteAnswerFragments()...)
 			for _, want := range wantBody {
@@ -635,6 +636,16 @@ func TestHandleTurnStream_M11LocalScenarios(t *testing.T) {
 			}
 		})
 	}
+}
+
+func deterministicHanScenarios(cases []application.AssistantScenarioFixture) []application.AssistantScenarioFixture {
+	filtered := make([]application.AssistantScenarioFixture, 0, len(cases))
+	for _, tc := range cases {
+		if containsHan(tc.Question) {
+			filtered = append(filtered, tc)
+		}
+	}
+	return filtered
 }
 
 func containsHan(text string) bool {

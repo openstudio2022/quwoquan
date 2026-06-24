@@ -7,42 +7,167 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: content-display-journey-consistency
 scope:
-  summary: video display journey 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 视频从 feed 未播放封面到沉浸播放、作者详情与数据源一致性的验收范围。
+  in_scope:
+  - 首页混合流、视频频道、通用视频卡、作品浏览器的视频未播放封面展示。
+  - "`thumbnailUrl` 优先、同源 `coverUrl` 回退、点击后进入真实视频播放的展示合同。"
+  - 用户上传视频与数据工程导入视频在 feed/read model 中使用同一封面合同。
+  - 关注、点赞、收藏、评论数、转发数和重入状态在列表、浏览器、作者详情间同步。
+  out_of_scope:
+  - 首页端侧运行时临时抽帧。
+  - 视频转码、加音乐、特效、美颜、剪辑能力本身。
+  - 商用全矩阵 beta/gamma/prod 非 dry-run 设备报告；该证据归 runtime-media 矩阵。
 gwt_acceptance:
   GWT1:
-    title: video display journey GWT
+    title: 视频未播放态展示同源封面并点击后播放
     given:
-    - 前置条件明确。
+    - 发现流或视频频道返回至少一个 `contentType=video` 的 post。
+    - 该 post 包含 `videoUrl`，并包含 `thumbnailUrl` 或同源 `coverUrl`。
     when:
-    - 用户或系统动作发生。
+    - 用户打开首页混合流、视频频道或作品浏览器，看到视频未播放态，并点击视频进入播放。
     then:
-    - 可观察结果符合预期。
+    - 未播放态优先展示 `thumbnailUrl`，缺失时只回退到同一 post/media asset 的 `coverUrl`。
+    - UI 不把 `videoUrl` 当图片 URL 交给 image loader，也不使用无关 seed 图、作者头像或地点图作为封面。
+    - 视频播放器初始化成功后从封面切换到真实视频画面；初始化失败时保留同源封面并展示结构化错误/恢复动作。
+    - 点击播放携带 `referralSource`、`feedRequestId` 或等效 trace，上报进入与播放行为。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 首页/视频频道/作品浏览器的同一视频 post 未播放态封面一致，点击后能进入同一 `videoUrl` 的播放态。
+    edge_cases:
+    - "`thumbnailUrl` 为空但同源 `coverUrl` 存在时展示 `coverUrl`。"
+    - "`thumbnailUrl` 与 `coverUrl` 均缺失时展示结构化缺封面错误/占位，不展示任意无关图片。"
+    - 弱网或播放器初始化失败时保留封面与恢复按钮，不误导为图片作品。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/projections/discovery_feed.yaml
+    - quwoquan_service/contracts/metadata/content/post/projections/video_post.yaml
+    - quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_media_grid.dart
+    - quwoquan_app/lib/components/content/video_post_card.dart
+    - quwoquan_app/lib/components/media/video/player/video_player_widget.dart
+    performance_points:
+    - 首屏视频封面可见 P95 <= 1.2s，不等待播放器初始化才显示。
+    - 点击到播放器首帧或错误态 P95 <= 2.0s。
     tests:
-      planned: []
-      recorded: []
+      planned:
+      - file: quwoquan_app/test/local_contract/content/video_display_cover_priority__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/content/video_feed_cover_playback__user_acceptance_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/content/video_display_cover_priority__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
-        suite: contract
+        suite: video_display_cover_priority
         cases:
-        - local_contract.discovery_content.content_display_journey_consistency.video_display_journey.contract
+        - local_contract.discovery_content.content_display_journey_consistency.video_display_journey.thumbnail_before_cover
         envs: &id001
         - local
-      - layer: local_contract
-        suite: gwt1_local_contract
+      - layer: user_acceptance
+        suite: video_feed_cover_playback
         cases:
-        - local_contract.discovery_content.content_display_journey_consistency.video_display_journey.gwt1_local_contract
-        envs: *id001
+        - user_acceptance.discovery_content.content_display_journey_consistency.video_display_journey.feed_cover_to_playback
+        envs:
+        - gamma_local
       supporting: []
-    notes: []
+    notes:
+    - 2026-06-22 已通过 local_contract 证明未播放态封面优先级为 `thumbnailUrl -> coverUrl -> 缺封面占位`，且不把 `videoUrl` 当 image poster；user_acceptance 播放旅程尚未落盘，状态保持 pending。
+  GWT2:
+    title: 视频 feed、沉浸浏览器与作者详情状态一致
+    given:
+    - 用户在视频频道或首页打开一个视频 post，并进入视频沉浸式浏览器。
+    - 该视频 post 具备作者、关注、点赞、收藏、评论数和转发数等互动状态。
+    when:
+    - 用户在视频沉浸式浏览器点赞、收藏、关注作者，进入作者详情后再返回。
+    then:
+    - 视频频道、首页卡片、沉浸浏览器和作者详情展示同一 post 与作者状态。
+    - 关注、点赞、收藏状态跨页面同步；作者详情关注变更返回后浏览器展示同步更新。
+    - 左右滑动顺序与视频频道 feed 一致，滑动到底按同一数据源加载更多。
+    done_when:
+    - Mock/Remote 模式下状态同步与重入保持均由同一 Provider/Repository 合同覆盖，不维护页面级第二状态源。
+    edge_cases:
+    - Remote 更新失败时 UI 通过结构化错误恢复 desired state，不吞异常。
+    - 用户重入视频频道时保留最近位置与互动状态，不重新混入图片 feed 项。
+    contract_refs:
+    - quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart
+    - quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer_canvas.dart
+    - quwoquan_app/lib/ui/content/providers/comment_provider.dart
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/content/video_display_state_sync__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/gamma/video_feed_state_roundtrip__api_integration_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/content/video_display_state_sync__local_contract_test.dart
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: video_display_state_sync
+        cases:
+        - local_contract.discovery_content.content_display_journey_consistency.video_display_journey.state_sync_across_feed_viewer_profile
+        envs: *id001
+      - layer: api_integration
+        suite: video_feed_state_roundtrip
+        cases:
+        - api_integration.discovery_content.content_display_journey_consistency.video_display_journey.video_feed_state_roundtrip
+        envs:
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        suite: video_feed_cover_playback
+        cases:
+        - user_acceptance.discovery_content.content_display_journey_consistency.video_display_journey.viewer_profile_return_state_sync
+        envs:
+        - gamma_local
+    notes:
+    - 2026-06-22 已通过 local_contract 证明 feed/card/viewer 对同一 video DTO 的 `videoUrl`、cover、duration、aspectRatio 同源消费；gamma 状态 roundtrip 尚未落盘，状态保持 pending。
+  GWT3:
+    title: 数据工程导入视频与用户上传视频展示合同一致
+    given:
+    - feed 中同时存在用户上传的视频 post 与数据工程导入的视频 post。
+    - 两类视频均包含 `videoUrl` 与 `thumbnailUrl/coverUrl`。
+    when:
+    - 用户在首页、视频频道和作品浏览器查看两类视频，并分别点击播放。
+    then:
+    - 两类视频未播放态均按同一 `thumbnailUrl -> coverUrl` 优先级展示封面。
+    - 点击后均进入播放器消费 `videoUrl`，不会因为来源不同走不同 UI 或不同封面字段。
+    - 数据工程导入视频缺封面时不会进入可发布 feed，必须在导入 gate 或服务 importer 阶段失败。
+    done_when:
+    - local_contract、api_integration 与 user_acceptance 均证明两类视频通过同一 DTO/read model 展示。
+    edge_cases:
+    - 数据导入重跑不改变既有 post 的封面优先级。
+    - 远端返回只含 `coverUrl` 的兼容样本仍通过同源回退展示。
+    contract_refs:
+    - quwoquan_data/schema/produce/post_manifest.schema.json
+    - quwoquan_service/services/content-service/cmd/import/main.go
+    - quwoquan_app/lib/cloud/runtime/generated/content/post_base_dto.dart
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/content/video_display_imported_uploaded_parity__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/gamma/video_import_feed_cover_roundtrip__api_integration_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/content/video_imported_uploaded_display_parity__user_acceptance_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/content/video_display_imported_uploaded_parity__local_contract_test.dart
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: video_display_imported_uploaded_parity
+        cases:
+        - local_contract.discovery_content.content_display_journey_consistency.video_display_journey.imported_and_uploaded_video_cover_parity
+        envs: *id001
+      - layer: api_integration
+        suite: video_import_feed_cover_roundtrip
+        cases:
+        - api_integration.discovery_content.content_display_journey_consistency.video_display_journey.imported_video_feed_cover_roundtrip
+        envs:
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        suite: video_feed_cover_playback
+        cases:
+        - user_acceptance.discovery_content.content_display_journey_consistency.video_display_journey.imported_uploaded_display_parity
+        envs:
+        - gamma_local
+    notes:
+    - 2026-06-22 已通过 local_contract 证明导入视频与用户上传视频在 DTO/display mapper 上共享同一封面展示合同；gamma import feed roundtrip 与 UAT 尚未落盘，状态保持 pending。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

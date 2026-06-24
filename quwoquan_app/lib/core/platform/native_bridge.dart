@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 /// Anti-corruption boundary for app-owned native `MethodChannel` surfaces.
 ///
-/// The app currently owns three native channels:
+/// The app currently owns four native channels:
 ///  - `quwoquan/auth/one_tap`        -> already abstracted by `OneTapLoginClient`
 ///                                      (core/auth/one_tap_login_channel.dart),
 ///                                      gated by `PlatformCapabilities.oneTapLogin`.
@@ -10,23 +10,15 @@ import 'package:flutter/services.dart';
 ///                                      by `PlatformCapabilities.nativeVideoEditing`.
 ///  - `personal_assistant/native_api`-> abstracted here as
 ///                                      [AssistantLocalContextBridge].
+///  - `quwoquan/startup/native`      -> abstracted here as
+///                                      [StartupNativeBridge].
 ///
 /// New native surfaces MUST be added behind an interface here (never a raw
 /// `MethodChannel` in business code), and unimplemented platforms must return a
 /// structured "unavailable" instead of crashing.
-enum NativeAuthProvider {
-  wechat,
-  alipay,
-  qq,
-  apple,
-  systemCredential,
-  passkey,
-}
+enum NativeAuthProvider { wechat, alipay, qq, apple, systemCredential, passkey }
 
-enum NativeAuthAvailability {
-  available,
-  unavailable,
-}
+enum NativeAuthAvailability { available, unavailable }
 
 class NativeAuthCapability {
   const NativeAuthCapability({
@@ -81,6 +73,17 @@ abstract interface class AssistantLocalContextBridge {
   });
 }
 
+abstract interface class StartupNativeBridge {
+  Future<int?> nativeStartupElapsedMs();
+
+  Future<void> markFlutterWelcomeReady({required int sequenceElapsedMs});
+
+  Future<void> completeWelcomeOverlay({
+    required bool degraded,
+    required int replayCount,
+  });
+}
+
 /// Default implementation backed by the `personal_assistant/native_api` channel.
 /// Returns an empty context (rather than throwing) when the platform has no
 /// implementation registered, so the assistant degrades gracefully.
@@ -124,8 +127,66 @@ class UnsupportedAssistantLocalContextBridge
   @override
   Future<Map<String, dynamic>> getLocalContext({
     List<String> requestedFields = const <String>[],
-  }) async =>
-      const <String, dynamic>{};
+  }) async => const <String, dynamic>{};
+}
+
+class MethodChannelStartupNativeBridge implements StartupNativeBridge {
+  const MethodChannelStartupNativeBridge({
+    this.channel = const MethodChannel('quwoquan/startup/native'),
+  });
+
+  final MethodChannel channel;
+
+  @override
+  Future<int?> nativeStartupElapsedMs() async {
+    final elapsed = await channel
+        .invokeMethod<Object?>('nativeStartupElapsedMs')
+        .timeout(const Duration(milliseconds: 80));
+    if (elapsed is num) {
+      return elapsed.round();
+    }
+    return null;
+  }
+
+  @override
+  Future<void> markFlutterWelcomeReady({required int sequenceElapsedMs}) async {
+    await channel
+        .invokeMethod<bool>('flutterWelcomeReady', <String, Object?>{
+          'sequenceElapsedMs': sequenceElapsedMs,
+        })
+        .timeout(const Duration(milliseconds: 250));
+  }
+
+  @override
+  Future<void> completeWelcomeOverlay({
+    required bool degraded,
+    required int replayCount,
+  }) async {
+    await channel
+        .invokeMethod<bool>('flutterWelcomeCompleted', <String, Object?>{
+          'degraded': degraded,
+          'replayCount': replayCount,
+        })
+        .timeout(const Duration(milliseconds: 250));
+  }
+}
+
+class UnsupportedStartupNativeBridge implements StartupNativeBridge {
+  const UnsupportedStartupNativeBridge();
+
+  @override
+  Future<int?> nativeStartupElapsedMs() async => null;
+
+  @override
+  Future<void> markFlutterWelcomeReady({
+    required int sequenceElapsedMs,
+  }) async {}
+
+  @override
+  Future<void> completeWelcomeOverlay({
+    required bool degraded,
+    required int replayCount,
+  }) async {}
 }
 
 class MethodChannelNativeAuthBridge implements NativeAuthBridge {
@@ -136,7 +197,9 @@ class MethodChannelNativeAuthBridge implements NativeAuthBridge {
   final MethodChannel channel;
 
   @override
-  Future<NativeAuthCapability> getCapability(NativeAuthProvider provider) async {
+  Future<NativeAuthCapability> getCapability(
+    NativeAuthProvider provider,
+  ) async {
     try {
       final result = await channel.invokeMapMethod<String, dynamic>(
         'getCapability',
@@ -222,17 +285,20 @@ class MethodChannelNativeAuthBridge implements NativeAuthBridge {
 /// [nativeAuthBridgeProvider] and never wired in production.
 class SandboxNativeAuthBridge implements NativeAuthBridge {
   SandboxNativeAuthBridge({Set<NativeAuthProvider>? socialProviders})
-      : _socialProviders = socialProviders ??
-            const <NativeAuthProvider>{
-              NativeAuthProvider.wechat,
-              NativeAuthProvider.alipay,
-              NativeAuthProvider.qq,
-            };
+    : _socialProviders =
+          socialProviders ??
+          const <NativeAuthProvider>{
+            NativeAuthProvider.wechat,
+            NativeAuthProvider.alipay,
+            NativeAuthProvider.qq,
+          };
 
   final Set<NativeAuthProvider> _socialProviders;
 
   @override
-  Future<NativeAuthCapability> getCapability(NativeAuthProvider provider) async {
+  Future<NativeAuthCapability> getCapability(
+    NativeAuthProvider provider,
+  ) async {
     final available = _socialProviders.contains(provider);
     return NativeAuthCapability(
       provider: provider,
@@ -269,7 +335,9 @@ class UnsupportedNativeAuthBridge implements NativeAuthBridge {
   const UnsupportedNativeAuthBridge();
 
   @override
-  Future<NativeAuthCapability> getCapability(NativeAuthProvider provider) async {
+  Future<NativeAuthCapability> getCapability(
+    NativeAuthProvider provider,
+  ) async {
     return NativeAuthCapability(
       provider: provider,
       availability: NativeAuthAvailability.unavailable,

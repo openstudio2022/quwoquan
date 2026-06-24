@@ -1,0 +1,68 @@
+version: 2
+node:
+  id: recommendation-observability-dashboard
+  level: L3_story
+  path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/recommendation-observability-dashboard
+  title: recommendation observability dashboard
+  parent_domain_service: recommendation-platform
+  parent_business_capability: evaluation-and-flywheel
+scope:
+  summary: 非深排推荐商用成熟度 P0/P0+ 的归因分桶看板契约。
+  in_scope:
+  - 推荐 served 与 behavior 归因指标看板。
+  - 首页、旅行、精品、UGC、数据工程供给、召回路径、交集类别和 reason version 分桶。
+  - unknown attribution rate、CTR、负反馈率、served 分布和供给占比。
+  out_of_scope:
+  - 深排平台、双塔 ANN、MMoE/PLE/ESMM、IPS/Thompson 或同步 scorer。
+  - 离线 replay 脚本、在线 AB 平台或真实流量训练晋升。
+  - product-ops 全局精品池写入、审计、过期、回滚和下架实时剔除。
+gwt_acceptance:
+  GWT1:
+    title: 推荐商用归因看板 GWT
+    given:
+    - P0+ feed 下发与行为上报已统一携带 bounded attribution。
+    - Prometheus 已暴露 recommendation_feed_served_by_attribution_total 与 recommendation_behavior_by_attribution_total。
+    when:
+    - 算法、运营、产品或测试复盘首页、旅行、精品、UGC、数据工程供给、召回路径与交集解释效果。
+    then:
+    - 看板能按 channel、vertical、supply_source、recall_path、ranking_version、reason_version、intersection_class 切分 served、CTR、负反馈率和 unknown attribution。
+    done_when:
+    - Grafana dashboard 源文件、SLO 指标入口和 local_contract 测试同时锁定。
+    - 看板不引用 objective_only 指标冒充已观测能力。
+    edge_cases:
+    - unknown attribution 上升时必须能单独暴露，避免吞掉端云归因断点。
+    - 低流量分桶不得作为 AB 显著性结论，只用于排查和运营观察。
+    contract_refs:
+    - deploy/monitoring/dashboards/l2_recommendation_commercial_maturity.json
+    - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+    performance_points:
+    - recommendation_attribution_bucket_coverage >= 0.95
+    tests:
+      planned: []
+      recorded:
+      - quwoquan_service/services/content-service/tests/local_contract/internal/application/recommendation_dashboard_contract__local_contract_test.go
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: recommendation_dashboard_contract
+        cases:
+        - local_contract.recommendation_platform.evaluation_and_flywheel.recommendation_observability_dashboard.contract
+        envs:
+        - local
+      supporting:
+      - layer: api_integration
+        suite: recommendation_observability_dashboard_api
+        cases:
+        - api_integration.recommendation_platform.evaluation_and_flywheel.recommendation_observability_dashboard.metrics
+        envs:
+        - beta
+        - gamma
+    notes:
+    - 本 Story 只承接 P0+ 已真实 emit 的归因指标，不代表离线 replay、在线 AB 或精品池运营闭环完成。
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

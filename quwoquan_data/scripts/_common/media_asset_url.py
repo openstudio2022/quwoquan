@@ -187,6 +187,14 @@ def _append_cdn_processing(url: str, processing: str) -> str:
     return f"{url}{separator}x-oss-process={quote(processing, safe='/_,')}"
 
 
+def _append_video_cover_query(url: str, cover_frame_time_ms: Any) -> str:
+    if not url:
+        return url
+    frame = int(cover_frame_time_ms or 0)
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}variant=thumb&t={frame}"
+
+
 def _image_variants_for_object(
     *,
     object_key: str,
@@ -237,7 +245,19 @@ def _video_variants_for_object(
     mime_type: str,
     duration_ms: Any = None,
 ) -> dict[str, dict[str, Any]]:
+    thumbnail_url = _append_video_cover_query(base_cdn_url, 0)
     variants: dict[str, dict[str, Any]] = {
+        "thumbnail": {
+            "profile": "thumbnail",
+            "objectKey": object_key,
+            "cdnUrl": thumbnail_url,
+            "sourceSha256": sha256,
+            "mimeType": mime_type,
+            "format": "image",
+            "scene": "video_cover",
+            "coverStrategy": "first_frame",
+            "coverFrameTimeMs": 0,
+        },
         "adaptive": {
             "profile": "adaptive",
             "objectKey": object_key,
@@ -261,6 +281,7 @@ def _video_variants_for_object(
         },
     }
     if duration_ms not in (None, ""):
+        variants["thumbnail"]["durationMs"] = duration_ms
         variants["adaptive"]["durationMs"] = duration_ms
         variants["original"]["durationMs"] = duration_ms
     return variants
@@ -368,6 +389,13 @@ def _merge_asset_entry(asset: Mapping[str, Any], resolved: Mapping[str, Any]) ->
         "releaseId",
         "environment",
         "variants",
+        "thumbnailUrl",
+        "coverUrl",
+        "coverStrategy",
+        "coverFrameTimeMs",
+        "durationMs",
+        "width",
+        "height",
     ):
         if resolved.get(key) not in (None, ""):
             merged[key] = resolved[key]
@@ -481,6 +509,15 @@ def _resolve_one_asset(
     )
     if variants:
         resolved["variants"] = variants
+    if kind == "video":
+        cover_frame_time_ms = asset.get("coverFrameTimeMs", 0) or 0
+        thumbnail_url = str(asset.get("thumbnailUrl") or asset.get("coverUrl") or "").strip()
+        if not thumbnail_url:
+            thumbnail_url = _append_video_cover_query(resolved["cdnUrl"], cover_frame_time_ms)
+        resolved["thumbnailUrl"] = thumbnail_url
+        resolved["coverUrl"] = thumbnail_url
+        resolved["coverStrategy"] = str(asset.get("coverStrategy") or "first_frame")
+        resolved["coverFrameTimeMs"] = cover_frame_time_ms
     for key in ("caption", "role", "imageLayout", "width", "height", "durationMs"):
         if asset.get(key) not in (None, ""):
             resolved[key] = asset[key]

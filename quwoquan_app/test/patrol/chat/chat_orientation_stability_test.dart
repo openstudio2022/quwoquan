@@ -1,4 +1,4 @@
-/// T4 Patrol E2E: 横竖屏切换聊天页稳定性
+/// user_acceptance Patrol: 横竖屏切换聊天页稳定性
 ///
 /// 守护：flutter_test 无法覆盖的真实屏幕旋转场景。
 /// 验证聊天详情页在横竖屏切换后 UI 不崩溃、消息列表保持可见。
@@ -26,7 +26,7 @@ void main() {
     ($) async {
       assert(
         _apiContractEnv == 'gamma',
-        'T4 tests must run with API_CONTRACT_ENV=gamma',
+        'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
       );
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
@@ -48,7 +48,7 @@ void main() {
     ($) async {
       assert(
         _apiContractEnv == 'gamma',
-        'T4 tests must run with API_CONTRACT_ENV=gamma',
+        'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
       );
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
@@ -71,7 +71,7 @@ void main() {
     ($) async {
       assert(
         _apiContractEnv == 'gamma',
-        'T4 tests must run with API_CONTRACT_ENV=gamma',
+        'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
       );
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());

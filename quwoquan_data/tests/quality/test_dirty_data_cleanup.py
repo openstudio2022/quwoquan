@@ -43,7 +43,8 @@ def _seed_dirty_homepage() -> Path:
 
 
 def _seed_dirty_post() -> Path:
-    post_dir = _TMP / "runtime" / "tasks" / "旅行" / "地域" / "四川省" / "景区" / "景区全覆盖" / "batches" / "b1" / "posts" / "article" / "都江堰" / "1"
+    # 顶层批次布局：成品落 runtime/batches/<intentLabel>__<batch>/posts/...（不再挂任务根）。
+    post_dir = _TMP / "runtime" / "batches" / "景区全覆盖__b1" / "posts" / "article" / "都江堰" / "1"
     post_dir.mkdir(parents=True, exist_ok=True)
     (post_dir / "article.md").write_text("正文足够长" * 200 + "\nasset://missing_cover\n", encoding="utf-8")
     write_json(

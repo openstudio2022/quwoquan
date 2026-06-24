@@ -33,6 +33,22 @@ var (
 	testRouter      *rtredis.Router
 )
 
+func requireMongoDB(tb testing.TB) *mongo.Database {
+	tb.Helper()
+	if mongoDB == nil {
+		tb.Fatal("content-service tests require TestMain to provision mongoDB or exit before execution")
+	}
+	return mongoDB
+}
+
+func requireTestRouter(tb testing.TB) *rtredis.Router {
+	tb.Helper()
+	if testRouter == nil {
+		tb.Fatal("content-service tests require TestMain to provision testRouter or exit before execution")
+	}
+	return testRouter
+}
+
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 

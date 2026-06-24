@@ -34,10 +34,14 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/ui/circle/widgets/circle_action_bar_widget_test.dart
-      - file: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
-      - file: quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart
-      - file: quwoquan_app/test/components/object_page/object_intersection_card_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_action_bar_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/circle/circleDetail/circleDetail_page__user_acceptance_test.dart
+      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_section_contract__api_integration_test.go
+      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_feed_contract__api_integration_test.go
+      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_member_contract__api_integration_test.go
     status: completed
     test_evidence:
       primary:
@@ -58,6 +62,13 @@ gwt_acceptance:
         cases:
         - user_acceptance.circle_community.circle_experience_redesign.circle_homepage_redesign.journey
         envs:
+        - gamma_local
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.circle_community.circle_experience_redesign.circle_homepage_redesign.gwt1_api_integration
+        envs:
+        - beta
         - gamma
     notes: []
 execution:

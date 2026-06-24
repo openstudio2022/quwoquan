@@ -514,3 +514,23 @@ func toSet(ss []string) map[string]bool {
 	}
 	return m
 }
+
+func recentSeedContentIDs(ids []string, limit int) []string {
+	if limit <= 0 || len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, limit)
+	out := make([]string, 0, limit)
+	for i := len(ids) - 1; i >= 0 && len(out) < limit; i-- {
+		id := strings.TrimSpace(ids[i])
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}

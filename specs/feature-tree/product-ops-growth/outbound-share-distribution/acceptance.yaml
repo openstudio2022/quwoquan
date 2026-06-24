@@ -75,7 +75,7 @@ sit_acceptance:
         cases:
         - user_acceptance.product_ops_growth.outbound_share_distribution.sit1.user_journey
         envs:
-        - gamma
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/share/object_share_panel_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/ui/share/object_share_card_render_test.dart'

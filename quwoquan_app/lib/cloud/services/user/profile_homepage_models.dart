@@ -310,32 +310,69 @@ class ProfileUserLikeRowViewData {
 class ProfileSocialRelationRowViewData {
   const ProfileSocialRelationRowViewData({
     required this.subAccountId,
+    required this.username,
+    required this.userHandle,
     required this.displayName,
     required this.avatarUrl,
     this.avatarVersion = 0,
-    this.isFollowing = false,
+    this.profileVisibility = 'public',
+    this.relationState = 'not_following',
+    this.followedAt,
+    this.relationshipCapability,
   });
 
   final String subAccountId;
+  final String username;
+  final String userHandle;
   final String displayName;
   final String avatarUrl;
   final int avatarVersion;
-  final bool isFollowing;
+  final String profileVisibility;
+  final String relationState;
+  final DateTime? followedAt;
+  final RelationshipCapabilityDto? relationshipCapability;
+
+  bool get isSelf => effectiveRelationshipCapability?.isSelf ?? false;
+
+  RelationshipCapabilityDto? get effectiveRelationshipCapability {
+    final capability = relationshipCapability;
+    if (capability != null) {
+      return capability;
+    }
+    return RelationshipCapabilityDto.fromFollowFlags(
+      viewerId: '',
+      targetId: subAccountId,
+      isFollowing: relationState == 'following' || relationState == 'mutual',
+      isFollowedBy: relationState == 'followed_by' || relationState == 'mutual',
+      isSelf: relationState == 'self',
+    );
+  }
 
   factory ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
     ProfileSocialRelationRowWireDto w,
   ) {
     final id = w.subAccountId;
     final name = w.displayName.isNotEmpty ? w.displayName : id;
+    final handle = w.userHandle.isNotEmpty
+        ? w.userHandle
+        : (w.username.isNotEmpty ? w.username : id);
+    final username = w.username.isNotEmpty ? w.username : handle;
     return ProfileSocialRelationRowViewData(
       subAccountId: id,
+      username: username,
+      userHandle: handle,
       displayName: name,
       avatarUrl: resolveAvatarImageUrl(
         w.avatarUrl,
         avatarVersion: w.avatarVersion,
       ),
       avatarVersion: w.avatarVersion,
-      isFollowing: w.isFollowing,
+      profileVisibility: w.profileVisibility,
+      relationState: w.relationState,
+      followedAt: w.followedAt,
+      relationshipCapability: w.relationshipCapability == null
+          ? null
+          : RelationshipCapabilityDto.fromMap(w.relationshipCapability!),
     );
   }
 
@@ -345,6 +382,33 @@ class ProfileSocialRelationRowViewData {
   factory ProfileSocialRelationRowViewData.fromMap(Map<String, dynamic> map) {
     return ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
       ProfileSocialRelationRowWireDto.fromMap(map),
+    );
+  }
+
+  ProfileSocialRelationRowViewData copyWith({
+    String? subAccountId,
+    String? username,
+    String? userHandle,
+    String? displayName,
+    String? avatarUrl,
+    int? avatarVersion,
+    String? profileVisibility,
+    String? relationState,
+    DateTime? followedAt,
+    RelationshipCapabilityDto? relationshipCapability,
+  }) {
+    return ProfileSocialRelationRowViewData(
+      subAccountId: subAccountId ?? this.subAccountId,
+      username: username ?? this.username,
+      userHandle: userHandle ?? this.userHandle,
+      displayName: displayName ?? this.displayName,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarVersion: avatarVersion ?? this.avatarVersion,
+      profileVisibility: profileVisibility ?? this.profileVisibility,
+      relationState: relationState ?? this.relationState,
+      followedAt: followedAt ?? this.followedAt,
+      relationshipCapability:
+          relationshipCapability ?? this.relationshipCapability,
     );
   }
 }

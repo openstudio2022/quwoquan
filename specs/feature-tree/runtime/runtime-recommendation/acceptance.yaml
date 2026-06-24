@@ -32,16 +32,8 @@ sit_acceptance:
     - Feed P95 <= 200ms，P99 <= 400ms（业务侧 SLO 引用 rec_slo.yaml）。
     tests:
       planned: []
-      recorded:
-      - file: quwoquan_service/runtime/recommendation/engine_test.go
-      - file: quwoquan_service/runtime/recommendation/bench_test.go
-      - file: quwoquan_service/runtime/recommendation/feed_type_contract_test.go
-      - file: quwoquan_service/runtime/recommendation/engagement_depth_test.go
-      - file: quwoquan_service/runtime/recommendation/intersection_fusion_test.go
-      - file: quwoquan_service/runtime/recommendation/rerank_mmr_test.go
-      - file: quwoquan_service/runtime/recommendation/social_recall_test.go
-      - file: quwoquan_service/runtime/recommendation/ucb_explore_test.go
-    status: implemented
+      recorded: []
+    status: pending_evidence
     test_evidence:
       primary:
       - layer: local_contract
@@ -63,7 +55,15 @@ sit_acceptance:
         envs:
         - beta
         - gamma
-    notes: []
+    notes:
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/engine_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/bench_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/feed_type_contract_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/engagement_depth_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/intersection_fusion_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/rerank_mmr_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/social_recall_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/ucb_explore_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

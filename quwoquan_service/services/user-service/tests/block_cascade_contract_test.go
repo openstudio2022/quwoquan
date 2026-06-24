@@ -7,9 +7,7 @@ import (
 )
 
 func TestBlockCascade_ClearsFollowAndPendingGreeting(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "bc_blocker", "blocker")
 	createTestProfile(t, "bc_blocked", "blocked")

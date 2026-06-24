@@ -112,13 +112,23 @@ type ScorerConfig struct {
 	EntityCategoryFactor    float64          `yaml:"entityCategoryFactor" json:"entityCategoryFactor"`
 	SearchIntentFactor      float64          `yaml:"searchIntentFactor" json:"searchIntentFactor"`
 	NegativePenaltyFactor   float64          `yaml:"negativePenaltyFactor" json:"negativePenaltyFactor"`
+	// QualityScoreFactor scales the projected item qualityScore/recScore signal.
+	// It must be consumed from rm_discovery_feed projection only; feed read paths
+	// must not synchronously compute quality.
+	QualityScoreFactor float64 `yaml:"qualityScoreFactor" json:"qualityScoreFactor"`
 	// IntersectionSignalFactor scales the single-point intersection fusion in the
 	// rule scorer: social/intersection-origin candidates earn a bounded socialPrior
 	// lift proportional to the viewer's revealed engagement with the matching kind.
 	IntersectionSignalFactor float64 `yaml:"intersectionSignalFactor" json:"intersectionSignalFactor"`
-	MaxAuthorPerFeed         int     `yaml:"maxAuthorPerFeed" json:"maxAuthorPerFeed"`
-	ColdStartAgeHours        float64 `yaml:"coldStartAgeHours" json:"coldStartAgeHours"`
-	ColdStartViewThreshold   int64   `yaml:"coldStartViewThreshold" json:"coldStartViewThreshold"`
+	// Candidate-level intersection fusion. Fact strength/freshness must outrank
+	// affinity probability; affinity is advisory and requires a confidence label
+	// before it can be projected into candidates.
+	IntersectionFactFactor      float64 `yaml:"intersectionFactFactor" json:"intersectionFactFactor"`
+	IntersectionFreshnessFactor float64 `yaml:"intersectionFreshnessFactor" json:"intersectionFreshnessFactor"`
+	IntersectionAffinityFactor  float64 `yaml:"intersectionAffinityFactor" json:"intersectionAffinityFactor"`
+	MaxAuthorPerFeed            int     `yaml:"maxAuthorPerFeed" json:"maxAuthorPerFeed"`
+	ColdStartAgeHours           float64 `yaml:"coldStartAgeHours" json:"coldStartAgeHours"`
+	ColdStartViewThreshold      int64   `yaml:"coldStartViewThreshold" json:"coldStartViewThreshold"`
 	// DiversityStrategy selects the rerank diversity algorithm: "greedy" (default
 	// type/author/top-tag dedup + explore/cold-start injection) or "mmr" (Maximal
 	// Marginal Relevance balancing relevance vs novelty by DiversityLambda).
@@ -398,6 +408,18 @@ func (p *RecPolicy) Validate() error {
 	}
 	if p.Scorer.IntersectionSignalFactor < 0 {
 		return errors.New("recpolicy: scorer.intersectionSignalFactor must be >= 0")
+	}
+	if p.Scorer.QualityScoreFactor < 0 {
+		return errors.New("recpolicy: scorer.qualityScoreFactor must be >= 0")
+	}
+	if p.Scorer.IntersectionFactFactor < 0 ||
+		p.Scorer.IntersectionFreshnessFactor < 0 ||
+		p.Scorer.IntersectionAffinityFactor < 0 {
+		return errors.New("recpolicy: scorer intersection candidate factors must be >= 0")
+	}
+	if p.Scorer.IntersectionAffinityFactor > 0 &&
+		p.Scorer.IntersectionFactFactor <= p.Scorer.IntersectionAffinityFactor {
+		return errors.New("recpolicy: scorer.intersectionFactFactor must be greater than intersectionAffinityFactor")
 	}
 	if p.Scorer.SearchIntentFactor < 0 {
 		return errors.New("recpolicy: scorer.searchIntentFactor must be >= 0")

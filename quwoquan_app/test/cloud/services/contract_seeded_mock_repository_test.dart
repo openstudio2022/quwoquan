@@ -15,6 +15,8 @@ import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 
+final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
+
 void main() {
   test('alpha 环境契约要求端侧使用 mock repository', () {
     final container = ProviderContainer();
@@ -199,7 +201,7 @@ void main() {
   test('user profile mock repository 默认优先读取 contract fixture', () async {
     const repo = MockUserProfileRepository();
     final profile = await repo.getUserProfile('fixture_user_current');
-    expect(profile.displayName, '契约当前用户');
+    expect(profile.displayName, matches(_defaultNicknamePattern));
     final relationship = await repo.getRelationship('fixture_user_photo');
     expect(relationship.isMutual, isTrue);
   });

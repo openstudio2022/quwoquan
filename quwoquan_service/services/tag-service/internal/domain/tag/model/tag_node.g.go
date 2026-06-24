@@ -6,13 +6,17 @@ import (
 )
 
 type TagNode struct {
-	TagRef    string    `json:"tagRef" bson:"tagRef"`
-	Group     string    `json:"group" bson:"group"`
-	Label     string    `json:"label" bson:"label"`
-	LabelEn   string    `json:"labelEn" bson:"labelEn"`
-	Aliases   string    `json:"aliases" bson:"aliases"`
-	Ancestors string    `json:"ancestors" bson:"ancestors"`
-	Depth     int       `json:"depth" bson:"depth"`
-	CreatedAt time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt" bson:"updatedAt"`
+	TagRef          string    `json:"tagRef" bson:"tagRef"`
+	Group           string    `json:"group" bson:"group"`
+	Label           string    `json:"label" bson:"label"`
+	DisplayLabel    string    `json:"displayLabel" bson:"displayLabel"`
+	LabelEn         string    `json:"labelEn" bson:"labelEn"`
+	Aliases         string    `json:"aliases" bson:"aliases"`
+	Ancestors       string    `json:"ancestors" bson:"ancestors"`
+	ParentTagRef    string    `json:"parentTagRef" bson:"parentTagRef"`
+	Depth           int       `json:"depth" bson:"depth"`
+	ReleaseID       string    `json:"releaseId" bson:"releaseId"`
+	LifecycleStatus string    `json:"lifecycleStatus" bson:"lifecycleStatus"`
+	CreatedAt       time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt" bson:"updatedAt"`
 }

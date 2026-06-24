@@ -58,7 +58,7 @@ void main() {
         result: LocationPermissionResult.permanentlyDenied,
         position: null,
       );
-      final locationService = CreateLocationService(
+      final locationService = RemoteCreateLocationService(
         locationPermissionChecker: checker,
       );
 
@@ -106,7 +106,7 @@ void main() {
           code: IntegrationLocationErrorCode.upstreamTimeout.code,
         );
       });
-      final locationService = CreateLocationService(
+      final locationService = RemoteCreateLocationService(
         locationPermissionChecker: checker,
         httpClient: httpClient,
         baseUrl: 'http://test',
@@ -127,11 +127,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final l10n = AppLocalizationsZh();
       expect(
-        find.text(l10n.locationUpstreamTimeout),
+        find.text(UITextConstants.pageLoadFailedTitle),
         findsOneWidget,
-        reason: '云端超时应展示 locationUpstreamTimeout 文案',
+        reason: '云端超时应展示统一页态标题',
+      );
+      expect(
+        find.text(UITextConstants.pageLoadFailedMessage),
+        findsOneWidget,
+        reason: 'pageLoad 类别 timeout 走统一页态说明文案',
       );
       expect(
         find.widgetWithText(CupertinoButton, UITextConstants.tryAgain),
@@ -153,7 +157,7 @@ void main() {
         if (uri.path == IntegrationLocationMetadata.nearbyPath) return completer.future;
         return {IntegrationLocationMetadata.responseItemsKey: []};
       });
-      final locationService = CreateLocationService(
+      final locationService = RemoteCreateLocationService(
         locationPermissionChecker: checker,
         httpClient: httpClient,
         baseUrl: 'http://test',

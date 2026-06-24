@@ -130,8 +130,32 @@ api_routes:
   - method: POST
     path: /v1/owner/credentials/bind
     operation: BindCredential
-    description: 绑定新凭证（phone/wechat/alipay/qq/apple）
+    description: 绑定新凭证（wechat/alipay/qq/apple/passkey 等非手机号凭证；手机号必须走专用 OTP/运营商绑定契约）
     request_fields: [credentialType, credentialKey, displayLabel]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: POST
+    path: /v1/owner/credentials/phone/bind
+    operation: BindPhoneCredential
+    description: 绑定手机号；必须先通过 SendOtp(sourceOperation=bind_phone) 下发并校验 OTP
+    request_fields: [phone, otpCode, displayLabel]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: POST
+    path: /v1/owner/credentials/carrier-phone/bind
+    operation: BindCarrierPhoneCredential
+    description: 绑定运营商本机号码；App 只上传 carrierToken，服务端置换真实手机号并写入 carrier_phone 凭证
+    request_fields: [vendor, carrierToken, deviceId, platform, displayLabel]
     security:
       auth_mode: required
       principal: owner
@@ -194,9 +218,9 @@ api_routes:
   - method: POST
     path: /v1/user/personas
     operation: CreatePersona
-    description: 创建新分身
+    description: 创建新分身；userHandle/趣我圈号由服务端按 subAccountId 系统分配，客户端不提交
     request_entity: Persona
-    request_fields: [displayName, userHandle, avatarUrl, isolationLevel, purposeHint]
+    request_fields: [displayName, avatarUrl, isolationLevel, purposeHint]
     security:
       auth_mode: required
       principal: owner
@@ -209,9 +233,9 @@ api_routes:
   - method: PATCH
     path: /v1/user/personas/{subAccountId}
     operation: UpdatePersona
-    description: 更新分身资料或隔离等级
+    description: 更新分身资料或隔离等级；userHandle/趣我圈号只读，不允许客户端修改
     request_entity: SubAccountProfileMutation
-    request_fields: [displayName, userHandle, phone, email, avatarUrl, isolationLevel, purposeHint, applyScope, syncTargetIds, fieldsMask]
+    request_fields: [displayName, phone, email, avatarUrl, isolationLevel, purposeHint, applyScope, syncTargetIds, fieldsMask]
     security:
       auth_mode: required
       principal: owner
@@ -322,7 +346,10 @@ api_routes:
   - method: GET
     path: /v1/user/search/social-relations
     operation: SearchSocialRelations
-    description: 全局搜索社交关系结果，统一承接“人”的搜索对象
+    description: >
+      全局搜索社交关系结果，统一承接“人”的搜索对象。匹配规则：先按趣我圈号(userHandle)精确命中并置顶
+      （隐私 strict 分身不暴露，与 GetSubAccountProfile strict→404 一致），再按昵称/资料模糊匹配补全去重。
+      不支持按手机号查人（隐私默认），手机号匹配仅走 contact_discovery 批量哈希。
     query_params: [query, cursor, limit]
     response_entity: SocialRelationSearchItemView
     auth: required
@@ -373,12 +400,51 @@ api_routes:
     join_path: owner_full_snapshot
     deprecated: false
 
+  - method: GET
+    path: /v1/user/profile/edit-snapshot
+    operation: GetProfileEditSnapshot
+    description: 当前登录 owner/active persona 的私有资料编辑快照；包含手机号凭证摘要与系统分配 userHandle，只供本人编辑页使用
+    response_entity: ProfileEditSnapshotWire
+    response_fields: [ownerUserId, subAccountId, avatarUrl, avatarAssetId, avatarVersion, backgroundUrl, backgroundAssetId, nickname, displayName, gender, birthDate, region, regionTagRef, userHandle, bio, identityTags, occupationTagRef, interestTagRefs, phoneCredential, qrCard, updatedAt]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: GET
+    path: /v1/user/profile/qr-card
+    operation: GetProfileQrCard
+    description: 返回我的二维码卡片渲染所需快照与可撤销 QR token 摘要；二维码 payload 为公开主页 HTTPS link，不编码手机号或 bearer token
+    response_entity: ProfileQrCardWire
+    response_fields: [publicProfileUrl, qrPayload, qrTokenId, styleVersion, avatarUrl, displayName, region, shareText, expiresAt]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: GET
+    path: /v1/public/profile/qr/resolve
+    operation: ResolveProfileQrToken
+    description: 公开扫码落地解析入口；校验 HTTPS payload 中的 opaque QR token，记录扫码观测后返回规范主页目标
+    response_entity: ProfileQrResolveWire
+    response_fields: [subAccountId, userHandle, publicProfileUrl, scanStatus]
+    security:
+      auth_mode: optional
+      principal: user
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+
   - method: PATCH
     path: /v1/user/profile
     operation: UpdateUserProfile
     description: "[已有] 更新主控账号资料"
     request_entity: SubAccountProfileMutation
-    request_fields: [nickname, displayName, avatarUrl, backgroundUrl, bio, gender, birthDate, region, profileVisibility, applyScope, syncTargetIds, fieldsMask]
+    request_fields: [nickname, displayName, avatarAssetId, avatarUrl, backgroundAssetId, backgroundUrl, bio, gender, birthDate, regionTagRef, occupationTagRef, interestTagRefs, identityTags, profileVisibility, applyScope, syncTargetIds, fieldsMask]
     security:
       auth_mode: required
       principal: owner

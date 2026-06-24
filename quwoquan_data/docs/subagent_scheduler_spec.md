@@ -43,6 +43,11 @@
 - **失败升级**：`fail_job` 未超 `maxAttempts` → `failed`（可重取）；达到上限 → `dead`（转人工编辑队列）。
 - **stage timing**：每个状态切换写入 `timings[]`，供 `run_journal` 观测端到端耗时。
 - **定向回退**：reducer 跨篇门失败时 `requeue_refs` 只把受影响 ref 退回 `queued`，不全批重写。
+- **controller lease**：同一 `task+batch` 只能存在一个 active Batch Controller；lease 锁为非阻塞硬门，第二 controller 直接 `GATE_BLOCK`，不得等待形成调度黑洞。
+- **AssignmentLedger**：strict governance job 必须带父级授权、owner、读写根、预算、deadline 和 heartbeat；`acquire_lease` 会阻断缺授权 job 并写 `failure_ledger.jsonl`。
+- **AssignmentState + Events**：`assignment_state.json` 按 `assignmentId` 幂等保存当前授权状态；`assignment_events.jsonl` 只记录真实 create/update 事件。重复 sync 不再追加重复 assignment，旧 `assignment_ledger.jsonl` 仅保留去重后的兼容事件流。
+- **结果所有权**：`AgentResultEnvelope.files[].path` 必须落在 assignment 的 `allowedWriteRoots` 内；越权写入按 gate block/失败处理，不能由 controller 口头采纳。
+- **失败账本**：`fail_job`、授权阻断、sourceUnit 冲突等必须写结构化 ledger，供批后质量报告聚合。
 
 状态机：`queued → leased → succeeded`；失败分支 `leased → failed → leased ... → dead`；reducer 回退 `succeeded → queued`。
 
@@ -71,7 +76,8 @@
 - 主 Agent 不允许在缺 `ref_review_gate` 的情况下把 ref 标 done。
 - 批次不允许在缺 `batch_reducer_gate` 的情况下进入 publish。
 - 创作自由只在 `ObjectEvidencePacket` 和 `CreativeBrief` 内发生；Subagent 不得自行扩展来源、换图、改变载体或写入未发布 refs。
-- 同一 `baseSourceRef` 被多篇使用时，reducer 标记 `source_reuse_risk`，要求人工确认或重选底稿。
+- 已完成的 `generator=agent` 且非占位草稿不得被普通 prepare 回退为 `pending`；只有显式上游 retry/rebuild 能降级，并必须写明 `downgradeReason`。
+- 同一 `baseSourceRef` 被多篇使用时，reducer 标记 `source_reuse_risk` 并写 conflict ledger；运行中不询问人工，批后由 Reconciler 判断误报、保留最佳项或安排重选底稿。
 - `ref_review_gate` 含的出口门（单一 gate library）：`writingIntentConsistency` / `imageReferenceClosure` / `skeletonSimilarity` / `registerMismatch` / `sourceRejectBlock` / `contactInfo`（私人电话/微信/QQ）/ `mechanicalHeading`（清单式标题）。
 - 超墙钟（`deadlineEpoch`）的 ref 由 `reap` 标 `timeout` 失败，不阻塞同批其它 ref。
 
@@ -140,6 +146,8 @@ CLI 只生成队列与 gate，**不直接生成正文**；正文只由 Subagent 
 - **1 任务 = 1 独立 cloud agent**：同一 cloud agent 并发跑两个 run 会 `409 agent_busy`（不可重试）；高并发只能是多个不同 agent 并行，**不得**给一个 agent 灌并发 run。
 - **编排层（自建）**：多进程 worker 各持 `worker_id`，循环 `object-queue lease-next` 消费同一队列；进程重启用 `Agent.resume(agentId)` 接管未完成 run（队列 lease 过期由 `reap` 回收）。
 - **限流/退避**：遇 `RateLimitError` / `isRetryable` 按指数退避；并发天花板=计费 + API 速率限制（**Cloud Agents 强制 Max Mode + 按 API 计费，须先设 spend limit**），上线前向 Cursor 确认账号/团队 API 速率配额。
+- **真实启动探针**：`env ready --json` 默认执行一次最小 `Agent.prompt` startup probe，覆盖当前 model、runtime、cwd、token、网络与 envelope；只通过 import/network 的环境不允许进入百级 author-runner。
+- **author-runner 断路器**：外部 runner 放大前先执行 1-job startup probe；probe 失败直接返回 `retry.infra` blocker，不 lease author job，不消耗 worker 槽位。连续 startup fail 归入基础设施预算，不占内容质量预算。
 - **完成通知**：webhook 推送 "coming soon"，当前靠 `run.wait()` / 状态监听 / 轮询 `listRuns`，由 worker 把终态回写 `object-queue complete|fail`。
 
 > 文件队列适用于开发/小批；规模化时把 `object_queue` 后端切到 Redis Streams/SQS（保持同一状态机语义：lease/heartbeat/deadline/dead/spillover）。
@@ -176,4 +184,4 @@ CLI 只生成队列与 gate，**不直接生成正文**；正文只由 Subagent 
 
 ### 10.4 与放量准入门的对账
 
-`verify scale-readiness` / `verify site-scale-readiness` 是本节的程序化对账面：source sufficiency、measured throughput、firstPassRate、作品判定纯净性（`nonWorkMaterializedCount`）、semanticMentions 覆盖、TokenLedger、release/import 证据、`queueBackend`/`maxConcurrency` 共同决定档位是否可升。本节任一保证缺证据，对应门即阻断，禁止口头放量。
+`verify scale-readiness` / `verify site-scale-readiness` 是本节的程序化对账面：source-ready 容量、Cursor startup、target satisfaction、measured throughput、firstPassRate、作品判定纯净性（`nonWorkMaterializedCount`）、semanticMentions 覆盖、TokenLedger、release/import 证据、`queueBackend`/`maxConcurrency` 共同决定档位是否可升。本节任一保证缺证据，对应门即阻断，禁止口头放量。

@@ -1,7 +1,7 @@
 {
   "status": "passed",
-  "baseUrl": "http://127.0.0.1:19000",
-  "productOpsBaseUrl": "http://127.0.0.1:19010",
+  "baseUrl": "https://gamma-api.quwoquan-env.test:19000",
+  "productOpsBaseUrl": "https://gamma-product-ops.quwoquan-env.test:19010",
   "enabledDomains": [
     "chat",
     "circle",
@@ -20,7 +20,7 @@
   "seed": {
     "status": "passed",
     "insertedCount": 32,
-    "output": "1': 'fixture_photo_002',\n    '2': 'fixture_video_001',\n    '3': 'fixture_article_001',\n    '4': 'fixture_moment_001',\n    '5': 'fixture_post_photography_001',\n    '6': 'fixture_post_travel_001',\n    '7': 'fixture_post_citywalk_001',\n    '8': 'fixture_post_lifestyle_001',\n    '9': 'fixture_post_outdoor_001',\n    '10': 'fixture_post_tech_001'\n  }\n}\nWrite Errors: [\n  WriteError {\n    err: {\n      index: 11,\n      code: 11000,\n      errmsg: 'E11000 duplicate key error collection: quwoquan_content.posts index: _id_ dup key: { _id: \"alpha_moment_grid_1\" }',\n      errInfo: undefined,\n      op: {\n        _id: 'alpha_moment_grid_1',\n        postId: 'alpha_moment_grid_1',\n        postRef: 'alpha_moment_grid_1',\n        authorId: 'alpha_moment_author',\n        subAccountId: 'alpha_moment_author',\n        authorDisplayNameSnapshot: '晨间记录者',\n        authorAvatarUrlSnapshot: 'media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',\n        personaContextVersion: 1,\n        contentType: 'micro',\n        contentIdentity: 'moment',\n        title: '',\n        body: '早晨只拍了一张窗边光线，记录留白和空气感。',\n        tags: [],\n        mediaUrls: [\n          'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png'\n        ],\n        coverUrl: 'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png',\n        videoUrl: '',\n        locationName: '',\n        status: 'published',\n        visibility: 'public',\n        assistantUsePolicy: 'allow',\n        circleId: '',\n        circleIds: [],\n        summary: '',\n        likeCount: 261,\n        commentCount: 182,\n        favoriteCount: 0,\n        shareCount: 7,\n        moderationStatus: 'approved',\n        createdAt: ISODate('2026-06-18T08:00:00.000Z'),\n        updatedAt: ISODate('2026-06-18T08:00:00.000Z'),\n        publishedAt: ISODate('2026-06-18T08:00:00.000Z'),\n        lastActiveAt: ISODate('2026-06-18T08:00:00.000Z')\n      }\n    }\n  }\n]\nrs0 [direct: primary] test> {\n  insertedCount: 32\n}\n\nrs0 [direct: primary] test> "
+    "output": " '1': 'fixture_photo_002',\n    '2': 'fixture_video_001',\n    '3': 'fixture_article_001',\n    '4': 'fixture_moment_001',\n    '5': 'fixture_post_photography_001',\n    '6': 'fixture_post_travel_001',\n    '7': 'fixture_post_citywalk_001',\n    '8': 'fixture_post_lifestyle_001',\n    '9': 'fixture_post_outdoor_001',\n    '10': 'fixture_post_tech_001'\n  }\n}\nWrite Errors: [\n  WriteError {\n    err: {\n      index: 11,\n      code: 11000,\n      errmsg: 'E11000 duplicate key error collection: quwoquan_content.posts index: _id_ dup key: { _id: \"alpha_moment_grid_1\" }',\n      errInfo: undefined,\n      op: {\n        _id: 'alpha_moment_grid_1',\n        postId: 'alpha_moment_grid_1',\n        postRef: 'alpha_moment_grid_1',\n        authorId: 'alpha_moment_author',\n        subAccountId: 'alpha_moment_author',\n        authorDisplayNameSnapshot: '晨间记录者',\n        authorAvatarUrlSnapshot: 'media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',\n        personaContextVersion: 1,\n        contentType: 'micro',\n        contentIdentity: 'moment',\n        title: '',\n        body: '早晨只拍了一张窗边光线，记录留白和空气感。',\n        tags: [],\n        mediaUrls: [\n          'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png'\n        ],\n        coverUrl: 'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png',\n        videoUrl: '',\n        locationName: '',\n        status: 'published',\n        visibility: 'public',\n        assistantUsePolicy: 'allow',\n        circleId: '',\n        circleIds: [],\n        summary: '',\n        likeCount: 261,\n        commentCount: 3,\n        favoriteCount: 0,\n        shareCount: 7,\n        moderationStatus: 'approved',\n        createdAt: ISODate('2026-06-18T08:00:00.000Z'),\n        updatedAt: ISODate('2026-06-18T08:00:00.000Z'),\n        publishedAt: ISODate('2026-06-18T08:00:00.000Z'),\n        lastActiveAt: ISODate('2026-06-18T08:00:00.000Z')\n      }\n    }\n  }\n]\nrs0 [direct: primary] test> {\n  insertedCount: 32\n}\n\nrs0 [direct: primary] test> "
   },
   "domainSeeds": {
     "circle": {
@@ -30,7 +30,7 @@
         "circle_core",
         "circle_group_chat_link_core"
       ],
-      "output": "2026/06/20 03:01:36 circle seed done: {\"database\":\"quwoquan_circle\",\"insertedCount\":81}\n"
+      "output": "2026/06/23 22:09:00 circle seed done: {\"database\":\"quwoquan_circle\",\"insertedCount\":81}\n"
     },
     "user": {
       "status": "passed",
@@ -38,17 +38,17 @@
       "refs": [
         "user_profile_core"
       ],
-      "output": "2026/06/20 03:01:36 user seed done: {\"dsn\":\"postgres\",\"insertedCount\":15}\n"
+      "output": "2026/06/23 22:09:01 user seed done: {\"dsn\":\"postgres\",\"insertedCount\":15}\n"
     },
     "entity": {
       "status": "passed",
-      "homepageId": "homepage_13"
+      "homepageId": "homepage_15"
     }
   },
   "runtimeSetup": {
     "status": "passed",
-    "parentCommentId": "comment_1781895695385259933",
-    "replyCommentId": "comment_1781895695403718226"
+    "parentCommentId": "comment_1782223740308727917",
+    "replyCommentId": "comment_1782223740317387615"
   },
   "endpoints": [
     {
@@ -66,7 +66,7 @@
       "path": "/v1/content/feed",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 20817,
+      "bytes": 57547,
       "status": "passed"
     },
     {
@@ -74,7 +74,7 @@
       "path": "/v1/content/posts/fixture_photo_001",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 2045,
+      "bytes": 2100,
       "status": "passed"
     },
     {
@@ -82,7 +82,7 @@
       "path": "/v1/content/posts/fixture_photo_001/comments",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 1802,
+      "bytes": 3847,
       "status": "passed"
     },
     {
@@ -90,32 +90,32 @@
       "path": "/v1/content/posts/fixture_photo_001/comments?sort=recommended",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 1803,
+      "bytes": 3847,
       "status": "passed"
     },
     {
       "domain": "content",
       "path": "/v1/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
       "method": "GET",
-      "resolvedPath": "/v1/content/posts/fixture_photo_001/comments/comment_1781895695385259933/replies",
+      "resolvedPath": "/v1/content/posts/fixture_photo_001/comments/comment_1782223740308727917/replies",
       "httpStatus": 200,
-      "bytes": 943,
+      "bytes": 1012,
       "status": "passed"
     },
     {
       "domain": "content",
       "path": "/v1/content/comments/fixture_comment_parent_001/reaction",
       "method": "POST",
-      "resolvedPath": "/v1/content/comments/comment_1781895695385259933/reaction",
+      "resolvedPath": "/v1/content/comments/comment_1782223740308727917/reaction",
       "httpStatus": 200,
-      "bytes": 871,
+      "bytes": 939,
       "status": "passed"
     },
     {
       "domain": "content",
       "path": "/v1/content/comments/fixture_comment_parent_001/media:bind",
       "method": "POST",
-      "resolvedPath": "/v1/content/comments/comment_1781895695385259933/media:bind",
+      "resolvedPath": "/v1/content/comments/comment_1782223740308727917/media:bind",
       "httpStatus": 200,
       "bytes": 95,
       "status": "passed"
@@ -141,7 +141,7 @@
       "path": "/v1/chat/inbox",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 43243,
+      "bytes": 44292,
       "status": "passed"
     },
     {
@@ -157,7 +157,7 @@
       "path": "/v1/user/profile/fixture_user_current",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 668,
+      "bytes": 672,
       "status": "passed"
     },
     {
@@ -165,7 +165,7 @@
       "path": "/v1/me",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 648,
+      "bytes": 661,
       "status": "passed"
     },
     {
@@ -173,23 +173,23 @@
       "path": "/v1/homepages/search",
       "method": "GET",
       "httpStatus": 200,
-      "bytes": 5457,
+      "bytes": 5459,
       "status": "passed"
     },
     {
       "domain": "entity",
       "path": "/v1/homepages/{homepageId}/object-page-bundle",
       "method": "GET",
-      "resolvedPath": "/v1/homepages/homepage_13/object-page-bundle",
+      "resolvedPath": "/v1/homepages/homepage_15/object-page-bundle",
       "httpStatus": 200,
-      "bytes": 4277,
+      "bytes": 3665,
       "status": "passed"
     },
     {
       "domain": "entity",
       "path": "/v1/homepages/{homepageId}/introduction",
       "method": "GET",
-      "resolvedPath": "/v1/homepages/homepage_13/introduction",
+      "resolvedPath": "/v1/homepages/homepage_15/introduction",
       "httpStatus": 200,
       "bytes": 3603,
       "status": "passed"
@@ -212,22 +212,8 @@
   ],
   "apiContracts": [
     {
-      "name": "content_api_contract",
-      "status": "passed",
-      "exitCode": 0,
-      "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/content/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: feed_cursor_pagination_end_to_end (setUpAll)\n00:00 +0: feed_cursor_pagination_end_to_end 第一页返回 20 条 + cursor 非空\n00:00 +1: feed_cursor_pagination_end_to_end 第二页与第一页无重叠 item\n00:00 +2: feed_cursor_pagination_end_to_end PhotoPostDto fromMap 解析所有字段包含 aspectRatio\n00:00 +3: feed_cursor_pagination_end_to_end (tearDownAll)\n00:00 +3: behavior_batch_report_reaches_service (setUpAll)\n00:00 +3: behavior_batch_report_reaches_service POST /v1/content/behaviors 返回 204\n00:00 +4: behavior_batch_report_reaches_service 事件 type 字段与 behaviors.yaml 枚举对齐\n00:00 +5: behavior_batch_report_reaches_service like type 被 batch 端点拒绝（专属路由）\n00:00 +6: behavior_batch_report_reaches_service (tearDownAll)\n00:00 +6: error_state_displayed_correctly 不存在的 postId → 404 + CONTENT.USER.post_not_found\n00:00 +7: media_not_ready_graceful_error X-Test-Error-Inject 触发 media_not_ready → 422 + recovery_action=retry\n00:00 +8: dedicated_feedback_and_user_block_contract (setUpAll)\n00:00 +8: dedicated_feedback_and_user_block_contract POST /v1/content/reports 可用\n00:00 +9: dedicated_feedback_and_user_block_contract POST/DELETE /v1/user/sub-accounts/{targetSubAccountId}/block 可用\n  local gamma content mirror excludes user routes\n00:00 +9 ~1: dedicated_feedback_and_user_block_contract PATCH /v1/user/settings/privacy 可写并回读 blockedKeywords\n  local gamma content mirror excludes user routes\n00:00 +9 ~2: dedicated_feedback_and_user_block_contract (tearDownAll)\n00:00 +9 ~2: (tearDownAll)\n00:00 +9 ~2: All tests passed!\n"
-    },
-    {
-      "name": "chat_api_contract",
-      "status": "passed",
-      "exitCode": 0,
-      "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/chat/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: list_conversations_contract (setUpAll)\n00:00 +0: list_conversations_contract GET /v1/chat/conversations 返回 200 + items 数组\n00:00 +1: list_conversations_contract conversation 字段结构完整\n00:00 +2: list_conversations_contract (tearDownAll)\n00:00 +2: send_and_recall_message_contract (setUpAll)\n00:00 +2: send_and_recall_message_contract 发送消息返回 201 + seq + messageId\n00:00 +3: send_and_recall_message_contract 相同 clientMsgId 幂等（dedup）\n00:00 +4: send_and_recall_message_contract 撤回消息返回 200 + status=recalled\n00:00 +5: send_and_recall_message_contract 消息列表包含已发送消息\n00:00 +6: send_and_recall_message_contract (tearDownAll)\n00:00 +6: error_not_found_contract 不存在的 conversationId → 404 + CHAT.USER.conversation_not_found\n00:00 +7: sync_messages_contract (setUpAll)\n00:00 +7: sync_messages_contract POST /sync 返回增量消息\n00:00 +8: sync_messages_contract (tearDownAll)\n00:00 +8: member_operations_contract (setUpAll)\n00:00 +8: member_operations_contract 添加成员 → 成员列表包含新成员\n00:00 +9: member_operations_contract (tearDownAll)\n00:00 +9: (tearDownAll)\n00:00 +9: All tests passed!\n"
-    },
-    {
-      "name": "product_ops_api_contract",
-      "status": "passed",
-      "exitCode": 0,
-      "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/ops/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: ops_event_ingestion_end_to_end POST /v1/ops/events 后 summary / drilldown 可读\n00:00 +1: ops_visit_record_end_to_end POST /v1/ops/visits 后 stats 可读\n00:00 +2: (tearDownAll)\n00:00 +2: All tests passed!\n"
+      "name": "flutter_contracts",
+      "status": "skipped"
     }
   ]
 }

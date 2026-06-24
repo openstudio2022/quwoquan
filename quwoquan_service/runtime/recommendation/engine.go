@@ -50,6 +50,8 @@ type GetFeedRequest struct {
 	TopicID       string
 	HomepageID    string
 	Surface       string
+	ChannelID     string
+	Vertical      string
 	FeedRequestID string
 	Cursor        string
 	Limit         int
@@ -75,13 +77,16 @@ type FeedResponse struct {
 
 // FeedItem represents a single item in the feed.
 type FeedItem struct {
-	ContentID   string   `json:"contentId"`
-	ContentType string   `json:"contentType"`
-	AuthorID    string   `json:"authorId"`
-	Title       string   `json:"title,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-	Score       float64  `json:"score"`
-	RecallPath  string   `json:"recallPath,omitempty"`
+	ContentID       string   `json:"contentId"`
+	ContentType     string   `json:"contentType"`
+	AuthorID        string   `json:"authorId"`
+	Title           string   `json:"title,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
+	Score           float64  `json:"score"`
+	RecallPath      string   `json:"recallPath,omitempty"`
+	QualityScore    float64  `json:"qualityScore,omitempty"`
+	ContentVertical string   `json:"contentVertical,omitempty"`
+	SupplySource    string   `json:"supplySource,omitempty"`
 }
 
 type feedCursorState struct {
@@ -93,18 +98,27 @@ type feedCursorState struct {
 
 // ContentCandidate is a candidate from the recall layer.
 type ContentCandidate struct {
-	ContentID    string
-	ContentType  string
-	AuthorID     string
-	Title        string
-	Tags         []string
-	EntityRefs   []string
-	PublishedAt  time.Time
-	ViewCount    int64
-	LikeCount    int64
-	CommentCount int64
-	ShareCount   int64
-	RecallPath   string
+	ContentID                   string
+	ContentType                 string
+	AuthorID                    string
+	Title                       string
+	Tags                        []string
+	EntityRefs                  []string
+	PublishedAt                 time.Time
+	ViewCount                   int64
+	LikeCount                   int64
+	CommentCount                int64
+	ShareCount                  int64
+	RecallPath                  string
+	QualityScore                float64
+	ContentVertical             string
+	SupplySource                string
+	IntersectionFactStrength    float64
+	IntersectionFreshness       float64
+	AffinityIntersectionScore   float64
+	IntersectionSourceRefTop    string
+	IntersectionConfidenceLabel string
+	IntersectionClass           string
 }
 
 // CandidateSource provides content candidates for recall.
@@ -113,16 +127,18 @@ type CandidateSource interface {
 }
 
 type RecallRequest struct {
-	FeedType      FeedType
-	UserID        string
-	CircleID      string
-	TopicID       string
-	HomepageID    string
-	Surface       string
-	FeedRequestID string
-	Tags          []string
-	Limit         int
-	Cursor        string
+	FeedType       FeedType
+	UserID         string
+	CircleID       string
+	TopicID        string
+	HomepageID     string
+	Surface        string
+	Vertical       string
+	FeedRequestID  string
+	SeedContentIDs []string
+	Tags           []string
+	Limit          int
+	Cursor         string
 }
 
 // ScoringWeights controls the relative importance of each scoring dimension.
@@ -509,13 +525,16 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	allItems := make([]FeedItem, 0, len(reranked))
 	for _, s := range reranked {
 		allItems = append(allItems, FeedItem{
-			ContentID:   s.Candidate.ContentID,
-			ContentType: s.Candidate.ContentType,
-			AuthorID:    s.Candidate.AuthorID,
-			Title:       s.Candidate.Title,
-			Tags:        s.Candidate.Tags,
-			Score:       s.Score,
-			RecallPath:  s.Candidate.RecallPath,
+			ContentID:       s.Candidate.ContentID,
+			ContentType:     s.Candidate.ContentType,
+			AuthorID:        s.Candidate.AuthorID,
+			Title:           s.Candidate.Title,
+			Tags:            s.Candidate.Tags,
+			Score:           s.Score,
+			RecallPath:      s.Candidate.RecallPath,
+			QualityScore:    s.Candidate.QualityScore,
+			ContentVertical: s.Candidate.ContentVertical,
+			SupplySource:    s.Candidate.SupplySource,
 		})
 	}
 
@@ -609,6 +628,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		servedItems := make([]FeedItem, len(items))
 		copy(servedItems, items)
 		RecordServedItems(len(servedItems))
+		RecordServedItemsByAttribution(servedItems, req.ChannelID, RankingVersion, ReasonVersion)
 		go func() {
 			servedCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
@@ -661,16 +681,18 @@ func encodeFeedCursor(state feedCursorState) string {
 func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, session *SessionState, out *[]ContentCandidate) {
 	interestTags := topNTags(session.TagWeights, 10)
 	recallReq := RecallRequest{
-		FeedType:      req.FeedType,
-		UserID:        req.UserID,
-		CircleID:      req.CircleID,
-		TopicID:       req.TopicID,
-		HomepageID:    req.HomepageID,
-		Surface:       req.Surface,
-		FeedRequestID: req.FeedRequestID,
-		Tags:          interestTags,
-		Limit:         req.Limit * 3,
-		Cursor:        req.Cursor,
+		FeedType:       req.FeedType,
+		UserID:         req.UserID,
+		CircleID:       req.CircleID,
+		TopicID:        req.TopicID,
+		HomepageID:     req.HomepageID,
+		Surface:        req.Surface,
+		Vertical:       req.Vertical,
+		FeedRequestID:  req.FeedRequestID,
+		SeedContentIDs: recentSeedContentIDs(session.ExposedIDs, 20),
+		Tags:           interestTags,
+		Limit:          req.Limit * 3,
+		Cursor:         req.Cursor,
 	}
 
 	recallCtx := ctx

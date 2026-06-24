@@ -3,12 +3,12 @@
   "env": "prod",
   "runtimeEnv": "prod",
   "dataSource": "remote",
-  "gatewayBaseUrl": "http://118.31.239.122:19000",
-  "realtimeBaseUrl": "ws://118.31.239.122:19000",
-  "avatarCdnBaseUrl": "http://118.31.239.122:19100",
-  "imageCdnBaseUrl": "http://118.31.239.122:19100",
-  "videoCdnBaseUrl": "http://118.31.239.122:19100",
-  "uploadBaseUrl": "http://118.31.239.122:19100",
+  "gatewayBaseUrl": "https://118.31.239.122:19000",
+  "realtimeBaseUrl": "wss://118.31.239.122:19000",
+  "avatarCdnBaseUrl": "https://118.31.239.122:19100",
+  "imageCdnBaseUrl": "https://118.31.239.122:19100",
+  "videoCdnBaseUrl": "https://118.31.239.122:19100",
+  "uploadBaseUrl": "https://118.31.239.122:19100",
   "currentUserId": "",
   "seedManifest": "",
   "topologySchemaVersion": "environment-topology/v1",
@@ -21,11 +21,11 @@
     "distribution": "store-release"
   },
   "publicBases": {
-    "gatewayBaseUrl": "http://118.31.239.122:19000",
-    "realtimeBaseUrl": "ws://118.31.239.122:19000",
-    "mediaAvatarCdnBaseUrl": "http://118.31.239.122:19100",
-    "mediaImageCdnBaseUrl": "http://118.31.239.122:19100",
-    "mediaVideoCdnBaseUrl": "http://118.31.239.122:19100",
-    "mediaUploadBaseUrl": "http://118.31.239.122:19100"
+    "gatewayBaseUrl": "https://118.31.239.122:19000",
+    "realtimeBaseUrl": "wss://118.31.239.122:19000",
+    "mediaAvatarCdnBaseUrl": "https://118.31.239.122:19100",
+    "mediaImageCdnBaseUrl": "https://118.31.239.122:19100",
+    "mediaVideoCdnBaseUrl": "https://118.31.239.122:19100",
+    "mediaUploadBaseUrl": "https://118.31.239.122:19100"
   }
 }

@@ -1,4 +1,4 @@
-/// T4 Patrol E2E: 创作草稿保存与恢复
+/// user_acceptance Patrol: 创作草稿保存与恢复
 ///
 /// 守护：动作优先入口进入统一编辑器，保存草稿后再次进入仍可恢复。
 library;
@@ -40,11 +40,10 @@ void main() {
       ).waitUntilVisible(timeout: const Duration(seconds: 10));
       await $(TestKeys.createActionContinueFromDraft).tap();
       await $(
-        TestKeys.createDraftPickerPanel,
+        TestKeys.localDraftPage,
       ).waitUntilVisible(timeout: const Duration(seconds: 10));
-      // 点选「文字草稿」恢复草稿（draftLabel：无标题/无图的文字草稿 == '文字草稿'）。
-      // 草稿恢复需关闭选择面板 + 重建统一编辑器路由，gamma 上较慢，给足 settle 与超时。
-      await $('文字草稿').tap();
+      // 续草稿入口已迁移到全屏本地草稿页；点击草稿卡摘要文本进入恢复链路。
+      await $(find.text(_draftText)).tap();
       await $.pump(const Duration(milliseconds: 400));
       await $.pump(const Duration(seconds: 1));
 

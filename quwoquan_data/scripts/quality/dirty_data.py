@@ -55,12 +55,13 @@ def entity_homepage_dirty_issues(issues: list[str]) -> list[str]:
 
 def _post_roots() -> list[Path]:
     roots: list[Path] = []
-    # 对象优先：batch 根 posts（parent.parent == batches）。
-    for path in (_runtime_root() / "tasks").rglob("posts"):
-        if not path.is_dir():
-            continue
-        if path.parent.parent.name == "batches":
-            roots.append(path)
+    # 对象优先：顶层 runtime/batches/<intentLabel>__<batch>/posts/（不再挂任务根 batches/）。
+    batches_dir = _runtime_root() / "batches"
+    if batches_dir.is_dir():
+        for batch_dir in batches_dir.iterdir():
+            posts = batch_dir / "posts"
+            if posts.is_dir():
+                roots.append(posts)
     publish_posts = _publish_root() / "posts"
     if publish_posts.is_dir():
         roots.append(publish_posts)

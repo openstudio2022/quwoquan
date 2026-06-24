@@ -30,6 +30,7 @@ python3 quwoquan_data/scripts/cli.py <command> ...
 | `annotate` | Human-in-loop 标注：发布前对账本图片/事实/文章下人判定/打分/置发布态/记再加工 |
 | `ship` | 一键发布：promote→重建索引→按环境采样写 sample bundle→(可选)调用服务侧 importer 灌库 |
 | `verify` | 收紧范围校验 post package（schema + 语义 + 图片 + 三道门） |
+| `verify scale-readiness` | 指令/地域维度放量准出门：百级目标满足率、source-ready 容量、Cursor startup、TokenLedger、release/import 与漏斗报告 |
 | `verify site-scale-readiness` | 网站维度放量准出门：trial 验结构/吞吐/账本，commercial 额外强制 release/import/搜索推荐证据 |
 | `template lint` | 模板蓝图门禁（route 叙事契约 / gallery imagePolicy） |
 
@@ -45,6 +46,8 @@ python3 quwoquan_data/scripts/cli.py <command> ...
 > **三道真实性门**（review + verify 强制）：generator 出处门、模板指纹门、事实可回溯门。
 
 **硬约束**：新能力 = `<command>/handler.py`（`register_parser` + `handle_*`）+ 可选 `gate.py`，复用逻辑沉到 `_common/`；`SKILL.md` 只暴露 CLI；禁止在 `scripts/**` 新增可直跑（`__main__`）业务入口（旧脚本只能薄壳委托）。门禁：`python3 quwoquan_data/scripts/verify/verify_cli_first.py`（基线 `cli_first_allowlist.txt`）+ `bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh`。
+
+Cursor SDK 环境门：`python3 quwoquan_data/scripts/cli.py env ready --json` 默认执行真实 `Agent.prompt` startup probe；只通过 key/import/network 探测不代表可进入百级 author-runner。需要离线检查时可显式加 `--no-cursor-startup`，但该报告不能作为放量准入证据。
 
 ## 标签体系设计
 

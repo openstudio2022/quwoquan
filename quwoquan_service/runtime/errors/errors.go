@@ -558,7 +558,12 @@ func HTTPStatusFromError(err *AppError) int {
 			"primary_guard",
 			"active_guard",
 			"retired_guard",
-			"delete_empty_only":
+			"delete_empty_only",
+			"handle_readonly",
+			"invalid_region",
+			"invalid_tag_ref",
+			"invalid_media_asset",
+			"qr_token_invalid":
 			return http.StatusBadRequest
 		case "unauthorized", "token_expired":
 			return http.StatusUnauthorized
@@ -584,7 +589,7 @@ func HTTPStatusFromError(err *AppError) int {
 			"invalid_call_action",
 			"screen_share_conflict":
 			return http.StatusConflict
-		case "expired", "call_ended":
+		case "expired", "call_ended", "qr_token_expired":
 			return http.StatusGone
 		case "media_not_ready":
 			return http.StatusUnprocessableEntity

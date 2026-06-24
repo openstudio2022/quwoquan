@@ -22,6 +22,8 @@ bool shouldShowWechatLogin(PlatformCapabilities caps) => caps.wechatNativeLogin;
 bool shouldShowSystemCredentialLogin(PlatformCapabilities caps) =>
     caps.systemCredentialLogin;
 
+bool shouldShowPhoneContactsEntry(PlatformCapabilities caps) => caps.contacts;
+
 PlatformCapabilities _resolve(PlatformCapabilities profile) {
   final container = ProviderContainer(
     overrides: [
@@ -56,6 +58,11 @@ void main() {
           shouldShowSystemCredentialLogin(caps),
           caps.systemCredentialLogin,
         );
+        expect(
+          shouldShowPhoneContactsEntry(caps),
+          caps.contacts,
+          reason: 'phone contacts entry must mirror contacts capability',
+        );
       });
     }
 
@@ -76,6 +83,12 @@ void main() {
       expect(shouldShowSystemCredentialLogin(CapabilityProfile.mobile), isTrue);
       expect(shouldShowSystemCredentialLogin(CapabilityProfile.web), isFalse);
       expect(shouldShowSystemCredentialLogin(CapabilityProfile.ohos), isFalse);
+    });
+
+    test('only mobile exposes phone contacts among mobile/web/ohos', () {
+      expect(shouldShowPhoneContactsEntry(CapabilityProfile.mobile), isTrue);
+      expect(shouldShowPhoneContactsEntry(CapabilityProfile.web), isFalse);
+      expect(shouldShowPhoneContactsEntry(CapabilityProfile.ohos), isFalse);
     });
   });
 }

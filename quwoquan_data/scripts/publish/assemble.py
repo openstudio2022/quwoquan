@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 from _common.entity_object import collect_task_entity_objects
-from _common.paths import release_root, task_root
+from _common.paths import batch_root, iter_task_batch_dirs, release_root
 from _common.io import read_json, write_json
 
 _REVIEW_SIDECARS = {
@@ -36,9 +36,9 @@ def assemble_release(task_id: str, release_id: str, *, batch_id: str = "") -> Pa
     # release 包保留 5.review 侧车，供 publish_filter / ship 读取；其余过程阶段不进 release。
     posts_dst = root / "posts"
     posts_dst.mkdir(exist_ok=True)
-    batches_dir = task_root(task_id) / "batches"
-    if batches_dir.exists():
-        batch_dirs = [batches_dir / batch_id] if batch_id else sorted(batches_dir.iterdir())
+    # 顶层 runtime/batches/ 反查该任务批次（依据 batch_manifest.taskId）。
+    batch_dirs = [batch_root(task_id, batch_id)] if batch_id else iter_task_batch_dirs(task_id)
+    if batch_dirs:
         for batch_dir in batch_dirs:
             src = batch_dir / "posts"
             if not src.is_dir():

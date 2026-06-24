@@ -345,6 +345,10 @@ func main() {
 		mongoCandidateSources = append(mongoCandidateSources, socialRecall)
 		recOpts = append(recOpts, rtrec.WithSocialMiner(rtrec.NewSocialInterestMiner(socialProvider)))
 		collabCfg := rtrecpolicy.Baseline().ExposureGovernance.CollaborativeRecall
+		if collaborativeRecallRollbackDisabled() {
+			collabCfg.Enabled = false
+			log.Printf("content-service collaborative recall disabled by disable_collaborative_recall_sources rollback flag")
+		}
 		if collabCfg.Enabled {
 			collabSource := rtrec.NewCollaborativeRecallSource(
 				recinfra.NewMongoCollaborativeCandidateStore(db),
@@ -959,6 +963,12 @@ func parseBoolEnv(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+func collaborativeRecallRollbackDisabled() bool {
+	return parseBoolEnv("QWQ_DISABLE_COLLABORATIVE_RECALL_SOURCES", false) ||
+		parseBoolEnv("DISABLE_COLLABORATIVE_RECALL_SOURCES", false) ||
+		parseBoolEnv("disable_collaborative_recall_sources", false)
 }
 
 // dailyAffinityDecayCheckInterval is how often each replica checks whether the

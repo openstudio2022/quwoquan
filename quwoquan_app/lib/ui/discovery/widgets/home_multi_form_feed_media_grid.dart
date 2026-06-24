@@ -2,10 +2,7 @@
 part of 'home_multi_form_feed.dart';
 
 class _HomeFeedMediaOverlayPill extends StatelessWidget {
-  const _HomeFeedMediaOverlayPill({
-    super.key,
-    required this.label,
-  });
+  const _HomeFeedMediaOverlayPill({super.key, required this.label});
 
   final String label;
 
@@ -105,6 +102,7 @@ class _HomeMomentGridCard extends StatelessWidget {
                   imageUrlCandidates: resolveContentMediaUrlCandidates(
                     urls[index],
                   ),
+                  cdnPreset: CdnImagePreset.thumbnail,
                   fit: BoxFit.cover,
                   placeholder: _mediaPlaceholder(isDark),
                   errorWidget: _mediaPlaceholder(isDark),
@@ -212,6 +210,7 @@ class _HomeFeedImageCarouselState extends State<_HomeFeedImageCarousel> {
                     imageUrlCandidates: resolveContentMediaUrlCandidates(
                       urls[index],
                     ),
+                    cdnPreset: CdnImagePreset.cover,
                     fit: BoxFit.cover,
                     placeholder: _placeholder(),
                     errorWidget: _placeholder(),
@@ -379,8 +378,8 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                 key: ValueKey<String>('home-video-player-${dto.id}'),
                 videoUrl: videoUrl,
                 videoUrlCandidates: resolveContentMediaUrlCandidates(videoUrl),
-                thumbnailUrl: dto.mediaThumbnailUrl.isNotEmpty
-                    ? dto.mediaThumbnailUrl
+                thumbnailUrl: dto.mediaVideoCoverUrl.isNotEmpty
+                    ? dto.mediaVideoCoverUrl
                     : dto.primaryVisualUrl,
                 initialize: initialize,
                 autoPlay: autoPlay,
@@ -411,6 +410,7 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                 imageUrlCandidates: resolveContentMediaUrlCandidates(
                   dto.primaryVisualUrl,
                 ),
+                cdnPreset: CdnImagePreset.cover,
                 fit: BoxFit.cover,
                 placeholder: _mediaPlaceholder(isDark),
                 errorWidget: _mediaPlaceholder(isDark),

@@ -17,6 +17,24 @@ void main() {
       expect(posts, isNotEmpty);
     });
 
+    test('mock 内容作者头像均引用可归档用户/圈子头像，不返回缺失 content/default 资产', () async {
+      final feedPosts = await repo.listDiscoveryFeed(category: 'all', limit: 0);
+      final previewPost = await repo.getPost(postId: 'nature_photographer_p1');
+      final avatarUrls = <String>[
+        ...feedPosts.map((post) => post.avatarUrl),
+        previewPost.post.avatarUrl,
+      ];
+
+      expect(avatarUrls, isNotEmpty);
+      for (final url in avatarUrls) {
+        expect(url.trim(), isNotEmpty);
+        expect(
+          url,
+          isNot(contains('media/avatar/s/archived-avatar/content/default/')),
+        );
+      }
+    });
+
     test('listDiscoveryFeed 支持按 identity/type 过滤', () async {
       final works = await repo.listDiscoveryFeed(
         category: 'work',
@@ -119,6 +137,26 @@ void main() {
       expect(byId('alpha_article_top_three_images').mediaCoverUrl, isNotEmpty);
       expect(
         recommend.every((post) => post.intersectionReasons?.isNotEmpty == true),
+        isTrue,
+      );
+    });
+
+    test('alpha 首页推荐分页首刷返回 showcase，禁止写入空首屏', () async {
+      final page = await repo.listDiscoveryFeedPage(
+        category: 'micro',
+        identity: 'moment',
+        limit: 20,
+      );
+
+      expect(page.items, hasLength(20));
+      expect(page.nextCursor, '20');
+      expect(page.items.first.id, 'alpha_moment_grid_1');
+      expect(page.items.any((post) => post.mediaImageUrls.isNotEmpty), isTrue);
+      expect(page.items.any((post) => post.hasVideo), isTrue);
+      expect(
+        page.items.every(
+          (post) => post.avatarUrl.isNotEmpty && post.displayName.isNotEmpty,
+        ),
         isTrue,
       );
     });

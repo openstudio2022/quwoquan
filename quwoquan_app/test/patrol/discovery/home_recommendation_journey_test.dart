@@ -1,10 +1,10 @@
-/// T4 Patrol E2E: 首页推荐用户旅程（阶段9 商用化收口）
+/// user_acceptance Patrol: 首页推荐用户旅程（阶段9 商用化收口）
 ///
 /// 对应 AppRoot Journey：发现/推荐主路径。本用例在真实设备 + 真实 gamma 后端
 /// 上守护 flutter_test 无法替代的端到端行为：真实远端 feed 渲染、真实导航进入
 /// 沉浸消费再返回、真实负反馈行为上报与即时收敛、真实作者对象跳转。
 ///
-/// 与 T2 的映射（R12 一体性）：
+/// 与 local_contract 的映射（R12 一体性）：
 ///   - 多形态卡片 / 交集证据行渲染   <- home_intersection_multiform_feed_widget_test
 ///   - 交集 name-span→主页 / count-span→交集列表 的精确导航
 ///                                    <- home_intersection_object_nav_test
@@ -24,15 +24,17 @@
 ///      且置顶）。故「多形态卡片 + 连续下拉曝光不重复」现可在推荐频道 App 内真演示
 ///      （用例 home_rec_multiform_feed_paginates_without_repeat）；page1/page2 无重叠的
 ///      契约级证据见同目录 moment_feed_pagination_guest.json / _viewer.json。
-///      现网 alpha_moment_* 作者已被 T3 负反馈加入 hidden_authors（预期生效非缺陷），
+///      现网 alpha_moment_* 作者已被 gamma-local 真实 HTTP 验证链路的负反馈加入
+///      hidden_authors（预期生效非缺陷），
 ///      故仅靠旧种子推荐频道只回 1 条 fixture_moment_001——本轮新种子用未抑制作者绕开。
 ///   2) 个性化交集仅由 X-Client-User-Id 决定（auth-only=0 / 带 header=6/20）；
-///      gamma-local 无 JWT 校验网关（T3 §1），App feed 读取按生产设计仅发送
+///      gamma-local 无 JWT 校验网关（真实 HTTP smoke §1），App feed 读取按生产设计仅发送
 ///      Authorization（由生产网关注入身份），不在端侧硬塞 X-Client-User-Id，故
 ///      gamma-local 下交集行不渲染（环境/拓扑缺口）。新种子已在 tagRefs 写入含/不含
 ///      交集兴趣标签（含交集混合数据就位），但交集行渲染本身仍受该 X-Client-User-Id
-///      环境缺口约束。本 T4 不改 lib 行为强制其渲染；交集渲染与 span 跳转由上述 T2
-///      守护、数据就绪由 T3 证明，本 T4 用「作者头像→用户主页」覆盖对象跳转链路。
+///      环境缺口约束。本 Patrol user_acceptance 不改 lib 行为强制其渲染；交集渲染与
+///      span 跳转由上述 local_contract 守护、数据就绪由 gamma-local smoke 证明，本用例
+///      用「作者头像→用户主页」覆盖对象跳转链路。
 ///
 /// 执行方式（本地，emulator 访问宿主用 10.0.2.2）：
 ///   patrol test --target test/patrol/discovery/home_recommendation_journey_test.dart \
@@ -44,7 +46,7 @@
 ///     --dart-define=MEDIA_IMAGE_CDN_BASE_URL=http://10.0.2.2:19100 \
 ///     --dart-define=MEDIA_VIDEO_CDN_BASE_URL=http://10.0.2.2:19100 \
 ///     --dart-define=APP_CURRENT_USER_ID=us_01_3278_01kvevr8s7s3b0arr7x3p27efe \
-///     --dart-define=TEST_AUTH_TOKEN=local-t4-token
+///     --dart-define=TEST_AUTH_TOKEN=local-patrol-token
 library;
 
 import 'package:flutter/cupertino.dart';
@@ -92,7 +94,7 @@ void main() {
       await launchPatrolAppOnce($);
       assert(
         _apiContractEnv == 'gamma',
-        'T4 home-rec journey must run with API_CONTRACT_ENV=gamma',
+        'Patrol user_acceptance journey must run with API_CONTRACT_ENV=gamma',
       );
       await _recoverToHomeFeed($);
 
@@ -153,7 +155,7 @@ void main() {
         isTrue,
         reason:
             '负反馈后应即时收敛：卡片本地移除并给出降级提示（行为同时上报 gamma，'
-            '未来窗口收敛由 T3 真实 HTTP 证明）',
+            '未来窗口收敛由 gamma-local 真实 HTTP 证明）',
       );
     },
   );
@@ -279,7 +281,8 @@ void main() {
       await _recoverToHomeFeed($);
 
       // 对象跳转：点击作者头像进入其主页（与交集 name-span 同一目标；精确的
-      // 「人名 span→主页 / 数字 span→交集列表」导航由 T2 home_intersection_object_nav
+      // 「人名 span→主页 / 数字 span→交集列表」导航由 local_contract
+      // home_intersection_object_nav
       // 守护）。
       final navigated = await _tapFirstAuthorAvatar($);
       expect(navigated, isTrue, reason: '应能点击到首卡作者头像');

@@ -204,7 +204,6 @@ def _entity_sample(batch_dir: Path, task_id: str, batch_id: str, focus: Mapping[
         "sourcePathsCount": len(quality.get("sourcePaths") or []),
         "reviewDecision": review.get("decision"),
         "sourceReadinessPassed": bool((((review.get("checks") or {}).get("sourceReadiness") or {}).get("passed"))),
-        "conditionEvidenceCount": len((((payload.get("conditionProfile") or {}) if isinstance(payload.get("conditionProfile"), Mapping) else {}).get("evidenceRefs") or [])),
         "provenanceOriginalSources": len(provenance.get("originalSources") or []),
         "finalizationDraftRef": finalization.get("draftArticleRef"),
         "finalizationFinalRef": finalization.get("finalArticleRef"),
@@ -367,8 +366,8 @@ def _manual_checklist(
                         f"{entity_path}/_entity.json",
                         f"{entity_path}/page.md",
                     ],
-                    "whatToCheck": "人工对照主页正文与 conditionProfile/evidenceRefs，确认主页是百科/官方底稿轻改，而不是 padding 凑字数。",
-                    "passCondition": "conditionProfile.regions/seasons 均有 evidenceRefs；正文与底稿事实一致，不出现重复句式灌水、机械收尾标题或与来源无关扩写。",
+                    "whatToCheck": "人工对照主页正文与底稿来源，确认主页是百科/官方底稿轻改，而不是 padding 凑字数。",
+                    "passCondition": "正文与底稿事实一致，不出现重复句式灌水、机械收尾标题或与来源无关扩写。",
                 },
             ]
         )

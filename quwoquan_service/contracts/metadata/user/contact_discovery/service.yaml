@@ -20,9 +20,13 @@ api_routes:
   - method: GET
     path: /v1/owner/contact-discovery/latest
     operation: GetLatestContactDiscovery
-    description: 获取最近一次发现结果（含匹配的 subAccountId 列表）
+    description: >
+      获取最近一次发现结果。matchedSubAccountIds 保留为隐私基线（仅 ID）；
+      matches[] 为富化投影 ContactDiscoveryMatchWire，回显发起者上传的 hashedPhone（端侧据此映射回本地通讯录显示名）、
+      精简 profile 与关系能力位，驱动「添加 / 已添加」。
     auth_required: true
     response_entity: ContactDiscoveryRecord
+    response_read_models: [ContactDiscoveryMatchWire]
     response_fields: [id, status, matchedSubAccountIds, matchCount, expireAt, completedAt]
 
   - method: DELETE
@@ -52,3 +56,11 @@ contract_test:
       description: 72h 后记录不可查询
       assertions:
         - "expire_at 过期后 GET latest → 404 或空结果"
+
+    - name: discovery_match_projection
+      description: matches[] 富化投影回显发起者自身上传的 hashedPhone，并附带命中用户精简 profile 与能力位
+      assertions:
+        - "matches[].hashedPhone 属于本次发起者上传的哈希集合"
+        - "matches[].subAccountId 与 matchedSubAccountIds 一致"
+        - "matches[] 不含其它用户的手机号原文或 ownerAccountId"
+        - "matches[].relationshipCapability 可驱动 canFollow / 已关注 判定"

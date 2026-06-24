@@ -447,7 +447,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get friends => '联系人';
 
   @override
-  String get groupChat => '讨论';
+  String get groupChat => '群聊';
 
   @override
   String get secretLockedTitle => '密信已锁定';
@@ -483,13 +483,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get contactsTabMutualFollow => '互相关注';
 
   @override
-  String get contactsTabFunGroup => '讨论';
+  String get contactsTabFunGroup => '群聊';
 
   @override
   String get contactsTabFriends => '联系人';
 
   @override
-  String get contactsTabGroups => '讨论';
+  String get contactsTabGroups => '群聊';
 
   @override
   String get starredFriends => '星标朋友';
@@ -555,7 +555,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get viewAllMembers => '查看全部成员';
 
   @override
-  String get groupName => '讨论名称';
+  String get groupName => '群聊名称';
 
   @override
   String get qrCode => '二维码';
@@ -579,19 +579,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get clearChatHistory => '清空聊天记录';
 
   @override
-  String get exitGroupChat => '退出讨论';
+  String get exitGroupChat => '退出群聊';
 
   @override
   String get addMember => '添加成员';
 
   @override
-  String get startGroupChat => '发起讨论';
+  String get startGroupChat => '发起群聊';
 
   @override
-  String get createNewGroupChat => '创建新讨论';
+  String get createNewGroupChat => '创建新群聊';
 
   @override
-  String get selectFriendsFromGroupChat => '选择讨论成员';
+  String get selectFriendsFromGroupChat => '选择群聊成员';
 
   @override
   String get selectFriendsFromCircle => '选择圈子成员';
@@ -600,10 +600,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get relatedSameInterest => '兴趣相近';
 
   @override
-  String get selectGroupChat => '选择讨论';
+  String get selectGroupChat => '选择群聊';
 
   @override
-  String get searchGroupChatHint => '搜索讨论';
+  String get searchGroupChatHint => '搜索群聊';
 
   @override
   String get selectCircle => '选择圈子';

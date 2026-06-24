@@ -1,0 +1,66 @@
+id: CR-20260625-063-recommendation-commercial-alerting-p1a
+title: 推荐商用归因告警 P1a
+slug: recommendation-commercial-alerting-p1a
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/recommendation-platform/evaluation-and-flywheel
+  - specs/feature-tree/recommendation-platform/evaluation-and-flywheel/recommendation-commercial-alerting
+  - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+  - deploy/monitoring/alerts/quwoquan_alerts.yaml
+
+entries:
+  - timestamp: "2026-06-25T01:30:00+08:00"
+    summary: |
+      在 P1 推荐商用归因看板之后，新增 P1a 商用告警层：unknown attribution、按供给来源的
+      负反馈异常、按召回路径的 CTR 异常、旅行/精品消费断崖和 UGC/数据工程供给 share 失衡。
+      告警只消费 P0+ 真实 emitter 指标 recommendation_feed_served_by_attribution_total 与
+      recommendation_behavior_by_attribution_total。
+    reason: |
+      看板只能支撑人工复盘，商用成熟还需要持续异常时能触发响应。P1a 将 P0+ bounded attribution
+      从可查询推进到可告警，避免端云归因丢失、场景路由退化或供给来源失衡长期静默。
+    change_type:
+      - observability
+      - acceptance
+      - tests
+      - documentation
+    changed_documents:
+      - path: docs/recommendation-commercial-maturity-plan.md
+        sections:
+          - P0/P0+ 到 P1a 完成复盘
+          - 剩余风险
+          - 下一阶段开发任务
+      - path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/spec.md
+        sections:
+          - 范围
+          - 验收标准
+      - path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/acceptance.yaml
+        sections:
+          - SIT1
+      - path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/recommendation-commercial-alerting/spec.md
+        sections:
+          - 全文
+      - path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/recommendation-commercial-alerting/acceptance.yaml
+        sections:
+          - GWT1
+      - path: quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+        sections:
+          - alerts
+          - slis
+          - alerts_source
+      - path: deploy/monitoring/alerts/quwoquan_alerts.yaml
+        sections:
+          - quwoquan_rec_model
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: low
+      breaking_contract: false
+    notes:
+      - 修正 recommendation_slo.yaml alerts_source 从不存在的 quwoquan_recommendation 对齐到实际 Prometheus group quwoquan_rec_model。
+      - 商用告警禁止引用 recommendation_offline_eval_metric_value、eligible_feed_item_count、collaborative_recall_lift 等 objective_only 口径。
+      - 深排平台、离线 replay 脚本、在线 AB 平台和 product-ops 精品池运营入口仍不在本 CR 范围内。

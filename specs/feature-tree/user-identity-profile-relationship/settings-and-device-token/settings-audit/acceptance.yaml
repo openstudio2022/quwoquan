@@ -42,9 +42,8 @@ gwt_acceptance:
       - file: quwoquan_app/test/ui/user/widgets/persona_management_page_test.dart
       - file: quwoquan_app/test/ui/user/providers/persona_management_provider_test.dart
       recorded:
-      - command: make verify-app-auth-policy
-      - file: quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart
-      - file: quwoquan_app/test/app/shell/web_auth_entry_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/shell/web_auth_entry_contract__local_contract_test.dart
     status: partial
     test_evidence:
       primary:
@@ -67,7 +66,8 @@ gwt_acceptance:
         envs:
         - beta
         - gamma
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] make verify-app-auth-policy'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

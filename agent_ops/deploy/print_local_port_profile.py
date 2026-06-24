@@ -19,6 +19,9 @@ ENV_EXPORTS = {
         "PRODUCT_OPS_PORT": "product-ops-edge",
         "MEDIA_EDGE_PORT": "media-edge",
         "MEDIA_ORIGIN_PORT": "media-origin",
+        "CONTENT_PORT": "content-service",
+        "PRODUCT_OPS_SERVICE_PORT": "product-ops-service",
+        "MEDIA_PROCESSOR_PORT": "media-processor",
     },
     "beta-local": {
         "GATEWAY_PORT": "api-edge",
@@ -27,6 +30,9 @@ ENV_EXPORTS = {
         "OPS_PORTAL_PORT": "ops-portal",
         "MEDIA_PORT": "media-edge",
         "MEDIA_ORIGIN_PORT": "media-origin",
+        "CONTENT_PORT": "content-service",
+        "PRODUCT_OPS_SERVICE_PORT": "product-ops-service",
+        "MEDIA_PROCESSOR_PORT": "media-processor",
         "ASSISTANT_PORT": "assistant-service",
         "CHAT_PORT": "chat-service",
     },
@@ -57,6 +63,9 @@ ENV_EXPORTS = {
         "PROD_SIM_PRODUCT_OPS_PORT": "product-ops-edge",
         "PROD_SIM_MEDIA_EDGE_PORT": "media-edge",
         "PROD_SIM_MEDIA_ORIGIN_PORT": "media-origin",
+        "PROD_SIM_CONTENT_PORT": "content-service",
+        "PROD_SIM_PRODUCT_OPS_SERVICE_PORT": "product-ops-service",
+        "PROD_SIM_MEDIA_PROCESSOR_PORT": "media-processor",
     },
 }
 

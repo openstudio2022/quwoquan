@@ -41,10 +41,8 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned: []
-      recorded:
-      - file: quwoquan_service/runtime/search/retrieve_contract_test.go::TestAITargetsMatchRuntimeAllowlist
-      - file: quwoquan_service/runtime/search/retrieve_location_test.go
-    status: completed
+      recorded: []
+    status: pending_evidence
     test_evidence:
       primary:
       - layer: local_contract
@@ -59,7 +57,9 @@ gwt_acceptance:
         cases:
         - local_contract.global_search_experience.search_provider_routing_and_storage_topology.search_object_taxonomy_and_provider_registry.gwt1_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_reference] quwoquan_service/runtime/search/retrieve_contract_test.go::TestAITargetsMatchRuntimeAllowlist'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/retrieve_location_test.go'
   GWT2:
     title: 第一方地点快照存储按地名去重、对绑定实体的地点单源排除
     given:
@@ -83,9 +83,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/internal/application/place_search_projection_test.go
-      - file: quwoquan_service/services/content-service/internal/infrastructure/placeindex/projector_test.go
-      - file: quwoquan_service/services/content-service/internal/infrastructure/placeindex/backfill_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/place_search_projection__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/placeindex/projector__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/placeindex/backfill__local_contract_test.go
     status: completed
     test_evidence:
       primary:
@@ -127,8 +127,8 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/ui/search/pages/location_place_landing_page_widget_test.dart
-      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/pages/location_place_landing_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
     status: completed
     test_evidence:
       primary:

@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import os
 import sys
 import tempfile
@@ -21,10 +22,52 @@ os.environ["QWQ_RUNTIME_ROOT"] = _TMP
 
 from task import object_queue as oq  # noqa: E402
 from task import production_contracts as pc  # noqa: E402
+from _common import ops_governance as og  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
+from _common.paths import batch_root  # noqa: E402
 
 TASK = "旅行/地域/四川省/景区/景区精选"
 BATCH = "test_batch_oq"
+
+
+def _creator_meta() -> dict:
+    return {
+        "authorId": "builtin_travel_blogger_chuanxi",
+        "creatorProfileId": "qwq_creator_travel_blogger_chuanxi_001",
+        "creatorArchetype": "travel_blogger",
+        "creatorProfileVersion": "1.0.0",
+        "creatorDisclosure": {
+            "type": "platform_virtual_creator",
+            "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+            "visible": True,
+        },
+        "experienceClaimMode": "editorial_synthesis",
+        "authorQualitySignals": {"qualityScore": 0.86, "fatigueScore": 0.2, "riskTier": "low"},
+    }
+
+
+def _valid_assignment(
+    batch: str,
+    ref: str,
+    *,
+    controller_run_id: str = "ctrl-test",
+    allowed_write_roots: list[str] | None = None,
+) -> dict:
+    roots = allowed_write_roots or ["posts/article"]
+    assignment = og.build_assignment(
+        task_id=TASK,
+        batch_id=batch,
+        controller_run_id=controller_run_id,
+        assignment_path=["四川省", "阿坝藏族羌族自治州", ref],
+        role="author_subagent",
+        parent_assignment_id="partition-parent",
+        scope={"sliceType": "content_ref", "ref": ref},
+        allowed_read_roots=["_shared", *roots],
+        allowed_write_roots=roots,
+        budget={"maxAttempts": 2},
+    )
+    og.append_assignment(TASK, batch, assignment)
+    return assignment
 
 
 def test_enqueue_is_idempotent():
@@ -37,6 +80,20 @@ def test_enqueue_is_idempotent():
     assert j2["queueBackend"] == "local_file"
 
 
+def test_enqueue_does_not_downgrade_succeeded_job():
+    batch = "test_batch_no_success_downgrade"
+    job = oq.enqueue_ref_job(TASK, batch, "refDone", "author", meta={"creatorProfileId": "first"})
+    leased = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    assert leased is not None
+    oq.complete_job(TASK, batch, leased["jobId"], leased["lease"])
+
+    again = oq.enqueue_ref_job(TASK, batch, "refDone", "author", meta={"creatorProfileId": "second"})
+    assert again["state"] == oq.STATE_SUCCEEDED
+    assert again["attempt"] == 1
+    assert again["creatorProfileId"] == "first"
+    assert read_json(oq._job_path(TASK, batch, job["jobId"]))["state"] == oq.STATE_SUCCEEDED
+
+
 def test_reliabletask_backend_records_bridge_and_requires_envelope():
     batch = "test_batch_reliabletask"
     job = oq.enqueue_ref_job(
@@ -45,7 +102,7 @@ def test_reliabletask_backend_records_bridge_and_requires_envelope():
         "refProd",
         "author",
         queue_backend="reliabletask",
-        meta={"creatorProfileId": "agent_creator_001", "creatorArchetype": "editor", "contentType": "article"},
+        meta={"contentType": "article", **_creator_meta()},
     )
     assert job["queueBackend"] == "reliabletask"
     assert job["resultEnvelopeRequired"] is True
@@ -54,13 +111,64 @@ def test_reliabletask_backend_records_bridge_and_requires_envelope():
     leased = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
     packet = oq.build_lease_packet(leased)
     assert packet["resultEnvelopeRequired"] is True
-    assert packet["creatorProfileId"] == "agent_creator_001"
+    assert packet["creatorProfileId"] == "qwq_creator_travel_blogger_chuanxi_001"
+    assert packet["authorId"] == "builtin_travel_blogger_chuanxi"
     try:
         oq.complete_job(TASK, batch, leased["jobId"], leased["lease"])
     except RuntimeError as exc:
         assert "result envelope required" in str(exc)
     else:
         raise AssertionError("reliabletask job must not complete without envelope")
+
+
+def test_author_job_with_content_type_requires_creator_assignment():
+    batch = "test_batch_author_creator_required"
+    try:
+        oq.enqueue_ref_job(TASK, batch, "r_no_creator", "author", meta={"contentType": "article"})
+    except ValueError as exc:
+        assert "creatorAssignment.authorId required" in str(exc)
+        assert "creatorAssignment.creatorProfileId required" in str(exc)
+    else:
+        raise AssertionError("author content object job must require creator assignment")
+
+
+def test_strict_governance_requires_assignment_on_enqueue():
+    batch = "test_batch_governance_missing_assignment"
+    try:
+        oq.enqueue_ref_job(
+            TASK,
+            batch,
+            "r_no_assignment",
+            "author",
+            meta={"requireGovernance": True, "controllerRunId": "ctrl-test"},
+        )
+    except ValueError as exc:
+        assert "assignment required" in str(exc)
+    else:
+        raise AssertionError("strict governance job must require a parent assignment")
+
+
+def test_malformed_governance_job_blocks_and_writes_failure_ledger():
+    batch = "test_batch_governance_block"
+    job = oq.enqueue_ref_job(TASK, batch, "r_bad_governance", "author")
+    path = oq._job_path(TASK, batch, job["jobId"])
+    payload = read_json(path)
+    payload["requireGovernance"] = True
+    payload["controllerRunId"] = "ctrl-test"
+    payload["assignmentId"] = ""
+    payload["assignmentPath"] = []
+    payload["owner"] = ""
+    write_json(path, payload)
+
+    leased = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+
+    assert leased is None
+    blocked = read_json(path)
+    assert blocked["state"] == oq.STATE_BLOCKED
+    assert "assignmentId required" in blocked["lastError"]
+    failures = og.read_jsonl(og.failure_ledger_path(TASK, batch))
+    assert failures[-1]["category"] == og.FAILURE_GATE_BLOCK
+    assert failures[-1]["ref"] == "r_bad_governance"
 
 
 def test_lease_complete_lifecycle():
@@ -70,6 +178,79 @@ def test_lease_complete_lifecycle():
     assert job["state"] == oq.STATE_LEASED and job["attempt"] >= 1
     done = oq.complete_job(TASK, BATCH, job["jobId"], job["lease"])
     assert done["state"] == oq.STATE_SUCCEEDED
+
+
+def test_governed_article_author_complete_requires_real_agent_draft():
+    batch = "test_batch_author_complete_gate"
+    ref = "refArticle"
+    content_dir = "posts/article/攻略/refArticle/1"
+    assignment = _valid_assignment(batch, ref, allowed_write_roots=[content_dir])
+    oq.enqueue_ref_job(
+        TASK,
+        batch,
+        ref,
+        "author",
+        meta={
+            "requireGovernance": True,
+            "assignment": assignment,
+            "contentObjectDir": content_dir,
+        },
+    )
+    draft_dir = batch_root(TASK, batch) / content_dir / "4.draft"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "draft.article.md").write_text("TODO: pending agent draft\n", encoding="utf-8")
+    write_json(draft_dir / "draft_meta.json", {"generator": "pending"})
+    job = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    completed = oq.complete_job(TASK, batch, job["jobId"], job["lease"])
+    assert completed["state"] == oq.STATE_FAILED
+    assert "draft_meta.generator is pending" in completed["lastError"]
+
+
+def test_governed_article_author_complete_rejects_creator_identity_change():
+    batch = "test_batch_author_creator_locked"
+    ref = "refArticleCreator"
+    content_dir = "posts/article/攻略/refArticleCreator/1"
+    assignment = _valid_assignment(batch, ref, allowed_write_roots=[content_dir])
+    meta = {
+        "requireGovernance": True,
+        "assignment": assignment,
+        "contentObjectDir": content_dir,
+        "contentType": "article",
+        **_creator_meta(),
+    }
+    oq.enqueue_ref_job(TASK, batch, ref, "author", meta=meta)
+    draft_dir = batch_root(TASK, batch) / content_dir / "4.draft"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "draft.article.md").write_text("# 标题\n\n这是一篇真实草稿。\n", encoding="utf-8")
+    write_json(
+        draft_dir / "draft_meta.json",
+        {
+            "generator": "agent",
+            "authorId": "builtin_travel_blogger",
+            "creatorProfileId": "qwq_creator_travel_blogger_001",
+            "creatorArchetype": "travel_blogger",
+            "creatorProfileVersion": "1.0.0",
+        },
+    )
+    job = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    completed = oq.complete_job(TASK, batch, job["jobId"], job["lease"])
+    assert completed["state"] == oq.STATE_FAILED
+    assert "draft_meta.authorId is builtin_travel_blogger" in completed["lastError"]
+    assert "expected locked creator assignment builtin_travel_blogger_chuanxi" in completed["lastError"]
+
+
+def test_concurrent_acquire_leases_single_job_once():
+    batch = "test_batch_concurrent_lease"
+    oq.enqueue_ref_job(TASK, batch, "only_one", "author")
+
+    def lease(worker: str):
+        return oq.acquire_lease(TASK, batch, worker=worker, stage="author")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        leased = list(pool.map(lease, ["w1", "w2"]))
+
+    assert sum(1 for item in leased if item is not None) == 1
+    assert oq.queue_summary(TASK, batch)["byState"][oq.STATE_LEASED] == ["only_one"]
 
 
 def test_same_source_mutex():
@@ -419,15 +600,21 @@ def test_usage_budget_exceeded_forces_dead():
     assert any(n.get("event") == "budget_exceeded" for n in notes)
 
 
-def _valid_envelope_for_job(batch: str, job: dict, *, body: str = "# ok\n\n正文。") -> Path:
+def _valid_envelope_for_job(
+    batch: str,
+    job: dict,
+    *,
+    body: str = "# ok\n\n正文。",
+    rel_path: str = "posts/article/demo.md",
+) -> Path:
     root = oq.batch_root(TASK, batch)
-    draft = root / "posts/article/demo.md"
+    draft = root / rel_path
     draft.parent.mkdir(parents=True, exist_ok=True)
     draft.write_text(body, encoding="utf-8")
     digest = pc.sha256_file(draft)
     envelope = pc.build_agent_result_envelope(
         job=job,
-        files=[{"path": "posts/article/demo.md", "sha256": digest, "role": "draft"}],
+        files=[{"path": rel_path, "sha256": digest, "role": "draft"}],
         gates=[pc.build_gate_verdict(gate_id="review", decision="passed", input_hash=digest, output_hash=digest)],
         agent_id="agent-test",
         run_id="run-test",
@@ -446,6 +633,42 @@ def test_complete_with_valid_envelope_succeeds():
     assert done["state"] == oq.STATE_SUCCEEDED
     assert done["resultEnvelopeRef"].endswith(".envelope.json")
     assert done["gateVerdicts"][0]["decision"] == "passed"
+
+
+def test_complete_with_envelope_rejects_write_outside_assignment_roots():
+    batch = "test_batch_envelope_governance_root"
+    assignment = _valid_assignment(
+        batch,
+        "renv_governed",
+        allowed_write_roots=["posts/article/allowed"],
+    )
+    oq.enqueue_ref_job(
+        TASK,
+        batch,
+        "renv_governed",
+        "author",
+        queue_backend="reliabletask",
+        max_attempts=1,
+        meta={
+            "requireGovernance": True,
+            "controllerRunId": assignment["controllerRunId"],
+            "assignmentId": assignment["assignmentId"],
+            "assignmentPath": assignment["assignmentPath"],
+            "owner": assignment["role"],
+            "allowedReadRoots": assignment["allowedReadRoots"],
+            "allowedWriteRoots": assignment["allowedWriteRoots"],
+            "assignment": assignment,
+        },
+    )
+    job = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    envelope_path = _valid_envelope_for_job(
+        batch,
+        job,
+        rel_path="posts/article/outside/demo.md",
+    )
+    failed = oq.complete_job_with_envelope(TASK, batch, job["jobId"], job["lease"], envelope_path=envelope_path)
+    assert failed["state"] == oq.STATE_DEAD
+    assert "outside assignment write roots" in (failed["lastError"] or "")
 
 
 def test_complete_with_envelope_rejects_hash_mismatch():

@@ -855,7 +855,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 height: height,
                 // Use TestKeys.photoPostCard only on first item to avoid
                 // duplicate keys in the scrollable grid (Flutter constraint).
-                // L4 Patrol tests use this key to confirm at least one card rendered.
+                // user_acceptance Patrol uses this key to confirm at least one card rendered.
                 key: index == 0 ? TestKeys.photoPostCard : null,
                 child: _DiscoveryItemCard(
                   isDark: isDark,
@@ -964,6 +964,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     CommentViewer.showModal(
       context: context,
       postId: postId,
+      entryObservedCommentCount: ref
+          .read(postInteractionStateProvider)
+          .commentCountFor(postId, fallback: post.commentCount),
       config: const CommentConfig(enabled: true),
       onShareTap: () => _onMomentShareTap(context, post),
     );

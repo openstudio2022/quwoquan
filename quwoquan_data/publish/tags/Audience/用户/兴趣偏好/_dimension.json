@@ -1,0 +1,9 @@
+{
+  "label": "兴趣偏好",
+  "labelEn": "Interest Preferences",
+  "description": "用户在资料页主动声明的兴趣标签，独立于内容 Topic，供推荐、交集和助手画像使用",
+  "maxDepth": 3,
+  "pathPolicy": "leaf-only",
+  "createdAt": "2026-06-24T17:35:21.933367+00:00",
+  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+}

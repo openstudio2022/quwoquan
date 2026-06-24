@@ -13,6 +13,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
@@ -25,6 +26,7 @@ import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 TextSpan _spanByText(RichText richText, String text) {
   TextSpan? result;
@@ -86,6 +88,7 @@ MicroPostDto _microPost({
     'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
   ],
   IntersectionReason? reason,
+  String avatarUrl = '',
 }) {
   final effectiveReason = reason ?? _reason();
   return MicroPostDto(
@@ -94,7 +97,7 @@ MicroPostDto _microPost({
     identity: 'moment',
     authorId: 'user_demo',
     displayName: '小趣用户',
-    avatarUrl: '',
+    avatarUrl: avatarUrl,
     authorBackgroundUrl: null,
     authorRoleLabel: '旅行创作者',
     authorIdentityTags: const <String>['摄影', '川西'],
@@ -164,6 +167,8 @@ VideoPostDto _videoPost({required int width, required int height}) {
     body: '视频画面下方的配文',
     videoUrl: 'media/video/s/archived-video/beta-sample.mp4',
     thumbnailUrl:
+        'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
+    coverUrl:
         'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
     width: width,
     height: height,
@@ -280,6 +285,32 @@ Widget _buildFeed(
   );
 }
 
+Widget _buildRealProviderFeed() {
+  return ProviderScope(
+    child: CupertinoApp(
+      home: ScreenUtilInit(
+        designSize: const Size(390, 844),
+        child: const MediaQuery(
+          data: MediaQueryData(size: Size(390, 844)),
+          child: HomeMultiFormFeed(
+            isDark: false,
+            channelId: 'recommend',
+            template: 'single_column_multiform',
+            onUserTap: _noopUserTap,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+void _noopUserTap(
+  String userId, {
+  String? avatarUrl,
+  String? displayName,
+  String? backgroundUrl,
+}) {}
+
 void main() {
   testWidgets('单列 post 内展示作者身份、媒体、交集与底部更多', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -305,8 +336,9 @@ void main() {
     );
     expect(
       find.text(DiscoveryFeedText.homeFeedIntersectionReasonLabel),
-      findsOneWidget,
+      findsNothing,
     );
+    expect(find.byKey(const ValueKey('home-intersection-glyph')), findsNothing);
     final reasonBox = tester.widget<DecoratedBox>(
       find.byKey(const ValueKey('home-relation-card-reason')),
     );
@@ -354,6 +386,105 @@ void main() {
     expect(find.text('更多'), findsOneWidget);
   });
 
+  testWidgets('推荐卡片把头像、图片、视频统一投影为 secure local media candidates', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildFeed(
+        _microPost(
+          avatarUrl:
+              'media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final avatarImages = tester
+        .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
+        .where((widget) => widget.cdnPreset == CdnImagePreset.avatar)
+        .toList(growable: false);
+    expect(avatarImages, hasLength(1));
+    expect(
+      avatarImages.single.imageUrlCandidates,
+      containsAll(<String>[
+        'https://localhost:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+        'https://127.0.0.1:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+        'https://10.0.2.2:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+        'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+      ]),
+    );
+
+    final contentImages = tester
+        .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
+        .where((widget) => widget.cdnPreset != CdnImagePreset.avatar)
+        .toList(growable: false);
+    expect(contentImages, isNotEmpty);
+    expect(
+      contentImages.any(
+        (widget) =>
+            widget.imageUrlCandidates?.contains(
+              'https://localhost:17100/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
+            ) ??
+            false,
+      ),
+      isTrue,
+    );
+
+    await tester.pumpWidget(_buildFeed(_videoPost(width: 1080, height: 1920)));
+    await tester.pump();
+
+    final player = tester.widget<VideoPlayerWidget>(
+      find.byType(VideoPlayerWidget),
+    );
+    expect(
+      player.videoUrlCandidates,
+      containsAll(<String>[
+        'https://localhost:17100/media/video/s/archived-video/beta-sample.mp4',
+        'https://127.0.0.1:17100/media/video/s/archived-video/beta-sample.mp4',
+        'https://10.0.2.2:17100/media/video/s/archived-video/beta-sample.mp4',
+        'https://alpha-video.quwoquan-env.test:17100/media/video/s/archived-video/beta-sample.mp4',
+      ]),
+    );
+  });
+
+  testWidgets('默认 Provider 加载首页推荐时保留 showcase 作者头像 media candidates', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    SharedPreferences.setMockInitialValues(const <String, Object>{});
+
+    await tester.pumpWidget(_buildRealProviderFeed());
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('晨间记录者'), findsWidgets);
+
+    final avatars = tester
+        .widgetList<RoundedSquareAvatar>(find.byType(RoundedSquareAvatar))
+        .toList(growable: false);
+    expect(avatars, isNotEmpty);
+    expect(
+      avatars.first.imageUrl,
+      'media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+    );
+
+    final avatarImages = tester
+        .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
+        .where((widget) => widget.cdnPreset == CdnImagePreset.avatar)
+        .toList(growable: false);
+    expect(avatarImages, isNotEmpty);
+    expect(
+      avatarImages.first.imageUrlCandidates,
+      contains(
+        'https://localhost:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+      ),
+    );
+  });
+
   testWidgets('任务B·分层强度：推测型交集证据行弱于事实型', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -390,10 +521,10 @@ void main() {
     // 事实型（共同关注/到访/收藏）必须比推测型视觉更强。
     expect(recommendedBgAlpha, lessThan(factBgAlpha));
     expect(recommendedBorderAlpha, lessThan(factBorderAlpha));
-    // 但推测型仍保留证据行（不消失），导语标签与可点击 span 仍在。
+    // 但推测型仍保留具体证据行（不消失），泛化标签不出现。
     expect(
       find.text(DiscoveryFeedText.homeFeedIntersectionReasonLabel),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -702,7 +833,7 @@ void main() {
         of: find.byKey(const ValueKey('home-post-inline-intersection')),
         matching: find.byKey(const ValueKey('home-intersection-glyph')),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.descendant(
@@ -799,7 +930,7 @@ void main() {
         of: find.byKey(const ValueKey('home-post-inline-intersection')),
         matching: find.byKey(const ValueKey('home-intersection-glyph')),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.descendant(
@@ -881,7 +1012,7 @@ void main() {
         of: find.byKey(const ValueKey('home-article-inline-intersection')),
         matching: find.byKey(const ValueKey('home-intersection-glyph')),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     final bodyTop = tester.getTopLeft(find.textContaining('这是一段')).dy;
     expect(bodyTop, lessThan(inlineTop));
@@ -941,7 +1072,8 @@ void main() {
     expect((bodyRect.top - thumbRect.top).abs(), lessThan(2));
     expect(bodyRect.right, lessThan(thumbRect.left + 1));
     expect(intersectionRect.top, greaterThan(thumbRect.bottom - 1));
-    expect(intersectionRect.right, greaterThanOrEqualTo(thumbRect.right - 1));
+    expect(intersectionRect.right, greaterThanOrEqualTo(bodyRect.right - 1));
+    expect(intersectionRect.right, lessThan(thumbRect.left + 1));
 
     await tester.pumpWidget(
       _buildFeed(
@@ -1036,46 +1168,47 @@ void main() {
   });
 
   // ── N6：交集 span 点击埋点带全归因（sourceRef + evidenceId 不再被丢） ──
-  testWidgets('点击交集名字 span → trackClick 透传 intersectionSourceRef + evidenceId', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets(
+    '点击交集名字 span → trackClick 透传 intersectionSourceRef + evidenceId',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final behaviorRepo = MockBehaviorRepository();
-    final tracker = ContentBehaviorTracker(
-      repository: behaviorRepo,
-      maxBatchSize: 1,
-      enablePeriodicFlush: false,
-    );
-    addTearDown(tracker.dispose);
+      final behaviorRepo = MockBehaviorRepository();
+      final tracker = ContentBehaviorTracker(
+        repository: behaviorRepo,
+        maxBatchSize: 1,
+        enablePeriodicFlush: false,
+      );
+      addTearDown(tracker.dispose);
 
-    await tester.pumpWidget(_routedFeed(_microPost(), tracker: tracker));
-    await tester.pump();
+      await tester.pumpWidget(_routedFeed(_microPost(), tracker: tracker));
+      await tester.pump();
 
-    final richText = tester.widget<RichText>(
-      find.descendant(
-        of: find.byType(InteractiveIntersectionText),
-        matching: find.byType(RichText),
-      ),
-    );
-    final nameSpan = _spanByText(richText, '林清越');
-    (nameSpan.recognizer! as TapGestureRecognizer).onTap!();
-    await tester.pump();
-    await tracker.flush();
+      final richText = tester.widget<RichText>(
+        find.descendant(
+          of: find.byType(InteractiveIntersectionText),
+          matching: find.byType(RichText),
+        ),
+      );
+      final nameSpan = _spanByText(richText, '林清越');
+      (nameSpan.recognizer! as TapGestureRecognizer).onTap!();
+      await tester.pump();
+      await tracker.flush();
 
-    final clicks = behaviorRepo.recorded
-        .where((event) => event.action == BehaviorAction.click)
-        .toList(growable: false);
-    expect(clicks, hasLength(1));
-    final click = clicks.single;
-    // 关键回归：sourceRef / evidenceId 由 attribution 真正转发到埋点（此前被丢）。
-    expect(click.intersectionSourceRef, equals('sharedFollowees'));
-    expect(click.intersectionEvidenceId, equals('snap_lin'));
-    expect(click.intersectionId, equals('ix_post_lin'));
-    expect(click.intersectionDimension, equals('relationship'));
-    expect(click.intersectionTagRefs, isNotNull);
-  });
+      final clicks = behaviorRepo.recorded
+          .where((event) => event.action == BehaviorAction.click)
+          .toList(growable: false);
+      expect(clicks, hasLength(1));
+      final click = clicks.single;
+      // 关键回归：sourceRef / evidenceId 由 attribution 真正转发到埋点（此前被丢）。
+      expect(click.intersectionSourceRef, equals('sharedFollowees'));
+      expect(click.intersectionEvidenceId, equals('snap_lin'));
+      expect(click.intersectionId, equals('ix_post_lin'));
+      expect(click.intersectionDimension, equals('relationship'));
+      expect(click.intersectionTagRefs, isNotNull);
+    },
+  );
 }
 
 /// N6：带 GoRouter 的 feed 宿主，使交集 span 点击的 `context.push` 可达，

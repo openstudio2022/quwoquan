@@ -25,7 +25,7 @@
 | 位置选择页：加载态 | 展示 `locationFetchingResult` + `CircularProgressIndicator` | ⚠️ 需权限 mock 先返回 granted |
 | 发现流：加载失败 | 内联占位 + 重试 | ✅ 可测（MockRepo 抛异常） |
 | 创作提交失败 | SnackBar 展示 submitFailed | ✅ 可测 |
-| 真机：点「去设置」 | 打开系统设置 | L4 Patrol |
+| 真机：点「去设置」 | 打开系统设置 | user_acceptance Patrol |
 
 ---
 
@@ -86,7 +86,7 @@
 
 ---
 
-## 4. L4 层落实方案（Patrol）
+## 4. user_acceptance Patrol 落实方案
 
 | 用例 | 做法 | 断言 |
 |------|------|------|
@@ -94,7 +94,7 @@
 | 拒绝权限后 UI | 用户点「不允许」 | 展示权限卡片 + 「去设置」 |
 | 「去设置」跳转 | 点击「去设置」 | 系统设置被打开（或相应系统行为） |
 
-**约束**：L4 为 pre-release advisory，不阻塞 PR；需真机或支持权限的模拟器。
+**约束**：user_acceptance Patrol 为 pre-release advisory，不阻塞 PR；需真机或支持权限的模拟器。
 
 ---
 
@@ -106,7 +106,7 @@
 | P1 | L1a：错误码→l10n 映射契约（替换纯 l10n 存在性测试） | 抽取 `_mapCloudCodeToMessage` 或建 mapper |
 | P2 | L1b：权限拒绝路径 | 抽取 `LocationPermissionChecker` |
 | P3 | L1c：创作流错误 journey | 依赖 P0 |
-| P4 | L4 Patrol：真机权限 + 去设置 | 有 Patrol 环境即可 |
+| P4 | user_acceptance Patrol：真机权限 + 去设置 | 有 Patrol 环境即可 |
 
 ---
 
@@ -117,4 +117,4 @@
 | L1a 映射契约 | `test/cloud/integration/location/contract/cloud_code_to_l10n_mapper_contract_test.dart` | 替换原 error_permission_l10n |
 | L1b Widget | `test/ui/create/publish/widgets/publish_location_selector_error_state_test.dart` | 错误态/权限态 UI |
 | L1c Journey | `test/ui/create/publish/journeys/create_location_error_journey_test.dart` | 创作流中的位置错误 |
-| L4 Patrol | `test/patrol/content/location_permission_flow_test.dart` | 真机权限与去设置 |
+| user_acceptance Patrol | `test/patrol/content/location_permission_flow_test.dart` | 真机权限与去设置 |

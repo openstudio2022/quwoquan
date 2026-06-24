@@ -387,6 +387,201 @@
             "城市街拍",
             "海外"
           ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_route_erhai",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_route:erhai",
+          "title": "洱海环线",
+          "subtitle": "大理洱海骑行环线",
+          "summary": "聚合环湖骑行节奏、机位、季节与结伴信息。",
+          "city": "大理",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "路线",
+            "云南"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_route_diancang",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_route:diancang",
+          "title": "滇藏线",
+          "subtitle": "滇藏公路自驾线",
+          "summary": "覆盖高原自驾路况、补给点与海拔适应建议。",
+          "city": "香格里拉",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "路线",
+            "自驾"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_route_chuanxi",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_route:chuanxi",
+          "title": "川西小环线",
+          "subtitle": "川西高原小环线",
+          "summary": "沉淀热门川西环线节点、住宿与最佳拍摄时段。",
+          "city": "成都",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "路线",
+            "川西"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_route_gongga",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_route:gongga",
+          "title": "贡嘎环线",
+          "subtitle": "贡嘎山徒步环线",
+          "summary": "聚合徒步分段、营地、垭口与雪山机位。",
+          "city": "甘孜",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "路线",
+            "徒步"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_route_daocheng",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_route:daocheng",
+          "title": "稻城亚丁线",
+          "subtitle": "稻城亚丁旅行线",
+          "summary": "覆盖亚丁三神山路线、季节色彩与拍摄计划。",
+          "city": "稻城",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "路线",
+            "愿望清单"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_spot_duanqiao",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:photo_spot:duanqiao",
+          "title": "断桥晨雾机位",
+          "subtitle": "西湖断桥晨雾机位",
+          "summary": "聚合最佳到位时间、潮汐晨雾条件与构图样片。",
+          "city": "杭州",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "机位",
+            "杭州"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_spot_yulong",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:photo_spot:yulong",
+          "title": "玉龙雪山机位",
+          "subtitle": "玉龙雪山观峰机位",
+          "summary": "覆盖观峰角度、光线时段与高原拍摄注意事项。",
+          "city": "丽江",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "机位",
+            "雪山"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_spot_laojunshan",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:photo_spot:laojunshan",
+          "title": "老君山观景台",
+          "subtitle": "老君山金顶观景台",
+          "summary": "沉淀云海观景位、徒步上山节奏与历史足迹。",
+          "city": "洛阳",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "机位",
+            "云海"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_gear_sony_a7m4",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_gear:sony_a7m4",
+          "title": "索尼 A7M4",
+          "subtitle": "索尼 A7M4 机身",
+          "summary": "聚合旅行摄影机身参数、镜头搭配与实拍样张。",
+          "city": "",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "器材",
+            "机身"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_gear_lens_35",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_gear:lens_35",
+          "title": "35mm 定焦镜头",
+          "subtitle": "35mm 旅拍定焦镜头",
+          "summary": "覆盖人文街拍焦段特性、光圈与旅行使用场景。",
+          "city": "",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "器材",
+            "镜头"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_place_dali_oldtown",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_place:dali_oldtown",
+          "title": "大理古城",
+          "subtitle": "大理古城历史街区",
+          "summary": "聚合古城游览动线、人文街拍点与本地停留。",
+          "city": "大理",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "目的地",
+            "古城"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_place_cangshan_inn",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_place:cangshan_inn",
+          "title": "苍山脚下民宿",
+          "subtitle": "苍山脚下旅拍民宿",
+          "summary": "覆盖民宿位置、苍山视野房型与摄影出片便利度。",
+          "city": "大理",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "民宿",
+            "住宿"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_place_temp_market",
+          "type": "travel_photo",
+          "canonicalEntityId": "entity:travel_place:temp_market",
+          "title": "临时市集",
+          "subtitle": "古城临时市集",
+          "summary": "记录一次性临时市集的位置与拍摄记忆（历史足迹）。",
+          "city": "大理",
+          "status": "published",
+          "categoryTags": [
+            "旅行摄影",
+            "市集",
+            "历史"
+          ]
         }
       ]
     },

@@ -87,7 +87,6 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
 
   Future<PersonaManagementItemViewData?> createPersona({
     required String displayName,
-    String? userHandle,
     String isolationLevel = 'open',
     String? purposeHint,
   }) async {
@@ -95,7 +94,6 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     try {
       final created = await _repo.createPersona(
         displayName: displayName,
-        userHandle: userHandle,
         isolationLevel: isolationLevel,
         purposeHint: purposeHint,
       );
@@ -142,7 +140,6 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
   Future<PersonaManagementItemViewData?> updatePersona(
     String subAccountId, {
     String? displayName,
-    String? userHandle,
     String? phone,
     String? email,
     String? isolationLevel,
@@ -151,7 +148,6 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     state = state.copyWith(isMutating: true, rawError: () => null);
     final changedFields = <String>[
       if (displayName != null) 'displayName',
-      if (userHandle != null) 'userHandle',
       if (phone != null) 'phone',
       if (email != null) 'email',
     ];
@@ -159,7 +155,6 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       final updated = await _repo.updatePersona(
         subAccountId,
         displayName: displayName,
-        userHandle: userHandle,
         phone: phone,
         email: email,
         isolationLevel: isolationLevel,
@@ -319,10 +314,6 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       switch (field) {
         case 'displayName':
           if (target.displayName != source.displayName) {
-            return true;
-          }
-        case 'userHandle':
-          if (target.userHandle != source.userHandle) {
             return true;
           }
         case 'phone':

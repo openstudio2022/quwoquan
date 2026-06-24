@@ -198,11 +198,16 @@ abstract class ContentCommentRepository {
 abstract class ContentMediaRepository {
   Future<ContentMediaInitUploadResponseDto> initMediaUpload({
     String mediaType = 'image',
+    String assetScope = 'draft',
   });
   Future<ContentMediaCompleteUploadResponseDto> completeMediaUpload({
     required String sessionId,
   });
   Future<void> abortMediaUpload({required String sessionId});
+  Future<void> bindMediaAssetsToPost({
+    required String postId,
+    required List<String> assetIds,
+  });
   Future<ContentMediaAssetWireDto> getMediaAsset({required String mediaId});
   Future<ContentVideoCoverSelectionWireDto> selectAutoVideoCover({
     required String mediaId,
@@ -210,6 +215,7 @@ abstract class ContentMediaRepository {
   Future<ContentVideoCoverSelectionWireDto> selectManualVideoCover({
     required String mediaId,
     required String coverAssetId,
+    int coverFrameTimeMs = 0,
   });
   Future<ContentArticleSummaryGenerateResponseDto> generateArticleSummary({
     required String title,

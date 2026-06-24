@@ -7,7 +7,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summa
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_evidence.dart';
@@ -86,10 +85,6 @@ class AuthorImpactCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (_isEmpty && !isMine) {
-      // 用户主页无影响事实不占位（不造假、不放占位数字）。
-      return const SizedBox.shrink();
-    }
     final fgSecondary = AppColors.iosSecondaryLabel(context);
     final visible = summary.items
         .where((item) => item.primaryText.trim().isNotEmpty)
@@ -123,14 +118,15 @@ class AuthorImpactCard extends ConsumerWidget {
                   dimension: item.intersectionDimension,
                   actionHints: item.actionHints,
                   showAuxiliaryLine: false,
-                  onActionHintTap: (hint) => AuthorImpactEvidence.onActionHintTap(
-                    context,
-                    navigator: navigator,
-                    item: item,
-                    hint: hint,
-                    isMine: isMine,
-                    fetchEvidence: _evidenceFetcher(ref, item),
-                  ),
+                  onActionHintTap: (hint) =>
+                      AuthorImpactEvidence.onActionHintTap(
+                        context,
+                        navigator: navigator,
+                        item: item,
+                        hint: hint,
+                        isMine: isMine,
+                        fetchEvidence: _evidenceFetcher(ref, item),
+                      ),
                   onSpanTap: (span) => AuthorImpactEvidence.onSpanTap(
                     context,
                     navigator: navigator,
@@ -162,7 +158,9 @@ class AuthorImpactCard extends ConsumerWidget {
             ],
       emptyChild: Text(
         key: AuthorImpactCard.emptyKey,
-        UITextConstants.profileImpactEmptyMine,
+        isMine
+            ? UITextConstants.profileImpactEmptyMine
+            : UITextConstants.profileImpactEmptyOther,
         style: TextStyle(
           fontSize: AppTypography.iosCaption1,
           height: AppSpacing.textLineHeightBody,
@@ -171,5 +169,4 @@ class AuthorImpactCard extends ConsumerWidget {
       ),
     );
   }
-
 }

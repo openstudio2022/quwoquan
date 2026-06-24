@@ -35,7 +35,24 @@ VM/CI 单测使用：
 - Android Debug 构建可通过
 - 相关 sqflite 单测可通过
 
-注意：新版链路首次解析 / 构建时会下载 `sqlite3` native assets；若外网或 Maven/GitHub 网络抖动，可能出现一次性下载失败，但在重试后可恢复并保持锁文件一致。
+当前仓库策略：
+
+- `quwoquan_app` 主运行链路不依赖外部下载 `sqlite3` native assets。
+- 根 `pubspec.yaml` 已通过 `hooks.user_defines.sqlite3.source=system` 固定到系统 SQLite，
+  避免 `flutter run` / Xcode build 因 GitHub release 下载抖动而阻断。
+- `sqflite_common_ffi` 仅用于主机侧 VM/CI 单测；移动端运行仍使用 `sqflite` 原生插件。
+
+## 本地依赖纯度策略（2026-06-22）
+
+- `quwoquan_app/run.sh` 与 `quwoquan_app/scripts/env/run_flutter_test_guarded.py`
+  统一使用 `flutter pub get --offline`，并以 `flutter run --no-pub` 启动，禁止
+  启动链偷偷联网补依赖。
+- iOS 侧要求 `ios/Podfile.lock` 与 `ios/Pods/Manifest.lock` 完全一致；若 drift，
+  启动脚本直接 fail-closed，而不是在运行时尝试修复 pod graph。
+- Android 自定义上游 AAR（`webrtc-sdk`、`audioswitch`、`livekit noise`）已固定
+  到 `quwoquan_app/vendor/android_artifacts/`，不再允许通过 GitHub / JitPack /
+  自定义 Maven 在编译时下载。
+- 仓库级门禁：`python3 agent_ops/gate/verify_local_dependency_purity.py`。
 
 ## 防御配置（Xcode 工程侧）
 已在以下 xcconfig 文件中明确设置了 SDKROOT：

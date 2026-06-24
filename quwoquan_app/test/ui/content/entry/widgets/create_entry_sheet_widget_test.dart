@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,17 @@ import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 void main() {
   Icon iconFor(WidgetTester tester, IconData icon) =>
       tester.widget<Icon>(find.byIcon(icon));
+  Finder dragHandleFinder() => find.byWidgetPredicate(
+    (widget) =>
+        widget is Container &&
+        widget.constraints?.minWidth == AppSpacing.createEntrySheetHandleWidth &&
+        widget.constraints?.maxWidth == AppSpacing.createEntrySheetHandleWidth &&
+        widget.constraints?.minHeight ==
+            AppSpacing.createEntrySheetHandleHeight &&
+        widget.constraints?.maxHeight ==
+            AppSpacing.createEntrySheetHandleHeight,
+    description: 'sheet drag handle',
+  );
 
   testWidgets('创作入口收口为图片/视频/长文/续草稿', (tester) async {
     EditorStartAction? selected;
@@ -84,6 +96,7 @@ void main() {
     expect(find.text('文章'), findsNothing);
     expect(find.byKey(TestKeys.modalBottomSheetPanel), findsOneWidget);
     expect(find.byType(ConversationSheetCancelBar), findsOneWidget);
+    expect(dragHandleFinder(), findsOneWidget);
     expect(
       tester.getTopLeft(find.byKey(TestKeys.modalBottomSheetPanel)).dy,
       greaterThan(0),
@@ -93,6 +106,38 @@ void main() {
     await tester.pump();
 
     expect(selected, EditorStartAction.capture);
+  });
+
+  testWidgets('深色模式下创作入口顶部仅渲染一个标准拖拽手柄', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, child) => MaterialApp(
+            home: CupertinoTheme(
+              data: const CupertinoThemeData(brightness: Brightness.dark),
+              child: Scaffold(
+                body: CreateEntrySheet(
+                  isOpen: true,
+                  onClose: () {},
+                  onSelect: (_) {},
+                  onContinueFromDraft: () {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(dragHandleFinder(), findsOneWidget);
+    final handle = tester.widget<Container>(dragHandleFinder());
+    final decoration = handle.decoration! as BoxDecoration;
+    expect(
+      decoration.color,
+      AppColorsFunctional.getColor(true, ColorType.separatorOpaque),
+    );
   });
 
   testWidgets('趣信上下文优先突出连接动作组', (tester) async {

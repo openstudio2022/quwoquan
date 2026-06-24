@@ -27,6 +27,9 @@ class MicroPostDto extends PostBaseDto {
   @override final DateTime createdAt;
   @override final DateTime? updatedAt;
   @override final DateTime? publishedAt;
+  final String? contentVertical;
+  final String? recallPath;
+  final String? supplySource;
   @override final List<IntersectionReason>? intersectionReasons;
 
   const MicroPostDto({
@@ -51,6 +54,9 @@ class MicroPostDto extends PostBaseDto {
     required this.createdAt,
     this.updatedAt,
     this.publishedAt,
+    this.contentVertical,
+    this.recallPath,
+    this.supplySource,
     this.intersectionReasons,
   });
 
@@ -77,6 +83,9 @@ class MicroPostDto extends PostBaseDto {
       createdAt: _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
       updatedAt: _parseDateTime(m['updatedAt']) ?? _parseDateTime(m['updated_at']) ?? null,
       publishedAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['published_at']) ?? null,
+      contentVertical: m['contentVertical']?.toString() ?? m['categoryId']?.toString() ?? m['category']?.toString() ?? m['vertical']?.toString() ?? null,
+      recallPath: m['recallPath']?.toString() ?? m['recall_path']?.toString() ?? null,
+      supplySource: m['supplySource']?.toString() ?? m['supply_source']?.toString() ?? null,
       intersectionReasons: m['intersectionReasons'] == null ? null : _parseProjectionDtoList(m['intersectionReasons'], IntersectionReason.fromMap),
     );
   }
@@ -105,6 +114,9 @@ class MicroPostDto extends PostBaseDto {
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'publishedAt': publishedAt,
+      'contentVertical': contentVertical,
+      'recallPath': recallPath,
+      'supplySource': supplySource,
       'intersectionReasons': intersectionReasons,
     };
   }
@@ -131,6 +143,9 @@ class MicroPostDto extends PostBaseDto {
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? publishedAt,
+    String? contentVertical,
+    String? recallPath,
+    String? supplySource,
     List<IntersectionReason>? intersectionReasons,
   }) {
     return MicroPostDto(
@@ -155,6 +170,9 @@ class MicroPostDto extends PostBaseDto {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       publishedAt: publishedAt ?? this.publishedAt,
+      contentVertical: contentVertical ?? this.contentVertical,
+      recallPath: recallPath ?? this.recallPath,
+      supplySource: supplySource ?? this.supplySource,
       intersectionReasons: intersectionReasons ?? this.intersectionReasons,
     );
   }

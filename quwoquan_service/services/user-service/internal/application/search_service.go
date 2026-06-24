@@ -8,6 +8,7 @@ import (
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
 )
 
@@ -45,25 +46,24 @@ func (s *SearchService) SearchSocialRelations(
 		return []map[string]any{}, nil
 	}
 	limit = clampSearchLimit(limit)
-	profiles, err := s.profiles.SearchProfiles(ctx, normalized, limit)
-	if err != nil {
-		return nil, err
-	}
 
-	results := make([]map[string]any, 0, len(profiles))
-	seen := make(map[string]struct{}, len(profiles))
-	for _, profile := range profiles {
-		persona, _ := s.personas.FindActiveByUserID(ctx, profile.UserID)
-		view := buildSubAccountProfileView(&profile, persona)
+	results := make([]map[string]any, 0, limit)
+	seen := make(map[string]struct{}, limit)
+
+	appendProfile := func(profile *model.UserProfile, persona *model.Persona) {
+		if profile == nil {
+			return
+		}
+		view := buildSubAccountProfileView(profile, persona)
 		subAccountID := strings.TrimSpace(asString(view["subAccountId"]))
 		if subAccountID == "" {
 			subAccountID = strings.TrimSpace(profile.UserID)
 		}
 		if subAccountID == "" {
-			continue
+			return
 		}
 		if _, ok := seen[subAccountID]; ok {
-			continue
+			return
 		}
 
 		displayName := strings.TrimSpace(asString(view["displayName"]))
@@ -77,9 +77,11 @@ func (s *SearchService) SearchSocialRelations(
 			displayName = subAccountID
 		}
 		avatarVersion, _ := view["avatarVersion"].(int)
+		userHandle := firstNonEmpty(strings.TrimSpace(asString(view["userHandle"])), strings.TrimSpace(asString(view["username"])), subAccountID)
 
 		results = append(results, map[string]any{
 			"subAccountId":  subAccountID,
+			"userHandle":    userHandle,
 			"username":      firstNonEmpty(strings.TrimSpace(asString(view["username"])), strings.TrimSpace(profile.Nickname), subAccountID),
 			"displayName":   displayName,
 			"avatarUrl":     strings.TrimSpace(asString(view["avatarUrl"])),
@@ -89,7 +91,39 @@ func (s *SearchService) SearchSocialRelations(
 		})
 		seen[subAccountID] = struct{}{}
 	}
+
+	// 趣我圈号(userHandle)精确命中优先：用户输入完整趣我圈号时直接置顶，
+	// 隐私 strict 分身不通过搜索暴露（与 GetSubAccountProfile strict→404 一致）。
+	if handle := normalizeUserHandleQuery(normalized); handle != "" {
+		if persona, _ := s.personas.FindByUserHandle(ctx, handle); persona != nil &&
+			!strings.EqualFold(strings.TrimSpace(persona.IsolationLevel), "strict") {
+			if profile, _ := s.profiles.FindByID(ctx, persona.UserID); profile != nil {
+				appendProfile(profile, persona)
+			}
+		}
+	}
+
+	// 昵称/资料模糊匹配补全。
+	profiles, err := s.profiles.SearchProfiles(ctx, normalized, limit)
+	if err != nil {
+		return nil, err
+	}
+	for i := range profiles {
+		if len(results) >= limit {
+			break
+		}
+		persona, _ := s.personas.FindActiveByUserID(ctx, profiles[i].UserID)
+		appendProfile(&profiles[i], persona)
+	}
 	return results, nil
+}
+
+// normalizeUserHandleQuery 清洗用户输入的趣我圈号，去掉可选 @ 前缀与空白；
+// 不做大小写折叠（user_handle 系统分配，精确匹配）。
+func normalizeUserHandleQuery(query string) string {
+	handle := strings.TrimSpace(query)
+	handle = strings.TrimPrefix(handle, "@")
+	return strings.TrimSpace(handle)
 }
 
 func (s *SearchService) ListRecentSearches(ctx context.Context, userID string) ([]map[string]any, error) {

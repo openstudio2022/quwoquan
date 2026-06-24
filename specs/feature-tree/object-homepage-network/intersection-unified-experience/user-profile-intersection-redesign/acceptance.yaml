@@ -11,7 +11,7 @@ scope:
   in_scope:
   - 公共头部：认证标识 + 摘要区挂载统计行（记录/粉丝/关注/获赞）。
   - 一级 tab 内容改记录；二级过滤改最右侧过滤项/图标、去胶囊。
-  - 他人主页「为什么推荐TA」/「TA帮助了很多人」列表入口与去好友化。
+  - 他人主页「我与TA的交集」/「TA的影响力」列表入口与去好友化。
   - 我的主页「我的连接」/「我的影响力」列表入口与去好友化/去收藏。
   out_of_scope:
   - 圈子主页、实体主页。
@@ -63,7 +63,7 @@ gwt_acceptance:
     when:
     - 查看一级 tab 与记录下的二级过滤。
     then:
-    - 一级 tab 显示「记录/圈子/互动」；二级过滤（全部/图片/视频/文字）在最右侧、非胶囊。
+    - 一级 tab 显示「记录/互动/足迹」（足迹仅本人主页可见）；记录二级过滤（全部/图片/视频/文字）在最右侧、非胶囊。
     done_when:
     - 他人/我的主页二级过滤同一实现。
     edge_cases: []
@@ -90,7 +90,7 @@ gwt_acceptance:
         envs: *id001
     notes:
     - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/user/widgets/profile_creations_tab_test.dart（一级
-      tab「记录/圈子/互动」+ 二级过滤全部/图片/视频/文字在最右侧非胶囊，他人/我的同实现，2026-06-16 green）'
+      tab「记录/互动/足迹」+ 记录二级过滤全部/图片/视频/文字在最右侧非胶囊，他人/我的同实现，2026-06-16 green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma user profile ui_config
       二级过滤真实链路待 WP-D。'
   GWT3:
@@ -98,13 +98,13 @@ gwt_acceptance:
     given:
     - alpha mock 提供对象交集与作者影响力数据。
     when:
-    - 渲染「为什么推荐TA」/「我的连接」与「TA帮助了很多人」/「我的影响力」。
+    - 渲染「我与TA的交集」/「我的连接」与「TA的影响力」/「我的影响力」。
     then:
     - 每行单结论句 + 至多一条辅助说明 + 查看更多；影响力文案为「建立了新连接」，无「认识了新朋友」/收藏文案。
     done_when:
     - 文案口径与 intersection-definition §17 一致。
     edge_cases:
-    - 无交集/无影响力事实时不占位（他人）/展示鼓励文案（我的）。
+    - 无交集/无影响力事实时，他人主页展示稳定空态；我的主页展示鼓励文案。
     contract_refs:
     - content/post/projections/author_impact_item.yaml
     performance_points: []
@@ -127,7 +127,7 @@ gwt_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.user_profile_intersection_redesign.contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/user/author_impact_card_test.dart（「TA帮助了很多人」/「我的影响力」单结论句
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/user/author_impact_card_test.dart（「TA的影响力」/「我的影响力」单结论句
       + 至多一条辅助说明 + 查看更多，文案「建立了新连接」无好友化/收藏，2026-06-16 green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma author_impact_item 真实链路待
       WP-D。'
@@ -193,8 +193,8 @@ gwt_acceptance:
       - file: quwoquan_app/test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart
       - file: quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
       recorded:
-      - file: quwoquan_app/test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/pages/lin_mo_travel_intersection_acceptance__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/my_intersection_inbox_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:

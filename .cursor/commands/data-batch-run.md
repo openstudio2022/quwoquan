@@ -35,7 +35,7 @@ python3 quwoquan_data/scripts/cli.py task rollup --plan <planId>
 python3 quwoquan_data/scripts/cli.py template lint
 python3 quwoquan_data/scripts/cli.py template creator-lint
 python3 quwoquan_data/scripts/cli.py template rec-contract
-python3 quwoquan_data/scripts/cli.py template region-season-lint
+python3 quwoquan_data/scripts/cli.py template audience-lint
 ```
 
 2. 将用户指令解析为 10D 输入：

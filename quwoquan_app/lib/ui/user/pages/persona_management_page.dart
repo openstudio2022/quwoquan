@@ -304,7 +304,6 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     }
 
     String displayName = '';
-    String userHandle = '';
     String purposeHint = '';
     String isolationLevel = 'open';
 
@@ -319,11 +318,6 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
               CupertinoTextField(
                 placeholder: UITextConstants.profileSubAccountNamePlaceholder,
                 onChanged: (value) => displayName = value,
-              ),
-              SizedBox(height: AppSpacing.intraGroupSm),
-              CupertinoTextField(
-                placeholder: UITextConstants.personaUserHandleLabel,
-                onChanged: (value) => userHandle = value,
               ),
               SizedBox(height: AppSpacing.intraGroupSm),
               CupertinoTextField(
@@ -370,9 +364,6 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                 try {
                   final created = await notifier.createPersona(
                     displayName: displayName.trim(),
-                    userHandle: userHandle.trim().isEmpty
-                        ? null
-                        : userHandle.trim(),
                     isolationLevel: isolationLevel,
                     purposeHint: purposeHint.trim().isEmpty
                         ? null
@@ -436,7 +427,6 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     final displayNameController = TextEditingController(
       text: persona.displayName,
     );
-    final handleController = TextEditingController(text: persona.userHandle);
     final phoneController = TextEditingController(text: persona.phone);
     final emailController = TextEditingController(text: persona.email);
     String isolationLevel = persona.isolationLevel;
@@ -454,9 +444,15 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                 placeholder: UITextConstants.profileSubAccountNamePlaceholder,
               ),
               SizedBox(height: AppSpacing.intraGroupSm),
-              CupertinoTextField(
-                controller: handleController,
-                placeholder: UITextConstants.personaUserHandleLabel,
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${UITextConstants.personaUserHandleLabel}: ${persona.userHandle.isEmpty ? '-' : persona.userHandle}',
+                  style: TextStyle(
+                    fontSize: AppTypography.caption,
+                    color: AppColors.iosSecondaryLabel(context),
+                  ),
+                ),
               ),
               SizedBox(height: AppSpacing.intraGroupSm),
               CupertinoTextField(
@@ -506,7 +502,6 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                   await notifier.updatePersona(
                     persona.subAccountId,
                     displayName: displayNameController.text.trim(),
-                    userHandle: handleController.text.trim(),
                     phone: phoneController.text.trim(),
                     email: emailController.text.trim(),
                     isolationLevel: isolationLevel,
@@ -528,7 +523,6 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       ),
     );
     displayNameController.dispose();
-    handleController.dispose();
     phoneController.dispose();
     emailController.dispose();
   }

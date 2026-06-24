@@ -183,50 +183,16 @@ class MockIntersectionRepository implements IntersectionRepository {
     required String objectType,
     int limit = CloudApiQueryDefaults.objectIntersectionsLimit,
   }) async {
-    // N3 对象页「你们的交集」优先消费 contract fixture（intersection_core.objectIntersections，
-    // 与 alpha/beta/gamma seed 同源，自带 primarySpans）；缺省回退证据组合成（关系类对象）。
+    // 对象页「你们的交集」唯一真相源 = contract fixture（intersection_core.objectIntersections，
+    // 与 alpha/beta/gamma seed 同源，自带 primaryText/primarySpans/intersectionPoints）。
+    // 无可解析对象交集时返回空（不造假、不回退硬编码证据组——N3 已删除 _objectEvidenceGroups
+    // 第二真相源，mock 与 remote 同走 IntersectionReason 真实下发）。
     final seeded = _seedObjectIntersections(objectId);
-    if (seeded.isNotEmpty) {
-      return seeded.length <= limit
-          ? seeded
-          : seeded.sublist(0, limit);
-    }
-    final groups = _objectEvidenceGroups(objectType);
-    if (groups.isEmpty) return const <IntersectionReason>[];
-    final isRecommended = groups.every((g) => g.pointClass == 'recommended');
-    final reason = _withPoints(
-      IntersectionReason(
-        dimension: groups.first.dimension,
-        intersectionId: 'objix_${objectType}_$objectId',
-        intersectionClass: isRecommended ? 'affinity' : 'fact',
-        objectKind: _objectKindForObjectType(objectType),
-        relationObjectId: objectId,
-        actionType: 'view_object',
-        actionTargetId: objectId,
-        source: 'relationship',
-        connectionSummary: _connectionSummaryFor(objectType, groups),
-      ),
-      groups
-          .take(limit)
-          .map(
-            (g) => _point(
-              id: 'objix_${objectId}_${g.kind}',
-              pointClass: g.pointClass,
-              dimension: g.dimension,
-              label: g.label,
-              displayText: g.label,
-              sourceRef: g.kind,
-              count: g.count,
-              sampleText: g.sampleText,
-              sampleAvatarUrls: g.avatars,
-            ),
-          )
-          .toList(growable: false),
-    );
-    return <IntersectionReason>[reason];
+    if (seeded.isEmpty) return const <IntersectionReason>[];
+    return seeded.length <= limit ? seeded : seeded.sublist(0, limit);
   }
 
-  /// N3 对象页「你们的交集」seed 真相源（intersection_core.objectIntersections，按 objectId 索引）。
+  /// 对象页「你们的交集」seed 真相源（intersection_core.objectIntersections，按 objectId 索引）。
   /// 自带 primarySpans/intersectionPoints；命中即直出（与 inbox 同一 hydrate 管线收敛点摘要）。
   static List<IntersectionReason> _seedObjectIntersections(String objectId) {
     final seed = ContractFixtureRuntimeLoader.contentSeedSet('intersection_core');
@@ -246,180 +212,6 @@ class MockIntersectionRepository implements IntersectionRepository {
           return reason;
         })
         .toList(growable: false);
-  }
-
-  /// 对象页对象类型 → objectKind 闭集（registry.objectKinds，统一品牌角标真相源）。
-  /// 旧 relationKind 承载对象类型语义已废止（§23 / 投影 yaml「禁止再承载对象类型语义」）。
-  String _objectKindForObjectType(String objectType) {
-    switch (objectType) {
-      case 'circle':
-        return 'circle';
-      case 'entity':
-      case 'homepage':
-        return 'place';
-      default:
-        return 'person';
-    }
-  }
-
-  /// 云侧实例化连接说明（mock 模拟云端下发，端不在 UI 拼装）。
-  String _connectionSummaryFor(String objectType, List<_EvidenceSeed> groups) {
-    final samples = groups
-        .where((g) => g.sampleText.trim().isNotEmpty)
-        .take(2)
-        .map((g) => g.sampleText.trim())
-        .toList(growable: false);
-    if (samples.isEmpty) return '';
-    final joined = samples.join('、');
-    return '$joined 把你们连在一起';
-  }
-
-  /// §2 证据组闭集 + contact/mutual/following 三层关系分层（按对象类型）。
-  /// 维度为开放字符串，kind 同 §9.7 映射总表；展示真相源为证据组。
-  List<_EvidenceSeed> _objectEvidenceGroups(String objectType) {
-    switch (objectType) {
-      case 'circle':
-        return const <_EvidenceSeed>[
-          _EvidenceSeed(
-            kind: 'followeeInObject',
-            dimension: 'relationship',
-            label: '关注的人在这',
-            count: 6,
-            sampleText: '周屿',
-            avatars: <String>[
-              'media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg',
-              'media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg',
-            ],
-          ),
-          _EvidenceSeed(
-            kind: 'commonContact',
-            dimension: 'relationship',
-            label: '联系人在这',
-            count: 3,
-            sampleText: '老同学 李航',
-            avatars: <String>[
-              'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
-            ],
-          ),
-          _EvidenceSeed(
-            kind: 'followeeInObject',
-            dimension: 'relationship',
-            label: '关注的人常来',
-            count: 3,
-            sampleText: '林清越',
-            avatars: <String>[
-              'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
-            ],
-          ),
-          _EvidenceSeed(
-            kind: 'sharedTagSample',
-            dimension: 'interest',
-            label: '都聊摄影',
-            count: 0,
-            sampleText: '',
-          ),
-          _EvidenceSeed(
-            kind: 'affinity',
-            dimension: 'interest',
-            label: '你可能感兴趣',
-            count: 0,
-            sampleText: '',
-            pointClass: 'recommended',
-          ),
-        ];
-      case 'entity':
-      case 'homepage':
-        return const <_EvidenceSeed>[
-          _EvidenceSeed(
-            kind: 'followeeVisited',
-            dimension: 'location',
-            label: '关注的人来过',
-            count: 9,
-            sampleText: '周屿',
-            avatars: <String>[
-              'media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg',
-              'media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg',
-              'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
-            ],
-          ),
-          _EvidenceSeed(
-            kind: 'followeeVisited',
-            dimension: 'location',
-            label: '联系人来过',
-            count: 4,
-            sampleText: '同事 苏黎',
-            avatars: <String>[
-              'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
-            ],
-          ),
-          _EvidenceSeed(
-            kind: 'followeeInObject',
-            dimension: 'relationship',
-            label: '关注的人加入',
-            count: 6,
-            sampleText: '校友摄影圈',
-            avatars: <String>[
-              'media/avatar/s/mock/seed/u_1499952127939-9bbf5af6c51c/v1/avatar.jpg',
-            ],
-          ),
-          _EvidenceSeed(
-            kind: 'affinity',
-            dimension: 'interest',
-            label: '可能想去',
-            count: 0,
-            sampleText: '',
-            pointClass: 'recommended',
-          ),
-        ];
-      case 'user':
-        return const <_EvidenceSeed>[
-          _EvidenceSeed(
-            kind: 'sharedFollowees',
-            dimension: 'relationship',
-            label: '共同关注的人',
-            count: 4,
-            sampleText: '林清越',
-            avatars: <String>[
-              'media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg',
-              'media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg',
-            ],
-          ),
-          _EvidenceSeed(
-            kind: 'commonContact',
-            dimension: 'relationship',
-            label: '共同联系人',
-            count: 2,
-            sampleText: '老同学 李航',
-            avatars: <String>[
-              'media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg',
-            ],
-          ),
-          _EvidenceSeed(
-            kind: 'coCommented',
-            dimension: 'content',
-            label: '共同讨论',
-            count: 3,
-            sampleText: '故宫夜景',
-          ),
-          _EvidenceSeed(
-            kind: 'sharedTagSample',
-            dimension: 'interest',
-            label: '都爱摄影',
-            count: 0,
-            sampleText: '',
-          ),
-          _EvidenceSeed(
-            kind: 'affinity',
-            dimension: 'interest',
-            label: '可能合得来',
-            count: 0,
-            sampleText: '',
-            pointClass: 'recommended',
-          ),
-        ];
-      default:
-        return const <_EvidenceSeed>[];
-    }
   }
 
   bool _isNew(IntersectionReason reason, DateTime? watermark) {
@@ -950,25 +742,4 @@ class _BriefStatement {
 
   final String text;
   final List<IntersectionTextSpan> spans;
-}
-
-/// 对象页关系证据组 mock 种子（§2 闭集 + 三层关系分层）。
-class _EvidenceSeed {
-  const _EvidenceSeed({
-    required this.kind,
-    required this.dimension,
-    required this.label,
-    required this.count,
-    required this.sampleText,
-    this.avatars = const <String>[],
-    this.pointClass = 'fact',
-  });
-
-  final String kind;
-  final String dimension;
-  final String label;
-  final int count;
-  final String sampleText;
-  final List<String> avatars;
-  final String pointClass;
 }

@@ -1,164 +1,180 @@
-# 三层测试策略与工程目录规范
+# 三层测试策略与迁移真相源
 
-本文是仓库测试体系的唯一执行规范。特性树仍表达产品与领域责任，测试工程只使用三层：
+本文是仓库三层测试治理的唯一执行规范。测试工程层只允许：
 
 - `local_contract`
 - `api_integration`
 - `user_acceptance`
 
-禁止新增以 `T1/T2/T3/T4` 作为测试目录、证据层或新验收字段；存量历史文本只能作为迁移前记录存在，新增验收必须使用三层测试证据。
+禁止再引入 `T1/T2/T3/T4`、`L1/L2/L3/L4` 作为测试目录、门禁名字、验收证据层或新测试资产命名。
 
-## 1. 三层定义
+## 1. 环境语义
 
-| 测试层 | 环境 | 测试对象 | 测试策略 |
+| 测试层 | 主环境 | 说明 |
+|---|---|---|
+| `local_contract` | `alpha` / `local` | 本地契约、DTO/wire、metadata/codegen、Provider/Widget/纯函数、Mock/Remote 等价断言 |
+| `api_integration` | `beta` / `gamma` | gateway/API、真实存储、错误码、requestId/traceId、一致性副作用、seed/fixture、回滚/降级 |
+| `user_acceptance` | `gamma_local` / `prod_gray_initial` | 用户旅程、页面状态、主 CTA、权限/错误/空态、trace/referral/feedRequestId、发布前灰度验收 |
+
+约束：
+
+- 生产没有 `prod-gray` 环境；灰度只是 `prod` rollout stage。
+- `user_acceptance` 的远端主证据来自 `gamma_local` 与 `prod_gray_initial`，而不是单独再维护第二套“远端 gamma”口径。
+
+## 2. 顶层用例模型
+
+统一 case id 口径：
+
+- Journey：`user_acceptance.<journey_id>.<scenario_id>.<case>`
+- Page：`user_acceptance.page.<surface_id>.<state_or_action>`
+- Service/API：`api_integration.<domain>.<capability>.<story>.<case>`
+- Local contract：`local_contract.<domain>.<capability>.<story>.<case>`
+
+页面 case 的 `surface_id` 直接来自 metadata `ui_surfaces.yaml`；route-only 页面归属来自
+`specs/gates/user_acceptance_page_inventory.yaml`，不再维护第二套人工页面清单。
+
+每个已实现的 Journey / Page `user_acceptance` 用例都必须反向绑定：
+
+- 至少 1 个 `local_contract`
+- 至少 1 个 `api_integration`
+
+缺任一层，不得标记为 `implemented` / `completed`。
+
+## 3. 特性树映射
+
+| 特性树层级 | 主验收意图 | 主证据 | 支撑证据 |
 |---|---|---|---|
-| `local_contract` | 本地开发机、CI、alpha fixture | 单模块、领域规则、DTO/wire、metadata、错误码、Provider、Widget、MockRepository、纯函数、handler 内部契约 | 快速、确定性、无外部网络；优先 Red -> Green；用 fixture 和 typed contract 证明最小行为 |
-| `api_integration` | beta、gamma-local、prod rollout 只读/幂等阶段 | RemoteRepository、gateway/API、真实存储、事件/outbox、跨服务读写一致性、错误响应、trace/request id | 端云契约和真实环境一致性；beta 支持人工验收，gamma-local 自动化镜像验证，prod 只跑低风险健康与回滚对账 |
-| `user_acceptance` | gamma-local、prod rollout、设备矩阵 | 用户旅程、页面功能、UI/UX 可用性、页面生命周期、权限、弱网、冷启动、灰度包、观测/SLO | 从用户价值出发；覆盖主路径、失败路径、边界、恢复动作、页面状态、埋点和发布准出 |
+| `AppRoot` | `UAT` | `user_acceptance` | `api_integration` + `local_contract` |
+| `L1_domain_service` | domain acceptance | `api_integration` | `local_contract`，必要时 `user_acceptance` |
+| `L2_business_capability` | `SIT` | `api_integration` | `local_contract`，面向用户能力时补 `user_acceptance` |
+| `L3_story` | `GWT` / `contract` | `local_contract` | 远端边界补 `api_integration`，页面/旅程补 `user_acceptance` |
 
-## 2. 特性树映射
-
-特性树不是测试层。测试层只回答“如何证明”，特性树回答“证明什么”。
-
-| 特性树层级 | 关注点 | 验收表达 | 主证据 | 支撑证据 |
-|---|---|---|---|---|
-| `AppRoot` | 跨领域 Journey / Scenario、产品 superpower、发布前用户价值 | UAT 用户验收用例，不使用 GWT | `user_acceptance` | `api_integration` |
-| `L1_domain_service` | 领域边界、上下游依赖、权限、生命周期、观测、发布 guardrails | domain acceptance | `api_integration` | `local_contract`，必要时 `user_acceptance` |
-| `L2_business_capability` | 多 Story 组合、状态机、端云协作、数据一致性 | SIT 能力验收用例 | `api_integration` | `local_contract`，面向用户能力补 `user_acceptance` |
-| `L3_story` | 最小可闭环价值点 | GWT + contract | `local_contract` | 远端边界补 `api_integration`，页面行为补 `user_acceptance` |
-
-`contract_acceptance` 是 L3 或 metadata 的契约验收块，必须与 `gwt_acceptance` 一样被主校验器覆盖。
-
-## 3. 工程目录
-
-新增测试必须优先使用三层目录。存量目录通过 `specs/gates/test_directory_inventory.yaml` 清单映射逐步收敛，并由 `make verify-test-directory-layout` 阻断任何新增 legacy 测试路径。
+## 4. 工程目录
 
 ### App
 
 ```text
 quwoquan_app/test/
-  local_contract/<domain>/<capability>/<story>/<case>_test.dart
-  api_integration/<domain>/<capability>/<story>/<case>_test.dart
-  user_acceptance/<journey_id>/<scenario_id>/<case>_test.dart
-  user_acceptance/pages/<domain>/<surface_id>/<case>_test.dart
+  local_contract/**
+  api_integration/**
+  user_acceptance/<journey>/**
+  user_acceptance/pages/<owner>/<surface_id>/**
 ```
-
-存量映射：
-
-- `test/cloud/**`：按是否访问真实环境映射到 `local_contract` 或 `api_integration`。
-- `test/ui/**`、`test/components/**`、`test/core/**`：默认映射到 `local_contract`；若表达完整页面验收，迁入 `user_acceptance/pages/**`。
-- `test/patrol/**`：映射到 `user_acceptance`。
-- `integration_test/**` 不作为仓库测试分层入口。
 
 ### Service
 
 ```text
 quwoquan_service/services/<service>/tests/
-  local_contract/<story_or_contract>_test.go
-  api_integration/<api_or_flow>_test.go
+  local_contract/**
+  api_integration/**
 ```
 
-存量 `services/<service>/tests/*_contract_test.go` 先映射到 `local_contract` 或 `api_integration`，后续随触达迁移。
+说明：
 
-### Ops / Release
+- `internal/**`、`cmd/**` 的既有 Go 测试通过 canonical bridge 映射到 `tests/local_contract/**`
+- `tests/**` 的 HTTP/真实存储/跨服务既有套件通过 canonical bridge 映射到 `tests/api_integration/**`
+
+### Data
 
 ```text
-agent_ops/acceptance/
-  api_integration/<domain>/<suite>.yaml
-  user_acceptance/<journey_id>/manifest.yaml
-  lib/**
+quwoquan_data/tests/
+  local_contract/**
+  api_integration/**
+  user_acceptance/**
 ```
 
-`agent_ops/acceptance/lib/**` 只放 runner、HTTP client、断言、report 结构和环境解析，不放业务假数据。
+### Ops
 
-## 4. 命名
-
-- 用例 ID：`<layer>.<domain>.<capability>.<story>.<case>`。
-- Journey 用例：`user_acceptance.<journey_id>.<scenario_id>.<case>`。
-- 页面用例：`user_acceptance.page.<surface_id>.<state_or_action>`。
-- API 用例：`api_integration.<domain>.<operation_id>.<case>`。
-- 本地契约用例：`local_contract.<domain>.<contract_or_story>.<case>`。
-- 文件名：`<story_or_operation>__<layer>_test.<ext>` 只适用于 canonical 三层根目录。legacy 源文件可暂保留原名，但必须被 `test_directory_inventory.yaml` 映射，且其 canonical 目标路径必须遵守该命名。
-- 报告：`artifacts/tests/<layer>/<env>/<suite>/<run_id>/report.json`。
-
-## 5. Acceptance Schema
-
-验收项必须使用 `test_evidence`：
-
-```yaml
-test_evidence:
-  primary:
-    - layer: user_acceptance
-      suite: profile_identity_sync
-      cases:
-        - user_acceptance.profile_identity_sync.create_update_sync
-      envs: [gamma, prod]
-  supporting:
-    - layer: api_integration
-      suite: user_profile_api
-      cases:
-        - api_integration.user.get_me.default_nickname
-      envs: [beta, gamma]
-tests:
-  planned: []
-  recorded: []
+```text
+agent_ops/tests/local_contract/**
+agent_ops/acceptance/api_integration/**
+agent_ops/acceptance/user_acceptance/**
 ```
+
+## 5. 物理迁移与 bridge
+
+全仓 legacy 测试源文件允许暂时保留在原目录，但从治理角度一律不再作为执行真相源：
+
+- 执行、门禁、`tests.recorded`、目录规范只认 canonical 三层根
+- legacy 到 canonical 的映射以 `specs/gates/test_directory_inventory.yaml` 为唯一清单
+- 允许继续存在的 legacy 源文件白名单以 `specs/gates/test_legacy_source_allowlist.yaml` 为唯一 ratchet；新增测试不得再通过“legacy + bridge”进入仓库
+- canonical bridge 由 `agent_ops/scaffold/generate_canonical_test_bridges.py` 生成
+- 任何新增 legacy 测试路径如果没有 canonical bridge，会被 `verify-test-directory-layout` 阻断
+- bench-only legacy runner 必须显式登记到 `test_legacy_source_allowlist.yaml`；当前仅保留已登记存量例外
+
+说明：
+
+- canonical bridge / inventory 收口表示“治理执行面完成”，不等于“legacy 测试文件已经全部物理搬迁或从磁盘移除”
+- `specs/gates/test_directory_inventory.yaml` 中的 `pending_count` 只表示“仍未 bridge 的 legacy suite 数量”，不是磁盘上 legacy 文件总数
+
+## 6. Acceptance / Evidence
 
 规则：
 
-- `test_evidence.primary` 必须非空。
-- `layer` 只能是 `local_contract`、`api_integration`、`user_acceptance`。
-- `cases` 中每个 case id 必须以对应 `layer` 开头。
-- `envs` 只能使用 `local`、`alpha`、`beta`、`gamma`、`prod`。
-- `status` 仅允许 `pending`、`partial`、`implemented`、`completed`、`pending_evidence`、`blocked`。
-- `status` 为 `implemented` 或 `completed` 时，`tests.recorded` 必须非空且引用真实存在的测试文件、命令或报告。
-- `tests.planned` / `tests.recorded` 只能使用结构化 `file` / `command` / `artifact` 记录，不允许富文本串联说明。
-- 不允许在验收项中新增旧字段 `evidence`。
+- `tests.recorded` 只允许：
+  - canonical 三层测试文件
+  - `artifacts/tests/**/report.json`
+- 旅程与页面的主证据优先落在 `user_acceptance`
+- 带 `surface` / `route` 的 Story 必须在 page inventory 中登记；metadata surface 必须有 page-level `user_acceptance` wrapper
+- 文档、脚本、命令、markdown 报告不再作为 `tests.recorded` 主证据；如需保留，只能进 `notes` / `contract_refs`
 
-## 6. 命令与门禁
+## 7. 门禁
 
-统一命令入口：
+统一测试治理门：
 
 ```bash
-make test-local-contract
-make test-api-integration ENV=beta|gamma|prod
-make test-user-acceptance TARGET=gamma-local|prod-hosted ROLLOUT_STAGE=<stage>
 make verify-test-specs
 make verify-test-directory-layout
 make verify-test-no-fake
 make verify-test-coverage-map
+make verify-test-remote-env MODE=api_integration ENV=beta|gamma|prod
+make verify-test-remote-env MODE=user_acceptance TARGET=prod-hosted
 ```
 
-门禁分层：
+含义：
 
-- `make gate`：必须覆盖 `local_contract`、`verify-test-specs`、`verify-test-directory-layout`。
-- `make gate-full`：必须覆盖 `local_contract + api_integration + gamma user_acceptance`。
-- 发布前 prod rollout：必须补 `api_integration` 只读/幂等校验、`user_acceptance` 灰度旅程、SLO/告警/回滚证据。
+- `verify-test-specs`：验收 schema、三层 case id、状态与字段约束
+- `verify-test-directory-layout`：legacy→canonical 映射、bridge 覆盖率，以及 no-new-legacy-tests ratchet
+- `verify-test-no-fake`：同时扫描 canonical bridge 与其背后的 legacy 源文件，禁止空断言、纯跳过、伪 report；存量 skip / bench-only 仅允许显式登记例外
+- `verify-test-coverage-map`：校验 acceptance、canonical 测试文件、page inventory、环境层与 recorded/artifact 可追溯；strict traceability 可按 feature node 或单个 acceptance item 逐步扩围，一旦纳入即必须保证 `test_evidence.cases[] -> canonical file / report.json.case_results[]` 可直连
+- `verify-test-remote-env`：在真正触发远端 `api_integration` / hosted `user_acceptance` 前，先检查 base URL、product-ops URL、token 与 Patrol CLI wiring
 
-## 7. 防造假
+执行入口：
 
-- 禁止手写全绿 `report.json` 充当测试结果。
-- 禁止空断言、全 skip、`assert true`、只凭富文本输出宣称通过。
-- 测试通过必须以退出码、机器可读 report、真实测试文件和可复跑命令共同证明。
-- 输出损坏或日志截断时，以退出码、JUnit/JSON/report 和二次交叉验证为准。
+```bash
+make test-local-contract
+make test-api-integration ENV=beta|gamma|prod
+make test-user-acceptance TARGET=local|gamma-local|prod-hosted
+make gate
+make gate-full
+```
 
-## 8. SDD / DevOps / 超级自动化接入
+约束：
 
-- `/prd`：冻结用户价值、验收表达和三层证据计划。
-- `/design`：在 AppRoot/L1/L2 层说明测试边界、环境、观测、回滚和自动化入口。
-- `/dev`：从 Story GWT/contract 下钻到 `local_contract`，再补必要 `api_integration` 和 `user_acceptance`。
-- `/verify`：按三层证据回收真实命令、退出码、report 和剩余风险。
-- `/continue` 或自然语言续作：必须先读当前 acceptance 与最近 report，禁止凭聊天记忆宣称完成。
-- Vibe coding：聊天中对齐规格也必须形成 Spec Entry、Pre-work Reflection、Exit Review，并落到三层测试证据。
+- `make gate` 必须阻断 `schema + directory + no-fake + coverage-map + local_contract`
+- `make gate-full` 必须在 `make gate` 之上补 `api_integration + gamma_local user_acceptance`
+- 发布前只认 `prod_gray_initial` 的只读/幂等 `api_integration` 和 Journey/Page `user_acceptance`
 
-## 9. 用户资料试点
+## 8. 页面真相源
 
-用户资料创建到更新作为三层覆盖示范：
+页面验收真相源统一为：
 
-- `local_contract.user.profile.default_nickname_format`
-- `local_contract.app.edit_profile_page.dirty_state`
-- `api_integration.user.update_profile.patch_and_versions`
-- `api_integration.chat.profile_snapshot_alignment`
-- `user_acceptance.profile_identity_sync.create_update_chat_sync`
+- metadata：`quwoquan_service/contracts/metadata/_shared/ui_surfaces.yaml`
+- route：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml`
+- page inventory：`specs/gates/user_acceptance_page_inventory.yaml`
 
-该试点必须能从 AppRoot UAT 下钻到 L2 SIT、L3 GWT/contract、工程 case id 和真实 `report.json`。
+每个 surface 至少覆盖：
+
+- `load_success`
+- `empty_permission_error`
+- `primary_cta`
+- `trace_context`
+
+## 9. 当前迁移状态
+
+本轮迁移后，canonical bridge 与 page inventory 已成为治理入口：
+
+- App / Service / Data / Ops 全域 canonical bridge 已落盘
+- `tests.recorded` 已统一 canonical 化，不再引用 legacy 路径
+- `user_acceptance.page.*` 已由 metadata surface 矩阵生成并进入 acceptance/gate
+- backlog `R-TST01` / `R-TST02` 的关闭标准是“bridge 落盘、coverage-map 生效、evidence 回写且完成定义无歧义”，不是“legacy 文件已全部物理搬迁完毕”

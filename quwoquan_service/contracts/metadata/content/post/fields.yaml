@@ -226,7 +226,16 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: 作者显式设置的文章封面；分发卡与阅读器扉页共享同一真相源
+        description: 通用封面字段；视频时与 thumbnailUrl 同源，用于旧卡片和作品浏览器回退
+
+      - name: thumbnailUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 视频未播放态主封面 URL，默认首帧，手工选帧时覆盖；图片/文章可为空
 
       - name: articleMarkdown
         type: string
@@ -323,8 +332,28 @@ entities:
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
-        api_exposure: read
+        api_exposure: read_write
         ops_exposure: read
+        description: 视频播放 URL 或稳定视频资源引用派生 URL
+
+      - name: coverStrategy
+        type: enum
+        enum_ref: MediaCoverStrategy
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 视频封面策略。first_frame 表示首帧派生；manual 表示用户手工选帧或手工封面资产
+
+      - name: coverFrameTimeMs
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 视频封面帧时间点（毫秒）。默认首帧为 0；用于审计和重新派生封面
 
       - name: location
         type: GeoPoint
@@ -1206,6 +1235,15 @@ entities:
         api_exposure: read
         ops_exposure: read
         description: 视频封面策略（first_frame/manual）
+
+      - name: coverFrameTimeMs
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 视频封面帧时间点（毫秒），manual 时用于追溯，first_frame 默认为 0
 
       - name: manualCoverAssetId
         type: ObjectId

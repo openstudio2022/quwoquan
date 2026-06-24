@@ -78,7 +78,7 @@ func TestContentFixturePostFromFixture_UsesExplicitUpdatedAndPublishedAt(t *test
 		ContentType: "article",
 		Identity:    "work",
 		AuthorID:    "fixture_user_current",
-		DisplayName: "契约当前用户",
+		DisplayName: "新同学_260622_6698692",
 		AvatarURL:   "media/avatar/example.png",
 		Title:       "时间语义",
 		Body:        "正文",

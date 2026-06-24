@@ -533,6 +533,7 @@ class _WorksPhotoCanvasState extends State<_WorksPhotoCanvas> {
                       imageUrlCandidates: resolveContentMediaUrlCandidates(
                         images[i],
                       ),
+                      cdnPreset: CdnImagePreset.cover,
                       fit: BoxFit.cover,
                       placeholder: Container(color: AppColors.worksBackground),
                       errorWidget: Container(color: AppColors.worksBackground),
@@ -607,6 +608,8 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   @override
   void dispose() {
     _episodeSettleTimer?.cancel();
+    _controllersByIndex.clear();
+    widget.onActiveControllerChanged(_currentEpisodeIndex, null);
     _episodeController.dispose();
     super.dispose();
   }
@@ -635,10 +638,17 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   }
 
   void _registerController(int index, VideoPlayerController controller) {
+    _pruneControllerRegistry(aroundIndex: _currentEpisodeIndex);
     _controllersByIndex[index] = controller;
     if (index == _currentEpisodeIndex) {
       widget.onActiveControllerChanged(index, controller);
     }
+  }
+
+  void _pruneControllerRegistry({required int aroundIndex}) {
+    _controllersByIndex.removeWhere(
+      (index, _) => (index - aroundIndex).abs() > 1,
+    );
   }
 
   void _togglePlayback(int index) {
@@ -672,6 +682,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
                 _currentEpisodeIndex = index;
                 _episodePlaybackSettled = false;
               });
+              _pruneControllerRegistry(aroundIndex: index);
               _scheduleEpisodePlaybackSettle();
               widget.onEpisodeChanged(index);
               widget.onActiveControllerChanged(
@@ -685,10 +696,12 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
                 return Container(color: AppColors.worksBackground);
               }
               final isCurrent = index == _currentEpisodeIndex;
+              final keepAlive = (index - _currentEpisodeIndex).abs() <= 1;
               return _KeepAliveStage(
                 key: ValueKey<String>(
                   'works-video-stage-${widget.post.id}-$index',
                 ),
+                keepAlive: keepAlive,
                 child: VideoPlayerWidget(
                   key: ValueKey<String>('works-video-${widget.post.id}-$index'),
                   videoUrl: item.url,
@@ -726,9 +739,14 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
 }
 
 class _KeepAliveStage extends StatefulWidget {
-  const _KeepAliveStage({super.key, required this.child});
+  const _KeepAliveStage({
+    super.key,
+    required this.child,
+    required this.keepAlive,
+  });
 
   final Widget child;
+  final bool keepAlive;
 
   @override
   State<_KeepAliveStage> createState() => _KeepAliveStageState();
@@ -737,7 +755,15 @@ class _KeepAliveStage extends StatefulWidget {
 class _KeepAliveStageState extends State<_KeepAliveStage>
     with AutomaticKeepAliveClientMixin {
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => widget.keepAlive;
+
+  @override
+  void didUpdateWidget(covariant _KeepAliveStage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.keepAlive != widget.keepAlive) {
+      updateKeepAlive();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -888,6 +914,7 @@ class _WorksTextCanvas extends StatelessWidget {
               child: AppCachedNetworkImage(
                 imageUrl: imageUrl!,
                 imageUrlCandidates: resolveContentMediaUrlCandidates(imageUrl!),
+                cdnPreset: CdnImagePreset.thumbnail,
                 fit: BoxFit.cover,
                 placeholder: Container(color: AppColors.worksBackground),
                 errorWidget: Container(color: AppColors.worksBackground),

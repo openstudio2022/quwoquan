@@ -3,9 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
 import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_action_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_package_toggle_payload.g.dart';
@@ -13,49 +11,14 @@ import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_re
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_simple_mode_payload.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_single_skill_payload.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_gateway_ui_views.dart';
 
+part 'assistant_skill_center_models.dart';
+
 // settings-canonical-exception: Skill Center 原型仪表板布局 CR-20260329-003
-
-class AssistantSkillCenterItem {
-  const AssistantSkillCenterItem({required this.catalog, this.subscription});
-
-  final AssistantSkillCatalogItemView catalog;
-  final SkillSubscriptionWire? subscription;
-
-  String get skillId => catalog.skillId;
-  bool get enabled => subscription != null && subscription!.status == 'active';
-  bool get paused => subscription != null && subscription!.status == 'paused';
-  String get statusLabel {
-    final status = subscription?.status ?? '';
-    if (status == 'active') return '已订阅';
-    if (status == 'paused') return '已暂停';
-    return catalog.requiresConsent ? '需授权' : '可订阅';
-  }
-}
-
-final assistantSkillCenterProvider =
-    FutureProvider<List<AssistantSkillCenterItem>>((ref) async {
-      final repo = ref.watch(assistantRepositoryProvider);
-      final catalog = await repo.listSkillCatalog(limit: 64);
-      final subscriptions = await repo.listSkillSubscriptions(limit: 64);
-      final activeSubscriptions = <String, SkillSubscriptionWire>{
-        for (final item in subscriptions)
-          if (item.status != 'archived') item.skillId: item,
-      };
-      return catalog
-          .map(
-            (item) => AssistantSkillCenterItem(
-              catalog: item,
-              subscription: activeSubscriptions[item.skillId],
-            ),
-          )
-          .toList(growable: false);
-    });
 
 /// Skill Center 仪表板（能力入口与统计）
 ///
@@ -736,8 +699,9 @@ class _AssistantSkillCenterPageState
     final id = skill.skillId;
     final category = skill.catalog.category ?? '';
     if (id == 'daily_assistant' || category == 'life') return 'life';
-    if (id == 'assistant_navigation' || category == 'productivity')
+    if (id == 'assistant_navigation' || category == 'productivity') {
       return 'work';
+    }
     if (id == 'news_briefing' ||
         id == 'stock_sentinel' ||
         id == 'knowledge_qa' ||

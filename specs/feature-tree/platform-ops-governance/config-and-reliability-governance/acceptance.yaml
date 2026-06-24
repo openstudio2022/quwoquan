@@ -22,8 +22,8 @@ sit_acceptance:
       - file: quwoquan_service/services/platform-ops-service/cmd/api/main_test.go
       - file: apps/ops-portal/src/shared/api/controlPlane.test.mjs
       recorded:
-      - file: quwoquan_service/services/platform-ops-service/cmd/api/main_test.go
-      - file: apps/ops-portal/src/shared/api/controlPlane.test.mjs
+      - file: quwoquan_service/services/platform-ops-service/tests/local_contract/cmd/api/main__local_contract_test.go
+      - file: quwoquan_service/services/platform-ops-service/tests/api_integration/config_and_reliability_governance__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
@@ -46,7 +46,8 @@ sit_acceptance:
         cases:
         - local_contract.platform_ops_governance.config_and_reliability_governance.sit1.sit1_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_reference] apps/ops-portal/src/shared/api/controlPlane.test.mjs'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -57,6 +57,7 @@ void main() {
     final blocks = buildArticleBlocksFromDocument(document);
     final state = CreateEditorState(
       editorKind: CreateEditorKind.text,
+      draftFlowKind: CreateDraftFlowKind.article,
       mediaKind: CreateMediaKind.none,
       imagePaths: const <String>[],
       videoPath: '',
@@ -66,6 +67,9 @@ void main() {
       videoTrimStartMs: 0,
       videoTrimEndMs: 0,
       videoCoverTimeMs: 0,
+      videoCoverStrategy: 'first_frame',
+      videoWidth: 0,
+      videoHeight: 0,
       videoMuted: false,
       currentMediaIndex: 0,
       title: '',

@@ -7,46 +7,89 @@ node:
   parent_domain_service: runtime
   parent_business_capability: runtime-testinfra
 scope:
-  summary: runtime testinfra 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: runtime testinfra 为三层测试迁移提供 canonical bridge、inventory、page truth source
+    与证据门禁的基础设施验收。
+  in_scope:
+  - App / Service / Data / Ops canonical bridge 生成
+  - test_directory_inventory 与 page inventory 真相源
+  - no-fake / coverage-map / directory-layout 等独立门禁
+  - artifacts/tests/**/report.json 与 canonical 根的可追溯关系
+  out_of_scope:
+  - 具体业务测试断言的通过与否
+  - CI 调度、并发策略和远端环境容量管理
 sit_acceptance:
   SIT1:
-    title: runtime testinfra 能力 SIT
-    story_refs: []
+    title: canonical bridge 与测试清单基础设施可追溯
+    story_refs:
+    - specs/feature-tree/runtime/runtime-test-pyramid
     done_when:
-    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    - generate_canonical_test_bridges.py 能为 App / Service / Data / Ops 生成 canonical
+      bridge，并补齐 page-level user_acceptance wrapper。
+    - specs/gates/test_directory_inventory.yaml 记录 current_path -> target_path ->
+      classification_basis -> migration_status 全链路映射，且 pending=0；该状态表示 bridge
+      覆盖完备，不要求 legacy 文件已从磁盘移除。
+    - specs/gates/user_acceptance_page_inventory.yaml 与 metadata ui_surfaces /
+      app_routes 无漂移。
+    - verify-test-no-fake 与 verify-test-coverage-map 能独立阻断伪迁移、假报告和 page case
+      漏覆盖。
     performance_points: []
     tests:
-      planned: []
-      recorded: []
-    status: pending
+      planned:
+      - file: agent_ops/scaffold/test_directory_inventory_lib.py
+      - file: agent_ops/scaffold/generate_canonical_test_bridges.py
+      - file: agent_ops/scaffold/generate_test_directory_inventory.py
+      - file: specs/gates/user_acceptance_page_inventory.yaml
+      - command: python3 agent_ops/scaffold/verify_test_directory_inventory.py
+      - command: python3 agent_ops/scaffold/verify_test_no_fake.py
+      - command: python3 agent_ops/scaffold/verify_test_coverage_map.py
+      recorded:
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart
+      - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
+      - file: quwoquan_data/tests/local_contract/verify/test_directory_evidence_gate__local_contract_test.py
+      - file: agent_ops/acceptance/user_acceptance/test_stackctl_up_runtime__user_acceptance_test.py
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
-        suite: sit1_local_contract
+        suite: runtime_testinfra_bridge_inventory_local_contract
         cases:
-        - local_contract.runtime.runtime_testinfra.sit1.sit1_local_contract
+        - local_contract.runtime.runtime_testinfra.sit1.bridge_inventory_local_contract
         envs: &id001
+        - alpha
         - local
       - layer: api_integration
-        suite: sit1_api_integration
+        suite: runtime_testinfra_inventory_contract
         cases:
-        - api_integration.runtime.runtime_testinfra.sit1.sit1_api_integration
+        - api_integration.runtime.runtime_testinfra.sit1.inventory_contract
         envs:
         - beta
         - gamma
       supporting:
-      - layer: local_contract
-        suite: sit1_local_contract
+      - layer: user_acceptance
+        suite: runtime_testinfra_page_matrix
         cases:
-        - local_contract.runtime.runtime_testinfra.sit1.sit1_local_contract
+        - user_acceptance.runtime.runtime_testinfra.sit1.page_matrix
+        envs:
+        - gamma_local
+        - prod_gray_initial
+      - layer: local_contract
+        suite: runtime_testinfra_no_fake_guard
+        cases:
+        - local_contract.runtime.runtime_testinfra.sit1.no_fake_guard
         envs: *id001
     notes:
-    - '2026-06-21 migration baseline: test directory inventory + verify_test_directory_inventory.py gate; Makefile test-local-contract -> test/local_contract; test-api-integration includes service canonical api_integration runners (user/content/chat); generate_test_directory_inventory.py + generate_app_canonical_test_wrappers.py scaffold; gate_repo.sh wired to verify_test_directory_inventory.py.'
+    - 2026-06-22 bridge 生成结果：App 377、Service 183、Data 101、agent_ops 9 个 suite 全部
+      生成 canonical bridge，额外生成 28 个页面级 user_acceptance wrapper。
+    - 2026-06-22 inventory 升级：`pending_count` 表示尚未 bridge 的 suite 数，新增
+      `bridged_count` 与 `classification_basis`，可直接定位 suite 的 canonical 归属理由。
+    - 2026-06-22 完成定义校准：`pending_count=0` 与 canonical bridge 全覆盖表示治理执行面
+      已收口，不等于 legacy 测试文件已全部物理搬迁或从磁盘移除。
+    - 2026-06-22 门禁拆分：verify-test-no-fake 与 verify-test-coverage-map 不再是
+      verify_test_specs.py 的别名，已独立阻断 canonical 根中的假测试与证据漂移。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - python3 agent_ops/scaffold/verify_test_directory_inventory.py
+  - python3 agent_ops/scaffold/verify_test_no_fake.py
+  - python3 agent_ops/scaffold/verify_test_coverage_map.py
   full_gate:
   - make gate

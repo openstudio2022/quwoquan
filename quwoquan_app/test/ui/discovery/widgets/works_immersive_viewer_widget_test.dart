@@ -436,6 +436,7 @@ VideoPostDto _videoPost({int? width, int? height}) {
     body: 'video body',
     videoUrl: 'https://example.com/video.mp4',
     thumbnailUrl: 'https://example.com/video.jpg',
+    coverUrl: 'https://example.com/video.jpg',
     width: width,
     height: height,
     likeCount: 0,
@@ -1568,7 +1569,10 @@ void main() {
     );
     expect(find.text('你和 TA 都来自同一校园'), findsOneWidget);
     // V1.0：详情 sheet 为「为什么推荐给你」+ ✓ 证据列表。
-    expect(find.text(DiscoveryFeedText.intersectionDetailTitle), findsOneWidget);
+    expect(
+      find.text(DiscoveryFeedText.intersectionDetailTitle),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey<String>('works-intersection-check')),
       findsOneWidget,

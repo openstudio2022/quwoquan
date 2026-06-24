@@ -54,7 +54,6 @@ def _seed_homepage_spec(name: str) -> dict:
         "schemaVersion": "quwoquan.task.spec",
         "taskId": TASK,
         "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": name}]},
-        "conditionAxes": {"region": {"applicable": True}, "season": {"applicable": True}},
     }
 
 
@@ -136,14 +135,6 @@ def test_gate_passes_clean_object():
             "domain": "地点",
             "type": "景区",
             "sourceTaskId": TASK,
-            "conditionProfile": {
-                "regions": ["高原"],
-                "seasons": ["秋"],
-                "evidenceRefs": [
-                    {"field": "regions", "value": "高原", "source": "source.md", "path": "entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md"},
-                    {"field": "seasons", "value": "秋", "source": "source.md", "path": "entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md"},
-                ],
-            },
         },
     )
     long_body = "\n\n".join([
@@ -190,6 +181,7 @@ def test_gate_passes_clean_object():
     write_json(
         ent / "manifest.json",
         {
+            "generator": "agent",
             "assets": [
                 {
                     "assetId": asset_id,
@@ -240,14 +232,6 @@ def test_gate_entity_homepage_writes_review_sidecars():
             "domain": "地点",
             "type": "景区",
             "sourceTaskId": TASK,
-            "conditionProfile": {
-                "regions": ["平原都市"],
-                "seasons": ["秋"],
-                "evidenceRefs": [
-                    {"field": "regions", "value": "平原都市", "source": "source.md", "path": "entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md"},
-                    {"field": "seasons", "value": "秋", "source": "source.md", "path": "entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md"},
-                ],
-            },
         },
     )
     asset_id = allocate_post_asset_id(
@@ -296,6 +280,7 @@ def test_gate_entity_homepage_writes_review_sidecars():
     write_json(
         ent / "manifest.json",
         {
+            "generator": "agent",
             "assets": [
                 {
                     "assetId": asset_id,
@@ -343,13 +328,6 @@ def test_gate_flags_missing_entity_review_sidecars():
             "domain": "地点",
             "type": "景区",
             "sourceTaskId": TASK,
-            "conditionProfile": {
-                "regions": ["平原都市"],
-                "seasons": ["秋"],
-                "evidenceRefs": [
-                    {"field": "regions", "value": "平原都市", "source": "source.md", "path": "entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md"},
-                ],
-            },
         },
     )
     asset_id = allocate_post_asset_id(
@@ -571,6 +549,60 @@ def test_stage_tree_completeness_default_on():
         (post / stage).mkdir(parents=True, exist_ok=True)
     strict2 = scan_batch(TASK, batch)
     assert not any("阶段树不完整" in i for i in strict2), strict2
+
+
+def test_stage_tree_completeness_covers_image_work_by_manifest():
+    """图片作品没有 article.md/gallery.md，成品判定改用 manifest，阶段树同样必须完整。"""
+    batch = "gate_stage_tree_image"
+    _seed_batch_manifest(batch)
+    ensure_task_layout(TASK)
+    ref = "结构化组图_画报"
+    register_content_object(TASK, batch, ref, content_type="image", angle="画报", title="九寨沟组图")
+    post = content_object_dir(TASK, batch, ref)
+    post.mkdir(parents=True, exist_ok=True)
+    # 图片作品成品：manifest(carrier=image) + assets/<image>，无 article.md/gallery.md。
+    write_json(
+        post / "manifest.json",
+        {"contentType": "image", "carrier": "image", "assets": [], "citedSourceRefs": []},
+    )
+    (post / "assets").mkdir(parents=True, exist_ok=True)
+    (post / "assets" / "001_cover.jpg").write_bytes(b"\xff\xd8\xff\x00img")
+
+    # 缺过程阶段（含 1.download）→ 默认即被拦截。
+    issues = scan_batch(TASK, batch)
+    stage_issues = [i for i in issues if "阶段树不完整" in i]
+    assert stage_issues, issues
+    assert any("1.download" in i for i in stage_issues), stage_issues
+    # 已有 assets/<image>，不应报缺关键资产。
+    assert not any("缺关键资产" in i for i in issues), issues
+
+    # 补齐 1-5 阶段后通过；图片作品不要求 article.md。
+    for stage in ("1.download", "2.quality", "3.compose", "4.draft", "5.review"):
+        (post / stage).mkdir(parents=True, exist_ok=True)
+    strict2 = scan_batch(TASK, batch)
+    assert not any("阶段树不完整" in i for i in strict2), strict2
+    assert not any("缺关键文件 article.md" in i for i in strict2), strict2
+
+
+def test_stage_tree_completeness_flags_image_work_missing_assets():
+    """图片作品成品缺落盘资产 → 关键文件门拦截。"""
+    batch = "gate_stage_tree_image_no_asset"
+    _seed_batch_manifest(batch)
+    ensure_task_layout(TASK)
+    ref = "空资产组图_画报"
+    register_content_object(TASK, batch, ref, content_type="image", angle="画报", title="无资产组图")
+    post = content_object_dir(TASK, batch, ref)
+    post.mkdir(parents=True, exist_ok=True)
+    write_json(
+        post / "manifest.json",
+        {"contentType": "image", "carrier": "image", "assets": [], "citedSourceRefs": []},
+    )
+    # assets/ 目录存在但为空（成品被识别，但缺真实落盘资产）。
+    (post / "assets").mkdir(parents=True, exist_ok=True)
+    for stage in ("1.download", "2.quality", "3.compose", "4.draft", "5.review"):
+        (post / stage).mkdir(parents=True, exist_ok=True)
+    issues = scan_batch(TASK, batch)
+    assert any("图片作品成品缺关键资产" in i for i in issues), issues
 
 
 def test_gate_flags_orphan_post_object_residue():

@@ -45,7 +45,9 @@ client_projection:
           WorkBrowserMediaItemDto(
             kind: 'video',
             url: fallback,
-            coverUrl: coverUrl.isEmpty ? null : coverUrl,
+            coverUrl: thumbnailUrl.isNotEmpty
+                ? thumbnailUrl
+                : (coverUrl.isEmpty ? null : coverUrl),
             durationMs: durationMs,
             width: width,
             height: height,
@@ -161,6 +163,14 @@ client_projection:
       source: coverUrl
       aliases: [coverUrl, cover, thumbnail, thumbnailUrl]
       default: "''"
+
+    - name: thumbnailUrl
+      dart_type: String
+      nullable: false
+      source: thumbnailUrl
+      aliases: [thumbnailUrl, thumbnail, coverUrl, cover]
+      default: "''"
+      description: "视频未播放态主封面；为空时回退 coverUrl"
 
     - name: imageUrls
       dart_type: List<String>

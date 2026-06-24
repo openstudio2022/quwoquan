@@ -69,6 +69,14 @@ def _apply_writing_intent_override(brief, override):
         "carrier",
         "sourceCollectionId",
         "assetRefs",
+        "authorId",
+        "creatorProfileId",
+        "creatorArchetype",
+        "creatorProfileVersion",
+        "creatorDisclosure",
+        "experienceClaimMode",
+        "authorQualitySignals",
+        "creator",
     ):
         if field in override and override.get(field) not in (None, ""):
             merged[field] = override[field]

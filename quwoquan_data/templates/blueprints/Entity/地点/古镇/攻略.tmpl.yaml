@@ -18,7 +18,6 @@ render: { articleTemplate: journal, fontPreset: clean }
 structure:
   required: [到达方式, 游览动线, 值得停留的街巷, 餐饮住宿, 避坑提醒]
   optional: [清晨夜晚版本, 周边串联]
-hooks: ["去{name}，别只逛主街"]
 mustIncludeFacts: [到达方式, 停留时长, 核心街巷]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 800, max: 1800 }
@@ -32,4 +31,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/主页/地点/古镇/example.md

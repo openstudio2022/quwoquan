@@ -9,16 +9,16 @@
     {
       "objectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png",
-      "sourceHash": "sha256:8dd976396f17b1362f3981da82ada45f4d3c31c818c59286e0473ce455e86e19",
+      "sourceHash": "sha256:19898aeb84d87da0ec071465243bc53192f6353f6fdc9c08c19412c8bf97debd",
       "mimeType": "image/png",
       "sizeBytes": 523600
     },
     {
       "objectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_citywalk_01/v1/avatar.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/s/archived-avatar/circle/fixture_circle_citywalk_01/v1/avatar.png",
-      "sourceHash": "sha256:031cd960460d3eeda1d03f2aabbdb5ba7bf32e299eb710c37b6c56fc6c9e1068",
+      "sourceHash": "sha256:f8511430a98b119b33e55e7e1bdc8a9e0ed7d902ecdeebb2103fb05f39b1537e",
       "mimeType": "image/png",
-      "sizeBytes": 523599
+      "sizeBytes": 523600
     },
     {
       "objectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_food/v1/avatar.png",
@@ -51,14 +51,14 @@
     {
       "objectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_tech/v1/avatar.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/s/archived-avatar/circle/fixture_circle_tech/v1/avatar.png",
-      "sourceHash": "sha256:849ca22cef6aa9bd53d0b4320b3c859bb8b29d4709353d37c511eaaace9e75ba",
+      "sourceHash": "sha256:eb495b3f6b835eaae75a093fcb0299ab6a62bc432bacdd14a30a8aa67e668afa",
       "mimeType": "image/png",
       "sizeBytes": 433384
     },
     {
       "objectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_tech_01/v1/avatar.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/s/archived-avatar/circle/fixture_circle_tech_01/v1/avatar.png",
-      "sourceHash": "sha256:7f5d1ce100dc48844dd80156ca18a9c8753ddf5c26872ba0104b0cf8cf704db9",
+      "sourceHash": "sha256:58a226253853dc942bcc92afd2f43e12cf6b445c30c1f4f006d6075b291bf078",
       "mimeType": "image/png",
       "sizeBytes": 433384
     },
@@ -415,9 +415,9 @@
     {
       "objectKey": "media/background/s/archived-avatar/user/fixture_user_citywalk_01/v1/background.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/s/archived-avatar/user/fixture_user_citywalk_01/v1/background.png",
-      "sourceHash": "sha256:452de74cfb81238256a753c5dbd48d85edf27e1e5d7aa18ecdfb86bbe3659034",
+      "sourceHash": "sha256:d48ef6de6ecc8ec9929d833b405bc53dc49754990f12be94902a721e5af1ab6d",
       "mimeType": "image/png",
-      "sizeBytes": 2686628
+      "sizeBytes": 2686629
     },
     {
       "objectKey": "media/background/s/archived-avatar/user/fixture_user_commenter/v1/background.png",
@@ -464,9 +464,9 @@
     {
       "objectKey": "media/background/s/archived-avatar/user/fixture_user_tech_01/v1/background.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/s/archived-avatar/user/fixture_user_tech_01/v1/background.png",
-      "sourceHash": "sha256:27fec2d789502793339ff62c150d3a7f6ea4bc7b7658aaf2cb455e2efca89475",
+      "sourceHash": "sha256:f7728ffd829f44f6f4c18dbc77dbeeaef23d6c719d169c7b90e7c00cd35b5afe",
       "mimeType": "image/png",
-      "sizeBytes": 2148229
+      "sizeBytes": 2148230
     },
     {
       "objectKey": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
@@ -492,7 +492,7 @@
     {
       "objectKey": "media/background/s/archived-avatar/user/fixture_user_video/v1/background.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/s/archived-avatar/user/fixture_user_video/v1/background.png",
-      "sourceHash": "sha256:7b57689220155da2f05038aaf8a650dc5e1093a44ddd542017ff639b75b38b6f",
+      "sourceHash": "sha256:5e867009efb4e1602641ea1a416254e29666663454315bd30cf2d4d4f839ace5",
       "mimeType": "image/png",
       "sizeBytes": 2686629
     },
@@ -513,7 +513,7 @@
     {
       "objectKey": "media/image/s/archived-image/circle/fixture_circle_city/v1/cover.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/s/archived-image/circle/fixture_circle_city/v1/cover.png",
-      "sourceHash": "sha256:e3b85dd868cbcb98a181ae2c70f09743626f9e8f3eb5add8c3ac05c2fd4908a9",
+      "sourceHash": "sha256:733cf80ad2688d37110e48db2a1569ee1113d7031fdc269d62e641a68e6dcd4a",
       "mimeType": "image/png",
       "sizeBytes": 2472778
     },
@@ -555,7 +555,7 @@
     {
       "objectKey": "media/image/s/archived-image/circle/fixture_circle_tech/v1/cover.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/s/archived-image/circle/fixture_circle_tech/v1/cover.png",
-      "sourceHash": "sha256:6c5b96942460d7045c38892c9241eb0443605e954bd633d8bc1979c7a04a2d77",
+      "sourceHash": "sha256:c5662aceff994beb5b909fd5187c2675faaf41ac8992cd0e8f4c6fb0608a8dc4",
       "mimeType": "image/png",
       "sizeBytes": 1901856
     },

@@ -137,8 +137,8 @@ sit_acceptance:
         suite: device_journey
         cases:
         - user_acceptance.chat_conversation.contact_and_session_governance.sit3.device_journey
-        envs: &id003
-        - gamma
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/greeting_reply_promotes_conversation_test.go'
     - '[migrated_from_planned] quwoquan_app/test/cloud/user/greeting_repository_contract_test.dart'
@@ -186,7 +186,8 @@ sit_acceptance:
         suite: device_journey
         cases:
         - user_acceptance.chat_conversation.contact_and_session_governance.sit4.device_journey
-        envs: *id003
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/chat/pages/chat_conversation_relationship_gate_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/ui/rtc/call_relationship_gate_test.dart'

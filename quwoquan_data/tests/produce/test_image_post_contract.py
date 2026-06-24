@@ -199,6 +199,18 @@ def test_image_materialize_is_structured_only():
     assert provenance_issues(post_dir, manifest) == []
 
 
+def test_image_materialize_writes_download_stage_source_refs():
+    """图片作品也必须自持 1.download/source_refs.json，阶段树不再缺 1.download。"""
+    post_dir = _materialize_image()
+    snapshot = post_dir / "1.download" / "source_refs.json"
+    assert snapshot.is_file(), "图片作品缺 1.download/source_refs.json"
+    data = read_json(snapshot)
+    assert data["schemaVersion"] == "quwoquan_data.source_refs"
+    # 图片作品引证了来源图集 source unit
+    assert data.get("citedSourceRefs"), data
+    assert not (post_dir / "5.review" / "finalization_report.json").exists()
+
+
 def test_image_source_contract_rejects_mixed_pages():
     try:
         _image_source_contract(
@@ -251,12 +263,13 @@ def test_release_assembles_image_without_markdown_and_article_with_article_only(
     )
 
     release_base = Path(tempfile.mkdtemp(prefix="image_contract_release_"))
-    old_task_root = publish_assemble.task_root
+    # 顶层批次布局：assemble 经 batch_root(task,batch) 定位批次（不再走 task_root/"batches"）。
+    old_batch_root = publish_assemble.batch_root
     old_release_root = publish_assemble.release_root
     old_copy_entities = publish_assemble._copy_release_entities
     old_gate_release_root = publish_gate.release_root
     try:
-        publish_assemble.task_root = lambda _task_id: task_dir
+        publish_assemble.batch_root = lambda _task_id, _batch_id: task_dir / "batches" / BATCH
         publish_assemble.release_root = lambda release_id: release_base / release_id
         publish_assemble._copy_release_entities = lambda *_args, **_kwargs: None
         publish_gate.release_root = lambda release_id: release_base / release_id
@@ -275,7 +288,7 @@ def test_release_assembles_image_without_markdown_and_article_with_article_only(
         entity_page.write_text("# 占位实体", encoding="utf-8")
         assert publish_gate._release_surface_issues(release) == []
     finally:
-        publish_assemble.task_root = old_task_root
+        publish_assemble.batch_root = old_batch_root
         publish_assemble.release_root = old_release_root
         publish_assemble._copy_release_entities = old_copy_entities
         publish_gate.release_root = old_gate_release_root

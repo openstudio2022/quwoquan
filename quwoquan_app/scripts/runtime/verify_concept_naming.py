@@ -38,7 +38,10 @@ SEARCH_METADATA_FILES = [
 
 QUOTE_RE = re.compile(r"""(['"])(?P<value>.*?)(?<!\\)\1""")
 
-GROUP_FORBIDDEN = ("群聊", "群组", "趣群", "讨论群", "空间", "频道", "论坛")
+# 2026H1 定位刷新后，消息域 group 概念前台统一回滚为「群聊」。
+# 因此「群聊」不再是禁用词；仅保留其余历史别名作为禁用，避免再次出现「群组/趣群/空间/频道/论坛」等
+# 与「群聊」并行的旧前台心智。「讨论」保留给实体/圈子内容讨论分区与全局检索聚合，不在此禁用。
+GROUP_FORBIDDEN = ("群组", "趣群", "讨论群", "空间", "频道", "论坛")
 CONTENT_ACTION_FORBIDDEN = ("收藏", "收藏夹", "稍后看", "关注内容", "共同关注内容")
 OLD_INTERSECTION_TOKENS = (
     "mutualFriend",
@@ -137,8 +140,8 @@ def scan_user_visible_text() -> list[Finding]:
                                 path,
                                 line_no,
                                 token,
-                                "用户前台 group 概念必须统一为「讨论」",
-                                "将用户可见文案改为「讨论」；若是机器契约，请移动到技术 allowlist 或生成源。",
+                                "用户前台 chat group 概念统一为「群聊」，不得再用群组/趣群/讨论群等旧别名",
+                                "将用户可见文案改为「群聊」（内容/圈子讨论分区仍用「讨论」）；若是机器契约，请移动到技术 allowlist 或生成源。",
                             )
                         )
                 for token in CONTENT_ACTION_FORBIDDEN:
@@ -153,8 +156,10 @@ def scan_user_visible_text() -> list[Finding]:
                             )
                         )
             # Some constants do not appear as quoted strings in ARB metadata.
+            # 用标识符边界匹配，避免退役 token 命中合法的超集标识符（如 commonFollow ⊂ commonFollower）。
             for token in OLD_INTERSECTION_TOKENS + FAVORITE_CODE_TOKENS:
-                if token in line and not line.strip().startswith(("//", "///", "*")):
+                token_re = re.compile(r"(?<![A-Za-z])" + re.escape(token) + r"(?![A-Za-z])")
+                if token_re.search(line) and not line.strip().startswith(("//", "///", "*")):
                     findings.append(
                         Finding(
                             path,
@@ -181,8 +186,8 @@ def scan_search_metadata() -> list[Finding]:
                                 path,
                                 line_no,
                                 token,
-                                "搜索展示 label/title 必须使用「讨论」",
-                                "修改 search_objects.yaml 后运行 make codegen-app。",
+                                "搜索展示 label/title 不得使用群组/趣群/讨论群等旧别名",
+                                "修改 search_objects.yaml 后运行 make codegen-app（chat 群聊用「群聊」，跨对象聚合分区用「讨论」）。",
                             )
                         )
     return findings

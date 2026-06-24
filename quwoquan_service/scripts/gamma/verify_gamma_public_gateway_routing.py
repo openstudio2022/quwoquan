@@ -65,7 +65,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--base-url",
-        default=os.environ.get("GAMMA_BASE_URL", "http://127.0.0.1:19000").rstrip("/"),
+        default=os.environ.get(
+            "GAMMA_BASE_URL",
+            "https://gamma-api.quwoquan-env.test:19000",
+        ).rstrip("/"),
     )
     ap.add_argument("--request-timeout-seconds", type=float, default=12.0)
     ap.add_argument("--retry-attempts", type=int, default=3)

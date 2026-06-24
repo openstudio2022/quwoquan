@@ -2,15 +2,15 @@ schemaVersion: app-runtime-config
 runtime:
   appRuntimeEnv: prod
   appDataSource: remote
-  gatewayBaseUrl: http://118.31.239.122:19000
-  realtimeBaseUrl: ws://118.31.239.122:19000
-  mediaAvatarCdnBaseUrl: http://118.31.239.122:19100
-  mediaImageCdnBaseUrl: http://118.31.239.122:19100
-  mediaVideoCdnBaseUrl: http://118.31.239.122:19100
-  mediaUploadBaseUrl: http://118.31.239.122:19100
+  gatewayBaseUrl: https://118.31.239.122:19000
+  realtimeBaseUrl: wss://118.31.239.122:19000
+  mediaAvatarCdnBaseUrl: https://118.31.239.122:19100
+  mediaImageCdnBaseUrl: https://118.31.239.122:19100
+  mediaVideoCdnBaseUrl: https://118.31.239.122:19100
+  mediaUploadBaseUrl: https://118.31.239.122:19100
   currentUserId: ""
 seed:
   enabled: false
   manifest: ""
 gray:
-  strategyEndpoint: http://118.31.239.122:19000/v1/runtime/gray-strategy
+  strategyEndpoint: https://118.31.239.122:19000/v1/runtime/gray-strategy

@@ -48,8 +48,9 @@ gwt_acceptance:
       planned:
       - file: quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
       recorded:
-      - file: quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
-      - file: quwoquan_service/services/assistant-service/internal/application/service_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/tool_coordinator__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/api_integration/search_xiaoqu_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:

@@ -36,7 +36,7 @@ uat_acceptance:
           suite: journey_primary
           cases:
             - user_acceptance.journey-id.scenario-id.primary
-          envs: [gamma, prod]
+          envs: [gamma_local, prod_gray_initial]
       supporting:
         - layer: api_integration
           suite: app_root_supporting_api

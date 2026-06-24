@@ -118,7 +118,8 @@ def main() -> int:
         command.extend(["--media-base-url", media_url])
     if env_name == "beta" and not base_url:
         default_beta_gateway = os.environ.get(
-            "BETA_LOCAL_GATEWAY_BASE_URL", "http://127.0.0.1:18000"
+            "BETA_LOCAL_GATEWAY_BASE_URL",
+            "https://beta-api.quwoquan-env.test:18000",
         ).strip()
         command.extend(["--gateway-base-url", default_beta_gateway])
         if not media_url:
@@ -126,7 +127,8 @@ def main() -> int:
                 [
                     "--media-base-url",
                     os.environ.get(
-                        "BETA_LOCAL_MEDIA_BASE_URL", "http://127.0.0.1:18100"
+                        "BETA_LOCAL_MEDIA_BASE_URL",
+                        "https://beta-avatar.quwoquan-env.test:18100",
                     ).strip(),
                 ]
             )

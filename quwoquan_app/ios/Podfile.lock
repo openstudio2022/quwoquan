@@ -16,6 +16,8 @@ PODS:
   - flutter_callkit_incoming (0.0.1):
     - CryptoSwift
     - Flutter
+  - flutter_contacts (0.0.1):
+    - Flutter
   - flutter_secure_storage_darwin (10.0.0):
     - Flutter
     - FlutterMacOS
@@ -44,10 +46,13 @@ PODS:
   - libwebp/sharpyuv (1.5.0)
   - libwebp/webp (1.5.0):
     - libwebp/sharpyuv
-  - livekit_client (2.7.0):
+  - livekit_client (2.8.1):
     - Flutter
     - flutter_webrtc
     - WebRTC-SDK (= 144.7559.01)
+  - mobile_scanner (7.0.0):
+    - Flutter
+    - FlutterMacOS
   - package_info_plus (0.4.5):
     - Flutter
   - patrol (0.0.1):
@@ -92,6 +97,7 @@ DEPENDENCIES:
   - file_picker (from `.symlinks/plugins/file_picker/darwin`)
   - Flutter (from `Flutter`)
   - flutter_callkit_incoming (from `.symlinks/plugins/flutter_callkit_incoming/ios`)
+  - flutter_contacts (from `.symlinks/plugins/flutter_contacts/ios`)
   - flutter_secure_storage_darwin (from `.symlinks/plugins/flutter_secure_storage_darwin/darwin`)
   - flutter_webrtc (from `.symlinks/plugins/flutter_webrtc/ios`)
   - geolocator_apple (from `.symlinks/plugins/geolocator_apple/darwin`)
@@ -99,6 +105,7 @@ DEPENDENCIES:
   - integration_test (from `.symlinks/plugins/integration_test/ios`)
   - just_audio (from `.symlinks/plugins/just_audio/darwin`)
   - livekit_client (from `.symlinks/plugins/livekit_client/ios`)
+  - mobile_scanner (from `.symlinks/plugins/mobile_scanner/darwin`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - patrol (from `.symlinks/plugins/patrol/darwin`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
@@ -135,6 +142,8 @@ EXTERNAL SOURCES:
     :path: Flutter
   flutter_callkit_incoming:
     :path: ".symlinks/plugins/flutter_callkit_incoming/ios"
+  flutter_contacts:
+    :path: ".symlinks/plugins/flutter_contacts/ios"
   flutter_secure_storage_darwin:
     :path: ".symlinks/plugins/flutter_secure_storage_darwin/darwin"
   flutter_webrtc:
@@ -149,6 +158,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/just_audio/darwin"
   livekit_client:
     :path: ".symlinks/plugins/livekit_client/ios"
+  mobile_scanner:
+    :path: ".symlinks/plugins/mobile_scanner/darwin"
   package_info_plus:
     :path: ".symlinks/plugins/package_info_plus/ios"
   patrol:
@@ -186,6 +197,7 @@ SPEC CHECKSUMS:
   file_picker: e81e2d2db6261a4e98febeae383bd2173ba8b396
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_callkit_incoming: 139fb358c785e109854158086fd399aa64d77891
+  flutter_contacts: 8d2ecfb85b529297c9924aefd4699ded455dea8a
   flutter_secure_storage_darwin: 557817588b80e60213cbecb573c45c76b788018d
   flutter_webrtc: 5aa37bfb8b834bff989a03182d1c4266a4f93377
   geolocator_apple: 66b711889fd333205763b83c9dcf0a57a28c7afd
@@ -193,7 +205,8 @@ SPEC CHECKSUMS:
   integration_test: 252f60fa39af5e17c3aa9899d35d908a0721b573
   just_audio: a42c63806f16995daf5b219ae1d679deb76e6a79
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
-  livekit_client: e3c4fe5a12a8b70841db479ddf45e0a4e88d68c4
+  livekit_client: 88462cc0b8d19febb57679476bae8696961cfca2
+  mobile_scanner: 77265f3dc8d580810e91849d4a0811a90467ed5e
   package_info_plus: c0502532a26c7662a62a356cebe2692ec5fe4ec4
   patrol: d49fcd015892f19189a4cec572f21f3c3358e761
   permission_handler_apple: ee2fe0fd04551b304eb002714ff067c371c822ed

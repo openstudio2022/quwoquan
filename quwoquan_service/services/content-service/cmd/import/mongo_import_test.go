@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,13 +12,14 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-// 真实 mongo 写入路径覆盖。需要 QWQ_TEST_MONGO_URI（CI/本地起临时 mongod 后设置）。
-// 未设置时跳过，避免无 mongo 环境失败；本地用 run_mongo_import_test.sh 起临时实例后跑。
+// 真实 mongo 写入路径覆盖。优先读取 QWQ_TEST_MONGO_URI / TEST_MONGO_URI；
+// 未显式提供时由 TestMain 拉起 mongo:7-jammy testcontainer。本地若无 Docker，
+// TestMain 会在整包层提前退出，避免单用例继续以 skip 形式“伪绿”。
 func testDB(t *testing.T) (*mongo.Database, func()) {
 	t.Helper()
-	uri := os.Getenv("QWQ_TEST_MONGO_URI")
+	uri := strings.TrimSpace(testMongoURI)
 	if uri == "" {
-		t.Skip("QWQ_TEST_MONGO_URI not set; skipping mongo integration test")
+		t.Fatal("cmd/import tests require TestMain to provision mongo uri or exit before execution")
 	}
 	ctx := context.Background()
 	client, err := mongo.Connect(options.Client().ApplyURI(uri))
@@ -491,16 +491,21 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 		t.Fatalf("want 2 feed items, got %d", n)
 	}
 	var item struct {
-		PostId           string         `bson:"postId"`
-		PostRef          string         `bson:"postRef"`
-		Status           string         `bson:"status"`
-		Visibility       string         `bson:"visibility"`
-		TagRefs          []string       `bson:"tagRefs"`
-		SourceTaskId     string         `bson:"sourceTaskId"`
-		CreatorProfileID string         `bson:"creatorProfileId"`
-		CreatorArchetype string         `bson:"creatorArchetype"`
-		ConditionProfile map[string]any `bson:"conditionProfile"`
-		RecScore         float64        `bson:"recScore"`
+		PostId            string         `bson:"postId"`
+		PostRef           string         `bson:"postRef"`
+		Status            string         `bson:"status"`
+		Visibility        string         `bson:"visibility"`
+		TagRefs           []string       `bson:"tagRefs"`
+		SourceTaskId      string         `bson:"sourceTaskId"`
+		CreatorProfileID  string         `bson:"creatorProfileId"`
+		CreatorArchetype  string         `bson:"creatorArchetype"`
+		ConditionProfile  map[string]any `bson:"conditionProfile"`
+		RecScore          float64        `bson:"recScore"`
+		QualityScore      float64        `bson:"qualityScore"`
+		ContentVertical   string         `bson:"contentVertical"`
+		SupplySource      string         `bson:"supplySource"`
+		SemanticCoverage  float64        `bson:"semanticMentionCoverage"`
+		MediaCompleteness float64        `bson:"mediaCompleteness"`
 	}
 	if err := feed.FindOne(ctx, bson.M{"postId": RuntimePostID("posts/article/体验/甲居藏寨体验/1")}).Decode(&item); err != nil {
 		t.Fatal(err)
@@ -519,6 +524,15 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	}
 	if item.ConditionProfile == nil {
 		t.Fatalf("feed conditionProfile not joined from entity: %+v", item)
+	}
+	if item.QualityScore <= 0 || item.RecScore != item.QualityScore {
+		t.Fatalf("feed qualityScore/recScore not projected: %+v", item)
+	}
+	if item.ContentVertical != "travel_photography" || item.SupplySource != "data_engineering" {
+		t.Fatalf("feed vertical/source projection mismatch: %+v", item)
+	}
+	if item.SemanticCoverage <= 0 || item.MediaCompleteness <= 0 {
+		t.Fatalf("feed semantic/media projection missing: %+v", item)
 	}
 	if _, ok := item.ConditionProfile["altitudeMeters"]; !ok {
 		t.Fatalf("conditionProfile.altitudeMeters missing: %+v", item.ConditionProfile)

@@ -201,8 +201,8 @@ func (m *MongoSocialGraphProvider) GetFriendInteractedContent(ctx context.Contex
 	eventColl := m.db.Collection("rec_learning_events")
 	cutoff := time.Now().Add(-7 * 24 * time.Hour)
 	eventCursor, err := eventColl.Find(ctx, bson.M{
-		"userId":    bson.M{"$in": followeeIDs},
-		"eventType": "rec_engagement",
+		"userId":        bson.M{"$in": followeeIDs},
+		"eventType":     "rec_engagement",
 		"labels.action": bson.M{"$in": []string{"like", "share"}},
 		"createdAt":     bson.M{"$gte": cutoff},
 	}, options.Find().SetLimit(int64(limit)).SetSort(bson.M{"createdAt": -1}))
@@ -265,33 +265,9 @@ func (m *MongoSocialCandidateDB) GetCircleHotContent(ctx context.Context, circle
 func decodeCandidatesFromCursor(ctx context.Context, cursor *mongo.Cursor) ([]rtrec.ContentCandidate, error) {
 	var results []rtrec.ContentCandidate
 	for cursor.Next(ctx) {
-		var doc struct {
-			PostID       string    `bson:"postId"`
-			ContentType  string    `bson:"contentType"`
-			AuthorID     string    `bson:"authorId"`
-			Title        string    `bson:"title"`
-			Tags         []string  `bson:"tagRefs"`
-			EntityRefs   []string  `bson:"entityRefs"`
-			PublishedAt  time.Time `bson:"publishedAt"`
-			ViewCount    int64     `bson:"viewCount"`
-			LikeCount    int64     `bson:"likeCount"`
-			CommentCount int64     `bson:"commentCount"`
-			ShareCount   int64     `bson:"shareCount"`
-		}
+		var doc discoveryFeedDoc
 		if err := cursor.Decode(&doc); err == nil {
-			results = append(results, rtrec.ContentCandidate{
-				ContentID:    doc.PostID,
-				ContentType:  doc.ContentType,
-				AuthorID:     doc.AuthorID,
-				Title:        doc.Title,
-				Tags:         doc.Tags,
-				EntityRefs:   doc.EntityRefs,
-				PublishedAt:  doc.PublishedAt,
-				ViewCount:    doc.ViewCount,
-				LikeCount:    doc.LikeCount,
-				CommentCount: doc.CommentCount,
-				ShareCount:   doc.ShareCount,
-			})
+			results = append(results, candidateFromDiscoveryDoc(doc, ""))
 		}
 	}
 	return results, nil

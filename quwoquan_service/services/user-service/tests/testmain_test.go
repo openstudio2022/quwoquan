@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,11 +28,14 @@ import (
 )
 
 var (
-	testHandler http.Handler
-	pgPool      *pgxpool.Pool
-	mongoDB     *mongo.Database
-	mr          *miniredis.Miniredis
-	redisClient rtredis.Client
+	testHandler    http.Handler
+	pgPool         *pgxpool.Pool
+	mongoDB        *mongo.Database
+	mr             *miniredis.Miniredis
+	redisClient    rtredis.Client
+	mongoClient    *mongo.Client
+	mongoContainer *mongomod.MongoDBContainer
+	mongoRuntimeMu sync.Mutex
 
 	testAccessSecret   = []byte("test-user-service-access-secret")
 	testAccessSigner   = rtauth.NewHS256Signer(testAccessSecret, 30*time.Minute)
@@ -81,37 +86,98 @@ func TestMain(m *testing.M) {
 	// Run migrations
 	runTestMigrations(ctx, pgPool)
 
-	// 3. MongoDB testcontainer
-	mongoURI := os.Getenv("TEST_MONGO_URI")
-	var mongoContainer *mongomod.MongoDBContainer
-	var mongoClient *mongo.Client
-	mongoSkipped := false
+	// 3. MongoDB best-effort bootstrap. Local runs keep non-Mongo tests runnable,
+	// while Mongo-backed tests can explicitly upgrade the runtime on demand.
+	if err := bootstrapMongoRuntime(ctx, true); err != nil {
+		if configuredMongoURI() != "" || isCIEnvironment() {
+			panic("mongo bootstrap: " + err.Error())
+		}
+		fmt.Fprintf(
+			os.Stderr,
+			"\n[L2] WARN: Docker unavailable, MongoDB-dependent tests will self-bootstrap or fail when exercised.\n"+
+				"  Set QWQ_TEST_MONGO_URI or TEST_MONGO_URI to run them without Docker.\n"+
+				"  Error: %v\n\n",
+			err,
+		)
+	}
+	if err := rebuildTestHandler(ctx); err != nil {
+		panic("build user-service test handler: " + err.Error())
+	}
+
+	code := m.Run()
+
+	// Teardown
+	pgPool.Close()
+	if mongoClient != nil {
+		_ = mongoClient.Disconnect(ctx)
+	}
+	if mongoContainer != nil {
+		_ = mongoContainer.Terminate(ctx)
+	}
+	_ = redisRouter.Close()
+	mr.Close()
+	if embeddedPG != nil {
+		_ = embeddedPG.Stop()
+	}
+	os.Exit(code)
+}
+
+func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("testcontainers panic: %v", r)
+		}
+	}()
+	c, err = mongomod.Run(ctx, "mongo:7-jammy")
+	return
+}
+
+func configuredMongoURI() string {
+	mongoURI := strings.TrimSpace(os.Getenv("QWQ_TEST_MONGO_URI"))
 	if mongoURI == "" {
-		container, runErr := tryRunMongoContainer(ctx)
-		if runErr != nil {
-			if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
-				panic("CI: failed to start mongo testcontainer: " + runErr.Error())
+		mongoURI = strings.TrimSpace(os.Getenv("TEST_MONGO_URI"))
+	}
+	return mongoURI
+}
+
+func isCIEnvironment() bool {
+	return os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true"
+}
+
+func bootstrapMongoRuntime(ctx context.Context, allowLocalUnavailable bool) error {
+	if mongoDB != nil {
+		return nil
+	}
+
+	mongoURI := configuredMongoURI()
+	if mongoURI == "" {
+		if mongoContainer == nil {
+			container, runErr := tryRunMongoContainer(ctx)
+			if runErr != nil {
+				if allowLocalUnavailable && !isCIEnvironment() {
+					return runErr
+				}
+				return fmt.Errorf("failed to start mongo testcontainer: %w", runErr)
 			}
-			fmt.Fprintf(os.Stderr, "\n[L2] WARN: Docker unavailable, MongoDB-dependent tests will be skipped.\n")
-			mongoSkipped = true
-		} else {
 			mongoContainer = container
-			mongoURI, err = container.ConnectionString(ctx)
-			if err != nil {
-				panic("mongo connection string: " + err.Error())
-			}
 		}
-	}
-
-	if !mongoSkipped {
-		mongoClient, err = mongo.Connect(mongoopts.Client().ApplyURI(mongoURI))
+		uri, err := mongoContainer.ConnectionString(ctx)
 		if err != nil {
-			panic("mongo connect: " + err.Error())
+			return fmt.Errorf("mongo connection string: %w", err)
 		}
-		mongoDB = mongoClient.Database("user_test")
+		mongoURI = uri
 	}
 
-	// 4. Stores
+	client, err := mongo.Connect(mongoopts.Client().ApplyURI(mongoURI))
+	if err != nil {
+		return fmt.Errorf("mongo connect: %w", err)
+	}
+	mongoClient = client
+	mongoDB = client.Database("user_test")
+	return nil
+}
+
+func rebuildTestHandler(ctx context.Context) error {
 	profileStore := persistence.NewPgProfileStore(pgPool)
 	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
 	settingStore := persistence.NewPgSettingStore(pgPool)
@@ -122,17 +188,19 @@ func TestMain(m *testing.M) {
 	var followStore *persistence.MongoFollowStore
 	if mongoDB != nil {
 		followStore = persistence.NewMongoFollowStore(mongoDB)
-		_ = followStore.EnsureIndexes(ctx)
+		if err := followStore.EnsureIndexes(ctx); err != nil {
+			return fmt.Errorf("ensure follow indexes: %w", err)
+		}
 	}
 	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
 	userAuthStore := persistence.NewPgUserAuthStore(pgPool)
 	userDeviceStore := persistence.NewPgUserDeviceStore(pgPool)
 	consentRecordStore := persistence.NewPgConsentRecordStore(pgPool)
 	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
+	profileQrTokenStore := persistence.NewPgProfileQrTokenStore(pgPool)
 	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
 	inviteStore := persistence.NewPgInviteStore(pgPool)
 
-	// 5. Caches
 	profileCache := cache.NewProfileCache(redisClient)
 	settingCache := cache.NewSettingCache(redisClient)
 	blockCache := cache.NewBlockCache(redisClient)
@@ -140,10 +208,9 @@ func TestMain(m *testing.M) {
 	userSyncService := runtimesync.NewService(redisClient, redisClient)
 	shardDirectory, err := application.LoadDefaultShardDirectory()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	// 6. Services
 	profileService := application.NewProfileService(
 		profileStore,
 		personaStore,
@@ -152,6 +219,7 @@ func TestMain(m *testing.M) {
 		settingCache,
 		userEventPublisher,
 		userSyncService,
+		application.WithProfileQrTokenRepository(profileQrTokenStore),
 	)
 	searchService := application.NewSearchService(profileStore, personaStore, redisClient)
 	followService := application.NewFollowService(
@@ -203,38 +271,29 @@ func TestMain(m *testing.M) {
 	}
 	interestProfileService := application.NewInterestProfileService(interestReader)
 
-	// 7. Handler（包裹统一鉴权中间件：Bearer JWT 验签后覆盖 X-Client-User-Id）
 	testHandler = rtauth.Middleware(testAccessVerifier)(httpadapter.NewUserHandler(
 		profileService, searchService, followService, blockService, greetingService,
 		personaService, workService, lifeItemService, settingService,
 		authService, subAccountService, contactDiscoveryService, inviteService,
 		interestProfileService,
 	).Routes())
-
-	code := m.Run()
-
-	// Teardown
-	pgPool.Close()
-	if mongoClient != nil {
-		_ = mongoClient.Disconnect(ctx)
-	}
-	if mongoContainer != nil {
-		_ = mongoContainer.Terminate(ctx)
-	}
-	_ = redisRouter.Close()
-	mr.Close()
-	if embeddedPG != nil {
-		_ = embeddedPG.Stop()
-	}
-	os.Exit(code)
+	return nil
 }
 
-func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("testcontainers panic: %v", r)
-		}
-	}()
-	c, err = mongomod.Run(ctx, "mongo:7-jammy")
-	return
+func requireMongoBackedRuntime(tb testing.TB) {
+	tb.Helper()
+	mongoRuntimeMu.Lock()
+	defer mongoRuntimeMu.Unlock()
+
+	if mongoDB != nil {
+		return
+	}
+
+	ctx := context.Background()
+	if err := bootstrapMongoRuntime(ctx, false); err != nil {
+		tb.Fatalf("mongo-backed user-service tests require QWQ_TEST_MONGO_URI/TEST_MONGO_URI or Docker-backed testcontainers: %v", err)
+	}
+	if err := rebuildTestHandler(ctx); err != nil {
+		tb.Fatalf("rebuild user-service test handler with mongo runtime: %v", err)
+	}
 }

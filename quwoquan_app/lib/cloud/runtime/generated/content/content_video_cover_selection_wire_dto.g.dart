@@ -5,11 +5,17 @@ class ContentVideoCoverSelectionWireDto {
   final String mediaId;
   final String coverStrategy;
   final String? manualCoverAssetId;
+  final String thumbnailUrl;
+  final String coverUrl;
+  final int? coverFrameTimeMs;
 
   ContentVideoCoverSelectionWireDto({
     this.mediaId = '',
     this.coverStrategy = '',
     this.manualCoverAssetId,
+    this.thumbnailUrl = '',
+    this.coverUrl = '',
+    this.coverFrameTimeMs,
   });
 
   factory ContentVideoCoverSelectionWireDto.fromMap(Map<String, dynamic> m) {
@@ -17,6 +23,9 @@ class ContentVideoCoverSelectionWireDto {
       mediaId: m['mediaId']?.toString() ?? '',
       coverStrategy: m['coverStrategy']?.toString() ?? '',
       manualCoverAssetId: m['manualCoverAssetId']?.toString() ?? null,
+      thumbnailUrl: m['thumbnailUrl']?.toString() ?? m['thumbnail']?.toString() ?? m['coverUrl']?.toString() ?? m['cover']?.toString() ?? '',
+      coverUrl: m['coverUrl']?.toString() ?? m['cover']?.toString() ?? m['thumbnailUrl']?.toString() ?? m['thumbnail']?.toString() ?? '',
+      coverFrameTimeMs: (m['coverFrameTimeMs'] as num?)?.toInt() ?? (m['cover_frame_time_ms'] as num?)?.toInt() ?? null,
     );
   }
 
@@ -25,6 +34,9 @@ class ContentVideoCoverSelectionWireDto {
       'mediaId': mediaId,
       'coverStrategy': coverStrategy,
       'manualCoverAssetId': manualCoverAssetId,
+      'thumbnailUrl': thumbnailUrl,
+      'coverUrl': coverUrl,
+      'coverFrameTimeMs': coverFrameTimeMs,
     };
   }
 
@@ -32,11 +44,17 @@ class ContentVideoCoverSelectionWireDto {
     String? mediaId,
     String? coverStrategy,
     String? manualCoverAssetId,
+    String? thumbnailUrl,
+    String? coverUrl,
+    int? coverFrameTimeMs,
   }) {
     return ContentVideoCoverSelectionWireDto(
       mediaId: mediaId ?? this.mediaId,
       coverStrategy: coverStrategy ?? this.coverStrategy,
       manualCoverAssetId: manualCoverAssetId ?? this.manualCoverAssetId,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      coverUrl: coverUrl ?? this.coverUrl,
+      coverFrameTimeMs: coverFrameTimeMs ?? this.coverFrameTimeMs,
     );
   }
 }

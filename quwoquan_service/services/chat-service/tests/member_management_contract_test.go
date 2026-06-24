@@ -111,11 +111,8 @@ func TestInviteAssistant(t *testing.T) {
 func TestRemoveAssistant(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"group","title":"rm assistant test"}`)
-	convId := conv["_id"].(string)
-
-	doPost(t, "/v1/chat/conversations/"+convId+"/assistant",
-		`{"skillId":"general"}`, "user_test_001", 200)
+	convId := "fixture_remove_assistant_conv"
+	seedConversationWithAssistantMember(t, convId, "user_test_001", "rm assistant test", "general")
 
 	code, _ := doDelete(t, "/v1/chat/conversations/"+convId+"/assistant", "user_test_001")
 	if code != 200 {

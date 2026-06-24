@@ -33,6 +33,36 @@ func (s *MongoTagNodeStore) FindByTagRef(ctx context.Context, tagRef string) (*m
 	return &node, nil
 }
 
+// ListChildren 读取某 tagRef 的 active 直接子节点，供层级浏览/行政区选择使用。
+func (s *MongoTagNodeStore) ListChildren(ctx context.Context, parentTagRef string, limit int64) ([]model.TagNode, error) {
+	filter := bson.M{
+		"parentTagRef":    parentTagRef,
+		"lifecycleStatus": "active",
+	}
+	findOptions := options.Find().SetSort(bson.D{{Key: "tagRef", Value: 1}})
+	if limit > 0 {
+		findOptions.SetLimit(limit)
+	}
+	cur, err := s.coll.Find(ctx, filter, findOptions)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	out := make([]model.TagNode, 0)
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CountActiveChildren 返回某 tagRef 下 active 子节点数量。
+func (s *MongoTagNodeStore) CountActiveChildren(ctx context.Context, parentTagRef string) (int64, error) {
+	return s.coll.CountDocuments(ctx, bson.M{
+		"parentTagRef":    parentTagRef,
+		"lifecycleStatus": "active",
+	}, options.Count().SetLimit(1))
+}
+
 // ListAll 读取全部标签节点，供 suggest / 面板类查询使用。
 func (s *MongoTagNodeStore) ListAll(ctx context.Context) ([]model.TagNode, error) {
 	cur, err := s.coll.Find(

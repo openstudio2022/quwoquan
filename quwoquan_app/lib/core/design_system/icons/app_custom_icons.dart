@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
+part 'app_custom_icons_premium_mark.dart';
+
 // ─── 精品「钻石」图标 ───────────────────────────────────────
 /// 底部导航「精品」专用图标：极简钻石轮廓，表达精选与高价值内容。
 /// 公开类名沿用 AppOpenWindowIcon，避免底栏装配层跟随视觉命名 churn。
@@ -905,60 +907,6 @@ Path _leftConversationBubblePath(Rect rect) {
     )
     ..cubicTo(cx - rx, cy - ry * k, cx - rx * k, cy - ry, cx, cy - ry)
     ..close();
-}
-
-class _PremiumMarkPainter extends CustomPainter {
-  _PremiumMarkPainter({required this.color, required this.filled});
-
-  final Color color;
-  final bool filled;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final sw = size.width * 0.064;
-    final strokePaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = sw
-      ..strokeJoin = StrokeJoin.round
-      ..strokeCap = StrokeCap.round;
-    final fillPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final play = Path()
-      ..moveTo(size.width * 0.31, size.height * 0.19)
-      ..quadraticBezierTo(
-        size.width * 0.31,
-        size.height * 0.13,
-        size.width * 0.37,
-        size.height * 0.17,
-      )
-      ..lineTo(size.width * 0.82, size.height * 0.45)
-      ..quadraticBezierTo(
-        size.width * 0.90,
-        size.height * 0.50,
-        size.width * 0.82,
-        size.height * 0.55,
-      )
-      ..lineTo(size.width * 0.37, size.height * 0.83)
-      ..quadraticBezierTo(
-        size.width * 0.31,
-        size.height * 0.87,
-        size.width * 0.31,
-        size.height * 0.81,
-      )
-      ..close();
-
-    if (filled) {
-      canvas.drawPath(play, fillPaint);
-    }
-    canvas.drawPath(play, strokePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _PremiumMarkPainter old) =>
-      color != old.color || filled != old.filled;
 }
 
 Path _bubblePath(

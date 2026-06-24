@@ -10,6 +10,8 @@ class CreateEntrySheet extends StatelessWidget {
     required this.onSelect,
     required this.onContinueFromDraft,
     this.onCreateCircle,
+    this.onAddContact,
+    this.onStartGroupChat,
     this.priority = CreateActionSheetPriority.createPrimary,
   });
 
@@ -18,6 +20,8 @@ class CreateEntrySheet extends StatelessWidget {
   final void Function(EditorStartAction action) onSelect;
   final VoidCallback onContinueFromDraft;
   final VoidCallback? onCreateCircle;
+  final VoidCallback? onAddContact;
+  final VoidCallback? onStartGroupChat;
   final CreateActionSheetPriority priority;
 
   @override
@@ -29,8 +33,8 @@ class CreateEntrySheet extends StatelessWidget {
     return CreateActionSheet(
       onCreateAction: onSelect,
       onContinueFromDraft: onContinueFromDraft,
-      onStartGroupChat: onClose,
-      onAddContact: onClose,
+      onStartGroupChat: onStartGroupChat ?? onClose,
+      onAddContact: onAddContact ?? onClose,
       onCreateCircle: onCreateCircle,
       onCancel: onClose,
       priority: priority,

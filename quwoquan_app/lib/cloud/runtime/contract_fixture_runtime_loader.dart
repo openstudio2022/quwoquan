@@ -190,7 +190,6 @@ class ContractFixtureRuntimeLoader {
         File('../../$suffix'),
         File('../../../$suffix'),
         File('../../../../$suffix'),
-        File('/Users/zhaoyuxi/Projects/quwoquan/$suffix'),
       ]);
     }
     return files;

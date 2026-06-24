@@ -30,17 +30,17 @@ api_routes:
     path: /v1/user/sub-accounts/{subAccountId}/following
     operation: ListFollowing
     description: 关注列表（按 subAccount 读取）
-    query_params: [cursor, limit]
+    query_params: [query, cursor, limit]
     response_entity: FollowingListItemView
-    response_fields: [subAccountId, username, displayName, avatarUrl, profileVisibility, relationState, followedAt]
+    response_fields: [subAccountId, username, userHandle, displayName, avatarUrl, profileVisibility, relationState, followedAt, relationshipCapability]
 
   - method: GET
     path: /v1/user/sub-accounts/{subAccountId}/followers
     operation: ListFollowers
     description: 粉丝列表（按 subAccount 读取）
-    query_params: [cursor, limit]
+    query_params: [query, cursor, limit]
     response_entity: FollowerListItemView
-    response_fields: [subAccountId, username, displayName, avatarUrl, profileVisibility, relationState, followedAt]
+    response_fields: [subAccountId, username, userHandle, displayName, avatarUrl, profileVisibility, relationState, followedAt, relationshipCapability]
 
   - method: GET
     path: /v1/user/sub-accounts/{subAccountId}/relationship

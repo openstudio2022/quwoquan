@@ -42,6 +42,11 @@ l2:
       - feature: persona-context-propagation
       - feature: follow-relationship
       - feature: social-graph-read
+  - feature: profile-homepage-redesign
+    l3:
+      - feature: owner-subaccount-homepage-unification
+      - feature: profile-commercial-readiness
+      - feature: career-interest-profile-editor
   - feature: settings-and-device-token
     l3:
       - feature: appearance-accessibility-settings
@@ -60,4 +65,3 @@ l2:
           - feature: settings-change-trace-link
             l5:
               - feature: compliance-audit-export
-

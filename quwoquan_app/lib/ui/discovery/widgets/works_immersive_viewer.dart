@@ -5,6 +5,7 @@ import 'dart:ui' show FontFeature, ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Theme;
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
@@ -47,10 +48,12 @@ import 'package:quwoquan_app/core/auth/auth_session.dart'
     show authSessionControllerProvider;
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/article_reader_observability.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart'
     show ContentType;
+import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
@@ -78,6 +81,7 @@ import 'package:quwoquan_app/ui/discovery/models/home_feed_video_autoplay_policy
 
 part 'works_immersive_viewer_controls.dart';
 part 'works_immersive_viewer_canvas.dart';
+part 'works_immersive_viewer_engagement_actions.dart';
 
 class WorksImmersiveViewer extends ConsumerStatefulWidget {
   const WorksImmersiveViewer({
@@ -174,6 +178,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   // 当前可见视频作品的播放控制器（由 _WorksVideoCanvas 上报，供极简控制条消费）。
   VideoPlayerController? _activeVideoController;
   String? _activeVideoStageKey;
+  late final FeedPerformanceObservability _feedPerformanceObservability;
 
   late final PageController _pageController;
   bool _prefetchScheduled = false;
@@ -184,18 +189,20 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   @override
   void initState() {
     super.initState();
+    _feedPerformanceObservability = ref.read(
+      feedPerformanceObservabilityProvider,
+    );
     final initialPage = _safeInitialPage;
     _currentPage = initialPage;
     _pageController = PageController(
       initialPage: _verticalRecommendationFlowDisabled ? 0 : initialPage,
     );
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      if (mounted) {
-        primeMediaViewerInteractionSnapshot(
-          ref,
-          widget.initialInteractionSnapshot,
-        );
-      }
+      if (!mounted) return;
+      primeMediaViewerInteractionSnapshot(
+        ref,
+        widget.initialInteractionSnapshot,
+      );
       if (!_usesExternalFeed) {
         for (final tabId in <String>['photo', 'video', 'article']) {
           final feedMap = ref.read(discoveryFeedMapProvider);
@@ -587,6 +594,19 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 post.id,
                 authorId: post.authorId,
                 contentType: post.type,
+                feedRequestId: ref
+                    .read(feedSessionProvider.notifier)
+                    .currentFeedRequestId,
+                channelId: _immersiveChannelId(),
+                rankingVersion: ref
+                    .read(feedSessionProvider.notifier)
+                    .currentRankingVersion,
+                reasonVersion: ref
+                    .read(feedSessionProvider.notifier)
+                    .currentReasonVersion,
+                recallPath: post.recallPath,
+                contentVertical: post.contentVertical,
+                supplySource: post.supplySource,
               );
         },
         onBlockWords: () async {
@@ -601,6 +621,19 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 post.id,
                 contentType: post.type,
                 authorId: post.authorId,
+                feedRequestId: ref
+                    .read(feedSessionProvider.notifier)
+                    .currentFeedRequestId,
+                channelId: _immersiveChannelId(),
+                rankingVersion: ref
+                    .read(feedSessionProvider.notifier)
+                    .currentRankingVersion,
+                reasonVersion: ref
+                    .read(feedSessionProvider.notifier)
+                    .currentReasonVersion,
+                recallPath: post.recallPath,
+                contentVertical: post.contentVertical,
+                supplySource: post.supplySource,
               );
         },
         onReport: () {
@@ -610,6 +643,22 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 .reportSingle(
                   contentId: post.id,
                   action: BehaviorAction.report,
+                  contentType: post.type,
+                  authorId: post.authorId,
+                  referralSource: ReferralSource.organicFeed,
+                  feedRequestId: ref
+                      .read(feedSessionProvider.notifier)
+                      .currentFeedRequestId,
+                  channelId: _immersiveChannelId(),
+                  rankingVersion: ref
+                      .read(feedSessionProvider.notifier)
+                      .currentRankingVersion,
+                  reasonVersion: ref
+                      .read(feedSessionProvider.notifier)
+                      .currentReasonVersion,
+                  recallPath: post.recallPath,
+                  contentVertical: post.contentVertical,
+                  supplySource: post.supplySource,
                 );
             ref
                 .read(reportRepositoryProvider)
@@ -993,9 +1042,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       WorkBrowserMediaItemDto(
         kind: 'video',
         url: post.mediaVideoUrl,
-        coverUrl: post.mediaThumbnailUrl.isEmpty
+        coverUrl: post.mediaVideoCoverUrl.isEmpty
             ? null
-            : post.mediaThumbnailUrl,
+            : post.mediaVideoCoverUrl,
       ),
     ];
   }
@@ -1232,9 +1281,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     if (span.isTag) {
       final tagRef = _tagRefForArticleMention(targetId);
       if (tagRef.isEmpty) return;
-      context.push(
-        AppRoutePaths.globalSearchNetworkResults(query: tagRef),
-      );
+      context.push(AppRoutePaths.globalSearchNetworkResults(query: tagRef));
       return;
     }
     if (targetType != 'homepage' && targetType != 'entity') return;
@@ -1429,17 +1476,57 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         identical(_activeVideoController, controller)) {
       return;
     }
-    setState(() {
-      _activeVideoStageKey = stageKey;
-      _activeVideoController = controller;
-    });
+    void applyState() {
+      if (!mounted) return;
+      setState(() {
+        _activeVideoStageKey = stageKey;
+        _activeVideoController = controller;
+      });
+    }
+
+    final schedulerPhase = SchedulerBinding.instance.schedulerPhase;
+    if (schedulerPhase == SchedulerPhase.idle ||
+        schedulerPhase == SchedulerPhase.postFrameCallbacks) {
+      applyState();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => applyState());
+    }
+    _feedPerformanceObservability.recordActiveVideoControllerCount(
+      surfaceId: 'works_immersive_viewer',
+      activeCount: controller == null ? 0 : 1,
+    );
   }
 
   // ── 行为追踪辅助 ──────────────────────────────────────────────
 
+  String _immersiveChannelId() {
+    final normalized = widget.source.trim().toLowerCase();
+    switch (normalized) {
+      case 'featured':
+      case 'premium':
+      case 'premium_stream':
+      case 'immersive':
+        return 'premium_stream';
+      default:
+        return normalized.isEmpty ? 'premium_stream' : normalized;
+    }
+  }
+
   void _trackImpressionForPost(PostBaseDto post) {
     final tracker = ref.read(contentBehaviorTrackerProvider);
-    tracker.trackImpression(post.id);
+    final feedSession = ref.read(feedSessionProvider.notifier);
+    tracker.trackImpression(
+      post.id,
+      contentType: post.type,
+      referralSource: ReferralSource.organicFeed,
+      feedRequestId: feedSession.currentFeedRequestId,
+      channelId: _immersiveChannelId(),
+      rankingVersion: feedSession.currentRankingVersion,
+      reasonVersion: feedSession.currentReasonVersion,
+      recallPath: post.recallPath,
+      contentVertical: post.contentVertical,
+      supplySource: post.supplySource,
+    );
 
     final engTracker = ref.read(contentEngagementTrackerProvider);
     engTracker.trackContentEnter(
@@ -1665,7 +1752,20 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final durationSec =
         DateTime.now().difference(enterTime).inMilliseconds / 1000.0;
     final tracker = ref.read(contentBehaviorTrackerProvider);
-    tracker.trackDwell(post.id, durationSeconds: durationSec);
+    final feedSession = ref.read(feedSessionProvider.notifier);
+    tracker.trackDwell(
+      post.id,
+      durationSeconds: durationSec,
+      contentType: post.type,
+      referralSource: ReferralSource.organicFeed,
+      feedRequestId: feedSession.currentFeedRequestId,
+      channelId: _immersiveChannelId(),
+      rankingVersion: feedSession.currentRankingVersion,
+      reasonVersion: feedSession.currentReasonVersion,
+      recallPath: post.recallPath,
+      contentVertical: post.contentVertical,
+      supplySource: post.supplySource,
+    );
     _pageEnterTime = null;
 
     ref.read(contentEngagementTrackerProvider).trackContentExit(post.id);
@@ -1793,6 +1893,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
           child: ImmersiveCommentSplitSheet(
             postId: splitPostId,
             content: _buildCommentSplitContent(commentSplitPost),
+            entryObservedCommentCount: interaction.commentCountFor(
+              splitPostId,
+              fallback: commentSplitPost.commentCount,
+            ),
             commentContext: widget.initialCommentContext,
             likeCount: interaction.likeCountFor(splitPostId),
             shareCount: effectivePostShareCount(
@@ -1919,6 +2023,22 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                                     .trackSkip(
                                       prevPost.id,
                                       dwellSeconds: skipDwell,
+                                      contentType: prevPost.type,
+                                      referralSource:
+                                          ReferralSource.organicFeed,
+                                      feedRequestId: ref
+                                          .read(feedSessionProvider.notifier)
+                                          .currentFeedRequestId,
+                                      channelId: _immersiveChannelId(),
+                                      rankingVersion: ref
+                                          .read(feedSessionProvider.notifier)
+                                          .currentRankingVersion,
+                                      reasonVersion: ref
+                                          .read(feedSessionProvider.notifier)
+                                          .currentReasonVersion,
+                                      recallPath: prevPost.recallPath,
+                                      contentVertical: prevPost.contentVertical,
+                                      supplySource: prevPost.supplySource,
                                     );
                               }
 
@@ -2352,104 +2472,5 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       );
     }
     setState(() => _articleInnerIndex[post.id] = index);
-  }
-
-  void _openCommentFor(String postId) {
-    setState(() => _commentSplitPostId = postId);
-  }
-
-  Widget _buildCommentSplitContent(PostBaseDto post) {
-    return ColoredBox(
-      color: AppColors.worksBackground,
-      child: _buildPostCanvas(
-        post,
-        enableArticlePageCurl: _enableArticlePageCurl,
-      ),
-    );
-  }
-
-  PostBaseDto? _postById(List<PostBaseDto> posts, String postId) {
-    for (final post in posts) {
-      if (post.id == postId) {
-        return post;
-      }
-    }
-    return null;
-  }
-
-  void _sharePost(
-    BuildContext ctx,
-    PostBaseDto post, {
-    required bool enableIdentityTemplate,
-  }) {
-    runWhenLoggedIn(ref, context, AuthGateReason.shareRecord, () {
-      final template = _buildShareTemplate(
-        post: post,
-        enableIdentityTemplate: enableIdentityTemplate,
-      );
-      ContentShareSheet.show(
-        ctx,
-        template: template,
-        onActionCompleted: (result) async {
-          await _recordShare(post.id, result.actionId);
-        },
-      );
-    });
-  }
-
-  Future<void> _copyLink(
-    BuildContext context,
-    PostBaseDto post, {
-    required bool enableIdentityTemplate,
-  }) async {
-    final result = await const DefaultContentShareActionHandler().execute(
-      context,
-      _buildShareTemplate(
-        post: post,
-        enableIdentityTemplate: enableIdentityTemplate,
-      ),
-      ContentShareAction(id: 'copy_link', label: UITextConstants.copyLink),
-    );
-    if (result.success) {
-      await _recordShare(post.id, result.actionId);
-    }
-  }
-
-  ContentShareTemplate _buildShareTemplate({
-    required PostBaseDto post,
-    required bool enableIdentityTemplate,
-  }) {
-    final raw = _rawPostById(post.id);
-    final visibility =
-        raw?[ContentPostImmersiveWireKeys.visibility]?.toString() ?? 'public';
-    final surfaceView = ContentSurfaceViewMapper.fromDto(post, wire: raw);
-    return ContentShareTemplateBuilder.build(
-      surfaceView: surfaceView,
-      enableIdentityTemplate: enableIdentityTemplate,
-      visibility: visibility,
-      circleNames: _circlesForPost(
-        post,
-      ).map((circle) => circle.name).toList(growable: false),
-    );
-  }
-
-  Future<void> _recordShare(String postId, String actionId) async {
-    final rawShareCount =
-        (_rawPostById(postId)?[ContentPostImmersiveWireKeys.shareCount] as num?)
-            ?.toInt() ??
-        0;
-    final baselineShareCount = effectivePostShareCount(
-      ref,
-      postId,
-      fallback: rawShareCount,
-    );
-    await syncPostShareIntent(
-      ref,
-      postId: postId,
-      baselineShareCount: baselineShareCount,
-    );
-    ref
-        .read(contentBehaviorTrackerProvider)
-        .trackShare(postId, tags: <String>[actionId]);
   }
 }

@@ -29,8 +29,7 @@ gwt_acceptance:
       - file: quwoquan_service/services/product-ops-service/cmd/api/main_test.go
       - file: apps/ops-portal/src/shared/api/controlPlane.test.mjs
       recorded:
-      - file: quwoquan_service/services/product-ops-service/cmd/api/main_test.go
-      - file: apps/ops-portal/src/shared/api/controlPlane.test.mjs
+      - file: quwoquan_service/services/product-ops-service/tests/local_contract/cmd/api/main__local_contract_test.go
     status: implemented
     test_evidence:
       primary:
@@ -46,7 +45,8 @@ gwt_acceptance:
         - local_contract.product_ops_growth.event_ingestion_and_analytics.analytics_metric_dictionary.gwt1_local_contract
         envs: *id001
       supporting: []
-    notes: []
+    notes:
+    - '[migrated_from_recorded_reference] apps/ops-portal/src/shared/api/controlPlane.test.mjs'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

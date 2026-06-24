@@ -7,42 +7,381 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: publish-comment-reaction
 scope:
-  summary: post create update 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 内容创建、媒体发布与发布后回读验收；本轮覆盖图片与视频作品商用创作链路。
+  in_scope:
+  - 图片作品从相册选择、拍摄、编辑、排序、完成回填到发布的端侧主链路。
+  - 图片发布远端媒体上传、完成、绑定、发布与展示回读契约。
+  - 图片与视频发布入口、选择器、拍摄和 payload 语义互斥。
+  - 视频作品从相册选择、拍摄、选封面、完成回填到发布的端侧主链路。
+  - 视频封面字段、封面策略、远端发布 payload 与发布后 feed 回读契约。
+  out_of_scope:
+  - 重做图片编辑器内部滤镜、裁剪、文字、马赛克算法。
+  - 新增外部平台分享 SDK。
+  - 视频加音乐、特效、美颜、闪光灯、定时、完整剪辑能力商用化。
+  - 首页运行时临时抽帧；未播放态封面必须来自服务/数据生产出的封面 URL。
 gwt_acceptance:
   GWT1:
-    title: post create update GWT
+    title: 图片选择器达到商用品质的深色 iOS 图片发布体验
     given:
-    - 前置条件明确。
+    - "用户已登录并从图片作品入口进入 `/create?type=gallery`。"
+    - 设备相册权限可用，最近项目和至少一个相册目录包含图片。
     when:
-    - 用户或系统动作发生。
+    - 用户打开图片选择器、切换相册目录、选择多张图片、取消其中一张，并拖动底部缩略条调整顺序。
     then:
-    - 可观察结果符合预期。
+    - 页面使用深色 iOS 全屏选择态，顶部为返回按钮和居中“图片选择”下拉标题。
+    - 相册下拉展示封面、名称、数量和选中态；切换后宫格只显示当前目录图片。
+    - 宫格首项为拍摄，图片右上角空心圆选择态；选中后显示与底部顺序一致的蓝色编号。
+    - 底部仅展示“编辑图片”和“完成(n)”，不出现“一键成片”或视频发布暗示。
+    - 宫格取消、底部点叉删除和拖动排序会同步更新底部缩略条、宫格编号与最终完成顺序。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 图片选择器可把当前顺序图片回填到创作编辑器当前位置。
+    edge_cases:
+    - 未授权相册权限时展示内联权限态和恢复动作。
+    - 选中数达到上限时阻止新增并展示用户可理解提示。
+    - 目录为空时展示空态，不破坏底部已有选择。
+    contract_refs:
+    - quwoquan_app/lib/components/media/picker/create_media_picker_page.dart
+    - quwoquan_app/lib/core/services/media_picker_service.dart
+    - quwoquan_app/lib/ui/content/entry/pages/create_page.dart
+    performance_points:
+    - 相册 warm 打开到可交互 P95 <= 1.2s。
+    - 选中/取消/排序反馈 P95 <= 100ms，不能整页缩略图闪烁。
     tests:
-      planned: []
-      recorded: []
+      planned:
+      - file: quwoquan_app/test/local_contract/content/create/photo_media_picker_commercial_flow__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/photo_picker_reentry_append_journey__user_acceptance_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/content/create/photo_media_picker_commercial_flow__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/photo_picker_reentry_append_journey__user_acceptance_test.dart
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: photo_media_picker_commercial_flow
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.photo_picker_dark_album_select_reorder
+        envs: &id001
+        - local
+      supporting:
+      - layer: api_integration
+        suite: photo_publish_upload_bind_roundtrip
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.post_create_update.photo_upload_bind_publish_roundtrip
+        envs:
+        - gamma
+      - layer: user_acceptance
+        suite: photo_creation_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.photo_picker_select_reorder_complete
+        envs:
+        - gamma_local
+      - layer: user_acceptance
+        suite: photo_picker_reentry_append_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.photo_picker_reentry_appends_images
+        envs:
+        - gamma_local
+    notes:
+    - 2026-06-22 已记录图片模式展示规则、相册目录切换、视频防穿透、宫格选择、底部删除与完成回填 widget 合同；真实拖拽手势由后续真机巡检继续覆盖。
+    - 2026-06-23 新增跨页面 user_acceptance：重入图片选择器不预选旧图，但确认后会把新图追加到已有图片末尾，不覆盖第一次选择。
+  GWT2:
+    title: 图片拍摄为高保黑色拍照确认流并统一进图片编辑页
+    given:
+    - "用户从图片选择器首格“拍摄”或 `/create?type=capture` 进入相机。"
+    - 设备相机权限可用。
+    when:
+    - 用户切换滤镜/闪光灯/前后镜头，拍摄一张照片，在确认页选择重新拍摄或使用照片。
+    then:
+    - 拍摄页为全黑沉浸式 chrome，顶部仅保留返回、居中“拍照模式”和闪光灯；底部仅保留滤镜、快门、翻转。
+    - 拍照模式不出现录像切换、动图入口或麦克风权限请求；默认后置、闪光灯 off、滤镜 original。
+    - 闪光灯为单击开关，不弹出选择面板；图标在关闭闪光与开启闪光状态之间切换，前置镜头不可用时置灰并关闭。
+    - 六个相机滤镜来自 `filter_presets.json` 的 `camera_photo` 集合，实时作用于取景/预览，不在相机页维护第二套矩阵或文案。
+    - 拍照后展示确认态，包含“重新拍照”和“使用照片”；重新拍照保留当前滤镜、镜头和闪光灯状态。
+    - "使用照片必须先进入 `ImageEditorPage`；编辑完成后按 caller 回流，picker 来源追加到选择器底部，`/create?type=capture` 来源追加到创作页图片列表。"
+    done_when:
+    - 从拍摄得到的图片可进入图片选择器底部缩略条或创作编辑器图片列表，并参与排序、编辑和发布。
+    edge_cases:
+    - 相机不可用时展示深色页面级错误态和重试/返回动作。
+    - 相机权限拒绝时展示深色权限态和去设置/返回动作。
+    - 拍摄失败时展示提交级错误，不退出创作上下文。
+    contract_refs:
+    - quwoquan_app/lib/components/media/camera/camera_capture_page.dart
+    - quwoquan_app/lib/components/media/picker/create_media_picker_page.dart
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/content/create/photo_camera_capture_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/photo_camera_hifi_layout__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/photo_picker_reentry_append_journey__user_acceptance_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/content/create/photo_camera_capture_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/photo_camera_hifi_layout__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/photo_picker_reentry_append_journey__user_acceptance_test.dart
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: photo_camera_capture_flow
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.photo_camera_hifi_state_filter_flash_preview_editor
+        envs: *id001
+      - layer: local_contract
+        suite: photo_camera_hifi_layout
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.photo_camera_hifi_topbar_shutter_filter_geometry
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: photo_publish_upload_bind_roundtrip
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.post_create_update.photo_upload_bind_publish_roundtrip
+        envs:
+        - gamma
+      - layer: user_acceptance
+        suite: photo_picker_reentry_append_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.photo_picker_camera_preview_editor_append
+        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.photo_create_capture_preview_editor_append
+        envs:
+        - gamma_local
+    notes:
+    - 2026-06-22 已记录图片入口隐藏录像模式、拍后确认态“重新拍摄/使用照片”和使用照片返回图片结果；真实相机硬件路径由设备矩阵巡检覆盖。
+    - 2026-06-23 冻结高保拍照相机：黑色沉浸式、九宫格、滤镜/快门/翻转底栏、闪光灯单击 on/off 开关、前置置灰、拍后统一进图片编辑页，再按 picker/create 来源追加；新增 fake camera local_contract、几何约束与两条 user_acceptance 旅程证据。
+  GWT3:
+    title: 图片发布远端媒体引用与展示回读一致
+    given:
+    - 用户已在创作编辑器中完成图片排序和发布设置。
+    - App 处于 Remote 数据源，content media upload API 可用。
+    when:
+    - 用户点击发布图片作品。
+    then:
+    - "发布前本地图片路径先转换为 content media 远端引用，最终 `CreatePost` payload 的 `mediaUrls` / `coverUrl` 不包含本地文件路径。"
+    - "`coverUrl` 默认使用排序后的第一张图片远端引用。"
+    - "`BindMediaAssetsToPost` 把已完成的媒体资产绑定到创建出的 post。"
+    - 发布成功后发现流、个人主页作品列表与详情页按同一顺序回读展示图片。
+    done_when:
+    - Mock/Remote 的图片 payload 形态在 local contract 对齐，Remote/API 在 api_integration 证明上传、绑定、发布、回读闭环。
+    edge_cases:
+    - 上传失败时中止发布并提供可恢复动作，不能创建带本地路径的 post。
+    - 部分图片上传失败时不得发布半成品图片顺序。
+    - 私密发布时仍遵守 visibility/circle 现有契约。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/service.yaml
+    - quwoquan_app/lib/cloud/services/content/content_repository.dart
+    - quwoquan_app/lib/ui/content/entry/services/create_page_remote_helpers.dart
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/content/create/photo_publish_payload_media_refs__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/gamma/photo_publish_upload_bind_roundtrip__api_integration_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/content/create/photo_publish_payload_media_refs__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/gamma/photo_publish_upload_bind_roundtrip__api_integration_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: photo_publish_payload_media_refs
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.photo_publish_payload_uses_remote_media_refs
+        envs: *id001
+      - layer: api_integration
+        suite: photo_publish_upload_bind_roundtrip
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.post_create_update.photo_upload_bind_publish_roundtrip
+        envs:
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        suite: photo_creation_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.photo_creation_publish_roundtrip
+        envs:
+        - gamma_local
+    notes:
+    - 2026-06-22 已记录本地图片上传转换、失败 abort、content-service init/complete/create/bind API 合同，以及发布旅程的远端 URL 顺序、首图 coverUrl 与 bind assetIds 顺序。
+  GWT4:
+    title: 视频选择与拍摄进入深色视频选封面主链路
+    given:
+    - "用户已登录并从视频作品入口进入 `/create?type=video`。"
+    - 设备相册或相机权限可用，至少存在一个可选择视频或可录制视频。
+    when:
+    - 用户打开视频选择器选择一个视频，或从视频入口进入相机拍摄一段视频。
+    then:
+    - 视频选择器使用深色 iOS 全屏选择态，顶部含取消与相机入口，上半区为“现在开拍”，下半区为“全部视频”三列视频缩略图。
+    - 视频缩略图展示时长，选中态清晰；选择单个视频后进入视频编辑/选封面页，不直接写入发布 payload。
+    - 视频入口进入相机时默认后置摄像头，顶部为返回/“摄像模式”/灯光，底部仅保留滤镜/蓝色录像按钮/翻转，不出现拍照模式标题或白色快门。
+    - 录制中顶部显示时长，主按钮转为停止态，翻转与滤镜锁定；小于 1 秒提示“录制时间太短”，到 60 秒自动停止并进入预览确认。
+    - 录制停止后先进入视频预览确认（自动播放/重拍/下一步），下一步进入同一视频编辑/选封面页，不回落到图片确认流或浅色不可用页。
+    - 滤镜复用 `filter_presets.json` 的 `camera_photo` 集合与拍照同源；麦克风被拒时允许继续无声录制，不整体阻断视频入口。
+    done_when:
+    - 相册视频与拍摄视频均能进入统一视频编辑状态，包含 `videoPath`、`durationMs` 和默认封面候选。
+    edge_cases:
+    - 相册权限未授权时展示深色权限态与恢复动作。
+    - 相机权限拒绝时展示深色页级权限态与去设置/返回动作。
+    - 麦克风权限拒绝时允许继续无声录制，不阻断进入相机。
+    - 相机不可用或录制失败时展示结构化深色错误态并隐藏录制/翻转等无意义控件，不丢失创作上下文。
+    contract_refs:
+    - quwoquan_app/lib/components/media/picker/create_media_picker_page.dart
+    - quwoquan_app/lib/components/media/camera/camera_capture_page.dart
+    - quwoquan_app/lib/ui/content/entry/pages/video_editor_page.dart
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/content/create/video_media_picker_dark_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/video_camera_capture_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/video_camera_hifi_layout__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/capture_camera_photo_video_independence__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_crud_contract__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/content/create/video_media_picker_dark_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/video_camera_capture_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/video_camera_hifi_layout__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/capture_camera_photo_video_independence__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: video_media_picker_dark_flow
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.video_picker_enters_cover_editor
+        envs: *id001
+      - layer: local_contract
+        suite: video_camera_capture_flow
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.video_camera_records_to_cover_editor
+        envs: *id001
+      - layer: local_contract
+        suite: video_camera_hifi_layout
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.video_camera_hifi_topbar_record_filter_geometry
+        envs: *id001
+      - layer: local_contract
+        suite: capture_camera_photo_video_independence
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.capture_photo_video_routes_results_independent
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: post_crud_contract
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.post_create_update.video_create_post_all_types
+        envs:
+        - gamma
+      - layer: user_acceptance
+        suite: video_creation_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.video_select_or_record_to_cover_editor
+        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.video_camera_record_preview_to_editor_roundtrip
+        envs:
+        - gamma_local
+    notes:
+    - 2026-06-22 已记录视频选择器深色全屏、现在开拍、全部视频过滤图片、视频相机固定视频模式的 local_contract；gamma api_integration 与 user_acceptance 证据尚未落盘，状态保持 partial，真机前置摄像头与实际录制链路仍由后续设备矩阵/UAT 覆盖。
+    - 2026-06-23 冻结高保视频摄像模式：默认后置摄像头、顶部返回/“摄像模式”/灯光、底部滤镜/蓝色录像按钮/翻转，最短 1 秒/最长 60 秒录制状态机、录制中锁定翻转与滤镜、灯光（补光灯）off/on 前置置灰；相机权限页级阻断、麦克风拒绝可继续无声录制、模拟器/无相机走深色错误态隐藏无意义控件；录后视频预览确认（自动播放/重拍/下一步）再进 `VideoEditorPage`；与拍照共享高保壳但路由结果/状态机/埋点前缀独立。新增 fake camera/recording 注入、video_camera_hifi_layout、capture_camera_photo_video_independence 与 video_creation_publish_roundtrip 证据；gamma read model 仍由 GWT5/GWT6 pending 覆盖。
+  GWT5:
+    title: 视频选封面与发布 payload 使用同源远端封面契约
+    given:
+    - 用户已在视频编辑页选择一个视频，默认封面候选可用。
+    - App 处于 Remote 数据源，content media upload API 可用。
+    when:
+    - 用户保持默认首帧封面或拖动时间轴选择手工封面，并点击下一步后发布视频作品。
+    then:
+    - 未手工选封面时默认 `coverStrategy=first_frame` 且 `coverFrameTimeMs=0`。
+    - 手工选封面时 `coverStrategy=manual`，`coverFrameTimeMs` 与当前预览帧一致。
+    - 最终 `CreatePost` payload 显式携带 `videoUrl`、`thumbnailUrl`、`coverUrl`、`durationMs` 和可得的 `width/height`，且不包含本地文件路径。
+    - "`thumbnailUrl` 与 `coverUrl` 指向远端可访问封面；无真实转码 worker 时由 App 本地选帧封面上传或媒体资产封面 URL 提供。"
+    done_when:
+    - Mock/Remote 的视频 payload 形态在 local contract 对齐，Remote/API 在 api_integration 证明创建与回读闭环。
+    edge_cases:
+    - 封面上传失败时中止发布并提供可恢复动作，不能创建无关封面或半成品视频 post。
+    - 视频上传成功但封面缺失时服务返回结构化错误或明确降级策略，不允许首页使用 seed 图。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/service.yaml
+    - quwoquan_service/contracts/metadata/content/post/fields.yaml
+    - quwoquan_app/lib/ui/content/entry/services/create_page_remote_helpers.dart
+    - quwoquan_app/lib/ui/content/entry/providers/create_editor_provider.dart
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/content/create/video_publish_payload_cover_contract__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/gamma/video_publish_cover_roundtrip__api_integration_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/content/create/video_publish_payload_cover_contract__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
-        suite: contract
+        suite: video_publish_payload_cover_contract
         cases:
-        - local_contract.discovery_content.publish_comment_reaction.post_create_update.contract
-        envs: &id001
-        - local
-      - layer: local_contract
-        suite: gwt1_local_contract
-        cases:
-        - local_contract.discovery_content.publish_comment_reaction.post_create_update.gwt1_local_contract
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.video_publish_payload_uses_remote_cover_refs
         envs: *id001
-      supporting: []
-    notes: []
+      - layer: api_integration
+        suite: video_publish_cover_roundtrip
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.post_create_update.video_create_feed_cover_roundtrip
+        envs:
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        suite: video_creation_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.video_creation_publish_roundtrip
+        envs:
+        - gamma_local
+    notes:
+    - 2026-06-22 已通过 local_contract 证明视频与封面上传后 payload 只含远端 `videoUrl/thumbnailUrl/coverUrl`，并覆盖封面上传失败 abort；gamma api_integration 与 user_acceptance 证据未落盘，状态保持 pending。
+  GWT6:
+    title: 数据工程视频导入与用户上传视频使用同一封面展示契约
+    given:
+    - 数据工程产物包含至少一个视频 post manifest。
+    - 服务侧 content importer 可写入 content post 与 feed/read model 投影。
+    when:
+    - 数据工程发布 gate 校验视频 manifest，并由 importer 导入视频内容。
+    then:
+    - video manifest 显式声明 `videoUrl` 或 `videoAssetId`，并声明 `thumbnailUrl` 或 `coverUrl`。
+    - importer 写入的 Post、DiscoveryFeed 和作品浏览器 media item 均包含同源 `videoUrl` 与 `thumbnailUrl/coverUrl`。
+    - 数据工程不得用无关图片冒充视频首帧；无法抽帧时必须声明手工封面来源。
+    done_when:
+    - 数据工程 schema/gate、服务 importer local contract 与端云 api_integration 能证明导入视频和用户上传视频使用同一展示契约。
+    edge_cases:
+    - manifest 缺少视频资产或封面资源时 publish gate 失败。
+    - importer 重跑时保持幂等，不产生封面字段漂移。
+    contract_refs:
+    - quwoquan_data/schema/produce/post_manifest.schema.json
+    - quwoquan_data/scripts/publish/gate.py
+    - quwoquan_service/services/content-service/cmd/import/main.go
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/test_video_manifest_cover_contract__local_contract_test.py
+      - file: quwoquan_service/services/content-service/tests/local_contract/cmd/import/video_import_cover_projection__local_contract_test.go
+      - file: quwoquan_app/test/api_integration/gamma/video_import_feed_cover_roundtrip__api_integration_test.dart
+      recorded:
+      - file: quwoquan_data/tests/local_contract/test_video_manifest_cover_contract__local_contract_test.py
+      - file: quwoquan_service/services/content-service/tests/local_contract/cmd/import/video_import_cover_projection__local_contract_test.go
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: video_manifest_cover_contract
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.video_manifest_requires_cover
+        envs: *id001
+      - layer: api_integration
+        suite: video_import_feed_cover_roundtrip
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.post_create_update.video_import_feed_cover_roundtrip
+        envs:
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        suite: video_creation_journey
+        cases:
+        - user_acceptance.discovery_content.publish_comment_reaction.post_create_update.imported_video_feed_cover_and_playback
+        envs:
+        - gamma_local
+    notes:
+    - 2026-06-22 已通过 data local_contract 校验视频 manifest 缺封面/缺视频对象阻断，并通过 service importer local_contract 校验导入封面投影；gamma feed roundtrip 尚未落盘，状态保持 pending。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

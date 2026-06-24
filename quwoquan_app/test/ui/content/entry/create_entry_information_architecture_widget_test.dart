@@ -42,7 +42,7 @@ void main() {
     expect(find.text('写长文'), findsOneWidget);
     expect(find.text('续草稿'), findsOneWidget);
     expect(find.text('加联系'), findsOneWidget);
-    expect(find.text('发起讨论'), findsOneWidget);
+    expect(find.text('发起群聊'), findsOneWidget);
     expect(find.byIcon(FluentIcons.chat_multiple_24_regular), findsOneWidget);
     expect(find.text('创作'), findsNothing);
     expect(find.text('连接'), findsNothing);

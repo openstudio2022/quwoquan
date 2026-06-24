@@ -71,6 +71,16 @@ def lint_spec(spec: dict[str, Any], spec_path: Path, valid_types: set[str]) -> l
         if not spec.get(field):
             errors.append(f"缺少必填字段 {field}")
 
+    # intentLabel（顶层批次目录前缀 runtime/batches/<标签>-<taskHash>__<批次>/ 的人读标签部分）：
+    # 存在则必须 ≤16 字且无路径分隔符。
+    intent_label = spec.get("intentLabel")
+    if intent_label is not None:
+        label_str = str(intent_label)
+        if any(sep in label_str for sep in ("/", "\\", ":")) or label_str != label_str.strip():
+            errors.append(f"intentLabel '{intent_label}' 含路径分隔符或首尾空白（顶层批次目录前缀须干净）")
+        if len(label_str.strip()) > 16:
+            errors.append(f"intentLabel '{intent_label}' 超过 16 字（人类可读任务意图标签上限）")
+
     vertical = spec.get("vertical")
     if vertical and vertical not in VALID_VERTICALS:
         errors.append(f"非法 vertical: {vertical}")
@@ -131,13 +141,13 @@ def lint_spec(spec: dict[str, Any], spec_path: Path, valid_types: set[str]) -> l
                 "景区/打卡地 双树共存会导致目录与发布漂移，必须显式纠偏为唯一类型"
             )
 
-    errors.extend(_condition_axes_errors(spec, tid, vertical))
+    errors.extend(_effective_content_errors(spec, tid))
     errors.extend(_content_contract_errors(spec, tid))
     return errors
 
 
-def _condition_axes_errors(spec: dict[str, Any], tid: str, vertical: Any) -> list[str]:
-    """废弃字段拦截 + 继承解析后(effective)非空 + task 显式 conditionAxes 须为地域全谱子集。"""
+def _effective_content_errors(spec: dict[str, Any], tid: str) -> list[str]:
+    """废弃字段拦截 + 继承解析后(effective) content 菜单非空。"""
     errors: list[str] = []
 
     prov = spec.get("provenance") or {}
@@ -153,23 +163,6 @@ def _condition_axes_errors(spec: dict[str, Any], tid: str, vertical: Any) -> lis
     eff_content = effective.get("content") or {}
     if not eff_content.get("angles"):
         errors.append("effective content.angles 为空（垂类 _defaults.yaml 应提供 angles 菜单）")
-    eff_axes = eff_content.get("conditionAxes") or {}
-    if not eff_axes.get("seasons"):
-        errors.append("effective conditionAxes.seasons 为空（_defaults.yaml 应提供四季/旱雨季）")
-    if vertical == "travel" and not eff_axes.get("regions"):
-        errors.append("travel effective conditionAxes.regions 为空（地域/环线 _defaults.yaml 应提供地形全谱）")
-
-    raw_axes = ((spec.get("content") or {}).get("conditionAxes")) or {}
-    if raw_axes.get("regions") or raw_axes.get("seasons"):
-        menu = (defaults_merged(tid).get("content") or {}).get("conditionAxes") or {}
-        menu_regions = set(menu.get("regions") or [])
-        menu_seasons = set(menu.get("seasons") or [])
-        for r in raw_axes.get("regions") or []:
-            if menu_regions and r not in menu_regions:
-                errors.append(f"conditionAxes.regions '{r}' 不在继承地形全谱 {sorted(menu_regions)} 内")
-        for s in raw_axes.get("seasons") or []:
-            if menu_seasons and s not in menu_seasons:
-                errors.append(f"conditionAxes.seasons '{s}' 不在继承季节全谱 {sorted(menu_seasons)} 内")
 
     return errors
 
@@ -221,9 +214,6 @@ def content_redundancy_warnings(spec: dict[str, Any], tid: str) -> list[str]:
     for field in ("angles", "audiences", "carriers"):
         if field in raw_content and raw_content.get(field) == menu.get(field):
             warnings.append(f"content.{field} 与继承默认完全相同，建议删除该字段以继承")
-    raw_ca = raw_content.get("conditionAxes")
-    if raw_ca is not None and raw_ca == menu.get("conditionAxes"):
-        warnings.append("content.conditionAxes 与继承默认完全相同，建议删除以继承地域全谱")
     return warnings
 
 

@@ -70,13 +70,13 @@
 
 | Secret | 用途 |
 |--------|------|
-| **GAMMA_TEST_AUTH_TOKEN** | L3/L4 鉴权 Token |
+| **GAMMA_TEST_AUTH_TOKEN** | `api_integration` / `user_acceptance` 鉴权 Token |
 
 ### 说明
 
-- 远端 gamma 已退役；L3/L4 验证统一跑 `gamma-local`，默认 URL 从 `deploy/shared/environment_topology_manifest.yaml` 的 `gamma-local.publicBases.*` 解析。
+- 远端 gamma 已退役；`api_integration` / `user_acceptance` 验证统一跑 `gamma-local`，默认 URL 从 `deploy/shared/environment_topology_manifest.yaml` 的 `gamma-local.publicBases.*` 解析。
 - 如需手动覆盖 local-gamma 入口，可在命令行或 workflow input 传 `gamma_base_url`，而不是维护第二套 GitHub secret。
-- L4 Patrol 已统一迁到 **本机 macOS self-hosted runner**，通过 `flutter devices --machine` 动态发现当前可见的 Android/iOS 模拟器或真机，并逐台执行；总设备数至少为 1。
+- `user_acceptance` Patrol 已统一迁到 **本机 macOS self-hosted runner**，通过 `flutter devices --machine` 动态发现当前可见的 Android/iOS 模拟器或真机，并逐台执行；总设备数至少为 1。
 - `main` 的 pull request 合入规则中，`03` / `04` / `05` 需同时配置为 required checks。
 
 ---

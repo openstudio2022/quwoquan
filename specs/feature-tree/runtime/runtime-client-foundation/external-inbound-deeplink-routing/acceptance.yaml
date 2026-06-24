@@ -68,8 +68,8 @@ gwt_acceptance:
         suite: user_journey
         cases:
         - user_acceptance.runtime.runtime_client_foundation.external_inbound_deeplink_routing.user_journey
-        envs: &id002
-        - gamma
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/runtime/deeplink/deep_link_resolver_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/runtime/deeplink/deep_link_cold_start_replay_test.dart'
@@ -113,7 +113,8 @@ gwt_acceptance:
         suite: user_journey
         cases:
         - user_acceptance.runtime.runtime_client_foundation.external_inbound_deeplink_routing.user_journey
-        envs: *id002
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/runtime/deeplink/wechat_launch_strategy_test.dart'
     - '[migrated_from_planned] quwoquan_app/integration_test/wechat_launch_journey_test.dart'
@@ -155,7 +156,8 @@ gwt_acceptance:
         suite: user_journey
         cases:
         - user_acceptance.runtime.runtime_client_foundation.external_inbound_deeplink_routing.user_journey
-        envs: *id002
+        envs:
+        - gamma_local
       supporting:
       - layer: api_integration
         suite: gwt3_api_integration

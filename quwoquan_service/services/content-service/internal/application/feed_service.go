@@ -62,29 +62,37 @@ type ListFeedRequest struct {
 }
 
 type FeedItemView struct {
-	ID           string   `json:"id"`
-	PostID       string   `json:"postId"`
-	WireID       string   `json:"_id"`
-	Type         string   `json:"type"`
-	ContentType  string   `json:"contentType"`
-	AuthorID     string   `json:"authorId"`
-	Title        string   `json:"title,omitempty"`
-	Body         string   `json:"body,omitempty"`
-	Images       []string `json:"images,omitempty"`
-	VideoURL     string   `json:"videoUrl,omitempty"`
-	CoverURL     string   `json:"coverUrl,omitempty"`
-	Width        int64    `json:"width,omitempty"`
-	Height       int64    `json:"height,omitempty"`
-	LikeCount    int64    `json:"likesCount"`
-	CommentCount int64    `json:"commentsCount"`
-	ShareCount   int64    `json:"shares"`
-	CreatedAt    string   `json:"createdAt"`
+	ID               string   `json:"id"`
+	PostID           string   `json:"postId"`
+	WireID           string   `json:"_id"`
+	Type             string   `json:"type"`
+	ContentType      string   `json:"contentType"`
+	AuthorID         string   `json:"authorId"`
+	Title            string   `json:"title,omitempty"`
+	Body             string   `json:"body,omitempty"`
+	Images           []string `json:"images,omitempty"`
+	VideoURL         string   `json:"videoUrl,omitempty"`
+	CoverURL         string   `json:"coverUrl,omitempty"`
+	ThumbnailURL     string   `json:"thumbnailUrl,omitempty"`
+	CoverStrategy    string   `json:"coverStrategy,omitempty"`
+	CoverFrameTimeMs int64    `json:"coverFrameTimeMs,omitempty"`
+	DurationMs       int64    `json:"durationMs,omitempty"`
+	Width            int64    `json:"width,omitempty"`
+	Height           int64    `json:"height,omitempty"`
+	LikeCount        int64    `json:"likesCount"`
+	CommentCount     int64    `json:"commentsCount"`
+	ShareCount       int64    `json:"shares"`
+	CreatedAt        string   `json:"createdAt"`
 	// UpdatedAt 最后实质更新时间；与 createdAt 相等或更早时端只显示创作时间。零值省略。
 	UpdatedAt string `json:"updatedAt,omitempty"`
 	// PublishedAt 首次公开时间；零值（未发布/未知）时省略。
 	PublishedAt string `json:"publishedAt,omitempty"`
 	// IntersectionReasons 内容卡交集行（70/20/10 频率契约；空即无交集，端不渲染）。
 	IntersectionReasons []IntersectionReasonView `json:"intersectionReasons,omitempty"`
+	QualityScore        float64                  `json:"qualityScore,omitempty"`
+	RecallPath          string                   `json:"recallPath,omitempty"`
+	ContentVertical     string                   `json:"contentVertical,omitempty"`
+	SupplySource        string                   `json:"supplySource,omitempty"`
 }
 
 type ListFeedResponse struct {
@@ -129,6 +137,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	views := make([]FeedItemView, 0, limit)
 	requestedIdentity := normalizeRequestedIdentity(req.Identity)
 	requestedType := normalizeRequestType(req.Type)
+	route := resolveFeedRoute(req)
 	blockedUsers := toLowerSet(req.BlockedUserIDs)
 	blockedKeywords := toLowerSet(req.BlockedKeywords)
 
@@ -143,7 +152,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	feedbackExclusions := s.engine.LoadFeedbackExclusions(ctx, req.UserID, req.SessionID)
 	_, cursorIsPostID := s.postReader.GetByID(ctx, repositoryCursor)
 	useRepositoryPagination := cursorIsPostID || requestedType != "" || requestedIdentity != ""
-	appendPost := func(post *postmodel.Post) bool {
+	appendPost := func(post *postmodel.Post, recItem *rtrec.FeedItem) bool {
 		if post == nil {
 			return false
 		}
@@ -162,6 +171,9 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		if feedbackExclusions.HiddenContentTypes[strings.TrimSpace(post.ContentType)] {
 			return false
 		}
+		if !postMatchesVertical(post, route.Vertical) {
+			return false
+		}
 		if containsBlockedKeyword(post, blockedKeywords) {
 			return false
 		}
@@ -175,26 +187,39 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		}
 		seenPostIDs[post.ID] = struct{}{}
 		width, height := resolvePostDimensions(post)
+		thumbnailURL := strings.TrimSpace(post.ThumbnailUrl)
+		if thumbnailURL == "" {
+			thumbnailURL = strings.TrimSpace(post.CoverUrl)
+		}
+		qualityScore, recallPath, contentVertical, supplySource := feedItemAttribution(post, recItem)
 		views = append(views, FeedItemView{
-			ID:           post.ID,
-			PostID:       post.ID,
-			WireID:       post.ID,
-			Type:         viewType,
-			ContentType:  post.ContentType,
-			AuthorID:     post.AuthorId,
-			Title:        post.Title,
-			Body:         post.Body,
-			Images:       toStringSlice(post.MediaUrls),
-			VideoURL:     post.VideoUrl,
-			CoverURL:     post.CoverUrl,
-			Width:        width,
-			Height:       height,
-			LikeCount:    post.LikeCount,
-			CommentCount: post.CommentCount,
-			ShareCount:   post.ShareCount,
-			CreatedAt:    post.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
-			UpdatedAt:    feedTimeOrEmpty(post.UpdatedAt),
-			PublishedAt:  feedTimeOrEmpty(post.PublishedAt),
+			ID:               post.ID,
+			PostID:           post.ID,
+			WireID:           post.ID,
+			Type:             viewType,
+			ContentType:      post.ContentType,
+			AuthorID:         post.AuthorId,
+			Title:            post.Title,
+			Body:             post.Body,
+			Images:           toStringSlice(post.MediaUrls),
+			VideoURL:         post.VideoUrl,
+			CoverURL:         post.CoverUrl,
+			ThumbnailURL:     thumbnailURL,
+			CoverStrategy:    post.CoverStrategy,
+			CoverFrameTimeMs: post.CoverFrameTimeMs,
+			DurationMs:       resolvePostDurationMs(post),
+			Width:            width,
+			Height:           height,
+			LikeCount:        post.LikeCount,
+			CommentCount:     post.CommentCount,
+			ShareCount:       post.ShareCount,
+			CreatedAt:        post.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:        feedTimeOrEmpty(post.UpdatedAt),
+			PublishedAt:      feedTimeOrEmpty(post.PublishedAt),
+			QualityScore:     qualityScore,
+			RecallPath:       recallPath,
+			ContentVertical:  contentVertical,
+			SupplySource:     supplySource,
 		})
 		return true
 	}
@@ -202,10 +227,13 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		recResp, err := s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
 			UserID:        req.UserID,
 			SessionID:     req.SessionID,
-			FeedType:      rtrec.FeedDiscovery,
+			FeedType:      route.FeedType,
 			Sort:          normalizeFeedSort(req.Sort),
 			Cursor:        cursor,
 			Limit:         limit,
+			Surface:       route.Surface,
+			ChannelID:     route.ChannelID,
+			Vertical:      route.Vertical,
 			FeedRequestID: feedRequestID,
 		})
 		if err != nil {
@@ -217,7 +245,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			if !ok {
 				continue
 			}
-			appendPost(post)
+			appendPost(post, &item)
 			if len(views) >= limit {
 				break
 			}
@@ -237,7 +265,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 				}
 				for i := range posts {
 					post := posts[i]
-					if appendPost(&post) && len(views) >= limit {
+					if appendPost(&post, nil) && len(views) >= limit {
 						nextCursor = encodeRepositoryFeedCursor(post.ID)
 						break
 					}
@@ -250,7 +278,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		}
 	}
 	if s.intersections != nil && strings.TrimSpace(req.UserID) != "" {
-		if reasons, reasonErr := s.intersections.Feed(ctx, req.UserID, "", feedIntersectionPoolLimit); reasonErr == nil {
+		if reasons, reasonErr := s.intersections.Feed(ctx, req.UserID, route.ChannelID, feedIntersectionPoolLimit); reasonErr == nil {
 			attachFeedIntersections(views, reasons, req.UserID)
 		}
 	}
@@ -314,7 +342,7 @@ func mapContentTypeToViewType(contentType string) string {
 
 func normalizeRequestType(t string) string {
 	switch strings.TrimSpace(strings.ToLower(t)) {
-	case "", "recommended", "following":
+	case "", "recommended", "following", "travel", "travel_photography", "premium", "similar", "featured", "immersive", "精品", "旅行", "旅游":
 		return ""
 	case "photo":
 		return "image"
@@ -323,6 +351,107 @@ func normalizeRequestType(t string) string {
 	default:
 		return strings.TrimSpace(strings.ToLower(t))
 	}
+}
+
+type feedRoute struct {
+	FeedType  rtrec.FeedType
+	Surface   string
+	Vertical  string
+	ChannelID string
+}
+
+func resolveFeedRoute(req ListFeedRequest) feedRoute {
+	tokens := []string{
+		strings.TrimSpace(strings.ToLower(req.Type)),
+		strings.TrimSpace(strings.ToLower(req.SubCategory)),
+	}
+	for _, token := range tokens {
+		switch token {
+		case "premium", "similar", "featured", "immersive", "精品", "quality":
+			return feedRoute{
+				FeedType:  rtrec.FeedSimilar,
+				Surface:   "premium_stream",
+				ChannelID: "premium_stream",
+			}
+		case "travel", "travel_photography", "旅行", "旅游":
+			return feedRoute{
+				FeedType:  rtrec.FeedDiscovery,
+				Surface:   "travel_photography",
+				Vertical:  "travel_photography",
+				ChannelID: "travel_photography",
+			}
+		}
+	}
+	return feedRoute{
+		FeedType:  rtrec.FeedDiscovery,
+		Surface:   "home",
+		ChannelID: "discovery",
+	}
+}
+
+func feedItemAttribution(post *postmodel.Post, item *rtrec.FeedItem) (float64, string, string, string) {
+	if item != nil {
+		return item.QualityScore,
+			strings.TrimSpace(item.RecallPath),
+			firstNonEmptyLocal(item.ContentVertical, postContentVertical(post)),
+			firstNonEmptyLocal(item.SupplySource, postSupplySource(post))
+	}
+	return 0,
+		"repository_fallback",
+		postContentVertical(post),
+		postSupplySource(post)
+}
+
+func postContentVertical(post *postmodel.Post) string {
+	if post == nil {
+		return "general"
+	}
+	if vertical := strings.TrimSpace(strings.ToLower(post.ContentVertical)); vertical != "" {
+		return vertical
+	}
+	if postMatchesVertical(post, "travel_photography") {
+		return "travel_photography"
+	}
+	return "general"
+}
+
+func postSupplySource(post *postmodel.Post) string {
+	if post == nil {
+		return "unknown"
+	}
+	if strings.TrimSpace(post.SourceTaskId) != "" {
+		return "data_engineering"
+	}
+	return "ugc"
+}
+
+func postMatchesVertical(post *postmodel.Post, vertical string) bool {
+	vertical = strings.TrimSpace(strings.ToLower(vertical))
+	if vertical == "" {
+		return true
+	}
+	if strings.TrimSpace(strings.ToLower(post.ContentVertical)) == vertical {
+		return true
+	}
+	haystack := strings.ToLower(strings.Join(postVerticalTokens(post), " "))
+	switch vertical {
+	case "travel_photography":
+		return strings.Contains(haystack, "travel") ||
+			strings.Contains(haystack, "旅行") ||
+			strings.Contains(haystack, "旅游") ||
+			strings.Contains(haystack, "景区") ||
+			strings.Contains(haystack, "路线") ||
+			strings.Contains(haystack, "自驾")
+	default:
+		return false
+	}
+}
+
+func postVerticalTokens(post *postmodel.Post) []string {
+	tokens := []string{post.ContentType, post.SourceTaskId}
+	tokens = append(tokens, post.TagRefs...)
+	tokens = append(tokens, post.EntityRefs...)
+	return tokens
 }
 
 func normalizeRequestedIdentity(identity string) string {
@@ -359,6 +488,22 @@ func resolvePostDimensions(post *postmodel.Post) (int64, int64) {
 		return width, height
 	}
 	return 0, 0
+}
+
+func resolvePostDurationMs(post *postmodel.Post) int64 {
+	if post == nil {
+		return 0
+	}
+	for _, source := range []map[string]any{
+		post.DeviceInfo,
+		post.ArticleRenderProfile,
+		post.PrimaryHomepageSnapshot,
+	} {
+		if duration, ok := extractDimension(source, "durationMs", "duration_ms", "duration"); ok {
+			return duration
+		}
+	}
+	return 0
 }
 
 func extractDimensions(source map[string]any) (int64, int64, bool) {

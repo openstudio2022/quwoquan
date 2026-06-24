@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -11,6 +10,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_comments_provider.dart';
+import 'package:quwoquan_app/ui/user/utils/profile_comment_detail_route.dart';
 
 /// 评论收发列表；数据为 ContentRepository 返回的 CommentDto（非页内 Map）。
 class ProfileCommentsPage extends ConsumerStatefulWidget {
@@ -381,28 +381,14 @@ class _ProfileCommentItem extends StatelessWidget {
   }
 
   String? _routeToOriginal({required bool reply}) {
-    final postId = _postId;
-    if (postId.isEmpty) return null;
-    final commentId = comment.id.trim();
-    final parentCommentId = comment.parentCommentId?.trim() ?? '';
-    final isReply = parentCommentId.isNotEmpty;
-    final route = Uri.parse(
-      AppRoutePaths.workBrowser(workId: postId, source: 'profile-comments'),
+    return buildProfileCommentDetailRoute(
+      workId: _postId,
+      source: 'profile-comments',
+      entrySource: MediaViewerCommentContext.entrySourceProfileComments,
+      commentId: comment.id,
+      parentCommentId: comment.parentCommentId,
+      replyToCommentId: reply ? comment.id : null,
     );
-    return route
-        .replace(
-          queryParameters: <String, String>{
-            ...route.queryParameters,
-            ...MediaViewerCommentContext.buildDeepLinkQuery(
-              entrySource: MediaViewerCommentContext.entrySourceProfileComments,
-              targetParentCommentId: isReply ? parentCommentId : null,
-              targetReplyId: isReply ? commentId : null,
-              targetCommentId: isReply ? null : commentId,
-              replyToCommentId: reply ? commentId : null,
-            ),
-          },
-        )
-        .toString();
   }
 
   String get _postId {

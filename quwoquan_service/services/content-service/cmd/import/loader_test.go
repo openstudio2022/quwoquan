@@ -253,6 +253,72 @@ func TestLoadManifestOnlyImagePost(t *testing.T) {
 	}
 }
 
+func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
+	root := t.TempDir()
+	postDir := filepath.Join(root, "posts/video/旅行/雪山视频/1")
+	writeFile(t, filepath.Join(postDir, "manifest.json"), `{
+		"contentType":"video",
+		"title":"雪山视频",
+		"caption":"首帧就是雪山封面。",
+		"entityRefs":["地点/景区/雪山"],
+		"tagRefs":["Topic/旅行/视频"],
+		"createdAt":"2026-06-20T02:00:00Z",
+		"updatedAt":"2026-06-20T02:00:00Z",
+		"publishedAt":"2026-06-20T02:00:00Z",
+		"assets":[{
+			"assetId":"clip",
+			"kind":"video",
+			"objectKey":"media/objects/sha256/dd/dd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.mp4",
+			"cdnUrl":"https://video.example.com/media/objects/sha256/dd/dd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.mp4",
+			"sha256":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+			"mimeType":"video/mp4",
+			"thumbnailUrl":"https://video.example.com/media/objects/sha256/dd/dd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.mp4?variant=thumb&t=0",
+			"coverUrl":"https://video.example.com/media/objects/sha256/dd/dd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.mp4?variant=thumb&t=0",
+			"coverStrategy":"first_frame",
+			"coverFrameTimeMs":0,
+			"durationMs":12000,
+			"width":1080,
+			"height":1920
+		}]
+	}`)
+
+	posts, err := LoadPosts(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 1 {
+		t.Fatalf("posts = %d", len(posts))
+	}
+	post := posts[0]
+	if post.ContentType != "video" || len(post.Assets) != 1 {
+		t.Fatalf("video manifest not loaded: %+v", post)
+	}
+	asset := post.Assets[0]
+	if asset.ThumbnailURL == "" || asset.CoverURL != asset.ThumbnailURL {
+		t.Fatalf("video cover fields not loaded: %+v", asset)
+	}
+	if asset.CoverStrategy != "first_frame" || asset.CoverFrameTimeMs != 0 || asset.DurationMs != 12000 {
+		t.Fatalf("video cover strategy/duration wrong: %+v", asset)
+	}
+
+	media := importedMediaFields(post.Assets)
+	if media.VideoURL != asset.CDNURL {
+		t.Fatalf("videoUrl = %q, want %q", media.VideoURL, asset.CDNURL)
+	}
+	if media.ThumbnailURL != asset.ThumbnailURL || media.CoverURL != asset.CoverURL {
+		t.Fatalf("cover summary wrong: %+v", media)
+	}
+	if media.CoverStrategy != "first_frame" || media.CoverFrameTimeMs != 0 || media.DurationMs != 12000 {
+		t.Fatalf("video summary strategy/duration wrong: %+v", media)
+	}
+	if len(media.MediaItems) != 1 || media.MediaItems[0]["thumbnailUrl"] != asset.ThumbnailURL {
+		t.Fatalf("media item thumbnail missing: %+v", media.MediaItems)
+	}
+	if media.MediaItems[0]["coverFrameTimeMs"] != int64(0) {
+		t.Fatalf("media item must preserve first-frame coverFrameTimeMs=0: %+v", media.MediaItems[0])
+	}
+}
+
 func TestLoadPostsValidatesRawActiveRefsNotNormalizedAliases(t *testing.T) {
 	root := t.TempDir()
 	postDir := filepath.Join(root, "posts/article/攻略/黄山风景区攻略/1")
@@ -323,7 +389,7 @@ func TestLoadPostsRejectsSystemCreatorWithoutDisclosure(t *testing.T) {
 }
 
 func TestImportedMediaFields(t *testing.T) {
-	urls, items, cover := importedMediaFields([]AssetManifestItem{{
+	media := importedMediaFields([]AssetManifestItem{{
 		AssetID: "image_1",
 		Kind:    "image",
 		CDNURL:  "https://img.example.com/image-1.jpg",
@@ -331,10 +397,10 @@ func TestImportedMediaFields(t *testing.T) {
 		Width:   1600,
 		Height:  900,
 	}})
-	if len(urls) != 1 || len(items) != 1 || cover != urls[0] {
-		t.Fatalf("media fields urls=%#v items=%#v cover=%q", urls, items, cover)
+	if len(media.MediaURLs) != 1 || len(media.MediaItems) != 1 || media.CoverURL != media.MediaURLs[0] {
+		t.Fatalf("media fields = %#v", media)
 	}
-	if items[0]["caption"] != "晨雾" || items[0]["width"] != int64(1600) {
-		t.Fatalf("media item = %#v", items[0])
+	if media.MediaItems[0]["caption"] != "晨雾" || media.MediaItems[0]["width"] != int64(1600) {
+		t.Fatalf("media item = %#v", media.MediaItems[0])
 	}
 }

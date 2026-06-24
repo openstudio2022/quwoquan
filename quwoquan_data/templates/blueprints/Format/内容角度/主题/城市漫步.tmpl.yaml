@@ -15,13 +15,9 @@ creatorPersona:
   mustNotClaim: [商业图库授权, 官方摄影师身份]
 editorialIntent: 用一条可步行的城市动线串联街区、光线和细节，兼顾观感与可走性。
 render: { articleTemplate: journal, fontPreset: clean }
-conditionAxes:
-  region: { applicable: true, slot: 街区与天气 }
-  season: { applicable: true, slot: 季节光线与人流 }
 structure:
   required: [漫步主线, 街区节点, 拍摄机位, 步行与休息, 周边串联]
   optional: [咖啡与小店, 夜景延伸]
-hooks: ["在{name}慢慢走一天，比打卡更值得", "{name}最好看的光，藏在这几条街里"]
 mustIncludeFacts: [步行动线, 节点顺序, 光线时段, 步行时长, 休息点]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 1000, max: 2000 }
@@ -36,4 +32,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/article.md

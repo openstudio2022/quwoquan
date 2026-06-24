@@ -157,10 +157,12 @@ gwt_acceptance:
       - file: quwoquan_service/services/content-service/internal/application/author_impact_travel_test.go
       - file: quwoquan_app/test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart
       recorded:
-      - file: quwoquan_service/services/content-service/internal/application/intersection_hydration_vertical_test.go
-      - file: quwoquan_service/services/content-service/internal/application/author_impact_travel_test.go
-      - file: quwoquan_app/test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart
-      - artifact: artifacts/intersection-travel-debridge-t3/t3_gamma_recap_20260621.json
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection_hydration_vertical__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/author_impact_travel__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/user/pages/lin_mo_travel_intersection_acceptance__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/viewer_object_intersection_store_contract__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/intersection_source_contract__api_integration_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/author_impact_evidence_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
@@ -176,7 +178,8 @@ gwt_acceptance:
         - api_integration.object_homepage_network.intersection_unified_experience.intersection_algorithm_closure.cross_service_integration
         envs:
         - gamma
-    notes: []
+    notes:
+    - '[migrated_from_recorded_artifact] artifacts/intersection-travel-debridge-t3/t3_gamma_recap_20260621.json'
 execution:
   local_gate:
   - make verify-metadata

@@ -160,6 +160,21 @@ def test_fetch_image_writes_and_rejects_non_image():
         fetch_mod._http_get_bytes = orig
 
 
+def test_fetch_image_payload_respects_max_bytes():
+    orig = fetch_mod._http_get_bytes
+    seen: list[int] = []
+    try:
+        def _fake_get(url, **kw):
+            seen.append(int(kw.get("max_bytes") or 0))
+            return (200, _real_jpeg(44), "image/jpeg")
+
+        fetch_mod._http_get_bytes = _fake_get
+        assert fetch_mod.fetch_image_payload("https://img.example/large.jpg", max_bytes=128) is None
+    finally:
+        fetch_mod._http_get_bytes = orig
+    assert seen == [128]
+
+
 def test_fetch_image_payload_tries_same_source_high_res_candidates():
     compressed = "https://img1.qunarzz.com/travel/d1/1509/f3/foo.jpg_r_720x480x95_abcd1234.jpg"
     original = "https://img1.qunarzz.com/travel/d1/1509/f3/foo.jpg"
@@ -372,7 +387,7 @@ def test_handle_download_fetches_images_into_source_unit():
 
     _by_url = {"https://img.invalid/a.jpg": img_a, "https://img.invalid/b.jpg": img_b}
 
-    def _fake_payload(url, *, min_bytes=3000):
+    def _fake_payload(url, *, min_bytes=3000, max_bytes=0):
         body = _by_url.get(url, img_a)
         import hashlib as _h
 
@@ -480,7 +495,7 @@ def test_repeated_image_lane_fetch_reuses_cached_assets_when_network_fails():
 
     _by_url = {"https://img.invalid/cache-a.jpg": img_a, "https://img.invalid/cache-b.jpg": img_b}
 
-    def _fake_payload(url, *, min_bytes=3000):
+    def _fake_payload(url, *, min_bytes=3000, max_bytes=0):
         body = _by_url[url]
         import hashlib as _h
 
@@ -571,7 +586,7 @@ def test_failed_image_lane_repair_preserves_previous_image_source_units():
     ]
     _write_lane_plans(batch, sources, old_images)
 
-    def _fake_payload(url, *, min_bytes=3000):
+    def _fake_payload(url, *, min_bytes=3000, max_bytes=0):
         body = img_a if url.endswith("old-a.jpg") else img_b
         import hashlib as _h
 
@@ -626,7 +641,7 @@ def test_failed_image_lane_repair_preserves_previous_image_source_units():
             },
         ]
         _write_lane_plans(batch, sources, new_images)
-        handler_mod.fetch_image_payload = lambda url, *, min_bytes=3000: None
+        handler_mod.fetch_image_payload = lambda url, *, min_bytes=3000, max_bytes=0: None
         try:
             handle_download(argparse.Namespace(task=_TASK, batch=batch, entity_ids=_EID, entity_type="景区"))
         except SystemExit as exc:
@@ -687,7 +702,7 @@ def test_handle_download_isolates_rejected_sources_when_retained_bundle_is_suffi
         ],
     )
 
-    def _fake_payload(url, *, min_bytes=3000):
+    def _fake_payload(url, *, min_bytes=3000, max_bytes=0):
         body = img_a if url.endswith("a.jpg") else img_b
         import hashlib as _h
 
@@ -778,7 +793,7 @@ def test_handle_download_blocks_unsafe_images_before_persist():
     img_a = _real_jpeg(21)
     img_b = _real_jpeg(22)
 
-    def _fake_payload(url, *, min_bytes=3000):
+    def _fake_payload(url, *, min_bytes=3000, max_bytes=0):
         body = img_a if url.endswith("a.jpg") else img_b
         import hashlib as _h
 

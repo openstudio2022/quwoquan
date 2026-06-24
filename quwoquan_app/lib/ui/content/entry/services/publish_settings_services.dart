@@ -1,6 +1,6 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:meta/meta.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
@@ -16,10 +16,60 @@ import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dar
 export 'package:quwoquan_app/core/services/location_permission_checker.dart'
     show LocationPermissionResult;
 
-enum MapProviderType { baidu, amap }
+/// 发布选点服务接口（content/entry 领域）。
+///
+/// 三层模式（对齐 `01-arch-constraints` §2.2、`08-mock-data-isolation`）：
+/// - [CreateLocationService]：抽象接口，UI 只依赖此类型；
+/// - [RemoteCreateLocationService]：经 gateway/API + 系统定位的真实实现；
+/// - [MockCreateLocationService]：本地 canonical POI，不发 HTTP、不依赖系统定位，
+///   供 alpha/mock 模式使用，杜绝「附近地点访问失败」断点。
+///
+/// 切换由 `createLocationServiceProvider` 依据 `appDataSourceModeProvider` 完成，
+/// UI 不得直接实例化 Remote/Mock。
+abstract class CreateLocationService {
+  /// 检查并请求定位权限，返回权限状态；若已授予则返回当前位置。
+  Future<({LocationPermissionResult result, Position? position})>
+  ensureLocationPermission();
 
-class CreateLocationService {
-  CreateLocationService({
+  /// 打开应用权限设置页面。
+  Future<bool> openAppSettings();
+
+  /// 附近地点。
+  Future<List<CreateLocationOption>> nearby({double? lat, double? lng});
+
+  /// 关键字检索地点；空关键字回退到 [nearby]。
+  Future<List<CreateLocationOption>> search(
+    String keyword, {
+    double? lat,
+    double? lng,
+  });
+
+  /// JSON 解析边界：非法类型返回空列表，不抛异常。
+  @visibleForTesting
+  static List<CreateLocationOption> parseIntegrationLocationItems(
+    Object? decoded,
+  ) {
+    if (decoded is! Map) return const <CreateLocationOption>[];
+    final decodedMap = Map<String, dynamic>.from(decoded);
+    final raw = decodedMap[IntegrationLocationMetadata.responseItemsKey];
+    if (raw is! List) return const <CreateLocationOption>[];
+    final result = <CreateLocationOption>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      try {
+        final dto = LocationPoiDto.fromMap(Map<String, dynamic>.from(item));
+        if (dto.name.trim().isEmpty) continue;
+        result.add(CreateLocationOption.from(dto));
+      } catch (_) {
+        continue;
+      }
+    }
+    return result;
+  }
+}
+
+class RemoteCreateLocationService implements CreateLocationService {
+  RemoteCreateLocationService({
     CloudHttpClient? httpClient,
     http.Client? client,
     String? baseUrl,
@@ -37,23 +87,18 @@ class CreateLocationService {
   List<CreateLocationOption> _lastNearby = const <CreateLocationOption>[];
   List<CreateLocationOption> _lastSearch = const <CreateLocationOption>[];
 
-  MapProviderType get currentProvider {
-    final raw = CloudRuntimeConfig.mapProvider.toLowerCase().trim();
-    if (raw == 'amap' || raw == 'ali' || raw == 'alimap') {
-      return MapProviderType.amap;
-    }
-    return MapProviderType.baidu;
-  }
-
   /// 检查并请求定位权限，返回权限状态；若已授予则返回当前位置。
+  @override
   Future<({LocationPermissionResult result, Position? position})>
   ensureLocationPermission() =>
       _locationPermissionChecker.ensureLocationPermission();
 
   /// 打开应用权限设置页面。
+  @override
   Future<bool> openAppSettings() =>
       _locationPermissionChecker.openAppSettings();
 
+  @override
   Future<List<CreateLocationOption>> nearby({double? lat, double? lng}) async {
     final params = <String, String>{'limit': '20'};
     if (lat != null && lng != null) {
@@ -85,6 +130,7 @@ class CreateLocationService {
     }
   }
 
+  @override
   Future<List<CreateLocationOption>> search(
     String keyword, {
     double? lat,
@@ -126,28 +172,101 @@ class CreateLocationService {
 
   List<CreateLocationOption> _parseItems(Object? decoded) =>
       CreateLocationService.parseIntegrationLocationItems(decoded);
+}
 
-  /// JSON 解析边界：非法类型返回空列表，不抛异常。
-  @visibleForTesting
-  static List<CreateLocationOption> parseIntegrationLocationItems(
-    Object? decoded,
-  ) {
-    if (decoded is! Map) return const <CreateLocationOption>[];
-    final decodedMap = Map<String, dynamic>.from(decoded);
-    final raw = decodedMap[IntegrationLocationMetadata.responseItemsKey];
-    if (raw is! List) return const <CreateLocationOption>[];
-    final result = <CreateLocationOption>[];
-    for (final item in raw) {
-      if (item is! Map) continue;
-      try {
-        final dto = LocationPoiDto.fromMap(Map<String, dynamic>.from(item));
-        if (dto.name.trim().isEmpty) continue;
-        result.add(CreateLocationOption.from(dto));
-      } catch (_) {
-        continue;
-      }
-    }
-    return result;
+/// 本地 mock 选点服务：不发 HTTP、不依赖系统定位。
+///
+/// alpha / mock 模式下使用，确保「附近位置」始终有可选项，避免因网关或地图密钥
+/// 缺失导致的整页「附近地点访问失败」。数据为 canonical POI，仅存在于本 Mock 实现内
+/// （对齐 `08-mock-data-isolation`：假数据只存在于 Mock 实现或 test/）。
+class MockCreateLocationService implements CreateLocationService {
+  MockCreateLocationService();
+
+  static const List<CreateLocationOption> _canonicalNearby =
+      <CreateLocationOption>[
+    CreateLocationOption(
+      id: 'mock_poi_tianfu_square',
+      name: '天府广场',
+      latitude: 30.6586,
+      longitude: 104.0648,
+      address: '成都市青羊区',
+      distanceMeters: 120,
+    ),
+    CreateLocationOption(
+      id: 'mock_poi_taikoo_li',
+      name: '成都远洋太古里',
+      latitude: 30.6548,
+      longitude: 104.0839,
+      address: '成都市锦江区中纱帽街',
+      distanceMeters: 480,
+    ),
+    CreateLocationOption(
+      id: 'mock_poi_chunxi_road',
+      name: '春熙路',
+      latitude: 30.6520,
+      longitude: 104.0817,
+      address: '成都市锦江区',
+      distanceMeters: 650,
+    ),
+    CreateLocationOption(
+      id: 'mock_poi_jinli',
+      name: '锦里古街',
+      latitude: 30.6420,
+      longitude: 104.0480,
+      address: '成都市武侯区武侯祠大街',
+      distanceMeters: 1500,
+    ),
+    CreateLocationOption(
+      id: 'mock_poi_dujiangyan',
+      name: '都江堰景区',
+      latitude: 31.0026,
+      longitude: 103.6171,
+      address: '成都市都江堰市公园路',
+      distanceMeters: 48000,
+    ),
+  ];
+
+  static final Position _mockPosition = Position(
+    latitude: 30.6586,
+    longitude: 104.0648,
+    timestamp: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    accuracy: 0,
+    altitude: 0,
+    altitudeAccuracy: 0,
+    heading: 0,
+    headingAccuracy: 0,
+    speed: 0,
+    speedAccuracy: 0,
+  );
+
+  @override
+  Future<({LocationPermissionResult result, Position? position})>
+  ensureLocationPermission() async =>
+      (result: LocationPermissionResult.granted, position: _mockPosition);
+
+  @override
+  Future<bool> openAppSettings() async => true;
+
+  @override
+  Future<List<CreateLocationOption>> nearby({double? lat, double? lng}) async =>
+      _canonicalNearby;
+
+  @override
+  Future<List<CreateLocationOption>> search(
+    String keyword, {
+    double? lat,
+    double? lng,
+  }) async {
+    final q = keyword.trim();
+    if (q.isEmpty) return _canonicalNearby;
+    final matched = _canonicalNearby
+        .where(
+          (poi) =>
+              poi.name.contains(q) ||
+              poi.address.contains(q),
+        )
+        .toList(growable: false);
+    return matched;
   }
 }
 

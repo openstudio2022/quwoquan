@@ -62,7 +62,7 @@ gwt_acceptance:
         cases:
         - user_acceptance.discovery_content.exposure_governance.content_lifecycle_resurfacing.e2e_journey
         envs:
-        - gamma
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_service/runtime/recommendation/exposure_resurfacing_test.go'
     - '[migrated_from_planned] quwoquan_service/services/content-service/tests/post_feed_resurfacing_contract_test.go'

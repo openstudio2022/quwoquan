@@ -12,9 +12,7 @@ import (
 )
 
 func TestFollow_Success(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable - skipping follow test")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "follower_1", "follower1")
 	createTestProfile(t, "followee_1", "followee1")
@@ -70,9 +68,7 @@ func TestFollow_Success(t *testing.T) {
 }
 
 func TestFollow_Idempotent(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "follower_2", "follower2")
 	createTestProfile(t, "followee_2", "followee2")
@@ -110,9 +106,7 @@ func TestFollow_Idempotent(t *testing.T) {
 }
 
 func TestFollow_ReconcilesDriftedCounters(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "follower_reconcile", "follower_reconcile")
 	createTestProfile(t, "followee_reconcile", "followee_reconcile")
@@ -168,9 +162,7 @@ func TestFollow_ReconcilesDriftedCounters(t *testing.T) {
 }
 
 func TestUnfollow_Success(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "follower_3", "follower3")
 	createTestProfile(t, "followee_3", "followee3")
@@ -225,9 +217,7 @@ func TestUnfollow_Success(t *testing.T) {
 }
 
 func TestGetRelationship_Mutual(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "user_a", "user_a")
 	createTestProfile(t, "user_b", "user_b")
@@ -266,9 +256,7 @@ func TestGetRelationship_Mutual(t *testing.T) {
 }
 
 func TestListFollowing_Pagination(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "paginator", "paginator")
 	createTestPersonaFull(t, "paginator_persona", "paginator", "ps_paginator", "paginator", "default", true)
@@ -307,9 +295,7 @@ func TestListFollowing_Pagination(t *testing.T) {
 }
 
 func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	followtelemetry.Reset()
 	t.Cleanup(followtelemetry.Reset)
@@ -391,9 +377,7 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 }
 
 func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "target_owner_graph", "target_owner_graph")
 	createTestProfile(t, "shared_owner_graph", "shared_owner_graph")
@@ -463,9 +447,7 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 }
 
 func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	followtelemetry.Reset()
 	t.Cleanup(followtelemetry.Reset)
@@ -513,9 +495,7 @@ func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 }
 
 func TestFollow_FlagOffPreservesExistingPersonaEdge(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
+	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
 	followtelemetry.Reset()
 	t.Cleanup(followtelemetry.Reset)

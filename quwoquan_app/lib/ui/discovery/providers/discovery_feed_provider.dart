@@ -168,6 +168,7 @@ class DiscoveryFeedMapNotifier
       feedSession.adoptServerFeedRequestId(
         page.feedRequestId,
         rankingVersion: page.rankingVersion,
+        reasonVersion: page.reasonVersion,
       );
       ref
           .read(postInteractionStateProvider.notifier)
@@ -290,6 +291,7 @@ class DiscoveryFeedMapNotifier
       feedSession.adoptServerFeedRequestId(
         page.feedRequestId,
         rankingVersion: page.rankingVersion,
+        reasonVersion: page.reasonVersion,
       );
       ref
           .read(postInteractionStateProvider.notifier)

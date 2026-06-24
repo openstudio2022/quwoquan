@@ -1,0 +1,294 @@
+id: CR-20260623-057-native-startup-welcome-first-frame
+title: Android / iOS 原生启动过渡与唯一 Flutter 欢迎页纠偏
+slug: native-startup-welcome-first-frame
+revision: 5
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/welcome-entry-routing--login-state-entry-policy
+  - specs/feature-tree/runtime/runtime-client-foundation
+  - quwoquan_app/android/app/src/main/res
+  - quwoquan_app/android/app/build.gradle.kts
+  - quwoquan_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+  - quwoquan_app/scripts/patch_android_plugin_registrant.sh
+  - quwoquan_app/android/app/src/main/java/com/quwoquan/quwoquan_app/StartupActivity.java
+  - quwoquan_app/android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java
+  - quwoquan_app/scripts/device/verify_startup_first_frame.py
+  - quwoquan_app/ios/Runner/Base.lproj/LaunchScreen.storyboard
+  - quwoquan_app/ios/Runner/Assets.xcassets/LaunchImage.imageset
+  - quwoquan_app/ios/Runner/Assets.xcassets/LaunchTransitionBackground.imageset
+  - quwoquan_app/ios/Runner/AppDelegate.swift
+  - quwoquan_app/lib/quwoquan_app_shell.dart
+  - quwoquan_app/lib/ui/welcome/pages/welcome_screen.dart
+  - quwoquan_app/lib/core/platform/native_bridge.dart
+
+entries:
+  - timestamp: "2026-06-23T23:30:00+08:00"
+    summary: |
+      修复 Android 真机 `flutter run` 冷启动时 Flutter 首帧前仍停留纯蓝原生窗口的问题：
+
+      1. Android `LaunchTheme` / `NormalTheme` 的 `windowBackground` 从纯色改为品牌渐变 + 欢迎页静态首帧，
+         补齐 `drawable-mdpi..xxxhdpi/launch_brand_cluster.png` 密度资源；Android 12+ 单独使用
+         `launch_splash_icon.png` 居中花瓣图标，避免完整 cluster 被系统图标视口裁到透明留白。
+      2. Android `MainActivity` 在 `onCreate` 后立即安装原生欢迎 overlay，Flutter UI displayed 后
+         120ms 淡出移除，避免 Android 12 system splash 阶段屏蔽普通 `windowBackground` bitmap 时继续纯蓝等待。
+      3. iOS `LaunchScreen.storyboard` 不再只是纯蓝背景，改为在背景上全屏 aspect-fit 引用
+         `LaunchImage` 欢迎静态帧；重新生成 `LaunchImage` 1x/2x/3x 透明覆盖层。
+      4. Flutter 欢迎页首帧改为标题稳定、花瓣从可识别但未完成绽放的状态开始，原生静态帧与 Flutter
+         接管后的第一帧保持同一视觉节奏。
+      5. 根启动接通 `onSequenceComplete` 状态机：首轮欢迎动效结束后检查 Shell ready；未 ready 时最多
+         重放两次花瓣，重放期间只显示一行 `启动中，马上进入`，超过上限进入降级 Shell，由页面生命周期承接。
+      6. Android / iOS 增加 `QWQStartup` 平台日志，配合 Dart `startup_welcome_sequence` 埋点观察
+         原生 Activity / Flutter engine / Flutter UI displayed / welcome completed。
+      7. 新增 native launch screen local_contract 测试，阻断 Android 退回纯色启动屏、漏 Android 12+
+         splash 或 iOS storyboard 不引用 LaunchImage 的回归。
+    reason: |
+      上一轮只修了 Flutter 首帧之后的欢迎页，Android 用户实际等待的 2-4 秒发生在 Flutter 首帧之前，
+      由原生 `LaunchTheme` 负责显示。原生资源仍是纯蓝色，导致测试通过但真机第一可见画面仍不是欢迎页。
+      本轮把“欢迎页第一帧”提升到平台原生启动层，Flutter 接管后再播放完整花瓣动效，并补观测和契约测试。
+    changed_documents:
+      - path: specs/changelog/CR-20260623-057-native-startup-welcome-first-frame.yaml
+        sections:
+          - entries
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      - "flutter analyze --no-pub lib/quwoquan_app_shell.dart lib/ui/welcome/pages/welcome_screen.dart test/local_contract/app/startup_native_launch_screen__local_contract_test.dart test/ui/welcome/welcome_screen_test.dart：No issues"
+      - "flutter test --no-pub test/local_contract/app/startup_native_launch_screen__local_contract_test.dart test/ui/welcome/welcome_screen_test.dart test/app/app_startup_welcome_test.dart：21 passed"
+      - "flutter build apk --debug --no-pub：Built build/app/outputs/flutter-apk/app-debug.apk"
+      - "flutter build ios --simulator --debug --no-pub：Built build/ios/iphonesimulator/Runner.app"
+      - "Android emulator-5554 `flutter run -d emulator-5554 --no-pub`：启动成功，QWQStartup 显示 overlay installed 35ms / engine configured 1079ms / Flutter UI displayed 1885ms"
+      - "Android emulator-5554 冷启动截图：2.0s 进入欢迎动效，不再出现 2-4s 纯蓝等待；0.5s 仍为 Android 12 system splash 蓝底"
+      - "iPhone 17 Pro simulator `flutter run -d DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB --no-pub`：启动成功"
+      - "iPhone 17 Pro simulator 冷启动截图：0.2s 即显示 LaunchImage 欢迎静态帧，1.4s 保持欢迎动效阶段"
+    notes:
+      - Android 12+ 系统 splash 的 animatedIcon 受平台尺寸限制，只使用居中花瓣图标；完整欢迎静态帧由 Activity windowBackground / overlay 与 Flutter 欢迎页承接。
+      - 原生启动层不能播放 Flutter 动画，因此设计为原生稳定首帧 + Flutter 首帧后播放花瓣绽放。
+  - timestamp: "2026-06-24T00:50:00+08:00"
+    summary: |
+      复测发现 Android 12 system splash / preview window 仍会在 Flutter 首帧前覆盖 `MainActivity`
+      的 overlay，表现为 0.5s / 2.0s 仍是空蓝或空浅底。最终改为原生 `StartupActivity`
+      作为唯一 Launcher：它在 500ms 前直接绘制同一张合成欢迎页位图，再无动画交给 `MainActivity`。
+
+      1. 新增 `StartupActivity`，启动即显示 `launch_background_full.png` 合成欢迎页，避免 Android
+         starting window 丢失 layer-list bitmap 或只显示纯色背景。
+      2. `MainActivity` 不再直接作为 Launcher，改用 `FlutterStartupTheme`，继续保留原生欢迎 overlay
+         到 Flutter UI displayed，保证 Activity 交接期间仍是同一个欢迎视觉。
+      3. 原生侧通过 `quwoquan/startup/native` 暴露已显示欢迎页耗时；Flutter 欢迎页计算 3 秒地板时扣除
+         原生已覆盖时长，避免用户先等原生欢迎页再完整等待第二段 3 秒。
+      4. 新增 `scripts/device/verify_startup_first_frame.py`，默认 Android 500ms 门槛，三层截图必须都非空屏、
+         非蓝屏；同时记录 `android_flutter_ui_displayed` 是否在 3 秒预算内，作为性能观察字段。
+      5. 移除早期 Android 12 system splash icon / color 兜底资源，避免与 `StartupActivity`
+         合成欢迎页形成第二套启动真相源。
+      6. Web 构建因 vendored `record_web` 缺少 `setOnConfigChanged` 阻断，本轮补齐平台接口空实现，保持
+         Web 启动验证可运行。
+    reason: |
+      只改 `LaunchTheme` / Android 12 splash icon 无法保证真机和 emulator 的第一可见画面；系统 preview
+      会优先显示纯色并盖住 Flutter 宿主 Activity。把极轻量原生欢迎页前置为 Launcher 后，用户可见首帧
+      不再依赖 Flutter engine 或 Android 12 system splash 的 icon 行为。
+    changed_documents:
+      - path: specs/changelog/CR-20260623-057-native-startup-welcome-first-frame.yaml
+        sections:
+          - entries
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "python3 -m py_compile scripts/device/verify_startup_first_frame.py scripts/media/generate_native_launch_assets.py：通过"
+      - "flutter analyze --no-pub lib/app/app_startup_runtime.dart lib/app_bootstrap.dart lib/quwoquan_app_shell.dart lib/ui/welcome/pages/welcome_screen.dart test/local_contract/app/startup_native_launch_screen__local_contract_test.dart test/ui/welcome/welcome_screen_test.dart：No issues"
+      - "flutter test --no-pub test/local_contract/app/startup_native_launch_screen__local_contract_test.dart test/ui/welcome/welcome_screen_test.dart test/app/app_startup_welcome_test.dart：26 passed"
+      - "flutter build apk --debug --no-pub：Built build/app/outputs/flutter-apk/app-debug.apk，无 Java deprecation warning"
+      - "flutter build ios --simulator --debug --no-pub：Built build/ios/iphonesimulator/Runner.app"
+      - "Android emulator-5554 `verify_startup_first_frame.py --android-visible-by-ms 500`：passed=true；500ms/2000ms/3000ms 均 brandedOrContentVisible=true，blueScreenDetected=false，plainBackgroundDetected=false"
+      - "iPhone 17 Pro simulator：passed=true；200ms 与 1400ms 均 brandedOrContentVisible=true"
+      - "flutter build web --debug --no-pub --no-wasm-dry-run：Built build/web"
+      - "Web 393x852 Chrome headless 截图：verify_startup_first_frame.py --screenshot web=... passed=true，plainBackground=false，blueBackground=false"
+    notes:
+      - Android debug 包清理后复测 `android_flutter_ui_displayed=4084ms`，已不再影响用户首帧可见性，但仍作为性能观察字段保留；后续若要把 Flutter UI 本身压回 3 秒内，应单独做 engine/Dart debug startup 性能专项。
+      - Android 最终验收 artifact：`quwoquan_app/artifacts/startup_first_frame/verify-20260624T005050-android-final-after-cleanup/20260624T005050/startup_first_frame_report.json`。
+      - Android+iOS 组合验收 artifact：`quwoquan_app/artifacts/startup_first_frame/verify-20260624T004323-android-ios-final/20260624T004324/startup_first_frame_report.json`。
+  - timestamp: "2026-06-24T02:05:00+08:00"
+    summary: |
+      启动 engine / Dart 性能专项复盘后，确认 Android `flutter run` debug 模式是用户看到 2-4 秒纯蓝等待的主要放大器，
+      但 release 包还暴露了两个必须同步修复的问题：
+
+      1. `GeneratedPluginRegistrant.java` 会被 Flutter 重新生成并写回 `integration_test` / `patrol` dev-only 插件，
+         release 编译缺少测试插件类，或在缺失 registrant 时运行期崩溃。新增构建前 patch 钩子，把 dev-only 插件改为
+         可选反射注册，release 包不编译测试插件，debug/profile 仍可在类存在时注册。
+      2. Android 12+ system splash 只声明 AndroidX 属性时，release 500ms 仍可能只显示纯蓝背景。v31 样式同时声明
+         framework `android:windowSplashScreen*` 与 AndroidX `windowSplashScreen*`，并保留 `StartupActivity`
+         合成欢迎页和 `MainActivity` overlay，形成 system splash -> native welcome -> Flutter welcome 的同一视觉链路。
+      3. 移除过期 `CurrentSharedPreferencesPlugin` registrant 补丁，恢复当前依赖实际存在的
+         `SharedPreferencesPlugin`，避免 release Java 编译失败。
+      4. 顺手修复 release AOT 暴露的 `CreateMediaPickerPage._buildForcedDarkChrome` 两处缺失 `baseContext`
+         参数，确保启动性能测试能覆盖完整 release 编译。
+    reason: |
+      debug/profile 的 JIT、JDWP、profile instrumentation、本地 alpha mock 准备和 adb install 后包广播会显著拖慢
+      Activity 创建与 Flutter engine 配置；这解释了 `flutter run` 首启比 release 慢。但生产验收不能只归因于 debug，
+      release 构建纯度、Android 12 system splash 属性和端侧首帧探针必须同时闭环。
+    changed_documents:
+      - path: specs/changelog/CR-20260623-057-native-startup-welcome-first-frame.yaml
+        sections:
+          - revision
+          - affected_nodes
+          - entries
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "flutter build apk --release --no-pub：Built build/app/outputs/flutter-apk/app-release.apk (162.8MB)，Gradle 自动执行 patch_android_plugin_registrant.sh"
+      - "Android release emulator-5554 `verify_startup_first_frame.py --android-offsets-ms 500,1000,1500,2000,3000,4000`：passed=true；500ms brandedOrContentVisible=true，blueScreenDetected=false，plainBackgroundDetected=false；engine=238ms，Flutter UI displayed=1114ms"
+      - "Android debug emulator-5554 同探针：passed=false；500/1000/1500/2000ms 仍为 system blue；engine=2038ms，Flutter UI displayed=3728ms，用于证明 debug 模式会显著放大启动等待"
+      - "Android profile emulator-5554 同探针：passed=false；500/1000ms 仍为 system blue；engine=345ms，Flutter UI displayed=1409ms，用于证明 profile 也受 instrumentation / 本地环境准备影响"
+      - "flutter build ios --simulator --debug --no-pub：Built build/ios/iphonesimulator/Runner.app"
+      - "iPhone 17 Pro simulator `verify_startup_first_frame.py --ios-offsets-ms 200,500,1000,1500,2000`：passed=true；200ms brandedOrContentVisible=true"
+      - "flutter build ios --simulator --profile --no-pub / --release --no-pub：Flutter 明确返回 simulators 不支持 profile/release，iOS AOT 启动性能需真机复测"
+      - "flutter build web --release --no-pub --no-wasm-dry-run：Built build/web；字体 tree-shake 有警告但不阻断"
+      - "Web release `http://127.0.0.1:18080` 浏览器截图 + verify_startup_first_frame.py --screenshot：passed=true，plainBackground=false，blueBackground=false"
+      - "flutter test --no-pub test/local_contract/app/startup_native_launch_screen__local_contract_test.dart：10 passed"
+      - "git diff --check：通过"
+    notes:
+      - Android debug/profile 的 500ms 纯蓝来自调试/插桩模式下 Activity 创建前的系统层等待，不等同于生产包体验；正式用户验收以 release 包为准。
+      - iOS simulator 只能覆盖 debug 首帧，iOS release/profile 启动性能需真机或 TestFlight/Ad Hoc 包复测。
+      - Web release 截图 artifact：`quwoquan_app/artifacts/startup_perf/20260624T020100-web-release/web-release-viewport.png`。
+  - timestamp: "2026-06-24T08:36:00+08:00"
+    summary: |
+      按 iPhone 模拟器复测反馈撤回“原生欢迎页静态镜像”方案：原生层不能再显示花瓣、标题、标语，也不能把原生停留时间当作欢迎页动效的一部分。新的启动边界为：
+
+      1. iOS `LaunchScreen.storyboard` 不再引用 `LaunchImage` 欢迎镜像，改为只引用 `LaunchTransitionBackground`
+         背景渐变；旧 `LaunchImage` 资源改为透明占位，避免再次展示花瓣/标题。
+      2. Android 原生启动层不再生成或引用 `launch_brand_cluster.png`、`launch_background_full.png`；
+         `launch_background.xml` 改为 XML gradient，v31 样式从 `Theme.SplashScreen` 回到普通
+         `NoTitleBar + windowBackground`，避免 Android 12 system splash 强行显示透明图标 + 蓝底。
+      3. Flutter `WelcomeScreen` 删除 `nativeWelcomeCoveredDuration` 抵扣逻辑，欢迎页动效始终按自身
+         3 秒完整序列播放；原生过渡不再缩短花瓣绽放过程。
+      4. `StartupActivity` 去掉固定 120ms handoff 延迟，下一帧即进入 Flutter 宿主，减少空过渡停留。
+      5. 设备探针阈值收紧，只有足够前景差异或复杂度才算“欢迎页/内容可见”，不再把单色或简单渐变背景误判为启动成功。
+      6. 本地契约测试新增反向断言：禁止 iOS storyboard 重新引用 `LaunchImage`，禁止生成脚本再画花瓣/标题，
+         禁止 Flutter 欢迎页按原生启动耗时缩短，禁止 Android v31 回到 `Theme.SplashScreen`。
+    reason: |
+      iPhone 模拟器上用户观察到的“前 1-3 秒静态花瓣页 + 初始化后进入真正欢迎页”，本质是原生启动层镜像了
+      Flutter 欢迎页首帧，并且 Flutter 又用原生已显示时长抵扣欢迎页地板时长。这虽然遮住了白/蓝屏，但产品语义
+      上是两个欢迎页，违背“欢迎页只有一个”的要求。本轮把原生层降级为无内容过渡背景，真正的花瓣、标题、标语
+      和动效只由 Flutter `WelcomeScreen` 负责。
+    changed_documents:
+      - path: specs/changelog/CR-20260623-057-native-startup-welcome-first-frame.yaml
+        sections:
+          - title
+          - revision
+          - affected_nodes
+          - entries
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "python3 -m py_compile scripts/media/generate_native_launch_assets.py scripts/device/verify_startup_first_frame.py：通过"
+      - "flutter analyze --no-pub lib/app/app_startup_runtime.dart lib/ui/welcome/pages/welcome_screen.dart lib/quwoquan_app_shell.dart test/local_contract/app/startup_native_launch_screen__local_contract_test.dart test/ui/welcome/welcome_screen_test.dart test/app/app_startup_welcome_test.dart：No issues"
+      - "flutter test --no-pub test/local_contract/app/startup_native_launch_screen__local_contract_test.dart test/ui/welcome/welcome_screen_test.dart test/app/app_startup_welcome_test.dart：27 passed"
+      - "flutter build ios --simulator --debug --no-pub：Built build/ios/iphonesimulator/Runner.app"
+      - "iPhone 17 Pro simulator 卸载重装后冷启动探针：200ms 为无花瓣原生过渡背景，500ms 进入 Flutter 欢迎页首帧，1000/1500ms 保持同一个欢迎页动效；artifact `quwoquan_app/artifacts/startup_perf/20260624T082202-ios-debug-single-welcome-tight-threshold/20260624T082202/startup_first_frame_report.json`"
+      - "flutter build apk --debug --no-pub：Built build/app/outputs/flutter-apk/app-debug.apk"
+      - "Android emulator-5554 debug 冷启动探针：200-1500ms 为无花瓣系统/宿主过渡背景，2000ms 进入 Flutter 欢迎页，Flutter UI displayed=3217ms；artifact `quwoquan_app/artifacts/startup_perf/20260624T082734-android-debug-xml-gradient/20260624T082734/startup_first_frame_report.json`"
+      - "flutter build apk --release --no-pub：Built build/app/outputs/flutter-apk/app-release.apk (162.6MB)"
+      - "Android emulator-5554 release 冷启动探针：800ms 进入 Flutter 欢迎页，engine=361ms，Flutter UI displayed=1608ms；artifact `quwoquan_app/artifacts/startup_perf/20260624T083303-android-release-single-welcome-no-delay/20260624T083303/startup_first_frame_report.json`"
+      - "flutter build web --release --no-pub --no-wasm-dry-run：Built build/web；字体提示不阻断"
+      - "Web release 393x852 浏览器截图 + 探针：passed=true；artifact `quwoquan_app/artifacts/startup_perf/20260624T0834-web-release-single-welcome.png` 与 `quwoquan_app/artifacts/startup_perf/20260624T083535-web-release-single-welcome-analysis/20260624T083536/startup_first_frame_report.json`"
+      - "git diff --check：通过"
+    notes:
+      - iOS simulator 仍会在最早约 200ms 出现系统原生过渡背景，这是 Flutter 首帧前的不可交互窗口，不包含花瓣/标题/标语，不再被当作欢迎页成功。
+      - Android debug 仍明显慢于 release；debug 下真正 Flutter 欢迎页约 2s 出现，release 约 800ms 出现。继续压缩 debug 只能靠 engine/JIT/调试附加链路专项，不能再通过原生镜像欢迎页掩盖。
+  - timestamp: "2026-06-25T09:20:00+08:00"
+    summary: |
+      按 Android 真机反馈再次纠偏：撤销“初始化后再完整播放 Flutter 欢迎页”的串行方案，启动欢迎改成同一条并行时间轴。
+
+      1. Android `windowBackground` 移除静态 `launch_splash_icon`，启动窗口只保留品牌背景，避免把静态花瓣首帧伪装成欢迎页。
+      2. Android `NativeWelcomeView` 只承担 Flutter 首帧前的早期绘制，并把 `nativeStartupElapsedMs` 暴露给 Flutter。
+      3. Flutter `WelcomeScreen` 新增 `initialSequenceElapsed` / `sequenceEnabled` / `onFlutterWelcomeReady`：拿到原生已跑时间后从对应花瓣进度接续，而不是从 0 重放。
+      4. 一次花瓣绽放约 1.5 秒完成；启动初始化与欢迎动效并行，Shell ready 且动效已完成就进入主壳。若 Shell 未 ready，才进入最多两轮重放并显示一行 `启动中，马上进入`。
+      5. 原生 overlay 不再等待 Flutter 欢迎完成；它只等 `flutterWelcomeReady`，确认 Flutter 已按同一进度渲染后淡出。若握手异常，4.5 秒兜底释放并记录 `android_flutter_welcome_ready_timeout`，避免用户卡死。
+      6. 本地契约测试更新为反向约束：禁止静态花瓣 `windowBackground`，要求 `nativeStartupElapsedMs -> flutterWelcomeReady -> flutterWelcomeCompleted` 可观测链路，要求 Flutter 欢迎页消费 `initialSequenceElapsed`。
+    reason: |
+      上一版仍把启动初始化和 Flutter 欢迎动效串行化：原生层遮住等待后，Flutter 初始化完成又重新播放欢迎页，
+      用户体感是“两段启动”。正确模型是系统启动开始时欢迎动效同步开始，Flutter 接管时继承原生已消耗时间；
+      因此总启动时长应接近 `max(初始化耗时, 欢迎动效耗时)`，而不是二者相加。
+    changed_documents:
+      - path: specs/changelog/CR-20260623-057-native-startup-welcome-first-frame.yaml
+        sections:
+          - revision
+          - affected_nodes
+          - entries
+      - path: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+        sections:
+          - welcome
+          - changelog
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "python3 -m py_compile scripts/device/verify_startup_first_frame.py scripts/media/generate_native_launch_assets.py：通过"
+      - "flutter analyze --no-pub lib/core/platform/native_bridge.dart lib/app/app_startup_runtime.dart lib/quwoquan_app_shell.dart lib/ui/welcome/pages/welcome_screen.dart test/local_contract/app/startup_native_launch_screen__local_contract_test.dart：No issues"
+      - "flutter test --no-pub test/local_contract/app/startup_native_launch_screen__local_contract_test.dart test/ui/welcome/welcome_screen_test.dart test/app/app_startup_welcome_test.dart：29 passed"
+    notes:
+      - 设备级 Android 真机 / emulator 冷启动探测需在本次构建后重新生成 artifact；验收重点改为 `android_flutter_welcome_ready` 与 `android_native_welcome_completion_received` 的间隔，不再只看是否遮住蓝底。
+  - timestamp: "2026-06-25T10:05:00+08:00"
+    summary: |
+      启动并行化实现复盘后补齐可观测与防卡死边界。
+
+      1. Android `NativeWelcomeView` 增加真实首帧 `onDraw` 打点：`android_startup_welcome_first_draw` / `android_native_welcome_first_draw`，设备探针不再只依赖慢速 `adb screencap` 推断首帧。
+      2. Flutter 读取原生已播放时长从 80 次重试改为 1 次；读不到时按原生欢迎已完整播放 1.5 秒处理，避免为了拿时间戳把原生 overlay 卡住。
+      3. Android overlay ready 等待上限收紧为 4.5 秒，符合最多两次重放后的释放原则；`flutterWelcomeReady` 后 `flutterWelcomeCompleted` 间隔用于发现串行重播。
+      4. `verify_startup_first_frame.py` 增加 `sequence_elapsed_ms`、`flutterWelcomeSequenceContinuityWithinBudget`、`startupWelcomeFirstDrawMs`、`firstFrameWithinBudget`，并处理 debug/release 签名不一致时的卸载重装。
+    reason: |
+      设备复测发现 `adb screencap` 在 emulator 上本身可能耗时超过 1 秒，导致截图文件名时间与真实采样时间不一致；
+      同时 release 下若原生 elapsed 查询不及时，会把 overlay 释放拖到兜底。需要把首帧和连续性变成原生日志可观测字段，
+      防止再次靠肉眼或静态截图判断。
+    changed_documents:
+      - path: specs/changelog/CR-20260623-057-native-startup-welcome-first-frame.yaml
+        sections:
+          - entries
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "python3 -m py_compile scripts/device/verify_startup_first_frame.py：通过"
+      - "flutter test --no-pub test/local_contract/app/startup_native_launch_screen__local_contract_test.dart test/ui/welcome/welcome_screen_test.dart test/app/app_startup_welcome_test.dart：29 passed"
+      - "make verify-app-page-horizontal-quality：page-horizontal-quality-matrix OK；78 paths inventory aligned"
+      - "Android emulator-5554 debug 探针（上一版 APK，firstDraw 打点尚未打入包）：500ms 起非纯蓝，artifact `quwoquan_app/artifacts/startup_perf/20260625T015529-android-emulator-debug-parallel-welcome-ready-fast/20260625T015529/startup_first_frame_report.json`"
+      - "Android emulator-5554 release 探针（上一版 APK，firstDraw 打点尚未打入包）：`android_flutter_welcome_ready_sequence_elapsed_ms=1500`，`flutterWelcomeSequenceContinuityWithinBudget=true`，artifact `quwoquan_app/artifacts/startup_perf/20260625T015812-android-emulator-release-parallel-welcome-actual-offsets/20260625T015812/startup_first_frame_report.json`"
+      - "flutter build apk --debug --no-pub：阻断，当前工作树存在 user_profile_repository/profile_social_relation_row_wire DTO 契约漂移，非本启动改动引入"
+      - "flutter build web --no-pub：同一 Dart 契约漂移阻断"
+      - "flutter build ios --simulator --no-pub：Xcode build 长时间无输出后中断；当前 Dart 构建阻断已由 Android/Web 复现"
+    notes:
+      - Android 真机未连接，仍需在真机重新可见后跑同一 probe；本轮不冒充真机验证。
+      - 当前最新 Java firstDraw 打点因全量 Dart 构建阻断尚未进入新 APK；需先收口资料页分页/DTO 契约漂移，再重建三端包。

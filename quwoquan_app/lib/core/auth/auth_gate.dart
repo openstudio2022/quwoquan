@@ -274,6 +274,13 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
   if (loc == AppRoutePaths.chat || loc.startsWith('/chat/')) {
     return AuthGateReason.openChat;
   }
+  // 添加联系人是「先开面板、动作再登录」的强入口：主页及其全部子页（扫一扫/
+  // 通讯录/搜索/确认）与「我的二维码」都是账号态，直达必须先登录，关闭兜底回首页。
+  if (loc == AppRoutePaths.addContact ||
+      loc.startsWith('${AppRoutePaths.addContact}/') ||
+      loc == AppRoutePaths.myQrCode) {
+    return AuthGateReason.addContact;
+  }
   return null;
 }
 

@@ -39,7 +39,7 @@ void main() {
 
       final notifier = container.read(personaManagementProvider.notifier);
 
-      await notifier.createPersona(displayName: '摄影分身', userHandle: 'photo');
+      await notifier.createPersona(displayName: '摄影分身');
       await notifier.activatePersona('persona_1');
       await notifier.retirePersona('persona_2');
       await notifier.trackQuotaReached(5);

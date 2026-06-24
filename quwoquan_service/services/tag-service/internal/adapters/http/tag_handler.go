@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -32,6 +33,7 @@ var reservedRoutes = []string{
 func (h *TagHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/tag/resolve", h.resolve)
+	mux.HandleFunc("GET /v1/tag/children", h.listChildren)
 	mux.HandleFunc("GET /v1/tag/shared-tags", h.sharedTags)
 	mux.HandleFunc("GET /v1/tag/inverted", h.inverted)
 	mux.HandleFunc("GET /v1/tag/dimensions", h.listDimensions)
@@ -64,6 +66,25 @@ func (h *TagHandler) resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *TagHandler) listChildren(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	parentTagRef := q.Get("parentTagRef")
+	if parentTagRef == "" {
+		writeError(w, http.StatusBadRequest, "parentTagRef is required")
+		return
+	}
+	views, err := h.svc.ListChildren(r.Context(), parentTagRef, parseLimit(q.Get("limit")))
+	if err != nil {
+		if errors.Is(err, application.ErrTagParentNotFound) {
+			writeError(w, http.StatusNotFound, "parentTagRef not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, views)
 }
 
 func (h *TagHandler) sharedTags(w http.ResponseWriter, r *http.Request) {

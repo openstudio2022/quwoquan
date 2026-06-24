@@ -47,6 +47,36 @@ class AssistantConsentMatrix {
       };
 }
 
+class AssistantUserActionGroundingView {
+  const AssistantUserActionGroundingView({
+    required this.action,
+    this.objectTypeRef,
+    this.objectId,
+    this.occurredAt,
+  });
+
+  final String action;
+  final String? objectTypeRef;
+  final String? objectId;
+  final dynamic occurredAt;
+
+  factory AssistantUserActionGroundingView.fromJson(Map<String, dynamic> json) {
+    return AssistantUserActionGroundingView(
+      action: (json['action'] ?? '').toString(),
+      objectTypeRef: json['objectTypeRef']?.toString(),
+      objectId: json['objectId']?.toString(),
+      occurredAt: json['occurredAt'],
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'action': action,
+        'objectTypeRef': objectTypeRef,
+        'objectId': objectId,
+        'occurredAt': occurredAt,
+      };
+}
+
 class AssistantObjectGroundingView {
   const AssistantObjectGroundingView({
     required this.objectTypeRef,
@@ -96,36 +126,6 @@ class AssistantObjectGroundingView {
         'url': url,
         'recallSource': recallSource,
         'score': score,
-      };
-}
-
-class AssistantUserActionGroundingView {
-  const AssistantUserActionGroundingView({
-    required this.action,
-    this.objectTypeRef,
-    this.objectId,
-    this.occurredAt,
-  });
-
-  final String action;
-  final String? objectTypeRef;
-  final String? objectId;
-  final dynamic occurredAt;
-
-  factory AssistantUserActionGroundingView.fromJson(Map<String, dynamic> json) {
-    return AssistantUserActionGroundingView(
-      action: (json['action'] ?? '').toString(),
-      objectTypeRef: json['objectTypeRef']?.toString(),
-      objectId: json['objectId']?.toString(),
-      occurredAt: json['occurredAt'],
-    );
-  }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'action': action,
-        'objectTypeRef': objectTypeRef,
-        'objectId': objectId,
-        'occurredAt': occurredAt,
       };
 }
 

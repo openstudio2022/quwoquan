@@ -37,10 +37,9 @@ var SupportedEventTypes = []string{
 	event.ReadReceiptSent,
 	event.AssistantInvited,
 	event.AssistantMentioned,
-	EventAssistantRemoved,
+	event.AssistantRemoved,
 }
 
-const EventAssistantRemoved = "AssistantRemoved"
 const AssistantMentionedStream = "events.chat.assistant_mentions"
 
 // EventPublisher publishes domain events to Redis Pub/Sub channels.

@@ -30,7 +30,7 @@ type mongoIdxData struct {
 }
 
 type mongoKeyData struct {
-	Field string
+	Field     string
 	ValueExpr string
 }
 
@@ -59,12 +59,18 @@ func generateMongoStore(ctx *genContext, collName string, coll CollectionDef) er
 			Unique: idx.Unique,
 			Sparse: idx.Sparse,
 		}
-		keys := make([]string, 0, len(idx.Keys))
-		for k := range idx.Keys {
-			keys = append(keys, k)
+		keys := append([]string{}, idx.KeyOrder...)
+		if len(keys) == 0 {
+			keys = make([]string, 0, len(idx.Keys))
+			for k := range idx.Keys {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
 		}
-		sort.Strings(keys)
 		for _, k := range keys {
+			if _, ok := idx.Keys[k]; !ok {
+				return fmt.Errorf("index %s key_order references unknown key %s", idx.Name, k)
+			}
 			valueExpr, err := formatMongoIndexValue(idx.Keys[k])
 			if err != nil {
 				return fmt.Errorf("index %s key %s: %w", idx.Name, k, err)

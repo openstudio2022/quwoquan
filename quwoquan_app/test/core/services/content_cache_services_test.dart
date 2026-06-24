@@ -9,11 +9,29 @@ import 'package:quwoquan_app/core/services/cache/cache_management_service.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
+import 'package:quwoquan_app/core/services/cache/object_cache_store.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('ObjectCacheStore', () {
+    test(
+      'maxMemoryEntries constrains hot memory while rebuildable bucket remains available',
+      () {
+        final store = ObjectCacheStore<String>(maxMemoryEntries: 1);
+
+        store.put('post_1', 'one');
+        store.put('post_2', 'two');
+
+        expect(store.memoryCount, 1);
+        expect(store.diskCount, 2);
+        expect(store.get('post_1')?.value, 'one');
+        expect(store.memoryCount, 1);
+      },
+    );
+  });
 
   group('CachedContentRepository', () {
     test('feed 查询优先请求远端，失败时才回退快照', () async {
@@ -93,11 +111,7 @@ void main() {
         1,
         reason: '新增评论后缓存详情 commentCount 应 +1',
       );
-      expect(
-        delegate.detailRequestCount,
-        1,
-        reason: '精确同步缓存，不应重新请求详情',
-      );
+      expect(delegate.detailRequestCount, 1, reason: '精确同步缓存，不应重新请求详情');
 
       // 回复（二级）同样计入 post 总评论数。
       await repo.createComment(

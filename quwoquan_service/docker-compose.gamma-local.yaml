@@ -307,7 +307,6 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:18086"
       - "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}:18086"
     volumes:
       - ../state/local/gamma/config-root:/etc/qwq-config:ro
@@ -526,15 +525,15 @@ services:
     environment:
       LOCAL_GAMMA_TLS_MODE: "${LOCAL_GAMMA_TLS_MODE:-internal}"
     ports:
-      - "${LOCAL_GAMMA_HTTP_PORT:-19000}:80"
-      - "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:80"
-      - "${LOCAL_GAMMA_HTTPS_PORT:-443}:443"
+      - "${LOCAL_GAMMA_HTTP_PORT:-19000}:443"
+      - "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:443"
+      - "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:443"
       - "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019"
     volumes:
       - ../state/local/gamma/Caddyfile:/etc/caddy/Caddyfile:ro
       - ../state/local/gamma/media:/srv/media:ro
-      - local-gamma-caddy-data:/data
-      - local-gamma-caddy-config:/config
+      - ${LOCAL_GAMMA_CADDY_DATA_ROOT:-../state/local/gamma/caddy-data}:/data
+      - ${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-../state/local/gamma/caddy-config}:/config
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null 2>&1"]
       interval: 10s
@@ -634,6 +633,4 @@ volumes:
   local-gamma-mongo:
   local-gamma-redis:
   local-gamma-go-cache:
-  local-gamma-caddy-data:
-  local-gamma-caddy-config:
   local-gamma-es:

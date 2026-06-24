@@ -21,7 +21,7 @@ def handle_audit(args: argparse.Namespace) -> None:
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("audit", help="审计数据工程产物，不写入业务状态")
     sub = p.add_subparsers(dest="audit_command")
-    pri = sub.add_parser("release-integrity", help="审计 release 证据链、一稿一用和跨作品资产独占")
+    pri = sub.add_parser("release-integrity", help="审计 release 证据链、一稿一用与跨作品资产溯源完整性")
     pri.add_argument("--release", required=True, help="Release ID under release/")
     p.set_defaults(handler=handle_audit)
 

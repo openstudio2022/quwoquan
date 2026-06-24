@@ -7,6 +7,16 @@ part of 'profile_interaction_tab.dart';
 /// [setState] / [mounted]，独占本子系统的全部本地态字段，与主文件同库（part）。
 /// 拆出仅为收敛主文件行数（R03/R24），不构成第二数据源；公共行为 / TestKeys 不变。
 mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
+  String? _commentActivityRoute(
+    ProfileInteractionActivityViewData item, {
+    bool replyToComment = false,
+  });
+
+  void _trackCommentActivityDeeplink(
+    ProfileInteractionActivityViewData item, {
+    required String postId,
+  });
+
   // ── 内联动作本地态（小红书式即时反馈，失败回滚）──────────────────────────
   /// 评论类活动「赞」乐观态：activityId → 浏览者反应（覆盖 item.viewerReaction）。
   final Map<String, String> _commentReactionByActivity = <String, String>{};
@@ -20,17 +30,6 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
   /// 点赞类活动「私信」发送中 / 已发送的 activityId。
   final Set<String> _directMessageInFlight = <String>{};
   final Set<String> _directMessageSentActivityIds = <String>{};
-
-  /// 当前内联回复框所属 activityId（null 表示无展开的回复框）。
-  String? _replyingActivityId;
-  bool _replySubmitting = false;
-  final TextEditingController _replyController = TextEditingController();
-
-  @override
-  void dispose() {
-    _replyController.dispose();
-    super.dispose();
-  }
 
   bool _isCommentActivity(ProfileInteractionActivityViewData item) {
     final kind = item.commentKind.trim().toLowerCase();
@@ -70,7 +69,6 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
       }
       final liked = _effectiveReaction(item) == 'like';
       final busy = _commentReactionInFlight.contains(item.activityId);
-      final replying = _replyingActivityId == item.activityId;
       return <Widget>[
         Padding(
           padding: actionPadding,
@@ -81,9 +79,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
                 actionKey: ValueKey<String>(
                   'profile-interaction-like-${item.activityId}',
                 ),
-                icon: liked
-                    ? CupertinoIcons.heart_fill
-                    : CupertinoIcons.heart,
+                icon: liked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
                 label: liked
                     ? UITextConstants.profileInteractionCommentLiked
                     : UITextConstants.profileInteractionLikeComment,
@@ -99,22 +95,12 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
                 ),
                 icon: CupertinoIcons.arrowshape_turn_up_left,
                 label: UITextConstants.profileInteractionReplyComment,
-                active: replying,
                 isDark: widget.isDark,
-                onPressed: () => _toggleReplyComposer(item),
+                onPressed: () => _openCommentReplyDetail(context, item),
               ),
             ],
           ),
         ),
-        if (replying)
-          Padding(
-            padding: EdgeInsets.only(
-              left: leftInset,
-              right: AppSpacing.containerMd,
-              bottom: AppSpacing.containerSm,
-            ),
-            child: _buildInlineReplyComposer(context, item),
-          ),
       ];
     }
 
@@ -168,80 +154,22 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
     return const <Widget>[];
   }
 
-  Widget _buildInlineReplyComposer(
-    BuildContext context,
-    ProfileInteractionActivityViewData item,
-  ) {
-    final fg = AppColorsFunctional.getColor(
-      widget.isDark,
-      ColorType.foregroundPrimary,
-    );
-    final fill = AppColors.iosSecondaryFill(context);
-    final border = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: widget.isDark ? 0.30 : 0.22);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        Expanded(
-          child: CupertinoTextField(
-            key: ValueKey<String>(
-              'profile-interaction-reply-field-${item.activityId}',
-            ),
-            controller: _replyController,
-            autofocus: true,
-            minLines: 1,
-            maxLines: 3,
-            placeholder: UITextConstants.profileInteractionReplyHint,
-            placeholderStyle: TextStyle(
-              fontSize: AppTypography.iosFootnote,
-              color: AppColors.iosTertiaryLabel(context),
-            ),
-            style: TextStyle(
-              fontSize: AppTypography.iosFootnote,
-              color: fg,
-            ),
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.containerSm,
-              vertical: AppSpacing.intraGroupSm,
-            ),
-            decoration: BoxDecoration(
-              color: fill,
-              borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-              border: Border.all(color: border, width: AppSpacing.hairline),
-            ),
-            onSubmitted: (_) => _submitInlineReply(item),
-          ),
-        ),
-        SizedBox(width: AppSpacing.containerSm),
-        CupertinoButton(
-          key: ValueKey<String>(
-            'profile-interaction-reply-submit-${item.activityId}',
-          ),
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
-          minimumSize: const Size(
-            AppSpacing.minInteractiveSize,
-            AppSpacing.minInteractiveSize,
-          ),
-          onPressed: _replySubmitting ? null : () => _submitInlineReply(item),
-          child: _replySubmitting
-              ? const CupertinoActivityIndicator()
-              : Text(
-                  UITextConstants.profileInteractionReplySubmit,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosFootnote,
-                    fontWeight: AppTypography.regular,
-                    color: AppColors.iosAccent(context),
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-
   /// 浏览者对该评论的有效反应（本地乐观态覆盖契约字段）。
   String _effectiveReaction(ProfileInteractionActivityViewData item) {
     return _commentReactionByActivity[item.activityId] ?? item.viewerReaction;
+  }
+
+  void _openCommentReplyDetail(
+    BuildContext context,
+    ProfileInteractionActivityViewData item,
+  ) {
+    final route = _commentActivityRoute(item, replyToComment: true);
+    if (route == null) {
+      AppToast.show(context, UITextConstants.profileCommentOriginalUnavailable);
+      return;
+    }
+    _trackCommentActivityDeeplink(item, postId: item.previewObjectId.trim());
+    context.push(route);
   }
 
   /// 点赞类活动：非评论活动且 filterKeys 命中 likes 子分类。
@@ -254,7 +182,9 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
   }
 
   /// 评论类活动「赞」：乐观切换 viewerReaction，失败回滚 + 反馈。
-  Future<void> _toggleCommentLike(ProfileInteractionActivityViewData item) async {
+  Future<void> _toggleCommentLike(
+    ProfileInteractionActivityViewData item,
+  ) async {
     final commentId = item.commentId.trim();
     if (commentId.isEmpty ||
         _commentReactionInFlight.contains(item.activityId)) {
@@ -295,74 +225,6 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
             category: UiErrorCategory.backgroundAction,
             scope: UiErrorScope.global,
             allowRetry: false,
-          ),
-        );
-      }
-    }
-  }
-
-  void _toggleReplyComposer(ProfileInteractionActivityViewData item) {
-    setState(() {
-      if (_replyingActivityId == item.activityId) {
-        _replyingActivityId = null;
-      } else {
-        _replyingActivityId = item.activityId;
-        _replySubmitting = false;
-        _replyController.clear();
-      }
-    });
-  }
-
-  /// 评论类活动「回复评论」提交：content 仓库 createComment 写出回复。
-  Future<void> _submitInlineReply(ProfileInteractionActivityViewData item) async {
-    final commentId = item.commentId.trim();
-    final postId = item.previewObjectId.trim();
-    final text = _replyController.text.trim();
-    if (commentId.isEmpty ||
-        postId.isEmpty ||
-        text.isEmpty ||
-        _replySubmitting) {
-      return;
-    }
-    setState(() => _replySubmitting = true);
-    try {
-      await ref
-          .read(contentRepositoryProvider)
-          .createComment(
-            postId: postId,
-            content: text,
-            replyToCommentId: commentId,
-          );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _replySubmitting = false;
-        _replyingActivityId = null;
-        _replyController.clear();
-      });
-      AppToast.show(
-        context,
-        UITextConstants.profileInteractionReplySentToast,
-      );
-    } catch (error, stackTrace) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'profile interaction tab',
-          context: ErrorDescription('submitting inline interaction reply'),
-        ),
-      );
-      if (mounted) {
-        setState(() => _replySubmitting = false);
-        await AppActionErrorFeedback.show(
-          context,
-          semantic: runtimeErrorSemantic(
-            context,
-            error: error,
-            category: UiErrorCategory.submit,
-            scope: UiErrorScope.global,
           ),
         );
       }

@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/conversation/message_bubble_frame.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/platform/app_font_families.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/voice_message_bubble.dart';
 
@@ -393,6 +394,8 @@ class ChatMessageBubble extends StatelessWidget {
                 ColorType.foregroundInverse,
               ),
               height: AppTypography.bodyLineHeight,
+              fontFamily: resolveAppThemeFontFamily(),
+              fontFamilyFallback: resolveAppThemeFontFallbacks(),
             ),
           ),
         ),
@@ -415,7 +418,12 @@ class ChatMessageBubble extends StatelessWidget {
           ),
           child: SelectableText(
             content,
-            style: TextStyle(fontSize: AppTypography.lg, color: textColor),
+            style: TextStyle(
+              fontSize: AppTypography.lg,
+              color: textColor,
+              fontFamily: resolveAppThemeFontFamily(),
+              fontFamilyFallback: resolveAppThemeFontFallbacks(),
+            ),
           ),
         ),
       );

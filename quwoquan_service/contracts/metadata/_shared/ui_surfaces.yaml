@@ -212,6 +212,13 @@ surfaces:
     description: 一方地点（location.place）落地页：被内容引用但未绑定主页的临时地点卡 + 提升为实体主页引导（R-S05e-1）
     operation_ids: []
 
+  - id: localDrafts
+    owner: content
+    route_id: localDrafts
+    path_template: /create/drafts
+    description: 本地草稿页：续草稿统一入口，展示图片/视频/长文草稿并支持继续编辑、删除与恢复
+    operation_ids: []
+
   - id: homepagePicker
     owner: entity
     route_id: homepagePicker
@@ -311,3 +318,73 @@ surfaces:
       - GetRelationshipCapability
       - FollowUser
       - UnfollowUser
+
+  - id: profileCareerInterests
+    owner: user
+    route_id: profileCareerInterests
+    path_template: /profile/career-interests
+    description: 我的资料页职业身份与兴趣标签编辑页（职业/兴趣均来自 tag-service 标签体系）
+    operation_ids:
+      - GetProfileEditSnapshot
+      - UpdateUserProfile
+      - ResolveTag
+      - ListTagChildren
+      - ValidateTagRefs
+
+  - id: addContact
+    owner: user
+    route_id: addContact
+    path_template: /add-contact
+    description: 添加联系人主页（搜索 / 扫一扫 / 手机联系人入口 + 我的二维码名片）
+    operation_ids:
+      - GetProfileQrCard
+
+  - id: addContactSearch
+    owner: user
+    route_id: addContactSearch
+    path_template: /add-contact/search
+    description: 按趣我圈号 / 昵称搜索并添加联系人
+    operation_ids:
+      - SearchSocialRelations
+      - GetRelationshipCapability
+      - FollowUser
+
+  - id: addContactScan
+    owner: user
+    route_id: addContactScan
+    path_template: /add-contact/scan
+    description: 扫描对方二维码名片（相机 / 图库），解析后进入联系人确认
+    operation_ids:
+      - ResolveProfileQrToken
+      - GetProfileQrCard
+
+  - id: addContactPhone
+    owner: user
+    route_id: addContactPhone
+    path_template: /add-contact/phone
+    description: 手机通讯录匹配已注册趣我圈用户并添加
+    operation_ids:
+      - InitiateContactDiscovery
+      - GetLatestContactDiscovery
+      - DismissContactDiscovery
+      - GetSubAccountProfile
+      - GetRelationshipCapability
+      - FollowUser
+
+  - id: addContactConfirm
+    owner: user
+    route_id: addContactConfirm
+    path_template: /add-contact/confirm
+    description: 添加联系人确认页（来源 扫码 / 通讯录 / 搜索）
+    operation_ids:
+      - GetSubAccountProfile
+      - GetRelationshipCapability
+      - FollowUser
+
+  - id: myQrCode
+    owner: user
+    route_id: myQrCode
+    path_template: /me/qr-code
+    description: 我的二维码名片（让对方扫码添加为联系人）
+    operation_ids:
+      - GetProfileQrCard

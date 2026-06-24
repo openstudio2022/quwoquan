@@ -20,6 +20,7 @@ import 'package:quwoquan_app/core/design_system/spacing/discovery_feed_spacing.d
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
+import 'package:quwoquan_app/ui/user/utils/profile_comment_detail_route.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
 
 part 'profile_interaction_tab_widgets.dart';
@@ -82,8 +83,6 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
     final repo = ref.read(userProfileRepositoryProvider);
     setState(() {
       _loading = true;
-      _replyingActivityId = null;
-      _replySubmitting = false;
     });
     try {
       final list = direction == InteractionDirection.received
@@ -761,38 +760,51 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
     // 评论类互动：深链进入内容评论区并携带评论标识，
     // 落地后由分屏定位到「回复我的」那条（回复场景用父评论行高亮）。
     if (_isCommentActivity(item)) {
-      final commentId = item.commentId.trim();
-      final parentCommentId = item.parentCommentId.trim();
-      final isReply = parentCommentId.isNotEmpty;
-      final uri = Uri.parse(baseRoute);
-      final route = uri
-          .replace(
-            queryParameters: <String, String>{
-              ...uri.queryParameters,
-              ...MediaViewerCommentContext.buildDeepLinkQuery(
-                entrySource:
-                    MediaViewerCommentContext.entrySourceProfileInteraction,
-                targetParentCommentId: isReply ? parentCommentId : null,
-                targetReplyId: isReply ? commentId : null,
-                targetCommentId: isReply ? null : commentId,
-              ),
-            },
-          )
-          .toString();
-      ref
-          .read(commentObservabilityProvider)
-          .trackAction(
-            eventName: CommentEventNames.deeplinkOpened,
-            postId: objectId,
-            commentId: commentId.isNotEmpty ? commentId : null,
-            entrySource:
-                MediaViewerCommentContext.entrySourceProfileInteraction,
-            result: 'initiated',
-          );
+      final route = _commentActivityRoute(item);
+      if (route == null) {
+        return;
+      }
+      _trackCommentActivityDeeplink(item, postId: objectId);
       context.push(route);
       return;
     }
     context.push(baseRoute);
+  }
+
+  @override
+  String? _commentActivityRoute(
+    ProfileInteractionActivityViewData item, {
+    bool replyToComment = false,
+  }) {
+    if (!_previewObjectEnabled(item)) {
+      return null;
+    }
+    return buildProfileCommentDetailRoute(
+      workId: item.previewObjectId,
+      filter: _previewFilterFor(item),
+      source: 'profile-interaction',
+      entrySource: MediaViewerCommentContext.entrySourceProfileInteraction,
+      commentId: item.commentId,
+      parentCommentId: item.parentCommentId,
+      replyToCommentId: replyToComment ? item.commentId : null,
+    );
+  }
+
+  @override
+  void _trackCommentActivityDeeplink(
+    ProfileInteractionActivityViewData item, {
+    required String postId,
+  }) {
+    final commentId = item.commentId.trim();
+    ref
+        .read(commentObservabilityProvider)
+        .trackAction(
+          eventName: CommentEventNames.deeplinkOpened,
+          postId: postId,
+          commentId: commentId.isNotEmpty ? commentId : null,
+          entrySource: MediaViewerCommentContext.entrySourceProfileInteraction,
+          result: 'initiated',
+        );
   }
 
   /// 该活动是否可深链进入内容（评论详情）：被评论内容存在且为 post 路由。

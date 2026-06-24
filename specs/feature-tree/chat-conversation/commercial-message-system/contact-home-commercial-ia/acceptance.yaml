@@ -52,7 +52,7 @@ gwt_acceptance:
         cases:
         - user_acceptance.chat_conversation.commercial_message_system.contact_home_commercial_ia.device_journey
         envs:
-        - gamma
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/chat/widgets/contact_home_widget_test.dart'
 contract_acceptance:

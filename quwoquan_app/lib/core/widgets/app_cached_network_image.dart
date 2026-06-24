@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -11,7 +13,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 
-final _avatarImageCacheManager = CacheManager(
+final _avatarImageCacheManager = _AppImageCacheManager(
   Config(
     'appImageAvatarCache',
     maxNrOfCacheObjects: 800,
@@ -19,7 +21,7 @@ final _avatarImageCacheManager = CacheManager(
   ),
 );
 
-final _previewImageCacheManager = CacheManager(
+final _previewImageCacheManager = _AppImageCacheManager(
   Config(
     'appImagePreviewCache',
     maxNrOfCacheObjects: 1000,
@@ -27,13 +29,17 @@ final _previewImageCacheManager = CacheManager(
   ),
 );
 
-final _ephemeralImageCacheManager = CacheManager(
+final _ephemeralImageCacheManager = _AppImageCacheManager(
   Config(
     'appImageEphemeralCache',
     maxNrOfCacheObjects: 250,
     stalePeriod: const Duration(days: 2),
   ),
 );
+
+class _AppImageCacheManager extends CacheManager with ImageCacheManager {
+  _AppImageCacheManager(super.config);
+}
 
 class AppImageCacheController {
   const AppImageCacheController._();
@@ -65,11 +71,14 @@ class AppImageCacheController {
     String imageUrl, {
     double size = 120,
   }) async {
-    final normalized = imageUrl.trim();
-    if (normalized.isEmpty) {
+    final candidates = resolveAvatarImageUrlCandidates(imageUrl);
+    if (candidates.isEmpty) {
       return;
     }
-    final processed = CdnImageUrlBuilder.avatar(normalized, size: size.toInt());
+    final processed = CdnImageUrlBuilder.avatar(
+      candidates.first,
+      size: size.toInt(),
+    );
     await _avatarImageCacheManager.downloadFile(processed);
   }
 
@@ -109,28 +118,43 @@ class AppResourceCacheProfile {
     required this.name,
     required this.maxImageCacheObjects,
     required this.maxImageCacheBytes,
+    required this.maxMediaDownloadCacheSizeMb,
+    required this.maxConcurrentMediaDownloads,
+    required this.maxPostObjectCacheEntries,
   });
 
   final String name;
   final int maxImageCacheObjects;
   final int maxImageCacheBytes;
+  final int maxMediaDownloadCacheSizeMb;
+  final int maxConcurrentMediaDownloads;
+  final int maxPostObjectCacheEntries;
 
   static const compact = AppResourceCacheProfile(
     name: 'compact',
     maxImageCacheObjects: 300,
     maxImageCacheBytes: 64 * 1024 * 1024,
+    maxMediaDownloadCacheSizeMb: 96,
+    maxConcurrentMediaDownloads: 2,
+    maxPostObjectCacheEntries: 120,
   );
 
   static const regular = AppResourceCacheProfile(
     name: 'regular',
     maxImageCacheObjects: 500,
     maxImageCacheBytes: 96 * 1024 * 1024,
+    maxMediaDownloadCacheSizeMb: 200,
+    maxConcurrentMediaDownloads: 3,
+    maxPostObjectCacheEntries: 200,
   );
 
   static const expanded = AppResourceCacheProfile(
     name: 'expanded',
     maxImageCacheObjects: 900,
     maxImageCacheBytes: 192 * 1024 * 1024,
+    maxMediaDownloadCacheSizeMb: 384,
+    maxConcurrentMediaDownloads: 4,
+    maxPostObjectCacheEntries: 320,
   );
 }
 
@@ -269,12 +293,19 @@ class AppCachedNetworkImage extends ConsumerWidget {
     List<String> candidates,
     int index,
   ) {
+    final cacheManager = AppImageCacheController.cacheManagerForPreset(
+      cdnPreset,
+    );
     return CachedNetworkImage(
       imageUrl: candidates[index],
-      cacheManager: AppImageCacheController.cacheManagerForPreset(cdnPreset),
+      cacheManager: cacheManager,
       fit: fit,
       width: width,
       height: height,
+      memCacheWidth: _decodeExtentFor(width, context),
+      memCacheHeight: _decodeExtentFor(height, context),
+      maxWidthDiskCache: _diskCacheExtentFor(cacheManager, width, context),
+      maxHeightDiskCache: _diskCacheExtentFor(cacheManager, height, context),
       imageBuilder: (context, imageProvider) {
         ref
             .read(pageLifecycleObservabilityProvider)
@@ -301,6 +332,17 @@ class AppCachedNetworkImage extends ConsumerWidget {
         if (nextIndex < candidates.length) {
           return _buildCandidateImage(context, ref, candidates, nextIndex);
         }
+        developer.log(
+          'image load failed after ${candidates.length} candidate(s): $url',
+          name: 'AppCachedNetworkImage',
+          error: error,
+        );
+        debugPrint(
+          '[AppCachedNetworkImage] image load failed after '
+          '${candidates.length} candidate(s); '
+          'last=${_summarizeImageUrl(url)}; '
+          'errorType=${error.runtimeType}',
+        );
         ref
             .read(pageLifecycleObservabilityProvider)
             .recordMediaLoad(
@@ -314,6 +356,46 @@ class AppCachedNetworkImage extends ConsumerWidget {
         return errorWidget ?? _buildErrorWidget(context);
       },
     );
+  }
+
+  int? _decodeExtentFor(double? logicalExtent, BuildContext context) {
+    if (logicalExtent == null ||
+        logicalExtent <= 0 ||
+        logicalExtent == double.infinity) {
+      return null;
+    }
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final value = (logicalExtent * devicePixelRatio).round();
+    if (value < 1) {
+      return 1;
+    }
+    if (value > 4096) {
+      return 4096;
+    }
+    return value;
+  }
+
+  int? _diskCacheExtentFor(
+    BaseCacheManager cacheManager,
+    double? logicalExtent,
+    BuildContext context,
+  ) {
+    if (cacheManager is! ImageCacheManager) {
+      return null;
+    }
+    final decoded = _decodeExtentFor(logicalExtent, context);
+    if (decoded == null) {
+      return null;
+    }
+    return decoded > 2048 ? 2048 : decoded;
+  }
+
+  String _summarizeImageUrl(String raw) {
+    final uri = Uri.tryParse(raw);
+    if (uri == null || uri.host.isEmpty) {
+      return 'unparseable';
+    }
+    return '${uri.host}${uri.path}';
   }
 
   Widget _buildErrorWidget(BuildContext context) {

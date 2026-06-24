@@ -41,11 +41,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/runtime/search/es/indexer_test.go
-      - file: quwoquan_service/runtime/search/es/query_builder_test.go
-      - file: quwoquan_service/runtime/search/backend_switch_test.go
-      - file: quwoquan_service/services/content-service/internal/infrastructure/placeindex/backfill_test.go
-      - file: quwoquan_service/services/content-service/internal/infrastructure/placeindex/projector_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/placeindex/backfill__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/placeindex/projector__local_contract_test.go
+      - file: quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
     status: completed
     test_evidence:
       primary:
@@ -68,7 +66,10 @@ gwt_acceptance:
         envs: &id002
         - beta
         - gamma
-    notes: []
+    notes:
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/es/indexer_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/es/query_builder_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/backend_switch_test.go'
   GWT2:
     title: search-service + ES 端到端冒烟（stackctl gamma：package/up/health/verify + /v1/search
       200 + feedback 202）
@@ -96,11 +97,10 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/search-service/tests/search_contract_test.go
-      - file: quwoquan_service/services/search-service/tests/storage_ttl_contract_test.go
-      - file: quwoquan_service/services/search-service/internal/infrastructure/searchsignals/stream_publisher_test.go
-      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
-      - artifact: artifacts/local-gamma/search_signal_t3_report.json
+      - file: quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
+      - file: quwoquan_service/services/search-service/tests/api_integration/storage_ttl_contract__api_integration_test.go
+      - file: quwoquan_service/services/search-service/tests/local_contract/internal/infrastructure/searchsignals/stream_publisher__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/search_signal_consumer__local_contract_test.go
     status: implemented
     notes:
     - 端到端冒烟（R-S06-S）已绿；推荐信号双服务 api_integration（R-S07-5）已补真实链路证据（发布+消费+投影闭环，见 search_signal_t3_report.json）。
@@ -113,6 +113,7 @@ gwt_acceptance:
     - '[migrated_from_planned] CI：search-service 独立 Go module go.mod/go.sum 依赖图可复现构建验证
       —— 阻塞于版本控制：services/search-service/ 整体 git untracked，待用户提交后方可在干净检出上验证（R-S06-S-3
       / WP-E）。'
+    - '[migrated_from_recorded_artifact] artifacts/local-gamma/search_signal_t3_report.json'
     test_evidence:
       primary:
       - layer: api_integration
@@ -160,19 +161,19 @@ gwt_acceptance:
       - artifact: artifacts/search-load/prod-sim/search_capacity_report.json
       - artifact: artifacts/search-load/prod-sim/search_repeatability_multi_replica_report.json
       - artifact: artifacts/stackctl/prod/search_release_verify_report.json
-      recorded:
-      - file: quwoquan_service/runtime/search/sort_stable_test.go
-      - file: quwoquan_service/runtime/search/es/query_builder_test.go
-      - file: quwoquan_service/scripts/search/verify_search_local_gamma_capacity.py
-      - artifact: artifacts/local-gamma/search_repeatability_golden_diff.json
-      - artifact: artifacts/local-gamma/search_r_s06_s1_local_gamma_report.json
-      - artifact: artifacts/search-load/search_load_analysis.md
-      - artifact: artifacts/search-load/search_e2e_hotpath_profile.md
+      recorded: []
     status: partial
     notes:
     - local 单节点重复查询 0 跳变、高并发方法学、压测工具链与 `verify_search_local_gamma_capacity.py` local-gamma
       聚合报告已 recorded；脚本显式输出 `r_s06_s1_closed_by_local_gamma=false`，真集群 measured 值和多副本
       preference 验证仍是发布前阻断。
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/sort_stable_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/es/query_builder_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/search/verify_search_local_gamma_capacity.py'
+    - '[migrated_from_recorded_artifact] artifacts/local-gamma/search_repeatability_golden_diff.json'
+    - '[migrated_from_recorded_artifact] artifacts/local-gamma/search_r_s06_s1_local_gamma_report.json'
+    - '[migrated_from_recorded_artifact] artifacts/search-load/search_load_analysis.md'
+    - '[migrated_from_recorded_artifact] artifacts/search-load/search_e2e_hotpath_profile.md'
     test_evidence:
       primary:
       - layer: api_integration
@@ -222,16 +223,16 @@ gwt_acceptance:
       planned:
       - artifact: artifacts/search-obs/prod-observation/search_ab_benefit_report.md
       recorded:
-      - file: quwoquan_service/services/search-service/internal/application/queryheat
-      - file: quwoquan_service/services/search-service/tests/storage_ttl_contract_test.go
-      - file: quwoquan_service/services/search-service/internal/infrastructure/searchsignals/stream_publisher_test.go
-      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
-      - file: quwoquan_service/runtime/recommendation
-      - artifact: artifacts/local-gamma/search_signal_t3_report.json
-      - artifact: artifacts/search-obs/search_observability_ab_recommendation_report.md
+      - file: quwoquan_service/services/search-service/tests/api_integration/storage_ttl_contract__api_integration_test.go
+      - file: quwoquan_service/services/search-service/tests/local_contract/internal/infrastructure/searchsignals/stream_publisher__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/search_signal_consumer__local_contract_test.go
     status: completed
     notes:
     - 链路可消费性已完成；线上 AB 收益显著性不阻断稳定性准出，但需发布后观察。
+    - '[migrated_from_recorded_reference] quwoquan_service/services/search-service/internal/application/queryheat'
+    - '[migrated_from_recorded_reference] quwoquan_service/runtime/recommendation'
+    - '[migrated_from_recorded_artifact] artifacts/local-gamma/search_signal_t3_report.json'
+    - '[migrated_from_recorded_artifact] artifacts/search-obs/search_observability_ab_recommendation_report.md'
     test_evidence:
       primary:
       - layer: local_contract

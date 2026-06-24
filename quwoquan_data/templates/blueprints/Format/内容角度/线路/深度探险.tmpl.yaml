@@ -15,14 +15,10 @@ creatorPersona:
   mustNotClaim: [官方救援, 向导资质保证, 零风险承诺]
 editorialIntent: 面向 7–14 日深度与徒步穿越线路，强调补给、风险、向导与体能边界，不做探险营销。
 render: { articleTemplate: journal, fontPreset: clean }
-conditionAxes:
-  region: { applicable: true, slot: 地形与风险 }
-  season: { applicable: true, slot: 季节窗口与封山 }
 narrativeMode:
   kind: expedition_route
   openingFocus: boundary_judgement
   transitionPolicy: route_progression
-  factsHeading: 先把边界、补给和退路讲清楚
   closingFocus: safety_decision
 evidenceRequirements:
   fact:
@@ -45,7 +41,6 @@ routeCoverageExpectations:
 structure:
   required: [线路定位, 体能与经验要求, 分段行程, 补给与露营, 风险与应急, 向导与许可, 替代方案]
   optional: [摄影停靠, 地形适应]
-hooks: ["走{name}之前，先确认体能和风险边界", "这条深度线不是打卡，而是算好补给和退路"]
 mustIncludeFacts: [总里程, 高程变化, 补给点, 露营或住宿, 向导需求, 应急避险, 最佳季节]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 零风险]
 wordCount: { min: 1600, max: 3200 }
@@ -64,4 +59,3 @@ openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }
 decisionPoints: { required: true, minPoints: 2 }
 tipsEmbeddingPolicy: { mode: inline, forbidStandaloneBlock: true }
-sopExampleRef: sop/article.md

@@ -80,18 +80,22 @@ func main() {
 		if !validGroups[group] {
 			return nil
 		}
+		parentTagRef := ""
 		ancestors := ""
 		if len(segs) > 1 {
-			ancestors = strings.Join(segs[:len(segs)-1], "/")
+			parentTagRef = strings.Join(segs[:len(segs)-1], "/")
+			ancestors = parentTagRef
 		}
 		now := time.Now().UTC()
 		setDoc := bson.M{
 			"tagRef":               tagRef,
 			"group":                group,
 			"label":                def.Label,
+			"displayLabel":         displayLabelForTag(def.Label),
 			"labelEn":              def.LabelEn,
 			"aliases":              "",
 			"ancestors":            ancestors,
+			"parentTagRef":         parentTagRef,
 			"depth":                len(segs) - 1,
 			"updatedAt":            now,
 			"releaseId":            *releaseID,
@@ -113,4 +117,49 @@ func main() {
 		log.Fatalf("walk tags dir: %v", walkErr)
 	}
 	log.Printf("OK: imported %d tag nodes into %s.tag_nodes", count, *dbName)
+}
+
+func displayLabelForTag(label string) string {
+	trimmed := strings.TrimSpace(label)
+	if trimmed == "" {
+		return ""
+	}
+	replacements := map[string]string{
+		"广西壮族自治区":  "广西",
+		"宁夏回族自治区":  "宁夏",
+		"新疆维吾尔自治区": "新疆",
+		"内蒙古自治区":   "内蒙古",
+		"西藏自治区":    "西藏",
+		"香港特别行政区":  "香港",
+		"澳门特别行政区":  "澳门",
+	}
+	if value, ok := replacements[trimmed]; ok {
+		return value
+	}
+	for _, suffix := range []string{
+		"朝鲜族自治州",
+		"蒙古自治州",
+		"藏族自治州",
+		"回族自治州",
+		"哈尼族彝族自治州",
+		"壮族苗族自治州",
+		"土家族苗族自治州",
+		"傣族自治州",
+		"白族自治州",
+		"傈僳族自治州",
+		"自治州",
+		"地区",
+		"盟",
+		"特别行政区",
+		"自治区",
+		"省",
+		"市",
+		"区",
+		"县",
+	} {
+		if strings.HasSuffix(trimmed, suffix) && len([]rune(trimmed)) > len([]rune(suffix)) {
+			return strings.TrimSuffix(trimmed, suffix)
+		}
+	}
+	return trimmed
 }

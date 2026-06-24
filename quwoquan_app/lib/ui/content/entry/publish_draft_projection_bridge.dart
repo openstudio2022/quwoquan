@@ -65,6 +65,7 @@ Map<String, dynamic> createPublishConfirmPreviewWire({
   required String body,
   required bool hasVideo,
   required int imageCount,
+  String videoThumbnailUrl = '',
   String previewPostId = 'draft_preview',
 }) {
   final base = <String, dynamic>{
@@ -84,6 +85,7 @@ Map<String, dynamic> createPublishConfirmPreviewWire({
   final caption = body.trim().isNotEmpty ? body.trim() : title.trim();
 
   if (hasVideo) {
+    final thumbnailUrl = videoThumbnailUrl.trim();
     return <String, dynamic>{
       ...base,
       'contentType': 'video',
@@ -92,7 +94,8 @@ Map<String, dynamic> createPublishConfirmPreviewWire({
       'identity': identityStr,
       'body': caption,
       'videoUrl': 'draft-preview://local',
-      'thumbnailUrl': '',
+      'thumbnailUrl': thumbnailUrl,
+      if (thumbnailUrl.isNotEmpty) 'coverUrl': thumbnailUrl,
     };
   }
   if (imageCount > 0) {
@@ -145,6 +148,7 @@ PostReadUiBundle postReadPreviewBundleFromPublishConfirmSummary({
   required String body,
   required bool hasVideo,
   required int imageCount,
+  String videoThumbnailUrl = '',
   String previewPostId = 'draft_preview',
 }) {
   final wire = createPublishConfirmPreviewWire(
@@ -153,6 +157,7 @@ PostReadUiBundle postReadPreviewBundleFromPublishConfirmSummary({
     body: body,
     hasVideo: hasVideo,
     imageCount: imageCount,
+    videoThumbnailUrl: videoThumbnailUrl,
     previewPostId: previewPostId,
   );
   return PostReadUiBundle.fromPost(

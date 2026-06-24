@@ -1,0 +1,1101 @@
+version: 1
+description: >
+  外部服务依赖机读登记表。覆盖 app/service/data/ops 的外部 SaaS、公开数据源、
+  自托管基础设施与客户端平台能力。配套说明见 docs/external_service_dependency_registry.md。
+
+status_legend:
+  production: 生产路径已接通，存在真实实现
+  mock: 仅 mock provider 或 mock SDK
+  sandbox: 仅沙箱 / allowlist / 半真实路径
+  planned: metadata 或接口存在，但真实实现未落地
+  registered_only: 只在注册表或目录中声明，未发现运行时调用
+  none: 代码中未发现真实接入实现
+
+compliance_legend:
+  compliant: 已登记，且访问路径符合当前规格
+  violation: 已发现绕过统一出口或关键校验缺失
+  waived: 不适用统一出口，但已显式登记并说明理由
+
+fields:
+  - service_id
+  - display_name
+  - category
+  - vendor
+  - endpoint
+  - access_layer
+  - consumers
+  - metadata_ref
+  - impl_status
+  - env_matrix
+  - secrets
+  - compliance
+  - gap
+  - notes
+
+entries:
+  - service_id: ext.map.baidu
+    display_name: 百度地图 Web API
+    category: map
+    vendor: baidu
+    endpoint: https://api.map.baidu.com
+    access_layer: integration-service
+    consumers: [app, content-service, circle-service, platform-ops]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/integration/location/service.yaml
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: [INTEGRATION_LOCATION_BAIDU_AK]
+    compliance: compliant
+    gap: 生产 secret 与独立部署仍需继续固化
+    notes: integration-service 当前主用 provider
+
+  - service_id: ext.map.amap
+    display_name: 高德地图 Web API
+    category: map
+    vendor: amap
+    endpoint: https://restapi.amap.com
+    access_layer: integration-service
+    consumers: [app, content-service, circle-service, platform-ops]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/integration/location/service.yaml
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: [INTEGRATION_LOCATION_AMAP_KEY]
+    compliance: compliant
+    gap: 主要作为 backup provider，需继续核对 quota 与 secret 注入
+    notes: integration-service 当前备用 provider
+
+  - service_id: ext.sms.mock
+    display_name: Mock SMS Provider
+    category: sms
+    vendor: mock
+    endpoint: mock_sms
+    access_layer: integration-service
+    consumers: [user-service, platform-ops]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/integration/external_interaction/service.yaml
+      - quwoquan_service/contracts/metadata/integration/external_interaction/fields.yaml
+    impl_status: mock
+    env_matrix:
+      alpha: mock
+      beta: mock
+      gamma: mock
+      prod: mock
+    secrets: []
+    compliance: compliant
+    gap: 仅有 mock provider，未接真实短信厂商
+    notes: integration-service external_interaction 默认短信 provider
+
+  - service_id: ext.sms.aliyun
+    display_name: 阿里云短信
+    category: sms
+    vendor: aliyun
+    endpoint: ""
+    access_layer: integration-service
+    consumers: [user-service, platform-ops]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/integration/external_interaction/fields.yaml
+    impl_status: planned
+    env_matrix:
+      alpha: not_implemented
+      beta: not_implemented
+      gamma: not_implemented
+      prod: not_implemented
+    secrets: []
+    compliance: compliant
+    gap: metadata 已登记 provider，但未实现 adapter
+    notes: 生产短信候选 provider
+
+  - service_id: ext.sms.tencent
+    display_name: 腾讯云短信
+    category: sms
+    vendor: tencent
+    endpoint: ""
+    access_layer: integration-service
+    consumers: [user-service, platform-ops]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/integration/external_interaction/fields.yaml
+    impl_status: planned
+    env_matrix:
+      alpha: not_implemented
+      beta: not_implemented
+      gamma: not_implemented
+      prod: not_implemented
+    secrets: []
+    compliance: compliant
+    gap: metadata 已登记 provider，但未实现 adapter
+    notes: 生产短信候选 provider
+
+  - service_id: ext.push.mock
+    display_name: Mock Push Provider
+    category: push
+    vendor: mock
+    endpoint: mock_push
+    access_layer: integration-service
+    consumers: [notification-service, platform-ops]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/integration/external_interaction/service.yaml
+      - quwoquan_service/contracts/metadata/integration/external_interaction/fields.yaml
+      - quwoquan_service/contracts/metadata/integration/push_delivery/service.yaml
+    impl_status: mock
+    env_matrix:
+      alpha: mock
+      beta: mock
+      gamma: mock
+      prod: mock
+    secrets: []
+    compliance: compliant
+    gap: 只有 mock_push，未接真实推送厂商
+    notes: notification-service 设计消费方尚未接线
+
+  - service_id: ext.push.apns
+    display_name: Apple Push Notification Service
+    category: push
+    vendor: apns
+    endpoint: ""
+    access_layer: integration-service
+    consumers: [notification-service, platform-ops]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/integration/push_delivery/service.yaml
+      - quwoquan_service/contracts/metadata/integration/external_interaction/fields.yaml
+    impl_status: planned
+    env_matrix:
+      alpha: not_implemented
+      beta: not_implemented
+      gamma: not_implemented
+      prod: not_implemented
+    secrets: []
+    compliance: compliant
+    gap: metadata 已有契约，但 notification-service 未接 integration push
+    notes: 仅 provider 枚举存在
+
+  - service_id: ext.push.fcm
+    display_name: Firebase Cloud Messaging
+    category: push
+    vendor: fcm
+    endpoint: ""
+    access_layer: integration-service
+    consumers: [notification-service, platform-ops]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/integration/push_delivery/service.yaml
+      - quwoquan_service/contracts/metadata/integration/external_interaction/fields.yaml
+    impl_status: planned
+    env_matrix:
+      alpha: not_implemented
+      beta: not_implemented
+      gamma: not_implemented
+      prod: not_implemented
+    secrets: []
+    compliance: compliant
+    gap: App 与服务端都未接 FCM 真链路
+    notes: App 侧未发现 firebase_messaging
+
+  - service_id: ext.push.vendor
+    display_name: 厂商推送聚合
+    category: push
+    vendor: vendor_push
+    endpoint: ""
+    access_layer: integration-service
+    consumers: [notification-service, platform-ops]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/integration/push_delivery/service.yaml
+      - quwoquan_service/contracts/metadata/integration/external_interaction/fields.yaml
+    impl_status: planned
+    env_matrix:
+      alpha: not_implemented
+      beta: not_implemented
+      gamma: not_implemented
+      prod: not_implemented
+    secrets: []
+    compliance: compliant
+    gap: 仅 provider 枚举存在，无实现
+    notes: 作为 Android 厂商推送预留位
+
+  - service_id: ext.auth.carrier_one_tap
+    display_name: 运营商一键登录置换
+    category: auth_carrier
+    vendor: carrier
+    endpoint: ""
+    access_layer: integration-service
+    consumers: [user-service, app, platform-ops]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/integration/external_interaction/service.yaml
+      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    impl_status: planned
+    env_matrix:
+      alpha: stub
+      beta: stub
+      gamma: sandbox_or_stub
+      prod: resolver_configured_but_unavailable
+    secrets: []
+    compliance: compliant
+    gap: App 原生通道和服务端 carrier resolver 都未真正落地
+    notes: 生产 config resolver=carrier，但未发现真实 provider 实现
+
+  - service_id: ext.webhook.deliver
+    display_name: 外部 webhook 投递
+    category: webhook
+    vendor: generic_webhook
+    endpoint: callbackUrl
+    access_layer: integration-service
+    consumers: [notification-service, platform-ops]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/integration/external_interaction/service.yaml
+      - quwoquan_service/contracts/metadata/integration/external_interaction/fields.yaml
+    impl_status: planned
+    env_matrix:
+      alpha: not_implemented
+      beta: not_implemented
+      gamma: not_implemented
+      prod: not_implemented
+    secrets: []
+    compliance: compliant
+    gap: 路由和 provider 预留，未发现真实投递适配器
+    notes: callback sender 仅支持结果回调，不等于业务 webhook 能力已完成
+
+  - service_id: ext.auth.wechat
+    display_name: 微信 OAuth
+    category: auth_oauth
+    vendor: wechat
+    endpoint: https://api.weixin.qq.com
+    access_layer: domain-direct
+    consumers: [user-service, app]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    impl_status: production
+    env_matrix:
+      alpha: mock
+      beta: mock
+      gamma: sandbox_with_real_fallback
+      prod: real_path_expected
+    secrets:
+      - integration.social.providers.wechat.app_id
+      - integration.social.providers.wechat.app_secret
+    compliance: violation
+    gap: 当前在 user-service 直连厂商，未纳入 integration-service
+    notes: prod checked-in config providers 为空，依赖部署密钥注入
+
+  - service_id: ext.auth.alipay
+    display_name: 支付宝 OAuth 登录
+    category: auth_oauth
+    vendor: alipay
+    endpoint: ""
+    access_layer: domain-direct
+    consumers: [user-service, app]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    impl_status: none
+    env_matrix:
+      alpha: mock
+      beta: mock
+      gamma: sandbox_with_unavailable_fallback
+      prod: unavailable
+    secrets:
+      - integration.social.providers.alipay.app_id
+      - integration.social.providers.alipay.app_secret
+    compliance: violation
+    gap: 路由已定义，真实置换未实现
+    notes: prod 默认返回 unavailable
+
+  - service_id: ext.auth.qq
+    display_name: QQ OAuth 登录
+    category: auth_oauth
+    vendor: qq
+    endpoint: ""
+    access_layer: domain-direct
+    consumers: [user-service, app]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    impl_status: none
+    env_matrix:
+      alpha: mock
+      beta: mock
+      gamma: sandbox_with_unavailable_fallback
+      prod: unavailable
+    secrets:
+      - integration.social.providers.qq.app_id
+      - integration.social.providers.qq.app_secret
+    compliance: violation
+    gap: 路由已定义，真实置换未实现
+    notes: prod 默认返回 unavailable
+
+  - service_id: ext.auth.apple
+    display_name: Apple ID Token 登录
+    category: auth_oauth
+    vendor: apple
+    endpoint: ""
+    access_layer: domain-direct
+    consumers: [user-service, app]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    impl_status: none
+    env_matrix:
+      alpha: route_exists_no_vendor_verification
+      beta: route_exists_no_vendor_verification
+      gamma: route_exists_no_vendor_verification
+      prod: route_exists_no_vendor_verification
+    secrets: []
+    compliance: violation
+    gap: 未发现 Apple 公钥或官方验签链路
+    notes: 当前只见 route 和 token 透传语义
+
+  - service_id: ext.llm.xiaomi_mimo
+    display_name: Xiaomi MiMo OpenAI-compatible API
+    category: llm
+    vendor: xiaomi_mimo
+    endpoint: https://api.xiaomimimo.com
+    access_layer: domain-direct
+    consumers: [assistant-service]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: deterministic
+      beta: configured_real_or_deterministic_override
+      gamma: configured_real_or_deterministic_override
+      prod: configured_real
+    secrets: [PERSONAL_ASSISTANT_MIMO_API_KEY]
+    compliance: violation
+    gap: 助手模型外链未纳入统一外部依赖治理
+    notes: assistant-service 直接构造 openai_compatible provider
+
+  - service_id: ext.search.duckduckgo_html
+    display_name: DuckDuckGo HTML Search
+    category: search
+    vendor: duckduckgo
+    endpoint: https://duckduckgo.com/html/
+    access_layer: domain-direct
+    consumers: [assistant-service]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: fake
+      beta: configured_real
+      gamma: configured_real
+      prod: configured_real
+    secrets: []
+    compliance: violation
+    gap: 依赖 HTML 抓取，未进入统一 attempt ledger
+    notes: 失败时回退 Bing RSS
+
+  - service_id: ext.search.bing_rss
+    display_name: Bing RSS Search Fallback
+    category: search
+    vendor: bing
+    endpoint: https://www.bing.com/search?format=rss
+    access_layer: domain-direct
+    consumers: [assistant-service]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: fake
+      beta: fallback
+      gamma: fallback
+      prod: fallback
+    secrets: []
+    compliance: violation
+    gap: 回退搜索同样绕过统一外部依赖治理
+    notes: 仅在 DuckDuckGo 失败时触发
+
+  - service_id: ext.finance.yahoo_chart
+    display_name: Yahoo Finance Chart API
+    category: finance
+    vendor: yahoo_finance
+    endpoint: https://query1.finance.yahoo.com
+    access_layer: domain-direct
+    consumers: [assistant-service]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: fake
+      beta: real_when_invoked
+      gamma: real_when_invoked
+      prod: real_when_invoked
+    secrets: []
+    compliance: violation
+    gap: 金融外链未纳入统一治理
+    notes: 仅 finance skill 触发时调用
+
+  - service_id: ext.weather.open_meteo_geocoding
+    display_name: Open-Meteo Geocoding API
+    category: weather
+    vendor: open_meteo
+    endpoint: https://geocoding-api.open-meteo.com
+    access_layer: domain-direct
+    consumers: [assistant-service]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: fake
+      beta: real_when_invoked
+      gamma: real_when_invoked
+      prod: real_when_invoked
+    secrets: []
+    compliance: violation
+    gap: 天气 geocoding 直连
+    notes: 与 forecast API 配套使用
+
+  - service_id: ext.weather.open_meteo_forecast
+    display_name: Open-Meteo Forecast API
+    category: weather
+    vendor: open_meteo
+    endpoint: https://api.open-meteo.com
+    access_layer: domain-direct
+    consumers: [assistant-service]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: fake
+      beta: real_when_invoked
+      gamma: real_when_invoked
+      prod: real_when_invoked
+    secrets: []
+    compliance: violation
+    gap: 天气 forecast 直连
+    notes: 无专门 metadata 与统一审计
+
+  - service_id: ext.weather.met_no_forecast
+    display_name: MET Norway Weather API
+    category: weather
+    vendor: met_no
+    endpoint: https://api.met.no/weatherapi/locationforecast/2.0/compact
+    access_layer: domain-direct
+    consumers: [assistant-service]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: fake
+      beta: real_when_invoked
+      gamma: real_when_invoked
+      prod: real_when_invoked
+    secrets: []
+    compliance: violation
+    gap: 天气 fallback 直连
+    notes: Open-Meteo 失败或补充引用时使用
+
+  - service_id: ext.embed.openai_compatible
+    display_name: Embedding API（OpenAI-compatible）
+    category: embedding
+    vendor: configurable
+    endpoint: configurable_endpoint
+    access_layer: domain-direct
+    consumers: [content-service]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/_vectors/content_embedding.yaml
+    impl_status: planned
+    env_matrix:
+      alpha: disabled_by_default
+      beta: disabled_by_default
+      gamma: disabled_by_default
+      prod: disabled_by_default
+    secrets: [CONTENT_EMBEDDING_API_KEY]
+    compliance: violation
+    gap: 若启用则为领域直连外部模型接口
+    notes: 默认模型 text-embedding-3-small
+
+  - service_id: ext.storage.s3_oss_media
+    display_name: S3-compatible 对象存储 / OSS
+    category: media_storage
+    vendor: s3_compatible
+    endpoint: s3_compatible_endpoint
+    access_layer: domain-direct
+    consumers: [content-service, quwoquan_app, rec-model-service]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: stub_or_minio
+      beta: s3_or_oss
+      gamma: s3_or_oss
+      prod: s3_or_oss
+    secrets:
+      - CONTENT_OSS_ENDPOINT
+      - CONTENT_OSS_BUCKET
+      - CONTENT_OSS_ACCESS_KEY_ID
+      - CONTENT_OSS_ACCESS_KEY_SECRET
+      - MODEL_ARTIFACT_ENDPOINT
+      - MODEL_ARTIFACT_BUCKET
+      - MODEL_ARTIFACT_ACCESS_KEY
+      - MODEL_ARTIFACT_SECRET_KEY
+    compliance: waived
+    gap: 仍需统一记录对象存储供应商、bucket 与环境映射
+    notes: presign / HeadObject / CopyObject 为基础设施豁免路径
+
+  - service_id: infra.livekit_sfu
+    display_name: LiveKit SFU
+    category: rtc
+    vendor: livekit
+    endpoint: LIVEKIT_URL
+    access_layer: self-hosted
+    consumers: [rtc-service, quwoquan_app]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: by_env
+      beta: by_env
+      gamma: by_env
+      prod: by_env
+    secrets: [LIVEKIT_API_KEY, LIVEKIT_API_SECRET]
+    compliance: waived
+    gap: 自托管媒体面，不适用 integration-service
+    notes: App 通过 livekit_client 直连自建 SFU
+
+  - service_id: infra.coturn
+    display_name: coturn / TURN-STUN
+    category: rtc
+    vendor: coturn
+    endpoint: turn_stun_endpoint
+    access_layer: self-hosted
+    consumers: [rtc-service, quwoquan_app]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: optional
+      beta: by_env
+      gamma: by_env
+      prod: by_env
+    secrets: [TURN_SECRET]
+    compliance: waived
+    gap: 自托管穿透基础设施，不适用 integration-service
+    notes: 与 LiveKit 同属媒体面
+
+  - service_id: infra.elasticsearch
+    display_name: Elasticsearch
+    category: infra
+    vendor: elasticsearch
+    endpoint: SEARCH_ES_ENDPOINTS
+    access_layer: self-hosted
+    consumers: [search-service, user-service, content-service, platform-ops]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: optional
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: [SEARCH_ES_*]
+    compliance: waived
+    gap: 属内部基础设施，不作为 integration-service 出口能力
+    notes: gamma-local 也有 compose 形态
+
+  - service_id: infra.mongodb
+    display_name: MongoDB
+    category: infra
+    vendor: mongodb
+    endpoint: MONGO_URI
+    access_layer: self-hosted
+    consumers: [multiple_services, quwoquan_data]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: [MONGO_URI]
+    compliance: waived
+    gap: 内部数据面基础设施
+    notes: 多服务共享
+
+  - service_id: infra.postgres
+    display_name: PostgreSQL
+    category: infra
+    vendor: postgres
+    endpoint: postgres_dsn
+    access_layer: self-hosted
+    consumers: [user-service]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: [POSTGRES_DSN]
+    compliance: waived
+    gap: 内部数据面基础设施
+    notes: 主要用于 user-service 关系数据
+
+  - service_id: infra.redis
+    display_name: Redis / Tair / VeCache
+    category: infra
+    vendor: redis
+    endpoint: redis_addrs
+    access_layer: self-hosted
+    consumers: [multiple_services]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: [REDIS_*]
+    compliance: waived
+    gap: 内部缓存与任务基础设施
+    notes: 含 cluster+t tls 配置
+
+  - service_id: infra.minio_local
+    display_name: MinIO（本地 / gamma-local）
+    category: infra
+    vendor: minio
+    endpoint: local_s3_compatible_endpoint
+    access_layer: self-hosted
+    consumers: [content-service, local-gamma]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: optional
+      beta: optional
+      gamma: gamma_local
+      prod: n_a
+    secrets: [MINIO_*]
+    compliance: waived
+    gap: 仅本地和镜像环境对象存储
+    notes: 与 ext.storage.s3_oss_media 的本地实现对应
+
+  - service_id: data.openverse_api
+    display_name: Openverse Images API
+    category: data_source
+    vendor: openverse
+    endpoint: https://api.openverse.org/v1/images/
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: []
+    compliance: waived
+    gap: 离线公开源抓取，不适用业务统一网关
+    notes: 由 research_plan 自动发现图片候选
+
+  - service_id: data.wikidata_api
+    display_name: Wikidata API
+    category: data_source
+    vendor: wikidata
+    endpoint: https://www.wikidata.org/w/api.php
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: []
+    compliance: waived
+    gap: 离线公开源抓取，不适用业务统一网关
+    notes: 用于 aliases、claims、Commons 分类发现
+
+  - service_id: data.wikipedia_api
+    display_name: Wikipedia API
+    category: data_source
+    vendor: wikipedia
+    endpoint: https://*.wikipedia.org/w/api.php
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: []
+    compliance: waived
+    gap: 公开百科抓取，不适用业务统一网关
+    notes: fetch.py 与 research_plan 都会使用
+
+  - service_id: data.wikivoyage_api
+    display_name: Wikivoyage / MediaWiki API
+    category: data_source
+    vendor: wikivoyage
+    endpoint: https://*.wikivoyage.org/w/api.php
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: []
+    compliance: waived
+    gap: 公开目的地指南抓取，不适用业务统一网关
+    notes: site_supply 和 fetch.py 都会使用
+
+  - service_id: data.wikimedia_commons
+    display_name: Wikimedia Commons
+    category: data_source
+    vendor: wikimedia_commons
+    endpoint: https://commons.wikimedia.org
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: []
+    compliance: waived
+    gap: 开放版权图片抓取，不适用业务统一网关
+    notes: 既作为 source collection 也作为图片事实来源
+
+  - service_id: data.qunar_touch_search
+    display_name: 去哪儿 touch 搜索 JSON
+    category: data_source
+    vendor: qunar
+    endpoint: https://touch.travel.qunar.com/search
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: []
+    compliance: waived
+    gap: 公开站点发现接口，不适用业务统一网关
+    notes: site_supply 发现候选时调用
+
+  - service_id: data.qunar_html
+    display_name: 去哪儿攻略 / 游记 HTML
+    category: data_source
+    vendor: qunar
+    endpoint: https://touch.travel.qunar.com/youji/*
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: []
+    compliance: waived
+    gap: 正文抓取，不适用业务统一网关
+    notes: fetch.py 中 qunar_html extractor
+
+  - service_id: data.baidu_baike_html
+    display_name: 百度百科 HTML
+    category: data_source
+    vendor: baidu_baike
+    endpoint: dynamic_source_url
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+    impl_status: production
+    env_matrix:
+      alpha: source_selected
+      beta: source_selected
+      gamma: source_selected
+      prod: source_selected
+    secrets: []
+    compliance: waived
+    gap: extractor 存在，但不是自动发现主源
+    notes: fetch.py 支持 baidu_baike_html
+
+  - service_id: data.sogou_baike_html
+    display_name: 搜狗百科 HTML
+    category: data_source
+    vendor: sogou_baike
+    endpoint: dynamic_source_url
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+    impl_status: production
+    env_matrix:
+      alpha: source_selected
+      beta: source_selected
+      gamma: source_selected
+      prod: source_selected
+    secrets: []
+    compliance: waived
+    gap: extractor 存在，但不是自动发现主源
+    notes: fetch.py 支持 sogou_baike_html
+
+  - service_id: data.ems517_api
+    display_name: EMS517 景区内容 API / 壳站点
+    category: data_source
+    vendor: ems517
+    endpoint: "*.ems517.com"
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+    impl_status: production
+    env_matrix:
+      alpha: source_selected
+      beta: source_selected
+      gamma: source_selected
+      prod: source_selected
+    secrets: []
+    compliance: waived
+    gap: extractor 存在，但调用取决于源 URL
+    notes: fetch.py 既处理 JSON API 也处理壳站页面
+
+  - service_id: data.unsplash_registry
+    display_name: Unsplash（目录登记）
+    category: registry_only_source
+    vendor: unsplash
+    endpoint: ""
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+    impl_status: registered_only
+    env_matrix:
+      alpha: registry_only
+      beta: registry_only
+      gamma: registry_only
+      prod: registry_only
+    secrets: []
+    compliance: waived
+    gap: 仅目录登记，未发现 api.unsplash.com 调用
+    notes: 不应与 seeded sample URL 混淆
+
+  - service_id: data.pexels_registry
+    display_name: Pexels（目录登记）
+    category: registry_only_source
+    vendor: pexels
+    endpoint: ""
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+    impl_status: registered_only
+    env_matrix:
+      alpha: registry_only
+      beta: registry_only
+      gamma: registry_only
+      prod: registry_only
+    secrets: []
+    compliance: waived
+    gap: 仅目录登记，未发现 API 客户端
+    notes: 仅做来源目录分类
+
+  - service_id: data.pixabay_registry
+    display_name: Pixabay（目录登记）
+    category: registry_only_source
+    vendor: pixabay
+    endpoint: ""
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+    impl_status: registered_only
+    env_matrix:
+      alpha: registry_only
+      beta: registry_only
+      gamma: registry_only
+      prod: registry_only
+    secrets: []
+    compliance: waived
+    gap: 仅目录登记，未发现 API 客户端
+    notes: 仅做来源目录分类
+
+  - service_id: data.flickr_registry
+    display_name: Flickr（目录登记）
+    category: registry_only_source
+    vendor: flickr
+    endpoint: ""
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/source_catalog.yaml
+      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+    impl_status: registered_only
+    env_matrix:
+      alpha: registry_only
+      beta: registry_only
+      gamma: registry_only
+      prod: registry_only
+    secrets: []
+    compliance: waived
+    gap: 仅目录登记，未发现 Flickr API 客户端
+    notes: 仅做来源目录分类
+
+  - service_id: data.getty_registry
+    display_name: Getty Images（目录登记）
+    category: registry_only_source
+    vendor: getty
+    endpoint: ""
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+    impl_status: registered_only
+    env_matrix:
+      alpha: registry_only
+      beta: registry_only
+      gamma: registry_only
+      prod: registry_only
+    secrets: []
+    compliance: waived
+    gap: 仅目录登记，未发现 API 客户端
+    notes: 仅做来源目录分类
+
+  - service_id: data.shutterstock_registry
+    display_name: Shutterstock（目录登记）
+    category: registry_only_source
+    vendor: shutterstock
+    endpoint: ""
+    access_layer: data-pipeline
+    consumers: [quwoquan_data]
+    metadata_ref:
+      - quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml
+    impl_status: registered_only
+    env_matrix:
+      alpha: registry_only
+      beta: registry_only
+      gamma: registry_only
+      prod: registry_only
+    secrets: []
+    compliance: waived
+    gap: 仅目录登记，未发现 API 客户端
+    notes: 仅做来源目录分类
+
+  - service_id: dev.cursor_sdk_api
+    display_name: Cursor SDK / Cursor Cloud API
+    category: dev_tool
+    vendor: cursor
+    endpoint: https://api2.cursor.sh/
+    access_layer: dev-tool
+    consumers: [quwoquan_data, agent_ops]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: dev_and_ci
+      beta: dev_and_ci
+      gamma: dev_and_ci
+      prod: dev_and_ci
+    secrets: [CURSOR_API_KEY]
+    compliance: waived
+    gap: 仅开发/托管工作流使用，不属于业务统一网关
+    notes: quwoquan_data 与 agent_ops fanout 都依赖 cursor_sdk
+
+  - service_id: cap.os.geolocator
+    display_name: geolocator / OS 定位服务
+    category: client_capability
+    vendor: os_location
+    endpoint: geolocator
+    access_layer: client-os
+    consumers: [quwoquan_app]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: permission_gated
+      beta: permission_gated
+      gamma: permission_gated
+      prod: permission_gated
+    secrets: []
+    compliance: waived
+    gap: 系统定位能力，不经 integration-service
+    notes: 地图数据仍通过 gateway -> integration-service
+
+  - service_id: cap.rtc.livekit_client
+    display_name: livekit_client + flutter_webrtc
+    category: client_capability
+    vendor: livekit
+    endpoint: livekit_client
+    access_layer: client-os
+    consumers: [quwoquan_app]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: enabled_when_rtc_used
+      beta: enabled_when_rtc_used
+      gamma: enabled_when_rtc_used
+      prod: enabled_when_rtc_used
+    secrets: []
+    compliance: waived
+    gap: 连接自建 SFU，不属于第三方 SaaS SDK
+    notes: token 仍经 gateway/rtc-service 下发
+
+  - service_id: cap.os.callkit_incoming
+    display_name: flutter_callkit_incoming
+    category: client_capability
+    vendor: os_call_ui
+    endpoint: flutter_callkit_incoming
+    access_layer: client-os
+    consumers: [quwoquan_app]
+    metadata_ref: []
+    impl_status: production
+    env_matrix:
+      alpha: enabled
+      beta: enabled
+      gamma: enabled
+      prod: enabled
+    secrets: []
+    compliance: waived
+    gap: 仅来电 UI，不提供推送与认证能力
+    notes: 离线唤醒仍依赖推送链路
+
+  - service_id: cap.auth.one_tap_method_channel
+    display_name: 一键登录原生通道占位
+    category: client_capability
+    vendor: method_channel
+    endpoint: quwoquan/auth/one_tap
+    access_layer: client-os
+    consumers: [quwoquan_app]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    impl_status: planned
+    env_matrix:
+      alpha: not_configured
+      beta: not_configured
+      gamma: not_configured
+      prod: not_configured
+    secrets: []
+    compliance: waived
+    gap: Android/iOS 当前都返回 one_tap_sdk_not_configured
+    notes: 需要与 ext.auth.carrier_one_tap 同步落地
+
+  - service_id: cap.auth.native_bridge_social
+    display_name: 社交登录原生桥抽象
+    category: client_capability
+    vendor: method_channel
+    endpoint: quwoquan/auth/native_bridge
+    access_layer: client-os
+    consumers: [quwoquan_app]
+    metadata_ref:
+      - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+    impl_status: planned
+    env_matrix:
+      alpha: sandbox_or_stub
+      beta: sandbox_or_stub
+      gamma: sandbox_or_stub
+      prod: not_fully_wired
+    secrets: []
+    compliance: waived
+    gap: Dart 侧有抽象，未发现完整厂商 SDK 接线
+    notes: 与 wechat/alipay/qq/apple/passkey 登录路径相关

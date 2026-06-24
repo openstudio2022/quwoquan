@@ -110,7 +110,6 @@ type ObjectPageBundle struct {
 	TagRefs             []string         `json:"tagRefs"`
 	Stats               map[string]any   `json:"stats"`
 	IntersectionReasons []map[string]any `json:"intersectionReasons"`
-	Intersections       []map[string]any `json:"intersections"`
 	HighlightItems      []map[string]any `json:"highlightItems"`
 	ContentSections     map[string]any   `json:"contentSections"`
 	RelatedObjects      []map[string]any `json:"relatedObjects"`
@@ -1248,7 +1247,7 @@ func buildObjectPageBundle(
 		"assistantProactiveEnabled": true,
 		"relationEvidenceEnabled":   true,
 	}
-	intersectionReasons, intersections := resolveObjectPageIntersections(ctx, viewerID, homepage, relationEdges)
+	intersectionReasons := resolveObjectPageIntersections(ctx, viewerID, homepage, relationEdges)
 	return &ObjectPageBundle{
 		ObjectType:         "homepage",
 		ObjectID:           homepage.ID,
@@ -1264,7 +1263,6 @@ func buildObjectPageBundle(
 			"highlightCount":    len(homepage.ContentPreview),
 		},
 		IntersectionReasons: intersectionReasons,
-		Intersections:       intersections,
 		HighlightItems:      cloneObjectSlice(homepage.ContentPreview),
 		ContentSections: map[string]any{
 			"home":    cloneObjectSlice(homepage.ContentPreview),
@@ -1385,48 +1383,6 @@ func defaultIntersectionReasons(homepage *Homepage, edges []map[string]any) []ma
 	return reasons
 }
 
-// defaultObjectIntersections 生成结构化事实交集（带证据项），落地 bundle.intersections。
-func defaultObjectIntersections(homepage *Homepage, edges []map[string]any) []map[string]any {
-	dimension, shortLabel, evidenceLabel := intersectionDimensionLabel(homepage)
-	objectKind := "place"
-	switch homepage.HomepageType {
-	case "university":
-		objectKind = "org"
-	case "travel_photo", "sight":
-		objectKind = "place"
-	}
-	evidence := []map[string]any{
-		{
-			"evidenceId":       homepage.ID + "_ev_tag",
-			"evidenceType":     "tag",
-			"evidenceObjectId": homepage.ID,
-			"evidenceLabel":    evidenceLabel,
-			"source":           "tagRef",
-			"referralTarget":   homepage.ID,
-			"visibility":       "public",
-		},
-	}
-	return []map[string]any{
-		{
-			"intersectionId":  homepage.ID + "_" + dimension,
-			"dimension":       dimension,
-			"objectKind":      objectKind,
-			"objectId":        homepage.ID,
-			"shortLabel":      shortLabel,
-			"evidenceLabel":   evidenceLabel,
-			"actionType":      "view_object",
-			"actionLabel":     "进入主页",
-			"strength":        intersectionStrengthFromCount(len(homepage.CategoryTags), 6),
-			"confidenceLabel": "",
-			"surfaceScope":    "objectPage",
-			"privacyLevel":    "public",
-			"tagRefs":         cloneStrings(homepage.CategoryTags),
-			"relationEdgeIds": edgeIDs(edges),
-			"evidenceItems":   evidence,
-		},
-	}
-}
-
 func intersectionStrengthFromCount(count int, saturate int) float64 {
 	if saturate <= 0 {
 		saturate = 1
@@ -1439,16 +1395,6 @@ func intersectionStrengthFromCount(count int, saturate int) float64 {
 		return 1.0
 	}
 	return v
-}
-
-func edgeIDs(edges []map[string]any) []string {
-	ids := make([]string, 0, len(edges))
-	for _, e := range edges {
-		if id, ok := e["edgeId"].(string); ok && strings.TrimSpace(id) != "" {
-			ids = append(ids, id)
-		}
-	}
-	return ids
 }
 
 func defaultAssistantContext(

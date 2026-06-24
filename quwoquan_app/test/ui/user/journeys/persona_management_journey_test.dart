@@ -67,14 +67,13 @@ class _JourneyUserRepository implements UserRepository {
   @override
   Future<PersonaManagementItemViewData> createPersona({
     required String displayName,
-    String? userHandle,
     String isolationLevel = 'open',
     String? purposeHint,
   }) async {
     final created = <String, dynamic>{
       'subAccountId': 'created_persona',
       'displayName': displayName,
-      'userHandle': userHandle ?? '',
+      'userHandle': 'qw_created_persona',
       'phone': '',
       'email': '',
       'avatarUrl': 'media/avatar/s/mock/user/created_persona/v1/avatar.png',
@@ -182,7 +181,6 @@ class _JourneyUserRepository implements UserRepository {
   Future<PersonaManagementItemViewData> updatePersona(
     String subAccountId, {
     String? displayName,
-    String? userHandle,
     String? phone,
     String? email,
     String? avatarUrl,
@@ -195,12 +193,10 @@ class _JourneyUserRepository implements UserRepository {
     final target = persona(subAccountId);
     final changedFields = <String>[
       if (displayName != null) 'displayName',
-      if (userHandle != null) 'userHandle',
       if (phone != null) 'phone',
       if (email != null) 'email',
     ];
     if (displayName != null) target['displayName'] = displayName;
-    if (userHandle != null) target['userHandle'] = userHandle;
     if (phone != null) target['phone'] = phone;
     if (email != null) target['email'] = email;
     if (avatarUrl != null) target['avatarUrl'] = avatarUrl;
@@ -298,7 +294,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.byType(CupertinoTextField).at(1),
+      find.byType(CupertinoTextField).at(0),
       'main_synced',
     );
     await tester.tap(find.text(UITextConstants.confirm));
@@ -313,7 +309,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repo.syncAppliedCount, 1);
-    expect(repo.persona('persona_photo')['userHandle'], 'main_synced');
+    expect(repo.persona('persona_photo')['displayName'], 'main_synced');
+    expect(repo.persona('persona_photo')['userHandle'], 'photo_handle');
     expect(find.text(UITextConstants.personaSyncSuggestionTitle), findsNothing);
 
     await tester.tap(

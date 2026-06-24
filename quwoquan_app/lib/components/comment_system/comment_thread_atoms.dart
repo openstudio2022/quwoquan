@@ -348,14 +348,22 @@ class _ReplyPreviewItem extends ConsumerWidget {
         _CommentReactionGroup(
           likeSelected: reply.viewerReaction == 'like',
           dislikeSelected: reply.viewerReaction == 'dislike',
+          showDeleteAction: reply.canDelete,
           likeCount: reply.likeCount,
           dislikeCount: reply.dislikeCount,
           onLike: () => ref
               .read(commentProviderFamily(postId).notifier)
               .toggleLike(reply.id),
-          onDislike: () => ref
-              .read(commentProviderFamily(postId).notifier)
-              .toggleDislike(reply.id),
+          onDislike: reply.canDelete
+              ? null
+              : () => ref
+                    .read(commentProviderFamily(postId).notifier)
+                    .toggleDislike(reply.id),
+          onDelete: reply.canDelete
+              ? () => ref
+                    .read(commentProviderFamily(postId).notifier)
+                    .deleteComment(reply.id)
+              : null,
         ),
       ],
     );
@@ -405,14 +413,12 @@ class _CommentActions extends StatelessWidget {
     required this.comment,
     required this.isDark,
     this.onReply,
-    this.onDelete,
     this.onPin,
   });
 
   final CommentDto comment;
   final bool isDark;
   final VoidCallback? onReply;
-  final VoidCallback? onDelete;
   final VoidCallback? onPin;
 
   @override
@@ -475,20 +481,6 @@ class _CommentActions extends StatelessWidget {
           ),
           SizedBox(width: AppSpacing.sm),
         ],
-        if (onDelete != null) ...[
-          GestureDetector(
-            onTap: onDelete,
-            child: Icon(
-              CupertinoIcons.trash,
-              size: AppSpacing.iconSmall,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundTertiary,
-              ),
-            ),
-          ),
-          SizedBox(width: AppSpacing.sm),
-        ],
       ],
     );
   }
@@ -512,18 +504,22 @@ class _CommentReactionGroup extends StatelessWidget {
   const _CommentReactionGroup({
     required this.likeSelected,
     required this.dislikeSelected,
+    this.showDeleteAction = false,
     required this.likeCount,
     required this.dislikeCount,
     required this.onLike,
-    required this.onDislike,
+    this.onDislike,
+    this.onDelete,
   });
 
   final bool likeSelected;
   final bool dislikeSelected;
+  final bool showDeleteAction;
   final int likeCount;
   final int dislikeCount;
   final VoidCallback onLike;
-  final VoidCallback onDislike;
+  final VoidCallback? onDislike;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -540,13 +536,22 @@ class _CommentReactionGroup extends StatelessWidget {
             onTap: onLike,
           ),
           SizedBox(width: AppSpacing.commentReactionActionGap),
-          _ReactionIconButton(
-            selected: dislikeSelected,
-            icon: CupertinoIcons.hand_thumbsdown,
-            selectedIcon: CupertinoIcons.hand_thumbsdown_fill,
-            count: dislikeCount,
-            onTap: onDislike,
-          ),
+          if (showDeleteAction)
+            _ReactionIconButton(
+              selected: false,
+              icon: CupertinoIcons.trash,
+              selectedIcon: CupertinoIcons.trash,
+              reserveCountSlot: true,
+              onTap: onDelete,
+            )
+          else
+            _ReactionIconButton(
+              selected: dislikeSelected,
+              icon: CupertinoIcons.hand_thumbsdown,
+              selectedIcon: CupertinoIcons.hand_thumbsdown_fill,
+              count: dislikeCount,
+              onTap: onDislike,
+            ),
         ],
       ),
     );
@@ -558,15 +563,17 @@ class _ReactionIconButton extends StatelessWidget {
     required this.selected,
     required this.icon,
     required this.selectedIcon,
-    required this.count,
-    required this.onTap,
+    this.count = 0,
+    this.reserveCountSlot = true,
+    this.onTap,
   });
 
   final bool selected;
   final IconData icon;
   final IconData selectedIcon;
   final int count;
-  final VoidCallback onTap;
+  final bool reserveCountSlot;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -584,22 +591,23 @@ class _ReactionIconButton extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            SizedBox(
-              width: AppSpacing.commentReactionCountWidth,
-              child: Text(
-                count > 0 ? formatCompactActionCount(count) : '',
-                maxLines: 1,
-                overflow: TextOverflow.clip,
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                  fontSize: AppTypography.xs,
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.foregroundTertiary,
+            if (reserveCountSlot)
+              SizedBox(
+                width: AppSpacing.commentReactionCountWidth,
+                child: Text(
+                  count > 0 ? formatCompactActionCount(count) : '',
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: AppTypography.xs,
+                    color: AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.foregroundTertiary,
+                    ),
                   ),
                 ),
               ),
-            ),
             SizedBox(width: AppSpacing.xs),
             Icon(
               selected ? selectedIcon : icon,

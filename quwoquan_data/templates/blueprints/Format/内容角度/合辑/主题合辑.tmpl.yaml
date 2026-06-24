@@ -18,7 +18,6 @@ render: { articleTemplate: gentle, fontPreset: clean }
 structure:
   required: [合辑主题, 入选标准, 逐项观察, 横向对比, 怎么选择]
   optional: [地图分布, 家长关注点]
-hooks: ["这份校园合辑，先说清楚我们按什么标准选"]
 mustIncludeFacts: [入选标准, 对比维度, 适合人群]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 官方排名]
 wordCount: { min: 1000, max: 2200 }
@@ -32,4 +31,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/主页/机构/学校/example.md

@@ -170,7 +170,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text(UITextConstants.contentUnavailable), findsOneWidget);
+    expect(find.text(UITextConstants.workOpenFailedTitle), findsOneWidget);
     expect(
       find.text(
         ContentErrorMessages.zh[ContentErrorCode.postNotFound]!,

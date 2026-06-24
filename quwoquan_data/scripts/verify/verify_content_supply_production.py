@@ -22,8 +22,14 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(path))
 
 _TMP = Path(tempfile.mkdtemp(prefix="qwq_prod_gate_"))
-os.environ.setdefault("QWQ_RUNTIME_ROOT", str(_TMP / "runtime"))
-os.environ.setdefault("QWQ_COMMITTED_TASKS_ROOT", str(_TMP / "tasks"))
+os.environ["QWQ_RUNTIME_ROOT"] = str(_TMP / "runtime")
+os.environ["QWQ_COMMITTED_TASKS_ROOT"] = str(_TMP / "tasks")
+
+from _common import paths as _paths  # noqa: E402
+
+_paths.RUNTIME_ROOT = Path(os.environ["QWQ_RUNTIME_ROOT"])
+_paths.TASKS_ROOT = _paths.RUNTIME_ROOT / "tasks"
+_paths.COMMITTED_TASKS_ROOT = Path(os.environ["QWQ_COMMITTED_TASKS_ROOT"])
 
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import batch_root  # noqa: E402
@@ -66,6 +72,22 @@ def _spec(target: int) -> dict:
     )
 
 
+def _creator_meta() -> dict:
+    return {
+        "authorId": "builtin_travel_blogger_chuanxi",
+        "creatorProfileId": "qwq_creator_travel_blogger_chuanxi_001",
+        "creatorArchetype": "travel_blogger",
+        "creatorProfileVersion": "1.0.0",
+        "creatorDisclosure": {
+            "type": "platform_virtual_creator",
+            "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+            "visible": True,
+        },
+        "experienceClaimMode": "editorial_synthesis",
+        "authorQualitySignals": {"qualityScore": 0.86, "fatigueScore": 0.2, "riskTier": "low"},
+    }
+
+
 def verify_schemas_exist() -> None:
     missing = [str(path.relative_to(ROOT)) for path in REQUIRED_SCHEMAS if not path.is_file()]
     _assert(not missing, f"missing schemas: {missing}")
@@ -96,7 +118,20 @@ def verify_queue_and_envelope() -> None:
         "content_ref_001",
         "author",
         queue_backend="reliabletask",
-        meta={"creatorProfileId": "agent_creator_test", "creatorArchetype": "editor", "contentType": "article"},
+        meta={
+            "authorId": "builtin_travel_blogger",
+            "creatorProfileId": "qwq_creator_travel_blogger_001",
+            "creatorArchetype": "travel_blogger",
+            "creatorProfileVersion": "1.0.0",
+            "creatorDisclosure": {
+                "type": "platform_virtual_creator",
+                "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+                "visible": True,
+            },
+            "experienceClaimMode": "editorial_synthesis",
+            "authorQualitySignals": {"qualityScore": 0.85, "fatigueScore": 0.2, "riskTier": "low"},
+            "contentType": "article",
+        },
     )
     _assert(job["schemaVersion"] == pc.OBJECT_JOB_SCHEMA, "object job must be current")
     _assert(job["queueBackend"] == "reliabletask", "job must carry reliabletask backend")

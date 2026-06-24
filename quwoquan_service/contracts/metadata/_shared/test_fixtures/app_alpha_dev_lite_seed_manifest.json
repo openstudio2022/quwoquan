@@ -24,7 +24,8 @@
       "fixturePath": "content/test_fixtures/scenarios/content_scenarios.lite.json",
       "refs": [
         "content_discovery_core",
-        "home_showcase_core"
+        "home_showcase_core",
+        "intersection_core"
       ],
       "resetScope": "fixture_content_*",
       "targetStore": "alpha-dev-lite:app-fixture-json",

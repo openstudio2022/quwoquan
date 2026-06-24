@@ -18,7 +18,6 @@ render: { articleTemplate: gentle, fontPreset: clean }
 structure:
   required: [到店场景, 招牌与点单, 味道与服务, 价格与排队, 适合人群]
   optional: [替代选择, 周边串联]
-hooks: ["{name}值得排队吗？先说结论"]
 mustIncludeFacts: [价格, 地址或片区, 招牌菜, 适合人群]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 恰饭]
 wordCount: { min: 600, max: 1400 }
@@ -31,4 +30,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/主页/地点/餐厅/example.md

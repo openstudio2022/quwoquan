@@ -1,25 +1,17 @@
 include(ExternalProject)
 
 set(ZIPFILE "${CMAKE_CURRENT_LIST_DIR}/downloads/libwebrtc.zip")
-set(DOWNLOAD_URL "https://github.com/flutter-webrtc/flutter-webrtc/releases/download/v1.4.0/libwebrtc.zip")
+set(EXTRACT_DIR "${CMAKE_CURRENT_LIST_DIR}/libwebrtc")
 
 if(NOT EXISTS "${ZIPFILE}")
-  message(NOTICE "download: ${DOWNLOAD_URL}")
-    file(DOWNLOAD "${DOWNLOAD_URL}"
-        ${ZIPFILE}
-        STATUS download_status
-        LOG download_log)
-
-    if(NOT download_status EQUAL 0)
-    message(FATAL_ERROR "Failed to download dependency: ${download_log}")
-    endif()
-
-    file(ARCHIVE_EXTRACT INPUT ${ZIPFILE} DESTINATION "${CMAKE_CURRENT_LIST_DIR}")
+  message(FATAL_ERROR
+    "Missing vendored libwebrtc archive at ${ZIPFILE}. "
+    "This repository forbids build-time remote downloads; stage the pinned archive explicitly before enabling desktop WebRTC builds."
+  )
 else()
-  if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/libwebrtc")
+  if(NOT EXISTS "${EXTRACT_DIR}")
     message(NOTICE "libwebrtc directory does not exist after extraction.")
     file(ARCHIVE_EXTRACT INPUT ${ZIPFILE} DESTINATION "${CMAKE_CURRENT_LIST_DIR}")
   endif()
-  message(TRACE "libwebrtc already downloaded.")
+  message(TRACE "Using vendored libwebrtc archive.")
 endif()
-

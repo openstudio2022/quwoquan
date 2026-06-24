@@ -14,13 +14,11 @@
     "wordCount": { "type": "object" },
     "forbiddenPhrases": { "type": "array", "items": { "type": "string" } },
     "mustIncludeFacts": { "type": "array", "items": { "type": "string" } },
-    "conditionContext": { "type": "object" },
     "sectionIntents": { "type": "array", "items": { "type": "string" } },
     "narrativeContract": { "type": "object" },
     "styleFamily": { "type": "string" },
     "evidencePoints": { "type": "array" },
     "assets": { "type": "array" },
-    "sopExampleRef": { "type": ["string", "null"] },
     "writingIntent": {
       "type": "string",
       "enum": ["planning_consultation", "decision_experience", "post_trip_journal"],

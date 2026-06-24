@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/platform/app_font_families.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 
@@ -71,6 +73,40 @@ void main() {
       expect(find.text(UITextConstants.chatMorePhoto), findsOneWidget);
       expect(find.text(UITextConstants.chatMoreShoot), findsOneWidget);
       expect(find.text(UITextConstants.chatMoreFile), findsOneWidget);
+    });
+
+    testWidgets('emoji 面板 glyph 使用 emoji-capable fallback 字体栈', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                onSend: (_) async {},
+                showEmojiButton: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(TestKeys.chatInputEmojiToggleButton));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final emojiGlyph = tester.widgetList<Text>(
+        find.descendant(
+          of: find.byType(UnifiedEmojiPicker),
+          matching: find.byType(Text),
+        ),
+      ).firstWhere(
+        (widget) =>
+            widget.style?.fontSize == SettingsSemanticConstants.emojiIconFontSize,
+      );
+      expect(
+        emojiGlyph.style?.fontFamilyFallback,
+        contains(BundledFontFamilies.notoColorEmoji),
+      );
     });
 
     testWidgets('群聊输入区可插入 @小趣 上下文 mention', (tester) async {

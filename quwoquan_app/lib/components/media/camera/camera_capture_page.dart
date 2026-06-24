@@ -1,347 +1,151 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:quwoquan_app/components/media/camera/camera_capture_shell.dart';
+import 'package:quwoquan_app/components/media/camera/camera_filter_strip.dart';
+import 'package:quwoquan_app/components/media/camera/camera_session_models.dart';
+import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_semantic_icon.dart';
+import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_matrix.dart';
+import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
+import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
+import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
+import 'package:quwoquan_app/core/media/local_video_file_readiness.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
+import 'package:video_player/video_player.dart';
+part 'camera_capture_page_state.dart';
+part 'camera_capture_page_state_helpers.dart';
+
+typedef CameraPhotoTelemetry =
+    FutureOr<void> Function(String eventName, Map<String, String> parameters);
+
+typedef CameraPhotoEditorLauncher =
+    Future<String?> Function(
+      BuildContext context,
+      CameraPhotoEditorRequest request,
+    );
+
+typedef CameraPhotoCapture = Future<String> Function();
+
+typedef CameraPreviewBuilder = Widget Function(BuildContext context);
+
+/// 视频录制注入点：测试可用 fake 录制器跑通状态机，无需真实相机。
+typedef CameraVideoRecordingStart = Future<void> Function();
+typedef CameraVideoRecordingStop = Future<String> Function();
+
+/// 麦克风权限注入点：返回是否已授权。
+typedef CameraMicrophonePermissionRequest = Future<bool> Function();
+
+/// 录后预览注入点：测试用占位预览替代真实 `video_player`。
+typedef CameraVideoPreviewBuilder =
+    Widget Function(BuildContext context, String videoPath);
+
+@immutable
+class CameraPhotoEditorRequest {
+  const CameraPhotoEditorRequest({
+    required this.path,
+    required this.filterPresetId,
+    required this.filterStrength,
+    required this.caller,
+    required this.entrySource,
+  });
+
+  final String path;
+  final String filterPresetId;
+  final double filterStrength;
+  final CameraPhotoCaller caller;
+  final CameraPhotoEntrySource entrySource;
+}
 
 @immutable
 class CameraCaptureResult {
   const CameraCaptureResult({
     required this.path,
     required this.type,
+    this.filterPresetId = 'original',
+    this.entrySource = CameraPhotoEntrySource.photoPicker,
   });
 
   final String path;
   final CreateMediaType type;
+  final String filterPresetId;
+  final CameraPhotoEntrySource entrySource;
 }
+
+enum _MicrophoneDecision { audio, muted, abort }
+
+enum _MicrophoneChoice { openSettings, continueMuted }
 
 class CameraCapturePage extends StatefulWidget {
   const CameraCapturePage({
     super.key,
     required this.initialMode,
+    this.allowVideoMode = true,
+    this.initialCapturedPhotoPath,
+    this.caller = CameraPhotoCaller.picker,
+    this.entrySource = CameraPhotoEntrySource.photoPicker,
+    this.selectedCountBeforeCapture = 0,
+    this.filterRepository,
+    this.imageEditorLauncher,
+    this.photoCapture,
+    this.previewBuilder,
+    this.previewCameraDescriptions = const <CameraDescription>[],
+    this.telemetry,
+    this.cameraDiscovery = availableCameras,
+    this.videoRecordingStart,
+    this.videoRecordingStop,
+    this.microphonePermissionRequest,
+    this.videoPreviewBuilder,
+    this.videoFileReadyProbe,
+    this.minRecordingMs = 1000,
+    this.maxRecordingMs = 60000,
   });
 
   final MediaPickerEntryMode initialMode;
+  final bool allowVideoMode;
+  final String? initialCapturedPhotoPath;
+  final CameraPhotoCaller caller;
+  final CameraPhotoEntrySource entrySource;
+  final int selectedCountBeforeCapture;
+  final ImageEditorFilterRepository? filterRepository;
+  final CameraPhotoEditorLauncher? imageEditorLauncher;
+  final CameraPhotoCapture? photoCapture;
+  final CameraPreviewBuilder? previewBuilder;
+  final List<CameraDescription> previewCameraDescriptions;
+  final CameraPhotoTelemetry? telemetry;
+  final Future<List<CameraDescription>> Function() cameraDiscovery;
+  final CameraVideoRecordingStart? videoRecordingStart;
+  final CameraVideoRecordingStop? videoRecordingStop;
+  final CameraMicrophonePermissionRequest? microphonePermissionRequest;
+  final CameraVideoPreviewBuilder? videoPreviewBuilder;
+  final LocalVideoFileReadyProbe? videoFileReadyProbe;
+  final int minRecordingMs;
+  final int maxRecordingMs;
 
   @override
   State<CameraCapturePage> createState() => _CameraCapturePageState();
 }
 
-class _CameraCapturePageState extends State<CameraCapturePage> {
-  CameraController? _controller;
-  List<CameraDescription> _cameras = const [];
-  int _cameraIndex = 0;
-  bool _isRecording = false;
-  bool _isBusy = true;
-  UiErrorSemantic? _pageErrorSemantic;
-  late MediaPickerEntryMode _mode;
+/// 录后预览：自动循环播放本地录制视频，加载失败时回落深色占位。
+class _RecordedVideoPreview extends StatefulWidget {
+  const _RecordedVideoPreview({
+    super.key,
+    required this.path,
+    required this.readyProbe,
+    required this.onReady,
+    required this.onFailed,
+  });
+
+  final String path;
+  final LocalVideoFileReadyProbe readyProbe;
+  final VoidCallback onReady;
+  final VoidCallback onFailed;
 
   @override
-  void initState() {
-    super.initState();
-    _mode = widget.initialMode;
-    _initCamera();
-  }
-
-  @override
-  void dispose() {
-    unawaited(_controller?.dispose());
-    super.dispose();
-  }
-
-  Future<void> _initCamera() async {
-    try {
-      _cameras = await availableCameras();
-      if (_cameras.isEmpty) {
-        setState(() {
-          _pageErrorSemantic = UiErrorSemantic(
-            category: UiErrorCategory.pageLoad,
-            scope: UiErrorScope.page,
-            title: '相机暂时打不开',
-            message: UITextConstants.cameraUnavailable,
-            primaryAction: const UiErrorAction(
-              type: UiErrorActionType.retry,
-              label: UITextConstants.tryAgain,
-            ),
-          );
-          _isBusy = false;
-        });
-        return;
-      }
-      await _initControllerByIndex(_cameraIndex);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _pageErrorSemantic = UiErrorSemantic(
-          category: UiErrorCategory.pageLoad,
-          scope: UiErrorScope.page,
-          title: '相机暂时打不开',
-          message: UITextConstants.cameraUnavailable,
-          primaryAction: const UiErrorAction(
-            type: UiErrorActionType.retry,
-            label: UITextConstants.tryAgain,
-          ),
-        );
-        _isBusy = false;
-      });
-    }
-  }
-
-  Future<void> _initControllerByIndex(int index) async {
-    final next = CameraController(
-      _cameras[index],
-      ResolutionPreset.high,
-      enableAudio: true,
-    );
-    await _controller?.dispose();
-    _controller = next;
-    await _controller!.initialize();
-    if (!mounted) return;
-    setState(() {
-      _cameraIndex = index;
-      _pageErrorSemantic = null;
-      _isBusy = false;
-    });
-  }
-
-  Future<void> _showCaptureActionError() async {
-    if (!mounted) {
-      return;
-    }
-    await AppActionErrorFeedback.show(
-      context,
-      semantic: const UiErrorSemantic(
-        category: UiErrorCategory.submit,
-        scope: UiErrorScope.global,
-        title: '拍摄未完成',
-        message: UITextConstants.cameraCaptureFailed,
-        primaryAction: UiErrorAction(
-          type: UiErrorActionType.dismiss,
-          label: UITextConstants.confirm,
-        ),
-        dismissible: true,
-      ),
-    );
-  }
-
-  Future<void> _toggleCamera() async {
-    if (_cameras.length <= 1 || _isBusy) return;
-    final next = (_cameraIndex + 1) % _cameras.length;
-    setState(() => _isBusy = true);
-    await _initControllerByIndex(next);
-  }
-
-  Future<void> _takePhoto() async {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized || _isBusy) return;
-    setState(() => _isBusy = true);
-    try {
-      final file = await controller.takePicture();
-      if (!mounted) return;
-      Navigator.of(context).pop(
-        CameraCaptureResult(path: file.path, type: CreateMediaType.image),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isBusy = false);
-      await _showCaptureActionError();
-    }
-  }
-
-  Future<void> _toggleRecord() async {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized || _isBusy) return;
-    if (_isRecording) {
-      setState(() => _isBusy = true);
-      try {
-        final file = await controller.stopVideoRecording();
-        if (!mounted) return;
-        Navigator.of(context).pop(
-          CameraCaptureResult(path: file.path, type: CreateMediaType.video),
-        );
-      } catch (_) {
-        if (!mounted) return;
-        setState(() {
-          _isBusy = false;
-          _isRecording = false;
-        });
-        await _showCaptureActionError();
-      }
-      return;
-    }
-    setState(() => _isBusy = true);
-    try {
-      await controller.startVideoRecording();
-      if (!mounted) return;
-      setState(() {
-        _isRecording = true;
-        _isBusy = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _isBusy = false;
-      });
-      await _showCaptureActionError();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final subtle = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final controller = _controller;
-    final canPreview = controller != null && controller.value.isInitialized;
-    return AppScaffold(
-      backgroundColor: bg,
-      navigationBar: AppNavigationBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: bg,
-        leading: AppNavigationBarIconButton(
-          icon: CupertinoIcons.xmark,
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        middle: Text(
-          _mode == MediaPickerEntryMode.image
-              ? UITextConstants.cameraPhotoMode
-              : UITextConstants.cameraVideoMode,
-          style: TextStyle(
-            color: fg,
-            fontSize: AppTypography.lg,
-            fontWeight: AppTypography.semiBold,
-          ),
-        ),
-        trailing: AppNavigationBarIconButton(
-          icon: CupertinoIcons.camera_rotate_fill,
-          onPressed: _toggleCamera,
-        ),
-      ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: Container(
-                margin: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-                  color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: canPreview
-                    ? CameraPreview(controller)
-                    : _pageErrorSemantic != null
-                    ? AppPageErrorState(
-                        semantic: _pageErrorSemantic!,
-                        padding: EdgeInsets.all(AppSpacing.containerSm),
-                        onAction: (action) async {
-                          if (action.type == UiErrorActionType.retry ||
-                              action.type == UiErrorActionType.resubmit) {
-                            await _initCamera();
-                          }
-                        },
-                      )
-                    : Center(
-                        child: CupertinoActivityIndicator(),
-                      ),
-              ),
-            ),
-            SizedBox(height: AppSpacing.interGroupSm),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _modeButton(
-                  isDark: isDark,
-                  active: _mode == MediaPickerEntryMode.image,
-                  text: UITextConstants.cameraPhotoMode,
-                  onTap: () => setState(() => _mode = MediaPickerEntryMode.image),
-                ),
-                SizedBox(width: AppSpacing.interGroupSm),
-                _modeButton(
-                  isDark: isDark,
-                  active: _mode == MediaPickerEntryMode.video,
-                  text: UITextConstants.cameraVideoMode,
-                  onTap: () => setState(() => _mode = MediaPickerEntryMode.video),
-                ),
-              ],
-            ),
-            SizedBox(height: AppSpacing.interGroupSm),
-            SizedBox(
-              height: AppSpacing.buttonHeight + AppSpacing.buttonHeightSm,
-              child: Center(
-                child: GestureDetector(
-                  onTap: _mode == MediaPickerEntryMode.image ? _takePhoto : _toggleRecord,
-                  child: Container(
-                    width: AppSpacing.buttonHeight + AppSpacing.buttonHeightSm,
-                    height: AppSpacing.buttonHeight + AppSpacing.buttonHeightSm,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppColors.white,
-                        width: AppSpacing.intraGroupXs / 2,
-                      ),
-                      color: _mode == MediaPickerEntryMode.video && _isRecording
-                          ? AppColors.error
-                          : AppColors.primaryColor,
-                    ),
-                    child: Icon(
-                      _mode == MediaPickerEntryMode.image
-                          ? CupertinoIcons.camera_fill
-                          : (_isRecording
-                              ? CupertinoIcons.stop_circle_fill
-                              : CupertinoIcons.videocam_fill),
-                      color: AppColors.white,
-                      size: AppSpacing.iconMedium,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(height: AppSpacing.interGroupLg),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _modeButton({
-    required bool isDark,
-    required bool active,
-    required String text,
-    required VoidCallback onTap,
-  }) {
-    final bg = active
-        ? AppColors.primaryColor
-        : AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
-    final fg = active
-        ? AppColors.white
-        : AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        constraints: BoxConstraints(minHeight: AppSpacing.minInteractiveSize),
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerMd,
-          vertical: AppSpacing.intraGroupSm,
-        ),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: fg,
-            fontSize: AppTypography.base,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
+  State<_RecordedVideoPreview> createState() => _RecordedVideoPreviewState();
 }

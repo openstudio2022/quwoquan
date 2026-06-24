@@ -1,6 +1,0 @@
-schemaVersion: quwoquan.task.defaults
-content:
-  conditionAxes:
-    regions:
-    - 平原都市
-    - 沿海海岛

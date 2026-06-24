@@ -1,0 +1,64 @@
+id: CR-20260625-062-recommendation-commercial-dashboard-p1
+title: 推荐商用归因看板 P1
+slug: recommendation-commercial-dashboard-p1
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/recommendation-platform/evaluation-and-flywheel
+  - specs/feature-tree/recommendation-platform/evaluation-and-flywheel/recommendation-observability-dashboard
+  - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+  - deploy/monitoring/dashboards/l2_recommendation_commercial_maturity.json
+
+entries:
+  - timestamp: "2026-06-25T00:30:00+08:00"
+    summary: |
+      在 P0+ bounded attribution 指标已打通后，新增推荐商用成熟度归因看板源文件与
+      recommendation-observability-dashboard L3 Story，用真实 emitter 指标支撑首页、旅行、精品、
+      UGC、数据工程供给、召回路径、交集类别和 reasonVersion 的运营/算法复盘。
+    reason: |
+      P0/P0+ 已具备质量分、协同召回、场景路由、交集融合、primaryText 解释和归因字段回传，
+      但缺少稳定的商用评估入口。P1 先把可观测的 served/behavior 分桶看板固化，避免仍停留在
+      objective_only 目标或人工查询。
+    change_type:
+      - observability
+      - acceptance
+      - tests
+      - documentation
+    changed_documents:
+      - path: docs/recommendation-commercial-maturity-plan.md
+        sections:
+          - P0/P0+ 到 P1 完成复盘
+          - 剩余风险
+          - 下一阶段开发任务
+      - path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/spec.md
+        sections:
+          - 范围
+          - 验收标准
+      - path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/acceptance.yaml
+        sections:
+          - SIT1
+      - path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/recommendation-observability-dashboard/spec.md
+        sections:
+          - 全文
+      - path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/recommendation-observability-dashboard/acceptance.yaml
+        sections:
+          - GWT1
+      - path: quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
+        sections:
+          - dashboards
+      - path: deploy/monitoring/dashboards/l2_recommendation_commercial_maturity.json
+        sections:
+          - dashboard
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: low
+      breaking_contract: false
+    notes:
+      - 看板只引用 recommendation_feed_served_by_attribution_total 与 recommendation_behavior_by_attribution_total 两个 P0+ 真实 emitter 指标。
+      - 禁止用 recommendation_offline_eval_metric_value、eligible_feed_item_count 或 collaborative_recall_lift 等 objective_only 口径冒充已上线观测。
+      - 深排平台、离线 replay 脚本、在线 AB 平台和 product-ops 精品池运营入口仍不在本 CR 范围内。

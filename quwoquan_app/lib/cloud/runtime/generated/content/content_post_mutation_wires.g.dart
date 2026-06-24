@@ -44,12 +44,16 @@ class CreatePostRequestWire {
     this.rating,
     this.reviewAspects,
     this.mediaUrls,
+    this.mediaItems,
     this.coverUrl,
+    this.thumbnailUrl,
     this.articleMarkdown,
     this.articleMarkdownVersion,
     this.articleAssetManifest,
     this.articleRenderProfile,
     this.videoUrl,
+    this.coverStrategy,
+    this.coverFrameTimeMs,
     this.illustrationAssetId,
     this.location,
     this.locationName,
@@ -80,12 +84,16 @@ class CreatePostRequestWire {
   final String? rating;
   final List<CloudJsonMap>? reviewAspects;
   final List<String>? mediaUrls;
+  final List<CloudJsonMap>? mediaItems;
   final String? coverUrl;
+  final String? thumbnailUrl;
   final String? articleMarkdown;
   final String? articleMarkdownVersion;
   final CloudJsonMap? articleAssetManifest;
   final CloudJsonMap? articleRenderProfile;
   final String? videoUrl;
+  final String? coverStrategy;
+  final String? coverFrameTimeMs;
   final String? illustrationAssetId;
   final CloudJsonMap? location;
   final String? locationName;
@@ -117,12 +125,16 @@ class CreatePostRequestWire {
     _mutationPutOpt(m, 'rating', rating);
     if (reviewAspects != null) m['reviewAspects'] = reviewAspects!;
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
+    if (mediaItems != null) m['mediaItems'] = mediaItems!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
+    _mutationPutOpt(m, 'thumbnailUrl', thumbnailUrl);
     _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
     _mutationPutOpt(m, 'articleMarkdownVersion', articleMarkdownVersion);
     if (articleAssetManifest != null) m['articleAssetManifest'] = articleAssetManifest!;
     if (articleRenderProfile != null) m['articleRenderProfile'] = articleRenderProfile!;
     _mutationPutOpt(m, 'videoUrl', videoUrl);
+    _mutationPutOpt(m, 'coverStrategy', coverStrategy);
+    _mutationPutOpt(m, 'coverFrameTimeMs', coverFrameTimeMs);
     _mutationPutOpt(m, 'illustrationAssetId', illustrationAssetId);
     if (location != null) m['location'] = location!;
     _mutationPutOpt(m, 'locationName', locationName);
@@ -156,12 +168,16 @@ class CreatePostRequestWire {
       rating: m['rating']?.toString(),
       reviewAspects: _mutationMapList(m['reviewAspects']),
       mediaUrls: _mutationStringList(m['mediaUrls']),
+      mediaItems: _mutationMapList(m['mediaItems']),
       coverUrl: m['coverUrl']?.toString(),
+      thumbnailUrl: m['thumbnailUrl']?.toString(),
       articleMarkdown: m['articleMarkdown']?.toString(),
       articleMarkdownVersion: m['articleMarkdownVersion']?.toString(),
       articleAssetManifest: _mutationStringKeyedMap(m['articleAssetManifest']),
       articleRenderProfile: _mutationStringKeyedMap(m['articleRenderProfile']),
       videoUrl: m['videoUrl']?.toString(),
+      coverStrategy: m['coverStrategy']?.toString(),
+      coverFrameTimeMs: m['coverFrameTimeMs']?.toString(),
       illustrationAssetId: m['illustrationAssetId']?.toString(),
       location: _mutationStringKeyedMap(m['location']),
       locationName: m['locationName']?.toString(),
@@ -196,12 +212,16 @@ class UpdatePostRequestWire {
     this.rating,
     this.reviewAspects,
     this.mediaUrls,
+    this.mediaItems,
     this.coverUrl,
+    this.thumbnailUrl,
     this.articleMarkdown,
     this.articleMarkdownVersion,
     this.articleAssetManifest,
     this.articleRenderProfile,
     this.videoUrl,
+    this.coverStrategy,
+    this.coverFrameTimeMs,
     this.illustrationAssetId,
     this.location,
     this.locationName,
@@ -224,12 +244,16 @@ class UpdatePostRequestWire {
   final String? rating;
   final List<CloudJsonMap>? reviewAspects;
   final List<String>? mediaUrls;
+  final List<CloudJsonMap>? mediaItems;
   final String? coverUrl;
+  final String? thumbnailUrl;
   final String? articleMarkdown;
   final String? articleMarkdownVersion;
   final CloudJsonMap? articleAssetManifest;
   final CloudJsonMap? articleRenderProfile;
   final String? videoUrl;
+  final String? coverStrategy;
+  final String? coverFrameTimeMs;
   final String? illustrationAssetId;
   final CloudJsonMap? location;
   final String? locationName;
@@ -253,12 +277,16 @@ class UpdatePostRequestWire {
     _mutationPutOpt(m, 'rating', rating);
     if (reviewAspects != null) m['reviewAspects'] = reviewAspects!;
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
+    if (mediaItems != null) m['mediaItems'] = mediaItems!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
+    _mutationPutOpt(m, 'thumbnailUrl', thumbnailUrl);
     _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
     _mutationPutOpt(m, 'articleMarkdownVersion', articleMarkdownVersion);
     if (articleAssetManifest != null) m['articleAssetManifest'] = articleAssetManifest!;
     if (articleRenderProfile != null) m['articleRenderProfile'] = articleRenderProfile!;
     _mutationPutOpt(m, 'videoUrl', videoUrl);
+    _mutationPutOpt(m, 'coverStrategy', coverStrategy);
+    _mutationPutOpt(m, 'coverFrameTimeMs', coverFrameTimeMs);
     _mutationPutOpt(m, 'illustrationAssetId', illustrationAssetId);
     if (location != null) m['location'] = location!;
     _mutationPutOpt(m, 'locationName', locationName);
@@ -284,12 +312,16 @@ class UpdatePostRequestWire {
       rating: m['rating']?.toString(),
       reviewAspects: _mutationMapList(m['reviewAspects']),
       mediaUrls: _mutationStringList(m['mediaUrls']),
+      mediaItems: _mutationMapList(m['mediaItems']),
       coverUrl: m['coverUrl']?.toString(),
+      thumbnailUrl: m['thumbnailUrl']?.toString(),
       articleMarkdown: m['articleMarkdown']?.toString(),
       articleMarkdownVersion: m['articleMarkdownVersion']?.toString(),
       articleAssetManifest: _mutationStringKeyedMap(m['articleAssetManifest']),
       articleRenderProfile: _mutationStringKeyedMap(m['articleRenderProfile']),
       videoUrl: m['videoUrl']?.toString(),
+      coverStrategy: m['coverStrategy']?.toString(),
+      coverFrameTimeMs: m['coverFrameTimeMs']?.toString(),
       illustrationAssetId: m['illustrationAssetId']?.toString(),
       location: _mutationStringKeyedMap(m['location']),
       locationName: m['locationName']?.toString(),

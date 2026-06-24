@@ -1338,7 +1338,7 @@
           "defaultPublicGroupId": "fixture_group_lifestyle_01_public",
           "createdAt": "2026-05-10T04:00:00Z",
           "updatedAt": "2026-05-10T04:00:00Z",
-          "ownerDisplayNameSnapshot": "契约当前用户",
+          "ownerDisplayNameSnapshot": "新同学_260622_6698692",
           "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_lifestyle_01/v1/avatar.png",
           "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_lifestyle_01/v1/cover.jpg"
         },
@@ -3594,7 +3594,7 @@
             "status": "active",
             "createdAt": "2026-05-10T04:00:00Z",
             "updatedAt": "2026-05-10T04:00:00Z",
-            "ownerDisplayNameSnapshot": "契约当前用户"
+            "ownerDisplayNameSnapshot": "新同学_260622_6698692"
           }
         ],
         "fixture_circle_lifestyle_02": [
@@ -4617,7 +4617,7 @@
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
             "contribution": 3,
-            "displayName": "契约当前用户",
+            "displayName": "新同学_260622_6698692",
             "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
             "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png"
           },
@@ -7733,7 +7733,7 @@
             "joinedAt": "2026-05-10T04:00:00Z",
             "lastActiveAt": "2026-05-10T04:00:00Z",
             "contribution": 10,
-            "displayName": "契约当前用户",
+            "displayName": "新同学_260622_6698692",
             "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
             "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png"
           },
@@ -8075,7 +8075,7 @@
             "joinedAt": "2026-05-10T10:00:00Z",
             "lastActiveAt": "2026-05-10T10:00:00Z",
             "contribution": 3,
-            "displayName": "契约当前用户",
+            "displayName": "新同学_260622_6698692",
             "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
             "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png"
           },
@@ -8173,7 +8173,7 @@
             "joinedAt": "2026-05-10T12:00:00Z",
             "lastActiveAt": "2026-05-10T12:00:00Z",
             "contribution": 3,
-            "displayName": "契约当前用户",
+            "displayName": "新同学_260622_6698692",
             "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
             "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png"
           },
@@ -8283,7 +8283,7 @@
             "joinedAt": "2026-05-10T14:00:00Z",
             "lastActiveAt": "2026-05-10T14:00:00Z",
             "contribution": 3,
-            "displayName": "契约当前用户",
+            "displayName": "新同学_260622_6698692",
             "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
             "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png"
           }

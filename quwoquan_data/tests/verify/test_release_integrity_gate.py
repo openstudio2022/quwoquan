@@ -85,6 +85,8 @@ def _seed_release_post(
     asset_sha: str = "sha256:abc",
     publish_media_mode: str = "",
     with_assets: bool = True,
+    source_use_mode: str = "licensed_adaptation",
+    prompt_text: str = "基于授权底稿创作",
 ) -> None:
     runtime_post = batch_root(TASK, BATCH) / "posts/article/攻略" / title / "1"
     release_post = release_root(RELEASE) / "posts/article/攻略" / title / "1"
@@ -99,12 +101,12 @@ def _seed_release_post(
         runtime_post / "3.compose" / "writing_pack.json",
         {
             "baseSourceRef": base_source,
-            "sourceUseMode": "licensed_adaptation",
+            "sourceUseMode": source_use_mode,
             "baseDraftText": "这是足够长的图文底稿。" * 80,
             "publishMediaMode": publish_media_mode,
         },
     )
-    _write(runtime_post / "4.draft" / "prompt.md", "基于授权底稿创作")
+    _write(runtime_post / "4.draft" / "prompt.md", prompt_text)
     write_json(
         runtime_post / "5.review" / "review.json",
         {
@@ -165,7 +167,7 @@ def _seed_approved_entity(entity: str) -> None:
     write_json(entity_dir / "5.review" / "review.json", {"decision": "approved"})
 
 
-def test_release_integrity_flags_cross_post_asset_reuse_and_empty_source_ref():
+def test_release_integrity_allows_cross_post_asset_reuse_but_still_flags_empty_source_ref():
     _reset()
     _seed_release_root()
     base = _seed_source("毕棚沟", "01.base", kind="维基百科")
@@ -179,11 +181,11 @@ def test_release_integrity_flags_cross_post_asset_reuse_and_empty_source_ref():
     text = "\n".join(report["issues"])
     assert not report["passed"]
     assert "missing manifest.assets[].sourceRef" in text
-    assert "asset sha reused across posts" in text
+    assert "asset sha reused across posts" not in text
     assert "base draft ledger does not map" in text
 
 
-def test_runtime_integrity_flags_same_asset_contract_before_release():
+def test_runtime_integrity_allows_same_asset_contract_before_release():
     _reset()
     _seed_release_root()
     base = _seed_source("毕棚沟", "01.base", kind="维基百科")
@@ -199,7 +201,7 @@ def test_runtime_integrity_flags_same_asset_contract_before_release():
 
     assert not report["passed"]
     assert "missing manifest.assets[].sourceRef" in text
-    assert "asset sha reused across posts" in text
+    assert "asset sha reused across posts" not in text
     assert "base draft ledger does not map" in text
 
 
@@ -217,6 +219,33 @@ def test_release_integrity_allows_article_asset_from_independent_source_unit():
     text = "\n".join(report["issues"])
     assert "sourceRef must match article baseSourceRef" not in text
     assert "sourceAssetRef must belong to its declared sourceRef unit" not in text
+
+
+def test_release_integrity_allows_factual_reference_prompted_as_adaptation():
+    """产品裁定 full light-edit：factual_reference_only 以底稿为骨架轻改，不再被 release 门拦截。"""
+    _reset()
+    _seed_release_root()
+    base = _seed_source(
+        "毕棚沟",
+        "01.base",
+        kind="去哪儿攻略",
+        source_use_mode="factual_reference_only",
+    )
+    _seed_release_post(
+        "毕棚沟FactOnly",
+        "fact-only",
+        base_source=base,
+        asset_source=base,
+        source_use_mode="factual_reference_only",
+        prompt_text="在底稿基础上做适度润色，Review Gate 会检查 baseDraftFidelity 55%~99.5%。",
+    )
+    write_json(
+        batch_root(TASK, BATCH) / "_shared" / "base_draft_ledger.json",
+        {"schemaVersion": "quwoquan_data.base_draft_ledger", "assignments": {base: "fact-only"}},
+    )
+    report = scan_release_integrity(RELEASE)
+    text = "\n".join(report["issues"])
+    assert "is prompted as licensed/adaptable base draft" not in text
 
 
 def test_release_integrity_allows_text_only_article_without_source_asset():

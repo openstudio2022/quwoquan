@@ -1,0 +1,5 @@
+  bash arg: -p
+  bash arg: com.quwoquan.quwoquan_app
+  bash arg: 1
+Events injected: 1
+## Network stats: elapsed time=69ms (0ms mobile, 0ms wifi, 69ms not connected)

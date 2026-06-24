@@ -1,6 +1,7 @@
 schemaVersion: quwoquan.task.spec
 taskId: 旅行/地域/测试省/景区/只有baseline
 title: 测试省景区只有baseline
+intentLabel: 只有baseline
 taskArchetype: region_category_coverage
 vertical: travel
 organizeBy: 地域
@@ -18,7 +19,7 @@ scope:
   - entityType: 地点/景区
     name: 景区002
 provenance:
-  createdAt: '2026-06-20T18:10:34.630826+00:00'
+  createdAt: '2026-06-24T13:09:26.513685+00:00'
   createdBy: test
 content:
   modalityContract: separated_research

@@ -15,14 +15,10 @@ creatorPersona:
   mustNotClaim: [官方交通承诺, 最低价机票]
 editorialIntent: 为外地游客规划大交通到成都、市内休整与再出发川西段，把枢纽段与后续环线/深度段衔接清楚。
 render: { articleTemplate: journal, fontPreset: clean }
-conditionAxes:
-  region: { applicable: true, slot: 成都枢纽与周边 }
-  season: { applicable: true, slot: 旺季交通与备选 }
 narrativeMode:
   kind: inbound_route
   openingFocus: arrival_judgement
   transitionPolicy: hub_to_route
-  factsHeading: 先把大交通和衔接窗口讲透
   closingFocus: transfer_decision
 evidenceRequirements:
   fact:
@@ -45,7 +41,6 @@ routeCoverageExpectations:
 structure:
   required: [大交通方案, 到达成都, 休整与补给, 再出发衔接, 时间与费用, 风险提醒]
   optional: [转机/转高铁, 成都半日安排]
-hooks: ["从{origin}到成都，先把大交通和休整算清楚", "外地进川西，成都这一站决定后面会不会赶"]
 mustIncludeFacts: [大交通方式, 耗时与费用, 成都到达站, 休整安排, 后续川西段衔接]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 1400, max: 2600 }
@@ -63,4 +58,3 @@ openingTension: { required: true, focus: 出发动机与犹豫 }
 explicitFeelings: { requireLike: true, requireDislike: true }
 decisionPoints: { required: true, minPoints: 2 }
 tipsEmbeddingPolicy: { mode: inline, forbidStandaloneBlock: true }
-sopExampleRef: sop/article.md

@@ -1,8 +1,11 @@
 // ignore_for_file: prefer_single_quotes
+import 'dart:convert';
+
 import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
+import 'package:quwoquan_app/cloud/services/content/mock/generated/home_showcase_core_fixture.g.dart';
 
 /// 内容域 mock 数据（canonical 字段，与 FeedItemDto schema 严格对齐）。
 ///
@@ -161,7 +164,39 @@ class ContentMockData {
     final seed = ContractFixtureRuntimeLoader.contentSeedSet(
       'home_showcase_core',
     );
-    final posts = seed?['posts'];
+    final hostSeed = _feedItemsFromSeed(seed);
+    if (hostSeed.isNotEmpty) {
+      return hostSeed;
+    }
+    return _feedItemsFromPostsJson(kHomeShowcaseCorePostsJson);
+  }
+
+  /// 移动端运行时无法读取宿主仓库文件，必须使用随 App 编译进来的生成常量。
+  /// host-side 测试仍优先使用 [seededShowcaseFeedItems] 的 contract fixture 读链。
+  static Future<List<FeedItemDto>> seededShowcaseFeedItemsAsync() async {
+    return seededShowcaseFeedItems;
+  }
+
+  static List<FeedItemDto> _feedItemsFromPostsJson(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <FeedItemDto>[];
+      }
+      return decoded
+          .whereType<Map>()
+          .map((item) => FeedItemDto.fromMap(item.cast<String, dynamic>()))
+          .toList(growable: false);
+    } catch (_) {
+      return const <FeedItemDto>[];
+    }
+  }
+
+  static List<FeedItemDto> _feedItemsFromSeed(Object? seed) {
+    if (seed is! Map) {
+      return const <FeedItemDto>[];
+    }
+    final posts = seed['posts'];
     if (posts is! List) {
       return const <FeedItemDto>[];
     }

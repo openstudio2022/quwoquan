@@ -100,7 +100,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
-  testWidgets('启动条件满足后，欢迎页在3秒序列后进入主壳首页', (tester) async {
+  testWidgets('启动条件满足后，欢迎页在并行动效序列后进入主壳首页', (tester) async {
     suppressExpectedErrors();
     final store = _ImmediateAuthSessionStore(
       stored: const StoredAuthSession(

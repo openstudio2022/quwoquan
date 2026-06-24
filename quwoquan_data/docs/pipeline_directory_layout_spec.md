@@ -58,20 +58,22 @@
 ### 2.1 任务根（公共，跨批次唯一）
 
 ```
-runtime/tasks/{task}/
-  task_manifest.json          # [处理] task 定义快照：垂类/organizeBy/scope/目标对象口径（由 task run 写，来源 committed task.yaml）
+runtime/tasks/{task}/                  # {task} = taskId 斜杠路径（committed 分类树同构，受版本控制的规格在 tasks/{task}/）
+  task_manifest.json          # [处理] task 定义快照：intentLabel/垂类/organizeBy/scope/目标对象口径（由 task run 写，来源 committed task.yaml）
   notes.md                    # [处理] 人写任务说明（可选）
   catalog.ndjson              # [处理] 任务级对象台账（可选，assemble 消费）
   entities/{domain}/{type}/{name}/   # [处理] 实体【成品】，跨批次唯一，见 2.3-成品；promote_task_entities 直拷 publish
   posts/                      # [处理] 任务级聚合产物（assemble 用，可选）
-  batches/{batch}/            # 见 2.2
+  _shared/                    # [处理] 任务级共享（dedup_ledger.json / catalog.ndjson / entities.ndjson …）
 ```
 
-### 2.2 批次根（批次级公共）
+> **批次工作区不再挂在任务根下**（消除「批次埋在 `旅行/地域/四川省/景区/…` 分类树深处、无法在顶层找到批次」的问题）。批次统一上提到顶层 `runtime/batches/{intentLabel}-{taskHash}__{batch}/`（见 2.2），通过 `batch_manifest.json.taskId` 反指所属任务。任务根只保留跨批次唯一的实体成品、任务定义快照与任务级共享账本。
+
+### 2.2 批次根（顶层 `runtime/batches/`，批次级公共）
 
 ```
-batches/{batch}/
-  batch_manifest.json         # [处理] 批次公共：目标对象、参数快照、env、salt、命令链、globalBatchSeq、时间戳、schemaVersion（新布局标识）
+runtime/batches/{intentLabel}-{taskHash}__{batch}/   # intentLabel = 任务意图标签（≤16 字，源自 task.yaml.intentLabel）；taskHash = 归一 taskId 短哈希（8 hex），消歧同名任务
+  batch_manifest.json         # [处理] 批次公共：taskId（反指任务，反查唯一依据）、目标对象、参数快照、env、salt、命令链、globalBatchSeq、时间戳、schemaVersion（新布局标识）
   _shared/                    # [处理] 批次级跨对象共享产物（不属于任一对象）
     source_catalog.json       #   受控来源类目白名单（限定 sourceKind，挡散文来源）
     content_object_index.json #   内容对象路由：ref → {contentType,angle,title,seq}（批次内 ref→对象唯一路由真相）
@@ -82,7 +84,10 @@ batches/{batch}/
   posts/{contentType}/{angle}/{title}/{seq}/   # 内容对象（过程+成品），见 2.4
 ```
 
-> batch 顶层**只允许** `entities/ posts/ _shared/ batch_manifest.json` 四项；出现 `download/ build/ produce/ pipeline/` 即 BLOCK（§10 顶层结构门）。
+> - 批次目录名 = `{intentLabel}-{taskHash}__{batch}`：`intentLabel` 是 ≤16 字人类可读任务意图标签（由用户指令/对话在 `task new` / `select-targets` 时给定，落 `task.yaml.intentLabel`，缺省回退 taskId 末段清洗截断）；`taskHash` 是归一 taskId 的稳定短哈希（`sha1(normalizedTaskId)[:8]`）；`batch` 是批次号（含日期+序号）。首个 `__` 之前为「任务唯一前缀 `{intentLabel}-{taskHash}`」，之后为 `batch`。`batch_root()` 由 taskId 确定性拼装，不引入第二索引文件、不嵌全局 seq。
+> - **为何要 `taskHash`**：fanout 各分区叶任务**同名**（如 `四川省/…/全国景点主页` 与 `云南省/…/全国景点主页`）且**共享同一 `batch`（`fanout_<plan>`）**，旧布局 `tasks/{taskId}/batches/{batch}/` 由 taskId 路径天然区分；上提到顶层后必须由 `taskHash` 重新提供任务唯一性，否则两任务会塌缩到同一目录、内容对象互相串扰。`intentLabel` 仅作人读标签（可被多任务复用）。
+> - **batch→task 反查唯一依据仍是 `batch_manifest.json.taskId`**；`{intentLabel}-{taskHash}__` 前缀任务唯一，用于顶层候选目录的精确过滤与 `batch` 还原。
+> - batch 顶层**只允许** `entities/ posts/ _shared/ batch_manifest.json` 四项；出现 `download/ build/ produce/ pipeline/` 即 BLOCK（§10 顶层结构门）。
 
 ### 2.3 实体对象目录（成品 task 根 / 过程 batch 内）
 
@@ -90,7 +95,7 @@ batches/{batch}/
 
 ```
 entities/{domain}/{type}/{name}/
-  _entity.json                # [处理] 实体事实（含 conditionProfile + evidenceRefs，每条事实回指 source 相对路径）
+  _entity.json                # [处理] 实体事实（label/domain/type/tagRefs/sourceRefs，回指 source 相对路径）
   page.md                     # [处理] 实体主页正文（>= MIN_PAGE_CHARS，reader-facing，无机械标题/平台词）
   manifest.json               # [处理] 实体资产/出处清单（assets[].sourceAssetRef 相对引用）
   assets/{assetId}.{ext}      # [处理] 主页配图，文件名 = assetId
@@ -200,12 +205,13 @@ posts/{contentType}/{angle}/{title}/{seq}/
 
 | 信息 | 唯一位置 | 禁止 |
 |---|---|---|
-| 任务定义/口径 | `tasks/{task}/task_manifest.json`、committed `tasks/{task}/task.yaml` | 在对象目录重复 |
-| 批次参数/env/salt/命令链/globalBatchSeq/时间/schemaVersion | `batches/{batch}/batch_manifest.json` | 在对象目录重复 |
-| 受控来源类目 | `batches/{batch}/_shared/source_catalog.json` | 每对象各存一份 |
-| 批次级共享 brief | `batches/{batch}/_shared/compose_brief.json` | 复制进每个内容对象 |
-| workflow 状态 | `batches/{batch}/_shared/task_workflow_state.json` | 上提到对象根 |
-| 实体成品（事实/主页/资产） | task 根 `entities/{d}/{t}/{name}/` | 在每个 batch 重复生产 |
+| 任务定义/口径/intentLabel | `runtime/tasks/{task}/task_manifest.json`、committed `tasks/{task}/task.yaml` | 在对象目录重复 |
+| 批次归属任务（反查唯一依据） | `runtime/batches/{intentLabel}-{taskHash}__{batch}/batch_manifest.json.taskId` | 用目录名 intentLabel 当反查真相 |
+| 批次参数/env/salt/命令链/globalBatchSeq/时间/schemaVersion | `runtime/batches/{intentLabel}-{taskHash}__{batch}/batch_manifest.json` | 在对象目录重复 |
+| 受控来源类目 | `runtime/batches/{intentLabel}-{taskHash}__{batch}/_shared/source_catalog.json` | 每对象各存一份 |
+| 批次级共享 brief | `…/_shared/compose_brief.json` | 复制进每个内容对象 |
+| workflow 状态 | `…/_shared/task_workflow_state.json` | 上提到对象根 |
+| 实体成品（事实/主页/资产） | `runtime/tasks/{task}/entities/{d}/{t}/{name}/`（跨批次唯一，不随批次上提） | 在每个 batch 重复生产 |
 | 对象自身来源/质量/草稿/审校/内容成品 | 对象目录 `N.xxx/` 与对象根 | 上提到批次根 |
 
 ---
@@ -264,8 +270,9 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 
 | 门 | 校验内容（对照本规格章节） | 处置 | 状态 |
 |---|---|---|---|
+| **批次顶层归属门**（`verify_directory_evidence_chain.py`） | 批次工作区只能落顶层 `runtime/batches/{intentLabel}-{taskHash}__{batch}/`，**不得**再出现在 `runtime/tasks/{task}/batches/`；`batch_manifest.json.taskId` 必填且与 intentLabel 自洽 | BLOCK | ◑ 本版落地 |
 | **顶层结构门**（新增 `verify_directory_layout_structure.py`） | §2.2 batch 顶层只允许 4 项；出现 `download/build/produce/pipeline/` BLOCK；内容对象路径 = `posts/{type}/{angle}/{title}/{seq}`；阶段名 ∈ §1.5 枚举且带序号 | BLOCK | ❌ 待建 |
-| **去 stage-first 豁免**（改 `verify_directory_evidence_chain.py`） | 删除「stage-first 不在扫描范围」，新布局批次全量纳入；按 `batch_manifest.schemaVersion` 区分新旧 | BLOCK | ❌ 待改 |
+| **去 stage-first 豁免**（改 `verify_directory_evidence_chain.py`） | 删除「stage-first 不在扫描范围」，新布局批次全量纳入（scan 遍历顶层 `runtime/batches/`，taskId 取自 `batch_manifest.taskId`）；按 `batch_manifest.schemaVersion` 区分新旧 | BLOCK | ◑ 本版落地 |
 | **批次号/资产零碰撞门**（新增 `verify_asset_id_zero_collision.py`） | §4.1/§14.2 `globalBatchSeq` 单调；批内 registry + `parse_post_asset_id` 零碰撞 | BLOCK | ❌ 待建 |
 | **命名一致门** | §0/§3：来源单元 `{NN}.{kind}`、`meta.json`、`assets/index.json`、阶段枚举 | BLOCK | ❌ 待建 |
 | **散落 images 门** | §3 无对象级 `images/` | BLOCK | ✅ 已有 |
@@ -340,12 +347,13 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 
 > 仅列最小必填；可加字段但不得少。所有路径字段为相对引用（§4/§5）。
 
-### 14.1 `tasks/{task}/task_manifest.json`
-`{ schemaVersion:"quwoquan.task.manifest", taskId, vertical, organizeBy, scope{region?, entityTypes[], coverageTargets[]}, content{angles[]}, createdAt }`
+### 14.1 `runtime/tasks/{task}/task_manifest.json`
+`{ schemaVersion:"quwoquan.task.manifest", taskId, intentLabel, vertical, organizeBy, scope{region?, entityTypes[], coverageTargets[]}, content{angles[]}, createdAt }`
+（`intentLabel` = ≤16 字人类可读任务意图标签，来源 committed `task.yaml.intentLabel`；它是顶层批次目录前缀 `runtime/batches/{intentLabel}-{taskHash}__{batch}/` 的唯一标签真相源。）
 
-### 14.2 `batches/{batch}/batch_manifest.json`
+### 14.2 `runtime/batches/{intentLabel}-{taskHash}__{batch}/batch_manifest.json`
 `{ schemaVersion:"quwoquan_data.batch_manifest", taskId, batchId, layout:"object-first", env, salt, params{}, coverageTargets[], commandChain[], globalBatchSeq, createdAt, updatedAt }`
-（`layout` 与 `schemaVersion` 是新旧布局判定依据；§10 去豁免门与 §13 旧布局历史说明据此区分新旧批次。）
+（`taskId` 是 **batch→task 反查的唯一依据**（目录名 intentLabel 仅用于人读定位与候选过滤，可被多任务复用）；`layout` 与 `schemaVersion` 是新旧布局判定依据；§10 去豁免门与 §13 旧布局历史说明据此区分新旧批次。）
 
 ### 14.3 对象 `_object.json`（实体过程根 / 内容对象根各一份）
 `{ schemaVersion:"quwoquan.object.index", objectKind:"entity"|"content", objectRef, publishTargetRef(相对 publish 根), finalRef(成品相对路径), stages{ "1.download":"done"|"pending"|... }, updatedAt }`
@@ -365,6 +373,8 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 ## 15. task run 编排落盘约定（对象优先，`task/run.py` 据此切换）
 
 > 编排器是薄壳，stage 间流转改为「写对象阶段目录」；`task_workflow_state.json` 与 `assistant_tasks/` 属批次工作区，落 `_shared/`（不进对象目录、不进 publish）。
+>
+> 批次工作区根 = 顶层 `runtime/batches/{intentLabel}-{taskHash}__{batch}/`（不再挂任务根）；`build_homepage` 仍把实体**成品**落任务根 `runtime/tasks/{task}/entities/{d}/{t}/{name}/`（跨批次唯一），批次内只放实体过程对象。
 
 | stage | 类型 | 对象 | 写入位置（对象优先） |
 |---|---|---|---|

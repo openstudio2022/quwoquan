@@ -68,13 +68,54 @@ void main() {
 
       expect(view.kind, ContentSurfaceKind.video);
       expect(view.hasVideo, isTrue);
-      expect(view.video!.url, contains('media/video/s/fixture/video1/v1/clip.mp4'));
+      expect(
+        view.video!.url,
+        contains('media/video/s/fixture/video1/v1/clip.mp4'),
+      );
       expect(
         view.video!.thumbnailUrl,
         contains('media/image/s/fixture/video1/v1/thumb.jpg'),
       );
       expect(view.video!.durationMs, 12000);
       expect(view.hasImages, isFalse);
+    });
+
+    test('video 帖封面优先使用 thumbnailUrl，cover 与播放 poster 同源', () {
+      final dto = VideoPostDto.fromMap(<String, dynamic>{
+        '_id': 'video-cover-priority',
+        'postId': 'video-cover-priority',
+        'type': 'video',
+        'contentType': 'video',
+        'identity': 'work',
+        'authorId': 'a2',
+        'displayName': '作者乙',
+        'authorAvatarUrl': '',
+        'videoUrl': 'media/video/s/fixture/video1/v1/clip.mp4',
+        'thumbnailUrl': 'media/image/s/fixture/video1/v1/manual-thumb.jpg',
+        'coverUrl': 'media/image/s/fixture/video1/v1/stale-cover.jpg',
+        'durationMs': 12000,
+        'likeCount': 0,
+        'commentCount': 0,
+        'shareCount': 0,
+        'createdAt': '2026-01-01T00:00:00.000Z',
+      });
+
+      final view = ContentSurfaceViewMapper.fromDto(dto);
+
+      expect(view.kind, ContentSurfaceKind.video);
+      expect(
+        dto.mediaVideoCoverUrl,
+        contains('media/image/s/fixture/video1/v1/manual-thumb.jpg'),
+      );
+      expect(
+        view.cover!.url,
+        contains('media/image/s/fixture/video1/v1/manual-thumb.jpg'),
+      );
+      expect(
+        view.video!.thumbnailUrl,
+        contains('media/image/s/fixture/video1/v1/manual-thumb.jpg'),
+      );
+      expect(view.cover!.url, equals(view.video!.thumbnailUrl));
     });
 
     test('article 帖 → kind.article，标题/正文/封面 + wire 模板字段', () {
@@ -109,7 +150,10 @@ void main() {
       expect(view.title, '统一展示标题');
       expect(view.body, '正文摘要');
       expect(view.cover, isNotNull);
-      expect(view.cover!.url, contains('media/image/s/fixture/article1/v1/cover.jpg'));
+      expect(
+        view.cover!.url,
+        contains('media/image/s/fixture/article1/v1/cover.jpg'),
+      );
       expect(view.articleTemplate, 'modern');
       expect(view.articleFontPreset, 'serif');
       expect(view.tags, <String>['校园', '摄影']);
@@ -177,8 +221,7 @@ void main() {
 
       expect(view.hasIntersectionReasons, isTrue);
       expect(view.intersectionReasons, isA<List<IntersectionReason>>());
-      expect(view.intersectionReasons.first.primaryText,
-          '你和 TA 都来自新东方校友圈');
+      expect(view.intersectionReasons.first.primaryText, '你和 TA 都来自新东方校友圈');
     });
 
     test('时间语义：createdAt 用真实创作时间，updatedAt/publishedAt 透传 (T1)', () {

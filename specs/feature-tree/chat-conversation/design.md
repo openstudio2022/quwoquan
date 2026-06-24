@@ -252,6 +252,7 @@ abstract class ChatRepository {
    → 发布 AssistantMentioned 事件 → assistant-service 消费
 5. assistant-service 处理后通过 SendMessage API 回复（senderId=assistant:{skillId}, type=assistant_reply）
 6. 移除助手 → DELETE /conversations/{id}/assistant → 删除 assistant member
+   → 发布 AssistantRemoved 事件 → realtime-gateway/端上成员态同步
 ```
 
 **约束**：
@@ -366,7 +367,7 @@ chat-service 需完整纳入 `make gate` 流水线：
 | S12 | 端侧 gamma HTTP 契约 | | | ● | | A20 |
 | S13 | 基准性能测试 | | | ● | | A21 |
 | S14 | L1c Journey（会话列表/发消息/群管理） | | | | ● | A22~A24 |
-| S15 | L4 Patrol（真实设备 + 灰度性能） | | | | ● | A25 |
+| S15 | user_acceptance Patrol（真实设备 + 灰度性能） | | | | ● | A25 |
 | S16 | runtime 集成 + Makefile + 门禁 | ● | | ● | | A4(gate) |
 | S17 | 部署 + 灰度 + 生产 | | | ● | ● | A25 |
 

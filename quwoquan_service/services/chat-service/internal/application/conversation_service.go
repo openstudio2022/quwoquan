@@ -138,6 +138,11 @@ func (s *ConversationService) createDirectConversation(
 			"initial members exceed max group size",
 		)
 	}
+	if req.Type == conversationTypeGroup && !bypassRelationshipGate && !isCircleBoundCreateRequest(req) {
+		if err := s.validateGroupInitialMembers(ctx, req.CreatorId, initialMemberIds); err != nil {
+			return nil, err
+		}
+	}
 	receiptEnabled := maxGroupSize <= 50
 
 	conv := &model.Conversation{
@@ -326,6 +331,35 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req Diss
 		return err
 	}
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
+	return nil
+}
+
+// isCircleBoundCreateRequest reports whether the create request targets a
+// circle-derived group (circle default group or circle self-built group),
+// whose membership is governed by circle join rather than hand-picked mutual
+// contacts. The 发起群聊 hand-pick flow never sets these fields.
+func isCircleBoundCreateRequest(req CreateConversationRequest) bool {
+	return strings.TrimSpace(req.CircleId) != "" || strings.TrimSpace(req.CircleGroupId) != ""
+}
+
+// validateGroupInitialMembers enforces, server-side, that every hand-picked
+// initial member of an ad-hoc group is mutually followed by the creator and is
+// not in a block relationship. This mirrors the client candidate surfaces
+// (which only expose mutual contacts) so a forged request cannot inject
+// non-mutual or blocked members into a new group.
+func (s *ConversationService) validateGroupInitialMembers(ctx context.Context, creatorID string, memberIDs []string) error {
+	for _, memberID := range memberIDs {
+		capability, err := s.relationships.GetCapability(ctx, creatorID, memberID)
+		if err != nil {
+			return err
+		}
+		if capability.IsBlocked || capability.IsBlockedBy {
+			return chatBlocked("group conversation member blocked by relationship gate")
+		}
+		if !capability.IsMutual {
+			return chatNotMutual("group conversation requires mutual follow with each invited member")
+		}
+	}
 	return nil
 }
 

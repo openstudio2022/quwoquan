@@ -11,9 +11,9 @@ import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
 
 class _FakeCircleRepository extends MockCircleRepository {
-  _FakeCircleRepository({required List<CircleDto> circles}) : _circles = circles;
+  _FakeCircleRepository({required this.circles});
 
-  final List<CircleDto> _circles;
+  final List<CircleDto> circles;
 
   @override
   Future<List<CircleDto>> listCircles({
@@ -25,7 +25,7 @@ class _FakeCircleRepository extends MockCircleRepository {
     String? sort,
     String? subCategory,
   }) async {
-    return _circles.take(limit).toList(growable: false);
+    return circles.take(limit).toList(growable: false);
   }
 }
 
@@ -51,7 +51,7 @@ class _StubCloudHttpClient extends CloudHttpClient {
 /// 规范：specs/ux/error-and-permission-semantics.md
 /// 领域：content，实体：entry（创作草稿/入口）
 void main() {
-  group('CreateLocationService', () {
+  group('RemoteCreateLocationService', () {
     test('nearby parses cloud response', () async {
       final httpClient = _StubCloudHttpClient((_, headers) async {
         expect(headers, isNotNull);
@@ -69,7 +69,7 @@ void main() {
           }),
         );
       });
-      final service = CreateLocationService(
+      final service = RemoteCreateLocationService(
         httpClient: httpClient,
         baseUrl: 'http://127.0.0.1:18080',
       );
@@ -89,7 +89,7 @@ void main() {
           }),
         );
       });
-      final service = CreateLocationService(
+      final service = RemoteCreateLocationService(
         httpClient: httpClient,
         baseUrl: 'http://127.0.0.1:18080',
       );
@@ -118,7 +118,7 @@ void main() {
           statusCode: 429,
         );
       });
-      final service = CreateLocationService(
+      final service = RemoteCreateLocationService(
         httpClient: httpClient,
         baseUrl: 'http://127.0.0.1:18080',
       );
@@ -127,6 +127,51 @@ void main() {
       expect(first.length, 1);
       expect(second.length, 1);
       expect(second.first.name, 'A');
+    });
+  });
+
+  // alpha/mock 模式专用：Mock 必须永远可用、永不发 HTTP、永不抛错，
+  // 否则会回归「附近地点访问失败」整页断点（specs/ux/error-and-permission-semantics.md）。
+  group('MockCreateLocationService', () {
+    test('ensureLocationPermission 始终授予并返回位置（不依赖系统定位）', () async {
+      final service = MockCreateLocationService();
+      final outcome = await service.ensureLocationPermission();
+      expect(outcome.result, LocationPermissionResult.granted);
+      expect(outcome.position, isNotNull);
+    });
+
+    test('openAppSettings 不抛异常并返回 true', () async {
+      final service = MockCreateLocationService();
+      expect(await service.openAppSettings(), isTrue);
+    });
+
+    test('nearby 始终返回非空 canonical POI（杜绝附近地点访问失败断点）', () async {
+      final service = MockCreateLocationService();
+      final nearby = await service.nearby();
+      expect(nearby, isNotEmpty);
+      for (final poi in nearby) {
+        expect(poi.name.trim(), isNotEmpty);
+      }
+    });
+
+    test('search 空关键字回退到 nearby（与 Remote 语义一致）', () async {
+      final service = MockCreateLocationService();
+      final fallback = await service.search('   ');
+      final nearby = await service.nearby();
+      expect(fallback.length, nearby.length);
+    });
+
+    test('search 命中关键字时按名称/地址过滤', () async {
+      final service = MockCreateLocationService();
+      final matched = await service.search('天府');
+      expect(matched, isNotEmpty);
+      expect(matched.every((poi) => poi.name.contains('天府') || poi.address.contains('天府')), isTrue);
+    });
+
+    test('search 无命中时返回空列表而非抛异常', () async {
+      final service = MockCreateLocationService();
+      final matched = await service.search('完全不存在的地点XYZ');
+      expect(matched, isEmpty);
     });
   });
 

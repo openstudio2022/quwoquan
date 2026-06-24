@@ -15,8 +15,24 @@ eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profi
 ASSISTANT_PORT="${ASSISTANT_PORT}"
 CHAT_PORT="${CHAT_PORT}"
 GATEWAY_PORT="${GATEWAY_PORT}"
+PRODUCT_OPS_PORT="${PRODUCT_OPS_PORT}"
 MEDIA_PORT="${MEDIA_PORT}"
 MEDIA_ORIGIN_PORT="${MEDIA_ORIGIN_PORT}"
+CONTENT_PORT="${CONTENT_PORT}"
+PRODUCT_OPS_SERVICE_PORT="${PRODUCT_OPS_SERVICE_PORT}"
+MEDIA_PROCESSOR_PORT="${MEDIA_PROCESSOR_PORT}"
+PUBLIC_API_HOST="beta-api.quwoquan-env.test"
+PUBLIC_PRODUCT_OPS_HOST="beta-product-ops.quwoquan-env.test"
+PUBLIC_AVATAR_HOST="beta-avatar.quwoquan-env.test"
+PUBLIC_IMAGE_HOST="beta-image.quwoquan-env.test"
+PUBLIC_VIDEO_HOST="beta-video.quwoquan-env.test"
+PUBLIC_UPLOAD_HOST="beta-upload.quwoquan-env.test"
+LOCAL_API_HOST="beta-api.localhost"
+LOCAL_PRODUCT_OPS_HOST="beta-product-ops.localhost"
+LOCAL_AVATAR_HOST="beta-avatar.localhost"
+LOCAL_IMAGE_HOST="beta-image.localhost"
+LOCAL_VIDEO_HOST="beta-video.localhost"
+LOCAL_UPLOAD_HOST="beta-upload.localhost"
 CHAT_SEED_REFS="${CHAT_SEED_REFS:-chat_core,chat_settings_core,chat_contacts_core,chat_group_flow_core}"
 CHAT_MONGO_URI="${CHAT_MONGO_URI:-mongodb://localhost:27017}"
 CHAT_MONGO_DATABASE="${CHAT_MONGO_DATABASE:-quwoquan_chat_local}"
@@ -28,13 +44,16 @@ GATEWAY_BASE_URL_EXPLICIT=0
 if [[ -n "${GATEWAY_BASE_URL:-}" ]]; then
   GATEWAY_BASE_URL_EXPLICIT=1
 else
-  GATEWAY_BASE_URL="http://127.0.0.1:${GATEWAY_PORT}"
+  GATEWAY_BASE_URL="https://${PUBLIC_API_HOST}:${GATEWAY_PORT}"
 fi
 LOCAL_PUBLIC_HOST="${LOCAL_PUBLIC_HOST:-}"
 MEDIA_AVATAR_CDN_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-}"
 MEDIA_IMAGE_CDN_BASE_URL="${MEDIA_IMAGE_CDN_BASE_URL:-}"
 MEDIA_VIDEO_CDN_BASE_URL="${MEDIA_VIDEO_CDN_BASE_URL:-}"
 MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-}"
+INTERNAL_GATEWAY_BASE_URL="http://127.0.0.1:${CONTENT_PORT}"
+INTERNAL_MEDIA_BASE_URL="http://127.0.0.1:${MEDIA_PROCESSOR_PORT}"
+INTERNAL_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}"
 APP_CURRENT_USER_ID="${APP_CURRENT_USER_ID:-fixture_user_current}"
 ASSISTANT_SEED_REFS="${ASSISTANT_SEED_REFS:-assistant_p0_core}"
 FLUTTER_DEVICE_ID="${FLUTTER_DEVICE_ID:-}"
@@ -53,6 +72,12 @@ INSTANCE_NAMESPACE="${INSTANCE_NAMESPACE:-app-beta-manual}"
 BETA_MANUAL_OWNER_ID="${BETA_MANUAL_STACK_NAME}-$$-$(date +%s)"
 export BETA_MANUAL_OWNER_ID
 source "$ROOT_DIR/agent_ops/lib/beta_manual_lifecycle.sh"
+TLS_PROXY_NAME="quwoquan_beta_tls_proxy"
+TLS_PROXY_CADDYFILE="$LOG_DIR/beta-public-plane.Caddyfile"
+TLS_PROXY_DATA_DIR="$LOG_DIR/caddy-data"
+TLS_PROXY_CONFIG_DIR="$LOG_DIR/caddy-config"
+CONTAINER_RUNTIME=""
+CONTAINER_HOST_ALIAS=""
 
 usage() {
   cat <<EOF
@@ -505,18 +530,25 @@ fi
 DEVICE_KIND="$(detect_device_kind "$FLUTTER_DEVICE_ID")"
 ADB_REVERSE_ENABLED=0
 if [[ -z "$LOCAL_PUBLIC_HOST" ]]; then
-  case "$DEVICE_KIND" in
-    android_emulator) LOCAL_PUBLIC_HOST="10.0.2.2" ;;
-    *) LOCAL_PUBLIC_HOST="127.0.0.1" ;;
-  esac
+  LOCAL_PUBLIC_HOST="$PUBLIC_API_HOST"
 fi
 if [[ "$GATEWAY_BASE_URL_EXPLICIT" == "0" ]]; then
-  GATEWAY_BASE_URL="http://${LOCAL_PUBLIC_HOST}:${GATEWAY_PORT}"
+  GATEWAY_BASE_URL="https://${PUBLIC_API_HOST}:${GATEWAY_PORT}"
 fi
-MEDIA_AVATAR_CDN_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-http://${LOCAL_PUBLIC_HOST}:${MEDIA_PORT}}"
-MEDIA_IMAGE_CDN_BASE_URL="${MEDIA_IMAGE_CDN_BASE_URL:-http://${LOCAL_PUBLIC_HOST}:${MEDIA_PORT}}"
-MEDIA_VIDEO_CDN_BASE_URL="${MEDIA_VIDEO_CDN_BASE_URL:-http://${LOCAL_PUBLIC_HOST}:${MEDIA_PORT}}"
-MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-http://${LOCAL_PUBLIC_HOST}:${MEDIA_PORT}}"
+MEDIA_AVATAR_CDN_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-https://${PUBLIC_AVATAR_HOST}:${MEDIA_PORT}}"
+MEDIA_IMAGE_CDN_BASE_URL="${MEDIA_IMAGE_CDN_BASE_URL:-https://${PUBLIC_IMAGE_HOST}:${MEDIA_PORT}}"
+MEDIA_VIDEO_CDN_BASE_URL="${MEDIA_VIDEO_CDN_BASE_URL:-https://${PUBLIC_VIDEO_HOST}:${MEDIA_PORT}}"
+MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-https://${PUBLIC_UPLOAD_HOST}:${MEDIA_PORT}}"
+if [[ "$DEVICE_KIND" == android_* ]]; then
+  LOCAL_PUBLIC_HOST="$LOCAL_API_HOST"
+  if [[ "$GATEWAY_BASE_URL_EXPLICIT" == "0" ]]; then
+    GATEWAY_BASE_URL="https://${LOCAL_API_HOST}:${GATEWAY_PORT}"
+  fi
+  MEDIA_AVATAR_CDN_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL/https:\/\/${PUBLIC_AVATAR_HOST}:https:\/\/${LOCAL_AVATAR_HOST}:}"
+  MEDIA_IMAGE_CDN_BASE_URL="${MEDIA_IMAGE_CDN_BASE_URL/https:\/\/${PUBLIC_IMAGE_HOST}:https:\/\/${LOCAL_IMAGE_HOST}:}"
+  MEDIA_VIDEO_CDN_BASE_URL="${MEDIA_VIDEO_CDN_BASE_URL/https:\/\/${PUBLIC_VIDEO_HOST}:https:\/\/${LOCAL_VIDEO_HOST}:}"
+  MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL/https:\/\/${PUBLIC_UPLOAD_HOST}:https:\/\/${LOCAL_UPLOAD_HOST}:}"
+fi
 
 case "$VERIFY_MODE" in
   fast|full) ;;
@@ -540,6 +572,11 @@ bash "$ROOT_DIR/quwoquan_service/scripts/runtime/build_service_env_package.sh" -
 
 if [[ "$RESTART_STACK" == "1" || "$CLEAN_ENV" == "1" ]]; then
   echo "[app-beta-manual] restarting managed beta stack before launch"
+  if command -v docker >/dev/null 2>&1; then
+    docker rm -f "$TLS_PROXY_NAME" >/dev/null 2>&1 || true
+  elif command -v podman >/dev/null 2>&1; then
+    podman rm -f "$TLS_PROXY_NAME" >/dev/null 2>&1 || true
+  fi
   beta_manual_stop_stack "$CLEAN_ENV"
   beta_manual_init
 fi
@@ -561,8 +598,143 @@ beta_manual_record_metadata "media_avatar_cdn_base_url" "$MEDIA_AVATAR_CDN_BASE_
 beta_manual_record_metadata "seed_verify_mode" "$VERIFY_MODE"
 beta_manual_record_metadata "media_prep_mode" "$MEDIA_PREP_MODE"
 
+resolve_container_runtime() {
+  if [[ -n "$CONTAINER_RUNTIME" ]]; then
+    return 0
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    CONTAINER_RUNTIME="docker"
+    CONTAINER_HOST_ALIAS="host.docker.internal"
+    return 0
+  fi
+  if command -v podman >/dev/null 2>&1; then
+    CONTAINER_RUNTIME="podman"
+    CONTAINER_HOST_ALIAS="host.containers.internal"
+    return 0
+  fi
+  echo "GATE_BLOCK: docker/podman not found; beta HTTPS public plane cannot start" >&2
+  exit 2
+}
+
+beta_manual_prepare_tls_caddyfile() {
+  resolve_container_runtime
+  mkdir -p "$TLS_PROXY_DATA_DIR" "$TLS_PROXY_CONFIG_DIR"
+  cat >"$TLS_PROXY_CADDYFILE" <<EOF
+{
+	admin off
+	local_certs
+}
+
+(local_tls) {
+	tls internal
+}
+
+(media_cors) {
+	header {
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+		Access-Control-Allow-Headers "*"
+		Cross-Origin-Resource-Policy "cross-origin"
+	}
+}
+
+${PUBLIC_API_HOST},
+${LOCAL_API_HOST} {
+	import local_tls
+	reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}
+}
+
+${PUBLIC_PRODUCT_OPS_HOST},
+${LOCAL_PRODUCT_OPS_HOST} {
+	import local_tls
+	reverse_proxy ${CONTAINER_HOST_ALIAS}:${PRODUCT_OPS_SERVICE_PORT}
+}
+
+${PUBLIC_AVATAR_HOST},
+${PUBLIC_IMAGE_HOST},
+${PUBLIC_VIDEO_HOST},
+${PUBLIC_UPLOAD_HOST},
+${LOCAL_AVATAR_HOST},
+${LOCAL_IMAGE_HOST},
+${LOCAL_VIDEO_HOST},
+${LOCAL_UPLOAD_HOST} {
+	import local_tls
+	import media_cors
+	reverse_proxy ${CONTAINER_HOST_ALIAS}:${MEDIA_PROCESSOR_PORT}
+}
+EOF
+}
+
+beta_manual_stop_tls_proxy() {
+  if command -v docker >/dev/null 2>&1; then
+    docker rm -f "$TLS_PROXY_NAME" >/dev/null 2>&1 || true
+    return 0
+  fi
+  if command -v podman >/dev/null 2>&1; then
+    podman rm -f "$TLS_PROXY_NAME" >/dev/null 2>&1 || true
+  fi
+}
+
+beta_manual_start_tls_proxy() {
+  beta_manual_prepare_tls_caddyfile
+  beta_manual_stop_tls_proxy
+  "$CONTAINER_RUNTIME" run -d \
+    --name "$TLS_PROXY_NAME" \
+    -v "$TLS_PROXY_CADDYFILE:/etc/caddy/Caddyfile:ro" \
+    -v "$TLS_PROXY_DATA_DIR:/data" \
+    -v "$TLS_PROXY_CONFIG_DIR:/config" \
+    -p "${GATEWAY_PORT}:443" \
+    -p "${PRODUCT_OPS_PORT}:443" \
+    -p "${MEDIA_PORT}:443" \
+    docker.io/library/caddy:2.8.4-alpine >/dev/null
+}
+
+beta_manual_wait_https_ok() {
+  local host="$1"
+  local port="$2"
+  local path="$3"
+  local label="$4"
+  local timeout="${5:-30}"
+  local deadline=$((SECONDS + timeout))
+  until curl -kfsS \
+    --resolve "${host}:${port}:127.0.0.1" \
+    "https://${host}:${port}${path}" >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      echo "${label} unavailable: https://${host}:${port}${path}" >&2
+      return 1
+    fi
+    sleep 0.5
+  done
+}
+
+beta_manual_wait_https_range_ok() {
+  local host="$1"
+  local port="$2"
+  local path="$3"
+  local label="$4"
+  local timeout="${5:-30}"
+  local deadline=$((SECONDS + timeout))
+  local status=""
+  until [[ "$status" == "206" ]]; do
+    status="$(
+      curl -kfsS \
+        --resolve "${host}:${port}:127.0.0.1" \
+        -r 0-1 \
+        -o /dev/null \
+        -w '%{http_code}' \
+        "https://${host}:${port}${path}" 2>/dev/null || true
+    )"
+    if (( SECONDS >= deadline )); then
+      echo "${label} unavailable: https://${host}:${port}${path}" >&2
+      return 1
+    fi
+    sleep 0.5
+  done
+}
+
 cleanup() {
   trap - EXIT INT TERM HUP TSTP
+  beta_manual_stop_tls_proxy
   beta_manual_stop_stack "$CLEAN_ENV" "$BETA_MANUAL_OWNER_ID"
 }
 trap cleanup EXIT
@@ -573,7 +745,9 @@ trap 'cleanup; exit 148' TSTP
 beta_manual_ensure_port_available "$ASSISTANT_PORT" "assistant-service"
 beta_manual_ensure_port_available "$CHAT_PORT" "chat-service"
 beta_manual_ensure_port_available "$GATEWAY_PORT" "gateway"
+beta_manual_ensure_port_available "$CONTENT_PORT" "gateway-upstream"
 beta_manual_ensure_port_available "$MEDIA_PORT" "media-edge"
+beta_manual_ensure_port_available "$MEDIA_PROCESSOR_PORT" "media-edge-upstream"
 beta_manual_ensure_port_available "$MEDIA_ORIGIN_PORT" "media-origin"
 
 echo "[app-beta-manual] logs: $LOG_DIR"
@@ -638,12 +812,12 @@ beta_manual_start_process \
   "$ROOT_DIR" \
   python3 agent_ops/deploy/lib/http_reverse_proxy.py \
     --listen-host 127.0.0.1 \
-    --listen-port "$MEDIA_PORT" \
+    --listen-port "$MEDIA_PROCESSOR_PORT" \
     --target-base-url "http://127.0.0.1:${MEDIA_ORIGIN_PORT}"
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "media edge current user avatar fixture" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "media edge post cover fixture" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_range_ok "http://127.0.0.1:${MEDIA_PORT}/media/video/s/archived-video/beta-sample.mp4" "media edge playable video range" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
-if [[ "$DEVICE_KIND" == "android_physical" && -n "$FLUTTER_DEVICE_ID" && "$LOCAL_PUBLIC_HOST" == "127.0.0.1" && -x "$(command -v adb 2>/dev/null || true)" ]]; then
+beta_manual_wait_http_ok "${INTERNAL_MEDIA_BASE_URL}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "media edge current user avatar fixture" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_MEDIA_BASE_URL}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "media edge post cover fixture" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_range_ok "${INTERNAL_MEDIA_BASE_URL}/media/video/s/archived-video/beta-sample.mp4" "media edge playable video range" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
+if [[ "$DEVICE_KIND" == android_* && -n "$FLUTTER_DEVICE_ID" && -x "$(command -v adb 2>/dev/null || true)" ]]; then
   adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${GATEWAY_PORT}" "tcp:${GATEWAY_PORT}" >/dev/null 2>&1 || true
   adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${MEDIA_PORT}" "tcp:${MEDIA_PORT}" >/dev/null 2>&1 || true
   adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${MEDIA_ORIGIN_PORT}" "tcp:${MEDIA_ORIGIN_PORT}" >/dev/null 2>&1 || true
@@ -708,7 +882,7 @@ beta_manual_start_process \
     REDIS_ADDR="$CHAT_REDIS_ADDR" \
     CHAT_GROUP_AVATAR_CDN_BASE_URL="$MEDIA_AVATAR_CDN_BASE_URL" \
     CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT="$MEDIA_DIR" \
-    USER_SERVICE_BASE_URL="$GATEWAY_BASE_URL" \
+    USER_SERVICE_BASE_URL="$INTERNAL_GATEWAY_BASE_URL" \
     RELIABLE_TASK_CATALOG_PATH="$ROOT_DIR/deploy/shared/reliable_task_module_catalog.yaml" \
     RELIABLE_TASK_RETENTION_POLICY_PATH="$ROOT_DIR/deploy/shared/reliable_task_retention_policy.yaml" \
     go run ./cmd/api
@@ -726,7 +900,7 @@ beta_manual_start_process \
   "$ROOT_DIR" \
   python3 agent_ops/assistant/dev_assistant_beta_gateway.py \
     --listen-host 127.0.0.1 \
-    --listen-port "$GATEWAY_PORT" \
+    --listen-port "$CONTENT_PORT" \
     --assistant-upstream-host 127.0.0.1 \
     --assistant-upstream-port "$ASSISTANT_PORT" \
     --chat-upstream-host 127.0.0.1 \
@@ -735,14 +909,14 @@ beta_manual_start_process \
     --image-cdn-base-url "$MEDIA_IMAGE_CDN_BASE_URL" \
     --video-cdn-base-url "$MEDIA_VIDEO_CDN_BASE_URL"
 
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/healthz" "gateway" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/assistant/skill-subscriptions" "assistant route" 60 || { echo "assistant log: $ASSISTANT_LOG" >&2; echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/config/app" "app config fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/content/feed" "content fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/inbox" "chat inbox route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/contacts" "chat contacts route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/conversations" "chat conversations route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
-python3 - "$GATEWAY_PORT" <<'PY' || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/healthz" "gateway" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/assistant/skill-subscriptions" "assistant route" 60 || { echo "assistant log: $ASSISTANT_LOG" >&2; echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/config/app" "app config fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/content/feed" "content fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/chat/inbox" "chat inbox route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/chat/contacts" "chat contacts route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/chat/conversations" "chat conversations route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
+python3 - "$CONTENT_PORT" <<'PY' || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
 import json
 import sys
 from urllib.request import Request, urlopen
@@ -761,28 +935,32 @@ with urlopen(req, timeout=30) as resp:
     if resp.status != 200:
         raise SystemExit(f"user sync route unhealthy: {resp.status}")
 PY
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "host media edge avatar route" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "gateway current user avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png" "gateway friend avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png" "gateway group avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "gateway post cover proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/circles" "circle fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/circles/fixture_circle_photo/feed" "circle feed fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/user/profile" "user fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/me" "current user fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/user/personas/active" "active persona fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/user/settings/appearance" "appearance fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/content/profile-subjects/fixture_user_current/posts" "profile posts fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/users/fixture_user_current/works" "profile works fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/users/fixture_user_current/circles" "profile circles fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/user/sub-accounts/fixture_user_current/relationship/capability" "relationship capability fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/entity/homepages" "entity fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/integration/locations/pois" "integration fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/app-messages" "notification fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/app-messages/unread-count" "notification unread-count route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/notifications/unread-count" "notification aggregate unread-count route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/content/feed/intersections?limit=4&channel=recommend" "feed intersections fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/rtc/calls" "rtc fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_start_tls_proxy
+beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/healthz" "gateway public health" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_https_ok "$PUBLIC_IMAGE_HOST" "$MEDIA_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "public media image route" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_https_range_ok "$PUBLIC_VIDEO_HOST" "$MEDIA_PORT" "/media/video/s/archived-video/beta-sample.mp4" "public media video route" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_https_ok "$PUBLIC_AVATAR_HOST" "$MEDIA_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "public media avatar route" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "gateway current user avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png" "gateway friend avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png" "gateway group avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "gateway post cover proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/circles" "circle fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/circles/fixture_circle_photo/feed" "circle feed fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/user/profile" "user fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/me" "current user fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/user/personas/active" "active persona fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/user/settings/appearance" "appearance fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/content/profile-subjects/fixture_user_current/posts" "profile posts fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/users/fixture_user_current/works" "profile works fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/users/fixture_user_current/circles" "profile circles fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/user/sub-accounts/fixture_user_current/relationship/capability" "relationship capability fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/entity/homepages" "entity fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/integration/locations/pois" "integration fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/app-messages" "notification fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/app-messages/unread-count" "notification unread-count route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/notifications/unread-count" "notification aggregate unread-count route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/content/feed/intersections?limit=4&channel=recommend" "feed intersections fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/rtc/calls" "rtc fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 
 python3 - "$REPORT" "$MANIFEST" "$GATEWAY_BASE_URL" "$ASSISTANT_PORT" "$CHAT_PORT" "$DEVICE_KIND" "$LOCAL_PUBLIC_HOST" "$MEDIA_AVATAR_CDN_BASE_URL" "$MEDIA_IMAGE_CDN_BASE_URL" "$MEDIA_VIDEO_CDN_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "http://127.0.0.1:${MEDIA_ORIGIN_PORT}" "$ADB_REVERSE_ENABLED" "$RESTARTED_FROM_PREVIOUS" "$FLUTTER_DEVICE_ID" "$VERIFY_MODE" "$MEDIA_PREP_MODE" <<'PY'
 import json
@@ -888,6 +1066,14 @@ if [[ "$SKIP_APP" == "1" ]]; then
 fi
 
 echo "[app-beta-manual] starting Flutter app on device: $FLUTTER_DEVICE_ID"
+if [[ "$DEVICE_KIND" == android_* ]]; then
+  if [[ ! -f "$TLS_PROXY_DATA_DIR/caddy/pki/authorities/local/root.crt" ]]; then
+    echo "GATE_BLOCK: beta local Android debug CA missing: $TLS_PROXY_DATA_DIR/caddy/pki/authorities/local/root.crt" >&2
+    exit 2
+  fi
+  export QWQ_ANDROID_LOCAL_ENV_CA_PATH="$TLS_PROXY_DATA_DIR/caddy/pki/authorities/local/root.crt"
+  export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1
+fi
 bash "$ROOT_DIR/quwoquan_app/scripts/device/start_app_instance.sh" \
   --env beta \
   --device-id "$FLUTTER_DEVICE_ID" \

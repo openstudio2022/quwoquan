@@ -32,6 +32,7 @@ def _print_preflight(report: dict, *, as_json: bool) -> None:
     runtime = report.get("runtime") or {}
     key = report.get("cursorApiKey") or {}
     network = report.get("network") or {}
+    cloud_api = report.get("cursorCloudApi") or {}
     print(f"[env preflight] runtime={'ready' if runtime.get('ready') else 'missing'}")
     print(f"[env preflight] resolvedPython={runtime.get('resolvedPython') or '<missing>'}")
     key_status = "present" if key.get("present") else "missing"
@@ -46,8 +47,33 @@ def _print_preflight(report: dict, *, as_json: bool) -> None:
             status = row.get("status") or row.get("error") or ""
             marker = "ok" if row.get("reachable") else "fail"
             print(f"  - {marker}: {row.get('url')} {status}")
+    if cloud_api.get("checked"):
+        status = "ready" if cloud_api.get("ready") else "failed"
+        key_type = cloud_api.get("keyType") or "unknown"
+        code = cloud_api.get("errorCode")
+        suffix = f" keyType={key_type}"
+        if code:
+            suffix += f" errorCode={code}"
+        print(f"[env preflight] cursorCloudApi={status}{suffix}")
+    elif cloud_api:
+        print(f"[env preflight] cursorCloudApi=skipped ({cloud_api.get('skipReason')})")
+    startup = report.get("cursorStartup") or {}
+    if startup.get("checked"):
+        print(
+            "[env preflight] cursorStartup="
+            + ("ready" if startup.get("ready") else "failed")
+            + f" model={startup.get('model')} runtime={startup.get('runtime')}"
+        )
+    elif startup:
+        print(f"[env preflight] cursorStartup=skipped ({startup.get('skipReason')})")
     for item in report.get("issues") or []:
         print(f"  - {item}", file=sys.stderr)
+
+
+def _cursor_startup_enabled(args: argparse.Namespace) -> bool:
+    if bool(getattr(args, "no_cursor_startup", False)):
+        return False
+    return bool(getattr(args, "cursor_startup", False))
 
 
 def handle_doctor(args: argparse.Namespace) -> None:
@@ -86,6 +112,10 @@ def handle_preflight(args: argparse.Namespace) -> None:
         check_network=not bool(getattr(args, "no_network", False)),
         endpoints=getattr(args, "endpoint", None),
         timeout_seconds=float(getattr(args, "timeout_seconds", 5.0)),
+        check_cursor_startup=_cursor_startup_enabled(args),
+        cursor_startup_model=str(getattr(args, "model", "composer-2") or "composer-2"),
+        cursor_startup_runtime=str(getattr(args, "runtime", "local") or "local"),
+        cursor_startup_timeout_seconds=float(getattr(args, "startup_timeout_seconds", 45.0)),
     )
     _print_preflight(report, as_json=bool(getattr(args, "json", False)))
     if not report.get("ready"):
@@ -113,9 +143,14 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
         "env",
         "preflight",
         "--json",
-        "--timeout-seconds",
-        str(float(getattr(args, "timeout_seconds", 5.0))),
+            "--timeout-seconds",
+            str(float(getattr(args, "timeout_seconds", 5.0))),
     ]
+    if _cursor_startup_enabled(args):
+        cmd.append("--cursor-startup")
+        cmd.extend(["--model", str(getattr(args, "model", "composer-2") or "composer-2")])
+        cmd.extend(["--runtime", str(getattr(args, "runtime", "local") or "local")])
+        cmd.extend(["--startup-timeout-seconds", str(float(getattr(args, "startup_timeout_seconds", 45.0)))])
     if bool(getattr(args, "no_cursor_key", False)):
         cmd.append("--no-cursor-key")
     if bool(getattr(args, "no_network", False)):
@@ -157,12 +192,18 @@ def handle_ready(args: argparse.Namespace) -> None:
             check_network=not bool(getattr(args, "no_network", False)),
             endpoints=getattr(args, "endpoint", None),
             timeout_seconds=float(getattr(args, "timeout_seconds", 5.0)),
+            check_cursor_startup=_cursor_startup_enabled(args),
+            cursor_startup_model=str(getattr(args, "model", "composer-2") or "composer-2"),
+            cursor_startup_runtime=str(getattr(args, "runtime", "local") or "local"),
+            cursor_startup_timeout_seconds=float(getattr(args, "startup_timeout_seconds", 45.0)),
         )
     )
     report = {
         "schemaVersion": "quwoquan_data.env_ready",
         "prepare": prepare,
         "preflight": preflight,
+        "cursorApiKey": preflight.get("cursorApiKey") or {},
+        "cursorStartup": preflight.get("cursorStartup") or {},
         "ready": bool(prepare.get("ready")) and bool(preflight.get("ready")),
     }
     if bool(getattr(args, "json", False)):
@@ -198,6 +239,10 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     ppf.add_argument("--no-cursor-key", action="store_true", help="跳过 CURSOR_API_KEY 检查（仅限单测/离线）")
     ppf.add_argument("--endpoint", action="append", help="覆盖网络探测端点，可重复")
     ppf.add_argument("--timeout-seconds", type=float, default=5.0)
+    ppf.add_argument("--cursor-startup", action="store_true", help="执行真实 Cursor SDK Agent.prompt 启动探针")
+    ppf.add_argument("--model", default="composer-2", help="Cursor startup probe model")
+    ppf.add_argument("--runtime", choices=["local", "cloud"], default="local", help="Cursor startup probe runtime")
+    ppf.add_argument("--startup-timeout-seconds", type=float, default=45.0)
     ppf.set_defaults(handler=handle_preflight)
 
     pr = sub.add_parser("ready", help="一键准备 data venv，并执行运行前环境验收")
@@ -208,4 +253,9 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pr.add_argument("--no-cursor-key", action="store_true", help="跳过 CURSOR_API_KEY 检查（仅限单测/离线）")
     pr.add_argument("--endpoint", action="append", help="覆盖网络探测端点，可重复")
     pr.add_argument("--timeout-seconds", type=float, default=5.0)
+    pr.add_argument("--no-cursor-startup", action="store_true", help="跳过真实 Cursor SDK Agent.prompt 启动探针（仅限单测/离线）")
+    pr.add_argument("--model", default="composer-2", help="Cursor startup probe model")
+    pr.add_argument("--runtime", choices=["local", "cloud"], default="local", help="Cursor startup probe runtime")
+    pr.add_argument("--startup-timeout-seconds", type=float, default=45.0)
+    pr.set_defaults(cursor_startup=True)
     pr.set_defaults(handler=handle_ready)

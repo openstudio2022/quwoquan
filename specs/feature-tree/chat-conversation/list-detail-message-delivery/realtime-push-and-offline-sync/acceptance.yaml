@@ -49,8 +49,9 @@ gwt_acceptance:
       - file: quwoquan_app/test/cloud/realtime/mock_realtime_delegate_test.dart
       - file: quwoquan_app/test/ui/chat/pages/chat_conversation_page_realtime_journey_test.dart
       recorded:
-      - file: quwoquan_app/test/cloud/realtime/mock_realtime_delegate_test.dart
-      - file: quwoquan_app/test/ui/chat/pages/chat_conversation_page_realtime_journey_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/mock_realtime_delegate__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/chat/pages/chat_conversation_page_realtime_journey__user_acceptance_test.dart
+      - file: quwoquan_service/services/chat-service/tests/api_integration/contract_fixture_seed_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
@@ -71,6 +72,13 @@ gwt_acceptance:
         cases:
         - user_acceptance.chat_conversation.list_detail_message_delivery.realtime_push_and_offline_sync.device_journey
         envs:
+        - gamma_local
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.chat_conversation.list_detail_message_delivery.realtime_push_and_offline_sync.gwt1_api_integration
+        envs:
+        - beta
         - gamma
     notes: []
   GWT2:
@@ -95,7 +103,7 @@ gwt_acceptance:
       planned:
       - file: quwoquan_app/test/cloud/realtime/realtime_member_joined_handler_test.dart
       recorded:
-      - file: quwoquan_app/test/cloud/realtime/realtime_member_joined_handler_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_member_joined_handler__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -142,10 +150,11 @@ gwt_acceptance:
       - file: quwoquan_app/test/cloud/realtime/realtime_lifecycle_mapping_test.dart
       - file: quwoquan_app/test/cloud/realtime/realtime_root_startup_test.dart
       recorded:
-      - file: quwoquan_app/test/cloud/realtime/remote_realtime_lifecycle_test.dart
-      - file: quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart
-      - file: quwoquan_app/test/cloud/realtime/realtime_lifecycle_mapping_test.dart
-      - file: quwoquan_app/test/cloud/realtime/realtime_root_startup_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/remote_realtime_lifecycle__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_transport_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_lifecycle_mapping__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_root_startup__local_contract_test.dart
+      - file: quwoquan_service/services/chat-service/tests/api_integration/message_sync_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
@@ -189,7 +198,7 @@ gwt_acceptance:
       planned:
       - file: quwoquan_app/test/cloud/realtime/realtime_provider_mode_switch_test.dart
       recorded:
-      - file: quwoquan_app/test/cloud/realtime/realtime_provider_mode_switch_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_provider_mode_switch__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:

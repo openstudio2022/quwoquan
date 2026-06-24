@@ -3,13 +3,13 @@
   "environments": {
     "alpha": {
       "publicBases": {
-        "api": "http://127.0.0.1:17000",
-        "realtime": "ws://127.0.0.1:17000",
-        "productOps": "http://127.0.0.1:17010",
-        "mediaAvatar": "http://127.0.0.1:17100",
-        "mediaImage": "http://127.0.0.1:17100",
-        "mediaVideo": "http://127.0.0.1:17100",
-        "mediaUpload": "http://127.0.0.1:17100"
+        "api": "https://alpha-api.quwoquan-env.test:17000",
+        "realtime": "wss://alpha-api.quwoquan-env.test:17000",
+        "productOps": "https://alpha-product-ops.quwoquan-env.test:17010",
+        "mediaAvatar": "https://alpha-avatar.quwoquan-env.test:17100",
+        "mediaImage": "https://alpha-image.quwoquan-env.test:17100",
+        "mediaVideo": "https://alpha-video.quwoquan-env.test:17100",
+        "mediaUpload": "https://alpha-upload.quwoquan-env.test:17100"
       },
       "subnets": {
         "edge": "172.30.10.0/24",
@@ -46,7 +46,14 @@
           "distribution": "internal-only"
         }
       },
-      "hostAllowlist": ["127.0.0.1", "10.0.2.2", "localhost"],
+      "hostAllowlist": [
+        "alpha-api.quwoquan-env.test",
+        "alpha-product-ops.quwoquan-env.test",
+        "alpha-avatar.quwoquan-env.test",
+        "alpha-image.quwoquan-env.test",
+        "alpha-video.quwoquan-env.test",
+        "alpha-upload.quwoquan-env.test"
+      ],
       "forbiddenHostTokens": [
         "api.quwoquan.com",
         "gamma-api.quwoquan-env.test",
@@ -59,13 +66,13 @@
     },
     "beta": {
       "publicBases": {
-        "api": "http://127.0.0.1:18000",
-        "realtime": "ws://127.0.0.1:18000",
-        "productOps": "http://127.0.0.1:18010",
-        "mediaAvatar": "http://127.0.0.1:18100",
-        "mediaImage": "http://127.0.0.1:18100",
-        "mediaVideo": "http://127.0.0.1:18100",
-        "mediaUpload": "http://127.0.0.1:18100"
+        "api": "https://beta-api.quwoquan-env.test:18000",
+        "realtime": "wss://beta-api.quwoquan-env.test:18000",
+        "productOps": "https://beta-product-ops.quwoquan-env.test:18010",
+        "mediaAvatar": "https://beta-avatar.quwoquan-env.test:18100",
+        "mediaImage": "https://beta-image.quwoquan-env.test:18100",
+        "mediaVideo": "https://beta-video.quwoquan-env.test:18100",
+        "mediaUpload": "https://beta-upload.quwoquan-env.test:18100"
       },
       "subnets": {
         "edge": "172.31.10.0/24",
@@ -102,7 +109,14 @@
           "distribution": "internal-only"
         }
       },
-      "hostAllowlist": ["127.0.0.1", "10.0.2.2", "localhost"],
+      "hostAllowlist": [
+        "beta-api.quwoquan-env.test",
+        "beta-product-ops.quwoquan-env.test",
+        "beta-avatar.quwoquan-env.test",
+        "beta-image.quwoquan-env.test",
+        "beta-video.quwoquan-env.test",
+        "beta-upload.quwoquan-env.test"
+      ],
       "forbiddenHostTokens": [
         "api.quwoquan.com",
         "gamma-api.quwoquan-env.test",
@@ -115,13 +129,13 @@
     },
     "gamma": {
       "publicBases": {
-        "api": "http://127.0.0.1:19000",
-        "realtime": "ws://127.0.0.1:19000",
-        "productOps": "http://127.0.0.1:19010",
-        "mediaAvatar": "http://127.0.0.1:19100",
-        "mediaImage": "http://127.0.0.1:19100",
-        "mediaVideo": "http://127.0.0.1:19100",
-        "mediaUpload": "http://127.0.0.1:19100"
+        "api": "https://gamma-api.quwoquan-env.test:19000",
+        "realtime": "wss://gamma-api.quwoquan-env.test:19000",
+        "productOps": "https://gamma-product-ops.quwoquan-env.test:19010",
+        "mediaAvatar": "https://gamma-avatar.quwoquan-env.test:19100",
+        "mediaImage": "https://gamma-image.quwoquan-env.test:19100",
+        "mediaVideo": "https://gamma-video.quwoquan-env.test:19100",
+        "mediaUpload": "https://gamma-upload.quwoquan-env.test:19100"
       },
       "subnets": {
         "edge": "172.40.10.0/24",
@@ -158,7 +172,14 @@
           "distribution": "internal-only"
         }
       },
-      "hostAllowlist": ["127.0.0.1", "10.0.2.2", "localhost"],
+      "hostAllowlist": [
+        "gamma-api.quwoquan-env.test",
+        "gamma-product-ops.quwoquan-env.test",
+        "gamma-avatar.quwoquan-env.test",
+        "gamma-image.quwoquan-env.test",
+        "gamma-video.quwoquan-env.test",
+        "gamma-upload.quwoquan-env.test"
+      ],
       "forbiddenHostTokens": [
         "api.quwoquan.com",
         "avatar-cdn.quwoquan.com",
@@ -171,13 +192,13 @@
     },
     "prod": {
       "publicBases": {
-        "api": "http://118.31.239.122:19000",
-        "realtime": "ws://118.31.239.122:19000",
-        "productOps": "http://118.31.239.122:19010",
-        "mediaAvatar": "http://118.31.239.122:19100",
-        "mediaImage": "http://118.31.239.122:19100",
-        "mediaVideo": "http://118.31.239.122:19100",
-        "mediaUpload": "http://118.31.239.122:19100"
+        "api": "https://118.31.239.122:19000",
+        "realtime": "wss://118.31.239.122:19000",
+        "productOps": "https://118.31.239.122:19010",
+        "mediaAvatar": "https://118.31.239.122:19100",
+        "mediaImage": "https://118.31.239.122:19100",
+        "mediaVideo": "https://118.31.239.122:19100",
+        "mediaUpload": "https://118.31.239.122:19100"
       },
       "subnets": {
         "edge": "10.60.10.0/24",
@@ -236,13 +257,13 @@
       "backend": "local",
       "portProfile": "alpha-local",
       "publicBases": {
-        "api": "http://127.0.0.1:17000",
-        "realtime": "ws://127.0.0.1:17000",
-        "productOps": "http://127.0.0.1:17010",
-        "mediaAvatar": "http://127.0.0.1:17100",
-        "mediaImage": "http://127.0.0.1:17100",
-        "mediaVideo": "http://127.0.0.1:17100",
-        "mediaUpload": "http://127.0.0.1:17100"
+        "api": "https://alpha-api.quwoquan-env.test:17000",
+        "realtime": "wss://alpha-api.quwoquan-env.test:17000",
+        "productOps": "https://alpha-product-ops.quwoquan-env.test:17010",
+        "mediaAvatar": "https://alpha-avatar.quwoquan-env.test:17100",
+        "mediaImage": "https://alpha-image.quwoquan-env.test:17100",
+        "mediaVideo": "https://alpha-video.quwoquan-env.test:17100",
+        "mediaUpload": "https://alpha-upload.quwoquan-env.test:17100"
       },
       "origins": {
         "mediaOrigin": "http://127.0.0.1:17110"
@@ -253,13 +274,13 @@
       "backend": "local",
       "portProfile": "beta-local",
       "publicBases": {
-        "api": "http://127.0.0.1:18000",
-        "realtime": "ws://127.0.0.1:18000",
-        "productOps": "http://127.0.0.1:18010",
-        "mediaAvatar": "http://127.0.0.1:18100",
-        "mediaImage": "http://127.0.0.1:18100",
-        "mediaVideo": "http://127.0.0.1:18100",
-        "mediaUpload": "http://127.0.0.1:18100"
+        "api": "https://beta-api.quwoquan-env.test:18000",
+        "realtime": "wss://beta-api.quwoquan-env.test:18000",
+        "productOps": "https://beta-product-ops.quwoquan-env.test:18010",
+        "mediaAvatar": "https://beta-avatar.quwoquan-env.test:18100",
+        "mediaImage": "https://beta-image.quwoquan-env.test:18100",
+        "mediaVideo": "https://beta-video.quwoquan-env.test:18100",
+        "mediaUpload": "https://beta-upload.quwoquan-env.test:18100"
       },
       "origins": {
         "mediaOrigin": "http://127.0.0.1:18110"
@@ -270,13 +291,13 @@
       "backend": "local",
       "portProfile": "gamma-local",
       "publicBases": {
-        "api": "http://127.0.0.1:19000",
-        "realtime": "ws://127.0.0.1:19000",
-        "productOps": "http://127.0.0.1:19010",
-        "mediaAvatar": "http://127.0.0.1:19100",
-        "mediaImage": "http://127.0.0.1:19100",
-        "mediaVideo": "http://127.0.0.1:19100",
-        "mediaUpload": "http://127.0.0.1:19100"
+        "api": "https://gamma-api.quwoquan-env.test:19000",
+        "realtime": "wss://gamma-api.quwoquan-env.test:19000",
+        "productOps": "https://gamma-product-ops.quwoquan-env.test:19010",
+        "mediaAvatar": "https://gamma-avatar.quwoquan-env.test:19100",
+        "mediaImage": "https://gamma-image.quwoquan-env.test:19100",
+        "mediaVideo": "https://gamma-video.quwoquan-env.test:19100",
+        "mediaUpload": "https://gamma-upload.quwoquan-env.test:19100"
       },
       "origins": {
         "mediaOrigin": "http://127.0.0.1:19110"
@@ -287,13 +308,13 @@
       "backend": "local",
       "portProfile": "prod-sim",
       "publicBases": {
-        "api": "http://127.0.0.1:20000",
-        "realtime": "ws://127.0.0.1:20000",
-        "productOps": "http://127.0.0.1:20010",
-        "mediaAvatar": "http://127.0.0.1:20100",
-        "mediaImage": "http://127.0.0.1:20100",
-        "mediaVideo": "http://127.0.0.1:20100",
-        "mediaUpload": "http://127.0.0.1:20100"
+        "api": "https://prod-api.quwoquan-env.test:20000",
+        "realtime": "wss://prod-api.quwoquan-env.test:20000",
+        "productOps": "https://prod-product-ops.quwoquan-env.test:20010",
+        "mediaAvatar": "https://prod-avatar.quwoquan-env.test:20100",
+        "mediaImage": "https://prod-image.quwoquan-env.test:20100",
+        "mediaVideo": "https://prod-video.quwoquan-env.test:20100",
+        "mediaUpload": "https://prod-upload.quwoquan-env.test:20100"
       },
       "origins": {
         "mediaOrigin": "http://127.0.0.1:20110"
@@ -305,13 +326,13 @@
       "portProfile": null,
       "sharedClusterNote": "gray-initial and full share the same physical cluster because of current cost constraints; gamma is local-only and has no remote target",
       "publicBases": {
-        "api": "http://118.31.239.122:19000",
-        "realtime": "ws://118.31.239.122:19000",
-        "productOps": "http://118.31.239.122:19010",
-        "mediaAvatar": "http://118.31.239.122:19100",
-        "mediaImage": "http://118.31.239.122:19100",
-        "mediaVideo": "http://118.31.239.122:19100",
-        "mediaUpload": "http://118.31.239.122:19100"
+        "api": "https://118.31.239.122:19000",
+        "realtime": "wss://118.31.239.122:19000",
+        "productOps": "https://118.31.239.122:19010",
+        "mediaAvatar": "https://118.31.239.122:19100",
+        "mediaImage": "https://118.31.239.122:19100",
+        "mediaVideo": "https://118.31.239.122:19100",
+        "mediaUpload": "https://118.31.239.122:19100"
       }
     }
   }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the legacy test directory inventory baseline."""
+"""Generate the canonical bridge coverage inventory for three-layer tests."""
 
 from __future__ import annotations
 
@@ -24,7 +24,9 @@ def main() -> int:
 
     print(f"[inventory] wrote {INVENTORY_PATH.relative_to(Path.cwd())}")
     for area_name, area in inventory["areas"].items():
-        print(f"[inventory] {area_name}: {area['legacy_count']} legacy files")
+        print(
+            f"[inventory] {area_name}: pending={area['pending_count']} bridged={area['bridged_count']}"
+        )
     return 0
 
 

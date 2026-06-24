@@ -1,28 +1,12 @@
 import 'package:flutter/foundation.dart';
 
-enum CreateMediaType {
-  image,
-  video,
-  gif,
-}
+enum CreateMediaType { image, video, gif }
 
-enum CreateMediaSource {
-  album,
-  camera,
-}
+enum CreateMediaSource { album, camera }
 
-enum MediaPickerCategory {
-  all,
-  video,
-  photo,
-  live,
-  fullscreen,
-}
+enum MediaPickerCategory { all, video, photo, live, fullscreen }
 
-enum MediaPickerEntryMode {
-  image,
-  video,
-}
+enum MediaPickerEntryMode { image, video }
 
 @immutable
 class CreateMediaItem {
@@ -54,6 +38,28 @@ class CreateMediaItem {
     if (!isImage || width <= 0 || height <= 0) return false;
     final ratio = height / width;
     return ratio >= 1.9;
+  }
+
+  CreateMediaItem copyWith({
+    String? id,
+    String? path,
+    CreateMediaType? type,
+    CreateMediaSource? source,
+    int? width,
+    int? height,
+    int? durationMs,
+    int? createdAtMs,
+  }) {
+    return CreateMediaItem(
+      id: id ?? this.id,
+      path: path ?? this.path,
+      type: type ?? this.type,
+      source: source ?? this.source,
+      width: width ?? this.width,
+      height: height ?? this.height,
+      durationMs: durationMs ?? this.durationMs,
+      createdAtMs: createdAtMs ?? this.createdAtMs,
+    );
   }
 }
 

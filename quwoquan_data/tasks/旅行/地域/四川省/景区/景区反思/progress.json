@@ -1,7 +1,7 @@
 {
   "schemaVersion": "quwoquan.task.progress",
   "taskId": "旅行/地域/四川省/景区/景区反思",
-  "updatedAt": "2026-06-20T18:10:34.315021+00:00",
+  "updatedAt": "2026-06-24T13:09:26.488782+00:00",
   "coverage": {
     "entities": {
       "done": [],
@@ -13,7 +13,6 @@
     "categoriesDone": []
   },
   "anglesByEntity": {},
-  "conditionCells": [],
   "openGaps": [
     "地点/景区/牛奶海 待补主页"
   ],
@@ -21,5 +20,5 @@
     "entities": 0,
     "posts": 0
   },
-  "lastRunId": "run_20260621_021034"
+  "lastRunId": "run_20260624_210926"
 }

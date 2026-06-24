@@ -912,10 +912,6 @@ files:
     zone: ui
     material_import: none
     imports_cupertino: false
-  - path: quwoquan_app/lib/ui/settings/pages/developer_settings_page.dart
-    zone: ui
-    material_import: none
-    imports_cupertino: true
   - path: quwoquan_app/lib/ui/settings/pages/settings_page.dart
     zone: ui
     material_import: full

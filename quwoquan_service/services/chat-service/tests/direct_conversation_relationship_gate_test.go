@@ -24,9 +24,6 @@ func (g stubRelationshipGate) GetCapability(context.Context, string, string) (ap
 
 func newGateTestConversationService(t *testing.T, gate application.RelationshipGate) *application.ConversationService {
 	t.Helper()
-	if mongoDB == nil {
-		t.Skip("MongoDB unavailable")
-	}
 	mr, err := miniredis.Run()
 	if err != nil {
 		t.Fatalf("miniredis: %v", err)
@@ -39,7 +36,7 @@ func newGateTestConversationService(t *testing.T, gate application.RelationshipG
 		DefaultScene: "general",
 	})
 	t.Cleanup(func() { _ = router.Close() })
-	store := persistence.NewMongoChatStore(mongoDB)
+	store := persistence.NewMongoChatStore(requireMongoDB(t))
 	cache := chatcache.NewConversationCache(router.Scene("general"))
 	return application.NewConversationService(store, cache, nil, testProfileResolver{}, gate, nil, nil, nil)
 }

@@ -1,4 +1,4 @@
-/// T4 Patrol E2E: 系统通知点击打开聊天详情
+/// user_acceptance Patrol: 系统通知点击打开聊天详情
 ///
 /// 守护：flutter_test 无法覆盖的系统推送通知交互场景。
 /// 验证收到聊天通知 → 点击通知 → 正确打开 ChatDetailPage 的完整链路。
@@ -33,7 +33,7 @@ void main() {
     ($) async {
       assert(
         _apiContractEnv == 'gamma',
-        'T4 tests must run with API_CONTRACT_ENV=gamma',
+        'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
       );
 
       await launchPatrolAppOnce($);
@@ -75,7 +75,7 @@ void main() {
     ($) async {
       assert(
         _apiContractEnv == 'gamma',
-        'T4 tests must run with API_CONTRACT_ENV=gamma',
+        'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
       );
 
       await launchPatrolAppOnce($);

@@ -14,6 +14,9 @@ sources:
       - profile_update_proposals
       - credential_bindings
       - anonymous_device_bindings
+      - profile_qr_tokens
+    migration_skip_tables:
+      - profile_qr_tokens
     name_overrides:
       UserProfile: Profile
       UserSetting: Setting

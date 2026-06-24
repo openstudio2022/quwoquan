@@ -1,4 +1,4 @@
-.PHONY: gate build test test-unit test-contract test-contract-local test-integration test-chat-ready-index-alpha-beta lint verify-metadata codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop
+.PHONY: gate build test test-unit test-contract test-contract-local test-integration test-chat-ready-index-alpha-beta lint verify-metadata codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop
 
 SCENARIO ?= content_feed
 DB ?= quwoquan_content
@@ -68,7 +68,7 @@ lint:
 verify-metadata:
 	go run ./tools/verify_metadata/ contracts/metadata
 
-codegen: codegen-content-service codegen-circle-service codegen-storage codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-content-service codegen-circle-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
 
 codegen-rec-intersection:
 	go run ./tools/codegen_rec_intersection --metadata-dir contracts/metadata --output-dir services/content-service/internal/generated
@@ -90,6 +90,12 @@ codegen-content-service:
 
 codegen-circle-service:
 	go run ./tools/codegen_circle_domain --metadata-dir contracts/metadata --output-dir services/circle-service/internal
+
+codegen-chat-service:
+	go run ./tools/codegen_chat_service --metadata-dir contracts/metadata --output-dir services/chat-service/internal --manifest services/chat-service/codegen_chat_service_manifest.yaml
+
+codegen-chat-domain-events:
+	go run ./tools/codegen_chat_domain_events --metadata-dir contracts/metadata --output-dir services/chat-service/internal
 
 codegen-rec-model-python:
 	go run ./tools/codegen_rec_model_python --metadata-dir contracts/metadata --service-dir recommendation/rec_model --output-dir services/rec-model-service/generated

@@ -42,7 +42,7 @@ qwq-data task resume <taskId>
 - 打印缺口 + `openGaps` + **近 3 条过往反思**（归因→决策），同类任务直接复用，避免重复踩坑。
 
 ## 飞轮闭环
-检索不足→换词再检索；模板失配→调路由/ SOP few-shot；执行问题→重写。
+检索不足→换词再检索；模板失配→调路由/结构质量契约；执行问题→重写。
 反复出现的同类归因 → 升级为 SOP / 模板 / 质量门改进（大循环），而非每轮临时绕过。
 
 自然语言等价触发：用户直接描述与本命令目标相同的需求时，也按 `/data-reflect` 语义执行；执行前仍需按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection，完成后按 Exit Review 收口。

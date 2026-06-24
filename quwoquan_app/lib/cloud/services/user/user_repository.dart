@@ -29,14 +29,12 @@ abstract class UserRepository {
   Future<ActivePersonaContextViewData> getActivePersonaContext();
   Future<PersonaManagementItemViewData> createPersona({
     required String displayName,
-    String? userHandle,
     String isolationLevel = 'open',
     String? purposeHint,
   });
   Future<PersonaManagementItemViewData> updatePersona(
     String subAccountId, {
     String? displayName,
-    String? userHandle,
     String? phone,
     String? email,
     String? avatarUrl,
@@ -142,15 +140,15 @@ class MockUserRepository implements UserRepository {
   @override
   Future<PersonaManagementItemViewData> createPersona({
     required String displayName,
-    String? userHandle,
     String isolationLevel = 'open',
     String? purposeHint,
   }) async {
     final generatedSubAccountId = 'persona_${displayName.hashCode.abs()}';
+    final generatedHandle = 'qw${generatedSubAccountId.hashCode.abs()}';
     return PersonaManagementItemViewData.fromMap(<String, dynamic>{
       'subAccountId': generatedSubAccountId,
       'displayName': displayName,
-      'userHandle': userHandle ?? '',
+      'userHandle': generatedHandle,
       'phone': _mockPersonas.first['phone'] ?? '',
       'email': _mockPersonas.first['email'] ?? '',
       'isolationLevel': isolationLevel,
@@ -239,7 +237,6 @@ class MockUserRepository implements UserRepository {
   Future<PersonaManagementItemViewData> updatePersona(
     String subAccountId, {
     String? displayName,
-    String? userHandle,
     String? phone,
     String? email,
     String? avatarUrl,
@@ -252,7 +249,7 @@ class MockUserRepository implements UserRepository {
     return PersonaManagementItemViewData.fromMap(<String, dynamic>{
       'subAccountId': subAccountId,
       'displayName': displayName ?? '已更新分身',
-      'userHandle': userHandle ?? 'updated_handle',
+      'userHandle': 'qw${subAccountId.hashCode.abs()}',
       'phone': phone ?? '',
       'email': email ?? '',
       'avatarUrl': avatarUrl ?? '',
@@ -347,14 +344,12 @@ class RemoteUserRepository implements UserRepository {
   @override
   Future<PersonaManagementItemViewData> createPersona({
     required String displayName,
-    String? userHandle,
     String isolationLevel = 'open',
     String? purposeHint,
   }) async {
     final uri = _uri(UserApiMetadata.createPersonaPath);
     final request = PersonaCreateRequestDto(
       displayName: displayName,
-      userHandle: userHandle,
       isolationLevel: isolationLevel,
       purposeHint: purposeHint,
     );
@@ -373,7 +368,6 @@ class RemoteUserRepository implements UserRepository {
   Future<PersonaManagementItemViewData> updatePersona(
     String subAccountId, {
     String? displayName,
-    String? userHandle,
     String? phone,
     String? email,
     String? avatarUrl,
@@ -388,7 +382,6 @@ class RemoteUserRepository implements UserRepository {
     );
     final request = PersonaUpdateRequestDto(
       displayName: displayName,
-      userHandle: userHandle,
       phone: phone,
       email: email,
       avatarUrl: avatarUrl,

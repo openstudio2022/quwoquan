@@ -118,7 +118,7 @@ def _gallery_brief() -> dict:
         "sourceCollectionId": "fixture:gallery:gongga-west",
         "imagePolicy": {"minImages": 4, "captionMaxChars": 20},
         "titleHint": "贡嘎西坡光影图集",
-        "templateId": "主题_风光画报",
+        "templateId": "主题_图文画报",
         "entityRefs": ENTITIES,
         "tagRefs": ["Topic/旅行/主题/风光"],
         "render": {"articleTemplate": "gallery", "fontPreset": "clean"},

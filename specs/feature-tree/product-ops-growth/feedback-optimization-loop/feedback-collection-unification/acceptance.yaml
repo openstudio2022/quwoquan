@@ -43,11 +43,7 @@ gwt_acceptance:
     - 人群匹配为纯函数（无 IO），可在派生路径内同步完成。
     tests:
       planned: []
-      recorded:
-      - file: services/content-service/internal/infrastructure/recommendation/interest_profile_test.go
-      - file: services/content-service/internal/infrastructure/recommendation/segment_test.go
-      - file: services/user-service/internal/infrastructure/projection/interest_profile_projector_test.go
-      - file: quwoquan_service/tools/verify_metadata/main_test.go
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -70,7 +66,11 @@ gwt_acceptance:
         envs:
         - beta
         - gamma
-    notes: []
+    notes:
+    - '[migrated_from_recorded_noncanonical] services/content-service/internal/infrastructure/recommendation/interest_profile_test.go'
+    - '[migrated_from_recorded_noncanonical] services/content-service/internal/infrastructure/recommendation/segment_test.go'
+    - '[migrated_from_recorded_noncanonical] services/user-service/internal/infrastructure/projection/interest_profile_projector_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/tools/verify_metadata/main_test.go'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

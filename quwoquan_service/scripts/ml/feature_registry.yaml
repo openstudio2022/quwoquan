@@ -162,6 +162,45 @@ scenarios:
       - name: qualityScore
         type: float
         source: rm_discovery_feed.qualityScore
+      - name: recScore
+        type: float
+        source: rm_discovery_feed.recScore
+        description: "Read-path ranking consumes this projected score only; no synchronous scorer call."
+      - name: contentVertical
+        type: categorical
+        source: rm_discovery_feed.contentVertical
+      - name: supplySource
+        type: categorical
+        source: rm_discovery_feed.supplySource
+      - name: semanticMentionCoverage
+        type: float
+        source: rm_discovery_feed.semanticMentionCoverage
+      - name: mediaCompleteness
+        type: float
+        source: rm_discovery_feed.mediaCompleteness
+      - name: intersectionFactStrength
+        type: float
+        source: rm_discovery_feed.intersectionFactStrength
+        description: "Candidate-level fact intersection strength; must outrank affinity in ranking fusion."
+      - name: intersectionFreshness
+        type: float
+        source: rm_discovery_feed.intersectionFreshness
+      - name: affinityIntersectionScore
+        type: float
+        source: rm_discovery_feed.affinityIntersectionScore
+        description: "Advisory affinity channel; requires intersectionConfidenceLabel before online use."
+      - name: intersectionSourceRefTop
+        type: categorical
+        source: rm_discovery_feed.intersectionSourceRefTop
+        nullable: true
+      - name: intersectionConfidenceLabel
+        type: categorical
+        source: rm_discovery_feed.intersectionConfidenceLabel
+        nullable: true
+      - name: intersectionClass
+        type: categorical
+        source: rm_discovery_feed.intersectionClass
+        nullable: true
       - name: publishHour
         type: int
         derived: "publishedAt.hour"

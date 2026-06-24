@@ -491,7 +491,13 @@
     10. 顺手清理: `author_impact_evidence.dart` 行尾箭头 `chevron_right`→`chevron_forward`（pre-existing iOS 语义债，`verify_dart_semantic` 门禁绿）；author impact + 我的交集 21 绿。
     - 第二轮门禁: `verify_dart_semantic` 绿、`verify_ui_mock_isolation` 绿、`verify_metadata` 绿；交集核心测试集合 83 绿。
     - 已知非本轮：`home_circles_hub_page_test`（`home-circle-grid-post-*` key 缺失）与 `homepage_detail_page_widget_test`（「主页暂不可用」失效态文案）2 例失败属 discovery/entity 脏树并发 WIP 漂移，与本轮交集改动无关。
-  - 状态: 大部收口（2026-06-21；N1/N2/N4/N5/N6/N7/N8/N9/N10 已闭并验证，证据见上）；**仅剩 N3** 未做——经证据级勘察定性为 reason 粒度 + env-seed-first 跨端云增量（云侧 spans 已就位、端侧 mock `getObjectIntersections` 走 `_objectEvidenceGroups` point 粒度无 spans，须先把云侧 hydration 后对象交集 reason 含 spans 固化进 `contracts/metadata/content/test_fixtures` → mock 读 fixture 删 `_objectEvidenceGroups` → UI 换 `IntersectionStatementRow` → object_page 测试重写），触 content-service fixtures 域（与 `post_service.go` 并发编辑同域），须避开撞车窗口**单独排期**，不在脏树并发 WIP 活跃期强推（避免半成品 fixture 成新债）。对象页交集行当前已具备统一图标 resolver + 整行可下钻 + 云侧文案，N3 增量价值是「句内对象名蓝字可点 + 句内头像 + 与我的交集渲染器字面一致」。
+  - 第三轮收口（2026-06-23 · N3 env-seed-first 主体）:
+    11. N3（env-seed-first + 删第二真相源）: 对象页「你们的交集」改为唯一经 contract fixture 真实下发。
+        - `content/test_fixtures/scenarios/content_scenarios.json` 的 `intersection_core.objectIntersections` 新增 `u_lin`/`c_photo`/`e_pku` 三个 alpha 测试对象，每个为完整 `IntersectionReason`（含 `primaryText` + `primarySpans`〔句内对象名蓝字可点 target〕 + 多 `intersectionPoints`〔关系分层 label/count/sampleAvatarUrls〕 + `connectionSummary`），与 erhai/duanqiao 同 schema、与 alpha/beta/gamma seed 同源。
+        - `MockIntersectionRepository.getObjectIntersections` 删除硬编码 `_objectEvidenceGroups` / `_EvidenceSeed` / `_connectionSummaryFor` / `_objectKindForObjectType`（按 objectType 合成事实的第二真相源），改为只读 `intersection_core.objectIntersections[objectId]`；无 seed 命中返回空（不造假、无 objectType 回退）。mock 与 remote 同走 `IntersectionReason.fromMap`。
+        - `build_alpha_lite_fixture_bundle.py`：content LITE_REFS 增 `intersection_core`，并裁剪为 `objectIntersections`-only（inbox/channelReasons 仍走端侧行内 canonical 回退，零改 inbox 行为，避免 inbox 测试级联）。`build_gamma_curated_fixture_bundle.py`：新增 `CURATED_OBJECT_INTERSECTION_DROP_IDS` 裁掉三个 alpha 测试对象，gamma 仅保留 `fixture_*` 真实首页对象交集（已校验 gamma-curated 0 命中测试 id）。
+        - 重写 `intersection_object_evidence_test.dart`：断言真实 fixture 链路（`intersectionId`/`actionTargetId` 取自 seed、`primaryText` + object span 蓝字可点、`join(primarySpans.text)==primaryText`、关系分层 label、count single-source、`把你们连在一起` 连接句、推荐排在事实后、未 seed 对象〔含合法 user 类型〕返回空证明无 objectType 回退）。`flutter test` 8 绿；object_page/intersection 目录 111 绿；profile shell/tab 41 绿。
+  - 状态: 收口（2026-06-23；N1–N10 全部已闭并验证，证据见上）。N3 第二真相源（mock 硬编码 `_objectEvidenceGroups`）已删除，对象页交集唯一经 fixture `IntersectionReason` 真实下发，自带 `primarySpans`（句内对象名蓝字 target + 头像簇）。**渲染/导航已统一**：我的主页「我的连接」与三对象页（用户 B / 圈子 C / 实体 D）**共用同一个** `ObjectIntersectionSection` → `ObjectIntersectionCard`/`EvidenceGroup` + `IntersectionTargetNavigator` + `IntersectionIconResolver` codegen（profile/circle/entity shell builders 同源），整行/名字/数字可下钻、归因 `tag_click` 1.8 权重不变——主页与对象页无渲染分叉，instruction #4「统一到与主页同一 ObjectIntersectionSection」已满足。**残留（独立 UI 视觉升级项，非主页/对象页分叉）**：当前共用的 `ObjectIntersectionCard` 以 `EvidenceGroup`（point 证据组行）呈现，尚未升级为直接渲染 `reason.primarySpans` 的 `IntersectionStatementRow`（句内蓝字+头像，目前仅 `我的交集` inbox/impact 时间线在用）。因主页与对象页同源，此升级须在 `ObjectIntersectionSection` 层**跨面统一**进行（一改全改，避免新分叉），seed 已下发 `primarySpans` 为该升级铺好数据；属可独立排期的全局视觉对齐增量，不构成主页对标缺口。
 
 ## 评论系统重做（Comment System Redesign）
 
@@ -540,7 +546,7 @@
   - 涉及文件: `quwoquan_service/services/content-service/internal/application/post_service.go`（`AdjustCommentCount`/`reconcilePostCommentCount`/`GetCommentCountsDelta`）、`internal/infrastructure/persistence/{comment_mongo_store.go,mongo_post_store.go}`
   - 状态: 待办（残留最终一致项；本轮已实现读时自愈 + 半开 watermark，强一致化作为后续可选里程碑）
 
-- [ ] R-CMT03 content-service 既有契约测试两项失败（与评论域硬化无关，working-tree 阻断）
+- [x] R-CMT03 content-service 既有契约测试两项失败（与评论域硬化无关，working-tree 阻断）
   - 区域: Service
   - 域: `content`
   - 事项: `go test ./services/content-service/tests/` 有两项失败：`TestContractFixtureSeed_ContentAlphaReadsViaHandler`（`content_discovery_core` seedSet 不含 `fixture_photo_001` 评论，断言 comments 非空失败）与 `TestIntersectionSource_EntityObjectProducesFolloweeVisited`（交集文案 `ixsrc_visitor_c来过这里` off-dictionary）。
@@ -549,7 +555,8 @@
   - 正确设计: 由 `content_scenarios.json` 共享池重构 / 交集文案词典的负责会话同步修正 seedSet 与词典；或将 `TestContractFixtureSeed` 的评论断言改读包含该评论的 seedSet。
   - 验收标准: clean working-tree 下 `go test ./services/content-service/tests/` 全绿。
   - 涉及文件: `quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json`、`quwoquan_service/contracts/metadata/recommendation/rec_model/{intersection_kind_registry.yaml,projections/intersection_reason.yaml}`、`services/content-service/tests/{contract_fixture_seed_contract_test.go,intersection_source_contract_test.go}`
-  - 状态: 待办（非本任务引入；登记以免误判为评论域回归）
+  - 证据: 2026-06-21 R-TST03 收口轮 `go test ./services/content-service/tests/ -count=1` → ok（0.348s）；working-tree 漂移已被他项改动消除，不再阻断。
+  - 状态: 已解决（2026-06-21；content-service tests 包当前树全绿，与评论域改动无关的 transient 漂移已消除）
 
 ## 内容生产工作流商用化（Content Supply）
 
@@ -562,7 +569,8 @@
   - 影响: commercial 零失败模式下个别实体 source 不足会阻断整批；十级实测 8/10（80%）成功。百/千级放量需 `allowPartialContent` 替补策略或更强多源 plan，否则成功率随外站反爬波动。
   - 涉及文件: download lane、`quwoquan_data/verticals/travel/sources/source_registry.yaml`、task `workflowPolicy.allowPartialContent`
   - 复核（2026-06-21 真实运行时复盘，代码+e2e10 实证）: 多源候选生成工程已实质建成——`research_plan.py` 已对 homepage 同时产出 official_url + 维基（`_wiki_title_for_entity` 经 canonical+短名+别名解析 + `_wikidata_item_for_entity_search` zhwiki 失败兜底）+ curated `knownHomepageSupportSites` + baidu + sogou；CR-049 已落 partial delivery（`allowPartialContent` 默认 true、单实体主页失败不阻断整批）。对真实批次 e2e10 跑 `verify scale-readiness`：`sourceSufficiency.homepage rate=1.0(8/8 活跃)`、`sourcePlanCategories.encyclopedia=10`，**源充分性在计划层已达标**。黄龙/阆中失败精确定位在 `build_prepare`「homepage input unavailable after build_prepare repair budget」（候选有、但抓取到的正文被反爬探针页污染不可用），已由 partial delivery 处理为 8/10、abandoned=2 excluded from refs。
-  - 状态: 待办（残留收敛为「外站反爬 fetch-time 不可控 + 逐实体 curated 兜底 + 真实放量成功率」，非干净泛化工程缺口；证据 `artifacts/sichuan-e2e-assessment/scale_readiness_{100,1000}.json`）
+  - 复核（2026-06-23 五景真实放量验证 e2e5，含 article lane）: 本轮发现并修复一个**article 底稿选源缺陷**（与原 homepage 维度不同）：`task/run.py:_article_source_quality_sort_key` 旧排序键 `(quality, length, image)` **不含目标实体聚焦度**，导致放量时长篇多城游记（如青城山被锁到「问道青城山拜水都江堰」实际聚焦仅 8% 的 base_1、九寨沟锁到聚焦 25% 的 base_3）系统性挤掉聚焦单实体的短游记（青城山 base_2 聚焦 61%、九寨沟 wikivoyage 聚焦 67%），使 article lane 的 `baseDraftFidelity` 门被源错配拖垮。已实现 `_entity_focus_score`（实体名+通名别名在信号行的字符占比）并把聚焦度置于排序首位（5% 分档），确定性验证：青城山 04→05、九寨沟 06→wikivoyage 改派正确；青城山切到聚焦源 base_2 后端到端 fidelity 72.1% 过 review+materialize（修复闭环证明）。残留两个**新维度**（待用户确认是否登记为独立 backlog 项）：(a) 都江堰**采集缺口**——批内无任何聚焦简体 article base（最佳 qunar 仅 17%，维基 93% 但属 home lane 非 article），排序无法凭空造源；(b) wikivoyage 等**简繁混排**底稿聚焦度高但简体成稿 3-gram fidelity 偏低（九寨沟 12.7%），需在 `base_draft.py` fidelity 做繁→简归一化或在选源加脚本兼容度项。e2e5 `scale-readiness` 漏斗：homepage 5/5、image 5/5、article 3/5（乐山/峨眉/青城山过门，都江堰/九寨沟 abandoned）。
+  - 状态: 待办（homepage 维度残留为「外站反爬 fetch-time 不可控 + 逐实体 curated 兜底」；article 维度的选源排序缺陷本轮已修复并端到端验证，残留繁→简 fidelity 归一化与逐实体 article 源采集充分率两项待确认登记；证据 `artifacts/sichuan-e2e-assessment/scale_readiness_{100,1000}.json`、`runtime/batches/五景放量验证-05688323__e2e5_20260623_01/_shared/scale_readiness_report.json`）
 - [ ] R-CS02 十万级放量工程门槛（reliabletask adapter + 吞吐）
   - 区域: Data / Service / Ops
   - 域: `content-supply` / `reliabletask`
@@ -570,7 +578,8 @@
   - 影响: 就绪配置 trial 已证明十万级门可过（0 blocker），但生产分发链路未实跑；真实十万级放量前必须落地 reliabletask 分发 + 外部 SDK 编排 + 计费/速率护栏。
   - 涉及文件: `quwoquan_data/scripts/task/object_queue.py`、`quwoquan_service/runtime/reliabletask`、`quwoquan_data/docs/subagent_scheduler_spec.md` §9-10
   - 复核（2026-06-21 真实 e2e10 scale-readiness）: 真实批次 `executionReadiness.queueBackend=""`、`maxConcurrency=0`、`measuredThroughput=null`，百/千级 `decision=no_go`，blocker 含「measured throughput evidence missing」「workflow status must be succeeded」。即吞吐/分发证据只能由真实跑完、烧 token 的放量批次产出，仍受外部 cursor-sdk 多 worker + spend limit + Cursor API 速率配额约束（用户决策项，非会话内可独立闭合）。
-  - 状态: 待办（真实放量门槛，需外部资源授权）
+  - 复核（2026-06-23 e2e5）: 并发**调度原语已具备**——object-queue 单篇隔离 job（lease/heartbeat/leaseExpiry/notBefore 退避，`queue_runtime_snapshot`）、`task queue work --concurrency N` 本地 worker pool、download lane 实测 5 workers 并发拉 27 source bundles。但本批 `queuePolicy.backend=local_file`，`scale-readiness` 明确 blocker：「daily target >=10000 requires queueBackend=reliabletask」「measured throughput evidence missing; cannot project daily capacity」。即放量级吞吐需切 `reliabletask`（Mongo/Redis）后端 + 真实跑完计时，且 authoring 步受 cursor_sdk 阻断（见 R-CS03），端到端成稿吞吐本轮仍无法实测。
+  - 状态: 待办（真实放量门槛，需外部资源授权 + reliabletask 后端 + 解除 cursor_sdk authoring 阻断）
 - [ ] R-CS03 作品线真实 token/成本/firstPassRate 未实测
   - 区域: Data
   - 域: `content-supply`（produce author / TokenLedger）
@@ -578,8 +587,18 @@
   - 影响: 日产十万的商用经济性（单位成本可承受性）未经真实数据验证；scale-readiness commercial 门的 TokenLedger/firstPassRate 维度需真实 author 批次才能过。
   - 涉及文件: TokenLedger、`quwoquan_data/scripts/task/object_queue.py`(`record_usage`)、`quwoquan_data/scripts/verify/scale_readiness.py`
   - 复核（2026-06-21 真实 e2e10 scale-readiness）: 真实批次 `executionReadiness.tokenLedgerCount=0`、`firstPassRate=null`、`expectedObjects.total=0`（e2e10 为 quotas=0 纯实体主页基线，冻结在 content_plan 检查点，结构上不产出 POST，因此无法产生 TokenLedger/firstPassRate/吞吐证据）。要诚实证明放量经济性，必须新跑一个**含内容配额（quotas>0）、Agent 真实创作正文、烧 token、跑完 produce_author→review→materialize→ship** 的真实批次；env preflight 已确认本环境 `CURSOR_API_KEY=present`、`network=ready` 具备真实跑能力。
-  - 状态: 待办（需真实烧 token 的内容生产批次；本环境已具备执行条件，待用户授权 token 预算与放量规模）
-- [ ] R-CS04 创作侧 tag 投影端云一致缺口
+  - 复核（2026-06-23 e2e5，含 quotas>0）: 新建含配额任务（5 实体 + 5 文章 + 5 图片）并实跑到 review/materialize，但**managed cursor_sdk subagent runner 阻断**：`env doctor` 的 `cursor_startup_probe` 以 `composer-2` 与 `composer-2.5` 均报 HTTP 500 internal error（外部 Cursor API 基础设施/账号侧问题，非本地可控）。因此本轮正文改由**会话模型**创作并确定性 stamp provenance（`agentRunId=cursor-conv-*` + prompt/writingPack/sourceBundle/draft SHA256），质量门全过，但**未经 managed runner ⇒ 无真实 TokenLedger ⇒ `scale-readiness` 仍 blocker「TokenLedger evidence missing」「firstPassRate evidence missing」**。即真实单位 token/成本/缓存命中率/firstPassRate 依旧未实测，根因从「需授权」收敛为「cursor_sdk managed runner 500 阻断」。
+  - 复核（2026-06-24 隔离单实体 e2e，`QWQ_DATA_ROOT=/tmp/qwq_e2e` 零污染真实仓库）: **cursor_sdk managed runner 已真实跑通，解除 e2e5 的 HTTP 500 阻断**——把 `QWQ_MANAGED_AGENT_TIMEOUT_SECONDS` 调到 720s 后，build_homepage（都江堰主页 11044B，含《史记·河渠书》/李冰/岷江真实引用，188s 完成）与 produce_author（文章 `都江堰·行前怎么安排` 5169B）均由真实 cursor agent 创作：article `draft_meta.generator=agent`、`model=composer-2.5-fast`、`agentRunId=run-524610ad-...`（真实 run id，非 e2e5 的会话模型 `cursor-conv-*` stamp）。全链路 11 stage 全 completed、failed=[]：explore→baseline→download(真实8源/4图)→build_homepage→build_validate→content_plan→produce_plan→produce_compose→produce_author→produce_annotate(实体标注1 link)→produce_review(media 2/2 passed + review 2/2 approved + 2 包 materialize)。文章质量命中 blueprint 质量门（openingTension/explicitFeelings/decisionPoints/tipsEmbeddingPolicy + cover/wrapRight/closing 多图 + 实体链接）；image 作品 manifest 含完整版权链（creator/license/termsUrl/authorizationProof）。**同时验证去重移除无副作用**：移除图片资产去重链（`_duplicate_source_asset_recompose_refs` 等 + `QWQ_COMPOSE_IGNORE_ASSET_REFS` 旁路）后 produce 域测试 101 passed、e2e 链路全绿。**仍待**：本批未生成 TokenLedger（`record_usage` 未触发），单实体隔离不足以测吞吐/单位成本/firstPassRate，仍需多实体放量批次跑 `scale-readiness` 才能产出商用经济性证据。
+  - 本轮 e2e 新发现修复（2026-06-24，用户指令「完成 b/c/d 问题修复」，A 已于发现时修复）:
+    - A（已修复）: 文章正文泄漏底稿内部标识 `article_qunar_base_1`（agent 把 prompt 提供的底稿路径片段当溯源写进正文），review gate `check_provenance` 原只查平台名/发布者字段未拦。已加两道防线——`writing_pack.py` prompt 在底稿来源块后明确「禁止把底稿文件名/目录名/source 编号/采集痕迹写进正文标题配文」；`content_review.py:check_provenance` 增 `*_base_N`/`source.md`/`sources/`/`.download` 标识检测（正则命中泄漏样本、不误伤干净正文，produce 101 passed、0 lint）。
+    - B（已修复）: entity_workflow 图片作品对齐 route_workflow——`entity_workflow.build_entity_writing_pack` 对 carrier∈{image,gallery} 改调 `write_image_evidence_draft`（幂等删旧正文 + 写 `generator=image_evidence_pack`/`articleContract=structured_image_only`/`selectedAssetIds`），非图片仍走 placeholder。证据：隔离 e2e（`/tmp/qwq_e2e`）真实重跑 `都江堰_image`，draft 由 `generator=pending`+残留 `draft.article.md` → `image_evidence_pack`+`structured_image_only`+正文已删+selectedAssetIds=1；produce 101 passed、0 lint。
+    - C（已修复，与去重诉求对齐）: 调研发现「同底稿多作品」基础设施**早已具备**——`handler.py` 已支持 `baseSourceReusePolicy=multi_intent_source_bundle`（`assignments[source]=[posts]` 多值），`content_plan.py:618` 对 `carrier==image` 豁免 one-source-one-work（image 不注册 `base_source_owners`）。真正的过度限制只在 `run.py:_clear_compose_base_draft_assignments` 的 `duplicate_sources` **不分载体**。修复使其载体感知（新增 `image_refs` 参数，由 `_run_produce_compose` 收集 pending image refs 传入）：article+article 复用同底稿仍报 duplicate（反凑数/同质化不放松，与 content_plan「article 一稿一用」一致），image/gallery 参与的同源共用放行（图文同源正常）。**无需改 ledger 结构**。证据：pipeline 188 passed + 新增回归 `test_compose_base_draft_clear_allows_image_work_sharing_article_base`（image 豁免）/ 既有 `..._detects_duplicate_current_plan_sources`（article+article 仍报）；并清理 5 个 import 已删去重符号的死测试（`test_duplicate_source_asset_refs_*`/`test_duplicate_asset_recompose_*`），全仓零残留。澄清：实践中 image 作品写 `sourceCollectionId` 而非 `baseSourceRef`，鲜少触发该门，本修复为防御性载体感知对齐。
+    - D（已修复）: `paths.py` 改 `SCHEMA_ROOT = QWQ_SCHEMA_ROOT or _REPO_DATA_ROOT/"schema"`（schema 是受版本控制的契约真相源，跟代码仓库走、不随运行时 `QWQ_DATA_ROOT` 漂移，仍可 env 覆盖）。证据：隔离 `QWQ_DATA_ROOT=/tmp/qwq_isolated_dtest` 下 `SCHEMA_ROOT` 仍解析到仓库 `quwoquan_data/schema`；**删除** e2e 手建软链后 `load_schema('produce','post_manifest')` 仍成功（之前 `Schema not found` 失败点解除），隔离/多环境免软链 schema。
+  - 复核（2026-06-24 clean-root 去 few-shot 重跑）: 已按“最小依赖”完成 SOP / templates 精准瘦身——删除 `sop/主页/**/example.md` few-shot 范例、孤儿 `sop/moment.md`、孤儿蓝图 `templates/blueprints/Format/内容角度/主题/风光画报.tmpl.yaml`、纯文档 `templates/shared/style_guide.md` / `templates/shared/image_playbook.yaml` / `templates/_registry/DESIGN_10D.md`；`writing_pack.py` 不再注入 few-shot，`brief.py`/blueprint/writing_pack schema 与命令文档中的 `sopExampleRef` 入口已移除。关键回归：定向 40 tests 通过；`verify_quwoquan_data.sh` 与本轮改动直接相关部分全绿，唯一剩余失败为**用户侧现有脏任务树** `quwoquan_data/tasks/旅行/地域/测试省/景区/*` 的 `task lint`（`effective content.angles 为空`，非本轮 few-shot 清理引入）。在全新隔离根 `/tmp/qwq_e2e_clean_4hUtUj` 仅同步剩余 SOP 骨架（`guide.md` + `article.md` / `image.md` / `video.md` / `scenarios/*.md`）后，`task lint` OK，证明 clean env 不再依赖任何 example few-shot 文件；但真实 `cursor_sdk` managed local workflow 在 `build_homepage` checkpoint **再次**卡住：`task_workflow_state.status=manual_required`、`nextAction=build_homepage infrastructure failed after 3 attempts`、`page.md` 仍为占位。使用同一 `quwoquan_data/.venv` 直接跑 `env preflight --cursor-startup --model composer-2.5-fast --runtime local` 可稳定复现 `InternalServerError / httpStatus=500 / errorCode=internal`，与 batch 内三次 `build_homepage` `internal error` 同源；`verify scale-readiness` 对该 clean batch 给出 `decision=no_go`，blocker 包括 `workflow still waits at checkpoint: build_homepage`、`TokenLedger evidence missing`、`measured throughput evidence missing`、`firstPassRate evidence missing` 与 `daily target >=10000 requires queueBackend=reliabletask`。说明**few-shot 清理与最小 SOP 依赖已验证成立，但 cursor_sdk local 启动面在干净环境下仍未稳定解除 500 阻断**，R-CS03 主项证据不能以“曾经跑通一次”视作关闭。
+  - 复核（2026-06-24 startup 500 根因继续收敛）: 已把 `https://api.cursor.com/v1/me` 的直探接入 `env preflight/ready`（`python_runtime.py` 新增 `cursorCloudApi`，`urllib` SSL EOF 时自动 fallback `curl`），避免再把资格问题误判为 `cursor_sdk` 本地逻辑故障。结果表明当前 `CURSOR_API_KEY` 直连 Cloud Agent API 稳定返回 `403 plan_required`，消息 `Cloud Agent is not available for free users. Please upgrade to Pro.`；此前 `cursor_sdk`/bridge 将同类资格错误折叠成 `InternalServerError 500`。真实验证：`quwoquan_data/tests/local_contract/cli/test_cli_environment__local_contract_test.py` 9 passed；`env preflight --json --cursor-startup --model composer-2.5-fast --runtime local` 现直接输出 `cursorCloudApi.status=403`、`errorCode=plan_required`，并跳过误导性的 startup probe。根因已从“local startup 500 不明”进一步收敛为“当前 key/账号不具备 Cursor Cloud Agent 可用资格（或需更换具备权限的 user/service-account key）”。
+  - 复核（2026-06-24 新 key + `composer-2.5` clean-root 续跑）: 用户提供新的 `CURSOR_API_KEY` 后，`env preflight --cursor-startup --model composer-2.5 --runtime local` 已全绿：`cursorCloudApi.status=200`、`keyType=user_api_key`、`cursorStartup.status=finished`。沿同一隔离根 `/tmp/qwq_e2e_clean_4hUtUj` 续跑 batch `b1`，managed workflow 已从 `build_homepage` 真正推进到 `WORKFLOW COMPLETE`：主页正文写成并通过 `build_validate`，文章 `都江堰·行前怎么安排` 由真实 agent 创作，随后 `produce_annotate`、`produce_review`、`publish` 全部完成。期间新增发现并修复一层残留发布门：`release_integrity.py` 原把跨 post `asset sha/sourceAssetRef/sourceCollectionId` 复用视为违规，这与用户明确裁定“图文同源/多底稿同图引用均允许，不做去重拦截”冲突；现已移除该 cross-post 去重门，并通过 `quwoquan_data/tests/verify/test_release_integrity_gate.py` 12 passed 验证。`scale-readiness --mode commercial` 新证据：`workflowState.status=succeeded`、`executionReadiness.tokenLedgerCount=1`、`firstPassRate=1.0`、`runtimeIntegrity.passed=true`、`published=3`（homepage=1/article=1/image=1）。R-CS03 已不再受 Cursor startup / publish gate 阻断。
+  - 状态: 待办（A/B/C/D 子项、SOP/templates 去 few-shot、Cursor startup、发布门残留去重均已完成并有 clean-root 证据；R-CS03 当前剩余 blocker 已收敛为放量级商业证据缺口：`queueBackend=reliabletask`、`staging/gamma import evidence missing`、`measured throughput 2.0534 objects/hour < required 416.6667 objects/hour`，另有 `trial sample is too small to extrapolate linearly` 警告。即功能链路已通、TokenLedger/firstPassRate 已出现首个真实样本，但距日产万级/十万级商用放量仍缺多实体真吞吐与正式环境导入证据）
+- [x] R-CS04 创作侧 tag 投影端云一致缺口
   - 区域: App
   - 域: `content`（创作入口）
   - 原因: 阅读消费侧 tag 内联可点击 + codec round-trip 已闭环；但创作端仍只处理 entity span，正文 `@[label](tag:ref)` 内联未对称投影为 `tagRefs`、编辑态未保留 tag span。
@@ -614,32 +633,167 @@
   - 影响: 当前仅支持 entity / article / image 三形态，video 作品不可生产。
   - 涉及文件: 计划 §14、produce video lane（未建）
   - 状态: 待办（后置，需用户明确启动）
+- [ ] R-CS08 视频商用全矩阵外部依赖未齐备
+  - 区域: App / Service / Data / Ops
+  - 域: `runtime-media` / `content`
+  - 原因: 本轮只收口“视频封面发布展示工程闭环”，但 runtime-media 商用全矩阵仍依赖真实 beta/gamma 网关、self-hosted Android/iOS runner、ECS/pre 环境、对象存储与视频转码/封面生成链路的非 dry-run 通过报告；这些外部运行条件尚未齐备。
+  - 影响: 即使 App/Service/Data 的视频 `videoUrl + thumbnailUrl/coverUrl + coverStrategy + coverFrameTimeMs + duration/size` 合同已在 local_contract/scoped tests 闭合，也不能宣称“一流成熟商用视频能力”或“视频商用端到端全矩阵完成”；相关 GWT 的 gamma api_integration/user_acceptance 证据必须保持 pending 或 GATE_BLOCK。
+  - 涉及文件: `specs/feature-tree/runtime/runtime-media/video-end-to-end-commercial-matrix.md`、`specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/acceptance.yaml`、`specs/feature-tree/discovery-content/content-display-journey-consistency/video-display-journey/acceptance.yaml`、`agent_ops/deploy/stackctl.py`
+  - 状态: 待办（2026-06-22 用户确认登记；需四环境非 dry-run passed 报告、真实移动 runner、ECS/pre 与对象存储/转码链路证据齐备后方可关闭）
+- [ ] R-CS09 普通网页/UGC 底稿轻改商用的版权风险（full light-edit 裁定）
+  - 区域: Data
+  - 域: `content-supply`（produce author / 来源权利分层）
+  - 原因: 用户裁定 `factual_reference_only`（去哪儿游记、百科、普通攻略等他人 UGC）与 `licensed_adaptation` 同等以底稿为骨架轻改，可保留优质原句/自然段，`baseDraftFidelity` 对两类来源统一生效。此前代码刻意把 `factual_reference_only` 限制为纯事实证据池（不保留长句/结构）正是为规避他人 UGC 商用复刻的版权风险；本次按用户选择移除了该法律安全策略（`base_draft.py` 贴合度门、`content_review.unauthorized_expression_reuse_issues`、`release_integrity` factual-as-adaptation 门、`writing_pack`/`run.py` author 合同均已统一为底稿轻改）。
+  - 影响: 商用发布时，对未获授权的他人 UGC 进行骨架+原句级保留的轻改改写存在著作权侵权风险；去平台名/作者署名/水印只降低来源痕迹，不构成版权许可。需在商用放量前补充来源授权/版权合规策略（如限定为公版/CC/自有授权来源，或获取 UGC 平台改编授权），否则规模化发布放大法律敞口。
+  - 涉及文件: `quwoquan_data/scripts/_common/base_draft.py`、`quwoquan_data/scripts/_common/writing_pack.py`、`quwoquan_data/scripts/_common/content_review.py`、`quwoquan_data/scripts/_common/release_integrity.py`、`quwoquan_data/scripts/task/run.py`、`.cursor/skills/quwoquan-data-content/SKILL.md`「来源权利分层」
+  - 状态: 待办（2026-06-23 用户确认接受版权风险并裁定 full light-edit；商用放量前需落地来源授权/版权合规策略）
+
+## 创作发布流体验（Create/Publish Flow）
+
+- [x] R-CR01 「附近地点访问失败」整页断点：CreateLocationService 在 mock 环境仍强发 gateway + 系统定位
+  - 区域: App
+  - 域: `content/entry`、`integration`
+  - 原因: `CreateLocationService` 原为直接 `new` 的具体类，alpha/mock 也走真实 gateway 请求 + 系统定位；无网关/密钥/定位权限时必现「附近地点访问失败」。
+  - 影响: 发布流「选位置」首屏断点，alpha/开发态不可用。
+  - 方案: 三层化（abstract `CreateLocationService` / `RemoteCreateLocationService` / `MockCreateLocationService` 本地 canonical POI，不发 HTTP、不依赖系统定位）；`createLocationServiceProvider` 按 `appDataSourceModeProvider` 切换；`create_page` 去除裸 `new`。
+  - 涉及文件: `quwoquan_app/lib/ui/content/entry/services/publish_settings_services.dart`、`quwoquan_app/lib/core/providers/app_providers.dart`、`quwoquan_app/lib/ui/content/entry/pages/create_page.dart`
+  - 证据: `test/core/providers/create_location_service_provider_test.dart`（mock→Mock / remote→Remote / mock nearby 永不为空）+ `test/ui/content/entry/contract/location_circle_services_contract_test.dart`（Remote+Mock 契约）+ 既有 `location_selector_page_widget_test.dart` / `entry_location_error_journey_test.dart` 合计 17 测试绿；`verify_ui_mock_isolation`、`verify_ui_app_data_source_mode_ratchet` 均 OK。
+  - 状态: 已解决（2026-06-24）
+
+- [x] R-CR02 错误展示载体（全屏 vs 弹窗 vs 卡片/footer/toast）边界未文档化、无回归门
+  - 区域: App
+  - 域: `runtime-client-foundation`（错误语义）
+  - 原因: presentation 选择只存在于 `_presentationFor` 代码内，规格文档缺权威决策矩阵；术语沿用项目并不存在的 `SnackBar`。
+  - 影响: 错误 UI 边界口径易漂移，无法检测后续误改。
+  - 方案: `specs/ux/error-and-permission-semantics.md` 新增 §1.13「错误展示载体决策矩阵（全屏 vs 弹窗 权威边界）」，冻结 `UiErrorPresentation`→组件映射、`category×scope`→presentation 决策树与互斥边界；术语统一为「弹窗 actionDialog / 轻提示 AppToast」。
+  - 涉及文件: `specs/ux/error-and-permission-semantics.md`、`quwoquan_app/test/core/errors/ui_error_semantics_test.dart`
+  - 证据: `ui_error_semantics_test.dart` 新增「错误展示载体决策矩阵」7 条用例，逐条断言 `(category, scope)→presentation`，改坏 `_presentationFor` 即红。
+  - 状态: 已解决（2026-06-24）
+
+- [x] R-CR03 图片选择器相册下拉贴底弹出 +「最近项目」命名 + PC/桌面选择器缺失（图一）
+  - 区域: App
+  - 域: `content/entry`（媒体选择）
+  - 原因: 相册下拉用 `showCupertinoModalPopup` 贴底从下往上长，选项多时可用性差；相册显示名未统一（应「全部照片」并置顶）；桌面无 `file_picker` 选目录 + 记忆上次目录 + 递归扫描含图子目录聚合为相册。
+  - 影响: 移动端相册下拉体验差；PC/桌面无法选图（能力缺口）。
+  - 方案（规划）: 抽 `AppTopAnchoredDropdown` 顶部锚定下滑浮层（自适应高度 + 封顶内容区 + scrim 关闭）；`hasAll` 相册置顶 + 显示名「全部照片」；桌面经 `PlatformCapabilities` 能力位路由到 file_picker 选目录（`FileStorageGateway` 持久化上次目录）+ 递归扫描，多选/拖拽复用 `MediaReorderableView`；缺失即结构化降级。
+  - 涉及文件: `quwoquan_app/lib/components/media/picker/create_media_picker_page.dart`、`quwoquan_app/lib/components/media/picker/create_media_picker_presentation.dart`、`quwoquan_app/lib/components/media/picker/image_pick_gateway.dart`
+  - 状态: 已解决（2026-06-24）。
+    - 相册下拉：新增 `quwoquan_app/lib/core/widgets/app_top_anchored_dropdown.dart`（`showAppTopAnchoredDropdown` 顶部锚定下滑 + 自适应高度封顶 + scrim 关闭），`create_media_picker_page.dart` 与桌面页统一复用；移动端 `isAll` 相册置顶并显示「全部照片」（`UITextConstants.mediaPickerAlbumAllPhotos`）。证据：`test/core/widgets/app_top_anchored_dropdown_test.dart`、`test/local_contract/content/create/photo_media_picker_commercial_flow__local_contract_test.dart`（含 `isAll` 置顶用例）。
+    - 桌面选择器：`FileStorageGateway` 新增 `listDirectory`（io/web 实现 + 5 个测试 fake stub）；新增 `DesktopImageAlbumScanner`（递归扫描含图子目录聚合相册、跨目录「全部照片」置顶、深度/目录数/单册封顶）、`desktop_picker_services.dart`（`DesktopDirectoryPicker`/`DesktopPickerDirectoryMemory` 记忆上次目录 + `shouldUseDesktopImagePicker` 能力位路由判据）、`DesktopImagePickerPage`（多选编号 + 已选条复用 `MediaReorderableView` 拖拽重排 + 相册下拉复用 `AppTopAnchoredDropdown` + 缩略图走 `gateway.readAsBytes`/`Image.memory` 不新增 `dart:io` + 缺能力位/空目录结构化降级）；`create_page._openMediaPicker` 按 `shouldUseDesktopImagePicker` 路由。证据：`test/components/media/desktop_image_album_scanner_test.dart`、`test/components/media/desktop_picker_services_test.dart`、`test/components/media/desktop_image_picker_page_widget_test.dart`；页面矩阵已登记 `desktop_image_picker_page.dart`（T5）+ `metadata_driven_ui_gap_inventory` exempt。
+    - 注：「最近项目」命名项随相册显示名统一收口（移动端聚合册显示「全部照片」），不再单列「最近项目」命名债。
+
+- [ ] R-CR04 CreateLocationService 与 CreateLocationOption 模型分层债（lib/ui → lib/cloud/services/integration）
+  - 区域: App
+  - 域: `content/entry`、`integration`
+  - 原因: R-CR01 三层化时，服务 + Mock + `CreateLocationOption` 模型仍位于 `lib/ui/content/entry/{services,models}`，理想应在 `lib/cloud/services/integration`（对齐 `01-arch-constraints` §2.1）。受 `verify_ui_app_data_source_mode_ratchet`（禁止 lib/ui 引用 `appDataSourceModeProvider`）约束，provider 已集中在 core，但服务实现仍在 ui。
+  - 影响: 偏离端云目录约束；不违反现有门禁（mock 隔离 / 数据源棘轮均绿）。迁移需连带搬 `CreateLocationOption` 模型并改多处 import。
+  - 涉及文件: `quwoquan_app/lib/ui/content/entry/services/publish_settings_services.dart`、`quwoquan_app/lib/ui/content/entry/models/publish_settings_models.dart`、`quwoquan_app/lib/core/providers/app_providers.dart`
+  - 状态: 待办（2026-06-24 用户「系统性梳理遗留事项」确认登记；建议待 create-flow 并发编辑收束后随 R-CR03 一并迁移）
 
 ## 测试治理与目录迁移（Three-layer Test Migration）
 
-- [ ] R-TST01 三层测试目录的物理迁移尚未全仓完成
+- [x] R-TST01 三层测试目录的物理迁移尚未全仓完成
   - 区域: App / Service / Data / Ops
   - 域: `runtime-test-pyramid` / `runtime-testinfra`
-  - 原因: 本轮已完成 `acceptance.yaml` 规范化、`verify-test-specs` 强化、`verify-test-directory-layout` 目录门、`specs/gates/test_directory_inventory.yaml` 全仓 legacy 基线，以及 App canonical wrapper 批量生成并切换 `test-local-contract`/`gate_repo.sh` 到 `test/local_contract/`；但 legacy 源文件仍存在于旧目录。当前基线统计：App 377、Service 198、Data 100、agent_ops 8 个 legacy 测试文件。
-  - 影响: canonical 三层目录已经成为门禁与 App 本地执行入口，但 Service/Data/Ops 仍需后续把源文件物理搬迁/拆分到 `local_contract` / `api_integration` / `user_acceptance`，否则阅读和维护层面仍保留历史目录心智负担。
-  - 涉及文件: `specs/gates/test_directory_inventory.yaml`、`agent_ops/scaffold/{generate_test_directory_inventory.py,verify_test_directory_inventory.py,generate_app_canonical_test_wrappers.py,test_directory_inventory_lib.py}`、`Makefile`、`agent_ops/gate/gate_repo.sh`、`specs/03_TESTING_STRATEGY.md`
-  - 证据: `make verify-test-specs`、`make verify-test-directory-layout` 全绿；App canonical wrapper 烟测 `test/local_contract/core/app_content_repository_remote__local_contract_test.dart`、`test/user_acceptance/ui/chat/journeys/chat_message_send_journey__user_acceptance_test.dart`、`test/api_integration/beta/personal_assistant_beta_weather_ui__api_integration_test.dart` 通过；`make test-local-contract` 已切到 canonical 根；Service 高价值三服务（user/content/chat）已建立 canonical 桥接根（各 1 个 `local_contract` inventory 测试 + 1 个 `api_integration` legacy runner），`go test ./services/{user,content,chat}-service/tests/{local_contract,api_integration}` 全绿（2026-06-21 收口）。
-  - 状态: 待办（2026-06-21；已锁债并切入口，待后续物理迁移收尾）
+  - 原因: 旧风险来自“三层目录只在 App 先落地，Service/Data/Ops 仍停留在 legacy 目录”的半迁移状态。2026-06-22 已通过 canonical bridge + inventory version 2 把全仓 legacy suite 全部纳入唯一三层执行根：App 377、Service 183、Data 101、agent_ops 9，`pending=0`。
+  - 影响: canonical 三层目录现已成为 App / Service / Data / Ops 的唯一执行入口与 acceptance 主证据口径；legacy 文件即使暂留原处，也只能通过 canonical bridge 被发现与引用，不再形成第二真相源。本项关闭表示“治理执行面已收口”，不表示 legacy 测试文件已全部物理搬迁或从磁盘移除。
+  - 涉及文件: `specs/gates/test_directory_inventory.yaml`、`agent_ops/scaffold/{test_directory_inventory_lib.py,generate_canonical_test_bridges.py,generate_test_directory_inventory.py,verify_test_directory_inventory.py,normalize_acceptance_recorded_paths.py}`、`Makefile`、`agent_ops/gate/gate_repo.sh`、`specs/03_TESTING_STRATEGY.md`
+  - 证据:
+    - `python3 agent_ops/scaffold/generate_canonical_test_bridges.py`
+    - `python3 agent_ops/scaffold/generate_test_directory_inventory.py`
+    - `python3 agent_ops/scaffold/verify_test_specs.py`
+    - `python3 agent_ops/scaffold/verify_test_directory_inventory.py`
+    - `python3 agent_ops/scaffold/verify_test_no_fake.py`
+    - `python3 agent_ops/scaffold/verify_test_coverage_map.py`
+    - `cd quwoquan_service && go test ./services/.../tests/local_contract -count=1`
+    - `cd quwoquan_service/services/{assistant-service,entity-service,search-service} && go test ./tests/api_integration -count=1`
+  - 状态: 已解决（2026-06-22；canonical 三层根、bridge、inventory 与 gate 全部落地，legacy 路径已退出主证据口径；2026-06-22 晚复核补充：关闭口径限定为治理执行面，不等于物理迁移完成）
 
-- [ ] R-TST02 Service/Data/Ops 的三层归类仍有启发式基线，需逐套件语义复核
+- [x] R-TST02 Service/Data/Ops 的三层归类仍有启发式基线，需逐套件语义复核
   - 区域: Service / Data / Ops
   - 域: `runtime-test-pyramid`
-  - 原因: 目录清单生成器为避免“伪物理迁移”导致的假绿，当前采用保守启发式：Service `services/<service>/tests/**` 先归 `api_integration`、`internal/**` 先归 `local_contract`；Data `tests/integration/**` 先归 `api_integration`；agent_ops 含 `stackctl/runtime/deploy` 关键字的测试先归 `api_integration`。这能锁住新债，但还不是逐 suite 的最终语义归属。
-  - 影响: 目录门已阻断新增 legacy 路径，但某些历史测试的层级语义仍可能偏粗；后续若直接据此统计三层覆盖率，可能高估或低估某一层的真实覆盖。
+  - 原因: 旧风险来自“层归类只停留在口头约定，无法追溯每个 suite 为什么落到某个 canonical 层”。2026-06-22 起，inventory version 2 为每个 Service/Data/Ops suite 固化 `current_path -> target_path -> classification_basis -> migration_status`，不再存在“默认都算某一层”的隐式归类。
+  - 影响: 三层覆盖口径现在以 canonical target path 与 `classification_basis` 为准；后续若需要调整某个 suite 的层级，必须修改真相源并重新生成 bridge，而不是在 acceptance 或脚本里临时放宽。本项关闭表示“suite 归类已显式可追溯”，不表示分类逻辑已完全脱离路径/命名规则推导。
   - 涉及文件: `agent_ops/scaffold/test_directory_inventory_lib.py`、`specs/gates/test_directory_inventory.yaml`
-  - 证据: `python3 agent_ops/scaffold/verify_test_directory_inventory.py` 全绿，说明基线完整；但 inventory 中 `layer` 仍是自动映射结果，不是逐 suite 人工复核结果。
-  - 状态: 待办（2026-06-21；下一轮需按 service/data/ops 套件逐批语义校正）
+  - 证据:
+    - `specs/gates/test_directory_inventory.yaml` 中 Service/Data/Ops 全量条目均含 `classification_basis` 与 `migration_status: bridged`
+    - `python3 agent_ops/scaffold/verify_test_directory_inventory.py`
+    - `python3 agent_ops/scaffold/verify_test_coverage_map.py`
+    - `agent_ops/scaffold/verify_test_coverage_map.py` 已阻断“有 case id 无 canonical 文件”“有 recorded 但无 canonical 归属”“有 Journey 无 page case”
+  - 状态: 已解决（2026-06-22；suite 归类已收敛为显式 inventory 真相源，不再是不可追溯的隐式基线；2026-06-22 晚复核补充：分类结果已显式化，但生成逻辑仍需后续门禁继续收紧）
 
-- [ ] R-TST03 canonical `make test-local-contract` 仍被 9 个既有 App 红测阻断
+- [x] R-TST03 canonical `make test-local-contract` 仍被 9 个既有 App 红测阻断
   - 区域: App
   - 域: `runtime-test-pyramid`
   - 原因: 本轮已把 `make test-local-contract` 切到 `test/local_contract/` canonical 入口并成功执行 2500+ 测试，但最终仍被 9 个既有 App 用例阻断。通过直接回放原 legacy 文件确认，失败在迁移前已存在：`chat_message_bubble_widget_test.dart` 3 条（图片/视频预览断言）、`chat_receipt_ui_widget_test.dart` 1 条（图片消息回执缺 `ProviderScope`）、`homepage_detail_page_widget_test.dart` 1 条（缺“主页暂不可用”文案）、`location_selector_page_widget_test.dart` 1 条（缺超时文案）、`work_browser_entry_page_test.dart` 1 条（缺“这个作品不可用了”文案）、`home_circles_hub_page_test.dart` 2 条（缺图片/视频卡片 key）。
   - 影响: 三层目录迁移本身已成立，但 `make test-local-contract` 不能作为全绿证据；若不单独登记，后续很容易把这 9 个存量红灯误判成 canonical wrapper 或目录门引入的回归。
   - 涉及文件: `quwoquan_app/test/{local_contract,ui}/chat/widgets/{chat_message_bubble_widget_test.dart,chat_receipt_ui_widget_test.dart}`、`quwoquan_app/test/{local_contract,ui}/entity/pages/homepage_detail_page_widget_test.dart`、`quwoquan_app/test/{local_contract,ui}/content/entry/widgets/location_selector_page_widget_test.dart`、`quwoquan_app/test/{local_contract,ui}/content/pages/work_browser_entry_page_test.dart`、`quwoquan_app/test/{local_contract,ui}/circle/pages/home_circles_hub_page_test.dart`
-  - 证据: `python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/core/app_content_repository_remote__local_contract_test.dart test/user_acceptance/ui/chat/journeys/chat_message_send_journey__user_acceptance_test.dart test/api_integration/beta/personal_assistant_beta_weather_ui__api_integration_test.dart` 全绿；`make test-local-contract` 在 canonical 入口执行后失败；随后直接运行原 legacy 文件 `test/ui/chat/widgets/{chat_message_bubble_widget_test.dart,chat_receipt_ui_widget_test.dart}` 与 `test/ui/{entity/pages/homepage_detail_page_widget_test.dart,content/entry/widgets/location_selector_page_widget_test.dart,content/pages/work_browser_entry_page_test.dart,circle/pages/home_circles_hub_page_test.dart}`，复现完全相同的 9 个失败。
-  - 状态: 待办（2026-06-21；需单独修红后 `make test-local-contract` 才能作为三层迁移完成证据）
+  - 证据:
+    - 根因：产品已切 `AppPageErrorState`+`runtimeErrorSemantic`（标题/说明与旧 `UITextConstants.*Unavailable*` 不同）、聊天图片改 `AppCachedNetworkImage`（非 `Image`）、圈子 hub feed 改契约 seed（grid key 与 category 过滤不对齐）、摄影 tab inline carousel 禁用外层 onTap。
+    - 修复：9 个 legacy 测试对齐当前产品契约（非 shim）；圈子 grid 测试用 `_LegacyHubCircleFeedRepository` 稳定样本 + 视频帖覆盖 work-browser 导航。
+    - `flutter test` 上述 6 legacy 文件 47 用例 + 6 canonical wrapper 47 用例全绿（2026-06-21）。
+  - 状态: 已解决（2026-06-21；9 个存量红测已修，`make test-local-contract` 阻断项消除；全量 2500+ 套件仍建议 CI 定期跑）
+
+- [ ] R-TST04 canonical 治理完成与物理迁移完成仍可能被混读
+  - 区域: App / Service / Data / Ops
+  - 域: `runtime-test-pyramid` / `runtime-testinfra`
+  - 原因: 本轮已把 `pending_count`、bridge 语义和 backlog/acceptance 文案校准为“治理执行面完成”，但仓库中仍保留 670 个 grandfathered legacy 源测试，且 `specs/gates/test_legacy_source_allowlist.yaml` 会长期存在，说明“canonical 已接管执行”与“legacy 已物理清零”仍是两件事。
+  - 影响: 若后续只看 `pending_count=0` 或已关闭的 `R-TST01/R-TST02`，仍可能误判为“磁盘已无 legacy”“允许删除 allowlist / bridge 机制”，从而造成迁移完成度漂移。
+  - 涉及文件: `specs/03_TESTING_STRATEGY.md`、`specs/gates/test_directory_inventory.yaml`、`specs/gates/test_legacy_source_allowlist.yaml`、`specs/feature-tree/runtime/runtime-test-{pyramid,infra}/**`
+  - 证据:
+    - `specs/gates/test_directory_inventory.yaml` 已为 `pending_count: 0`
+    - `specs/gates/test_legacy_source_allowlist.yaml` 当前 `grandfathered_current_paths: 670`
+    - 2026-06-22 已同步收紧 `specs/03_TESTING_STRATEGY.md`、`runtime-test-pyramid/spec.md`、`runtime-testinfra/spec.md` 的完成口径
+  - 状态: 待办（2026-06-22 用户确认登记；后续若启动物理迁移 burn-down，需单列计划逐步减少 allowlist）
+
+- [ ] R-TST05 `api_integration` / `user_acceptance` 统一执行入口仍依赖外部环境与凭证注入
+  - 区域: App / Service / Data / Ops
+  - 域: `runtime-test-pyramid`
+  - 原因: 本轮已把 `Makefile` / `gate-full` 与 `prod_gray_initial`、`gamma_local` 语义对齐，但远端层仍必须依赖 `BETA/GAMMA/PROD_*_BASE_URL` 与测试 token；仓库本身不能在裸 shell 中自举出可运行的 `api_integration` / hosted `user_acceptance`。
+  - 影响: 三层执行入口虽已同源，但无法在任意开发机上直接得到“远端层为绿”的完整证据；一旦 CI/本地环境变量或拓扑准备缺失，验证会停在前置检查而不是业务断言。
+  - 涉及文件: `Makefile`、`agent_ops/deploy/smoke/run_environment_patrol_smoke.py`、`.cursor/skills/environment-ops/SKILL.md`
+  - 证据:
+    - `make verify-test-remote-env MODE=api_integration ENV=gamma` 会在入口即阻断缺失的 `GAMMA_BASE_URL`、`GAMMA_PRODUCT_OPS_BASE_URL` 与 token（2026-06-22 晚补）
+    - `make verify-test-remote-env MODE=user_acceptance TARGET=gamma-local` 可在无远端前置时直接通过
+    - `PROD_BASE_URL=https://example.invalid PROD_PRODUCT_OPS_BASE_URL=https://example.invalid TEST_AUTH_TOKEN=dryrun USER_ACCEPTANCE_DRY_RUN=1 make verify-test-remote-env MODE=user_acceptance TARGET=prod-hosted` wiring 通过（2026-06-22 晚补）
+    - `ENV=gamma make test-api-integration` 当前直接被 `GAMMA_BASE_URL` 缺失阻断（2026-06-22）
+    - `PROD_BASE_URL=https://example.invalid PROD_PRODUCT_OPS_BASE_URL=https://example.invalid TEST_AUTH_TOKEN=dryrun USER_ACCEPTANCE_DRY_RUN=1 make test-user-acceptance TARGET=prod-hosted` wiring 通过（2026-06-22）
+  - 状态: 待办（2026-06-22 用户确认登记；当晚已补 `verify-test-remote-env` preflight，但远端层仍需 stackctl / CI secret / 拓扑准备才能真正实跑）
+
+- [x] R-TST06 acceptance case 到 canonical file / report 的严格 traceability 尚未全仓铺满
+  - 区域: App / Service / Data / Ops
+  - 域: `runtime-test-pyramid` / `runtime-testinfra`
+  - 原因: 旧风险来自 strict traceability 只覆盖局部治理节点，full strict 诊断一度仍有 `23` 份 acceptance 文件、`55` 个 layer 级缺口。2026-06-22 夜间继续补齐 `exposure-observability-capacity` 的 direct canonical `local_contract` 与 `config-and-reliability-governance` 的 canonical `api_integration` 后，最后两条真实缺桥/缺测试路径也已收口。
+  - 影响: 当前全仓 acceptance case 均能追溯到 canonical file 或 `report.json.case_results[]`，新增 recorded 漂移会被 `verify_test_coverage_map.py` strict hard gate 即时阻断。本项关闭表示“strict traceability 治理面已全仓收口”，不表示后续可以跳过 recorded / report 回填；任何新增节点若掉出 canonical 追溯链，都会立即重新触发门禁。
+  - 涉及文件: `agent_ops/scaffold/verify_test_coverage_map.py`、`specs/feature-tree/**/acceptance.yaml`、`quwoquan_service/services/content-service/tests/local_contract/internal/application/exposure_observability_capacity__local_contract_test.go`、`quwoquan_service/services/platform-ops-service/tests/api_integration/config_and_reliability_governance__api_integration_test.go`
+  - 证据:
+    - 2026-06-22 初版 full strict 诊断为 `23` 份 acceptance 文件、`55` 个 layer 级缺口
+    - 2026-06-22 晚间首轮扩围后已把 full strict 缺口压到 `20` 份 acceptance 文件、`26` 个 layer 级缺口
+    - 2026-06-22 深夜第二轮扩围后，`verify_test_coverage_map.py` hard gate 已覆盖 runtime 节点、17 个业务/能力节点与 `comment-thread` 的 13 个 item 级 GWT
+    - 2026-06-22 收尾补上 `comment-thread.GWT12` 的真实 canonical `api_integration` 后，`comment-thread` item-level strict 扩到 `14` 个 GWT
+    - 2026-06-22 夜间继续补上 `xiaoqu-entry-handoff` 的真实 canonical `api_integration` 后，hard gate 覆盖扩到 `18` 个业务/能力节点
+    - 2026-06-22 夜间继续把 `page-horizontal-quality` 与 `realtime-push-and-offline-sync` 纳入 strict hard gate 后，hard gate 覆盖扩到 `20` 个业务/能力节点
+    - 2026-06-22 夜间补上 `exposure-observability-capacity` 的 direct canonical `local_contract` 并纳入 strict hard gate 后，full strict 诊断收敛到 `1` 份 acceptance 文件、`1` 个 layer 级缺口
+    - 2026-06-22 夜间补上 `config-and-reliability-governance` 的 canonical `api_integration` 并纳入 strict hard gate 后，full strict 诊断归零：`0` 份 acceptance 文件、`0` 个 layer 级缺口
+    - `make verify-test-coverage-map`
+    - `make verify-test-specs`
+    - `make verify-test-directory-layout`
+    - `make verify-test-no-fake`
+    - `python3 agent_ops/scaffold/verify_test_coverage_map.py`
+  - 状态: 已解决（2026-06-22；当晚已把 full strict 缺口从 `55` 压到 `0`，strict traceability hard gate 现已全仓闭环）
+
+- [ ] R-TST07 旧 `T1-T4/L1-L4` 口径与 grandfathered legacy 例外仍散落仓库
+  - 区域: App / Service / Data / Ops / Docs
+  - 域: `runtime-test-pyramid` / `runtime-testinfra`
+  - 原因: 本轮已清理核心 testing 规则、脚本、模板、README 与 Patrol 用例中的人类可读旧口径，并继续收掉四批真正可去掉的 grandfathered skip：一批是 deterministic 场景（assistant/user），一批是 `chat-service` / `content-service` / `rtc-service` 里由 `TestMain` 已兜底却仍留在文件内的冗余依赖双保险，一批是 `content-service/cmd/import` 与 `http_model_client` 这类可直接自举/去 loopback 的独立测试，最新一批是 `user-service/tests` 在混合 `pg/redis always-on + mongo optional` 运行时上补了按需 Mongo runtime 升级与 handler 重建，不再把文件级 `t.Skip` 当作环境契约。
+  - 影响: 新增 debt 已能被 ratchet 阻断，deterministic 场景、已由 `TestMain` 承诺初始化的 legacy skip、独立可自举测试、`user-service` 这批“显式依赖 Mongo 但不该把 skip 散落在文件里”的历史例外，以及 `chat-service` 里真实缺失的 `AssistantRemoved` 事件链路都已继续收缩；但存量运行时旧命名与剩余 grandfathered 例外仍会维持历史心智负担，也意味着 `legacy-source-no-fake` 还不是零债基线。
+  - 涉及文件: `specs/gates/test_legacy_source_allowlist.yaml`、`agent_ops/scaffold/{verify_test_specs.py,verify_test_no_fake.py}`、`quwoquan_app/test/patrol/**`、`docs/personal-assistant/README.md`、`quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py`
+  - 证据:
+    - `specs/gates/test_legacy_source_allowlist.yaml` 当前 `bench_only_allowed_sources: 1`、`skip_grandfathered_sources: 2`
+    - 2026-06-22 晚补后，`T4 Patrol E2E` / `L4 Patrol` / `T4 tests must run` / `T1-T4 测试` 等人类可读旧口径在非产物文件中已清零；剩余命中主要是运行时接口名与历史 tier 语义
+    - 2026-06-22 深夜继续去掉 `assistant-service/internal/{adapters/http/handler_test.go,application/m11_local_scenario_test.go}` 与 `user-service/tests/error_contract_test.go` 的 skip grandfathered 后，`make verify-test-no-fake` / `make verify-test-directory-layout` / `make verify-test-specs` 继续全绿
+    - 2026-06-22 深夜继续去掉 `chat-service/tests/{direct_conversation_relationship_gate_test.go,send_message_relationship_gate_test.go}`、`content-service/tests/{comment_keyset_explain_bench_test.go,intersection_watermark_store_contract_test.go,post_cache_contract_test.go,viewer_object_intersection_store_contract_test.go,redis_router_contract_test.go}` 与 `rtc-service/tests/one_to_one_relationship_gate_test.go` 的冗余 skip 双保险后，`make verify-test-no-fake` / `make verify-test-directory-layout` / `make verify-test-specs` 继续全绿
+    - 2026-06-23 凌晨继续给 `content-service/cmd/import` 补 `TestMain` 自举 Mongo，并把 `http_model_client_test.go` 改成内存 `RoundTripper` 后，`cmd/import` canonical wrapper、`make verify-test-no-fake`、`make verify-test-directory-layout`、`make verify-test-specs` 继续全绿
+    - 2026-06-23 凌晨继续把 `user-service/tests/{block_cascade_contract,follow_contract,greeting_request_state_machine,persona_contract,sub_account_view_contract}.go` 的文件级 skip 改为按需 `requireMongoBackedRuntime`，并在 `TEST_MONGO_URI=mongodb://127.0.0.1:37019` 下实跑 `go test ./tests -count=1`；`make verify-test-no-fake` / `make verify-test-directory-layout` / `make verify-test-specs` 继续全绿
+    - 2026-06-23 清晨继续给 `chat-service` 补 `AssistantRemoved` metadata/codegen/handler 事件链路，并把 `event_publish_contract_test.go` 从 skeleton skip 改成真实断言；在 `TEST_MONGO_URI=mongodb://127.0.0.1:37020` 下实跑 `go test ./tests -run 'TestRemoveAssistant|TestEventPublish_AssistantRemoved|TestEventPublish_SupportedEventTypesComplete' -count=1` 通过。`event_publish_contract__api_integration` canonical wrapper 仍被同文件内既有 `createConversation` 基线红测阻塞，不属于本轮新增回归。
+  - 状态: 待办（2026-06-22 用户确认登记；截至 2026-06-23 清晨已清掉 README / 注释 / Patrol 文案旧口径，并把 `skip_grandfathered_sources` 从 21 压到 2；后续需继续 burn-down 运行时接口旧命名、app 侧最后 2 条 legacy skip，以及 chat-service 事件发布套件里与本轮无关的 `createConversation` 基线红测）

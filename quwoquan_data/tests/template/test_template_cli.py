@@ -47,22 +47,10 @@ def test_template_rec_contract_passes():
     assert "PASSED" in result.stdout
 
 
-def test_template_region_season_lint_passes():
-    result = _run("template", "region-season-lint")
+def test_template_audience_lint_passes():
+    result = _run("template", "audience-lint")
     assert result.returncode == 0, result.stderr
     assert "PASSED" in result.stdout
-
-
-def test_plan_injects_region_season_conditions():
-    result = _run("plan", "--instruction", "为川西做冬季自驾线路攻略")
-    assert result.returncode == 0, result.stderr
-    brief = json.loads(result.stdout)
-    assert brief["templateId"] == "线路_自驾路书"
-    ctx = brief["conditionContext"]
-    assert ctx["region"]["name"] == "高原"
-    assert ctx["season"]["name"] == "冬"
-    assert "海拔与高反风险" in brief["mustIncludeFacts"]
-    assert brief["recommendation"]["conditionContext"] == {"region": "高原", "season": "冬"}
 
 
 def test_plan_food_columnist_resolves_for_foodie():
@@ -132,10 +120,9 @@ if __name__ == "__main__":
     test_template_lint_passes()
     test_template_creator_lint_passes()
     test_template_rec_contract_passes()
-    test_template_region_season_lint_passes()
+    test_template_audience_lint_passes()
     test_plan_instruction_resolves_self_drive_creator()
     test_plan_campus_new_student_resolves_mentor()
-    test_plan_injects_region_season_conditions()
     test_plan_food_columnist_resolves_for_foodie()
     test_plan_citywalk_resolves_for_photo_traveler()
     test_plan_career_mentor_resolves_for_job_seeker()

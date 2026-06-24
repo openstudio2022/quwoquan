@@ -52,7 +52,7 @@ void main() {
       expect(rows.single.isMutualFollow, isTrue);
     });
 
-    test('圈子和讨论 tab 使用 ContactHome kind，讨论仍请求 group filter', () async {
+    test('圈子和群聊 tab 使用 ContactHome kind，群聊仍请求 group filter', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
         overrides: [chatRepositoryProvider.overrideWithValue(repo)],
@@ -71,7 +71,7 @@ void main() {
       );
 
       expect(repo.requestedFilters, <String>['circle', 'group']);
-      expect(UITextConstants.contactsTabGroups, '讨论');
+      expect(UITextConstants.contactsTabGroups, '群聊');
       expect(circleRows, hasLength(1));
       expect(circleRows.single.kind, ChatContactsRowKind.circle);
       expect(circleRows.single.id, 'circle_01');

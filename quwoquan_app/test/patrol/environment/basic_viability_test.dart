@@ -1,4 +1,4 @@
-/// T4 Patrol E2E: 环境页面基本可用性 smoke。
+/// user_acceptance Patrol: 环境页面基本可用性 smoke。
 ///
 /// 固定覆盖部署后最容易断的五个入口：首页、我的、他人主页、记录列表、视频流。
 library;

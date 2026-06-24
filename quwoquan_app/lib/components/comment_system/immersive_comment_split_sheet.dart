@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/components/comment_system/comment_detail_surface.dart';
@@ -19,6 +17,7 @@ class ImmersiveCommentSplitSheet extends ConsumerStatefulWidget {
     super.key,
     required this.postId,
     required this.content,
+    this.entryObservedCommentCount,
     this.commentContext = const MediaViewerCommentContext(),
     this.config = const CommentConfig(),
     this.likeCount = 0,
@@ -32,6 +31,7 @@ class ImmersiveCommentSplitSheet extends ConsumerStatefulWidget {
 
   final String postId;
   final Widget content;
+  final int? entryObservedCommentCount;
   final MediaViewerCommentContext commentContext;
   final CommentConfig config;
   final int likeCount;
@@ -135,6 +135,7 @@ class _ImmersiveCommentSplitSheetState
                     ? CommentDetailSurfaceMode.profileInteraction
                     : CommentDetailSurfaceMode.immersiveSplit,
                 config: widget.config,
+                entryObservedCommentCount: widget.entryObservedCommentCount,
                 commentContext: widget.commentContext,
                 scrollController: _scrollController,
                 flexibleThread: false,

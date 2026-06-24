@@ -8,18 +8,17 @@
 
 - `compose_brief.json`
 - 下载阶段的真实 sources
-- `sopExampleRef`
 - 可用素材清单
 
 ## 写作要求
 
 1. 严格遵守 `compose_brief`：
    - `creator` 决定公开作者口吻和可声明身份。
-   - `structure.required` 必须全部覆盖。
-   - `mustIncludeFacts` 必须逐项在正文或图注中体现（含地域/季节注入的条件 facts）。
+   - `structure.required` 仅作反镜像参考：正文结构以底稿与写作主线为准，**禁止**把 required 槽位照抄成 `##` 小标题（命中过多会被反模板门判失败）。
+   - `mustIncludeFacts` 必须逐项在正文或图注中体现。
    - `forbiddenPhrases` 任何一个都不得出现。
-   - `imagePlan` 决定 `:::figure` / `:::gallery` 位置和版式（含地域/季节注入的图位）。
-   - `conditionContext`：若存在，正文里的地域专有现象（高原反应、潮汐、雪线等）只能落在 `conditionContext.region` 授权的地域，季节描述只能落在 `conditionContext.season`；缺省时不得臆造任何地域/季节专有事实。`packing/riskNotes/crowdNotes` 应自然融入正文，不堆砌成清单段。
+   - `imagePlan` 决定 `:::figure` / `:::gallery` 位置和版式。
+   - `packing/riskNotes/crowdNotes` 等注意事项应自然融入正文，不堆砌成清单段。
 
 2. 输出必须是 QWQ Rich Markdown：
 

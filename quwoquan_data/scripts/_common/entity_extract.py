@@ -178,15 +178,10 @@ def generate_entity_homepage(
     *,
     evidence: str = "",
     source_ref: str = "",
-    condition_profile: Mapping[str, Any] | None = None,
     approved_candidate_id: str = "",
     candidate_repository: CandidateRepository | None = None,
 ) -> Path:
-    """Materialize an approved backfill candidate as a minimal entity page.
-
-    condition_profile（L3 实体条件画像：真实地形 regions / 最佳季节 seasons / 海拔 altitudeMeters）
-    仅在显式传入且非空时写入，plan/brief 据此精确注入 conditionContext；缺省时不写，回退地域全谱。
-    """
+    """Materialize an approved backfill candidate as a minimal entity page."""
     from _common.source_unit import resolve_entity_object_dir
 
     repository = candidate_repository or CandidateRepository(RUNTIME_ROOT / "governance")
@@ -222,8 +217,6 @@ def generate_entity_homepage(
         "governanceCandidateId": approved_candidate_id,
         "status": STATUS_PUBLISHED,
     }
-    if condition_profile:
-        payload["conditionProfile"] = dict(condition_profile)
     write_json(ent_dir / "_entity.json", payload)
     write_entity_object_index(task_id, batch_id, domain, etype, name)
     sync_entity_object_to_task_mirror(task_id, batch_id, domain, etype, name)

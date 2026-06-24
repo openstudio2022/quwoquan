@@ -1,9 +1,16 @@
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 String settingsThemeModeLabel(AppearanceThemeMode mode) => switch (mode) {
   AppearanceThemeMode.system => '跟随系统',
   AppearanceThemeMode.light => '浅色',
   AppearanceThemeMode.dark => '深色',
+};
+
+String settingsDarkModeLabel(AppearanceThemeMode mode) => switch (mode) {
+  AppearanceThemeMode.light => UITextConstants.settingsDarkModeOff,
+  AppearanceThemeMode.dark => UITextConstants.settingsDarkModeOn,
+  AppearanceThemeMode.system => UITextConstants.settingsDarkModeSystem,
 };
 
 String settingsFontSizePresetLabel(AppearanceFontSizePreset preset) =>

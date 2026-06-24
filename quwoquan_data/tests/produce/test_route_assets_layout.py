@@ -130,7 +130,12 @@ def test_layouts_not_uniformly_degraded():
     assert cover["imageLayout"] == "fullWidth", cover
 
 
-def test_article_declared_asset_refs_constrain_selection():
+def test_article_auto_selects_from_base_source_ignoring_asset_refs():
+    """图文同源底稿：article 选图按 baseSourceRef 来源自动选 cover/node/closing，
+
+    不受 brief 声明的 assetRefs 收窄——assetRefs 严格约束只对 image/gallery 图片作品
+    生效；article 的图与文字同源于底稿来源，跨底稿引用相同图片属正常现象，不去重降级。
+    """
     _seed_images()
     entity = ENTITIES[0]
     candidates = RW._entity_image_candidates(TASK, BATCH, entity, f"/entity/地点/景区/{entity}")
@@ -148,7 +153,9 @@ def test_article_declared_asset_refs_constrain_selection():
 
     assets = _build_route_assets(TASK, BATCH, "声明源图文章", brief, evidence_bundle)
 
-    assert [asset["sourceAssetRef"] for asset in assets] == [declared["sourceAssetRef"]]
+    selected = [asset["sourceAssetRef"] for asset in assets]
+    assert selected, "article 应从底稿来源选出图片"
+    assert all(entity in ref for ref in selected), selected
 
 
 def _run_all() -> None:

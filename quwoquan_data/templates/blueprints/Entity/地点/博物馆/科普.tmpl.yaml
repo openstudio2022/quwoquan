@@ -18,7 +18,6 @@ render: { articleTemplate: ritual, fontPreset: classic }
 structure:
   required: [馆舍概况, 镇馆之宝, 展陈动线, 关键展品, 参观建议]
   optional: [亲子讲解点, 周边串联]
-hooks: ["去{name}，先看懂这几件展品"]
 mustIncludeFacts: [开放时间, 镇馆之宝, 展陈主题, 参观动线]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 900, max: 2000 }
@@ -32,4 +31,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/主页/地点/博物馆/example.md

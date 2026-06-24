@@ -2,6 +2,7 @@ import 'package:test/test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_create_request_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_update_request_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_bundle_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
@@ -36,13 +37,46 @@ void main() {
     test('updateProfile 不崩溃', () async {
       await expectLater(
         repo.updateProfile(
-          const ProfileEditUpdatePayload(
-            nickname: '新昵称',
-            bio: 'b',
-          ),
+          const ProfileEditUpdatePayload(nickname: '新昵称', bio: 'b'),
         ),
         completes,
       );
+    });
+
+    test('updateProfile payload 使用 profile media assetId 和 fieldsMask', () {
+      final wire = const ProfileEditUpdatePayload(
+        avatarAssetId: 'asset_avatar_1',
+        backgroundAssetId: 'asset_cover_1',
+        avatarUrl: 'https://cdn.example.test/avatar.jpg',
+        backgroundUrl: 'https://cdn.example.test/cover.jpg',
+      ).toRepositoryMap();
+
+      expect(wire['avatarAssetId'], 'asset_avatar_1');
+      expect(wire['backgroundAssetId'], 'asset_cover_1');
+      expect(
+        wire['fieldsMask'],
+        containsAll(<String>[
+          'avatarAssetId',
+          'backgroundAssetId',
+          'avatarUrl',
+          'backgroundUrl',
+        ]),
+      );
+    });
+
+    test('ProfileQrCardData 要求服务返回真实 qrPayload', () {
+      expect(
+        () => ProfileQrCardData.fromMap(<String, dynamic>{
+          'publicProfileUrl': 'https://app.example.test/u/qw123',
+        }),
+        throwsStateError,
+      );
+      final card = ProfileQrCardData.fromMap(<String, dynamic>{
+        'publicProfileUrl': 'https://app.example.test/u/qw123',
+        'qrPayload': 'https://app.example.test/u/qw123?qr=opaque',
+        'qrTokenId': 'token_1',
+      });
+      expect(card.qrPayload, contains('qr=opaque'));
     });
 
     // ── 主页 Tab 数据 ──────────────────────────────────────────────────────
@@ -160,10 +194,7 @@ void main() {
 
     test('createPersona 返回含 id 的分身', () async {
       final persona = await repo.createPersona(
-        PersonaCreateRequestDto(
-          displayName: '新分身',
-          isolationLevel: 'strict',
-        ),
+        PersonaCreateRequestDto(displayName: '新分身', isolationLevel: 'strict'),
       );
       expect(persona.id, isNotEmpty);
       expect(persona.displayName, '新分身');
@@ -201,14 +232,17 @@ void main() {
       expect(bundle.cacheVersion, isNotEmpty);
     });
 
-    test('getUserHomepageBundle tabCounts 与 stats 同源（works/likes/circles）', () async {
-      final bundle = await repo.getUserHomepageBundle(_fixtureProfileUserId);
-      expect(bundle.tabCounts.worksCount, bundle.stats.postCount);
-      expect(bundle.tabCounts.likesCount, bundle.stats.likeCount);
-      expect(bundle.tabCounts.circlesCount, bundle.stats.circleCount);
-      // collections 属 content 域，user 域不造假，置 0 待端覆盖。
-      expect(bundle.tabCounts.collectionsCount, 0);
-    });
+    test(
+      'getUserHomepageBundle tabCounts 与 stats 同源（works/likes/circles）',
+      () async {
+        final bundle = await repo.getUserHomepageBundle(_fixtureProfileUserId);
+        expect(bundle.tabCounts.worksCount, bundle.stats.postCount);
+        expect(bundle.tabCounts.likesCount, bundle.stats.likeCount);
+        expect(bundle.tabCounts.circlesCount, bundle.stats.circleCount);
+        // collections 属 content 域，user 域不造假，置 0 待端覆盖。
+        expect(bundle.tabCounts.collectionsCount, 0);
+      },
+    );
 
     test('getUserHomepageBundle 他人态：下发关系能力且非本人', () async {
       final bundle = await repo.getUserHomepageBundle(_fixtureProfileUserId);
@@ -238,13 +272,25 @@ void main() {
 
     test('接口包含全部 19 个 service.yaml API 方法', () {
       final methods = <String>[
-        'getUserProfile', 'getUserHomepageBundle', 'updateProfile',
-        'listUserPosts', 'listUserWorks', 'listUserLifeItems',
-        'listUserCircles', 'getUserStats',
-        'followUser', 'unfollowUser',
-        'listFollowing', 'listFollowers', 'getRelationship', 'listUserLikes',
-        'listPersonas', 'createPersona', 'updatePersona',
-        'deletePersona', 'activatePersona',
+        'getUserProfile',
+        'getUserHomepageBundle',
+        'updateProfile',
+        'listUserPosts',
+        'listUserWorks',
+        'listUserLifeItems',
+        'listUserCircles',
+        'getUserStats',
+        'followUser',
+        'unfollowUser',
+        'listFollowing',
+        'listFollowers',
+        'getRelationship',
+        'listUserLikes',
+        'listPersonas',
+        'createPersona',
+        'updatePersona',
+        'deletePersona',
+        'activatePersona',
       ];
       expect(methods.length, 19);
       expect(
@@ -277,12 +323,18 @@ void main() {
     });
 
     test('listFollowing limit 参数限制条数', () async {
-      final following = await repo.listFollowing(_fixtureCurrentUserId, limit: 2);
+      final following = await repo.listFollowing(
+        _fixtureCurrentUserId,
+        limit: 2,
+      );
       expect(following.length, lessThanOrEqualTo(2));
     });
 
     test('listFollowers limit 参数限制条数', () async {
-      final followers = await repo.listFollowers(_fixtureProfileUserId, limit: 2);
+      final followers = await repo.listFollowers(
+        _fixtureProfileUserId,
+        limit: 2,
+      );
       expect(followers.length, lessThanOrEqualTo(2));
     });
 
@@ -370,10 +422,7 @@ void main() {
     test('updateProfile 空 payload 不崩溃', () async {
       await expectLater(
         repo.updateProfile(
-          const ProfileEditUpdatePayload(
-            nickname: '',
-            bio: '',
-          ),
+          const ProfileEditUpdatePayload(nickname: '', bio: ''),
         ),
         completes,
       );
@@ -406,50 +455,55 @@ void main() {
   // ── homepage-bundle wire 解码与回退（Remote 解码路径）─────────────────────
 
   group('UserHomepageBundleViewData — wire 解码与回退', () {
-    test('fromMap 解析顶层 bundle（含嵌套 profile/viewerContext/relationshipCapability）', () {
-      final wire = UserHomepageBundleWireDto.fromMap(<String, dynamic>{
-        'profile': <String, dynamic>{
-          'subAccountId': 'u_remote',
-          'displayName': '远端用户',
-        },
-        'stats': <String, dynamic>{
-          'postCount': 7,
-          'likeCount': 88,
-          'circleCount': 3,
-          'followerCount': 100,
-          'followingCount': 20,
-        },
-        'tabCounts': <String, dynamic>{
-          'worksCount': 7,
-          'likesCount': 88,
-          'circlesCount': 3,
-          'collectionsCount': 0,
-        },
-        'viewerContext': <String, dynamic>{
-          'viewerSubAccountId': 'viewer_1',
-          'isOwner': false,
-          'isGuest': false,
-          'relationToTarget': 'following',
-          'canViewFullProfile': true,
-        },
-        'relationshipCapability': <String, dynamic>{
-          'viewerSubAccountId': 'viewer_1',
-          'targetSubAccountId': 'u_remote',
-          'relationState': 'following',
-          'canFollow': false,
-          'canUnfollow': true,
-        },
-        'cacheVersion': 'abc123',
-      });
-      final bundle = UserHomepageBundleViewData.fromUserHomepageBundleWire(wire);
-      expect(bundle.profile.subAccountId, 'u_remote');
-      expect(bundle.stats.postCount, 7);
-      expect(bundle.tabCounts.likesCount, 88);
-      expect(bundle.viewerContext.relationToTarget, 'following');
-      expect(bundle.relationshipCapability, isNotNull);
-      expect(bundle.relationshipCapability!.canUnfollow, isTrue);
-      expect(bundle.cacheVersion, 'abc123');
-    });
+    test(
+      'fromMap 解析顶层 bundle（含嵌套 profile/viewerContext/relationshipCapability）',
+      () {
+        final wire = UserHomepageBundleWireDto.fromMap(<String, dynamic>{
+          'profile': <String, dynamic>{
+            'subAccountId': 'u_remote',
+            'displayName': '远端用户',
+          },
+          'stats': <String, dynamic>{
+            'postCount': 7,
+            'likeCount': 88,
+            'circleCount': 3,
+            'followerCount': 100,
+            'followingCount': 20,
+          },
+          'tabCounts': <String, dynamic>{
+            'worksCount': 7,
+            'likesCount': 88,
+            'circlesCount': 3,
+            'collectionsCount': 0,
+          },
+          'viewerContext': <String, dynamic>{
+            'viewerSubAccountId': 'viewer_1',
+            'isOwner': false,
+            'isGuest': false,
+            'relationToTarget': 'following',
+            'canViewFullProfile': true,
+          },
+          'relationshipCapability': <String, dynamic>{
+            'viewerSubAccountId': 'viewer_1',
+            'targetSubAccountId': 'u_remote',
+            'relationState': 'following',
+            'canFollow': false,
+            'canUnfollow': true,
+          },
+          'cacheVersion': 'abc123',
+        });
+        final bundle = UserHomepageBundleViewData.fromUserHomepageBundleWire(
+          wire,
+        );
+        expect(bundle.profile.subAccountId, 'u_remote');
+        expect(bundle.stats.postCount, 7);
+        expect(bundle.tabCounts.likesCount, 88);
+        expect(bundle.viewerContext.relationToTarget, 'following');
+        expect(bundle.relationshipCapability, isNotNull);
+        expect(bundle.relationshipCapability!.canUnfollow, isTrue);
+        expect(bundle.cacheVersion, 'abc123');
+      },
+    );
 
     test('stats/tabCounts/viewerContext 缺失时同源回退（不造假）', () {
       final wire = UserHomepageBundleWireDto.fromMap(<String, dynamic>{
@@ -461,7 +515,9 @@ void main() {
         },
         'cacheVersion': 'v',
       });
-      final bundle = UserHomepageBundleViewData.fromUserHomepageBundleWire(wire);
+      final bundle = UserHomepageBundleViewData.fromUserHomepageBundleWire(
+        wire,
+      );
       // stats 缺失 → 由 profile 同源推导。
       expect(bundle.stats.postCount, 4);
       // tabCounts 缺失 → 由 stats 推导，collections 归 0。

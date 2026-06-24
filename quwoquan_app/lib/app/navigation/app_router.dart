@@ -28,8 +28,10 @@ import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_entry_arguments.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
-import 'package:quwoquan_app/ui/settings/pages/developer_settings_page.dart';
+import 'package:quwoquan_app/ui/content/entry/pages/local_draft_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/settings_about_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
@@ -51,8 +53,15 @@ import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_status_report_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/suggest_homepage_page.dart';
 import 'package:quwoquan_app/ui/intersection/pages/object_intersection_list_page.dart';
+import 'package:quwoquan_app/ui/user/pages/add_contact_page.dart';
+import 'package:quwoquan_app/ui/user/pages/contact_confirm_page.dart';
+import 'package:quwoquan_app/ui/user/pages/contact_search_result_page.dart';
+import 'package:quwoquan_app/ui/user/pages/career_interest_page.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
 import 'package:quwoquan_app/ui/user/pages/legal_document_page.dart';
+import 'package:quwoquan_app/ui/user/pages/my_qr_code_page.dart';
+import 'package:quwoquan_app/ui/user/pages/phone_contacts_page.dart';
+import 'package:quwoquan_app/ui/user/pages/scan_contact_qr_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
@@ -73,6 +82,8 @@ import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 
 part 'app_router_create_entry_route.dart';
+part 'app_router_contact_routes.dart';
+part 'app_router_profile_routes.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshListenable = ValueNotifier<int>(0);
@@ -99,6 +110,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     observers: <NavigatorObserver>[
       AppPageAccessNavigatorObserver.instance,
       chatRouteObserver,
+      createDraftRouteObserver,
     ],
     initialLocation: ref.read(welcomeCompletedProvider)
         ? AppRoutePaths.home
@@ -250,6 +262,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
+      ..._contactRoutes(),
       GoRoute(
         path: AppRoutePaths.globalSearch,
         pageBuilder: (context, state) {
@@ -462,6 +475,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: AppRoutePaths.localDrafts,
+        pageBuilder: (context, state) {
+          return appRoutePage<void>(
+            state: state,
+            child: const LocalDraftPage(),
+          );
+        },
+      ),
+      GoRoute(
         path: AppRoutePaths.createPathTemplate,
         pageBuilder: (context, state) {
           final typeStr = state.uri.queryParameters['type'];
@@ -569,71 +591,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-      GoRoute(
-        path: AppRoutePaths.userProfilePathTemplate.replaceAll(
-          '{username}',
-          ':username',
-        ),
-        pageBuilder: (context, state) {
-          final username = state.pathParameters['username'] ?? '';
-          final currentUser = ref.read(userDataProvider);
-          final isSelf =
-              currentUser != null &&
-              (username == currentUser.id ||
-                  (currentUser.username != null &&
-                      username == currentUser.username));
-          void onBack() {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(AppRoutePaths.home);
-            }
-          }
-
-          if (isSelf) {
-            return appRoutePage<void>(
-              state: state,
-              child: MyProfilePage(onBack: onBack),
-            );
-          }
-          UserProfileRouteExtra? extra;
-          ReferralSource profileReferralSource = ReferralSource.authorProfile;
-          if (state.extra is OtherProfilePageRouteExtra) {
-            final profileExtra = state.extra! as OtherProfilePageRouteExtra;
-            profileReferralSource =
-                profileExtra.referralSource ?? ReferralSource.authorProfile;
-            extra = UserProfileRouteExtra(
-              subAccountId: profileExtra.subAccountId,
-              avatar: profileExtra.avatar,
-              displayName: profileExtra.displayName,
-              backgroundImage: profileExtra.backgroundImage,
-            );
-          } else if (state.extra is UserProfileRouteExtra) {
-            extra = state.extra! as UserProfileRouteExtra;
-          } else if (state.extra is Map) {
-            final m = state.extra! as Map;
-            extra = UserProfileRouteExtra(
-              subAccountId: (m['subAccountId'] ?? m['profileSubjectId'])
-                  ?.toString(),
-              avatar: m['avatar']?.toString(),
-              displayName: m['displayName']?.toString(),
-              backgroundImage: m['backgroundImage']?.toString(),
-            );
-          }
-          return appRoutePage<void>(
-            state: state,
-            child: OtherProfilePage(
-              username: username,
-              subAccountId: extra?.safeSubAccountId,
-              initialAvatarUrl: extra?.safeAvatar,
-              initialDisplayName: extra?.safeDisplayName,
-              initialBackgroundImageUrl: extra?.safeBackgroundImage,
-              referralSource: profileReferralSource,
-              onBack: onBack,
-            ),
-          );
-        },
-      ),
+      _userProfileRoute(ref),
       GoRoute(
         path: AppRoutePaths.workBrowserPathTemplate.replaceAll(
           '{workId}',
@@ -734,11 +692,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
         routes: [
           GoRoute(
-            path: AppRoutePaths.settingsDeveloperSegment,
+            path: AppRoutePaths.settingsPermissionsSegment,
             pageBuilder: (context, state) {
               return appRoutePage<void>(
                 state: state,
-                child: const DeveloperSettingsPage(),
+                child: const SettingsPermissionsPage(),
+              );
+            },
+          ),
+          GoRoute(
+            path: AppRoutePaths.settingsAboutSegment,
+            pageBuilder: (context, state) {
+              return appRoutePage<void>(
+                state: state,
+                child: const SettingsAboutPage(),
               );
             },
           ),
@@ -748,6 +715,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.profileEdit,
         pageBuilder: (context, state) =>
             appRoutePage<void>(state: state, child: const EditProfilePage()),
+      ),
+      GoRoute(
+        path: AppRoutePaths.profileCareerInterests,
+        pageBuilder: (context, state) =>
+            appRoutePage<bool>(state: state, child: const CareerInterestPage()),
       ),
       GoRoute(
         path: AppRoutePaths.profilePersonas,

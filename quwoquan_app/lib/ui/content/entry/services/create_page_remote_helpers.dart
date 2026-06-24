@@ -1,8 +1,10 @@
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
@@ -290,15 +292,47 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
   final coverAssetPath = coverAssetPathForPayload(state);
   if (state.editorKind == CreateEditorKind.media) {
     if (state.hasVideo) {
+      final videoPath = state.videoPath.trim();
+      final thumbnailUrl = state.videoThumbnail.trim();
+      final coverUrl = thumbnailUrl.isNotEmpty ? thumbnailUrl : coverAssetPath;
+      final coverStrategy = _videoCoverStrategyForPayload(state);
       return <String, Object?>{
         'type': 'video',
         'contentType': 'video',
         'title': state.title.trim(),
         'body': state.body.trim(),
         if (summary.isNotEmpty) 'summary': summary,
-        'videoUrl': state.videoPath,
-        'mediaUrls': <String>[state.videoPath],
-        'coverUrl': coverAssetPath,
+        'videoUrl': videoPath,
+        'mediaUrls': <String>[videoPath],
+        'mediaItems': <Map<String, Object?>>[
+          <String, Object?>{
+            'kind': 'video',
+            'url': videoPath,
+            if (thumbnailUrl.isNotEmpty) 'thumbnailUrl': thumbnailUrl,
+            if (coverUrl.isNotEmpty) 'coverUrl': coverUrl,
+            'coverStrategy': coverStrategy,
+            'coverFrameTimeMs': state.videoCoverTimeMs,
+            if (state.videoDurationMs > 0) 'durationMs': state.videoDurationMs,
+            if (state.videoWidth > 0) 'width': state.videoWidth,
+            if (state.videoHeight > 0) 'height': state.videoHeight,
+          },
+        ],
+        if (coverUrl.isNotEmpty) 'coverUrl': coverUrl,
+        if (thumbnailUrl.isNotEmpty) 'thumbnailUrl': thumbnailUrl,
+        'coverStrategy': coverStrategy,
+        'coverFrameTimeMs': state.videoCoverTimeMs,
+        if (state.videoDurationMs > 0) 'durationMs': state.videoDurationMs,
+        if (state.videoWidth > 0) 'width': state.videoWidth,
+        if (state.videoHeight > 0) 'height': state.videoHeight,
+        'deviceInfo': <String, Object?>{
+          if (state.videoDurationMs > 0) 'durationMs': state.videoDurationMs,
+          if (state.videoWidth > 0) 'width': state.videoWidth,
+          if (state.videoHeight > 0) 'height': state.videoHeight,
+          if (state.videoTrimStartMs > 0) 'trimStartMs': state.videoTrimStartMs,
+          if (state.videoTrimEndMs > 0) 'trimEndMs': state.videoTrimEndMs,
+          'coverFrameTimeMs': state.videoCoverTimeMs,
+          'muted': state.videoMuted,
+        },
         ...settings,
       };
     }
@@ -340,15 +374,365 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
   };
 }
 
+typedef CreateMediaObjectUploader =
+    Future<void> Function(
+      Uri uploadUri,
+      List<int> bytes, {
+      required String contentType,
+    });
+
+class PreparedCreatePostPayload {
+  const PreparedCreatePostPayload({
+    required this.payload,
+    required this.mediaAssetIds,
+  });
+
+  final Map<String, Object?> payload;
+  final List<String> mediaAssetIds;
+}
+
+Future<PreparedCreatePostPayload> buildCreatePostPayloadWithRemoteImageMedia({
+  required ContentRepository repository,
+  required FileStorageGateway fileStorageGateway,
+  required CreateEditorState state,
+  CreateMediaObjectUploader? uploadObject,
+}) async {
+  final basePayload = Map<String, Object?>.from(
+    buildCreatePostPayloadMap(state),
+  );
+  if (state.editorKind != CreateEditorKind.media) {
+    return PreparedCreatePostPayload(
+      payload: basePayload,
+      mediaAssetIds: const <String>[],
+    );
+  }
+  if (state.hasVideo) {
+    return _buildCreatePostPayloadWithRemoteVideoMedia(
+      repository: repository,
+      fileStorageGateway: fileStorageGateway,
+      state: state,
+      basePayload: basePayload,
+      uploadObject: uploadObject ?? _defaultUploadMediaObject,
+    );
+  }
+  if (state.imagePaths.isEmpty) {
+    return PreparedCreatePostPayload(
+      payload: basePayload,
+      mediaAssetIds: const <String>[],
+    );
+  }
+
+  final uploader = uploadObject ?? _defaultUploadMediaObject;
+  final remoteUrls = <String>[];
+  final assetIds = <String>[];
+  for (final path in state.imagePaths) {
+    final resolved = await _resolveMediaReference(
+      repository: repository,
+      fileStorageGateway: fileStorageGateway,
+      localOrRemotePath: path,
+      mediaType: 'image',
+      uploadObject: uploader,
+    );
+    remoteUrls.add(resolved.url);
+    if (resolved.assetId.isNotEmpty) {
+      assetIds.add(resolved.assetId);
+    }
+  }
+  basePayload['mediaUrls'] = remoteUrls;
+  basePayload['coverUrl'] = remoteUrls.first;
+  return PreparedCreatePostPayload(
+    payload: basePayload,
+    mediaAssetIds: assetIds,
+  );
+}
+
+Future<PreparedCreatePostPayload> _buildCreatePostPayloadWithRemoteVideoMedia({
+  required ContentRepository repository,
+  required FileStorageGateway fileStorageGateway,
+  required CreateEditorState state,
+  required Map<String, Object?> basePayload,
+  required CreateMediaObjectUploader uploadObject,
+}) async {
+  final video = await _resolveMediaReference(
+    repository: repository,
+    fileStorageGateway: fileStorageGateway,
+    localOrRemotePath: state.videoPath,
+    mediaType: 'video',
+    uploadObject: uploadObject,
+  );
+  final assetIds = <String>[if (video.assetId.isNotEmpty) video.assetId];
+
+  final cover = await _resolveRemoteVideoCover(
+    repository: repository,
+    fileStorageGateway: fileStorageGateway,
+    videoAssetId: video.assetId,
+    localOrRemoteCoverPath: state.videoThumbnail,
+    coverStrategy: _videoCoverStrategyForPayload(state),
+    coverFrameTimeMs: state.videoCoverTimeMs,
+    uploadObject: uploadObject,
+  );
+  if (cover.assetId.isNotEmpty) {
+    assetIds.add(cover.assetId);
+  }
+
+  basePayload['videoUrl'] = video.url;
+  basePayload['mediaUrls'] = <String>[video.url];
+  basePayload['thumbnailUrl'] = cover.thumbnailUrl;
+  basePayload['coverUrl'] = cover.coverUrl;
+  basePayload['coverStrategy'] = cover.coverStrategy;
+  basePayload['coverFrameTimeMs'] = state.videoCoverTimeMs;
+  if (state.videoDurationMs > 0) {
+    basePayload['durationMs'] = state.videoDurationMs;
+  }
+  if (state.videoWidth > 0) {
+    basePayload['width'] = state.videoWidth;
+  }
+  if (state.videoHeight > 0) {
+    basePayload['height'] = state.videoHeight;
+  }
+  basePayload['mediaItems'] = <Map<String, Object?>>[
+    <String, Object?>{
+      'kind': 'video',
+      'url': video.url,
+      'thumbnailUrl': cover.thumbnailUrl,
+      'coverUrl': cover.coverUrl,
+      'coverStrategy': cover.coverStrategy,
+      'coverFrameTimeMs': state.videoCoverTimeMs,
+      if (state.videoDurationMs > 0) 'durationMs': state.videoDurationMs,
+      if (state.videoWidth > 0) 'width': state.videoWidth,
+      if (state.videoHeight > 0) 'height': state.videoHeight,
+      if (video.assetId.isNotEmpty) 'mediaId': video.assetId,
+      if (cover.assetId.isNotEmpty) 'coverAssetId': cover.assetId,
+    },
+  ];
+
+  return PreparedCreatePostPayload(
+    payload: basePayload,
+    mediaAssetIds: assetIds,
+  );
+}
+
+class _ResolvedMediaReference {
+  const _ResolvedMediaReference({required this.url, this.assetId = ''});
+
+  final String url;
+  final String assetId;
+}
+
+class _ResolvedVideoCoverReference {
+  const _ResolvedVideoCoverReference({
+    required this.thumbnailUrl,
+    required this.coverUrl,
+    required this.coverStrategy,
+    this.assetId = '',
+  });
+
+  final String thumbnailUrl;
+  final String coverUrl;
+  final String coverStrategy;
+  final String assetId;
+}
+
+Future<_ResolvedMediaReference> _resolveMediaReference({
+  required ContentRepository repository,
+  required FileStorageGateway fileStorageGateway,
+  required String localOrRemotePath,
+  required String mediaType,
+  required CreateMediaObjectUploader uploadObject,
+}) async {
+  final path = localOrRemotePath.trim();
+  if (path.isEmpty) {
+    throw StateError('empty media path');
+  }
+  if (_isRemoteMediaReference(path)) {
+    return _ResolvedMediaReference(
+      url: path,
+      assetId: path.startsWith('media://')
+          ? path.substring('media://'.length)
+          : '',
+    );
+  }
+  final init = await repository.initMediaUpload(mediaType: mediaType);
+  final sessionId = init.sessionId.trim();
+  if (sessionId.isEmpty) {
+    throw StateError('media upload session is missing');
+  }
+  try {
+    final uploadUrl = (init.presignUrl ?? init.uploadUrl ?? '').trim();
+    if (uploadUrl.isNotEmpty) {
+      final bytes = await fileStorageGateway.readAsBytes(path);
+      await uploadObject(
+        Uri.parse(uploadUrl),
+        bytes,
+        contentType: _contentTypeForMediaPath(path, mediaType),
+      );
+    }
+    final completed = await repository.completeMediaUpload(
+      sessionId: sessionId,
+    );
+    final assetId = (completed.assetId ?? init.mediaId ?? '').trim();
+    final cdnUrl = (completed.cdnUrl ?? '').trim();
+    final url = cdnUrl.isNotEmpty
+        ? cdnUrl
+        : assetId.isNotEmpty
+        ? 'media://$assetId'
+        : '';
+    if (url.isEmpty) {
+      throw StateError('completed media upload is missing remote url');
+    }
+    return _ResolvedMediaReference(url: url, assetId: assetId);
+  } catch (_) {
+    await repository.abortMediaUpload(sessionId: sessionId);
+    rethrow;
+  }
+}
+
+Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
+  required ContentRepository repository,
+  required FileStorageGateway fileStorageGateway,
+  required String videoAssetId,
+  required String localOrRemoteCoverPath,
+  required String coverStrategy,
+  required int coverFrameTimeMs,
+  required CreateMediaObjectUploader uploadObject,
+}) async {
+  final coverPath = localOrRemoteCoverPath.trim();
+  if (coverPath.isNotEmpty) {
+    final cover = await _resolveMediaReference(
+      repository: repository,
+      fileStorageGateway: fileStorageGateway,
+      localOrRemotePath: coverPath,
+      mediaType: 'image',
+      uploadObject: uploadObject,
+    );
+    var thumbnailUrl = cover.url;
+    var coverUrl = cover.url;
+    var resolvedStrategy = coverStrategy == 'manual' ? 'manual' : 'first_frame';
+    if (videoAssetId.isNotEmpty && cover.assetId.isNotEmpty) {
+      final selected = await repository.selectManualVideoCover(
+        mediaId: videoAssetId,
+        coverAssetId: cover.assetId,
+        coverFrameTimeMs: coverFrameTimeMs,
+      );
+      thumbnailUrl = selected.thumbnailUrl.trim().isNotEmpty
+          ? selected.thumbnailUrl.trim()
+          : thumbnailUrl;
+      coverUrl = selected.coverUrl.trim().isNotEmpty
+          ? selected.coverUrl.trim()
+          : coverUrl;
+      resolvedStrategy = selected.coverStrategy.trim().isNotEmpty
+          ? selected.coverStrategy.trim()
+          : resolvedStrategy;
+    }
+    return _ResolvedVideoCoverReference(
+      thumbnailUrl: thumbnailUrl,
+      coverUrl: coverUrl,
+      coverStrategy: resolvedStrategy,
+      assetId: cover.assetId,
+    );
+  }
+
+  if (videoAssetId.isEmpty) {
+    throw StateError('video cover is missing');
+  }
+  final selected = await repository.selectAutoVideoCover(mediaId: videoAssetId);
+  final thumbnailUrl = selected.thumbnailUrl.trim();
+  final coverUrl = selected.coverUrl.trim().isNotEmpty
+      ? selected.coverUrl.trim()
+      : thumbnailUrl;
+  if (thumbnailUrl.isEmpty && coverUrl.isEmpty) {
+    throw StateError('video cover selection is missing remote url');
+  }
+  return _ResolvedVideoCoverReference(
+    thumbnailUrl: thumbnailUrl.isNotEmpty ? thumbnailUrl : coverUrl,
+    coverUrl: coverUrl,
+    coverStrategy: selected.coverStrategy.trim().isNotEmpty
+        ? selected.coverStrategy.trim()
+        : 'first_frame',
+  );
+}
+
+bool _isRemoteMediaReference(String value) {
+  final lower = value.toLowerCase();
+  return lower.startsWith('http://') ||
+      lower.startsWith('https://') ||
+      lower.startsWith('media://') ||
+      lower.startsWith('asset://');
+}
+
+String _contentTypeForMediaPath(String path, String mediaType) {
+  if (mediaType == 'video') {
+    return _videoContentTypeForPath(path);
+  }
+  return _imageContentTypeForPath(path);
+}
+
+String _imageContentTypeForPath(String path) {
+  final lower = path.toLowerCase();
+  if (lower.endsWith('.png')) {
+    return 'image/png';
+  }
+  if (lower.endsWith('.gif')) {
+    return 'image/gif';
+  }
+  if (lower.endsWith('.webp')) {
+    return 'image/webp';
+  }
+  return 'image/jpeg';
+}
+
+String _videoContentTypeForPath(String path) {
+  final lower = path.toLowerCase();
+  if (lower.endsWith('.mov')) {
+    return 'video/quicktime';
+  }
+  if (lower.endsWith('.m4v')) {
+    return 'video/x-m4v';
+  }
+  if (lower.endsWith('.webm')) {
+    return 'video/webm';
+  }
+  return 'video/mp4';
+}
+
+String _videoCoverStrategyForPayload(CreateEditorState state) {
+  final strategy = state.videoCoverStrategy.trim();
+  if (strategy == 'manual') {
+    return 'manual';
+  }
+  return state.videoCoverTimeMs > 0 ? 'manual' : 'first_frame';
+}
+
+Future<void> _defaultUploadMediaObject(
+  Uri uploadUri,
+  List<int> bytes, {
+  required String contentType,
+}) async {
+  final client = http.Client();
+  try {
+    final response = await client.put(
+      uploadUri,
+      headers: <String, String>{'Content-Type': contentType},
+      body: bytes,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('media object upload failed: ${response.statusCode}');
+    }
+  } finally {
+    client.close();
+  }
+}
+
 Future<void> reportCreateEditorSurfaceEvent(
   WidgetRef ref,
   String event, [
   Map<String, Object?> extras = const {},
+  String surfaceId = 'create_editor',
 ]) async {
   try {
     final row = <String, Object?>{
       'event': event,
-      'surface': 'create_editor',
+      'surface': surfaceId,
       'timestamp': DateTime.now().toIso8601String(),
       ...extras,
     };

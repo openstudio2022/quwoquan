@@ -49,8 +49,12 @@ type RawBehaviorEvent struct {
 	CommentLength int `bson:"commentLength,omitempty"`
 	// ChannelID/RankingVersion 是阶段五归因字段：feed 下发频道与精排版本；与 FeedRequestID 组合可
 	// 离线还原「某次 feed 下发(频道/精排版本)的第几位被曝光/点击/转化」，供位置偏置校正与 AB / replay。
-	ChannelID      string `bson:"channelId,omitempty"`
-	RankingVersion string `bson:"rankingVersion,omitempty"`
+	ChannelID       string `bson:"channelId,omitempty"`
+	RankingVersion  string `bson:"rankingVersion,omitempty"`
+	ReasonVersion   string `bson:"reasonVersion,omitempty"`
+	RecallPath      string `bson:"recallPath,omitempty"`
+	ContentVertical string `bson:"contentVertical,omitempty"`
+	SupplySource    string `bson:"supplySource,omitempty"`
 	// 交集转化归因（S6）：触发交集行动（follow/join_circle/add_contact）的维度与路径制 tagRef。
 	IntersectionDimension string   `bson:"intersectionDimension,omitempty"`
 	IntersectionTagRefs   []string `bson:"intersectionTagRefs,omitempty"`
@@ -96,6 +100,9 @@ func (s *MongoBehaviorEventStore) ensureIndexes() {
 		},
 		{
 			Keys: bson.D{{Key: "contentId", Value: 1}, {Key: "createdAt", Value: -1}},
+		},
+		{
+			Keys: bson.D{{Key: "feedRequestId", Value: 1}, {Key: "channelId", Value: 1}, {Key: "recallPath", Value: 1}, {Key: "createdAt", Value: -1}},
 		},
 	}
 

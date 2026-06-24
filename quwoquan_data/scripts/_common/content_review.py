@@ -96,8 +96,6 @@ def check_provenance(article_path: Path, task: str | None = None, batch: str | N
     for term in PLATFORM_TERMS:
         if term in article:
             issues.append(f"{ref}: leaked provenance term {term}")
-    # 版权风险全面放开：取消反抄袭长句门，所有来源允许以底稿为基础大面积保留优质原文；
-    # 仍清洗平台名/原作者署名/水印等来源痕迹（内容以虚拟创作者身份发布）。
     if "来源平台：" in article:
         issues.append(f"{ref}: leaked source platform label")
     if "游记里还提到：" in article:
@@ -106,6 +104,15 @@ def check_provenance(article_path: Path, task: str | None = None, batch: str | N
         issues.append(f"{ref}: standalone entity-ref block")
     if any(field in article for field in PUBLISHER_BANNED_FIELDS):
         issues.append(f"{ref}: leaked publisher boundary field")
+    # 底稿文件/路径标识泄漏门：正文/标题不得出现内部 source 目录名、文件名或底稿编号
+    for pat, label in (
+        (r"[A-Za-z]+_[A-Za-z]+_base_\d", "base draft id"),
+        (r"source\.(?:clean\.)?md", "source file name"),
+        (r"\d+\.download", "download stage path"),
+        (r"[/\\]sources[/\\]", "sources dir path"),
+    ):
+        if re.search(pat, article):
+            issues.append(f"{ref}: leaked base-draft identifier ({label})")
     if manifest and not manifest.get("sourceUrls"):
         issues.append(f"{ref}: missing manifest sourceUrls")
     return issues
@@ -228,7 +235,6 @@ def check_reader_experience(article_path: Path) -> list[str]:
 
 def check_factual_grounding(article_path: Path, task: str | None = None, batch: str | None = None) -> list[str]:
     article = article_path.read_text(encoding="utf-8")
-    manifest = _load_manifest(article_path)
     ref = article_path.parent.name
     issues: list[str] = []
     if task and batch:
@@ -239,8 +245,6 @@ def check_factual_grounding(article_path: Path, task: str | None = None, batch: 
             for fact in [str(x) for x in (brief.get("mustIncludeFacts") or []) if x]:
                 if not fact_covered(fact, article):
                     issues.append(f"{ref}: mustIncludeFact not reflected: {fact}")
-    if manifest and not manifest.get("conditionContext") and any(term in article for term in ("高原", "雪山", "海岛")):
-        issues.append(f"{ref}: region-locked term without conditionContext")
     return issues
 
 

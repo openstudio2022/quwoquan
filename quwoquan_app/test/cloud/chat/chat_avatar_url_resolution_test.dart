@@ -3,6 +3,7 @@ import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 
@@ -20,7 +21,11 @@ void main() {
 
       expect(
         item.avatarUrl,
-        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/s/archived-avatar/conversation/conv_1/v2/hash.png?v=2',
+        resolveAvatarImageUrlCandidates(
+          '/media/avatar/s/archived-avatar/conversation/conv_1/v2/hash.png?v=2',
+          gatewayBaseUrl: CloudRuntimeConfig.gatewayBaseUrl,
+          avatarCdnBaseUrl: CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+        ).first,
       );
     });
 
@@ -36,7 +41,11 @@ void main() {
 
       expect(
         row.avatarUrl,
-        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/s/archived-avatar/user/user_2/v1/profile.png',
+        resolveAvatarImageUrlCandidates(
+          'media/avatar/s/archived-avatar/user/user_2/v1/profile.png',
+          gatewayBaseUrl: CloudRuntimeConfig.gatewayBaseUrl,
+          avatarCdnBaseUrl: CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+        ).first,
       );
     });
 
@@ -52,7 +61,11 @@ void main() {
 
       expect(
         item.senderAvatar,
-        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/s/archived-avatar/user/user_2/v3/profile.png?v=3',
+        resolveAvatarImageUrlCandidates(
+          '/media/avatar/s/archived-avatar/user/user_2/v3/profile.png?v=3',
+          gatewayBaseUrl: CloudRuntimeConfig.gatewayBaseUrl,
+          avatarCdnBaseUrl: CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+        ).first,
       );
     });
 

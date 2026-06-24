@@ -163,13 +163,17 @@ func TestBehaviorBatchWireAliases(t *testing.T) {
 	}
 }
 
-// TestBehaviorEventInputDecodesAttributionFields 冻结阶段五归因 wire 契约：
-// channelId/rankingVersion/feedRequestId/referralSource/position/state 必须从批量 JSON
+// TestBehaviorEventInputDecodesAttributionFields 冻结推荐归因 wire 契约：
+// channelId/rankingVersion/reasonVersion/recallPath/contentVertical/supplySource/
+// feedRequestId/referralSource/position/state 与交集分桶字段必须从批量 JSON
 // 正确解析进 BehaviorEventInput（端云 DTO↔struct↔YAML common_fields 对齐，R08）。
 func TestBehaviorEventInputDecodesAttributionFields(t *testing.T) {
 	raw := `{"contentId":"post_attr_1","action":"impression","state":"impressed",` +
 		`"feedRequestId":"frq_01H","referralSource":"organic_feed","position":7,` +
-		`"channelId":"following","rankingVersion":"rank-v3","commentLength":42}`
+		`"channelId":"following","rankingVersion":"rank-v3","reasonVersion":"reason-v2",` +
+		`"recallPath":"collab_i2i","contentVertical":"travel_photography","supplySource":"data_engineering",` +
+		`"intersectionSourceRef":"shared_city","intersectionClass":"fact","intersectionEvidenceId":"ev_attr_1",` +
+		`"commentLength":42}`
 	var in application.BehaviorEventInput
 	if err := json.Unmarshal([]byte(raw), &in); err != nil {
 		t.Fatalf("decode behavior event input: %v", err)
@@ -191,6 +195,27 @@ func TestBehaviorEventInputDecodesAttributionFields(t *testing.T) {
 	}
 	if in.RankingVersion != "rank-v3" {
 		t.Errorf("rankingVersion: want rank-v3, got %q", in.RankingVersion)
+	}
+	if in.ReasonVersion != "reason-v2" {
+		t.Errorf("reasonVersion: want reason-v2, got %q", in.ReasonVersion)
+	}
+	if in.RecallPath != "collab_i2i" {
+		t.Errorf("recallPath: want collab_i2i, got %q", in.RecallPath)
+	}
+	if in.ContentVertical != "travel_photography" {
+		t.Errorf("contentVertical: want travel_photography, got %q", in.ContentVertical)
+	}
+	if in.SupplySource != "data_engineering" {
+		t.Errorf("supplySource: want data_engineering, got %q", in.SupplySource)
+	}
+	if in.IntersectionSourceRef != "shared_city" {
+		t.Errorf("intersectionSourceRef: want shared_city, got %q", in.IntersectionSourceRef)
+	}
+	if in.IntersectionClass != "fact" {
+		t.Errorf("intersectionClass: want fact, got %q", in.IntersectionClass)
+	}
+	if in.IntersectionEvidenceID != "ev_attr_1" {
+		t.Errorf("intersectionEvidenceId: want ev_attr_1, got %q", in.IntersectionEvidenceID)
 	}
 	if in.CommentLength != 42 {
 		t.Errorf("commentLength: want 42, got %d", in.CommentLength)
@@ -326,7 +351,7 @@ func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.
 	err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
 		{UserID: userID, ContentID: "post_ss_visible", Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
 		{UserID: userID, ContentID: "post_ss_impressed", Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
-		{UserID: userID, ContentID: "post_ss_click", Action: "click", State: "interaction", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
+		{UserID: userID, ContentID: "post_ss_click", Action: "click", State: "click", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
 	})
 	if err != nil {
 		t.Fatalf("process seven-state batch: %v", err)

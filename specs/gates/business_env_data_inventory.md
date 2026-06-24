@@ -30,7 +30,7 @@
 | 实体主页 | `homepage_detail_page.dart`、`homepage_picker_page.dart`、`suggest_homepage_page.dart`、认领/维护/状态报告页 | `entity.homepage`、`entity.homepage_claim`、`entity.homepage_suggestion`、`entity.homepage_status_report` | `entity_homepage_core`、`entity_claim_core`、`entity_picker_core` |
 | 创作入口 | `create_page.dart`、`article_typography_page.dart`、发布位置/圈子/主页选择页、`video_editor_page.dart` | `content.draft`、`content.publish_payload`、`circle.circle`、`integration.location_poi`、`entity.homepage` | `publish_core`、`location_poi_core`、`circle_core`、`entity_picker_core` |
 | 助手 | 助手会话、找私助、技能中心、管理/设置/回放页 | `assistant.conversation`、`assistant.turn`、`assistant.stream_event`、`assistant.skill`、`assistant.skill_subscription`、`notification.app_message` | `assistant_p0_core`、`skill_management_core`、`notification_core` |
-| RTC/设置 | 来电/去电/语音/视频页、参与人选择、设置/开发者设置页 | `rtc.call_session`、`rtc.participant`、`chat.member`、`user.call_settings`、`user.appearance_settings`、`ops.event` | `rtc_core`、`chat_contacts_core`、`settings_core` |
+| RTC/设置 | 来电/去电/语音/视频页、参与人选择、设置页 | `rtc.call_session`、`rtc.participant`、`chat.member`、`user.call_settings`、`user.appearance_settings`、`ops.event` | `rtc_core`、`chat_contacts_core`、`settings_core` |
 
 ## 强制规则
 

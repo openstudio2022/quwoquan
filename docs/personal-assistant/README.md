@@ -2172,7 +2172,7 @@ M8 非目标：
 3. M8-S3：实现云侧订阅 CRUD、状态流转、store 与 HTTP handler。
 4. M8-S4：实现 cron tick、fake clock、proactive turn、AppMessage 投递与幂等去重。
 5. M8-S5：实现端侧订阅管理 Repository、Provider、UI 入口与 AppMessage 回跳。
-6. M8-S6：补齐 T1-T4 测试与门禁证据。
+6. M8-S6：补齐 `local_contract / api_integration / user_acceptance` 测试与门禁证据。
 
 ### M9：P0 主动 Skill 落地
 
@@ -2263,7 +2263,7 @@ M9 非目标：
 3. M9-S3：实现云侧 P0 Skill fake provider 与 SkillRuntime 分发，输出结构化 `why/evidence/nextActions`。
 4. M9-S4：增强 cron proactive turn 生成逻辑，按 skillId 生成对应 AppMessage 标题、摘要、风险边界和回跳目标。
 5. M9-S5：完善找私助端侧订阅入口、消息展示、回跳和反馈入口。
-6. M9-S6：补齐 T1-T4 测试证据，必要时同步页面横向质量矩阵和 P2 inventory。
+6. M9-S6：补齐三层测试证据，必要时同步页面横向质量矩阵和 P2 inventory。
 
 ### M10：趣聊与圈子主动分发
 
@@ -2549,7 +2549,7 @@ make gate
 5. M10-S5：新增 chat delivery port / adapter，复用 chat-service assistant member 与 message send 能力。
 6. M10-S6：新增 circle AppMessage 查询与端侧圈子摘要卡片展示入口，不创建 feed post。
 7. M10-S7：完善找私助端侧群/圈订阅管理、反馈入口、错误降级与页面横向质量矩阵。
-8. M10-S8：补齐 T1-T4 测试证据，运行对应 metadata/codegen、service tests、app tests 与门禁。
+8. M10-S8：补齐三层测试证据，运行对应 metadata/codegen、service tests、app tests 与门禁。
 
 M10 自检与冻结状态：
 
@@ -2558,7 +2558,7 @@ M10 自检与冻结状态：
 - 云侧覆盖：已明确 assistant-service proactive delivery router、chat delivery port、circle AppMessage port、chat-service / circle-service 协作边界。
 - 端侧覆盖：已明确找私助管理入口、趣聊群订阅入口、圈子摘要卡片、反馈入口、Provider / Mock 隔离和页面横向质量要求。
 - 记录文档：`docs/personal-assistant/` 保持 `README.md` 为唯一评审入口，旧文档不再作为规格真相源。
-- 验证状态：本小节冻结的是 M10 规格与验收规划；M10-S2 到 M10-S8 的代码实现、metadata/codegen、T1-T4 测试和门禁需要在开发实施阶段执行后，才能进入 M11。
+- 验证状态：本小节冻结的是 M10 规格与验收规划；M10-S2 到 M10-S8 的代码实现、metadata/codegen、三层测试和门禁需要在开发实施阶段执行后，才能进入 M11。
 - 准出结论：可以进入 M10 开发实施；不能跳过 M10 实施直接进入 M11。
 
 ### M11：测试与门禁收口

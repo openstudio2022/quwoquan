@@ -383,11 +383,9 @@ class _WorksIntersectionReasonRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = reason.primaryText.isNotEmpty
-        ? reason.primaryText
-        : reason.connectionSummary;
-    final secondary = reason.secondaryText;
-    if (primary.isEmpty && secondary.isEmpty) {
+    final primary = reason.primaryText.trim();
+    final secondary = reason.secondaryText.trim();
+    if (primary.isEmpty) {
       return const SizedBox.shrink();
     }
     return Container(

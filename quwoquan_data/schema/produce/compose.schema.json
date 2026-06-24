@@ -125,7 +125,6 @@
     "publishTitle": { "type": "string" },
     "publishSeq": { "type": "integer" },
     "articleRenderProfile": { "type": "object" },
-    "conditionContext": { "type": "object" },
     "recommendation": { "type": "object" },
     "composeBriefRef": { "type": "string" },
     "sourceQuality": { "type": "array" },

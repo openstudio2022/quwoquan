@@ -18,7 +18,6 @@ render: { articleTemplate: journal, fontPreset: clean }
 structure:
   required: [机位总览, 到达方式, 光线时段, 焦段建议, 拍摄限制]
   optional: [无人机限制, 替代机位, 后期方向]
-hooks: ["{name}这些机位，差别不在滤镜而在光线", "拍{name}之前，先确认方向、焦段和限制"]
 mustIncludeFacts: [机位坐标, 朝向, 焦段, 光线时段, 禁飞禁拍限制]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 900, max: 1800 }
@@ -32,4 +31,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/image.md

@@ -22,6 +22,7 @@ from _common.draft_io import (
     read_draft_article,
     read_draft_meta,
     read_writing_pack,
+    write_image_evidence_draft,
     write_placeholder_draft,
     write_prompt,
     write_writing_pack,
@@ -37,6 +38,7 @@ from produce.route_workflow import (
     is_route_brief,
     resolve_carrier,
     _attach_base_draft_text,
+    _article_without_assets_allowed,
     _build_route_assets,
     _build_summary,
     _check_carrier_consistency,
@@ -161,13 +163,27 @@ def build_entity_writing_pack(
     _attach_base_draft_text(task_id, batch_id, pack)
     write_writing_pack(task_id, batch_id, ref, pack)
     write_prompt(task_id, batch_id, ref, render_prompt_md(pack))
-    existing = read_draft_meta(task_id, batch_id, ref)
-    if not existing or str(existing.get("generator")) != GENERATOR_AGENT:
-        write_placeholder_draft(task_id, batch_id, ref)
+    if carrier in ("image", "gallery"):
+        # 图片作品是结构化图集，不需要 agent 长文正文：写 image_evidence_pack 草稿元数据
+        # 并清除任何残留 article 占位/正文（write_image_evidence_draft 幂等删除旧正文）。
+        write_image_evidence_draft(
+            task_id,
+            batch_id,
+            ref,
+            selected_asset_ids=[
+                str(a.get("assetId")) for a in assets if isinstance(a, Mapping) and a.get("assetId")
+            ],
+            cited_source_paths=quality_payload.get("sourcePaths") or [],
+        )
+    else:
+        # 仅当尚无 agent 草稿时写占位，避免覆盖会话模型已创作的正文。
+        existing = read_draft_meta(task_id, batch_id, ref)
+        if not existing or str(existing.get("generator")) != GENERATOR_AGENT:
+            write_placeholder_draft(task_id, batch_id, ref)
 
     issues = list(gate_route_evidence_bundle(brief, evidence_bundle))
     issues.extend(creative_brief_contract_issues(pack))
-    if not assets:
+    if not assets and not _article_without_assets_allowed(brief):
         issues.append("writing pack has no verifiable image assets")
     write_stage_result(task_id, batch_id, "produce", "compose_brief", ref, pack)
     write_gate_report(
@@ -210,6 +226,8 @@ def _compose_payload_from_pack(
     article: str,
     draft_meta: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
+    from _common.creator_assignment import creator_from_payload
+
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
     story_spine = (evidence_bundle.get("storySpine") or {}) if isinstance(evidence_bundle, Mapping) else {}
     carrier = str(pack.get("carrier") or "article")
@@ -222,6 +240,7 @@ def _compose_payload_from_pack(
     image_source_urls = _image_source_urls_from_assets(assets) if is_image else []
     if is_image:
         story_spine = _image_story_spine(brief, pack, assets)
+    creator_assignment = creator_from_payload(pack) or creator_from_payload(brief)
     payload = {
         "topicId": ref,
         "title": title_hint,
@@ -234,6 +253,7 @@ def _compose_payload_from_pack(
         "sourcePaths": image_source_paths if is_image else list(quality_payload.get("sourcePaths") or []),
         "template": template,
         "assets": assets,
+        "publishMediaMode": pack.get("publishMediaMode") or brief.get("publishMediaMode"),
         "publishLayout": "image" if carrier in ("image", "gallery") else "entity",
         "publishAngle": _publish_angle(brief),
         "publishTitle": (
@@ -242,11 +262,11 @@ def _compose_payload_from_pack(
             else title_hint
         ),
         "publishSeq": 1,
-        "conditionContext": brief.get("conditionContext"),
         "composeBriefRef": ref,
         "storySpine": story_spine,
         "generator": IMAGE_EVIDENCE_GENERATOR if is_image else str(meta.get("generator") or "pending"),
         "generatorModel": None if is_image else meta.get("model"),
+        "sourceUseMode": pack.get("sourceUseMode"),
         "citedSourceRefs": (
             image_source_paths
             if is_image
@@ -258,6 +278,7 @@ def _compose_payload_from_pack(
             "template": template,
             "fontPreset": (brief.get("render") or {}).get("fontPreset", "clean"),
         },
+        **creator_assignment,
     }
     if carrier in ("image", "gallery"):
         caption = _image_caption_from_brief(brief, pack, article)
@@ -419,12 +440,24 @@ def review_entity_draft(
         "issues": traceability,
         "suggestions": ["补齐 mustIncludeFacts，并确保门票/开放时间/海拔等数字能在 source 证据中找到。"] if traceability else [],
     }
-    from _common.base_draft import base_draft_fidelity_issues, base_source_use_mode, load_base_draft_text
+    from _common.base_draft import (
+        base_draft_fidelity_issues,
+        base_source_use_mode,
+        load_intent_aligned_base_draft_text,
+    )
+    from _common.writing_pack import primary_entity_name
 
     if carrier in ("image", "gallery"):
         fidelity = []
     else:
-        base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
+        # 与 prompt 侧 baseDraftText 同源：同一份 writingIntent 主线对齐底稿作分母（R-CS01）。
+        base_text = load_intent_aligned_base_draft_text(
+            task_id,
+            batch_id,
+            brief.get("baseSourceRef"),
+            writing_intent=brief.get("writingIntent"),
+            entity_name=primary_entity_name(brief),
+        )
         source_use_mode = base_source_use_mode(task_id, batch_id, brief.get("baseSourceRef"))
         fidelity = base_draft_fidelity_issues(
             body,
@@ -554,7 +587,7 @@ def _entity_review_checks(
         }
     checks = {
         "entityCoverage": _check_entity_coverage(article, brief, evidence_bundle),
-        "provenanceRewrite": _check_provenance_rewrite(article, brief, quality_payload),
+        "provenanceRewrite": _check_provenance_rewrite(article, brief, quality_payload, compose_payload),
         "evidenceQuality": _check_evidence_quality(article, brief, quality_payload, compose_payload),
         "carrierConsistency": _check_carrier_consistency(compose_payload),
         "proseStyle": _check_prose_style(article),

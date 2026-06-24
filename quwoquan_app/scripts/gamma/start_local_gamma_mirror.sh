@@ -51,9 +51,9 @@ export \
   LOCAL_GAMMA_ES_PORT
 CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
 IMAGE_VERSION="${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
-GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-http://127.0.0.1:${LOCAL_GAMMA_HTTP_PORT}}"
-PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-http://127.0.0.1:${LOCAL_GAMMA_PRODUCT_OPS_PORT}}"
-MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}}"
+GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-https://gamma-api.quwoquan-env.test:${LOCAL_GAMMA_HTTP_PORT}}"
+PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-ops.quwoquan-env.test:${LOCAL_GAMMA_PRODUCT_OPS_PORT}}"
+MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-https://gamma-image.quwoquan-env.test:${LOCAL_GAMMA_MEDIA_EDGE_PORT}}}"
 MEDIA_ORIGIN_BASE_URL="${LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL:-}"
 LOCAL_MEDIA_ORIGIN_URL="http://127.0.0.1:${LOCAL_GAMMA_MEDIA_ORIGIN_PORT}"
 LOCAL_GAMMA_TAGS_DIR="${LOCAL_GAMMA_TAGS_DIR:-$ROOT/quwoquan_data/publish/tags}"
@@ -71,6 +71,8 @@ LOCAL_GAMMA_ARTIFACT_ROOT="${LOCAL_GAMMA_ARTIFACT_ROOT:-$ROOT/artifacts/local-ga
 LOCAL_GAMMA_CONFIG_ROOT="${LOCAL_GAMMA_STATE_ROOT}/config-root"
 LOCAL_GAMMA_MEDIA_ROOT="${LOCAL_GAMMA_STATE_ROOT}/media"
 LOCAL_GAMMA_CADDYFILE="${LOCAL_GAMMA_STATE_ROOT}/Caddyfile"
+LOCAL_GAMMA_CADDY_DATA_ROOT="${LOCAL_GAMMA_CADDY_DATA_ROOT:-${LOCAL_GAMMA_STATE_ROOT}/caddy-data}"
+LOCAL_GAMMA_CADDY_CONFIG_ROOT="${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-${LOCAL_GAMMA_STATE_ROOT}/caddy-config}"
 LOCAL_GAMMA_MODEL_CACHE_ROOT="${LOCAL_GAMMA_STATE_ROOT}/model-cache"
 LOCAL_GAMMA_STACK_REPORT="${LOCAL_GAMMA_STATE_ROOT}/stack_state.json"
 STAGE="${STAGE:-gamma}"
@@ -120,6 +122,8 @@ export \
   LOCAL_GAMMA_READY_INDEX_STREAM \
   LOCAL_GAMMA_READY_INDEX_GROUP \
   LOCAL_GAMMA_READY_INDEX_QUEUE \
+  LOCAL_GAMMA_CADDY_DATA_ROOT \
+  LOCAL_GAMMA_CADDY_CONFIG_ROOT \
   PREVIOUS_IMAGE_VERSION
 
 library_image() {
@@ -386,15 +390,14 @@ PY
 host_port_open() {
   local port="$1"
   python3 - "$port" <<'PY'
+import socket
 import sys
-import urllib.request
 
 port = sys.argv[1]
 try:
-    body = urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=2).read()
-except Exception:
-    raise SystemExit(1)
-if b"business-beta" in body.lower():
+    with socket.create_connection(("127.0.0.1", int(port)), timeout=2):
+        pass
+except OSError:
     raise SystemExit(1)
 raise SystemExit(0)
 PY
@@ -412,7 +415,11 @@ start_colima_tunnels_if_needed() {
   # 否则 colima 下 host 无法直达 user-service 发布端口，host 就绪探测会卡死。
   local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
   local ssh_config="${LOCAL_GAMMA_STATE_ROOT}/colima-ssh-config"
-  mkdir -p "${LOCAL_GAMMA_STATE_ROOT}" "${LOCAL_GAMMA_MODEL_CACHE_ROOT}"
+  mkdir -p \
+    "${LOCAL_GAMMA_STATE_ROOT}" \
+    "${LOCAL_GAMMA_MODEL_CACHE_ROOT}" \
+    "${LOCAL_GAMMA_CADDY_DATA_ROOT}" \
+    "${LOCAL_GAMMA_CADDY_CONFIG_ROOT}"
   stop_colima_tunnels
   colima ssh-config > "$ssh_config"
   : > "$tunnel_pid_file"
@@ -770,13 +777,24 @@ prepare_media_root() {
 
 prepare_caddyfile() {
   local out="${LOCAL_GAMMA_CADDYFILE}"
-  mkdir -p "$(dirname "$out")"
-  python3 - "$out" "$MEDIA_ORIGIN_BASE_URL" <<'PY'
+  mkdir -p \
+    "$(dirname "$out")" \
+    "$LOCAL_GAMMA_CADDY_DATA_ROOT" \
+    "$LOCAL_GAMMA_CADDY_CONFIG_ROOT"
+  python3 - \
+    "$out" \
+    "$MEDIA_ORIGIN_BASE_URL" \
+    "$LOCAL_GAMMA_HTTP_PORT" \
+    "$LOCAL_GAMMA_PRODUCT_OPS_PORT" \
+    "$LOCAL_GAMMA_MEDIA_EDGE_PORT" <<'PY'
 import sys
 from pathlib import Path
 
 out_path = Path(sys.argv[1])
 media_origin = sys.argv[2].strip().rstrip("/")
+api_port = sys.argv[3].strip()
+product_ops_port = sys.argv[4].strip()
+media_edge_port = sys.argv[5].strip()
 # 容器内 reverse_proxy 到 127.0.0.1/localhost 会命中容器自身 loopback。
 # local-gamma 默认应直接服务挂载的 curated media bundle，仅在显式传入可达公网/宿主地址时才回源。
 if media_origin.startswith(("http://127.0.0.1", "https://127.0.0.1", "http://localhost", "https://localhost")):
@@ -796,7 +814,11 @@ if media_origin:
             "gamma-avatar.quwoquan-env.test,",
             "gamma-image.quwoquan-env.test,",
             "gamma-video.quwoquan-env.test,",
-            "gamma-upload.quwoquan-env.test {",
+            "gamma-upload.quwoquan-env.test,",
+            "gamma-avatar.localhost,",
+            "gamma-image.localhost,",
+            "gamma-video.localhost,",
+            "gamma-upload.localhost {",
             "\timport local_gamma_tls",
             "\timport media_cors",
             f"\treverse_proxy {media_origin}",
@@ -826,7 +848,11 @@ else:
             "gamma-avatar.quwoquan-env.test,",
             "gamma-image.quwoquan-env.test,",
             "gamma-video.quwoquan-env.test,",
-            "gamma-upload.quwoquan-env.test {",
+            "gamma-upload.quwoquan-env.test,",
+            "gamma-avatar.localhost,",
+            "gamma-image.localhost,",
+            "gamma-video.localhost,",
+            "gamma-upload.localhost {",
             "\timport local_gamma_tls",
             "\timport media_cors",
             "\troot * /srv/media",
@@ -862,7 +888,8 @@ content = f"""{{
 \t}}
 }}
 
-gamma-api.quwoquan-env.test {{
+gamma-api.quwoquan-env.test,
+gamma-api.localhost {{
 \timport local_gamma_tls
 \thandle /healthz {{
 \t\treverse_proxy content-service:18080
@@ -917,7 +944,8 @@ gamma-api.quwoquan-env.test {{
 \t}}
 }}
 
-gamma-product-ops.quwoquan-env.test {{
+gamma-product-ops.quwoquan-env.test,
+gamma-product-ops.localhost {{
 \timport local_gamma_tls
 \thandle /healthz {{
 \t\treverse_proxy product-ops-service:18086
@@ -1291,8 +1319,6 @@ if [[ "$podman_compose" == "1" ]]; then
   podman volume inspect quwoquan_service_local-gamma-mongo >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-mongo >/dev/null
   podman volume inspect quwoquan_service_local-gamma-redis >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-redis >/dev/null
   podman volume inspect quwoquan_service_local-gamma-go-cache >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-go-cache >/dev/null
-  podman volume inspect quwoquan_service_local-gamma-caddy-data >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-caddy-data >/dev/null
-  podman volume inspect quwoquan_service_local-gamma-caddy-config >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-caddy-config >/dev/null
   podman volume inspect quwoquan_service_local-gamma-es >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-es >/dev/null
 
   podman run --pull=never --name quwoquan_service_postgres_1 -d \
@@ -1372,7 +1398,6 @@ if [[ "$podman_compose" == "1" ]]; then
     -e MONGO_URI=mongodb://mongodb:27017 \
     -e PRODUCT_OPS_REDIS_REC_ADDR=redis:6379 -e PRODUCT_OPS_REDIS_GENERAL_ADDR=redis:6379 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
-    -p "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:18086" \
     -p "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}:18086" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
@@ -1515,11 +1540,11 @@ if [[ "$podman_compose" == "1" ]]; then
     -e LOCAL_GAMMA_TLS_MODE="${LOCAL_GAMMA_TLS_MODE:-internal}" \
     -v "${LOCAL_GAMMA_CADDYFILE}:/etc/caddy/Caddyfile:ro" \
     -v "${LOCAL_GAMMA_MEDIA_ROOT}:/srv/media:ro" \
-    -v quwoquan_service_local-gamma-caddy-data:/data \
-    -v quwoquan_service_local-gamma-caddy-config:/config \
-    -p "${LOCAL_GAMMA_HTTP_PORT:-19000}:80" \
-    -p "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:80" \
-    -p "${LOCAL_GAMMA_HTTPS_PORT:-443}:443" \
+    -v "${LOCAL_GAMMA_CADDY_DATA_ROOT}:/data" \
+    -v "${LOCAL_GAMMA_CADDY_CONFIG_ROOT}:/config" \
+    -p "${LOCAL_GAMMA_HTTP_PORT:-19000}:443" \
+    -p "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:443" \
+    -p "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:443" \
     -p "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019" \
     --healthcheck-command "wget -qO- http://127.0.0.1/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 5s --healthcheck-retries 10 \
@@ -1590,69 +1615,36 @@ start_colima_tunnels_if_needed
 # docker compose 分支不会逐项 wait_healthy；在宣告就绪前用主机侧探测避免 T3/T4 撞到端口未监听。
 wait_local_gamma_host_ready() {
   local gw="${GATEWAY_BASE_URL%/}"
-  local gw_local="http://127.0.0.1:${LOCAL_GAMMA_HTTP_PORT:-19000}"
-  local media_edge_local="http://127.0.0.1:${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
-  local po_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
+  local gw_host="gamma-api.quwoquan-env.test"
+  local gw_port="${LOCAL_GAMMA_HTTP_PORT:-19000}"
+  local product_ops_host="gamma-product-ops.quwoquan-env.test"
+  local product_ops_public_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
+  local media_host="gamma-image.quwoquan-env.test"
+  local media_edge_port="${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
+  local po_port="${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_PORT:-19250}"
   local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
   local deadline=$(( $(date +%s) + HOST_READY_TIMEOUT_SECONDS ))
   local last_gamma_proxy_retry=0
-  echo "[local-gamma] waiting for host probes (${HOST_READY_TIMEOUT_SECONDS}s): ${gw}/healthz or ${gw_local}/healthz + ${media_edge_local}/healthz + http://127.0.0.1:${po_port}/healthz + http://127.0.0.1:${user_port}/healthz"
+  echo "[local-gamma] waiting for host probes (${HOST_READY_TIMEOUT_SECONDS}s): ${gw}/healthz + ${PRODUCT_OPS_BASE_URL%/}/healthz + ${MEDIA_BASE_URL%/}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png + http://127.0.0.1:${po_port}/healthz + http://127.0.0.1:${user_port}/healthz"
   while (( $(date +%s) < deadline )); do
     if (( $(date +%s) - last_gamma_proxy_retry >= 15 )); then
       ensure_docker_gamma_proxy_started || true
       last_gamma_proxy_retry=$(date +%s)
     fi
-    if python3 - <<PY
-import urllib.request
-gateway_urls = ["${gw}/healthz"]
-if "${gw_local}/healthz" not in gateway_urls:
-    gateway_urls.append("${gw_local}/healthz")
-if "${media_edge_local}/healthz" not in gateway_urls:
-    gateway_urls.append("${media_edge_local}/healthz")
-gateway_ready = False
-for url in gateway_urls:
-    try:
-        body = urllib.request.urlopen(url, timeout=4).read()
-    except Exception:
-        continue
-    if b"business-beta" in body.lower():
-        continue
-    gateway_ready = True
-    break
-if not gateway_ready:
-    raise SystemExit(1)
-for url in ("http://127.0.0.1:${po_port}/healthz", "http://127.0.0.1:${user_port}/healthz"):
-    try:
-        body = urllib.request.urlopen(url, timeout=4).read()
-    except Exception:
-        raise SystemExit(1)
-    if b"business-beta" in body.lower():
-        raise SystemExit(1)
-raise SystemExit(0)
-PY
+    if curl -kfsS --resolve "${gw_host}:${gw_port}:127.0.0.1" "https://${gw_host}:${gw_port}/healthz" >/dev/null 2>&1 \
+      && curl -kfsS --resolve "${product_ops_host}:${product_ops_public_port}:127.0.0.1" "https://${product_ops_host}:${product_ops_public_port}/healthz" >/dev/null 2>&1 \
+      && curl -kfsS --resolve "${media_host}:${media_edge_port}:127.0.0.1" "https://${media_host}:${media_edge_port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" >/dev/null 2>&1 \
+      && curl -fsS "http://127.0.0.1:${po_port}/healthz" >/dev/null 2>&1 \
+      && curl -fsS "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1
     then
       return 0
     fi
     sleep 2
   done
-  echo "[local-gamma] FAIL: host cannot reach ${gw}/healthz or ${gw_local}/healthz plus ${media_edge_local}/healthz and http://127.0.0.1:${po_port}/healthz within ${HOST_READY_TIMEOUT_SECONDS}s" >&2
-  python3 - <<PY >&2
-import urllib.request
-
-urls = [
-    "${gw}/healthz",
-    "${gw_local}/healthz",
-    "${media_edge_local}/healthz",
-    "http://127.0.0.1:${po_port}/healthz",
-    "http://127.0.0.1:${user_port}/healthz",
-]
-for url in urls:
-    try:
-        body = urllib.request.urlopen(url, timeout=4).read(120)
-        print(f"[local-gamma] probe {url} -> ok body={body!r}")
-    except Exception as exc:  # noqa: BLE001
-        print(f"[local-gamma] probe {url} -> {exc}")
-PY
+  echo "[local-gamma] FAIL: host cannot reach ${gw}/healthz, ${PRODUCT_OPS_BASE_URL%/}/healthz, ${MEDIA_BASE_URL%/}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png and internal health probes within ${HOST_READY_TIMEOUT_SECONDS}s" >&2
+  curl -kfsS --resolve "${gw_host}:${gw_port}:127.0.0.1" "https://${gw_host}:${gw_port}/healthz" >&2 || true
+  curl -kfsS --resolve "${product_ops_host}:${product_ops_public_port}:127.0.0.1" "https://${product_ops_host}:${product_ops_public_port}/healthz" >&2 || true
+  curl -kfsS --resolve "${media_host}:${media_edge_port}:127.0.0.1" "https://${media_host}:${media_edge_port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" >&2 || true
   docker compose -f "$COMPOSE_FILE" ps >&2 || true
   docker compose -f "$COMPOSE_FILE" logs --tail 80 gamma-proxy product-ops-service user-service >&2 || true
   return 1

@@ -33,6 +33,7 @@ import (
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
 	"quwoquan_service/services/user-service/internal/infrastructure/projection"
 	"quwoquan_service/services/user-service/internal/infrastructure/searchindex"
+	"quwoquan_service/services/user-service/internal/infrastructure/tagindex"
 )
 
 type redisSceneCfg struct {
@@ -80,21 +81,21 @@ type config struct {
 	Integration struct {
 		ExternalInteractionBaseURL string `yaml:"external_interaction_base_url"`
 		SmsOTP                     struct {
-			PassThroughEnabled   bool                 `yaml:"pass_through_enabled"`
-			PassThroughDebtID    string               `yaml:"pass_through_debt_id"`
-			PassThroughOwner     string               `yaml:"pass_through_owner"`
-			PassThroughExpiresAt string               `yaml:"pass_through_expires_at"`
-			DebugRevealEnabled   bool                 `yaml:"debug_reveal_enabled"`
-			SandboxAllowlist     sandboxAllowlistCfg  `yaml:"sandbox_allowlist"`
+			PassThroughEnabled   bool                `yaml:"pass_through_enabled"`
+			PassThroughDebtID    string              `yaml:"pass_through_debt_id"`
+			PassThroughOwner     string              `yaml:"pass_through_owner"`
+			PassThroughExpiresAt string              `yaml:"pass_through_expires_at"`
+			DebugRevealEnabled   bool                `yaml:"debug_reveal_enabled"`
+			SandboxAllowlist     sandboxAllowlistCfg `yaml:"sandbox_allowlist"`
 		} `yaml:"sms_otp"`
 		Social struct {
-			SandboxAllowlist sandboxAllowlistCfg            `yaml:"sandbox_allowlist"`
-			Providers        map[string]providerOAuthCfg    `yaml:"providers"`
+			SandboxAllowlist sandboxAllowlistCfg         `yaml:"sandbox_allowlist"`
+			Providers        map[string]providerOAuthCfg `yaml:"providers"`
 		} `yaml:"social"`
 		OneTap struct {
-			Resolver         string             `yaml:"resolver"`
+			Resolver         string              `yaml:"resolver"`
 			SandboxAllowlist sandboxAllowlistCfg `yaml:"sandbox_allowlist"`
-			SandboxPhones    map[string]string  `yaml:"sandbox_phones"`
+			SandboxPhones    map[string]string   `yaml:"sandbox_phones"`
 		} `yaml:"one_tap"`
 	} `yaml:"integration"`
 }
@@ -211,6 +212,7 @@ func main() {
 	userDeviceStore := persistence.NewPgUserDeviceStore(pgPool)
 	consentRecordStore := persistence.NewPgConsentRecordStore(pgPool)
 	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
+	profileQrTokenStore := persistence.NewPgProfileQrTokenStore(pgPool)
 	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
 	inviteStore := persistence.NewPgInviteStore(pgPool)
 
@@ -247,9 +249,21 @@ func main() {
 	if searchBuilt.Projector != nil {
 		userEventPublisher = searchindex.ComposePublisher(userEventPublisher, searchBuilt.Projector)
 	}
+	if mongoDB != nil {
+		userEventPublisher = searchindex.ComposePublisher(
+			userEventPublisher,
+			tagindex.NewProjector(mongoDB.Collection("object_tag_index"), profileStore),
+		)
+	}
 	userSyncService := runtimesync.NewService(redisClient, redisRouter.Scene("realtime"))
 
 	// 7. Services
+	var regionTagResolver application.RegionTagResolver = application.PathRegionTagResolver{}
+	var profileTagValidator application.ProfileTagValidator = application.PathProfileTagValidator{}
+	if tagServiceBaseURL := getenvOrDefault("TAG_SERVICE_BASE_URL", ""); tagServiceBaseURL != "" {
+		regionTagResolver = userintegration.NewTagServiceRegionResolver(tagServiceBaseURL, nil)
+		profileTagValidator = userintegration.NewTagServiceProfileTagValidator(tagServiceBaseURL, nil)
+	}
 	profileService := application.NewProfileService(
 		profileStore,
 		personaStore,
@@ -258,6 +272,9 @@ func main() {
 		settingCache,
 		userEventPublisher,
 		userSyncService,
+		application.WithProfileQrTokenRepository(profileQrTokenStore),
+		application.WithRegionTagResolver(regionTagResolver),
+		application.WithProfileTagValidator(profileTagValidator),
 	)
 	searchService := application.NewSearchService(profileStore, personaStore, redisClient)
 	followService := application.NewFollowService(

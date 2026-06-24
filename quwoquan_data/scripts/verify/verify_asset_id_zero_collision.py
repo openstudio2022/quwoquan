@@ -12,7 +12,11 @@ from _common.batch_asset_registry import batch_asset_registry_path  # noqa: E402
 from _common.batch_manifest import load_batch_manifest  # noqa: E402
 from _common.batch_scan import iter_batch_object_dirs  # noqa: E402
 from _common.io import read_json  # noqa: E402
-from _common.paths import TASKS_ROOT, batch_root  # noqa: E402
+from _common.paths import (  # noqa: E402
+    batch_root,
+    batch_task_id,
+    iter_all_batch_dirs,
+)
 from _common.asset_identity import parse_post_asset_id  # noqa: E402
 
 
@@ -109,20 +113,34 @@ def scan_batch(task_id: str, batch_id: str) -> list[str]:
 
 def scan_all() -> list[str]:
     issues: list[str] = []
-    if not TASKS_ROOT.is_dir():
-        return issues
-    for batches_dir in TASKS_ROOT.rglob("batches"):
-        for batch in sorted(p for p in batches_dir.iterdir() if p.is_dir()):
-            task_id, batch_id = _task_batch_from_path(batch)
-            manifest = load_batch_manifest(task_id, batch_id)
-            if _coerce_global_batch_seq(manifest.get("globalBatchSeq")) <= 0:
-                continue
-            issues.extend(scan_batch(task_id, batch_id))
+    # 顶层 runtime/batches/<intentLabel>__<batch>/，taskId/batchId 取自 batch_manifest。
+    for batch in iter_all_batch_dirs():
+        task_id, batch_id = _task_batch_from_path(batch)
+        if not task_id or not batch_id:
+            continue
+        manifest = load_batch_manifest(task_id, batch_id)
+        if _coerce_global_batch_seq(manifest.get("globalBatchSeq")) <= 0:
+            continue
+        issues.extend(scan_batch(task_id, batch_id))
     return issues
 
 
 def _task_batch_from_path(batch: Path) -> tuple[str, str]:
-    return str(batch.parent.parent.relative_to(TASKS_ROOT)), batch.name
+    task_id = batch_task_id(batch)
+    batch_id = ""
+    manifest = batch / "batch_manifest.json"
+    if manifest.is_file():
+        try:
+            import json as _json
+
+            data = _json.loads(manifest.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+        if isinstance(data, dict):
+            batch_id = str(data.get("batchId") or "")
+    if not batch_id:
+        batch_id = batch.name.split("__", 1)[1] if "__" in batch.name else batch.name
+    return task_id, batch_id
 
 
 def main(argv: list[str] | None = None) -> int:

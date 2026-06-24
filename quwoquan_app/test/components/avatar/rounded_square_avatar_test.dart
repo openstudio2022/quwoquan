@@ -27,9 +27,16 @@ void main() {
         final image = tester.widget<AppCachedNetworkImage>(
           find.byType(AppCachedNetworkImage),
         );
+        expect(image.cdnPreset, CdnImagePreset.avatar);
+        expect(image.imageUrl, startsWith('https://localhost:17100/'));
         expect(
-          image.imageUrl,
-          'http://127.0.0.1:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
+          image.imageUrlCandidates,
+          containsAll(<String>[
+            'https://localhost:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
+            'https://127.0.0.1:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
+            'https://10.0.2.2:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
+            'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
+          ]),
         );
         expect(find.text('契'), findsNothing);
       },

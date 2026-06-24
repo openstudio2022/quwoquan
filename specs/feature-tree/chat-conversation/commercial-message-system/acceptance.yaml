@@ -55,8 +55,8 @@ sit_acceptance:
         suite: device_journey
         cases:
         - user_acceptance.chat_conversation.commercial_message_system.sit1.device_journey
-        envs: &id003
-        - gamma
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/chat/journeys/commercial_message_system_journey_test.dart'
   SIT2:
@@ -170,7 +170,8 @@ sit_acceptance:
         suite: device_journey
         cases:
         - user_acceptance.chat_conversation.commercial_message_system.sit4.device_journey
-        envs: *id003
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/group_home_contract_test.go'
   SIT5:

@@ -11,7 +11,7 @@ import 'package:quwoquan_app/components/comment_system/comment_thread_view.dart'
 import 'package:quwoquan_app/components/comment_system/comment_toolbar.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/trackers/comment_observability.dart';
+import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/providers/comment_provider.dart';
 
@@ -32,6 +32,7 @@ class CommentDetailSurface extends ConsumerStatefulWidget {
     required this.mode,
     this.config = const CommentConfig(),
     this.commentContext = const MediaViewerCommentContext(),
+    this.entryObservedCommentCount,
     this.scrollController,
     this.flexibleThread = true,
     this.showDragHandle = false,
@@ -50,6 +51,7 @@ class CommentDetailSurface extends ConsumerStatefulWidget {
   final CommentDetailSurfaceMode mode;
   final CommentConfig config;
   final MediaViewerCommentContext commentContext;
+  final int? entryObservedCommentCount;
   final ScrollController? scrollController;
   final bool flexibleThread;
   final bool showDragHandle;
@@ -72,6 +74,8 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
   late final ScrollController _scrollController;
   late final bool _ownsScrollController;
   bool _handledInitialCommentContext = false;
+  bool _entryCountNoticeResolved = false;
+  String? _entryCountNoticeMessage;
 
   @override
   void initState() {
@@ -91,8 +95,15 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
   @override
   void didUpdateWidget(covariant CommentDetailSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.commentContext != widget.commentContext) {
+    if (oldWidget.postId != widget.postId ||
+        oldWidget.commentContext != widget.commentContext) {
       _handledInitialCommentContext = false;
+    }
+    if (oldWidget.postId != widget.postId ||
+        oldWidget.entryObservedCommentCount !=
+            widget.entryObservedCommentCount) {
+      _entryCountNoticeResolved = false;
+      _entryCountNoticeMessage = null;
     }
   }
 
@@ -194,6 +205,46 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
     });
   }
 
+  void _maybeResolveEntryCountNotice(CommentState commentState) {
+    if (_entryCountNoticeResolved) {
+      return;
+    }
+    final observedCount = widget.entryObservedCommentCount;
+    if (observedCount == null) {
+      _entryCountNoticeResolved = true;
+      return;
+    }
+    final ready =
+        commentState.sessionLoadVersion > 0 &&
+        commentState.status == CommentListStatus.idle &&
+        !commentState.isLoading;
+    if (!ready) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _entryCountNoticeResolved) {
+        return;
+      }
+      final diff = commentState.totalCount - observedCount;
+      setState(() {
+        _entryCountNoticeResolved = true;
+        if (diff > 0) {
+          _entryCountNoticeMessage = UITextConstants
+              .commentEntryCountIncreaseNoticeTemplate
+              .replaceFirst('%s', '$diff');
+          return;
+        }
+        if (diff < 0) {
+          _entryCountNoticeMessage = UITextConstants
+              .commentEntryCountDecreaseNoticeTemplate
+              .replaceFirst('%s', '${diff.abs()}');
+          return;
+        }
+        _entryCountNoticeMessage = null;
+      });
+    });
+  }
+
   void _toggleLikeFromInteraction(PostInteractionState interaction) {
     final isLiked = interaction.isLiked(widget.postId);
     final likeCount = interaction.likeCountFor(widget.postId);
@@ -226,6 +277,7 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
             fallback: commentState.totalCount,
           );
     _maybeConsumeInitialContext(commentState);
+    _maybeResolveEntryCountNotice(commentState);
 
     final thread = CommentThreadView(
       postId: widget.postId,
@@ -254,6 +306,8 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
             onClose: widget.onClose,
           ),
         ),
+        if (_entryCountNoticeMessage != null)
+          _CommentEntryConsistencyNotice(message: _entryCountNoticeMessage!),
         if (widget.flexibleThread)
           Flexible(fit: FlexFit.loose, child: thread)
         else
@@ -274,6 +328,43 @@ class _CommentDetailSurfaceState extends ConsumerState<CommentDetailSurface> {
     );
 
     return content;
+  }
+}
+
+class _CommentEntryConsistencyNotice extends StatelessWidget {
+  const _CommentEntryConsistencyNotice({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      child: Container(
+        key: TestKeys.commentEntryConsistencyNotice,
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.primaryColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
+        ),
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppColors.primaryColor,
+            fontSize: AppTypography.sm,
+            fontWeight: AppTypography.semiBold,
+          ),
+        ),
+      ),
+    );
   }
 }
 

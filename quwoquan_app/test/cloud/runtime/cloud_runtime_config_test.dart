@@ -3,22 +3,28 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 
 void main() {
   group('CloudRuntimeConfig defaults', () {
-    test('本地默认网关与媒体基座使用 http loopback', () {
+    test('默认网关与媒体基座使用 secure env domains', () {
       expect(CloudRuntimeConfig.appRuntimeEnv, 'alpha');
-      expect(CloudRuntimeConfig.gatewayBaseUrl, 'http://127.0.0.1:17000');
+      expect(
+        CloudRuntimeConfig.gatewayBaseUrl,
+        'https://alpha-api.quwoquan-env.test:17000',
+      );
       expect(
         CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
-        'http://127.0.0.1:17100',
+        'https://alpha-avatar.quwoquan-env.test:17100',
       );
       expect(
         CloudRuntimeConfig.mediaImageCdnBaseUrl,
-        'http://127.0.0.1:17100',
+        'https://alpha-image.quwoquan-env.test:17100',
       );
       expect(
         CloudRuntimeConfig.mediaVideoCdnBaseUrl,
-        'http://127.0.0.1:17100',
+        'https://alpha-video.quwoquan-env.test:17100',
       );
-      expect(CloudRuntimeConfig.mediaUploadBaseUrl, 'http://127.0.0.1:17100');
+      expect(
+        CloudRuntimeConfig.mediaUploadBaseUrl,
+        'https://alpha-upload.quwoquan-env.test:17100',
+      );
     });
   });
 }

@@ -21,12 +21,11 @@ sit_acceptance:
       planned:
       - file: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
       recorded:
-      - file: quwoquan_app/test/ui/assistant/widgets/assistant_half_sheet_personalization_provider_test.dart
-      - file: quwoquan_app/test/ui/assistant/personal_content_access_provider_test.dart
-      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - file: quwoquan_service/services/assistant-service/internal/application/service_test.go
-      - file: quwoquan_service/services/assistant-service/internal/application/skill_subscription_service_test.go
-      - file: specs/feature-tree/assistant-run-learning/commercial_slo_observability.md
+      - file: quwoquan_app/test/local_contract/ui/assistant/widgets/assistant_half_sheet_personalization_provider__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/assistant/personal_content_access_provider__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/skill_subscription_service__local_contract_test.go
     status: partial
     test_evidence:
       primary:
@@ -51,6 +50,7 @@ sit_acceptance:
         envs: *id001
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_feedback_test.dart'
+    - '[migrated_from_recorded_reference] specs/feature-tree/assistant-run-learning/commercial_slo_observability.md'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

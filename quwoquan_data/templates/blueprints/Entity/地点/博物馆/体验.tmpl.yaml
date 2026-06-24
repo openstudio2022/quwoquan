@@ -18,7 +18,6 @@ render: { articleTemplate: journal, fontPreset: handwritten }
 structure:
   required: [进馆第一印象, 最停留的展厅, 一个展品故事, 参观动线, 离开后的感受]
   optional: [亲子体验, 周边咖啡]
-hooks: ["在{name}，我停留最久的是这个展柜"]
 mustIncludeFacts: [参观时间, 推荐动线, 停留展厅]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 700, max: 1600 }
@@ -31,4 +30,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/主页/地点/博物馆/example.md

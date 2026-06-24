@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/components/comment_system/comment_composer_models.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -17,56 +15,30 @@ class CommentNotifier extends Notifier<CommentState>
     with _CommentCountsSyncMixin {
   CommentNotifier(this.postId);
 
-  static const Duration _pollingInterval = Duration(seconds: 30);
   static final Map<String, _CommentPageCacheEntry> _commentPageCache =
       <String, _CommentPageCacheEntry>{};
-  static final Set<CommentNotifier> _activePollingTargets = <CommentNotifier>{};
-  static Timer? _sharedPollingTimer;
 
   @override
   final String postId;
 
-  @override
-  ContentRepository get _repo => ref.read(contentRepositoryProvider);
   @override
   CommentObservability get _observability =>
       ref.read(commentObservabilityProvider);
   PageLifecycleObservability get _lifecycleObservability =>
       ref.read(pageLifecycleObservabilityProvider);
 
+  ContentRepository get _repo => ref.read(contentRepositoryProvider);
+
   @override
   CommentState build() {
-    _registerPollingTarget();
-    ref.onDispose(_unregisterPollingTarget);
     final cached =
         _commentPageCache[_snapshotKey(CommentSortMode.recommended)]?.state;
     if (cached != null) {
-      // 重新进入详情：清空上次会话的基线/增量解释/新评论标记，
-      // 确保按「本次进入」重新建立 baseline watermark。
       return cached.copyWith(
-        baselineWatermark: () => null,
-        countsDelta: () => null,
-        hasNewComments: false,
+        sessionLoadVersion: 0,
       );
     }
     return const CommentState();
-  }
-
-  void _registerPollingTarget() {
-    _activePollingTargets.add(this);
-    _sharedPollingTimer ??= Timer.periodic(_pollingInterval, (_) {
-      for (final target in List<CommentNotifier>.from(_activePollingTargets)) {
-        unawaited(target.checkForNewComments());
-      }
-    });
-  }
-
-  void _unregisterPollingTarget() {
-    _activePollingTargets.remove(this);
-    if (_activePollingTargets.isEmpty) {
-      _sharedPollingTimer?.cancel();
-      _sharedPollingTimer = null;
-    }
   }
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
@@ -88,8 +60,6 @@ class CommentNotifier extends Notifier<CommentState>
       errorMessage: () => null,
       rawError: () => null,
       appendError: () => null,
-      refreshError: () => null,
-      hasNewComments: false,
     );
     _lifecycleObservability.recordPageState(
       pageName: 'comment_thread',
@@ -111,13 +81,10 @@ class CommentNotifier extends Notifier<CommentState>
         comments: page.items,
         nextCursor: () => page.nextCursor,
         totalCount: page.totalCount,
+        sessionLoadVersion: state.sessionLoadVersion + 1,
         status: CommentListStatus.idle,
       );
       _syncConfirmedCommentTotal(page.totalCount);
-      await _establishCountsBaselineIfNeeded();
-      if (!ref.mounted) {
-        return;
-      }
       _storeSnapshot();
       _trackLatency(
         metricName: CommentMetricNames.listLoadMs,
@@ -255,77 +222,8 @@ class CommentNotifier extends Notifier<CommentState>
       totalCount: snapshot?.totalCount ?? 0,
       rawError: () => null,
       appendError: () => null,
-      refreshError: () => null,
-      hasNewComments: false,
     );
     await loadComments();
-  }
-
-  Future<void> refreshFromNewCommentNotice() async {
-    if (state.isRefreshing) return;
-    final stopwatch = Stopwatch()..start();
-    _observability.trackAction(
-      eventName: CommentEventNames.newNoticeClicked,
-      postId: postId,
-      sortMode: _sortParam(state.sortMode),
-    );
-    state = state.copyWith(isRefreshing: true, refreshError: () => null);
-    try {
-      final page = await _repo.listComments(
-        postId: postId,
-        sort: _sortParam(state.sortMode),
-      );
-      if (!ref.mounted) {
-        return;
-      }
-      // 用户已确认解释（点击刷新）：推进基线到本次已展示 delta 的 watermark，
-      // 并清空增量，避免下次 poll 重复计数；无已展示 delta 则保持原基线。
-      final advancedWatermark = state.countsDelta?.watermark;
-      state = state.copyWith(
-        comments: page.items,
-        nextCursor: () => page.nextCursor,
-        totalCount: page.totalCount,
-        hasNewComments: false,
-        isRefreshing: false,
-        status: CommentListStatus.idle,
-        countsDelta: () => null,
-        baselineWatermark:
-            advancedWatermark != null ? () => advancedWatermark : null,
-      );
-      _syncConfirmedCommentTotal(page.totalCount);
-      _storeSnapshot();
-      _trackLatency(
-        metricName: CommentMetricNames.pollingRefreshMs,
-        stopwatch: stopwatch,
-        result: 'success',
-        source: 'notice',
-        itemCount: page.items.length,
-      );
-      _lifecycleObservability.recordRefresh(
-        pageName: 'comment_thread',
-        result: 'success',
-        retained: true,
-        itemCount: page.items.length,
-      );
-    } catch (e) {
-      if (!ref.mounted) {
-        return;
-      }
-      state = state.copyWith(isRefreshing: false, refreshError: () => e);
-      _trackLatency(
-        metricName: CommentMetricNames.pollingRefreshMs,
-        stopwatch: stopwatch,
-        result: 'error',
-        source: 'notice',
-      );
-      _lifecycleObservability.recordRefresh(
-        pageName: 'comment_thread',
-        result: 'failure',
-        retained: true,
-        copyKey: 'refreshFailedRetained',
-        error: e,
-      );
-    }
   }
 
   Future<CommentDto?> addComment(
@@ -828,12 +726,11 @@ class CommentNotifier extends Notifier<CommentState>
   void _storeSnapshot() {
     _commentPageCache[_snapshotKey(state.sortMode)] = _CommentPageCacheEntry(
       state: state.copyWith(
+        sessionLoadVersion: 0,
         status: CommentListStatus.idle,
         errorMessage: () => null,
         rawError: () => null,
         appendError: () => null,
-        refreshError: () => null,
-        isRefreshing: false,
       ),
       cachedAt: DateTime.now(),
     );

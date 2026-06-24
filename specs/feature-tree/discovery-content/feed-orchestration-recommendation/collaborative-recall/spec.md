@@ -8,13 +8,15 @@
 
 - itemCF / swing i2i 召回。
 - u2i 用户兴趣近邻召回。
-- 多路召回配额融合和 recall_path 标识。
+- 多路召回配额融合和固定 `recall_path=collab_i2i/collab_u2i` 标识。
 - 离线 replay 评估协同召回增益。
+- 稀疏用户回退 tag/hot/new/onboarding；支持 `disable_collaborative_recall_sources` 回滚。
 
 ## 非目标
 
-- P1 先实现读取已物化 `i2i/u2i` 的召回源与多路配额融合；离线物化作业和 replay 评估脚本按后续数据工程切片补齐。
+- 本轮实现读取已物化 `i2i/u2i` 的召回源与多路配额融合；离线物化作业和 replay 评估脚本按后续数据工程切片补齐。
 - 不引入双塔 ANN 或深度向量召回。
+- 不在 feed 读路径同步计算共现或构建近邻。
 
 ## 验收标准
 

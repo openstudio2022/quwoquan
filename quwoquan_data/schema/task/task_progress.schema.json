@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "任务进度断点 — quwoquan_data/tasks/<taskId>/progress.json。重启续跑唯一依据：广度(coverage.entities) + 深度(anglesByEntity / conditionCells)。",
+  "description": "任务进度断点 — quwoquan_data/tasks/<taskId>/progress.json。重启续跑唯一依据：广度(coverage.entities) + 深度(anglesByEntity)。",
   "type": "object",
   "properties": {
     "schemaVersion": { "const": "quwoquan.task.progress" },
@@ -25,17 +25,6 @@
       "type": "object",
       "description": "深度：每实体已完成角度集合（entityRef -> [angle...]）",
       "additionalProperties": { "type": "array", "items": { "type": "string" } }
-    },
-    "conditionCells": {
-      "type": "array",
-      "description": "深度：已覆盖的 地域×季节 条件格",
-      "items": {
-        "type": "object",
-        "properties": {
-          "region": { "type": "string" },
-          "season": { "type": "string" }
-        }
-      }
     },
     "openGaps": {
       "type": "array",

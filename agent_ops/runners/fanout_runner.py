@@ -128,10 +128,16 @@ def _build_prompt(packet: Mapping[str, Any]) -> str:
     """把 lease packet 渲染为 cloud agent 的执行 prompt（含执行合约 + Ralph 出口门）。"""
     contract = packet.get("executionContract") or {}
     object_refs = packet.get("objectPacketRefs") or {}
+    output_paths = (contract.get("outputPaths") or []) if isinstance(contract, Mapping) else []
     return (
         f"你是单篇内容创作 Subagent。严格隔离：{packet.get('isolation')}\n"
         f"目标 ref: {packet.get('ref')} / stage: {packet.get('stage')}\n"
         f"对象目录: {object_refs.get('contentObjectDir') or '(见 author_job_packet.contentObjectDir)'}\n"
+        f"必须真实读取 author_job_packet、prompt 和 writing_pack，并真实写入这些输出路径："
+        f"{json.dumps(output_paths, ensure_ascii=False)}\n"
+        "article 载体完成前必须重新读取确认 draft.article.md 不是占位文本，"
+        "draft_meta.json 的 generator 必须是 agent；image 载体必须写 image_evidence_pack 元数据。"
+        "禁止只回复 finished 或只调用 object_queue complete 来代替落盘。\n"
         f"执行合约（必须全部满足）：\n{json.dumps(contract, ensure_ascii=False, indent=2)}\n"
         f"Ralph 自纠环：{packet.get('ralphLoop')}\n"
         f"完成判据：ref_review_gate.passed == true（reviewDecision == approved）。"
@@ -202,6 +208,25 @@ def _build_agent_options(
     )
 
 
+def _patch_cursor_sdk_tool_callback_token() -> None:
+    try:
+        import cursor_sdk._tool_callback as tool_callback  # type: ignore
+    except Exception:  # noqa: BLE001
+        return
+    original = getattr(tool_callback, "_new_auth_token", None)
+    if not callable(original) or getattr(original, "_qwq_safe_token_factory", False):
+        return
+
+    def _factory() -> str:
+        token = str(original() or "")
+        if token.startswith("-"):
+            return "qwq_" + token.lstrip("-")
+        return token
+
+    setattr(_factory, "_qwq_safe_token_factory", True)
+    setattr(tool_callback, "_new_auth_token", _factory)
+
+
 def _discover_result_envelope(packet: Mapping[str, Any]) -> str | None:
     """Find the canonical AgentResultEnvelope written by a local Agent run."""
     if not bool(packet.get("resultEnvelopeRequired")):
@@ -226,6 +251,60 @@ def _discover_result_envelope(packet: Mapping[str, Any]) -> str | None:
     return None
 
 
+def _packet_job_state(packet: Mapping[str, Any]) -> dict[str, Any] | None:
+    task_id = str(packet.get("taskId") or "").strip()
+    batch_id = str(packet.get("batchId") or "").strip()
+    job_id = str(packet.get("jobId") or "").strip()
+    if not task_id or not batch_id or not job_id:
+        return None
+    try:
+        return read_json(oq._job_path(task_id, batch_id, job_id))  # noqa: SLF001 - runner owns queue audit.
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _queue_terminal_outcome(packet: Mapping[str, Any]) -> RunOutcome | None:
+    """Return an outcome when the cloud agent has already terminalized its job.
+
+    Real agents are allowed to run object-queue complete/fail themselves. Cursor
+    SDK can occasionally keep the parent call open after the queue is terminal;
+    the queue is the business truth source, so the runner must not wait forever
+    for SDK tail cleanup.
+    """
+    job = _packet_job_state(packet)
+    if not job:
+        return None
+    state = str(job.get("state") or "")
+    if state == oq.STATE_SUCCEEDED:
+        return RunOutcome(
+            started=True,
+            status="finished",
+            passed=True,
+            envelope_path=str(job.get("resultEnvelopeRef") or "") or None,
+        )
+    if state in (oq.STATE_FAILED, oq.STATE_DEAD, oq.STATE_BLOCKED):
+        return RunOutcome(
+            started=True,
+            status="error",
+            passed=False,
+            error=str(job.get("lastError") or state),
+            retryable=bool(job.get("sameRunRetryable", False)),
+        )
+    return None
+
+
+def _prompt_deadline_epoch(packet: Mapping[str, Any]) -> float:
+    now = time.time()
+    deadline = float(packet.get("deadlineEpoch") or 0)
+    if deadline > now:
+        return deadline
+    wall_clock = float(packet.get("maxWallClockSeconds") or 0)
+    budget = (packet.get("executionContract") or {}).get("budget") if isinstance(packet.get("executionContract"), Mapping) else {}
+    if not wall_clock and isinstance(budget, Mapping):
+        wall_clock = float(budget.get("maxWallClockSeconds") or 0)
+    return now + max(60.0, wall_clock or float(oq.DEFAULT_MAX_WALL_CLOCK_SECONDS))
+
+
 def default_agent_runner(
     packet: Mapping[str, Any],
     *,
@@ -243,7 +322,7 @@ def default_agent_runner(
     依据 run 终态返回 RunOutcome，passed 由调用方再校验 gate 文件。
     """
     try:
-        from cursor_sdk import Agent, CursorAgentError  # type: ignore
+        from cursor_sdk import Agent, Client, CursorAgentError  # type: ignore
     except Exception as exc:  # noqa: BLE001
         return RunOutcome(started=False, error=f"cursor_sdk unavailable: {exc}", retryable=False)
 
@@ -251,15 +330,58 @@ def default_agent_runner(
     if not key:
         return RunOutcome(started=False, error="CURSOR_API_KEY missing", retryable=False)
     prompt = _build_prompt(packet)
-    try:
-        opts = _build_agent_options(api_key=key, model=model, runtime=runtime, cwd=cwd, repos=repos)
-        result = Agent.prompt(prompt, opts)  # 一次性：起→跑→释放
-    except CursorAgentError as err:  # 启动失败：从未执行
+    holder: dict[str, Any] = {}
+    done = threading.Event()
+
+    def _invoke_prompt() -> None:
+        client = None
+        try:
+            _patch_cursor_sdk_tool_callback_token()
+            client = Client.launch_bridge(
+                workspace=cwd or os.getcwd(),
+                timeout=10,
+                allow_api_key_env_fallback=True,
+            )
+            opts = _build_agent_options(api_key=key, model=model, runtime=runtime, cwd=cwd, repos=repos)
+            holder["result"] = Agent.prompt(prompt, opts, client=client)  # 一次性：起→跑→释放
+        except CursorAgentError as err:  # 启动失败：从未执行
+            holder["startup_error"] = err
+        except Exception as exc:  # noqa: BLE001
+            holder["error"] = exc
+        finally:
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:  # noqa: BLE001
+                    pass
+            done.set()
+
+    started_at = time.time()
+    thread = threading.Thread(target=_invoke_prompt, name="cursor-agent-prompt", daemon=True)
+    thread.start()
+    deadline = _prompt_deadline_epoch(packet)
+    while not done.wait(timeout=0.5):
+        terminal = _queue_terminal_outcome(packet)
+        if terminal is not None:
+            return terminal
+        if time.time() >= deadline:
+            return RunOutcome(
+                started=True,
+                status="error",
+                passed=False,
+                error=f"Agent.prompt timed out after {int(max(1, time.time() - started_at))}s",
+                retryable=True,
+            )
+    if "startup_error" in holder:
+        err = holder["startup_error"]
         return RunOutcome(
             started=False,
             error=getattr(err, "message", str(err)),
             retryable=bool(getattr(err, "is_retryable", False)),
         )
+    if "error" in holder:
+        return RunOutcome(started=True, status="error", passed=False, error=str(holder["error"]), retryable=True)
+    result = holder.get("result")
     status = getattr(result, "status", "error")
     return RunOutcome(
         started=True,
@@ -593,6 +715,42 @@ def _process_job(
         "started": outcome.started,
     }
 
+    terminal_job = _packet_job_state(packet)
+    terminal_state = str((terminal_job or {}).get("state") or "")
+    if terminal_state == oq.STATE_SUCCEEDED:
+        stats.completed += 1
+        stats.refs_completed.append(ref)
+        meta = _backfill_draft_meta_run_context(task_id, batch_id, ref, outcome=outcome) or {}
+        record["status"] = "succeeded"
+        try:
+            record["draftMetaPath"] = relative_batch_ref(draft_meta_path(task_id, batch_id, ref), task_id, batch_id)
+            record["draftPath"] = relative_batch_ref(draft_article_path(task_id, batch_id, ref), task_id, batch_id)
+        except KeyError:
+            pass
+        record["agentRunId"] = meta.get("agentRunId") or outcome.run_id
+        record["agentId"] = meta.get("agentId") or outcome.agent_id
+        record["sessionTrace"] = meta.get("sessionTrace")
+        record["promptSha256"] = meta.get("promptSha256")
+        record["writingPackSha256"] = meta.get("writingPackSha256")
+        record["sourceBundleSha256"] = meta.get("sourceBundleSha256")
+        record["draftSha256"] = meta.get("draftSha256")
+        stats.run_records.append(record)
+        _upsert_ref_run_record(plan_id, ref=ref, record=record)
+        return
+    if terminal_state in (oq.STATE_FAILED, oq.STATE_DEAD, oq.STATE_BLOCKED):
+        error = str((terminal_job or {}).get("lastError") or terminal_state)
+        if error.startswith("startup:"):
+            stats.startup_failures += 1
+        else:
+            stats.attempt_failures += 1
+        stats.failed += 1
+        stats.refs_failed.append(ref)
+        record["status"] = terminal_state
+        record["error"] = error
+        stats.run_records.append(record)
+        _upsert_ref_run_record(plan_id, ref=ref, record=record)
+        return
+
     if outcome.tokens or outcome.cost_usd:
         usage_job = oq.record_usage(task_id, batch_id, job_id, lease, tokens=outcome.tokens, cost_usd=outcome.cost_usd)
         record["tokens"] = outcome.tokens
@@ -842,7 +1000,12 @@ def run_assignment(
     if requested_ref_set and refs == [] and use_assignment_refs:
         return stats
 
-    if plan is not None and not use_assignment_refs and orchestrator_runner is None:
+    if (
+        plan is not None
+        and not use_assignment_refs
+        and orchestrator_runner is None
+        and not bool(assignment.get("contentRefsSynced"))
+    ):
         from task import fanout_dispatch as fd  # noqa: E402
 
         for target in targets:
@@ -952,6 +1115,8 @@ def run_fanout(
     orchestrator_until: str = ORCHESTRATOR_UNTIL,
     refs: list[str] | None = None,
     force_refs: list[str] | None = None,
+    source_task: str | None = None,
+    source_batch: str | None = None,
 ) -> dict[str, Any]:
     """加载冻结计划 → 展开 assignment → 多 worker 执行。返回聚合统计。
 
@@ -963,8 +1128,54 @@ def run_fanout(
     plan = fp.load_plan(plan_id)
     if plan is None:
         raise ValueError(f"plan not found: {plan_id}")
-    expansion = fs.expand(plan, strategy=strategy, concurrency=concurrency)
-    assignments = expansion["assignments"]
+    source_task_id = str(source_task or "").strip()
+    source_batch_id = str(source_batch or "").strip()
+    if source_task_id or source_batch_id:
+        if not source_task_id or not source_batch_id:
+            raise ValueError("--source-task and --source-batch must be provided together")
+        if not str(plan.get("sourceTaskId") or "").strip():
+            raise ValueError("source content author target requires a sourceTask-derived plan")
+        from task import fanout_dispatch as fd  # noqa: E402
+
+        fd.sync_content_author_jobs(
+            plan,
+            {"taskId": source_task_id, "batchId": source_batch_id},
+            partition_path=["sourceTask"],
+            refs=refs,
+            force_refs=force_refs,
+        )
+        worker_count = max(1, int(max_workers or concurrency or 1))
+        units = [
+            {
+                "partitionPath": ["sourceTask"],
+                "taskId": source_task_id,
+                "batchId": source_batch_id,
+                "refs": [],
+            }
+        ]
+        assignments = [
+            {
+                "assignmentId": f"source-content::w{i}",
+                "kind": "source-content-pool",
+                "targets": [{"taskId": source_task_id, "batchId": source_batch_id}],
+                "refs": [],
+                "partitionPath": ["sourceTask"],
+                "contentRefsSynced": True,
+            }
+            for i in range(worker_count)
+        ]
+        expansion = {
+            "planId": plan_id,
+            "strategy": "source-content-pool",
+            "concurrency": worker_count,
+            "batchSize": 0,
+            "units": units,
+            "assignments": assignments,
+        }
+        orchestrator_runner = None
+    else:
+        expansion = fs.expand(plan, strategy=strategy, concurrency=concurrency)
+        assignments = expansion["assignments"]
     matrix = _load_run_matrix(plan_id)
     matrix["strategy"] = expansion["strategy"]
     matrix["concurrency"] = expansion["concurrency"]
@@ -1053,6 +1264,31 @@ def run_fanout(
     }
 
 
+def _startup_probe_packet(plan_id: str) -> dict[str, Any]:
+    return {
+        "taskId": "__cursor_startup_probe__",
+        "batchId": f"startup_{plan_id}",
+        "jobId": "startup_probe",
+        "ref": "__cursor_startup_probe__",
+        "stage": "startup_probe",
+        "isolation": "startup-only; do not edit files",
+        "resultEnvelopeRequired": False,
+        "executionContract": {
+            "inputs": ["none"],
+            "budget": {"maxWallClockSeconds": 120},
+            "permissions": ["reply_only"],
+            "completionConditions": ["Agent.prompt returns finished"],
+            "outputPaths": [],
+        },
+        "objectPacketRefs": {},
+        "ralphLoop": [],
+    }
+
+
+def run_startup_probe(plan_id: str, *, agent_runner: AgentRunner) -> RunOutcome:
+    return agent_runner(_startup_probe_packet(plan_id))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fanout_runner", description="fan-out cursor-sdk 多 worker runner")
     parser.add_argument("--plan", required=True, help="冻结计划 planId")
@@ -1072,6 +1308,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--spend-limit-usd", dest="spend_limit", type=float, default=None)
     parser.add_argument("--refs", help="仅运行逗号分隔的 ref 列表（content-mode 为内容对象 ref）")
     parser.add_argument("--force-refs", dest="force_refs", help="强制重跑逗号分隔的已成稿 ref")
+    parser.add_argument("--source-task", dest="source_task", help="sourceTask-derived content author: 直接消费该 task 的 content refs")
+    parser.add_argument("--source-batch", dest="source_batch", help="sourceTask-derived content author: 直接消费该 batch 的 content refs")
+    parser.add_argument("--skip-startup-probe", action="store_true", help="跳过 author-runner 前置 Cursor startup probe（仅限已有外部门禁证据的测试）")
     parser.add_argument(
         "--orchestrate",
         dest="orchestrate",
@@ -1111,6 +1350,30 @@ def main(argv: list[str] | None = None) -> int:
     if not orchestrate:
         orchestrator_runner = None  # type: ignore[assignment]
 
+    if not bool(getattr(args, "skip_startup_probe", False)):
+        probe = run_startup_probe(args.plan, agent_runner=runner)
+        if not probe.started or probe.status != "finished":
+            report = {
+                "planId": args.plan,
+                "strategy": "startup-probe",
+                "assignments": 0,
+                "leased": 0,
+                "completed": 0,
+                "failed": 0,
+                "attemptFailures": 0,
+                "startupFailures": 1,
+                "refsCompleted": [],
+                "refsFailed": [],
+                "blocker": {
+                    "category": "retry.infra",
+                    "stage": "author_runner.startup_probe",
+                    "error": probe.error or probe.status or "startup probe failed",
+                    "retryable": probe.retryable,
+                },
+            }
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+            return 3
+
     report = run_fanout(
         args.plan,
         agent_runner=runner,
@@ -1122,6 +1385,8 @@ def main(argv: list[str] | None = None) -> int:
         orchestrator_until=args.orchestrator_until,
         refs=[item.strip() for item in str(args.refs or "").split(",") if item.strip()] or None,
         force_refs=[item.strip() for item in str(args.force_refs or "").split(",") if item.strip()] or None,
+        source_task=args.source_task,
+        source_batch=args.source_batch,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     # 退出码：运行失败或 orchestrator checkpoint 未到位=2，否则 0（startup 失败已退避入队，不视为致命）。

@@ -30,13 +30,22 @@ def _lane_payload(
     ref: str,
     ent: dict,
     guidance: dict,
-    registry_guidance: dict,
+    guidance_ref: str,
 ) -> dict:
     common = {
         "entityId": ref,
         "canonicalName": ent.get("canonicalName", ""),
         "entityType": ent.get("entityType", ""),
         "researchLane": lane,
+    }
+    # 静态 vertical 级采源指引（类别明细 + 站点注册表）体量上千行且对所有实体完全相同，
+    # 抽到批次共享文件作单一真相源，per-entity 计划只保留「必须覆盖的类别摘要 + 引用」，
+    # 避免把同一份指引在每实体每 lane 复制一遍把计划文件撑到几千行。
+    category_summary = {
+        "minCategoriesPerEntity": guidance.get("minCategoriesPerEntity"),
+        "coreCategories": guidance.get("coreCategories", []),
+        "preferredCategories": guidance.get("preferredCategories", []),
+        "instruction": guidance.get("instruction", ""),
     }
     source_image_policy = {
         "sameSourceRequired": True,
@@ -62,8 +71,8 @@ def _lane_payload(
     if lane == "homepage":
         return {
             **common,
-            "sourceCategoryGuidance": guidance,
-            "sourceRegistryGuidance": registry_guidance,
+            "sourceGuidanceRef": guidance_ref,
+            "sourceCategorySummary": category_summary,
             "sourceImagePolicy": source_image_policy,
             "primaryEvidenceRef": "",
             "sources": [],
@@ -71,8 +80,8 @@ def _lane_payload(
     if lane == "article":
         return {
             **common,
-            "sourceCategoryGuidance": guidance,
-            "sourceRegistryGuidance": registry_guidance,
+            "sourceGuidanceRef": guidance_ref,
+            "sourceCategorySummary": category_summary,
             "sourceImagePolicy": source_image_policy,
             "sources": [],
         }
@@ -119,6 +128,21 @@ def prepare_source_plan(task_id: str, batch_id: str, entities: list[dict]) -> Pa
         }
     else:
         registry_guidance = {"contentSourceGuidance": content_source_guidance}
+    # 把静态 vertical 级采源指引写一次到批次共享文件（单一真相源），
+    # per-entity 计划只引用，避免上千行指引在每实体每 lane 重复内联。
+    shared_dir = batch_shared_dir(task_id, batch_id)
+    shared_dir.mkdir(parents=True, exist_ok=True)
+    guidance_path = shared_dir / "source_research_guidance.json"
+    write_json(
+        guidance_path,
+        {
+            "schemaVersion": "quwoquan_data.source_research_guidance",
+            "vertical": vertical,
+            "sourceCategoryGuidance": guidance,
+            "sourceRegistryGuidance": registry_guidance,
+        },
+    )
+    guidance_ref = str(guidance_path.relative_to(batch_root(task_id, batch_id)))
     refs_by_lane: dict[str, list[str]] = {lane: [] for lane in RESEARCH_PLAN_FILES}
     for ent in entities:
         ref = ent.get("entityId", ent.get("id"))
@@ -142,7 +166,7 @@ def prepare_source_plan(task_id: str, batch_id: str, entities: list[dict]) -> Pa
                             ref=ref,
                             ent=ent,
                             guidance=guidance,
-                            registry_guidance=registry_guidance,
+                            guidance_ref=guidance_ref,
                         ),
                     },
                 )

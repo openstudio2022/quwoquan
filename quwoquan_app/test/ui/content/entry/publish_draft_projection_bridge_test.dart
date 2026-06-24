@@ -62,9 +62,57 @@ void main() {
         body: 'caption',
         hasVideo: true,
         imageCount: 0,
+        videoThumbnailUrl: '/tmp/cover.jpg',
       );
       expect(wire['contentType'], 'video');
       expect(wire['contentIdentity'], 'moment');
+      expect(wire['thumbnailUrl'], '/tmp/cover.jpg');
+      expect(wire['coverUrl'], '/tmp/cover.jpg');
+    });
+
+    test('buildCreatePostPayloadMap video writes cover contract fields', () {
+      final state =
+          CreateEditorState.initial(
+            editorKind: CreateEditorKind.media,
+          ).copyWith(
+            mediaKind: CreateMediaKind.video,
+            videoPath: '/tmp/video.mp4',
+            videoThumbnail: '/tmp/cover.jpg',
+            videoDurationMs: 12000,
+            videoCoverTimeMs: 420,
+            videoMuted: true,
+            title: '视频作品',
+            body: '视频简介',
+          );
+
+      final payload = buildCreatePostPayloadMap(state);
+      expect(payload['contentType'], 'video');
+      expect(payload['videoUrl'], '/tmp/video.mp4');
+      expect(payload['thumbnailUrl'], '/tmp/cover.jpg');
+      expect(payload['coverUrl'], '/tmp/cover.jpg');
+      expect(payload['coverStrategy'], 'manual');
+      expect(payload['coverFrameTimeMs'], 420);
+      expect(payload['durationMs'], 12000);
+      expect(payload['mediaItems'], [
+        <String, Object?>{
+          'kind': 'video',
+          'url': '/tmp/video.mp4',
+          'thumbnailUrl': '/tmp/cover.jpg',
+          'coverUrl': '/tmp/cover.jpg',
+          'coverStrategy': 'manual',
+          'coverFrameTimeMs': 420,
+          'durationMs': 12000,
+        },
+      ]);
+
+      final wire = CreatePostRequestWire.fromMap(
+        Map<String, dynamic>.from(payload),
+      ).toWire();
+      expect(wire['thumbnailUrl'], '/tmp/cover.jpg');
+      expect(wire['coverUrl'], '/tmp/cover.jpg');
+      expect(wire['coverStrategy'], 'manual');
+      expect(wire['coverFrameTimeMs'], '420');
+      expect(wire['mediaItems'], isA<List>());
     });
 
     test(
@@ -103,9 +151,7 @@ void main() {
 
         expect(payload['summary'], '用户确认摘要');
         expect(payload['tagRefs'], <String>['Topic/旅行/城市漫步']);
-        expect(payload['entityRefs'], <String>[
-          'entity:sight:west_lake',
-        ]);
+        expect(payload['entityRefs'], <String>['entity:sight:west_lake']);
         expect(payload['assistantUsePolicy'], 'allow_summary');
         expect(payload['articleMarkdown'], contains('summary: "用户确认摘要"'));
         expect(payload['articleMarkdown'], contains('tag_refs:'));
@@ -143,10 +189,7 @@ void main() {
 
         final payload = buildCreatePostPayloadMap(state);
 
-        expect(
-          payload['entityRefs'],
-          contains('entity:sight:lingyin'),
-        );
+        expect(payload['entityRefs'], contains('entity:sight:lingyin'));
         expect(
           payload['articleMarkdown'],
           contains('@[灵隐寺](entity:sight:lingyin)'),
@@ -366,11 +409,7 @@ void main() {
           title: 'T',
           body: 'x' * 200,
           settings: const PublishSettings(
-            tagRefs: <String>[
-              'Topic/旅行/城市漫步',
-              'Topic/旅行/城市漫步',
-              '单段非法标签',
-            ],
+            tagRefs: <String>['Topic/旅行/城市漫步', 'Topic/旅行/城市漫步', '单段非法标签'],
             entityRefs: <String>[
               'entity:sight:west_lake',
               'entity:candidate_pending',
@@ -439,9 +478,7 @@ void main() {
           title: 'T',
           body: 'x' * 200,
           articleDocument: document,
-          settings: const PublishSettings(
-            tagRefs: <String>['Topic/旅行/城市漫步'],
-          ),
+          settings: const PublishSettings(tagRefs: <String>['Topic/旅行/城市漫步']),
         );
 
         final payload = buildCreatePostPayloadMap(state);

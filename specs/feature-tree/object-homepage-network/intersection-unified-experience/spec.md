@@ -114,7 +114,7 @@
 | 面 | 主表达 | 具象化要点 |
 |---|---|---|
 | A 我的主页 | 我的连接（lifecycle 分桶弱标）+ 我的影响力（传播视图） | 四槽样板首落；author_impact 路径节点 + secondarySpread 计数 |
-| B 用户主页(他人) | 为什么推荐TA + TA帮助了很多人 | 证据组叠 lifecycle 弱标 + 句内头像 |
+| B 用户主页(他人) | 为什么推荐TA + TA的影响力 | 证据组叠 lifecycle 弱标 + 句内头像 |
 | C 实体主页 | 为什么推荐这里 + 记录流单句 | 复用 ObjectIntersectionSection；对象封面缩略图 |
 | D 圈子主页 | 为什么推荐这个圈子 + 这个圈子帮助了很多人 | circle_impact 接统一三件套（解决 G4）+「你认识的人在这」 |
 | E 首页 post | post 卡内单句 chip | 紧凑：1 句 + lifecycle 仅「新」，不堆叠 |

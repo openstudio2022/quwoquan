@@ -9,6 +9,8 @@ import (
 // TagNodeReader 只读标签节点查询（resolve / shared-tags 标签富化 / suggest）。
 type TagNodeReader interface {
 	FindByTagRef(ctx context.Context, tagRef string) (*model.TagNode, error)
+	ListChildren(ctx context.Context, parentTagRef string, limit int64) ([]model.TagNode, error)
+	CountActiveChildren(ctx context.Context, parentTagRef string) (int64, error)
 	ListAll(ctx context.Context) ([]model.TagNode, error)
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate local-gamma T1-T4 evidence into one commit gate report."""
+"""Aggregate local-gamma gate evidence into one commit gate report."""
 
 from __future__ import annotations
 

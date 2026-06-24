@@ -82,18 +82,17 @@ else()
 set(TEST_RUNNER "${PROJECT_NAME}_test")
 enable_testing()
 
-# Add the Google Test dependency.
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/release-1.11.0.zip
-)
-# Prevent overriding the parent project's compiler/linker settings
+# Unit tests must use a pre-vendored googletest checkout.
+set(GTEST_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/test/third_party/googletest")
+if(NOT EXISTS "${GTEST_SOURCE_DIR}/CMakeLists.txt")
+  message(FATAL_ERROR
+    "Missing vendored googletest at ${GTEST_SOURCE_DIR}. "
+    "This repository forbids test-time remote downloads; stage googletest explicitly before enabling livekit Linux plugin tests."
+  )
+endif()
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-# Disable install commands for gtest so it doesn't end up in the bundle.
 set(INSTALL_GTEST OFF CACHE BOOL "Disable installation of googletest" FORCE)
-
-FetchContent_MakeAvailable(googletest)
+add_subdirectory("${GTEST_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/googletest")
 
 # The plugin's exported API is not very useful for unit testing, so build the
 # sources directly into the test binary rather than using the shared library.

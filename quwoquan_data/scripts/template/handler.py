@@ -6,10 +6,9 @@ import json
 import sys
 from pathlib import Path
 
-from template.condition import validate_region_season
 from template.coverage import coverage_summary
 from template.creator import validate_creators
-from template.lint import lint_templates
+from template.lint import lint_templates, validate_audiences
 from template.recommend import validate_recommendation_contract
 from template.registry import TemplateRegistry, write_yaml
 
@@ -25,8 +24,8 @@ def handle_template(args: argparse.Namespace) -> None:
     if args.template_command == "creator-lint":
         _print_errors(validate_creators(registry), "template creator-lint")
         return
-    if args.template_command == "region-season-lint":
-        _print_errors(validate_region_season(registry), "template region-season-lint")
+    if args.template_command == "audience-lint":
+        _print_errors(validate_audiences(registry), "template audience-lint")
         return
     if args.template_command == "coverage":
         print(json.dumps(coverage_summary(registry, args.vertical), ensure_ascii=False, indent=2))
@@ -68,8 +67,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p_creator = sub.add_parser("creator-lint", help="Validate system builtin creators")
     p_creator.set_defaults(handler=handle_template)
 
-    p_rs = sub.add_parser("region-season-lint", help="Validate region/season catalogs and conditionAxes")
-    p_rs.set_defaults(handler=handle_template)
+    p_aud = sub.add_parser("audience-lint", help="Validate audience catalog has no orphan audiences")
+    p_aud.set_defaults(handler=handle_template)
 
     p_cov = sub.add_parser("coverage", help="Print template coverage summary")
     p_cov.add_argument("--vertical", choices=["travel", "campus"], default=None)

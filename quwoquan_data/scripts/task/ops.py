@@ -16,6 +16,7 @@ from _common.paths import (
     committed_task_runs_dir,
     iter_committed_task_specs,
     iter_existing_task_legacy_entries,
+    iter_task_batch_dirs,
     publish_data,
     task_id_from_committed_path,
     task_root,
@@ -142,58 +143,49 @@ def compute_gaps(task_id: str) -> dict[str, Any]:
         if miss:
             missing_angles[e] = miss
 
-    cond = spec.get("content", {}).get("conditionAxes", {}) or {}
-    want_cells = [
-        {"region": rg, "season": ss}
-        for rg in (cond.get("regions") or [None])
-        for ss in (cond.get("seasons") or [None])
-        if rg or ss
-    ]
-    done_cells = {(c.get("region"), c.get("season")) for c in prog.get("conditionCells", [])}
-    missing_cells = [c for c in want_cells if (c["region"], c["season"]) not in done_cells]
-
     return {
         "remainingEntities": remaining_entities,
         "missingAnglesByEntity": missing_angles,
-        "missingConditionCells": missing_cells,
         "openGaps": prog.get("openGaps", []),
     }
 
 
 def latest_post_outputs(task_id: str, limit: int = 10) -> list[dict[str, Any]]:
-    """Return materialized post package locations under runtime batches."""
-    root = runtime_task_root(task_id)
-    posts_root = root / "batches"
-    if not posts_root.is_dir():
-        return []
+    """Return materialized post package locations under top-level runtime/batches."""
     rows: list[dict[str, Any]] = []
-    # 对象优先：成品落 batch/posts/{type}/{angle}/{title}/{seq}/。
-    for manifest in sorted(posts_root.rglob("manifest.json")):
-        leaf = manifest.parent
-        try:
-            rel = leaf.relative_to(root)
-        except ValueError:
+    # 顶层 runtime/batches/<intentLabel>__<batch>/ 反查该任务批次（依据 batch_manifest.taskId）。
+    for batch_dir in iter_task_batch_dirs(task_id):
+        posts_root = batch_dir / "posts"
+        if not posts_root.is_dir():
             continue
-        parts = rel.parts
-        if len(parts) < 5 or parts[0] != "batches" or parts[2] != "posts":
-            continue
-        if not ((leaf / "article.md").exists() or (leaf / "gallery.md").exists()):
-            continue
-        try:
-            data = read_json(manifest)
-        except Exception:  # noqa: BLE001
-            continue
-        batch_id = parts[1] if len(parts) > 1 and parts[0] == "batches" else ""
-        rows.append(
-            {
-                "batchId": batch_id,
-                "title": data.get("publishTitle") or data.get("title") or manifest.parent.parent.name,
-                "contentType": data.get("contentType") or "",
-                "path": str(rel).replace("\\", "/"),
-                "articlePath": str((rel / "article.md")).replace("\\", "/"),
-                "sourceBatchId": data.get("sourceBatchId") or batch_id,
-            }
-        )
+        manifest_meta = read_json(batch_dir / "batch_manifest.json") if (batch_dir / "batch_manifest.json").is_file() else {}
+        batch_id = str((manifest_meta or {}).get("batchId") or "")
+        # 对象优先：成品落 batch/posts/{type}/{angle}/{title}/{seq}/。
+        for manifest in sorted(posts_root.rglob("manifest.json")):
+            leaf = manifest.parent
+            try:
+                rel = leaf.relative_to(batch_dir)
+            except ValueError:
+                continue
+            parts = rel.parts
+            if len(parts) < 4 or parts[0] != "posts":
+                continue
+            if not ((leaf / "article.md").exists() or (leaf / "gallery.md").exists()):
+                continue
+            try:
+                data = read_json(manifest)
+            except Exception:  # noqa: BLE001
+                continue
+            rows.append(
+                {
+                    "batchId": batch_id,
+                    "title": data.get("publishTitle") or data.get("title") or manifest.parent.parent.name,
+                    "contentType": data.get("contentType") or "",
+                    "path": str(rel).replace("\\", "/"),
+                    "articlePath": str((rel / "article.md")).replace("\\", "/"),
+                    "sourceBatchId": data.get("sourceBatchId") or batch_id,
+                }
+            )
     rows.sort(key=lambda r: (r["batchId"], r["path"]), reverse=True)
     return rows[:limit]
 
@@ -215,9 +207,7 @@ def resume(task_id: str) -> None:
         print("  缺角度(已建实体):")
         for e, angs in list(gaps["missingAnglesByEntity"].items())[:30]:
             print(f"    - {e}: {', '.join(angs)}")
-    if gaps["missingConditionCells"]:
-        print(f"  缺条件维 ({len(gaps['missingConditionCells'])}): {gaps['missingConditionCells'][:10]}")
-    if not any([gaps["remainingEntities"], gaps["missingAnglesByEntity"], gaps["missingConditionCells"], gaps["openGaps"]]):
+    if not any([gaps["remainingEntities"], gaps["missingAnglesByEntity"], gaps["openGaps"]]):
         print("  无缺口：任务覆盖已达成。")
     reflections = recent_reflections(task_id, limit=3)
     if reflections:
@@ -236,7 +226,7 @@ def status(task_id: str) -> None:
     pct = (done / total * 100) if total else 0.0
     print(f"[status] {task_id}")
     print(f"  广度: {done}/{total} 实体 ({pct:.0f}%)")
-    print(f"  深度: anglesByEntity={len(prog.get('anglesByEntity', {}))} 实体有角度记录; conditionCells={len(prog.get('conditionCells', []))}")
+    print(f"  深度: anglesByEntity={len(prog.get('anglesByEntity', {}))} 实体有角度记录")
     print(f"  计数: entities={prog.get('counts', {}).get('entities', 0)} posts={prog.get('counts', {}).get('posts', 0)}")
     print(f"  lastRunId: {prog.get('lastRunId')}")
     outputs = latest_post_outputs(task_id, limit=5)

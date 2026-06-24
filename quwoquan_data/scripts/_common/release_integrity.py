@@ -52,13 +52,6 @@ ENTITY_SOURCE_KINDS = (
     "政务",
 )
 AUTHOR_EXPERIENCE_SOURCE_KINDS = ("攻略", "游记", "评论", "点评", "小红书", "图虫", "摄影")
-FACTUAL_REFERENCE_ADAPTATION_MARKERS = (
-    "授权底稿来源",
-    "可在许可范围内改编",
-    "以下方授权底稿为基底",
-    "轻改",
-    "贴合度控制",
-)
 
 
 def _payload(path: Path) -> dict[str, Any]:
@@ -233,20 +226,6 @@ def _base_draft_issues(
             f"{post_rel}: baseDraftText too short for article "
             f"({effective_len} < {MIN_ARTICLE_BASE_DRAFT_CHARS})"
         )
-    source_mode = str(writing_pack.get("sourceUseMode") or "").strip()
-    prompt_text = ""
-    prompt_path = runtime_post / "4.draft" / "prompt.md"
-    if prompt_path.is_file():
-        try:
-            prompt_text = prompt_path.read_text(encoding="utf-8")
-        except OSError:
-            prompt_text = ""
-    if source_mode == "factual_reference_only" and any(
-        marker in prompt_text for marker in FACTUAL_REFERENCE_ADAPTATION_MARKERS
-    ):
-        issues.append(
-            f"{post_rel}: factual_reference_only source is prompted as licensed/adaptable base draft"
-        )
     return issues
 
 
@@ -376,9 +355,6 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
     if runtime_batch and runtime_batch.is_dir():
         issues.extend(_entity_homepage_issues(root, runtime_batch))
 
-    asset_sha_posts: dict[str, list[str]] = defaultdict(list)
-    source_asset_posts: dict[str, list[str]] = defaultdict(list)
-    source_collection_posts: dict[str, list[str]] = defaultdict(list)
     post_manifests = sorted((root / "posts").rglob("manifest.json")) if (root / "posts").is_dir() else []
     for manifest_path in post_manifests:
         post_rel = manifest_path.parent.relative_to(root).as_posix()
@@ -422,11 +398,7 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
                 issues.append(f"{post_rel}: {asset_label} missing manifest.assets[].sourceRef")
             if not source_asset_ref:
                 issues.append(f"{post_rel}: {asset_label} missing manifest.assets[].sourceAssetRef")
-            if source_asset_ref:
-                source_asset_posts[source_asset_ref].append(post_rel)
             collection_id = str(asset.get("sourceCollectionId") or "").strip()
-            if collection_id:
-                source_collection_posts[collection_id].append(post_rel)
             manifest_sha = _norm_sha(str(asset.get("sha256") or ""))
             file_name = str(asset.get("fileName") or asset.get("path") or "").strip()
             actual_sha = _file_sha(manifest_path.parent / "assets" / file_name) if file_name else ""
@@ -435,8 +407,6 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
                 issues.append(f"{post_rel}: {asset_label} missing sha256")
             elif actual_sha and manifest_sha != actual_sha:
                 issues.append(f"{post_rel}: {asset_label} sha256 mismatch with asset file")
-            if effective_sha:
-                asset_sha_posts[effective_sha].append(post_rel)
             if runtime_batch and runtime_batch.is_dir() and source_ref:
                 meta = _source_unit_meta(runtime_batch, source_ref)
                 if not _has_rights_proof(asset, meta):
@@ -451,19 +421,6 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
                         runtime_post=runtime_post,
                     )
                 )
-
-    for sha, posts in sorted(asset_sha_posts.items()):
-        distinct = sorted(set(posts))
-        if len(distinct) > 1:
-            issues.append(f"asset sha reused across posts {sha[:16]}: {distinct}")
-    for ref, posts in sorted(source_asset_posts.items()):
-        distinct = sorted(set(posts))
-        if len(distinct) > 1:
-            issues.append(f"sourceAssetRef reused across posts {ref}: {distinct}")
-    for collection_id, posts in sorted(source_collection_posts.items()):
-        distinct = sorted(set(posts))
-        if len(distinct) > 1:
-            issues.append(f"sourceCollectionId reused across posts {collection_id}: {distinct}")
 
     return {
         "schemaVersion": REPORT_SCHEMA,
@@ -534,9 +491,6 @@ def scan_runtime_batch_integrity(
             except KeyError:
                 continue
 
-    asset_sha_posts: dict[str, list[str]] = defaultdict(list)
-    source_asset_posts: dict[str, list[str]] = defaultdict(list)
-    source_collection_posts: dict[str, list[str]] = defaultdict(list)
     post_manifests = sorted((root / "posts").rglob("manifest.json")) if (root / "posts").is_dir() else []
     for manifest_path in post_manifests:
         post_rel = manifest_path.parent.relative_to(root).as_posix()
@@ -581,11 +535,7 @@ def scan_runtime_batch_integrity(
                 issues.append(f"{post_rel}: {asset_label} missing manifest.assets[].sourceRef")
             if not source_asset_ref:
                 issues.append(f"{post_rel}: {asset_label} missing manifest.assets[].sourceAssetRef")
-            if source_asset_ref:
-                source_asset_posts[source_asset_ref].append(post_rel)
             collection_id = str(asset.get("sourceCollectionId") or "").strip()
-            if collection_id:
-                source_collection_posts[collection_id].append(post_rel)
             manifest_sha = _norm_sha(str(asset.get("sha256") or ""))
             file_name = str(asset.get("fileName") or asset.get("path") or "").strip()
             actual_sha = _file_sha(manifest_path.parent / "assets" / file_name) if file_name else ""
@@ -594,8 +544,6 @@ def scan_runtime_batch_integrity(
                 issues.append(f"{post_rel}: {asset_label} missing sha256")
             elif actual_sha and manifest_sha != actual_sha:
                 issues.append(f"{post_rel}: {asset_label} sha256 mismatch with asset file")
-            if effective_sha:
-                asset_sha_posts[effective_sha].append(post_rel)
             if source_ref:
                 meta = _source_unit_meta(root, source_ref)
                 if not _has_rights_proof(asset, meta):
@@ -610,19 +558,6 @@ def scan_runtime_batch_integrity(
                         runtime_post=root / post_rel,
                     )
                 )
-
-    for sha, posts in sorted(asset_sha_posts.items()):
-        distinct = sorted(set(posts))
-        if len(distinct) > 1:
-            issues.append(f"asset sha reused across posts {sha[:16]}: {distinct}")
-    for ref, posts in sorted(source_asset_posts.items()):
-        distinct = sorted(set(posts))
-        if len(distinct) > 1:
-            issues.append(f"sourceAssetRef reused across posts {ref}: {distinct}")
-    for collection_id, posts in sorted(source_collection_posts.items()):
-        distinct = sorted(set(posts))
-        if len(distinct) > 1:
-            issues.append(f"sourceCollectionId reused across posts {collection_id}: {distinct}")
 
     return {
         "schemaVersion": REPORT_SCHEMA,

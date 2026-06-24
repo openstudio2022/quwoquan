@@ -34,6 +34,14 @@ var collections = []string{
 	"call_sessions",
 }
 
+func requireMongoDB(tb testing.TB) *mongo.Database {
+	tb.Helper()
+	if mongoDB == nil {
+		tb.Fatal("rtc-service tests require TestMain to provision mongoDB or exit before execution")
+	}
+	return mongoDB
+}
+
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 

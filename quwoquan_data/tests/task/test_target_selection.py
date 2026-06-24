@@ -382,7 +382,10 @@ def test_audit_batch_dedupes_workflow_failure_for_same_entity_lane():
         },
     )
 
-    assert report["failedLaneCount"] == 3
+    # image 为加分项（scoredAngles），图片不足不阻断合格实体、不计入 required failed lane；
+    # 缺源实体仅 homepage + article 两条 required lane 失败。article 的 download 缺口与
+    # workflow failedObjects 去重合并为同一条，不重复计数。
+    assert report["failedLaneCount"] == 2
     article_failures = [
         item for item in report["failedLanes"]
         if item.get("entity") == "缺源景区" and item.get("lane") == "article"
@@ -582,6 +585,26 @@ def test_build_multimodal_spec_allows_explicit_image_work_quota():
 
     assert spec["content"]["quotas"]["imageWorksPerTarget"] == 2
     assert spec["acceptance"]["minPostsPerEntity"] == 6
+
+
+def test_build_multimodal_spec_bounds_required_angles_to_article_quota():
+    spec = build_multimodal_spec(
+        name="两篇文章重跑",
+        title="两篇文章重跑",
+        region="四川省",
+        category="景区",
+        targets=[{"name": "四姑娘山", "entityType": "地点/景区", "region": "川西"}],
+        created_by="test",
+        entity_articles_per_target=2,
+        image_works_per_target=1,
+    )
+
+    assert spec["content"]["quotas"]["entityArticlesPerTarget"] == 2
+    assert spec["acceptance"]["requiredAngles"] == [
+        "planning_consultation",
+        "decision_experience",
+    ]
+    assert spec["acceptance"]["minPostsPerEntity"] == 3
 
 
 def test_write_selected_task_writes_catalog_for_baseline_gate():

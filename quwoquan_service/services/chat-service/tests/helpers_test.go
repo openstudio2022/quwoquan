@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 )
 
 func testDerivedMediaFileServer(localRoot string) http.Handler {
@@ -121,4 +125,64 @@ func doDelete(t *testing.T, path, userId string) (int, map[string]any) {
 	var result map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &result)
 	return rec.Code, result
+}
+
+func seedConversationWithAssistantMember(
+	t *testing.T,
+	conversationID string,
+	ownerUserID string,
+	title string,
+	assistantSkillID string,
+) {
+	t.Helper()
+	db := requireMongoDB(t)
+	now := time.Now().UTC()
+	conversation := &model.Conversation{
+		ID:                    conversationID,
+		Type:                  "group",
+		Title:                 title,
+		CreatorId:             ownerUserID,
+		MemberCount:           2,
+		MembersRosterRevision: 1,
+		MaxGroupSize:          500,
+		ReceiptEnabled:        true,
+		Status:                "active",
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	}
+	if _, err := db.Collection("conversations").InsertOne(context.Background(), conversation); err != nil {
+		t.Fatalf("seed conversation %s: %v", conversationID, err)
+	}
+	ownerMember := &model.ConversationMember{
+		ID:             conversationID + "_owner_member",
+		ConversationId: conversationID,
+		UserId:         ownerUserID,
+		DisplayName:    "Display_" + ownerUserID,
+		AvatarUrl:      "https://test.avatar/" + ownerUserID,
+		AvatarAssetId:  "ua_" + ownerUserID,
+		AvatarVersion:  1,
+		MemberType:     "user",
+		Role:           "owner",
+		JoinedAt:       now,
+	}
+	if _, err := db.Collection("conversation_members").InsertOne(context.Background(), ownerMember); err != nil {
+		t.Fatalf("seed owner member %s: %v", conversationID, err)
+	}
+	assistantMember := &model.ConversationMember{
+		ID:               conversationID + "_assistant_member",
+		ConversationId:   conversationID,
+		UserId:           "assistant",
+		DisplayName:      "Display_assistant",
+		AvatarUrl:        "https://test.avatar/assistant",
+		AvatarAssetId:    "ua_assistant",
+		AvatarVersion:    1,
+		MemberType:       "assistant",
+		Role:             "member",
+		AssistantSkillId: assistantSkillID,
+		InvitedBy:        ownerUserID,
+		JoinedAt:         now.Add(time.Second),
+	}
+	if _, err := db.Collection("conversation_members").InsertOne(context.Background(), assistantMember); err != nil {
+		t.Fatalf("seed assistant member %s: %v", conversationID, err)
+	}
 }

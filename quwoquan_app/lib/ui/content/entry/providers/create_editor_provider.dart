@@ -8,6 +8,8 @@ import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_undo_snapshot.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 
+part 'create_editor_provider_article_helpers.dart';
+
 class CreateEditorNotifier extends Notifier<CreateEditorState> {
   int _articleBlockSeed = 0;
   int _articleAssetSeed = 0;
@@ -82,12 +84,18 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     _redoStack.clear();
   }
 
-  void reset({CreateEditorKind editorKind = CreateEditorKind.text}) {
+  void reset({
+    CreateEditorKind editorKind = CreateEditorKind.text,
+    CreateDraftFlowKind draftFlowKind = CreateDraftFlowKind.article,
+  }) {
     _clearUndoRedo();
     _paginationStageWidth = 390;
     _paginationContentHeight = null;
     _paginationMetrics = ArticleCanvasMetrics.snapshot();
-    state = CreateEditorState.initial(editorKind: editorKind);
+    state = CreateEditorState.initial(
+      editorKind: editorKind,
+      draftFlowKind: draftFlowKind,
+    );
   }
 
   /// 仅重算分页，不写撤销栈；由编辑器 LayoutBuilder 在宽度/可视高度变化时调用。
@@ -133,15 +141,30 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     state = state.copyWith(editorKind: editorKind);
   }
 
+  void setDraftFlowKind(CreateDraftFlowKind draftFlowKind) {
+    state = state.copyWith(draftFlowKind: draftFlowKind);
+  }
+
   void setStartAction(EditorStartAction? action) {
     switch (action) {
       case EditorStartAction.gallery:
+        state = state.copyWith(
+          editorKind: CreateEditorKind.media,
+          draftFlowKind: CreateDraftFlowKind.image,
+        );
+        return;
       case EditorStartAction.capture:
-        state = state.copyWith(editorKind: CreateEditorKind.media);
+        state = state.copyWith(
+          editorKind: CreateEditorKind.media,
+          draftFlowKind: CreateDraftFlowKind.video,
+        );
         return;
       case EditorStartAction.write:
       case null:
-        state = state.copyWith(editorKind: CreateEditorKind.text);
+        state = state.copyWith(
+          editorKind: CreateEditorKind.text,
+          draftFlowKind: CreateDraftFlowKind.article,
+        );
         return;
     }
   }
@@ -677,50 +700,6 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     final delta = newLeading.length - o;
     final nextAssets = document.assets
         .map((a) => a.offset >= o ? a.copyWith(offset: a.offset + delta) : a)
-        .toList(growable: false);
-    _applyArticleDocument(
-      document.copyWith(
-        body: nextBody,
-        assets: _normalizeAssets(nextAssets, nextBody.length),
-      ),
-      recordUndoPoint: recordUndo,
-    );
-  }
-
-  /// 两图之间插文槽草稿与 [syncParagraphDraftBeforeAsset] 同理。
-  void syncParagraphDraftBetweenAssets(String anchorAssetId, String draft) {
-    final id = anchorAssetId.trim();
-    if (id.isEmpty) {
-      return;
-    }
-    final document = state.articleDocument;
-    final sorted = _documentSortedImageAssets(document);
-    final index = sorted.indexWhere((a) => a.id == id);
-    if (index < 0 || index + 1 >= sorted.length) {
-      return;
-    }
-    final cur = sorted[index];
-    final nxt = sorted[index + 1];
-    final a = cur.offset.clamp(0, document.body.length);
-    final b = nxt.offset.clamp(a, document.body.length);
-    final newMid = _normalizeArticleBody(draft.replaceAll('\r\n', '\n'));
-    final oldMid = document.body.substring(a, b);
-    if (oldMid == newMid) {
-      return;
-    }
-    final recordUndo =
-        (oldMid.trim().isEmpty && newMid.trim().isNotEmpty) ||
-        (oldMid.trim().isNotEmpty && newMid.trim().isEmpty);
-    final nextBody = _normalizeArticleBody(
-      document.body.substring(0, a) + newMid + document.body.substring(b),
-    );
-    final delta = newMid.length - (b - a);
-    final nextAssets = document.assets
-        .map(
-          (asset) => asset.offset >= b
-              ? asset.copyWith(offset: asset.offset + delta)
-              : asset,
-        )
         .toList(growable: false);
     _applyArticleDocument(
       document.copyWith(
@@ -1644,75 +1623,6 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     return newNodeId;
   }
 
-  /// 在指定文本 node 的光标位置为插图腾出空间。
-  ///
-  /// 返回后续图片应插入到哪个锚点之后。
-  String prepareTextNodeForImageInsertion(String nodeId, int selectionOffset) {
-    final id = nodeId.trim();
-    if (id.isEmpty) {
-      return kArticleEditorStartAnchorId;
-    }
-    final doc = state.articleDocument;
-    final index = doc.nodes.indexWhere((node) => node.id == id);
-    if (index < 0) {
-      return kArticleEditorStartAnchorId;
-    }
-    final node = doc.nodes[index];
-    if (node.isFigure || node.isDocumentTitle) {
-      return index > 0 ? doc.nodes[index - 1].id : kArticleEditorStartAnchorId;
-    }
-
-    final text = node.text;
-    final offset = selectionOffset.clamp(0, text.length);
-    if (offset <= 0) {
-      return index > 0 ? doc.nodes[index - 1].id : kArticleEditorStartAnchorId;
-    }
-    if (offset >= text.length) {
-      return node.id;
-    }
-
-    final leftText = text.substring(0, offset);
-    final rightText = text.substring(offset);
-    final keepLeft = leftText.trim().isNotEmpty;
-    final keepRight = rightText.trim().isNotEmpty;
-    final leftSpans = _sliceInlineSpans(node.spans, 0, offset);
-    final rightSpans = _sliceInlineSpans(node.spans, offset, text.length);
-    final nextNodes = List<ArticleDocumentNode>.from(doc.nodes)
-      ..removeAt(index);
-
-    var insertIndex = index;
-    var anchorId = index > 0
-        ? doc.nodes[index - 1].id
-        : kArticleEditorStartAnchorId;
-
-    if (keepLeft) {
-      nextNodes.insert(
-        insertIndex,
-        _cloneTextNode(node, id: node.id, text: leftText, spans: leftSpans),
-      );
-      anchorId = node.id;
-      insertIndex += 1;
-    }
-
-    if (keepRight) {
-      final rightNodeId = keepLeft
-          ? _nextArticleTextNodeId(node.type)
-          : node.id;
-      nextNodes.insert(
-        insertIndex,
-        _cloneTextNode(
-          node,
-          id: rightNodeId,
-          text: rightText,
-          spans: rightSpans,
-        ),
-      );
-    }
-
-    _applyArticleDocument(doc.copyWith(nodes: nextNodes));
-    return anchorId;
-  }
-
   /// 在指定 node 之后插入一张图片（node 级操作）。
   /// 返回新 figure node 的 id，方便连续插入多张。
   String insertImageAfterNode(String? afterNodeId, String imagePath) {
@@ -2186,6 +2096,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
         .toList(growable: false);
     state = state.copyWith(
       editorKind: editorKind,
+      draftFlowKind: CreateDraftFlowKind.image,
       mediaKind: sanitized.isEmpty
           ? CreateMediaKind.none
           : CreateMediaKind.images,
@@ -2197,6 +2108,9 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       videoTrimStartMs: 0,
       videoTrimEndMs: 0,
       videoCoverTimeMs: 0,
+      videoCoverStrategy: 'first_frame',
+      videoWidth: 0,
+      videoHeight: 0,
       videoMuted: false,
       currentMediaIndex: sanitized.isEmpty
           ? 0
@@ -2272,11 +2186,15 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     int trimStartMs = 0,
     int trimEndMs = 0,
     int coverTimeMs = 0,
+    String coverStrategy = 'first_frame',
+    int width = 0,
+    int height = 0,
     bool muted = false,
   }) {
     final sanitizedPath = path.trim();
     state = state.copyWith(
       editorKind: editorKind,
+      draftFlowKind: CreateDraftFlowKind.video,
       mediaKind: sanitizedPath.isEmpty
           ? CreateMediaKind.none
           : CreateMediaKind.video,
@@ -2288,6 +2206,12 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       videoTrimStartMs: trimStartMs.clamp(0, 999999999),
       videoTrimEndMs: trimEndMs.clamp(0, 999999999),
       videoCoverTimeMs: coverTimeMs.clamp(0, 999999999),
+      videoCoverStrategy: _normalizedVideoCoverStrategy(
+        coverStrategy,
+        coverTimeMs,
+      ),
+      videoWidth: width.clamp(0, 999999999),
+      videoHeight: height.clamp(0, 999999999),
       videoMuted: muted,
       currentMediaIndex: 0,
     );
@@ -2300,6 +2224,9 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     required int trimStartMs,
     required int trimEndMs,
     required int coverTimeMs,
+    String coverStrategy = 'first_frame',
+    int width = 0,
+    int height = 0,
     required bool muted,
     String? originalVideoPath,
   }) {
@@ -2309,6 +2236,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
     }
     state = state.copyWith(
       editorKind: CreateEditorKind.media,
+      draftFlowKind: CreateDraftFlowKind.video,
       mediaKind: CreateMediaKind.video,
       imagePaths: const <String>[],
       videoPath: sanitizedVideoPath,
@@ -2318,6 +2246,12 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       videoTrimStartMs: trimStartMs.clamp(0, 999999999),
       videoTrimEndMs: trimEndMs.clamp(0, 999999999),
       videoCoverTimeMs: coverTimeMs.clamp(0, 999999999),
+      videoCoverStrategy: _normalizedVideoCoverStrategy(
+        coverStrategy,
+        coverTimeMs,
+      ),
+      videoWidth: width.clamp(0, 999999999),
+      videoHeight: height.clamp(0, 999999999),
       videoMuted: muted,
       currentMediaIndex: 0,
     );
@@ -2335,6 +2269,9 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       videoTrimStartMs: 0,
       videoTrimEndMs: 0,
       videoCoverTimeMs: 0,
+      videoCoverStrategy: 'first_frame',
+      videoWidth: 0,
+      videoHeight: 0,
       videoMuted: false,
       currentMediaIndex: 0,
     );
@@ -2348,6 +2285,14 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
           draft.state.articleBlocks.first.id,
     );
   }
+}
+
+String _normalizedVideoCoverStrategy(String value, int coverTimeMs) {
+  final trimmed = value.trim();
+  if (trimmed == 'manual') {
+    return 'manual';
+  }
+  return coverTimeMs > 0 ? 'manual' : 'first_frame';
 }
 
 class _WrapGroupMutationResult {

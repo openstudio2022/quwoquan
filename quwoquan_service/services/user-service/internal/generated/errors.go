@@ -66,6 +66,12 @@ var (
 	ErrRetiredSubAccountGuard = errors.New("USER.SUB_ACCOUNT.retired_guard")
 	ErrDeleteEmptySubAccountOnly = errors.New("USER.SUB_ACCOUNT.delete_empty_only")
 	ErrSubAccountHandleTaken = errors.New("USER.SUB_ACCOUNT.handle_taken")
+	ErrSubAccountHandleReadonly = errors.New("USER.SUB_ACCOUNT.handle_readonly")
+	ErrProfileInvalidRegion = errors.New("USER.PROFILE.invalid_region")
+	ErrProfileInvalidTagRef = errors.New("USER.PROFILE.invalid_tag_ref")
+	ErrProfileInvalidMediaAsset = errors.New("USER.PROFILE.invalid_media_asset")
+	ErrProfileQrTokenInvalid = errors.New("USER.PROFILE.qr_token_invalid")
+	ErrProfileQrTokenExpired = errors.New("USER.PROFILE.qr_token_expired")
 )
 
 // AppErrorFromContactDiscoveryRateLimited returns *AppError for USER.CONTACT.rate_limited (user_message from errors.yaml).
@@ -396,5 +402,41 @@ func AppErrorFromDeleteEmptySubAccountOnly(debugMessage string) *rerrors.AppErro
 func AppErrorFromSubAccountHandleTaken(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSubAccountHandleTaken.Error()))
 	return rerrors.NewAppError(code, "该分身号已被占用，请换一个", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromSubAccountHandleReadonly returns *AppError for USER.SUB_ACCOUNT.handle_readonly (user_message from errors.yaml).
+func AppErrorFromSubAccountHandleReadonly(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrSubAccountHandleReadonly.Error()))
+	return rerrors.NewAppError(code, "趣我圈号由系统分配，暂不支持手动修改", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromProfileInvalidRegion returns *AppError for USER.PROFILE.invalid_region (user_message from errors.yaml).
+func AppErrorFromProfileInvalidRegion(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrProfileInvalidRegion.Error()))
+	return rerrors.NewAppError(code, "请选择有效的省市地区", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromProfileInvalidTagRef returns *AppError for USER.PROFILE.invalid_tag_ref (user_message from errors.yaml).
+func AppErrorFromProfileInvalidTagRef(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrProfileInvalidTagRef.Error()))
+	return rerrors.NewAppError(code, "所选标签不可用，请重新选择", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromProfileInvalidMediaAsset returns *AppError for USER.PROFILE.invalid_media_asset (user_message from errors.yaml).
+func AppErrorFromProfileInvalidMediaAsset(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrProfileInvalidMediaAsset.Error()))
+	return rerrors.NewAppError(code, "图片上传未完成，请重新选择并保存", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromProfileQrTokenInvalid returns *AppError for USER.PROFILE.qr_token_invalid (user_message from errors.yaml).
+func AppErrorFromProfileQrTokenInvalid(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrProfileQrTokenInvalid.Error()))
+	return rerrors.NewAppError(code, "二维码已失效，请让对方重新分享", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromProfileQrTokenExpired returns *AppError for USER.PROFILE.qr_token_expired (user_message from errors.yaml).
+func AppErrorFromProfileQrTokenExpired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrProfileQrTokenExpired.Error()))
+	return rerrors.NewAppError(code, "二维码已过期，请让对方重新分享", debugMessage).WithRecovery("surface", 0)
 }
 

@@ -1,0 +1,123 @@
+{
+  "outputDir": "artifacts/startup_perf/20260624T014245-android-profile-splash-icon-fixed/20260624T014245",
+  "passed": false,
+  "results": [
+    {
+      "platform": "android",
+      "device": "emulator-5554",
+      "passed": false,
+      "visibleByMs": 500,
+      "firstVisibleMs": null,
+      "blueScreenDetected": true,
+      "plainBackgroundDetected": true,
+      "flutterUiDisplayedMaxMs": 3000,
+      "flutterUiDisplayedWithinBudget": true,
+      "timings": {
+        "android_startup_activity_handoff": 184,
+        "android_native_welcome_overlay_installed": 55,
+        "android_flutter_engine_configured": 318,
+        "android_flutter_ui_displayed": 657
+      },
+      "screenshots": [
+        {
+          "path": "artifacts/startup_perf/20260624T014245-android-profile-splash-icon-fixed/20260624T014245/android-0500ms.png",
+          "offsetMs": 500,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            10,
+            132,
+            255
+          ],
+          "plainBackground": true,
+          "blueBackground": true,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_perf/20260624T014245-android-profile-splash-icon-fixed/20260624T014245/android-1000ms.png",
+          "offsetMs": 1000,
+          "foregroundRatio": 0.04714,
+          "stddevAvg": 7.005,
+          "medianRgb": [
+            11,
+            132,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_perf/20260624T014245-android-profile-splash-icon-fixed/20260624T014245/android-1500ms.png",
+          "offsetMs": 1500,
+          "foregroundRatio": 0.27082,
+          "stddevAvg": 33.561,
+          "medianRgb": [
+            15,
+            130,
+            245
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_perf/20260624T014245-android-profile-splash-icon-fixed/20260624T014245/android-2000ms.png",
+          "offsetMs": 2000,
+          "foregroundRatio": 0.2101,
+          "stddevAvg": 72.929,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_perf/20260624T014245-android-profile-splash-icon-fixed/20260624T014245/android-2500ms.png",
+          "offsetMs": 2500,
+          "foregroundRatio": 0.21013,
+          "stddevAvg": 74.833,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_perf/20260624T014245-android-profile-splash-icon-fixed/20260624T014245/android-3000ms.png",
+          "offsetMs": 3000,
+          "foregroundRatio": 0.21013,
+          "stddevAvg": 74.833,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_perf/20260624T014245-android-profile-splash-icon-fixed/20260624T014245/android-4000ms.png",
+          "offsetMs": 4000,
+          "foregroundRatio": 0.21013,
+          "stddevAvg": 74.833,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        }
+      ]
+    }
+  ]
+}

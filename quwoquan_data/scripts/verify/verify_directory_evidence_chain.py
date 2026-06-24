@@ -40,6 +40,9 @@ from _common.paths import (  # noqa: E402
     TASK_ROOT_LEGACY_COMPAT_ENTRIES,
     TASK_SHARED_LEDGER_FILENAMES,
     batch_root,
+    batch_task_id,
+    batches_root,
+    iter_all_batch_dirs,
     normalize_task_id,
     task_root,
     task_shared_dir,
@@ -120,6 +123,10 @@ def scan_task(task_id: str) -> list[str]:
     issues: list[str] = []
     for entry in sorted(root.iterdir()):
         if entry.name.startswith("."):
+            continue
+        if entry.name == "batches":
+            # 批次工作区已上提到顶层 runtime/batches/，任务根不得再出现 batches/。
+            issues.append("task/batches: 批次工作区不得挂任务根，须上提到顶层 runtime/batches/<intentLabel>__<batch>/")
             continue
         if entry.name in TASK_ROOT_ALLOWED_ENTRIES:
             continue
@@ -469,20 +476,56 @@ def _orphan_post_object_issues(task_id: str, batch_id: str, batch: Path) -> list
     return issues
 
 
+_STAGE_TREE_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+
+def _post_object_carrier(obj: Path) -> str:
+    """读取内容对象 manifest 的 carrier（article/image…）；读不到返回空串。"""
+    manifest_path = obj / "manifest.json"
+    if not manifest_path.is_file():
+        return ""
+    try:
+        return str(read_json(manifest_path).get("carrier") or "")
+    except Exception:
+        return ""
+
+
+def _has_image_asset(obj: Path) -> bool:
+    assets_dir = obj / "assets"
+    if not assets_dir.is_dir():
+        return False
+    return any(
+        p.is_file() and p.suffix.lower() in _STAGE_TREE_IMAGE_EXTS
+        for p in assets_dir.iterdir()
+    )
+
+
 def stage_completeness_issues(batch: Path) -> list[str]:
     """阶段树完整性门（opt-in）：成品对象必须物化完整 1-5 过程阶段证据。
 
-    - 内容对象（posts，有 article.md/gallery.md）：补齐 1.download 证据快照等全链。
-    - 实体对象（entities，有 page.md/_entity.json）：补齐 2.quality/4.draft/5.review。
+    成品判定以 `manifest.json` 为准（图片作品没有 article.md/gallery.md，旧口径会漏判）。
+    并按内容类型校验关键成品文件：
+    - 文章/主页：必须有 article.md（实体主页为 page.md）。
+    - 图片作品（manifest.carrier==image）：必须有至少一张落盘资产 assets/<image>。
+    - 全部成品：必须物化 1.download→5.review 全链过程阶段。
     """
     issues: list[str] = []
     for obj in iter_batch_object_dirs(batch):
         rel = obj.relative_to(batch)
         parts = rel.parts
         if parts and parts[0] == "posts":
-            if not ((obj / "article.md").exists() or (obj / "gallery.md").exists()):
+            manifest_present = (obj / "manifest.json").is_file()
+            has_article = (obj / "article.md").exists()
+            has_gallery = (obj / "gallery.md").exists()
+            if not (manifest_present or has_article or has_gallery):
                 continue
             required = _POST_REQUIRED_STAGES
+            is_image = _post_object_carrier(obj) == "image"
+            if is_image:
+                if not _has_image_asset(obj):
+                    issues.append(f"{rel}: 图片作品成品缺关键资产 assets/<image>")
+            elif not has_article:
+                issues.append(f"{rel}: 文章成品缺关键文件 article.md")
         elif parts and parts[0] == "entities":
             if not ((obj / "page.md").exists() or (obj / "_entity.json").exists()):
                 continue
@@ -496,10 +539,27 @@ def stage_completeness_issues(batch: Path) -> list[str]:
 
 
 def _task_batch_from_path(batch: Path) -> tuple[str, str]:
-    """从 batch 目录反推 (task_id, batch_id)：tasks/{task...}/batches/{batch}。"""
-    task_root_dir = batch.parent.parent
-    task_id = task_root_dir.relative_to(TASKS_ROOT).as_posix()
-    return task_id, batch.name
+    """从顶层批次目录反推 (task_id, batch_id)。
+
+    新布局 runtime/batches/{intentLabel}-{taskHash}__{batch}/：taskId 取自 batch_manifest.taskId
+    （反查唯一依据）；batchId 取自 manifest.batchId，回退按目录名首个 `__` 之后的部分。
+    """
+    task_id = batch_task_id(batch)
+    batch_id = ""
+    manifest = batch / "batch_manifest.json"
+    if manifest.is_file():
+        try:
+            data = read_json(manifest)
+        except Exception:
+            data = {}
+        if isinstance(data, dict):
+            batch_id = str(data.get("batchId") or "")
+            if not task_id:
+                task_id = normalize_task_id(str(data.get("taskId") or ""))
+    if not batch_id:
+        name = batch.name
+        batch_id = name.split("__", 1)[1] if "__" in name else name
+    return task_id, batch_id
 
 
 def _scan_object(obj: Path, batch: Path, issues: list[str]) -> None:
@@ -604,24 +664,31 @@ def scan_batch(task_id: str, batch_id: str, *, require_stage_tree: bool = True) 
 
 def scan_all() -> list[str]:
     issues: list[str] = []
-    if not TASKS_ROOT.is_dir():
-        return issues
-    seen_tasks: set[str] = set()
-    for batches_dir in TASKS_ROOT.rglob("batches"):
-        task_id = batches_dir.parent.relative_to(TASKS_ROOT).as_posix()
-        if task_id not in seen_tasks:
-            issues.extend(scan_task(task_id))
-            seen_tasks.add(task_id)
-        for batch in sorted(p for p in batches_dir.iterdir() if p.is_dir()):
-            for obj in iter_batch_object_dirs(batch):
-                _scan_object(obj, batch, issues)
-            issues.extend(_top_level_issues(batch))
-            issues.extend(_regression_issues(batch))
-            current_task_id, batch_id = _task_batch_from_path(batch)
-            issues.extend(_sync_issues(current_task_id, batch_id, batch))
-            issues.extend(_orphan_post_object_issues(current_task_id, batch_id, batch))
-            issues.extend(scan_asset_ids(current_task_id, batch_id))
-            issues.extend(stage_completeness_issues(batch))
+    # 任务根门：批次工作区已上提到顶层 runtime/batches/，任务根不得再出现 batches/。
+    if TASKS_ROOT.is_dir():
+        seen_tasks: set[str] = set()
+        for legacy_batches in TASKS_ROOT.rglob("batches"):
+            if legacy_batches.is_dir():
+                rel = legacy_batches.relative_to(TASKS_ROOT).as_posix()
+                issues.append(
+                    f"task/{rel}: 批次工作区不得挂任务根，须上提到顶层 runtime/batches/<intentLabel>__<batch>/"
+                )
+    else:
+        seen_tasks = set()
+    # 顶层批次门：遍历 runtime/batches/，taskId 取自 batch_manifest.taskId。
+    for batch in iter_all_batch_dirs():
+        current_task_id, batch_id = _task_batch_from_path(batch)
+        if current_task_id and current_task_id not in seen_tasks:
+            issues.extend(scan_task(current_task_id))
+            seen_tasks.add(current_task_id)
+        for obj in iter_batch_object_dirs(batch):
+            _scan_object(obj, batch, issues)
+        issues.extend(_top_level_issues(batch))
+        issues.extend(_regression_issues(batch))
+        issues.extend(_sync_issues(current_task_id, batch_id, batch))
+        issues.extend(_orphan_post_object_issues(current_task_id, batch_id, batch))
+        issues.extend(scan_asset_ids(current_task_id, batch_id))
+        issues.extend(stage_completeness_issues(batch))
     return issues
 
 

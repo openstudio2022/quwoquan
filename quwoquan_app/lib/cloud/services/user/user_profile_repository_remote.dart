@@ -43,6 +43,14 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     return data;
   }
 
+  Never _throwStatus(http.Response resp, String path) {
+    throw CloudErrorMapper.fromStatusCode(
+      resp.statusCode,
+      body: resp.body,
+      requestPath: path,
+    );
+  }
+
   static String _normalizeRelationshipState(Map<String, dynamic> map) {
     final state = map['relationState']?.toString() ?? '';
     if (state.isNotEmpty) {
@@ -68,17 +76,44 @@ class RemoteUserProfileRepository extends UserProfileRepository {
         raw['displayName']?.toString() ??
         raw['nickname']?.toString() ??
         subAccountId;
+    final userHandle =
+        raw['userHandle']?.toString() ??
+        raw['username']?.toString() ??
+        subAccountId;
+    final username =
+        raw['username']?.toString() ??
+        raw['userHandle']?.toString() ??
+        subAccountId;
     final avatarUrl =
         raw['avatarUrl']?.toString() ??
         raw['avatarUrlSnapshot']?.toString() ??
         '';
+    final relationState = _normalizeRelationshipState(raw);
+    final hasRelationshipCapability = raw['relationshipCapability'] is Map;
+    final relationshipCapability = hasRelationshipCapability
+        ? Map<String, dynamic>.from(raw['relationshipCapability'] as Map)
+        : <String, dynamic>{
+            'targetSubAccountId': subAccountId,
+            'relationState': relationState,
+            'canFollow':
+                relationState == 'not_following' ||
+                relationState == 'followed_by',
+            'canUnfollow':
+                relationState == 'following' || relationState == 'mutual',
+            'canFollowBack': relationState == 'followed_by',
+          };
     return <String, dynamic>{
       ...raw,
       'subAccountId': subAccountId,
       'userId': subAccountId,
+      'username': username,
+      'userHandle': userHandle,
       'displayName': displayName,
       'nickname': displayName,
       'avatarUrl': avatarUrl,
+      'profileVisibility': raw['profileVisibility']?.toString() ?? 'public',
+      'relationState': relationState,
+      'relationshipCapability': relationshipCapability,
     };
   }
 
@@ -166,6 +201,74 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
+  Future<ProfileEditSnapshotData> getProfileEditSnapshot() async {
+    final url = _uri(UserApiMetadata.getProfileEditSnapshotPath);
+    final resp = await _httpClient.get(
+      url,
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.getProfileEditSnapshot,
+      ),
+    );
+    if (resp.statusCode != 200) {
+      _throwStatus(resp, UserApiMetadata.getProfileEditSnapshotPath);
+    }
+    return ProfileEditSnapshotData.fromWire(
+      ProfileEditSnapshotWireDto.fromMap(
+        _decodeObject(resp, UserRequestPageIds.getProfileEditSnapshot),
+      ),
+    );
+  }
+
+  @override
+  Future<ProfileQrCardData> getProfileQrCard() async {
+    final url = _uri(UserApiMetadata.getProfileQrCardPath);
+    final resp = await _httpClient.get(
+      url,
+      headers: CloudRequestHeaders.forPage(UserRequestPageIds.getProfileQrCard),
+    );
+    if (resp.statusCode != 200) {
+      _throwStatus(resp, UserApiMetadata.getProfileQrCardPath);
+    }
+    return ProfileQrCardData.fromWire(
+      ProfileQrCardWireDto.fromMap(
+        _decodeObject(resp, UserRequestPageIds.getProfileQrCard),
+      ),
+    );
+  }
+
+  @override
+  Future<ProfileQrResolveWireDto> resolveProfileQrToken({
+    required String token,
+    String handle = '',
+  }) async {
+    final normalizedToken = token.trim();
+    if (normalizedToken.isEmpty) {
+      throw ArgumentError.value(token, 'token', 'qr token required');
+    }
+    final query = <String, String>{'qr': normalizedToken};
+    final normalizedHandle = handle.trim();
+    if (normalizedHandle.isNotEmpty) {
+      query['handle'] = normalizedHandle;
+    }
+    final url = _uri(
+      UserApiMetadata.resolveProfileQrTokenPath,
+      queryParameters: query,
+    );
+    final resp = await _httpClient.get(
+      url,
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.resolveProfileQrToken,
+      ),
+    );
+    if (resp.statusCode != 200) {
+      _throwStatus(resp, UserApiMetadata.resolveProfileQrTokenPath);
+    }
+    return ProfileQrResolveWireDto.fromMap(
+      _decodeObject(resp, UserRequestPageIds.resolveProfileQrToken),
+    );
+  }
+
+  @override
   Future<void> updateProfile(ProfileEditUpdatePayload data) async {
     final url = _uri(UserApiMetadata.updateUserProfilePath);
     final resp = await _httpClient.patch(
@@ -177,7 +280,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       body: json.encode(data.toRepositoryMap()),
     );
     if (resp.statusCode != 200) {
-      throw Exception('updateProfile failed: ${resp.statusCode}');
+      _throwStatus(resp, UserApiMetadata.updateUserProfilePath);
     }
   }
 
@@ -246,13 +349,22 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<List<CircleDto>> listUserCircles(
+  Future<CursorPage<CircleDto>> listUserCirclesPage(
     String userId, {
+    String? query,
+    String? cursor,
     int limit = CloudApiDefaults.userCirclesLimit,
   }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if ((query ?? '').trim().isNotEmpty) {
+      params['query'] = query!.trim();
+    }
+    if ((cursor ?? '').trim().isNotEmpty) {
+      params['cursor'] = cursor!.trim();
+    }
     final url = _uri(
       CircleApiMetadata.listUserCirclesPath(userId: userId),
-      queryParameters: <String, String>{'limit': '$limit'},
+      queryParameters: params,
     );
     final resp = await _httpClient.get(
       url,
@@ -263,12 +375,15 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listUserCircles failed: ${resp.statusCode}');
     }
-    final data = CloudResponseDecoder.asObject(
+    final page = CloudResponseDecoder.asCursorPage(
       json.decode(resp.body),
       context: CircleRequestPageIds.listUserCircles,
     );
-    final items = CloudResponseDecoder.mapList(data, 'items');
-    return items.map(CircleDto.fromMap).toList(growable: false);
+    return CursorPage<CircleDto>(
+      items: page.items.map(CircleDto.fromMap).toList(growable: false),
+      nextCursor: page.nextCursor,
+      totalCount: page.totalCount,
+    );
   }
 
   @override
@@ -303,12 +418,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     required String impactId,
     String evidenceSnapshotId = '',
     String cursor = '',
-    int limit = 20,
+    int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final query = <String, String>{
-      'impactId': impactId,
-      'limit': '$limit',
-    };
+    final query = <String, String>{'impactId': impactId, 'limit': '$limit'};
     if (evidenceSnapshotId.trim().isNotEmpty) {
       query['evidenceSnapshotId'] = evidenceSnapshotId.trim();
     }
@@ -316,7 +428,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       query['cursor'] = cursor.trim();
     }
     final url = _uri(
-      ContentApiMetadata.listAuthorImpactEvidencePath(subAccountId: subAccountId),
+      ContentApiMetadata.listAuthorImpactEvidencePath(
+        subAccountId: subAccountId,
+      ),
       queryParameters: query,
     );
     final resp = await _httpClient.get(
@@ -493,13 +607,19 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<List<ProfileSocialRelationRowViewData>> listFollowing(
+  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowingPage(
     String userId, {
+    String? query,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final params = <String, String>{'limit': '$limit'};
-    if (cursor != null) params['cursor'] = cursor;
+    if ((query ?? '').trim().isNotEmpty) {
+      params['query'] = query!.trim();
+    }
+    if ((cursor ?? '').trim().isNotEmpty) {
+      params['cursor'] = cursor!.trim();
+    }
     final url = _uri(
       UserApiMetadata.listFollowingPath(subAccountId: userId),
       queryParameters: params,
@@ -511,25 +631,39 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listFollowing failed: ${resp.statusCode}');
     }
-    return _decodeItems(resp, UserRequestPageIds.listFollowing)
-        .map(_normalizeRelationshipItem)
-        .map(
-          (m) =>
-              ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
-                ProfileSocialRelationRowWireDto.fromMap(m),
-              ),
-        )
-        .toList(growable: false);
+    final page = CloudResponseDecoder.asCursorPage(
+      json.decode(resp.body),
+      context: UserRequestPageIds.listFollowing,
+    );
+    return CursorPage<ProfileSocialRelationRowViewData>(
+      items: page.items
+          .map(_normalizeRelationshipItem)
+          .map(
+            (m) =>
+                ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+                  ProfileSocialRelationRowWireDto.fromMap(m),
+                ),
+          )
+          .toList(growable: false),
+      nextCursor: page.nextCursor,
+      totalCount: page.totalCount,
+    );
   }
 
   @override
-  Future<List<ProfileSocialRelationRowViewData>> listFollowers(
+  Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowersPage(
     String userId, {
+    String? query,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final params = <String, String>{'limit': '$limit'};
-    if (cursor != null) params['cursor'] = cursor;
+    if ((query ?? '').trim().isNotEmpty) {
+      params['query'] = query!.trim();
+    }
+    if ((cursor ?? '').trim().isNotEmpty) {
+      params['cursor'] = cursor!.trim();
+    }
     final url = _uri(
       UserApiMetadata.listFollowersPath(subAccountId: userId),
       queryParameters: params,
@@ -541,15 +675,23 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (resp.statusCode != 200) {
       throw Exception('listFollowers failed: ${resp.statusCode}');
     }
-    return _decodeItems(resp, UserRequestPageIds.listFollowers)
-        .map(_normalizeRelationshipItem)
-        .map(
-          (m) =>
-              ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
-                ProfileSocialRelationRowWireDto.fromMap(m),
-              ),
-        )
-        .toList(growable: false);
+    final page = CloudResponseDecoder.asCursorPage(
+      json.decode(resp.body),
+      context: UserRequestPageIds.listFollowers,
+    );
+    return CursorPage<ProfileSocialRelationRowViewData>(
+      items: page.items
+          .map(_normalizeRelationshipItem)
+          .map(
+            (m) =>
+                ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
+                  ProfileSocialRelationRowWireDto.fromMap(m),
+                ),
+          )
+          .toList(growable: false),
+      nextCursor: page.nextCursor,
+      totalCount: page.totalCount,
+    );
   }
 
   @override

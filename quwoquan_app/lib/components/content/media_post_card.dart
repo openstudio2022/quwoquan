@@ -16,6 +16,7 @@ import 'package:quwoquan_app/components/settings_conversation/more_actions_popup
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
+
 /// 媒体帖子卡片基类
 /// 按照Figma原型设计，包含完整的交互功能和评论显示
 abstract class MediaPostCard extends ConsumerStatefulWidget {
@@ -272,16 +273,19 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
       config: config,
       panelMaxWidth:
           panelMaxWidth ??
-          MediaQuery.sizeOf(context).width -
-              AppSpacing.contentSpacingMd.w * 2,
+          MediaQuery.sizeOf(context).width - AppSpacing.contentSpacingMd.w * 2,
     );
   }
 
   /// 显示评论查看器
   void _showCommentViewer() {
+    final postId = widget.post.id.isNotEmpty ? widget.post.id : 'mock_post_id';
     CommentViewer.showModal(
       context: context,
-      postId: widget.post.id.isNotEmpty ? widget.post.id : 'mock_post_id',
+      postId: postId,
+      entryObservedCommentCount: ref
+          .read(postInteractionStateProvider)
+          .commentCountFor(postId, fallback: _commentsCount),
       onShareTap: _onShare,
     );
   }
@@ -721,7 +725,6 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
     }
     return formatCompactActionCount(count);
   }
-
 
   /// 处理加载更多评论
   void _handleLoadMoreComments(String postId) {

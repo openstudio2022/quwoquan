@@ -18,28 +18,28 @@ class CloudRuntimeConfig {
   /// 通过 `--dart-define=CLOUD_GATEWAY_BASE_URL=...` 注入。
   static const String gatewayBaseUrl = String.fromEnvironment(
     'CLOUD_GATEWAY_BASE_URL',
-    defaultValue: 'https://127.0.0.1:17000',
+    defaultValue: 'https://alpha-api.quwoquan-env.test:17000',
   );
 
   /// 头像 CDN Base URL。展示 URL 由服务端返回，App 仅用于环境包审计与 beta 联调报告。
   static const String mediaAvatarCdnBaseUrl = String.fromEnvironment(
     'MEDIA_AVATAR_CDN_BASE_URL',
-    defaultValue: 'https://127.0.0.1:17100',
+    defaultValue: 'https://alpha-avatar.quwoquan-env.test:17100',
   );
 
   static const String mediaImageCdnBaseUrl = String.fromEnvironment(
     'MEDIA_IMAGE_CDN_BASE_URL',
-    defaultValue: 'https://127.0.0.1:17100',
+    defaultValue: 'https://alpha-image.quwoquan-env.test:17100',
   );
 
   static const String mediaVideoCdnBaseUrl = String.fromEnvironment(
     'MEDIA_VIDEO_CDN_BASE_URL',
-    defaultValue: 'https://127.0.0.1:17100',
+    defaultValue: 'https://alpha-video.quwoquan-env.test:17100',
   );
 
   static const String mediaUploadBaseUrl = String.fromEnvironment(
     'MEDIA_UPLOAD_BASE_URL',
-    defaultValue: 'https://127.0.0.1:17100',
+    defaultValue: 'https://alpha-upload.quwoquan-env.test:17100',
   );
 
   /// Web 顶部安装提示：移动/Pad 端直接下载 App 或打开商店落地页。

@@ -86,12 +86,37 @@ CROSS_THEME_PAIRS = [
     ("outdoor", "pet"),
     ("fitness", "lifestyle"),
 ]
+DEFAULT_NICKNAME_PREFIX = "新同学"
+DEFAULT_NICKNAME_SAMPLE_TIME = datetime(2026, 6, 22, 1, 51, 38, 421000)
+DEFAULT_NICKNAME_SAMPLE_ENTROPY = 271
+
+
+def build_default_nickname(
+    now: datetime,
+    *,
+    prefix: str = DEFAULT_NICKNAME_PREFIX,
+    extra_entropy: int = 0,
+) -> str:
+    date_part = now.strftime("%y%m%d")
+    millis_of_day = (
+        ((now.hour * 60 + now.minute) * 60 + now.second) * 1000
+        + now.microsecond // 1000
+    )
+    suffix = (millis_of_day + max(extra_entropy, 0)) % 10_000_000
+    return f"{prefix}_{date_part}_{suffix:07d}"
+
+
+FIXTURE_CURRENT_USER_DEFAULT_NICKNAME = build_default_nickname(
+    DEFAULT_NICKNAME_SAMPLE_TIME,
+    extra_entropy=DEFAULT_NICKNAME_SAMPLE_ENTROPY,
+)
+
 CORE_USER_PRESETS = {
     "fixture_user_current": {
         "themeId": "lifestyle",
         "role": "currentUserVariant",
-        "displayName": "契约当前用户",
-        "bio": "用于 alpha/beta/gamma 的当前用户主页。",
+        "displayName": FIXTURE_CURRENT_USER_DEFAULT_NICKNAME,
+        "bio": "",
         "avatarSourceId": "portrait_archived_lifestyle_01",
         "backgroundSourceId": "scene_lifestyle_home_01",
         "subAccountRefs": ["fixture_persona_daily", "fixture_persona_work"],
@@ -1440,7 +1465,7 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
         ("fixture_user_friend", "契约好友"),
         ("fixture_user_photo", "契约摄影师"),
         ("fixture_user_commenter", "契约评论者"),
-        ("fixture_user_current", "契约当前用户"),
+        ("fixture_user_current", FIXTURE_CURRENT_USER_DEFAULT_NICKNAME),
     ]
     comments: list[dict[str, Any]] = []
 
@@ -1512,7 +1537,7 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
     add_comment(
         "fixture_comment_parent_001",
         "fixture_user_current",
-        "契约当前用户",
+        FIXTURE_CURRENT_USER_DEFAULT_NICKNAME,
         "主评论示例",
         0,
         ipLocation="浙江",
@@ -1532,7 +1557,7 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
         parentCommentId="fixture_comment_parent_001",
         replyToCommentId="fixture_comment_parent_001",
         replyToUserId="fixture_user_current",
-        replyToDisplayName="契约当前用户",
+        replyToDisplayName=FIXTURE_CURRENT_USER_DEFAULT_NICKNAME,
     )
 
     # 0 条回复。
@@ -1692,7 +1717,7 @@ def build_user_doc(users: list[dict[str, Any]], posts: list[dict[str, Any]]) -> 
             "following_subject_core": {"description": "关注对象动态 strip 种子。", "items": [{"subjectId": "user_travel_photographer", "subjectType": "user", "displayName": "旅行摄影师", "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png", "coverUrl": "", "subtitle": "刚更新了川西路线", "targetRouteId": "user_profile", "targetObjectId": "user_travel_photographer", "followedAt": "2026-05-20T08:00:00Z", "lastVisitedAt": "2026-06-01T08:00:00Z", "latestChangedAt": "2026-06-02T00:30:00Z", "unreadChangeCount": 2, "hasUnreadChanges": True, "latestChangeReason": "发布了新内容"}, {"subjectId": "circle_sichuan_travel", "subjectType": "circle", "displayName": "四川旅行圈", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_003/v1/cover.png", "subtitle": "圈内有新攻略", "targetRouteId": "circle_detail", "targetObjectId": "circle_sichuan_travel", "followedAt": "2026-05-22T08:00:00Z", "lastVisitedAt": "2026-06-02T01:00:00Z", "latestChangedAt": "2026-06-02T01:00:00Z", "unreadChangeCount": 0, "hasUnreadChanges": False, "latestChangeReason": ""}, {"subjectId": "homepage_sight_emeishan", "subjectType": "homepage", "displayName": "峨眉山", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png", "subtitle": "地点动态有更新", "targetRouteId": "homepage_detail", "targetObjectId": "homepage_sight_emeishan", "followedAt": "2026-05-24T08:00:00Z", "lastVisitedAt": "2026-05-30T08:00:00Z", "latestChangedAt": "2026-06-01T12:20:00Z", "unreadChangeCount": 1, "hasUnreadChanges": True, "latestChangeReason": "新增问答和口碑"}]},
             "settings_core": {"description": "外观、通话设置与开发者诊断最小数据。", "appearance": {"themeMode": "system", "fontScale": 1.0}, "callSettings": {"allowVoiceCall": True, "allowVideoCall": True}, "diagnostics": [{"id": "fixture_ops_event_settings", "message": "契约设置诊断事件"}]},
         },
-        "scenarios": [{"id": "user_profile_basic", "title": "用户主页与关系能力契约种子", "type": "user_profile", "domainId": "user", "seedRefs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "settings_core"], "uiExpectations": {"userIds": ["fixture_user_current", "fixture_user_photo"], "textFragments": ["契约当前用户", "契约摄影师", "日常我"]}, "remoteExpectations": {"profileUserIds": ["fixture_user_current", "fixture_user_photo"], "subAccountIds": ["fixture_persona_daily", "fixture_persona_work"]}, "environments": {"alpha": {"enabled": True, "repository": "mock"}, "beta": {"enabled": True, "repository": "remote", "requiresSeedReset": True}, "gamma": {"enabled": True, "repository": "remote", "requiresSeedReset": True}}}],
+        "scenarios": [{"id": "user_profile_basic", "title": "用户主页与关系能力契约种子", "type": "user_profile", "domainId": "user", "seedRefs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "settings_core"], "uiExpectations": {"userIds": ["fixture_user_current", "fixture_user_photo"], "textFragments": [FIXTURE_CURRENT_USER_DEFAULT_NICKNAME, "契约摄影师", "日常我"]}, "remoteExpectations": {"profileUserIds": ["fixture_user_current", "fixture_user_photo"], "subAccountIds": ["fixture_persona_daily", "fixture_persona_work"]}, "environments": {"alpha": {"enabled": True, "repository": "mock"}, "beta": {"enabled": True, "repository": "remote", "requiresSeedReset": True}, "gamma": {"enabled": True, "repository": "remote", "requiresSeedReset": True}}}],
     }
 
 

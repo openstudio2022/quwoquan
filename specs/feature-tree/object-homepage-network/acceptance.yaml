@@ -29,15 +29,18 @@ domain_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/components/object_page/object_intersection_card_test.dart
-      - file: quwoquan_app/test/components/object_page/object_intersection_section_test.dart
-      - file: quwoquan_app/test/components/object_page/object_page_shell_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
-      - file: quwoquan_app/test/ui/user/author_impact_card_test.dart
-      - file: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
-      - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-      - file: quwoquan_data/tests/produce/test_homepage_introduction_seed.py
-      - file: quwoquan_service/services/entity-service/tests/homepage_handler_test.go
+      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_section__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/object_page/object_page_shell__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/author_impact_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+      - file: quwoquan_data/tests/local_contract/produce/test_homepage_introduction_seed__local_contract_test.py
+      - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/pages/user/userProfile/userProfile_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/circle/circleDetail/circleDetail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -51,14 +54,21 @@ domain_acceptance:
         suite: user_journey
         cases:
         - user_acceptance.object_homepage_network.domain_service.da1.user_journey
-        envs: &id003
-        - gamma
+        envs:
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: da1_local_contract
         cases:
         - local_contract.object_homepage_network.domain_service.da1.da1_local_contract
         envs: *id001
+      - layer: api_integration
+        suite: da1_api_integration
+        cases:
+        - api_integration.object_homepage_network.domain_service.da1.da1_api_integration
+        envs:
+        - beta
+        - gamma
     notes:
     - '[migrated_from_planned] quwoquan_app/test/components/object_page/object_identity_header_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/components/object_page/object_relation_ribbon_test.dart'
@@ -80,11 +90,10 @@ domain_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/cloud/services/content/intersection_object_evidence_test.dart
-      - file: quwoquan_app/test/components/object_page/object_intersection_card_test.dart
-      - file: quwoquan_service/contracts/metadata/entity/homepage/projections/homepage_introduction.yaml
-      - file: quwoquan_service/contracts/metadata/entity/homepage/projections/homepage_introduction_section.yaml
-      - file: quwoquan_service/contracts/metadata/entity/homepage/service.yaml
+      - file: quwoquan_app/test/local_contract/cloud/services/content/intersection_object_evidence__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
     status: implemented
     test_evidence:
       primary:
@@ -112,6 +121,9 @@ domain_acceptance:
     - '[migrated_from_planned] quwoquan_service/tests/entity/homepage_type_fixture_contract_test.go'
     - '[migrated_from_planned] quwoquan_service/tests/content/comment_entity_relation_contract_test.go'
     - '[migrated_from_planned] quwoquan_app/test/cloud/runtime/generated/object_page_dto_contract_test.dart'
+    - '[migrated_from_recorded_reference] quwoquan_service/contracts/metadata/entity/homepage/projections/homepage_introduction.yaml'
+    - '[migrated_from_recorded_reference] quwoquan_service/contracts/metadata/entity/homepage/projections/homepage_introduction_section.yaml'
+    - '[migrated_from_recorded_reference] quwoquan_service/contracts/metadata/entity/homepage/service.yaml'
   DA3:
     title: 运营灰度与回滚验收
     done_when:
@@ -143,7 +155,8 @@ domain_acceptance:
         suite: user_journey
         cases:
         - user_acceptance.object_homepage_network.domain_service.da3.user_journey
-        envs: *id003
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_service/tests/product_ops/object_homepage_rollout_contract_test.go'
     - '[migrated_from_planned] quwoquan_app/test/core/rollout/object_homepage_rollout_policy_test.dart'
@@ -214,7 +227,8 @@ domain_acceptance:
         suite: user_journey
         cases:
         - user_acceptance.object_homepage_network.domain_service.da5.user_journey
-        envs: *id003
+        envs:
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/assistant/object_page_assistant_action_dock_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/assistant/object_page_context_builder_test.dart'

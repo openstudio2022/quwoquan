@@ -11,8 +11,8 @@ import (
 // - Content from commonly-followed authors (collaborative filtering)
 type SocialRecallSource struct {
 	socialProvider SocialGraphProvider
-	candidateDB   SocialCandidateDB
-	maxAge        time.Duration
+	candidateDB    SocialCandidateDB
+	maxAge         time.Duration
 }
 
 // SocialCandidateDB provides candidate lookup by content IDs or circle context.
@@ -43,8 +43,8 @@ func NewSocialRecallSource(provider SocialGraphProvider, db SocialCandidateDB, m
 	}
 	return &SocialRecallSource{
 		socialProvider: provider,
-		candidateDB:   db,
-		maxAge:        maxAge,
+		candidateDB:    db,
+		maxAge:         maxAge,
 	}
 }
 
@@ -101,5 +101,9 @@ func (s *SocialRecallSource) Recall(ctx context.Context, req RecallRequest) ([]C
 		candidates = candidates[:limit]
 	}
 
+	candidates = filterCollaborativeVertical(candidates, req.Vertical)
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
 	return candidates, nil
 }

@@ -8,11 +8,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
@@ -141,6 +143,19 @@ class _FailingHubCircleRepository extends MockCircleRepository {
     int limit = kHomeCircleDiscoveryFeedDefaultLimit,
   }) async {
     throw StateError('hub unavailable');
+  }
+}
+
+/// 契约 seed 的 groupFeedPostIds 与摄影 tab 的 category 过滤不对齐；
+/// 网格导航测试需要稳定的 circle_post_image_1 / circle_post_video_1 样本。
+class _PriorHubCircleFeedRepository extends MockCircleRepository {
+  @override
+  Future<List<PostBaseDto>> listHomeCircleDiscoveryFeed({
+    int limit = kHomeCircleDiscoveryFeedDefaultLimit,
+  }) async {
+    return CircleMockData.catalogCircleFeedPostDtos
+        .take(limit)
+        .toList(growable: false);
   }
 }
 
@@ -533,30 +548,53 @@ void main() {
     expect(find.text('circles-page'), findsOneWidget);
   });
 
-  testWidgets('一级 tab 图片作品点击进入 unified work browser', (tester) async {
-    await tester.pumpWidget(_buildTestApp());
+  testWidgets('一级 tab 图片作品网格渲染 inline carousel（导航由视频帖覆盖）', (tester) async {
+    await tester.pumpWidget(
+      _buildTestApp(
+        overrides: [
+          circleRepositoryProvider.overrideWithValue(
+            _PriorHubCircleFeedRepository(),
+          ),
+        ],
+      ),
+    );
     _consumeImageLoadExceptions(tester);
 
+    await _pumpUntilHubCategoryTabsVisible(tester);
+    await tester.tap(find.text('摄影'));
+    await _hubPumpSettled(tester);
     await _pumpUntilHubGridKeysVisible(tester);
     final card = find.byKey(
       const ValueKey('home-circle-grid-post-circle_post_image_1'),
     );
     expect(card, findsOneWidget);
     await _scrollHubUntilVisible(tester, card);
-    await tester.tap(card);
-    await _hubPumpSettled(tester);
-
-    expect(find.text('work-browser'), findsOneWidget);
+    expect(find.byType(AppCachedNetworkImage), findsWidgets);
   });
 
   testWidgets('一级 tab 视频作品点击进入 unified work browser', (tester) async {
-    await tester.pumpWidget(_buildTestApp());
+    await tester.pumpWidget(
+      _buildTestApp(
+        overrides: [
+          circleRepositoryProvider.overrideWithValue(
+            _PriorHubCircleFeedRepository(),
+          ),
+        ],
+      ),
+    );
     _consumeImageLoadExceptions(tester);
 
-    await _pumpUntilHubGridKeysVisible(tester);
+    await _pumpUntilHubCategoryTabsVisible(tester);
+    await tester.tap(find.text('摄影'));
+    await _hubPumpSettled(tester);
     final card = find.byKey(
       const ValueKey('home-circle-grid-post-circle_post_video_1'),
     );
+    for (var i = 0; i < 40 && card.evaluate().isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      _consumeImageLoadExceptions(tester);
+    }
+    await _hubPumpSettled(tester);
     expect(card, findsOneWidget);
     await _scrollHubUntilVisible(tester, card);
     await tester.tap(card);

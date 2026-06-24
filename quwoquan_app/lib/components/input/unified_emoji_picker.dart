@@ -3,6 +3,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/platform/app_font_families.dart';
 
 /// 统一 Emoji 选择器：最近（为空则不显示）+ 七分类，单页从上到下依次展示，支持上下滑动与 Tab 切换，滚动时 Tab 联动；Tab 无胶囊、中性色，分类间无空行
 class UnifiedEmojiPicker extends ConsumerStatefulWidget {
@@ -266,6 +267,9 @@ class _UnifiedEmojiPickerState extends ConsumerState<UnifiedEmojiPicker> {
                                   style: TextStyle(
                                     fontSize: SettingsSemanticConstants.emojiIconFontSize,
                                     color: fgColor,
+                                    fontFamily: resolveAppThemeFontFamily(),
+                                    fontFamilyFallback:
+                                        resolveAppThemeFontFallbacks(),
                                   ),
                                 ),
                               ),

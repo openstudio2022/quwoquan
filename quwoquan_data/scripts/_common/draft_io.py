@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from _common.article_package import compute_document_sha256, sha256_file, sha256_text
+from _common.creator_assignment import creator_from_payload
 from _common.io import read_json, write_json
 from _common.paths import STAGE_COMPOSE, STAGE_DRAFT, batch_root
 
@@ -124,9 +125,31 @@ def write_prompt(task_id: str, batch_id: str, ref: str, prompt_md: str) -> Path:
     return path
 
 
-def write_placeholder_draft(task_id: str, batch_id: str, ref: str) -> None:
-    """prepare 阶段写占位正文 + pending meta，待会话模型覆盖。"""
+def write_placeholder_draft(
+    task_id: str,
+    batch_id: str,
+    ref: str,
+    *,
+    allow_agent_downgrade: bool = False,
+    downgrade_reason: str = "",
+) -> None:
+    """prepare 阶段写占位正文 + pending meta，待会话模型覆盖。
+
+    A completed agent draft is production evidence.  It may only be reset by an
+    explicit upstream retry/rebuild path, never by an incidental prepare rerun.
+    """
     article = draft_article_path(task_id, batch_id, ref)
+    existing_meta = read_draft_meta(task_id, batch_id, ref) or {}
+    existing_article = article.read_text(encoding="utf-8") if article.exists() else None
+    if (
+        str(existing_meta.get("generator") or "") == GENERATOR_AGENT
+        and existing_article
+        and not is_placeholder(existing_article)
+        and not allow_agent_downgrade
+    ):
+        raise RuntimeError(
+            f"{ref}: refusing to downgrade completed agent draft to pending without explicit upstream retry"
+        )
     article.parent.mkdir(parents=True, exist_ok=True)
     article.write_text(
         f"{PLACEHOLDER_MARKER}\n# 待会话模型创作\n\n请阅读同目录 prompt.md 与 3.compose/writing_pack.json 后创作正文并覆盖 draft.article.md。\n",
@@ -134,7 +157,14 @@ def write_placeholder_draft(task_id: str, batch_id: str, ref: str) -> None:
     )
     write_json(
         draft_meta_path(task_id, batch_id, ref),
-        {"ref": ref, "generator": GENERATOR_PENDING, "model": None, "citedSourcePaths": [], "coveredFacts": []},
+        {
+            "ref": ref,
+            "generator": GENERATOR_PENDING,
+            "model": None,
+            "citedSourcePaths": [],
+            "coveredFacts": [],
+            **({"downgradedFrom": "agent", "downgradeReason": downgrade_reason} if allow_agent_downgrade else {}),
+        },
     )
 
 
@@ -182,6 +212,8 @@ def is_placeholder(article: str | None) -> bool:
 
 def draft_asset_reference_issues(article: str | None, pack: dict[str, Any] | None) -> list[str]:
     if not article:
+        return []
+    if str((pack or {}).get("publishMediaMode") or "").strip() == "text_only":
         return []
     refs = {raw.split("/")[-1] for raw in _ASSET_REF_RE.findall(article)}
     if not refs:
@@ -292,6 +324,7 @@ def write_agent_draft(
         cited_source_paths=cited_source_paths,
     )
     pack = read_writing_pack(task_id, batch_id, ref) or {}
+    creator_assignment = creator_from_payload(pack)
     creative = pack.get("creativeBrief") if isinstance(pack.get("creativeBrief"), dict) else {}
     reader_promise = str(creative.get("readerPromise") or "兑现写作任务承诺").strip()
     title_match = re.search(r"(?m)^#\s+(.+)$", article_markdown or "")
@@ -324,6 +357,7 @@ def write_agent_draft(
             "coveredFacts": list(covered_facts),
             "extractedEntities": list(extracted_entities or []),
             "extractedTags": list(extracted_tags or []),
+            **creator_assignment,
             "creativePlan": creative_plan,
             "selfCritique": self_critique,
             "promptSha256": facts.get("promptSha256"),

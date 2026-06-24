@@ -17,12 +17,14 @@ import yaml
 from _common.io import read_json, write_json
 from _common.paths import (
     COMMITTED_TASKS_ROOT,
+    clear_intent_label_cache,
     committed_task_notes,
     committed_task_progress,
     committed_task_root,
     committed_task_runs_dir,
     committed_task_spec,
     normalize_task_id,
+    sanitize_intent_label,
     task_lock_path,
     task_root,
 )
@@ -93,6 +95,7 @@ def scaffold_spec(
     category: str | None = None,
     archetype: str | None = None,
     title: str | None = None,
+    intent_label: str | None = None,
     parent_task_id: str | None = None,
     scope: dict[str, Any] | None = None,
     content: dict[str, Any] | None = None,
@@ -101,7 +104,9 @@ def scaffold_spec(
 ) -> dict[str, Any]:
     """脚手架最小化 spec：只写身份 + scope + 非空 content/acceptance override。
 
-    空的 content/conditionAxes 等不写出，运行期由 _defaults.yaml 继承链补齐。
+    空的 content 等不写出，运行期由 _defaults.yaml 继承链补齐。
+    intentLabel = ≤16 字人类可读任务意图标签（顶层批次目录前缀真相源），
+    缺省由任务名清洗截断；用户指令/对话应给出更精炼的意图标签。
     """
     task_id = build_task_id(vertical, organize_by, key, category, name)
     arche = archetype or ORGANIZE_ARCHETYPE.get(organize_by, "region_category_coverage")
@@ -109,6 +114,7 @@ def scaffold_spec(
         "schemaVersion": SPEC_VERSION,
         "taskId": task_id,
         "title": title or f"{key}{category or ''}{name}",
+        "intentLabel": sanitize_intent_label(intent_label or name),
         "taskArchetype": arche,
         "vertical": vertical,
         "organizeBy": organize_by,
@@ -138,7 +144,6 @@ def init_progress(task_id: str, remaining: list[str] | None = None) -> dict[str,
             "categoriesDone": [],
         },
         "anglesByEntity": {},
-        "conditionCells": [],
         "openGaps": [],
         "counts": {"entities": 0, "posts": 0},
         "lastRunId": None,
@@ -160,6 +165,8 @@ def read_yaml(path: Path) -> Any:
 def save_spec(spec: dict[str, Any]) -> Path:
     path = committed_task_spec(spec["taskId"])
     write_yaml(path, spec)
+    # committed 规格变更后，刷新 intentLabel 解析缓存（顶层批次目录前缀依赖它）。
+    clear_intent_label_cache()
     return path
 
 
@@ -211,7 +218,7 @@ def defaults_chain(task_id: str) -> list[dict[str, Any]]:
 def defaults_merged(task_id: str) -> dict[str, Any]:
     """合并继承默认链（不含 task 自身），即某 task 的「继承菜单」（list 替换语义）。
 
-    供 lint 判 task 显式 conditionAxes 是否为地域全谱子集、检测冗余 content 复用。
+    供 lint 检测冗余 content 复用。
     """
     merged: dict[str, Any] = {}
     for doc in defaults_chain(task_id):

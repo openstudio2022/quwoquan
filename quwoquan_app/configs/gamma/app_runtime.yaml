@@ -2,12 +2,12 @@ schemaVersion: app-runtime-config
 runtime:
   appRuntimeEnv: gamma
   appDataSource: remote
-  gatewayBaseUrl: http://127.0.0.1:19000
-  realtimeBaseUrl: ws://127.0.0.1:19000
-  mediaAvatarCdnBaseUrl: http://127.0.0.1:19100
-  mediaImageCdnBaseUrl: http://127.0.0.1:19100
-  mediaVideoCdnBaseUrl: http://127.0.0.1:19100
-  mediaUploadBaseUrl: http://127.0.0.1:19100
+  gatewayBaseUrl: https://gamma-api.quwoquan-env.test:19000
+  realtimeBaseUrl: wss://gamma-api.quwoquan-env.test:19000
+  mediaAvatarCdnBaseUrl: https://gamma-avatar.quwoquan-env.test:19100
+  mediaImageCdnBaseUrl: https://gamma-image.quwoquan-env.test:19100
+  mediaVideoCdnBaseUrl: https://gamma-video.quwoquan-env.test:19100
+  mediaUploadBaseUrl: https://gamma-upload.quwoquan-env.test:19100
   currentUserId: fixture_user_current
 seed:
   enabled: false

@@ -23,6 +23,8 @@ abstract final class PageAccessInternalRoutes {
   static const String profileMediaPickerCamera = 'page_internal_profile_media_camera';
   static const String profileMediaPickerGallery = 'page_internal_profile_media_gallery';
 
+  static const String addContactScanGallery = 'page_internal_add_contact_scan_gallery';
+
   static const String globalSurfaceCircleEditCreate = 'page_internal_global_circle_edit_create';
 
   static const String publishLocationSearch = 'page_internal_publish_location_search';

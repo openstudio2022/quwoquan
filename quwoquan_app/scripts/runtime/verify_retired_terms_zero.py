@@ -149,6 +149,25 @@ ALLOWLIST_PATHS = {
     ".cursor/rules/16-outstanding-risk-backlog.mdc",
     # 环境维度迁移说明：「历史 dev 口径映射到 alpha」描述真实迁移语义，非退役命名。
     ".cursor/commands/infra.md",
+    # 测试迁移治理文档/脚本需要显式描述被禁旧口径与收敛策略，属门禁元信息。
+    ".cursor/commands/continue-dev.md",
+    ".cursor/rules/03-testing.mdc",
+    "docs/agent_command_simulation_matrix.md",
+    "specs/03_TESTING_STRATEGY.md",
+    "specs/feature-tree/runtime/runtime-test-pyramid/spec.md",
+    "specs/feature-tree/runtime/runtime-test-pyramid/design.md",
+    "specs/feature-tree/runtime/runtime-test-pyramid/acceptance.yaml",
+    "specs/feature-tree/runtime/runtime-testinfra/spec.md",
+    "specs/feature-tree/runtime/runtime-testinfra/design.md",
+    "specs/feature-tree/runtime/runtime-testinfra/acceptance.yaml",
+    "specs/product/intersection-definition-and-application.md",
+    "agent_ops/scaffold/generate_canonical_test_bridges.py",
+    "agent_ops/scaffold/generate_app_canonical_test_wrappers.py",
+    "agent_ops/scaffold/test_directory_inventory_lib.py",
+    "agent_ops/scaffold/verify_test_directory_inventory.py",
+    "agent_ops/scaffold/verify_test_no_fake.py",
+    "agent_ops/scaffold/verify_test_specs.py",
+    "quwoquan_service/scripts/recommendation/verify_impact_help_type_registry.py",
     # 规格冻结语言「零历史兼容」= 零向后兼容 + 单一真相源，是约束表述而非退役命名。
     "specs/feature-tree/global-search-experience/spec.md",
     # 用户可见登录功能「历史账号一键登录 / 历史会话」为冻结产品概念（two-state-one-tap-login）。

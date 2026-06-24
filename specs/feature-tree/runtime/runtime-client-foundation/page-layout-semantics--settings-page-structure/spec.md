@@ -6,7 +6,7 @@
 
 ## 范围
 
-- SettingsPage、DeveloperSettingsPage、ChatSettingsPage、AssistantManagementPage
+- SettingsPage、ChatSettingsPage、AssistantManagementPage
 - 建议抽取 SettingsSection、SettingsRow 等可复用组件
 
 ## 与父节点关系

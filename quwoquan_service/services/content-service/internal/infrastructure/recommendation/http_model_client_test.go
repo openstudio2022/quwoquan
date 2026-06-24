@@ -1,17 +1,23 @@
 package recommendation
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/runtime/recpolicy"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
+}
 
 func TestHTTPModelServiceClient_Predict_Unreachable(t *testing.T) {
 	// No server listening on this port; client should return error.
@@ -61,37 +67,31 @@ func TestCascadeScorer_FallbackWhenHTTPClientFails(t *testing.T) {
 }
 
 func TestHTTPModelServiceClient_Predict_ContractStable(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := NewHTTPModelServiceClient("http://rec-model.test", 2*time.Second)
+	client.httpClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "expected POST", http.StatusMethodNotAllowed)
-			return
+			t.Fatalf("expected POST, got %s", r.Method)
 		}
 		if r.URL.Path != "/v1/score" {
-			http.Error(w, "expected /v1/score", http.StatusNotFound)
-			return
+			t.Fatalf("expected /v1/score, got %s", r.URL.Path)
 		}
 
 		var req rtrec.ModelPredictRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+			t.Fatalf("decode request: %v", err)
 		}
 		if req.Scenario != "content_feed" || req.UserID != "u1" || req.SessionID != "s1" {
-			http.Error(w, "unexpected request fields", http.StatusBadRequest)
-			return
+			t.Fatalf("unexpected request fields: %+v", req)
 		}
 		if len(req.Candidates) != 1 || req.Candidates[0].ContentID != "c1" {
-			http.Error(w, "unexpected candidates", http.StatusBadRequest)
-			return
+			t.Fatalf("unexpected candidates: %+v", req.Candidates)
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"scores":[{"contentId":"c1","score":0.93}]}`))
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(bytes.NewReader([]byte(`{"scores":[{"contentId":"c1","score":0.93}]}`))),
+		}, nil
 	})
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
-
-	client := NewHTTPModelServiceClient(srv.URL, 2*time.Second)
 	resp, err := client.Predict(context.Background(), &rtrec.ModelPredictRequest{
 		Scenario:  "content_feed",
 		UserID:    "u1",
@@ -101,9 +101,6 @@ func TestHTTPModelServiceClient_Predict_ContractStable(t *testing.T) {
 		},
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "EOF") {
-			t.Skipf("httptest localhost returned EOF (environment may restrict loopback): %v", err)
-		}
 		t.Fatalf("predict should succeed: %v", err)
 	}
 	if len(resp.Scores) != 1 {

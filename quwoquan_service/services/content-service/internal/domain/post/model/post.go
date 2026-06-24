@@ -106,6 +106,7 @@ type MediaAsset struct {
 	AccessPolicy            map[string]any `json:"accessPolicy" bson:"accessPolicy"`
 	OriginalAccess          map[string]any `json:"originalAccess" bson:"originalAccess"`
 	CoverStrategy           string         `json:"coverStrategy" bson:"coverStrategy"`
+	CoverFrameTimeMs        int64          `json:"coverFrameTimeMs" bson:"coverFrameTimeMs"`
 	ManualCoverAssetId      string         `json:"manualCoverAssetId" bson:"manualCoverAssetId"`
 	CreatedAt               time.Time      `json:"createdAt" bson:"createdAt"`
 	UpdatedAt               time.Time      `json:"updatedAt" bson:"updatedAt"`
@@ -136,6 +137,7 @@ type Post struct {
 	MediaUrls                 []string       `json:"mediaUrls" bson:"mediaUrls"`
 	MediaItems                any            `json:"mediaItems" bson:"mediaItems"`
 	CoverUrl                  string         `json:"coverUrl" bson:"coverUrl"`
+	ThumbnailUrl              string         `json:"thumbnailUrl" bson:"thumbnailUrl"`
 	ArticleMarkdown           string         `json:"articleMarkdown" bson:"articleMarkdown"`
 	ArticleMarkdownVersion    string         `json:"articleMarkdownVersion" bson:"articleMarkdownVersion"`
 	ArticleMarkdownDigest     string         `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`
@@ -146,6 +148,8 @@ type Post struct {
 	ArticleTemplate           string         `json:"articleTemplate" bson:"articleTemplate"`
 	ArticleFontPreset         string         `json:"articleFontPreset" bson:"articleFontPreset"`
 	VideoUrl                  string         `json:"videoUrl" bson:"videoUrl"`
+	CoverStrategy             string         `json:"coverStrategy" bson:"coverStrategy"`
+	CoverFrameTimeMs          int64          `json:"coverFrameTimeMs" bson:"coverFrameTimeMs"`
 	Location                  GeoPoint       `json:"location" bson:"location"`
 	LocationName              string         `json:"locationName" bson:"locationName"`
 	PrimaryHomepageId         string         `json:"primaryHomepageId" bson:"primaryHomepageId"`

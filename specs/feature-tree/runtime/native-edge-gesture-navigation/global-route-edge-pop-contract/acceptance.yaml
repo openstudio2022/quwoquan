@@ -78,7 +78,7 @@ gwt_acceptance:
         cases:
         - user_acceptance.runtime.native_edge_gesture_navigation.global_route_edge_pop_contract.user_journey
         envs:
-        - gamma
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/app/navigation/app_router_edge_pop_contract_test.dart'
 execution:

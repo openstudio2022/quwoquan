@@ -82,7 +82,7 @@ sit_acceptance:
         cases:
         - user_acceptance.runtime.native_edge_gesture_navigation.sit_edge_swipe.user_journey
         envs:
-        - gamma
+        - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/content/edge_gesture/immersive_media_edge_swipe_back_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/app/navigation/home_edge_swipe_exit_guard_test.dart'

@@ -12,19 +12,21 @@ let package = Package(
     ],
     dependencies: [
         .package(name: "flutter_webrtc", path: "../flutter_webrtc"),
+        .package(url: "https://github.com/webrtc-sdk/Specs.git", exact: "144.7559.01"),
     ],
     targets: [
         .target(
             name: "livekit_client",
             dependencies: [
                 .product(name: "flutter-webrtc", package: "flutter_webrtc"),
+                .product(name: "WebRTC", package: "Specs"),
             ],
-            path: "Sources/livekit_client",
+            path: "../Classes",
             linkerSettings: [
-                .linkedFramework("AVFoundation"),
                 .linkedFramework("Accelerate"),
+                .linkedFramework("AVFoundation"),
+                .linkedFramework("CoreMedia"),
                 .linkedFramework("ReplayKit"),
-                .linkedFramework("UIKit"),
             ]
         ),
     ]

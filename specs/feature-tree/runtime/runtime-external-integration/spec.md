@@ -7,6 +7,9 @@
 ## 适用范围与约束
 - 适用于跨业务域复用的外部能力（location、sms、ocr 等）。
 - 不承载业务聚合逻辑；仅负责外部能力集成、治理、错误标准化与可观测。
+- 外部依赖总表见 `docs/external_service_dependency_registry.md`，机读登记真相源见 `docs/external_service_registry.yaml`。
+- 所有新增业务 SaaS 依赖默认必须先登记，再通过 `integration-service` 暴露给 App 或业务服务。
+- 对象存储 presign、自托管媒体面、离线公开源抓取、客户端平台能力属于豁免项，但仍必须登记并说明理由。
 
 ## 验收标准
 - A1：新增 integration-service 基础骨架、配置分层与版本化发布配置。

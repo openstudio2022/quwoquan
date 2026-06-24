@@ -19,13 +19,14 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
-import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 import 'package:simple_icons/simple_icons.dart';
+
+const String _defaultNicknameSample = '新同学_260622_6698692';
+final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
 void main() {
   test('登录原因主副标题覆盖全部 reason 且不重复', () {
@@ -378,7 +379,7 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('趣友3909'), findsOneWidget);
+    expect(find.textContaining(_defaultNicknamePattern), findsOneWidget);
     expect(find.text('138****3909'), findsOneWidget);
     expect(find.text(UITextConstants.loginReturningHeroTitle), findsOneWidget);
     expect(
@@ -404,9 +405,7 @@ void main() {
     expect(repo.loginOneTapCalls, 0);
   });
 
-  testWidgets('软退出后凭证有效期内：returning 主按钮为一键登录、refresh 成功无红字', (
-    tester,
-  ) async {
+  testWidgets('软退出后凭证有效期内：returning 主按钮为一键登录、refresh 成功无红字', (tester) async {
     final repo = _RecordingAuthRepository();
     await _pumpLogin(
       tester,
@@ -481,96 +480,87 @@ void main() {
     expect(find.byType(PhoneNumberField), findsOneWidget);
   });
 
-  testWidgets(
-    '过期 returning 记住手机号 + 已勾协议：点主按钮自动预填并自动发码进验证码',
-    (tester) async {
-      final repo = _RecordingAuthRepository();
-      await _pumpLogin(
-        tester,
-        authStore: _ExpiredPhoneOtpStore(),
-        authRepository: repo,
-        oneTapClient: const _UnavailableOneTapLoginClient(),
-        capabilities: CapabilityProfile.mobile,
-      );
-      await tester.pump(const Duration(milliseconds: 50));
+  testWidgets('过期 returning 记住手机号 + 已勾协议：点主按钮自动预填并自动发码进验证码', (tester) async {
+    final repo = _RecordingAuthRepository();
+    await _pumpLogin(
+      tester,
+      authStore: _ExpiredPhoneOtpStore(),
+      authRepository: repo,
+      oneTapClient: const _UnavailableOneTapLoginClient(),
+      capabilities: CapabilityProfile.mobile,
+    );
+    await tester.pump(const Duration(milliseconds: 50));
 
-      // 先勾选协议（图一返回头部的协议勾选），满足自动发码前置。
-      await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-      await tester.pump();
+    // 先勾选协议（图一返回头部的协议勾选），满足自动发码前置。
+    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
+    await tester.pump();
 
-      await tester.tap(find.text(UITextConstants.loginReturningSmsPrimary));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
+    await tester.tap(find.text(UITextConstants.loginReturningSmsPrimary));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
 
-      // 自动预填完整手机号、自动发码（无需用户单独点击获取验证码）→ 直接进验证码态。
-      expect(repo.refreshTokenCalls, 0);
-      expect(repo.sendOtpCalls, 1);
-      expect(find.byType(OtpCodeBoxes), findsOneWidget);
-      final phoneField = tester.widget<CupertinoTextField>(
-        find.byType(CupertinoTextField).first,
-      );
-      expect(phoneField.controller?.text, '18013813909');
-      expect(find.text(UITextConstants.loginFailed), findsNothing);
-    },
-  );
+    // 自动预填完整手机号、自动发码（无需用户单独点击获取验证码）→ 直接进验证码态。
+    expect(repo.refreshTokenCalls, 0);
+    expect(repo.sendOtpCalls, 1);
+    expect(find.byType(OtpCodeBoxes), findsOneWidget);
+    final phoneField = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField).first,
+    );
+    expect(phoneField.controller?.text, '18013813909');
+    expect(find.text(UITextConstants.loginFailed), findsNothing);
+  });
 
-  testWidgets(
-    '过期 returning 记住手机号 + 未勾协议：点主按钮预填但不自动发码并提示勾选',
-    (tester) async {
-      final repo = _RecordingAuthRepository();
-      await _pumpLogin(
-        tester,
-        authStore: _ExpiredPhoneOtpStore(),
-        authRepository: repo,
-        oneTapClient: const _UnavailableOneTapLoginClient(),
-        capabilities: CapabilityProfile.mobile,
-      );
-      await tester.pump(const Duration(milliseconds: 50));
+  testWidgets('过期 returning 记住手机号 + 未勾协议：点主按钮预填但不自动发码并提示勾选', (tester) async {
+    final repo = _RecordingAuthRepository();
+    await _pumpLogin(
+      tester,
+      authStore: _ExpiredPhoneOtpStore(),
+      authRepository: repo,
+      oneTapClient: const _UnavailableOneTapLoginClient(),
+      capabilities: CapabilityProfile.mobile,
+    );
+    await tester.pump(const Duration(milliseconds: 50));
 
-      await tester.tap(find.text(UITextConstants.loginReturningSmsPrimary));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
+    await tester.tap(find.text(UITextConstants.loginReturningSmsPrimary));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
 
-      // 未勾协议不得自动发码，但仍预填手机号并停在可发码态，给出明确下一步。
-      expect(repo.sendOtpCalls, 0);
-      expect(find.byType(OtpCodeBoxes), findsNothing);
-      final phoneField = tester.widget<CupertinoTextField>(
-        find.byType(CupertinoTextField).first,
-      );
-      expect(phoneField.controller?.text, '18013813909');
-    },
-  );
+    // 未勾协议不得自动发码，但仍预填手机号并停在可发码态，给出明确下一步。
+    expect(repo.sendOtpCalls, 0);
+    expect(find.byType(OtpCodeBoxes), findsNothing);
+    final phoneField = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField).first,
+    );
+    expect(phoneField.controller?.text, '18013813909');
+  });
 
-  testWidgets(
-    '其他手机号入口仍为空号手动输入：不预填、不自动发码',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(430, 932));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      final repo = _RecordingAuthRepository();
-      await _pumpLogin(
-        tester,
-        authStore: _ExpiredPhoneOtpStore(),
-        authRepository: repo,
-        oneTapClient: const _UnavailableOneTapLoginClient(),
-        capabilities: CapabilityProfile.mobile,
-      );
-      await tester.pump(const Duration(milliseconds: 50));
+  testWidgets('其他手机号入口仍为空号手动输入：不预填、不自动发码', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repo = _RecordingAuthRepository();
+    await _pumpLogin(
+      tester,
+      authStore: _ExpiredPhoneOtpStore(),
+      authRepository: repo,
+      oneTapClient: const _UnavailableOneTapLoginClient(),
+      capabilities: CapabilityProfile.mobile,
+    );
+    await tester.pump(const Duration(milliseconds: 50));
 
-      // 主动选择「其他手机号」走空号手动输入流程（与记住号自动续登区分）。
-      final phoneEntry = find.text(UITextConstants.loginMethodPhoneFull);
-      await tester.ensureVisible(phoneEntry);
-      await tester.tap(phoneEntry);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+    // 主动选择「其他手机号」走空号手动输入流程（与记住号自动续登区分）。
+    final phoneEntry = find.text(UITextConstants.loginMethodPhoneFull);
+    await tester.ensureVisible(phoneEntry);
+    await tester.tap(phoneEntry);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
-      expect(repo.sendOtpCalls, 0);
-      expect(find.byType(OtpCodeBoxes), findsNothing);
-      final phoneField = tester.widget<CupertinoTextField>(
-        find.byType(CupertinoTextField).first,
-      );
-      expect(phoneField.controller?.text, isEmpty);
-    },
-  );
+    expect(repo.sendOtpCalls, 0);
+    expect(find.byType(OtpCodeBoxes), findsNothing);
+    final phoneField = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField).first,
+    );
+    expect(phoneField.controller?.text, isEmpty);
+  });
 
   testWidgets('手机号验证码输入包裹 AutofillGroup，支持系统自动填充', (tester) async {
     await _pumpLogin(
@@ -850,6 +840,81 @@ void main() {
     expect(store.lastRememberedMaskedIdentifier, '180****3909');
   });
 
+  testWidgets('手机号 OTP 输入首位后保持焦点，可连续输入而不需重新点按', (tester) async {
+    final repo = _RecordingAuthRepository();
+    await _pumpLogin(
+      tester,
+      authStore: _MutableAuthStore(),
+      authRepository: repo,
+      oneTapClient: const _UnavailableOneTapLoginClient(),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.enterText(
+      find.byType(CupertinoTextField).first,
+      '18013813909',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
+    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
+    await tester.pump();
+    await tester.tap(find.text(UITextConstants.loginSendOtp));
+    await tester.pump(const Duration(milliseconds: 250));
+
+    final otpFieldFinder = find.byType(CupertinoTextField).last;
+    await tester.showKeyboard(otpFieldFinder);
+    await tester.pump();
+    expect(
+      tester.widget<CupertinoTextField>(otpFieldFinder).focusNode?.hasFocus,
+      isTrue,
+    );
+
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: '1',
+        selection: TextSelection.collapsed(offset: 1),
+      ),
+    );
+    await tester.pump();
+    expect(
+      tester.widget<CupertinoTextField>(otpFieldFinder).controller?.text,
+      '1',
+    );
+    expect(
+      tester.widget<CupertinoTextField>(otpFieldFinder).focusNode?.hasFocus,
+      isTrue,
+      reason: '首位输入后不应因 phase 切换重建而丢焦点',
+    );
+
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: '12',
+        selection: TextSelection.collapsed(offset: 2),
+      ),
+    );
+    await tester.pump();
+    expect(
+      tester.widget<CupertinoTextField>(otpFieldFinder).controller?.text,
+      '12',
+    );
+    expect(
+      tester.widget<CupertinoTextField>(otpFieldFinder).focusNode?.hasFocus,
+      isTrue,
+      reason: '第二位输入前不应要求用户重新点击验证码框',
+    );
+
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: '123456',
+        selection: TextSelection.collapsed(offset: 6),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(repo.phoneLoginCalls, 1);
+  });
+
   testWidgets('验证码格在 337px 可用宽度下自适应不溢出', (tester) async {
     await tester.binding.setSurfaceSize(const Size(393, 852));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -886,6 +951,55 @@ void main() {
     expect(boxFinder, findsNWidgets(6));
     final rightMost = tester.getRect(boxFinder.at(5));
     expect(rightMost.right, lessThanOrEqualTo(otpRect.right));
+  });
+
+  testWidgets('验证码格在 306.3px 可用宽度下会压缩间距且不溢出', (tester) async {
+    final controller = TextEditingController(text: '123456');
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Center(
+          child: SizedBox(
+            width: 306.3,
+            child: OtpCodeBoxes(
+              controller: controller,
+              enabled: true,
+              hasError: false,
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+
+    final otpRect = tester.getRect(find.byType(OtpCodeBoxes));
+    final boxFinder = find.descendant(
+      of: find.byType(OtpCodeBoxes),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Container &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration! as BoxDecoration).borderRadius != null &&
+            widget.constraints != null,
+      ),
+    );
+    expect(boxFinder, findsNWidgets(6));
+
+    final firstRect = tester.getRect(boxFinder.at(0));
+    final secondRect = tester.getRect(boxFinder.at(1));
+    final rightMost = tester.getRect(boxFinder.at(5));
+
+    expect(firstRect.left, greaterThanOrEqualTo(otpRect.left));
+    expect(rightMost.right, lessThanOrEqualTo(otpRect.right));
+    expect(
+      secondRect.left - firstRect.right,
+      lessThan(AppSpacing.loginOtpBoxGap),
+      reason: '窄宽度下应先压缩格间距，避免 44x44 最小输入格被撑出溢出',
+    );
   });
 
   testWidgets('手机号 OTP 12 状态都有就近 UI 表达', (tester) async {
@@ -1079,8 +1193,11 @@ void main() {
       LoginPhoneOtpPhase.accountSuspended,
       LoginPhoneOtpPhase.accountDeleted,
     ]) {
-      expect(labelFor(phase), UITextConstants.loginSwitchPhone,
-          reason: phase.name);
+      expect(
+        labelFor(phase),
+        UITextConstants.loginSwitchPhone,
+        reason: phase.name,
+      );
       final state = LoginPhoneOtpState(
         phase: phase,
         phone: '18013813909',
@@ -1438,7 +1555,7 @@ class _RecordingAuthRepository implements AuthRepository {
       'identityOrigin': 'phone',
       'subAccountCount': 1,
       'accountHint': <String, dynamic>{
-        'displayName': '趣友3909',
+        'displayName': _defaultNicknameSample,
         'maskedPhone': '180****3909',
       },
     });
@@ -1500,7 +1617,7 @@ class _RecordingAuthRepository implements AuthRepository {
       'identityOrigin': 'phone',
       'subAccountCount': 1,
       'accountHint': <String, dynamic>{
-        'displayName': '趣友3909',
+        'displayName': _defaultNicknameSample,
         'maskedPhone': '138****3909',
       },
     });
@@ -1513,6 +1630,22 @@ class _RecordingAuthRepository implements AuthRepository {
   Future<void> bindCredential({
     required String credentialType,
     required String credentialKey,
+    String? displayLabel,
+  }) async {}
+
+  @override
+  Future<void> bindPhoneWithOtp({
+    required String phone,
+    required String otpCode,
+    String? displayLabel,
+  }) async {}
+
+  @override
+  Future<void> bindCarrierPhone({
+    required String vendor,
+    required String carrierToken,
+    required String deviceId,
+    required String platform,
     String? displayLabel,
   }) async {}
 
@@ -1603,7 +1736,7 @@ class _RememberedLoginStore extends _MutableAuthStore {
     lastForegroundAuthCheckAtEpochMs: 0,
     rememberedLoginMethod: AuthRememberedLoginMethod.oneTap,
     rememberedLoginMaskedIdentifier: '138****3909',
-    rememberedDisplayName: '趣友3909',
+    rememberedDisplayName: _defaultNicknameSample,
     rememberedAvatarUrl: '',
     manualLoggedOut: false,
     launchPromptDismissed: false,
@@ -1656,8 +1789,7 @@ class _ExpiredQuickLoginStore extends _MutableAuthStore {
     rememberedLoginMaskedIdentifier: '138****0002',
     rememberedDisplayName: '趣友B',
     rememberedAvatarUrl: '',
-    quickLoginExpiresAtEpochMs:
-        DateTime.now().millisecondsSinceEpoch - 1000,
+    quickLoginExpiresAtEpochMs: DateTime.now().millisecondsSinceEpoch - 1000,
     manualLoggedOut: true,
     launchPromptDismissed: false,
   );

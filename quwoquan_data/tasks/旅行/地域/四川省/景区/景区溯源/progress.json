@@ -1,7 +1,7 @@
 {
   "schemaVersion": "quwoquan.task.progress",
   "taskId": "旅行/地域/四川省/景区/景区溯源",
-  "updatedAt": "2026-06-20T18:10:34.321441+00:00",
+  "updatedAt": "2026-06-24T13:09:26.493254+00:00",
   "coverage": {
     "entities": {
       "done": [],
@@ -13,7 +13,6 @@
     "categoriesDone": []
   },
   "anglesByEntity": {},
-  "conditionCells": [],
   "openGaps": [],
   "counts": {
     "entities": 0,

@@ -13,7 +13,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_context.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_rollout_context.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -46,6 +48,9 @@ void main() {
         overrides: [
           // 「为什么推荐这里」交集卡需要当前用户（你×这里）；游客无「你」即收起（G2）。
           currentUserIdProvider.overrideWithValue('viewer_demo'),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageIntersectionRepository(),
+          ),
         ],
         child: const MaterialApp(
           home: HomepageDetailPage(homepageId: 'homepage_sight_west_lake'),
@@ -134,7 +139,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
-    expect(find.text(UITextConstants.homepageInfoUnavailableTitle), findsOneWidget);
+    expect(find.text(UITextConstants.homepageLoadFailedTitle), findsOneWidget);
     expect(find.text('主页不存在或已下线'), findsOneWidget);
     expect(find.text(UITextConstants.back), findsOneWidget);
 
@@ -230,6 +235,29 @@ void main() {
 }
 
 class _NoNetworkHttpOverrides extends HttpOverrides {}
+
+class _HomepageIntersectionRepository extends MockIntersectionRepository {
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = 6,
+  }) async {
+    return <IntersectionReason>[
+      IntersectionReason(
+        kind: 'shared_interest',
+        dimension: 'interest',
+        objectKind: objectType,
+        relationObjectId: objectId,
+        primaryText: '你和这里都与西湖摄影有关',
+        source: 'test',
+        intersectionId: 'ix_homepage_west_lake',
+        actionType: 'open',
+        actionTargetId: objectId,
+      ),
+    ];
+  }
+}
 
 class _RecordingHomepageRepository extends MockHomepageRepository {
   String? lastReferralSource;

@@ -47,17 +47,14 @@ func TestResolveObjectPageIntersectionsUsesContentService(t *testing.T) {
 		CanonicalEntityID: "entity:university:pku",
 	}
 
-	reasons, intersections := resolveObjectPageIntersections(context.Background(), "viewer_1", homepage, nil)
+	reasons := resolveObjectPageIntersections(context.Background(), "viewer_1", homepage, nil)
 	if len(reasons) != 1 {
 		t.Fatalf("reasons len=%d want 1", len(reasons))
-	}
-	if len(intersections) != 1 {
-		t.Fatalf("intersections len=%d want 1", len(intersections))
 	}
 	if got := reasons[0]["intersectionId"]; got != "remote_1" {
 		t.Fatalf("reasons[0].intersectionId=%v want remote_1", got)
 	}
-	if got := intersections[0]["source"]; got != "remote" {
-		t.Fatalf("intersections[0].source=%v want remote", got)
+	if got := reasons[0]["source"]; got != "remote" {
+		t.Fatalf("reasons[0].source=%v want remote", got)
 	}
 }

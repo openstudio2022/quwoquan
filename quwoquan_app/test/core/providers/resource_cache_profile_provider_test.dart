@@ -25,6 +25,10 @@ void main() {
           container.read(appResourceCacheProfileProvider),
           same(AppResourceCacheProfile.compact),
         );
+        final resourceProfile = container.read(appResourceCacheProfileProvider);
+        expect(resourceProfile.maxMediaDownloadCacheSizeMb, 96);
+        expect(resourceProfile.maxConcurrentMediaDownloads, 2);
+        expect(resourceProfile.maxPostObjectCacheEntries, 120);
       }
     });
 
@@ -45,6 +49,12 @@ void main() {
         container.read(appResourceCacheProfileProvider),
         same(AppResourceCacheProfile.regular),
       );
+      expect(
+        container
+            .read(appResourceCacheProfileProvider)
+            .maxConcurrentMediaDownloads,
+        3,
+      );
 
       container
           .read(responsiveProvider.notifier)
@@ -52,6 +62,12 @@ void main() {
       expect(
         container.read(appResourceCacheProfileProvider),
         same(AppResourceCacheProfile.expanded),
+      );
+      expect(
+        container
+            .read(appResourceCacheProfileProvider)
+            .maxMediaDownloadCacheSizeMb,
+        384,
       );
     });
   });

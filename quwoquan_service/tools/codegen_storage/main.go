@@ -69,11 +69,15 @@ func main() {
 			orderedTables := orderedTableNames(storage.Tables, src.Tables)
 			for _, tableName := range orderedTables {
 				tableDef := storage.Tables[tableName]
-				ctx.migrationSeq = migrationSeq
-				if err := generateMigrationSQL(ctx, tableName, tableDef); err != nil {
-					exitErr(fmt.Errorf("gen migration %s: %w", tableName, err))
+				if src.skipsMigration(tableName) {
+					fmt.Printf("  migration: %s (manual)\n", tableName)
+				} else {
+					ctx.migrationSeq = migrationSeq
+					if err := generateMigrationSQL(ctx, tableName, tableDef); err != nil {
+						exitErr(fmt.Errorf("gen migration %s: %w", tableName, err))
+					}
+					migrationSeq++
 				}
-				migrationSeq++
 
 				if err := generatePGStore(ctx, tableName, tableDef); err != nil {
 					exitErr(fmt.Errorf("gen pg store %s: %w", tableName, err))
@@ -115,12 +119,13 @@ type Manifest struct {
 }
 
 type Source struct {
-	Metadata       string                       `yaml:"metadata"`
-	DomainPkg      string                       `yaml:"domain_pkg"`
-	Tables         []string                     `yaml:"tables"`
-	NameOverrides  map[string]string            `yaml:"name_overrides"`
-	TypeOverrides  map[string]map[string]string `yaml:"type_overrides"`
-	CacheOverrides map[string]CacheOverride     `yaml:"cache_overrides"`
+	Metadata            string                       `yaml:"metadata"`
+	DomainPkg           string                       `yaml:"domain_pkg"`
+	Tables              []string                     `yaml:"tables"`
+	MigrationSkipTables []string                     `yaml:"migration_skip_tables"`
+	NameOverrides       map[string]string            `yaml:"name_overrides"`
+	TypeOverrides       map[string]map[string]string `yaml:"type_overrides"`
+	CacheOverrides      map[string]CacheOverride     `yaml:"cache_overrides"`
 }
 
 type CacheOverride struct {
@@ -134,6 +139,15 @@ func (s Source) resolveStoreName(entity string) string {
 		return short
 	}
 	return entity
+}
+
+func (s Source) skipsMigration(tableName string) bool {
+	for _, candidate := range s.MigrationSkipTables {
+		if candidate == tableName {
+			return true
+		}
+	}
+	return false
 }
 
 func loadManifest(path string) (*Manifest, error) {
@@ -213,10 +227,11 @@ type CollectionDef struct {
 }
 
 type MongoIdx struct {
-	Name   string         `yaml:"name"`
-	Keys   map[string]any `yaml:"keys"`
-	Unique bool           `yaml:"unique"`
-	Sparse bool           `yaml:"sparse"`
+	Name     string         `yaml:"name"`
+	Keys     map[string]any `yaml:"keys"`
+	KeyOrder []string       `yaml:"key_order"`
+	Unique   bool           `yaml:"unique"`
+	Sparse   bool           `yaml:"sparse"`
 }
 
 type RedisCacheDef struct {
@@ -331,8 +346,8 @@ func hasConstraint(ss []string, target string) bool {
 
 // --- Naming (delegated to runtime/codegen) ---
 
-func toGoName(snakeName string) string  { return codegen.SnakeToGoName(snakeName) }
-func toSnake(s string) string           { return codegen.CamelToSnake(s) }
+func toGoName(snakeName string) string   { return codegen.SnakeToGoName(snakeName) }
+func toSnake(s string) string            { return codegen.CamelToSnake(s) }
 func entityToSnake(entity string) string { return codegen.CamelToSnake(entity) }
 
 func sqlTypeToGo(sqlType string, notNull bool) string {

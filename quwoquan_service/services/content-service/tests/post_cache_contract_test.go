@@ -12,12 +12,9 @@ import (
 )
 
 func TestCacheFindByID_MissThenHit(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("mongo unavailable")
-	}
-
 	ctx := context.Background()
-	innerStore := persistence.NewMongoPostStore(mongoDB.Collection("posts_cache_test"))
+	db := requireMongoDB(t)
+	innerStore := persistence.NewMongoPostStore(db.Collection("posts_cache_test"))
 	redisClient := testRouter.Scene("general")
 	cachedRepo := cache.NewPostCacheRepository(innerStore, redisClient, nil)
 
@@ -30,7 +27,7 @@ func TestCacheFindByID_MissThenHit(t *testing.T) {
 	if err := innerStore.Create(ctx, post); err != nil {
 		t.Fatalf("seed post: %v", err)
 	}
-	defer mongoDB.Collection("posts_cache_test").Drop(ctx)
+	defer db.Collection("posts_cache_test").Drop(ctx)
 
 	found, ok := cachedRepo.FindByID(ctx, "cache_test_01")
 	if !ok || found == nil {
@@ -58,12 +55,9 @@ func TestCacheFindByID_MissThenHit(t *testing.T) {
 }
 
 func TestCacheInvalidateOnUpdate(t *testing.T) {
-	if mongoDB == nil {
-		t.Skip("mongo unavailable")
-	}
-
 	ctx := context.Background()
-	innerStore := persistence.NewMongoPostStore(mongoDB.Collection("posts_cache_inv_test"))
+	db := requireMongoDB(t)
+	innerStore := persistence.NewMongoPostStore(db.Collection("posts_cache_inv_test"))
 	redisClient := testRouter.Scene("general")
 	cachedRepo := cache.NewPostCacheRepository(innerStore, redisClient, nil)
 
@@ -77,7 +71,7 @@ func TestCacheInvalidateOnUpdate(t *testing.T) {
 	if err := innerStore.Create(ctx, post); err != nil {
 		t.Fatalf("seed post: %v", err)
 	}
-	defer mongoDB.Collection("posts_cache_inv_test").Drop(ctx)
+	defer db.Collection("posts_cache_inv_test").Drop(ctx)
 
 	cachedRepo.FindByID(ctx, "cache_inv_01")
 

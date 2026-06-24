@@ -212,66 +212,88 @@ class ProfileIosGroupedCell extends StatelessWidget {
           horizontal: AppSpacing.containerMd,
           vertical: verticalPadding ?? AppSpacing.containerSm,
         ),
-        child: Row(
-          children: <Widget>[
-            if (leading != null) ...<Widget>[
-              leading!,
-              SizedBox(width: AppSpacing.containerSm),
-            ],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosSubheadline,
-                      fontWeight: AppTypography.regular,
-                      color: labelColor,
-                    ),
-                  ),
-                  if (subtitle != null &&
-                      subtitle!.trim().isNotEmpty) ...<Widget>[
-                    SizedBox(height: AppSpacing.intraGroupXs),
-                    Text(
-                      subtitle!,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosFootnote,
-                        color: AppColors.iosSecondaryLabel(context),
-                        height: AppTypography.lineHeightCompact,
-                      ),
-                    ),
-                  ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final hasTrailingText =
+                trailingText != null && trailingText!.trim().isNotEmpty;
+            final hasTrailingSlot =
+                hasTrailingText || trailing != null || showChevron;
+            final trailingSlotWidth = constraints.maxWidth * 0.56;
+            return Row(
+              children: <Widget>[
+                if (leading != null) ...<Widget>[
+                  leading!,
+                  SizedBox(width: AppSpacing.containerSm),
                 ],
-              ),
-            ),
-            if (trailingText != null &&
-                trailingText!.trim().isNotEmpty) ...<Widget>[
-              Flexible(
-                child: Text(
-                  trailingText!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosFootnote,
-                    color: AppColors.iosSecondaryLabel(context),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosSubheadline,
+                          fontWeight: AppTypography.regular,
+                          color: labelColor,
+                        ),
+                      ),
+                      if (subtitle != null &&
+                          subtitle!.trim().isNotEmpty) ...<Widget>[
+                        SizedBox(height: AppSpacing.intraGroupXs),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            color: AppColors.iosSecondaryLabel(context),
+                            height: AppTypography.lineHeightCompact,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              ),
-              SizedBox(width: AppSpacing.intraGroupSm),
-            ],
-            trailing ?? const SizedBox.shrink(),
-            if (showChevron) ...<Widget>[
-              if (trailing != null) SizedBox(width: AppSpacing.intraGroupSm),
-              Icon(
-                CupertinoIcons.chevron_forward,
-                size: AppSpacing.iconSmall,
-                color: AppColors.iosTertiaryLabel(context),
-              ),
-            ],
-          ],
+                if (hasTrailingSlot) ...<Widget>[
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  SizedBox(
+                    width: trailingSlotWidth,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: <Widget>[
+                        if (hasTrailingText)
+                          Flexible(
+                            child: Text(
+                              trailingText!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontSize: AppTypography.iosFootnote,
+                                color: AppColors.iosSecondaryLabel(context),
+                              ),
+                            ),
+                          ),
+                        if (trailing != null) ...<Widget>[
+                          if (hasTrailingText)
+                            SizedBox(width: AppSpacing.intraGroupSm),
+                          trailing!,
+                        ],
+                        if (showChevron) ...<Widget>[
+                          if (hasTrailingText || trailing != null)
+                            SizedBox(width: AppSpacing.intraGroupSm),
+                          Icon(
+                            CupertinoIcons.chevron_forward,
+                            size: AppSpacing.iconSmall,
+                            color: AppColors.iosTertiaryLabel(context),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
         ),
       ),
     );

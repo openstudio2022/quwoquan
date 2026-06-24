@@ -131,6 +131,10 @@ class BehaviorEvent {
     this.position,
     this.channelId,
     this.rankingVersion,
+    this.reasonVersion,
+    this.recallPath,
+    this.contentVertical,
+    this.supplySource,
     this.commentLength,
     this.authorId,
     this.referralSource,
@@ -153,7 +157,7 @@ class BehaviorEvent {
   /// Client-generated idempotency key. Remote service de-duplicates by this id.
   final String? clientEventId;
 
-  /// Closed feedback state: visible/impressed/dwell/interaction/negative.
+  /// Closed feedback state: visible/impressed/click/dwell/interaction/negative.
   final String? state;
 
   /// Content format: photo, video, article, moment (for ENER type stats)
@@ -176,6 +180,18 @@ class BehaviorEvent {
   /// feed 下发精排管线版本（来源 DiscoveryFeedPage.rankingVersion）；
   /// 闭合「召回 → 下发(rankingVersion) → 曝光 → 互动」AB / replay 归因。
   final String? rankingVersion;
+
+  /// feed 下发理由生成版本（envelope.reasonVersion），用于解释理由效果归因。
+  final String? reasonVersion;
+
+  /// item 下发召回路径（如 tag_recall/collab_i2i/collab_u2i/repository_fallback）。
+  final String? recallPath;
+
+  /// item 推荐垂类（如 general/travel_photography）。
+  final String? contentVertical;
+
+  /// item 供给来源（ugc/data_engineering/product_ops 等）。
+  final String? supplySource;
 
   /// Comment text length (for comment action)
   final int? commentLength;
@@ -236,6 +252,13 @@ class BehaviorEvent {
     if (channelId != null && channelId!.isNotEmpty) 'channelId': channelId,
     if (rankingVersion != null && rankingVersion!.isNotEmpty)
       'rankingVersion': rankingVersion,
+    if (reasonVersion != null && reasonVersion!.isNotEmpty)
+      'reasonVersion': reasonVersion,
+    if (recallPath != null && recallPath!.isNotEmpty) 'recallPath': recallPath,
+    if (contentVertical != null && contentVertical!.isNotEmpty)
+      'contentVertical': contentVertical,
+    if (supplySource != null && supplySource!.isNotEmpty)
+      'supplySource': supplySource,
     if (commentLength != null) 'commentLength': commentLength,
     if (authorId != null && authorId!.isNotEmpty) 'authorId': authorId,
     if (referralSource != null) 'referralSource': referralSource!.value,
@@ -278,6 +301,10 @@ abstract class BehaviorRepository {
     int? position,
     String? channelId,
     String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
     String? feedRequestId,
   }) {
     return reportEvents(
@@ -293,6 +320,10 @@ abstract class BehaviorRepository {
           position: position,
           channelId: channelId,
           rankingVersion: rankingVersion,
+          reasonVersion: reasonVersion,
+          recallPath: recallPath,
+          contentVertical: contentVertical,
+          supplySource: supplySource,
           feedRequestId: feedRequestId,
         ),
       ],

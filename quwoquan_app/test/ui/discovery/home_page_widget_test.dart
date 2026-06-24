@@ -441,7 +441,8 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(_buildApp());
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byKey(TestKeys.globalSearchLauncherButton), findsOneWidget);
       expect(find.text(UITextConstants.globalXiaoquSearchHint), findsOneWidget);

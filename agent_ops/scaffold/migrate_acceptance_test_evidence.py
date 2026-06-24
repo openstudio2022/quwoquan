@@ -13,17 +13,17 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 FEATURE_TREE = ROOT / "specs" / "feature-tree"
 
-LAYER_BY_OLD_PREFIX = {
-    "T1": "local_contract",
-    "T2": "local_contract",
-    "T3": "api_integration",
-    "T4": "user_acceptance",
+RETIRED_NUMERIC_LAYER_MAP = {
+    1: "local_contract",
+    2: "local_contract",
+    3: "api_integration",
+    4: "user_acceptance",
 }
 
 ENVS_BY_LAYER = {
-    "local_contract": ["local"],
+    "local_contract": ["local", "alpha"],
     "api_integration": ["beta", "gamma"],
-    "user_acceptance": ["gamma"],
+    "user_acceptance": ["gamma_local", "prod_gray_initial"],
 }
 
 ACCEPTANCE_GROUPS = {
@@ -96,7 +96,7 @@ GENERIC_CASES = {
 
 def slug(value: str) -> str:
     value = value.strip().lower()
-    value = re.sub(r"^t[1-4][_-]?", "", value)
+    value = re.sub(r"^[tT][1-4][_-]?", "", value)
     value = re.sub(r"[^a-z0-9]+", "_", value)
     value = re.sub(r"_+", "_", value).strip("_")
     return value or "contract"
@@ -104,9 +104,9 @@ def slug(value: str) -> str:
 
 def layer_for_entry(entry: Any) -> str:
     text = str(entry)
-    match = re.match(r"^(T[1-4])(?:_|$)", text)
+    match = re.match(r"^[Tt]([1-4])(?:_|$)", text)
     if match:
-        return LAYER_BY_OLD_PREFIX[match.group(1)]
+        return RETIRED_NUMERIC_LAYER_MAP[int(match.group(1))]
     if text.startswith(("local_contract.", "api_integration.", "user_acceptance.")):
         return text.split(".", 1)[0]
     return "local_contract"

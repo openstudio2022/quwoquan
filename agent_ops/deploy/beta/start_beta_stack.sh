@@ -17,6 +17,8 @@ GATEWAY_PORT="${GATEWAY_PORT}"
 PRODUCT_OPS_PORT="${PRODUCT_OPS_PORT}"
 PLATFORM_OPS_PORT="${PLATFORM_OPS_PORT}"
 OPS_PORTAL_PORT="${OPS_PORTAL_PORT}"
+CONTENT_PORT="${CONTENT_PORT}"
+PRODUCT_OPS_SERVICE_PORT="${PRODUCT_OPS_SERVICE_PORT}"
 CDN_DOMAIN="${CDN_DOMAIN:-cdn.beta.local}"
 DEVICE_ID="${DEVICE_ID:-}"
 START_APP="${START_APP:-1}"
@@ -116,12 +118,12 @@ write_env() {
 APP_RUNTIME_ENV=beta
 APP_DATA_SOURCE=remote
 CDN_DOMAIN=${CDN_DOMAIN}
-GATEWAY_BASE_URL=http://127.0.0.1:${GATEWAY_PORT}
-PRODUCT_OPS_BASE_URL=http://127.0.0.1:${PRODUCT_OPS_PORT}
+GATEWAY_BASE_URL=https://beta-api.quwoquan-env.test:${GATEWAY_PORT}
+PRODUCT_OPS_BASE_URL=https://beta-product-ops.quwoquan-env.test:${PRODUCT_OPS_PORT}
 PLATFORM_OPS_BASE_URL=http://127.0.0.1:${PLATFORM_OPS_PORT}
 OPS_PORTAL_BASE_URL=http://127.0.0.1:${OPS_PORTAL_PORT}
 OBSERVABILITY_BASE_URL=http://127.0.0.1:9200
-RECOMMENDATION_BASE_URL=http://127.0.0.1:${GATEWAY_PORT}
+RECOMMENDATION_BASE_URL=http://127.0.0.1:${CONTENT_PORT}
 EOF
 }
 
@@ -301,13 +303,13 @@ case "$ACTION" in
     start_bg app-beta "${APP_BETA_CMD[@]}"
     start_bg platform-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/platform-ops-service' && APP_ENV='beta' PLATFORM_OPS_SERVICE_ADDR='127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
     wait_service_ok platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz" 60 || true
-    start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && APP_ENV='beta' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
-    start_bg ops-portal env VITE_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_PORT}" VITE_PLATFORM_OPS_BASE_URL="http://127.0.0.1:${PLATFORM_OPS_PORT}" VITE_GATEWAY_BASE_URL="http://127.0.0.1:${GATEWAY_PORT}" npm --prefix "$OPS_PORTAL_DIR" run dev -- --host 127.0.0.1 --port "${OPS_PORTAL_PORT}"
-    wait_service_ok product-ops "http://127.0.0.1:${PRODUCT_OPS_PORT}/healthz" 60 || true
+    start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && APP_ENV='beta' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
+    start_bg ops-portal env VITE_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}" VITE_PLATFORM_OPS_BASE_URL="http://127.0.0.1:${PLATFORM_OPS_PORT}" VITE_GATEWAY_BASE_URL="http://127.0.0.1:${CONTENT_PORT}" npm --prefix "$OPS_PORTAL_DIR" run dev -- --host 127.0.0.1 --port "${OPS_PORTAL_PORT}"
+    wait_service_ok product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz" 60 || true
     wait_service_ok ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/" 60 || true
     maybe_open_ops
-    status_one app-beta "http://127.0.0.1:${GATEWAY_PORT}/healthz"
-    status_one product-ops "http://127.0.0.1:${PRODUCT_OPS_PORT}/healthz"
+    status_one app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz"
+    status_one product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz"
     status_one platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz"
     status_one ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/"
     ;;
@@ -320,11 +322,11 @@ case "$ACTION" in
   status)
     [[ -f "$ENV_FILE" ]] && echo "[beta] env: $ENV_FILE" || echo "[beta] env: missing"
     echo "[beta] app launch: $([[ "$START_APP" == "1" ]] && echo enabled || echo disabled)${DEVICE_ID:+ device=$DEVICE_ID}"
-    status_one app-beta "http://127.0.0.1:${GATEWAY_PORT}/healthz"
-    status_one product-ops "http://127.0.0.1:${PRODUCT_OPS_PORT}/healthz"
+    status_one app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz"
+    status_one product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz"
     status_one platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz"
     status_one ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/"
-    status_one gateway "http://127.0.0.1:${GATEWAY_PORT}/healthz"
+    status_one gateway "http://127.0.0.1:${CONTENT_PORT}/healthz"
     ;;
   *)
     usage >&2

@@ -12,7 +12,7 @@ scope:
   out_of_scope: []
 gwt_acceptance:
   GWT1:
-    title: page horizontal quality GWT
+    title: metadata surface page matrix 与 gamma/prod gray 页面验收闭环
     given:
     - 前置条件明确。
     when:
@@ -20,35 +20,241 @@ gwt_acceptance:
     then:
     - 可观察结果符合预期。
     done_when:
-    - 最小价值点闭环。
+    - metadata ui_surfaces 中每个 surface 都有统一 page-level user_acceptance case。
+    - 每个 surface 至少覆盖加载成功、空态/权限/错误态、主 CTA、trace/referral/feedRequestId 传递。
+    - page wrapper、local_contract 断言和 api_integration 反向绑定均可追溯。
     edge_cases: []
     contract_refs: []
     performance_points: []
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/app/shell/web_page_max_width_frame_test.dart
-      - file: quwoquan_app/test/app/shell/web_create_groups_test.dart
-      - file: quwoquan_app/test/app/shell/web_featured_no_queue_test.dart
-      - file: quwoquan_app/test/app/shell/web_feed_post_tap_viewer_test.dart
-      - file: quwoquan_app/test/app/shell/web_chat_frame_test.dart
-      - file: quwoquan_app/test/app/shell/main_app_shell_widget_test.dart
-    status: pending
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chatList/chatList_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/startGroupChat/startGroupChat_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chatDetail/chatDetail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chatSettings/chatSettings_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chatManage/chatManage_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chatAddMembers/chatAddMembers_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chatTransferOwnership/chatTransferOwnership_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chatAdmins/chatAdmins_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chatMemberSearch/chatMemberSearch_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistantHalfSheet/assistantHalfSheet_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/personalAssistantDialog/personalAssistantDialog_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistantSettings/assistantSettings_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistantHistory/assistantHistory_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistantFeedback/assistantFeedback_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/search/globalSearchLanding/globalSearchLanding_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/search/globalSearchSuggestions/globalSearchSuggestions_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/search/globalSearchNetworkResults/globalSearchNetworkResults_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/search/locationPlaceLanding/locationPlaceLanding_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepagePicker/homepagePicker_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/suggestHomepage/suggestHomepage_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageIntroduction/homepageIntroduction_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageClaim/homepageClaim_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageMaintenance/homepageMaintenance_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageStatusReport/homepageStatusReport_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/circle/circleDetail/circleDetail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/content/myFootprint/myFootprint_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/userProfile/userProfile_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/addContact/addContact_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/addContactSearch/addContactSearch_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/addContactScan/addContactScan_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/addContactPhone/addContactPhone_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/addContactConfirm/addContactConfirm_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/myQrCode/myQrCode_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/app/shell/web_page_max_width_frame__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/shell/web_create_groups__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/shell/web_featured_no_queue__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/shell/web_feed_post_tap_viewer__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/shell/web_chat_frame__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/shell/main_app_shell_widget__local_contract_test.dart
+      - file: quwoquan_service/services/chat-service/tests/api_integration/group_lifecycle_contract__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/message_sync_contract__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/social_contacts_contract__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/send_message_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/conversation_error_contract__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/conversation_settings_contract__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/member_management_contract__api_integration_test.go
+      - file: quwoquan_app/test/api_integration/gamma/assistant_alpha_beta_simulator__api_integration_test.dart
+      - file: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
+      - file: quwoquan_app/test/api_integration/gamma/assistant_skill_comparison__api_integration_test.dart
+      - file: quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
+      - file: quwoquan_service/services/search-service/tests/api_integration/storage_ttl_contract__api_integration_test.go
+      - file: quwoquan_service/services/search-service/tests/api_integration/search_signal_contract__api_integration_test.go
+      - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
+      - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
+      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_crud_contract__api_integration_test.go
+      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_feed_contract__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/contact_discovery_contract__api_integration_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go
+    status: implemented
     test_evidence:
       primary:
-      - layer: local_contract
-        suite: contract
+      - layer: user_acceptance
+        suite: page_surface_matrix
         cases:
-        - local_contract.runtime.runtime_client_foundation.page_horizontal_quality.contract
-        envs: &id001
-        - local
+        - user_acceptance.page.chatList.load_success
+        - user_acceptance.page.chatList.empty_permission_error
+        - user_acceptance.page.chatList.primary_cta
+        - user_acceptance.page.chatList.trace_context
+        - user_acceptance.page.startGroupChat.load_success
+        - user_acceptance.page.startGroupChat.empty_permission_error
+        - user_acceptance.page.startGroupChat.primary_cta
+        - user_acceptance.page.startGroupChat.trace_context
+        - user_acceptance.page.chatDetail.load_success
+        - user_acceptance.page.chatDetail.empty_permission_error
+        - user_acceptance.page.chatDetail.primary_cta
+        - user_acceptance.page.chatDetail.trace_context
+        - user_acceptance.page.chatSettings.load_success
+        - user_acceptance.page.chatSettings.empty_permission_error
+        - user_acceptance.page.chatSettings.primary_cta
+        - user_acceptance.page.chatSettings.trace_context
+        - user_acceptance.page.chatManage.load_success
+        - user_acceptance.page.chatManage.empty_permission_error
+        - user_acceptance.page.chatManage.primary_cta
+        - user_acceptance.page.chatManage.trace_context
+        - user_acceptance.page.chatAddMembers.load_success
+        - user_acceptance.page.chatAddMembers.empty_permission_error
+        - user_acceptance.page.chatAddMembers.primary_cta
+        - user_acceptance.page.chatAddMembers.trace_context
+        - user_acceptance.page.chatTransferOwnership.load_success
+        - user_acceptance.page.chatTransferOwnership.empty_permission_error
+        - user_acceptance.page.chatTransferOwnership.primary_cta
+        - user_acceptance.page.chatTransferOwnership.trace_context
+        - user_acceptance.page.chatAdmins.load_success
+        - user_acceptance.page.chatAdmins.empty_permission_error
+        - user_acceptance.page.chatAdmins.primary_cta
+        - user_acceptance.page.chatAdmins.trace_context
+        - user_acceptance.page.chatMemberSearch.load_success
+        - user_acceptance.page.chatMemberSearch.empty_permission_error
+        - user_acceptance.page.chatMemberSearch.primary_cta
+        - user_acceptance.page.chatMemberSearch.trace_context
+        - user_acceptance.page.assistantHalfSheet.load_success
+        - user_acceptance.page.assistantHalfSheet.empty_permission_error
+        - user_acceptance.page.assistantHalfSheet.primary_cta
+        - user_acceptance.page.assistantHalfSheet.trace_context
+        - user_acceptance.page.personalAssistantDialog.load_success
+        - user_acceptance.page.personalAssistantDialog.empty_permission_error
+        - user_acceptance.page.personalAssistantDialog.primary_cta
+        - user_acceptance.page.personalAssistantDialog.trace_context
+        - user_acceptance.page.assistantSettings.load_success
+        - user_acceptance.page.assistantSettings.empty_permission_error
+        - user_acceptance.page.assistantSettings.primary_cta
+        - user_acceptance.page.assistantSettings.trace_context
+        - user_acceptance.page.assistantHistory.load_success
+        - user_acceptance.page.assistantHistory.empty_permission_error
+        - user_acceptance.page.assistantHistory.primary_cta
+        - user_acceptance.page.assistantHistory.trace_context
+        - user_acceptance.page.assistantFeedback.load_success
+        - user_acceptance.page.assistantFeedback.empty_permission_error
+        - user_acceptance.page.assistantFeedback.primary_cta
+        - user_acceptance.page.assistantFeedback.trace_context
+        - user_acceptance.page.globalSearchLanding.load_success
+        - user_acceptance.page.globalSearchLanding.empty_permission_error
+        - user_acceptance.page.globalSearchLanding.primary_cta
+        - user_acceptance.page.globalSearchLanding.trace_context
+        - user_acceptance.page.globalSearchSuggestions.load_success
+        - user_acceptance.page.globalSearchSuggestions.empty_permission_error
+        - user_acceptance.page.globalSearchSuggestions.primary_cta
+        - user_acceptance.page.globalSearchSuggestions.trace_context
+        - user_acceptance.page.globalSearchNetworkResults.load_success
+        - user_acceptance.page.globalSearchNetworkResults.empty_permission_error
+        - user_acceptance.page.globalSearchNetworkResults.primary_cta
+        - user_acceptance.page.globalSearchNetworkResults.trace_context
+        - user_acceptance.page.locationPlaceLanding.load_success
+        - user_acceptance.page.locationPlaceLanding.empty_permission_error
+        - user_acceptance.page.locationPlaceLanding.primary_cta
+        - user_acceptance.page.locationPlaceLanding.trace_context
+        - user_acceptance.page.homepagePicker.load_success
+        - user_acceptance.page.homepagePicker.empty_permission_error
+        - user_acceptance.page.homepagePicker.primary_cta
+        - user_acceptance.page.homepagePicker.trace_context
+        - user_acceptance.page.suggestHomepage.load_success
+        - user_acceptance.page.suggestHomepage.empty_permission_error
+        - user_acceptance.page.suggestHomepage.primary_cta
+        - user_acceptance.page.suggestHomepage.trace_context
+        - user_acceptance.page.homepageDetail.load_success
+        - user_acceptance.page.homepageDetail.empty_permission_error
+        - user_acceptance.page.homepageDetail.primary_cta
+        - user_acceptance.page.homepageDetail.trace_context
+        - user_acceptance.page.homepageIntroduction.load_success
+        - user_acceptance.page.homepageIntroduction.empty_permission_error
+        - user_acceptance.page.homepageIntroduction.primary_cta
+        - user_acceptance.page.homepageIntroduction.trace_context
+        - user_acceptance.page.homepageClaim.load_success
+        - user_acceptance.page.homepageClaim.empty_permission_error
+        - user_acceptance.page.homepageClaim.primary_cta
+        - user_acceptance.page.homepageClaim.trace_context
+        - user_acceptance.page.homepageMaintenance.load_success
+        - user_acceptance.page.homepageMaintenance.empty_permission_error
+        - user_acceptance.page.homepageMaintenance.primary_cta
+        - user_acceptance.page.homepageMaintenance.trace_context
+        - user_acceptance.page.homepageStatusReport.load_success
+        - user_acceptance.page.homepageStatusReport.empty_permission_error
+        - user_acceptance.page.homepageStatusReport.primary_cta
+        - user_acceptance.page.homepageStatusReport.trace_context
+        - user_acceptance.page.circleDetail.load_success
+        - user_acceptance.page.circleDetail.empty_permission_error
+        - user_acceptance.page.circleDetail.primary_cta
+        - user_acceptance.page.circleDetail.trace_context
+        - user_acceptance.page.myFootprint.load_success
+        - user_acceptance.page.myFootprint.empty_permission_error
+        - user_acceptance.page.myFootprint.primary_cta
+        - user_acceptance.page.myFootprint.trace_context
+        - user_acceptance.page.userProfile.load_success
+        - user_acceptance.page.userProfile.empty_permission_error
+        - user_acceptance.page.userProfile.primary_cta
+        - user_acceptance.page.userProfile.trace_context
+        - user_acceptance.page.profileCareerInterests.load_success
+        - user_acceptance.page.profileCareerInterests.empty_permission_error
+        - user_acceptance.page.profileCareerInterests.primary_cta
+        - user_acceptance.page.profileCareerInterests.trace_context
+        - user_acceptance.page.addContact.load_success
+        - user_acceptance.page.addContact.empty_permission_error
+        - user_acceptance.page.addContact.primary_cta
+        - user_acceptance.page.addContact.trace_context
+        - user_acceptance.page.addContactSearch.load_success
+        - user_acceptance.page.addContactSearch.empty_permission_error
+        - user_acceptance.page.addContactSearch.primary_cta
+        - user_acceptance.page.addContactSearch.trace_context
+        - user_acceptance.page.addContactScan.load_success
+        - user_acceptance.page.addContactScan.empty_permission_error
+        - user_acceptance.page.addContactScan.primary_cta
+        - user_acceptance.page.addContactScan.trace_context
+        - user_acceptance.page.addContactPhone.load_success
+        - user_acceptance.page.addContactPhone.empty_permission_error
+        - user_acceptance.page.addContactPhone.primary_cta
+        - user_acceptance.page.addContactPhone.trace_context
+        - user_acceptance.page.addContactConfirm.load_success
+        - user_acceptance.page.addContactConfirm.empty_permission_error
+        - user_acceptance.page.addContactConfirm.primary_cta
+        - user_acceptance.page.addContactConfirm.trace_context
+        - user_acceptance.page.myQrCode.load_success
+        - user_acceptance.page.myQrCode.empty_permission_error
+        - user_acceptance.page.myQrCode.primary_cta
+        - user_acceptance.page.myQrCode.trace_context
+        envs:
+        - gamma_local
+        - prod_gray_initial
+      supporting:
       - layer: local_contract
         suite: gwt1_local_contract
         cases:
         - local_contract.runtime.runtime_client_foundation.page_horizontal_quality.gwt1_local_contract
-        envs: *id001
-      supporting: []
-    notes: []
+        envs:
+        - local
+      - layer: api_integration
+        suite: gwt1_api_integration
+        cases:
+        - api_integration.runtime.runtime_client_foundation.page_horizontal_quality.gwt1_api_integration
+        envs:
+        - beta
+        - gamma
+    notes:
+    - 'metadata page truth source: specs/gates/user_acceptance_page_inventory.yaml'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

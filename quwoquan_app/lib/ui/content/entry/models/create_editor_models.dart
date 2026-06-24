@@ -6,6 +6,7 @@ import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/markdown/article_markdown_codec.dart';
 import 'package:quwoquan_app/ui/content/markdown/qwq_markdown_ast.dart';
+part 'create_editor_models_article_blocks.dart';
 
 enum EditorStartAction { gallery, write, capture }
 
@@ -28,6 +29,16 @@ class IdentitySuggestion {
 enum CreateEditorKind { media, text }
 
 enum CreateMediaKind { none, images, video }
+
+enum CreateDraftFlowKind { article, image, video }
+
+extension CreateDraftFlowKindX on CreateDraftFlowKind {
+  EditorStartAction get startAction => switch (this) {
+    CreateDraftFlowKind.article => EditorStartAction.write,
+    CreateDraftFlowKind.image => EditorStartAction.gallery,
+    CreateDraftFlowKind.video => EditorStartAction.capture,
+  };
+}
 
 enum TitlePresentation { collapsed, expanded }
 
@@ -503,112 +514,6 @@ ArticleDocumentData buildArticleDocumentFromBlocks(
   );
 }
 
-List<CreateTextBlock> buildArticleBlocksFromDocument(
-  ArticleDocumentData document,
-) {
-  final body = _normalizeArticleBody(document.body);
-  final semanticBlocks =
-      document.blocks
-          .where(
-            (block) =>
-                block.type == ArticleDocumentBlockType.heading2 ||
-                block.type == ArticleDocumentBlockType.heading3 ||
-                block.type == ArticleDocumentBlockType.sectionTitle,
-          )
-          .toList(growable: false)
-        ..sort((left, right) {
-          final offsetCompare = left.offset.compareTo(right.offset);
-          if (offsetCompare != 0) {
-            return offsetCompare;
-          }
-          return left.id.compareTo(right.id);
-        });
-  final assets =
-      document.assets.where((asset) => asset.hasImage).toList(growable: false)
-        ..sort((left, right) => left.offset.compareTo(right.offset));
-  final blocks = <CreateTextBlock>[];
-  var cursor = 0;
-  var textSeed = 0;
-  var semanticIndex = 0;
-  var assetIndex = 0;
-
-  void appendTextSegment(String value) {
-    final lines = _normalizeArticleBody(value)
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList(growable: false);
-    for (final line in lines) {
-      final orderedMatch = _orderedArticleLinePattern.firstMatch(line);
-      if (orderedMatch != null) {
-        final content = line.substring(orderedMatch.end).trim();
-        blocks.add(
-          CreateTextBlock.orderedItem(
-            id: 'ordered_${textSeed++}',
-            text: content,
-          ),
-        );
-      } else {
-        final bulletMatch = _bulletArticleLinePattern.firstMatch(line);
-        if (bulletMatch != null) {
-          final content = line.substring(bulletMatch.end).trim();
-          blocks.add(
-            CreateTextBlock.bulletItem(
-              id: 'bullet_${textSeed++}',
-              text: content,
-            ),
-          );
-        } else {
-          blocks.add(
-            CreateTextBlock.paragraph(
-              id: 'paragraph_${textSeed++}',
-              text: line,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  while (semanticIndex < semanticBlocks.length || assetIndex < assets.length) {
-    final nextSemanticOffset = semanticIndex < semanticBlocks.length
-        ? semanticBlocks[semanticIndex].offset.clamp(cursor, body.length)
-        : body.length;
-    final nextAssetOffset = assetIndex < assets.length
-        ? assets[assetIndex].offset.clamp(cursor, body.length)
-        : body.length;
-    final nextOffset = nextSemanticOffset < nextAssetOffset
-        ? nextSemanticOffset
-        : nextAssetOffset;
-    appendTextSegment(body.substring(cursor, nextOffset));
-    cursor = nextOffset;
-
-    while (semanticIndex < semanticBlocks.length &&
-        semanticBlocks[semanticIndex].offset.clamp(0, body.length) <= cursor) {
-      blocks.add(_editorBlockFromDocumentBlock(semanticBlocks[semanticIndex]));
-      semanticIndex += 1;
-    }
-    while (assetIndex < assets.length &&
-        assets[assetIndex].offset.clamp(0, body.length) <= cursor) {
-      final asset = assets[assetIndex];
-      blocks.add(
-        CreateTextBlock.image(
-          id: asset.id,
-          imagePath: asset.imageUrl.trim(),
-          imageLayout: _imageLayoutFromPage(asset.imageLayout),
-        ),
-      );
-      assetIndex += 1;
-    }
-  }
-  appendTextSegment(body.substring(cursor));
-
-  if (blocks.isEmpty) {
-    return createDefaultArticleBlocks();
-  }
-  return blocks;
-}
-
 String buildArticlePlainTextFromDocument(ArticleDocumentData document) {
   if (document.blocks.isNotEmpty) {
     return buildArticlePlainText(buildArticleBlocksFromDocument(document));
@@ -763,6 +668,7 @@ typedef ContentPublishDraftComposite = CreateEditorState;
 class CreateEditorState {
   const CreateEditorState({
     required this.editorKind,
+    required this.draftFlowKind,
     required this.mediaKind,
     required this.imagePaths,
     required this.videoPath,
@@ -772,6 +678,9 @@ class CreateEditorState {
     required this.videoTrimStartMs,
     required this.videoTrimEndMs,
     required this.videoCoverTimeMs,
+    required this.videoCoverStrategy,
+    required this.videoWidth,
+    required this.videoHeight,
     required this.videoMuted,
     required this.currentMediaIndex,
     required this.title,
@@ -793,12 +702,14 @@ class CreateEditorState {
 
   factory CreateEditorState.initial({
     CreateEditorKind editorKind = CreateEditorKind.text,
+    CreateDraftFlowKind draftFlowKind = CreateDraftFlowKind.article,
   }) {
     final initialDocument = createDefaultArticleDocument();
     final initialBlocks = buildArticleBlocksFromDocument(initialDocument);
     final initialPages = buildArticlePagesSnapshotFromDocument(initialDocument);
     return CreateEditorState(
       editorKind: editorKind,
+      draftFlowKind: draftFlowKind,
       mediaKind: CreateMediaKind.none,
       imagePaths: const <String>[],
       videoPath: '',
@@ -808,6 +719,9 @@ class CreateEditorState {
       videoTrimStartMs: 0,
       videoTrimEndMs: 0,
       videoCoverTimeMs: 0,
+      videoCoverStrategy: 'first_frame',
+      videoWidth: 0,
+      videoHeight: 0,
       videoMuted: false,
       currentMediaIndex: 0,
       title: '',
@@ -828,6 +742,7 @@ class CreateEditorState {
   }
 
   final CreateEditorKind editorKind;
+  final CreateDraftFlowKind draftFlowKind;
   final CreateMediaKind mediaKind;
   final List<String> imagePaths;
   final String videoPath;
@@ -837,6 +752,9 @@ class CreateEditorState {
   final int videoTrimStartMs;
   final int videoTrimEndMs;
   final int videoCoverTimeMs;
+  final String videoCoverStrategy;
+  final int videoWidth;
+  final int videoHeight;
   final bool videoMuted;
   final int currentMediaIndex;
   final String title;
@@ -883,6 +801,7 @@ class CreateEditorState {
 
   CreateEditorState copyWith({
     CreateEditorKind? editorKind,
+    CreateDraftFlowKind? draftFlowKind,
     CreateMediaKind? mediaKind,
     List<String>? imagePaths,
     String? videoPath,
@@ -892,6 +811,9 @@ class CreateEditorState {
     int? videoTrimStartMs,
     int? videoTrimEndMs,
     int? videoCoverTimeMs,
+    String? videoCoverStrategy,
+    int? videoWidth,
+    int? videoHeight,
     bool? videoMuted,
     int? currentMediaIndex,
     String? title,
@@ -915,6 +837,7 @@ class CreateEditorState {
   }) {
     return CreateEditorState(
       editorKind: editorKind ?? this.editorKind,
+      draftFlowKind: draftFlowKind ?? this.draftFlowKind,
       mediaKind: mediaKind ?? this.mediaKind,
       imagePaths: imagePaths ?? this.imagePaths,
       videoPath: videoPath ?? this.videoPath,
@@ -924,6 +847,9 @@ class CreateEditorState {
       videoTrimStartMs: videoTrimStartMs ?? this.videoTrimStartMs,
       videoTrimEndMs: videoTrimEndMs ?? this.videoTrimEndMs,
       videoCoverTimeMs: videoCoverTimeMs ?? this.videoCoverTimeMs,
+      videoCoverStrategy: videoCoverStrategy ?? this.videoCoverStrategy,
+      videoWidth: videoWidth ?? this.videoWidth,
+      videoHeight: videoHeight ?? this.videoHeight,
       videoMuted: videoMuted ?? this.videoMuted,
       currentMediaIndex: currentMediaIndex ?? this.currentMediaIndex,
       title: title ?? this.title,
@@ -1010,11 +936,18 @@ class CreateDraft {
         .toString()
         .trim();
     final draftType = (map['type'] ?? editorKind.name).toString().trim();
+    final draftFlowKind = _draftFlowKindFromStorage(
+      rawDraftFlowKind: map['draftFlowKind']?.toString(),
+      sourceType: draftType,
+      editorKind: editorKind,
+      mediaKind: mediaKind,
+    );
     return CreateDraft(
       id: (map['id'] ?? '').toString(),
       updatedAtMs: (map['updatedAt'] as num?)?.toInt() ?? 0,
       state: CreateEditorState(
         editorKind: editorKind,
+        draftFlowKind: draftFlowKind,
         mediaKind: mediaKind,
         imagePaths: editorKind == CreateEditorKind.text
             ? extractArticleImagePaths(normalizedBlocks)
@@ -1027,6 +960,14 @@ class CreateDraft {
         videoTrimStartMs: (map['videoTrimStartMs'] as num?)?.toInt() ?? 0,
         videoTrimEndMs: (map['videoTrimEndMs'] as num?)?.toInt() ?? 0,
         videoCoverTimeMs: (map['videoCoverTimeMs'] as num?)?.toInt() ?? 0,
+        videoCoverStrategy:
+            (map['videoCoverStrategy'] ?? '').toString().trim().isNotEmpty
+            ? (map['videoCoverStrategy'] ?? '').toString().trim()
+            : (((map['videoCoverTimeMs'] as num?)?.toInt() ?? 0) > 0
+                  ? 'manual'
+                  : 'first_frame'),
+        videoWidth: (map['videoWidth'] as num?)?.toInt() ?? 0,
+        videoHeight: (map['videoHeight'] as num?)?.toInt() ?? 0,
         videoMuted: map['videoMuted'] == true,
         currentMediaIndex:
             (map['currentMediaIndex'] as num?)?.toInt().clamp(0, 9999) ?? 0,
@@ -1077,6 +1018,7 @@ class CreateDraft {
       'updatedAt': updatedAtMs,
       'identity': identity.value,
       'editorKind': state.editorKind.name,
+      'draftFlowKind': state.draftFlowKind.name,
       'mediaKind': state.mediaKind.name,
       'imagePaths': state.imagePaths,
       'videoPath': state.videoPath,
@@ -1086,6 +1028,9 @@ class CreateDraft {
       'videoTrimStartMs': state.videoTrimStartMs,
       'videoTrimEndMs': state.videoTrimEndMs,
       'videoCoverTimeMs': state.videoCoverTimeMs,
+      'videoCoverStrategy': state.videoCoverStrategy,
+      'videoWidth': state.videoWidth,
+      'videoHeight': state.videoHeight,
       'videoMuted': state.videoMuted,
       'currentMediaIndex': state.currentMediaIndex,
       'title': state.title,
@@ -1114,6 +1059,8 @@ class CreateDraft {
     }
     return 'text';
   }
+
+  CreateDraftFlowKind get flowKind => state.draftFlowKind;
 
   String get tabKey {
     if (sourceType != null && sourceType!.isNotEmpty) {
@@ -1159,6 +1106,9 @@ class CreateDraft {
       'videoTrimStartMs': state.videoTrimStartMs,
       'videoTrimEndMs': state.videoTrimEndMs,
       'videoCoverTimeMs': state.videoCoverTimeMs,
+      'videoCoverStrategy': state.videoCoverStrategy,
+      'videoWidth': state.videoWidth,
+      'videoHeight': state.videoHeight,
       'videoMuted': state.videoMuted,
     };
   }
@@ -1217,13 +1167,11 @@ class CreateDraft {
   }
 
   String get draftLabel {
-    if (state.editorKind == CreateEditorKind.media) {
-      return '媒体草稿';
-    }
-    if (state.title.trim().isNotEmpty || state.imagePaths.isNotEmpty) {
-      return '文章草稿';
-    }
-    return '文字草稿';
+    return switch (flowKind) {
+      CreateDraftFlowKind.image => '图片草稿',
+      CreateDraftFlowKind.video => '视频草稿',
+      CreateDraftFlowKind.article => '文章草稿',
+    };
   }
 
   bool get shouldSuggestTitle {
@@ -1245,6 +1193,47 @@ class CreateDraft {
         paragraphCount >= 2 ||
         state.imagePaths.isNotEmpty;
   }
+}
+
+CreateDraftFlowKind _draftFlowKindFromStorage({
+  required String? rawDraftFlowKind,
+  required String? sourceType,
+  required CreateEditorKind editorKind,
+  required CreateMediaKind mediaKind,
+}) {
+  final normalizedFlow = (rawDraftFlowKind ?? '').trim();
+  switch (normalizedFlow) {
+    case 'image':
+      return CreateDraftFlowKind.image;
+    case 'video':
+      return CreateDraftFlowKind.video;
+    case 'article':
+      return CreateDraftFlowKind.article;
+  }
+
+  final normalizedSource = (sourceType ?? '').trim();
+  switch (normalizedSource) {
+    case 'media':
+    case 'photo':
+    case 'gallery':
+    case 'image':
+      return CreateDraftFlowKind.image;
+    case 'video':
+    case 'capture':
+      return CreateDraftFlowKind.video;
+    case 'text':
+    case 'article':
+    case 'write':
+      return CreateDraftFlowKind.article;
+  }
+
+  if (mediaKind == CreateMediaKind.video) {
+    return CreateDraftFlowKind.video;
+  }
+  if (editorKind == CreateEditorKind.media) {
+    return CreateDraftFlowKind.image;
+  }
+  return CreateDraftFlowKind.article;
 }
 
 Map<String, Object?> _articleDraftManifestRow(

@@ -7,14 +7,14 @@ node:
   parent_domain_service: user-identity-profile-relationship
   parent_business_capability: profile-homepage-redesign
 scope:
-  summary: V5 用户/我的主页改版（一级 Tab 收敛为记录/互动/足迹、圈子进入统计详情、无微趣三类、你们的交集卡真闭环、resonance 旧链路清理、我的交集/我的影响力详情双一级
+  summary: V5 用户/我的主页改版（一级 Tab 收敛为记录/互动/足迹、圈子进入统计详情、无微趣三类、我与TA的交集卡真闭环、resonance 旧链路清理、我的交集/我的影响力详情双一级
     Tab）的能力级 SIT 验收范围。
   in_scope:
   - ProfileShell mine/other 统一组件与差异区（头图/信息卡/统计/操作/工具栏）
   - 一级 3 Tab（记录/互动/足迹）由 codegen profile_tabs 驱动，圈子作为统计数字进入详情页
   - 创作 Tab 二级 SubTab（全部/图片/视频/文字，无微趣）+ 可见性过滤
   - 统计区四项（粉丝/关注/获赞/圈子）可点击；粉丝/关注/圈子共用三 Tab 详情页，获赞进入互动-点赞
-  - 你们的交集卡真闭环（shared-tags 真数据 + object_tag_index 打标管道 + 归因）
+  - 我与TA的交集卡真闭环（shared-tags 真数据 + object_tag_index 打标管道 + 归因）
   - resonance 旧链路彻底删除并统一到 IntersectionReason
   - 主页页面级埋点与 referralSource 归因
   out_of_scope:
@@ -38,10 +38,11 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/profile_creations_tab_test.dart
-      - file: quwoquan_app/test/ui/user/journeys/my_profile_journey_test.dart
-      - file: quwoquan_app/test/ui/user/journeys/other_profile_journey_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_creations_tab__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/my_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/other_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
     status: completed
     test_evidence:
       primary:
@@ -61,7 +62,14 @@ sit_acceptance:
         suite: journey
         cases:
         - user_acceptance.user_identity_profile_relationship.profile_homepage_redesign.sit1.journey
-        envs: &id003
+        envs:
+        - gamma_local
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.profile_homepage_redesign.sit1.sit1_api_integration
+        envs:
+        - beta
         - gamma
     notes: []
   SIT2:
@@ -70,17 +78,21 @@ sit_acceptance:
     - profile-commercial-readiness
     done_when:
     - 创作 SubTab（全部/图片/视频/文字）+ 可见性过滤（mine 含私密、other 仅公开）正确。
-    - 统计区展示粉丝、关注、获赞、圈子四项；粉丝/关注/圈子进入统一统计详情页并默认落在对应一级 Tab。
-    - 获赞统计点击进入现有互动 Tab 的点赞子维度；统计详情与互动列表经 Repository 取数，无硬编码假数据与中文字面量。
+    - 统计区展示粉丝、关注、获赞、圈子四项；粉丝/关注/圈子进入统一统计详情页并默认落在对应一级 Tab，获赞仍进入现有互动 Tab 的点赞子维度。
+    - 统计详情页顶部使用与设置/资料编辑同源的 inset chrome + `[粉丝|关注|圈子]` segmented selector，正文区无第二条 tab strip、无 underline 选中态。
+    - 统计详情页搜索走云侧 `query + cursor + limit`；三 Tab 独立记忆 query、scroll、cursor 与已加载结果，切换后恢复，不接受单页本地 `contains` 伪搜索。
+    - 粉丝/关注行消费 `ProfileSocialRelationRowViewData.relationshipCapability` 渲染动作矩阵；圈子行消费 `CircleDto` 渲染公开浏览卡片；private/blocked/empty/pagination/error 状态齐备，无硬编码假数据与中文字面量。
     performance_points:
     - 生活/创作列表加载无数据漂移（统计与列表条数一致）
+    - 统计详情 Tab 切换 / 搜索恢复 P95 ≤ 200ms
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/ui/user/widgets/profile_interaction_tab_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/profile_stats_row_test.dart
-      - file: quwoquan_app/test/ui/user/pages/profile_stats_page_test.dart
-      - file: quwoquan_app/test/cloud/user/contract/user_life_item_dto_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_stats_row__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/pages/profile_stats_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/user_life_item_dto_contract__local_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
     status: completed
     test_evidence:
       primary:
@@ -102,13 +114,14 @@ sit_acceptance:
         cases:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit2.sit2_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - 2026-06-25 统计详情页口径刷新为 iOS toolbar segmented selector + 云侧分页搜索 + capability 驱动动作矩阵；local_contract 以 `profile_stats_page__local_contract_test.dart` 包装 `test/ui/user/pages/profile_stats_page_test.dart` 为当前真相。
   SIT3:
-    title: 你们的交集卡真闭环 + 行为归因 + resonance 零残留
+    title: 我与TA的交集卡真闭环 + 行为归因 + resonance 零残留
     story_refs:
     - profile-commercial-readiness
     done_when:
-    - other 主页交集卡经 objectSharedReasonsProvider → sharedTags → IntersectionReason 渲染；无交集不占位。
+    - other 主页交集卡经 objectSharedReasonsProvider → sharedTags → IntersectionReason 渲染；无交集展示稳定空态。
     - gamma 真打 shared-tags 对已打标对象返回非空（object_tag_index 打标管道落地）。
     - 交集卡 onReasonTap 上报 BehaviorEvent.intersectionDimension/intersectionTagRefs；MyProfilePage
       曝光/停留埋点到位。
@@ -118,9 +131,12 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/ui/user/widgets/profile_intersection_card_test.dart
-      - file: quwoquan_app/test/cloud/recommendation/intersection_reason_test.dart
-      - file: quwoquan_service/services/tag-service/internal/application/tag_service_test.go
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/recommendation/intersection_reason__local_contract_test.dart
+      - file: quwoquan_service/services/tag-service/tests/local_contract/internal/application/tag_service__local_contract_test.go
+      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/my_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/other_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
     status: completed
     test_evidence:
       primary:
@@ -144,7 +160,8 @@ sit_acceptance:
         suite: journey
         cases:
         - user_acceptance.user_identity_profile_relationship.profile_homepage_redesign.sit3.journey
-        envs: *id003
+        envs:
+        - gamma_local
     notes: []
   SIT4:
     title: 四类主页体系中的用户主页首屏高保统一
@@ -153,7 +170,7 @@ sit_acceptance:
     done_when:
     - 他人主页首屏 CTA 固定为关注和私信，我的主页首屏 CTA 固定为管理分身和编辑资料。
     - 首屏模块顺序为身份区、CTA、交集、影响力、Tab、双列内容流；不再首屏展示粉丝/浏览/点赞数据面板。
-    - 他人主页模块命名为你们的交集、TA的影响力；我的主页模块命名为我的新交集、我的影响力。
+    - 他人主页模块命名为我与TA的交集、TA的影响力；我的主页模块命名为我的连接、我的影响力。
     - 作品二级筛选仅为全部、图片、视频、文字；底层 article 不改数据模型；圈子统计入口进入三 Tab 详情页。
     performance_points:
     - 主页首屏 TTI P95 ≤ 1.5s
@@ -161,10 +178,13 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/ui/user/widgets/profile_action_bar_widget_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/profile_creations_tab_test.dart
-      - file: quwoquan_app/test/components/object_page/object_intersection_card_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_action_bar_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_creations_tab__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/my_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/other_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
     status: completed
     test_evidence:
       primary:
@@ -183,7 +203,15 @@ sit_acceptance:
         suite: journey
         cases:
         - user_acceptance.user_identity_profile_relationship.profile_homepage_redesign.sit4.journey
-        envs: *id003
+        envs:
+        - gamma_local
+      - layer: api_integration
+        suite: sit4_api_integration
+        cases:
+        - api_integration.user_identity_profile_relationship.profile_homepage_redesign.sit4.sit4_api_integration
+        envs:
+        - beta
+        - gamma
     notes: []
   SIT5:
     title: 我的交集 / 我的影响力一流水准 UX 与接口扩展准出
@@ -231,6 +259,49 @@ sit_acceptance:
         - local_contract.user_identity_profile_relationship.profile_homepage_redesign.sit5.sit5_local_contract
         envs: *id001
     notes: []
+  SIT6:
+    title: 职业与兴趣资料页标签同源、编辑保存与交集索引投影
+    story_refs:
+    - career-interest-profile-editor
+    done_when:
+    - "/profile/career-interests 独立页面从编辑资料页进入，页面结构为职业身份、我的标签、全部兴趣，不展示推荐标签。"
+    - "职业通过 Audience/用户/职业 查询并保存单个叶子 tagRef；兴趣通过 Audience/用户/兴趣偏好 查询并保存有序叶子 tagRefs，最多 30 个、允许清空。"
+    - "端侧通过 ListTagChildren / ResolveTag / ValidateTagRefs 查询与校验；alpha mock 不再接受 Topic/兴趣/*。"
+    - "user-service 拒绝非法根、分类父节点、职业多选与兴趣超限；保存成功后投影 object_tag_index 的 user 对象 tagRefs。"
+    - "alpha/beta/gamma/prod 均使用同一 publish/tags 标签树；beta/gamma/prod 通过 tag import 与 object index import/backfill 灌入。"
+    performance_points:
+    - 标签层级加载 P95 ≤ 500ms
+    - 保存 P95 ≤ 800ms
+    tests:
+      planned:
+      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/profile_career_interest_personalization__user_acceptance_test.dart
+      - file: quwoquan_service/services/tag-service/tests/api_integration/tag_contract__api_integration_test.go
+      recorded:
+      - file: quwoquan_app/test/local_contract/cloud/tag/profile_career_interest_catalog__local_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/local_contract/internal/application/profile_edit_validation__local_contract_test.go
+      - file: quwoquan_service/services/user-service/tests/local_contract/internal/infrastructure/projection/interest_profile_projector__local_contract_test.go
+      - file: quwoquan_service/services/tag-service/tests/api_integration/tag_contract__api_integration_test.go
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: career_interest_catalog
+        cases:
+        - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.catalog
+        envs: *id001
+      - layer: local_contract
+        suite: profile_edit_validation
+        cases:
+        - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.validation
+        envs: *id001
+      supporting:
+      - layer: api_integration
+        suite: tag_service_children_validate_shared_tags
+        cases:
+        - api_integration.user_identity_profile_relationship.profile_homepage_redesign.career_interest.tag_service
+        envs: *id002
+    notes:
+    - "2026-06-25: alpha local_contract 已覆盖 mock catalog、旧 Topic/兴趣 拒绝、user-service 本地校验与去重保序；beta/gamma/prod 需以 tag import + object index import/backfill gate 补正式环境证据。"
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

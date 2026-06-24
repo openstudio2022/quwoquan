@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from agent_ops.deploy.lib.common import run
 from agent_ops.deploy.lib.environment_topology import get_target, load_environment_topology
+from agent_ops.deploy.lib.port_manifest import load_port_manifest, profile_ports
 
 
 DEFAULT_APP_DIR = ROOT / "quwoquan_app"
@@ -43,6 +44,15 @@ DEV_UP_ENV_DESCRIPTIONS = {
     "gamma": "local gamma mirror + App",
     "prod-sim": "prod-sim App 连接",
     "prod": "prod-hosted edge health + App",
+}
+ANDROID_LOCAL_LOOPBACK_SUFFIX = ".localhost"
+ANDROID_LOCAL_DEBUG_CA_ENV = "QWQ_ANDROID_LOCAL_ENV_CA_PATH"
+ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV = "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED"
+ANDROID_LOCAL_DEBUG_CA_PATHS = {
+    "alpha-local": ROOT / "state" / "local" / "alpha_stack" / "caddy-data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
+    "beta-local": ROOT / "state" / "local" / "app_beta_manual" / "caddy-data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
+    "gamma-local": ROOT / "state" / "local" / "gamma" / "caddy-data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
+    "prod-sim": ROOT / "state" / "local" / "prod_sim_stack" / "caddy-data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
 }
 
 
@@ -325,9 +335,15 @@ def resolve_app_endpoint_overrides(
     target_name = app_target_for_env(env_name)
     target = get_target(manifest, target_name)
     public_bases = dict(target.get("publicBases") or {})
-    if str(target.get("backend", "")).strip() == "local" and device_kind == "android_emulator":
+    if str(target.get("backend", "")).strip() == "local" and device_kind.startswith("android"):
+        # alpha's repo-owned TLS plane is port-routed. Pure localhost is the
+        # only portable Android physical-device target with adb reverse.
+        collapse_to_localhost = env_name == "alpha"
         public_bases = {
-            key: _rewrite_localhost_base(str(value), "10.0.2.2")
+            key: _rewrite_android_local_base(
+                str(value),
+                collapse_to_localhost=collapse_to_localhost,
+            )
             for key, value in public_bases.items()
         }
     return {
@@ -400,8 +416,13 @@ def launch_app(
         target_platform=str(device.get("targetPlatform", "")),
         emulator=bool(device.get("emulator", False)) if device else None,
     )
-    if str(target.get("backend", "")).strip() == "local" and device_kind == "android_physical":
+    command_env = os.environ.copy()
+    if str(target.get("backend", "")).strip() == "local" and device_kind.startswith("android"):
         enable_android_adb_reverse(device_id, target_name, topology=manifest)
+        command_env[ANDROID_LOCAL_DEBUG_CA_ENV] = str(
+            local_target_android_debug_ca_cert(target_name)
+        )
+        command_env[ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV] = "1"
     command = build_start_app_command(
         env_name,
         device_id,
@@ -415,6 +436,7 @@ def launch_app(
         process = subprocess.Popen(
             command,
             cwd=str(ROOT),
+            env=command_env,
             stdin=subprocess.DEVNULL,
             stdout=log_handle,
             stderr=subprocess.STDOUT,
@@ -468,19 +490,59 @@ def local_target_ports(
     target = get_target(manifest, target_name)
     if str(target.get("backend", "")).strip() != "local":
         return []
-    urls = []
-    public_bases = target.get("publicBases") or {}
-    origins = target.get("origins") or {}
-    urls.extend(str(value) for value in public_bases.values())
-    urls.extend(str(value) for value in origins.values())
     ports: set[int] = set()
-    for url in urls:
+    for url in list((target.get("publicBases") or {}).values()) + list(
+        (target.get("origins") or {}).values()
+    ):
         parsed = urllib.parse.urlparse(url)
-        if parsed.hostname not in {"127.0.0.1", "localhost"}:
-            continue
         if parsed.port:
             ports.add(parsed.port)
+    profile_name = str(target.get("portProfile") or "").strip()
+    if profile_name:
+        for port in profile_ports(load_port_manifest(), profile_name).values():
+            ports.add(int(port))
     return sorted(ports)
+
+
+def local_target_android_debug_ca_cert(target_name: str) -> Path:
+    cert_path = ANDROID_LOCAL_DEBUG_CA_PATHS.get(target_name)
+    if cert_path is None:
+        raise RuntimeError(
+            f"GATE_BLOCK: local Android debug CA path is undefined for target {target_name}"
+        )
+    if not cert_path.is_file():
+        raise RuntimeError(
+            f"GATE_BLOCK: local Android debug CA certificate missing for {target_name}: {cert_path}"
+        )
+    return cert_path
+
+
+def _android_local_loopback_host(host: str, *, collapse_to_localhost: bool = False) -> str:
+    if collapse_to_localhost:
+        return "localhost"
+    if host == "127.0.0.1":
+        return "localhost"
+    if host == "localhost" or host.endswith(ANDROID_LOCAL_LOOPBACK_SUFFIX):
+        return host
+    suffix = ".quwoquan-env.test"
+    if host.endswith(suffix):
+        return host[: -len(suffix)] + ANDROID_LOCAL_LOOPBACK_SUFFIX
+    return host
+
+
+def _rewrite_android_local_base(url: str, *, collapse_to_localhost: bool = False) -> str:
+    parsed = urllib.parse.urlparse(url)
+    if not parsed.scheme or not parsed.hostname:
+        return url
+    host = _android_local_loopback_host(
+        parsed.hostname,
+        collapse_to_localhost=collapse_to_localhost,
+    )
+    if parsed.port:
+        netloc = f"{host}:{parsed.port}"
+    else:
+        netloc = host
+    return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
 
 
 def _rewrite_localhost_base(url: str, host: str) -> str:

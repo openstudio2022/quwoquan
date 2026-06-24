@@ -1,6 +1,6 @@
 /// Patrol test entry point.
 ///
-/// Patrol 4.x 仍要求 main() 调用真实 app，否则 T4 用例会在空白屏运行。
+/// Patrol 4.x 仍要求 main() 调用真实 app，否则 user_acceptance Patrol 用例会在空白屏运行。
 /// 本仓库将 Patrol 用例保留在 `test/patrol/`，并通过 `pubspec.yaml` 的
 /// `patrol.test_directory` 指向该目录。
 ///

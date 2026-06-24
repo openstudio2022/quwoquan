@@ -19,17 +19,19 @@ type contentServiceObjectIntersectionsResponse struct {
 	Items []map[string]any `json:"items"`
 }
 
+// resolveObjectPageIntersections 解析对象页交集的唯一下发通道 intersectionReasons
+// （List<IntersectionReason>）。按 object_page_bundle.yaml 契约禁止并行 intersections 第二通道：
+// 远端 content-service 命中即原样下发，否则回落本地结构化事实理由。
 func resolveObjectPageIntersections(
 	ctx context.Context,
 	viewerID string,
 	homepage *Homepage,
 	relationEdges []map[string]any,
-) ([]map[string]any, []map[string]any) {
+) []map[string]any {
 	if remote, ok := fetchContentServiceObjectIntersections(ctx, viewerID, homepage); ok {
-		remote = cloneObjectSlice(remote)
-		return remote, cloneObjectSlice(remote)
+		return cloneObjectSlice(remote)
 	}
-	return defaultIntersectionReasons(homepage, relationEdges), defaultObjectIntersections(homepage, relationEdges)
+	return defaultIntersectionReasons(homepage, relationEdges)
 }
 
 func fetchContentServiceObjectIntersections(

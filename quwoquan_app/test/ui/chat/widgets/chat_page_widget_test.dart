@@ -128,7 +128,6 @@ void main() {
       expect(find.text(UITextConstants.groupChat), findsOneWidget);
       expect(find.text(UITextConstants.chatPrivateMessages), findsOneWidget);
       expect(find.text(UITextConstants.chatNotifications), findsOneWidget);
-      expect(find.text('群聊'), findsNothing);
       expect(find.text('趣群'), findsNothing);
       expect(find.text(UITextConstants.atXiaoqu), findsNothing);
       expect(find.text(UITextConstants.reminders), findsNothing);
@@ -152,6 +151,23 @@ void main() {
         recorder.recordedTargets,
         contains(const VisitTarget.page('chat_contacts_all')),
       );
+    });
+
+    testWidgets('星标朋友保留分组标题但不再渲染行尾星标', (tester) async {
+      await tester.pumpWidget(
+        _scopedApp(mock: _StarredContactsChatRepository()),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(UITextConstants.chatPrimaryContacts));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('chat-contact-section-label-star')),
+        findsOneWidget,
+      );
+      expect(find.text(UITextConstants.starredFriends), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.star_fill), findsNothing);
     });
 
     testWidgets('包含 Scaffold 结构', (tester) async {
@@ -220,7 +236,8 @@ void main() {
         expect(inboxDivider.color, expectedListDivider);
 
         await tester.tap(find.text(UITextConstants.chatPrimaryContacts));
-        await tester.pumpAndSettle();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
         final contactRowFinder = _findByValueKeyPrefix('chat-contact-row-');
         expect(contactRowFinder, findsWidgets);
@@ -338,6 +355,9 @@ void main() {
           sectionHeaderText.style?.fontSize,
           indexLetterText.style?.fontSize,
         );
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
       }
     });
   });
@@ -695,6 +715,32 @@ class _NavigationChatRepository extends MockChatRepository {
         displayName: '李明',
         avatarUrl: 'https://example.com/contact.jpg',
         bio: '篮球爱好者',
+        relationState: 'mutual',
+      ),
+    ];
+  }
+}
+
+class _StarredContactsChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatContactRowDto>> listContacts({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ChatContactRowDto>[
+      ChatContactRowDto(
+        userId: 'user_starred_contact',
+        displayName: 'Ada Starred',
+        avatarUrl: 'https://example.com/starred_contact.jpg',
+        bio: 'Starred contact',
+        relationState: 'mutual',
+        isStarred: true,
+      ),
+      ChatContactRowDto(
+        userId: 'user_regular_contact',
+        displayName: 'Ben Regular',
+        avatarUrl: 'https://example.com/regular_contact.jpg',
+        bio: 'Regular contact',
         relationState: 'mutual',
       ),
     ];

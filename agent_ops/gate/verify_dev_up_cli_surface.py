@@ -50,12 +50,137 @@ def main() -> int:
         issues.append("stackctl up must prompt or fail clearly when env selector is missing")
 
     topology = load_environment_topology()
+    alpha_android = resolve_app_endpoint_overrides("alpha", "android_physical", topology=topology)
+    if alpha_android["gatewayBaseUrl"] != "https://localhost:17000":
+        issues.append("alpha android local device must map gateway to plain localhost HTTPS transport")
+    if alpha_android["mediaImageBaseUrl"] != "https://localhost:17100":
+        issues.append("alpha android local device must map media to plain localhost HTTPS transport")
     beta_android = resolve_app_endpoint_overrides("beta", "android_emulator", topology=topology)
-    if beta_android["gatewayBaseUrl"] != "http://10.0.2.2:18000":
-        issues.append("beta android emulator must map gateway to 10.0.2.2:18000")
+    if beta_android["gatewayBaseUrl"] != "https://beta-api.localhost:18000":
+        issues.append("beta android local device must map gateway to distinct localhost HTTPS transport")
     gamma_web = resolve_app_endpoint_overrides("gamma", "web", topology=topology)
-    if gamma_web["gatewayBaseUrl"] != "http://127.0.0.1:19000":
-        issues.append("gamma web must map gateway to 127.0.0.1:19000")
+    if gamma_web["gatewayBaseUrl"] != "https://gamma-api.quwoquan-env.test:19000":
+        issues.append("gamma web must map gateway to secure gamma env domain")
+
+    build_gradle = (ROOT / "quwoquan_app/android/app/build.gradle.kts").read_text(
+        encoding="utf-8"
+    )
+    alpha_run = (ROOT / "quwoquan_app/run.sh").read_text(encoding="utf-8")
+    beta_manual = (
+        ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
+    ).read_text(encoding="utf-8")
+    gamma_script = (
+        ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
+    ).read_text(encoding="utf-8")
+    gamma_compose = (
+        ROOT / "quwoquan_service/docker-compose.gamma-local.yaml"
+    ).read_text(encoding="utf-8")
+
+    if "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED" not in build_gradle:
+        issues.append("android debug build must require explicit local CA when launcher marks it required")
+    if "tasks.withType<FlutterTask>()" not in build_gradle:
+        issues.append("android debug build must patch FlutterTask dart-defines for plain flutter run")
+    if '"CLOUD_GATEWAY_BASE_URL" to "https://localhost:17000"' not in build_gradle:
+        issues.append("plain android flutter run must default alpha gateway to localhost HTTPS transport")
+    if '"MEDIA_IMAGE_CDN_BASE_URL" to "https://localhost:17100"' not in build_gradle:
+        issues.append("plain android flutter run must default alpha media to localhost HTTPS transport")
+    if "prepareAndroidLocalAlphaStack" not in build_gradle:
+        issues.append("plain android flutter run must prepare alpha local stack before debug resource generation")
+    if 'environment("QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP", "skip")' not in build_gradle:
+        issues.append("plain android flutter run must start alpha stack in HTTPS localhost transport mode")
+    if "prepareAndroidLocalAdbReverse" not in build_gradle or '"reverse",' not in build_gradle:
+        issues.append("plain android flutter run must prepare adb reverse for local gateway/media ports")
+    android_debug_network = (
+        ROOT / "quwoquan_app/android/app/src/debug/res/xml/beta_debug_network_security_config.xml"
+    ).read_text(encoding="utf-8")
+    android_profile_network = (
+        ROOT / "quwoquan_app/android/app/src/profile/res/xml/beta_debug_network_security_config.xml"
+    ).read_text(encoding="utf-8")
+    android_debug_manifest = (
+        ROOT / "quwoquan_app/android/app/src/debug/AndroidManifest.xml"
+    ).read_text(encoding="utf-8")
+    android_profile_manifest = (
+        ROOT / "quwoquan_app/android/app/src/profile/AndroidManifest.xml"
+    ).read_text(encoding="utf-8")
+    app_bootstrap = (ROOT / "quwoquan_app/lib/app_bootstrap.dart").read_text(
+        encoding="utf-8"
+    )
+    local_https_trust = (
+        ROOT / "quwoquan_app/lib/cloud/runtime/local_dev_https_trust_io.dart"
+    ).read_text(encoding="utf-8")
+    platform_local_https_trust = (
+        ROOT / "quwoquan_app/lib/core/platform/local_dev_https_trust_io.dart"
+    ).read_text(encoding="utf-8")
+    local_https_trust_sources = local_https_trust + "\n" + platform_local_https_trust
+    main_activity = (
+        ROOT / "quwoquan_app/android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java"
+    ).read_text(encoding="utf-8")
+    if 'cleartextTrafficPermitted="true"' in android_debug_network + android_profile_network:
+        issues.append("android local network security config must not permit cleartext HTTP")
+    if 'android:usesCleartextTraffic="true"' in android_debug_manifest + android_profile_manifest:
+        issues.append("android debug/profile manifests must not permit cleartext HTTP")
+    if "LocalDevHttpsTrust.installForCurrentRuntime()" not in app_bootstrap:
+        issues.append("app bootstrap must install Dart local HTTPS trust before media/cache clients start")
+    if "_installLocalDevHttpsTrustAfterFirstFrame" in app_bootstrap:
+        issues.append("app bootstrap must not defer Dart local HTTPS trust until after the first frame")
+    if "await _installLocalDevHttpsTrustBeforeMediaClients();" not in app_bootstrap:
+        issues.append("app bootstrap must await local HTTPS trust before runApp/media clients")
+    if (
+        "SecurityContext.defaultContext.setTrustedCertificatesBytes"
+        not in local_https_trust_sources
+    ):
+        issues.append("Dart local HTTPS trust must add the packaged CA to SecurityContext.defaultContext")
+    if "badCertificateCallback" in local_https_trust_sources:
+        issues.append("Dart local HTTPS trust must not bypass certificate validation")
+    if "localEnvDebugRootCertificate" not in main_activity:
+        issues.append("Android MainActivity must expose packaged local_env_debug_root to Dart HttpClient")
+    if "export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1" not in alpha_run:
+        issues.append("alpha run.sh must require Android local debug CA when preparing local device launch")
+    if "export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1" not in beta_manual:
+        issues.append("beta manual launcher must require Android local debug CA for Android devices")
+    alpha_stack = (ROOT / "agent_ops/deploy/alpha/start_alpha_mock_stack.sh").read_text(
+        encoding="utf-8"
+    )
+    if "agent_ops/deploy/lib/tls_reverse_proxy.py" not in alpha_stack:
+        issues.append("alpha local stack must use repo-owned TLS reverse proxy")
+    if "docker.io/library/caddy" in alpha_stack:
+        issues.append("alpha local stack must not depend on external Caddy image for flutter run")
+    if "ensure_public_hosts_mapping" not in alpha_stack:
+        issues.append("alpha local stack must manage quwoquan-env.test loopback DNS before app launch")
+    if "security add-trusted-cert" not in alpha_stack:
+        issues.append("alpha local stack must trust the local root CA for host/iOS simulator HTTPS")
+    if "simctl keychain booted add-root-cert" not in alpha_stack:
+        issues.append("alpha local stack must install the local root CA into booted iOS simulators")
+    if "IP.2 = 10.0.2.2" not in alpha_stack:
+        issues.append("alpha local TLS certificate must include Android emulator host 10.0.2.2 as an IP SAN")
+    if "--resolve" in alpha_stack:
+        issues.append("alpha local stack health checks must use real public DNS, not curl --resolve")
+    if "curl -k" in alpha_stack:
+        issues.append("alpha local stack health checks must not bypass TLS trust with curl -k")
+    ios_project = (
+        ROOT / "quwoquan_app/ios/Runner.xcodeproj/project.pbxproj"
+    ).read_text(encoding="utf-8")
+    ios_prepare_alpha = (
+        ROOT / "quwoquan_app/scripts/ios/prepare_alpha_local_https.sh"
+    ).read_text(encoding="utf-8")
+    if "Prepare Alpha HTTPS Local Plane" not in ios_project:
+        issues.append("plain iOS flutter run must prepare alpha HTTPS local plane before Flutter build")
+    if "../scripts/ios/prepare_alpha_local_https.sh" not in ios_project:
+        issues.append("iOS Runner project must call the alpha HTTPS prepare script")
+    if "QWQ_IOS_LOCAL_AUTO_PREPARE" not in ios_prepare_alpha:
+        issues.append("iOS alpha prepare script must expose an explicit opt-out")
+    if "start_alpha_mock_stack.sh\" up" not in ios_prepare_alpha:
+        issues.append("iOS alpha prepare script must start the alpha HTTPS stack")
+    if 'LOCAL_GAMMA_CADDY_DATA_ROOT="${LOCAL_GAMMA_CADDY_DATA_ROOT:-${LOCAL_GAMMA_STATE_ROOT}/caddy-data}"' not in gamma_script:
+        issues.append("gamma local mirror must expose host-readable caddy data root")
+    if 'LOCAL_GAMMA_CADDY_CONFIG_ROOT="${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-${LOCAL_GAMMA_STATE_ROOT}/caddy-config}"' not in gamma_script:
+        issues.append("gamma local mirror must expose host-readable caddy config root")
+    if '${LOCAL_GAMMA_CADDY_DATA_ROOT:-../state/local/gamma/caddy-data}:/data' not in gamma_compose:
+        issues.append("gamma compose must bind caddy data to host state path")
+    if '${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-../state/local/gamma/caddy-config}:/config' not in gamma_compose:
+        issues.append("gamma compose must bind caddy config to host state path")
+    if "local-gamma-caddy-data:/data" in gamma_compose or "local-gamma-caddy-config:/config" in gamma_compose:
+        issues.append("gamma compose must not hide caddy CA inside named volumes")
 
     if issues:
         print("[verify_dev_up_cli_surface] FAIL")

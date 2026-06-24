@@ -443,62 +443,102 @@ class _ErrorActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final actions = <Widget>[
+      if (semantic.secondaryAction != null)
+        _buildSecondaryAction(context, semantic.secondaryAction!),
+      if (semantic.primaryAction != null)
+        _buildPrimaryAction(context, semantic.primaryAction!),
+    ];
+    if (!compact) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: actions
+            .map(
+              (action) => Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.intraGroupXs,
+                ),
+                child: SizedBox(
+                  width: AppSpacing.minInteractiveSize * 2.55,
+                  height: AppSpacing.minInteractiveSize,
+                  child: action,
+                ),
+              ),
+            )
+            .toList(growable: false),
+      );
+    }
     return Wrap(
-      alignment: compact ? WrapAlignment.start : WrapAlignment.center,
+      alignment: WrapAlignment.start,
       spacing: AppSpacing.containerSm,
       runSpacing: AppSpacing.containerSm,
-      children: <Widget>[
-        if (semantic.secondaryAction != null)
-          CupertinoButton(
-            minimumSize: compact
-                ? const Size(
-                    AppSpacing.minInteractiveSize,
-                    AppSpacing.minInteractiveSize,
-                  )
-                : null,
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? AppSpacing.sm : AppSpacing.containerMd,
-              vertical: compact ? AppSpacing.xs : AppSpacing.sm,
-            ),
-            onPressed: _canDispatch(semantic.secondaryAction!)
-                ? () => unawaited(
-                    _dispatchAction(context, semantic.secondaryAction!),
-                  )
-                : null,
-            child: Text(semantic.secondaryAction!.label),
-          ),
-        if (semantic.primaryAction != null)
-          CupertinoButton(
-            minimumSize: compact
-                ? const Size(
-                    AppSpacing.minInteractiveSize,
-                    AppSpacing.minInteractiveSize,
-                  )
-                : null,
-            padding: EdgeInsets.symmetric(
-              horizontal: compact
-                  ? AppSpacing.containerSm
-                  : AppSpacing.containerLg,
-              vertical: compact ? AppSpacing.xs : AppSpacing.sm,
-            ),
-            color: AppColors.iosTintedFill(context),
-            borderRadius: BorderRadius.circular(
-              AppSpacing.circularBorderRadius,
-            ),
-            onPressed: _canDispatch(semantic.primaryAction!)
-                ? () => unawaited(
-                    _dispatchAction(context, semantic.primaryAction!),
-                  )
-                : null,
-            child: Text(
-              semantic.primaryAction!.label,
-              style: TextStyle(
-                color: AppColors.iosAccent(context),
-                fontWeight: AppTypography.semiBold,
-              ),
+      children: actions,
+    );
+  }
+
+  Widget _buildSecondaryAction(BuildContext context, UiErrorAction action) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final background = isDark
+        ? AppColors.white.withValues(alpha: 0.08)
+        : CupertinoColors.systemBackground.resolveFrom(context);
+    final border = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.26 : 0.2);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+        border: Border.all(color: border, width: AppSpacing.hairline),
+      ),
+      child: CupertinoButton(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? AppSpacing.sm : AppSpacing.containerMd,
+          vertical: compact ? AppSpacing.xs : AppSpacing.sm,
+        ),
+        minimumSize: Size.zero,
+        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+        onPressed: _canDispatch(action)
+            ? () => unawaited(_dispatchAction(context, action))
+            : null,
+        child: Center(
+          child: Text(
+            action.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.iosLabel(context),
+              fontWeight: AppTypography.medium,
             ),
           ),
-      ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrimaryAction(BuildContext context, UiErrorAction action) {
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? AppSpacing.containerSm : AppSpacing.containerMd,
+        vertical: compact ? AppSpacing.xs : AppSpacing.sm,
+      ),
+      minimumSize: Size.zero,
+      color: AppColors.iosTintedFill(context),
+      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+      onPressed: _canDispatch(action)
+          ? () => unawaited(_dispatchAction(context, action))
+          : null,
+      child: Center(
+        child: Text(
+          action.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.iosAccent(context),
+            fontWeight: AppTypography.semiBold,
+          ),
+        ),
+      ),
     );
   }
 

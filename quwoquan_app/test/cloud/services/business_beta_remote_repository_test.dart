@@ -9,6 +9,8 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 
+final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
+
 void main() {
   test(
     'beta RemoteRepository reads contract fixture data through HTTP',
@@ -52,7 +54,9 @@ void main() {
       expect(photoFeed.map((item) => item.id), contains('fixture_photo_001'));
       expect(
         photoFeed.every(
-          (item) => item.primaryVisualUrl.contains('media/image/s/archived-image/post/'),
+          (item) => item.primaryVisualUrl.contains(
+            'media/image/s/archived-image/post/',
+          ),
         ),
         isTrue,
       );
@@ -121,7 +125,9 @@ void main() {
       expect(circles.map((item) => item.id), contains('fixture_circle_photo'));
       expect(
         circles.every(
-          (item) => item.coverUrl?.contains('media/image/s/archived-image/circle/') == true,
+          (item) =>
+              item.coverUrl?.contains('media/image/s/archived-image/circle/') ==
+              true,
         ),
         isTrue,
       );
@@ -145,7 +151,9 @@ void main() {
       expect(circleHomeFeed.length, greaterThanOrEqualTo(5));
       expect(
         circleHomeFeed.every(
-          (item) => item.primaryVisualUrl.contains('media/image/s/archived-image/post/'),
+          (item) => item.primaryVisualUrl.contains(
+            'media/image/s/archived-image/post/',
+          ),
         ),
         isTrue,
       );
@@ -157,9 +165,11 @@ void main() {
           .getActivePersonaContext();
       expect(activePersonaContext.ownerUserId, currentUserId);
       expect(activePersonaContext.subAccountId, currentUserId);
-      expect(currentUser.displayName, '契约当前用户');
+      expect(currentUser.displayName, matches(_defaultNicknamePattern));
       expect(
-        currentUser.backgroundUrl.contains('media/background/s/archived-avatar/user/'),
+        currentUser.backgroundUrl.contains(
+          'media/background/s/archived-avatar/user/',
+        ),
         isTrue,
       );
       final userPosts = await userRepository.listUserPosts(
@@ -170,7 +180,9 @@ void main() {
       expect(userPosts.map((item) => item.id), contains('fixture_moment_001'));
       expect(
         userPosts.every(
-          (item) => item.primaryVisualUrl.contains('media/image/s/archived-image/post/'),
+          (item) => item.primaryVisualUrl.contains(
+            'media/image/s/archived-image/post/',
+          ),
         ),
         isTrue,
       );

@@ -1,4 +1,4 @@
-/// T4 Patrol E2E: 点赞旅程（realtime + error rollback）
+/// user_acceptance Patrol: 点赞旅程（realtime + error rollback）
 ///
 /// 对应 e2e.yaml 场景：like_post_realtime [test_type: ui_journey]
 ///
@@ -41,7 +41,7 @@ Future<String> _seedPhotoPost(http.Client client) async {
     },
     body: jsonEncode({
       'contentType': 'image',
-      'title': 'T4 like_post_realtime seed',
+      'title': 'patrol like_post_realtime seed',
       'body': 'patrol test fixture',
       'mediaUrls': ['https://example.com/patrol.jpg'],
     }),
@@ -76,9 +76,12 @@ void main() {
   setUp(() async {
     assert(
       _apiContractEnv == 'gamma',
-      'T4 tests must run with API_CONTRACT_ENV=gamma',
+      'Patrol user_acceptance tests must run with API_CONTRACT_ENV=gamma',
     );
-    assert(_apiBase.isNotEmpty, 'T4 tests require API_CONTRACT_BASE_URL');
+    assert(
+      _apiBase.isNotEmpty,
+      'Patrol user_acceptance tests require API_CONTRACT_BASE_URL',
+    );
     client = http.Client();
     seededPostId = await _seedPhotoPost(client);
     await _resetLikeState(client, seededPostId);

@@ -17,14 +17,19 @@ class PostObjectCacheService {
   PostObjectCacheService({
     ObjectCacheStore<ContentPostDetailPayload>? detailStore,
     ObjectCacheStore<PostBaseDto>? projectionStore,
+    int maxMemoryEntries = 200,
   }) : _detailStore =
            detailStore ??
            ObjectCacheStore<ContentPostDetailPayload>(
+             maxMemoryEntries: maxMemoryEntries,
              freshFor: const Duration(minutes: 30),
            ),
        _projectionStore =
            projectionStore ??
-           ObjectCacheStore<PostBaseDto>(freshFor: const Duration(minutes: 10));
+           ObjectCacheStore<PostBaseDto>(
+             maxMemoryEntries: maxMemoryEntries,
+             freshFor: const Duration(minutes: 10),
+           );
 
   final ObjectCacheStore<ContentPostDetailPayload> _detailStore;
   final ObjectCacheStore<PostBaseDto> _projectionStore;

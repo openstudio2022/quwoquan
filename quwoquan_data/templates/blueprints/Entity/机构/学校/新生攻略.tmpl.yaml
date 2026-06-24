@@ -18,7 +18,6 @@ render: { articleTemplate: gentle, fontPreset: rounded }
 structure:
   required: [报到前准备, 校区与交通, 宿舍食堂, 第一周安排, 常见坑]
   optional: [社团活动, 城市生活]
-hooks: ["去{name}报到前，先把这几件事搞清楚"]
 mustIncludeFacts: [校区位置, 报到流程, 宿舍食堂, 交通方式]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 900, max: 1800 }
@@ -31,4 +30,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/主页/机构/学校/example.md

@@ -3,17 +3,15 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 group = "io.livekit.plugin"
 version = "1.0-SNAPSHOT"
 
-buildscript {
-    ext.kotlin_version = "1.8.22"
-    repositories {
-        google()
-        mavenCentral()
+def vendoredAndroidArtifact(String name) {
+    def artifact = new File(rootProject.projectDir, "../vendor/android_artifacts/${name}")
+    if (!artifact.exists()) {
+        throw new GradleException(
+            "Missing vendored Android artifact ${artifact}. " +
+            "This repository forbids implicit remote dependency downloads during build."
+        )
     }
-
-    dependencies {
-        classpath("com.android.tools.build:gradle:8.1.0")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
-    }
+    return artifact
 }
 
 allprojects {
@@ -33,10 +31,10 @@ kotlin {
 
 android {
     if (project.android.hasProperty("namespace")) {
-        namespace = "io.livekit.pluginn"
+        namespace = "io.livekit.plugin"
     }
 
-    compileSdk = 34
+    compileSdk = 36
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -52,13 +50,6 @@ android {
         minSdk = 21
     }
 
-    dependencies {
-        testImplementation("org.jetbrains.kotlin:kotlin-test")
-        testImplementation("org.mockito:mockito-core:5.0.0")
-        implementation 'io.github.webrtc-sdk:android:144.7559.01'
-        implementation 'io.livekit:noise:2.0.0'
-    }
-
     testOptions {
         unitTests.all {
             useJUnitPlatform()
@@ -70,4 +61,12 @@ android {
             }
         }
     }
+}
+
+dependencies {
+    testImplementation("org.jetbrains.kotlin:kotlin-test")
+    testImplementation("org.mockito:mockito-core:5.0.0")
+    // AGP 8+ forbids packaging local .aar inside another AAR; app module bundles these.
+    compileOnly files(vendoredAndroidArtifact("android-144.7559.01.aar"))
+    compileOnly files(vendoredAndroidArtifact("noise-2.0.0.aar"))
 }

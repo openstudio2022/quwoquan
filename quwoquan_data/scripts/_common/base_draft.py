@@ -1,17 +1,23 @@
 """底稿（base draft）选取、批次级占用账本与贴合度度量。
 
-范式：以一篇真实底稿为锚做「适度润色 + 人设轻量化适配」，而非按模板从零拼装，
-也不是把底稿重写到面目全非。版权风险全面放开后，所有来源（含未授权普通网页）
-统一走「以底稿为基础适度润色、大面积保留优质原文」一条范式，贴合度门对所有来源生效。
+复用策略（产品裁定：full light-edit，统一以底稿为骨架轻改）：
+
+- `licensed_adaptation` 与 `factual_reference_only` 统一作为表达底稿处理：以底稿为骨架做
+  适度润色 + 平台/作者痕迹清理 + 私人信息脱敏 + 人设适配；优质原句/自然段可保留，
+  禁止脱离底稿从零另写，也禁止零加工整篇逐字照搬。
+- review 对两类来源都启用 `baseDraftFidelity`（下限防换稿/重写，上限防零加工照搬）。
+- 仅 `blocked` 来源不可作底稿（且不会进入底稿路径）。
+- 注意：普通网页/UGC（攻略/游记/评论）以底稿为骨架轻改用于商用发布存在版权风险，
+  该风险由产品侧承担（详见 SKILL「来源权利分层」与 docs/outstanding_risks_backlog）。
 
 - 每篇文章/主页只认领一篇底稿（某来源单元的 source.md），一源仅一稿。
 - 批次级账本（`batches/<batch>/_shared/base_draft_ledger.json`）记录 sourceRef -> postRef
   一对一映射；已被占用的源在其它篇目里只能进 evidenceRefs 作补充材料，不得再当底稿。
-- 贴合度采用「底稿留存率」(单向 char 三连覆盖)，与成品长度无关：
+- 授权改编来源的贴合度采用「底稿留存率」(单向 char 三连覆盖)，与成品长度无关：
   coverage = |base_trigrams ∩ article_trigrams| / |base_trigrams|
   下限防「从零另写/换稿」(实测：从零重写≈0.24、无关文≈0.0、真实适度润色≥0.7)；
   上限（99.5%）只兜底「零加工整篇逐字照搬」——即没做任何去语病/错字、PII 脱敏替代或
-  人设用词语气适配。优质原文与自然段允许大面积保留，故上限放得很高。
+  人设用词语气适配。授权范围内的优质原文与自然段可保留，故上限放得很高。
   注意：不可用对称的 difflib.ratio——底稿(数百字)远短于成品(上千字)时，
   对称比值上限≈2*len(base)/(len(base)+len(body))，永远摸不到 0.70，会误杀所有合规润色。
 """
@@ -21,6 +27,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from _common.content_evidence import SOURCE_BOILERPLATE_MARKERS, source_line_is_boilerplate
 from _common.io import read_json, write_json
 from _common.paths import batch_root, batch_shared_dir, relative_batch_ref
 from _common.source_unit import iter_source_units, resolve_entity_object_dir
@@ -31,33 +38,22 @@ LEDGER_SCHEMA = "quwoquan_data.base_draft_ledger"
 FIDELITY_MIN = 0.55
 FIDELITY_MAX = 0.995
 _NGRAM = 3
-_NOISE_LINE_MARKERS = (
-    "登录",
-    "注册",
-    "联系客服",
-    "我的订单",
-    "举报",
-    "点赞",
-    "写点评",
-    "上一页",
-    "下一页",
-    "回到顶部",
-    "用户问答",
-    "附近景点",
-    "推荐景点",
-    "附近美食",
-    "附近购物",
-    "热门旅游目的地推荐",
-    "旅游攻略导航",
-    "微信小程序",
-    "扫码前往",
-    "值机选座",
-    "退票改签",
-    "报销凭证",
-    "AI行程助手",
-    "特价机票",
-    "企业商旅",
-)
+
+# 可作"以底稿为骨架轻改"的权利模式（产品裁定 full light-edit，licensed 与 factual 同等对待）。
+# 仅 blocked 不可作底稿；rights 准入校验另在 download/content_plan 层执行，与此复用策略解耦。
+ADAPTABLE_SOURCE_USE_MODES = ("licensed_adaptation", "factual_reference_only")
+
+
+def base_draft_is_adaptable(source_use_mode: str | None) -> bool:
+    """生产/review 复用层：该来源是否可作为以底稿为骨架轻改的表达底稿。"""
+    return str(source_use_mode or "").strip() in ADAPTABLE_SOURCE_USE_MODES
+# 样板/噪声行标记唯一真相源在 content_evidence.SOURCE_BOILERPLATE_MARKERS，禁止在此另起一份。
+_NOISE_LINE_MARKERS = SOURCE_BOILERPLATE_MARKERS
+_RELEVANT_BASE_MIN_CHARS = 320
+_RELEVANT_BASE_MIN_RATIO = 0.55
+_RELEVANT_BASE_MULTI_TOPIC_MIN_RATIO = 0.25
+_RELEVANT_LINE_MIN_SIMILARITY = 0.18
+_ARTICLE_BASE_BODY_RATIO = 0.72
 
 
 # ─── 账本（一源仅一稿）────────────────────────────────────────────────
@@ -243,37 +239,37 @@ def load_base_draft_text(task_id: str, batch_id: str, base_source_ref: str | Non
     return ""
 
 
-def base_source_use_mode(task_id: str, batch_id: str, base_source_ref: str | None) -> str:
-    """读取来源单元权利模式；旧来源默认按事实参考处理，禁止误启用轻改门。"""
+def base_source_unit_meta(task_id: str, batch_id: str, base_source_ref: str | None) -> dict[str, Any]:
+    """读取来源单元 meta.json（sourceId/platform/sourceUseMode 等），缺失返回空 dict。
+
+    作为来源单元元信息的唯一读取入口：base_source_use_mode 取权利模式、
+    works_gate 取 sourceId/platform 解析来源专业度，共享同一份路径解析，
+    避免重复推导来源目录（R25）。
+    """
     if not base_source_ref:
-        return "factual_reference_only"
+        return {}
     candidate = batch_root(task_id, batch_id) / str(base_source_ref)
     unit_dir = candidate if candidate.is_dir() else candidate.parent
     meta_path = unit_dir / "meta.json"
     if meta_path.is_file():
         try:
-            mode = str(read_json(meta_path).get("sourceUseMode") or "").strip()
+            meta = read_json(meta_path)
         except (OSError, ValueError):
-            mode = ""
-        if mode:
-            return mode
-    return "factual_reference_only"
+            return {}
+        if isinstance(meta, dict):
+            return dict(meta)
+    return {}
+
+
+def base_source_use_mode(task_id: str, batch_id: str, base_source_ref: str | None) -> str:
+    """读取来源单元权利模式；旧来源默认按事实参考处理，禁止误启用轻改门。"""
+    mode = str(base_source_unit_meta(task_id, batch_id, base_source_ref).get("sourceUseMode") or "").strip()
+    return mode or "factual_reference_only"
 
 
 def _looks_like_noise_line(line: str) -> bool:
-    compact = re.sub(r"\s+", "", line)
-    letters = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", compact)
-    if not letters:
-        return True
-    if any(marker in line for marker in _NOISE_LINE_MARKERS):
-        return True
-    if "http" in compact.lower():
-        return True
-    if re.fullmatch(r"[\d./:+\-—~～()（） ]+", compact):
-        return True
-    if compact.startswith(("IP属地", "第", "共")) and any(ch.isdigit() for ch in compact):
-        return True
-    return False
+    # 复用唯一样板判定（content_evidence.source_line_is_boilerplate），不再各自实现。
+    return source_line_is_boilerplate(line)
 
 
 def _is_signal_line(line: str) -> bool:
@@ -297,9 +293,9 @@ def _extract_base_draft_body(text: str) -> str:
 
     picked: list[str] = []
     total_chars = 0
-    for line in signal_lines[:18]:
+    for line in signal_lines:
         line_chars = len(re.sub(r"\s+", "", line))
-        if total_chars >= 2200 and len(picked) >= 4:
+        if total_chars >= 6000 and len(picked) >= 4:
             break
         picked.append(line)
         total_chars += line_chars
@@ -311,6 +307,84 @@ def _extract_base_draft_body(text: str) -> str:
 def extract_base_draft_body(text: str) -> str:
     """公共底稿正文提取入口，供站点供给与生产管线复用同一清洗规则。"""
     return _extract_base_draft_body(text)
+
+
+# ─── writingIntent 主线对齐底稿（prompt 与 review 门共享单一真相源）──────────
+# 长多主题游记（跨城支线/广告/无关主题）若整篇灌进 baseDraftText，会逼 agent
+# 要么照搬无关段、要么大改导致低贴合度，且 review 门以整篇作分母，聚焦文章永远
+# 摸不到下限。这里按 writingIntent 桶（WRITING_INTENTS 为唯一来源）+ 实体名挑出
+# 主线对齐段，prompt 与门必须消费同一份对齐底稿，避免双轨/第二坐标链（R24/R-CS01）。
+_INTENT_ALIGNED_TARGET_CHARS = 4000
+# 仅当聚焦底稿自身有效字 >= 该下限才收窄；否则原样返回整篇。
+# 取 640（发布门 MIN_ARTICLE_BASE_DRAFT_CHARS=600 之上留小余量），避免收窄后跌破发布门。
+_INTENT_ALIGNED_MIN_CHARS = 640
+
+
+def _intent_is_relevant(paragraph: str, bucket_terms: Sequence[Sequence[str]], entity_name: str) -> bool:
+    """段落是否与本篇 writingIntent 主线或本实体直接相关。"""
+    if entity_name and entity_name in paragraph:
+        return True
+    return any(any(term in paragraph for term in terms) for terms in bucket_terms)
+
+
+def intent_aligned_base_text(
+    base_text: str,
+    *,
+    writing_intent: str | None,
+    entity_name: str = "",
+    target_chars: int = _INTENT_ALIGNED_TARGET_CHARS,
+    min_chars: int = _INTENT_ALIGNED_MIN_CHARS,
+) -> str:
+    """按 writingIntent 桶关键词 + 实体名，从清洗底稿里挑主线对齐段落。
+
+    - 未知/缺失 intent 或段落过少时，原样返回整篇正文（不冒险收窄）。
+    - 只保留命中 intent 桶或含本实体名的段落，按原文顺序拼回保持叙事连贯。
+    - 绝不用无关段补长：聚焦底稿 < min_chars（源对该 intent 太薄）时原样返回整篇，
+      既不污染聚焦度，也不新增 thin-source 误丢（薄源由源采集充分率门 T3 处置）。
+    - prompt 侧 baseDraftText 与 review 门 baseDraftFidelity 分母消费同一份对齐底稿，
+      避免整篇多主题游记作分母误杀聚焦文章（R-CS01 单一真相源）。
+    """
+    from _common.quality_gates import WRITING_INTENTS
+
+    body = extract_base_draft_body(base_text)
+    if not body:
+        return ""
+    spec = WRITING_INTENTS.get(str(writing_intent or "").strip())
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", body) if p.strip()]
+    if not spec or len(paragraphs) <= 4:
+        return body[:target_chars]
+    bucket_terms = [list(terms) for terms in (spec.get("buckets") or {}).values()]
+    picked: list[str] = []
+    total = 0
+    for paragraph in paragraphs:
+        if not _intent_is_relevant(paragraph, bucket_terms, entity_name):
+            continue
+        chars = len(re.sub(r"\s+", "", paragraph))
+        if picked and total + chars > target_chars:
+            break
+        picked.append(paragraph)
+        total += chars
+    excerpt = "\n\n".join(picked).strip()
+    if excerpt and len(re.sub(r"\s+", "", excerpt)) >= min_chars:
+        return excerpt[:target_chars]
+    return body[:target_chars]
+
+
+def load_intent_aligned_base_draft_text(
+    task_id: str,
+    batch_id: str,
+    base_source_ref: str | None,
+    *,
+    writing_intent: str | None = None,
+    entity_name: str = "",
+) -> str:
+    """读取底稿正文并按 writingIntent 收窄到主线对齐段（prompt 与门共用）。"""
+    text = load_base_draft_text(task_id, batch_id, base_source_ref)
+    if not text:
+        return ""
+    return intent_aligned_base_text(
+        text, writing_intent=writing_intent, entity_name=entity_name
+    )
 
 
 _FIGURE_RE = re.compile(r"(?ms)^:::figure.*?:::")
@@ -353,6 +427,8 @@ def _base_excerpt_for_gallery(text: str, *, body_len: int) -> str:
         chars = len(re.sub(r"\s+", "", paragraph))
         if picked and total >= target_chars:
             break
+        if picked and body_len > 0 and total >= int(body_len * 0.9):
+            break
         if picked and total + chars > target_chars:
             current_gap = abs(target_chars - total)
             expanded_gap = abs(target_chars - (total + chars))
@@ -363,19 +439,99 @@ def _base_excerpt_for_gallery(text: str, *, body_len: int) -> str:
     return "\n\n".join(picked)
 
 
-def _strip_source_meta(text: str, *, carrier: str = "article", body_len: int = 0) -> str:
-    """去掉底稿里的 license/credit/url 等元信息行，并按载体裁切公平比较窗口。"""
+def _base_comparison_lines(text: str) -> list[str]:
+    """用于贴合度比较的底稿行：去掉来源头、平台壳、广告和纯导航噪声。"""
     text = _normalize_embedded_newlines(text)
     kept: list[str] = []
     for line in text.splitlines():
-        low = line.strip().lower()
+        stripped = line.strip()
+        if not stripped:
+            kept.append("")
+            continue
+        low = stripped.lower()
         if low.startswith(("license", "alloweduse", "credit", "url", "source", "title:", "图片来源", "授权")):
             continue
-        kept.append(line)
-    filtered = "\n".join(kept).strip()
+        if _looks_like_noise_line(stripped):
+            continue
+        kept.append(stripped)
+    return kept
+
+
+def _compact_lines(lines: Sequence[str]) -> str:
+    return re.sub(r"\s+", "", "\n".join(lines).strip())
+
+
+def _cap_relevant_lines_to_body(scored_lines: Sequence[tuple[int, float, str]], *, body_len: int) -> str:
+    if not scored_lines:
+        return ""
+    ordered_lines = [line for _index, _score, line in sorted(scored_lines, key=lambda item: item[0])]
+    compact = _compact_lines(ordered_lines)
+    if not body_len:
+        return compact
+    target_chars = int(body_len / _ARTICLE_BASE_BODY_RATIO) if _ARTICLE_BASE_BODY_RATIO > 0 else body_len
+    target_chars = max(_RELEVANT_BASE_MIN_CHARS, target_chars)
+    if len(compact) <= target_chars:
+        return compact
+    picked_rows: list[tuple[int, str]] = []
+    total = 0
+    for index, _score, line in sorted(scored_lines, key=lambda item: item[1], reverse=True):
+        chars = len(re.sub(r"\s+", "", line))
+        if picked_rows and total >= target_chars:
+            break
+        if picked_rows and total + chars > target_chars:
+            current_gap = abs(target_chars - total)
+            expanded_gap = abs(target_chars - (total + chars))
+            if current_gap <= expanded_gap:
+                break
+        picked_rows.append((index, line))
+        total += chars
+    picked = [line for _index, line in sorted(picked_rows, key=lambda item: item[0])]
+    return _compact_lines(picked) or compact[:target_chars]
+
+
+def _relevant_base_excerpt(base_lines: Sequence[str], body: str) -> str:
+    """在长底稿含广告/跨城支线时，用主体保留段落作为比较窗口。
+
+    候选段落覆盖清洗底稿的足够比例时直接启用。对于多城/多主题游记，
+    如果相关段占比偏低但自身与正文仍达到贴合度下限，也启用相关段；
+    只复用少量关键词的成稿仍会回退到完整清洗底稿并触发低贴合度。
+    """
+    clean_base = _compact_lines(base_lines)
+    if len(clean_base) < _RELEVANT_BASE_MIN_CHARS or not body:
+        return clean_base
+    body_grams = _char_ngrams(body)
+    selected: list[tuple[int, float, str]] = []
+    selected_chars = 0
+    for index, line in enumerate(base_lines):
+        compact = re.sub(r"\s+", "", line)
+        grams = _char_ngrams(compact)
+        if not grams:
+            continue
+        overlap = len(grams & body_grams) / len(grams)
+        if overlap >= _RELEVANT_LINE_MIN_SIMILARITY:
+            selected.append((index, overlap, line))
+            selected_chars += len(compact)
+    if selected_chars >= _RELEVANT_BASE_MIN_CHARS:
+        selected_base = _cap_relevant_lines_to_body(selected, body_len=len(body))
+        selected_ratio = selected_chars / len(clean_base)
+        selected_grams = _char_ngrams(selected_base)
+        selected_similarity = len(selected_grams & body_grams) / len(selected_grams) if selected_grams else 0.0
+        if selected_ratio >= _RELEVANT_BASE_MIN_RATIO or (
+            selected_ratio >= _RELEVANT_BASE_MULTI_TOPIC_MIN_RATIO
+            and selected_similarity >= FIDELITY_MIN
+        ):
+            return selected_base
+    return clean_base
+
+
+def _strip_source_meta(text: str, *, carrier: str = "article", body_len: int = 0, body: str = "") -> str:
+    """去掉底稿里的 license/credit/url/平台噪声，并按载体裁切公平比较窗口。"""
+    base_lines = _base_comparison_lines(text)
+    filtered = "\n".join(base_lines).strip()
     if carrier == "gallery" and filtered:
         filtered = _base_excerpt_for_gallery(filtered, body_len=body_len)
-    return re.sub(r"\s+", "", filtered)
+        return re.sub(r"\s+", "", filtered)
+    return _relevant_base_excerpt(base_lines, body)
 
 
 def _char_ngrams(text: str, n: int = _NGRAM) -> set[str]:
@@ -387,7 +543,7 @@ def _char_ngrams(text: str, n: int = _NGRAM) -> set[str]:
 def base_draft_similarity(article: str, base_text: str, *, carrier: str = "article") -> float:
     """底稿留存率：底稿 char 三连里有多少在成品中出现（单向覆盖，与成品长度无关）。"""
     body = _readable_body(article)
-    base = _strip_source_meta(base_text, carrier=carrier, body_len=len(body))
+    base = _strip_source_meta(base_text, carrier=carrier, body_len=len(body), body=body)
     base_grams = _char_ngrams(base)
     if not body or not base_grams:
         return 0.0
@@ -404,14 +560,15 @@ def base_draft_fidelity_issues(
     carrier: str = "article",
     source_use_mode: str = "licensed_adaptation",
 ) -> list[str]:
-    """底稿贴合度门：版权风险全面放开后对所有来源生效。
+    """底稿贴合度门：对所有可作底稿的来源生效（licensed_adaptation 与 factual_reference_only）。
 
-    下限防「脱离底稿从零另写」；上限（99.5%）只兜底「零加工整篇逐字照搬」——
-    即未做任何去语病/错字、PII 脱敏替代或人设用词语气适配。优质原文允许大面积保留。
-    `source_use_mode` 仅保留供授权快照/署名留痕，不再决定是否启用本门。
+    产品裁定 full light-edit 后，两类来源都以底稿为骨架轻改：下限防脱离底稿/从零另写，
+    上限防零加工整篇逐字照搬。仅 blocked（不会进入底稿路径）跳过。
     """
+    if not base_draft_is_adaptable(source_use_mode):
+        return []
     body = _readable_body(article)
-    base = _strip_source_meta(base_text, carrier=carrier, body_len=len(body))
+    base = _strip_source_meta(base_text, carrier=carrier, body_len=len(body), body=body)
     if not base or not body:
         return []
     sim = base_draft_similarity(article, base_text, carrier=carrier)
@@ -432,13 +589,17 @@ def base_draft_fidelity_issues(
 __all__ = [
     "FIDELITY_MIN",
     "FIDELITY_MAX",
+    "ADAPTABLE_SOURCE_USE_MODES",
+    "base_draft_is_adaptable",
     "load_base_draft_ledger",
     "save_base_draft_ledger",
     "occupied_source_refs",
     "base_draft_candidates",
     "assign_base_draft",
     "extract_base_draft_body",
+    "intent_aligned_base_text",
     "load_base_draft_text",
+    "load_intent_aligned_base_draft_text",
     "base_source_use_mode",
     "base_draft_similarity",
     "base_draft_fidelity_issues",

@@ -56,11 +56,10 @@ def contract_field_names() -> frozenset[str]:
 
 
 def build_intersection_hints(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """据 manifest 的 entityRefs / tagRefs / conditionContext 预生成内容侧交集锚点。"""
+    """据 manifest 的 entityRefs / tagRefs 预生成内容侧交集锚点。"""
     hints: list[dict[str, Any]] = []
     entity_refs = [str(r) for r in (manifest.get("normalizedEntityRefs") or []) if r]
     tag_refs = [str(t) for t in (manifest.get("tagRefs") or []) if t]
-    condition = manifest.get("conditionContext") or {}
 
     for ref in entity_refs[:3]:
         hints.append(
@@ -85,18 +84,6 @@ def build_intersection_hints(manifest: Mapping[str, Any]) -> list[dict[str, Any]
                 "tagRefs": [tag],
                 "actionType": "join",
                 "actionTargetId": tag,
-            }
-        )
-    region = condition.get("region") if isinstance(condition, Mapping) else None
-    if region:
-        target = str(region.get("name") or region.get("label") or "") if isinstance(region, Mapping) else str(region)
-        hints.append(
-            {
-                "dimension": "location",
-                "source": "geoTagRef",
-                "tagRefs": [],
-                "actionType": "view_object",
-                "actionTargetId": target,
             }
         )
     return hints

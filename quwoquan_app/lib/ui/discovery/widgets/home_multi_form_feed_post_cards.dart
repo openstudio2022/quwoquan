@@ -640,13 +640,6 @@ class _PostIntersectionLine extends StatelessWidget {
     final double borderOpacity = isFact
         ? DiscoveryFeedSpacing.homeFeedIntersectionBorderOpacity
         : DiscoveryFeedSpacing.homeFeedIntersectionBorderOpacitySoft;
-    final Color labelColor = isFact
-        ? accent
-        : Color.lerp(
-            accent,
-            AppColors.iosSecondaryLabel(context),
-            DiscoveryFeedSpacing.homeFeedIntersectionSoftLabelBlend,
-          )!;
     return DecoratedBox(
       key: const ValueKey('home-relation-card-reason'),
       decoration: BoxDecoration(
@@ -664,79 +657,23 @@ class _PostIntersectionLine extends StatelessWidget {
           horizontal: DiscoveryFeedSpacing.homeFeedIntersectionPadding,
           vertical: DiscoveryFeedSpacing.homeFeedIntersectionPadding,
         ),
-        child: Row(
-          children: [
-            _IntersectionGlyphIcon(strong: isFact),
-            const SizedBox(width: DiscoveryFeedSpacing.homeFeedIntersectionGap),
-            Text(
-              DiscoveryFeedText.homeFeedIntersectionReasonLabel,
-              style: TextStyle(
-                fontSize: AppTypography.iosCaption2,
-                fontWeight: AppTypography.semiBold,
-                color: labelColor,
-                height: AppSpacing.textLineHeightFootnote,
-              ),
-            ),
-            const SizedBox(
-              width: DiscoveryFeedSpacing.homeFeedIntersectionLabelGap,
-            ),
-            Expanded(
-              child: InteractiveIntersectionText(
-                spans: reason.primarySpans,
-                fallbackText: reason.primaryText.trim().isNotEmpty
-                    ? reason.primaryText
-                    : reason.connectionSummary,
-                maxLines: 1,
-                onSpanTap: onSpanTap,
-                onFallbackTap: onFallbackTap,
-                // 任务 B · 分层强度：首页交集证据行把可点击片段（姓名/数字）做成
-                // 比正文更重的字重，强化「可点击行动召唤」的视觉识别，而组件默认
-                // 字重仍保持常规（见 interactive_intersection_text_test）。
-                accentFontWeight: AppTypography.medium,
-                baseStyle: TextStyle(
-                  fontSize: AppTypography.iosFootnote,
-                  height: AppSpacing.textLineHeightFootnote,
-                  color: AppColors.iosLabel(context),
-                  letterSpacing: -0.06,
-                ),
-              ),
-            ),
-          ],
+        child: InteractiveIntersectionText(
+          spans: reason.primarySpans,
+          fallbackText: reason.primaryText,
+          maxLines: 1,
+          onSpanTap: onSpanTap,
+          onFallbackTap: onFallbackTap,
+          // 任务 B · 分层强度：首页交集证据行把可点击片段（姓名/数字）做成
+          // 比正文更重的字重，强化「可点击行动召唤」的视觉识别，而组件默认
+          // 字重仍保持常规（见 interactive_intersection_text_test）。
+          accentFontWeight: AppTypography.medium,
+          baseStyle: TextStyle(
+            fontSize: AppTypography.iosFootnote,
+            height: AppSpacing.textLineHeightFootnote,
+            color: AppColors.iosLabel(context),
+            letterSpacing: 0,
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _IntersectionGlyphIcon extends StatelessWidget {
-  const _IntersectionGlyphIcon({this.strong = true});
-
-  /// 事实型交集（强）使用纯强调色圆点；推测型（弱）向次级文本混合以弱化。
-  final bool strong;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppColors.iosAccent(context);
-    final dotColor = strong
-        ? accent
-        : Color.lerp(
-            accent,
-            AppColors.iosSecondaryLabel(context),
-            DiscoveryFeedSpacing.homeFeedIntersectionSoftLabelBlend,
-          )!;
-    return CustomPaint(
-      key: const ValueKey('home-intersection-glyph'),
-      size: const Size.square(
-        DiscoveryFeedSpacing.homeFeedIntersectionIconSize,
-      ),
-      painter: _IntersectionGlyphPainter(
-        ringColor: Color.lerp(
-          AppColors.iosSecondaryLabel(context),
-          accent,
-          DiscoveryFeedSpacing.homeFeedIntersectionRingAccentBlend,
-        )!,
-        dotColor: dotColor,
-        strokeWidth: DiscoveryFeedSpacing.homeFeedIntersectionStrokeWidth,
       ),
     );
   }
@@ -747,7 +684,9 @@ class _IntersectionGlyphIcon extends StatelessWidget {
 bool _isFactIntersection(IntersectionReason reason) {
   final normalized = reason.intersectionClass.trim().toLowerCase();
   // 仅显式标记为推测型时弱化，其余（含空值/fact）按事实型从重。
-  return normalized != 'recommended' && normalized != 'inferred';
+  return normalized != 'recommended' &&
+      normalized != 'inferred' &&
+      normalized != 'affinity';
 }
 
 Widget? _buildPostIntersectionRow({
@@ -767,57 +706,6 @@ Widget? _buildPostIntersectionRow({
       onFallbackTap: onFallbackTap,
     ),
   );
-}
-
-class _IntersectionGlyphPainter extends CustomPainter {
-  const _IntersectionGlyphPainter({
-    required this.ringColor,
-    required this.dotColor,
-    required this.strokeWidth,
-  });
-
-  final Color ringColor;
-  final Color dotColor;
-  final double strokeWidth;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(
-      size.width / AppSpacing.two,
-      size.height / AppSpacing.two,
-    );
-    final radius = (size.shortestSide - AppSpacing.two) / AppSpacing.three;
-    final leftCenter = center.translate(
-      -radius * AppSpacing.hairline,
-      AppSpacing.zero,
-    );
-    final rightCenter = center.translate(
-      radius * AppSpacing.hairline,
-      AppSpacing.zero,
-    );
-    final ringPaint = Paint()
-      ..isAntiAlias = true
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..color = ringColor;
-    canvas
-      ..drawCircle(leftCenter, radius, ringPaint)
-      ..drawCircle(rightCenter, radius, ringPaint)
-      ..drawCircle(
-        center,
-        AppSpacing.two,
-        Paint()
-          ..isAntiAlias = true
-          ..color = dotColor,
-      );
-  }
-
-  @override
-  bool shouldRepaint(covariant _IntersectionGlyphPainter oldDelegate) {
-    return oldDelegate.ringColor != ringColor ||
-        oldDelegate.dotColor != dotColor ||
-        oldDelegate.strokeWidth != strokeWidth;
-  }
 }
 
 /// 任务 A · 加载态：首页推荐占位骨架屏。脉冲渐显在「减少动态效果」下退化为静态占位。

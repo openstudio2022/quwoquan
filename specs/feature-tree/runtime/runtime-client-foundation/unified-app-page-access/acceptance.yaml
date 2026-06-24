@@ -31,10 +31,9 @@ gwt_acceptance:
       - file: quwoquan_app/test/ui/welcome/welcome_screen_test.dart
       - file: quwoquan_app/test/cloud/ops/api_contract_runner.dart
       recorded:
-      - file: quwoquan_app/test/core/services/visit_recorder_service_test.dart
-      - file: quwoquan_app/test/app/app_startup_welcome_test.dart
-      - file: quwoquan_app/test/ui/welcome/welcome_screen_test.dart
-      - file: quwoquan_app/test/cloud/ops/api_contract_runner.dart
+      - file: quwoquan_app/test/local_contract/core/services/visit_recorder_service__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -50,7 +49,8 @@ gwt_acceptance:
         - local_contract.runtime.runtime_client_foundation.unified_app_page_access.gwt1_local_contract
         envs: *id001
       supporting: []
-    notes: []
+    notes:
+    - '[migrated_from_recorded_noncanonical] quwoquan_app/test/cloud/ops/api_contract_runner.dart'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -48,12 +48,18 @@ class WelcomeScreen extends StatefulWidget {
     super.key,
     required this.onFinish,
     this.deferSequenceStart = false,
+    this.sequenceEnabled = true,
+    this.initialSequenceElapsed = Duration.zero,
+    this.onFlutterWelcomeReady,
     this.onSequenceComplete,
     this.startupLoading,
   });
 
   final VoidCallback onFinish;
   final bool deferSequenceStart;
+  final bool sequenceEnabled;
+  final Duration initialSequenceElapsed;
+  final VoidCallback? onFlutterWelcomeReady;
   final VoidCallback? onSequenceComplete;
   final WelcomeStartupLoadingState? startupLoading;
 
@@ -63,14 +69,14 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen>
     with TickerProviderStateMixin {
-  static const Duration _minimumSequenceDuration = Duration(seconds: 3);
-  static const Duration _petalDuration = Duration(milliseconds: 920);
-  static const Duration _petalStagger = Duration(milliseconds: 110);
-  static const Duration _postBloomPause = Duration(milliseconds: 260);
+  static const Duration _minimumSequenceDuration = Duration(milliseconds: 1500);
+  static const Duration _petalDuration = Duration(milliseconds: 700);
+  static const Duration _petalStagger = Duration(milliseconds: 70);
+  static const Duration _postBloomPause = Duration(milliseconds: 180);
   static const Duration _textDuration = Duration(milliseconds: 760);
-  static const Duration _finalPause = Duration(milliseconds: 180);
-  static const double _initialPetalProgress = 0.46;
-  static const double _initialTextProgress = 0.18;
+  static const Duration _finalPause = Duration(milliseconds: 120);
+  static const double _initialPetalProgress = 0.24;
+  static const double _initialTextProgress = 1.0;
   static const int _petalCount = 8;
 
   late List<AnimationController> _petalControllers;
@@ -78,6 +84,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   final Set<Timer> _sequenceTimers = <Timer>{};
   bool _finishHandled = false;
   bool _sequenceCompletionDispatched = false;
+  bool _sequenceStarted = false;
+  bool _welcomeReadyDispatched = false;
 
   @override
   void initState() {
@@ -90,7 +98,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       (i) => AnimationController(
         vsync: this,
         duration: _petalDuration,
-        value: _initialPetalProgress,
+        value: _petalValueForElapsed(widget.initialSequenceElapsed, i),
       ),
     );
     _textController = AnimationController(
@@ -99,48 +107,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       value: _initialTextProgress,
     );
 
-    Future<void> runSequence() async {
-      if (!mounted) return;
-      for (var i = 0; i < _petalCount; i++) {
-        if (!mounted) return;
-        _petalControllers[i].forward();
-        await _waitFor(_petalStagger);
-      }
-      await _waitFor(_postBloomPause);
-      if (!mounted) return;
-      await _textController.forward();
-      await _waitFor(_finalPause);
-      if (!mounted) return;
-      final awaitedBeforeFloor = Duration(
-        microseconds:
-            (_petalStagger.inMicroseconds * _petalCount) +
-            _postBloomPause.inMicroseconds +
-            (_textDuration.inMicroseconds * (1 - _initialTextProgress))
-                .round() +
-            _finalPause.inMicroseconds,
-      );
-      if (awaitedBeforeFloor < _minimumSequenceDuration) {
-        await _waitFor(_minimumSequenceDuration - awaitedBeforeFloor);
-      }
-      if (!mounted) return;
-      _dispatchSequenceCompletion();
-    }
-
-    if (widget.deferSequenceStart) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) return;
-        runSequence();
-      });
-    } else {
-      runSequence();
+    if (widget.sequenceEnabled) {
+      _startSequenceAfterFirstStableFrame();
     }
   }
 
   @override
   void didUpdateWidget(covariant WelcomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!oldWidget.sequenceEnabled && widget.sequenceEnabled) {
+      _applyInitialSequenceElapsed(widget.initialSequenceElapsed);
+      _startSequenceAfterFirstStableFrame();
+    }
   }
 
   @override
@@ -184,8 +162,85 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  bool get _shouldShowStartupLoading =>
-      _sequenceCompletionDispatched && widget.startupLoading != null;
+  bool get _shouldShowStartupLoading => widget.startupLoading != null;
+
+  Duration get _sequenceCompletionDuration {
+    final lastPetalComplete =
+        (_petalStagger * (_petalCount - 1)) + _petalDuration;
+    final remainingText = Duration(
+      microseconds: (_textDuration.inMicroseconds * (1 - _initialTextProgress))
+          .round(),
+    );
+    final visualComplete =
+        lastPetalComplete + _postBloomPause + remainingText + _finalPause;
+    return visualComplete > _minimumSequenceDuration
+        ? visualComplete
+        : _minimumSequenceDuration;
+  }
+
+  void _startSequenceAfterFirstStableFrame() {
+    if (_sequenceStarted) {
+      return;
+    }
+    _sequenceStarted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (widget.deferSequenceStart) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return;
+      }
+      _dispatchFlutterWelcomeReady();
+      _runSequenceFrom(widget.initialSequenceElapsed);
+    });
+  }
+
+  void _dispatchFlutterWelcomeReady() {
+    if (_welcomeReadyDispatched) {
+      return;
+    }
+    _welcomeReadyDispatched = true;
+    widget.onFlutterWelcomeReady?.call();
+  }
+
+  void _runSequenceFrom(Duration elapsed) {
+    if (!mounted) return;
+    for (var i = 0; i < _petalCount; i++) {
+      final startDelay = (_petalStagger * i) - elapsed;
+      if (startDelay <= Duration.zero) {
+        if (_petalControllers[i].value < 1) {
+          _petalControllers[i].forward();
+        }
+      } else {
+        _schedule(startDelay, () {
+          if (mounted && _petalControllers[i].value < 1) {
+            _petalControllers[i].forward();
+          }
+        });
+      }
+    }
+
+    final remaining = _sequenceCompletionDuration - elapsed;
+    _schedule(remaining, _dispatchSequenceCompletion);
+  }
+
+  void _applyInitialSequenceElapsed(Duration elapsed) {
+    for (var i = 0; i < _petalCount; i++) {
+      _petalControllers[i].value = _petalValueForElapsed(elapsed, i);
+    }
+    _textController.value = _initialTextProgress;
+  }
+
+  double _petalValueForElapsed(Duration elapsed, int index) {
+    final sinceStart = elapsed - (_petalStagger * index);
+    if (sinceStart <= Duration.zero) {
+      return _initialPetalProgress;
+    }
+    if (sinceStart >= _petalDuration) {
+      return 1.0;
+    }
+    final raw = sinceStart.inMicroseconds / _petalDuration.inMicroseconds;
+    return _initialPetalProgress + (1 - _initialPetalProgress) * raw;
+  }
 
   Widget _buildBackground(WelcomeAppearance appearance) {
     return Positioned.fill(
@@ -468,19 +523,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     _finishWelcome();
   }
 
-  Future<void> _waitFor(Duration duration) {
+  void _schedule(Duration duration, VoidCallback callback) {
     if (duration <= Duration.zero) {
-      return Future<void>.value();
+      callback();
+      return;
     }
-    final completer = Completer<void>();
     late final Timer timer;
     timer = Timer(duration, () {
       _sequenceTimers.remove(timer);
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
+      callback();
     });
     _sequenceTimers.add(timer);
-    return completer.future;
   }
 }

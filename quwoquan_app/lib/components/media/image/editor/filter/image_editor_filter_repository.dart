@@ -16,6 +16,15 @@ class ImageEditorFilterRepository {
   static const String _usageCountMapKey = 'image_editor_filter_usage_count_map';
   static const int recentPresetMaxCount = 8;
   static const int _presetTargetCount = 220;
+  static const String cameraPhotoCategoryId = 'camera_photo';
+  static const List<String> cameraPhotoPresetIds = <String>[
+    'original',
+    'vivid',
+    'warm',
+    'cool',
+    'dramatic',
+    'mono',
+  ];
 
   Future<ImageEditorFilterConfig> loadConfig() async {
     final cached = await _readCachedConfig();
@@ -34,6 +43,28 @@ class ImageEditorFilterRepository {
       presets: <ImageEditorFilterPreset>[],
       recommendedFallbackPresetIds: <String>[],
     );
+  }
+
+  Future<List<ImageEditorFilterPreset>> loadCameraPhotoPresets() async {
+    final config =
+        await _readBundledConfig() ??
+        const ImageEditorFilterConfig(
+          version: 1,
+          categories: <ImageEditorFilterCategory>[],
+          presets: <ImageEditorFilterPreset>[],
+          recommendedFallbackPresetIds: <String>[],
+        );
+    final byId = <String, ImageEditorFilterPreset>{
+      for (final preset in config.presets)
+        if (preset.enabled &&
+            preset.categoryId == cameraPhotoCategoryId &&
+            cameraPhotoPresetIds.contains(preset.id))
+          preset.id: preset,
+    };
+    return cameraPhotoPresetIds
+        .map((id) => byId[id])
+        .whereType<ImageEditorFilterPreset>()
+        .toList(growable: false);
   }
 
   ImageEditorFilterConfig _expandPresetPool(

@@ -47,6 +47,14 @@ var collections = []string{
 	"notification_delivery_ledger",
 }
 
+func requireMongoDB(tb testing.TB) *mongo.Database {
+	tb.Helper()
+	if mongoDB == nil {
+		tb.Fatal("chat-service tests require TestMain to provision mongoDB or exit before execution")
+	}
+	return mongoDB
+}
+
 // testProfileResolver returns deterministic display names for contract tests.
 type testProfileResolver struct{}
 

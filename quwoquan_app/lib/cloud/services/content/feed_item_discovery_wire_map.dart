@@ -56,6 +56,12 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
         'articleFontPreset': articleFontPreset,
       if (articlePresentationVersion != null)
         'articlePresentationVersion': articlePresentationVersion,
+      if (contentVertical != null && contentVertical!.trim().isNotEmpty)
+        'contentVertical': contentVertical,
+      if (recallPath != null && recallPath!.trim().isNotEmpty)
+        'recallPath': recallPath,
+      if (supplySource != null && supplySource!.trim().isNotEmpty)
+        'supplySource': supplySource,
       if (cards != null && cards!.isNotEmpty) 'cards': cards,
       if (circleSummaries != null && circleSummaries!.isNotEmpty)
         'circleSummaries': circleSummaries,

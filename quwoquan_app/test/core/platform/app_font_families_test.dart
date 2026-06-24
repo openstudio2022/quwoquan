@@ -13,6 +13,12 @@ void main() {
       expect(fallbacks, isNot(contains('PingFang SC')));
       expect(fallbacks, isNot(contains('.SF Pro Text')));
     });
+
+    test('ios theme fallback includes emoji-capable family', () {
+      final fallbacks = resolveAppThemeFontFallbacks(AppPlatform.ios);
+      expect(fallbacks, contains('.SF Pro Text'));
+      expect(fallbacks, contains(BundledFontFamilies.notoColorEmoji));
+    });
   });
 
   group('resolveArticleFontStack', () {

@@ -43,8 +43,8 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - 'command: go test ./services/user-service/tests -run Test(GetPersonaLifecycleGuard_HistoryCoverageBySource|GetPersonaLifecycleGuard_ActivePersonaRequiresSuccessor|GetPersonaLifecycleGuard_HistoryRequiresRetire|RetirePersona_PersistsRetiredStatus|DeleteEmptyPersona_HistoryRequiresRetireConflict|RetiredPersona_CannotBeActivatedOrUpdated) -count=1'
-      - quwoquan_app/test/ui/user/widgets/persona_management_page_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/persona_management_page__local_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/persona_contract__api_integration_test.go
     status: completed
     test_evidence:
       primary:
@@ -56,21 +56,26 @@ gwt_acceptance:
         - api_integration.user.persona_lifecycle.retire_persists_retired_status
         - api_integration.user.persona_lifecycle.delete_empty_conflict_when_history_exists
         - api_integration.user.persona_lifecycle.retired_persona_cannot_activate_or_update
-        envs: &id001
-        - local
+        envs:
+        - gamma
       - layer: local_contract
         suite: persona_management_page
         cases:
         - local_contract.user.persona_lifecycle.retired_persona_hides_delete_action
-        envs: *id001
+        envs:
+        - local
       supporting:
       - layer: api_integration
         suite: persona_lifecycle_metrics
         cases:
         - api_integration.user.persona_lifecycle.mongo_history_fallback_metric
-        envs: *id001
+        envs:
+        - gamma
     notes:
     - 本 story 关注 delete/retire contract；不把一般分身编辑能力混入生命周期守卫范围。
+    - '[migrated_from_recorded_command] go test ./services/user-service/tests -run
+      Test(GetPersonaLifecycleGuard_HistoryCoverageBySource|GetPersonaLifecycleGuard_ActivePersonaRequiresSuccessor|GetPersonaLifecycleGuard_HistoryRequiresRetire|RetirePersona_PersistsRetiredStatus|DeleteEmptyPersona_HistoryRequiresRetireConflict|RetiredPersona_CannotBeActivatedOrUpdated)
+      -count=1'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
+import 'package:quwoquan_app/cloud/runtime/local_dev_https_trust.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
@@ -87,6 +88,7 @@ Future<void> runQuwoquanApp({
       );
 
       WidgetsBinding.instance.addObserver(_AppExceptionLifecycleObserver());
+      await _installLocalDevHttpsTrustBeforeMediaClients();
       runApp(
         ScreenUtilInit(
           designSize: const Size(375, 812),
@@ -107,6 +109,19 @@ Future<void> runQuwoquanApp({
       );
     },
   );
+}
+
+Future<void> _installLocalDevHttpsTrustBeforeMediaClients() async {
+  try {
+    await LocalDevHttpsTrust.installForCurrentRuntime();
+  } catch (error, stack) {
+    logQuwoquanAppException(
+      source: 'local_dev_https_trust',
+      exceptionText: error.toString(),
+      stackText: stack.toString(),
+    );
+    rethrow;
+  }
 }
 
 void _installRootIsolateErrorListener() {

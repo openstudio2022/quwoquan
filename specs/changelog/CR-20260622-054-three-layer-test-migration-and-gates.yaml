@@ -1,0 +1,891 @@
+id: CR-20260622-054-three-layer-test-migration-and-gates
+title: 三层测试规范迁移收口：canonical bridge、页面矩阵真相源与独立门禁落地
+slug: three-layer-test-migration-and-gates
+revision: 7
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-test-pyramid
+  - specs/feature-tree/runtime/runtime-testinfra
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality
+  - specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror
+  - specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod
+  - specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread
+  - specs/feature-tree/chat-conversation/list-detail-message-delivery/voice-message
+  - specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign
+  - specs/feature-tree/object-homepage-network
+  - specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-overview-and-module-shell
+  - specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign
+  - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management--persona-lifecycle-contract
+  - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management
+  - specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update
+  - specs/feature-tree/runtime/runtime-client-foundation/app-remote-config
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/realtime-feed-baseline
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/personalized-ranking
+  - specs/feature-tree/product-ops-growth/event-ingestion-and-analytics
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity
+  - specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract
+  - specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity
+  - specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure
+  - specs/feature-tree/chat-conversation
+
+entries:
+  - timestamp: "2026-06-22T00:00:00+08:00"
+    summary: |
+      按 `/plan-review` 把全仓测试治理从历史 `T1-T4/L1-L4` 口径收敛到唯一三层模型，并把
+      `gamma-local + prod gray-initial` 的 Journey / Page 用例提升为顶层真相源，再向下约束
+      `beta/gamma` 的 `api_integration` 与 `alpha/local` 的 `local_contract`。本次收口包含：
+
+      - 目录与 bridge：新增 `generate_canonical_test_bridges.py`，为 App 377、Service 183、
+        Data 101、agent_ops 9 个 legacy suite 生成 canonical bridge，并自动生成 28 个页面级
+        `user_acceptance/pages/<owner>/<surface_id>/...` wrapper。
+      - inventory：`specs/gates/test_directory_inventory.yaml` 升级为 version 2，记录
+        `current_path -> target_path -> classification_basis -> migration_status`；`pending_count`
+        表示尚未 bridge 的 suite 数，新增 `bridged_count` 表示已桥接数。该状态用于治理执行面，
+        不表示 legacy 文件已从磁盘移除。
+      - 页面真相源：新增 `specs/gates/user_acceptance_page_inventory.yaml`，以 metadata
+        `ui_surfaces` / `app_routes` 为唯一页面清单；`page-horizontal-quality` acceptance 建立
+        `user_acceptance.page.*` 页面矩阵，不再为 0。
+      - 证据与 acceptance：新增 `normalize_acceptance_recorded_paths.py`，回写 66 份 acceptance，
+        `tests.recorded` 只允许 canonical 三层路径或真实 `artifacts/tests/**/report.json`。
+      - 门禁：`verify-test-no-fake` 与 `verify-test-coverage-map` 从别名升级为独立脚本，并串入
+        `Makefile` 与 `agent_ops/gate/gate_repo.sh`；`make gate` / `make gate-full` 收敛到新口径。
+      - 二轮收口：新增 `specs/gates/test_legacy_source_allowlist.yaml` 作为存量 legacy 源 ratchet，
+        `verify-test-directory-layout` 阻断任何“新增 legacy + 补 bridge”的回潮；`verify-test-no-fake`
+        进一步下钻到 bridge 背后的 legacy 源文件，并把 bench-only / grandfathered skip 例外显式化。
+      - traceability：`verify-test-coverage-map` 新增 `test_evidence.cases[] -> canonical file /
+        report.json.case_results[]` 校验，并补上 Journey/Scenario 的反向绑定 gate，使
+        `runtime-test-pyramid` / `runtime-testinfra` 的 `tests.recorded`、`test_evidence`、`execution`
+        可以直接被脚本证明。
+      - 远端层 preflight：新增 `verify-test-remote-env`，在真正触发远端 `api_integration` /
+        hosted `user_acceptance` 之前，先阻断缺失的 base URL、product-ops URL、token 与
+        Patrol CLI wiring，避免半路才因环境前置缺失失败。
+      - 历史口径清理：清掉 `README`、Patrol 用例文件头、断言文案、支撑注释与 `pubspec`
+        里的 `T1-T4/L1-L4` 人类可读旧 testing 口径；保留 `RUN_T4_PATROL` / `tier t4`
+        等运行时接口名，作为后续单独评估的遗留。
+      - strict 扩围：回填 `comment-thread`、`voice-message`、`profile-homepage-redesign`、
+        `object-homepage-network` 的 `tests.recorded` canonical 文件，并把
+        `voice-message` / `profile-homepage-redesign` / `object-homepage-network` 整文件，
+        以及 `comment-thread` 已补齐的 13 个 GWT 项纳入 `verify-test-coverage-map` hard gate。
+        全仓 full strict 诊断从 `23` 份 acceptance / `55` 个 layer 缺口下降到
+        `20` 份 acceptance / `26` 个 layer 缺口。
+    reason: |
+      迁移前全仓测试目录、环境语义、页面用例、acceptance recorded 与门禁都存在第二口径：Journey/
+      Page 不是顶层真相源，`user_acceptance.page.*` 为 0，legacy 路径仍大量出现在主证据中，
+      `verify-test-no-fake`/`verify-test-coverage-map` 只是别名，导致“看似迁移、实际不可追溯”的
+      假绿风险。用户要求一次性收口迁移并关闭 `R-TST01`/`R-TST02`，因此需要同步完成规范、
+      工程目录、acceptance、门禁与执行入口的同源化。
+    change_type:
+      - arch
+      - contract
+      - test
+      - tooling
+    changed_documents:
+      - path: specs/03_TESTING_STRATEGY.md
+        sections:
+          - 三层环境语义
+          - canonical 目录与 bridge
+          - page inventory 与门禁
+          - 远端 preflight
+      - path: Makefile
+        sections:
+          - verify-test-remote-env
+          - test-api-integration
+          - test-user-acceptance
+      - path: specs/feature-tree/runtime/runtime-test-pyramid/spec.md
+        sections:
+          - Summary
+          - Core Rules
+          - Exit Evidence
+      - path: specs/feature-tree/runtime/runtime-testinfra/spec.md
+        sections:
+          - Summary
+          - In Scope
+          - Done When
+      - path: specs/feature-tree/runtime/runtime-test-pyramid/acceptance.yaml
+        sections:
+          - sit_acceptance.SIT1
+      - path: specs/feature-tree/runtime/runtime-testinfra/acceptance.yaml
+        sections:
+          - sit_acceptance.SIT1
+      - path: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+          - gwt_acceptance.GWT2
+      - path: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod/acceptance.yaml
+        sections:
+          - scope
+          - gwt_acceptance.GWT1
+      - path: specs/gates/test_directory_inventory.yaml
+        sections:
+          - areas
+      - path: specs/gates/test_legacy_source_allowlist.yaml
+        sections:
+          - grandfathered_current_paths
+          - bench_only_allowed_sources
+          - skip_grandfathered_sources
+      - path: specs/gates/user_acceptance_page_inventory.yaml
+        sections:
+          - page_truth_source
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-TST01
+          - R-TST02
+          - R-TST05
+          - R-TST06
+          - R-TST07
+      - path: agent_ops/scaffold/verify_test_coverage_map.py
+        sections:
+          - STRICT_TRACEABILITY_PATHS
+          - STRICT_TRACEABILITY_ITEMS
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+          - gwt_acceptance.GWT2
+          - gwt_acceptance.GWT3
+          - gwt_acceptance.GWT5
+          - gwt_acceptance.GWT7
+          - gwt_acceptance.GWT8
+      - path: specs/feature-tree/chat-conversation/list-detail-message-delivery/voice-message/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+          - gwt_acceptance.GWT2
+          - gwt_acceptance.GWT4
+          - gwt_acceptance.GWT5
+          - gwt_acceptance.GWT6
+      - path: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/acceptance.yaml
+        sections:
+          - sit_acceptance.SIT1
+          - sit_acceptance.SIT2
+          - sit_acceptance.SIT3
+          - sit_acceptance.SIT4
+      - path: specs/feature-tree/object-homepage-network/acceptance.yaml
+        sections:
+          - domain_acceptance.DA1
+          - domain_acceptance.DA2
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: false
+    verification:
+      - "python3 agent_ops/scaffold/generate_canonical_test_bridges.py"
+      - "python3 agent_ops/scaffold/generate_test_directory_inventory.py"
+      - "python3 agent_ops/scaffold/verify_test_specs.py"
+      - "python3 agent_ops/scaffold/verify_test_directory_inventory.py"
+      - "python3 agent_ops/scaffold/verify_test_no_fake.py"
+      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+      - "make verify-test-specs"
+      - "make verify-test-directory-layout"
+      - "make verify-test-no-fake"
+      - "make verify-test-coverage-map"
+      - "GAMMA_BASE_URL=https://example.invalid GAMMA_PRODUCT_OPS_BASE_URL=https://example.invalid TEST_AUTH_TOKEN=dryrun make verify-test-remote-env MODE=api_integration ENV=gamma"
+      - "make verify-test-remote-env MODE=user_acceptance TARGET=gamma-local"
+      - "PROD_BASE_URL=https://example.invalid PROD_PRODUCT_OPS_BASE_URL=https://example.invalid TEST_AUTH_TOKEN=dryrun USER_ACCEPTANCE_DRY_RUN=1 make verify-test-remote-env MODE=user_acceptance TARGET=prod-hosted"
+      - "PROD_BASE_URL=https://example.invalid PROD_PRODUCT_OPS_BASE_URL=https://example.invalid TEST_AUTH_TOKEN=dryrun USER_ACCEPTANCE_DRY_RUN=1 make test-user-acceptance TARGET=prod-hosted"
+      - "cd quwoquan_service && go test ./services/.../tests/local_contract -count=1"
+      - "cd quwoquan_service/services/assistant-service && go test ./tests/api_integration -count=1"
+      - "cd quwoquan_service/services/entity-service && go test ./tests/api_integration -count=1"
+      - "cd quwoquan_service/services/search-service && go test ./tests/api_integration -count=1"
+    notes:
+      - 本 CR 收口的是迁移与门禁，不把 `quwoquan_data` 既有业务红测或 `user-service` 长跑 api_integration 误记为绿色。
+      - 生产灰度语义统一为 `prod_gray_initial` rollout stage，不新增 `prod-gray` 第二环境。
+  - timestamp: "2026-06-22T22:30:00+08:00"
+    summary: |
+      继续按 `/continue-dev` 对 `R-TST06` 做 feature-tree 级 burn-down，本轮不新增测试实现，只回填已有
+      canonical 测试的 recorded 证据并扩大 hard gate。新增 strict 覆盖的节点包括：
+
+      - `shared-homepage`、`circle-homepage`、`persona-management`、`persona-management--persona-lifecycle-contract`
+      - `profile-read-update`、`app-remote-config`
+      - `feed-orchestration-recommendation`、`realtime-feed-baseline`、`personalized-ranking`
+      - `event-ingestion-and-analytics`、`search-storage-topology-and-elasticity`
+      - `canonical-search-contract`、`geo-content-trinity`、`intersection-algorithm-closure`
+
+      同时把 `verify-test-coverage-map` 的 strict path 集合继续扩大，并保持 `comment-thread` 的 item 级 strict。
+      full strict 诊断从上一轮的 `20` 份 acceptance / `26` 个 layer 缺口，进一步压缩到
+      `6` 份 acceptance / `8` 个 layer 缺口。
+    reason: |
+      上一轮已经证明大量历史 acceptance 并非“缺测试”，而是“已有 canonical 测试但没有 recorded 回填”。
+      因此本轮优先消化低成本节点，把 hard gate 范围尽量扩到真正已闭环的业务特性，剩余文件则保留为
+      真实缺桥/缺测试问题，避免继续用弱相关 recorded 伪绿。
+    change_type:
+      - contract
+      - test
+      - tooling
+      - docs
+    changed_documents:
+      - path: agent_ops/scaffold/verify_test_coverage_map.py
+        sections:
+          - STRICT_TRACEABILITY_PATHS
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-TST06
+      - path: specs/03_TESTING_STRATEGY.md
+        sections:
+          - 门禁
+      - path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-overview-and-module-shell/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management--persona-lifecycle-contract/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT4
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/acceptance.yaml
+        sections:
+          - sit_acceptance.SIT1
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/realtime-feed-baseline/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/personalized-ranking/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/acceptance.yaml
+        sections:
+          - sit_acceptance.SIT1
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT2
+      - path: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT_ALG4
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "make verify-test-coverage-map"
+      - "make verify-test-specs"
+      - "make verify-test-directory-layout"
+      - "make verify-test-no-fake"
+      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+    notes:
+      - 本轮没有捏造新的 api_integration / local_contract 文件；只回填仓库中已存在的 canonical 测试证据。
+      - 剩余 6 份 acceptance / 8 个 layer 缺口已集中收敛为真实缺桥/缺测试问题，详见 backlog `R-TST06`。
+  - timestamp: "2026-06-22T22:55:00+08:00"
+    summary: |
+      继续按 `/continue-dev` 收尾 `R-TST06` 的真实硬缺口。本轮不再只做 acceptance 回填，而是补上
+      `comment-thread.GWT12` 缺失的 canonical `api_integration`：
+
+      - 新增 `quwoquan_service/services/content-service/tests/api_integration/comment_pin_contract__api_integration_test.go`
+      - 真实覆盖 `PinComment/UnpinComment` 的 HTTP + Mongo 链路，断言 author pin/unpin、非作者 403、二级回复 400
+      - 把 `comment-thread.GWT12` 纳入 `verify_test_coverage_map.py` 的 item-level strict，`comment-thread` strict 范围扩到 14 个 GWT
+
+      同时，为保持治理 gate 全绿，把工作树里新增但放错根目录的
+      `internal/application/video_cover_contract_test.go` 迁到 canonical
+      `tests/local_contract/internal/application/video_cover_contract__local_contract_test.go`，避免新增 legacy
+      test source / allowlist 债。
+
+      full strict 诊断进一步从 `6` 份 acceptance / `8` 个 layer 缺口，压到 `5` 份 acceptance / `7`
+      个 layer 缺口。
+    reason: |
+      `comment-thread.GWT12` 已经不是“只差 recorded 回填”的软缺口，而是明确缺一条真实 pin/unpin service
+      API 证据，因此本轮直接补 canonical 测试而不再用弱相关文件兜底。顺手清掉 `video_cover` 的新 legacy
+      测试源，是为了保证 no-new-legacy-tests ratchet 与 no-fake gate 不被在途改动拖红。
+    change_type:
+      - contract
+      - test
+      - tooling
+      - docs
+    changed_documents:
+      - path: quwoquan_service/services/content-service/tests/api_integration/comment_pin_contract__api_integration_test.go
+        sections:
+          - TestCommentPinContractApiIntegration
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT12
+      - path: agent_ops/scaffold/verify_test_coverage_map.py
+        sections:
+          - STRICT_TRACEABILITY_ITEMS
+      - path: quwoquan_service/services/content-service/tests/local_contract/internal/application/video_cover_contract__local_contract_test.go
+        sections:
+          - TestVideoCoverContractLocalContract
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-TST06
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "cd quwoquan_service/services/content-service && go test ./tests/api_integration -run TestCommentPinContractApiIntegration -count=1"
+      - "cd quwoquan_service/services/content-service && go test ./tests/local_contract/internal/application -run TestVideoCoverContractLocalContract -count=1"
+      - "make verify-test-coverage-map"
+      - "make verify-test-specs"
+      - "make verify-test-directory-layout"
+      - "make verify-test-no-fake"
+      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+    notes:
+      - 本轮新增的是 canonical 测试文件，不是 legacy bridge；未扩 `allowlist`，也未回退 strict 门禁。
+      - 剩余 5 份 acceptance / 7 个 layer 缺口已全部收敛到真实缺桥/缺测试问题，详见 backlog `R-TST06`。
+  - timestamp: "2026-06-22T23:10:00+08:00"
+    summary: |
+      继续按 `/continue-dev` 向下 burn-down `R-TST06`。本轮选择剩余单 story 缺口里最小、最干净的
+      `xiaoqu-entry-handoff`，直接补上一条 canonical `api_integration`：
+
+      - 新增 `quwoquan_service/services/assistant-service/tests/api_integration/search_xiaoqu_contract__api_integration_test.go`
+      - 真实命中 `POST /v1/assistant/search/xiaoqu`，断言统一 citation envelope、canonical object target、
+        web supplement 与 provenance 字段
+      - 将 `specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/acceptance.yaml`
+        回挂到该 canonical 文件
+      - 把 `xiaoqu-entry-handoff` 纳入 `verify_test_coverage_map.py` 的 strict path hard gate
+
+      full strict 诊断因此从 `5` 份 acceptance / `7` 个 layer 缺口，进一步压到
+      `4` 份 acceptance / `6` 个 layer 缺口。
+    reason: |
+      `xiaoqu-entry-handoff` 已有完整 local_contract 证据与稳定 HTTP route，但缺少一条直接落在
+      canonical `tests/api_integration/` 的远端层闭环；相比 `realtime-push-and-offline-sync`、
+      `page-horizontal-quality` 或 `platform-ops` 聚合项，这是更小且不需要 metadata / stackctl / 多服务联动的切口。
+    change_type:
+      - contract
+      - test
+      - tooling
+      - docs
+    changed_documents:
+      - path: quwoquan_service/services/assistant-service/tests/api_integration/search_xiaoqu_contract__api_integration_test.go
+        sections:
+          - TestSearchXiaoquContractApiIntegration
+      - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: agent_ops/scaffold/verify_test_coverage_map.py
+        sections:
+          - STRICT_TRACEABILITY_PATHS
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-TST06
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "cd quwoquan_service/services/assistant-service && go test ./tests/api_integration -count=1"
+      - "make verify-test-coverage-map"
+      - "make verify-test-specs"
+      - "make verify-test-directory-layout"
+      - "make verify-test-no-fake"
+      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+    notes:
+      - 本轮新增的是 direct canonical api_integration，不是 legacy bridge，也没有新增 inventory / allowlist 债。
+      - 剩余 4 份 acceptance / 6 个 layer 缺口均保留为真实缺桥/缺测试问题，详见 backlog `R-TST06`。
+  - timestamp: "2026-06-22T23:25:00+08:00"
+    summary: |
+      继续沿 `R-TST06` 做低成本 hard gate 扩围，本轮再关掉两个“已有 canonical 证据但 acceptance
+      尚未回挂”的节点：
+
+      - `page-horizontal-quality`：把 `specs/gates/user_acceptance_page_inventory.yaml` 中去重后的 19 条
+        canonical `api_integration_tests` 回挂到 acceptance recorded，并纳入 strict path
+      - `realtime-push-and-offline-sync`：把 `contract_fixture_seed_contract__api_integration_test.go`
+        与 `message_sync_contract__api_integration_test.go` 分别回挂到 GWT1 / GWT3，并纳入 strict path
+
+      full strict 诊断因此从 `4` 份 acceptance / `6` 个 layer 缺口，进一步压到
+      `2` 份 acceptance / `3` 个 layer 缺口。
+    reason: |
+      这两个节点都不是“缺测试实现”，而是 acceptance 没有把仓库里已经存在且 canonical 的远端证据挂回来。
+      在不新增 bridge、不扩 allowlist、不放宽门禁的前提下，直接回挂并纳入 strict hard gate 是最干净的收口路径。
+    change_type:
+      - contract
+      - tooling
+      - docs
+    changed_documents:
+      - path: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+          - gwt_acceptance.GWT3
+      - path: agent_ops/scaffold/verify_test_coverage_map.py
+        sections:
+          - STRICT_TRACEABILITY_PATHS
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-TST06
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - api_integration
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "cd quwoquan_service/services/chat-service && go test ./tests/api_integration -run 'TestContractFixtureSeedContractApiIntegrationTest|TestMessageSyncContractApiIntegrationTest' -count=1"
+      - "make verify-test-coverage-map"
+      - "make verify-test-specs"
+      - "make verify-test-directory-layout"
+      - "make verify-test-no-fake"
+      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+    notes:
+      - 本轮没有新增任何测试实现，只回挂已存在的 canonical `api_integration` 文件。
+      - 剩余 2 份 acceptance / 3 个 layer 缺口都是真实缺桥/缺测试问题，详见 backlog `R-TST06`。
+  - timestamp: "2026-06-22T23:45:00+08:00"
+    summary: |
+      继续按 `/continue-dev` 把 `R-TST06` 收到零。本轮直接补齐最后两条真实缺口，并同步把两个节点纳入
+      strict hard gate：
+
+      - `exposure-observability-capacity`：新增
+        `quwoquan_service/services/content-service/tests/local_contract/internal/application/exposure_observability_capacity__local_contract_test.go`
+        ，冻结 `recommendation_slo.yaml` 的 SLI / metrics / rollback layers 以及
+        `quwoquan_alerts.yaml` 中对应推荐告警，补齐缺失的 `local_contract`
+      - `config-and-reliability-governance`：新增
+        `quwoquan_service/services/platform-ops-service/tests/api_integration/config_and_reliability_governance__api_integration_test.go`
+        ，以 canonical `api_integration` 入口承接现有 `cmd/api` 控制面 HTTP 测试，补齐缺失的 `api_integration`
+
+      两个 acceptance 节点回挂 recorded 后，`verify_test_coverage_map.py` 的 full strict 诊断从
+      `2` 份 acceptance / `3` 个 layer 缺口，最终压到 `0` / `0`；`R-TST06` 至此关闭。
+    reason: |
+      剩余两项都已收敛为明确的“真实缺桥/缺测试”问题：前者缺一个冻结可观测真相源的 canonical
+      `local_contract`，后者缺一个落在 `tests/api_integration/` 的 canonical 控制面 API 入口。
+      直接补 canonical 测试并纳入 strict hard gate，比继续停留在 acceptance 口头声明更符合零技术债收口要求。
+    change_type:
+      - contract
+      - test
+      - tooling
+      - docs
+    changed_documents:
+      - path: quwoquan_service/services/content-service/tests/local_contract/internal/application/exposure_observability_capacity__local_contract_test.go
+        sections:
+          - TestExposureObservabilityCapacityLocalContract
+      - path: specs/feature-tree/discovery-content/exposure-governance/exposure-observability-capacity/acceptance.yaml
+        sections:
+          - gwt_acceptance.GWT1
+      - path: quwoquan_service/services/platform-ops-service/tests/api_integration/config_and_reliability_governance__api_integration_test.go
+        sections:
+          - TestConfigAndReliabilityGovernanceApiIntegration
+      - path: specs/feature-tree/platform-ops-governance/config-and-reliability-governance/acceptance.yaml
+        sections:
+          - sit_acceptance.SIT1
+      - path: agent_ops/scaffold/verify_test_coverage_map.py
+        sections:
+          - STRICT_TRACEABILITY_PATHS
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-TST06
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "cd quwoquan_service/services/content-service && go test ./tests/local_contract/internal/application -run TestExposureObservabilityCapacityLocalContract -count=1"
+      - "cd quwoquan_service/services/platform-ops-service && go test ./tests/api_integration -run TestConfigAndReliabilityGovernanceApiIntegration -count=1"
+      - "make verify-test-coverage-map"
+      - "make verify-test-specs"
+      - "make verify-test-directory-layout"
+      - "make verify-test-no-fake"
+      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+    notes:
+      - `exposure-observability-capacity` 使用的是 direct canonical `local_contract`，不新增 legacy source / allowlist。
+      - `config-and-reliability-governance` 使用的是 canonical `api_integration` 入口承接既有控制面 HTTP 测试，不新增第二套实现或 shim。
+      - full strict 诊断已归零，`R-TST06` 已从 backlog 正式关闭。
+  - timestamp: "2026-06-22T23:58:00+08:00"
+    summary: |
+      在 `R-TST06` 归零后继续沿 `/continue-dev` 清 `R-TST07`。本轮不碰 `RUN_T4_PATROL` /
+      `tier t4` 运行时接口名，先专注收掉真正可去掉的 grandfathered skip：
+
+      - `assistant-service/internal/adapters/http/handler_test.go`
+      - `assistant-service/internal/application/m11_local_scenario_test.go`
+      - `user-service/tests/error_contract_test.go`
+
+      其中前两者把“非中文自由输入”从 `t.Skip` 改为只遍历可 deterministic 的中文场景；后者把
+      “空 userId 路由不稳定”改成稳定断言 `GET /v1/user/blocked` 在缺失 `X-Client-User-Id`
+      时返回 `USER.USER.invalid_argument`。
+
+      `skip_grandfathered_sources` 因此从 `21` 压到 `18`，三个治理门禁继续全绿；`R-TST07`
+      仍保留，后续继续处理环境依赖 / 未接线例外与运行时接口改名窗口。
+    reason: |
+      allowlist 自体检后确认没有陈旧条目可直接删除，21 条 skip grandfathered 都是真命中；因此本轮必须
+      选真正能移除 skip 的 deterministic 例外，不能靠删配置制造“假收口”。
+    change_type:
+      - test
+      - tooling
+      - docs
+    changed_documents:
+      - path: quwoquan_service/services/assistant-service/internal/adapters/http/handler_test.go
+        sections:
+          - TestHandleTurnStream_M11LocalScenarios
+      - path: quwoquan_service/services/assistant-service/internal/application/m11_local_scenario_test.go
+        sections:
+          - TestM11ReactiveP0SkillInferenceForBetaQuestions
+      - path: quwoquan_service/services/user-service/tests/error_contract_test.go
+        sections:
+          - TestErrorCode_InvalidArgument
+      - path: specs/gates/test_legacy_source_allowlist.yaml
+        sections:
+          - skip_grandfathered_sources
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-TST07
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      - "cd quwoquan_service/services/assistant-service && go test ./internal/adapters/http -run TestHandleTurnStream_M11LocalScenarios -count=1"
+      - "cd quwoquan_service/services/assistant-service && go test ./internal/application -run TestM11ReactiveP0SkillInferenceForBetaQuestions -count=1"
+      - "cd quwoquan_service/services/user-service && go test ./tests -run TestErrorCode_InvalidArgument -count=1"
+      - "make verify-test-no-fake"
+      - "make verify-test-directory-layout"
+      - "make verify-test-specs"
+    notes:
+      - 本轮没有扩 allowlist，也没有放宽 `verify_test_no_fake.py`；只删除已不需要的 skip grandfathered 例外。
+      - assistant 两处修改都保留了“仅 deterministic 中文场景做稳定断言”的原意，只是不再通过 `t.Skip` 表达。
+  - timestamp: "2026-06-23T00:18:00+08:00"
+    summary: |
+      继续沿 `R-TST07` 往下清，这一轮优先处理“`TestMain` 已经兜底依赖，但 legacy 文件里仍保留
+      `t.Skip` / `b.Skip` 双保险”的冗余例外，并顺手去掉一条已经不再需要 `-short` 跳过的深分页
+      L2 回归：
+
+      - `chat-service/tests/{direct_conversation_relationship_gate_test.go,send_message_relationship_gate_test.go}`
+      - `content-service/tests/{comment_keyset_explain_bench_test.go,intersection_watermark_store_contract_test.go,post_cache_contract_test.go,viewer_object_intersection_store_contract_test.go,redis_router_contract_test.go}`
+      - `rtc-service/tests/one_to_one_relationship_gate_test.go`
+
+      这些文件改为直接要求 `TestMain` 已初始化好 `mongoDB` / `testRouter`，否则 fail；不再把
+      “本地没有 Docker / Mongo 时 `TestMain` 已经 `os.Exit(0)`” 再重复表达成文件内 skip。
+
+      本轮之后，`skip_grandfathered_sources` 从 `18` 进一步压到 `10`，`R-TST07` 继续收敛但暂未关闭。
+    reason: |
+      这批 skip 与其说是真实环境前置，不如说是历史防御性双保险：`chat-service`、`content-service`、
+      `rtc-service` 的 `TestMain` 已明确承诺“拿不到 Mongo 就直接退出，不让测试继续执行”。因此继续把
+      依赖未初始化写成文件级 skip，只会徒增 grandfathered 债，而不会提供额外保护。
+    change_type:
+      - test
+      - tooling
+      - docs
+    changed_documents:
+      - path: quwoquan_service/services/chat-service/tests/testmain_test.go
+        sections:
+          - requireMongoDB
+      - path: quwoquan_service/services/chat-service/tests/direct_conversation_relationship_gate_test.go
+        sections:
+          - newGateTestConversationService
+      - path: quwoquan_service/services/chat-service/tests/send_message_relationship_gate_test.go
+        sections:
+          - newGateTestMessageService
+      - path: quwoquan_service/services/content-service/tests/testmain_test.go
+        sections:
+          - requireMongoDB
+          - requireTestRouter
+      - path: quwoquan_service/services/content-service/tests/comment_keyset_explain_bench_test.go
+        sections:
+          - TestCommentMongoStore_DeepPageBeyond10kNoTruncation
+          - BenchmarkCommentListTopLevel_DeepPage
+          - BenchmarkCommentListReplies_DeepPage
+          - BenchmarkPostCommentCount_AtomicHotWrite
+      - path: quwoquan_service/services/content-service/tests/intersection_watermark_store_contract_test.go
+        sections:
+          - TestIntersectionWatermarkStore_RoundTripAndMonotonic
+      - path: quwoquan_service/services/content-service/tests/post_cache_contract_test.go
+        sections:
+          - TestCacheFindByID_MissThenHit
+          - TestCacheInvalidateOnUpdate
+      - path: quwoquan_service/services/content-service/tests/viewer_object_intersection_store_contract_test.go
+        sections:
+          - TestViewerObjectIntersectionStore_RoundTrip
+          - TestViewerObjectIntersectionMaterialization_PersistsGraphLifecycle
+          - TestViewerObjectIntersectionReadThrough_FreshHitZeroCompute
+      - path: quwoquan_service/services/content-service/tests/redis_router_contract_test.go
+        sections:
+          - TestRedisRouter_DualSceneIsolation
+          - TestRedisRouter_PrefixRoutingToCorrectScene
+          - TestRedisRouter_RecSceneBacksMiniredis
+          - TestRedisRouter_GeneralSceneBacksMemory
+      - path: quwoquan_service/services/rtc-service/tests/testmain_test.go
+        sections:
+          - requireMongoDB
+      - path: quwoquan_service/services/rtc-service/tests/one_to_one_relationship_gate_test.go
+        sections:
+          - newGateTestOrchestrator
+      - path: specs/gates/test_legacy_source_allowlist.yaml
+        sections:
+          - skip_grandfathered_sources
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-TST07
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      - "cd quwoquan_service/services/chat-service && go test ./tests -run 'TestCreateConversation_Direct_|TestSendMessage_Direct_' -count=1"
+      - "cd quwoquan_service/services/content-service && go test ./tests -run 'TestIntersectionWatermarkStore_RoundTripAndMonotonic|TestCacheFindByID_MissThenHit|TestCacheInvalidateOnUpdate|TestViewerObjectIntersectionStore_RoundTrip|TestViewerObjectIntersectionMaterialization_PersistsGraphLifecycle|TestViewerObjectIntersectionReadThrough_FreshHitZeroCompute' -count=1"
+      - "cd quwoquan_service/services/content-service && go test ./tests -run 'TestRedisRouter_DualSceneIsolation|TestRedisRouter_PrefixRoutingToCorrectScene|TestRedisRouter_RecSceneBacksMiniredis|TestRedisRouter_GeneralSceneBacksMemory' -count=1"
+      - "cd quwoquan_service/services/content-service && go test ./tests -run TestCommentMongoStore_DeepPageBeyond10kNoTruncation -count=1"
+      - "cd quwoquan_service/services/rtc-service && go test ./tests -run 'TestInitiateCall_OneToOne_' -count=1"
+      - "make verify-test-no-fake"
+      - "make verify-test-directory-layout"
+      - "make verify-test-specs"
+    notes:
+      - 本轮没有扩 allowlist，也没有新增“隐式 return 伪跳过”；所有移除的 skip 都改成了更诚实的测试前置契约。
+      - `content-service/tests/comment_keyset_explain_bench_test.go` 的深分页回归去掉 `-short` 跳过后依然快速通过，没有形成新的慢测债。
+  - timestamp: "2026-06-23T00:30:00+08:00"
+    summary: |
+      继续沿 `R-TST07` 做低成本真清债，本轮再收两个独立 legacy skip：
+
+      - `content-service/cmd/import/mongo_import_test.go`：补 `TestMain`，统一为
+        `QWQ_TEST_MONGO_URI` / `TEST_MONGO_URI` / `mongo:7-jammy` testcontainer 三段式自举，
+        不再在单测里 `t.Skip`
+      - `content-service/internal/infrastructure/recommendation/http_model_client_test.go`：
+        用内存 `RoundTripper` 替换 `httptest.NewServer` + loopback `EOF` 逃生口，保留完整请求/响应契约断言
+
+      `skip_grandfathered_sources` 因此从 `10` 进一步压到 `8`，且 `cmd/import` 的 canonical
+      local_contract wrapper 继续全绿。
+    reason: |
+      这两条都属于“独立测试自举边界清晰”的小切口，不需要跨服务重构：前者可以直接复用仓库既有
+      testcontainer 约定，后者本就和实现同包，完全可以绕过 loopback 网络噪音，保留纯契约断言。
+    change_type:
+      - test
+      - tooling
+      - docs
+    changed_documents:
+      - path: quwoquan_service/services/content-service/cmd/import/testmain_test.go
+        sections:
+          - TestMain
+          - tryRunMongoContainer
+      - path: quwoquan_service/services/content-service/cmd/import/mongo_import_test.go
+        sections:
+          - testDB
+      - path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/http_model_client_test.go
+        sections:
+          - TestHTTPModelServiceClient_Predict_ContractStable
+      - path: specs/gates/test_legacy_source_allowlist.yaml
+        sections:
+          - skip_grandfathered_sources
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-TST07
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      - "cd quwoquan_service/services/content-service && go test ./cmd/import -run 'TestMongoUpsertPostsInsertAndFields|TestMongoUpsertIsIdempotent|TestMongoUpsertEntitiesPageFlag|TestMongoSparseUniqueIndexEnforced' -count=1"
+      - "cd quwoquan_service/services/content-service && go test ./internal/infrastructure/recommendation -run 'TestHTTPModelServiceClient_Predict_Unreachable|TestCascadeScorer_FallbackWhenHTTPClientFails|TestHTTPModelServiceClient_Predict_ContractStable' -count=1"
+      - "cd quwoquan_service/services/content-service && go test ./tests/local_contract/cmd/import -run TestMongoImportLocalContractTest -count=1"
+      - "make verify-test-no-fake"
+      - "make verify-test-directory-layout"
+      - "make verify-test-specs"
+    notes:
+      - `cmd/import` 现在和其他 service L2 测试一样，在缺少显式 Mongo URI 时优先尝试 testcontainer；本地无 Docker 时整包提前退出，而不是让单用例残留 skip。
+      - `http_model_client_test.go` 保留了原本对 method/path/body/response 的完整断言，只是去掉了与 loopback 环境相关的非业务噪音。
+  - timestamp: "2026-06-23T00:55:00+08:00"
+    summary: |
+      继续沿 `R-TST07` 清理 `user-service` 剩余的 Mongo 依赖 grandfathered 例外。本轮没有把包级
+      `TestMain` 粗暴改成“无 Mongo 就整包退出”，而是保持 `pg/redis always-on + mongo optional`
+      的混合运行时语义，同时把历史散落在文件里的 `t.Skip` 收回到统一的按需升级入口：
+
+      - `tests/testmain_test.go` 抽出 `bootstrapMongoRuntime`、`rebuildTestHandler`、
+        `requireMongoBackedRuntime`
+      - `tests/helpers_test.go` 的 Mongo 历史 seed helper 改为显式要求 Mongo-backed runtime
+      - `tests/{block_cascade_contract,follow_contract,greeting_request_state_machine,persona_contract,sub_account_view_contract}.go`
+        全部去掉文件级 `t.Skip`
+
+      `skip_grandfathered_sources` 因此从 `8` 进一步压到 `3`，剩余只剩 app/pageflip、app/patrol
+      与 chat-service 事件发布这 3 条真正还未收口的 legacy 源。
+    reason: |
+      `user-service/tests` 不是纯 Mongo 包：大量用例只依赖 embedded Postgres + miniredis，历史上因此让
+      Mongo 缺席时继续跑非 Mongo 用例，再在少数文件里用 `t.Skip` 表达“这批测试需要 follow graph /
+      Mongo 历史”。继续保留文件级 skip 会让 grandfathered 例外长期散落；更优解是把环境契约收回到统一
+      runtime helper，让依赖 Mongo 的测试显式要求 Mongo-backed handler，但不影响同包其余测试的默认运行。
+    change_type:
+      - test
+      - tooling
+      - docs
+    changed_documents:
+      - path: quwoquan_service/services/user-service/tests/testmain_test.go
+        sections:
+          - TestMain
+          - bootstrapMongoRuntime
+          - rebuildTestHandler
+          - requireMongoBackedRuntime
+      - path: quwoquan_service/services/user-service/tests/helpers_test.go
+        sections:
+          - seedPersonaPostHistory
+          - seedPersonaCommentHistory
+          - seedPersonaChatHistory
+          - seedPersonaNotificationHistory
+      - path: quwoquan_service/services/user-service/tests/block_cascade_contract_test.go
+        sections:
+          - TestBlockCascade_ClearsFollowAndPendingGreeting
+      - path: quwoquan_service/services/user-service/tests/follow_contract_test.go
+        sections:
+          - TestFollow_Success
+          - TestFollow_Idempotent
+          - TestFollow_ReconcilesDriftedCounters
+          - TestUnfollow_Success
+          - TestGetRelationship_Mutual
+          - TestListFollowing_Pagination
+          - TestListFollowing_PaginationFillsVisibleItemsAfterFiltering
+          - TestListFollowers_DoesNotExposeOwnerMapping
+          - TestFollow_BlockGateRejectsBothDirections
+          - TestFollow_FlagOffPreservesExistingPersonaEdge
+      - path: quwoquan_service/services/user-service/tests/greeting_request_state_machine_test.go
+        sections:
+          - TestGreeting_SendReplyIgnoreCancel
+          - TestGreeting_MutualSenderRejected
+          - TestGreeting_BlockedSenderRejected
+      - path: quwoquan_service/services/user-service/tests/persona_contract_test.go
+        sections:
+          - TestGetPersonaLifecycleGuard_RecordsMongoHistoryFallbackMetric
+      - path: quwoquan_service/services/user-service/tests/sub_account_view_contract_test.go
+        sections:
+          - TestRelationshipCapabilityView_States
+      - path: specs/gates/test_legacy_source_allowlist.yaml
+        sections:
+          - skip_grandfathered_sources
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-TST07
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      - "cd quwoquan_service/services/user-service && TEST_MONGO_URI=mongodb://127.0.0.1:37019 go test ./tests -count=1"
+      - "make verify-test-no-fake"
+      - "make verify-test-directory-layout"
+      - "make verify-test-specs"
+    notes:
+      - `requireMongoBackedRuntime` 不再把 Mongo 前置散落为文件级 skip；它把约束收回到统一 helper，允许 mixed runtime 包先跑非 Mongo 用例，再在真正触达 follow/history 语义时显式升级。
+      - 本轮未扩 allowlist，也未新增 helper 内隐式 `t.Skip` / `return` 伪跳过；去掉 skip 后的 user-service package 已在显式 `TEST_MONGO_URI` 下整包实跑通过。
+  - timestamp: "2026-06-23T07:15:00+08:00"
+    summary: |
+      继续沿 `R-TST07` 清理 service 侧最后一条 grandfathered skip，本轮把
+      `chat-service/tests/event_publish_contract_test.go` 从 skeleton `t.Skip` 收回成真实事件契约：
+
+      - metadata：`messages/conversation/events.yaml` 正式补齐 `AssistantRemoved`
+      - codegen：补 `GenerateDomainEventsOnly` 与 `codegen_chat_domain_events`，让
+        `chat-service/internal/domain/conversation/event/events.go` 可以按真相源重生
+      - runtime：`RemoveAssistant` handler/application 发布 `AssistantRemoved`，不再让 mq adapter
+        私自维护 `EventAssistantRemoved` 第二常量
+      - tests：`event_publish_contract_test.go` 改为真实断言，`member_management_contract_test.go`
+        与新 seed helper 直接用真实 Mongo seed 验证 remove-assistant 路径
+
+      `skip_grandfathered_sources` 因此从 `3` 进一步压到 `2`，service 侧 grandfathered skip 已清零，
+      剩余只剩 app/pageflip 与 app/patrol 两条 legacy 源。
+    reason: |
+      `chat-service` 这条例外不是单纯“环境没起所以跳过”，而是历史上真实缺失了
+      `RemoveAssistant -> AssistantRemoved` 事件链路：handler 已有路由、mq adapter 自己偷偷维护了
+      `EventAssistantRemoved` 常量，但 metadata/codegen/application 都没有这条 contract。继续保留
+      `t.Skip` 只会把契约漂移藏起来；因此本轮按 metadata-first 把事件真相源、生成入口、应用发布路径和
+      用例断言一起补正。
+    change_type:
+      - contract
+      - test
+      - tooling
+      - docs
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/messages/conversation/events.yaml
+        sections:
+          - events.AssistantRemoved
+      - path: specs/feature-tree/chat-conversation/design.md
+        sections:
+          - KD-10：小趣助手会话内参与
+      - path: quwoquan_service/runtime/codegen/codegen.go
+        sections:
+          - GenerateDomainEventsOnly
+      - path: quwoquan_service/tools/codegen_chat_domain_events/main.go
+        sections:
+          - main
+      - path: quwoquan_service/Makefile
+        sections:
+          - codegen
+          - codegen-chat-domain-events
+      - path: quwoquan_service/services/chat-service/internal/domain/conversation/event/events.go
+        sections:
+          - const
+      - path: quwoquan_service/services/chat-service/internal/application/member_service.go
+        sections:
+          - RemoveAssistantRequest
+          - RemoveAssistant
+      - path: quwoquan_service/services/chat-service/internal/adapters/http/chat_handler.go
+        sections:
+          - handleRemoveAssistant
+      - path: quwoquan_service/services/chat-service/internal/adapters/mq/event_publisher.go
+        sections:
+          - SupportedEventTypes
+      - path: quwoquan_service/services/chat-service/tests/helpers_test.go
+        sections:
+          - seedConversationWithAssistantMember
+      - path: quwoquan_service/services/chat-service/tests/member_management_contract_test.go
+        sections:
+          - TestRemoveAssistant
+      - path: quwoquan_service/services/chat-service/tests/event_publish_contract_test.go
+        sections:
+          - TestEventPublish_AssistantRemoved
+          - TestEventPublish_SupportedEventTypesComplete
+      - path: specs/gates/test_legacy_source_allowlist.yaml
+        sections:
+          - skip_grandfathered_sources
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-TST07
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - api_integration
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      - "cd quwoquan_service && make verify-metadata"
+      - "cd quwoquan_service && make codegen-chat-domain-events"
+      - "cd quwoquan_service && go test ./runtime/codegen ./tools/codegen_chat_domain_events -count=1"
+      - "cd quwoquan_service/services/chat-service && TEST_MONGO_URI=mongodb://127.0.0.1:37020 go test ./tests -run 'TestRemoveAssistant|TestEventPublish_AssistantRemoved|TestEventPublish_SupportedEventTypesComplete' -count=1"
+      - "make verify-test-no-fake"
+      - "make verify-test-directory-layout"
+      - "make verify-test-specs"
+    notes:
+      - `event_publish_contract__api_integration` canonical wrapper 当前仍被同文件内既有 `createConversation` 路径红测阻塞；本轮 focused 验证刻意直接 seed Mongo，会把主证据限定在 `RemoveAssistant/AssistantRemoved` 这条本轮实际改动路径。
+      - 本轮没有扩 allowlist，也没有把 `AssistantRemoved` 留在 adapter 私有常量里；service 侧 grandfathered skip 已从清单归零，后续 `R-TST07` 主战场转到 app/pageflip、app/patrol 与运行时旧命名。

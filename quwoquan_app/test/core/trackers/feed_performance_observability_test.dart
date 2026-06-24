@@ -165,4 +165,62 @@ void main() {
       expect(failed.first.payload['result'], equals('failed'));
     });
   });
+
+  group('资源与长滑指标', () {
+    test('上报 jank 比例、图片缓存、视频活跃数、下载队列和 post cache source', () async {
+      observability.recordFrameJankRatio(
+        surfaceId: 'home_feed',
+        sampledFrames: 120,
+        jankyFrames: 9,
+        ratio: 0.075,
+      );
+      observability.recordImageCacheBudget(
+        profile: 'compact',
+        currentSizeBytes: 1024,
+        maxSizeBytes: 2048,
+      );
+      observability.recordActiveVideoControllerCount(
+        surfaceId: 'works_immersive_viewer',
+        activeCount: 1,
+      );
+      observability.recordMediaDownloadQueue(
+        profile: 'compact',
+        activeDownloads: 1,
+        queuedDownloads: 2,
+        inflightDownloads: 3,
+        cacheSizeBytes: 4096,
+      );
+      observability.recordPostCacheHitSource(
+        source: 'memory',
+        cacheClass: 'recent',
+      );
+
+      expect(
+        eventsNamed(FeedPerformanceMetricNames.frameJankRatio),
+        hasLength(1),
+      );
+      expect(
+        eventsNamed(FeedPerformanceMetricNames.imageCacheBytes).single.payload,
+        containsPair('currentSizeBytes', 1024),
+      );
+      expect(
+        eventsNamed(
+          FeedPerformanceMetricNames.activeVideoControllerCount,
+        ).single.payload,
+        containsPair('activeCount', 1),
+      );
+      expect(
+        eventsNamed(
+          FeedPerformanceMetricNames.mediaDownloadQueue,
+        ).single.payload,
+        containsPair('queuedDownloads', 2),
+      );
+      expect(
+        eventsNamed(
+          FeedPerformanceMetricNames.postCacheHitSource,
+        ).single.payload,
+        containsPair('source', 'memory'),
+      );
+    });
+  });
 }

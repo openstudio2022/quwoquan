@@ -476,12 +476,54 @@ func TestEventPublish_AssistantMentioned(t *testing.T) {
 }
 
 func TestEventPublish_AssistantRemoved(t *testing.T) {
-	t.Skip("event_publisher not yet integrated into handler pipeline")
-
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"group","title":"assistant remove event"}`)
-	_ = conv["_id"].(string)
+	convId := "fixture_assistant_removed_event_conv"
+	seedConversationWithAssistantMember(t, convId, "user_test_001", "assistant remove event", "general")
+
+	channel := "rt:conversation:" + convId
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	sub, err := redisRouter.Scene("realtime").Subscribe(ctx, channel)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	doDelete(t, "/v1/chat/conversations/"+convId+"/assistant", "user_test_001")
+
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case raw := <-sub.Channel():
+			var evt mqpkg.DomainEvent
+			if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if evt.Type != event.AssistantRemoved {
+				continue
+			}
+			if evt.ConversationID != convId {
+				t.Errorf("expected conversationId=%s, got %s", convId, evt.ConversationID)
+			}
+			if evt.ActorID != "user_test_001" {
+				t.Errorf("expected actorId=user_test_001, got %s", evt.ActorID)
+			}
+			if evt.Payload["assistantSkillId"] != "general" {
+				t.Errorf("expected assistantSkillId=general, got %v", evt.Payload["assistantSkillId"])
+			}
+			if evt.Payload["removedBy"] != "user_test_001" {
+				t.Errorf("expected removedBy=user_test_001, got %v", evt.Payload["removedBy"])
+			}
+			if evt.Payload["assistantMemberId"] == "" {
+				t.Errorf("expected assistantMemberId in payload, got %#v", evt.Payload)
+			}
+			return
+		case <-deadline:
+			t.Fatal("AssistantRemoved event not received within timeout")
+		}
+	}
 }
 
 // --- Direct publisher tests (verify EventPublisher→Redis independently) ---
@@ -592,7 +634,7 @@ func TestEventPublish_SupportedEventTypesComplete(t *testing.T) {
 		event.ReadReceiptSent,
 		event.AssistantInvited,
 		event.AssistantMentioned,
-		mqpkg.EventAssistantRemoved,
+		event.AssistantRemoved,
 	}
 
 	supported := make(map[string]bool, len(mqpkg.SupportedEventTypes))

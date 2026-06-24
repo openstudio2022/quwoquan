@@ -44,8 +44,7 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
-      recorded:
-      - command: python3 quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -63,7 +62,8 @@ gwt_acceptance:
         envs: &id002
         - beta
         - gamma
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] python3 quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py'
   GWT2:
     title: gamma 短信 OTP 受控放通仅命中白名单回填验证码
     given:
@@ -84,9 +84,7 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_service/services/user-service/internal/application/sandbox_allowlist_test.go
-      recorded:
-      - command: cd quwoquan_service && go test ./services/user-service/internal/application/
-          -run 'TestSandboxAllowlist|TestSendOtpSandboxAllowlist'
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -101,7 +99,9 @@ gwt_acceptance:
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt2_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_service && go test ./services/user-service/internal/application/
+      -run ''TestSandboxAllowlist|TestSendOtpSandboxAllowlist'''
   GWT3:
     title: 社交三方票据置换分环境实现且 prod 不伪造成功
     given:
@@ -124,10 +124,7 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_service/services/user-service/internal/infrastructure/integration/external_auth_provider_client_test.go
-      recorded:
-      - command: cd quwoquan_service && go test ./services/user-service/internal/infrastructure/integration/
-          -run TestMockExternalAuthProvider -run TestSandboxExternalAuthProvider -run
-          TestHTTPExternalAuthProvider
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -142,7 +139,10 @@ gwt_acceptance:
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt3_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_service && go test ./services/user-service/internal/infrastructure/integration/
+      -run TestMockExternalAuthProvider -run TestSandboxExternalAuthProvider -run
+      TestHTTPExternalAuthProvider'
   GWT4:
     title: 社交首登创建账号并同步昵称头像
     given:
@@ -203,10 +203,7 @@ gwt_acceptance:
       planned:
       - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
       - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart
-          test/ui/user/login_page_widget_test.dart
-      - command: cd quwoquan_app && make verify-app-login-entry-loop-contract
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -221,7 +218,10 @@ gwt_acceptance:
         cases:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt5_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart
+      test/ui/user/login_page_widget_test.dart'
+    - '[migrated_from_recorded_command] cd quwoquan_app && make verify-app-login-entry-loop-contract'
   GWT6:
     title: 调试码仅 gamma 受控放通回填，生产永不回填
     given:
@@ -242,8 +242,7 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -253,7 +252,8 @@ gwt_acceptance:
         - local_contract.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.gwt6_local_contract
         envs: *id001
       supporting: []
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart'
 contract_acceptance:
   CONTRACT1:
     title: 社交 metadata/codegen/错误码契约一致
@@ -266,8 +266,7 @@ contract_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-      recorded:
-      - command: cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart
+      recorded: []
     status: pending_evidence
     test_evidence:
       primary:
@@ -282,7 +281,8 @@ contract_acceptance:
         cases:
         - api_integration.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.contract1_api_integration
         envs: *id002
-    notes: []
+    notes:
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/cloud/user/contract/auth_repository_contract_test.dart'
   CONTRACT2:
     title: 凭证唯一性约束契约
     done_when:
@@ -327,7 +327,7 @@ uat_acceptance:
         cases:
         - user_acceptance.user_identity_profile_relationship.onboarding_and_identity_entry.four_environment_commercial_login_maturity.e2e_journey
         envs:
-        - gamma
+        - gamma_local
       supporting:
       - layer: local_contract
         suite: uat1_local_contract

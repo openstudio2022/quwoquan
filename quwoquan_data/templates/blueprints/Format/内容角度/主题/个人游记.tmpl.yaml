@@ -18,7 +18,6 @@ render: { articleTemplate: journal, fontPreset: handwritten }
 structure:
   required: [出发原因, 路上片段, 一个具体时刻, 实用补充, 回看这趟旅行]
   optional: [同行者, 花费, 遗憾]
-hooks: ["我在{name}记住的不是景点，而是这个时刻", "如果再去一次{name}，我会保留和删掉这些安排"]
 mustIncludeFacts: [旅行时间, 交通方式, 停留地点, 主观体验边界]
 forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
 wordCount: { min: 900, max: 1800 }
@@ -32,4 +31,3 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
-sopExampleRef: sop/article.md

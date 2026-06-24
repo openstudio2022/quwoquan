@@ -2,7 +2,7 @@
 
 与三层目录实体模型一致；不再依赖旧 entities.ndjson 模型。
 - prepare：按 coverageTargets 下发 SOP 产出契约给 Agent
-- validate：校验产出（三件套/≥800字/必填字段/conditionProfile），作为 promote 前采纳门
+- validate：校验产出（三件套/≥350字/必填字段），作为 promote 前采纳门
 """
 from __future__ import annotations
 
@@ -122,8 +122,8 @@ def handle_build(args: argparse.Namespace) -> None:
         inputs_dir, refs = prepare_entity_pages(task_id, batch_id, spec)
         print(f"[build] prepare: 下发 {len(refs)} 个实体主页产出契约 -> {inputs_dir}")
         print(
-            f"[build] Agent: 按 sopDir 模板在 outputDir 物化 "
-            f"page.md(≥{MIN_PAGE_CHARS}字)+_entity.json(含 conditionProfile)+manifest.json"
+            f"[build] Agent: 读 4.draft/prompt.md 在底稿基础上轻改创作正文写回 4.draft/page.md"
+            f"(≥{MIN_PAGE_CHARS}字)；finalize 据正文与已授权真实图补齐 page.md+_entity.json+manifest.json"
         )
         if not refs:
             print("[build] WARN: coverageTargets 为空，无实体可下发")
