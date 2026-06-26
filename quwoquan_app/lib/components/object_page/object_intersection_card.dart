@@ -1,24 +1,29 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/components/object_page/evidence_group.dart';
-import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
+import 'package:quwoquan_app/ui/user/widgets/intersection_statement_row.dart';
 
-/// 对象页统一交集卡（V4 · 纵向交集列表）。
+/// 对象页统一交集卡（V5 · primaryText 单通道事实列表）。
 ///
 /// 三对象页共用同一结构与口径：
-/// - 用户主页：`你们的交集`
-/// - 地点和事物页 / 圈子页：`与你的交集`
+/// - 用户主页：`我与TA的交集` / `为什么推荐TA`
+/// - 圈子主页：`为什么推荐这个圈子`
+/// - 实体主页：`为什么推荐这里`
 ///
 /// 设计：
-/// - 证据组以纵向列表行呈现：主结论 + 原因说明；
-/// - 默认展示 [inlineExpandCount] 行，第一次点击展开，第二次进入全部交集；
-/// - 文案、数字、实例全部来自云侧证据组，端不本地拼装事实（G2）。
+/// - 每条行只读云侧 [IntersectionReason.primaryText]；
+/// - [IntersectionReason.primarySpans] 只作为同一句话的结构化富文本投影；
+/// - [IntersectionReason.sampleVisuals] / [IntersectionReason.objectVisual] 进入四槽视觉；
+/// - 默认展示 [inlineExpandCount] 条理由，第一次点击展开，第二次进入全部连接。
 ///
-/// 口径（必读要求 2 事实清晰）：
-/// - 顶部总数 = 可见证据组 count 之和（[EvidenceGroup.totalCount]），与列表逐项一致；
-/// - 维度 kind 开放字符串，未知维度优雅降级展示 label + count（必读要求 1）。
+/// G2 红线：
+/// - 不再通过 `EvidenceGroup` / `intersectionPoints` 本地拼主句；
+/// - 无 [IntersectionReason.primaryText] 的 reason 直接隐藏；
+/// - affinity 只能作为推荐辅助行，不伪装成事实。
 class ObjectIntersectionCard extends StatefulWidget {
   const ObjectIntersectionCard({
     super.key,
@@ -29,6 +34,9 @@ class ObjectIntersectionCard extends StatefulWidget {
     this.moreLabel,
     this.subtitle,
     this.onReasonTap,
+    this.onSpanTap,
+    this.onVisualTap,
+    this.onActionHintTap,
     this.onMoreTap,
     this.highlightKind,
   });
@@ -49,13 +57,19 @@ class ObjectIntersectionCard extends StatefulWidget {
   final String? subtitle;
 
   final void Function(IntersectionReason reason)? onReasonTap;
+  final void Function(IntersectionReason reason, IntersectionTextSpan span)?
+  onSpanTap;
+  final void Function(IntersectionReason reason, IntersectionVisual visual)?
+  onVisualTap;
+  final void Function(IntersectionReason reason, IntersectionActionHint hint)?
+  onActionHintTap;
   final VoidCallback? onMoreTap;
 
   /// 旅程高亮（§7.3）：从 post 作者徽标跳入时携带的最强证据组 kind；
   /// 命中时该行高亮并默认展开（即便它在折叠区之外），让旅程无断点。
   final String? highlightKind;
 
-  /// 便捷构造：把 reasons 摊平为可见证据组；无可渲染证据组返回 null（不展示，G2）。
+  /// 便捷构造：只保留携带 primaryText 的理由；无可渲染理由返回 null（不展示，G2）。
   static Widget? fromReasons({
     required String title,
     required List<IntersectionReason>? reasons,
@@ -64,17 +78,20 @@ class ObjectIntersectionCard extends StatefulWidget {
     String? moreLabel,
     String? subtitle,
     void Function(IntersectionReason reason)? onReasonTap,
+    void Function(IntersectionReason reason, IntersectionTextSpan span)?
+    onSpanTap,
+    void Function(IntersectionReason reason, IntersectionVisual visual)?
+    onVisualTap,
+    void Function(IntersectionReason reason, IntersectionActionHint hint)?
+    onActionHintTap,
     VoidCallback? onMoreTap,
     String? highlightKind,
     Key? key,
   }) {
     final usable = (reasons ?? const <IntersectionReason>[])
-        .where((r) => EvidenceGroup.fromReason(r).isNotEmpty)
+        .where((r) => r.primaryText.trim().isNotEmpty)
         .toList(growable: false);
     if (usable.isEmpty) return null;
-    // 连接说明（§7.1）：调用方未显式传入时，回落云侧实例化 connectionSummary，
-    // 端不本地拼装，缺省则不展示该行（G2）。
-    final resolvedSubtitle = subtitle ?? _connectionSummaryOf(usable);
     return ObjectIntersectionCard(
       key: key ?? cardKey,
       title: title,
@@ -82,19 +99,14 @@ class ObjectIntersectionCard extends StatefulWidget {
       isDark: isDark,
       inlineExpandCount: inlineExpandCount,
       moreLabel: moreLabel,
-      subtitle: resolvedSubtitle,
+      subtitle: subtitle,
       onReasonTap: onReasonTap,
+      onSpanTap: onSpanTap,
+      onVisualTap: onVisualTap,
+      onActionHintTap: onActionHintTap,
       onMoreTap: onMoreTap,
       highlightKind: highlightKind,
     );
-  }
-
-  static String? _connectionSummaryOf(List<IntersectionReason> reasons) {
-    for (final r in reasons) {
-      final s = r.connectionSummary.trim();
-      if (s.isNotEmpty) return s;
-    }
-    return null;
   }
 
   @override
@@ -119,17 +131,18 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
       ColorType.foregroundSecondary,
     );
 
-    final rows = <_IntersectionRow>[];
-    for (final reason in widget.reasons) {
-      for (final group in EvidenceGroup.fromReason(reason)) {
-        rows.add(_IntersectionRow(reason: reason, group: group));
-      }
+    final rows = widget.reasons
+        .where((reason) => reason.primaryText.trim().isNotEmpty)
+        .map(_IntersectionRow.new)
+        .toList(growable: false);
+    if (rows.isEmpty) {
+      return const SizedBox.shrink();
     }
     final inline = widget.inlineExpandCount <= 0 ? 3 : widget.inlineExpandCount;
     final highlight = (widget.highlightKind ?? '').trim();
     final highlightHidden =
         highlight.isNotEmpty &&
-        rows.skip(inline).any((row) => row.group.kind == highlight);
+        rows.skip(inline).any((row) => row.matchesHighlight(highlight));
     final expanded = _expanded || highlightHidden;
     final visible = expanded ? rows : rows.take(inline).toList(growable: false);
     final hiddenCount = rows.length - visible.length;
@@ -177,14 +190,24 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
                   if (i > 0) _rowDivider(),
                   _EvidenceRow(
                     row: visible[i],
-                    isDark: widget.isDark,
                     isPrimary: i == 0,
                     highlighted:
                         highlight.isNotEmpty &&
-                        visible[i].group.kind == highlight,
+                        visible[i].matchesHighlight(highlight),
                     onTap: widget.onReasonTap == null
                         ? null
                         : () => widget.onReasonTap!(visible[i].reason),
+                    onSpanTap: widget.onSpanTap == null
+                        ? null
+                        : (span) => widget.onSpanTap!(visible[i].reason, span),
+                    onVisualTap: widget.onVisualTap == null
+                        ? null
+                        : (visual) =>
+                              widget.onVisualTap!(visible[i].reason, visual),
+                    onActionHintTap: widget.onActionHintTap == null
+                        ? null
+                        : (hint) =>
+                              widget.onActionHintTap!(visible[i].reason, hint),
                   ),
                 ],
               ],
@@ -250,97 +273,95 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
 }
 
 class _IntersectionRow {
-  const _IntersectionRow({required this.reason, required this.group});
+  const _IntersectionRow(this.reason);
+
   final IntersectionReason reason;
-  final EvidenceGroup group;
+
+  bool matchesHighlight(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return <String>{
+      reason.kind.trim(),
+      reason.source.trim(),
+      reason.dimension.trim(),
+      reason.iconKey.trim(),
+      reason.intersectionId.trim(),
+    }.contains(normalized);
+  }
+
+  String get auxiliaryText {
+    final secondary = reason.secondaryText.trim();
+    if (secondary.isNotEmpty) {
+      return secondary;
+    }
+    final summary = reason.connectionSummary.trim();
+    if (summary.isNotEmpty) {
+      return summary;
+    }
+    if (reason.intersectionClass.trim() == 'affinity') {
+      final confidence = reason.confidenceLabel.trim();
+      return confidence.isNotEmpty
+          ? confidence
+          : DiscoveryFeedText.intersectionAffinityLabel;
+    }
+    return '';
+  }
 }
 
-/// 单行证据组：头像簇 + 短句 + 计数 + 实例 + chevron（≥44 命中区）。
+/// 单行理由：类型图标 + primaryText/spans + 样本视觉 + 对象封面 + lifecycle 弱标。
 class _EvidenceRow extends StatelessWidget {
   const _EvidenceRow({
     required this.row,
-    required this.isDark,
     required this.isPrimary,
     this.onTap,
+    this.onSpanTap,
+    this.onVisualTap,
+    this.onActionHintTap,
     this.highlighted = false,
   });
 
   final _IntersectionRow row;
-  final bool isDark;
   final bool isPrimary;
   final VoidCallback? onTap;
+  final void Function(IntersectionTextSpan span)? onSpanTap;
+  final void Function(IntersectionVisual visual)? onVisualTap;
+  final void Function(IntersectionActionHint hint)? onActionHintTap;
 
   /// 旅程高亮（§7.3）：从 post 徽标跳入命中的证据组行加弱底色强调。
   final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
-    final group = row.group;
-    final accent = AppColors.iosAccent(context);
-    final labelColor = isPrimary ? accent : AppColors.iosLabel(context);
-    final secondary = AppColors.iosSecondaryLabel(context);
-    final body = ConstrainedBox(
-      constraints: BoxConstraints(minHeight: AppSpacing.minInteractiveSize),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+    final reason = row.reason;
+    final auxiliary = row.auxiliaryText;
+    final hasActionHint = reason.actionHints.any(
+      (hint) => hint.label.trim().isNotEmpty,
+    );
+    final body = IntersectionStatementRow(
+      item: IntersectionStatementItem(
+        primaryText: reason.primaryText.trim(),
+        subtitleText: auxiliary,
+        highlight: isPrimary
+            ? IntersectionStatementHighlight.blue
+            : IntersectionStatementHighlight.gray,
         onTap: onTap,
-        child: Row(
-          children: <Widget>[
-            _ConnectionLeadingIcon(
-              sourceKind: group.kind,
-              isDark: isDark,
-              isPrimary: isPrimary,
-            ),
-            SizedBox(width: AppSpacing.intraGroupSm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          group.count > 0
-                              ? '${group.label} ${group.count}'
-                              : group.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosSubheadline,
-                            fontWeight: AppTypography.medium,
-                            color: labelColor,
-                          ),
-                        ),
-                      ),
-                      if (group.isRecommended) ...<Widget>[
-                        SizedBox(width: AppSpacing.intraGroupSm),
-                        _RecommendBadge(isDark: isDark),
-                      ],
-                    ],
-                  ),
-                  if (group.sampleText.isNotEmpty) ...<Widget>[
-                    SizedBox(height: AppSpacing.two),
-                    Text(
-                      group.sampleText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosFootnote,
-                        color: secondary,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            SizedBox(width: AppSpacing.intraGroupXs),
-            Icon(
-              CupertinoIcons.chevron_forward,
-              size: AppSpacing.fourteen,
-              color: AppColors.iosTertiaryLabel(context),
-            ),
-          ],
-        ),
+        spans: reason.primarySpans,
+        visuals: reason.sampleVisuals,
+        onSpanTap: onSpanTap,
+        onVisualTap: onVisualTap,
+        iconKey: reason.iconKey,
+        sourceRef: reason.source.trim().isNotEmpty
+            ? reason.source.trim()
+            : reason.kind.trim(),
+        dimension: reason.dimension,
+        objectVisual: reason.objectVisual,
+        actionHints: reason.actionHints,
+        onActionHintTap: onActionHintTap,
+        lifecycleState: reason.lifecycleState,
+        strengthDelta: reason.strengthDelta.round(),
+        showAuxiliaryLine: auxiliary.isNotEmpty || hasActionHint,
       ),
     );
     if (!highlighted) return body;
@@ -353,77 +374,6 @@ class _EvidenceRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
       ),
       child: body,
-    );
-  }
-}
-
-/// 连接行语义图标。主页交集模块统一用纵向列表，避免头像堆叠造成信息焦点偏移。
-///
-/// 图标真相源统一为 [IntersectionIconResolver]（§21.5.2）：从证据组 kind
-/// （sourceRef 或 dimension 语义槽位）解析，端不再自带 `switch(kind)` 复制第二套
-/// 图标规则；保留对象页既有 accent 圆底视觉，仅图标字形改由 resolver 决定。
-class _ConnectionLeadingIcon extends StatelessWidget {
-  const _ConnectionLeadingIcon({
-    required this.sourceKind,
-    required this.isDark,
-    required this.isPrimary,
-  });
-
-  final String sourceKind;
-  final bool isDark;
-  final bool isPrimary;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppColors.iosAccent(context);
-    final foreground = isPrimary
-        ? accent
-        : AppColors.iosSecondaryLabel(context);
-    final background = isPrimary
-        ? accent.withValues(alpha: isDark ? 0.22 : 0.12)
-        : AppColors.iosFill(context);
-    const size = AppSpacing.avatarUserSm;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(color: background, shape: BoxShape.circle),
-      child: Icon(
-        IntersectionIconResolver.resolve(
-          sourceRef: sourceKind,
-          dimension: sourceKind,
-        ),
-        size: AppSpacing.iconSmall,
-        color: foreground,
-      ),
-    );
-  }
-}
-
-/// 推荐类小角标（概率，不伪装事实）。
-class _RecommendBadge extends StatelessWidget {
-  const _RecommendBadge({required this.isDark});
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppColors.iosAccent(context);
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.intraGroupXs,
-        vertical: AppSpacing.hairline,
-      ),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: isDark ? 0.22 : 0.12),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-      ),
-      child: Text(
-        DiscoveryFeedText.intersectionAffinityLabel,
-        style: TextStyle(
-          fontSize: AppTypography.iosCaption2,
-          fontWeight: AppTypography.medium,
-          color: accent,
-        ),
-      ),
     );
   }
 }

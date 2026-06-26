@@ -18,8 +18,8 @@ type linkTemplatesRuntimeBinding struct {
 }
 
 type linkTemplatesQueryRule struct {
-	When         string `yaml:"when"`
-	AppendQuery  string `yaml:"append_query"`
+	When        string `yaml:"when"`
+	AppendQuery string `yaml:"append_query"`
 }
 
 type linkTemplatesAppDeepLink struct {
@@ -47,8 +47,8 @@ type linkTemplatesEntity struct {
 }
 
 type linkTemplatesFile struct {
-	Version              int                         `yaml:"version"`
-	RuntimeOriginBinding linkTemplatesRuntimeBinding `yaml:"runtime_origin_binding"`
+	Version              int                            `yaml:"version"`
+	RuntimeOriginBinding linkTemplatesRuntimeBinding    `yaml:"runtime_origin_binding"`
 	Entities             map[string]linkTemplatesEntity `yaml:"entities"`
 }
 

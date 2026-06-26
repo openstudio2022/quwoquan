@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/navigation/app_router.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
@@ -19,6 +20,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_app_exception_p
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exception_payload.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exception_summary.g.dart';
 import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
     show
         appResourceCacheProfileProvider,
@@ -32,6 +34,8 @@ import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 
@@ -129,7 +133,11 @@ Widget wrapWithQuwoquanAppAppearance({
 
 /// 根组件：冷启动先直出轻量欢迎页，首帧后再并行恢复会话、装配路由与预热首页。
 class QuWoQuanAppRoot extends ConsumerStatefulWidget {
-  const QuWoQuanAppRoot({super.key});
+  const QuWoQuanAppRoot({super.key, this.startupPrerequisites});
+
+  /// Runtime prerequisites that must start before media clients but must not
+  /// block the Flutter welcome first frame.
+  final Future<void>? startupPrerequisites;
 
   @override
   ConsumerState<QuWoQuanAppRoot> createState() => _QuWoQuanAppRootState();
@@ -138,24 +146,18 @@ class QuWoQuanAppRoot extends ConsumerStatefulWidget {
 class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     with WidgetsBindingObserver {
   static const int _maxStartupWelcomeReplayCount = 2;
-  static const Duration _androidNativeWelcomeSequenceComplete = Duration(
-    milliseconds: 1500,
+  static const Duration _startupPrerequisiteBudget = Duration(
+    milliseconds: 2500,
   );
 
   bool _routerEnabled = false;
   bool _startupShellReady = false;
-  Duration? _startupNativeSequenceElapsed;
   int _startupWelcomeReplayIndex = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (ref.read(platformTargetProvider) == AppPlatform.android) {
-      unawaited(_loadStartupNativeSequenceElapsed());
-    } else {
-      _startupNativeSequenceElapsed = Duration.zero;
-    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppStartupRuntime.instance.markFirstFramePainted();
@@ -257,37 +259,85 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   }
 
   void _initializeApp() {
-    var shellReady = false;
-    try {
-      _syncWindowDerivedState();
-      ref
-          .read(themeProvider.notifier)
-          .updateSystemBrightness(
-            WidgetsBinding.instance.platformDispatcher.platformBrightness,
-          );
-      // 串并行关系：
-      // 1. 首帧只渲染轻量欢迎页，不读取业务数据、不等待云端接口。
-      // 2. 首帧后并行启动 auth 恢复、外观设置、日志上传与云端连接。
-      // 3. 欢迎动效完整播放后直接进入 App Shell；页面自行承接加载/失败/缓存状态。
-      ref.read(authSessionControllerProvider);
-      ref.read(appLogUploaderProvider);
-      ref.read(realtimeConnectionManagerProvider.notifier).onAppForeground();
-      unawaited(
-        ref.read(appearanceSettingsControllerProvider.notifier).ensureLoaded(),
-      );
-      AppStartupRuntime.instance.schedulePostFirstFrameWarmup(
-        (provider) => ref.read(provider),
-      );
-      shellReady = true;
-    } catch (e, stack) {
-      logQuwoquanAppException(
-        source: 'startup_initialize_app',
-        exceptionText: e.toString(),
-        stackText: stack.toString(),
-      );
-    } finally {
-      _setStartupShellReady(shellReady);
+    _bestEffortStartupStep(
+      source: 'startup_sync_window',
+      action: () {
+        _syncWindowDerivedState();
+      },
+    );
+    _bestEffortStartupStep(
+      source: 'startup_theme',
+      action: () {
+        ref
+            .read(themeProvider.notifier)
+            .updateSystemBrightness(
+              WidgetsBinding.instance.platformDispatcher.platformBrightness,
+            );
+      },
+    );
+    // 串并行关系：
+    // 1. 首帧只渲染轻量欢迎页，不读取业务数据、不等待云端接口。
+    // 2. 首帧后并行启动 auth 恢复、外观设置、日志上传与云端连接。
+    // 3. 欢迎动效完整播放后直接进入 App Shell；页面自行承接加载/失败/缓存状态。
+    _bestEffortStartupStep(
+      source: 'startup_auth_session',
+      action: () {
+        ref.read(authSessionControllerProvider);
+      },
+    );
+    _bestEffortStartupStep(
+      source: 'startup_log_uploader',
+      action: () {
+        ref.read(appLogUploaderProvider);
+      },
+    );
+    _bestEffortStartupStep(
+      source: 'startup_realtime_foreground',
+      action: () {
+        ref.read(realtimeConnectionManagerProvider.notifier).onAppForeground();
+      },
+    );
+    _bestEffortStartupStep(
+      source: 'startup_appearance_ensure_loaded',
+      action: () {
+        _recordBestEffortStartupFuture(
+          source: 'startup_appearance_ensure_loaded',
+          future: ref
+              .read(appearanceSettingsControllerProvider.notifier)
+              .ensureLoaded(),
+        );
+      },
+    );
+    _bestEffortStartupStep(
+      source: 'startup_post_first_frame_warmup',
+      action: () {
+        AppStartupRuntime.instance.schedulePostFirstFrameWarmup(
+          (provider) => ref.read(provider),
+        );
+      },
+    );
+    _completeStartupPrerequisitesThenReady();
+  }
+
+  void _completeStartupPrerequisitesThenReady() {
+    final prerequisites = widget.startupPrerequisites;
+    if (prerequisites == null) {
+      _setStartupShellReady(true);
+      return;
     }
+    unawaited(() async {
+      try {
+        await prerequisites.timeout(_startupPrerequisiteBudget);
+      } catch (e, stack) {
+        logQuwoquanAppException(
+          source: 'startup_prerequisites',
+          exceptionText: e.toString(),
+          stackText: stack.toString(),
+        );
+      } finally {
+        _setStartupShellReady(true);
+      }
+    }());
   }
 
   void _setStartupShellReady(bool ready) {
@@ -299,35 +349,6 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       return;
     }
     setState(() => _startupShellReady = ready);
-  }
-
-  Future<void> _loadStartupNativeSequenceElapsed() async {
-    final elapsed = await AppStartupRuntime.instance.nativeStartupElapsed(
-      attempts: 1,
-      retryDelay: const Duration(milliseconds: 50),
-    );
-    final effectiveElapsed = elapsed > Duration.zero
-        ? elapsed
-        : _androidNativeWelcomeSequenceComplete;
-    if (!mounted) {
-      _startupNativeSequenceElapsed = effectiveElapsed;
-      return;
-    }
-    setState(() => _startupNativeSequenceElapsed = effectiveElapsed);
-  }
-
-  void _markFlutterWelcomeReady() {
-    if (ref.read(platformTargetProvider) != AppPlatform.android) {
-      return;
-    }
-    final elapsed = _startupWelcomeReplayIndex == 0
-        ? (_startupNativeSequenceElapsed ?? Duration.zero)
-        : Duration.zero;
-    unawaited(
-      AppStartupRuntime.instance.markFlutterWelcomeReady(
-        sequenceElapsed: elapsed,
-      ),
-    );
   }
 
   void _syncWindowDerivedState() {
@@ -345,6 +366,36 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     );
   }
 
+  void _bestEffortStartupStep({
+    required String source,
+    required VoidCallback action,
+  }) {
+    try {
+      action();
+    } catch (e, stack) {
+      logQuwoquanAppException(
+        source: source,
+        exceptionText: e.toString(),
+        stackText: stack.toString(),
+      );
+    }
+  }
+
+  void _recordBestEffortStartupFuture({
+    required String source,
+    required Future<void> future,
+  }) {
+    unawaited(
+      future.catchError((Object e, StackTrace stack) {
+        logQuwoquanAppException(
+          source: source,
+          exceptionText: e.toString(),
+          stackText: stack.toString(),
+        );
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final snapshot = ref.watch(appearanceSnapshotProvider);
@@ -358,7 +409,10 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       return _buildStartupWelcomeApp(snapshot);
     }
 
-    final router = ref.watch(appRouterProvider);
+    final router = _watchRouterOrNull();
+    if (router == null) {
+      return _buildStartupFallbackApp(snapshot);
+    }
 
     return MaterialApp.router(
       title: '趣我圈',
@@ -384,7 +438,10 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   }
 
   Widget _buildWebStartupApp(AppearanceSnapshot snapshot) {
-    final router = ref.watch(appRouterProvider);
+    final router = _watchRouterOrNull();
+    if (router == null) {
+      return _buildStartupFallbackApp(snapshot);
+    }
     return MaterialApp.router(
       title: '趣我圈',
       debugShowCheckedModeBanner: false,
@@ -439,18 +496,8 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         child: child ?? const SizedBox.shrink(),
       ),
       home: WelcomeScreen(
-        key: ValueKey(
-          'startup-welcome-$_startupWelcomeReplayIndex-'
-          '${_startupNativeSequenceElapsed?.inMilliseconds ?? -1}',
-        ),
+        key: ValueKey('startup-welcome-$_startupWelcomeReplayIndex'),
         deferSequenceStart: true,
-        sequenceEnabled:
-            _startupWelcomeReplayIndex > 0 ||
-            _startupNativeSequenceElapsed != null,
-        initialSequenceElapsed: _startupWelcomeReplayIndex == 0
-            ? (_startupNativeSequenceElapsed ?? Duration.zero)
-            : Duration.zero,
-        onFlutterWelcomeReady: _markFlutterWelcomeReady,
         startupLoading: _startupWelcomeReplayIndex > 0
             ? const WelcomeStartupLoadingState(
                 title: '',
@@ -498,12 +545,6 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       return;
     }
     ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
-    unawaited(
-      AppStartupRuntime.instance.completeNativeWelcomeOverlay(
-        degraded: degraded,
-        replayCount: _startupWelcomeReplayIndex,
-      ),
-    );
     AppStartupRuntime.instance.recordStartupPhase(
       (provider) => ref.read(provider),
       phase: 'welcome_completed',
@@ -531,6 +572,64 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         );
       });
     }
+  }
+
+  GoRouter? _watchRouterOrNull() {
+    try {
+      return ref.watch(appRouterProvider);
+    } catch (e, stack) {
+      logQuwoquanAppException(
+        source: 'startup_router_build',
+        exceptionText: e.toString(),
+        stackText: stack.toString(),
+      );
+      return null;
+    }
+  }
+
+  Widget _buildStartupFallbackApp(AppearanceSnapshot snapshot) {
+    return MaterialApp(
+      title: '趣我圈',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: snapshot.themeMode,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+      locale: const Locale('zh', 'CN'),
+      builder: (context, child) => wrapWithQuwoquanAppAppearance(
+        context: context,
+        snapshot: snapshot,
+        child: child ?? const SizedBox.shrink(),
+      ),
+      home: AppScaffold(
+        body: AppPageErrorState(
+          semantic: UiErrorSemantic(
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            title: UITextConstants.pageLoadFailedTitle,
+            message: UITextConstants.pageLoadFailedMessage,
+            copyKey: 'pageLoadFailedTitle',
+            presentation: UiErrorPresentation.emptyPage,
+            tone: UiErrorTone.caution,
+            primaryAction: UiErrorAction(
+              type: UiErrorActionType.retry,
+              label: UITextConstants.tryAgain,
+            ),
+          ),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry && mounted) {
+              setState(() {});
+            }
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _refreshAuthSessionOnForegroundIfNeeded() async {

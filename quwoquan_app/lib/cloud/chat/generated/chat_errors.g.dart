@@ -9,6 +9,8 @@ enum ChatErrorCode {
   notMutual('CHAT.USER.not_mutual', '互相关注后可进入正式私信', 403),
   greetingRequired('CHAT.USER.greeting_required', '请先打招呼，等对方回复后再进入正式私信', 403),
   blocked('CHAT.USER.blocked', '当前状态不能继续发送消息', 403),
+  groupMemberNotMutual('CHAT.USER.group_member_not_mutual', '只能邀请互相关注的好友加入群聊', 403),
+  groupMemberBlocked('CHAT.USER.group_member_blocked', '存在已屏蔽的成员，无法发起群聊', 403),
   internalError('CHAT.SYSTEM.internal_error', '消息服务异常，请稍后重试', 500),
   unknown('', '消息服务异常，请稍后重试', 500);
 
@@ -38,6 +40,8 @@ class ChatErrorMessages {
     ChatErrorCode.notMutual: '互相关注后可进入正式私信',
     ChatErrorCode.greetingRequired: '请先打招呼，等对方回复后再进入正式私信',
     ChatErrorCode.blocked: '当前状态不能继续发送消息',
+    ChatErrorCode.groupMemberNotMutual: '只能邀请互相关注的好友加入群聊',
+    ChatErrorCode.groupMemberBlocked: '存在已屏蔽的成员，无法发起群聊',
     ChatErrorCode.internalError: '消息服务异常，请稍后重试',
   };
 
@@ -49,6 +53,8 @@ class ChatErrorMessages {
     ChatErrorCode.notMutual: 'Mutual follow is required to enter a formal direct conversation',
     ChatErrorCode.greetingRequired: 'Send a greeting first and wait for a reply before entering formal direct conversation',
     ChatErrorCode.blocked: 'Current relationship does not allow messaging',
+    ChatErrorCode.groupMemberNotMutual: 'Only mutually-followed friends can be invited to a group',
+    ChatErrorCode.groupMemberBlocked: 'Cannot start a group while some members are blocked',
     ChatErrorCode.internalError: 'Chat service error, please try again',
   };
 }

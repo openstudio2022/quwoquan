@@ -99,6 +99,7 @@ def scalar(path):
 runtime_env = scalar("runtime.appRuntimeEnv")
 data_source = scalar("runtime.appDataSource")
 gateway = scalar("runtime.gatewayBaseUrl")
+legal_base = scalar("runtime.legalBaseUrl")
 realtime = scalar("runtime.realtimeBaseUrl")
 avatar_cdn = scalar("runtime.mediaAvatarCdnBaseUrl")
 image_cdn = scalar("runtime.mediaImageCdnBaseUrl")
@@ -117,6 +118,7 @@ if env_name in {"prod"} and ("test_fixtures" in text or "seedRefs" in text or "r
     raise SystemExit(f"{env_name} app package config must not reference test fixtures or seed refs")
 expected_urls = {
     "gatewayBaseUrl": public_bases.get("api", ""),
+    "legalBaseUrl": (public_bases.get("api", "").rstrip("/") + "/legal") if env_name != "prod" else "https://quwoquan.com/legal",
     "realtimeBaseUrl": public_bases.get("realtime", ""),
     "mediaAvatarCdnBaseUrl": public_bases.get("mediaAvatar", ""),
     "mediaImageCdnBaseUrl": public_bases.get("mediaImage", ""),
@@ -125,6 +127,7 @@ expected_urls = {
 }
 for label, value in {
     "gatewayBaseUrl": gateway,
+    "legalBaseUrl": legal_base,
     "realtimeBaseUrl": realtime,
     "mediaAvatarCdnBaseUrl": avatar_cdn,
     "mediaImageCdnBaseUrl": image_cdn,
@@ -148,7 +151,7 @@ if env_name in {"prod"}:
         "192.168.",
         "mock-cdn.example.com",
     )
-    joined = "\n".join([gateway, realtime, avatar_cdn, image_cdn, video_cdn, upload_base])
+    joined = "\n".join([gateway, legal_base, realtime, avatar_cdn, image_cdn, video_cdn, upload_base])
     if any(token in joined for token in forbidden):
         raise SystemExit(f"{env_name} app package contains forbidden local/test media or gateway URL")
 
@@ -158,6 +161,7 @@ report = {
     "runtimeEnv": runtime_env,
     "dataSource": data_source,
     "gatewayBaseUrl": gateway,
+    "legalBaseUrl": legal_base,
     "realtimeBaseUrl": realtime,
     "avatarCdnBaseUrl": avatar_cdn,
     "imageCdnBaseUrl": image_cdn,

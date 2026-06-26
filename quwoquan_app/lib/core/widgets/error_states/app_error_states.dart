@@ -30,29 +30,37 @@ class AppPageErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedSemantic = _withSafePageExit(context, semantic);
-    final fallbackStyle = TextStyle(
-      color: AppColors.iosLabel(context),
-      fontSize: AppTypography.iosBody,
-      decoration: TextDecoration.none,
-    );
-    return DefaultTextStyle(
-      style: fallbackStyle,
-      child: Padding(
-        padding: EdgeInsets.zero,
-        child: Center(
-          child: Padding(
-            padding: padding ?? EdgeInsets.all(AppSpacing.containerMd),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: AppSpacing.feedMaxContentWidth,
-              ),
-              child: _ErrorEmptyPageBody(
-                semantic: resolvedSemantic,
-                onAction: onAction,
+    return _wrapWithErrorAppearance(
+      context,
+      resolvedSemantic,
+      Builder(
+        builder: (themedContext) {
+          final fallbackStyle = TextStyle(
+            color: AppColors.iosLabel(themedContext),
+            fontSize: AppTypography.iosBody,
+            decoration: TextDecoration.none,
+          );
+          return DefaultTextStyle(
+            style: fallbackStyle,
+            child: Padding(
+              padding: EdgeInsets.zero,
+              child: Center(
+                child: Padding(
+                  padding: padding ?? EdgeInsets.all(AppSpacing.containerMd),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: AppSpacing.feedMaxContentWidth,
+                    ),
+                    child: _ErrorEmptyPageBody(
+                      semantic: resolvedSemantic,
+                      onAction: onAction,
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -684,6 +692,9 @@ UiErrorSemantic _withSafePageExit(
       recoveryAction: semantic.recoveryAction,
       presentation: semantic.presentation,
       tone: semantic.tone,
+      appearanceMode: semantic.appearanceMode,
+      sourceRouteId: semantic.sourceRouteId,
+      sourceSurfaceId: semantic.sourceSurfaceId,
     );
   }
   final shouldAppendBack =
@@ -710,6 +721,24 @@ UiErrorSemantic _withSafePageExit(
     recoveryAction: semantic.recoveryAction,
     presentation: semantic.presentation,
     tone: semantic.tone,
+    appearanceMode: semantic.appearanceMode,
+    sourceRouteId: semantic.sourceRouteId,
+    sourceSurfaceId: semantic.sourceSurfaceId,
+  );
+}
+
+Widget _wrapWithErrorAppearance(
+  BuildContext context,
+  UiErrorSemantic semantic,
+  Widget child,
+) {
+  final brightness = semantic.appearanceMode.brightness;
+  if (brightness == null) {
+    return child;
+  }
+  return CupertinoTheme(
+    data: CupertinoTheme.of(context).copyWith(brightness: brightness),
+    child: child,
   );
 }
 

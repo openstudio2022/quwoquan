@@ -10,8 +10,6 @@ import 'package:flutter/services.dart';
 ///                                      by `PlatformCapabilities.nativeVideoEditing`.
 ///  - `personal_assistant/native_api`-> abstracted here as
 ///                                      [AssistantLocalContextBridge].
-///  - `quwoquan/startup/native`      -> abstracted here as
-///                                      [StartupNativeBridge].
 ///
 /// New native surfaces MUST be added behind an interface here (never a raw
 /// `MethodChannel` in business code), and unimplemented platforms must return a
@@ -73,17 +71,6 @@ abstract interface class AssistantLocalContextBridge {
   });
 }
 
-abstract interface class StartupNativeBridge {
-  Future<int?> nativeStartupElapsedMs();
-
-  Future<void> markFlutterWelcomeReady({required int sequenceElapsedMs});
-
-  Future<void> completeWelcomeOverlay({
-    required bool degraded,
-    required int replayCount,
-  });
-}
-
 /// Default implementation backed by the `personal_assistant/native_api` channel.
 /// Returns an empty context (rather than throwing) when the platform has no
 /// implementation registered, so the assistant degrades gracefully.
@@ -128,65 +115,6 @@ class UnsupportedAssistantLocalContextBridge
   Future<Map<String, dynamic>> getLocalContext({
     List<String> requestedFields = const <String>[],
   }) async => const <String, dynamic>{};
-}
-
-class MethodChannelStartupNativeBridge implements StartupNativeBridge {
-  const MethodChannelStartupNativeBridge({
-    this.channel = const MethodChannel('quwoquan/startup/native'),
-  });
-
-  final MethodChannel channel;
-
-  @override
-  Future<int?> nativeStartupElapsedMs() async {
-    final elapsed = await channel
-        .invokeMethod<Object?>('nativeStartupElapsedMs')
-        .timeout(const Duration(milliseconds: 80));
-    if (elapsed is num) {
-      return elapsed.round();
-    }
-    return null;
-  }
-
-  @override
-  Future<void> markFlutterWelcomeReady({required int sequenceElapsedMs}) async {
-    await channel
-        .invokeMethod<bool>('flutterWelcomeReady', <String, Object?>{
-          'sequenceElapsedMs': sequenceElapsedMs,
-        })
-        .timeout(const Duration(milliseconds: 250));
-  }
-
-  @override
-  Future<void> completeWelcomeOverlay({
-    required bool degraded,
-    required int replayCount,
-  }) async {
-    await channel
-        .invokeMethod<bool>('flutterWelcomeCompleted', <String, Object?>{
-          'degraded': degraded,
-          'replayCount': replayCount,
-        })
-        .timeout(const Duration(milliseconds: 250));
-  }
-}
-
-class UnsupportedStartupNativeBridge implements StartupNativeBridge {
-  const UnsupportedStartupNativeBridge();
-
-  @override
-  Future<int?> nativeStartupElapsedMs() async => null;
-
-  @override
-  Future<void> markFlutterWelcomeReady({
-    required int sequenceElapsedMs,
-  }) async {}
-
-  @override
-  Future<void> completeWelcomeOverlay({
-    required bool degraded,
-    required int replayCount,
-  }) async {}
 }
 
 class MethodChannelNativeAuthBridge implements NativeAuthBridge {

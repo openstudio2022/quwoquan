@@ -14,6 +14,7 @@
 | S2 我的主页 | `user-profile-intersection-redesign`（我的） | 我的连接 / 我的影响力 |
 | S3 实体主页 | `entity-homepage-intersection-redesign` | 为什么推荐这里 |
 | S4 圈子主页 | `circle-homepage-intersection-redesign` | 为什么推荐这个圈子 |
+| S3/S4 端云闭环 | `object-homepage-gamma-real-data-closure` | gamma-local 真实 bundle / impact / object intersections |
 | S5 全局搜索 | `search-intersection-consumption` | 交集 Tab + 发现区分组 |
 | 横切 | `intersection-sentence-unification` | primaryText 单句 + G2 |
 
@@ -87,6 +88,7 @@
 5. 事实/概率分通道，事实每条可追溯，概率明确标注推荐。
 6. 保鲜期/冷却窗口生效；曝光→点击→转化全链路埋点。
 7. 页面横向质量 P1-P8、Mock 隔离、语义 token、弱类型预算、local_contract-user_acceptance 全部满足。
+8. 实体主页与圈子主页的 gamma-local 真实数据闭环必须通过 `object-homepage-gamma-real-data-closure`；本地 UI 通过不等同于商用成熟。
 
 ## 架构基线 v2 对齐（§21 收口，A–E 五会话开工基线）
 

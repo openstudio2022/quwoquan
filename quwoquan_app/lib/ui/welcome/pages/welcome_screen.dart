@@ -48,18 +48,12 @@ class WelcomeScreen extends StatefulWidget {
     super.key,
     required this.onFinish,
     this.deferSequenceStart = false,
-    this.sequenceEnabled = true,
-    this.initialSequenceElapsed = Duration.zero,
-    this.onFlutterWelcomeReady,
     this.onSequenceComplete,
     this.startupLoading,
   });
 
   final VoidCallback onFinish;
   final bool deferSequenceStart;
-  final bool sequenceEnabled;
-  final Duration initialSequenceElapsed;
-  final VoidCallback? onFlutterWelcomeReady;
   final VoidCallback? onSequenceComplete;
   final WelcomeStartupLoadingState? startupLoading;
 
@@ -75,6 +69,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   static const Duration _postBloomPause = Duration(milliseconds: 180);
   static const Duration _textDuration = Duration(milliseconds: 760);
   static const Duration _finalPause = Duration(milliseconds: 120);
+  static const Duration _firstFrameRasterTimeout = Duration(milliseconds: 1500);
+  static const Duration _visibleFrameGuard = Duration(milliseconds: 300);
   static const double _initialPetalProgress = 0.24;
   static const double _initialTextProgress = 1.0;
   static const int _petalCount = 8;
@@ -85,7 +81,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   bool _finishHandled = false;
   bool _sequenceCompletionDispatched = false;
   bool _sequenceStarted = false;
-  bool _welcomeReadyDispatched = false;
 
   @override
   void initState() {
@@ -98,7 +93,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       (i) => AnimationController(
         vsync: this,
         duration: _petalDuration,
-        value: _petalValueForElapsed(widget.initialSequenceElapsed, i),
+        value: _initialPetalProgress,
       ),
     );
     _textController = AnimationController(
@@ -107,18 +102,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       value: _initialTextProgress,
     );
 
-    if (widget.sequenceEnabled) {
-      _startSequenceAfterFirstStableFrame();
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant WelcomeScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!oldWidget.sequenceEnabled && widget.sequenceEnabled) {
-      _applyInitialSequenceElapsed(widget.initialSequenceElapsed);
-      _startSequenceAfterFirstStableFrame();
-    }
+    _startSequenceAfterFirstStableFrame();
   }
 
   @override
@@ -188,58 +172,65 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       if (widget.deferSequenceStart) {
         await WidgetsBinding.instance.endOfFrame;
         if (!mounted) return;
+        await _waitForFirstFrameRasterizedOrTimeout();
+        if (!mounted) return;
+        await _waitForManagedDelay(_visibleFrameGuard);
+        if (!mounted) return;
       }
-      _dispatchFlutterWelcomeReady();
-      _runSequenceFrom(widget.initialSequenceElapsed);
+      _runSequence();
     });
   }
 
-  void _dispatchFlutterWelcomeReady() {
-    if (_welcomeReadyDispatched) {
+  Future<void> _waitForFirstFrameRasterizedOrTimeout() async {
+    if (WidgetsBinding.instance.firstFrameRasterized) {
       return;
     }
-    _welcomeReadyDispatched = true;
-    widget.onFlutterWelcomeReady?.call();
+    final timeout = Completer<void>();
+    late final Timer timer;
+    timer = Timer(_firstFrameRasterTimeout, () {
+      _sequenceTimers.remove(timer);
+      if (!timeout.isCompleted) {
+        timeout.complete();
+      }
+    });
+    _sequenceTimers.add(timer);
+    await Future.any<void>([
+      WidgetsBinding.instance.waitUntilFirstFrameRasterized,
+      timeout.future,
+    ]);
+    if (_sequenceTimers.remove(timer)) {
+      timer.cancel();
+    }
   }
 
-  void _runSequenceFrom(Duration elapsed) {
+  Future<void> _waitForManagedDelay(Duration duration) {
+    if (duration <= Duration.zero) {
+      return Future<void>.value();
+    }
+    final completer = Completer<void>();
+    late final Timer timer;
+    timer = Timer(duration, () {
+      _sequenceTimers.remove(timer);
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+    _sequenceTimers.add(timer);
+    return completer.future;
+  }
+
+  void _runSequence() {
     if (!mounted) return;
     for (var i = 0; i < _petalCount; i++) {
-      final startDelay = (_petalStagger * i) - elapsed;
-      if (startDelay <= Duration.zero) {
-        if (_petalControllers[i].value < 1) {
+      final startDelay = _petalStagger * i;
+      _schedule(startDelay, () {
+        if (mounted && _petalControllers[i].value < 1) {
           _petalControllers[i].forward();
         }
-      } else {
-        _schedule(startDelay, () {
-          if (mounted && _petalControllers[i].value < 1) {
-            _petalControllers[i].forward();
-          }
-        });
-      }
+      });
     }
 
-    final remaining = _sequenceCompletionDuration - elapsed;
-    _schedule(remaining, _dispatchSequenceCompletion);
-  }
-
-  void _applyInitialSequenceElapsed(Duration elapsed) {
-    for (var i = 0; i < _petalCount; i++) {
-      _petalControllers[i].value = _petalValueForElapsed(elapsed, i);
-    }
-    _textController.value = _initialTextProgress;
-  }
-
-  double _petalValueForElapsed(Duration elapsed, int index) {
-    final sinceStart = elapsed - (_petalStagger * index);
-    if (sinceStart <= Duration.zero) {
-      return _initialPetalProgress;
-    }
-    if (sinceStart >= _petalDuration) {
-      return 1.0;
-    }
-    final raw = sinceStart.inMicroseconds / _petalDuration.inMicroseconds;
-    return _initialPetalProgress + (1 - _initialPetalProgress) * raw;
+    _schedule(_sequenceCompletionDuration, _dispatchSequenceCompletion);
   }
 
   Widget _buildBackground(WelcomeAppearance appearance) {

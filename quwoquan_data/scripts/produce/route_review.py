@@ -158,6 +158,21 @@ def review_route_draft(
     }
     from _common import quality_gates as qg
 
+    # 结构形态硬门（与来源数量无关，低误报）：单章节过半失衡 + 平行时间线拼接未归并。
+    sb_issues = [] if carrier in ("image", "gallery") else qg.section_balance_issues(
+        body, max_ratio=qg.SECTION_BALANCE_MAX_RATIO_ARTICLE
+    )
+    route_checks["sectionBalance"] = {
+        "passed": not sb_issues,
+        "issues": sb_issues,
+        "suggestions": ["压缩或拆分过长章节，避免一段吞并其余应有章节；按 writingIntent 均衡分配篇幅。"] if sb_issues else [],
+    }
+    tl_issues = [] if carrier in ("image", "gallery") else qg.timeline_monotonicity_issues(body)
+    route_checks["timelineOrder"] = {
+        "passed": not tl_issues,
+        "issues": tl_issues,
+        "suggestions": ["把同章节内并列时间线按真实时间顺序归并为单一连贯叙事，禁止首尾拼接造成时间倒错。"] if tl_issues else [],
+    }
     wi_issues = [] if carrier in ("image", "gallery") else qg.writing_intent_consistency_issues(body, brief.get("writingIntent"))
     route_checks["writingIntentConsistency"] = {
         "passed": not wi_issues,

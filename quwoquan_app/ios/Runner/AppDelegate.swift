@@ -13,7 +13,10 @@ import UIKit
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     NSLog("QWQStartup ios_did_finish_launching")
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    let launched = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    window?.backgroundColor = StartupTransitionBackground.color
+    window?.rootViewController?.view.backgroundColor = StartupTransitionBackground.color
+    return launched
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
@@ -58,6 +61,15 @@ import UIKit
       }
     }
   }
+}
+
+private enum StartupTransitionBackground {
+  static let color = UIColor(
+    red: 0.0196078431,
+    green: 0.0235294118,
+    blue: 0.0313725490,
+    alpha: 1
+  )
 }
 
 private final class PersonalAssistantNativeApiPlugin {

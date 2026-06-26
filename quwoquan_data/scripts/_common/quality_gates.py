@@ -255,6 +255,115 @@ def intra_doc_repetition_issues(
 
 
 # ---------------------------------------------------------------------------
+# 结构形态量化门：章节占比 + 历史时间线单调性。
+# 关键词命中式软门（情绪词/桶词/转场词）测不到“单源忠实照搬但章节失衡 / 平行
+# 时间线拼接未归并”这类结构缺陷。这两道是可量化、低误报的硬结构门：
+# 九寨沟「历史沿革」占正文约 70%、且末尾 2007→1979 时间倒错，二者都会被拦。
+# ---------------------------------------------------------------------------
+# 硬阈值标定（基于四川 scale100 真实样本）：0.55 只拦“单段过半且明显失衡”，
+# 九寨沟(82%)/单段 99%/海螺沟(67%) 被拦；概况为主的均衡主页(47-51%)放行，
+# 更细的均衡性由 P0-B LLM 语义复核做软判，避免硬门过严造成重生成振荡。
+SECTION_BALANCE_MAX_RATIO_HOMEPAGE = 0.55
+SECTION_BALANCE_MAX_RATIO_ARTICLE = 0.60
+SECTION_BALANCE_MIN_SECTIONS = 2
+SECTION_BALANCE_MIN_BODY_CHARS = 240
+
+TIMELINE_MIN_YEARS = 6
+TIMELINE_BACKWARD_DROP_YEARS = 12
+
+_ASSET_DIRECTIVE_RE = re.compile(r"\{asset://[^}]*\}")
+_FRONTMATTER_RE = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
+# 4 位年份（1xxx/20xx）后紧跟“年”，避免误命中“12000年前”这类非纪年数字。
+_YEAR_TOKEN_RE = re.compile(r"(?<!\d)(1[0-9]{3}|20[0-9]{2})(?=\s*年)")
+_SUBHEADING_RE = re.compile(r"(?m)^(#{2,6})\s+(.+?)\s*$")
+
+
+def _section_units(text: str) -> list[tuple[str, str]]:
+    """按 `##`+ 小标题切分正文，含首个小标题前的导语段（heading 为 ''）。
+
+    用于结构形态门：先剥离 frontmatter、`{asset://}` 主页图片指令与 `:::figure` 块，
+    再按二级及以下小标题切段；H1（`# 标题`）归入导语段。
+    """
+    body = _strip_figures(_ASSET_DIRECTIVE_RE.sub("", _FRONTMATTER_RE.sub("", text or "")))
+    matches = list(_SUBHEADING_RE.finditer(body))
+    if not matches:
+        return [("", body.strip())]
+    units: list[tuple[str, str]] = []
+    preamble = body[: matches[0].start()].strip()
+    if preamble:
+        units.append(("", preamble))
+    for index, match in enumerate(matches):
+        seg_start = match.end()
+        seg_end = matches[index + 1].start() if index + 1 < len(matches) else len(body)
+        units.append((match.group(2).strip(), body[seg_start:seg_end].strip()))
+    return units
+
+
+def section_balance_issues(
+    text: str,
+    *,
+    max_ratio: float,
+    min_sections: int = SECTION_BALANCE_MIN_SECTIONS,
+    min_body_chars: int = SECTION_BALANCE_MIN_BODY_CHARS,
+) -> list[str]:
+    """章节占比门：任一章节去空白字数 / 正文总字数 > max_ratio 即判结构失衡。
+
+    直击“单源忠实照搬导致某一章节（如「历史沿革」）吞并主体篇幅”。
+    章节数不足或正文过短时不判（避免短文误杀）。
+    """
+    sized = [(heading, len(_compact(body))) for heading, body in _section_units(text)]
+    sized = [(heading, count) for heading, count in sized if count > 0]
+    total = sum(count for _, count in sized)
+    if len(sized) < min_sections or total < min_body_chars:
+        return []
+    issues: list[str] = []
+    for heading, count in sized:
+        ratio = count / total
+        if ratio > max_ratio:
+            issues.append(
+                f"sectionBalance: 章节「{heading or '导语'}」占正文 {ratio * 100:.0f}% "
+                f"(> {max_ratio * 100:.0f}%)，单章节过长导致结构失衡，"
+                "应压缩或拆分，避免一段吞并其余应有章节"
+            )
+    return issues
+
+
+def timeline_monotonicity_issues(
+    text: str,
+    *,
+    min_years: int = TIMELINE_MIN_YEARS,
+    backward_drop_years: int = TIMELINE_BACKWARD_DROP_YEARS,
+) -> list[str]:
+    """历史时间线单调门：章节内年份序列出现大幅回跳即判平行时间线未归并。
+
+    直击“多条并列时间线（开发史/保护史/行政沿革）首尾拼接，造成
+    2007→1979 这类时间倒错”。仅在章节年份数 >= min_years 时生效。
+    """
+    issues: list[str] = []
+    for heading, body in _section_units(text):
+        years = [int(value) for value in _YEAR_TOKEN_RE.findall(body)]
+        if len(years) < min_years:
+            continue
+        running_max = years[0]
+        worst_drop = 0
+        worst_pair: tuple[int, int] | None = None
+        for year in years[1:]:
+            drop = running_max - year
+            if drop > worst_drop:
+                worst_drop = drop
+                worst_pair = (running_max, year)
+            running_max = max(running_max, year)
+        if worst_drop > backward_drop_years and worst_pair is not None:
+            hi, lo = worst_pair
+            issues.append(
+                f"timelineOrder: 章节「{heading or '导语'}」时间线非单调，"
+                f"出现 {hi}→{lo} 的回跳（{worst_drop} 年），疑似平行时间线拼接未归并，"
+                "请按时间顺序归并为单一叙事"
+            )
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # 门 1：图文引用闭环硬门——有 assets 就必须进正文，不只做封面。
 # ---------------------------------------------------------------------------
 def image_reference_closure_issues(

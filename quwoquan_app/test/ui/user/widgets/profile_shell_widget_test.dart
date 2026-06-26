@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
@@ -80,7 +82,7 @@ class _FailingHomepageBundleRepository extends MockUserProfileRepository {
 }
 
 /// 默认昵称态（未编辑）本人档案：昵称即默认用户名、未自定义、无头像/封面/简介/标签。
-/// 用于验证我的主页空态引导与「改名画笔」，并断言不再回退到「探索者 / 趣我圈号」占位。
+/// 用于验证我的主页空态引导，并断言不再回退到「探索者 / 趣我圈号」占位。
 class _DefaultNicknameProfileRepository extends MockUserProfileRepository {
   const _DefaultNicknameProfileRepository();
 
@@ -106,7 +108,7 @@ class _DefaultNicknameProfileRepository extends MockUserProfileRepository {
   }
 }
 
-/// 已自定义昵称的本人档案：nicknameCustomized=true，用于断言改名画笔隐藏。
+/// 已自定义昵称的本人档案：nicknameCustomized=true，用于断言昵称行编辑入口不回归。
 class _CustomizedNicknameProfileRepository extends MockUserProfileRepository {
   const _CustomizedNicknameProfileRepository();
 
@@ -130,6 +132,77 @@ class _CustomizedNicknameProfileRepository extends MockUserProfileRepository {
   }
 }
 
+/// 云侧只给 object key 的本人头像：主头像与吸顶头像应共用同一可解析源。
+class _AvatarObjectKeyProfileRepository extends MockUserProfileRepository {
+  const _AvatarObjectKeyProfileRepository();
+
+  @override
+  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
+    return SubAccountProfileViewData.fromSubAccountProfileWire(
+      SubAccountProfileWireDto(
+        subAccountId: userId,
+        ownerUserId: userId,
+        userHandle: userId,
+        username: userId,
+        displayName: '头像同源用户',
+        nickname: '头像同源用户',
+        nicknameCustomized: true,
+        avatarUrl:
+            'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+        backgroundUrl: '',
+        bio: '头像同源回归',
+        identityTags: const <String>['摄影'],
+      ),
+    );
+  }
+}
+
+class _NoUserPostsContentRepository extends MockContentRepository {
+  _NoUserPostsContentRepository() : super(seedPosts: const <PostBaseDto>[]);
+
+  @override
+  Future<CursorPage<PostBaseDto>> listUserPosts({
+    required String userId,
+    String? identity,
+    String? type,
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return const CursorPage<PostBaseDto>(
+      items: <PostBaseDto>[],
+      nextCursor: null,
+    );
+  }
+}
+
+PhotoPostDto _profileBackgroundPost(String authorId) {
+  return PhotoPostDto(
+    id: '${authorId}_cover_source',
+    type: 'photo',
+    identity: 'work',
+    assistantUsePolicy: 'inherit',
+    authorId: authorId,
+    displayName: '封面来源用户',
+    avatarUrl:
+        'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+    authorBackgroundUrl:
+        'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png',
+    authorRoleLabel: '摄影',
+    authorIdentityTags: const <String>['摄影'],
+    authorVerified: false,
+    body: '封面回退来源',
+    coverUrl:
+        'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png',
+    imageUrls: const <String>[
+      'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png',
+    ],
+    likeCount: 1,
+    commentCount: 0,
+    shareCount: 0,
+    createdAt: DateTime.utc(2026, 6, 24),
+  );
+}
+
 Widget _scopedApp({
   required ProfileMode mode,
   String userId = 'nature_photographer',
@@ -138,12 +211,15 @@ Widget _scopedApp({
   RelationshipCapabilityRepository? capabilityRepository,
   UserProfileRepository userProfileRepository =
       const MockUserProfileRepository(),
+  ContentRepository? contentRepository,
   List overrides = const [],
 }) {
   return ProviderScope(
     overrides: [
       userProfileRepositoryProvider.overrideWithValue(userProfileRepository),
-      contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+      contentRepositoryProvider.overrideWithValue(
+        contentRepository ?? MockContentRepository(),
+      ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         capabilityRepository ?? _ThrowingCapabilityRepository(),
       ),
@@ -217,7 +293,7 @@ void main() {
       expect(find.text(UITextConstants.profileEditLabel), findsOneWidget);
     });
 
-    testWidgets('默认昵称态展示头像/封面/简介/标签引导与改名画笔，且不出现探索者/趣我圈号', (tester) async {
+    testWidgets('默认昵称态展示头像/封面/简介/标签引导与 QR，且不出现探索者/趣我圈号', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -227,6 +303,7 @@ void main() {
           mode: ProfileMode.mine,
           userId: 'fixture_user_current',
           userProfileRepository: const _DefaultNicknameProfileRepository(),
+          contentRepository: _NoUserPostsContentRepository(),
         ),
       );
       await _pumpFrames(tester);
@@ -248,14 +325,18 @@ void main() {
       expect(find.text(UITextConstants.profileUploadCover), findsOneWidget);
       expect(find.text(UITextConstants.profileEmptyBioPrompt), findsWidgets);
       expect(find.text(UITextConstants.profileEmptyTagsPrompt), findsOneWidget);
-      // 默认昵称（未自定义改名）时展示改名画笔；改名后应隐藏。
+      // 昵称行不再承载小画笔；新增二维码固定在 header trailing 区。
       expect(
         find.byKey(const ValueKey<String>('profile-header-edit')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('profile-header-qr-code')),
         findsOneWidget,
       );
     });
 
-    testWidgets('改过昵称（nicknameCustomized）后我的主页不再展示改名画笔', (tester) async {
+    testWidgets('改过昵称（nicknameCustomized）后我的主页不展示昵称行编辑入口', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -276,6 +357,103 @@ void main() {
       );
     });
 
+    testWidgets('头像 object key 在主头像与吸顶头像使用同一可加载组件渲染', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.mine,
+          userId: 'fixture_user_current',
+          userProfileRepository: const _AvatarObjectKeyProfileRepository(),
+        ),
+      );
+      await _pumpFrames(tester, count: 20);
+
+      expect(
+        find.byKey(const ValueKey<String>('profile-header-avatar-image')),
+        findsOneWidget,
+      );
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+      await _pumpFrames(tester, count: 12);
+      expect(
+        find.byKey(
+          const ValueKey<String>('profile-shell-compact-avatar-image'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('有作品回退背景图时不展示添加封面', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.mine,
+          userId: 'fixture_user_current',
+          userProfileRepository: const _DefaultNicknameProfileRepository(),
+          contentRepository: MockContentRepository(
+            seedPosts: <PostBaseDto>[
+              _profileBackgroundPost('fixture_user_current'),
+            ],
+          ),
+        ),
+      );
+      await _pumpFrames(tester, count: 20);
+
+      expect(find.text(UITextConstants.profileUploadCover), findsNothing);
+    });
+
+    testWidgets('无任何背景图时展示添加封面', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.mine,
+          userId: 'fixture_user_current',
+          userProfileRepository: const _DefaultNicknameProfileRepository(),
+          contentRepository: _NoUserPostsContentRepository(),
+        ),
+      );
+      await _pumpFrames(tester, count: 20);
+
+      expect(find.text(UITextConstants.profileUploadCover), findsOneWidget);
+    });
+
+    testWidgets('二维码位于 header trailing 区并贴近资料卡右边界', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
+      await _pumpFrames(tester, count: 20);
+
+      final qrFinder = find.byKey(
+        const ValueKey<String>('profile-header-qr-code'),
+      );
+      final cardFinder = find.byKey(
+        const ValueKey<String>('profile-shell-profile-card'),
+      );
+      expect(qrFinder, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('profile-header-edit')),
+        findsNothing,
+      );
+
+      final cardRight = tester.getTopRight(cardFinder).dx;
+      final qrRight = tester.getTopRight(qrFinder).dx;
+      expect(
+        (cardRight - AppSpacing.containerMd) - qrRight,
+        closeTo(0, AppSpacing.containerLg),
+      );
+    });
+
     testWidgets('other 模式渲染返回和更多按钮', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
@@ -287,6 +465,7 @@ void main() {
           userId: 'u_lin',
           capabilityRepository: _StaticCapabilityRepository(),
           overrides: [
+            currentUserIdProvider.overrideWithValue('viewer-profile'),
             objectSharedReasonsProvider.overrideWith((ref, query) async {
               return <IntersectionReason>[
                 IntersectionReason(
@@ -396,6 +575,13 @@ void main() {
         find.text(UITextConstants.profileIntersectionEmptyOther),
         findsOneWidget,
       );
+      expect(
+        find.descendant(
+          of: find.byKey(OtherProfileIntersectionCard.cardKey),
+          matching: find.text(DiscoveryFeedText.intersectionViewAll),
+        ),
+        findsNothing,
+      );
       expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
       expect(find.byKey(AuthorImpactCard.emptyKey), findsOneWidget);
       expect(
@@ -415,10 +601,12 @@ void main() {
           userId: 'u_lin',
           capabilityRepository: _StaticCapabilityRepository(),
           overrides: [
+            currentUserIdProvider.overrideWithValue('viewer-profile'),
             objectSharedReasonsProvider.overrideWith((ref, query) async {
               return <IntersectionReason>[
                 IntersectionReason(
                   dimension: 'relationship',
+                  primaryText: '你和林清越都关注胶片摄影',
                   intersectionPoints: <IntersectionPoint>[
                     IntersectionPoint(
                       pointId: 'shared-followees',
@@ -458,6 +646,13 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(OtherProfileIntersectionCard.cardKey), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(OtherProfileIntersectionCard.cardKey),
+          matching: find.text(DiscoveryFeedText.intersectionViewAll),
+        ),
+        findsOneWidget,
+      );
       expect(find.text(DiscoveryFeedText.myIntersectionsTitle), findsNothing);
       expect(find.text(UITextConstants.profileImpactTitleMine), findsNothing);
     });

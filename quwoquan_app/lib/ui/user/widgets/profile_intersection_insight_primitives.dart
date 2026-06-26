@@ -22,14 +22,14 @@ class ProfileInsightSectionCard extends StatelessWidget {
   const ProfileInsightSectionCard({
     super.key,
     required this.title,
-    required this.actionLabel,
     required this.child,
+    this.actionLabel,
     this.onAction,
     this.topPadding = false,
   });
 
   final String title;
-  final String actionLabel;
+  final String? actionLabel;
   final Widget child;
   final VoidCallback? onAction;
   final bool topPadding;
@@ -97,8 +97,14 @@ class ProfileInsightSectionCard extends StatelessWidget {
             ),
             const ProfileInsightDivider(),
             child,
-            const ProfileInsightDivider(),
-            ProfileInsightFooterAction(label: actionLabel, onTap: onAction),
+            if ((actionLabel ?? '').trim().isNotEmpty &&
+                onAction != null) ...<Widget>[
+              const ProfileInsightDivider(),
+              ProfileInsightFooterAction(
+                label: actionLabel!.trim(),
+                onTap: onAction,
+              ),
+            ],
           ],
         ),
       ),

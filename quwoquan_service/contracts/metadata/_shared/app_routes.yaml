@@ -40,7 +40,7 @@ routes:
     path: /user/{username}
   - id: workBrowser
     path: /works/browser/{workId}
-    query_params: [filter, source, index]
+    query_params: [filter, source, index, sourceTheme]
   - id: assistant
     path: /assistant
   - id: assistantPersonal
@@ -78,6 +78,8 @@ routes:
     path: /settings
   - id: settingsPermissions
     path: /settings/permissions
+  - id: settingsDarkMode
+    path: /settings/dark-mode
   - id: settingsAbout
     path: /settings/about
   - id: profileEdit

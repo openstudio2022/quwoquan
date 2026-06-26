@@ -475,15 +475,86 @@ def default_orchestrator_runner(
 
     与 leaf runner 同构；真正的 checkpoint 完成由调用方读 workflow_state 校验（orchestrate_partition）。
     """
-    try:
-        from cursor_sdk import Agent, CursorAgentError  # type: ignore
-    except Exception as exc:  # noqa: BLE001
-        return RunOutcome(started=False, error=f"cursor_sdk unavailable: {exc}", retryable=False)
-
     key = api_key or os.environ.get("CURSOR_API_KEY")
     if not key:
         return RunOutcome(started=False, error="CURSOR_API_KEY missing", retryable=False)
     prompt = _build_orchestrator_prompt(packet)
+
+    if runtime == RUNTIME_LOCAL:
+        # 本地编排必须复用 produce 路径同一套健壮 bridge 生命周期（launch 文件锁 + 冷却 +
+        # 暖 bridge 复用 + ready 延迟 + 重试间清理）。早期 orchestrate 直接裸 Agent.prompt，
+        # 无任何 bridge 稳定化，放量时 100 分区顺序冷启 bridge 互相抢端口 → 大面积
+        # "Connection refused"（实测放量 cs100 一轮 294 次），orchestrationFailed 而 0 收口。
+        # 单一真相源：直接委托 task.run._default_managed_agent_runner，禁止在此另起第二套。
+        try:
+            from task.run import _default_managed_agent_runner  # noqa: E402
+            from task.run_context import PipelineContext  # noqa: E402
+        except Exception as exc:  # noqa: BLE001
+            return RunOutcome(
+                started=False, error=f"managed local runner unavailable: {exc}", retryable=False
+            )
+        ctx = PipelineContext(
+            task_id=str(packet.get("taskId") or ""),
+            batch_id=str(packet.get("batchId") or ""),
+            entity_ids=[],
+            spec={},
+            runtime=RUNTIME_LOCAL,
+            model=model,
+            agent_provider="cursor_sdk",
+            max_workers=1,
+        )
+        os.environ.setdefault("CURSOR_API_KEY", key)
+        # 看门狗超时：编排 prompt 是开放式 Ralph 循环，本地 bridge 偶发 agent 调用挂起
+        # （bridge/python 双 0% CPU、零文件写入、无返回）。_default_managed_agent_runner
+        # 不对 Agent.prompt 设超时，单个挂起分区会永久阻塞串行队列。这里用独立线程跑托管
+        # runner + 硬 deadline；超时则杀本 workspace bridge 让其解除阻塞，并按 retryable 返回，
+        # 由 orchestrate_partition 的 per-partition 重试/object_queue backoff 接力，而非整轮卡死。
+        timeout_s = max(
+            60.0, float(os.environ.get("QWQ_ORCHESTRATE_AGENT_TIMEOUT_SECONDS", "300"))
+        )
+        holder: dict[str, Any] = {}
+        done = threading.Event()
+
+        def _invoke() -> None:
+            try:
+                holder["res"] = _default_managed_agent_runner(ctx, prompt)
+            except Exception as exc:  # noqa: BLE001
+                holder["res"] = {"started": True, "status": "error", "error": str(exc), "retryable": True}
+            finally:
+                done.set()
+
+        worker = threading.Thread(target=_invoke, name="orchestrate-agent", daemon=True)
+        worker.start()
+        if not done.wait(timeout=timeout_s):
+            try:
+                from task.run import _terminate_workspace_cursor_bridges  # noqa: E402
+
+                _terminate_workspace_cursor_bridges(Path(cwd or os.getcwd()))
+            except Exception:  # noqa: BLE001
+                pass
+            return RunOutcome(
+                started=True,
+                status="error",
+                passed=False,
+                retryable=True,
+                error=f"orchestrate agent timed out after {int(timeout_s)}s (local bridge stall)",
+            )
+        res = holder.get("res") or {"started": False, "status": "error", "error": "no result", "retryable": True}
+        status = str(res.get("status") or "error")
+        return RunOutcome(
+            started=bool(res.get("started")),
+            status="finished" if status == "finished" else "error",
+            passed=status == "finished",
+            agent_id=res.get("agentId"),
+            run_id=res.get("runId"),
+            retryable=bool(res.get("retryable")),
+            error=None if status == "finished" else (res.get("error") or f"run status={status}"),
+        )
+
+    try:
+        from cursor_sdk import Agent, CursorAgentError  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        return RunOutcome(started=False, error=f"cursor_sdk unavailable: {exc}", retryable=False)
     try:
         opts = _build_agent_options(api_key=key, model=model, runtime=runtime, cwd=cwd, repos=repos)
         result = Agent.prompt(prompt, opts)
@@ -1286,7 +1357,26 @@ def _startup_probe_packet(plan_id: str) -> dict[str, Any]:
 
 
 def run_startup_probe(plan_id: str, *, agent_runner: AgentRunner) -> RunOutcome:
-    return agent_runner(_startup_probe_packet(plan_id))
+    """前置 Cursor bridge 预热探测。
+
+    bridge 冷启动有 socket 绑定延迟，单次探测会与冷启竞态导致 'Connection refused'，
+    使整个 author-runner 误判为 startup failure 而 rc=3 退出（实测每 cycle 反复发生、
+    0 派工）。这里对 retryable 失败做有限次退避重试，在源头吸收冷启竞态；仍失败才上报。
+    重试次数/间隔可经环境变量覆盖。
+    """
+    attempts = max(1, int(os.environ.get("QWQ_STARTUP_PROBE_MAX_ATTEMPTS", "8")))
+    base_backoff = float(os.environ.get("QWQ_STARTUP_PROBE_BACKOFF_SECONDS", "3.0"))
+    # probe packet 的 model/prompt 都是固定有效的（无效 model/缺 key 在更早处已分流），
+    # 因此任何探测失败都视为瞬时（bridge 冷启 Connection refused / 云端 code=internal 等），
+    # 一律退避重试，不以 SDK 的 retryable 标志为门——实测 internal error 被标 retryable=False
+    # 但隔离重跑即恢复，单纯凭该标志会让整个 author-runner 因一次云端 hiccup 而 rc=3 空转。
+    outcome = agent_runner(_startup_probe_packet(plan_id))
+    for i in range(1, attempts):
+        if outcome.started and outcome.status == "finished":
+            return outcome
+        time.sleep(min(base_backoff * i, 15.0))
+        outcome = agent_runner(_startup_probe_packet(plan_id))
+    return outcome
 
 
 def main(argv: list[str] | None = None) -> int:

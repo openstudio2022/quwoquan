@@ -30,6 +30,7 @@ import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dar
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/local_draft_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_about_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/settings_dark_mode_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
@@ -625,6 +626,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             child: WorkBrowserEntryPage(
               workId: workId,
               source: state.uri.queryParameters['source'] ?? 'workBrowser',
+              sourceAppearanceMode: uiErrorAppearanceModeFromRouteValue(
+                state.uri.queryParameters['sourceTheme'],
+              ),
               commentContext: commentContext,
             ),
           );
@@ -697,6 +701,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               return appRoutePage<void>(
                 state: state,
                 child: const SettingsPermissionsPage(),
+              );
+            },
+          ),
+          GoRoute(
+            path: AppRoutePaths.settingsDarkModeSegment,
+            pageBuilder: (context, state) {
+              return appRoutePage<void>(
+                state: state,
+                child: const SettingsDarkModePage(),
               );
             },
           ),

@@ -46,6 +46,11 @@ def entity_page_quality_issues(page_path: Path, *, label: str = "") -> list[str]
     if "## 为什么值得关注" in text and "属于「" in text and "实体" in text:
         issues.append(f"{prefix}entity homepage looks like generated system explainer, not reader-facing copy")
     issues.extend(f"{prefix}{issue}" for issue in qg.intra_doc_repetition_issues(text))
+    issues.extend(
+        f"{prefix}{issue}"
+        for issue in qg.section_balance_issues(text, max_ratio=qg.SECTION_BALANCE_MAX_RATIO_HOMEPAGE)
+    )
+    issues.extend(f"{prefix}{issue}" for issue in qg.timeline_monotonicity_issues(text))
     issues.extend(_history_section_issues(text, prefix))
     return issues
 

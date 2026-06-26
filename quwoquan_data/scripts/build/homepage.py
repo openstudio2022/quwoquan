@@ -242,6 +242,17 @@ def _render_entity_page_prompt(payload: dict[str, Any]) -> str:
         "- 结构尊重底稿真实内容：SOP 模板章节只是规范化参考（用于命名/归类对齐），"
         "仅『概况』必备，其余章节有真实内容才写、无内容直接省略、禁止硬凑，章节语义须正确。"
     )
+    lines.append(
+        "- **章节均衡硬要求**：任何单个章节去空白字数不得超过正文总量的一半（约 50%）。"
+        "底稿若某一主题（如『历史沿革』）篇幅极长，必须**按比例压缩为精炼概述**，"
+        "提炼关键节点与代表性事实，而不是整段照搬；压缩属于轻编辑的合法操作，"
+        "保真针对的是『不脱离底稿另写、不编造』，不是『不许删减』。"
+    )
+    lines.append(
+        "- **时间线归并硬要求**：当底稿把同一实体的多条并列时间线（如开发史/保护史/"
+        "行政沿革）分段罗列时，必须**按真实时间顺序归并为单一连贯叙事**，禁止首尾拼接造成"
+        "『2007 年后又跳回 1979 年』式的时间倒错；同一章节内年份应大致单调推进。"
+    )
     lines.append("")
     if base_text:
         lines.append("## 底稿材料（在此基础上轻改）")
@@ -325,10 +336,17 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
                 "结构尊重底稿真实内容——SOP 模板里的章节只是『规范化参考』（用于章节命名与归类对齐），"
                 "不是必须逐节填满的清单：仅『概况』必备，其余章节有真实内容才写、无内容直接省略、禁止硬凑，"
                 "也允许按底稿增减或合并章节；章节语义须正确（如『历史沿革』必须是真实历史，否则省略）。"
+                "章节均衡硬要求：任何单个章节去空白字数不得超过正文总量的一半；底稿某主题（如历史沿革）"
+                "篇幅极长时必须按比例压缩为精炼概述（提炼关键节点，压缩属合法轻编辑，保真针对不另写/不编造而非不许删减）。"
+                "时间线归并硬要求：底稿把同一实体多条并列时间线分段罗列时，必须按真实时间顺序归并为单一连贯叙事，"
+                "禁止首尾拼接造成时间倒错，同章节年份应大致单调推进。"
             ),
             "imageRequirement": (
                 "正文只写文字；不要手写 asset:// 图片指令或 manifest.json。"
-                "finalize 会按 page.md 与同一主页研究链中权利合格的真实 CC 图片自动补齐配图与 manifest 资产闭环。"
+                "finalize 会按 page.md 与同一主页研究链中权利合格的真实 CC 图片自动补齐配图："
+                "封面紧随 H1，其余图按二级章节分布到正文，形成图文闭环。"
+                "请把正文组织成多个语义清晰的二级章节（概况必备，其余有真实内容才写），"
+                "以便配图能自然分布到正文，而不是只有一张封面。"
             ),
             "draftPage": "4.draft/page.md",
             "outputDir": str(batch_entity_object_dir(task_id, batch_id, domain, etype, name)),
@@ -465,11 +483,22 @@ def _page_char_count(page: Path) -> int:
     return len("".join(text.split()))
 
 
-def _pick_homepage_asset(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> dict[str, Any]:
+# 主页正文最多注入的配图数量：封面 + 若干章节内图。避免“只有一张封面、正文无图”。
+HOMEPAGE_MAX_ASSETS = 3
+
+
+def _pick_homepage_assets(
+    task_id: str, batch_id: str, domain: str, etype: str, name: str, *, limit: int = HOMEPAGE_MAX_ASSETS
+) -> list[dict[str, Any]]:
+    """主页可发布图片候选（已授权），按 homepage 线优先排序，去重后取前 limit 张。
+
+    homepage_image 研究线优先；缺该线时少图而非硬凑（不强制借用，但当前不阻断回退，
+    download 侧补齐 homepage_image 线为后续收紧前置条件，见 backlog）。
+    """
     from _common.source_unit import object_image_candidates
 
     obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
-    candidates = []
+    candidates: list[dict[str, Any]] = []
     for image in object_image_candidates(obj, task_id, batch_id):
         if not str(image.get("sourceRef") or "").endswith("/source.md"):
             continue
@@ -478,8 +507,6 @@ def _pick_homepage_asset(task_id: str, batch_id: str, domain: str, etype: str, n
         if not (str(image.get("authorizationProof") or "").strip() or str(image.get("termsUrl") or "").strip()):
             continue
         candidates.append(image)
-    if not candidates:
-        return {}
     candidates.sort(
         key=lambda item: (
             0 if str(item.get("researchLane") or "") in {"homepage", "homepage_image"} else 1,
@@ -487,10 +514,28 @@ def _pick_homepage_asset(task_id: str, batch_id: str, domain: str, etype: str, n
             str(item.get("sourceAssetRef") or ""),
         )
     )
-    return candidates[0]
+    picked: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for image in candidates:
+        key = str(image.get("sha256") or "") or str(image.get("sourceAssetRef") or "")
+        if key in seen:
+            continue
+        seen.add(key)
+        picked.append(image)
+        if len(picked) >= max(1, limit):
+            break
+    return picked
 
 
-def _copy_homepage_asset(task_id: str, batch_id: str, entity_dir: Path, name: str, image: dict[str, Any]) -> dict[str, Any]:
+def _copy_homepage_asset(
+    task_id: str,
+    batch_id: str,
+    entity_dir: Path,
+    name: str,
+    image: dict[str, Any],
+    *,
+    role: str = "cover",
+) -> dict[str, Any]:
     src = Path(str(image.get("path") or ""))
     if not src.is_file():
         return {}
@@ -504,7 +549,7 @@ def _copy_homepage_asset(task_id: str, batch_id: str, entity_dir: Path, name: st
     registry = load_batch_asset_registry(task_id, batch_id, global_batch_seq)
     asset_id = allocate_post_asset_id(
         entity_name=name,
-        role="cover",
+        role=role,
         ref=str(image.get("sourceAssetRef") or image.get("sourceRef") or entity_dir.as_posix()),
         global_batch_seq=global_batch_seq,
         registry=registry,
@@ -517,6 +562,7 @@ def _copy_homepage_asset(task_id: str, batch_id: str, entity_dir: Path, name: st
     return {
         "assetId": asset_id,
         "fileName": file_name,
+        "role": role,
         "caption": str(image.get("caption") or image.get("relevance") or "实体主页图片").strip(),
         "license": str(image.get("license") or "").strip(),
         "credit": str(image.get("creator") or "").strip(),
@@ -536,22 +582,60 @@ def _homepage_gate_body(page_text: str) -> str:
     return body.strip()
 
 
-def _inject_homepage_asset(page_text: str, asset: dict[str, Any]) -> str:
-    """把唯一封面 asset:// 指令注入到会话模型正文（紧随首个 H1，幂等）。"""
+def _homepage_asset_directive(asset: dict[str, Any]) -> str:
     asset_id = str(asset.get("assetId") or "").strip()
-    if not asset_id:
-        return page_text
-    if f"asset://{asset_id}" in page_text:
-        return page_text
     caption = str(asset.get("caption") or "").strip() or "实景"
-    directive = f"{{asset://{asset_id}|wrapRight|{caption}|width=45%}}"
+    return f"{{asset://{asset_id}|wrapRight|{caption}|width=45%}}"
+
+
+def _inject_homepage_assets(page_text: str, assets: list[dict[str, Any]]) -> str:
+    """注入封面 + 章节内配图：封面紧随 H1，其余依次配到后续 `##` 章节首行。
+
+    解决“只有一张封面、正文无图”：把已授权的多张主页图分布到正文章节，
+    形成图文闭环；幂等（已存在的 asset:// 不重复注入）。
+    """
+    pending = [a for a in assets if str(a.get("assetId") or "").strip() and f"asset://{a.get('assetId')}" not in page_text]
+    if not pending:
+        return page_text
+    trailing_nl = "\n" if page_text.endswith("\n") else ""
     lines = page_text.splitlines()
-    for index, line in enumerate(lines):
-        if line.lstrip().startswith("# "):
-            lines.insert(index + 1, "")
-            lines.insert(index + 2, directive)
-            return "\n".join(lines) + ("\n" if page_text.endswith("\n") else "")
-    return f"{directive}\n\n{page_text}"
+    cover = pending.pop(0)
+    out: list[str] = []
+    cover_done = False
+    for line in lines:
+        out.append(line)
+        if not cover_done and line.lstrip().startswith("# "):
+            out.extend(["", _homepage_asset_directive(cover)])
+            cover_done = True
+            continue
+        # 其余图：每遇到一个二级章节标题，在其下方注入一张
+        if cover_done and pending and re.match(r"^#{2,3}\s+\S", line.strip()):
+            out.extend(["", _homepage_asset_directive(pending.pop(0))])
+    if not cover_done:
+        # 没有 H1：封面置顶
+        out = [_homepage_asset_directive(cover), ""] + out
+        cover_done = True
+    # 仍有未注入的图（章节不足）：补在文末，保证 manifest 与正文图文闭环一致
+    for asset in pending:
+        out.extend(["", _homepage_asset_directive(asset)])
+    return "\n".join(out) + trailing_nl
+
+
+def _homepage_tag_refs(domain: str, etype: str, name: str, payload: dict[str, Any]) -> list[str]:
+    """主页确定性标签：复用 compose/agent 透传的 tagRefs，并补足 Topic/Format 最小集。
+
+    保证 manifest.tagRefs >= 2 个合法 ref（关闭“主页零标签”缺口）。区域/季节等更丰富的
+    证据型标签依赖 compose/agent 产出，作为后续增强（见 backlog），此处不编造区域 ref。
+    """
+    from _common.content_tags import resolved_content_tag_refs
+
+    brief: dict[str, Any] = {}
+    candidate = payload.get("tagRefs") if isinstance(payload, dict) else None
+    if isinstance(candidate, list):
+        provided = [str(item) for item in candidate if str(item).strip()]
+        if provided:
+            brief["tagRefs"] = provided
+    return resolved_content_tag_refs(brief, "article")
 
 
 def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> list[str]:
@@ -598,27 +682,33 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
     if gate_issues:
         return gate_issues
 
-    image = _pick_homepage_asset(task_id, batch_id, domain, etype, name)
-    if not image:
+    images = _pick_homepage_assets(task_id, batch_id, domain, etype, name)
+    if not images:
         return [f"{label}: homepage lane 无可发布图片资产"]
     obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
     obj.mkdir(parents=True, exist_ok=True)
-    asset = _copy_homepage_asset(task_id, batch_id, obj, name, image)
-    if not asset:
+    assets: list[dict[str, Any]] = []
+    for index, image in enumerate(images):
+        asset = _copy_homepage_asset(
+            task_id, batch_id, obj, name, image, role="cover" if index == 0 else "detail"
+        )
+        if asset:
+            assets.append(asset)
+    if not assets:
         return [f"{label}: homepage asset copy failed"]
 
-    final_text = _inject_homepage_asset(draft_text, asset)
+    final_text = _inject_homepage_assets(draft_text, assets)
     (obj / "page.md").write_text(final_text, encoding="utf-8")
 
     facts = _split_fact_sentences(final_text, entity_name=name) or _split_fact_sentences(base_text, entity_name=name)
-    # 底稿源与封面图源常常来自同一来源单元（如 wikipedia 既给正文又给配图），
-    # 去重去空，避免 sourceRefs 把同一路径列两遍。
-    source_refs = _dedupe_nonempty(
-        [
-            str(base.get("primaryEvidenceRef") or base.get("sourceRef") or ""),
-            str(asset.get("sourceRef") or ""),
-        ]
+    # 来源分型：文本源（底稿）与图片源（配图）分列，避免 manifest 把文/图源混成一摊。
+    # sourceRefs 仍保留为去重并集，供既有读取方向后兼容。
+    text_source_refs = _dedupe_nonempty(
+        [str(base.get("primaryEvidenceRef") or base.get("sourceRef") or "")]
     )
+    image_source_refs = _dedupe_nonempty([str(a.get("sourceRef") or "") for a in assets])
+    source_refs = _dedupe_nonempty([*text_source_refs, *image_source_refs])
+    tag_refs = _homepage_tag_refs(domain, etype, name, payload)
     write_json(
         obj / "_entity.json",
         {
@@ -629,6 +719,9 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
             "entityRef": entity_ref(domain, etype, name),
             "summary": _homepage_summary(name, facts)[:180],
             "sourceRefs": source_refs,
+            "textSourceRefs": text_source_refs,
+            "imageSourceRefs": image_source_refs,
+            "tagRefs": tag_refs,
         },
     )
     write_json(
@@ -637,7 +730,10 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
             "entityRef": entity_ref(domain, etype, name),
             "sourceTaskId": task_id,
             "sourceRefs": source_refs,
-            "assets": [asset],
+            "textSourceRefs": text_source_refs,
+            "imageSourceRefs": image_source_refs,
+            "tagRefs": tag_refs,
+            "assets": assets,
             "generator": "agent",
         },
     )

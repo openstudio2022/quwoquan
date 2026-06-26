@@ -158,6 +158,106 @@ class _HomepageEmptyState extends StatelessWidget {
   }
 }
 
+class _HomepageRelatedCircleCard extends StatelessWidget {
+  const _HomepageRelatedCircleCard({required this.group});
+
+  final HomepageRelatedGroupSummary group;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = group.name.trim().isNotEmpty
+        ? group.name.trim()
+        : UITextConstants.objectTabRelatedCircles;
+    final linkedTitle = (group.linkedHomepageTitle ?? '').trim();
+    final reason = linkedTitle.isNotEmpty
+        ? HomepageDetailText.relatedGroupReasonFor(linkedTitle)
+        : HomepageDetailText.relatedGroupDefaultReason;
+    final memberLine = group.memberCount > 0
+        ? HomepageDetailText.relatedGroupMemberLine(
+            formatCompactActionCount(group.memberCount),
+          )
+        : '';
+    final accent = AppColors.iosAccent(context);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Container(
+          width: AppSpacing.buttonHeight,
+          height: AppSpacing.buttonHeight,
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: isDark ? 0.18 : 0.10),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyFour),
+          ),
+          child: Icon(
+            CupertinoIcons.person_3_fill,
+            size: AppSpacing.iconMedium,
+            color: accent,
+          ),
+        ),
+        SizedBox(width: AppSpacing.containerSm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.semiBold,
+                  color: AppColors.iosLabel(context),
+                ),
+              ),
+              SizedBox(height: AppSpacing.intraGroupXs),
+              Text(
+                reason,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.iosFootnote,
+                  color: AppColors.iosSecondaryLabel(context),
+                  height: AppSpacing.textLineHeightBody,
+                ),
+              ),
+              SizedBox(height: AppSpacing.containerSm),
+              Row(
+                children: <Widget>[
+                  if (memberLine.isNotEmpty)
+                    Expanded(
+                      child: Text(
+                        memberLine,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosCaption1,
+                          color: AppColors.iosTertiaryLabel(context),
+                        ),
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  _HomepageSummaryChipWidget(
+                    label: HomepageDetailText.relatedGroupOpenAction,
+                    accent: true,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: AppSpacing.intraGroupSm),
+        Icon(
+          CupertinoIcons.chevron_forward,
+          size: AppSpacing.iconXSmall,
+          color: AppColors.iosTertiaryLabel(context),
+        ),
+      ],
+    );
+  }
+}
+
 class _HomepageBottomActionBar extends StatelessWidget {
   const _HomepageBottomActionBar({
     required this.enabled,
@@ -246,46 +346,6 @@ class _HomepagePrimaryTabSpec {
 }
 
 enum _HomepageMoreAction { claim, maintain, report }
-
-String _statusLabel(String? status) {
-  switch ((status ?? '').trim()) {
-    case 'candidate':
-      return '待发布';
-    case 'offline':
-      return '已下线';
-    case 'published':
-      return '已发布';
-    default:
-      return '主页';
-  }
-}
-
-String _sourceLabel(String? sourceType) {
-  switch ((sourceType ?? '').trim()) {
-    case 'official_seed':
-      return '官方初始化';
-    case 'user_suggested':
-      return '用户补充';
-    case 'user_created':
-      return '用户创建';
-    default:
-      return '未知来源';
-  }
-}
-
-String _claimLabel(String? claimStatus) {
-  switch ((claimStatus ?? '').trim()) {
-    case 'pending_review':
-    case 'pending':
-      return '认领审核中';
-    case 'claimed':
-      return '已认领';
-    case 'rejected':
-      return '认领被退回';
-    default:
-      return '待认领';
-  }
-}
 
 String _contentTypeLabel(String contentType) {
   switch (contentType.trim()) {

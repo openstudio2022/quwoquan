@@ -6,6 +6,8 @@ pages:
     shell: inset_form
   - path: quwoquan_app/lib/ui/settings/pages/settings_permissions_page.dart
     shell: inset_form
+  - path: quwoquan_app/lib/ui/settings/pages/settings_dark_mode_page.dart
+    shell: inset_form
   - path: quwoquan_app/lib/ui/settings/pages/settings_about_page.dart
     shell: inset_form
   - path: quwoquan_app/lib/ui/chat/pages/chat_settings_page.dart
@@ -25,6 +27,6 @@ pages:
   - path: quwoquan_app/lib/ui/assistant/pages/assistant_skill_center_page.dart
     shell: prototype_exception
   - path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
-    shell: wizard_deferred
+    shell: inset_member_picker
   - path: quwoquan_app/lib/ui/circle/pages/circle_edit_settings_page.dart
     shell: deferred_inset

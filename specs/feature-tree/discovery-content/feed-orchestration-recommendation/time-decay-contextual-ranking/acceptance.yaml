@@ -58,6 +58,7 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
+    - 2026-06-25 P1b replay report 已输出 time_decay_feature_freshness 并把 SLO 从 objective_only 推进到可观测入口；本 Story 的特征作业、scorer 改动和上下文化排序仍保持 pending。
     - '[migrated_from_planned] quwoquan_service/runtime/recommendation/time_decay_contextual_ranking_test.go'
     - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_time_decay_features.py'
 execution:

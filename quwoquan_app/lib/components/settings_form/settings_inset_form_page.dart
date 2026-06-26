@@ -244,30 +244,33 @@ class SettingsInsetFormRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labelColor = SettingsSemanticConstants.labelColor(isDark);
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: AppSpacing.minInteractiveSize,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: AppTypography.lg,
-                    fontWeight: AppTypography.regular,
-                    color: labelColor,
+    return SizedBox(
+      width: double.infinity,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: AppSpacing.minInteractiveSize,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: AppTypography.lg,
+                      fontWeight: AppTypography.regular,
+                      color: labelColor,
+                    ),
                   ),
                 ),
-              ),
-              trailing,
-            ],
+                trailing,
+              ],
+            ),
           ),
         ),
       ),

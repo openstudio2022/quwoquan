@@ -40,6 +40,8 @@ enum UiErrorPresentation {
 
 enum UiErrorTone { neutral, info, caution, critical }
 
+enum UiErrorAppearanceMode { inherit, light, dark }
+
 enum UiErrorActionType { retry, login, openSettings, back, dismiss, resubmit }
 
 class UiErrorAction {
@@ -65,6 +67,9 @@ class UiErrorSemantic {
     this.recoveryAction,
     this.presentation = UiErrorPresentation.emptyPage,
     this.tone = UiErrorTone.neutral,
+    this.appearanceMode = UiErrorAppearanceMode.inherit,
+    this.sourceRouteId,
+    this.sourceSurfaceId,
   });
 
   final UiErrorCategory category;
@@ -81,6 +86,49 @@ class UiErrorSemantic {
   final RuntimeRecoveryAction? recoveryAction;
   final UiErrorPresentation presentation;
   final UiErrorTone tone;
+  final UiErrorAppearanceMode appearanceMode;
+  final String? sourceRouteId;
+  final String? sourceSurfaceId;
+}
+
+extension UiErrorAppearanceModeX on UiErrorAppearanceMode {
+  String? get routeValue {
+    return switch (this) {
+      UiErrorAppearanceMode.inherit => null,
+      UiErrorAppearanceMode.light => 'light',
+      UiErrorAppearanceMode.dark => 'dark',
+    };
+  }
+
+  Brightness? get brightness {
+    return switch (this) {
+      UiErrorAppearanceMode.inherit => null,
+      UiErrorAppearanceMode.light => Brightness.light,
+      UiErrorAppearanceMode.dark => Brightness.dark,
+    };
+  }
+}
+
+UiErrorAppearanceMode uiErrorAppearanceModeFromBrightness(
+  Brightness brightness,
+) {
+  return brightness == Brightness.dark
+      ? UiErrorAppearanceMode.dark
+      : UiErrorAppearanceMode.light;
+}
+
+UiErrorAppearanceMode uiErrorAppearanceModeFromRouteValue(String? raw) {
+  return switch ((raw ?? '').trim()) {
+    'light' => UiErrorAppearanceMode.light,
+    'dark' => UiErrorAppearanceMode.dark,
+    _ => UiErrorAppearanceMode.inherit,
+  };
+}
+
+String? uiErrorAppearanceRouteValueFor(BuildContext context) {
+  return uiErrorAppearanceModeFromBrightness(
+    CupertinoTheme.of(context).brightness ?? Brightness.light,
+  ).routeValue;
 }
 
 class UiErrorSemanticResolver {
@@ -113,6 +161,9 @@ class UiErrorSemanticResolver {
     bool allowOpenSettings = false,
     UiErrorPresentation? presentation,
     UiErrorTone? tone,
+    UiErrorAppearanceMode appearanceMode = UiErrorAppearanceMode.inherit,
+    String? sourceRouteId,
+    String? sourceSurfaceId,
   }) {
     final failure = _runtimeFailureFromError(error);
     final recoveryAction = _deriveRecoveryAction(
@@ -181,6 +232,9 @@ class UiErrorSemanticResolver {
             failure: failure,
             allowOpenSettings: allowOpenSettings,
           ),
+      appearanceMode: appearanceMode,
+      sourceRouteId: sourceRouteId,
+      sourceSurfaceId: sourceSurfaceId,
     );
   }
 

@@ -28,27 +28,16 @@ class ProfileSocialRelationRowWireDto {
 
   factory ProfileSocialRelationRowWireDto.fromMap(Map<String, dynamic> m) {
     return ProfileSocialRelationRowWireDto(
-      subAccountId:
-          _firstNonEmptyWireString(m, <String>['subAccountId', 'userId']) ?? '',
-      username:
-          m['username']?.toString() ??
-          m['userHandle']?.toString() ??
-          m['subAccountId']?.toString() ??
-          '',
-      userHandle:
-          m['userHandle']?.toString() ??
-          m['username']?.toString() ??
-          m['subAccountId']?.toString() ??
-          '',
-      displayName:
-          m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
+      subAccountId: _firstNonEmptyWireString(m, <String>['subAccountId', 'userId']) ?? '',
+      username: m['username']?.toString() ?? m['userHandle']?.toString() ?? m['subAccountId']?.toString() ?? '',
+      userHandle: m['userHandle']?.toString() ?? m['username']?.toString() ?? m['subAccountId']?.toString() ?? '',
+      displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
       avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
       profileVisibility: m['profileVisibility']?.toString() ?? 'public',
       relationState: m['relationState']?.toString() ?? 'not_following',
       followedAt: _parseDateTime(m['followedAt']) ?? null,
-      relationshipCapability:
-          _parseStringKeyMap(m['relationshipCapability']) ?? null,
+      relationshipCapability: _parseStringKeyMap(m['relationshipCapability']) ?? null,
     );
   }
 
@@ -89,8 +78,7 @@ class ProfileSocialRelationRowWireDto {
       profileVisibility: profileVisibility ?? this.profileVisibility,
       relationState: relationState ?? this.relationState,
       followedAt: followedAt ?? this.followedAt,
-      relationshipCapability:
-          relationshipCapability ?? this.relationshipCapability,
+      relationshipCapability: relationshipCapability ?? this.relationshipCapability,
     );
   }
 }
@@ -109,6 +97,7 @@ DateTime? _parseDateTime(dynamic v) {
   if (v is String) return DateTime.tryParse(v);
   return null;
 }
+
 
 Map<String, dynamic>? _parseStringKeyMap(dynamic v) {
   if (v == null) return null;

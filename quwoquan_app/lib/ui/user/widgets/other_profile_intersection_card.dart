@@ -104,6 +104,7 @@ class OtherProfileIntersectionCard extends ConsumerWidget {
       return _buildCard(
         context: context,
         title: title,
+        showAction: false,
         child: const ProfileIntersectionEmptyState(
           key: emptyKey,
           text: UITextConstants.profileIntersectionEmptyOther,
@@ -115,11 +116,13 @@ class OtherProfileIntersectionCard extends ConsumerWidget {
       loading: () => _buildCard(
         context: context,
         title: title,
+        showAction: false,
         child: const ProfileIntersectionSkeletonList(),
       ),
       error: (_, _) => _buildCard(
         context: context,
         title: title,
+        showAction: false,
         child: const ProfileIntersectionEmptyState(
           key: emptyKey,
           text: UITextConstants.profileIntersectionEmptyOther,
@@ -133,6 +136,7 @@ class OtherProfileIntersectionCard extends ConsumerWidget {
         return _buildCard(
           context: context,
           title: title,
+          showAction: visible.isNotEmpty,
           child: visible.isEmpty
               ? const ProfileIntersectionEmptyState(
                   key: emptyKey,
@@ -161,12 +165,13 @@ class OtherProfileIntersectionCard extends ConsumerWidget {
     required BuildContext context,
     required String title,
     required Widget child,
+    required bool showAction,
   }) {
     return ProfileInsightSectionCard(
       key: cardKey,
       title: title,
-      actionLabel: DiscoveryFeedText.intersectionViewAll,
-      onAction: () => _openList(context),
+      actionLabel: showAction ? DiscoveryFeedText.intersectionViewAll : null,
+      onAction: showAction ? () => _openList(context) : null,
       topPadding: true,
       child: child,
     );

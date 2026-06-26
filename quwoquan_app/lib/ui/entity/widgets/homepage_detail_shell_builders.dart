@@ -368,9 +368,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                     Expanded(child: introText),
                     SizedBox(width: AppSpacing.containerSm),
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.radiusTen,
-                      ),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
                       child: SizedBox(
                         width: AppSpacing.avatarUserXl,
                         height: AppSpacing.avatarUserXl,
@@ -484,7 +482,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       sections.add(
         _buildSectionBlock(
           context: context,
-          title: '口碑摘要',
+          title: HomepageDetailText.reviewSummaryTitle,
           child: _HomepageReviewCard(
             summary: _reviewSummary,
             fallbackAverageRating:
@@ -498,47 +496,14 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     sections.add(
       _buildSectionBlock(
         context: context,
-        title: '基础信息',
+        title: HomepageDetailText.basicInfoSectionTitle,
         child: ProfileIosGroupedSection(
           margin: EdgeInsets.zero,
           children: <Widget>[
-            if ((widget.objectPageBundle?.canonicalEntityId ?? '')
-                .trim()
-                .isNotEmpty)
-              ProfileIosGroupedCell(
-                title: '统一对象键',
-                subtitle: widget.objectPageBundle!.canonicalEntityId,
-                showChevron: false,
-              ),
-            if ((widget.objectPageBundle?.objectPageTemplate ?? '')
-                .trim()
-                .isNotEmpty)
-              ProfileIosGroupedCell(
-                title: '对象页模板',
-                subtitle: widget.objectPageBundle!.objectPageTemplate,
-                showChevron: false,
-              ),
-            ProfileIosGroupedCell(
-              title: '主页状态',
-              subtitle: _statusLabel(detail.status),
-              showChevron: false,
-            ),
-            if ((detail.sourceType ?? '').trim().isNotEmpty)
-              ProfileIosGroupedCell(
-                title: '来源',
-                subtitle: _sourceLabel(detail.sourceType),
-                showChevron: false,
-              ),
-            if ((detail.claimStatus ?? '').trim().isNotEmpty)
-              ProfileIosGroupedCell(
-                title: '认领状态',
-                subtitle: _claimLabel(detail.claimStatus),
-                showChevron: false,
-              ),
             if ((detail.city ?? '').trim().isNotEmpty ||
                 (detail.address ?? '').trim().isNotEmpty)
               ProfileIosGroupedCell(
-                title: '位置',
+                title: HomepageDetailText.locationInfoTitle,
                 subtitle: <String>[
                   if ((detail.city ?? '').trim().isNotEmpty)
                     detail.city!.trim(),
@@ -549,16 +514,16 @@ extension _HomepageBuilders on _HomepageDetailShellState {
               ),
             if (detail.categoryTags.isNotEmpty)
               ProfileIosGroupedCell(
-                title: '分类标签',
+                title: HomepageDetailText.categoryInfoTitle,
                 subtitle: detail.categoryTags.join(' · '),
                 showChevron: false,
               ),
-            if ((widget.objectPageBundle?.rolloutContext?.cohort ?? '')
-                .trim()
-                .isNotEmpty)
+            if (detail.establishedYear != null && detail.establishedYear! > 0)
               ProfileIosGroupedCell(
-                title: '灰度 cohort',
-                subtitle: widget.objectPageBundle!.rolloutContext!.cohort,
+                title: HomepageDetailText.establishedInfoTitle,
+                subtitle: UITextConstants.entityEstablishedYearLabel(
+                  detail.establishedYear!,
+                ),
                 showChevron: false,
               ),
           ],
@@ -570,65 +535,16 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       sections.add(
         _buildSectionBlock(
           context: context,
-          title: '记录状态',
+          title: HomepageDetailText.offlineNoticeTitle,
           child: ProfileIosSectionCard(
             child: Text(
-              '该主页已下线，记录口碑、关联内容与讨论摘要会继续保留，方便用户回看与迁移判断。',
+              HomepageDetailText.offlineNoticeMessage,
               style: TextStyle(
                 fontSize: AppTypography.iosBody,
                 color: AppColors.iosSecondaryLabel(context),
                 height: AppSpacing.textLineHeightBody,
               ),
             ),
-          ),
-        ),
-      );
-    }
-
-    if (_isOwnerLike || _canClaim || _isClaimPending) {
-      final managementChildren = <Widget>[];
-      if (_isOwnerLike) {
-        managementChildren.add(
-          ProfileIosGroupedCell(
-            title: '维护主页',
-            subtitle: '更新标题、简介、位置与分类标签等基础资料',
-            onTap: widget.onMaintain,
-          ),
-        );
-      } else if (_canClaim) {
-        managementChildren.add(
-          ProfileIosGroupedCell(
-            title: '认领主页',
-            subtitle: '提交营业执照、联系电话等材料进入审核',
-            onTap: widget.onClaim,
-          ),
-        );
-      } else if (_isClaimPending) {
-        managementChildren.add(
-          const ProfileIosGroupedCell(
-            title: '认领审核中',
-            subtitle: '审核通过后即可维护主页资料与状态',
-            showChevron: false,
-          ),
-        );
-      }
-      if (_isOwnerLike || _canReport) {
-        managementChildren.add(
-          ProfileIosGroupedCell(
-            title: '状态上报',
-            subtitle: '主页停业、重复或关键信息失效时发起上报',
-            onTap: widget.onReport,
-            isDestructive: !_isOwnerLike,
-          ),
-        );
-      }
-      sections.add(
-        _buildSectionBlock(
-          context: context,
-          title: '主页管理',
-          child: ProfileIosGroupedSection(
-            margin: EdgeInsets.zero,
-            children: managementChildren,
           ),
         ),
       );

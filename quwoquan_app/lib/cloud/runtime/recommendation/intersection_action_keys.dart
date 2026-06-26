@@ -23,9 +23,31 @@ abstract final class IntersectionActionKeys {
   static const String createFollowup = 'create_followup';
   static const String askAssistant = 'ask_assistant';
 
+  // §交集行动深化：同趣 / 同行 / 线下 / 实时 / 意图 行动阶梯（与 registry actionHintLegend 同源）。
+  static const String joinTopicRoom = 'join_topic_room';
+  static const String startCompanion = 'start_companion';
+  static const String joinTrip = 'join_trip';
+  static const String joinMeetup = 'join_meetup';
+  static const String meetNearby = 'meet_nearby';
+  static const String startVoiceRoom = 'start_voice_room';
+  static const String expressInterest = 'express_interest';
+
   /// 助手类动作：点击该交集行打开小艺解释 / 追问，而非导航到对象页。
   static bool isAssistant(String actionKey) {
     final key = actionKey.trim();
     return key == askAssistant || key == createFollowup;
+  }
+
+  /// 重社交行动（同行 / 线下 / 实时 / 心动）：进入破冰阶梯或同频连接专属落点，
+  /// 非简单对象下钻；端侧据此决定是否走打招呼请求 / 建群 / 报名等专属流程。
+  static bool isHeavySocialAction(String actionKey) {
+    final key = actionKey.trim();
+    return key == joinTopicRoom ||
+        key == startCompanion ||
+        key == joinTrip ||
+        key == joinMeetup ||
+        key == meetNearby ||
+        key == startVoiceRoom ||
+        key == expressInterest;
   }
 }

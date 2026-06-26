@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card_skeleton.dart';
@@ -23,16 +22,7 @@ IntersectionReason _reason({
     dimension: dimension,
     actionTargetId: actionTargetId,
     objectKind: objectKind,
-    intersectionPoints: <IntersectionPoint>[
-      IntersectionPoint(
-        pointId: '$dimension-$label',
-        pointClass: 'fact',
-        dimension: dimension,
-        label: label,
-        displayText: label,
-        count: count,
-      ),
-    ],
+    primaryText: '$label $count',
   );
 }
 
@@ -43,9 +33,7 @@ const _query = ObjectIntersectionQuery(
   objectBType: 'user',
 );
 
-Widget _host({
-  required Future<List<IntersectionReason>> Function() reasons,
-}) {
+Widget _host({required Future<List<IntersectionReason>> Function() reasons}) {
   return ProviderScope(
     overrides: [
       objectSharedReasonsProvider(_query).overrideWith((_) => reasons()),
@@ -100,9 +88,7 @@ Widget _routerHost({
 void main() {
   testWidgets('loading → 展示骨架占位（不留白/不闪布局）', (tester) async {
     final completer = Completer<List<IntersectionReason>>();
-    await tester.pumpWidget(
-      _host(reasons: () => completer.future),
-    );
+    await tester.pumpWidget(_host(reasons: () => completer.future));
     await tester.pump();
 
     expect(find.byType(ObjectIntersectionCardSkeleton), findsOneWidget);
@@ -186,10 +172,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 命中后首帧消费：意图被清空（一次性语义）。
-    expect(
-      capturedRef.read(intersectionHighlightIntentProvider),
-      isNull,
-    );
+    expect(capturedRef.read(intersectionHighlightIntentProvider), isNull);
     expect(find.byType(ObjectIntersectionCard), findsOneWidget);
   });
 
@@ -219,9 +202,7 @@ void main() {
     expect(find.text('USER:u_lin'), findsOneWidget);
   });
 
-  testWidgets('N4 传入 onReasonTap（实体页自定义）→ 调用方优先，不叠加默认下钻（不双跳）', (
-    tester,
-  ) async {
+  testWidgets('N4 传入 onReasonTap（实体页自定义）→ 调用方优先，不叠加默认下钻（不双跳）', (tester) async {
     IntersectionReason? tapped;
     await tester.pumpWidget(
       _routerHost(

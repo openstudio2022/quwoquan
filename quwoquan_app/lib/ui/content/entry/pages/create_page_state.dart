@@ -407,17 +407,25 @@ class _CreatePageState extends ConsumerState<CreatePage>
     if (_useImmersiveArticleExperience(state)) {
       return UITextConstants.createArticleSurfaceLongEdit;
     }
-    return '创作';
+    if (_isPhotoCreateFlow(state)) {
+      return CreatePageText.photoPageTitle;
+    }
+    return UITextConstants.createPageTitle;
   }
 
   String _mediaHeaderHintForState(CreateEditorState state) {
     if (state.hasVideo) {
-      return '轻点视频编辑，可设置封面';
+      return UITextConstants.createMediaHintVideoCover;
     }
     if (state.imagePaths.isEmpty) {
-      return '先添加图片或视频';
+      return UITextConstants.createMediaHintAddFirst;
     }
-    return '拖拽排序，轻点编辑';
+    return UITextConstants.createMediaHintDragReorder;
+  }
+
+  bool _isPhotoCreateFlow(CreateEditorState state) {
+    return state.draftFlowKind == CreateDraftFlowKind.image ||
+        state.mediaKind == CreateMediaKind.images;
   }
 
   bool _canAddMoreImages(CreateEditorState state) {
@@ -536,7 +544,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       _kMaxMediaImages,
     );
     if (remainingSlots <= 0) {
-      AppToast.show(context, '最多添加 $_kMaxMediaImages 张图片');
+      AppToast.show(context, CreatePageText.maxImagesToast(_kMaxMediaImages));
       return;
     }
     final result = await _openMediaPicker(
@@ -576,7 +584,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       _kMaxMediaImages,
     );
     if (remainingSlots <= 0) {
-      AppToast.show(context, '最多添加 $_kMaxMediaImages 张图片');
+      AppToast.show(context, CreatePageText.maxImagesToast(_kMaxMediaImages));
       return;
     }
     final result = await _openMediaPicker(

@@ -24,11 +24,13 @@ class WorkBrowserEntryPage extends ConsumerStatefulWidget {
     super.key,
     required this.workId,
     this.source = 'workBrowser',
+    this.sourceAppearanceMode = UiErrorAppearanceMode.inherit,
     this.commentContext = const MediaViewerCommentContext(),
   });
 
   final String workId;
   final String source;
+  final UiErrorAppearanceMode sourceAppearanceMode;
   final MediaViewerCommentContext commentContext;
 
   @override
@@ -103,7 +105,25 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
       scope: UiErrorScope.page,
     );
     setState(() {
-      _error = semantic;
+      _error = UiErrorSemantic(
+        category: semantic.category,
+        scope: semantic.scope,
+        title: semantic.title,
+        message: semantic.message,
+        secondaryMessage: semantic.secondaryMessage,
+        primaryAction: semantic.primaryAction,
+        secondaryAction: semantic.secondaryAction,
+        dismissible: semantic.dismissible,
+        sourceCode: semantic.sourceCode,
+        failureKind: semantic.failureKind,
+        copyKey: semantic.copyKey,
+        recoveryAction: semantic.recoveryAction,
+        presentation: semantic.presentation,
+        tone: semantic.tone,
+        appearanceMode: widget.sourceAppearanceMode,
+        sourceRouteId: 'workBrowser',
+        sourceSurfaceId: widget.source,
+      );
       _loading = false;
     });
   }
@@ -123,29 +143,49 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
       return UnifiedMediaViewerPage(extra: extra);
     }
     final showError = !_loading && _error != null;
-    return CupertinoPageScaffold(
-      backgroundColor: showError
-          ? AppColors.iosSystemBackground(context)
-          : AppColors.black,
-      child: SafeArea(
-        child: _loading
-            ? const Center(
-                key: ValueKey('work-browser-entry-loading'),
-                child: CupertinoActivityIndicator(color: AppColors.white),
-              )
-            : AppPageErrorState(
-                key: const ValueKey('work-browser-entry-error'),
-                semantic: _error!,
-                onAction: (action) async {
-                  if (action.type == UiErrorActionType.retry ||
-                      action.type == UiErrorActionType.resubmit) {
-                    await _resolve();
-                  } else {
-                    _back();
-                  }
-                },
-              ),
+    return _withSourceAppearance(
+      context,
+      Builder(
+        builder: (themedContext) {
+          return CupertinoPageScaffold(
+            backgroundColor: showError || _loading
+                ? AppColors.iosSystemBackground(themedContext)
+                : AppColors.black,
+            child: SafeArea(
+              child: _loading
+                  ? Center(
+                      key: const ValueKey('work-browser-entry-loading'),
+                      child: CupertinoActivityIndicator(
+                        color: AppColors.iosLabel(themedContext),
+                      ),
+                    )
+                  : AppPageErrorState(
+                      key: const ValueKey('work-browser-entry-error'),
+                      semantic: _error!,
+                      onAction: (action) async {
+                        if (action.type == UiErrorActionType.retry ||
+                            action.type == UiErrorActionType.resubmit) {
+                          await _resolve();
+                        } else {
+                          _back();
+                        }
+                      },
+                    ),
+            ),
+          );
+        },
       ),
+    );
+  }
+
+  Widget _withSourceAppearance(BuildContext context, Widget child) {
+    final brightness = widget.sourceAppearanceMode.brightness;
+    if (brightness == null) {
+      return child;
+    }
+    return CupertinoTheme(
+      data: CupertinoTheme.of(context).copyWith(brightness: brightness),
+      child: child,
     );
   }
 }

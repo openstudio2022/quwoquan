@@ -27,6 +27,8 @@ gwt_acceptance:
     - 用户进入相册选择、拍摄、底部操作和发布前状态。
     then:
     - 图片 entry mode 下，相册选择器和拍摄页只表达图片发布，不展示“一键成片”“拍视频”“录像”等视频语义。
+    - 图片 flow 的创作页顶栏标题为“图片创作”，并使用主导航标题语义，不在首屏淡化。
+    - 图片选择器已选缩略条、图片编辑器缩略条与创作页图片网格共用统一拖拽重排行为：内容不足一屏时左对齐，拖拽悬停时目标区间兄弟项即时前移/后移空出目标位。
     - 视频 entry mode 下，可使用视频选择和成片能力，但不复用图片路径的“编辑图片/完成(n)”按钮语义。
     - 图片与视频互斥，切换类型前必须删空当前媒体，不存在图片和视频混合发布草稿。
     done_when:
@@ -43,8 +45,12 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
     status: completed
     test_evidence:
       primary:
@@ -55,6 +61,16 @@ gwt_acceptance:
         envs: &id001
         - local
       supporting:
+      - layer: local_contract
+        suite: photo_create_page_surface
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.photo_title_semantic_and_hover_reorder
+        envs: *id001
+      - layer: local_contract
+        suite: image_editor_thumbnail_reorder_widget
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.photo_strip_left_align_reveal_not_center
+        envs: *id001
       - layer: api_integration
         suite: photo_publish_upload_bind_roundtrip
         cases:
@@ -69,6 +85,7 @@ gwt_acceptance:
         - gamma_local
     notes:
     - 2026-06-22 已记录图片/视频 picker 动作互斥与发布 payload contentType 互斥合同。
+    - 2026-06-25 补充图片 flow 顶栏标题“图片创作”、缩略条左对齐与悬停即时让位验收口径，三处列表继续共用同一拖拽真相源。
   GWT2:
     title: 续草稿进入统一本地草稿页并保持保存/清除时机一致
     given:

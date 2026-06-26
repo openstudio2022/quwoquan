@@ -12,7 +12,7 @@ func TestMainLocalContractTest(t *testing.T) {
 		"test",
 		"../../../../cmd/api",
 		"-run",
-		"^(TestControlPlaneWorkflowEndpoints|TestEventEndpoints|TestExperimentEndpoints|TestL1L4MetricsEndpoint|TestProductTriageSummaryEndpoint|TestVisitEndpoints)$",
+		"^(TestControlPlaneWorkflowEndpoints|TestEventEndpoints|TestExperimentEndpoints|TestL1L4MetricsEndpoint|TestPremiumPoolControlPlaneEndpoints|TestProductTriageSummaryEndpoint|TestVisitEndpoints)$",
 		"-count=1",
 	)
 	output, err := cmd.CombinedOutput()

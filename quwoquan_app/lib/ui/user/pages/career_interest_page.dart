@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -40,7 +41,7 @@ class _CareerTagOption {
 class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
   static const double _pagePadding = AppSpacing.containerMd;
   static const double _gridSpacing = 10;
-  static const double _tagTileHeight = 62;
+  static const double _tagTileHeight = AppSpacing.minInteractiveSize + 10;
 
   final Map<String, _CareerTagOption> _tagByRef = <String, _CareerTagOption>{};
   final Map<String, List<_CareerTagOption>> _interestByCategory =
@@ -198,31 +199,33 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
 
   Future<void> _handleBack() async {
     if (!_isDirty) {
-      Navigator.of(context).maybePop(false);
+      Navigator.of(context).pop(false);
       return;
     }
-    final action = await showAppActionSheet<String>(
-      context,
-      title: UITextConstants.careerInterestUnsavedTitle,
-      sections: <AppActionSheetSection<String>>[
-        AppActionSheetSection<String>(
-          items: <AppActionSheetItem<String>>[
-            AppActionSheetItem<String>(
-              label: UITextConstants.editProfileSaveAction,
-              value: 'save',
+    final action = await showCupertinoDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return CupertinoAlertDialog(
+          title: const Text(UITextConstants.careerInterestUnsavedTitle),
+          content: const Text(UITextConstants.careerInterestUnsavedMessage),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.of(dialogContext).pop('save'),
+              child: const Text(UITextConstants.editProfileSaveAction),
             ),
-            AppActionSheetItem<String>(
-              label: UITextConstants.careerInterestKeepEditing,
-              value: 'keep',
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(dialogContext).pop('keep'),
+              child: const Text(UITextConstants.careerInterestKeepEditing),
             ),
-            AppActionSheetItem<String>(
-              label: UITextConstants.careerInterestDiscard,
-              value: 'discard',
-              isDestructive: true,
+            CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.of(dialogContext).pop('discard'),
+              child: const Text(UITextConstants.careerInterestDiscard),
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
     if (!mounted) {
       return;
@@ -230,7 +233,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
     if (action == 'save') {
       await _save(closeAfterSave: true);
     } else if (action == 'discard') {
-      Navigator.of(context).maybePop(false);
+      Navigator.of(context).pop(false);
     }
   }
 
@@ -335,7 +338,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
 
   @override
   Widget build(BuildContext context) {
-    final background = const Color(0xFFF7FAFF);
+    final background = AppColors.iosPageBackground(context);
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -353,7 +356,15 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
             icon: CupertinoIcons.back,
             onPressed: () => unawaited(_handleBack()),
           ),
-          middle: const Text(UITextConstants.careerInterestTitle),
+          middle: Text(
+            UITextConstants.careerInterestTitle,
+            style: TextStyle(
+              color: AppColors.iosLabel(context),
+              fontSize: AppTypography.iosNavTitle,
+              fontWeight: AppTypography.medium,
+              height: AppTypography.lineHeightTight,
+            ),
+          ),
           trailing: CupertinoButton(
             padding: EdgeInsets.zero,
             minimumSize: const Size(
@@ -370,7 +381,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
                     ? AppColors.iosTertiaryLabel(context)
                     : AppColors.iosAccent(context),
                 fontSize: AppTypography.iosBody,
-                fontWeight: AppTypography.semiBold,
+                fontWeight: AppTypography.medium,
               ),
             ),
           ),
@@ -419,24 +430,16 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
                 const SizedBox(height: AppSpacing.containerSm),
                 _OccupationRow(
                   label: _occupationDisplay,
+                  isPlaceholder: _occupationTagRef.trim().isEmpty,
                   onTap: _pickOccupation,
                 ),
-                const SizedBox(height: 34),
+                const SizedBox(height: AppSpacing.containerXl),
                 _SectionTitle(
                   title: UITextConstants.careerInterestMyTagsSection,
                 ),
-                const SizedBox(height: AppSpacing.containerXs),
-                Text(
-                  UITextConstants.careerInterestMyTagsHint,
-                  style: TextStyle(
-                    color: AppColors.iosSecondaryLabel(context),
-                    fontSize: AppTypography.iosSubheadline,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.containerMd),
+                const SizedBox(height: AppSpacing.containerSm),
                 _buildMyTags(context),
-                const SizedBox(height: 34),
+                const SizedBox(height: AppSpacing.containerXl),
                 _SectionTitle(title: UITextConstants.careerInterestAllSection),
                 const SizedBox(height: AppSpacing.containerMd),
                 _buildCategoryTabs(context),
@@ -452,33 +455,22 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
 
   Widget _buildMyTags(BuildContext context) {
     if (_interestTagRefs.isEmpty) {
-      return Container(
+      return SizedBox(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.containerMd,
-          vertical: AppSpacing.containerLg,
-        ),
-        decoration: _cardDecoration(context),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              UITextConstants.careerInterestMyTagsEmptyHint,
-              style: TextStyle(
-                color: AppColors.iosSecondaryLabel(context),
-                fontSize: AppTypography.iosSubheadline,
-                height: 1.3,
-              ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerMd,
+            vertical: AppSpacing.containerXs,
+          ),
+          child: Text(
+            UITextConstants.careerInterestMyTagsEmptyHint,
+            style: TextStyle(
+              color: AppColors.iosTertiaryLabel(context),
+              fontSize: AppTypography.iosSubheadline,
+              height: AppTypography.lineHeightCompact,
+              fontWeight: AppTypography.regular,
             ),
-            const SizedBox(height: AppSpacing.containerSm),
-            Text(
-              UITextConstants.careerInterestMyTagsEmpty,
-              style: TextStyle(
-                color: AppColors.iosTertiaryLabel(context),
-                fontSize: AppTypography.iosBody,
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -519,12 +511,14 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
     final categories =
         UserProfileUIConfig.careerInterestCatalog.interestCategories;
     return Container(
-      height: 44,
+      height: AppSpacing.minInteractiveSize,
       padding: const EdgeInsets.all(AppSpacing.containerXs),
       decoration: BoxDecoration(
         color: AppColors.iosSystemBackground(context),
         borderRadius: BorderRadius.circular(AppSpacing.radiusTen + 2),
-        border: Border.all(color: const Color(0xFFE5ECF5)),
+        border: Border.all(
+          color: AppColors.iosSeparator(context).withValues(alpha: 0.45),
+        ),
       ),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -552,10 +546,11 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
                   color: selected
                       ? CupertinoColors.white
                       : AppColors.iosSecondaryLabel(context),
-                  fontSize: AppTypography.iosBody,
+                  fontSize: AppTypography.iosSubheadline,
                   fontWeight: selected
-                      ? AppTypography.semiBold
+                      ? AppTypography.medium
                       : AppTypography.regular,
+                  height: AppTypography.lineHeightTight,
                 ),
               ),
             ),
@@ -628,14 +623,11 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
 
   static BoxDecoration _cardDecoration(BuildContext context) => BoxDecoration(
     color: AppColors.iosSystemBackground(context),
-    borderRadius: BorderRadius.circular(14),
-    border: Border.all(color: const Color(0xFFE5ECF5)),
-    boxShadow: <BoxShadow>[
-      BoxShadow(
-        color: CupertinoColors.black.withValues(alpha: 0.025),
-        blurRadius: 18,
-        offset: const Offset(0, 8),
-      ),
-    ],
+    borderRadius: BorderRadius.circular(
+      AppSpacing.radiusTen + AppSpacing.containerXs / 2,
+    ),
+    border: Border.all(
+      color: AppColors.iosSeparator(context).withValues(alpha: 0.45),
+    ),
   );
 }

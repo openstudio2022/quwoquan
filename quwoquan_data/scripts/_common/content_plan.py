@@ -273,6 +273,8 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
 
     items = _items(packet)
     if not items:
+        if not content_plan_quotas_required(spec):
+            return issues
         return ["content_plan_packet.items is empty"]
     if str(packet.get("schemaVersion") or "").strip() != CONTENT_PLAN_SCHEMA:
         issues.append(
@@ -801,11 +803,17 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             )
         if per_target_articles == 2:
             intents = sorted(str(item.get("writingIntent") or "") for item in articles)
-            expected = sorted(["planning_consultation", "decision_experience"])
+            abandoned_intents = _abandoned_intents_for_target(abandoned_refs, target)
+            expected = sorted(
+                intent
+                for intent in ("planning_consultation", "decision_experience")
+                if intent not in abandoned_intents
+            )
             if intents != expected:
                 issues.append(
-                    f"{target}: two entity articles must split planning_consultation and "
-                    f"decision_experience, got {intents}"
+                    f"{target}: entity articles must split planning_consultation and "
+                    f"decision_experience (minus abandoned {sorted(abandoned_intents)} => {expected}), "
+                    f"got {intents}"
                 )
         if required_article_intents and per_target_articles == len(required_article_intents):
             intents = sorted(str(item.get("writingIntent") or "") for item in articles)

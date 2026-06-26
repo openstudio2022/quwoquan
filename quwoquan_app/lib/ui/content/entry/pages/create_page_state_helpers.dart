@@ -170,7 +170,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
       return;
     }
     if (state.hasVideo && state.editorKind == CreateEditorKind.media) {
-      AppToast.show(context, '请先删除当前视频，再改为图片');
+      AppToast.show(context, UITextConstants.createDeleteVideoBeforeImages);
       return;
     }
     final remainingSlots =
@@ -179,7 +179,10 @@ extension _CreatePageStateHelpers on _CreatePageState {
           _CreatePageState._kMaxMediaImages,
         );
     if (remainingSlots <= 0) {
-      AppToast.show(context, '最多添加 ${_CreatePageState._kMaxMediaImages} 张图片');
+      AppToast.show(
+        context,
+        CreatePageText.maxImagesToast(_CreatePageState._kMaxMediaImages),
+      );
       return;
     }
     final result = await _openMediaPicker(
@@ -237,7 +240,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
     if (!mounted) return;
     final state = ref.read(createEditorProvider);
     if (state.imagePaths.isNotEmpty) {
-      AppToast.show(context, '请先删空图片，再改为视频');
+      AppToast.show(context, UITextConstants.createClearImagesBeforeVideo);
       return;
     }
     final result = await _openMediaPicker(
@@ -292,7 +295,10 @@ extension _CreatePageStateHelpers on _CreatePageState {
     if (initialMode == MediaPickerEntryMode.image &&
         state.editorKind != CreateEditorKind.text &&
         state.imagePaths.length >= _CreatePageState._kMaxMediaImages) {
-      AppToast.show(context, '最多添加 ${_CreatePageState._kMaxMediaImages} 张图片');
+      AppToast.show(
+        context,
+        CreatePageText.maxImagesToast(_CreatePageState._kMaxMediaImages),
+      );
       return;
     }
     await _flushDraftIfDirty('subpage_push');
@@ -317,7 +323,10 @@ extension _CreatePageStateHelpers on _CreatePageState {
     }
     if (state.editorKind == CreateEditorKind.text) {
       if (result.type == CreateMediaType.video) {
-        AppToast.show(context, '写文字编辑器暂不支持视频');
+        AppToast.show(
+          context,
+          UITextConstants.createTextEditorVideoNotSupported,
+        );
         return;
       }
       ref
@@ -327,7 +336,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
     }
     if (result.type == CreateMediaType.video) {
       if (state.imagePaths.isNotEmpty) {
-        AppToast.show(context, '请先删空图片，再改为视频');
+        AppToast.show(context, UITextConstants.createClearImagesBeforeVideo);
         return;
       }
       await waitForLocalVideoPlayable(result.path);
@@ -359,7 +368,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
       return;
     }
     if (state.hasVideo) {
-      AppToast.show(context, '请先删除当前视频，再改为图片');
+      AppToast.show(context, UITextConstants.createDeleteVideoBeforeImages);
       return;
     }
     ref
@@ -706,7 +715,9 @@ extension _CreatePageStateHelpers on _CreatePageState {
           Expanded(
             child: Center(
               child: Opacity(
-                opacity: lerpDouble(0.34, 1, collapseProgress)!,
+                opacity: _isPhotoCreateFlow(state)
+                    ? 1
+                    : lerpDouble(0.34, 1, collapseProgress)!,
                 child: Text(
                   title,
                   maxLines: 1,
@@ -752,7 +763,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
           state: state,
           title: _mediaHeaderHintForState(state),
           trailing: state.hasVideo
-              ? '仅 1 个视频'
+              ? UITextConstants.createMediaSingleVideoCaption
               : '${state.imagePaths.length} / ${_CreatePageState._kMaxMediaImages}',
         ),
         SizedBox(height: AppSpacing.interGroupMd),
@@ -764,7 +775,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
         ),
         SizedBox(height: AppSpacing.interGroupSm),
         _buildInputPanel(
-          label: '正文',
+          label: UITextConstants.createMediaBodySectionLabel,
           currentLength: state.body.length,
           input: CupertinoTextField(
             key: state.mediaKind == CreateMediaKind.video
@@ -776,7 +787,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
             maxLines: null,
             minLines: 4,
             padding: EdgeInsets.zero,
-            placeholder: '补一段配文，让内容更完整',
+            placeholder: UITextConstants.createMediaBodyPlaceholder,
             decoration: const BoxDecoration(),
             onChanged: (value) {
               ref.read(createEditorProvider.notifier).updateBody(value);
@@ -882,7 +893,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
                   ),
                   SizedBox(width: AppSpacing.intraGroupXs),
                   Text(
-                    '添加标题（可选）',
+                    UITextConstants.createAddTitleWithOptional,
                     style: TextStyle(
                       color: AppColors.iosAccentLight,
                       fontSize: AppTypography.base,
@@ -898,14 +909,17 @@ extension _CreatePageStateHelpers on _CreatePageState {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                _buildSectionHeader(title: '标题', trailing: '可选'),
+                _buildSectionHeader(
+                  title: CreatePageText.titleFieldLabel,
+                  trailing: UITextConstants.createFieldOptionalTag,
+                ),
                 SizedBox(height: AppSpacing.intraGroupSm),
                 CupertinoTextField(
                   key: titleFieldKey,
                   controller: _titleController,
                   focusNode: _titleFocusNode,
                   padding: EdgeInsets.zero,
-                  placeholder: '补一个能概括内容的标题',
+                  placeholder: UITextConstants.createTitleSummaryPlaceholder,
                   decoration: const BoxDecoration(),
                   onChanged: (value) {
                     ref.read(createEditorProvider.notifier).updateTitle(value);

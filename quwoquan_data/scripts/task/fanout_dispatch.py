@@ -274,6 +274,17 @@ def ensure_partition_task(plan: Mapping[str, Any], unit: Mapping[str, Any]) -> d
         content = dict(content)
         content["quotas"] = quotas_by_partition[partition_path]
 
+    # 派生分区必须继承源任务的 acceptance 与 workflowPolicy：否则分区会丢失
+    # allowContentQuotaShortfall/allowPartialContent 等优雅降级策略与验收门，
+    # 导致来源不足的实体在分区层硬失败/卡 checkpoint，而非按源任务策略诚实弃稿。
+    inherited_acceptance: dict[str, Any] | None = None
+    inherited_workflow_policy: dict[str, Any] | None = None
+    if source_spec:
+        if isinstance(source_spec.get("acceptance"), Mapping):
+            inherited_acceptance = dict(source_spec.get("acceptance") or {})
+        if isinstance(source_spec.get("workflowPolicy"), Mapping):
+            inherited_workflow_policy = dict(source_spec.get("workflowPolicy") or {})
+
     spec = store.scaffold_spec(
         vertical=str(plan.get("vertical") or "travel"),
         organize_by=str(defaults.get("organizeBy") or "地域"),
@@ -282,8 +293,11 @@ def ensure_partition_task(plan: Mapping[str, Any], unit: Mapping[str, Any]) -> d
         category=(str(unit.get("category")) if unit.get("category") else None),
         scope=scope,
         content=content,
+        acceptance=inherited_acceptance,
         created_by="task run --mode fanout",
     )
+    if inherited_workflow_policy:
+        spec["workflowPolicy"] = inherited_workflow_policy
     task_id = spec["taskId"]
     if task_id != unit.get("taskId"):
         # 不一致说明寻址漂移（strategies 与 scaffold 不同源），直接暴露而非静默。
@@ -357,6 +371,59 @@ def enqueue_partition_leaves(plan: Mapping[str, Any], unit: Mapping[str, Any]) -
     return jobs
 
 
+def _carrier_for_creator(pack: Mapping[str, Any]) -> str:
+    """把内容对象载体归一到 creator 载体亲和键（article/image/video）。"""
+    raw = str(pack.get("carrier") or pack.get("contentType") or "article").strip().lower()
+    if raw in {"image", "gallery"}:
+        return "image"
+    if raw == "video":
+        return "video"
+    return "article"
+
+
+def _resolve_registry_creator(
+    pack: Mapping[str, Any],
+    *,
+    ref: str,
+    region: str | None,
+    vertical: str | None,
+) -> dict[str, Any]:
+    """模板被清空/compose 未冻结 creator 时，按内容载体从已注册 creator 人设确定性解析。
+
+    与模板路由（routes/blueprints）解耦：传空 blueprint 让 match_creator 回退到
+    「全部 active creator 按载体亲和+评分择优」，满足无模板原创目标，同时保证
+    author 作业带完整 creatorAssignment，避免 enqueue_ref_job 硬校验崩溃。
+    seed=ref 保证同一内容对象稳定命中同一作者。
+    """
+    try:
+        from template.creator import match_creator
+        from template.registry import TemplateRegistry
+
+        from _common.creator_assignment import creator_assignment_from_profile
+    except Exception:  # noqa: BLE001
+        return {}
+    try:
+        registry = TemplateRegistry.load()
+    except Exception:  # noqa: BLE001
+        return {}
+    if not getattr(registry, "creators", None):
+        return {}
+    try:
+        creator = match_creator(
+            registry,
+            {},
+            carrier=_carrier_for_creator(pack),
+            region=region,
+            vertical=vertical,
+            seed=ref,
+        )
+    except Exception:  # noqa: BLE001
+        return {}
+    if not creator:
+        return {}
+    return creator_assignment_from_profile(creator)
+
+
 def sync_content_author_jobs(
     plan: Mapping[str, Any],
     target: Mapping[str, Any],
@@ -367,9 +434,15 @@ def sync_content_author_jobs(
 ) -> dict[str, Any]:
     """在 produce_compose 之后按内容对象 ref 准备 author packet 并入队。"""
     from _common import content_object
-    from _common.creator_assignment import CREATOR_ASSIGNMENT_FIELDS, creator_from_payload
+    from _common.creator_assignment import (
+        CREATOR_ASSIGNMENT_FIELDS,
+        creator_assignment_issues,
+        creator_from_payload,
+    )
     from _common.draft_io import draft_article_path, draft_package_dir, is_placeholder, read_writing_pack, write_writing_pack
     from _common.handoff import build_author_job_packet
+    from _common.source_catalog import vertical_from_task_id
+    from task.run import _abandoned_content_refs, load_workflow_state
 
     task_id = str(target["taskId"])
     batch_id = str(target["batchId"])
@@ -378,6 +451,11 @@ def sync_content_author_jobs(
     default_creator = creator_from_payload(defaults.get("creatorAssignment") or defaults)
     queue_backend = defaults.get("queueBackend")
     stage_name = str(defaults.get("stage") or "author")
+    task_vertical = vertical_from_task_id(task_id)
+    task_region = str((target.get("region") or "")) or None
+    # 已弃稿的内容对象（含主页短底稿哨兵 _homepage_only）是终态，禁止再入 author 队列：
+    # 重入会把无 creatorAssignment 的非内容对象误当作品作业，触发 enqueue 硬校验崩溃。
+    abandoned_refs = _abandoned_content_refs(load_workflow_state(task_id, batch_id) or {})
     prepared_refs: list[str] = []
     skipped_authored_refs: list[str] = []
     jobs: list[dict[str, Any]] = []
@@ -385,6 +463,8 @@ def sync_content_author_jobs(
     force_ref_filter = {str(item) for item in (force_refs or []) if str(item).strip()} if force_refs else set()
     for ref in content_object.iter_content_refs(task_id, batch_id):
         if ref_filter is not None and ref not in ref_filter:
+            continue
+        if ref in abandoned_refs and ref not in force_ref_filter:
             continue
         try:
             article_path = draft_article_path(task_id, batch_id, ref)
@@ -395,10 +475,20 @@ def sync_content_author_jobs(
         if not brief or not pack:
             continue
         effective_pack = dict(pack)
-        creator_assignment = creator_from_payload(effective_pack) or default_creator
+        creator_assignment = creator_from_payload(effective_pack) or dict(default_creator)
+        # compose 期未冻结完整 creator（如模板/路由被清空）时，按内容载体从已注册
+        # creator 人设确定性解析，避免 author 队列因 creatorAssignment 不完整而崩溃。
+        carrier_for_check = _carrier_for_creator(effective_pack)
+        if creator_assignment_issues(creator_assignment, carrier=carrier_for_check):
+            resolved = _resolve_registry_creator(
+                effective_pack, ref=ref, region=task_region, vertical=task_vertical
+            )
+            if resolved:
+                creator_assignment = resolved
         for field in CREATOR_ASSIGNMENT_FIELDS:
-            if field in creator_assignment and effective_pack.get(field) in (None, "", {}):
-                effective_pack[field] = creator_assignment[field]
+            value = creator_assignment.get(field)
+            if value not in (None, "", {}) and effective_pack.get(field) in (None, "", {}):
+                effective_pack[field] = value
         if effective_pack != pack:
             write_writing_pack(task_id, batch_id, ref, effective_pack)
         authored = article_path.is_file() and not is_placeholder(article_path.read_text(encoding="utf-8"))

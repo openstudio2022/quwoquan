@@ -325,7 +325,9 @@ api_routes:
       主页首屏聚合（锁定决策 #1）：一次返回身份域真相 profile/stats/relationshipCapability/
       tabCounts/viewerContext/cacheVersion，消除首屏串行阻塞。交集与影响力 evidence 仍由 content
       域接口端侧并发拉取，user 域不聚合 content/intersection 事实。陌生人 strict 隔离返回 404。
-    response_entity: UserHomepageBundleView
+    response_entity: UserHomepageBundleWire
+    response_body: UserHomepageBundleWire
+    response_body_kind: object
     response_fields: [profile, stats, relationshipCapability, tabCounts, viewerContext, cacheVersion]
     auth: optional
     note: viewer 由鉴权头解析；本人态返回 viewerContext.isOwner=true，游客可读公开档案
@@ -556,6 +558,8 @@ api_routes:
     description: 用户作品集列表（用户主页-创作 Tab 作品子分类）
     query_params: [cursor, limit]
     response_entity: UserWork
+    response_body: UserWork
+    response_body_kind: page
 
   - method: GET
     path: /v1/users/{userId}/life-items
@@ -563,6 +567,8 @@ api_routes:
     description: 用户生活记录列表（用户主页-生活 Tab）
     query_params: [category, cursor, limit]
     response_entity: UserLifeItem
+    response_body: UserLifeItem
+    response_body_kind: page
 
   - method: GET
     path: /v1/users/{userId}/likes

@@ -2,14 +2,17 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"quwoquan_service/runtime/controlplane"
 	rthealth "quwoquan_service/runtime/health"
+	"quwoquan_service/runtime/repository"
 	"quwoquan_service/services/product-ops-service/internal/application"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
 )
@@ -20,6 +23,24 @@ func newTestProductService(t *testing.T) *productService {
 		controlplane.NewFileStore(filepath.Join(t.TempDir(), "product-ops-state.json")),
 		application.NewTelemetryService(telemetrypersistence.NewMemoryTelemetryStore(), nil),
 	)
+}
+
+func newTestProductServiceWithPublisher(t *testing.T, publisher repository.EventPublisher) *productService {
+	t.Helper()
+	return newProductService(
+		controlplane.NewFileStore(filepath.Join(t.TempDir(), "product-ops-state.json")),
+		application.NewTelemetryService(telemetrypersistence.NewMemoryTelemetryStore(), nil),
+		publisher,
+	)
+}
+
+type capturePublisher struct {
+	events []repository.DomainEvent
+}
+
+func (p *capturePublisher) Publish(_ context.Context, event repository.DomainEvent) error {
+	p.events = append(p.events, event)
+	return nil
 }
 
 func newTestServerMux(service *productService) *http.ServeMux {
@@ -296,6 +317,149 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	}
 }
 
+func TestPremiumPoolControlPlaneEndpoints(t *testing.T) {
+	publisher := &capturePublisher{}
+	service := newTestProductServiceWithPublisher(t, publisher)
+	server := newTestServerMux(service)
+	expiresAt := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+
+	invalidScopeReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/control-plane/product/recommendation/premium-pool",
+		bytes.NewBufferString(`{"contentId":"post_bad","scope":"circle","qualityScore":0.95,"qualityAdmission":"approved","auditId":"audit_bad","expiresAt":"`+expiresAt+`"}`),
+	)
+	invalidScopeResp := httptest.NewRecorder()
+	server.ServeHTTP(invalidScopeResp, invalidScopeReq)
+	if invalidScopeResp.Code != http.StatusBadRequest {
+		t.Fatalf("circle scoped premium pool must be rejected, status=%d body=%s", invalidScopeResp.Code, invalidScopeResp.Body.String())
+	}
+
+	lowQualityReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/control-plane/product/recommendation/premium-pool",
+		bytes.NewBufferString(`{"contentId":"post_low","scope":"global","qualityScore":0.5,"qualityAdmission":"approved","auditId":"audit_low","expiresAt":"`+expiresAt+`"}`),
+	)
+	lowQualityResp := httptest.NewRecorder()
+	server.ServeHTTP(lowQualityResp, lowQualityReq)
+	if lowQualityResp.Code != http.StatusBadRequest {
+		t.Fatalf("low quality premium pool must be rejected, status=%d body=%s", lowQualityResp.Code, lowQualityResp.Body.String())
+	}
+
+	createBody := `{"contentId":"post_premium_1","scope":"global","qualityScore":0.92,"qualityAdmission":"approved","supplySource":"data_engineering","sourceTaskId":"task_1","auditId":"audit_premium_1","rollbackToken":"rbk-premium-1","expiresAt":"` + expiresAt + `"}`
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/recommendation/premium-pool", bytes.NewBufferString(createBody))
+	createReq.Header.Set("X-Actor", "premium-editor")
+	createResp := httptest.NewRecorder()
+	server.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("create premium pool status=%d body=%s", createResp.Code, createResp.Body.String())
+	}
+	var created premiumPoolEntry
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal create response: %v", err)
+	}
+	if created.Scope != "global" || created.Status != "active" || created.RollbackToken == "" {
+		t.Fatalf("premium entry missing commercial governance fields: %+v", created)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/recommendation/premium-pool?activeOnly=true", nil)
+	listResp := httptest.NewRecorder()
+	server.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("list premium pool status=%d body=%s", listResp.Code, listResp.Body.String())
+	}
+	var listPayload struct {
+		Items []premiumPoolEntry `json:"items"`
+	}
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listPayload); err != nil {
+		t.Fatalf("unmarshal list response: %v", err)
+	}
+	if len(listPayload.Items) != 1 || listPayload.Items[0].ContentID != "post_premium_1" {
+		t.Fatalf("expected active premium entry, got %+v", listPayload.Items)
+	}
+
+	rollbackReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/recommendation/premium-pool/post_premium_1:rollback", nil)
+	rollbackResp := httptest.NewRecorder()
+	server.ServeHTTP(rollbackResp, rollbackReq)
+	if rollbackResp.Code != http.StatusOK {
+		t.Fatalf("rollback premium pool status=%d body=%s", rollbackResp.Code, rollbackResp.Body.String())
+	}
+	var rolledBack premiumPoolEntry
+	if err := json.Unmarshal(rollbackResp.Body.Bytes(), &rolledBack); err != nil {
+		t.Fatalf("unmarshal rollback response: %v", err)
+	}
+	if rolledBack.Status != "rolled_back" {
+		t.Fatalf("rollback status=%q", rolledBack.Status)
+	}
+
+	createBody2 := `{"contentId":"post_premium_2","scope":"global","qualityScore":0.91,"qualityAdmission":"approved","auditId":"audit_premium_2","expiresAt":"` + expiresAt + `"}`
+	createReq2 := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/recommendation/premium-pool", bytes.NewBufferString(createBody2))
+	createResp2 := httptest.NewRecorder()
+	server.ServeHTTP(createResp2, createReq2)
+	if createResp2.Code != http.StatusOK {
+		t.Fatalf("create second premium pool status=%d body=%s", createResp2.Code, createResp2.Body.String())
+	}
+	takedownReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/recommendation/premium-pool/post_premium_2:takedown", nil)
+	takedownResp := httptest.NewRecorder()
+	server.ServeHTTP(takedownResp, takedownReq)
+	if takedownResp.Code != http.StatusOK {
+		t.Fatalf("takedown premium pool status=%d body=%s", takedownResp.Code, takedownResp.Body.String())
+	}
+	var ejected premiumPoolEntry
+	if err := json.Unmarshal(takedownResp.Body.Bytes(), &ejected); err != nil {
+		t.Fatalf("unmarshal takedown response: %v", err)
+	}
+	if !ejected.TakedownEjected || ejected.Status != "takedown_ejected" {
+		t.Fatalf("takedown must eject premium entry, got %+v", ejected)
+	}
+
+	auditReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/audits", nil)
+	auditResp := httptest.NewRecorder()
+	server.ServeHTTP(auditResp, auditReq)
+	if auditResp.Code != http.StatusOK {
+		t.Fatalf("audit status=%d body=%s", auditResp.Code, auditResp.Body.String())
+	}
+	var auditPayload struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(auditResp.Body.Bytes(), &auditPayload); err != nil {
+		t.Fatalf("unmarshal audits: %v", err)
+	}
+	if len(auditPayload.Items) < 4 {
+		t.Fatalf("premium pool must audit create/rollback/takedown, got %+v", auditPayload.Items)
+	}
+	if got, want := premiumPoolEventTypes(publisher.events), []string{
+		premiumPoolEntryUpsertedEvent,
+		premiumPoolEntryRolledBackEvent,
+		premiumPoolEntryUpsertedEvent,
+		premiumPoolEntryTakedownEjectedEvent,
+	}; !equalStrings(got, want) {
+		t.Fatalf("premium pool events=%v want %v", got, want)
+	}
+	if sourceTaskID, _ := publisher.events[0].Payload["sourceTaskId"].(string); sourceTaskID != "task_1" {
+		t.Fatalf("premium pool event must keep sourceTaskId for data-engineering attribution, payload=%+v", publisher.events[0].Payload)
+	}
+}
+
+func premiumPoolEventTypes(events []repository.DomainEvent) []string {
+	out := make([]string, 0, len(events))
+	for _, event := range events {
+		out = append(out, event.Type)
+	}
+	return out
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestL1L4MetricsEndpoint(t *testing.T) {
 	service := newTestProductService(t)
 	if err := service.seed(); err != nil {
@@ -334,15 +498,15 @@ func TestL1L4MetricsEndpoint(t *testing.T) {
 			EventSignals    int `json:"eventSignals"`
 		} `json:"coverage"`
 		Alerts []struct {
-			ID          string `json:"id"`
-			State       string `json:"state"`
-			Metric      string `json:"metric"`
-			Source      string `json:"source"`
-			RunbookID   string `json:"runbookId"`
+			ID           string `json:"id"`
+			State        string `json:"state"`
+			Metric       string `json:"metric"`
+			Source       string `json:"source"`
+			RunbookID    string `json:"runbookId"`
 			RunbookRoute string `json:"runbookRoute"`
-			RepairEntry string `json:"repairEntry"`
-			AlertID     string `json:"alertId"`
-			Owner       string `json:"owner"`
+			RepairEntry  string `json:"repairEntry"`
+			AlertID      string `json:"alertId"`
+			Owner        string `json:"owner"`
 		} `json:"alerts"`
 		Items []struct {
 			Level       string `json:"level"`
@@ -419,14 +583,14 @@ func TestProductTriageSummaryEndpoint(t *testing.T) {
 			SurfaceID string `json:"surfaceId"`
 		} `json:"recentEvents"`
 		BacklogCandidates []struct {
-			ID            string `json:"id"`
-			Category      string `json:"category"`
-			Title         string `json:"title"`
-			NextAction    string `json:"nextAction"`
-			RunbookRoute  string `json:"runbookRoute"`
-			RepairEntry   string `json:"repairEntry"`
-			AlertID       string `json:"alertId"`
-			AuditRoute    string `json:"auditRoute"`
+			ID           string `json:"id"`
+			Category     string `json:"category"`
+			Title        string `json:"title"`
+			NextAction   string `json:"nextAction"`
+			RunbookRoute string `json:"runbookRoute"`
+			RepairEntry  string `json:"repairEntry"`
+			AlertID      string `json:"alertId"`
+			AuditRoute   string `json:"auditRoute"`
 		} `json:"backlogCandidates"`
 		RuntimeReady bool   `json:"runtimeReady"`
 		Source       string `json:"source"`

@@ -39,6 +39,7 @@ from _common.post_evidence_chain import (
 from _common.provenance import build_provenance
 from _common.intersection_signal import build_intersection_hints
 from _common.entity_annotation import annotate_inline, normalize_link_ref
+from produce.materialize_residue_cleanup import prune_unregistered_post_residue
 
 
 def _resolve_semantic_mentions(

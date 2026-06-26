@@ -166,6 +166,57 @@ def test_goldenset_calibration():
     assert report["falsePositiveRate"] <= 0.05
 
 
+def test_section_balance_blocks_dominant_section():
+    filler = "这是真实可信的描述性正文段落，用于撑起章节篇幅且不重复。" * 6
+    short = "这是一段简短的章节正文。"
+    balanced = (
+        f"# 某地\n\n## 概况\n\n{filler}\n\n## 地理\n\n{filler}\n\n## 看点\n\n{filler}\n"
+    )
+    assert qg.section_balance_issues(balanced, max_ratio=qg.SECTION_BALANCE_MAX_RATIO_HOMEPAGE) == []
+    dominant = (
+        f"# 某地\n\n## 概况\n\n{short}\n\n## 地理\n\n{short}\n\n## 历史沿革\n\n{filler * 4}\n"
+    )
+    issues = qg.section_balance_issues(dominant, max_ratio=qg.SECTION_BALANCE_MAX_RATIO_HOMEPAGE)
+    assert issues and "历史沿革" in issues[0] and "sectionBalance" in issues[0]
+
+
+def test_timeline_monotonicity_blocks_backward_jump():
+    spliced = (
+        "# 某地\n\n## 历史沿革\n\n"
+        "1956年开始勘查，1966年建场，1978年停伐，1992年列入世界遗产，2007年评为5A。"
+        "1979年迁出林场，1983年视察，1984年开放，1989年设镇，1998年更名。\n"
+    )
+    issues = qg.timeline_monotonicity_issues(spliced)
+    assert issues and "timelineOrder" in issues[0]
+    chronological = (
+        "# 某地\n\n## 历史沿革\n\n"
+        "1956年勘查，1966年建场，1978年停伐，1984年开放，1989年设镇，1992年列入遗产，2007年评5A。\n"
+    )
+    assert qg.timeline_monotonicity_issues(chronological) == []
+
+
+def test_out_of_draft_and_cross_source_overlap():
+    from _common import base_draft as bd
+
+    base = (
+        "毕棚沟位于四川省阿坝州理县，是国家级风景名胜区，"
+        "以高山彩林、红叶和雪山瀑布闻名，秋季景色最为壮丽。"
+    )
+    light = (
+        "# 毕棚沟\n\n## 概况\n\n毕棚沟位于四川省阿坝州理县，是国家级风景名胜区，"
+        "以高山彩林、红叶和雪山瀑布闻名，秋季的景色最为壮丽迷人。"
+    )
+    assert bd.out_of_draft_issues(light, base, source_use_mode="factual_reference_only") == []
+    block = (
+        "从成都出发自驾约四小时即可抵达毕棚沟景区门口沿途经过都江堰和卧龙自然保护区建议清晨出发避开堵车"
+        "景区内有观光车直达上海子和磐羊湖等核心景点票价另算游客中心提供讲解服务旺季排队较久请预留时间"
+    )
+    other = {"entities/x/sources/09.article_qunar_base_6/source.md": block}
+    spliced = light + "\n\n## 交通\n\n" + block
+    assert bd.cross_source_overlap_issues(spliced, base, other), "拼接非底稿长串应被拦"
+    assert bd.cross_source_overlap_issues(light, base, other) == [], "纯轻改不应误判拼接"
+
+
 def _run_all() -> None:
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

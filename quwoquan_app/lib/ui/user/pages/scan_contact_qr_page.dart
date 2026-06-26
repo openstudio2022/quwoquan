@@ -15,6 +15,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/user/services/contact_qr_image_analyzer.dart';
 import 'package:quwoquan_app/ui/user/services/qr_payload_parser.dart';
 
 /// 扫一扫页：全屏相机预览 + 取景框 + 扫描线动画 + 图库识别 + 我的二维码入口。
@@ -30,6 +31,8 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
   MobileScannerController? _controller;
   late final AnimationController _scanLine;
   bool _handling = false;
+  late bool _canUseCamera;
+  late bool _canUseGallery;
 
   @override
   void initState() {
@@ -39,7 +42,9 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
       duration: const Duration(milliseconds: 2200),
     )..repeat();
     final caps = ref.read(platformCapabilitiesProvider);
-    if (caps.camera) {
+    _canUseCamera = caps.camera;
+    _canUseGallery = caps.mediaLibrary;
+    if (_canUseCamera) {
       _controller = MobileScannerController();
     }
   }
@@ -60,8 +65,7 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
   }
 
   Future<void> _pickFromGallery() async {
-    final controller = _controller;
-    if (controller == null) {
+    if (!_canUseGallery) {
       return;
     }
     final path = await ref
@@ -75,10 +79,14 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
     if (!mounted || path == null || path.trim().isEmpty) {
       return;
     }
-    final capture = await controller.analyzeImage(path);
-    final raw = capture?.barcodes.isNotEmpty == true
-        ? capture!.barcodes.first.rawValue?.trim() ?? ''
-        : '';
+    String raw;
+    try {
+      raw = await ref
+          .read(contactQrImageAnalyzerProvider)
+          .analyzeImage(path: path);
+    } catch (_) {
+      raw = '';
+    }
     if (raw.isEmpty) {
       if (mounted) {
         AppToast.show(context, UITextConstants.scanQrNoCodeFound);
@@ -137,7 +145,7 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            if (controller != null)
+            if (_canUseCamera && controller != null)
               MobileScanner(
                 controller: controller,
                 onDetect: _onDetect,
@@ -147,7 +155,8 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
               )
             else
               const _CameraUnavailable(),
-            if (controller != null) _ScannerOverlay(animation: _scanLine),
+            if (_canUseCamera && controller != null)
+              _ScannerOverlay(animation: _scanLine),
             SafeArea(
               child: Column(
                 children: <Widget>[
@@ -177,7 +186,7 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
                           label: UITextConstants.editProfileQrCardTitle,
                           onTap: () => context.push(AppRoutePaths.myQrCode),
                         ),
-                        if (controller != null)
+                        if (_canUseGallery)
                           _CircleAction(
                             icon: CupertinoIcons.photo,
                             label: UITextConstants.scanQrAlbum,

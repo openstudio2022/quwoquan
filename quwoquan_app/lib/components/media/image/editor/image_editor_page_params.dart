@@ -115,10 +115,7 @@ List<LocalAnchor> imageEditorParseLocalAnchorsFromParams(
           ((map['x'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0),
           ((map['y'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0),
         ),
-        radius: ((map['radius'] as num?)?.toDouble() ?? 0.18).clamp(
-          0.06,
-          0.45,
-        ),
+        radius: ((map['radius'] as num?)?.toDouble() ?? 0.18).clamp(0.06, 0.45),
         values: <String, double>{
           for (final key in kLocalParamOrder)
             key: (valuesRaw[key] as num?)?.toDouble() ?? 0,

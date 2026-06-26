@@ -301,7 +301,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
               ),
               SizedBox(height: spacing),
               Text(
-                '轻点视频编辑，支持裁切、静音和精细选帧',
+                UITextConstants.createVideoEditFeaturesHint,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: CupertinoColors.secondaryLabel.resolveFrom(context),
@@ -312,7 +312,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: onAdd,
-                child: const Text('更换视频'),
+                child: const Text(UITextConstants.createReplaceVideoLabel),
               ),
             ],
           );
@@ -433,6 +433,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         await onTap();
       },
       child: SizedBox(
+        key: ValueKey<String>('create-media-tile-$assetPath'),
         width: width,
         height: height,
         child: Transform.scale(
@@ -561,7 +562,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
                         left: AppSpacing.intraGroupXs,
                         bottom: AppSpacing.intraGroupXs,
                         child: _PreviewBadge(
-                          label: '编辑视频',
+                          label: UITextConstants.createVideoBadgeEditLabel,
                           backgroundColor: mediaScrim.withValues(
                             alpha: isDark ? 0.42 : 0.48,
                           ),
@@ -572,7 +573,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
                         left: AppSpacing.intraGroupXs,
                         top: AppSpacing.intraGroupXs,
                         child: _PreviewBadge(
-                          label: '视频',
+                          label: UITextConstants.createVideoKindBadgeLabel,
                           backgroundColor: mediaScrim.withValues(
                             alpha: isDark ? 0.42 : 0.48,
                           ),

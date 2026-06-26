@@ -49,12 +49,10 @@ Future<void> _pumpView(
   await tester.pumpAndSettle();
 }
 
-Future<void> _dragBy(
-  WidgetTester tester,
-  int fromIndex,
-  Offset delta,
-) async {
-  final start = tester.getCenter(find.byKey(ValueKey<String>('item-$fromIndex')));
+Future<void> _dragBy(WidgetTester tester, int fromIndex, Offset delta) async {
+  final start = tester.getCenter(
+    find.byKey(ValueKey<String>('item-$fromIndex')),
+  );
   final gesture = await tester.startGesture(start);
   // 触发 onLongPressStart。
   await tester.pump(kLongPressTimeout + const Duration(milliseconds: 30));
@@ -62,6 +60,18 @@ Future<void> _dragBy(
   await tester.pump();
   await gesture.up();
   await tester.pumpAndSettle();
+}
+
+Future<TestGesture> _startLongPressDrag(
+  WidgetTester tester,
+  int fromIndex,
+) async {
+  final start = tester.getCenter(
+    find.byKey(ValueKey<String>('item-$fromIndex')),
+  );
+  final gesture = await tester.startGesture(start);
+  await tester.pump(kLongPressTimeout + const Duration(milliseconds: 30));
+  return gesture;
 }
 
 void main() {
@@ -76,6 +86,116 @@ void main() {
     // 60px 一格、无间距：移到第 2 槽中心 = +120px。
     await _dragBy(tester, 0, const Offset(120, 0));
     expect(result, (0, 3));
+  });
+
+  testWidgets('横条内容少于视口时首项仍贴左起始，不会视觉居中', (tester) async {
+    await _pumpView(
+      tester,
+      itemCount: 3,
+      layout: MediaReorderableLayout.strip,
+      onReorder: (_, __) {},
+    );
+
+    final stripRect = tester.getRect(find.byType(MediaReorderableView));
+    final firstRect = tester.getRect(
+      find.byKey(const ValueKey<String>('item-0')),
+    );
+    expect(firstRect.left, closeTo(stripRect.left, 0.5));
+  });
+
+  testWidgets('横条拖拽悬停到第 4 槽位时，后续兄弟项会在松手前即时前移让位', (tester) async {
+    (int, int)? result;
+    await _pumpView(
+      tester,
+      itemCount: 4,
+      layout: MediaReorderableLayout.strip,
+      onReorder: (o, n) => result = (o, n),
+    );
+
+    final item0RectBefore = tester.getRect(
+      find.byKey(const ValueKey<String>('item-0')),
+    );
+    final item1RectBefore = tester.getRect(
+      find.byKey(const ValueKey<String>('item-1')),
+    );
+    final item2RectBefore = tester.getRect(
+      find.byKey(const ValueKey<String>('item-2')),
+    );
+    final item3CenterBefore = tester.getCenter(
+      find.byKey(const ValueKey<String>('item-3')),
+    );
+    final gesture = await _startLongPressDrag(tester, 0);
+    await gesture.moveBy(
+      (item3CenterBefore - item0RectBefore.center) + const Offset(30, 0),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 220));
+
+    final item1Rect = tester.getRect(
+      find.byKey(const ValueKey<String>('item-1')),
+    );
+    final item2Rect = tester.getRect(
+      find.byKey(const ValueKey<String>('item-2')),
+    );
+    final item3Rect = tester.getRect(
+      find.byKey(const ValueKey<String>('item-3')),
+    );
+    expect(item1Rect.left, closeTo(item0RectBefore.left, 0.5));
+    expect(item2Rect.left, closeTo(item1RectBefore.left, 0.5));
+    expect(item3Rect.left, closeTo(item2RectBefore.left, 0.5));
+    expect(result, isNull, reason: '悬停让位阶段不应提前提交最终顺序');
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(result, (0, 4));
+  });
+
+  testWidgets('横条拖拽悬停到第 1 槽位时，前方区间兄弟项会在松手前整体后移', (tester) async {
+    (int, int)? result;
+    await _pumpView(
+      tester,
+      itemCount: 4,
+      layout: MediaReorderableLayout.strip,
+      onReorder: (o, n) => result = (o, n),
+    );
+
+    final item1RectBefore = tester.getRect(
+      find.byKey(const ValueKey<String>('item-1')),
+    );
+    final item2RectBefore = tester.getRect(
+      find.byKey(const ValueKey<String>('item-2')),
+    );
+    final item3RectBefore = tester.getRect(
+      find.byKey(const ValueKey<String>('item-3')),
+    );
+    final item0RectBefore = tester.getRect(
+      find.byKey(const ValueKey<String>('item-0')),
+    );
+    final item0CenterBefore = item0RectBefore.center;
+    final gesture = await _startLongPressDrag(tester, 3);
+    await gesture.moveBy(
+      (item0CenterBefore - item3RectBefore.center) - const Offset(30, 0),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 220));
+
+    final item0Rect = tester.getRect(
+      find.byKey(const ValueKey<String>('item-0')),
+    );
+    final item1Rect = tester.getRect(
+      find.byKey(const ValueKey<String>('item-1')),
+    );
+    final item2Rect = tester.getRect(
+      find.byKey(const ValueKey<String>('item-2')),
+    );
+    expect(item0Rect.left, closeTo(item1RectBefore.left, 0.5));
+    expect(item1Rect.left, closeTo(item2RectBefore.left, 0.5));
+    expect(item2Rect.left, closeTo(item3RectBefore.left, 0.5));
+    expect(result, isNull, reason: '悬停让位阶段不应提前提交最终顺序');
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(result, (3, 0));
   });
 
   testWidgets('横条 反向：item3 拖到 slot1 → onReorder(3, 1)', (tester) async {

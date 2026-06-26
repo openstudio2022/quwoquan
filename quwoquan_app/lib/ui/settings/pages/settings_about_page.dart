@@ -81,6 +81,43 @@ class SettingsAboutPage extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  SettingsInsetGroupedSection(
+                    isDark: isDark,
+                    child: Column(
+                      children: <Widget>[
+                        SettingsInsetFormRow(
+                          isDark: isDark,
+                          label: UITextConstants.userAgreement,
+                          trailing: Icon(
+                            CupertinoIcons.chevron_forward,
+                            size: AppSpacing.iconSmall,
+                            color: SettingsSemanticConstants.secondaryColor(
+                              isDark,
+                            ),
+                          ),
+                          onTap: () {
+                            context.push(AppRoutePaths.legalUserAgreement);
+                          },
+                        ),
+                        SettingsInsetFormSectionDivider(isDark: isDark),
+                        SettingsInsetFormRow(
+                          isDark: isDark,
+                          label: UITextConstants.privacyPolicy,
+                          trailing: Icon(
+                            CupertinoIcons.chevron_forward,
+                            size: AppSpacing.iconSmall,
+                            color: SettingsSemanticConstants.secondaryColor(
+                              isDark,
+                            ),
+                          ),
+                          onTap: () {
+                            context.push(AppRoutePaths.legalPrivacyPolicy);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               );
             },

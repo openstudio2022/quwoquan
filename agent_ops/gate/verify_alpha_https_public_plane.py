@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import re
 import socket
 import subprocess
 import sys
@@ -20,6 +21,17 @@ LOCAL_ROOT_CA = (
     / "local"
     / "root.crt"
 )
+APP_CHAT_MOCK_DATA_PATH = (
+    ROOT
+    / "quwoquan_app"
+    / "lib"
+    / "cloud"
+    / "services"
+    / "chat"
+    / "mock"
+    / "chat_mock_data.dart"
+)
+GROUP_AVATAR_CALL_RE = re.compile(r"groupAvatarFor\('([^']+)'\)")
 
 
 CHECKS = (
@@ -133,6 +145,21 @@ ANDROID_LOOPBACK_CHECKS = (
 )
 
 
+def _collect_app_mock_group_avatar_paths() -> list[str]:
+    text = APP_CHAT_MOCK_DATA_PATH.read_text(encoding="utf-8")
+    conversation_ids = {
+        match.group(1)
+        for match in GROUP_AVATAR_CALL_RE.finditer(text)
+        if "$" not in match.group(1)
+    }
+    if "groupAvatarFor('conv_grid_$n')" in text:
+        conversation_ids.update(f"conv_grid_{index}" for index in range(1, 17))
+    return [
+        f"/media/avatar/s/archived-avatar/conversation/{conversation_id}/v1/mock.png"
+        for conversation_id in sorted(conversation_ids)
+    ]
+
+
 def _loopback_addresses(host: str) -> set[str]:
     try:
         return {item[4][0] for item in socket.getaddrinfo(host, None)}
@@ -173,7 +200,32 @@ def _curl_status(
 
 def main() -> int:
     issues: list[str] = []
-    hosts = sorted({host for _, host, _, _, _, _ in CHECKS})
+    app_group_avatar_checks = tuple(
+        (
+            f"app-mock-group-avatar-{path.split('/')[-3]}",
+            "alpha-avatar.quwoquan-env.test",
+            17100,
+            path,
+            None,
+            "200",
+        )
+        for path in _collect_app_mock_group_avatar_paths()
+    )
+    android_group_avatar_checks = tuple(
+        (
+            f"android-emulator-app-mock-group-avatar-{path.split('/')[-3]}",
+            "10.0.2.2",
+            17100,
+            path,
+            None,
+            "200",
+        )
+        for path in _collect_app_mock_group_avatar_paths()
+    )
+    checks = (*CHECKS, *app_group_avatar_checks)
+    android_checks = (*ANDROID_LOOPBACK_CHECKS, *android_group_avatar_checks)
+
+    hosts = sorted({host for _, host, _, _, _, _ in checks})
     for host in hosts:
         addresses = _loopback_addresses(host)
         if not addresses:
@@ -182,7 +234,7 @@ def main() -> int:
         if not any(address.startswith("127.") or address == "::1" for address in addresses):
             issues.append(f"{host} resolves outside loopback: {', '.join(sorted(addresses))}")
 
-    for name, host, port, path, range_header, expected in CHECKS:
+    for name, host, port, path, range_header, expected in checks:
         status = _curl_status(host, port, path, range_header)
         if status != expected:
             issues.append(
@@ -192,7 +244,7 @@ def main() -> int:
     if not LOCAL_ROOT_CA.is_file():
         issues.append(f"local root CA missing: {LOCAL_ROOT_CA}")
     else:
-        for name, host, port, path, range_header, expected in ANDROID_LOOPBACK_CHECKS:
+        for name, host, port, path, range_header, expected in android_checks:
             status = _curl_status(
                 host,
                 port,

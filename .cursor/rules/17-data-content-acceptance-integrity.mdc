@@ -1,0 +1,59 @@
+---
+description: 数据内容生产验收完整性：禁止 test 垫片当生产、验收必须基于真实落盘产物、优雅降级端到端一致、版本控制资产跟代码走
+globs: quwoquan_data/**
+alwaysApply: false
+---
+
+# 数据内容生产 · 验收完整性军规
+
+本规则固化「误用 test 垫片 / 无产物假通过」复盘出的根因，防止数据内容生产（`quwoquan_data/**`，含 `scaled-e2e` / `task run` / `produce` / `build` / `finalize` / `publish`）再次出现「门禁绿了但产物是假的」。与 [13-coding-discipline.mdc](13-coding-discipline.mdc) R12–R17、[00-fullstack-core.mdc](00-fullstack-core.mdc) 互补，data CLI-first 见 [01-arch-constraints.mdc](01-arch-constraints.mdc) §5.3。
+
+## 1. 禁止 test 垫片 / stub 当生产（GATE_BLOCK）
+
+- **agent runtime、Repository、数据源、模型客户端**在非测试执行路径必须是真实实现。禁止把标注「test / minimal / placeholder / for-testing-only」的垫片（典型：曾经的 `cursor_sdk_shim` 最小 HTTP 包装）当作生产 runtime。
+- `import` 解析到的包必须是真实实现：`runtime=local` 必须真的本地产出产物（经真实 `cursor-agent` CLI / 官方 SDK bridge 落盘），`runtime=cloud` 必须真的回传产物；**名为 local 实为纯云端、且无产物回传**＝造假，立即阻断。
+- 真实 SDK 缺失时必须**显式失败并报告**，禁止悄悄 fallback 到垫片或返回成功状态。
+
+## 2. 验收必须基于真实落盘产物（GATE_BLOCK）
+
+- 任何 stage / checkpoint 标记 `done` / `passed` / `WORKFLOW COMPLETE`，必须有对应真实产物落盘：文章 `article.md`、主页 `page.md`、图片 `assets/<image>`，且**非占位**（`is_placeholder` 为真、含 `TODO/待补充/XXX/PLACEHOLDER`、长度低于发布门、未替换模板变量者一律不算成稿）。
+- 产物必须由真实 agent 创作：provenance/draft_meta 的 `generator` 不得是 fallback/占位生成器；`generator==GENERATOR_AGENT` 才可视为已创作。
+- 实体相关文章必须**标题与正文整体指代该实体**（`entityRefs` + 标题/正文实体名匹配）；否则**诚实弃稿**，不得用主页哨兵（`_homepage_only`）或环线/无指代底稿凑成 article post 发布。
+
+## 3. 门禁必须能检测「无产物却通过」（GATE_BLOCK）
+
+- produce/build/finalize/release 门禁必须校验：产物存在性 + 非占位 + 真实创作 + 资产授权。**禁止**定义了却不接入主校验函数的「形同虚设」检查（典型：空 `check_image_relevance`、定义但未调用的水印/快照关键词）。
+- 检查所需依赖缺失时（如缺 PIL 做分辨率/人脸检测）必须降级为**显式告警或阻断**，**禁止静默跳过**伪装通过。
+- scale-readiness / 准出聚合必须能因「无真实产物」而 BLOCK，不得只看 checkpoint 状态位。
+- **验收作用域必须收敛到本次冻结计划成员**：放量 verify 校验 `run_matrix` 时，必须按冻结计划的 `(taskId,batchId)` 成员集过滤编排记录，**禁止直接信任按 `batchId` 跨任务聚合的 `summary`**。历史/并行任务复用同一 `planId`（→ 同一 fanout `batchId`）时，其 `attemptFailures`/未达 checkpoint 记录会被混入，导致对「别的任务」失败的**假阴性**或对已收敛重试的**假阳性**。放量必须用**唯一 planId**，对象队列/编排状态跨运行隔离或清理。
+- **content_object_index 是对象坐标唯一真相，孤儿残骸必须剪枝而非纵容**：agent authoring 期可能先用临时标题落地阶段证据，最终改派坐标后旧目录成死残骸（未登记 + 无 manifest + 无成品）。materialize 后必须按索引剪除这类纯阶段残骸（放量 agent 重组合/改标题会复现），否则目录证据链孤儿门 BLOCK。带 manifest/成品的未登记对象属更严重不一致，**保留交给孤儿门显式 BLOCK，绝不静默删真实成品**。
+
+## 4. 优雅降级语义端到端一致（GATE_BLOCK）
+
+- `allowContentQuotaShortfall` / `allowPartialContent` / 弃稿 的语义必须在 `content_plan → produce → finalize → release_integrity` 全链同源：来源不足时**诚实少注册 / 弃稿**，不得在任一层硬失败或强凑配额。
+- 派生分区（fanout）必须继承源任务的 `workflowPolicy` 与 `acceptance`；丢失降级策略导致分区硬失败＝缺陷。
+- **载体差异必须一致豁免**：`image`/`video` 作品不认领底稿（图文可同源、豁免 one-source-one-draft），纯图片/视频 release 合法缺 `base_draft_ledger`，`media_check` 等检查不得用 article-centric 假设让 image-only 实体硬失败。
+
+## 5. 版本控制契约 / 系统内置资产跟代码走（GATE_BLOCK）
+
+- `creator_profiles` / `templates` / `schema` / `contracts/metadata` 等受版本控制的契约真相源必须跟代码走（以 `_REPO_DATA_ROOT` 解析），**禁止随运行时 `QWQ_DATA_ROOT` 漂移**到 scratch/隔离根导致注册表静默空集。
+- 注册表为空（如 0 个 creator）必须显式失败或回退到仓库内置，**禁止静默降级**成「指派空 creator → 下游 enqueue 才崩」的隐性假通过。
+- **creator 人设指派必须与模板路由（routes/blueprints）解耦**：内容对象的 `creatorAssignment` 只依赖「已注册 active creator 人设 + 载体亲和」即可确定性冻结（`match_creator` 传空 blueprint 按 carrier 择优），不得因模板/路由被清空而拿不到 creator。指派必须在进 author 队列前冻结写回 pack；凡 author 阶段 article/image/video/gallery 作业，`creatorAssignment` 必须完整且 registry-backed，缺失即在指派层显式失败或诚实弃稿，禁止留到 enqueue 才崩。
+
+## 6. 长跑执行进程保活（执行纪律）
+
+- 长跑 agent / orchestrate / finalize 进程**禁止**用 `nohup ... &` 经一次性工具调用启动：工具调用返回时进程会被 harness 杀，主进程死、bridge node 成孤儿，表现为「静默崩溃」误判。
+- 正确做法：直接运行命令、让执行工具自动后台化并以 Shell ID 跟踪保活；需要等待时显式轮询/等待该 Shell。
+
+## 7. 编排阶段职责分离 + finalize 触发不可死锁（执行纪律）
+
+- `author-runner --orchestrate` 是**唯一创作引擎**：负责把各分区驱动到 orchestrator checkpoint 并把所有 leaf author job（文章/主页正文 agent 创作）跑到终态；`finalize` **只做** review / materialize / publish，**不创作**正文。含未创作文章的分区在 finalize 下只会停在 `waiting_agent`，不会被补写。
+- 正确放量序列固定为：`author-runner(orchestrate 至所有 leaf job 终态) → finalize(review/publish) → verify`。**禁止**在 author 未跑满前 finalize，也**禁止**把 finalize 当作创作补偿。
+- `stopped_at_until` 是「leaf job 已终态、等待 finalize」的**正常稳态**，不是「仍在忙」。监管/supervisor 收敛判定**禁止**把 `stopped_at_until` 计入「活跃需继续 orchestrate」，否则会与 finalize 触发互锁形成死锁（实证：scale-50 因此跑 2h20m、38 分区离 succeeded 仅差一步却 0 succeeded）。收敛条件应基于 **leaf job 是否全部终态**，达到后即触发 finalize。
+- 全弃稿 / image-only 分区必须有「空收尾→succeeded（诚实 shortfall）」路径，不得卡在 `produce_author`。
+
+## 门禁
+
+- `bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh`（cli-first + template lint + verify --scope current）。
+- `python3 quwoquan_data/scripts/verify/verify_content_quality.py`、`scale_readiness.py`（产物质量 / 准出，须能因无产物或占位 BLOCK）。
+- 触及内容生产闭环时：端到端跑 `scaled-e2e prepare/author-runner/finalize/verify`，以真实 release 产物（非占位、entityRefs 指代、carrier-aware 降级）为验收证据。

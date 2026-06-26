@@ -255,6 +255,16 @@ class AppSpacing {
   /// 横向头像栏高度
   static const double avatarRailHeight = 90.0;
 
+  // ==================== 个人主页统计行（关注/粉丝/圈子列表行） ====================
+  /// 关系行/圈子行/骨架行的左侧圆形头像直径
+  static const double profileStatsRowAvatarSize = 52.0;
+
+  /// 关注按钮骨架占位胶囊宽度
+  static const double profileStatsFollowSkeletonWidth = 78.0;
+
+  /// 关注按钮骨架占位胶囊高度
+  static const double profileStatsFollowSkeletonHeight = 34.0;
+
   // ==================== 欢迎页动效（Figma WelcomeScreen） ====================
   static const double welcomeGraphicDiameter = 256.0; static const double welcomePetalWidth = 52.0; static const double welcomePetalHeight = 94.0; static const double welcomePetalRadialOffset = 54.0;
 
@@ -773,6 +783,9 @@ class AppSpacing {
 
   /// 大图标: 32.0
   static const double iconLarge = 32.0;
+
+  /// iOS 列表行尾导航 chevron 尺寸（介于小/中图标之间，对齐系统 disclosure indicator）
+  static const double listTrailingChevronSize = 18.0;
 
   // ==================== 工具面板功能项（裁剪比例 / 旋转四项 / 专业工具列表） ====================
   /// 功能项图标尺寸，与 iconMedium 一致

@@ -58,7 +58,7 @@ class AddContactEntryCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: AppTypography.iosBody,
-                          fontWeight: AppTypography.semiBold,
+                          fontWeight: AppTypography.regular,
                           color: AppColors.iosLabel(context),
                         ),
                       ),

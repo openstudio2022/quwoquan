@@ -77,6 +77,7 @@ def _rewrite_volume_with_layout(
     *,
     config_root: str,
     media_root: str,
+    legal_root: str,
     caddyfile_path: str,
     model_cache_root: str,
 ) -> str:
@@ -85,6 +86,10 @@ def _rewrite_volume_with_layout(
     return (
         raw.replace("../state/local/gamma/config-root", _compose_bind_source(config_root))
         .replace("../state/local/gamma/media", _compose_bind_source(media_root))
+        .replace(
+            "${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-../artifacts/legal-static-packages/gamma/current/public}",
+            _compose_bind_source(legal_root),
+        )
         .replace("../state/local/gamma/Caddyfile", _compose_bind_source(caddyfile_path))
     )
 
@@ -105,6 +110,7 @@ def _rewrite_service(
     *,
     config_root: str,
     media_root: str,
+    legal_root: str,
     caddyfile_path: str,
     model_cache_root: str,
 ) -> dict[str, Any]:
@@ -163,6 +169,7 @@ def _rewrite_service(
                     item,
                     config_root=config_root,
                     media_root=media_root,
+                    legal_root=legal_root,
                     caddyfile_path=caddyfile_path,
                     model_cache_root=model_cache_root,
                 )
@@ -382,6 +389,14 @@ prod-api.quwoquan-env.test {
 \thandle /v1/control-plane/product/* {
 \t\treverse_proxy product-ops-service:18086
 \t}
+\thandle /legal/* {
+\t\theader {
+\t\t\tCache-Control "public, max-age=300"
+\t\t\tX-Content-Type-Options "nosniff"
+\t\t}
+\t\troot * /srv/legal
+\t\tfile_server
+\t}
 \thandle /media/* {
 \t\timport media_cors
 \t\troot * /srv/media
@@ -447,6 +462,14 @@ prod-upload.quwoquan-env.test {
 \t}
 \thandle /v1/control-plane/product/* {
 \t\treverse_proxy product-ops-service:18086
+\t}
+\thandle /legal/* {
+\t\theader {
+\t\t\tCache-Control "public, max-age=300"
+\t\t\tX-Content-Type-Options "nosniff"
+\t\t}
+\t\troot * /srv/legal
+\t\tfile_server
 \t}
 \thandle /media/* {
 \t\timport media_cors
@@ -534,11 +557,14 @@ def main() -> int:
     config_root = str(layout.get("configRoot") or "runtime/config-root")
     caddyfile_path = str(layout.get("caddyfile") or "runtime/Caddyfile")
     media_root = str(layout.get("mediaRoot") or "runtime/media")
+    legal_root = str(layout.get("legalStaticRoot") or "runtime/legal-static")
     model_cache_root = str(layout.get("modelCacheRoot") or "runtime/model-cache")
     if Path(config_root).is_absolute():
         raise SystemExit("FAIL: rootlessRuntimeLayout.configRoot must remain relative")
     if Path(caddyfile_path).is_absolute():
         raise SystemExit("FAIL: rootlessRuntimeLayout.caddyfile must remain relative")
+    if Path(legal_root).is_absolute():
+        raise SystemExit("FAIL: rootlessRuntimeLayout.legalStaticRoot must remain relative")
     if Path(model_cache_root).is_absolute():
         raise SystemExit("FAIL: rootlessRuntimeLayout.modelCacheRoot must remain relative")
 
@@ -548,6 +574,14 @@ def main() -> int:
     output_root.mkdir(parents=True, exist_ok=True)
     if not Path(media_root).is_absolute():
         (output_root / media_root).mkdir(parents=True, exist_ok=True)
+    legal_package_public = ROOT / "artifacts" / "legal-static-packages" / "prod" / "current" / "public"
+    legal_output_root = output_root / legal_root
+    if legal_output_root.exists():
+        shutil.rmtree(legal_output_root)
+    if legal_package_public.is_dir():
+        shutil.copytree(legal_package_public, legal_output_root)
+    else:
+        legal_output_root.mkdir(parents=True, exist_ok=True)
     (output_root / model_cache_root).mkdir(parents=True, exist_ok=True)
 
     template = _load_yaml(compose_template)
@@ -566,6 +600,7 @@ def main() -> int:
             selected_names,
             config_root=config_root,
             media_root=media_root,
+            legal_root=legal_root,
             caddyfile_path=caddyfile_path,
             model_cache_root=model_cache_root,
         )
@@ -607,6 +642,8 @@ def main() -> int:
         "configVersion": args.config_version,
         "outputDir": str(output_root),
         "mediaRoot": media_root,
+        "legalStaticRoot": legal_root,
+        "legalStaticSource": str(legal_package_public),
     }
     (output_root / "render_report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",

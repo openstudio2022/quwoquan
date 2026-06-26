@@ -15,7 +15,7 @@ from agent_ops.deploy.lib.dev_up import (
 from agent_ops.deploy.lib.environment_topology import load_environment_topology
 from agent_ops.deploy.lib.local_media_origin import LocalMediaOriginHandler
 from agent_ops.deploy.lib.mock_public_plane import MockPublicPlaneHandler
-from agent_ops.deploy.stackctl import _health_checks_for_target
+from agent_ops.deploy.stackctl import _health_checks_for_target, _seeded_media_surface_tier_command
 from agent_ops.assistant.dev_assistant_beta_gateway import (
     AssistantBetaGateway,
     app_message_unread_count,
@@ -174,6 +174,22 @@ class DevUpTest(unittest.TestCase):
             video_check["url"],
         )
 
+    def test_stackctl_t4_blocks_on_full_seeded_media_surface(self) -> None:
+        for env_name in ("alpha", "beta", "gamma"):
+            with self.subTest(env_name=env_name):
+                command = _seeded_media_surface_tier_command(env_name, f"{env_name}-local")
+                self.assertIsNotNone(command)
+                assert command is not None
+                argv = command["argv"]
+                self.assertEqual(command["name"], "seeded-media-surface")
+                self.assertIn("agent_ops/gate/verify_alpha_media_fixture_surface.py", argv)
+                self.assertIn("--avatar-base-url", argv)
+                self.assertIn(f"https://{env_name}-avatar.quwoquan-env.test", " ".join(argv))
+                self.assertIn("--media-base-url", argv)
+                self.assertIn(f"https://{env_name}-image.quwoquan-env.test", " ".join(argv))
+                self.assertIn("--video-base-url", argv)
+                self.assertIn(f"https://{env_name}-video.quwoquan-env.test", " ".join(argv))
+
     def test_alpha_stack_checks_current_app_group_avatar_contract(self) -> None:
         script = (
             ROOT / "agent_ops/deploy/alpha/start_alpha_mock_stack.sh"
@@ -289,7 +305,7 @@ class DevUpTest(unittest.TestCase):
             encoding="utf-8"
         )
         local_https_trust = (
-            ROOT / "quwoquan_app/lib/cloud/runtime/local_dev_https_trust_io.dart"
+            ROOT / "quwoquan_app/lib/core/platform/local_dev_https_trust_io.dart"
         ).read_text(encoding="utf-8")
         main_activity = (
             ROOT

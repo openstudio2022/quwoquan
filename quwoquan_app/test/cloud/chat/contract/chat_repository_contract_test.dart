@@ -40,16 +40,66 @@ void main() {
 
     test('mock 群聊头像使用群派生 URL，不使用成员个人头像', () async {
       final inbox = await repo.listInbox(limit: 80);
-      final gridGroup = inbox.firstWhere((item) => item.id == 'conv_grid_10');
+      final groups = inbox.where((item) => item.type == 'group').toList();
 
-      expect(gridGroup.type, 'group');
-      // 群头像迁移为内部 media object key（无外链 host），仍是群派生 URL。
-      expect(
-        gridGroup.avatarUrl,
-        contains('media/avatar/s/archived-avatar/conversation/'),
-      );
-      expect(gridGroup.avatarUrl, isNot(contains('grid_10_member_1')));
-      expect(gridGroup.groupAvatarVersion, greaterThan(0));
+      expect(groups, isNotEmpty);
+      for (final group in groups) {
+        // 群头像迁移为内部 media object key（无外链 host），仍是群派生 URL。
+        expect(
+          group.avatarUrl,
+          contains('media/avatar/s/archived-avatar/'),
+          reason: group.id,
+        );
+        expect(
+          group.avatarUrl.contains('/conversation/${group.id}/') ||
+              group.avatarUrl.contains('/group/${group.id}/'),
+          isTrue,
+          reason: group.id,
+        );
+        expect(group.avatarUrl, isNot(contains('_member_')), reason: group.id);
+        expect(group.groupAvatarVersion, greaterThan(0), reason: group.id);
+
+        final conversation = await repo.getConversation(group.id);
+        expect(conversation.avatarUrl, group.avatarUrl, reason: group.id);
+        expect(
+          conversation.groupAvatarVersion,
+          group.groupAvatarVersion,
+          reason: group.id,
+        );
+
+        final members = await repo.listMembers(conversationId: group.id);
+        final expectedSourceHash = members
+            .take(9)
+            .map((member) => '${member.userId}:${member.avatarUrl}')
+            .join('|');
+        expect(
+          conversation.groupAvatarSourceHash,
+          expectedSourceHash,
+          reason: group.id,
+        );
+      }
+    });
+
+    test('消息列表与会话详情使用同一个预制群头像对象', () async {
+      final inbox = await repo.listInbox(limit: 80);
+      final messageHome = await repo.listMessageHome(limit: 80);
+      final messageHomeById = {
+        for (final row in messageHome.where(
+          (item) => item.conversationType == 'group',
+        ))
+          row.conversationId: row,
+      };
+
+      for (final group in inbox.where((item) => item.type == 'group')) {
+        final row = messageHomeById[group.id];
+        expect(row, isNotNull, reason: group.id);
+        expect(row!.avatarUrl, group.avatarUrl, reason: group.id);
+        expect(
+          row.groupAvatarVersion,
+          group.groupAvatarVersion,
+          reason: group.id,
+        );
+      }
     });
 
     test('listConversations 与 listInbox 同为 ChatInboxDto', () async {

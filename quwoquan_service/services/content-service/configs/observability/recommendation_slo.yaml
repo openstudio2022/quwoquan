@@ -218,9 +218,9 @@ slis:
     observe_only: true
 
   - id: collaborative_recall_lift
-    description: 协同召回候选相对非协同召回的 CTR/完成率增益；实现前仅冻结指标名。
-    source: recommendation_feed_collaborative_recall_total joined with engagement/completion metrics
-    objective_only: true
+    description: 协同召回候选相对非协同召回的 CTR/完成率增益；由离线 replay report 统一计算并写入 offline_eval_metric_value。
+    source: recommendation_offline_eval_metric_value{metric="collaborative_recall_lift"}
+    measured: true
     objective_min: 0.05
 
   - id: recommendation_attribution_bucket_coverage
@@ -256,37 +256,37 @@ slis:
   - id: ranking_calibration_error
     description: 推荐预估分与真实点击/完成率的校准误差，按 channel/segment/scorer_variant 切分。
     source: recommendation_offline_eval_metric_value{metric="calibration_error"}
-    objective_only: true
+    measured: true
     objective_max: 0.08
 
   - id: time_decay_feature_freshness
     description: 时间加权统计特征的新鲜度，衡量 CTR/完成率等统计是否过期。
     source: recommendation_offline_eval_metric_value{metric="time_decay_feature_freshness"}
-    objective_only: true
+    measured: true
     objective_min: 0.95
 
   - id: offline_ndcg_at_k
     description: replay 离线评估 NDCG@K，作为排序质量回归门。
     source: recommendation_offline_eval_metric_value{metric="ndcg_at_k"}
-    objective_only: true
+    measured: true
     objective_min: 0.20
 
   - id: offline_recall_at_k
     description: replay 离线评估 Recall@K，作为召回质量回归门。
     source: recommendation_offline_eval_metric_value{metric="recall_at_k"}
-    objective_only: true
+    measured: true
     objective_min: 0.25
 
   - id: offline_diversity_rate
     description: replay 离线评估多样性，覆盖作者、标签、内容类型和交集维度。
     source: recommendation_offline_eval_metric_value{metric="diversity_rate"}
-    objective_only: true
+    measured: true
     objective_min: 0.30
 
   - id: ab_experiment_validity
     description: 在线 AB 实验样本量、分桶稳定性（SRM）和显著性口径是否达标；准入校验由 EvaluateABAdmission 喂 recommendation_feed_ab_experiment_validity_total{result}。
     source: recommendation_feed_ab_experiment_validity_total{result="valid"} / sum(recommendation_feed_ab_experiment_validity_total)
-    objective_only: true
+    measured: true
     objective_min: 0.95
 
   - id: policy_takedown_ejection_latency

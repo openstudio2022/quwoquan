@@ -7,13 +7,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
-import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/intersection_statement_card.dart';
@@ -151,19 +148,14 @@ class _MyIntersectionInboxPageState
 
   @override
   Widget build(BuildContext context) {
-    final bg = AppColors.iosSystemBackground(context);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final state = ref.watch(myIntersectionListProvider);
-    return AppScaffold(
-      backgroundColor: bg,
-      navigationBar: AppNavigationBar(
-        backgroundColor: bg,
-        leading: AppNavigationBarIconButton(
-          icon: CupertinoIcons.back,
-          onPressed: () => context.pop(),
-        ),
-        middle: Text(_titleForTab(_selectedTab)),
-      ),
-      child: _buildBody(context, state),
+    return AppListPageScaffold(
+      isDark: isDark,
+      kind: AppListPageKind.multiOptionList,
+      title: _titleForTab(_selectedTab),
+      onBack: () => context.pop(),
+      body: _buildBody(context, state),
     );
   }
 
@@ -191,14 +183,12 @@ class _MyIntersectionInboxPageState
     );
     return ListView(
       padding: EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.md,
-        AppSpacing.xl,
+        SettingsSemanticConstants.insetFormListHorizontalPadding,
+        AppSpacing.containerSm,
+        SettingsSemanticConstants.insetFormListHorizontalPadding,
+        AppSpacing.containerLg,
       ),
       children: <Widget>[
-        // 一级 tab（交集 / 影响力）：移入 body 顶部，与「我的主页」内容区一级 tab 同款
-        // 蓝色下划线 + 选中加粗（CenteredScrollableTabBar），导航栏标题随之切换。
         _IntersectionDetailTabs(
           selected: _selectedTab,
           onSelected: _selectDetailTab,
@@ -429,38 +419,24 @@ class _IntersectionDetailTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tabs = <TabItem>[
-      TabItem(
-        id: _IntersectionDetailTab.intersections.id,
-        label: UITextConstants.profileTabIntersection,
-      ),
-      TabItem(
-        id: _IntersectionDetailTab.impact.id,
-        label: UITextConstants.profileTabImpact,
-      ),
-    ];
-    return SizedBox(
-      height: AppSpacing.buttonHeightMd,
-      child: CenteredScrollableTabBar(
-        tabs: tabs,
-        activeTab: selected.id,
-        onTabChange: (id) => onSelected(_intersectionDetailTabForId(id)),
-        transparentBackground: true,
-        selectedLabelColor: AppColors.iosAccent(context),
+    return Center(
+      child: SizedBox(
+        width: AppSpacing.minInteractiveSize * 4,
+        child: AppSegmentedChoiceBar<_IntersectionDetailTab>(
+          items: <AppSegmentedChoiceItem<_IntersectionDetailTab>>[
+            AppSegmentedChoiceItem<_IntersectionDetailTab>(
+              value: _IntersectionDetailTab.intersections,
+              label: UITextConstants.profileTabIntersection,
+            ),
+            AppSegmentedChoiceItem<_IntersectionDetailTab>(
+              value: _IntersectionDetailTab.impact,
+              label: UITextConstants.profileTabImpact,
+            ),
+          ],
+          selectedValue: selected,
+          onChanged: onSelected,
+        ),
       ),
     );
   }
-}
-
-extension _IntersectionDetailTabMetadata on _IntersectionDetailTab {
-  String get id => switch (this) {
-    _IntersectionDetailTab.intersections => 'intersections',
-    _IntersectionDetailTab.impact => 'impact',
-  };
-}
-
-_IntersectionDetailTab _intersectionDetailTabForId(String id) {
-  return id == _IntersectionDetailTab.impact.id
-      ? _IntersectionDetailTab.impact
-      : _IntersectionDetailTab.intersections;
 }

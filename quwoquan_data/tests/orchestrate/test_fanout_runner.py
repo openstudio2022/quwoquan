@@ -24,6 +24,10 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT, REPO_ROOT):
 _TMP = tempfile.mkdtemp(prefix="qwq_fanout_runner_test_")
 os.environ["QWQ_RUNTIME_ROOT"] = str(Path(_TMP) / "runtime")
 os.environ["QWQ_COMMITTED_TASKS_ROOT"] = str(Path(_TMP) / "tasks")
+# 测试不等真实退避：startup-probe 重试退避置 0、次数压低，避免逐个 main() 用例累积秒级 sleep。
+# 单测可在用例内再覆盖以断言具体重试次数。
+os.environ.setdefault("QWQ_STARTUP_PROBE_BACKOFF_SECONDS", "0")
+os.environ.setdefault("QWQ_STARTUP_PROBE_MAX_ATTEMPTS", "3")
 
 from _common import fanout_plan as fp  # noqa: E402
 from _common import content_object  # noqa: E402
@@ -899,6 +903,10 @@ def test_main_startup_probe_blocks_before_leasing_author_jobs():
 
     original_default_agent_runner = fr.default_agent_runner
     fr.default_agent_runner = runner
+    # 探测对 retryable 失败做有限次退避重试（吸收 bridge 冷启竞态）；测试用快速参数
+    # 验证：重试用尽后仍阻断派工（exit 3），且探测被调用 attempts 次。
+    os.environ["QWQ_STARTUP_PROBE_MAX_ATTEMPTS"] = "3"
+    os.environ["QWQ_STARTUP_PROBE_BACKOFF_SECONDS"] = "0"
     try:
         exit_code = fr.main([
             "--plan", "r_main_probe_block",
@@ -908,9 +916,39 @@ def test_main_startup_probe_blocks_before_leasing_author_jobs():
         ])
     finally:
         fr.default_agent_runner = original_default_agent_runner
+        os.environ["QWQ_STARTUP_PROBE_MAX_ATTEMPTS"] = "3"
+        os.environ["QWQ_STARTUP_PROBE_BACKOFF_SECONDS"] = "0"
 
     assert exit_code == 3
-    assert calls["n"] == 1
+    assert calls["n"] == 3
+
+
+def test_startup_probe_recovers_after_transient_connection_refused():
+    """冷启竞态：探测前两次 Connection refused（retryable），第三次成功→放行派工。"""
+    calls = {"n": 0}
+
+    def runner(packet, **_kwargs):
+        calls["n"] += 1
+        assert packet["stage"] == "startup_probe"
+        if calls["n"] < 3:
+            return fr.RunOutcome(
+                started=False, status="error",
+                error="Bridge request failed: ConnectError: [Errno 61] Connection refused",
+                retryable=True,
+            )
+        return fr.RunOutcome(started=True, status="finished", passed=True)
+
+    os.environ["QWQ_STARTUP_PROBE_MAX_ATTEMPTS"] = "8"
+    os.environ["QWQ_STARTUP_PROBE_BACKOFF_SECONDS"] = "0"
+    try:
+        outcome = fr.run_startup_probe("r_probe_recover", agent_runner=runner)
+    finally:
+        os.environ["QWQ_STARTUP_PROBE_MAX_ATTEMPTS"] = "3"
+        os.environ["QWQ_STARTUP_PROBE_BACKOFF_SECONDS"] = "0"
+
+    assert calls["n"] == 3
+    assert outcome.started is True
+    assert outcome.status == "finished"
 
 
 def _run_all() -> None:

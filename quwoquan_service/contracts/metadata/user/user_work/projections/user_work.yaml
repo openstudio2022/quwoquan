@@ -1,0 +1,23 @@
+version: 1
+read_model: UserWork
+
+description: |
+  GET /v1/users/{userId}/works 分页列表元素。该读模型来自 user/user_work
+  独立 aggregate，供 user_profile 主页创作 Tab 作为跨 metadata 响应模型引用。
+
+source_entities:
+  - UserWork
+
+consumers:
+  - app
+
+fields:
+  - { name: id, type: string }
+  - { name: userId, type: string }
+  - { name: title, type: string }
+  - { name: coverUrl, type: string, nullable: true }
+  - { name: workType, type: string, description: "post/video/article 等作品类型" }
+  - { name: refId, type: string, description: "关联内容系统对象 ID" }
+  - { name: sortOrder, type: int }
+  - { name: createdAt, type: timestamp }
+  - { name: updatedAt, type: timestamp }

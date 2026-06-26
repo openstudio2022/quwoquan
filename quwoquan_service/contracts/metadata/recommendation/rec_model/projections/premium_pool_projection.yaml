@@ -1,0 +1,54 @@
+version: 1
+read_model: PremiumPoolProjection
+
+description: |
+  Product-ops global premium pool projected into the content-service
+  recommendation read model. The feed read path consumes this projection only;
+  it must not synchronously call product-ops, quality scoring, data-engineering
+  jobs, or /v1/score.
+
+storage_backend: mongodb
+collection: rm_premium_pool
+
+source_entities:
+  - PremiumPoolEntry
+  - Post
+
+source_events:
+  - PremiumPoolEntryUpserted
+  - PremiumPoolEntryRolledBack
+  - PremiumPoolEntryTakedownEjected
+  - PostPublished
+  - PostTakedown
+
+producers:
+  - product-ops-service
+  - content-service
+
+consumers:
+  - recommendation-engine
+  - evaluation-and-flywheel
+  - ops-portal
+
+fields:
+  - { name: contentId, type: string, description: "Post id; unique key for the global premium candidate." }
+  - { name: scope, type: string, description: "Must be global; circle featured entries are never projected as global premium." }
+  - { name: status, type: string, description: "active/rolled_back/takedown_ejected/expired." }
+  - { name: eligibilityState, type: string, description: "eligible/ineligible; read path only consumes eligible." }
+  - { name: ineligibleReasons, type: "[]string", description: "Fail-closed reasons for audit and replay diagnostics." }
+  - { name: qualityAdmission, type: string, description: "Must be approved before entering premium_pool recall." }
+  - { name: qualityScore, type: float, description: "Projected admission quality; read path never computes it synchronously." }
+  - { name: supplySource, type: string, description: "ugc/data_engineering/product_ops etc. for attribution buckets." }
+  - { name: sourceTaskId, type: string, description: "Data-engineering source task id when applicable." }
+  - { name: auditId, type: string, description: "Product-ops audit event id for traceability." }
+  - { name: rollbackToken, type: string, description: "Control-plane rollback token." }
+  - { name: featuredAt, type: timestamp }
+  - { name: expiresAt, type: timestamp }
+  - { name: takedownEjected, type: bool }
+  - { name: projectionVersion, type: string }
+  - { name: updatedAt, type: timestamp }
+
+indexes:
+  - { name: idx_premium_pool_content, keys: { contentId: 1 }, unique: true }
+  - { name: idx_premium_pool_eligible, keys: { eligibilityState: 1, expiresAt: 1, qualityScore: -1, featuredAt: -1 } }
+  - { name: idx_premium_pool_audit, keys: { auditId: 1, updatedAt: -1 } }

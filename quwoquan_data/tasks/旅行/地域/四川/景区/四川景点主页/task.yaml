@@ -1,0 +1,68 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川/景区/四川景点主页
+title: 四川景区四川景点主页
+intentLabel: 四川景点主页
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川
+entityCategory: 景区
+parentTaskId: null
+status: draft
+scope:
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 四姑娘山
+  - entityType: 地点/景区
+    name: 都江堰
+  entityTypes:
+  - 地点/景区
+  region: 四川
+provenance:
+  createdAt: '2026-06-26T00:36:15.911556+00:00'
+  createdBy: task run --mode fanout
+content:
+  angles:
+  - 体验
+  - 美图
+  - 攻略
+  audiences:
+  - 通用
+  carriers:
+  - article
+  - image
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    - article
+    - image
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+      article: 3
+      image: 4
+    imageAssetStrategy: open_license_publish
+    imageCountPolicy: score_bonus
+    allowAiImages: false
+  quotas:
+    entityArticlesPerTarget: 4
+    imageWorksPerTarget: 1
+    entityHomepagesPerTarget: 1
+    routeArticles: 0
+acceptance:
+  minEntities: 2
+  minPostsPerEntity: 5
+  requiredAngles:
+  - planning_consultation
+  - decision_experience
+  - route_transport
+  - seasonal_timing
+  scoredAngles:
+  - image
+workflowPolicy:
+  allowPartialContent: true
+  deliveryMode: partial_with_replacement_report
+  maxReplacementWaves: 3
+  maxReplacementCandidatesPerWave: 8
+  maxReplacementScreenedPerRun: 8

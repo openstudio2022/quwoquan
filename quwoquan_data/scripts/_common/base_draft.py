@@ -586,9 +586,100 @@ def base_draft_fidelity_issues(
     return []
 
 
+# ─── 反脱稿 / 反拼接度量（fidelity 的反向与跨源补强）──────────────────────
+# baseDraftFidelity 是“底稿留存了多少”的单向指标，测不到“正文里多少来自底稿之外/
+# 逐字搬自别的源”。以下两个函数补这块盲区：
+# - out_of_draft_ratio：正文 char 三连里不在底稿中的占比（底稿外补写量）。
+# - cross_source_overlap_issues：正文与某个“非底稿来源”出现长串逐字重合（拼接照搬）。
+OUT_OF_DRAFT_MAX_RATIO = 0.78
+CROSS_SOURCE_OVERLAP_MIN_RUN = 80
+
+
+def out_of_draft_ratio(article: str, base_text: str, *, carrier: str = "article") -> float:
+    """正文里有多少（按 char 三连）不来自底稿——base_draft_similarity 的反向指标。
+
+    底稿常为主线对齐节选，正文合理扩写会抬高该值，故阈值放宽、仅兜底极端脱稿；
+    细粒度“大块补写/拼接观感”交给 LLM 语义复核与跨源重叠门。
+    """
+    body = _readable_body(article)
+    base = _strip_source_meta(base_text, carrier=carrier, body_len=len(body), body=body)
+    body_grams = _char_ngrams(body)
+    if not body_grams:
+        return 0.0
+    base_grams = _char_ngrams(base)
+    return len(body_grams - base_grams) / len(body_grams)
+
+
+def out_of_draft_issues(
+    article: str,
+    base_text: str,
+    *,
+    max_ratio: float = OUT_OF_DRAFT_MAX_RATIO,
+    carrier: str = "article",
+    source_use_mode: str = "licensed_adaptation",
+) -> list[str]:
+    """底稿外补写量门：正文里不来自底稿的 char 三连占比 > max_ratio 即判脱稿过度。"""
+    if not base_draft_is_adaptable(source_use_mode):
+        return []
+    body = _readable_body(article)
+    base = _strip_source_meta(base_text, carrier=carrier, body_len=len(body), body=body)
+    if not base or not body:
+        return []
+    ratio = out_of_draft_ratio(article, base_text, carrier=carrier)
+    if ratio > max_ratio:
+        return [
+            f"out-of-draft content ratio {ratio * 100:.1f}% > {int(max_ratio * 100)}% "
+            "(底稿外补写过多，疑似大块脱稿/拼接，应回到底稿基础轻改而非另起炉灶)"
+        ]
+    return []
+
+
+def cross_source_overlap_issues(
+    article: str,
+    base_text: str,
+    other_source_texts: Mapping[str, str],
+    *,
+    min_run: int = CROSS_SOURCE_OVERLAP_MIN_RUN,
+    carrier: str = "article",
+) -> list[str]:
+    """反拼接门：正文出现 >= min_run 连续字、与某个“非底稿来源”逐字重合即判拼接照搬。
+
+    会先扣除与底稿本身重合的片段（合规轻改保留底稿原句不应被误判），只检测来自
+    底稿之外来源的长串逐字搬运。other_source_texts: {sourceRef: 原文}（不含底稿源）。
+    """
+    body = _readable_body(article)
+    if len(body) < min_run:
+        return []
+    base = _strip_source_meta(base_text, carrier=carrier, body_len=len(body), body=body)
+    body_runs = {body[i : i + min_run] for i in range(len(body) - min_run + 1)}
+    if len(base) >= min_run:
+        base_runs = {base[i : i + min_run] for i in range(len(base) - min_run + 1)}
+        body_runs -= base_runs
+    if not body_runs:
+        return []
+    for ref, text in (other_source_texts or {}).items():
+        compact = re.sub(r"\s+", "", _normalize_embedded_newlines(str(text or "")))
+        if len(compact) < min_run:
+            continue
+        other_runs = {compact[i : i + min_run] for i in range(len(compact) - min_run + 1)}
+        hit = body_runs & other_runs
+        if hit:
+            sample = next(iter(hit))
+            return [
+                f"crossSourceOverlap: 正文出现 >= {min_run} 连续字与非底稿来源 {ref} 逐字重合"
+                f"（疑似拼接照搬非底稿来源），样本『{sample[:24]}…』"
+            ]
+    return []
+
+
 __all__ = [
     "FIDELITY_MIN",
     "FIDELITY_MAX",
+    "OUT_OF_DRAFT_MAX_RATIO",
+    "CROSS_SOURCE_OVERLAP_MIN_RUN",
+    "out_of_draft_ratio",
+    "out_of_draft_issues",
+    "cross_source_overlap_issues",
     "ADAPTABLE_SOURCE_USE_MODES",
     "base_draft_is_adaptable",
     "load_base_draft_ledger",

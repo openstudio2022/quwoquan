@@ -12,7 +12,7 @@ const List<String> intersectionLifecycleStateKeys = <String>["new", "strengthene
 const List<String> intersectionVerticalKeys = <String>["general", "travel_photography", "campus"];
 
 /// 行动建议 actionKey 闭集（registry.actionHintLegend，端只读分发，不按 kind 猜测）。
-const List<String> intersectionActionKeys = <String>["ask_assistant", "create_followup", "follow_object", "follow_person", "greet_person", "join_circle", "message_person", "open_content", "open_discussion", "open_object", "open_route", "view_shared_people"];
+const List<String> intersectionActionKeys = <String>["ask_assistant", "create_followup", "express_interest", "follow_object", "follow_person", "greet_person", "join_circle", "join_meetup", "join_topic_room", "join_trip", "meet_nearby", "message_person", "open_content", "open_discussion", "open_object", "open_route", "start_companion", "start_voice_room", "view_shared_people"];
 
 /// iconKey → 低饱和语义 tone（registry.visualToneByIconKey）。
 const Map<String, String> intersectionVisualToneByIconKey = <String, String>{
@@ -51,7 +51,9 @@ enum UnifiedObjectKind {
   enterprise("enterprise", "homepageDetail", "logo"),
   route("route", "homepageDetail", "coverImage"),
   photoSpot("photo_spot", "homepageDetail", "coverImage"),
-  gear("gear", "homepageDetail", "coverImage");
+  gear("gear", "homepageDetail", "coverImage"),
+  trip("trip", "tripDetail", "coverImage"),
+  meetup("meetup", "meetupDetail", "coverImage");
 
   const UnifiedObjectKind(this.wire, this.routeId, this.assetKind);
 
@@ -81,6 +83,10 @@ enum UnifiedObjectKind {
         return UnifiedObjectKind.photoSpot;
       case "gear":
         return UnifiedObjectKind.gear;
+      case "trip":
+        return UnifiedObjectKind.trip;
+      case "meetup":
+        return UnifiedObjectKind.meetup;
       default:
         return null;
     }
@@ -109,6 +115,10 @@ String intersectionRouteIdForObjectKind(String objectKind) {
       return "homepageDetail";
     case "entity":
       return "homepageDetail";
+    case "trip":
+      return "tripDetail";
+    case "meetup":
+      return "meetupDetail";
     default:
       return '';
   }
@@ -380,7 +390,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     objectKind: "place",
     countObjectKind: "place",
     dimensions: <String>["location"],
-    actionHints: <String>["open_route", "follow_object"],
+    actionHints: <String>["start_companion", "open_route", "follow_object"],
     tone: "tea",
     lifecycleApplicable: true,
     vertical: "general",
@@ -459,6 +469,50 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     dimensions: <String>["relationship", "content"],
     actionHints: <String>["open_discussion", "open_content"],
     tone: "clay",
+    lifecycleApplicable: true,
+    vertical: "general",
+  ),
+  "coPresentHere": IntersectionKindMetadata(
+    kind: "coPresentHere",
+    iconKey: "placeHere",
+    objectKind: "place",
+    countObjectKind: "person",
+    dimensions: <String>["location"],
+    actionHints: <String>["meet_nearby", "join_meetup", "greet_person"],
+    tone: "tea",
+    lifecycleApplicable: true,
+    vertical: "general",
+  ),
+  "nearbyAffinity": IntersectionKindMetadata(
+    kind: "nearbyAffinity",
+    iconKey: "place",
+    objectKind: "person",
+    countObjectKind: "person",
+    dimensions: <String>["location", "interest"],
+    actionHints: <String>["meet_nearby", "start_voice_room", "greet_person", "follow_person"],
+    tone: "tea",
+    lifecycleApplicable: true,
+    vertical: "general",
+  ),
+  "coPlannedTrip": IntersectionKindMetadata(
+    kind: "coPlannedTrip",
+    iconKey: "place",
+    objectKind: "trip",
+    countObjectKind: "person",
+    dimensions: <String>["location"],
+    actionHints: <String>["join_trip", "start_companion"],
+    tone: "tea",
+    lifecycleApplicable: true,
+    vertical: "general",
+  ),
+  "wantToMeetSameInterest": IntersectionKindMetadata(
+    kind: "wantToMeetSameInterest",
+    iconKey: "interest",
+    objectKind: "person",
+    countObjectKind: "person",
+    dimensions: <String>["interest"],
+    actionHints: <String>["express_interest", "join_topic_room", "greet_person", "follow_person"],
+    tone: "stone",
     lifecycleApplicable: true,
     vertical: "general",
   ),

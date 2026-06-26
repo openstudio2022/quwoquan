@@ -9,7 +9,7 @@ node:
 scope:
   summary: 推荐策略在线 AB 显著性、样本量与分桶稳定性规格。
   in_scope:
-  - champion/challenger、分桶标签、样本量、显著性和护栏指标。
+  - champion/challenger、分桶标签、样本量、SRM、显著性、relative lift、晋级/回滚结论和护栏指标。
   out_of_scope:
   - 本轮不实现 AB 框架或线上流量切分。
 gwt_acceptance:
@@ -22,7 +22,7 @@ gwt_acceptance:
     then:
     - 系统按稳定分桶收集北极星与护栏指标，样本量不足或显著性不足不得晋升。
     done_when:
-    - 分桶标签、样本量口径、显著性判定和报告字段均规格化。
+    - 分桶标签、样本量口径、SRM、显著性判定、保护指标和报告字段均规格化。
     edge_cases:
     - 实验污染或分桶漂移时标记 invalid。
     contract_refs:
@@ -31,8 +31,9 @@ gwt_acceptance:
     - ab_experiment_validity >= 0.95
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/online_ab_significance__local_contract_test.go
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
@@ -55,7 +56,8 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_ab_significance.py'
+    - P1c 已实现 BuildABExperimentReport 与 EvaluateABAdmissionWithGuardrails；正式 recorded 证据仅登记 canonical local_contract，真实线上流量切分仍由既有 experiment bucket 能力承载。
+    - P1d-2 PremiumPoolSource 灰度前，AB report 必须能按 `premium_pool` recall_path、精品场景、UGC/数据工程供给和交集类别分桶呈现主指标与保护指标；低流量诊断桶不得单独触发晋级。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

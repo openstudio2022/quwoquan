@@ -136,7 +136,7 @@ class _InlineMyQrCard extends StatelessWidget {
       future: future,
       builder: (context, snapshot) {
         if (snapshot.hasData) {
-          return MyQrCardContent(card: snapshot.data!);
+          return MyQrCardContent(card: snapshot.data!, compact: true);
         }
         if (snapshot.hasError) {
           return _InlineQrStateCard(

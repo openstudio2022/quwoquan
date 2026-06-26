@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
@@ -14,6 +16,7 @@ import 'package:quwoquan_app/components/object_page/object_intersection_section.
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/components/object_page/object_page_sections.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
+import 'package:quwoquan_app/core/constants/homepage_detail_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
@@ -174,9 +177,6 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
             claimStatus == 'unclaimed' ||
             claimStatus == 'rejected');
   }
-
-  bool get _isClaimPending =>
-      (widget.detail?.claimStatus ?? '').trim() == 'pending_review';
 
   bool get _isOwnerLike {
     final detail = widget.detail;
@@ -471,32 +471,27 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     return _buildSectionBlock(
       context: context,
       title: UITextConstants.homepageInterestCircleSectionTitle,
-      child: ProfileIosGroupedSection(
-        margin: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: _relatedGroups
-            .map(
-              (group) => ProfileIosGroupedCell(
-                title: group.name,
-                subtitle:
-                    '${group.memberCount} ${UITextConstants.homepageRelatedGroupSubtitle}',
-                leading: Container(
-                  width: AppSpacing.buttonHeightSm,
-                  height: AppSpacing.buttonHeightSm,
-                  decoration: BoxDecoration(
-                    color: AppColors.iosTintedFill(context),
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.radiusTwentyFour,
-                    ),
-                  ),
-                  child: Icon(
-                    CupertinoIcons.person_3_fill,
-                    size: AppSpacing.iconSmall,
-                    color: AppColors.iosAccent(context),
+            .map((group) {
+              final circleId = group.circleId.trim();
+              return Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.containerSm),
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: circleId.isEmpty
+                      ? null
+                      : () => context.push(
+                          AppRoutePaths.circleDetail(id: circleId),
+                        ),
+                  child: ProfileIosSectionCard(
+                    child: _HomepageRelatedCircleCard(group: group),
                   ),
                 ),
-                showChevron: false,
-              ),
-            )
+              );
+            })
             .toList(growable: false),
       ),
     );

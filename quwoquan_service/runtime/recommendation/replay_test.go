@@ -3,6 +3,7 @@ package recommendation
 import (
 	"math"
 	"testing"
+	"time"
 )
 
 func TestComputeReplayReport_RankingMetrics(t *testing.T) {
@@ -75,6 +76,138 @@ func TestReplayReport_EmitNoPanic(t *testing.T) {
 	}}}
 	// Emit writes to the registered gauge; must not panic.
 	ComputeReplayReport(ds, 10).Emit()
+}
+
+func TestComputeReplayReportWithOptions_CommercialAttributionAndPromotion(t *testing.T) {
+	windowStart := time.Date(2026, 6, 24, 0, 0, 0, 0, time.UTC)
+	windowEnd := windowStart.Add(24 * time.Hour)
+	ds := ReplayDataset{
+		EligibleContentCount:      8,
+		DataWindowStart:           windowStart,
+		DataWindowEnd:             windowEnd,
+		PolicyVersion:             "policy-v2",
+		RankingVersion:            "rec-v2",
+		ReasonVersion:             "reason-v2",
+		ScorerVariant:             "rule-commercial",
+		TimeDecayFeatureFreshness: 0.97,
+		Requests: []ReplayRequest{
+			{
+				FeedRequestID: "frq_home",
+				UserID:        "u1",
+				ChannelID:     "home",
+				Vertical:      "discovery",
+				Items: []ReplayItem{
+					{
+						ContentID: "collab_fact_click", AuthorID: "a1", Score: 0.95,
+						RecallPath: "collab_i2i", SupplySource: "ugc",
+						IntersectionClass: "fact", IntersectionSourceRef: "sharedFollowees",
+						Clicked: true, Impressed: true,
+					},
+					{
+						ContentID: "tag_affinity_click", AuthorID: "a2", Score: 0.80,
+						RecallPath: "tag_recall", SupplySource: "data_engineering",
+						IntersectionClass: "affinity", IntersectionSourceRef: "similarInterest",
+						Clicked: true, Impressed: true,
+					},
+					{
+						ContentID: "tag_affinity_skip", AuthorID: "a3", Score: 0.30,
+						RecallPath: "tag_recall", SupplySource: "data_engineering",
+						IntersectionClass: "affinity", IntersectionSourceRef: "similarInterest",
+						Impressed: true,
+					},
+				},
+			},
+		},
+	}
+
+	report := ComputeReplayReportWithOptions(ds, 3, ReplayReportOptions{
+		Thresholds: ReplayPromotionThresholds{
+			MinRequests:                  1,
+			MinServedItems:               3,
+			MinRecallAtK:                 0.9,
+			MinDiversityRate:             0.9,
+			MinTimeDecayFeatureFreshness: 0.95,
+			MaxNegativeFeedbackRate:      0.08,
+			MaxRepeatExposureRate:        0.01,
+		},
+	})
+
+	if report.Invalid {
+		t.Fatalf("expected valid report, reasons=%v", report.InvalidReasons)
+	}
+	if !report.PromotionAllowed || report.RollbackRecommended {
+		t.Fatalf("promotion verdict drifted: %+v", report)
+	}
+	if report.PolicyVersion != "policy-v2" ||
+		report.RankingVersion != "rec-v2" ||
+		report.ReasonVersion != "reason-v2" ||
+		report.ScorerVariant != "rule-commercial" {
+		t.Fatalf("version metadata missing: %+v", report)
+	}
+	if report.MAPAtK <= 0 {
+		t.Fatalf("MAP@K should be computed, got %.4f", report.MAPAtK)
+	}
+	if math.Abs(report.CollaborativeRecallLift-1.0) > 1e-9 {
+		t.Fatalf("collab lift = %.4f, want 1.0", report.CollaborativeRecallLift)
+	}
+	if math.Abs(report.FactExplanationCTR-1.0) > 1e-9 {
+		t.Fatalf("fact explanation ctr = %.4f, want 1", report.FactExplanationCTR)
+	}
+	if math.Abs(report.AffinityExplanationCTR-0.5) > 1e-9 {
+		t.Fatalf("affinity explanation ctr = %.4f, want 0.5", report.AffinityExplanationCTR)
+	}
+	if math.Abs(report.SupplySourceShare["data_engineering"]-2.0/3.0) > 1e-9 {
+		t.Fatalf("data engineering share = %.4f", report.SupplySourceShare["data_engineering"])
+	}
+	if report.TimeDecayFeatureFreshness != 0.97 {
+		t.Fatalf("time decay freshness = %.4f", report.TimeDecayFeatureFreshness)
+	}
+}
+
+func TestComputeReplayReportWithOptions_InvalidSamplesBlockPromotion(t *testing.T) {
+	report := ComputeReplayReportWithOptions(ReplayDataset{}, 10, ReplayReportOptions{
+		Thresholds: ReplayPromotionThresholds{MinRequests: 2, MinServedItems: 5},
+	})
+	if !report.Invalid {
+		t.Fatalf("empty replay dataset must be invalid")
+	}
+	if report.PromotionAllowed {
+		t.Fatalf("invalid replay dataset must block promotion")
+	}
+	if len(report.InvalidReasons) == 0 {
+		t.Fatalf("invalid report should explain sample failure")
+	}
+}
+
+func TestComputeReplayReportWithOptions_GuardrailRegressionRecommendsRollback(t *testing.T) {
+	ds := ReplayDataset{
+		EligibleContentCount: 2,
+		Requests: []ReplayRequest{{
+			FeedRequestID: "frq_rollback",
+			Items: []ReplayItem{
+				{ContentID: "a", AuthorID: "a1", Score: 0.9, Clicked: true, Negative: true},
+				{ContentID: "b", AuthorID: "a2", Score: 0.8, DuplicateExposure: true},
+			},
+		}},
+	}
+
+	report := ComputeReplayReportWithOptions(ds, 2, ReplayReportOptions{
+		Thresholds: ReplayPromotionThresholds{
+			MinRequests:             1,
+			MinServedItems:          2,
+			MaxNegativeFeedbackRate: 0.08,
+			MaxRepeatExposureRate:   0.01,
+		},
+	})
+	if report.Invalid {
+		t.Fatalf("dataset itself should be valid: %v", report.InvalidReasons)
+	}
+	if report.PromotionAllowed {
+		t.Fatalf("guardrail regression must block promotion: %+v", report)
+	}
+	if !report.RollbackRecommended {
+		t.Fatalf("negative/repeat guardrail breach should recommend rollback")
+	}
 }
 
 func TestComputeReplayReport_EmptyDatasetSafe(t *testing.T) {

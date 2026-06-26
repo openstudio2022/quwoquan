@@ -79,15 +79,36 @@ class MyQrCardView extends StatelessWidget {
 
 /// 我的二维码卡片主体。独立页与添加联系人主页共用，避免二维码样式形成第二套实现。
 class MyQrCardContent extends StatelessWidget {
-  const MyQrCardContent({super.key, required this.card});
+  const MyQrCardContent({super.key, required this.card, this.compact = false});
 
   final ProfileQrCardData card;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final cardPadding = EdgeInsets.all(
+      compact ? AppSpacing.containerLg : AppSpacing.containerXl,
+    );
+    final headingFontSize = compact
+        ? AppTypography.iosBody
+        : AppTypography.iosTitle2;
+    final headingWeight = compact
+        ? AppTypography.regular
+        : AppTypography.semiBold;
+    final avatarSize = compact
+        ? AppSpacing.avatarUserLg
+        : AppSpacing.avatarUserXl;
+    final nameFontSize = compact
+        ? AppTypography.iosBody
+        : AppTypography.iosTitle3;
+    final nameWeight = compact ? AppTypography.regular : AppTypography.semiBold;
+    final qrMaxSize = compact
+        ? AppSpacing.twoHundredTwenty
+        : AppSpacing.threeHundredTwenty;
+    final qrPadding = compact ? AppSpacing.containerXs : AppSpacing.containerSm;
     return ProfileIosSectionCard(
       backgroundColor: AppColors.iosSystemBackground(context),
-      padding: EdgeInsets.all(AppSpacing.containerXl),
+      padding: cardPadding,
       radius: AppSpacing.radiusTwenty,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -95,15 +116,22 @@ class MyQrCardContent extends StatelessWidget {
           Text(
             UITextConstants.editProfileQrCardHeading,
             style: TextStyle(
-              fontSize: AppTypography.iosTitle2,
-              fontWeight: AppTypography.semiBold,
+              fontSize: headingFontSize,
+              fontWeight: headingWeight,
               color: AppColors.iosLabel(context),
             ),
           ),
-          SizedBox(height: AppSpacing.containerXl),
+          SizedBox(
+            height: compact ? AppSpacing.containerLg : AppSpacing.containerXl,
+          ),
           Row(
             children: <Widget>[
-              _Avatar(url: card.avatarUrl, name: card.displayName),
+              _Avatar(
+                url: card.avatarUrl,
+                name: card.displayName,
+                size: avatarSize,
+                initialFontSize: nameFontSize,
+              ),
               SizedBox(width: AppSpacing.containerMd),
               Expanded(
                 child: Column(
@@ -112,8 +140,8 @@ class MyQrCardContent extends StatelessWidget {
                     Text(
                       card.displayName,
                       style: TextStyle(
-                        fontSize: AppTypography.iosTitle3,
-                        fontWeight: AppTypography.semiBold,
+                        fontSize: nameFontSize,
+                        fontWeight: nameWeight,
                         color: AppColors.iosLabel(context),
                       ),
                       maxLines: 1,
@@ -136,16 +164,13 @@ class MyQrCardContent extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: AppSpacing.containerXl),
-          _QrPayloadView(data: card.qrPayload),
-          SizedBox(height: AppSpacing.containerLg),
-          Text(
-            UITextConstants.editProfileQrCardHint,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: AppTypography.iosBody,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
+          SizedBox(
+            height: compact ? AppSpacing.containerLg : AppSpacing.containerXl,
+          ),
+          _QrPayloadView(
+            data: card.qrPayload,
+            maxSize: qrMaxSize,
+            padding: qrPadding,
           ),
         ],
       ),
@@ -154,24 +179,27 @@ class MyQrCardContent extends StatelessWidget {
 }
 
 class _QrPayloadView extends StatelessWidget {
-  const _QrPayloadView({required this.data});
+  const _QrPayloadView({
+    required this.data,
+    required this.maxSize,
+    required this.padding,
+  });
 
   final String data;
+  final double maxSize;
+  final double padding;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final size = math.min(
-          AppSpacing.threeHundredTwenty,
-          constraints.maxWidth,
-        );
+        final size = math.min(maxSize, constraints.maxWidth);
         return Center(
           child: Container(
             width: size,
             height: size,
             color: AppColors.white,
-            padding: EdgeInsets.all(AppSpacing.containerSm),
+            padding: EdgeInsets.all(padding),
             child: PrettyQrView.data(
               data: data,
               errorCorrectLevel: QrErrorCorrectLevel.M,
@@ -189,10 +217,17 @@ class _QrPayloadView extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.url, required this.name});
+  const _Avatar({
+    required this.url,
+    required this.name,
+    required this.size,
+    required this.initialFontSize,
+  });
 
   final String url;
   final String name;
+  final double size;
+  final double initialFontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -211,7 +246,7 @@ class _Avatar extends StatelessWidget {
             : Text(
                 initial,
                 style: TextStyle(
-                  fontSize: AppTypography.iosTitle3,
+                  fontSize: initialFontSize,
                   fontWeight: AppTypography.semiBold,
                   color: AppColors.iosAccent(context),
                 ),
@@ -220,15 +255,15 @@ class _Avatar extends StatelessWidget {
     );
     return ClipOval(
       child: SizedBox(
-        width: AppSpacing.avatarUserXl,
-        height: AppSpacing.avatarUserXl,
+        width: size,
+        height: size,
         child: url.trim().isEmpty
             ? fallback
             : AppMediaImage(
                 imageSource: url,
                 fit: BoxFit.cover,
-                width: AppSpacing.avatarUserXl,
-                height: AppSpacing.avatarUserXl,
+                width: size,
+                height: size,
                 placeholder: fallback,
                 errorWidget: fallback,
               ),

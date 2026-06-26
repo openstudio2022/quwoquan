@@ -22,6 +22,7 @@ DEFINE_KEYS = {
     "appDataSource": "APP_DATA_SOURCE",
     "appRolloutMode": "APP_ROLLOUT_MODE",
     "gatewayBaseUrl": "CLOUD_GATEWAY_BASE_URL",
+    "legalBaseUrl": "APP_LEGAL_BASE_URL",
     "mediaAvatarCdnBaseUrl": "MEDIA_AVATAR_CDN_BASE_URL",
     "mediaImageCdnBaseUrl": "MEDIA_IMAGE_CDN_BASE_URL",
     "mediaVideoCdnBaseUrl": "MEDIA_VIDEO_CDN_BASE_URL",
@@ -54,6 +55,7 @@ def parse_runtime_yaml(path: Path) -> dict[str, str]:
 def apply_overrides(values: dict[str, str], args: argparse.Namespace) -> dict[str, str]:
     overrides = {
         "gatewayBaseUrl": args.gateway_base_url or os.environ.get("LOCAL_GAMMA_GATEWAY_BASE_URL", ""),
+        "legalBaseUrl": args.legal_base_url or os.environ.get("APP_LEGAL_BASE_URL", ""),
         "mediaAvatarCdnBaseUrl": args.media_avatar_base_url
         or args.media_base_url
         or os.environ.get("LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL", ""),
@@ -75,6 +77,7 @@ def apply_overrides(values: dict[str, str], args: argparse.Namespace) -> dict[st
     }
     url_keys = {
         "gatewayBaseUrl",
+        "legalBaseUrl",
         "mediaAvatarCdnBaseUrl",
         "mediaImageCdnBaseUrl",
         "mediaVideoCdnBaseUrl",
@@ -91,6 +94,7 @@ def main() -> int:
     parser.add_argument("--env", default="gamma")
     parser.add_argument("--format", choices=["args", "shell", "json"], default="args")
     parser.add_argument("--gateway-base-url", default="")
+    parser.add_argument("--legal-base-url", default="")
     parser.add_argument("--media-base-url", default="")
     parser.add_argument("--media-avatar-base-url", default="")
     parser.add_argument("--media-image-base-url", default="")

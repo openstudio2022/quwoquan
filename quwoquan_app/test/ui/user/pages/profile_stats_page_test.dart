@@ -16,6 +16,7 @@ import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_list_page_semantics.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 
 class _FakeHttpOverrides extends HttpOverrides {
@@ -570,9 +571,8 @@ Widget _buildTestApp({
   );
 }
 
-Finder _segmentedControl() => find.byWidgetPredicate(
-  (widget) => widget is CupertinoSlidingSegmentedControl,
-);
+Finder _segmentedControl() =>
+    find.byWidgetPredicate((widget) => widget is AppSegmentedChoiceBar);
 
 Finder _segmentedLabel(String label) {
   return find.descendant(of: _segmentedControl(), matching: find.text(label));
@@ -665,6 +665,55 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('获赞'), findsNothing);
+    });
+
+    testWidgets('顶栏 segmented selector 为 tap-only，横向拖动不切换 tab', (tester) async {
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'me',
+          followerCount: 1,
+          followingCount: 1,
+          circleCount: 1,
+          isOwner: true,
+        ),
+        followers: <ProfileSocialRelationRowViewData>[
+          _row(
+            id: 'fan_001',
+            displayName: '你的皮炎有点辣',
+            userHandle: 'yanla',
+            relationState: 'followed_by',
+          ),
+        ],
+        following: <ProfileSocialRelationRowViewData>[
+          _row(
+            id: 'follow_001',
+            displayName: '阿青在路上',
+            userHandle: 'aqing',
+            relationState: 'following',
+          ),
+        ],
+        circles: <CircleDto>[
+          _circle(
+            id: 'circle_001',
+            name: '极简摄影俱乐部',
+            memberCount: 2340,
+            postCount: 128,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        _buildTestApp(type: 'fans', repository: repository, userId: 'me'),
+      );
+      await _pumpInitialLoad(tester);
+
+      await tester.drag(_segmentedControl(), const Offset(-160, 0));
+      await _pumpFrames(tester);
+
+      expect(find.text('你的皮炎有点辣'), findsOneWidget);
+      expect(find.text('阿青在路上'), findsNothing);
+      await _tapSegment(tester, UITextConstants.follow);
+      expect(find.text('阿青在路上'), findsOneWidget);
     });
 
     testWidgets('三 tab 搜索词独立记忆，切换后可恢复', (tester) async {

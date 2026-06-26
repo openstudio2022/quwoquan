@@ -1,8 +1,9 @@
 id: CR-20260623-057-native-startup-welcome-first-frame
 title: Android / iOS 原生启动过渡与唯一 Flutter 欢迎页纠偏
 slug: native-startup-welcome-first-frame
-revision: 5
-status: implemented
+revision: 6
+status: superseded
+superseded_by: CR-20260626-071-startup-welcome-honest-boundary
 
 affected_nodes:
   - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/welcome-entry-routing--login-state-entry-policy

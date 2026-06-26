@@ -3,6 +3,7 @@ runtime:
   appRuntimeEnv: alpha
   appDataSource: mock
   gatewayBaseUrl: https://alpha-api.quwoquan-env.test:17000
+  legalBaseUrl: https://alpha-api.quwoquan-env.test:17000/legal
   realtimeBaseUrl: wss://alpha-api.quwoquan-env.test:17000
   mediaAvatarCdnBaseUrl: https://alpha-avatar.quwoquan-env.test:17100
   mediaImageCdnBaseUrl: https://alpha-image.quwoquan-env.test:17100

@@ -86,6 +86,28 @@ errors:
       zh: "当前状态不能继续发送消息"
       en: "Current relationship does not allow messaging"
 
+  - code: CHAT.USER.group_member_not_mutual
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    recovery_action: surface
+    dart_const: groupMemberNotMutual
+    go_const: ErrGroupMemberNotMutual
+    user_message:
+      zh: "只能邀请互相关注的好友加入群聊"
+      en: "Only mutually-followed friends can be invited to a group"
+
+  - code: CHAT.USER.group_member_blocked
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    recovery_action: surface
+    dart_const: groupMemberBlocked
+    go_const: ErrGroupMemberBlocked
+    user_message:
+      zh: "存在已屏蔽的成员，无法发起群聊"
+      en: "Cannot start a group while some members are blocked"
+
   - code: CHAT.SYSTEM.internal_error
     kind: SYSTEM
     reason: internal_error

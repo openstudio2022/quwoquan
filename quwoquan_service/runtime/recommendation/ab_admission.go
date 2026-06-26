@@ -3,6 +3,7 @@ package recommendation
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"quwoquan_service/runtime/recpolicy"
 )
@@ -23,6 +24,7 @@ type BucketObservation struct {
 	DesignPct   int // intended split from ExperimentBucket.WeightPct
 	Samples     int
 	Conversions int
+	Guardrails  ABGuardrailMetrics
 }
 
 // PrimaryRate is the observed primary-metric rate for the bucket.
@@ -40,12 +42,67 @@ type ABExperimentObservation struct {
 	Buckets       []BucketObservation
 }
 
+// ABGuardrailMetrics captures commercial protection metrics for one bucket over
+// the same evaluation window as the primary metric.
+type ABGuardrailMetrics struct {
+	NegativeFeedbackRate    float64
+	RepeatExposureRate      float64
+	UnknownAttributionRate  float64
+	BehaviorIngestDropRate  float64
+	P95LatencyMs            float64
+	ScenarioConsumptionRate float64
+	TravelMisrouteRate      float64
+}
+
+// ABGuardrailThresholds defines promotion-blocking guardrails. Zero values are
+// treated as unset so local dry-runs can start with only sample/SRM checks.
+type ABGuardrailThresholds struct {
+	MaxNegativeFeedbackRate    float64
+	MaxRepeatExposureRate      float64
+	MaxUnknownAttributionRate  float64
+	MaxBehaviorIngestDropRate  float64
+	MaxP95LatencyMs            float64
+	MinScenarioConsumptionRate float64
+	MaxTravelMisrouteRate      float64
+}
+
 // ABAdmissionResult is the admission verdict for one experiment.
 type ABAdmissionResult struct {
 	ExperimentID       string
 	Valid              bool
 	Reasons            []string // why invalid (empty when valid)
 	RollbackCandidates []string // challenger buckets in significant regression
+}
+
+// ABBucketReport is the normalized report row for one bucket.
+type ABBucketReport struct {
+	Bucket               string   `json:"bucket"`
+	DesignPct            int      `json:"designPct"`
+	ActualPct            float64  `json:"actualPct"`
+	Samples              int      `json:"samples"`
+	Conversions          int      `json:"conversions"`
+	PrimaryRate          float64  `json:"primaryRate"`
+	RelativeLift         float64  `json:"relativeLift"`
+	SignificantVsControl bool     `json:"significantVsControl"`
+	GuardrailViolations  []string `json:"guardrailViolations,omitempty"`
+}
+
+// ABExperimentReport is the fixed online AB analysis template used by
+// recommendation promotion reviews. It is derived from the same admission result
+// that feeds recommendation_feed_ab_experiment_validity_total.
+type ABExperimentReport struct {
+	ExperimentID        string           `json:"experimentId"`
+	ControlBucket       string           `json:"controlBucket"`
+	PrimaryMetric       string           `json:"primaryMetric"`
+	MinSamplesPerBucket int              `json:"minSamplesPerBucket"`
+	MaxBucketSkewPct    float64          `json:"maxBucketSkewPct"`
+	SignificanceLevel   float64          `json:"significanceLevel"`
+	MinDetectableEffect float64          `json:"minDetectableEffect"`
+	Valid               bool             `json:"valid"`
+	Reasons             []string         `json:"reasons,omitempty"`
+	RollbackCandidates  []string         `json:"rollbackCandidates,omitempty"`
+	PromotionAllowed    bool             `json:"promotionAllowed"`
+	Buckets             []ABBucketReport `json:"buckets"`
 }
 
 // EvaluateABAdmission decides whether an experiment's measurements are
@@ -61,6 +118,13 @@ type ABAdmissionResult struct {
 // A zero-value config disables admission gating: the experiment is reported Valid
 // with no rollback analysis (callers should not act on validity in that case).
 func EvaluateABAdmission(obs ABExperimentObservation, cfg recpolicy.ABAdmissionConfig) ABAdmissionResult {
+	return EvaluateABAdmissionWithGuardrails(obs, cfg, ABGuardrailThresholds{})
+}
+
+// EvaluateABAdmissionWithGuardrails extends admission with commercial protection
+// guardrails. Guardrail violations make the experiment invalid for promotion but
+// keep rollback-candidate detection on the primary metric intact.
+func EvaluateABAdmissionWithGuardrails(obs ABExperimentObservation, cfg recpolicy.ABAdmissionConfig, thresholds ABGuardrailThresholds) ABAdmissionResult {
 	res := ABAdmissionResult{ExperimentID: obs.ExperimentID, Valid: true}
 
 	if (cfg == recpolicy.ABAdmissionConfig{}) {
@@ -87,6 +151,12 @@ func EvaluateABAdmission(obs ABExperimentObservation, cfg recpolicy.ABAdmissionC
 			if math.Abs(actualPct-float64(b.DesignPct)) > cfg.MaxBucketSkewPct {
 				res.Valid = false
 				res.Reasons = append(res.Reasons, fmt.Sprintf("bucket %s split %.1f%% skewed from design %d%% (>%.1f%%)", b.Bucket, actualPct, b.DesignPct, cfg.MaxBucketSkewPct))
+			}
+			if violations := guardrailViolations(b.Guardrails, thresholds); len(violations) > 0 {
+				res.Valid = false
+				for _, violation := range violations {
+					res.Reasons = append(res.Reasons, fmt.Sprintf("bucket %s guardrail %s", b.Bucket, violation))
+				}
 			}
 		}
 	}
@@ -127,6 +197,60 @@ func EvaluateAndRecordABAdmission(obs ABExperimentObservation, cfg recpolicy.ABA
 	return res
 }
 
+// BuildABExperimentReport produces the report template reviewed by product,
+// algorithm, data engineering, and operations before promotion.
+func BuildABExperimentReport(obs ABExperimentObservation, cfg recpolicy.ABAdmissionConfig, thresholds ABGuardrailThresholds) ABExperimentReport {
+	res := EvaluateABAdmissionWithGuardrails(obs, cfg, thresholds)
+	report := ABExperimentReport{
+		ExperimentID:        obs.ExperimentID,
+		ControlBucket:       obs.ControlBucket,
+		PrimaryMetric:       cfg.PrimaryMetric,
+		MinSamplesPerBucket: cfg.MinSamplesPerBucket,
+		MaxBucketSkewPct:    cfg.MaxBucketSkewPct,
+		SignificanceLevel:   cfg.SignificanceLevel,
+		MinDetectableEffect: cfg.MinDetectableEffect,
+		Valid:               res.Valid,
+		Reasons:             append([]string(nil), res.Reasons...),
+		RollbackCandidates:  append([]string(nil), res.RollbackCandidates...),
+	}
+	totalSamples := 0
+	for _, b := range obs.Buckets {
+		totalSamples += b.Samples
+	}
+	control, hasControl := findBucket(obs.Buckets, obs.ControlBucket)
+	for _, b := range obs.Buckets {
+		row := ABBucketReport{
+			Bucket:              b.Bucket,
+			DesignPct:           b.DesignPct,
+			Samples:             b.Samples,
+			Conversions:         b.Conversions,
+			PrimaryRate:         b.PrimaryRate(),
+			GuardrailViolations: guardrailViolations(b.Guardrails, thresholds),
+		}
+		if totalSamples > 0 {
+			row.ActualPct = 100 * float64(b.Samples) / float64(totalSamples)
+		}
+		if hasControl && b.Bucket != control.Bucket && control.PrimaryRate() > 0 {
+			row.RelativeLift = b.PrimaryRate()/control.PrimaryRate() - 1
+			row.SignificantVsControl = twoProportionSignificant(control, b, cfg.SignificanceLevel)
+		}
+		report.Buckets = append(report.Buckets, row)
+	}
+	report.PromotionAllowed = report.Valid &&
+		len(report.RollbackCandidates) == 0 &&
+		!report.hasGuardrailViolations()
+	return report
+}
+
+func (r ABExperimentReport) hasGuardrailViolations() bool {
+	for _, b := range r.Buckets {
+		if len(b.GuardrailViolations) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func findBucket(buckets []BucketObservation, name string) (BucketObservation, bool) {
 	for _, b := range buckets {
 		if b.Bucket == name {
@@ -134,6 +258,35 @@ func findBucket(buckets []BucketObservation, name string) (BucketObservation, bo
 		}
 	}
 	return BucketObservation{}, false
+}
+
+func guardrailViolations(m ABGuardrailMetrics, th ABGuardrailThresholds) []string {
+	var out []string
+	if th.MaxNegativeFeedbackRate > 0 && m.NegativeFeedbackRate > th.MaxNegativeFeedbackRate {
+		out = append(out, "negative_feedback_rate")
+	}
+	if th.MaxRepeatExposureRate > 0 && m.RepeatExposureRate > th.MaxRepeatExposureRate {
+		out = append(out, "repeat_exposure_rate")
+	}
+	if th.MaxUnknownAttributionRate > 0 && m.UnknownAttributionRate > th.MaxUnknownAttributionRate {
+		out = append(out, "unknown_attribution_rate")
+	}
+	if th.MaxBehaviorIngestDropRate > 0 && m.BehaviorIngestDropRate > th.MaxBehaviorIngestDropRate {
+		out = append(out, "behavior_ingest_drop_rate")
+	}
+	if th.MaxP95LatencyMs > 0 && m.P95LatencyMs > th.MaxP95LatencyMs {
+		out = append(out, "p95_latency_ms")
+	}
+	if th.MinScenarioConsumptionRate > 0 && m.ScenarioConsumptionRate < th.MinScenarioConsumptionRate {
+		out = append(out, "scenario_consumption_rate")
+	}
+	if th.MaxTravelMisrouteRate > 0 && m.TravelMisrouteRate > th.MaxTravelMisrouteRate {
+		out = append(out, "travel_misroute_rate")
+	}
+	for i := range out {
+		out[i] = strings.TrimSpace(out[i])
+	}
+	return out
 }
 
 // twoProportionSignificant runs a two-sided two-proportion z-test and reports

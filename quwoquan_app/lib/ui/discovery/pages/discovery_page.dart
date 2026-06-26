@@ -926,6 +926,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           filter: filter,
           source: category ?? post.displayFormat,
           index: '$initialIndex',
+          sourceTheme: uiErrorAppearanceRouteValueFor(context),
         ),
         extra: MediaViewerExtra(
           posts: postViews,
@@ -943,6 +944,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           filter: filter,
           source: category ?? post.displayFormat,
           index: '$initialIndex',
+          sourceTheme: uiErrorAppearanceRouteValueFor(context),
         ),
       );
     }

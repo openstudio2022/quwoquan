@@ -7,10 +7,8 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
-import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 
 class ObjectIntersectionListPage extends ConsumerWidget {
   const ObjectIntersectionListPage({
@@ -64,7 +62,6 @@ class ObjectIntersectionListPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = ref.watch(isDarkProvider);
-    final bg = AppColors.iosSystemBackground(context);
     final query = ObjectIntersectionQuery(
       objectAId: ref.watch(currentUserIdProvider),
       objectAType: 'user',
@@ -77,20 +74,12 @@ class ObjectIntersectionListPage extends ConsumerWidget {
         : const AsyncValue<List<IntersectionReason>>.data(
             <IntersectionReason>[],
           );
-    return AppScaffold(
-      backgroundColor: bg,
-      navigationBar: AppNavigationBar(
-        backgroundColor: bg,
-        leading: AppNavigationBarIconButton(
-          icon: CupertinoIcons.back,
-          onPressed: () => context.pop(),
-        ),
-        middle: Text(
-          _title,
-          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-        ),
-      ),
-      child: asyncReasons.when(
+    return AppListPageScaffold(
+      isDark: isDark,
+      kind: AppListPageKind.singleList,
+      title: _title,
+      onBack: () => context.pop(),
+      body: asyncReasons.when(
         loading: () => const Center(child: CupertinoActivityIndicator()),
         error: (error, _) {
           final resolved = runtimeErrorSemantic(
@@ -114,6 +103,9 @@ class ObjectIntersectionListPage extends ConsumerWidget {
               recoveryAction: resolved.recoveryAction,
               presentation: resolved.presentation,
               tone: resolved.tone,
+              appearanceMode: resolved.appearanceMode,
+              sourceRouteId: resolved.sourceRouteId,
+              sourceSurfaceId: resolved.sourceSurfaceId,
             ),
           );
         },
@@ -129,19 +121,27 @@ class ObjectIntersectionListPage extends ConsumerWidget {
             return Center(
               child: Padding(
                 padding: EdgeInsets.all(AppSpacing.lg),
-                child: Text(
-                  UITextConstants.objectIntersectionsEmpty,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    color: AppColors.iosSecondaryLabel(context),
+                child: AppListSurface(
+                  padding: EdgeInsets.all(AppSpacing.containerMd),
+                  child: Text(
+                    UITextConstants.objectIntersectionsEmpty,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosSubheadline,
+                      color: AppColors.iosSecondaryLabel(context),
+                    ),
                   ),
                 ),
               ),
             );
           }
           return ListView(
-            padding: EdgeInsets.all(AppSpacing.containerMd),
+            padding: EdgeInsets.fromLTRB(
+              SettingsSemanticConstants.insetFormListHorizontalPadding,
+              AppSpacing.containerSm,
+              SettingsSemanticConstants.insetFormListHorizontalPadding,
+              AppSpacing.containerLg,
+            ),
             children: <Widget>[card],
           );
         },

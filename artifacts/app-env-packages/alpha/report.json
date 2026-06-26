@@ -4,6 +4,7 @@
   "runtimeEnv": "alpha",
   "dataSource": "mock",
   "gatewayBaseUrl": "https://alpha-api.quwoquan-env.test:17000",
+  "legalBaseUrl": "https://alpha-api.quwoquan-env.test:17000/legal",
   "realtimeBaseUrl": "wss://alpha-api.quwoquan-env.test:17000",
   "avatarCdnBaseUrl": "https://alpha-avatar.quwoquan-env.test:17100",
   "imageCdnBaseUrl": "https://alpha-image.quwoquan-env.test:17100",
@@ -22,6 +23,7 @@
   },
   "publicBases": {
     "gatewayBaseUrl": "https://alpha-api.quwoquan-env.test:17000",
+    "legalBaseUrl": "https://alpha-api.quwoquan-env.test:17000/legal",
     "realtimeBaseUrl": "wss://alpha-api.quwoquan-env.test:17000",
     "mediaAvatarCdnBaseUrl": "https://alpha-avatar.quwoquan-env.test:17100",
     "mediaImageCdnBaseUrl": "https://alpha-image.quwoquan-env.test:17100",

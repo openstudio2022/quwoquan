@@ -11,15 +11,48 @@ Widget _wrap(Widget child) {
 
 void main() {
   group('RoundedSquareAvatar', () {
+    testWidgets('resolves relative media avatar paths before cached avatar load', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          const RoundedSquareAvatar(
+            size: 48,
+            imageUrl:
+                '/media/avatar/s/archived-avatar/default/group/v1/default.png',
+            name: '契约群',
+          ),
+        ),
+      );
+
+      final image = tester.widget<AppCachedNetworkImage>(
+        find.byType(AppCachedNetworkImage),
+      );
+      expect(image.cdnPreset, CdnImagePreset.avatar);
+      expect(image.imageUrl, startsWith('https://localhost:17100/'));
+      expect(
+        image.imageUrlCandidates,
+        containsAll(<String>[
+          'https://localhost:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
+          'https://127.0.0.1:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
+          'https://10.0.2.2:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
+          'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
+        ]),
+      );
+      expect(image.placeholder, isNotNull);
+      expect(find.text('契'), findsOneWidget);
+    });
+
     testWidgets(
-      'resolves relative media avatar paths before cached avatar load',
+      'shows explicit fallback icon while network avatar is loading',
       (tester) async {
         await tester.pumpWidget(
           _wrap(
             const RoundedSquareAvatar(
               size: 48,
-              imageUrl: '/media/avatar/s/archived-avatar/default/group/v1/default.png',
-              name: '契约群',
+              imageUrl: '/media/avatar/s/archived-avatar/user/u1/v1/avatar.png',
+              name: '空头像',
+              fallbackIcon: CupertinoIcons.person_fill,
             ),
           ),
         );
@@ -27,18 +60,8 @@ void main() {
         final image = tester.widget<AppCachedNetworkImage>(
           find.byType(AppCachedNetworkImage),
         );
-        expect(image.cdnPreset, CdnImagePreset.avatar);
-        expect(image.imageUrl, startsWith('https://localhost:17100/'));
-        expect(
-          image.imageUrlCandidates,
-          containsAll(<String>[
-            'https://localhost:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
-            'https://127.0.0.1:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
-            'https://10.0.2.2:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
-            'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/default/group/v1/default.png',
-          ]),
-        );
-        expect(find.text('契'), findsNothing);
+        expect(image.placeholder, isNotNull);
+        expect(find.byIcon(CupertinoIcons.person_fill), findsOneWidget);
       },
     );
 
