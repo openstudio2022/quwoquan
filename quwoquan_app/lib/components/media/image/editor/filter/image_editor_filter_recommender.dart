@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_recommendation_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_scene_classifier.dart';
@@ -72,8 +74,7 @@ class ImageEditorFilterRecommender {
     final brightNeed = (features.meanLuma - 0.62).clamp(0.0, 0.38) / 0.38;
     final lowContrastNeed = (0.15 - features.contrast).clamp(0.0, 0.15) / 0.15;
     final highContrastNeed = (features.contrast - 0.22).clamp(0.0, 0.78) / 0.78;
-    final lowSatNeed =
-        (0.30 - features.meanSaturation).clamp(0.0, 0.30) / 0.30;
+    final lowSatNeed = (0.30 - features.meanSaturation).clamp(0.0, 0.30) / 0.30;
     final highSatNeed =
         (features.meanSaturation - 0.58).clamp(0.0, 0.42) / 0.42;
     final coolNeed = (-features.warmth).clamp(0.0, 1.0);
@@ -82,60 +83,55 @@ class ImageEditorFilterRecommender {
     final harshNeed = (features.texture - 0.17).clamp(0.0, 0.83) / 0.83;
 
     double param(String key) => (p[key] ?? 0).toDouble();
-    score += darkNeed *
+    score +=
+        darkNeed *
         (param('brightness') +
                 param('exposure') +
                 param('lightSense') +
                 param('shadow'))
             .clamp(-100, 100) *
         0.15;
-    score += brightNeed *
+    score +=
+        brightNeed *
         (-param('highlight') - param('brightness')).clamp(-100, 100) *
         0.12;
-    score += lowContrastNeed *
+    score +=
+        lowContrastNeed *
         (param('contrast') + param('structure')).clamp(-100, 100) *
         0.10;
-    score += highContrastNeed *
+    score +=
+        highContrastNeed *
         (-param('contrast') + param('fade')).clamp(-100, 100) *
         0.10;
-    score += lowSatNeed *
+    score +=
+        lowSatNeed *
         (param('saturation') + param('vibrance')).clamp(-100, 100) *
         0.09;
-    score += highSatNeed *
+    score +=
+        highSatNeed *
         (-param('saturation') - param('vibrance')).clamp(-100, 100) *
         0.09;
     score += coolNeed * param('temperature').clamp(-100, 100) * 0.08;
     score += warmNeed * (-param('temperature')).clamp(-100, 100) * 0.08;
-    score += flatNeed *
-        (param('structure') + param('sharpen') + param('texture'))
-            .clamp(-100, 100) *
+    score +=
+        flatNeed *
+        (param('structure') + param('sharpen') + param('texture')).clamp(
+          -100,
+          100,
+        ) *
         0.08;
-    score += harshNeed *
-        (param('fade') - param('contrast')).clamp(-100, 100) *
-        0.08;
+    score +=
+        harshNeed * (param('fade') - param('contrast')).clamp(-100, 100) * 0.08;
 
     final styleStrength = p.values.fold<double>(
       0,
       (prev, value) => prev + value.abs(),
     );
     score += (styleStrength / 500).clamp(0, 1.5) * 2.0;
-    score += _sceneCategoryBonus(
-      categoryId: preset.categoryId,
-      scenes: scenes,
-    );
-    score += _sceneParamBonus(
-      params: p,
-      scenes: scenes,
-    );
-    score += _whitelistBonus(
-      features: features,
-      params: p,
-    );
-    score -= _blacklistPenalty(
-      preset: preset,
-      features: features,
-      params: p,
-    );
+    score += _sceneCategoryBonus(categoryId: preset.categoryId, scenes: scenes);
+    score += _sceneParamBonus(params: p, scenes: scenes);
+    score += _whitelistBonus(features: features, params: p);
+    score -= _blacklistPenalty(preset: preset, features: features, params: p);
     return score;
   }
 

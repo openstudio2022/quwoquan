@@ -1,0 +1,57 @@
+id: CR-20260625-069-metadata-response-model-warning-cleanup
+title: Metadata 响应模型告警清零
+slug: metadata-response-model-warning-cleanup
+revision: 1
+status: implemented
+
+affected_nodes:
+  - quwoquan_service/contracts/metadata/search/query
+  - quwoquan_service/contracts/metadata/user/user_profile
+  - quwoquan_service/contracts/metadata/user/user_work
+  - quwoquan_service/contracts/metadata/user/user_life_item
+
+entries:
+  - timestamp: "2026-06-25T12:10:00+08:00"
+    summary: |
+      清理 verify-metadata 暴露的 4 个 response_entity 告警：为 SearchResponseView、
+      UserWork、UserLifeItem 补齐 projection read_model；将 GetUserHomepageBundle
+      的旧 response_entity 从 UserHomepageBundleView 收敛为已存在的 UserHomepageBundleWire；
+      同时为 homepage bundle、works、life-items 明确 response_body 与 response_body_kind。
+    reason: |
+      推荐商用成熟度下一阶段需要端云模型与契约可信。若 API response_entity 未进入
+      fields.yaml 或 projections/*.yaml 闭集，后续首页/我的主页/精品推荐的行为归因、
+      replay/AB 证据和端侧模型治理都无法宣称 warning-free。
+    change_type:
+      - metadata
+      - contract
+      - app_cloud_contract
+      - verification
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/search/query/projections/search_response_view.yaml
+        sections:
+          - SearchResponseView read_model
+      - path: quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+        sections:
+          - GetUserHomepageBundle
+          - ListUserWorks
+          - ListUserLifeItems
+      - path: quwoquan_service/contracts/metadata/user/user_work/projections/user_work.yaml
+        sections:
+          - UserWork read_model
+      - path: quwoquan_service/contracts/metadata/user/user_life_item/projections/user_life_item.yaml
+        sections:
+          - UserLifeItem read_model
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - contract
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      - command: make -C quwoquan_service verify-metadata
+        result: passed_without_warnings
+    notes:
+      - 本 CR 不引入新的端侧 DTO 或业务读路径，只登记现有服务响应模型的正式契约。
+      - SearchResponseView 继续复用 runtime/search.RetrieveResponse 作为 hits 单一真相源。
+      - UserWork/UserLifeItem 保持 user/user_work 与 user/user_life_item 独立 aggregate，不复制到 user_profile fields.yaml。

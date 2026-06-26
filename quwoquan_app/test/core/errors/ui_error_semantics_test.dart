@@ -9,6 +9,29 @@ import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 
 void main() {
+  test('source appearance helpers map route values and brightness', () {
+    expect(
+      uiErrorAppearanceModeFromRouteValue('light'),
+      UiErrorAppearanceMode.light,
+    );
+    expect(
+      uiErrorAppearanceModeFromRouteValue('dark'),
+      UiErrorAppearanceMode.dark,
+    );
+    expect(
+      uiErrorAppearanceModeFromRouteValue(null),
+      UiErrorAppearanceMode.inherit,
+    );
+    expect(
+      uiErrorAppearanceModeFromBrightness(Brightness.light).routeValue,
+      'light',
+    );
+    expect(
+      uiErrorAppearanceModeFromBrightness(Brightness.dark).routeValue,
+      'dark',
+    );
+  });
+
   testWidgets('权限永久拒绝时优先透传本地 permission 文案并给出去设置动作', (tester) async {
     late BuildContext capturedContext;
     await tester.pumpWidget(
@@ -184,10 +207,7 @@ void main() {
       );
       return UiErrorSemanticResolver.resolve(
         capturedContext,
-        error: CloudException(
-          type: CloudErrorType.network,
-          message: 'network',
-        ),
+        error: CloudException(type: CloudErrorType.network, message: 'network'),
         category: category,
         scope: scope,
       );
@@ -286,9 +306,7 @@ void main() {
       expect(semantic.presentation, UiErrorPresentation.emptyPage);
     });
 
-    testWidgets('红线 提交失败即使在 section scope 也走弹窗而非全屏(保留用户输入)', (
-      tester,
-    ) async {
+    testWidgets('红线 提交失败即使在 section scope 也走弹窗而非全屏(保留用户输入)', (tester) async {
       final semantic = await resolveCase(
         tester,
         category: UiErrorCategory.submit,

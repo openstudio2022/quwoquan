@@ -18,6 +18,30 @@ class ChatMockData {
   static String groupAvatarFor(String conversationId, {int version = 1}) =>
       'media/avatar/s/archived-avatar/conversation/$conversationId/v$version/mock.png';
 
+  static String groupAvatarSourceHashFor(String conversationId) {
+    final source = _canonicalGroupAvatarMembers(membersFor(conversationId))
+        .take(9)
+        .map((member) => '${member['userId']}:${member['avatarUrl']}')
+        .join('|');
+    return source.isNotEmpty ? source : 'mock-$conversationId-v1';
+  }
+
+  static List<Map<String, dynamic>> _canonicalGroupAvatarMembers(
+    List<Map<String, dynamic>> members,
+  ) {
+    final sorted = List<Map<String, dynamic>>.from(members);
+    sorted.sort((a, b) {
+      final joinedA = a['joinedAt']?.toString() ?? '';
+      final joinedB = b['joinedAt']?.toString() ?? '';
+      final joinedCompare = joinedA.compareTo(joinedB);
+      if (joinedCompare != 0) return joinedCompare;
+      return (a['userId']?.toString() ?? '').compareTo(
+        b['userId']?.toString() ?? '',
+      );
+    });
+    return sorted;
+  }
+
   static String _relativeIso({
     required int daysAgo,
     required int hour,
@@ -67,7 +91,7 @@ class ChatMockData {
       'title': '周末登山群',
       'avatarUrl': groupAvatarFor('conv_002'),
       'groupAvatarVersion': 1,
-      'groupAvatarSourceHash': 'mock-conv_002-v1',
+      'groupAvatarSourceHash': groupAvatarSourceHashFor('conv_002'),
       'creatorId': currentUserProfileId,
       'maxSeq': 256,
       'memberCount': 15,
@@ -88,7 +112,7 @@ class ChatMockData {
       'title': '摄影爱好者圈子',
       'avatarUrl': groupAvatarFor('conv_003'),
       'groupAvatarVersion': 1,
-      'groupAvatarSourceHash': 'mock-conv_003-v1',
+      'groupAvatarSourceHash': groupAvatarSourceHashFor('conv_003'),
       'creatorId': 'user_003',
       'circleId': 'circle_001',
       'maxSeq': 1024,
@@ -204,7 +228,7 @@ class ChatMockData {
       'title': '产品共创群',
       'avatarUrl': groupAvatarFor('conv_006'),
       'groupAvatarVersion': 1,
-      'groupAvatarSourceHash': 'mock-conv_006-v1',
+      'groupAvatarSourceHash': groupAvatarSourceHashFor('conv_006'),
       'creatorId': currentUserProfileId,
       'maxSeq': 512,
       'memberCount': 8,
@@ -245,7 +269,7 @@ class ChatMockData {
       'title': '产品共创群',
       'avatarUrl': groupAvatarFor('conv_006'),
       'groupAvatarVersion': 1,
-      'groupAvatarSourceHash': 'mock-conv_006-v1',
+      'groupAvatarSourceHash': groupAvatarSourceHashFor('conv_006'),
       'lastMessagePreview': '今晚 8 点前把评审意见同步到文档里',
       'lastMessageType': 'text',
       'lastMessageTime': _relativeIso(daysAgo: 0, hour: 20, minute: 18),
@@ -275,7 +299,7 @@ class ChatMockData {
       'title': '周末登山群',
       'avatarUrl': groupAvatarFor('conv_002'),
       'groupAvatarVersion': 1,
-      'groupAvatarSourceHash': 'mock-conv_002-v1',
+      'groupAvatarSourceHash': groupAvatarSourceHashFor('conv_002'),
       'lastMessagePreview': '路线图已经发到群文件了',
       'lastMessageType': 'image',
       'lastMessageTime': _relativeIso(daysAgo: 1, hour: 21, minute: 10),
@@ -292,7 +316,7 @@ class ChatMockData {
       'circleId': 'circle_001',
       'avatarUrl': groupAvatarFor('conv_003'),
       'groupAvatarVersion': 1,
-      'groupAvatarSourceHash': 'mock-conv_003-v1',
+      'groupAvatarSourceHash': groupAvatarSourceHashFor('conv_003'),
       'lastMessagePreview': '分享一组新疆风景照',
       'lastMessageType': 'image',
       'lastMessageTime': _relativeIso(daysAgo: 1, hour: 11, minute: 6),
@@ -340,7 +364,7 @@ class ChatMockData {
         'updatedAt': '2026-03-07T0${n < 10 ? n : 9}:00:00Z',
         'avatarUrl': groupAvatarFor('conv_grid_$n'),
         'groupAvatarVersion': 1,
-        'groupAvatarSourceHash': 'mock-conv_grid_$n-v1',
+        'groupAvatarSourceHash': groupAvatarSourceHashFor('conv_grid_$n'),
       });
     }
     return result;
@@ -1115,8 +1139,7 @@ class ChatMockData {
       'conversationId': 'conv_group_photo',
       'id': 'conv_group_photo',
       'displayName': '摄影交流群',
-      'avatarUrl':
-          'media/image/s/mock/seed/p_1452457807411-4979b707c5be/v1/image.jpg',
+      'avatarUrl': groupAvatarFor('conv_group_photo'),
       'subtitle': '128',
     },
   ];

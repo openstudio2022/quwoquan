@@ -1,0 +1,80 @@
+id: CR-20260626-073-legal-static-independent-package
+title: 法律协议静态资源独立发布单元
+slug: legal-static-independent-package
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/platform-ops-governance/security-privacy-audit
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality
+  - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/onboarding-consent-flow--consent-record-contract
+
+entries:
+  - timestamp: "2026-06-26T14:30:00+08:00"
+    summary: |
+      新增 `deploy/legal` 法律协议源目录和 `legal-static` 独立静态资源发布单元，首版包含用户协议、隐私政策、权限说明、第三方 SDK 清单。
+      `stackctl package --env <env> --kind legal-static` 与 `stackctl verify --env <env> --kind legal-static` 独立于 App、service、内容页和数据工程包运行；发布包生成 manifest、checksums、release metadata 与 `current` 指针。
+      App 增加 `APP_LEGAL_BASE_URL`，保留单文档 URL override；关于页新增用户协议/隐私政策入口；user-service 继续只保存 consent version，不承载正文。
+    reason: |
+      法律正文需要可独立上架、独立回滚、独立 CDN/gateway 挂载，不能跟内容页或业务领域服务代码绑定。
+      当前首发免费社区版本不包含付费、会员、广告、电商、退款/发票、自动续费等商业条款，因此需登记正式 backlog，在未来商业化能力上线前强制触发补充条款。
+    change_type:
+      - ops-release
+      - compliance
+      - app-config
+      - local-contract
+      - user-acceptance
+    changed_documents:
+      - path: deploy/legal/manifest.yaml
+        sections:
+          - legal-static/v1 manifest
+      - path: deploy/legal/versions/2026-06
+        sections:
+          - user-agreement
+          - privacy-policy
+          - permissions
+          - third-party-sdk-list
+      - path: specs/feature-tree/platform-ops-governance/security-privacy-audit/spec.md
+        sections:
+          - 功能说明
+          - 约束
+          - 验收标准
+      - path: specs/feature-tree/platform-ops-governance/security-privacy-audit/acceptance.yaml
+        sections:
+          - SIT1
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-LEGAL-001
+    changed_code:
+      - path: agent_ops/deploy/legal_static.py
+      - path: agent_ops/deploy/stackctl.py
+      - path: quwoquan_app/lib/core/auth/auth_legal_config.dart
+      - path: quwoquan_app/lib/ui/settings/pages/settings_about_page.dart
+      - path: quwoquan_app/scripts/env/print_app_env_dart_defines.py
+      - path: quwoquan_app/scripts/env/build_app_env_package.sh
+      - path: quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
+      - path: quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
+      - path: quwoquan_service/docker-compose.gamma-local.yaml
+      - path: deploy/local-gamma/Caddyfile
+      - path: agent_ops/deploy/prod/render_prod_plane_stack.py
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    verification:
+      - "通过：python3 agent_ops/deploy/legal_static.py validate --env alpha"
+      - "通过：python3 agent_ops/deploy/stackctl.py package --env alpha --kind legal-static"
+      - "通过：python3 agent_ops/deploy/stackctl.py verify --env alpha --kind legal-static"
+      - "通过：python3 agent_ops/deploy/stackctl.py verify --env gamma --kind legal-static"
+      - "通过：cd quwoquan_app && flutter test test/ui/settings/pages/settings_page_appearance_test.dart"
+      - "通过：python3 quwoquan_app/scripts/settings/verify_settings_canonical.py"
+      - "通过：python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py"
+      - "通过：python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py"
+    notes:
+      - prod 包在主体、备案、客服电话等占位未补齐前应返回 GATE_BLOCK；这是法务终稿前的预期行为。
+      - commercial terms 不在 2026-06 免费社区模板内；未来任一商业化能力上线前必须关闭 R-LEGAL-001。

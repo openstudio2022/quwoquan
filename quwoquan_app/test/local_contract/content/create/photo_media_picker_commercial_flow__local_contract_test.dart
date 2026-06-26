@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_presentation.dart';
+import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -385,7 +387,9 @@ void main() {
       expect(panel, findsOneWidget);
       final panelRect = tester.getRect(panel);
       expect(panelRect.top, greaterThanOrEqualTo(AppSpacing.toolbarHeight));
-      final screenHeight = tester.getSize(find.byType(CreateMediaPickerPage)).height;
+      final screenHeight = tester
+          .getSize(find.byType(CreateMediaPickerPage))
+          .height;
       expect(panelRect.bottom, lessThanOrEqualTo(screenHeight + 0.5));
     });
 
@@ -421,6 +425,118 @@ void main() {
         find.byKey(const ValueKey<String>('media-picker-selected-thumb-a1')),
         findsNothing,
       );
+    });
+
+    testWidgets('已选缩略条左对齐，拖拽悬停时会先让位再在完成时提交顺序', (tester) async {
+      CreateMediaPickerResult? picked;
+      final service = _FakeMediaPickerService(
+        albums: <AssetPathEntity>[_album('recent', '最近项目')],
+        assetsByAlbumId: <String, List<AssetEntity>>{
+          'recent': <AssetEntity>[
+            _image('a1'),
+            _image('a2'),
+            _image('a3'),
+            _image('a4'),
+          ],
+        },
+      );
+
+      await tester.pumpWidget(
+        CupertinoApp(
+          home: Builder(
+            builder: (context) => CupertinoButton(
+              child: const Text('open'),
+              onPressed: () async {
+                picked = await Navigator.of(context)
+                    .push<CreateMediaPickerResult>(
+                      CupertinoPageRoute<CreateMediaPickerResult>(
+                        builder: (_) => CreateMediaPickerPage(
+                          entryMode: MediaPickerEntryMode.image,
+                          maxSelection: 9,
+                          mediaPickerService: service,
+                        ),
+                      ),
+                    );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      for (final id in <String>['a1', 'a2', 'a3', 'a4']) {
+        await tester.tap(
+          find.byKey(ValueKey<String>('media-picker-asset-$id')),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      final stripRect = tester.getRect(find.byType(MediaReorderableView));
+      final positionsBefore = <String, Rect>{
+        for (final id in <String>['a1', 'a2', 'a3', 'a4'])
+          id: tester.getRect(
+            find.byKey(ValueKey<String>('media-picker-selected-thumb-$id')),
+          ),
+      };
+      final orderedIds = positionsBefore.keys.toList(growable: false)
+        ..sort(
+          (a, b) =>
+              positionsBefore[a]!.left.compareTo(positionsBefore[b]!.left),
+        );
+      expect(
+        positionsBefore.values
+            .map((rect) => rect.left)
+            .reduce((min, value) => value < min ? value : min),
+        closeTo(stripRect.left, 0.5),
+      );
+
+      final start = tester.getCenter(
+        find.byKey(
+          ValueKey<String>('media-picker-selected-thumb-${orderedIds.first}'),
+        ),
+      );
+      final target = tester.getCenter(
+        find.byKey(
+          ValueKey<String>('media-picker-selected-thumb-${orderedIds.last}'),
+        ),
+      );
+      final gesture = await tester.startGesture(start);
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 80));
+      await gesture.moveBy((target - start) + const Offset(30, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 220));
+
+      final secondRect = tester.getRect(
+        find.byKey(
+          ValueKey<String>('media-picker-selected-thumb-${orderedIds[1]}'),
+        ),
+      );
+      final thirdRect = tester.getRect(
+        find.byKey(
+          ValueKey<String>('media-picker-selected-thumb-${orderedIds[2]}'),
+        ),
+      );
+      final fourthRect = tester.getRect(
+        find.byKey(
+          ValueKey<String>('media-picker-selected-thumb-${orderedIds[3]}'),
+        ),
+      );
+      expect(secondRect.left, closeTo(positionsBefore[orderedIds[0]]!.left, 1));
+      expect(thirdRect.left, closeTo(positionsBefore[orderedIds[1]]!.left, 1));
+      expect(fourthRect.left, closeTo(positionsBefore[orderedIds[2]]!.left, 1));
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('完成(4)'));
+      await tester.pumpAndSettle();
+
+      expect(picked?.items.map((item) => item.id).toList(), <String>[
+        orderedIds[1],
+        orderedIds[2],
+        orderedIds[3],
+        orderedIds[0],
+      ]);
     });
 
     testWidgets('宫格选择、底部删除与完成回填保持当前顺序', (tester) async {

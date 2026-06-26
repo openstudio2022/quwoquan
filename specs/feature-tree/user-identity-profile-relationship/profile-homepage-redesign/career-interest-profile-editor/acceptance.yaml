@@ -142,14 +142,15 @@ gwt_acceptance:
     done_when:
       - 用户能完成职业选择、兴趣添加、排序、保存、回读的完整旅程。
     edge_cases:
-      - 有未保存修改返回时展示保存/继续编辑/放弃修改底部确认。
+      - 有未保存修改返回时展示 iOS 原生风格保存/继续编辑/放弃修改确认，不使用底部动作面板。
     contract_refs:
       - profile-career-interest-personalization
     performance_points: []
     tests:
       planned:
         - file: quwoquan_app/test/user_acceptance/ui/user/journeys/profile_career_interest_personalization__user_acceptance_test.dart
-      recorded: []
+      recorded:
+        - file: quwoquan_app/test/local_contract/ui/user/pages/career_interest_page__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
@@ -159,8 +160,15 @@ gwt_acceptance:
             - user_acceptance.user_identity_profile_relationship.profile_homepage_redesign.career_interest.journey
           envs:
             - gamma_local
-      supporting: []
-    notes: []
+      supporting:
+        - layer: local_contract
+          suite: career_interest_page
+          cases:
+            - local_contract.user_identity_profile_relationship.profile_homepage_redesign.career_interest.unsaved_exit_ios_alert
+          envs:
+            - local
+    notes:
+      - 本轮仅补未保存退出确认的 local_contract 回归；完整 gamma_local 用户旅程仍按 planned user_acceptance 补录。
 execution:
   local_gate:
     - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

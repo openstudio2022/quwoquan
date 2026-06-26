@@ -95,6 +95,7 @@ class MockChatRepository implements ChatRepository {
             .toList(growable: true);
       }
     }
+    _materializeSeededGroupAvatarMetadata();
   }
 
   int _seqCounter = 100;
@@ -260,6 +261,36 @@ class MockChatRepository implements ChatRepository {
     _inboxOverrides[record.id] = _effectiveInbox(record);
   }
 
+  void _materializeSeededGroupAvatarMetadata() {
+    for (var index = 0; index < _conversationCache.length; index++) {
+      final current = _conversationCache[index];
+      if (current.type != 'group' || current.avatarUrl.trim().isEmpty) {
+        continue;
+      }
+      final sourceHash = _groupAvatarSourceHash(
+        _ensureMembersCache(current.id),
+      );
+      if (sourceHash.isEmpty) {
+        continue;
+      }
+      final needsVersion = current.groupAvatarVersion <= 0;
+      final needsSourceHash = (current.groupAvatarSourceHash ?? '')
+          .trim()
+          .isEmpty;
+      if (!needsVersion && !needsSourceHash) {
+        continue;
+      }
+      final next = current.copyWith(
+        groupAvatarVersion: needsVersion ? 1 : current.groupAvatarVersion,
+        groupAvatarSourceHash: needsSourceHash
+            ? sourceHash
+            : current.groupAvatarSourceHash,
+      );
+      _conversationCache[index] = next;
+      _syncInboxFromConversation(next);
+    }
+  }
+
   void _bumpMembersRosterAfterMemberChange(
     String conversationId,
     int memberCount,
@@ -297,10 +328,10 @@ class MockChatRepository implements ChatRepository {
   static String _groupAvatarSourceHash(
     List<ChatConversationMemberDto> members,
   ) {
-    return members
-        .take(9)
-        .map((member) => '${member.userId}:${member.avatarUrl}')
-        .join('|');
+    return sortChatMemberDtos(
+      members,
+      'joined_asc',
+    ).take(9).map((member) => '${member.userId}:${member.avatarUrl}').join('|');
   }
 
   static String _renderedGroupAvatarUrl(

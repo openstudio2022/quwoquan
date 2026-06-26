@@ -183,15 +183,14 @@ void main() {
 
       expect(
         find.byKey(const ValueKey<String>('profile-header-edit')),
-        findsOneWidget,
+        findsNothing,
       );
-      await revealProfileSummaryWidget(
-        tester,
-        find.byKey(const ValueKey<String>('profile-header-edit')),
-      );
-      await tester.tap(
-        find.byKey(const ValueKey<String>('profile-header-edit')),
-      );
+      final editProfileAction = find
+          .text(UITextConstants.profileEditLabel)
+          .first;
+      expect(editProfileAction, findsOneWidget);
+      await revealProfileSummaryWidget(tester, editProfileAction);
+      await tester.tap(editProfileAction);
       await _pumpFrames(tester, count: 10);
 
       expect(find.text(UITextConstants.editProfile), findsOneWidget);

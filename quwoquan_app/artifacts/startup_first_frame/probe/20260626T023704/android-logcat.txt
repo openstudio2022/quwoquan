@@ -1,0 +1,546 @@
+--------- beginning of main
+06-26 02:37:05.664  1109  1109 D SearchTargetUtil: queryLength=0 size=0
+06-26 02:37:05.667   956   956 E SmsApplication: com.google.android.apps.messaging lost android:read_cell_broadcasts:  (fixing)
+06-26 02:37:05.669   554   554 W IPCThreadState: Sending oneway calls to frozen process.
+06-26 02:37:05.670   956   956 E CellBroadcastUtils: getDefaultCellBroadcastReceiverPackageName: no package found
+06-26 02:37:05.670   554   554 W IPCThreadState: Sending oneway calls to frozen process.
+06-26 02:37:05.678  4149  7270 I PermissionControllerServiceImpl: Updating user sensitive for uid 10205
+06-26 02:37:05.683   956   956 E SmsApplication: com.google.android.apps.messaging lost android:read_cell_broadcasts:  (fixing)
+--------- beginning of system
+06-26 02:37:05.683   554  1382 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 10142, code = READ_CELL_BROADCASTS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 02:37:05.684   956   956 E CellBroadcastUtils: getDefaultCellBroadcastReceiverPackageName: no package found
+06-26 02:37:05.684   554  1382 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = READ_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 02:37:05.684   554  1387 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = RECEIVE_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 02:37:05.684   554  1382 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = RECEIVE_WAP_PUSH, mode = allow, callingUid = 1001, oldMode = allow
+06-26 02:37:05.684   554  1382 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = SEND_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 02:37:05.684   554  2339 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = READ_CELL_BROADCASTS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 02:37:05.685   956  1146 D ImsResolver: maybeAddedImsService, packageName: com.quwoquan.quwoquan_app
+06-26 02:37:05.686   956   956 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 02:37:05.687   956   956 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 02:37:05.693  1109  1109 D StatsLog: LAUNCHER_ALLAPPS_COUNT
+06-26 02:37:05.710   554   571 I system_server: Background concurrent mark compact GC freed 15MB AllocSpace bytes, 37(1376KB) LOS objects, 45% free, 29MB/53MB, paused 7.513ms,1.602ms total 208.909ms
+06-26 02:37:05.711   554   573 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/InputDevices/InputDevices.apk' with 1 weak references
+06-26 02:37:05.711   554   573 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/LatinIMEGooglePrebuilt/LatinIMEGooglePrebuilt.apk' with 1 weak references
+06-26 02:37:05.712   554   573 W System  : A resource failed to call HardwareBuffer.close. 
+06-26 02:37:05.712   554   573 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~L1TwAGe6o66CVMK1qwBoeg==/com.quwoquan.quwoquan_app-On8lgAmkYjT4RbQcEPtytQ==/base.apk' with 1 weak references
+06-26 02:37:05.712   554   573 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/talkback/talkback.apk' with 1 weak references
+06-26 02:37:05.712   554   573 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/GoogleTTS/GoogleTTS.apk' with 1 weak references
+06-26 02:37:05.712   554   573 W System  : A resource failed to call release. 
+06-26 02:37:05.712   554   573 W system_server: ApkAssets: Deleting an ApkAssets object '/vendor/overlay/EmulatorTalkBackOverlay/EmulatorTalkBackOverlay.apk' with 1 weak references
+06-26 02:37:05.712   554   573 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/app/AccessibilityMenu/AccessibilityMenu.apk' with 1 weak references
+06-26 02:37:05.712   554   573 W system_server: ApkAssets: Deleting an ApkAssets object '/product/overlay/AccessibilityMenu__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:05.712   554   573 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/CalendarGooglePrebuilt/CalendarGooglePrebuilt.apk' with 1 weak references
+06-26 02:37:05.713   554   573 W System  : A resource failed to call close. 
+06-26 02:37:05.713   554   573 W System  : A resource failed to call release. 
+06-26 02:37:05.768   554  1387 I ActivityManager: Force stopping com.quwoquan.quwoquan_app appid=10205 user=0: from pid 7832
+06-26 02:37:05.768   554  1387 I WindowManager:   Force removing ActivityRecord{2af575a u0 com.quwoquan.quwoquan_app/.MainActivity t16 f} isExiting}
+06-26 02:37:05.768   554  1387 W WindowManager: removeAppToken: Attempted to remove non-existing token: Token{69b4280 ActivityRecord{2af575a u0 com.quwoquan.quwoquan_app/.MainActivity t16 f} isExiting}}
+06-26 02:37:05.768   554  1387 I AppsFilter: interaction: PackageSetting{9b1eb1d com.example.quwoquan_app/10204} -> PackageSetting{2409433 com.quwoquan.quwoquan_app/10205} BLOCKED
+06-26 02:37:05.770   956   956 D CarrierSvcBindHelper: onHandleForceStop: [com.quwoquan.quwoquan_app]
+06-26 02:37:05.770   956   956 D CarrierSvcBindHelper: No carrier app for: 0
+06-26 02:37:05.777   401  1105 W VsyncModulator: setTransactionSchedule: Unexpected EarlyEnd
+06-26 02:37:05.799   554  1387 W ActivityTaskManager: callingPackage for (uid=2000, pid=7837) has no WPC
+06-26 02:37:05.800   554  1387 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_OVERRIDE
+06-26 02:37:05.800   554  1387 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_FULLSCREEN_OVERRIDE
+06-26 02:37:05.800   554  1387 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE
+06-26 02:37:05.802   554  1387 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@3cbbef26 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+06-26 02:37:05.802   554  1387 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_RESIZEABLE_ACTIVITY_OVERRIDES
+06-26 02:37:05.802   554  1387 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_MIN_ASPECT_RATIO_OVERRIDE
+06-26 02:37:05.805   554  1387 I ActivityTaskManager: Add Task{c446303 #16 type=standard A=10205:com.quwoquan.quwoquan_app} to hidden list because adding Task{3547941 #17 type=standard A=10205:com.quwoquan.quwoquan_app}
+06-26 02:37:05.805   812   847 V WindowManagerShell: Transition requested (#34): android.os.BinderProxy@70f6b7f TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=17 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity } baseActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} topActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} origActivity=null realActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} numActivities=1 lastActiveTime=2047625 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{android.window.IWindowContainerToken$Stub$Proxy@78ba74c} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=ActivityInfo{4379395 com.quwoquan.quwoquan_app.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= true isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=1080 topActivityLetterboxHeight=2400 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 34 }
+06-26 02:37:05.806   554  1387 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity} with LAUNCH_SINGLE_TOP from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+06-26 02:37:05.806   554   605 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@3cbbef26 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+06-26 02:37:05.810  1109  1109 W SplitSelectStateCtor: Missing session instanceIds
+06-26 02:37:05.810  1109  1109 D StatsLog: LAUNCHER_SPLIT_SELECTION_EXIT_INTERRUPTED
+06-26 02:37:05.812   359   359 D Zygote  : Forked child process 7840
+06-26 02:37:05.812   554   615 I ActivityManager: Start proc 7840:com.quwoquan.quwoquan_app/u0a205 for next-top-activity {com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity}
+06-26 02:37:05.812   812   847 D WindowManagerShell: setLauncherKeepClearAreaHeight: visible=false, height=527
+06-26 02:37:05.812   554  1360 I AppsFilter: interaction: PackageSetting{9b1eb1d com.example.quwoquan_app/10204} -> PackageSetting{818d440 com.quwoquan.quwoquan_app/10205} BLOCKED
+06-26 02:37:05.813  1109  1109 I TopTaskTracker: onTaskMovedToFront: (moved taskInfo to front) taskId=17, baseIntent=Intent { flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity }
+06-26 02:37:05.822   554  1360 D CoreBackPreview: Window{7c6c372 u0 Splash Screen com.quwoquan.quwoquan_app}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@ad6f46c, mPriority=0, mIsAnimationCallback=false}
+06-26 02:37:05.827  7840  7840 I an.quwoquan_app: Late-enabling -Xcheck:jni
+06-26 02:37:05.840   812  1231 V WindowManagerShell: onTransitionReady(transaction=2379411883078)
+06-26 02:37:05.841   554   602 V WindowManager: Sent Transition (#34) createdAt=06-26 02:37:05.802 via request=TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=17 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity } baseActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} topActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} origActivity=null realActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} numActivities=1 lastActiveTime=2047625 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{RemoteToken{f04c8e9 Task{3547941 #17 type=standard A=10205:com.quwoquan.quwoquan_app}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=ActivityInfo{776b96e com.quwoquan.quwoquan_app.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= true isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=1080 topActivityLetterboxHeight=2400 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 34 }
+06-26 02:37:05.841   554   602 V WindowManager:     startWCT=WindowContainerTransaction { changes = {} hops = [] errorCallbackToken=null taskFragmentOrganizer=null }
+06-26 02:37:05.841   554   602 V WindowManager:     info={id=34 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[
+06-26 02:37:05.841   554   602 V WindowManager:         {WCT{RemoteToken{f04c8e9 Task{3547941 #17 type=standard A=10205:com.quwoquan.quwoquan_app}}} m=OPEN f=NONE leash=Surface(name=Task=17)/@0x6f96504 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},
+06-26 02:37:05.841   554   602 V WindowManager:         {WCT{RemoteToken{f7dc97a Task{71dfae4 #1 type=home}}} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x78ef81f sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}
+06-26 02:37:05.841   554   602 V WindowManager:     ]}
+06-26 02:37:05.841   812   847 V WindowManagerShell: onTransitionReady (#34) android.os.BinderProxy@70f6b7f: {id=34 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@b20326f} m=OPEN f=NONE leash=Surface(name=Task=17)/@0xeea0a50 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@ced7b7c} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x2aaf449 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}]}
+06-26 02:37:05.843   812   847 V WindowManagerShell: Transition (#34) android.os.BinderProxy@70f6b7f@0 ready while (#33) android.os.BinderProxy@9d156ab@0 is still animating. Notify the animating transition in case they can be merged
+06-26 02:37:05.847   812   847 V WindowManagerShell:    Merge into remote: RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@1dad424, appThread = android.app.IApplicationThread$Stub$Proxy@ea77b8d, debugName = QuickstepLaunchHome }
+06-26 02:37:05.848   812   847 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#33) android.os.BinderProxy@9d156ab@0
+06-26 02:37:05.849   554   602 V WindowManager: Finish Transition (#33): created at 06-26 02:37:05.326 collect-started=0.329ms request-sent=0.944ms started=64.806ms ready=78.803ms sent=119.456ms finished=522.965ms
+06-26 02:37:05.849   554  2339 E IPCThreadState: Binder transaction failure. id: 652212, BR_*: 29189, error: -22 (Invalid argument)
+06-26 02:37:05.850   554  2339 W ActivityManager: pid 554 system sent binder code 7 with flags 1 to frozen apps and got error -32
+06-26 02:37:05.851   554  2339 W WindowManager: Exception thrown during dispatchAppVisibility Window{c4a2fac u0 com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity EXITING}
+06-26 02:37:05.851   554  2339 W WindowManager: android.os.DeadObjectException
+06-26 02:37:05.851   554  2339 W WindowManager: 	at android.os.BinderProxy.transactNative(Native Method)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at android.os.BinderProxy.transact(BinderProxy.java:586)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at android.view.IWindow$Stub$Proxy.dispatchAppVisibility(IWindow.java:553)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at com.android.server.wm.WindowState.sendAppVisibilityToClients(WindowState.java:3253)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at com.android.server.wm.WindowContainer.sendAppVisibilityToClients(WindowContainer.java:1289)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at com.android.server.wm.WindowToken.setClientVisible(WindowToken.java:403)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at com.android.server.wm.ActivityRecord.setClientVisible(ActivityRecord.java:7166)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at com.android.server.wm.ActivityRecord.postApplyAnimation(ActivityRecord.java:5881)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at com.android.server.wm.ActivityRecord.commitVisibility(ActivityRecord.java:5823)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at com.android.server.wm.Transition.finishTransition(Transition.java:1286)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at com.android.server.wm.TransitionController.finishTransition(TransitionController.java:937)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.finishTransition(WindowOrganizerController.java:494)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at android.window.IWindowOrganizerController$Stub.onTransact(IWindowOrganizerController.java:289)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.onTransact(WindowOrganizerController.java:204)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at android.os.Binder.execTransactInternal(Binder.java:1505)
+06-26 02:37:05.851   554  2339 W WindowManager: 	at android.os.Binder.execTransact(Binder.java:1444)
+06-26 02:37:05.851   554  2339 W Process : Unable to open /proc/7687/status
+06-26 02:37:05.855   812   847 V WindowManagerShell: Playing animation for (#34) android.os.BinderProxy@70f6b7f@0
+06-26 02:37:05.855   812   847 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultMixedHandler@12fd4c7
+06-26 02:37:05.855   554  1360 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 02:37:05.857   812   847 V WindowManagerShell:  try handler com.android.wm.shell.keyguard.KeyguardTransitionHandler@d1c6af4
+06-26 02:37:05.857   812   847 V WindowManagerShell:  try handler com.android.wm.shell.pip.PipTransition@a68121d
+06-26 02:37:05.857   812   847 V WindowManagerShell:  try handler com.android.wm.shell.activityembedding.ActivityEmbeddingController@342bc92
+06-26 02:37:05.857   812   847 V WindowManagerShell:  try handler com.android.wm.shell.recents.RecentsTransitionHandler@3caf663
+06-26 02:37:05.857   812   847 V ShellRecents: RecentsTransitionHandler.startAnimation: no controller found
+06-26 02:37:05.857   812   847 V WindowManagerShell:  try handler com.android.wm.shell.splitscreen.StageCoordinator@80f4260
+06-26 02:37:05.857   812   847 V WindowManagerShell:  try handler com.android.wm.shell.transition.RemoteTransitionHandler@af8b319
+06-26 02:37:05.857   812   847 V WindowManagerShell: Transition doesn't have explicit remote, search filters for match for {id=34 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@b20326f} m=OPEN f=NONE leash=Surface(name=Task=17)/@0xeea0a50 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@ced7b7c} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x2aaf449 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}]}
+06-26 02:37:05.857   812   847 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=undefined independent=true modes=[OPEN,TO_FRONT] flags=IN_TASK_WITH_EMBEDDED_ACTIVITY mustBeTask=false order=ANY topActivity=ComponentInfo{com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity} launchCookie=null},{atype=undefined independent=true modes=[CLOSE,TO_BACK] flags=IN_TASK_WITH_EMBEDDED_ACTIVITY mustBeTask=false order=ANY topActivity=null launchCookie=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@ba8b35c, appThread = android.app.IApplicationThread$Stub$Proxy@2a29665, debugName = OverlaySwipeBack }}
+06-26 02:37:05.858   812   847 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=dream independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null},{atype=home independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@b585fb6, appThread = android.app.IApplicationThread$Stub$Proxy@e8e64b7, debugName = LauncherToDream }}
+06-26 02:37:05.858   812   847 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x100 checks=[{atype=home independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=TOP topActivity=ComponentInfo{com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity} launchCookie=null},{atype=standard independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@1dad424, appThread = android.app.IApplicationThread$Stub$Proxy@ea77b8d, debugName = QuickstepLaunchHome }}
+06-26 02:37:05.858   812   847 V WindowManagerShell:  Delegate animation for (#34) to null
+06-26 02:37:05.858   812   847 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultTransitionHandler@ec6fd78
+06-26 02:37:05.858   812   847 V WindowManagerShell: start default transition animation, info = {id=34 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@b20326f} m=OPEN f=NONE leash=Surface(name=Task=17)/@0xeea0a50 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@ced7b7c} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x2aaf449 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}]}
+06-26 02:37:05.858   812   847 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@f54d368 animAttr=0x13 type=OPEN isEntrance=false
+06-26 02:37:05.858   812   847 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@9f7e381 animAttr=0x12 type=OPEN isEntrance=true
+06-26 02:37:05.860   554  1360 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 02:37:05.860   812   847 V WindowManagerShell:  animated by com.android.wm.shell.transition.DefaultTransitionHandler@ec6fd78
+06-26 02:37:05.861   554  1360 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 02:37:05.865  7840  7840 I an.quwoquan_app: Using CollectorTypeCMC GC.
+06-26 02:37:05.868   403   444 I adbd    : jdwp connection from 7840
+06-26 02:37:05.875  1109  1109 I TopTaskTracker: onTaskRemoved: taskId=16
+06-26 02:37:05.875  1109  1109 I TopTaskTracker: onTaskRemoved: taskId=16
+06-26 02:37:05.875  7840  7840 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+06-26 02:37:05.888   401   401 E BpTransactionCompletedListener: Failed to transact (-32)
+06-26 02:37:05.889   401   401 E BpTransactionCompletedListener: Failed to transact (-32)
+06-26 02:37:05.904  7840  7840 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+06-26 02:37:05.904  7840  7840 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+06-26 02:37:05.909  7840  7840 W ziparchive: Unable to open '/data/app/~~BpPNRZzzUoTPzOOsn8GWZQ==/com.quwoquan.quwoquan_app-Ldme-YFMm7Wzs-OvzeTcVA==/base.dm': No such file or directory
+06-26 02:37:05.910  7840  7840 W ziparchive: Unable to open '/data/app/~~BpPNRZzzUoTPzOOsn8GWZQ==/com.quwoquan.quwoquan_app-Ldme-YFMm7Wzs-OvzeTcVA==/base.dm': No such file or directory
+06-26 02:37:05.931   554  1360 W ActivityTaskManager: takeTaskSnapshot: taskId=8 not found or not visible
+06-26 02:37:06.002  1322  1322 W MediaProvider: WorkProfileOwnerApps cache is empty
+06-26 02:37:06.002  1322  1322 D PickerSyncLockManager: Trying to acquire lock com.android.providers.media.photopicker.sync.CloseableReentrantLock@91c6cf3[Unlocked]. Lock Name = CLOUD_PROVIDER_LOCK. Threads that may be waiting to acquire this lock = []
+06-26 02:37:06.002  1322  1322 D CloseableReentrantLock: Successfully acquired lock com.android.providers.media.photopicker.sync.CloseableReentrantLock@91c6cf3[Locked by thread main]. Lock Name = CLOUD_PROVIDER_LOCK. Threads that may be waiting to acquire this lock = []
+06-26 02:37:06.002  1322  1322 D CloseableReentrantLock: Successfully released lock com.android.providers.media.photopicker.sync.CloseableReentrantLock@91c6cf3[Unlocked]. Lock Name = CLOUD_PROVIDER_LOCK. Threads that may be waiting to acquire this lock = []
+06-26 02:37:06.003   812   812 D ControlsListingControllerImpl: ServiceConfig reloaded, count: 0
+06-26 02:37:06.004   554   614 D ActivityManager: sync unfroze 5733 com.android.vending for 3
+06-26 02:37:06.005   812   812 D ControlsListingControllerImpl: ServiceConfig reloaded, count: 0
+06-26 02:37:06.005   812   812 D ControlsListingControllerImpl: ServiceConfig reloaded, count: 0
+06-26 02:37:06.006  5733  5733 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 02:37:06.007  5733  5733 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 02:37:06.010   554   614 D ActivityManager: sync unfroze 4763 com.android.vending:background for 3
+06-26 02:37:06.010  5733  5733 I Finsky  : [2] Memory trim requested to level 40
+06-26 02:37:06.011  5733  5733 I Finsky  : [2] Flushing in-memory image cache
+06-26 02:37:06.016  5733  5733 I Finsky  : [2] Memory trim requested to level 40
+06-26 02:37:06.016  5733  5733 I Finsky  : [2] Flushing in-memory image cache
+06-26 02:37:06.018  1353  1353 I GsaVoiceInteractionSrv: (REDACTED) O received %s
+06-26 02:37:06.018  5733  5733 I Finsky  : [2] Memory trim requested to level 40
+06-26 02:37:06.018  5733  5733 I Finsky  : [2] Flushing in-memory image cache
+06-26 02:37:06.018  5733  5733 I Finsky  : [2] Memory trim requested to level 40
+06-26 02:37:06.018  5733  5733 I Finsky  : [2] Flushing in-memory image cache
+06-26 02:37:06.021  4763  4763 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 02:37:06.027  4763  4763 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 02:37:06.027  5733  5733 I Finsky  : [2] akoj - Received: android.intent.action.PACKAGE_REMOVED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 02:37:06.027  4763  4763 I Finsky:background: [2] Memory trim requested to level 40
+06-26 02:37:06.036  4763  4763 I Finsky:background: [2] Memory trim requested to level 40
+06-26 02:37:06.037  4763  4763 I Finsky:background: [2] aknz - Received: android.intent.action.PACKAGE_REMOVED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 02:37:06.038  1353  1353 I GsaVoiceInteractionSrv: (REDACTED) O received %s
+06-26 02:37:06.038  1353  1353 I GsaVoiceInteractionSrv: (REDACTED) O received %s
+06-26 02:37:06.061  6241  6319 W SearchServiceCore: Abort, client detached.
+06-26 02:37:06.061  6241  6319 W SearchServiceCore: Abort, client detached.
+06-26 02:37:06.062  6241  6319 W SearchServiceCore: Abort, client detached.
+06-26 02:37:06.069   554  2339 D ActivityManager: sync unfroze 5608 com.google.android.gms for 6
+06-26 02:37:06.078  5733  5817 I Finsky  : [64] AIM: AppInfoManager-Perf > OnDeviceAppInfo > cacheHitCount=0, cacheMissCount=1. Missed  in cache (limit 10) : [com.quwoquan.quwoquan_app]
+06-26 02:37:06.080  5608  5608 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 02:37:06.081  4763  4763 I Finsky:background: [2] aknz - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 02:37:06.081  5608  5608 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 02:37:06.092  4763  4880 I Finsky:background: [56] IQ:PSL: skipping onPackageRemoved(replacing=true) for untracked package=com.quwoquan.quwoquan_app
+06-26 02:37:06.100  4763  7860 I Finsky:background: [146] Wrote row to frosting DB: 347
+06-26 02:37:06.100  5733  5733 I Finsky  : [2] akoj - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 02:37:06.101  4763  4763 I Finsky:background: [2] aknz - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 02:37:06.103  4763  4763 I Finsky:background: [2] aknz - Deduping intent android.intent.action.PACKAGE_ADDED
+06-26 02:37:06.107  5733  5733 I Finsky  : [2] DTU: Received onPackageAdded, replacing: true
+06-26 02:37:06.108  4763  4763 I Finsky:background: [2] aknz - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 02:37:06.115  5733  5817 I Finsky  : [64] AIM: Got app ownership map. App counts: . Unique apps: 0
+06-26 02:37:06.116  4763  7860 I Finsky:background: [146] Wrote row to frosting DB: 348
+06-26 02:37:06.118  4763  4763 I Finsky:background: [2] aknz - Deduping intent android.intent.action.PACKAGE_ADDED
+06-26 02:37:06.119  4763  4892 I Finsky:background: [60] RECEIVER_PACKAGE_MONITOR_BACKGROUND#logWorkEndAndFinishGoAsync: SUCCESS
+06-26 02:37:06.120  5733  5817 E Finsky  : [64] [Counters] attempted to use a non-positive increment for: 4752
+06-26 02:37:06.121  5733  5814 E Finsky  : [62] [Counters] attempted to use a non-positive increment for: 4753
+06-26 02:37:06.125  4763  4763 I Finsky:background: [2] Memory trim requested to level 40
+06-26 02:37:06.127  5733  5805 I Finsky  : [58] AIM: AppInfoManager-Perf > OnDeviceAppInfo > cacheHitCount=0, cacheMissCount=1. Missed  in cache (limit 10) : [com.quwoquan.quwoquan_app]
+06-26 02:37:06.127  5733  5805 I Finsky  : [58] AIM: Got app ownership map. App counts: . Unique apps: 0
+06-26 02:37:06.127  5733  5805 E Finsky  : [58] [Counters] attempted to use a non-positive increment for: 4752
+06-26 02:37:06.127  5733  5805 E Finsky  : [58] [Counters] attempted to use a non-positive increment for: 4753
+06-26 02:37:06.135  5733  7679 I Finsky  : [185] SCH: Received scheduling request: Id: 12-1, Constraints: [{ L: 15000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 02:37:06.143  5733  5733 I Finsky  : [2] akoj - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 02:37:06.144  4763  7860 I Finsky:background: [146] Wrote row to frosting DB: 349
+06-26 02:37:06.145  5733  5733 I Finsky  : [2] akoj - Deduping intent android.intent.action.PACKAGE_ADDED
+06-26 02:37:06.152  5733  5733 I Finsky  : [2] akoj - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 02:37:06.157  5733  5733 I Finsky  : [2] akoj - Deduping intent android.intent.action.PACKAGE_ADDED
+06-26 02:37:06.158  5733  5783 I Finsky  : [48] RECEIVER_PACKAGE_MONITOR#logWorkEndAndFinishGoAsync: SUCCESS
+06-26 02:37:06.160   812   847 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#34) android.os.BinderProxy@70f6b7f@0
+06-26 02:37:06.163  5590  7873 I Fitness : (REDACTED) FitCleanupIntentOperation received Intent %s
+06-26 02:37:06.164   812   847 V WindowManagerShell: Track 0 became idle
+06-26 02:37:06.164   812   847 V WindowManagerShell: All active transition animations finished
+06-26 02:37:06.165  5590  7873 I ProximityAuth: [RecentAppsMediator] Package added: (user=UserHandle{0}) com.quwoquan.quwoquan_app
+06-26 02:37:06.165  1109  1109 D VRI[NexusLauncherActivity]: visibilityChanged oldVisibility=true newVisibility=false
+06-26 02:37:06.166   554  1387 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 02:37:06.167   554  1360 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 02:37:06.168   554   602 V WindowManager: Finish Transition (#34): created at 06-26 02:37:05.802 collect-started=0.026ms request-sent=2.861ms started=4.119ms ready=36.219ms sent=37.361ms finished=358.88ms
+06-26 02:37:06.169  5733  7679 I Finsky  : [185] SCH: Received scheduling request: Id: 12-1, Constraints: [{ L: 15000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 02:37:06.174  1109  1109 D NexusLauncherModelDelegate: notifySmartspaceEvent: SmartspaceTargetEvent{mSmartspaceTarget=null, mSmartspaceActionId='null', mEventType=7}
+06-26 02:37:06.174  4763  7860 I Finsky:background: [146] Wrote row to frosting DB: 350
+06-26 02:37:06.196  4763  7860 I Finsky:background: [146] Wrote row to frosting DB: 351
+06-26 02:37:06.201  5608  7879 I AppBackupStateCleanupIO: Backup state cleanup on uninstall is disabled. [CONTEXT service_id=229 ]
+06-26 02:37:06.202  5733  7689 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+06-26 02:37:06.204  5590  5590 D BoundBrokerSvc: onRebind: Intent { act=com.google.android.gms.auth.aang.events.services.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.PersistentApiService }
+06-26 02:37:06.205  5733  5817 I Finsky  : [64] AIM: AppInfoManager-Perf > ItemModel > CacheSize=0, cacheHitCount=0, cacheMissCount=1, total appsWithNoServerDataCount=0. Missed  in cache (limit 10) : [com.quwoquan.quwoquan_app]
+06-26 02:37:06.205  5733  7667 D TrafficStats: tagSocket(160) with statsTag=0xffffffff, statsUid=-1
+06-26 02:37:06.213  5733  5820 I Finsky  : [67] AIM: AppInfoManager-Perf > ItemModel > CacheSize=0, cacheHitCount=0, cacheMissCount=1, total appsWithNoServerDataCount=0. Missed  in cache (limit 10) : [com.quwoquan.quwoquan_app]
+06-26 02:37:06.216  5733  5820 I Finsky  : [67] AIM: AppInfoManager-Perf > ItemModel > ItemStore Called 1 apps cacheOptions = USE_CACHE
+06-26 02:37:06.217  5733  5820 I Finsky  : [67] AIM: ItemModel fetch - unauth(1), auth()
+06-26 02:37:06.219  5733  5820 I Finsky  : [67] ItemStore: Not cached: com.quwoquan.quwoquan_app
+06-26 02:37:06.222  5608  7880 I FraudProtectUtils: Not in testing population, skipping local test bank apps. [CONTEXT service_id=469 ]
+06-26 02:37:06.222  5608  7880 I FraudProtectUtils: (REDACTED) Latest bank app list size: %d, %s isBankApp: false
+06-26 02:37:06.228  4763  7860 I Finsky:background: [146] Wrote row to frosting DB: 352
+06-26 02:37:06.228  5608  7880 I PackageInstallIntentOp: (REDACTED) Package %s is not a bank app. Skipping updates.
+06-26 02:37:06.229  5733  5817 I Finsky  : [64] AIM: AppInfoManager-Perf > ItemModel > ItemStore Called 1 apps cacheOptions = USE_CACHE
+06-26 02:37:06.232  5733  5817 I Finsky  : [64] AIM: ItemModel fetch - unauth(1), auth()
+06-26 02:37:06.233  5733  5817 I Finsky  : [64] ItemStore: Not cached: com.quwoquan.quwoquan_app
+06-26 02:37:06.242  5733  5741 W android.vending: Missing inline cache for java.lang.Object bech.apply(java.lang.Object)
+06-26 02:37:06.245   554  2290 V SafetySourceDataValidat: Package: com.android.vending has expected signature
+06-26 02:37:06.250  5608  7863 I Auth    : (REDACTED) [SupervisedAccountIntentOperation] onHandleIntent: %s
+06-26 02:37:06.254  5608  7880 W AppInstallOperation: FDL Migration::InstallIntentOperation by Appinvite Module [CONTEXT service_id=77 ]
+06-26 02:37:06.256  5608  7879 I FraudProtectUtils: Not in testing population, skipping local test bank apps. [CONTEXT service_id=469 ]
+06-26 02:37:06.256  5608  7879 I FraudProtectUtils: (REDACTED) Latest bank app list size: %d, %s isBankApp: false
+06-26 02:37:06.256  5608  7879 I PackageInstallIntentOp: (REDACTED) Package %s is not a bank app. Skipping updates.
+06-26 02:37:06.260  5733  5733 E Finsky  : [2] brpi failed GRPC call!
+06-26 02:37:06.260  5733  5733 E Finsky  : java.lang.UnsupportedOperationException: Unauth not supported in gRPC BrowseService.
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at abfs.c(PG:179)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at abfq.b(PG:312)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at abfq.a(PG:54)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at org.chromium.net.AndroidNetworkLibrary.v(PG:14)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at ccng.o(PG:29)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at ccng.p(PG:12)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at abfr.b(PG:37)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at abfr.pQ(PG:23)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at smu.b(PG:25)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at cdls.us(PG:5)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at cdtf.run(PG:109)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at wfu.run(PG:619)
+06-26 02:37:06.260  5733  5733 E Finsky  : 	at java.lang.Thread.run(Thread.java:1012)
+06-26 02:37:06.263  5733  5733 E Finsky  : [2] brpi failed GRPC call!
+06-26 02:37:06.263  5733  5733 E Finsky  : java.lang.UnsupportedOperationException: Unauth not supported in gRPC BrowseService.
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at abfs.c(PG:179)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at abfq.b(PG:312)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at abfq.a(PG:54)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at org.chromium.net.AndroidNetworkLibrary.v(PG:14)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at ccng.o(PG:29)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at ccng.p(PG:12)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at abfr.b(PG:37)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at abfr.pQ(PG:23)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at smu.b(PG:25)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at cdls.us(PG:5)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at cdtf.run(PG:109)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at wfu.run(PG:619)
+06-26 02:37:06.263  5733  5733 E Finsky  : 	at java.lang.Thread.run(Thread.java:1012)
+06-26 02:37:06.263  5733  5733 I Finsky  : [2] Memory trim requested to level 40
+06-26 02:37:06.263  5733  5733 I Finsky  : [2] Flushing in-memory image cache
+06-26 02:37:06.274  5733  5805 E Finsky  : [58] ItemStore: getItems RPC failed for item com.quwoquan.quwoquan_app
+06-26 02:37:06.274  5733  5814 E Finsky  : [62] ItemStore: getItems RPC failed for item com.quwoquan.quwoquan_app
+06-26 02:37:06.275  5608  7890 I NearbyDiscovery: (REDACTED) processGrantSlicePermission: %s
+06-26 02:37:06.320  5608  7894 W SQLiteLog: (28) double-quoted string literal: "com.quwoquan.quwoquan_app"
+06-26 02:37:06.326  1339  1954 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 02:37:06.350  1339  1954 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 02:37:06.355  1339  1954 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 02:37:06.360  1339  1954 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 02:37:06.361  1339  1954 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 02:37:06.362  1339  1954 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 02:37:06.362  1339  1954 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 02:37:06.363  1339  1954 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 02:37:06.371  1339  1954 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 02:37:06.387  5608  6340 I Icing   : IndexChimeraService.getServiceInterface callingPackage=com.google.android.gms componentName=AppsCorpus serviceId=36
+06-26 02:37:06.394  5608  5608 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.feedback.internal.IFeedbackService dat=chimera-action:/... cmp=com.google.android.gms/.chimera.GmsBoundBrokerService }
+06-26 02:37:06.394  5608  5608 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.feedback.internal.IFeedbackService dat=chimera-action:/... cmp=com.google.android.gms/.chimera.GmsBoundBrokerService }
+06-26 02:37:06.404  5608  5749 I Icing   : IndexChimeraService.getServiceInterface callingPackage=com.google.android.gms componentName=null serviceId=30
+06-26 02:37:06.414  5608  6053 I Icing   : Usage reports ok 1, Failed Usage reports 0, indexed 0, rejected 0
+06-26 02:37:06.427  5608  6053 I Icing   : Usage reports ok 0, Failed Usage reports 0, indexed 0, rejected 0
+06-26 02:37:06.436  7840  7840 D nativeloader: Configuring clns-7 for other apk /data/app/~~BpPNRZzzUoTPzOOsn8GWZQ==/com.quwoquan.quwoquan_app-Ldme-YFMm7Wzs-OvzeTcVA==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~BpPNRZzzUoTPzOOsn8GWZQ==/com.quwoquan.quwoquan_app-Ldme-YFMm7Wzs-OvzeTcVA==/lib/arm64:/data/app/~~BpPNRZzzUoTPzOOsn8GWZQ==/com.quwoquan.quwoquan_app-Ldme-YFMm7Wzs-OvzeTcVA==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.quwoquan.quwoquan_app
+06-26 02:37:06.442  5608  6053 I Icing   : Indexing com.google.android.gms-apps from com.google.android.gms
+06-26 02:37:06.447  5608  6053 I Icing   : Indexing done com.google.android.gms-apps
+06-26 02:37:06.457  7840  7840 V GraphicsEnvironment: Currently set values for:
+06-26 02:37:06.457  7840  7840 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+06-26 02:37:06.457  7840  7840 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+06-26 02:37:06.457  7840  7840 V GraphicsEnvironment: Global.Settings values are invalid: number of packages: 0, number of values: 0
+06-26 02:37:06.457  7840  7840 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+06-26 02:37:06.461  7859  7859 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 02:37:06.461  7859  7859 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 02:37:06.468   158   158 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 02:37:06.468  7859  7903 I Gralloc4: mapper 4.x is not supported
+06-26 02:37:06.501   554  1387 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ENABLE_FAKE_FOCUS
+06-26 02:37:06.672   812   999 D EGL_emulation: app_time_stats: avg=6611.98ms min=6611.98ms max=6611.98ms count=1
+06-26 02:37:06.686  7840  7907 D nativeloader: Load /data/app/~~BpPNRZzzUoTPzOOsn8GWZQ==/com.quwoquan.quwoquan_app-Ldme-YFMm7Wzs-OvzeTcVA==/base.apk!/lib/arm64-v8a/libflutter.so using ns clns-7 from class loader (caller=/data/app/~~BpPNRZzzUoTPzOOsn8GWZQ==/com.quwoquan.quwoquan_app-Ldme-YFMm7Wzs-OvzeTcVA==/base.apk!classes22.dex): ok
+06-26 02:37:06.693   554  1387 D FileUtils: Rounded bytes from 2095906816 to 4000000000
+06-26 02:37:06.694  7840  7908 D skia    : [SkFontMgr Android Parser] '/product/etc/fonts_customization.xml' could not be opened
+06-26 02:37:06.718  7840  7840 W an.quwoquan_app: type=1400 audit(0.0:134): avc:  denied  { read } for  name="max_map_count" dev="proc" ino=56370 scontext=u:r:untrusted_app:s0:c205,c256,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.quwoquan.quwoquan_app
+06-26 02:37:06.727  7840  7840 I flutter : [IMPORTANT:flutter/shell/common/shell.cc(528)] [Action Required]: Impeller opt-out deprecated.
+06-26 02:37:06.727  7840  7840 I flutter :     The application opted out of Impeller by either using the
+06-26 02:37:06.727  7840  7840 I flutter :     `--no-enable-impeller` flag or the
+06-26 02:37:06.727  7840  7840 I flutter :     `io.flutter.embedding.android.EnableImpeller` `AndroidManifest.xml` entry.
+06-26 02:37:06.727  7840  7840 I flutter :     These options are going to go away in an upcoming Flutter release. Remove
+06-26 02:37:06.727  7840  7840 I flutter :     the explicit opt-out. If you need to opt-out, please report a bug describing
+06-26 02:37:06.727  7840  7840 I flutter :     the issue.
+06-26 02:37:06.727  7840  7840 I flutter : 
+06-26 02:37:06.727  7840  7840 I flutter :     https://github.com/flutter/flutter/issues/new?template=02_bug.yml
+06-26 02:37:06.727  7840  7840 I flutter : 
+06-26 02:37:06.728  7840  7840 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+06-26 02:37:06.728  7840  7840 I EGL_emulation: Opening libGLESv2_emulation.so
+06-26 02:37:06.736  7840  7915 I flutter : The Dart VM service is listening on http://127.0.0.1:38727/dWXhYR9G5-Y=/
+06-26 02:37:06.961   554   864 W Telecom : TelecomServiceImpl$1: registerPhoneAccount - attempt to set a group from a non-system caller.: TSI.rPA(cqq)@AJg
+06-26 02:37:06.961   554   864 I Telecom : TelecomServiceImpl$1: registerPhoneAccount: account=[[ ] PhoneAccount: ComponentInfo{com.quwoquan.quwoquan_app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0} Capabilities: SelfManaged  Audio Routes: BESW Schemes: tel  Extras: null GroupId: *** SC Restrictions: [NONE]]: TSI.rPA(cqq)@AJg
+06-26 02:37:06.961   554   864 I Telecom : PhoneAccountRegistrar: Modify account: [ComponentInfo{com.quwoquan.quwoquan_app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0}(lbl: Callkit Incoming In-App Call -> 趣我圈)]: TSI.rPA(cqq)@AJg
+06-26 02:37:06.962   554   864 I Telecom : AppLabelProxy: package com.quwoquan.quwoquan_app: name is 趣我圈: TSI.rPA(cqq)@AJg
+06-26 02:37:06.966   554   864 I Telecom : CallsManager: handlePhoneAccountChanged: phoneAccount=[[X] PhoneAccount: ComponentInfo{com.quwoquan.quwoquan_app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0} Capabilities: SelfManaged  Audio Routes: BESW Schemes: tel  Extras: null GroupId: *** SC Restrictions: [NONE]]: TSI.rPA(cqq)@AJg
+06-26 02:37:06.966  7840  7840 D InAppCallManager: PhoneAccount registered.
+06-26 02:37:06.981  7840  7840 D nativeloader: Load /data/app/~~BpPNRZzzUoTPzOOsn8GWZQ==/com.quwoquan.quwoquan_app-Ldme-YFMm7Wzs-OvzeTcVA==/base.apk!/lib/arm64-v8a/libdartjni.so using ns clns-7 from class loader (caller=/data/app/~~BpPNRZzzUoTPzOOsn8GWZQ==/com.quwoquan.quwoquan_app-Ldme-YFMm7Wzs-OvzeTcVA==/base.apk!classes12.dex): ok
+06-26 02:37:07.038  7840  7840 W an.quwoquan_app: Accessing hidden method Landroid/view/accessibility/AccessibilityNodeInfo;->getSourceNodeId()J (unsupported,test-api, reflection, allowed)
+06-26 02:37:07.038  7840  7840 W an.quwoquan_app: Accessing hidden method Landroid/view/accessibility/AccessibilityRecord;->getSourceNodeId()J (unsupported, reflection, allowed)
+06-26 02:37:07.039  7840  7840 W an.quwoquan_app: Accessing hidden field Landroid/view/accessibility/AccessibilityNodeInfo;->mChildNodeIds:Landroid/util/LongArray; (unsupported, reflection, allowed)
+06-26 02:37:07.039  7840  7840 W an.quwoquan_app: Accessing hidden method Landroid/util/LongArray;->get(I)J (unsupported, reflection, allowed)
+06-26 02:37:07.074  7840  7840 W HWUI    : Unknown dataspace 0
+06-26 02:37:07.077  7920  7920 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 02:37:07.077  7920  7920 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 02:37:07.081   158   158 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 02:37:07.081  7920  7923 I Gralloc4: mapper 4.x is not supported
+06-26 02:37:07.288  7840  7840 I Choreographer: Skipped 47 frames!  The application may be doing too much work on its main thread.
+06-26 02:37:07.295  7840  7840 I WindowExtensionsImpl: Initializing Window Extensions, vendor API level=6, activity embedding enabled=true
+06-26 02:37:07.302  7840  7845 I an.quwoquan_app: Compiler allocated 5250KB to compile void android.view.ViewRootImpl.performTraversals()
+06-26 02:37:07.320   554   864 D CoreBackPreview: Window{30ea81c u0 com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@50c85a1, mPriority=0, mIsAnimationCallback=false}
+06-26 02:37:07.334  7840  7904 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+06-26 02:37:07.334  7840  7904 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+06-26 02:37:07.348   158   158 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 02:37:07.348  7840  7909 I Gralloc4: mapper 4.x is not supported
+06-26 02:37:07.381  7840  7840 D FlutterGeolocator: Creating service.
+06-26 02:37:07.382  7840  7840 D FlutterGeolocator: Binding to location service.
+06-26 02:37:07.390   554   864 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_IGNORE_REQUESTED_ORIENTATION
+06-26 02:37:07.390   554   864 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_IGNORING_ORIENTATION_REQUEST_WHEN_LOOP_DETECTED
+06-26 02:37:07.400  7840  7840 D FlutterWebRTCPlugin: audioDeviceChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+06-26 02:37:07.424  7840  7840 D FlutterGeolocator: Flutter engine connected. Connected engine count 1
+06-26 02:37:07.547   554   602 W ziparchive: Unable to open '/data/app/~~BpPNRZzzUoTPzOOsn8GWZQ==/com.quwoquan.quwoquan_app-Ldme-YFMm7Wzs-OvzeTcVA==/base.dm': No such file or directory
+06-26 02:37:07.549  1109  1109 D BaseDepthController: setSurface:
+06-26 02:37:07.549  1109  1109 D BaseDepthController: 	mWaitingOnSurfaceValidity: false
+06-26 02:37:07.549  1109  1109 D BaseDepthController: 	mSurface: null
+06-26 02:37:07.551  1109  1109 D BaseDepthController: mSurface is null and mCurrentBlur is: 0
+06-26 02:37:07.552   554   602 I ActivityTaskManager: Displayed com.quwoquan.quwoquan_app/.MainActivity for user 0: +1s738ms
+06-26 02:37:07.568   554   692 I ImeTracker: com.quwoquan.quwoquan_app:93002b44: onRequestHide at ORIGIN_SERVER reason HIDE_UNSPECIFIED_WINDOW fromUser false
+06-26 02:37:07.571   554   692 I ImeTracker: com.quwoquan.quwoquan_app:93002b44: onCancelled at PHASE_SERVER_SHOULD_HIDE
+06-26 02:37:07.572  7928  7928 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 02:37:07.572  7928  7928 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 02:37:07.576  1109  1109 D StateManager: goToState - fromState: Normal, toState: Normal, partial trace:
+06-26 02:37:07.576  1109  1109 D StateManager: 	at com.android.launcher3.statemanager.StateManager.moveToRestState(go/retraceme 2855a437b73635ce9cad76b9289087e631bbb67fc90008a0da13d343a00e5041:4)
+06-26 02:37:07.576  1109  1109 D StateManager: 	at com.android.launcher3.statemanager.StateManager.moveToRestState(go/retraceme 2855a437b73635ce9cad76b9289087e631bbb67fc90008a0da13d343a00e5041:1)
+06-26 02:37:07.576  1109  1109 D StateManager: 	at com.android.launcher3.statemanager.StatefulActivity.onStop(go/retraceme 2855a437b73635ce9cad76b9289087e631bbb67fc90008a0da13d343a00e5041:34)
+06-26 02:37:07.577  1109  1109 D StatsLog: LAUNCHER_ONSTOP
+06-26 02:37:07.581   158   158 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 02:37:07.581  7928  7934 I Gralloc4: mapper 4.x is not supported
+06-26 02:37:07.584  1109  1545 D OneSearchSuggestProvider: Shut down the binder channel
+06-26 02:37:07.593  5816  5816 I GoogleInputMethodService: GoogleInputMethodService.onFinishInput():3157 
+06-26 02:37:07.593  1109  1109 D StatsLog: LAUNCHER_GOOGLE_SEARCH_RESTORE_LIST_SIZE_AFTER_ACTIVITY_RESTART
+06-26 02:37:07.601  5816  5816 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2248 repeatCheckTimes = 0, locked = false
+06-26 02:37:07.602  5816  5816 I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1986 onStartInput(EditorInfo{EditorInfo{packageName=com.quwoquan.quwoquan_app, inputType=0, inputTypeString=NULL, enableLearning=false, autoCorrection=false, autoComplete=false, imeOptions=0, privateImeOptions=null, actionName=UNSPECIFIED, actionLabel=null, initialSelStart=-1, initialSelEnd=-1, initialCapsMode=0, label=null, fieldId=0, fieldName=null, extras=null, hintText=null, hintLocales=[]}}, false)
+06-26 02:37:07.602  5816  5816 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2248 repeatCheckTimes = 1, locked = false
+06-26 02:37:07.604  5590  5600 I FontLog : (REDACTED) Received query %s, URI %s
+06-26 02:37:07.604  5590  5600 I FontLog : (REDACTED) Query [%s] resolved to %s
+06-26 02:37:07.606  1109  1482 I IPCThreadState: oneway function results for code 2 on binder at 0xb40077e18e22f5b0 will be dropped but finished with status UNKNOWN_TRANSACTION
+06-26 02:37:07.610  5816  5816 I AndroidIME: InputBundleManager.loadActiveInputBundleId():450 loadActiveInputBundleId: und-Latn-x-password, password
+06-26 02:37:07.610   554   864 W PackageConfigPersister: App-specific configuration not found for packageName: com.quwoquan.quwoquan_app and userId: 0
+06-26 02:37:07.651  5590  5600 I FontLog : (REDACTED) Fetch %s end status %s
+06-26 02:37:07.659  5590  5600 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+06-26 02:37:07.675  5590  5600 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+06-26 02:37:07.747  5590  5594 I .gms.persistent: Background concurrent mark compact GC freed 11MB AllocSpace bytes, 7(1232KB) LOS objects, 49% free, 13MB/26MB, paused 284us,3.177ms total 118.771ms
+06-26 02:37:07.753  5590  5596 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/Velvet/Velvet.apk' with 1 weak references
+06-26 02:37:07.925   812   909 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=android.view.ViewRootImpl$$ExternalSyntheticLambda11@2614b77
+06-26 02:37:07.926   554   864 W InputManager-JNI: Input channel object '7c6c372 Splash Screen com.quwoquan.quwoquan_app (client)' was disposed without first being removed with the input manager!
+06-26 02:37:07.927   554   645 D CoreBackPreview: Window{7c6c372 u0 Splash Screen com.quwoquan.quwoquan_app EXITING}: Setting back callback null
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/DisplayCutoutEmulationCorner/DisplayCutoutEmulationCornerOverlay.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.extservices/priv-app/GoogleExtServices-sminus@AE3A.240806.019/GoogleExtServices-sminus.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/DisplayCutoutEmulationDouble/DisplayCutoutEmulationDoubleOverlay.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/TelephonyProvider/TelephonyProvider.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/TelephonyProvider__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/DynamicSystemInstallationService/DynamicSystemInstallationService.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/Velvet/Velvet.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/CalendarProvider/CalendarProvider.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/GoogleOneTimeInitializer/GoogleOneTimeInitializer.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/GoogleExtShared/GoogleExtShared.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/ExternalStorageProvider/ExternalStorageProvider.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/HTMLViewer/HTMLViewer.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/CompanionDeviceManager/CompanionDeviceManager.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/DownloadProvider/DownloadProvider.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/PrebuiltBugle/PrebuiltBugle.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/SoundPickerPrebuilt/SoundPickerPrebuilt.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.mediaprovider/priv-app/MediaProviderGoogle@AE3A.240806.019/MediaProviderGoogle.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/SafetyHubPrebuilt/SafetyHubPrebuilt.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/DownloadProviderUi/DownloadProviderUi.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.wifi/app/OsuLoginGoogle@AE3A.240806.019/OsuLoginGoogle.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/base.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_config.arm64_v8a.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_config.en.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_data_loader.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_data_loader.config.arm64_v8a.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_webrtc_native_lib.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_webrtc_native_lib.config.arm64_v8a.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/PacProcessor/PacProcessor.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/SimAppDialog/SimAppDialog.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/SimAppDialog__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.adservices/priv-app/AdServicesApkGoogle@AE3A.240806.019/AdServicesApkGoogle.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/DisplayCutoutEmulationHole/DisplayCutoutEmulationHoleOverlay.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/DisplayCutoutEmulationTall/DisplayCutoutEmulationTallOverlay.apk' with 1 weak references
+06-26 02:37:07.969  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/CertInstaller/CertInstaller.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/talkback/talkback.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/vendor/overlay/EmulatorTalkBackOverlay/EmulatorTalkBackOverlay.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/NavigationBarMode3Button/NavigationBarMode3ButtonOverlay.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/Camera2/Camera2.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/EasterEgg/EasterEgg.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/MtpService/MtpService.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.nfcservices/priv-app/NfcNciApexGoogle@AE3A.240806.019/NfcNciApexGoogle.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/Stk/Stk.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/PrebuiltDeskClockGoogle/PrebuiltDeskClockGoogle.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/NavigationBarMode2Button/NavigationBarMode2ButtonOverlay.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/DevicePersonalizationPrebuiltPixel2021-aiai_20240329.00_RC16/DevicePersonalizationPrebuiltPixel2021-aiai_20240329.00_RC16.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.permission/priv-app/GooglePermissionController@AE3A.240806.019/GooglePermissionController.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/GooglePermissionControllerOverlay.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.btservices/app/BluetoothGoogle@AE3A.240806.019/BluetoothGoogle.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/SettingsProvider/SettingsProvider.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/LargeScreenSettingsProviderOverlay.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/SettingsProvider__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/PrintSpooler/PrintSpooler.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/BasicDreams/BasicDreams.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/DeviceIntelligenceNetworkPrebuilt-astrea_20240329.00_RC02/DeviceIntelligenceNetworkPrebuilt-astrea_20240329.00_RC02.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/InputDevices/InputDevices.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.devicelock/priv-app/DeviceLockControllerGoogle@AE3A.240806.019/DeviceLockControllerGoogle.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/GoogleDialer/GoogleDialer.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/BuiltInPrintService/BuiltInPrintService.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/BuiltInPrintService__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/CaptivePortalLoginGoogle/CaptivePortalLoginGoogle.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/MusicFX/MusicFX.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/Maps/Maps.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/ModuleMetadataGoogle/ModuleMetadataGoogle.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/DisplayCutoutEmulationEmu01/DisplayCutoutEmulationEmu01Overlay.apk' with 1 weak references
+06-26 02:37:07.970  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/priv-app/AvatarPickerGoogle/AvatarPickerGoogle.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/MarkupGoogle_v2/MarkupGoogle_v2.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/NetworkStackGoogle/NetworkStackGoogle.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.rkpd/priv-app/rkpdapp.google@AE3A.240806.019/rkpdapp.google.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/GoogleContacts/GoogleContacts.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/Telecom/Telecom.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/Telecom__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/KeyChain/KeyChain.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~c1ONbQveFEmF03EprUfRmw==/com.android.chrome-dFQVwYiP4-nhXPKymS9IpQ==/Chrome.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~qBBsYjj6BglpLVSWEaglFQ==/com.google.android.trichromelibrary_636771932-Luywulu-1ewwLhAiuVnTMA==/TrichromeLibrary.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/Gallery2/Gallery2.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/GooglePackageInstaller/GooglePackageInstaller.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/PixelThemesStub/PixelThemesStub.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/priv-app/GoogleServicesFramework/GoogleServicesFramework.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/TagGoogle/TagGoogle.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/GoogleTTS/GoogleTTS.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/CallLogBackup/CallLogBackup.apk' with 1 weak references
+06-26 02:37:07.971  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/PartnerSetupPrebuilt/PartnerSetupPrebuilt.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/CameraExtensionsProxy/CameraExtensionsProxy.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/NexusWallpapersStubPrebuilt2018/NexusWallpapersStubPrebuilt2018.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/priv-app/NexusLauncherRelease/NexusLauncherRelease.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/CarrierDefaultApp/CarrierDefaultApp.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/CredentialManager/CredentialManager.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/FontNotoSerifSource/FontNotoSerifSourceOverlay.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/DeviceAsWebcam/DeviceAsWebcam.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/ProxyHandler/ProxyHandler.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.permission/priv-app/GoogleSafetyCenterResources@AE3A.240806.019/GoogleSafetyCenterResources.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/DisplayCutoutEmulationWaterfall/DisplayCutoutEmulationWaterfallOverlay.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/IntentResolver/IntentResolver.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/TransparentNavigationBar/TransparentNavigationBarOverlay.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/E2eeContactKeysProvider/E2eeContactKeysProvider.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.tethering/priv-app/ServiceConnectivityResourcesGoogle@AE3A.240806.019/ServiceConnectivityResourcesGoogle.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/vendor/overlay/goldfish_overlay_connectivity_google.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/priv-app/GoogleFeedback/GoogleFeedback.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/GooglePrintRecommendationService/GooglePrintRecommendationService.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/CalendarGooglePrebuilt/CalendarGooglePrebuilt.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/ManagedProvisioning/ManagedProvisioning.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/SoundPicker/SoundPicker.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/DocumentsUIGoogle/DocumentsUIGoogle.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/PhotoTable/PhotoTable.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/PrebuiltGoogleTelemetryTvp/PrebuiltGoogleTelemetryTvp.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/priv-app/MultiDisplayProvider/MultiDisplayProvider.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/DeviceDiagnostics/DeviceDiagnostics.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/DeviceDiagnostics__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/NotesRoleEnabled/NotesRoleEnabledOverlay.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/LiveWallpapersPicker/LiveWallpapersPicker.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/PrebuiltGoogleAdservicesTvp/PrebuiltGoogleAdservicesTvp.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.healthfitness/priv-app/HealthConnectControllerGoogle@AE3A.240806.019/HealthConnectControllerGoogle.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/KidsSupervisionStub/KidsSupervisionStub.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/priv-app/StorageManager/StorageManager.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/StorageManager__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/BookmarkProvider/BookmarkProvider.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/priv-app/SettingsGoogle/SettingsGoogle.apk' with 1 weak references
+06-26 02:37:07.974  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/SettingsGoogle__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/SettingsIntelligenceGooglePrebuilt/SettingsIntelligenceGooglePrebuilt.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.uwb/priv-app/ServiceUwbResourcesGoogle@AE3A.240806.019/ServiceUwbResourcesGoogle.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.wifi/priv-app/ServiceWifiResourcesGoogle@AE3A.240806.019/ServiceWifiResourcesGoogle.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/priv-app/ThemePicker/ThemePicker.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/priv-app/WallpaperPickerGoogleRelease/WallpaperPickerGoogleRelease.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/OdadPrebuilt/OdadPrebuilt.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/Music/Music.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/TeleService/TeleService.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/vendor/overlay/TeleService__sdk_gphone16k_arm64__auto_generated_rro_vendor.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/TeleService__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:07.975   812   909 W FrameTracker: Missed SF frame:PREDICTION_ERROR, 37189, 0, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/Shell/Shell.apk' with 1 weak references
+06-26 02:37:07.975   812   909 W FrameTracker: Missing HWUI jank callback for vsyncId: 37189, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+06-26 02:37:07.975   812   909 W FrameTracker: Missing HWUI jank callback for vsyncId: 37410, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/BlockedNumberProvider/BlockedNumberProvider.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/UserDictionaryProvider/UserDictionaryProvider.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/overlay/NavigationBarModeGestural/NavigationBarModeGesturalOverlay.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/FusedLocation/FusedLocation.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/priv-app/SystemUIGoogle/SystemUIGoogle.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/vendor/overlay/SystemUIGoogle__sdk_gphone16k_arm64__auto_generated_rro_vendor.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/SystemUIGoogle__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/BluetoothMidiService/BluetoothMidiService.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/app/Traceur/Traceur.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.cellbroadcast/priv-app/GoogleCellBroadcastApp@AE3A.240806.019/GoogleCellBroadcastApp.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/ContactsProvider/ContactsProvider.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '/product/overlay/ContactsProvider__sdk_gphone16k_arm64__auto_generated_rro_product.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/LatinIMEGooglePrebuilt/LatinIMEGooglePrebuilt.apk' with 1 weak references
+06-26 02:37:07.975  6122  6138 W .apps.wellbeing: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/GoogleRestorePrebuilt-v526684/GoogleRestorePrebuilt-v526684.apk' with 1 weak references
+06-26 02:37:08.043  7939  7939 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 02:37:08.044  7939  7939 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 02:37:08.046   158   158 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 02:37:08.046  7939  7940 I Gralloc4: mapper 4.x is not supported
+06-26 02:37:08.111   812   999 D EGL_emulation: app_time_stats: avg=1438.96ms min=1438.96ms max=1438.96ms count=1
+06-26 02:37:08.486  7840  7909 D EGL_emulation: app_time_stats: avg=23.97ms min=6.71ms max=259.87ms count=42
+06-26 02:37:08.731  7943  7943 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 02:37:08.732  7943  7943 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 02:37:08.735   158   158 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 02:37:08.735  7943  7944 I Gralloc4: mapper 4.x is not supported
+06-26 02:37:09.266  7947  7947 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 02:37:09.266  7947  7947 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 02:37:09.268   158   158 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 02:37:09.268  7947  7948 I Gralloc4: mapper 4.x is not supported
+06-26 02:37:09.359   812   999 D EGL_emulation: app_time_stats: avg=124.56ms min=13.35ms max=1100.73ms count=10
+06-26 02:37:09.411  1109  1476 D EGL_emulation: app_time_stats: avg=84.26ms min=0.84ms max=3103.30ms count=43
+06-26 02:37:09.516  7840  7909 D EGL_emulation: app_time_stats: avg=46.84ms min=3.48ms max=532.47ms count=19
+06-26 02:37:09.721  5733  5794 I Finsky  : [55] WM::SCH: Logging work initialize for 12-1
+06-26 02:37:09.737  5733  5814 I Finsky  : [62] SCH: Scheduling phonesky job Id: 12-1, CT: 1782412626135, Constraints: [{ L: 15000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 02:37:09.743  5733  5805 I Finsky  : [58] SCH: Scheduling 1 system job(s)
+06-26 02:37:09.745  5733  5805 I Finsky  : [58] SCH: Scheduling system job Id: 9023, L: 11392, D: 48666178, C: false, I: false, N: 1
+06-26 02:37:09.754  5733  5795 I Finsky  : [56] [ContentSync] finished, scheduled=true
+06-26 02:37:09.810   554  1448 E TaskPersister: File error accessing recents directory (directory doesn't exist?).

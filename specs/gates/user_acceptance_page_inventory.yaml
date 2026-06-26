@@ -409,6 +409,10 @@ route_only:
   owner: user
   source_tests:
   - quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
+- route_id: settingsDarkMode
+  owner: user
+  source_tests:
+  - quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
 - route_id: settingsAbout
   owner: user
   source_tests:

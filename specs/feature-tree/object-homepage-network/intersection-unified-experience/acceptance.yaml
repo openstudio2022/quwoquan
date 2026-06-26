@@ -14,6 +14,7 @@ scope:
   - profile/entity/circle 三类主页移除 demo 问小趣 dock。
   - 全局搜索交集 Tab 与 connectionState 分组消费 intersectionReason 子集。
   - 首页与各频道（含校园、旅行）交集推荐卡重设计：去关注按钮、头像 + 名字 + 红计数。
+  - 实体主页与圈子主页的 gamma-local 真实 bundle、impact、related groups、object intersections 端云闭环。
   - IntersectionReason 字段收敛、recommendation/intersection 域契约、viewer_object_intersection
     读模型。
   - 事实与概率分通道、保鲜期、跨会话推荐冷却窗口、曝光到转化漏斗埋点。
@@ -73,7 +74,10 @@ sit_acceptance:
       R-IX05 衍生待办。'
   SIT2:
     title: 对象页交集卡与 demo dock 移除 SIT
-    story_refs: []
+    story_refs:
+    - entity-homepage-intersection-redesign
+    - circle-homepage-intersection-redesign
+    - object-homepage-gamma-real-data-closure
     done_when:
     - profile/entity/circle 三类主页不再出现问小趣 demo dock。
     - 他人用户主页、实体主页、圈子主页展示事实交集卡，每条有可读证据。
@@ -93,6 +97,11 @@ sit_acceptance:
         cases:
         - local_contract.object_homepage_network.intersection_unified_experience.sit2.sit2_local_contract
         envs: *id001
+      - layer: api_integration
+        suite: sit2_gamma_real_data
+        cases:
+        - api_integration.object_homepage_network.intersection_unified_experience.sit2.object_homepage_gamma_real_data_closure
+        envs: *id002
       supporting:
       - layer: local_contract
         suite: sit2_local_contract
@@ -100,15 +109,33 @@ sit_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.sit2.sit2_local_contract
         envs: *id001
     notes:
+    - '[recorded] local_contract 2026-06-25：`flutter test test/components/object_page/object_intersection_card_test.dart
+      test/components/object_page/object_intersection_section_test.dart` 15/15 green；ObjectIntersectionCard
+      已从 EvidenceGroup/intersectionPoints 主句拼装切到 IntersectionReason.primaryText/primarySpans
+      单通道，覆盖无 primaryText 隐藏、affinity 推荐辅助、span/visual/actionHint 导航入口、展开与高亮。'
+    - '[recorded] local_contract 2026-06-25：`flutter test test/ui/entity/pages/homepage_detail_page_widget_test.dart`
+      6/6 green；实体主页为什么推荐这里、关于这里、记录/讨论/相关圈子 Tab、相关圈子卡片化、内部字段不外露均有断言。'
+    - '[recorded] local_contract 2026-06-25：`flutter test test/ui/circle/widgets/circle_header_widget_test.dart
+      test/ui/circle/widgets/section_widgets_test.dart` 25/25 green；`flutter test test/ui/circle/widgets/circle_shell_widget_test.dart`
+      10/10 green；圈子主页 Shell、Header、记录/讨论/成员 section 局部契约均通过。'
+    - '[recorded] contract/local_gate 2026-06-25：`flutter analyze lib/components/object_page/object_intersection_card.dart
+      lib/components/object_page/object_intersection_section.dart lib/ui/entity/widgets/homepage_detail_shell.dart
+      lib/ui/entity/widgets/homepage_detail_shell_builders.dart lib/ui/entity/widgets/homepage_detail_shell_components2.dart
+      lib/core/constants/homepage_detail_text_constants.dart` 0 issue；`bash quwoquan_service/scripts/contract/verify_contract_metadata.sh`、
+      `make -C quwoquan_service verify-metadata`、`bash agent_ops/scaffold/verify_acceptance_standard.sh`、`bash
+      agent_ops/scaffold/verify_feature_tree_refactor.sh`、`make verify-app-page-horizontal-quality`、`make verify-app-mock-isolation`、`git
+      diff --check` 均通过。'
     - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（实体主页交集卡
       + 无 demo dock，2026-06-16 green）'
     - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（圈子主页「你认识的人有
       N 个在这」交集卡 + 无 demo dock，2026-06-16 green）'
-    - '[migrated_from_recorded] BLOCKED api_integration（2026-06-16 gamma-local 实测）：`docker-compose.gamma-local.yaml`
-      未含 entity-service / circle-service，经网关 `/v1/homepages/*` 返回 404『local-gamma
-      mirror route is not ready』，故 `/v1/homepages/{id}/object-page-bundle` 与 circle
-      impact 的 gamma api_integration 暂不可冒烟；需先把两服务纳入 gamma-local 拓扑，见 backlog R-IX05
-      衍生待办。'
+    - '[recorded] PARTIAL api_integration 2026-06-25：`docker-compose.gamma-local.yaml`
+      与 `deploy/local-gamma/Caddyfile` 已静态包含 entity-service / circle-service；`docker
+      compose -f quwoquan_service/docker-compose.gamma-local.yaml config` 通过，metadata verify
+      通过。`python3 agent_ops/deploy/stackctl.py verify --env gamma --kind all --tier all`
+      仍在 api_integration gateway health 因 SSL UNEXPECTED_EOF_WHILE_READING gate_block，user_acceptance
+      page smoke 因缺少 Patrol CLI 失败；真实 bundle/impact/related-groups/object-intersections populated
+      验收由 `object-homepage-gamma-real-data-closure` 接管，R-IX05 继续打开。'
   SIT3:
     title: 首页与频道交集推荐重设计 SIT
     story_refs: []

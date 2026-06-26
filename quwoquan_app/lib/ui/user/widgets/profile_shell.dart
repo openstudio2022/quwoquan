@@ -283,15 +283,13 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     );
     final profile = state.profile;
     final isMine = widget.mode == ProfileMode.mine;
-    // 昵称是否被用户自定义过（云侧 nicknameCustomized 直出）。默认昵称（未改名）
-    // 时我的主页在昵称右侧展示编辑画笔引导改名；改过即隐藏画笔。用户号 / 趣我圈号
-    // 等内部标识对 UI 完全不可见，主页只展示昵称。
-    final nicknameCustomized = profile?.nicknameCustomized ?? false;
-    final showEditPencil = isMine && !nicknameCustomized;
-    final avatarUrl =
-        widget.initialAvatarUrl ??
-        (isMine ? (userData?.avatar ?? userData?.avatarUrl) : null) ??
-        profile?.avatarUrl;
+    // 头像源在 Shell 层只选择一次，避免主头像与吸顶头像走不同兜底路径。
+    final avatarUrl = _firstNonEmptyString([
+      widget.initialAvatarUrl,
+      if (isMine) userData?.avatar,
+      if (isMine) userData?.avatarUrl,
+      profile?.avatarUrl,
+    ]);
     final profileName = profile?.displayName.trim() ?? '';
     final displayName =
         widget.initialDisplayName ??
@@ -300,13 +298,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     final bio = (profile?.bio.isNotEmpty ?? false)
         ? profile?.bio
         : (isMine ? userData?.bio : null);
-    final profileBackground = _firstNonEmptyString([
-      widget.initialBackgroundUrl,
-      if (isMine) userData?.backgroundImage,
-      profile?.backgroundUrl,
-    ]);
-    final hasProfileBackground =
-        profileBackground != null && profileBackground.isNotEmpty;
     final backgroundUrl = _firstNonEmptyString([
       widget.initialBackgroundUrl,
       if (isMine) userData?.backgroundImage,
@@ -343,7 +334,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
           c,
           backgroundUrl: backgroundUrl,
           backgroundColor: backgroundBridge,
-          showCoverPrompt: isMine && !hasProfileBackground,
+          showCoverPrompt: isMine && !hasCoverImage,
           onCoverPrompt: () => context.push(AppRoutePaths.profileEdit),
         ),
         summaryBuilder: (c) => _buildSummarySection(
@@ -351,7 +342,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
           isDark: isDark,
           avatarUrl: avatarUrl,
           displayName: displayName,
-          showEditPencil: showEditPencil,
           bio: bio,
           state: state,
           notifier: notifier,

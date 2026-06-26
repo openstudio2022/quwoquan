@@ -321,14 +321,15 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
       onTrack: (target, attribution) {
         ref
             .read(contentBehaviorTrackerProvider)
-            .trackClick(
+            .trackTagClick(
               target.objectId,
               referralSource: ReferralSource.organicFeed,
+              tags: attribution.tagRefs,
               intersectionId: attribution.intersectionId,
               intersectionDimension: attribution.dimension,
               intersectionSourceRef: attribution.sourceRef,
-              intersectionClass: attribution.intersectionClass,
               intersectionTagRefs: attribution.tagRefs,
+              intersectionClass: attribution.intersectionClass,
               intersectionEvidenceId: attribution.evidenceId,
             );
       },
@@ -363,14 +364,15 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
       onTrack: (target, attribution) {
         ref
             .read(contentBehaviorTrackerProvider)
-            .trackClick(
+            .trackTagClick(
               target.objectId,
               referralSource: ReferralSource.organicFeed,
+              tags: attribution.tagRefs,
               intersectionId: attribution.intersectionId,
               intersectionDimension: attribution.dimension,
               intersectionSourceRef: attribution.sourceRef,
-              intersectionClass: attribution.intersectionClass,
               intersectionTagRefs: attribution.tagRefs,
+              intersectionClass: attribution.intersectionClass,
               intersectionEvidenceId: attribution.evidenceId,
             );
       },
@@ -597,6 +599,8 @@ class _FollowPillButton extends StatelessWidget {
       minimumSize: Size.zero,
       onPressed: onPressed,
       child: Container(
+        key: const ValueKey<String>('home-post-author-follow-button'),
+        width: AppSpacing.followButtonWidth,
         height: AppSpacing.buttonHeightSm,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
         alignment: Alignment.center,

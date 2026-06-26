@@ -63,45 +63,28 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
   }
 
   Widget _buildSegmentedControl(BuildContext context) {
-    final availableWidth = math
-        .max(188.0, math.min(MediaQuery.sizeOf(context).width - 124, 244))
-        .toDouble();
+    final availableWidth =
+        (MediaQuery.sizeOf(context).width -
+                AppSpacing.appChromeActionButtonSize * 2)
+            .clamp(
+              AppSpacing.minInteractiveSize * _ProfileStatsTab.values.length,
+              AppSpacing.minInteractiveSize *
+                  _ProfileStatsTab.values.length *
+                  2,
+            )
+            .toDouble();
     return SizedBox(
       width: availableWidth,
-      child: CupertinoSlidingSegmentedControl<_ProfileStatsTab>(
-        groupValue: _activeTab,
-        backgroundColor: CupertinoDynamicColor.resolve(
-          CupertinoColors.systemFill,
-          context,
-        ),
-        thumbColor: CupertinoDynamicColor.resolve(
-          CupertinoColors.systemBackground,
-          context,
-        ),
-        children: <_ProfileStatsTab, Widget>{
+      child: AppSegmentedChoiceBar<_ProfileStatsTab>(
+        items: <AppSegmentedChoiceItem<_ProfileStatsTab>>[
           for (final tab in _ProfileStatsTab.values)
-            tab: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.containerSm,
-                vertical: AppSpacing.intraGroupSm,
-              ),
-              child: Text(
-                tab.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.iosFootnote,
-                  fontWeight: AppTypography.medium,
-                ),
-              ),
+            AppSegmentedChoiceItem<_ProfileStatsTab>(
+              value: tab,
+              label: tab.label,
             ),
-        },
-        onValueChanged: (value) {
-          if (value == null) {
-            return;
-          }
-          _selectTab(value, trackEvent: true);
-        },
+        ],
+        selectedValue: _activeTab,
+        onChanged: (value) => _selectTab(value, trackEvent: true),
       ),
     );
   }
@@ -226,8 +209,8 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
                 child: SizedBox(
-                  width: 52,
-                  height: 52,
+                  width: AppSpacing.profileStatsRowAvatarSize,
+                  height: AppSpacing.profileStatsRowAvatarSize,
                   child: circle.coverUrl?.isNotEmpty == true
                       ? AppCachedNetworkImage(
                           imageUrl: circle.coverUrl!,
@@ -310,8 +293,8 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
               ),
               SizedBox(width: AppSpacing.intraGroupXs),
               Icon(
-                CupertinoIcons.chevron_right,
-                size: 18,
+                CupertinoIcons.chevron_forward,
+                size: AppSpacing.listTrailingChevronSize,
                 color: subtitleColor,
               ),
             ],
@@ -341,10 +324,13 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
             children: [
               ClipOval(
                 child: SizedBox(
-                  width: 52,
-                  height: 52,
+                  width: AppSpacing.profileStatsRowAvatarSize,
+                  height: AppSpacing.profileStatsRowAvatarSize,
                   child: row.avatarUrl.isNotEmpty
-                      ? AppAvatarImage(imageUrl: row.avatarUrl, size: 52)
+                      ? AppAvatarImage(
+                          imageUrl: row.avatarUrl,
+                          size: AppSpacing.profileStatsRowAvatarSize,
+                        )
                       : ColoredBox(
                           color: CupertinoDynamicColor.resolve(
                             CupertinoColors.systemGrey5,
@@ -625,8 +611,8 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
           child: Row(
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: AppSpacing.profileStatsRowAvatarSize,
+                height: AppSpacing.profileStatsRowAvatarSize,
                 decoration: BoxDecoration(
                   color: shimmer,
                   shape: BoxShape.circle,
@@ -647,8 +633,8 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
               ),
               SizedBox(width: AppSpacing.containerSm),
               Container(
-                width: 78,
-                height: 34,
+                width: AppSpacing.profileStatsFollowSkeletonWidth,
+                height: AppSpacing.profileStatsFollowSkeletonHeight,
                 decoration: BoxDecoration(
                   color: shimmer,
                   borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
@@ -665,7 +651,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
     return FractionallySizedBox(
       widthFactor: widthFactor,
       child: Container(
-        height: 10,
+        height: AppSpacing.ten,
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
@@ -675,13 +661,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
   }
 
   Widget _buildCard({required bool isDark, required Widget child}) {
-    final surface = SettingsSemanticConstants.insetFormSectionSurface(isDark);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(
-        SettingsSemanticConstants.insetFormSectionCornerRadius,
-      ),
-      child: ColoredBox(color: surface, child: child),
-    );
+    return AppListSurface(child: child);
   }
 
   Widget _buildStatusCard({

@@ -1,0 +1,115 @@
+{
+  "outputDir": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024455",
+  "passed": true,
+  "results": [
+    {
+      "platform": "ios",
+      "device": "859D3980-2007-45EF-8DB6-707D813D3455",
+      "passed": true,
+      "visibleByMs": 4500,
+      "firstVisibleMs": 2265,
+      "blueScreenDetected": false,
+      "plainBackgroundDetected": false,
+      "screenshots": [
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024455/ios-0200ms.png",
+          "offsetMs": 203,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 1.633,
+          "medianRgb": [
+            7,
+            9,
+            16
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024455/ios-0800ms.png",
+          "offsetMs": 1022,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 1.626,
+          "medianRgb": [
+            7,
+            9,
+            16
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024455/ios-1400ms.png",
+          "offsetMs": 1568,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 1.537,
+          "medianRgb": [
+            7,
+            9,
+            15
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024455/ios-2200ms.png",
+          "offsetMs": 2265,
+          "foregroundRatio": 0.17457,
+          "stddevAvg": 22.63,
+          "medianRgb": [
+            14,
+            132,
+            249
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024455/ios-3000ms.png",
+          "offsetMs": 3037,
+          "foregroundRatio": 0.24573,
+          "stddevAvg": 33.525,
+          "medianRgb": [
+            15,
+            132,
+            247
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024455/ios-3800ms.png",
+          "offsetMs": 3885,
+          "foregroundRatio": 0.25294,
+          "stddevAvg": 34.289,
+          "medianRgb": [
+            15,
+            132,
+            247
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024455/ios-4500ms.png",
+          "offsetMs": 4610,
+          "foregroundRatio": 0.04971,
+          "stddevAvg": 34.581,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        }
+      ]
+    }
+  ]
+}

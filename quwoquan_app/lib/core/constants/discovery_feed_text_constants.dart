@@ -72,6 +72,14 @@ class DiscoveryFeedText {
     'open_route': '查看路线',
     'create_followup': '写续篇',
     'ask_assistant': '解释这条交集',
+    // §交集行动深化：同趣 / 同行 / 线下 / 实时 / 意图 行动阶梯按钮文案。
+    'join_topic_room': '进同趣群',
+    'start_companion': '发起结伴',
+    'join_trip': '加入同行',
+    'join_meetup': '报名',
+    'meet_nearby': '附近碰头',
+    'start_voice_room': '进语音房',
+    'express_interest': '打个招呼',
   };
 
   /// `actionKey` → 行动按钮文案；未知 key 回退助手解释（与 `ask_assistant` 同义）。

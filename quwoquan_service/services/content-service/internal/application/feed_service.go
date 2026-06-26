@@ -93,6 +93,7 @@ type FeedItemView struct {
 	RecallPath          string                   `json:"recallPath,omitempty"`
 	ContentVertical     string                   `json:"contentVertical,omitempty"`
 	SupplySource        string                   `json:"supplySource,omitempty"`
+	SourceTaskID        string                   `json:"sourceTaskId,omitempty"`
 }
 
 type ListFeedResponse struct {
@@ -220,6 +221,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			RecallPath:       recallPath,
 			ContentVertical:  contentVertical,
 			SupplySource:     supplySource,
+			SourceTaskID:     post.SourceTaskId,
 		})
 		return true
 	}

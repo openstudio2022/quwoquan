@@ -88,7 +88,8 @@ Future<void> runQuwoquanApp({
       );
 
       WidgetsBinding.instance.addObserver(_AppExceptionLifecycleObserver());
-      await _installLocalDevHttpsTrustBeforeMediaClients();
+      final startupPrerequisites =
+          _installLocalDevHttpsTrustBeforeMediaClients();
       runApp(
         ScreenUtilInit(
           designSize: const Size(375, 812),
@@ -96,7 +97,7 @@ Future<void> runQuwoquanApp({
           splitScreenMode: true,
           child: ProviderScope(
             overrides: providerScopeOverrides,
-            child: const QuWoQuanAppRoot(),
+            child: QuWoQuanAppRoot(startupPrerequisites: startupPrerequisites),
           ),
         ),
       );
@@ -120,7 +121,6 @@ Future<void> _installLocalDevHttpsTrustBeforeMediaClients() async {
       exceptionText: error.toString(),
       stackText: stack.toString(),
     );
-    rethrow;
   }
 }
 

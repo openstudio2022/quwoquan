@@ -333,6 +333,8 @@ class ProfileSocialRelationRowViewData {
   final RelationshipCapabilityDto? relationshipCapability;
 
   bool get isSelf => effectiveRelationshipCapability?.isSelf ?? false;
+  bool get isFollowing =>
+      effectiveRelationshipCapability?.viewerFollowsTarget ?? false;
 
   RelationshipCapabilityDto? get effectiveRelationshipCapability {
     final capability = relationshipCapability;

@@ -1,0 +1,129 @@
+id: CR-20260625-070-recommendation-premium-pool-readpath-foundation
+title: 推荐精品池读路径开发基座
+slug: recommendation-premium-pool-readpath-foundation
+revision: 2
+status: partial
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation
+  - docs/recommendation-commercial-maturity-plan.md
+  - docs/outstanding_risks_backlog.md
+  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/premium_pool_projection.yaml
+  - quwoquan_service/services/product-ops-service/cmd/api/premium_pool_handlers.go
+  - quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_source.go
+  - quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_projector.go
+
+entries:
+  - timestamp: "2026-06-25T12:20:00+08:00"
+    summary: |
+      按 /continue-dev 下一阶段 P1d-2，先落精品池读路径本地基座：rm_premium_pool projection metadata、
+      fail-closed 投影字段构造、PremiumPoolSource 场景门控、RecallPath=premium_pool、content-service 接线、
+      disable_premium_pool_source 回滚开关，以及 feed sourceTaskId 下发。
+    reason: |
+      product-ops 全局精品写入已经具备，但精品流仍未消费全局精品池。先补最小读路径基座，可在不引入深排、
+      不同步查 product-ops、不新增第二精品源的前提下进入 api_integration/Gamma 开发。
+    change_type:
+      - recommendation
+      - content_service
+      - metadata
+      - acceptance
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/premium_pool_projection.yaml
+        sections:
+          - rm_premium_pool projection metadata
+      - path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_source.go
+        sections:
+          - BuildPremiumPoolProjectionFields
+          - PremiumPoolSource
+          - MongoPremiumPoolCandidateReader
+      - path: quwoquan_service/services/content-service/cmd/api/main.go
+        sections:
+          - PremiumPoolSource wiring
+          - disable_premium_pool_source rollback flag
+      - path: quwoquan_service/services/content-service/internal/application/feed_service.go
+        sections:
+          - sourceTaskId feed attribution
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md
+        sections:
+          - 范围
+          - 验收标准
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/acceptance.yaml
+        sections:
+          - GWT2_premium_pool_readpath
+      - path: docs/recommendation-commercial-maturity-plan.md
+        sections:
+          - continue-dev 当前开发切片
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-IX04 精品池召回源
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - go test ./services/content-service/internal/infrastructure/recommendation -run 'TestPremiumPool|TestBuildRecommendationProjectionFields' -count=1
+        - go test ./services/content-service/tests/local_contract/internal/infrastructure/recommendation -run TestPremiumPoolSourceLocalContractTest -count=1
+        - go test ./services/content-service/cmd/api ./services/content-service/internal/application -run 'Test.*Feed|Test.*Config|Test.*Runtime|Test.*Rollback' -count=1
+    notes:
+      - 本 CR 不是 GWT2 完成证据；product-ops 到 content-service 的真实投影写入/同步仍未闭合。
+      - feed 读路径继续禁止同步调用 product-ops、质量模型、数据工程任务或 /v1/score。
+      - 不引入 MMoE/PLE/ESMM、双塔 ANN、IPS/Thompson 或深排平台。
+  - timestamp: "2026-06-25T13:10:00+08:00"
+    summary: |
+      继续 /continue-dev P1d-2：product-ops 全局精品池 upsert/rollback/takedown 开始发布
+      PremiumPoolEntryUpserted/RolledBack/TakedownEjected；content-service 新增 PremiumPoolProjector 与
+      PremiumPoolEventConsumer，消费 events.ops.* 并投影 rm_premium_pool；PostDeleted/PostTakedown 也会把精品池条目
+      fail closed 为 takedown_ejected。
+    reason: |
+      读路径基座之后的关键断点是控制面状态没有进入推荐读模型。本增量补齐最小事件投影链路，但仍不在 feed 请求中同步调用
+      product-ops，也不引入第二精品源或深排平台。
+    change_type:
+      - recommendation
+      - content_service
+      - product_ops
+      - acceptance
+    changed_documents:
+      - path: quwoquan_service/services/product-ops-service/cmd/api/premium_pool_handlers.go
+        sections:
+          - PremiumPoolEntry* event publish
+      - path: quwoquan_service/services/product-ops-service/cmd/api/main.go
+        sections:
+          - productService event publisher wiring
+      - path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_projector.go
+        sections:
+          - PremiumPoolProjector
+          - PremiumPoolEventConsumer
+      - path: quwoquan_service/services/content-service/cmd/api/main.go
+        sections:
+          - PremiumPoolProjector and event consumer wiring
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md
+        sections:
+          - 范围
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/acceptance.yaml
+        sections:
+          - GWT2_premium_pool_readpath
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - go test ./cmd/api -run 'TestPremiumPoolControlPlaneEndpoints' -count=1
+        - go test ./services/content-service/internal/infrastructure/recommendation -run 'TestPremiumPool' -count=1
+        - go test ./services/content-service/tests/local_contract/internal/infrastructure/recommendation -run 'TestPremiumPoolSourceLocalContractTest' -count=1
+        - go test ./services/content-service/cmd/api -run '^$'
+    notes:
+      - 仍不能宣称 GWT2 完成；真实 Redis/Mongo/api_integration/Gamma/UAT 尚未闭合。
+      - product-ops 事件失败会让控制面操作返回可见错误，避免运营误以为推荐读模型已同步。
+      - feed 读路径仍只消费 content-service 本地投影。

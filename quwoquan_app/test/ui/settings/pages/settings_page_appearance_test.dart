@@ -12,9 +12,11 @@ import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_about_page.dart';
+import 'package:quwoquan_app/ui/settings/pages/settings_dark_mode_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
 
@@ -111,22 +113,34 @@ void main() {
       );
     });
 
-    testWidgets('深色模式 Sheet 只有关闭、打开、跟随系统并更新运行时', (tester) async {
+    testWidgets('深色模式进入详情页并通过系统开关和手动单选更新运行时', (tester) async {
       await tester.pumpWidget(_buildSettingsApp());
       await tester.pumpAndSettle();
 
       await tester.tap(find.text(UITextConstants.settingsDarkMode));
       await tester.pumpAndSettle();
 
-      expect(find.text(UITextConstants.settingsDarkModeOff), findsOneWidget);
-      expect(find.text(UITextConstants.settingsDarkModeOn), findsOneWidget);
+      expect(find.byType(SettingsDarkModePage), findsOneWidget);
+      expect(find.byType(CupertinoActionSheet), findsNothing);
       expect(find.text(UITextConstants.settingsDarkModeSystem), findsWidgets);
+      expect(
+        find.text(UITextConstants.settingsDarkModeLightOption),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.settingsDarkModeDarkOption),
+        findsWidgets,
+      );
 
-      await tester.tap(find.text(UITextConstants.settingsDarkModeOn));
+      await tester.tap(
+        find.byKey(
+          const ValueKey<AppearanceThemeMode>(AppearanceThemeMode.dark),
+        ),
+      );
       await tester.pumpAndSettle();
 
       final container = ProviderScope.containerOf(
-        tester.element(find.byType(SettingsPage)),
+        tester.element(find.byType(SettingsDarkModePage)),
       );
       expect(
         container.read(themeProvider).themeModeSetting,
@@ -135,6 +149,63 @@ void main() {
       expect(
         container.read(appearanceSettingsControllerProvider).snapshot.themeMode,
         AppearanceThemeMode.dark,
+      );
+
+      await tester.tap(find.byType(CupertinoSwitch));
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(appearanceSettingsControllerProvider).snapshot.themeMode,
+        AppearanceThemeMode.system,
+      );
+    });
+
+    testWidgets('深色模式主行值贴右，账号操作为无图标居中按钮', (tester) async {
+      _useTallViewport(tester);
+      await tester.pumpWidget(_buildSettingsApp());
+      await tester.pumpAndSettle();
+
+      final modeText = find.text(UITextConstants.settingsDarkModeSystem).first;
+      final chevron = find.descendant(
+        of: find.ancestor(
+          of: find.text(UITextConstants.settingsDarkMode),
+          matching: find.byType(CupertinoButton),
+        ),
+        matching: find.byIcon(CupertinoIcons.chevron_forward),
+      );
+      expect(modeText, findsOneWidget);
+      expect(chevron, findsOneWidget);
+      expect(
+        tester.getTopRight(modeText).dx,
+        lessThan(tester.getTopLeft(chevron).dx),
+      );
+
+      final switchAccountButton = find.ancestor(
+        of: find.text(UITextConstants.switchAccount),
+        matching: find.byType(CupertinoButton),
+      );
+      final logoutButton = find.ancestor(
+        of: find.text(UITextConstants.logout),
+        matching: find.byType(CupertinoButton),
+      );
+      expect(
+        find.descendant(of: switchAccountButton, matching: find.byType(Icon)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: logoutButton, matching: find.byType(Icon)),
+        findsNothing,
+      );
+
+      final viewportCenterX =
+          tester.getSize(find.byType(MaterialApp)).width / 2;
+      expect(
+        tester.getCenter(find.text(UITextConstants.switchAccount)).dx,
+        moreOrLessEquals(viewportCenterX, epsilon: AppSpacing.md),
+      );
+      expect(
+        tester.getCenter(find.text(UITextConstants.logout)).dx,
+        moreOrLessEquals(viewportCenterX, epsilon: AppSpacing.md),
       );
     });
 
@@ -156,6 +227,22 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(find.text(UITextConstants.userAgreement), findsOneWidget);
+      expect(find.text(UITextConstants.privacyPolicy), findsOneWidget);
+
+      await tester.tap(find.text(UITextConstants.userAgreement));
+      await tester.pumpAndSettle();
+      expect(find.text(_RouteProbe.userAgreement), findsOneWidget);
+
+      final router = GoRouter.of(
+        tester.element(find.text(_RouteProbe.userAgreement)),
+      );
+      router.go(AppRoutePaths.settingsAbout);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(UITextConstants.privacyPolicy));
+      await tester.pumpAndSettle();
+      expect(find.text(_RouteProbe.privacyPolicy), findsOneWidget);
     });
 
     testWidgets('退出登录默认走软退出：不远端吊销、不清本机凭证', (tester) async {
@@ -266,6 +353,10 @@ Widget _buildSettingsApp({
                 builder: (context, state) => const SettingsPermissionsPage(),
               ),
               GoRoute(
+                path: AppRoutePaths.settingsDarkModeSegment,
+                builder: (context, state) => const SettingsDarkModePage(),
+              ),
+              GoRoute(
                 path: AppRoutePaths.settingsAboutSegment,
                 builder: (context, state) => const SettingsAboutPage(),
               ),
@@ -284,6 +375,14 @@ Widget _buildSettingsApp({
             path: AppRoutePaths.loginPathTemplate,
             builder: (context, state) => const Text(_RouteProbe.login),
           ),
+          GoRoute(
+            path: AppRoutePaths.legalUserAgreement,
+            builder: (context, state) => const Text(_RouteProbe.userAgreement),
+          ),
+          GoRoute(
+            path: AppRoutePaths.legalPrivacyPolicy,
+            builder: (context, state) => const Text(_RouteProbe.privacyPolicy),
+          ),
         ],
       ),
     ),
@@ -294,6 +393,8 @@ abstract final class _RouteProbe {
   static const String profileEdit = 'profile-edit-route';
   static const String profilePersonas = 'profile-personas-route';
   static const String login = 'login-route';
+  static const String userAgreement = 'user-agreement-route';
+  static const String privacyPolicy = 'privacy-policy-route';
 }
 
 abstract final class SettingsRemovedText {

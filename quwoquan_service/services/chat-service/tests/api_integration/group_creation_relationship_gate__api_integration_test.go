@@ -208,14 +208,14 @@ func TestCreateConversation_Group_RequiresMutualMembers(t *testing.T) {
 		InitialMemberIds: []string{"user_b", "user_c"},
 	})
 	if err == nil {
-		t.Fatal("expected not_mutual gate error for non-mutual group member")
+		t.Fatal("expected group_member_not_mutual gate error for non-mutual group member")
 	}
 	appErr, ok := err.(*rterr.AppError)
 	if !ok {
 		t.Fatalf("expected AppError, got %T (%v)", err, err)
 	}
-	if got := appErr.Code.String(); got != "CHAT.USER.not_mutual" {
-		t.Fatalf("code = %q, want CHAT.USER.not_mutual", got)
+	if got := appErr.Code.String(); got != "CHAT.USER.group_member_not_mutual" {
+		t.Fatalf("code = %q, want CHAT.USER.group_member_not_mutual", got)
 	}
 }
 
@@ -233,14 +233,14 @@ func TestCreateConversation_Group_BlockedMember(t *testing.T) {
 		InitialMemberIds: []string{"user_b"},
 	})
 	if err == nil {
-		t.Fatal("expected blocked gate error for blocked group member")
+		t.Fatal("expected group_member_blocked gate error for blocked group member")
 	}
 	appErr, ok := err.(*rterr.AppError)
 	if !ok {
 		t.Fatalf("expected AppError, got %T (%v)", err, err)
 	}
-	if got := appErr.Code.String(); got != "CHAT.USER.blocked" {
-		t.Fatalf("code = %q, want CHAT.USER.blocked", got)
+	if got := appErr.Code.String(); got != "CHAT.USER.group_member_blocked" {
+		t.Fatalf("code = %q, want CHAT.USER.group_member_blocked", got)
 	}
 }
 
@@ -286,14 +286,14 @@ func TestCreateConversation_Group_MixedMembersRejectsNonMutual(t *testing.T) {
 		InitialMemberIds: []string{"user_b", "user_c"},
 	})
 	if err == nil {
-		t.Fatal("expected not_mutual gate error when any member is non-mutual")
+		t.Fatal("expected group_member_not_mutual gate error when any member is non-mutual")
 	}
 	appErr, ok := err.(*rterr.AppError)
 	if !ok {
 		t.Fatalf("expected AppError, got %T (%v)", err, err)
 	}
-	if got := appErr.Code.String(); got != "CHAT.USER.not_mutual" {
-		t.Fatalf("code = %q, want CHAT.USER.not_mutual", got)
+	if got := appErr.Code.String(); got != "CHAT.USER.group_member_not_mutual" {
+		t.Fatalf("code = %q, want CHAT.USER.group_member_not_mutual", got)
 	}
 }
 

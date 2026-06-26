@@ -60,7 +60,7 @@ def test_task_scaled_e2e_verify_plan_aggregates_units():
             {
                 "schemaVersion": "quwoquan_data.fanout_run_matrix",
                 "planId": "plan_verify",
-                "orchestrators": [{"worker": "part::四川省", "reached": True, "missing": [], "error": None}],
+                "orchestrators": [{"taskId": task_id, "batchId": batch_id, "worker": "part::四川省", "reached": True, "missing": [], "error": None}],
                 "workers": [],
                 "summary": {"orchestrated": 1, "completed": 1, "failed": 0, "attemptFailures": 0, "startupFailures": 0, "orchestrationFailed": 0},
             },
@@ -192,7 +192,7 @@ def test_task_scaled_e2e_verify_plan_writes_partition_audit_summary():
             {
                 "schemaVersion": "quwoquan_data.fanout_run_matrix",
                 "planId": "plan_audit",
-                "orchestrators": [{"worker": "part::成都平原", "reached": True, "missing": [], "error": None}],
+                "orchestrators": [{"taskId": task_id, "batchId": batch_id, "worker": "part::成都平原", "reached": True, "missing": [], "error": None}],
                 "workers": [],
                 "summary": {"orchestrated": 1, "completed": 1, "failed": 0, "attemptFailures": 0, "startupFailures": 0, "orchestrationFailed": 0},
             },

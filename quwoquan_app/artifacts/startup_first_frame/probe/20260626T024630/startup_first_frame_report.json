@@ -1,0 +1,138 @@
+{
+  "outputDir": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024630",
+  "passed": true,
+  "results": [
+    {
+      "platform": "android",
+      "device": "emulator-5554",
+      "passed": true,
+      "visibleByMs": 3000,
+      "firstVisibleMs": null,
+      "activityDisplayedMs": 2896,
+      "firstFrameWithinBudget": true,
+      "nativeWelcomeDetected": false,
+      "nativeWelcomeHits": [],
+      "blueScreenDetected": false,
+      "plainBackgroundDetected": false,
+      "flutterUiDisplayedMaxMs": 3000,
+      "flutterUiDisplayedWithinBudget": true,
+      "timings": {
+        "android_activity_displayed_ms": 2896
+      },
+      "screenshots": [
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024630/android-0200ms.png",
+          "offsetMs": 202,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024630/android-0500ms.png",
+          "offsetMs": 1100,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024630/android-1200ms.png",
+          "offsetMs": 1651,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024630/android-2000ms.png",
+          "offsetMs": 2032,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024630/android-2800ms.png",
+          "offsetMs": 2801,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024630/android-3400ms.png",
+          "offsetMs": 3400,
+          "foregroundRatio": 0.20128,
+          "stddevAvg": 28.837,
+          "medianRgb": [
+            15,
+            132,
+            249
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024630/android-5000ms.png",
+          "offsetMs": 5001,
+          "foregroundRatio": 0.0465,
+          "stddevAvg": 34.539,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260626T024630/android-7000ms.png",
+          "offsetMs": 7000,
+          "foregroundRatio": 0.20602,
+          "stddevAvg": 74.583,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        }
+      ]
+    }
+  ]
+}

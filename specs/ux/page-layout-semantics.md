@@ -136,6 +136,23 @@
 
 **与 §4.3 选用关系**：全屏设置/表单 → `SettingsInsetFormPageScaffold`；贴底选项/说明 → 本节 + `AppBottomModalSurface`。
 
+### 4.5 列表页语义（multiOptionList / singleList）
+
+列表页是指以“筛选/搜索 + 可滚动列表 + 空/错/分页状态”为主体的页面。它不是设置表单，但视觉 token 必须与 Inset 同源，避免每个页面私有实现灰底、白卡、tab、行圆角。
+
+| 类型 | 适用 | 统一壳与背景 | 顶部选项 | 列表 surface / row | 空/错/分页 |
+|------|------|--------------|----------|--------------------|------------|
+| `multiOptionList` | 同页存在一级选项切换，例如粉丝/关注/圈子、交集/影响力 | `AppListPageScaffold(kind: multiOptionList)`；背景使用 `SettingsSemanticConstants.insetFormPageBackground` | `AppSegmentedChoiceBar`；tap-only；左右滑动只滚动选项条或列表，不改变一级 tab | `AppListSurface` / `AppListRowCard`；头像/封面、标题、次级文案、尾部箭头/按钮使用 `AppSpacing/AppTypography/AppColors/SettingsSemanticConstants` | 首屏失败 `AppPageErrorState`，区块失败 `AppSectionErrorCard`，分页失败 `AppListAppendErrorFooter`；不得把已有列表替换成整页错误 |
+| `singleList` | 只有一个主列表，例如对象交集列表、足迹、联系人候选 | `AppListPageScaffold(kind: singleList)`；背景使用同一 grouped page token | 不渲染一级 segmented；若有过滤胶囊，仍使用同源 secondary token | 列表外距使用 `insetFormListHorizontalPadding`；单行/卡片圆角与表面同源 | 空态、错误态和分页载体与 `multiOptionList` 一致 |
+
+约束：
+
+- 多选项列表页的一级选项不得使用可拖动切换控件；`CupertinoSlidingSegmentedControl` 只允许用于表单内局部二选一，不允许承担列表页一级 tab。
+- `AppSegmentedChoiceBar` 必须有固定最小交互高度、hairline 分隔、选中态 surface thumb、深浅色高对比和 `Semantics.selected`。
+- 搜索条放在列表首段或选项下方，placeholder 走 `UITextConstants` / l10n；搜索、cursor、scroll 状态按 tab 分开保存。
+- 单列表页不得白底悬浮私有卡片；背景、行 surface、空/错态都从本节组件或等价 token 取得。
+- 编辑器、媒体沉浸、聊天会话、主壳页的频道 rail 不属于本节；需要在 `page-horizontal-quality-matrix.md` 备注“不适用”或说明其对应专用语义。
+
 ---
 
 ## 5. 底部工具栏规范

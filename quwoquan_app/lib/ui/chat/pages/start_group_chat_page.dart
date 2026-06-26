@@ -5,8 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -15,10 +14,11 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
+import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
@@ -27,7 +27,19 @@ import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart'
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/start_group_member_wizard_provider.dart';
 
-// settings-canonical-exception: 多步发起群聊向导，完整 Inset 化见后续 slice owner:chat CR-20260329-003
+part 'start_group_chat_page_widgets.dart';
+part 'start_group_chat_member_sheet.dart';
+
+/// 与云侧 CreateConversation 默认 maxGroupSize 对齐的前置上限；超限由服务端
+/// 二次校验并通过结构化错误回传，客户端仅做即时拦截。
+const int _kStartGroupChatMaxMembers = 500;
+
+/// 发起群聊 / 添加成员两种模式的可观测命名（埋点事件属性，非路由/surface 契约）。
+const String _kCreateModePageName = 'start_group_chat';
+const String _kAddMemberModePageName = 'group_add_members';
+const String _kStartGroupChatSurface = 'start_group_chat';
+const String _kStartGroupChatRoute = '/chat/start-group';
+const String _kStartGroupChatJourney = 'start_group_chat';
 
 /// 发起群聊页（图一：创建新群聊 + 相关联系人）
 class StartGroupChatPage extends ConsumerStatefulWidget {
@@ -50,6 +62,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _listScrollController = ScrollController();
   late final String _wizardId;
+  late final PageLifecycleObservability _pageObservability;
+  late final JourneyEventTracker _journeyTracker;
+  late final DateTime _enteredAt;
 
   List<ChatContactRowDto> _contacts = [];
   bool _selectedExpanded = false;
@@ -58,11 +73,35 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   bool _isLoading = true;
   UiErrorSemantic? _pageErrorSemantic;
 
+  String get _analyticsPageName =>
+      widget.isCreateMode ? _kCreateModePageName : _kAddMemberModePageName;
+
+  void _recordPageState({
+    required String phase,
+    Object? error,
+    int? itemCount,
+    int? durationMs,
+  }) {
+    _pageObservability.recordPageState(
+      pageName: _analyticsPageName,
+      route: _kStartGroupChatRoute,
+      surface: _kStartGroupChatSurface,
+      phase: phase,
+      error: error,
+      itemCount: itemCount,
+      durationMs: durationMs,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _wizardId =
         '${widget.conversationId ?? 'create'}_${DateTime.now().microsecondsSinceEpoch}';
+    _pageObservability = ref.read(pageLifecycleObservabilityProvider);
+    _journeyTracker = ref.read(journeyEventTrackerProvider);
+    _enteredAt = DateTime.now();
+    _recordPageState(phase: 'enter');
     Future<void>.microtask(() {
       if (!mounted) {
         return;
@@ -80,11 +119,12 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   Future<void> _loadData() async {
+    _recordPageState(phase: 'onlineLoading');
     try {
       final chatRepo = ref.read(chatRepositoryProvider);
       final contacts = await chatRepo.listGroupCandidates(
         conversationId: widget.conversationId,
-        limit: 500,
+        limit: _kStartGroupChatMaxMembers,
       );
       if (mounted) {
         ref
@@ -96,12 +136,17 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           _pageErrorSemantic = null;
         });
       }
+      _recordPageState(
+        phase: contacts.isEmpty ? 'emptyState' : 'onlineSuccess',
+        itemCount: contacts.length,
+      );
     } catch (error) {
       if (mounted && !widget.isCreateMode) {
         ref
             .read(startGroupMemberWizardProvider(_wizardId).notifier)
             .completeBootstrap(const <String>{});
       }
+      _recordPageState(phase: 'blockingFailure', error: error);
       if (!mounted) {
         return;
       }
@@ -119,6 +164,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
 
   @override
   void dispose() {
+    _recordPageState(
+      phase: 'exit',
+      durationMs: DateTime.now().difference(_enteredAt).inMilliseconds,
+    );
     _searchController.dispose();
     _listScrollController.dispose();
     super.dispose();
@@ -134,7 +183,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   void _handleCreateConversationSuccess(String conversationId) {
-    AppToast.show(context, '讨论已创建');
+    AppToast.show(context, UITextConstants.startGroupChatCreatedToast);
     if (conversationId.isEmpty) {
       context.go(AppRoutePaths.chat);
     } else {
@@ -150,14 +199,14 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     context.pop();
   }
 
-  void _handleSubmitSelectionError() {
+  void _handleSubmitSelectionError(Object error) {
     final semantic = UiErrorSemantic(
       category: UiErrorCategory.submit,
       scope: UiErrorScope.global,
-      title: widget.isCreateMode ? '发起讨论未完成' : '添加成员未完成',
-      message: widget.isCreateMode
-          ? '这次没有发起成功，稍后可以再试一次。'
-          : '这次没有添加成功，稍后可以再试一次。',
+      title: widget.isCreateMode
+          ? UITextConstants.startGroupChatCreateIncompleteTitle
+          : UITextConstants.startGroupChatAddMembersIncompleteTitle,
+      message: runtimeErrorDisplayMessage(error),
       primaryAction: const UiErrorAction(
         type: UiErrorActionType.retry,
         label: UITextConstants.tryAgain,
@@ -194,6 +243,38 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         .toggleMember(member);
   }
 
+  /// 上报发起群聊 / 添加成员的转化结果到 journey funnel 与页面观测；
+  /// 失败时携带结构化错误（sourceCode / failureKind 由观测层统一抽取），
+  /// 与上一轮服务端 not_mutual / blocked / size 错误码同源。
+  void _recordSubmitOutcome({
+    required bool success,
+    required int memberCount,
+    Object? error,
+  }) {
+    final action = widget.isCreateMode
+        ? (success ? 'create_success' : 'create_failed')
+        : (success ? 'add_members_success' : 'add_members_failed');
+    unawaited(
+      _journeyTracker.trackAction(
+        journey: _kStartGroupChatJourney,
+        action: action,
+        pageName: _analyticsPageName,
+        targetType: 'conversation',
+        targetKey: widget.conversationId ?? '',
+        entityType: 'conversation',
+        payload: <String, dynamic>{
+          'isCreateMode': widget.isCreateMode,
+          'memberCount': memberCount,
+        },
+      ),
+    );
+    _recordPageState(
+      phase: success ? 'submitSuccess' : 'submitFailure',
+      error: error,
+      itemCount: memberCount,
+    );
+  }
+
   Future<void> _submitSelection() async {
     final wizardState = ref.read(startGroupMemberWizardProvider(_wizardId));
     if (_submitting || wizardState.selectedMembers.isEmpty) {
@@ -202,8 +283,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     final selectedIds = wizardState.selectedMembers.keys.toList(
       growable: false,
     );
-    if (widget.isCreateMode && selectedIds.length >= 500) {
-      AppToast.show(context, '群成员数量超过上限');
+    if (widget.isCreateMode &&
+        selectedIds.length >= _kStartGroupChatMaxMembers) {
+      AppToast.show(context, UITextConstants.startGroupChatMaxMembersReached);
       return;
     }
     setState(() => _submitting = true);
@@ -218,10 +300,11 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                   .where((name) => name.isNotEmpty)
                   .take(3)
                   .join('、'),
-              maxGroupSize: 500,
+              maxGroupSize: _kStartGroupChatMaxMembers,
               initialMemberIds: selectedIds,
             );
         final conversationId = created.conversationId;
+        _recordSubmitOutcome(success: true, memberCount: selectedIds.length);
         if (!context.mounted) {
           return;
         }
@@ -235,17 +318,23 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           conversationId: widget.conversationId!,
           userIds: selectedIds,
         );
+        _recordSubmitOutcome(success: true, memberCount: selectedIds.length);
         await _refreshChatEntryLists();
         if (!context.mounted) {
           return;
         }
         _handleAddMembersSuccess(selectedIds.length);
       }
-    } catch (_) {
+    } catch (error) {
+      _recordSubmitOutcome(
+        success: false,
+        memberCount: selectedIds.length,
+        error: error,
+      );
       if (!context.mounted) {
         return;
       }
-      _handleSubmitSelectionError();
+      _handleSubmitSelectionError(error);
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
@@ -281,24 +370,14 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
+    final pageTitle = widget.isCreateMode
+        ? UITextConstants.startGroupChat
+        : UITextConstants.addMember;
     if (_pageErrorSemantic != null && !_isLoading) {
-      return AppScaffold(
-        backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
-        navigationBar: AppNavigationBar(
-          backgroundColor: SettingsSemanticConstants.selectionToolbarBackground(
-            isDark,
-          ),
-          leading: AppNavigationBarIconButton(
-            icon: CupertinoIcons.back,
-            onPressed: widget.onBack,
-          ),
-          middle: Text(
-            widget.isCreateMode
-                ? UITextConstants.startGroupChat
-                : UITextConstants.addMember,
-            style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-          ),
-        ),
+      return SettingsInsetMemberPickerPageScaffold(
+        isDark: isDark,
+        title: pageTitle,
+        onBack: widget.onBack,
         body: AppPageErrorState(
           semantic: _pageErrorSemantic!,
           onAction: (action) async {
@@ -316,7 +395,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     }
     final wizardState = ref.watch(startGroupMemberWizardProvider(_wizardId));
     final selectionReady = widget.isCreateMode || wizardState.isBootstrapLoaded;
-    final bgColor = SettingsSemanticConstants.pageBackground(isDark);
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
@@ -325,7 +403,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final dividerColor = SettingsSemanticConstants.dividerColor(isDark);
+    final listHorizontalPadding =
+        SettingsSemanticConstants.insetFormListHorizontalPadding;
     final selectedMembers = wizardState.selectedMembers.values.toList(
       growable: false,
     );
@@ -375,7 +454,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
-                '正在同步群成员状态…',
+                UITextConstants.startGroupChatSyncingMemberState,
                 style: TextStyle(
                   fontSize: AppTypography.sm,
                   color: fgSecondary,
@@ -447,7 +526,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                                   : null,
                             ),
                           ),
-                          isDark: isDark,
                         );
                       },
                     ),
@@ -469,36 +547,19 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       );
     }
 
-    return AppScaffold(
-      backgroundColor: bgColor,
-      navigationBar: AppNavigationBar(
-        backgroundColor: SettingsSemanticConstants.selectionToolbarBackground(
-          isDark,
-        ),
-        leading: AppNavigationBarIconButton(
-          icon: CupertinoIcons.back,
-          onPressed: widget.onBack,
-        ),
-        middle: Text(
-          widget.isCreateMode
-              ? UITextConstants.startGroupChat
-              : UITextConstants.addMember,
-          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-        ),
-        border: Border(
-          bottom: BorderSide(color: dividerColor, width: AppSpacing.hairline),
-        ),
-      ),
+    return SettingsInsetMemberPickerPageScaffold(
+      isDark: isDark,
+      title: pageTitle,
+      onBack: widget.onBack,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal:
-                  AppSpacing.semantic[DesignSemanticConstants
-                      .container]?[DesignSemanticConstants.md] ??
-                  AppSpacing.containerMd,
-              vertical: AppSpacing.sm,
+            padding: EdgeInsets.fromLTRB(
+              listHorizontalPadding,
+              AppSpacing.sm,
+              listHorizontalPadding,
+              AppSpacing.sm,
             ),
             child: AppSearchField(
               controller: _searchController,
@@ -509,20 +570,25 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           if (selectedMembers.isNotEmpty)
             Padding(
               padding: EdgeInsets.fromLTRB(
-                AppSpacing.containerMd,
+                listHorizontalPadding,
                 0,
-                AppSpacing.containerMd,
+                listHorizontalPadding,
                 AppSpacing.sm,
               ),
               child: _SelectionCard(
                 isDark: isDark,
+                padding: EdgeInsets.all(
+                  SettingsSemanticConstants.blockHorizontalPadding,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
                         Text(
-                          '已选 ${selectedMembers.length} 人',
+                          UITextConstants.startGroupChatSelectedCount(
+                            selectedMembers.length,
+                          ),
                           style: TextStyle(
                             fontSize: AppTypography.md,
                             fontWeight: FontWeight.w600,
@@ -582,15 +648,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                 ListView(
                   controller: _listScrollController,
                   padding: EdgeInsets.only(
-                    left:
-                        AppSpacing.semantic[DesignSemanticConstants
-                            .container]?[DesignSemanticConstants.md] ??
-                        AppSpacing.containerMd,
-                    right:
-                        (AppSpacing.semantic[DesignSemanticConstants
-                                .container]?[DesignSemanticConstants.md] ??
-                            AppSpacing.containerMd) +
-                        28,
+                    left: listHorizontalPadding,
+                    right: listHorizontalPadding + 28,
                     bottom: AppSpacing.lg,
                   ),
                   children: [...topChildren, ...relatedChildren],
@@ -634,9 +693,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             top: false,
             child: Padding(
               padding: EdgeInsets.fromLTRB(
-                AppSpacing.containerMd,
+                listHorizontalPadding,
                 AppSpacing.sm,
-                AppSpacing.containerMd,
+                listHorizontalPadding,
                 AppSpacing.sm,
               ),
               child: CupertinoButton(
@@ -659,7 +718,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                     ? const CupertinoActivityIndicator()
                     : Text(
                         widget.isCreateMode
-                            ? '发起讨论（${selectedMembers.length}）'
+                            ? UITextConstants.startGroupChatActionCount(
+                                selectedMembers.length,
+                              )
                             : '${UITextConstants.addMember}（${selectedMembers.length}）',
                         style: TextStyle(
                           fontSize: AppTypography.lg,
@@ -673,666 +734,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                         ),
                       ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SelectedMemberAvatar extends StatelessWidget {
-  const _SelectedMemberAvatar({
-    required this.name,
-    required this.avatarUrl,
-    required this.onRemove,
-    required this.isDark,
-  });
-
-  final String name;
-  final String avatarUrl;
-  final VoidCallback onRemove;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: AppSpacing.iconButtonMinSizeMd,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RoundedSquareAvatar(
-                size: AppSpacing.largeButtonSize,
-                imageUrl: avatarUrl,
-                name: name,
-                backgroundColor: SettingsSemanticConstants.blockBackground(
-                  isDark,
-                ),
-              ),
-              SizedBox(height: AppSpacing.xs),
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: AppTypography.sm),
-              ),
-            ],
-          ),
-          Positioned(
-            right: -2,
-            top: -2,
-            child: GestureDetector(
-              onTap: onRemove,
-              child: Container(
-                width: AppSpacing.eighteen,
-                height: AppSpacing.eighteen,
-                decoration: BoxDecoration(
-                  color:
-                      SettingsSemanticConstants.selectionAvatarAccessoryBackground(
-                        isDark,
-                      ),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color:
-                        SettingsSemanticConstants.selectionAvatarAccessoryBorder(
-                          isDark,
-                        ),
-                  ),
-                ),
-                child: Icon(
-                  CupertinoIcons.clear,
-                  size: AppSpacing.ten + AppSpacing.one,
-                  color:
-                      SettingsSemanticConstants.selectionAvatarAccessoryForeground(
-                        isDark,
-                      ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SelectionSectionLabel extends StatelessWidget {
-  const _SelectionSectionLabel({required this.title, required this.color});
-
-  final String title;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.xs,
-        AppSpacing.xs,
-        AppSpacing.xs,
-        AppSpacing.xs,
-      ),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: AppTypography.sm,
-          fontWeight: AppTypography.semiBold,
-          color: color,
-        ),
-      ),
-    );
-  }
-}
-
-class _SelectionCard extends StatelessWidget {
-  const _SelectionCard({required this.isDark, required this.child});
-
-  final bool isDark;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: SettingsSemanticConstants.blockBackground(isDark),
-        borderRadius: BorderRadius.circular(
-          SettingsSemanticConstants.selectionCardBorderRadius,
-        ),
-        border: Border.all(
-          color: SettingsSemanticConstants.blockBorderColor(isDark),
-        ),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _SelectionListDivider extends StatelessWidget {
-  const _SelectionListDivider({required this.isDark, this.leadingInset = 0});
-
-  final bool isDark;
-  final double leadingInset;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: SettingsSemanticConstants.dividerThickness,
-      margin: EdgeInsets.only(
-        left: SettingsSemanticConstants.blockHorizontalPadding + leadingInset,
-        right: SettingsSemanticConstants.blockHorizontalPadding,
-      ),
-      color: SettingsSemanticConstants.dividerColor(isDark),
-    );
-  }
-}
-
-class _RelatedFriendRow extends StatelessWidget {
-  const _RelatedFriendRow({
-    required this.name,
-    required this.username,
-    required this.avatarUrl,
-    required this.selected,
-    required this.fgPrimary,
-    required this.fgSecondary,
-    required this.locked,
-    required this.onTap,
-    required this.onAvatarTap,
-    required this.isDark,
-  });
-
-  final String name;
-  final String username;
-  final String avatarUrl;
-  final bool selected;
-  final Color fgPrimary;
-  final Color fgSecondary;
-  final bool locked;
-  final VoidCallback? onTap;
-  final VoidCallback onAvatarTap;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: SettingsSemanticConstants.selectionRowMinHeight,
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: SettingsSemanticConstants.blockHorizontalPadding,
-            vertical: AppSpacing.sm,
-          ),
-          child: Row(
-            children: [
-              _SelectionIndicator(
-                selected: selected,
-                onTap: onTap,
-                enabled: !locked && onTap != null,
-              ),
-              GestureDetector(
-                onTap: onAvatarTap,
-                child: RoundedSquareAvatar(
-                  size: AppSpacing.avatarSize,
-                  imageUrl: avatarUrl,
-                  name: name,
-                  backgroundColor: SettingsSemanticConstants.blockBackground(
-                    isDark,
-                  ),
-                ),
-              ),
-              SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: TextStyle(
-                        fontSize: AppTypography.lg,
-                        color: locked ? fgSecondary : fgPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (locked)
-                      Text(
-                        '已在群中',
-                        style: TextStyle(
-                          fontSize: AppTypography.sm,
-                          color: fgSecondary,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LetterIndex extends StatelessWidget {
-  const _LetterIndex({required this.letters, required this.onTap});
-
-  final List<String> letters;
-  final void Function(int index) onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final fgSecondary = isDark
-        ? AppColors.white.withValues(alpha: 0.45)
-        : AppColors.black.withValues(alpha: 0.45);
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(letters.length, (i) {
-        return GestureDetector(
-          onTap: () => onTap(i),
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
-            child: Text(
-              letters[i],
-              style: TextStyle(
-                fontSize: AppTypography.xs,
-                color: fgSecondary,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-}
-
-class _SelectionIndicator extends StatelessWidget {
-  const _SelectionIndicator({
-    required this.selected,
-    required this.onTap,
-    this.enabled = true,
-  });
-
-  final bool selected;
-  final VoidCallback? onTap;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: enabled ? onTap : null,
-      minimumSize: Size(
-        AppSpacing.minInteractiveSize,
-        AppSpacing.minInteractiveSize,
-      ),
-      child: Icon(
-        selected
-            ? CupertinoIcons.check_mark_circled_solid
-            : CupertinoIcons.circle,
-        color: selected
-            ? AppColors.primaryColor.withValues(alpha: enabled ? 1 : 0.6)
-            : CupertinoColors.systemGrey2,
-        size: AppSpacing.iconMedium,
-      ),
-    );
-  }
-}
-
-/// 群成员/圈成员多选 sheet（图三）
-class _MemberSelectSheet extends ConsumerStatefulWidget {
-  const _MemberSelectSheet({
-    required this.title,
-    required this.members,
-    required this.wizardId,
-    required this.onBack,
-  });
-
-  final String title;
-  final List<StartGroupPickableMember> members;
-  final String wizardId;
-  final VoidCallback onBack;
-
-  @override
-  ConsumerState<_MemberSelectSheet> createState() => _MemberSelectSheetState();
-}
-
-class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
-  final TextEditingController _searchController = TextEditingController();
-  String _query = '';
-
-  String _memberId(StartGroupPickableMember member) {
-    final userId = member.userId.trim();
-    if (userId.isNotEmpty) {
-      return userId;
-    }
-    return member.displayName.trim();
-  }
-
-  bool _allSelected(StartGroupMemberWizardState state) {
-    final selectableIds = widget.members
-        .map(_memberId)
-        .where((id) => id.isNotEmpty && !state.isLocked(id))
-        .toList(growable: false);
-    if (selectableIds.isEmpty) {
-      return false;
-    }
-    return selectableIds.every((id) => state.selectedMembers.containsKey(id));
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  void _toggleMember(StartGroupPickableMember member) {
-    ref
-        .read(startGroupMemberWizardProvider(widget.wizardId).notifier)
-        .toggleMember(member);
-  }
-
-  void _toggleAll(StartGroupMemberWizardState state) {
-    final selectableMembers = widget.members
-        .where((member) {
-          final id = _memberId(member);
-          return id.isNotEmpty && !state.isLocked(id);
-        })
-        .toList(growable: false);
-    if (selectableMembers.isEmpty) {
-      return;
-    }
-    final notifier = ref.read(
-      startGroupMemberWizardProvider(widget.wizardId).notifier,
-    );
-    final allSelected = selectableMembers.every(
-      (member) => state.selectedMembers.containsKey(_memberId(member)),
-    );
-    if (allSelected) {
-      notifier.deselectMemberIds(selectableMembers.map(_memberId));
-      return;
-    }
-    notifier.selectMembers(selectableMembers);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final wizardState = ref.watch(
-      startGroupMemberWizardProvider(widget.wizardId),
-    );
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final pageBg = SettingsSemanticConstants.pageBackground(isDark);
-    final toolbarBg = SettingsSemanticConstants.selectionToolbarBackground(
-      isDark,
-    );
-    final fgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
-    final filtered = widget.members
-        .where((member) {
-          final query = _query.trim().toLowerCase();
-          if (query.isEmpty) {
-            return true;
-          }
-          final name = member.displayName.toLowerCase();
-          final userId = _memberId(member).toLowerCase();
-          return name.contains(query) || userId.contains(query);
-        })
-        .toList(growable: false);
-    final allSelected = _allSelected(wizardState);
-    final hasSelectableMembers = widget.members.any((member) {
-      final id = _memberId(member);
-      return id.isNotEmpty && !wizardState.isLocked(id);
-    });
-    final selectedCount = wizardState.selectedMembers.length;
-
-    return AppScaffold(
-      backgroundColor: pageBg,
-      navigationBar: AppNavigationBar(
-        backgroundColor: toolbarBg,
-        leading: AppNavigationBarIconButton(
-          icon: CupertinoIcons.back,
-          onPressed: widget.onBack,
-        ),
-        middle: Text(
-          widget.title,
-          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
-        ),
-        border: Border(
-          bottom: BorderSide(
-            color: SettingsSemanticConstants.dividerColor(isDark),
-            width: AppSpacing.hairline,
-          ),
-        ),
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              AppSpacing.containerMd,
-              AppSpacing.sm,
-              AppSpacing.containerMd,
-              AppSpacing.sm,
-            ),
-            child: AppSearchField(
-              controller: _searchController,
-              placeholder: UITextConstants.search,
-              onChanged: (value) => setState(() => _query = value),
-            ),
-          ),
-          Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Text(
-                      '暂无匹配成员',
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        color: fgSecondary,
-                      ),
-                    ),
-                  )
-                : ListView(
-                    padding: EdgeInsets.fromLTRB(
-                      AppSpacing.containerMd,
-                      0,
-                      AppSpacing.containerMd,
-                      AppSpacing.containerMd,
-                    ),
-                    children: [
-                      _SelectionCard(
-                        isDark: isDark,
-                        child: Column(
-                          children: [
-                            for (
-                              var index = 0;
-                              index < filtered.length;
-                              index++
-                            ) ...[
-                              Builder(
-                                builder: (context) {
-                                  final member = filtered[index];
-                                  final memberId = _memberId(member);
-                                  final selected = wizardState.isSelected(
-                                    memberId,
-                                  );
-                                  final locked = wizardState.isLocked(memberId);
-                                  return CupertinoButton(
-                                    padding: EdgeInsets.zero,
-                                    onPressed: locked
-                                        ? null
-                                        : () => _toggleMember(member),
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        minHeight: SettingsSemanticConstants
-                                            .selectionRowMinHeight,
-                                      ),
-                                      child: Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: SettingsSemanticConstants
-                                              .blockHorizontalPadding,
-                                          vertical: AppSpacing.sm,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            _SelectionIndicator(
-                                              selected: selected,
-                                              onTap: locked
-                                                  ? null
-                                                  : () => _toggleMember(member),
-                                              enabled: !locked,
-                                            ),
-                                            RoundedSquareAvatar(
-                                              size: AppSpacing.avatarSize,
-                                              imageUrl: member.avatarUrl,
-                                              name: member.displayName,
-                                              backgroundColor:
-                                                  SettingsSemanticConstants.blockBackground(
-                                                    isDark,
-                                                  ),
-                                            ),
-                                            SizedBox(width: AppSpacing.sm),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    member.displayName,
-                                                    style: TextStyle(
-                                                      fontSize:
-                                                          AppTypography.lg,
-                                                      color: locked
-                                                          ? fgSecondary
-                                                          : fgPrimary,
-                                                    ),
-                                                  ),
-                                                  if (locked)
-                                                    Text(
-                                                      '已在群中',
-                                                      style: TextStyle(
-                                                        fontSize:
-                                                            AppTypography.sm,
-                                                        color: fgSecondary,
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              if (index < filtered.length - 1)
-                                _SelectionListDivider(
-                                  isDark: isDark,
-                                  leadingInset:
-                                      AppSpacing.minInteractiveSize +
-                                      AppSpacing.avatarSize +
-                                      AppSpacing.sm,
-                                ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              AppSpacing.containerMd,
-              AppSpacing.sm,
-              AppSpacing.containerMd,
-              AppSpacing.sm + MediaQuery.paddingOf(context).bottom,
-            ),
-            decoration: BoxDecoration(
-              color: toolbarBg,
-              border: Border(
-                top: BorderSide(
-                  color: SettingsSemanticConstants.dividerColor(isDark),
-                  width: AppSpacing.hairline,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  onPressed: hasSelectableMembers
-                      ? () => _toggleAll(wizardState)
-                      : null,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _SelectionIndicator(
-                        selected: allSelected,
-                        onTap: hasSelectableMembers
-                            ? () => _toggleAll(wizardState)
-                            : null,
-                        enabled: hasSelectableMembers,
-                      ),
-                      Text(
-                        UITextConstants.selectAll,
-                        style: TextStyle(
-                          fontSize: AppTypography.lg,
-                          color: hasSelectableMembers ? fgPrimary : fgSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                CupertinoButton(
-                  padding: EdgeInsets.symmetric(
-                    horizontal:
-                        SettingsSemanticConstants.actionButtonPaddingHorizontal,
-                    vertical:
-                        SettingsSemanticConstants.actionButtonPaddingVertical,
-                  ),
-                  color:
-                      SettingsSemanticConstants.actionButtonPrimaryBackground,
-                  disabledColor:
-                      SettingsSemanticConstants.actionButtonDisabledBackground(
-                        isDark,
-                      ),
-                  borderRadius: BorderRadius.circular(
-                    SettingsSemanticConstants.actionButtonBorderRadius,
-                  ),
-                  onPressed: selectedCount == 0
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                  minimumSize: Size(
-                    SettingsSemanticConstants.actionButtonHeightMedium,
-                    SettingsSemanticConstants.actionButtonHeightMedium,
-                  ),
-                  child: Text(
-                    '${UITextConstants.selectAction}（$selectedCount）',
-                    style: TextStyle(
-                      fontSize: AppTypography.lg,
-                      fontWeight: FontWeight.w500,
-                      color: selectedCount == 0
-                          ? SettingsSemanticConstants.actionButtonDisabledForeground(
-                              isDark,
-                            )
-                          : SettingsSemanticConstants
-                                .actionButtonPrimaryForeground,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
         ],

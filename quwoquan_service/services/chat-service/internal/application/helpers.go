@@ -25,3 +25,11 @@ func chatNotMutual(debugMessage string) *rterr.AppError {
 func chatGreetingRequired(debugMessage string) *rterr.AppError {
 	return generated.AppErrorFromGreetingRequired(debugMessage)
 }
+
+func chatGroupMemberNotMutual(debugMessage string) *rterr.AppError {
+	return generated.AppErrorFromGroupMemberNotMutual(debugMessage)
+}
+
+func chatGroupMemberBlocked(debugMessage string) *rterr.AppError {
+	return generated.AppErrorFromGroupMemberBlocked(debugMessage)
+}

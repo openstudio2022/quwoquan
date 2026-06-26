@@ -95,6 +95,31 @@ void main() {
     expect(backButtonSize.width, retryButtonSize.width);
   });
 
+  testWidgets('AppPageErrorState 按 semantic appearanceMode 局部渲染', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const CupertinoApp(
+        theme: CupertinoThemeData(brightness: Brightness.dark),
+        home: AppPageErrorState(
+          semantic: UiErrorSemantic(
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            title: UITextConstants.temporarilyUnavailable,
+            message: UITextConstants.checkNetworkAndTryAgain,
+            appearanceMode: UiErrorAppearanceMode.light,
+          ),
+        ),
+      ),
+    );
+
+    final titleText = tester.widget<Text>(
+      find.text(UITextConstants.temporarilyUnavailable),
+    );
+    final titleColor = titleText.style!.color!;
+    expect(titleColor.computeLuminance(), lessThan(0.5));
+  });
+
   testWidgets('AppTransientErrorNotice 渲染刷新失败轻提示', (tester) async {
     await tester.pumpWidget(
       const CupertinoApp(

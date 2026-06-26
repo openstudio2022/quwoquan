@@ -271,6 +271,8 @@ func main() {
 		}
 		interestAgg := recinfra.NewInterestProfileAggregator(db, recinfra.DefaultInterestProfileConfig(), eventPub, recinfra.WithSegments(segDefs))
 		recommendProjector := recinfra.NewRecommendFeatureProjector(db, recinfra.WithEntityPropagation(entityPropagation), recinfra.WithSignalProcessor(bufferedWriter), recinfra.WithInterestAggregator(interestAgg))
+		premiumPoolProjector := recinfra.NewPremiumPoolProjector(db)
+		go recinfra.NewPremiumPoolEventConsumer(router.Scene("general"), premiumPoolProjector, logger).Run(ctx)
 		searchSignalConsumer := recinfra.NewSearchSignalConsumer(router.Scene("general"), recommendProjector, instanceID, logger)
 		go searchSignalConsumer.Run(ctx, 500*time.Millisecond)
 
@@ -296,7 +298,7 @@ func main() {
 			placeProjector = placeindex.NewProjector(searchBuilt.Indexer, store, placeStore, placeindex.WithLogger(logger))
 			log.Printf("content-service search index projector enabled (es endpoints=%d index=%s, place objects on)", len(cfg.ES.Endpoints), searchBuilt.Client.IndexName())
 		}
-		sharedProjector = &projectorAdapter{discovery: discoveryProjector, recommend: recommendProjector, search: searchBuilt.Projector, place: placeProjector}
+		sharedProjector = &projectorAdapter{discovery: discoveryProjector, recommend: recommendProjector, premium: premiumPoolProjector, search: searchBuilt.Projector, place: placeProjector}
 
 		// Periodic raw-affinity decay so $inc growth never permanently
 		// fossilizes stale interests. A per-day Redis single-flight lock
@@ -361,6 +363,13 @@ func main() {
 			)
 			mongoCandidateSources = append(mongoCandidateSources, collabSource)
 			log.Printf("content-service collaborative recall enabled quotaPct=%d i2i=%d u2i=%d", collabCfg.QuotaPct, collabCfg.MaxI2ICandidates, collabCfg.MaxU2ICandidates)
+		}
+		if premiumPoolSourceRollbackDisabled() {
+			log.Printf("content-service premium pool source disabled by disable_premium_pool_source rollback flag")
+		} else {
+			premiumPoolSource := recinfra.NewPremiumPoolSource(recinfra.NewMongoPremiumPoolCandidateReader(db))
+			mongoCandidateSources = append(mongoCandidateSources, premiumPoolSource)
+			log.Printf("content-service premium pool source enabled recall_path=%s", recinfra.PremiumPoolRecallPath)
 		}
 		intersectionPolicy := rtrecpolicy.Baseline().Intersection
 		// 事实交集读穿透：MongoIntersectionSource（请求期 compute）外包一层
@@ -857,6 +866,7 @@ func hostname() string {
 type projectorAdapter struct {
 	discovery *recinfra.DiscoveryFeedProjector
 	recommend *recinfra.RecommendFeatureProjector
+	premium   *recinfra.PremiumPoolProjector
 	search    *searchindex.Projector
 	place     *placeindex.PlaceProjector
 }
@@ -876,6 +886,11 @@ func (a *projectorAdapter) Project(ctx context.Context, event application.Projec
 	}
 	if a.recommend != nil {
 		if err := a.recommend.Project(ctx, projectorEvent); err != nil {
+			return err
+		}
+	}
+	if a.premium != nil {
+		if err := a.premium.Project(ctx, projectorEvent); err != nil {
 			return err
 		}
 	}
@@ -969,6 +984,12 @@ func collaborativeRecallRollbackDisabled() bool {
 	return parseBoolEnv("QWQ_DISABLE_COLLABORATIVE_RECALL_SOURCES", false) ||
 		parseBoolEnv("DISABLE_COLLABORATIVE_RECALL_SOURCES", false) ||
 		parseBoolEnv("disable_collaborative_recall_sources", false)
+}
+
+func premiumPoolSourceRollbackDisabled() bool {
+	return parseBoolEnv("QWQ_DISABLE_PREMIUM_POOL_SOURCE", false) ||
+		parseBoolEnv("DISABLE_PREMIUM_POOL_SOURCE", false) ||
+		parseBoolEnv("disable_premium_pool_source", false)
 }
 
 // dailyAffinityDecayCheckInterval is how often each replica checks whether the

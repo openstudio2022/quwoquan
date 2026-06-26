@@ -95,7 +95,11 @@ from _common.paths import (  # noqa: E402
 
 from _common.source_unit import resolve_entity_object_dir, write_source_unit as write_structured_source_unit
 
-from _common.release_integrity import ARTICLE_HARD_CHECKS
+from _common.release_integrity import (
+    ARTICLE_COVERAGE_HARD_CHECKS,
+    ARTICLE_HARD_CHECKS,
+    ARTICLE_STRUCTURE_HARD_CHECKS,
+)
 
 from task import object_queue as oq
 
@@ -495,10 +499,15 @@ def _write_source_unit(
     }
 
 def _approved_review_payload() -> dict:
+    # COMMON 硬门 + 每个载体可变对各取一个（entity 风格），构成合法 entity 文章 review。
+    names = sorted(ARTICLE_HARD_CHECKS) + [
+        ARTICLE_COVERAGE_HARD_CHECKS[0],
+        ARTICLE_STRUCTURE_HARD_CHECKS[0],
+    ]
     return {
         "decision": "approved",
         "issues": [],
-        "checks": {name: {"passed": True, "issues": []} for name in sorted(ARTICLE_HARD_CHECKS)},
+        "checks": {name: {"passed": True, "issues": []} for name in names},
     }
 
 def _seed_publish_inputs(task_id: str, batch_id: str) -> None:

@@ -10,7 +10,7 @@ import (
 )
 
 type readPresentationSurfacesFile struct {
-	Version      int `yaml:"version"`
+	Version      int    `yaml:"version"`
 	DartEnumName string `yaml:"dart_enum_name"`
 	Surfaces     []struct {
 		DartMember  string `yaml:"dart_member"`
@@ -29,9 +29,9 @@ type articleDetailWireKeysFile struct {
 }
 
 type readPresentationProjectionFile struct {
-	Version   int `yaml:"version"`
+	Version   int    `yaml:"version"`
 	DartClass string `yaml:"dart_class"`
-	Fields []struct {
+	Fields    []struct {
 		Name     string `yaml:"name"`
 		DartType string `yaml:"dart_type"`
 		PostBase string `yaml:"post_base"`

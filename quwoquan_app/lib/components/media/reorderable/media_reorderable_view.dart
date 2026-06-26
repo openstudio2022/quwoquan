@@ -134,7 +134,8 @@ class _MediaReorderableViewState extends State<MediaReorderableView> {
 
   int get _slotCount => widget.itemCount + (widget.trailing != null ? 1 : 0);
 
-  int get _columns => _isStrip ? _slotCount.clamp(1, 1 << 30) : widget.crossAxisCount;
+  int get _columns =>
+      _isStrip ? _slotCount.clamp(1, 1 << 30) : widget.crossAxisCount;
 
   int get _rows => _isStrip ? 1 : ((_slotCount + _columns - 1) ~/ _columns);
 
@@ -155,12 +156,13 @@ class _MediaReorderableViewState extends State<MediaReorderableView> {
       return Size(widget.padding.horizontal, _tileH + widget.padding.vertical);
     }
     if (_isStrip) {
-      final w =
-          _slotCount * _tileW + (_slotCount - 1) * widget.spacing;
-      return Size(w + widget.padding.horizontal, _tileH + widget.padding.vertical);
+      final w = _slotCount * _tileW + (_slotCount - 1) * widget.spacing;
+      return Size(
+        w + widget.padding.horizontal,
+        _tileH + widget.padding.vertical,
+      );
     }
-    final w =
-        _columns * _tileW + (_columns - 1) * widget.spacing;
+    final w = _columns * _tileW + (_columns - 1) * widget.spacing;
     final h = _rows * _tileH + (_rows - 1) * widget.runSpacing;
     return Size(w + widget.padding.horizontal, h + widget.padding.vertical);
   }
@@ -180,7 +182,10 @@ class _MediaReorderableViewState extends State<MediaReorderableView> {
 
   /// 指针落在哪个「物品槽位」（0..itemCount-1）。
   int _restIndexForPointer(Offset local) {
-    final p = Offset(local.dx - widget.padding.left, local.dy - widget.padding.top);
+    final p = Offset(
+      local.dx - widget.padding.left,
+      local.dy - widget.padding.top,
+    );
     int best = 0;
     double bestDist = double.infinity;
     for (var i = 0; i < widget.itemCount; i++) {
@@ -287,8 +292,7 @@ class _MediaReorderableViewState extends State<MediaReorderableView> {
       velocity = -maxSpeed * (1 - (viewX / edge)).clamp(0.0, 1.0);
     } else if (viewX > viewWidth - edge &&
         viewport.pixels < viewport.maxScrollExtent) {
-      velocity =
-          maxSpeed * (1 - ((viewWidth - viewX) / edge)).clamp(0.0, 1.0);
+      velocity = maxSpeed * (1 - ((viewWidth - viewX) / edge)).clamp(0.0, 1.0);
     }
     _edgeScrollVelocity = velocity;
     if (velocity == 0) {
@@ -319,21 +323,31 @@ class _MediaReorderableViewState extends State<MediaReorderableView> {
 
   @override
   Widget build(BuildContext context) {
-    final content = _buildStack();
     if (_isStrip) {
-      return SizedBox(
-        height: _contentSize.height,
-        child: SingleChildScrollView(
-          controller: _stripController,
-          scrollDirection: Axis.horizontal,
-          physics: _dragIndex != null
-              ? const NeverScrollableScrollPhysics()
-              : null,
-          child: content,
-        ),
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final content = _buildStack();
+          final stripContent = constraints.maxWidth.isFinite
+              ? ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: content,
+                )
+              : content;
+          return SizedBox(
+            height: _contentSize.height,
+            child: SingleChildScrollView(
+              controller: _stripController,
+              scrollDirection: Axis.horizontal,
+              physics: _dragIndex != null
+                  ? const NeverScrollableScrollPhysics()
+                  : null,
+              child: stripContent,
+            ),
+          );
+        },
       );
     }
-    return content;
+    return _buildStack();
   }
 
   Widget _buildStack() {

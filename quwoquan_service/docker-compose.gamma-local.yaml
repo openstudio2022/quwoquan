@@ -532,6 +532,7 @@ services:
     volumes:
       - ../state/local/gamma/Caddyfile:/etc/caddy/Caddyfile:ro
       - ../state/local/gamma/media:/srv/media:ro
+      - ${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-../artifacts/legal-static-packages/gamma/current/public}:/srv/legal:ro
       - ${LOCAL_GAMMA_CADDY_DATA_ROOT:-../state/local/gamma/caddy-data}:/data
       - ${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-../state/local/gamma/caddy-config}:/config
     healthcheck:

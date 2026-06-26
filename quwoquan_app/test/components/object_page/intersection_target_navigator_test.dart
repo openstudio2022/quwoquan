@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 
@@ -59,6 +60,28 @@ void main() {
       expect(
         IntersectionTargetNavigator.resolvePath(
           IntersectionTarget(objectId: 'x', objectKind: 'alien'),
+        ),
+        isNull,
+      );
+    });
+
+    test('新增 objectKind trip/meetup → routeId 反查正确，目标页未实现时优雅降级（契约占位）', () {
+      // 交集行动深化：registry.objectKinds 已登记 trip/meetup，codegen objectKind→routeId
+      // 闭集随之含 tripDetail/meetupDetail（端侧只读分发，不硬编码）。
+      expect(intersectionRouteIdForObjectKind('trip'), 'tripDetail');
+      expect(intersectionRouteIdForObjectKind('meetup'), 'meetupDetail');
+      // 结伴/线下局详情页尚未实现：resolvePath 落入 default → null，端侧静默降级（不崩溃）。
+      // 实现 tripDetail/meetupDetail 页后，需在 resolvePath switch 增补对应 case，
+      // 并把下面两条断言改为 contains(objectId)，本测试即为该实现的提醒式契约。
+      expect(
+        IntersectionTargetNavigator.resolvePath(
+          IntersectionTarget(objectId: 't1', objectKind: 'trip'),
+        ),
+        isNull,
+      );
+      expect(
+        IntersectionTargetNavigator.resolvePath(
+          IntersectionTarget(objectId: 'm1', objectKind: 'meetup'),
         ),
         isNull,
       );

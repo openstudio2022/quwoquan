@@ -11,18 +11,23 @@ class _SectionTitle extends StatelessWidget {
       title,
       style: TextStyle(
         color: AppColors.iosSecondaryLabel(context),
-        fontSize: AppTypography.iosTitle3,
-        height: 1.2,
-        fontWeight: AppTypography.bold,
+        fontSize: AppTypography.iosCallout,
+        height: AppTypography.lineHeightTight,
+        fontWeight: AppTypography.medium,
       ),
     );
   }
 }
 
 class _OccupationRow extends StatelessWidget {
-  const _OccupationRow({required this.label, required this.onTap});
+  const _OccupationRow({
+    required this.label,
+    required this.isPlaceholder,
+    required this.onTap,
+  });
 
   final String label;
+  final bool isPlaceholder;
   final VoidCallback onTap;
 
   @override
@@ -31,7 +36,7 @@ class _OccupationRow extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        height: 62,
+        constraints: const BoxConstraints(minHeight: AppSpacing.buttonHeight),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
         decoration: _CareerInterestPageState._cardDecoration(context),
         child: Row(
@@ -42,9 +47,12 @@ class _OccupationRow extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: AppColors.iosLabel(context),
+                  color: isPlaceholder
+                      ? AppColors.iosSecondaryLabel(context)
+                      : AppColors.iosLabel(context),
                   fontSize: AppTypography.iosBody,
-                  fontWeight: AppTypography.medium,
+                  fontWeight: AppTypography.regular,
+                  height: AppTypography.lineHeightCompact,
                 ),
               ),
             ),
@@ -85,33 +93,55 @@ class _InterestTagTile extends StatefulWidget {
 
 class _InterestTagTileState extends State<_InterestTagTile>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1500),
-  );
+  AnimationController? _controller;
+
+  // SingleTickerProviderStateMixin creates tickers via ancestor lookups, so the
+  // controller must only be created while this element is still active.
+  AnimationController _ensureWiggleController() =>
+      _controller ??= AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 1500),
+      );
+
+  void _startWiggle() {
+    final controller = _ensureWiggleController();
+    if (!controller.isAnimating) {
+      controller.repeat(reverse: true);
+    }
+  }
+
+  void _stopWiggle() {
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+    controller.stop();
+    controller.value = 0;
+  }
 
   @override
   void initState() {
     super.initState();
     if (widget.wiggle) {
-      _controller.repeat(reverse: true);
+      _startWiggle();
     }
   }
 
   @override
   void didUpdateWidget(covariant _InterestTagTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.wiggle && !_controller.isAnimating) {
-      _controller.repeat(reverse: true);
-    } else if (!widget.wiggle && _controller.isAnimating) {
-      _controller.stop();
-      _controller.value = 0;
+    if (widget.wiggle) {
+      _startWiggle();
+    } else {
+      _stopWiggle();
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    final controller = _controller;
+    _controller = null;
+    controller?.dispose();
     super.dispose();
   }
 
@@ -125,18 +155,16 @@ class _InterestTagTileState extends State<_InterestTagTile>
         decoration: BoxDecoration(
           color: widget.mode == _TagTileMode.add
               ? AppColors.iosSystemBackground(context)
-              : const Color(0xFFF7FAFF),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusTen + 1),
+              : AppColors.iosTintedFill(context),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
           border: Border.all(
-            color: widget.mode == _TagTileMode.add
-                ? const Color(0xFFDDE8F6)
-                : const Color(0xFFE3EAF5),
+            color: AppColors.iosSeparator(context).withValues(alpha: 0.42),
           ),
           boxShadow: widget.isDragging
               ? <BoxShadow>[
                   BoxShadow(
                     color: CupertinoColors.black.withValues(alpha: 0.16),
-                    blurRadius: 18,
+                    blurRadius: AppSpacing.containerLg,
                     offset: const Offset(0, 8),
                   ),
                 ]
@@ -147,18 +175,24 @@ class _InterestTagTileState extends State<_InterestTagTile>
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.containerXs,
+                  horizontal: AppSpacing.containerSm,
                 ),
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Text(
-                    widget.label,
-                    maxLines: 1,
-                    style: TextStyle(
-                      color: AppColors.iosLabel(context),
-                      fontSize: AppTypography.iosBody,
-                      fontWeight: AppTypography.medium,
-                      letterSpacing: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      right: AppSpacing.containerMd,
+                    ),
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: AppColors.iosLabel(context),
+                        fontSize: AppTypography.iosSubheadline,
+                        fontWeight: AppTypography.regular,
+                        height: AppTypography.lineHeightTight,
+                        letterSpacing: 0,
+                      ),
                     ),
                   ),
                 ),
@@ -171,8 +205,8 @@ class _InterestTagTileState extends State<_InterestTagTile>
                 behavior: HitTestBehavior.opaque,
                 onTap: widget.onAction,
                 child: SizedBox(
-                  width: 30,
-                  height: 30,
+                  width: AppSpacing.iconButtonMinSizeSm,
+                  height: AppSpacing.iconButtonMinSizeSm,
                   child: Align(
                     alignment: Alignment.topRight,
                     child: Padding(
@@ -187,7 +221,7 @@ class _InterestTagTileState extends State<_InterestTagTile>
                         size: AppSpacing.iconSmall,
                         color: widget.mode == _TagTileMode.add
                             ? AppColors.iosAccent(context)
-                            : AppColors.iosLabel(context),
+                            : AppColors.iosSecondaryLabel(context),
                       ),
                     ),
                   ),
@@ -201,10 +235,14 @@ class _InterestTagTileState extends State<_InterestTagTile>
     if (!widget.wiggle) {
       return child;
     }
+    final controller = _controller;
+    if (controller == null) {
+      return child;
+    }
     return AnimatedBuilder(
-      animation: _controller,
+      animation: controller,
       builder: (context, child) {
-        final angle = math.sin(_controller.value * math.pi * 2) * 0.022;
+        final angle = math.sin(controller.value * math.pi * 2) * 0.014;
         return Transform.rotate(angle: angle, child: child);
       },
       child: child,
@@ -223,25 +261,13 @@ class _OccupationPickerPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final grouped = <String, List<_CareerTagOption>>{};
-    for (final option in options) {
-      grouped
-          .putIfAbsent(option.parentLabel, () => <_CareerTagOption>[])
-          .add(option);
-    }
-    return AppScaffold(
-      backgroundColor: const Color(0xFFF7FAFF),
-      navigationBar: AppNavigationBar(
-        backgroundColor: const Color(0xFFF7FAFF),
-        border: null,
-        automaticallyImplyLeading: false,
-        leading: AppNavigationBarIconButton(
-          icon: CupertinoIcons.back,
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        middle: const Text(UITextConstants.careerInterestOccupationPickerTitle),
-      ),
-      child: ListView(
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final groups = _occupationGroups(options);
+    return SettingsInsetFormPageScaffold(
+      isDark: isDark,
+      title: UITextConstants.careerInterestOccupationPickerTitle,
+      onBack: () => Navigator.of(context).maybePop(),
+      body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.containerMd,
           AppSpacing.containerLg,
@@ -249,71 +275,167 @@ class _OccupationPickerPage extends StatelessWidget {
           AppSpacing.containerXl,
         ),
         children: <Widget>[
-          for (final entry in grouped.entries) ...<Widget>[
-            Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.containerXs,
-                bottom: AppSpacing.containerXs,
-                top: AppSpacing.containerSm,
-              ),
-              child: Text(
-                entry.key,
-                style: TextStyle(
-                  color: AppColors.iosSecondaryLabel(context),
-                  fontSize: AppTypography.iosSubheadline,
-                  fontWeight: AppTypography.semiBold,
-                ),
-              ),
-            ),
-            Container(
-              decoration: _CareerInterestPageState._cardDecoration(context),
-              child: Column(
-                children: <Widget>[
-                  for (var i = 0; i < entry.value.length; i++)
-                    _OccupationOptionRow(
-                      option: entry.value[i],
-                      selected: entry.value[i].tagRef == selectedTagRef,
-                      showDivider: i != entry.value.length - 1,
+          SettingsInsetGroupedSection(
+            isDark: isDark,
+            density: SettingsInsetSectionDensity.compact,
+            child: Column(
+              children: <Widget>[
+                for (var i = 0; i < groups.length; i++) ...<Widget>[
+                  _OccupationCategoryRow(
+                    group: groups[i],
+                    selectedOption: _selectedOptionIn(
+                      groups[i].options,
+                      selectedTagRef,
                     ),
+                  ),
+                  if (i != groups.length - 1)
+                    SettingsInsetFormSectionDivider(isDark: isDark),
                 ],
-              ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _OccupationOptionRow extends StatelessWidget {
-  const _OccupationOptionRow({
-    required this.option,
-    required this.selected,
-    required this.showDivider,
+class _OccupationCategoryRow extends StatelessWidget {
+  const _OccupationCategoryRow({
+    required this.group,
+    required this.selectedOption,
   });
 
-  final _CareerTagOption option;
-  final bool selected;
-  final bool showDivider;
+  final _OccupationCategoryGroup group;
+  final _CareerTagOption? selectedOption;
+
+  Future<void> _openChildren(BuildContext context) async {
+    final selected = await Navigator.of(context).push<String>(
+      CupertinoPageRoute<String>(
+        builder: (_) => _OccupationLeafPickerPage(
+          group: group,
+          selectedTagRef: selectedOption?.tagRef ?? '',
+        ),
+      ),
+    );
+    if (selected != null && context.mounted) {
+      Navigator.of(context).pop(selected);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => Navigator.of(context).pop(option.tagRef),
-      child: Container(
-        height: 52,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-        decoration: BoxDecoration(
-          border: showDivider
-              ? Border(
-                  bottom: BorderSide(
-                    color: AppColors.iosSeparator(context),
-                    width: AppSpacing.hairline,
+    final selected = selectedOption;
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: () => unawaited(_openChildren(context)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSpacing.buttonHeight),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                group.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.iosLabel(context),
+                  fontSize: AppTypography.iosBody,
+                  fontWeight: AppTypography.regular,
+                  height: AppTypography.lineHeightCompact,
+                ),
+              ),
+            ),
+            if (selected != null)
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: AppSpacing.containerSm),
+                  child: Text(
+                    selected.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: AppColors.iosSecondaryLabel(context),
+                      fontSize: AppTypography.iosSubheadline,
+                      fontWeight: AppTypography.regular,
+                      height: AppTypography.lineHeightCompact,
+                    ),
                   ),
-                )
-              : null,
+                ),
+              ),
+            const SizedBox(width: AppSpacing.containerXs),
+            Icon(
+              CupertinoIcons.chevron_forward,
+              size: AppSpacing.iconSmall,
+              color: AppColors.iosTertiaryLabel(context),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _OccupationLeafPickerPage extends StatelessWidget {
+  const _OccupationLeafPickerPage({
+    required this.group,
+    required this.selectedTagRef,
+  });
+
+  final _OccupationCategoryGroup group;
+  final String selectedTagRef;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    return SettingsInsetFormPageScaffold(
+      isDark: isDark,
+      title: group.label,
+      onBack: () => Navigator.of(context).maybePop(),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.containerMd,
+          AppSpacing.containerLg,
+          AppSpacing.containerMd,
+          AppSpacing.containerXl,
+        ),
+        children: <Widget>[
+          SettingsInsetGroupedSection(
+            isDark: isDark,
+            density: SettingsInsetSectionDensity.compact,
+            child: Column(
+              children: <Widget>[
+                for (var i = 0; i < group.options.length; i++) ...<Widget>[
+                  _OccupationLeafRow(
+                    option: group.options[i],
+                    selected: group.options[i].tagRef == selectedTagRef,
+                  ),
+                  if (i != group.options.length - 1)
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OccupationLeafRow extends StatelessWidget {
+  const _OccupationLeafRow({required this.option, required this.selected});
+
+  final _CareerTagOption option;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: () => Navigator.of(context).pop(option.tagRef),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSpacing.buttonHeight),
         child: Row(
           children: <Widget>[
             Expanded(
@@ -322,6 +444,8 @@ class _OccupationOptionRow extends StatelessWidget {
                 style: TextStyle(
                   color: AppColors.iosLabel(context),
                   fontSize: AppTypography.iosBody,
+                  fontWeight: AppTypography.regular,
+                  height: AppTypography.lineHeightCompact,
                 ),
               ),
             ),
@@ -336,6 +460,55 @@ class _OccupationOptionRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _OccupationCategoryGroup {
+  const _OccupationCategoryGroup({
+    required this.tagRef,
+    required this.label,
+    required this.options,
+  });
+
+  final String tagRef;
+  final String label;
+  final List<_CareerTagOption> options;
+}
+
+List<_OccupationCategoryGroup> _occupationGroups(
+  List<_CareerTagOption> options,
+) {
+  final parentRefs = <String>[];
+  final parentLabels = <String, String>{};
+  final grouped = <String, List<_CareerTagOption>>{};
+  for (final option in options) {
+    final parentRef = option.parentTagRef;
+    if (!grouped.containsKey(parentRef)) {
+      parentRefs.add(parentRef);
+      parentLabels[parentRef] = option.parentLabel;
+      grouped[parentRef] = <_CareerTagOption>[];
+    }
+    grouped[parentRef]!.add(option);
+  }
+  return <_OccupationCategoryGroup>[
+    for (final parentRef in parentRefs)
+      _OccupationCategoryGroup(
+        tagRef: parentRef,
+        label: parentLabels[parentRef] ?? _leafLabel(parentRef),
+        options: grouped[parentRef] ?? const <_CareerTagOption>[],
+      ),
+  ];
+}
+
+_CareerTagOption? _selectedOptionIn(
+  List<_CareerTagOption> options,
+  String selectedTagRef,
+) {
+  for (final option in options) {
+    if (option.tagRef == selectedTagRef) {
+      return option;
+    }
+  }
+  return null;
 }
 
 String _tagLabel(String label, String displayLabel) {
@@ -361,15 +534,15 @@ String _categoryLabel(UserCareerInterestCategoryConfig category) {
     case 'career_interest_category_tech':
       return UITextConstants.careerInterestCategoryTech;
     case 'career_occupation_category_product_ops':
-      return '产品/运营';
+      return UITextConstants.careerOccupationCategoryProductOps;
     case 'career_occupation_category_engineering':
-      return '研发/技术';
+      return UITextConstants.careerOccupationCategoryEngineering;
     case 'career_occupation_category_design':
-      return '设计/创意';
+      return UITextConstants.careerOccupationCategoryDesign;
     case 'career_occupation_category_student':
-      return '学生';
+      return UITextConstants.careerOccupationCategoryStudent;
     case 'career_occupation_category_freelance':
-      return '自由职业';
+      return UITextConstants.careerOccupationCategoryFreelance;
     default:
       return category.id;
   }

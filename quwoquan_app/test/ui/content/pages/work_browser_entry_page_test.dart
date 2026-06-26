@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -7,6 +8,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -93,6 +95,35 @@ void main() {
     );
   });
 
+  testWidgets('直达入口：浅色来源的失效内容错误页不继承深色沉浸上下文', (tester) async {
+    final repo = MockContentRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+        child: const CupertinoApp(
+          theme: CupertinoThemeData(brightness: Brightness.dark),
+          home: WorkBrowserEntryPage(
+            workId: 'definitely-missing-post-id',
+            source: 'home_feed',
+            sourceAppearanceMode: UiErrorAppearanceMode.light,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final scaffold = tester.widget<CupertinoPageScaffold>(
+      find.byType(CupertinoPageScaffold).first,
+    );
+    expect(scaffold.backgroundColor!.computeLuminance(), greaterThan(0.8));
+    expect(
+      find.byKey(const ValueKey('work-browser-entry-error')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('直达入口：评论原文跳转会消费 openComments 上下文', (tester) async {
     final repo = MockContentRepository();
     final postId = await firstReadablePostId(repo);
@@ -137,9 +168,7 @@ void main() {
       routes: <RouteBase>[
         GoRoute(
           path: AppRoutePaths.home,
-          builder: (_, _) => const Scaffold(
-            body: Center(child: Text('HOME')),
-          ),
+          builder: (_, _) => const Scaffold(body: Center(child: Text('HOME'))),
         ),
         GoRoute(
           path: AppRoutePaths.workBrowserPathTemplate.replaceAll(
@@ -172,9 +201,7 @@ void main() {
 
     expect(find.text(UITextConstants.workOpenFailedTitle), findsOneWidget);
     expect(
-      find.text(
-        ContentErrorMessages.zh[ContentErrorCode.postNotFound]!,
-      ),
+      find.text(ContentErrorMessages.zh[ContentErrorCode.postNotFound]!),
       findsOneWidget,
     );
     expect(find.text(UITextConstants.back), findsOneWidget);

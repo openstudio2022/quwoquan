@@ -24,6 +24,55 @@ void main() {
       expect(IntersectionActionKeys.openRoute, 'open_route');
       expect(IntersectionActionKeys.createFollowup, 'create_followup');
       expect(IntersectionActionKeys.askAssistant, 'ask_assistant');
+      // §交集行动深化：同趣 / 同行 / 线下 / 实时 / 意图 行动阶梯常量。
+      expect(IntersectionActionKeys.joinTopicRoom, 'join_topic_room');
+      expect(IntersectionActionKeys.startCompanion, 'start_companion');
+      expect(IntersectionActionKeys.joinTrip, 'join_trip');
+      expect(IntersectionActionKeys.joinMeetup, 'join_meetup');
+      expect(IntersectionActionKeys.meetNearby, 'meet_nearby');
+      expect(IntersectionActionKeys.startVoiceRoom, 'start_voice_room');
+      expect(IntersectionActionKeys.expressInterest, 'express_interest');
+    });
+
+    test('端侧常量集合与 codegen actionKey 闭集完全一致（无孤儿、无缺失）', () {
+      const endpointConstants = <String>{
+        IntersectionActionKeys.followPerson,
+        IntersectionActionKeys.greetPerson,
+        IntersectionActionKeys.messagePerson,
+        IntersectionActionKeys.viewSharedPeople,
+        IntersectionActionKeys.joinCircle,
+        IntersectionActionKeys.openDiscussion,
+        IntersectionActionKeys.openContent,
+        IntersectionActionKeys.openObject,
+        IntersectionActionKeys.followObject,
+        IntersectionActionKeys.openRoute,
+        IntersectionActionKeys.createFollowup,
+        IntersectionActionKeys.askAssistant,
+        IntersectionActionKeys.joinTopicRoom,
+        IntersectionActionKeys.startCompanion,
+        IntersectionActionKeys.joinTrip,
+        IntersectionActionKeys.joinMeetup,
+        IntersectionActionKeys.meetNearby,
+        IntersectionActionKeys.startVoiceRoom,
+        IntersectionActionKeys.expressInterest,
+      };
+      expect(endpointConstants, intersectionActionKeys.toSet());
+    });
+
+    test('isHeavySocialAction：重社交行动（同行/线下/实时/心动）识别', () {
+      expect(IntersectionActionKeys.isHeavySocialAction('start_companion'), isTrue);
+      expect(IntersectionActionKeys.isHeavySocialAction('join_trip'), isTrue);
+      expect(IntersectionActionKeys.isHeavySocialAction('join_topic_room'), isTrue);
+      expect(IntersectionActionKeys.isHeavySocialAction('meet_nearby'), isTrue);
+      expect(IntersectionActionKeys.isHeavySocialAction('start_voice_room'), isTrue);
+      expect(IntersectionActionKeys.isHeavySocialAction('express_interest'), isTrue);
+      // trim 容错。
+      expect(IntersectionActionKeys.isHeavySocialAction(' join_meetup '), isTrue);
+      // 轻连接 / 助手类不算重社交行动。
+      expect(IntersectionActionKeys.isHeavySocialAction('follow_person'), isFalse);
+      expect(IntersectionActionKeys.isHeavySocialAction('open_route'), isFalse);
+      expect(IntersectionActionKeys.isHeavySocialAction('ask_assistant'), isFalse);
+      expect(IntersectionActionKeys.isHeavySocialAction(''), isFalse);
     });
 
     test('isAssistant：仅助手类（ask_assistant / create_followup）才打开小艺', () {

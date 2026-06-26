@@ -1,0 +1,66 @@
+id: CR-20260625-068-recommendation-premium-pool-readpath-next
+title: 推荐精品池读路径闭环下一轮规划
+slug: recommendation-premium-pool-readpath-next
+revision: 1
+status: planned
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation
+  - specs/feature-tree/recommendation-platform/evaluation-and-flywheel
+  - specs/feature-tree/recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation
+  - specs/feature-tree/recommendation-platform/evaluation-and-flywheel/online-ab-significance
+  - docs/recommendation-commercial-maturity-plan.md
+  - docs/outstanding_risks_backlog.md
+
+entries:
+  - timestamp: "2026-06-25T11:30:00+08:00"
+    summary: |
+      按 /continue-dev 场景 B 复盘推荐 P1b/P1c/P1d 后，裁决下一轮主切片为 P1d-2 精品池读路径闭环：
+      product-ops 全局精品池投影到 content-service 推荐读模型，PremiumPoolSource 只读投影并以
+      RecallPath=premium_pool 进入 Engine，统一接受负反馈、过期、下架、频控、near-dup、作者屏蔽和类型屏蔽。
+    reason: |
+      product-ops 全局精品池写入前置已完成，但用户实际精品流仍未消费全局精品池。若继续优先做 P2 校准、
+      扩 replay/AB 平台或深排能力，会绕开当前精品运营成熟度和可解释推荐主战场的最大断点。
+    change_type:
+      - recommendation
+      - product_ops
+      - planning
+      - acceptance
+      - observability
+    changed_documents:
+      - path: docs/recommendation-commercial-maturity-plan.md
+        sections:
+          - continue-dev 下一轮目标规划
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-IX04 精品池召回源
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md
+        sections:
+          - 范围
+          - 非目标
+          - 验收标准
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/acceptance.yaml
+        sections:
+          - GWT2_premium_pool_readpath
+      - path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/acceptance.yaml
+        sections:
+          - SIT1 notes
+      - path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation/acceptance.yaml
+        sections:
+          - GWT1 notes
+      - path: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/online-ab-significance/acceptance.yaml
+        sections:
+          - GWT1 notes
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 本 CR 只冻结下一轮目标、规格与验收，不启用 PremiumPoolSource。
+      - feed 读路径继续禁止同步调用 product-ops、质量模型、数据工程任务或 /v1/score。
+      - 不引入 MMoE/PLE/ESMM、双塔 ANN、IPS/Thompson 或深排平台。

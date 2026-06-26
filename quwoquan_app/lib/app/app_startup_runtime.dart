@@ -5,7 +5,6 @@ import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/core/emoji/emoji_analytics.dart';
 import 'package:quwoquan_app/core/emoji/emoji_repository.dart';
-import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 typedef ProviderReader = Object? Function(dynamic provider);
@@ -16,8 +15,6 @@ final class AppStartupRuntime {
 
   static final AppStartupRuntime instance = AppStartupRuntime._();
   final Stopwatch _stopwatch = Stopwatch();
-  StartupNativeBridge startupNativeBridge =
-      const MethodChannelStartupNativeBridge();
 
   bool _bootstrapStarted = false;
   bool _postFirstFrameWarmupScheduled = false;
@@ -42,39 +39,6 @@ final class AppStartupRuntime {
 
   void markWelcomeShown() {
     _welcomeShownMs ??= _elapsedMs;
-  }
-
-  Future<Duration> nativeStartupElapsed({
-    int attempts = 1,
-    Duration retryDelay = const Duration(milliseconds: 50),
-  }) async {
-    final normalizedAttempts = attempts < 1 ? 1 : attempts;
-    for (var attempt = 0; attempt < normalizedAttempts; attempt++) {
-      try {
-        final elapsedMs = await startupNativeBridge.nativeStartupElapsedMs();
-        if (elapsedMs != null && elapsedMs > 0) {
-          return Duration(milliseconds: elapsedMs);
-        }
-      } catch (_) {
-        // Retry below; startup observability must never block app entry.
-      }
-      if (attempt < normalizedAttempts - 1) {
-        await Future<void>.delayed(retryDelay);
-      }
-    }
-    return Duration.zero;
-  }
-
-  Future<void> markFlutterWelcomeReady({
-    required Duration sequenceElapsed,
-  }) async {
-    try {
-      await startupNativeBridge.markFlutterWelcomeReady(
-        sequenceElapsedMs: sequenceElapsed.inMilliseconds,
-      );
-    } catch (_) {
-      // Android 原生欢迎层交接只做 best effort；iOS/Web 没有该 channel。
-    }
   }
 
   void markHomeFeedWarm() {
@@ -131,20 +95,6 @@ final class AppStartupRuntime {
       );
     } catch (_) {
       // 启动观测只做 best effort，不能影响进入 App。
-    }
-  }
-
-  Future<void> completeNativeWelcomeOverlay({
-    required bool degraded,
-    required int replayCount,
-  }) async {
-    try {
-      await startupNativeBridge.completeWelcomeOverlay(
-        degraded: degraded,
-        replayCount: replayCount,
-      );
-    } catch (_) {
-      // Android 原生欢迎层同步只做 best effort；iOS/Web 没有该 channel。
     }
   }
 

@@ -17,6 +17,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
+import 'package:quwoquan_app/core/constants/homepage_detail_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
@@ -73,6 +74,14 @@ void main() {
     expect(find.text('实体介绍'), findsNothing);
     expect(find.text(UITextConstants.objectIntroMoreLabel), findsOneWidget);
     expect(find.text('治理入口'), findsNothing);
+    expect(find.text('统一对象键'), findsNothing);
+    expect(find.text('对象页模板'), findsNothing);
+    expect(find.text('灰度 cohort'), findsNothing);
+    expect(find.text('主页管理'), findsNothing);
+
+    await tester.tap(find.text(UITextConstants.objectTabRelatedCircles).last);
+    await tester.pumpAndSettle();
+    expect(find.text(HomepageDetailText.relatedGroupOpenAction), findsWidgets);
 
     await tester.tap(
       find.byKey(const ValueKey<String>('homepage-detail-more-button')),
@@ -118,9 +127,7 @@ void main() {
       routes: <RouteBase>[
         GoRoute(
           path: AppRoutePaths.home,
-          builder: (_, _) => const Scaffold(
-            body: Center(child: Text('HOME')),
-          ),
+          builder: (_, _) => const Scaffold(body: Center(child: Text('HOME'))),
         ),
         GoRoute(
           path: AppRoutePaths.homepageDetailPathTemplate.replaceAll(

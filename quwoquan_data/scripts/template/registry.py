@@ -1,16 +1,33 @@
 """Load the quwoquan_data template library."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from _common.paths import DATA_ROOT, PUBLISH_ROOT, SERVICE_CONTRACTS_METADATA_ROOT
+from _common.paths import _REPO_DATA_ROOT, DATA_ROOT, PUBLISH_ROOT, SERVICE_CONTRACTS_METADATA_ROOT
 
 
-TEMPLATES_ROOT = DATA_ROOT / "templates"
+def _resolve_templates_root() -> Path:
+    """系统内置模板库（creator_profiles/blueprints/routing/catalogs）是版本控制的契约
+    真相源，应跟代码走，禁止随运行时 QWQ_DATA_ROOT 漂移到无模板的隔离/scratch 根。
+
+    解析顺序：显式 QWQ_TEMPLATES_ROOT > 运行时数据根自带 templates（测试 fixture 场景）
+    > 仓库内置 templates。回退保证 scratch 数据根下 creator 注册表不为空。
+    """
+    override = os.environ.get("QWQ_TEMPLATES_ROOT")
+    if override:
+        return Path(override)
+    data_root_templates = DATA_ROOT / "templates"
+    if (data_root_templates / "creator_profiles" / "system_builtin").is_dir():
+        return data_root_templates
+    return _REPO_DATA_ROOT / "templates"
+
+
+TEMPLATES_ROOT = _resolve_templates_root()
 CATALOGS_ROOT = TEMPLATES_ROOT / "_registry" / "catalogs"
 ROUTING_ROOT = TEMPLATES_ROOT / "_registry" / "routing"
 BLUEPRINTS_ROOT = TEMPLATES_ROOT / "blueprints"

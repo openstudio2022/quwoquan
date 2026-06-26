@@ -77,8 +77,8 @@
 ### WS2 合规与双端上架（P0，含外部阻断）
 
 #### T2.1 法律与合规正文就绪 — ⛔（外部人工）
-- 现状：登录强制勾选协议并携带 `agreementVersion/privacyVersion`；法律正文走 `quwoquan.com/legal/*` 外链；`security-privacy-audit/spec.md` 已填充关键条目。
-- 剩余：隐私政策/用户协议正文上线且 URL 200 可达；第三方 SDK 与权限用途清单；ICP/算法备案。
+- 现状：登录强制勾选协议并携带 `agreementVersion/privacyVersion`；法律正文已规划为 `legal-static` 独立静态包，prod canonical 为 `https://quwoquan.com/legal/*`，gateway 同路径兜底；`security-privacy-audit/spec.md` 已填充关键条目。
+- 剩余：隐私政策/用户协议/权限说明/SDK 清单经法务确认后通过 `stackctl package --env gamma --kind legal-static` 与 `stackctl verify --env gamma --kind legal-static`；prod URL 200 可达；ICP/算法备案。
 - 负责方：法务 + 运营 + 研发。
 - 验收/verify：双端审核所需法律 URL 全部 200。
 

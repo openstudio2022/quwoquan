@@ -195,6 +195,7 @@ grandfathered_current_paths:
 - quwoquan_app/test/core/trackers/intersection_attribution_test.dart
 - quwoquan_app/test/core/widgets/app_cached_network_image_test.dart
 - quwoquan_app/test/core/widgets/error_states/app_error_states_test.dart
+- quwoquan_app/test/core/widgets/app_list_page_semantics_test.dart
 - quwoquan_app/test/filter/image_editor_filter_models_test.dart
 - quwoquan_app/test/filter/image_editor_filter_repository_test.dart
 - quwoquan_app/test/gamma/assistant_alpha_beta_simulator_test.dart
@@ -253,6 +254,7 @@ grandfathered_current_paths:
 - quwoquan_app/test/ui/chat/widgets/group_manage_page_widget_test.dart
 - quwoquan_app/test/ui/chat/widgets/start_group_chat_page_widget_test.dart
 - quwoquan_app/test/ui/chat/widgets/transfer_ownership_page_widget_test.dart
+- quwoquan_app/test/ui/user/pages/career_interest_page_test.dart
 - quwoquan_app/test/ui/circle/circle_content_identity_widget_test.dart
 - quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
 - quwoquan_app/test/ui/circle/journeys/circle_navigation_journey_test.dart
@@ -577,6 +579,8 @@ grandfathered_current_paths:
 - quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source_test.go
 - quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer_test.go
 - quwoquan_service/services/content-service/internal/infrastructure/recommendation/segment_test.go
+- quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_projector_test.go
+- quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_source_test.go
 - quwoquan_service/services/content-service/internal/infrastructure/searchindex/backfill_test.go
 - quwoquan_service/services/content-service/internal/infrastructure/searchindex/projector_test.go
 - quwoquan_service/services/content-service/tests/author_impact_evidence_contract_test.go

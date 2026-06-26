@@ -1,0 +1,74 @@
+id: CR-20260626-072-unified-list-error-appearance-semantics
+title: 统一列表页语义与错误来源外观继承
+slug: unified-list-error-appearance-semantics
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality
+  - specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics
+  - specs/feature-tree/runtime/runtime-client-foundation/app-theme-infrastructure
+
+entries:
+  - timestamp: "2026-06-26T10:30:00+08:00"
+    summary: |
+      新增列表页语义 multiOptionList / singleList，并在 App 侧落地 AppSegmentedChoiceBar、AppListPageScaffold、AppListSurface、AppListRowCard。
+      ProfileStatsPage、MyIntersectionInboxPage、ObjectIntersectionListPage 统一背景、一级选项、列表 surface、空/错态语义；一级多选项使用 tap-only 分段控，不通过左右滑动切换 tab。
+      workBrowser 路由新增 sourceTheme 查询参数，WorkBrowserEntryPage 在首屏直拉失败时按来源 light/dark 局部渲染错误页，成功进入 viewer 仍保留沉浸式外观。
+    reason: |
+      图一/图三暴露出列表页分段控和列表 surface 漂移；图二暴露出内容不存在错误页继承沉浸式深色上下文，导致从浅色来源进入时低对比且不友好。
+      若继续按截图页面私有分支修补，会形成第二套列表语义和错误外观语义，因此本轮收口到 runtime-client-foundation 的共享组件与错误语义。
+    change_type:
+      - ux-spec
+      - metadata
+      - app-feature
+      - local-contract
+    changed_documents:
+      - path: specs/ux/page-layout-semantics.md
+        sections:
+          - 列表页语义 multiOptionList / singleList
+      - path: specs/ux/error-and-permission-semantics.md
+        sections:
+          - 来源外观模式 sourceAppearanceMode
+      - path: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
+        sections:
+          - 验收标准概要
+      - path: specs/feature-tree/runtime/runtime-client-foundation/app-theme-infrastructure/spec.md
+        sections:
+          - In-Scope
+          - 非功能目标
+      - path: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
+        sections:
+          - content/work_browser_entry_page
+          - user/profile_stats_page
+          - user/my_intersection_inbox_page
+          - intersection/object_intersection_list_page
+      - path: specs/gates/metadata_driven_ui_gap_inventory.yaml
+        sections:
+          - content/work_browser_entry_page
+          - user/profile_stats_page
+          - user/my_intersection_inbox_page
+          - intersection/object_intersection_list_page
+    changed_metadata:
+      - path: quwoquan_service/contracts/metadata/_shared/app_routes.yaml
+        sections:
+          - workBrowser.query_params.sourceTheme
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      - "通过：make codegen-app"
+      - "通过：bash quwoquan_service/scripts/contract/verify_contract_metadata.sh"
+      - "通过：dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart"
+      - "通过：cd quwoquan_app && flutter test test/core/widgets/app_list_page_semantics_test.dart test/core/widgets/error_states/app_error_states_test.dart test/core/errors/ui_error_semantics_test.dart"
+      - "通过：cd quwoquan_app && flutter test test/ui/user/pages/profile_stats_page_test.dart test/ui/user/pages/my_intersection_inbox_page_test.dart test/ui/intersection/pages/object_intersection_list_page_test.dart test/ui/content/pages/work_browser_entry_page_test.dart"
+      - "通过：make verify-app-page-horizontal-quality"
+      - "通过：bash agent_ops/scaffold/verify_acceptance_standard.sh"
+    notes:
+      - 本轮不新增服务错误码，不改变 HTTP 响应语义；sourceTheme 仅用于 App 错误页来源外观。
+      - 外部深链缺省 sourceTheme 时按当前全局主题继承，不保存 system。

@@ -327,6 +327,7 @@ String pageNameFromRouteLocation(String location) {
   if (path == AppRoutePaths.assistantSkills) return 'assistant_skills';
   if (path == AppRoutePaths.settings) return 'settings';
   if (path == AppRoutePaths.settingsPermissions) return 'settings_permissions';
+  if (path == AppRoutePaths.settingsDarkMode) return 'settings_dark_mode';
   if (path == AppRoutePaths.settingsAbout) return 'settings_about';
   if (path == AppRoutePaths.profileEdit) return 'profile_edit';
   if (path == AppRoutePaths.profilePersonas) return 'profile_personas';

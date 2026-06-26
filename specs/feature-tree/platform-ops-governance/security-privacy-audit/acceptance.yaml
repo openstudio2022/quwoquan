@@ -16,9 +16,14 @@ sit_acceptance:
     story_refs: []
     done_when:
     - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    - 法律正文通过 legal-static 独立包发布，不依赖 App 包、service 包、内容发布包或数据工程内容包。
+    - stable URL 与 manifest currentVersion 一致，版本 URL 不可变，prod 发布前先完成 gamma legal-static 探测。
     performance_points: []
     tests:
-      planned: []
+      planned:
+      - command: stackctl package --env gamma --kind legal-static
+      - command: stackctl verify --env gamma --kind legal-static
+      - command: curl -I /legal/user-agreement && curl -I /legal/privacy-policy
       recorded: []
     status: pending
     test_evidence:

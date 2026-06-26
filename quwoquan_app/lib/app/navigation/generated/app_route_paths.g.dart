@@ -95,13 +95,14 @@ class AppRoutePaths {
   static const String userProfileSegment = '{username}';
 
   static const String workBrowserPathTemplate = '/works/browser/{workId}';
-  static String workBrowser({required String workId, String? filter, String? source, String? index}) {
+  static String workBrowser({required String workId, String? filter, String? source, String? index, String? sourceTheme}) {
     return _buildPath(workBrowserPathTemplate, <String, String>{
       'workId': workId,
     }, <String, String?>{
       'filter': filter,
       'source': source,
       'index': index,
+      'sourceTheme': sourceTheme,
     });
   }
   static const String workBrowserSegment = '{workId}';
@@ -211,6 +212,9 @@ class AppRoutePaths {
 
   static const String settingsPermissions = '/settings/permissions';
   static const String settingsPermissionsSegment = 'permissions';
+
+  static const String settingsDarkMode = '/settings/dark-mode';
+  static const String settingsDarkModeSegment = 'dark-mode';
 
   static const String settingsAbout = '/settings/about';
   static const String settingsAboutSegment = 'about';

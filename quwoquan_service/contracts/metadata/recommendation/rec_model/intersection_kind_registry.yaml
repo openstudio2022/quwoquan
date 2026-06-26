@@ -136,6 +136,15 @@ objectKinds:
   - kind: tag
     roles: [count]
     routeId: ""
+  # §交集行动深化：未来态/线下对象（trip 出行意图、meetup 开放线下局），可作主对象品牌角标并下钻。
+  - kind: trip
+    roles: [object, count]
+    routeId: tripDetail
+    assetKind: coverImage
+  - kind: meetup
+    roles: [object, count]
+    routeId: meetupDetail
+    assetKind: coverImage
 
 computabilityLegend:
   R1: 关系边集合直接求交（follow_edges / circle_members），最易、最可靠、可请求期算。
@@ -204,6 +213,14 @@ actionHintLegend:
   open_route: 查看路线 / 地点内容
   create_followup: 写续篇 / 发布跟进
   ask_assistant: 让助手解释这条交集
+  # §交集行动深化：同趣 / 同行 / 线下 / 实时 / 意图 行动阶梯（端只读渲染，不按 kind 猜测）。
+  join_topic_room: 进入同趣话题群
+  start_companion: 发起结伴同行
+  join_trip: 加入同行行程
+  join_meetup: 报名线下局
+  meet_nearby: 附近碰头（默认模糊位置 + 双向同意）
+  start_voice_room: 进入同趣语音房
+  express_interest: 心动打招呼（带意图的打招呼变体，复用打招呼请求，不新增关系等级）
 
 actionLabelByKey:
   # §21.5.3 行动建议的终端 UI 短标签（按钮文案）。与 actionHintLegend 区分：
@@ -221,6 +238,13 @@ actionLabelByKey:
   open_route: 查看路线
   create_followup: 发布跟进
   ask_assistant: 解释这条交集
+  join_topic_room: 进同趣群
+  start_companion: 发起结伴
+  join_trip: 加入同行
+  join_meetup: 报名
+  meet_nearby: 附近碰头
+  start_voice_room: 进语音房
+  express_interest: 打个招呼
 
 actionHintsByKind:
   sharedFollowees: [follow_person, greet_person, view_shared_people]
@@ -243,7 +267,7 @@ actionHintsByKind:
   coLiked: [open_content, follow_person]
   coVisitedEntity: [open_object, open_route]
   sharedEntityAttention: [open_object, follow_object]
-  coWishlistedEntity: [open_route, follow_object]
+  coWishlistedEntity: [start_companion, open_route, follow_object]
   sharedTagSample: [open_object, join_circle]
   followeeInObject: [join_circle, view_shared_people]
   followeeVisited: [open_object, open_route]
@@ -251,6 +275,11 @@ actionHintsByKind:
   alumniHere: [open_object, join_circle]
   colleagueHere: [open_object, message_person]
   followeeDiscussedThis: [open_discussion, open_content]
+  # §交集行动深化：实时 / 附近 / 计划 / 意图 态新 kind 的行动阶梯（kind 暂 deferred，先登记契约）。
+  coPresentHere: [meet_nearby, join_meetup, greet_person]
+  nearbyAffinity: [meet_nearby, start_voice_room, greet_person, follow_person]
+  coPlannedTrip: [join_trip, start_companion]
+  wantToMeetSameInterest: [express_interest, join_topic_room, greet_person, follow_person]
 
 kinds:
   # ---- A. 人与人：共同型事实 ----
@@ -841,6 +870,95 @@ kinds:
     propagationRole: bridge
     lifecycleApplicable: true
     status: active
+
+  # ---- F. 交集行动深化：实时态 / 未来态 / 意图态（先登记后产出，全部 deferred 占位） ----
+  - kind: coPresentHere
+    vertical: general
+    entry: F1
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [location]
+    objectKind: place
+    countObjectKind: person
+    valueTier: T2
+    computability: R4
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "coPresentHere:{objectId}"
+    timeWindowDays: 1
+    evidenceRank: 35
+    sampleVisualsRequired: false
+    iconKey: placeHere
+    propagationRole: none
+    lifecycleApplicable: true
+    status: deferred
+    deferredReason: 「此刻同地」需实时位置上报与双向同意，当前无稳定实时位置数据源，登记占位、禁止产出。
+
+  - kind: nearbyAffinity
+    vertical: general
+    entry: F2
+    level: affinity
+    intersectionClass: affinity
+    dimensions: [location, interest]
+    objectKind: person
+    countObjectKind: person
+    valueTier: T3
+    computability: R4
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "nearbyAffinity:{objectId}"
+    timeWindowDays: 1
+    evidenceRank: 80
+    sampleVisualsRequired: false
+    iconKey: place
+    propagationRole: none
+    lifecycleApplicable: true
+    status: deferred
+    deferredReason: 「附近同趣」为概率匹配，需实时模糊位置 + 兴趣相似度，当前无稳定数据源，登记占位、禁止产出。
+
+  - kind: coPlannedTrip
+    vertical: general
+    entry: F3
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [location]
+    objectKind: trip
+    countObjectKind: person
+    valueTier: T3
+    computability: R4
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "coPlannedTrip:{objectId}"
+    timeWindowDays: 30
+    evidenceRank: 25
+    sampleVisualsRequired: false
+    iconKey: place
+    propagationRole: none
+    lifecycleApplicable: true
+    status: deferred
+    deferredReason: 「计划同期出行」需出行意图/行程数据源，当前无稳定采集，登记占位、禁止产出。
+
+  - kind: wantToMeetSameInterest
+    vertical: general
+    entry: F4
+    level: affinity
+    intersectionClass: affinity
+    dimensions: [interest]
+    objectKind: person
+    countObjectKind: person
+    valueTier: T3
+    computability: R4
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "wantToMeetSameInterest:{objectId}"
+    timeWindowDays: 7
+    evidenceRank: 85
+    sampleVisualsRequired: false
+    iconKey: interest
+    propagationRole: none
+    lifecycleApplicable: true
+    status: deferred
+    deferredReason: 「想认识同趣」为意图匹配，需显式意向信号 + 兴趣相似度，当前无稳定数据源，登记占位、禁止产出。
 
 # 一次性迁移映射（旧名 → 标准名，迁移后旧名零残留；与 §5.4 对齐）。
 migrations:

@@ -10,9 +10,9 @@ import (
 )
 
 type rtcClientRequestWireFile struct {
-	Version                int                       `yaml:"version"`
-	FieldTypes             map[string]string         `yaml:"field_types"`
-	OmitIfNullByOperation  map[string][]string       `yaml:"omit_if_null_by_operation"`
+	Version               int                 `yaml:"version"`
+	FieldTypes            map[string]string   `yaml:"field_types"`
+	OmitIfNullByOperation map[string][]string `yaml:"omit_if_null_by_operation"`
 }
 
 func readRtcClientRequestWire(path string) (*rtcClientRequestWireFile, error) {

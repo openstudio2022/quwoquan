@@ -726,6 +726,11 @@ class UITextConstants {
   static const String settingsDarkModeOff = '关闭';
   static const String settingsDarkModeOn = '打开';
   static const String settingsDarkModeSystem = '跟随系统';
+  static const String settingsDarkModeSystemDescription =
+      '开启后，应用内夜间模式状态和系统保持一致';
+  static const String settingsDarkModeManualSection = '手动选择';
+  static const String settingsDarkModeLightOption = '浅色模式';
+  static const String settingsDarkModeDarkOption = '深色模式';
   static const String settingsAboutQuwoquan = '关于趣我圈';
   static const String settingsVersion = '版本';
   static const String settingsAboutDefaultVersion = '1.1.0';
@@ -1107,13 +1112,13 @@ class UITextConstants {
   static const String addContactFailedMessage = '这次没有添加成功，稍后可以再试一次。';
   static const String scanQrHint = '将二维码放入框内，即可自动扫描';
   static const String scanQrAlbum = '相册';
-  static const String scanQrNoCodeFound = '未在图片中识别到二维码';
-  static const String scanQrInvalidCode = '无法识别该二维码';
+  static const String scanQrNoCodeFound = '未识别到联系人二维码，请选择对方的二维码图片';
+  static const String scanQrInvalidCode = '无法识别该联系人二维码，请让对方提供自己的二维码';
   static const String scanQrCameraPermissionTitle = '开启相机以扫码';
   static const String scanQrCameraPermissionBody = '扫描二维码需要使用相机。';
   static const String scanQrCameraPermissionCta = '去开启相机权限';
   static const String scanQrCameraUnavailableTitle = '当前无法使用相机';
-  static const String scanQrCameraUnavailableBody = '可以稍后再试，或让对方打开自己的二维码给你扫。';
+  static const String scanQrCameraUnavailableBody = '可以稍后再试，或从相册选择对方的联系人二维码。';
   static const String phoneContactsPermissionTitle = '查找通讯录联系人';
   static const String phoneContactsPermissionBody =
       '开启通讯录权限后，可发现已注册趣我圈的联系人。手机号仅在本机哈希后用于匹配，原文不会上传。';
@@ -1394,7 +1399,7 @@ class UITextConstants {
   static const String editProfilePhoneBindFailedTitle = '手机号绑定未完成';
   static const String editProfileQrCardTitle = '我的二维码';
   static const String editProfileQrCardHeading = '添加我为联系人';
-  static const String editProfileQrCardHint = '扫一扫，进入我的主页。';
+  static const String editProfileQrCardHint = '扫一扫，添加我为联系人。';
   static const String editProfileQrScanAction = '扫一扫';
   static const String editProfileQrShareAction = '分享';
   static const String editProfileQrSaveAction = '保存图片';
@@ -1410,9 +1415,7 @@ class UITextConstants {
   static const String careerInterestOccupationSection = '职业身份';
   static const String careerInterestSelectOccupation = '选择你的职业身份';
   static const String careerInterestMyTagsSection = '我的标签';
-  static const String careerInterestMyTagsHint = '点击 × 删除，拖拽可排序';
-  static const String careerInterestMyTagsEmptyHint = '添加一些兴趣，让小趣更好发现同趣的人';
-  static const String careerInterestMyTagsEmpty = '暂无标签，从下方添加';
+  static const String careerInterestMyTagsEmptyHint = '从下方添加几个兴趣，主页和推荐会更贴近你';
   static const String careerInterestAllSection = '全部兴趣';
   static const String careerInterestCategoryAll = '全部';
   static const String careerInterestCategoryTravelPhoto = '旅行摄影';
@@ -1427,9 +1430,16 @@ class UITextConstants {
   static const String careerInterestSaved = '已保存';
   static const String careerInterestSaveFailed = '保存失败，请重试';
   static const String careerInterestUnsavedTitle = '修改尚未保存';
+  static const String careerInterestUnsavedMessage =
+      '离开前可以保存本次职业与兴趣修改，或放弃未保存内容。';
   static const String careerInterestDiscard = '放弃修改';
   static const String careerInterestKeepEditing = '继续编辑';
   static const String careerInterestOccupationPickerTitle = '选择职业身份';
+  static const String careerOccupationCategoryProductOps = '产品/运营';
+  static const String careerOccupationCategoryEngineering = '研发/技术';
+  static const String careerOccupationCategoryDesign = '设计/创意';
+  static const String careerOccupationCategoryStudent = '学生';
+  static const String careerOccupationCategoryFreelance = '自由职业';
   static const String editProfileSaveAction = '保存';
   static const String editProfileCancelAction = '取消';
   static const String editProfileSavedToast = '资料已更新';
@@ -1441,7 +1451,7 @@ class UITextConstants {
   static const String profileIntersectionEmptyGuidance =
       '多关注感兴趣的人、圈子和地点，系统会帮你发现更多真实交集';
   static const String profileIntersectionEmptyOther =
-      '继续浏览 TA 的记录和圈子后，这里会展示你们的真实交集';
+      '现在还没有足够清晰的共同线索。共同关注、互动或加入同一圈子后，这里会呈现你们真正相关的连接。';
   static const String profileInteractionEmptyGuidance = '发布记录、点赞和评论，会让更多同好看见你';
   static const String profileBrowseHistory = '浏览历史';
   static const String profileDirectMessage = '私信';
@@ -1724,6 +1734,15 @@ class UITextConstants {
   static String startGroupChatMembersAddedCount(int count) => '已添加 $count 位联系人';
   static const String startGroupChatNoMutualContactsInGroup = '该群暂无可添加的互关联系人';
   static const String startGroupChatNoMutualContactsInCircle = '该圈暂无可添加的互关联系人';
+  static const String startGroupChatCreatedToast = '群聊已创建';
+  static const String startGroupChatCreateIncompleteTitle = '发起群聊未完成';
+  static const String startGroupChatAddMembersIncompleteTitle = '添加成员未完成';
+  static String startGroupChatSelectedCount(int count) => '已选 $count 人';
+  static String startGroupChatActionCount(int count) => '发起群聊（$count）';
+  static const String startGroupChatMaxMembersReached = '群成员数量超过上限';
+  static const String startGroupChatSyncingMemberState = '正在同步群成员状态…';
+  static const String startGroupChatAlreadyInGroup = '已在群中';
+  static const String startGroupChatNoMatchedMembers = '暂无匹配成员';
   static const String locationSearchHint = '搜索地点';
   static const String locationNearbyTitle = '附近位置';
   static const String locationSearchingNearby = '正在搜索附近位置';

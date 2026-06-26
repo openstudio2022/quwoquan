@@ -44,7 +44,6 @@ import threading
 import time
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, wait
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
@@ -63,7 +62,6 @@ from _common.io import read_json, write_json
 from _common.source_plan_contract import source_plan_rule_signature
 from _common.paths import (
     batch_root,
-    batch_workflow_packet_path,
     task_baseline_freeze_packet_path,
     ensure_batch_layout,
     relative_batch_ref,
@@ -71,185 +69,58 @@ from _common.paths import (
 )
 from task import store
 
-WORKFLOW_STATE_VERSION = "quwoquan.task.workflow_state"
-PIPELINE_STATE_VERSION = WORKFLOW_STATE_VERSION
-
-# 节点类型
-AUTO = "auto"          # CLI 确定性执行
-CHECKPOINT = "checkpoint"  # 等待 Agent 物化产物后 resume
-
-
-@dataclass
-class StageResult:
-    """单 stage 执行结果。"""
-    stage: str
-    kind: str
-    status: str           # done | waiting | failed | skipped
-    message: str = ""
-    checkpoint_hint: str = ""
-    fallback_stage: str | None = None   # ReAct 回退目标 DAG stage（failed 时消费）
-    issues: list[str] = field(default_factory=list)
-
-
-# ReAct 回退：CLI gate fallbackStage(download/compose) → DAG stage
-# 语义：证据不足回到检索 checkpoint；质量不达回到 compose 重组。
-FALLBACK_DAG_STAGE = {
-    "download": "download_plan",
-    "compose": "produce_compose",
-    "agent_compose": "produce_compose",
-    "manual": "produce_compose",
-    "produce_compose": "produce_compose",
-    "download_plan": "download_plan",
-}
-MAX_REACT_REWINDS = 2  # 单 stage 自动回退次数上限，超出转人工，防无限自省
-MAX_MANAGED_INFRA_RETRIES = 3
-DEFAULT_CURSOR_AGENT_MODEL = os.environ.get("QWQ_CURSOR_AGENT_MODEL", "composer-2")
-DEFAULT_CODEX_AGENT_MODEL = os.environ.get("QWQ_CODEX_AGENT_MODEL", "").strip()
-DEFAULT_MANAGED_AGENT_PROVIDER = os.environ.get("QWQ_MANAGED_AGENT_PROVIDER", "cursor_sdk")
-MANAGED_AGENT_PROVIDERS = {"cursor_sdk", "codex_cli"}
-_DEFAULT_MANAGED_LANE_LIMITS = {"homepage": 3, "article": 3, "image": 4}
-
-
-def _parse_managed_lane_limits(raw: str | None) -> dict[str, int]:
-    limits = dict(_DEFAULT_MANAGED_LANE_LIMITS)
-    text = str(raw or "").strip()
-    if not text:
-        return limits
-    for part in re.split(r"[,;]\s*", text):
-        if not part:
-            continue
-        if ":" in part:
-            key, value = part.split(":", 1)
-        elif "=" in part:
-            key, value = part.split("=", 1)
-        else:
-            continue
-        lane = key.strip()
-        if lane not in limits:
-            continue
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError):
-            continue
-        limits[lane] = max(1, parsed)
-    return limits
-
-
-def _normalize_managed_agent_provider(raw: str | None) -> str:
-    provider = str(raw or DEFAULT_MANAGED_AGENT_PROVIDER or "cursor_sdk").strip()
-    if provider not in MANAGED_AGENT_PROVIDERS:
-        return "cursor_sdk"
-    return provider
-
-
-def _resolve_managed_model(provider: str, raw_model: str | None) -> str:
-    model = str(raw_model or "").strip()
-    if model:
-        return model
-    if _normalize_managed_agent_provider(provider) == "codex_cli":
-        return DEFAULT_CODEX_AGENT_MODEL
-    return DEFAULT_CURSOR_AGENT_MODEL
-
-
-MANAGED_LANE_LIMITS = _parse_managed_lane_limits(os.environ.get("QWQ_MANAGED_LANE_LIMITS"))
-MANAGED_AGENT_TIMEOUT_SECONDS = max(
-    60, int(os.environ.get("QWQ_MANAGED_AGENT_TIMEOUT_SECONDS", "240"))
+from task.run_download_hints import (
+    _SOURCE_CATEGORY_REPAIR_MARKERS,
+    _download_diagnostic_image_repair_hints,
+    _download_issue_repair_hints,
+    _download_repair_lanes,
+    _planned_pixel_issue,
+    _research_image_repair_hints,
 )
-MANAGED_AGENT_FUTURE_GRACE_SECONDS = max(
-    5, int(os.environ.get("QWQ_MANAGED_AGENT_FUTURE_GRACE_SECONDS", "15"))
+from task.run_context import (
+    AUTO,
+    CHECKPOINT,
+    DEFAULT_CODEX_AGENT_MODEL,
+    DEFAULT_CURSOR_AGENT_MODEL,
+    DEFAULT_MANAGED_AGENT_PROVIDER,
+    DOWNLOAD_FETCH_ONLY_RETRY_LIMIT,
+    FALLBACK_DAG_STAGE,
+    MANAGED_AGENT_FUTURE_GRACE_SECONDS,
+    MANAGED_AGENT_PROVIDERS,
+    _MANAGED_AGENT_SUBPROCESS_LOCK,
+    _MANAGED_AGENT_SUBPROCESS_PIDS,
+    MANAGED_AGENT_TIMEOUT_SECONDS,
+    MANAGED_CODEX_CLI_MAX_WORKERS,
+    MANAGED_LANE_LIMITS,
+    MANAGED_LOCAL_CURSOR_MAX_WORKERS,
+    MANAGED_SCHEDULER_STALE_SECONDS,
+    MAX_MANAGED_INFRA_RETRIES,
+    MAX_REACT_REWINDS,
+    PIPELINE_STATE_VERSION,
+    PipelineContext,
+    REPLACEMENT_MAX_CANDIDATES_PER_WAVE,
+    REPLACEMENT_MAX_SCREENED_PER_RUN,
+    REPLACEMENT_MAX_WAVES,
+    StageResult,
+    TARGET_SET_DEPENDENT_STAGES,
+    WORKFLOW_STATE_VERSION,
+    _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS,
+    _CURSOR_BRIDGE_READY_DELAY_SECONDS,
+    _managed_local_cursor_worker_cap as _context_managed_local_cursor_worker_cap,
+    _normalize_managed_agent_provider,
+    _parse_managed_lane_limits,
+    _resolve_managed_model,
+    _state_path,
+    _write_workflow_packet,
+    load_workflow_state,
+    save_workflow_state,
 )
-MANAGED_SCHEDULER_STALE_SECONDS = max(
-    60, int(os.environ.get("QWQ_MANAGED_SCHEDULER_STALE_SECONDS", "900"))
-)
-DOWNLOAD_FETCH_ONLY_RETRY_LIMIT = max(
-    0, int(os.environ.get("QWQ_DOWNLOAD_FETCH_ONLY_RETRY_LIMIT", "1"))
-)
-_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS = max(
-    0.0, float(os.environ.get("QWQ_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS", "2.0"))
-)
-_CURSOR_BRIDGE_READY_DELAY_SECONDS = max(
-    0.0, float(os.environ.get("QWQ_CURSOR_BRIDGE_READY_DELAY_SECONDS", "1.5"))
-)
-_RAW_MANAGED_LOCAL_CURSOR_MAX_WORKERS = os.environ.get("QWQ_MANAGED_LOCAL_CURSOR_MAX_WORKERS")
-MANAGED_LOCAL_CURSOR_MAX_WORKERS = (
-    max(1, int(_RAW_MANAGED_LOCAL_CURSOR_MAX_WORKERS))
-    if _RAW_MANAGED_LOCAL_CURSOR_MAX_WORKERS
-    else None
-)
-MANAGED_CODEX_CLI_MAX_WORKERS = max(
-    1, int(os.environ.get("QWQ_MANAGED_CODEX_CLI_MAX_WORKERS", "1"))
-)
-REPLACEMENT_MAX_WAVES = max(
-    1, int(os.environ.get("QWQ_REPLACEMENT_MAX_WAVES", "3"))
-)
-REPLACEMENT_MAX_CANDIDATES_PER_WAVE = max(
-    1, int(os.environ.get("QWQ_REPLACEMENT_MAX_CANDIDATES_PER_WAVE", "8"))
-)
-REPLACEMENT_MAX_SCREENED_PER_RUN = max(
-    1, int(os.environ.get("QWQ_REPLACEMENT_MAX_SCREENED_PER_RUN", "64"))
-)
-TARGET_SET_DEPENDENT_STAGES = (
-    "download_fetch",
-    "build_prepare",
-    "build_homepage",
-    "build_validate",
-    "content_plan",
-    "produce_plan",
-    "produce_compose",
-    "produce_author",
-    "produce_annotate",
-    "produce_review",
-    "publish",
-)
-
-_MANAGED_AGENT_SUBPROCESS_LOCK = threading.Lock()
-_MANAGED_AGENT_SUBPROCESS_PIDS: set[int] = set()
-
-
-@dataclass
-class PipelineContext:
-    task_id: str
-    batch_id: str
-    entity_ids: list[str]
-    spec: dict
-    baseline_packet: dict | None = None
-    baseline_packet_path: Path | None = None
-    until: str | None = None
-    completed: list[str] = field(default_factory=list)
-    managed: bool = False
-    runtime: str = "local"
-    max_workers: int = 10
-    model: str = DEFAULT_CURSOR_AGENT_MODEL
-    agent_provider: str = "cursor_sdk"
-    release_only: bool = False
-    agent_runner: Callable[[str], dict[str, Any]] | None = None
-    force_clean_workspace_agent_state: bool = False
-
 
 def _managed_local_cursor_worker_cap(ctx: PipelineContext) -> int:
-    if _normalize_managed_agent_provider(ctx.agent_provider) != "cursor_sdk":
-        return max(1, int(ctx.max_workers or 1))
-    if MANAGED_LOCAL_CURSOR_MAX_WORKERS is not None:
-        return max(1, int(MANAGED_LOCAL_CURSOR_MAX_WORKERS))
-    base = max(1, int(ctx.max_workers or 1))
-    if str(ctx.runtime) != "local":
-        return base
-    try:
-        state = load_workflow_state(ctx.task_id, ctx.batch_id)
-    except Exception:  # noqa: BLE001 - cap must never block preflight/tests
-        return base
-    last = state.get("lastAgentRun") if isinstance(state.get("lastAgentRun"), Mapping) else {}
-    if str((last or {}).get("stage") or "") != "produce_author":
-        return base
-    infra = int((last or {}).get("infrastructureFailures") or 0)
-    if infra <= 0:
-        return base
-    scheduler = last.get("scheduler") if isinstance(last.get("scheduler"), Mapping) else {}
-    previous = int((scheduler or {}).get("effectiveWorkerCount") or base)
-    # Cursor local bridge failures tend to be concurrency-sensitive.  Back off
-    # aggressively so unattended reruns converge instead of replaying the same
-    # connection-refused wave.
-    return max(1, min(base, max(1, previous // 2)))
+    return _context_managed_local_cursor_worker_cap(
+        ctx,
+        local_cursor_max_workers=MANAGED_LOCAL_CURSOR_MAX_WORKERS,
+    )
 
 
 def _managed_uses_serial_local_cursor(ctx: PipelineContext) -> bool:
@@ -258,101 +129,6 @@ def _managed_uses_serial_local_cursor(ctx: PipelineContext) -> bool:
         and str(ctx.runtime) == "local"
         and _managed_local_cursor_worker_cap(ctx) == 1
     )
-
-
-def _write_workflow_packet(
-    ctx: PipelineContext,
-    *,
-    stage_name: str,
-    kind: str,
-    result: StageResult,
-    completed: list[str],
-    next_stage: str | None,
-    state: dict,
-) -> Path:
-    from _common.command_packet import build_packet, write_packet
-
-    packet = build_packet(
-        task_id=ctx.task_id,
-        command="data workflow run",
-        object_kind="workflow",
-        object_ref=f"{ctx.task_id}::{ctx.batch_id}",
-        stage=stage_name,
-        read_policy=[
-            "baseline_freeze_packet.json",
-            "workflow_state.json",
-            "current stage inputs",
-        ],
-        stop_if=[f"stage {stage_name} failed", f"stage {stage_name} waiting"] if result.status != "done" else [],
-        output_policy=[
-            "write _shared/workflow_packets/<stage>.json",
-            "write _shared/task_workflow_state.json",
-            "advance only when gate is green",
-        ],
-        inputs={
-            "baselinePacketPath": str(ctx.baseline_packet_path or ""),
-            "completedStages": completed,
-            "waitingCheckpoint": state.get("waitingCheckpoint"),
-            "until": ctx.until or "",
-        },
-        outputs={
-            "status": result.status,
-            "message": result.message,
-            "checkpointHint": result.checkpoint_hint,
-            "fallbackStage": result.fallback_stage,
-            "issues": list(result.issues),
-            "nextStage": next_stage or "",
-        },
-        handoff_to=result.fallback_stage or (next_stage or stage_name),
-        evidence={
-            "kind": kind,
-            "completed": result.status == "done",
-            "issueCount": len(result.issues),
-        },
-        summary={
-            "taskId": ctx.task_id,
-            "batchId": ctx.batch_id,
-            "stage": stage_name,
-            "status": result.status,
-            "message": result.message,
-        },
-    )
-    return write_packet(batch_workflow_packet_path(ctx.task_id, ctx.batch_id, stage_name), packet)
-
-
-def _state_path(task_id: str, batch_id: str) -> Path:
-    from _common.paths import batch_workflow_state_path
-    return batch_workflow_state_path(task_id, batch_id)
-
-
-def load_workflow_state(task_id: str, batch_id: str) -> dict:
-    p = _state_path(task_id, batch_id)
-    if p.exists():
-        return read_json(p)
-    return {
-        "schemaVersion": WORKFLOW_STATE_VERSION,
-        "taskId": task_id,
-        "batchId": batch_id,
-        "completed": [],
-        "waitingCheckpoint": None,
-        "status": "queued",
-        "owner": None,
-        "heartbeatAt": None,
-        "retryCounts": {},
-        "infrastructureRetryCounts": {},
-        "failedObjects": [],
-        "abandonedObjects": [],
-        "nextAction": None,
-        "updatedAt": store.now_iso(),
-    }
-
-
-def save_workflow_state(state: dict) -> Path:
-    state["updatedAt"] = store.now_iso()
-    p = _state_path(state["taskId"], state["batchId"])
-    p.parent.mkdir(parents=True, exist_ok=True)
-    write_json(p, state)
-    return p
 
 
 def _abandoned_entity_ids(state: Mapping[str, Any]) -> set[str]:
@@ -1238,392 +1014,11 @@ def _sync_replacement_policy_state(
         save_workflow_state(state)
 
 
-def _load_baseline_packet(task_id: str, packet_path: Path | None = None) -> tuple[Path, dict]:
-    path = packet_path or task_baseline_freeze_packet_path(task_id)
-    if not path.is_file():
-        raise RuntimeError(
-            f"missing baseline freeze packet: {path}. "
-            f"Run `qwq-data data baseline --task {task_id}` first."
-        )
-    packet = read_json(path)
-    if not isinstance(packet, dict):
-        raise RuntimeError(f"baseline freeze packet unreadable: {path}")
-    if str(packet.get("taskId") or "").strip() != task_id:
-        raise RuntimeError(
-            f"baseline freeze packet taskId mismatch: {packet.get('taskId')} != {task_id}"
-        )
-    if str(packet.get("command") or "").strip() != "data baseline":
-        raise RuntimeError(f"baseline freeze packet command mismatch: {packet.get('command')}")
-    return path, packet
-
-
-# ─── coverage 实体解析（download/build 的输入）────────────────────────
-def _coverage_entity_ids(spec: dict) -> list[str]:
-    out: list[str] = []
-    for target in (spec.get("scope") or {}).get("coverageTargets") or []:
-        name = str(target.get("name") or "").strip()
-        if name:
-            out.append(name)
-    return out
-
-
-# ─── checkpoint 完成度探测（resume 判定 Agent 是否已物化产物）──────────
-def _coverage_entity_type(spec: dict) -> str:
-    """coverageTargets/entityTypes 的唯一类型真相源；显式任务必须给出明确类型。"""
-    scope = spec.get("scope") or {}
-    targets = scope.get("coverageTargets") or []
-    target_types = {
-        str(target.get("entityType") or "").strip()
-        for target in targets
-        if str(target.get("entityType") or "").strip()
-    }
-    if len(target_types) > 1:
-        raise ValueError(
-            "workflow currently requires a single entityType across coverageTargets; "
-            f"got {sorted(target_types)}"
-        )
-    if target_types:
-        only = next(iter(target_types))
-        require_domain_etype(only, context="scope.coverageTargets[].entityType")
-        return only
-    types = [str(item).strip() for item in (scope.get("entityTypes") or []) if str(item).strip()]
-    if not types:
-        return ""
-    require_domain_etype(types[0], context="scope.entityTypes[0]")
-    return types[0]
-
-
-def _declared_pixel_issue(image: dict, *, asset_id: str) -> str | None:
-    """Validate declared dimensions exactly as provided by the research plan."""
-    from _common.image_rules import pixel_size_issue
-
-    raw_width = str(image.get("width") or "").strip()
-    raw_height = str(image.get("height") or "").strip()
-    if not raw_width and not raw_height:
-        return None
-    try:
-        width = int(float(raw_width or "0"))
-        height = int(float(raw_height or "0"))
-    except ValueError:
-        return f"imagePixels: {asset_id} 像素尺寸字段不可解析 width={raw_width!r} height={raw_height!r}"
-    return pixel_size_issue(width, height, asset_id=asset_id)
-
-
-def _planned_pixel_issue(image: dict, *, asset_id: str) -> str | None:
-    """Validate declared dimensions when the research plan provides them."""
-    issue = _declared_pixel_issue(image, asset_id=asset_id)
-    if issue:
-        try:
-            from download.fetch import candidate_image_urls
-
-            if len(candidate_image_urls(str(image.get("url") or ""))) > 1:
-                return None
-        except Exception:  # noqa: BLE001
-            pass
-    return issue
-
-
-def _image_repair_hint(
-    image: dict,
-    *,
-    lane: str,
-    entity_id: str,
-    asset_id: str,
-    source_id: str = "",
-    image_index: int = 0,
-) -> dict[str, Any] | None:
-    issue = _declared_pixel_issue(image, asset_id=asset_id)
-    if not issue:
-        return None
-    try:
-        from download.fetch import candidate_image_urls
-
-        candidates = candidate_image_urls(str(image.get("url") or ""))
-    except Exception:  # noqa: BLE001
-        candidates = [str(image.get("url") or "")]
-    high_res_candidate = candidates[1] if len(candidates) > 1 else ""
-    return {
-        "lane": lane,
-        "entityId": entity_id,
-        "sourceId": source_id,
-        "imageIndex": image_index,
-        "assetId": asset_id,
-        "url": str(image.get("url") or ""),
-        "width": image.get("width") or "",
-        "height": image.get("height") or "",
-        "issue": issue,
-        "sameSourceHighResCandidate": high_res_candidate,
-        "candidateUrls": candidates[:3],
-        "action": (
-            "retry_with_same_source_high_resolution_url"
-            if high_res_candidate
-            else "replace_image_or_source_unit"
-        ),
-    }
-
-
-def _image_rights_repair_hint(
-    image: dict[str, Any],
-    issues: list[str],
-    *,
-    lane: str,
-    entity_id: str,
-    asset_id: str,
-    source_id: str = "",
-    image_index: int = 0,
-) -> dict[str, Any] | None:
-    if not issues:
-        return None
-    issue_text = "; ".join(str(issue) for issue in issues)
-    license_value = str(image.get("license") or "").strip()
-    action = "replace_image_or_source_unit_with_explicit_publishable_image_rights"
-    if license_value in {"factual_reference_only", "licensed_adaptation", "blocked"}:
-        action = "replace_image_or_source_unit_do_not_use_sourceUseMode_as_image_license"
-    return {
-        "lane": lane,
-        "entityId": entity_id,
-        "sourceId": source_id,
-        "imageIndex": image_index,
-        "assetId": asset_id,
-        "url": str(image.get("url") or ""),
-        "width": image.get("width") or "",
-        "height": image.get("height") or "",
-        "issue": issue_text,
-        "sameSourceHighResCandidate": "",
-        "candidateUrls": [str(image.get("url") or "")] if str(image.get("url") or "") else [],
-        "action": action,
-    }
-
-
-def _research_image_repair_hints(
-    ctx: PipelineContext,
-    entity_id: str,
-    etype: str,
-) -> list[dict[str, Any]]:
-    """Return actionable image-resolution repair hints for the research lanes."""
-    from download.source_inputs import curated_images_for_entity, curated_sources_for_entity
-    from vertical.license import validate_image_rights
-
-    hints: list[dict[str, Any]] = []
-    for lane in ("homepage", "article"):
-        for source in curated_sources_for_entity(
-            ctx.task_id,
-            ctx.batch_id,
-            entity_id,
-            etype,
-            research_lane=lane,
-        ):
-            source_id = str(source.get("source_id") or "")
-            for index, image in enumerate(source.get("imageUrls") or [], start=1):
-                rights_hint = _image_rights_repair_hint(
-                    image,
-                    validate_image_rights(
-                        image,
-                        vertical=str(ctx.spec.get("vertical") or "travel"),
-                    ),
-                    lane=lane,
-                    entity_id=entity_id,
-                    source_id=source_id,
-                    image_index=index,
-                    asset_id=f"{entity_id}/{source_id}#{index}",
-                )
-                if rights_hint:
-                    hints.append(rights_hint)
-                hint = _image_repair_hint(
-                    image,
-                    lane=lane,
-                    entity_id=entity_id,
-                    source_id=source_id,
-                    image_index=index,
-                    asset_id=f"{entity_id}/{source_id}#{index}",
-                )
-                if hint:
-                    hints.append(hint)
-    for index, image in enumerate(
-        [
-            item
-            for item in curated_images_for_entity(ctx.task_id, ctx.batch_id, entity_id, etype)
-            if str(item.get("researchLane") or "image") == "image"
-        ],
-        start=1,
-    ):
-        rights_hint = _image_rights_repair_hint(
-            image,
-            validate_image_rights(
-                image,
-                vertical=str(ctx.spec.get("vertical") or "travel"),
-            ),
-            lane="image",
-            entity_id=entity_id,
-            source_id=str(image.get("sourceCollectionId") or ""),
-            image_index=index,
-            asset_id=f"{entity_id}/image#{index}",
-        )
-        if rights_hint:
-            hints.append(rights_hint)
-        hint = _image_repair_hint(
-            image,
-            lane="image",
-            entity_id=entity_id,
-            source_id=str(image.get("sourceCollectionId") or ""),
-            image_index=index,
-            asset_id=f"{entity_id}/image#{index}",
-        )
-        if hint:
-            hints.append(hint)
-    return hints
-
-
-def _download_diagnostic_image_repair_hints(
-    diagnostics: dict[str, Any],
-    *,
-    entity_id: str,
-) -> list[dict[str, Any]]:
-    hints: list[dict[str, Any]] = []
-    for index, raw in enumerate(diagnostics.get("sampleRejected") or [], start=1):
-        text = str(raw or "")
-        if not text:
-            continue
-        source_id = ""
-        url = ""
-        source_match = re.search(r"sourceImage:([^:\s]+):", text)
-        if source_match:
-            source_id = source_match.group(1)
-        url_match = re.search(r"\((https?://[^)]+)\)", text)
-        if url_match:
-            url = url_match.group(1)
-        if source_id.startswith("article") or "article" in text:
-            lane = "article"
-        elif source_id.startswith("home") or "homepage" in text or "主页" in text:
-            lane = "homepage"
-        else:
-            lane = "image"
-        action = "replace_image_or_source_unit"
-        if "imageSafety" in text or "watermark" in text:
-            action = "replace_unsafe_or_watermarked_image"
-        elif "imageFetch" in text or "non-image" in text or "too small" in text:
-            action = "replace_unfetchable_or_low_quality_image"
-        hints.append(
-            {
-                "lane": lane,
-                "entityId": entity_id,
-                "sourceId": source_id,
-                "imageIndex": index,
-                "assetId": f"{entity_id}/{source_id or 'rejected'}#{index}",
-                "url": url,
-                "width": "",
-                "height": "",
-                "issue": text,
-                "sameSourceHighResCandidate": "",
-                "candidateUrls": [url] if url else [],
-                "action": action,
-            }
-        )
-    return hints
-
-
-def _download_issue_repair_hints(
-    issues: list[str],
-    *,
-    entity_id: str,
-) -> list[dict[str, Any]]:
-    hints: list[dict[str, Any]] = []
-    for index, raw in enumerate(issues, start=1):
-        text = str(raw or "")
-        if not text:
-            continue
-        lane = ""
-        action = ""
-        category_lane = _download_source_category_issue_lane(text)
-        if category_lane == "homepage":
-            lane = "homepage"
-            action = "add_or_replace_homepage_encyclopedia_or_official_seed_source"
-        elif category_lane == "article":
-            lane = "article"
-            action = "add_or_replace_article_text_sources_with_fetchable_quality_evidence"
-        elif (
-            "text-qualified base sources" in text
-            or "article base sources" in text
-            or "article sources" in text
-            or "文章" in text
-        ):
-            lane = "article"
-            action = "add_or_replace_article_text_sources_with_fetchable_quality_evidence"
-        elif (
-            "unique publishable image" in text
-            or "imageCount" in text
-            or "imageFetch" in text
-            or "未下到真实图片" in text
-            or "合格去重图" in text
-            or "source collection" in text
-            or "image gates failed" in text
-            or "image_fetch_gate" in text
-            or "image_rights_gate" in text
-            or "图片作品" in text
-        ):
-            lane = "image"
-            action = "add_or_replace_image_source_collections_with_complete_rights"
-        elif "homepage" in text or "主页" in text:
-            lane = "homepage"
-            action = "add_or_replace_homepage_source_images_with_complete_rights"
-        if not lane:
-            continue
-        hints.append(
-            {
-                "lane": lane,
-                "entityId": entity_id,
-                "sourceId": "",
-                "imageIndex": index,
-                "assetId": f"{entity_id}/download_repair#{index}",
-                "url": "",
-                "width": "",
-                "height": "",
-                "issue": text,
-                "sameSourceHighResCandidate": "",
-                "candidateUrls": [],
-                "action": action,
-            }
-        )
-    return hints
-
-
-def _download_repair_lanes(repair: dict[str, Any]) -> set[str]:
-    issue_text = " ".join(str(item) for item in (repair.get("issues") or []))
-    lanes: set[str] = set()
-    category_lane = _download_source_category_issue_lane(issue_text)
-    if category_lane:
-        lanes.add(category_lane)
-    if "article" in issue_text or "文章" in issue_text or "source unit(s) with images" in issue_text:
-        lanes.add("article")
-    if "homepage" in issue_text or "主页" in issue_text:
-        lanes.add("homepage")
-    if (
-        "image research" in issue_text
-        or "imageCount" in issue_text
-        or "imageFetch" in issue_text
-        or "未下到真实图片" in issue_text
-        or "合格去重图" in issue_text
-        or "publishable image" in issue_text
-        or "sourceCollection" in issue_text
-        or "image gates failed" in issue_text
-        or "image_fetch_gate" in issue_text
-        or "image_rights_gate" in issue_text
-        or "图片作品" in issue_text
-    ):
-        lanes.add("image")
-    research_issues = repair.get("researchLaneIssues") or {}
-    if isinstance(research_issues, dict):
-        lanes.update(
-            lane for lane, lane_issues in research_issues.items()
-            if lane in {"homepage", "article", "image"} and lane_issues
-        )
-    if lanes:
-        return lanes
-    for hint in repair.get("imageRepairHints") or []:
-        if isinstance(hint, dict) and str(hint.get("lane") or "") in {"homepage", "article", "image"}:
-            lanes.add(str(hint.get("lane")))
-    return lanes
-
+from task.run_baseline import (
+    _coverage_entity_ids,
+    _coverage_entity_type,
+    _load_baseline_packet,
+)
 
 def _source_plan_filled(
     ctx: PipelineContext,
@@ -2167,36 +1562,6 @@ def _download_repair_entry_pending(repair: dict[str, Any]) -> bool:
     failed_mtime = int(repair.get("sourcePlanMtimeNs") or 0)
     current_mtime = max((_source_plan_mtime_ns(path) for path in plan_paths), default=0)
     return current_mtime <= failed_mtime
-
-
-_SOURCE_CATEGORY_REPAIR_MARKERS = (
-    "missing core source categories",
-    "source categories",
-)
-
-
-def _download_source_category_issue_lane(issue_text: str) -> str:
-    lowered = str(issue_text or "").casefold()
-    if not any(marker in lowered for marker in _SOURCE_CATEGORY_REPAIR_MARKERS):
-        return ""
-    homepage_markers = ("encyclopedia", "official evidence", "homepage", "主页", "百科")
-    if any(marker in lowered for marker in homepage_markers):
-        return "homepage"
-    article_markers = (
-        "travelogue",
-        "guidebook",
-        "official_article",
-        "vertical_professional",
-        "ugc_longform",
-        "community_post",
-        "media_article",
-        "platform_article",
-        "forum_thread",
-        "review_note",
-    )
-    if any(marker in lowered for marker in article_markers):
-        return "article"
-    return ""
 
 
 def _download_repair_issue_stale_under_current_rules(
@@ -5372,7 +4737,8 @@ def _run_produce_plan(ctx: PipelineContext) -> StageResult:
             if str(target.get("name") or "").strip()
         ],
     )
-    if content_plan_quotas_required(active_spec):
+    existing_packet = load_content_plan_packet(ctx.task_id, ctx.batch_id)
+    if existing_packet is not None or content_plan_quotas_required(active_spec):
         issues = validate_content_plan(ctx.task_id, ctx.batch_id, active_spec)
         if issues:
             return StageResult(
@@ -5383,7 +4749,7 @@ def _run_produce_plan(ctx: PipelineContext) -> StageResult:
                 fallback_stage="content_plan",
                 issues=issues,
             )
-        packet = load_content_plan_packet(ctx.task_id, ctx.batch_id) or {}
+        packet = existing_packet or {}
         n = len(packet.get("items") or [])
         return StageResult(
             "produce_plan",
@@ -5839,7 +5205,7 @@ def _runtime_materialization_issues(ctx: PipelineContext, refs: list[str]) -> li
 
 
 def _materialize_reviewed_refs(ctx: PipelineContext, refs: list[str]) -> list[str]:
-    from produce.materialize import materialize_posts
+    from produce.materialize import materialize_posts, prune_unregistered_post_residue
 
     issues: list[str] = []
     by_type = _content_ref_types(ctx, refs)
@@ -5848,6 +5214,13 @@ def _materialize_reviewed_refs(ctx: PipelineContext, refs: list[str]) -> list[st
             materialize_posts(ctx.task_id, ctx.batch_id, content_type, refs=typed_refs)
         except Exception as exc:  # noqa: BLE001 - gate turns materialization defects into stage issues.
             issues.append(f"{content_type} materialize failed: {exc}")
+    # 物化后 content_object_index 已权威：清除 agent 用临时标题落地、最终改派坐标后
+    # 遗留的死 provisional 残骸（未登记 + 无 manifest/无成品），否则目录证据链孤儿门
+    # 会因旧坐标阶段残骸 BLOCK（放量时 agent 重组合/改标题会复现）。
+    try:
+        prune_unregistered_post_residue(ctx.task_id, ctx.batch_id)
+    except Exception as exc:  # noqa: BLE001 - 剪枝失败降级为 stage issue，不静默吞。
+        issues.append(f"prune unregistered post residue failed: {exc}")
     return issues
 
 
@@ -5865,8 +5238,15 @@ def _produce_exit_issues(ctx: PipelineContext, refs: list[str]) -> list[str]:
 def _run_produce_review(ctx: PipelineContext) -> StageResult:
     from produce.handler import handle_produce
     from _common import content_object
+    from _common.base_draft import load_base_draft_ledger, save_base_draft_ledger
     from _common.handoff import build_batch_reducer_gate, write_batch_reducer_gate
     from produce.materialize import prune_materialized_refs
+    # 物化 batch 级 base_draft_ledger 落盘：纯图（image-only）批次不认领单一底稿、
+    # assignments 合法为空，但 release_integrity 要求 ledger 文件存在且 schema 正确。
+    # 幂等：文章批次的 assignments 已在底稿认领时写入，此处只保证文件落盘，不改内容。
+    save_base_draft_ledger(
+        ctx.task_id, ctx.batch_id, load_base_draft_ledger(ctx.task_id, ctx.batch_id)
+    )
     refs = content_object.iter_content_refs(ctx.task_id, ctx.batch_id)
     abandoned_refs = _abandoned_content_refs(load_workflow_state(ctx.task_id, ctx.batch_id))
     active_refs = [ref for ref in refs if ref not in abandoned_refs]
@@ -5918,6 +5298,13 @@ def _run_produce_review(ctx: PipelineContext) -> StageResult:
     initial_issues: list[str] = []
     review_refs = active_refs
     if all_green:
+        # review gate 已绿时本分支跳过 handle_produce 的 _stage_review，而 media_check
+        # 正是在 _stage_review 内产出。纯图（image-only）内容对象的 review 在叶子阶段已
+        # 通过，会直接走到此处，导致发布门因缺 media_check envelope 失败。这里幂等补跑
+        # 图像安全体检（CV：人脸/水印/OCR/去重），保证发布门有真实 media_check 证据。
+        from media.handler import check_images
+
+        check_images(ctx.task_id, ctx.batch_id, list(active_refs), allow_needs_review=True)
         initial_issues = _materialize_reviewed_refs(ctx, active_refs)
         initial_issues.extend(_produce_exit_issues(ctx, active_refs))
         abandoned_short_refs = _abandon_release_base_draft_shortfalls(

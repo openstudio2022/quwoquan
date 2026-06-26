@@ -14,6 +14,7 @@ from agent_ops.deploy.lib.environment_topology import ENVIRONMENTS, load_environ
 
 APP_RUNTIME_KEYS = {
     "gatewayBaseUrl": ("publicBases", "api"),
+    "legalBaseUrl": ("computed", "legalBaseUrl"),
     "realtimeBaseUrl": ("publicBases", "realtime"),
     "mediaAvatarCdnBaseUrl": ("publicBases", "mediaAvatar"),
     "mediaImageCdnBaseUrl": ("publicBases", "mediaImage"),
@@ -82,7 +83,14 @@ def main() -> int:
         runtime_values = parse_runtime_yaml(runtime_path)
         for runtime_key, manifest_path in APP_RUNTIME_KEYS.items():
             section_key, value_key = manifest_path
-            expected = str(env_cfg[section_key][value_key]).strip()
+            if section_key == "computed" and value_key == "legalBaseUrl":
+                expected = (
+                    "https://quwoquan.com/legal"
+                    if env_name == "prod"
+                    else str(env_cfg["publicBases"]["api"]).strip().rstrip("/") + "/legal"
+                )
+            else:
+                expected = str(env_cfg[section_key][value_key]).strip()
             actual = str(runtime_values.get(runtime_key, "")).strip()
             if actual != expected:
                 issues.append(

@@ -42,29 +42,49 @@ def _scaled_e2e_plan_runtime_issues(
 
     issues: list[str] = []
     plan_id = str(plan.get("planId") or "")
+    units = list(fs.expand_units(plan))
+    # 当前冻结计划的精确成员坐标集。run_matrix 的 summary 是按 batchId 跨任务聚合的，
+    # 若历史/并行任务复用同一 planId（→ 同一 fanout batchId），其 attemptFailures /
+    # 未达 checkpoint 记录会被混入，导致 verify 对“别的任务”的失败产生假阴性。
+    # 因此 run_matrix 校验必须严格收敛到本计划成员 (taskId,batchId)，不得直接信任全局 summary。
+    member_keys = {(str(u["taskId"]), str(u["batchId"])) for u in units}
     matrix_path = fanout_run_matrix_path(plan_id)
     if not matrix_path.is_file():
         issues.append(f"{plan_id}: missing run_matrix.json")
     else:
         matrix = read_json(matrix_path)
-        summary = matrix.get("summary") or {}
-        for key in ("failed", "attemptFailures", "startupFailures", "orchestrationFailed"):
-            count = int(summary.get(key) or 0)
-            if count:
-                issues.append(f"{plan_id}: run_matrix summary {key}={count}")
-        if int(summary.get("orchestrated") or 0) == 0 and int(summary.get("completed") or 0) == 0:
-            issues.append(f"{plan_id}: run_matrix has no completed or orchestrated work")
-        for idx, item in enumerate(matrix.get("orchestrators") or []):
-            if not item.get("reached"):
-                worker = str(item.get("worker") or item.get("partition") or f"orchestrator[{idx}]")
-                missing = ",".join(str(x) for x in (item.get("missing") or []))
-                error = str(item.get("error") or "")
-                detail = f" missing={missing}" if missing else ""
-                if error:
-                    detail += f" error={error}"
-                issues.append(f"{plan_id}: {worker} did not reach required checkpoints{detail}")
+        scoped = [
+            item
+            for item in (matrix.get("orchestrators") or [])
+            if (str(item.get("taskId") or ""), str(item.get("batchId") or "")) in member_keys
+        ]
+        if not scoped:
+            issues.append(f"{plan_id}: run_matrix has no orchestrator records for plan members")
+        # 同一 member（taskId,batchId,worker）在重试 / 多次 orchestrate 下会产生多条记录：
+        # 早期 startup 失败留下 reached=false，后续重试成功留下 reached=true。run_matrix
+        # 不覆盖历史记录，只追加。因此判定必须按 member 收敛——只要该 member 存在任一
+        # reached=true 即算达标，不得对已被成功重试覆盖的早期失败记录产生假阴性。
+        by_member: dict[tuple[str, str, str], list[dict]] = {}
+        for item in scoped:
+            mkey = (
+                str(item.get("taskId") or ""),
+                str(item.get("batchId") or ""),
+                str(item.get("worker") or item.get("partition") or ""),
+            )
+            by_member.setdefault(mkey, []).append(item)
+        for mkey, records in by_member.items():
+            if any(rec.get("reached") for rec in records):
+                continue
+            last = records[-1]
+            worker = mkey[2] or "orchestrator"
+            missing = ",".join(str(x) for x in (last.get("missing") or []))
+            error = str(last.get("error") or "")
+            detail = f" missing={missing}" if missing else ""
+            if error:
+                detail += f" error={error}"
+            issues.append(f"{plan_id}: {worker} did not reach required checkpoints{detail}")
 
-    for unit in fs.expand_units(plan):
+    for unit in units:
         task_id = str(unit["taskId"])
         batch_id = str(unit["batchId"])
         key = (task_id, batch_id)
@@ -240,6 +260,7 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
         units = fs.expand_units(plan)
         failures: list[str] = []
         paused_for_author: list[tuple[str, str]] = []
+        not_materialized: list[str] = []
         for unit in units:
             task_id = str(unit["taskId"])
             batch_id = str(unit["batchId"])
@@ -259,6 +280,13 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
                         until=None,
                     )
                 )
+            except FileNotFoundError:
+                # 分区 task spec 仅在 orchestrate 成功后落盘；放量时常有分区因瞬时云端窗口
+                # 尚未 orchestrate（无 task.yaml），load_spec 抛 FileNotFoundError。这类分区是
+                # pending（由下一轮 author-runner 补齐），不是 finalize 失败，必须优雅跳过而非
+                # 让整个 finalize 崩溃。
+                not_materialized.append(f"{task_id}/{batch_id}")
+                continue
             except SystemExit as exc:
                 code = int(getattr(exc, "code", 1) or 0)
                 if code == 10:
@@ -320,7 +348,15 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
             for item in failures[:100]:
                 print(f"  - {item}", file=sys.stderr)
             raise SystemExit(1)
-        print(f"[task scaled-e2e finalize] finalized {len(units)} partition batch(es)")
+        materialized = len(units) - len(not_materialized)
+        if not_materialized:
+            # pending（未 orchestrate）分区不是失败，但要显式可见，供守护判断是否继续 author cycle。
+            print(
+                f"[task scaled-e2e finalize] finalized {materialized}/{len(units)} partition batch(es); "
+                f"pending(not-yet-orchestrated)={len(not_materialized)}"
+            )
+        else:
+            print(f"[task scaled-e2e finalize] finalized {len(units)} partition batch(es)")
         return
     if command == "verify":
         if getattr(args, "plan", None):

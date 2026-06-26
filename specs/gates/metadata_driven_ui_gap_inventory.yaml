@@ -184,13 +184,13 @@ domains:
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/content/pages/work_browser_entry_page.dart
         status: compliant
-        note: workBrowser 统一深链入口；无 extra 时经 ContentRepository 拉取/定位队列，有 extra 时复用 WorkBrowserItemDto/PostReadPresentation 沉浸壳。
+        note: workBrowser 统一深链入口；无 extra 时经 ContentRepository 拉取/定位队列，有 extra 时复用 WorkBrowserItemDto/PostReadPresentation 沉浸壳；错误页按 sourceTheme/sourceAppearanceMode 保持来源明暗模式。
         target_dto: WorkBrowserItemDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/content/entry/pages/create_page.dart
         status: compliant
-        note: 发布确认摘要经 postReadPreviewBundleFromPublishConfirmSummary（draftPreview）；buildCreatePostPayloadMap 使用 codegen CreatePostRequestWire 写入 summary/tagRefs/entityRefs/assistantUsePolicy，行内对象提及经 Markdown span 派生 entityRefs。
+        note: 发布确认摘要经 postReadPreviewBundleFromPublishConfirmSummary（draftPreview）；buildCreatePostPayloadMap 使用 codegen CreatePostRequestWire 写入 summary/tagRefs/entityRefs/assistantUsePolicy，行内对象提及经 Markdown span 派生 entityRefs；2026-06-25 图片 flow 顶栏主标题统一为“图片创作”，图片网格悬停拖拽即时让位，文案回收至 CreatePageText/UITextConstants。
         target_dto: ContentPublishDraftComposite
         target_read_projection: PostReadPresentation
         target_edit_draft: ContentPublishDraftComposite
@@ -291,7 +291,7 @@ domains:
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/my_intersection_inbox_page.dart
         status: compliant
-        note: 我的交集分维度列表，消费 GET /v1/content/intersections（list）+ POST /v1/content/intersections/visit（打开即清零已读水位）；IntersectionRepository 三层，intersectionRepositoryProvider 切换
+        note: 我的交集分维度列表，消费 GET /v1/content/intersections（list）+ POST /v1/content/intersections/visit（打开即清零已读水位）；IntersectionRepository 三层，intersectionRepositoryProvider 切换；一级交集/影响力使用统一 multiOptionList 分段控。
         target_dto: IntersectionReason
         target_read_projection: IntersectionInboxSummary
         target_edit_draft: N/A
@@ -347,7 +347,7 @@ domains:
         target_dto: PersonaDto
       - path: quwoquan_app/lib/ui/user/pages/profile_stats_page.dart
         status: compliant
-        note: 2026-06-25 stats 详情页收口为 iOS segmented toolbar + 三 tab 云侧分页搜索；圈子列表消费 CircleDto，粉丝/关注列表消费 ProfileSocialRelationRowViewData（username/userHandle/profileVisibility/relationState/followedAt/relationshipCapability），动作矩阵只读 viewer->row capability，query/cursor/limit 在 Repository 边界透传
+        note: 2026-06-25 stats 详情页收口为统一 multiOptionList segmented toolbar + 三 tab 云侧分页搜索；圈子列表消费 CircleDto，粉丝/关注列表消费 ProfileSocialRelationRowViewData（username/userHandle/profileVisibility/relationState/followedAt/relationshipCapability），动作矩阵只读 viewer->row capability，query/cursor/limit 在 Repository 边界透传
         target_dto: UserProfileDto
       - path: quwoquan_app/lib/ui/user/pages/profile_comments_page.dart
         status: compliant
@@ -417,7 +417,7 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/intersection/pages/object_intersection_list_page.dart
         status: compliant
-        note: "全部交集页；路由 objectIntersections 由 _shared/app_routes.yaml codegen；消费 ObjectIntersectionQuery(limit: 50) 与 IntersectionReason，纵向列表复用 ObjectIntersectionCard"
+        note: "全部交集页；路由 objectIntersections 由 _shared/app_routes.yaml codegen；消费 ObjectIntersectionQuery(limit: 50) 与 IntersectionReason，纵向列表复用 ObjectIntersectionCard；页面壳为 singleList 语义"
         target_dto: IntersectionReason
         target_read_projection: IntersectionPoint
         target_edit_draft: N/A
@@ -464,6 +464,10 @@ domains:
         status: exempt
         note: 权限管理预留页；联系人/圈子/实体三层只读占位，本轮不接云端权限契约
         target_dto: N/A
+      - path: quwoquan_app/lib/ui/settings/pages/settings_dark_mode_page.dart
+        status: compliant
+        note: 深色模式详情页；复用 AppearanceSettingsController 与 AppearanceSettingsWireDto，不新增云端权限/设置 DTO
+        target_dto: AppearanceSettingsWireDto
       - path: quwoquan_app/lib/ui/settings/pages/settings_about_page.dart
         status: exempt
         note: 关于页；展示 PackageInfo 版本，无产品云契约
@@ -582,13 +586,13 @@ domains:
         note: 复用壳；无云契约
       - path: quwoquan_app/lib/components/media/image/editor/image_editor_page.dart
         status: exempt
-        note: 本地编辑为主
+        note: 本地编辑为主；2026-06-25 缩略条左对齐起始，切页 reveal-not-center，拖拽反馈继续复用共享重排组件
       - path: quwoquan_app/lib/components/media/camera/camera_capture_page.dart
         status: exempt
         note: 本地相机；无云行模型
       - path: quwoquan_app/lib/components/media/picker/create_media_picker_page.dart
         status: exempt
-        note: 本地选择器
+        note: 本地选择器；2026-06-25 已选缩略条左对齐，拖拽悬停即时让位，和创作页/编辑器共用统一重排反馈
       - path: quwoquan_app/lib/components/media/picker/desktop/desktop_image_picker_page.dart
         status: exempt
         note: 桌面本机图片选择器；数据源为本机文件系统扫描，无云行模型

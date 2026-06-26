@@ -88,6 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     package_parser = subparsers.add_parser("package", parents=[report_dir_compat_parser])
     package_parser.add_argument("--env", choices=ENVIRONMENTS, required=True)
+    package_parser.add_argument("--kind", choices=["runtime", "legal-static"], default="runtime")
     package_parser.add_argument("--service", default="")
     package_parser.add_argument("--include-services", action="store_true")
     package_parser.add_argument("--target", choices=TARGETS, default="")
@@ -97,7 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--target", choices=TARGETS, default="")
     verify_parser.add_argument(
         "--kind",
-        choices=["topology", "config", "packaging", "all"],
+        choices=["topology", "config", "packaging", "legal-static", "all"],
         default="all",
     )
     verify_parser.add_argument(
@@ -774,6 +775,9 @@ def _selected_tier_commands(
                 }
             )
     if tier in {"t4", "all"}:
+        media_surface_command = _seeded_media_surface_tier_command(env_name, target_name)
+        if media_surface_command is not None:
+            commands.append(media_surface_command)
         smoke_command = _environment_page_smoke_tier_command(
             env_name,
             target_name,
@@ -788,6 +792,40 @@ def _selected_tier_commands(
             }
         )
     return commands
+
+
+def _seeded_media_surface_tier_command(
+    env_name: str,
+    target_name: str,
+) -> dict[str, Any] | None:
+    if target_name not in {"alpha-local", "beta-local", "gamma-local"}:
+        return None
+    topology = load_environment_topology()
+    target = get_target(topology, target_name)
+    runtime_env = str(target.get("env") or env_name or "")
+    if runtime_env not in {"alpha", "beta", "gamma"}:
+        return None
+    public_bases = target.get("publicBases") or {}
+    required = {"mediaAvatar", "mediaImage", "mediaVideo"}
+    if not required.issubset(public_bases):
+        return None
+    return {
+        "name": "seeded-media-surface",
+        "argv": [
+            "python3",
+            "agent_ops/gate/verify_alpha_media_fixture_surface.py",
+            "--env",
+            runtime_env,
+            "--target",
+            target_name,
+            "--avatar-base-url",
+            str(public_bases["mediaAvatar"]),
+            "--media-base-url",
+            str(public_bases["mediaImage"]),
+            "--video-base-url",
+            str(public_bases["mediaVideo"]),
+        ],
+    }
 
 
 def _environment_page_smoke_tier_command(
@@ -1134,7 +1172,126 @@ def print_result(args: argparse.Namespace, payload: dict[str, Any]) -> int:
     return int(payload.get("exitCode", 0))
 
 
+def _legal_static_command(
+    subcommand: str,
+    env_name: str,
+    *,
+    output_root: str = "artifacts/legal-static-packages",
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
+    cmd = [
+        "python3",
+        "agent_ops/deploy/legal_static.py",
+        subcommand,
+        "--env",
+        env_name,
+        "--output-root",
+        output_root,
+    ]
+    result = run(cmd)
+    payload: dict[str, Any] = {}
+    if result.stdout.strip():
+        try:
+            loaded = json.loads(result.stdout)
+            if isinstance(loaded, dict):
+                payload = loaded
+        except json.JSONDecodeError:
+            payload = {}
+    payload.setdefault("argv", cmd)
+    payload.setdefault("exitCode", result.returncode)
+    return result, payload
+
+
+def _command_package_legal_static(args: argparse.Namespace) -> dict[str, Any]:
+    env_name = args.env
+    target_name = args.target or DEFAULT_TARGET_BY_ENV[env_name]
+    report_dir = resolve_report_dir(args, env_name, target_name)
+    started_monotonic, started_at = _start_timing()
+    if args.service or args.include_services:
+        timing = _finish_timing(started_monotonic, started_at)
+        details = ["legal-static packages cannot include service packages"]
+        _write_summary_bundle(
+            report_dir,
+            command="package",
+            target=target_name,
+            status="failed",
+            summary=f"stackctl legal-static package failed for {env_name}",
+            details=details,
+            extra={"env": env_name, "kind": "legal-static"},
+            timing=timing,
+        )
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl legal-static package failed for {env_name}",
+            "details": details,
+            "reportDir": relpath(report_dir),
+            **timing,
+        }
+
+    result, legal_payload = _legal_static_command("package", env_name)
+    timing = _finish_timing(started_monotonic, started_at)
+    status = "ok" if result.returncode == 0 else "failed"
+    details = []
+    if result.returncode == 0:
+        details.append(f"legal-static package ready: {legal_payload.get('packageDir', '')}")
+        if legal_payload.get("currentPointer"):
+            details.append(f"legal-static current pointer: {legal_payload['currentPointer']}")
+    else:
+        issues = legal_payload.get("issues") if isinstance(legal_payload.get("issues"), list) else []
+        details.extend(str(issue) for issue in issues)
+        if not details:
+            details.append(result.stderr.strip() or result.stdout.strip() or "legal-static package failed")
+    report = {
+        "status": status,
+        "command": "package",
+        "kind": "legal-static",
+        "env": env_name,
+        "target": target_name,
+        "timestamp": utc_now(),
+        "step": {
+            "name": "legal-static-package",
+            "exitCode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "payload": legal_payload,
+        },
+        **timing,
+    }
+    write_json(report_dir / "report.json", report)
+    _write_summary_bundle(
+        report_dir,
+        command="package",
+        target=target_name,
+        status=status,
+        summary=(
+            f"stackctl legal-static package completed for {env_name}"
+            if status == "ok"
+            else f"stackctl legal-static package failed for {env_name}"
+        ),
+        details=details,
+        extra={"env": env_name, "kind": "legal-static"},
+        timing=timing,
+    )
+    _write_stdout_markdown(
+        report_dir,
+        [("legal-static-package", "\n".join(filter(None, [result.stdout, result.stderr])))],
+    )
+    return {
+        "exitCode": result.returncode,
+        "summary": (
+            f"stackctl legal-static package completed for {env_name}"
+            if status == "ok"
+            else f"stackctl legal-static package failed for {env_name}"
+        ),
+        "details": details,
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
 def command_package(args: argparse.Namespace) -> dict[str, Any]:
+    if getattr(args, "kind", "runtime") == "legal-static":
+        return _command_package_legal_static(args)
+
     topology = load_environment_topology()
     env_name = args.env
     target_name = args.target or DEFAULT_TARGET_BY_ENV[env_name]
@@ -1256,7 +1413,107 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _command_verify_legal_static(args: argparse.Namespace) -> dict[str, Any]:
+    env_name = args.env or (get_target(load_environment_topology(), args.target).get("env") if args.target else "all")
+    target_name = args.target or (DEFAULT_TARGET_BY_ENV[env_name] if env_name in ENVIRONMENTS else "repo")
+    report_dir = resolve_report_dir(args, env_name if env_name in ENVIRONMENTS else "repo", target_name)
+    started_monotonic, started_at = _start_timing()
+    package_envs = [env_name] if env_name in ENVIRONMENTS else list(ENVIRONMENTS)
+    steps: list[dict[str, Any]] = []
+    issues: list[str] = []
+    stdout_sections: list[tuple[str, str]] = []
+
+    for package_env in package_envs:
+        package_args = argparse.Namespace(
+            command="package",
+            kind="legal-static",
+            env=package_env,
+            service="",
+            include_services=False,
+            target=args.target or DEFAULT_TARGET_BY_ENV[package_env],
+            output_format="json",
+            report_dir=str(report_dir / f"package-{package_env}"),
+        )
+        package_payload = command_package(package_args)
+        steps.append(
+            {
+                "kind": "package",
+                "packageKind": "legal-static",
+                "env": package_env,
+                "exitCode": package_payload["exitCode"],
+                "details": package_payload.get("details", []),
+                "reportDir": package_payload.get("reportDir", ""),
+            }
+        )
+        if package_payload["exitCode"] != 0:
+            issues.append(
+                f"legal-static package failed for {package_env}: "
+                + "; ".join(package_payload.get("details", []))
+            )
+            continue
+
+        verify_result, verify_payload = _legal_static_command("verify-package", package_env)
+        steps.append(
+            {
+                "kind": "verify",
+                "packageKind": "legal-static",
+                "env": package_env,
+                "exitCode": verify_result.returncode,
+                "stdout": verify_result.stdout,
+                "stderr": verify_result.stderr,
+                "payload": verify_payload,
+            }
+        )
+        stdout_sections.append(
+            (
+                f"legal-static-verify:{package_env}",
+                "\n".join(filter(None, [verify_result.stdout, verify_result.stderr])),
+            )
+        )
+        if verify_result.returncode != 0:
+            verify_issues = verify_payload.get("issues") if isinstance(verify_payload.get("issues"), list) else []
+            detail = "; ".join(str(issue) for issue in verify_issues)
+            issues.append(
+                f"legal-static verify failed for {package_env}: "
+                + (detail or verify_result.stderr.strip() or verify_result.stdout.strip())
+            )
+
+    timing = _finish_timing(started_monotonic, started_at)
+    payload = {
+        "status": "ok" if not issues else "failed",
+        "command": "verify",
+        "kind": "legal-static",
+        "tier": args.tier,
+        "timestamp": utc_now(),
+        "steps": steps,
+        **timing,
+    }
+    write_json(report_dir / "report.json", payload)
+    write_json(report_dir / "findings.json", {"issues": issues})
+    _write_summary_bundle(
+        report_dir,
+        command="verify",
+        target=target_name,
+        status=payload["status"],
+        summary="stackctl legal-static verify passed" if not issues else "stackctl legal-static verify failed",
+        details=issues or [f"ran {len(steps)} legal-static checks"],
+        extra={"kind": "legal-static", "tier": args.tier},
+        timing=timing,
+    )
+    _write_stdout_markdown(report_dir, stdout_sections)
+    return {
+        "exitCode": 0 if not issues else 1,
+        "summary": "stackctl legal-static verify passed" if not issues else "stackctl legal-static verify failed",
+        "details": issues or [f"ran {len(steps)} legal-static checks"],
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
 def command_verify(args: argparse.Namespace) -> dict[str, Any]:
+    if args.kind == "legal-static":
+        return _command_verify_legal_static(args)
+
     env_name = args.env or (get_target(load_environment_topology(), args.target).get("env") if args.target else "all")
     target_name = args.target or (DEFAULT_TARGET_BY_ENV[env_name] if env_name in ENVIRONMENTS else "repo")
     report_dir = resolve_report_dir(args, env_name if env_name in ENVIRONMENTS else "repo", target_name)
@@ -1267,6 +1524,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
     for package_env in package_envs:
         package_args = argparse.Namespace(
             command="package",
+            kind="runtime",
             env=package_env,
             service="",
             include_services=True,

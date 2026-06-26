@@ -2,8 +2,9 @@
 """Device-level startup first-frame probe for Android, iOS, and Web.
 
 This is a user-acceptance probe, not a unit test. It catches regressions where
-the app remains on a plain native splash/background while the Android native
-welcome host, Flutter welcome sequence, or shell should already be visible.
+the app remains on a plain native transition background for too long, or where
+Android native code reintroduces a mirrored welcome page before Flutter's real
+WelcomeScreen can render.
 """
 
 from __future__ import annotations
@@ -24,11 +25,20 @@ from PIL import Image, ImageStat
 
 APP_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_ANDROID_PACKAGE = "com.quwoquan.quwoquan_app"
-DEFAULT_ANDROID_ACTIVITY = "com.quwoquan.quwoquan_app/.StartupActivity"
+DEFAULT_ANDROID_ACTIVITY = "com.quwoquan.quwoquan_app/.MainActivity"
 DEFAULT_ANDROID_APK = APP_DIR / "build/app/outputs/flutter-apk/app-debug.apk"
 DEFAULT_IOS_BUNDLE = "com.example.quwoquanApp"
 DEFAULT_IOS_APP = APP_DIR / "build/ios/iphonesimulator/Runner.app"
 DEFAULT_OUTPUT_DIR = APP_DIR / "artifacts/startup_first_frame/probe"
+FORBIDDEN_NATIVE_WELCOME_LOG_PATTERNS = (
+    "android_startup_welcome_first_draw",
+    "android_startup_activity_handoff",
+    "android_native_welcome_first_draw",
+    "android_native_welcome_host_installed",
+    "android_flutter_welcome_ready",
+    "android_native_welcome_completion_received",
+    "android_flutter_welcome_ready_timeout",
+)
 
 
 @dataclass(frozen=True)
@@ -119,29 +129,18 @@ def analyze_screenshot(path: Path, offset_ms: int | None = None) -> ScreenshotAn
 
 def parse_qwqstartup_log(raw: str) -> dict[str, int]:
     values: dict[str, int] = {}
-    for key in (
-        "android_startup_welcome_first_draw",
-        "android_startup_activity_handoff",
-        "android_native_welcome_first_draw",
-        "android_native_welcome_host_installed",
-        "android_flutter_welcome_ready",
-        "android_native_welcome_completion_received",
-        "android_flutter_welcome_ready_timeout",
-        "android_flutter_engine_configured",
-        "android_flutter_ui_displayed",
-    ):
+    for key in ("android_flutter_engine_configured", "android_flutter_ui_displayed"):
         match = re.search(rf"{re.escape(key)} elapsedMs=(\d+)", raw)
         if match:
             values[key] = int(match.group(1))
-        if key == "android_flutter_welcome_ready":
-            sequence_match = re.search(
-                rf"{re.escape(key)} elapsedMs=\d+ sequenceElapsedMs=(\d+)",
-                raw,
-            )
-            if sequence_match:
-                values["android_flutter_welcome_ready_sequence_elapsed_ms"] = int(
-                    sequence_match.group(1)
-                )
+    displayed_match = re.search(
+        r"Displayed com\.quwoquan\.quwoquan_app/\.MainActivity for user \d+: \+((?:(\d+)s)?(\d+)ms)",
+        raw,
+    )
+    if displayed_match:
+        seconds = int(displayed_match.group(2) or "0")
+        milliseconds = int(displayed_match.group(3))
+        values["android_activity_displayed_ms"] = seconds * 1000 + milliseconds
     return values
 
 
@@ -206,12 +205,15 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
             )
         analyses.append(analyze_screenshot(screenshot, actual_offset_ms))
 
-    log = run(
-        ["adb", "-s", args.android_device, "logcat", "-d", "-s", "QWQStartup"],
-        timeout=15,
-    ).stdout
-    (output_dir / "android-qwqstartup.log").write_text(log, encoding="utf-8")
+    log = run(["adb", "-s", args.android_device, "logcat", "-d"], timeout=15).stdout
+    (output_dir / "android-logcat.txt").write_text(log, encoding="utf-8")
     timings = parse_qwqstartup_log(log)
+    native_welcome_hits = [
+        pattern
+        for pattern in FORBIDDEN_NATIVE_WELCOME_LOG_PATTERNS
+        if pattern in log
+    ]
+    native_welcome_detected = bool(native_welcome_hits)
     first_visible = next(
         (
             item.offset_ms
@@ -223,31 +225,9 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         None,
     )
     flutter_ui_ms = timings.get("android_flutter_ui_displayed")
-    startup_welcome_first_draw_ms = timings.get("android_startup_welcome_first_draw")
-    welcome_ready_ms = timings.get("android_flutter_welcome_ready")
-    welcome_completion_ms = timings.get("android_native_welcome_completion_received")
-    welcome_sequence_elapsed_ms = timings.get(
-        "android_flutter_welcome_ready_sequence_elapsed_ms"
-    )
-    welcome_sequence_continuity_within_budget = None
-    if (
-        welcome_ready_ms is not None
-        and welcome_completion_ms is not None
-        and welcome_sequence_elapsed_ms is not None
-    ):
-        expected_remaining_ms = max(0, 1500 - welcome_sequence_elapsed_ms)
-        actual_remaining_ms = welcome_completion_ms - welcome_ready_ms
-        welcome_sequence_continuity_within_budget = (
-            actual_remaining_ms <= expected_remaining_ms + 600
-        )
+    activity_displayed_ms = timings.get("android_activity_displayed_ms")
     blue_screen_detected = any(
         item.blue_background
-        and item.offset_ms is not None
-        and item.offset_ms >= args.android_visible_by_ms
-        for item in analyses
-    )
-    plain_background_detected = any(
-        item.plain_background
         and item.offset_ms is not None
         and item.offset_ms >= args.android_visible_by_ms
         for item in analyses
@@ -256,14 +236,22 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         flutter_ui_ms is None or flutter_ui_ms <= args.android_flutter_ui_max_ms
     )
     first_frame_within_budget = (
-        first_visible is not None
-        or (
-            startup_welcome_first_draw_ms is not None
-            and startup_welcome_first_draw_ms <= args.android_visible_by_ms
+        activity_displayed_ms <= args.android_visible_by_ms
+        if activity_displayed_ms is not None
+        else first_visible is not None
+    )
+    plain_background_detected = (
+        not first_frame_within_budget
+        and any(
+            item.plain_background
+            and item.offset_ms is not None
+            and item.offset_ms >= args.android_visible_by_ms
+            for item in analyses
         )
     )
     passed = (
-        not blue_screen_detected
+        not native_welcome_detected
+        and not blue_screen_detected
         and not plain_background_detected
         and first_frame_within_budget
     )
@@ -273,15 +261,14 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         "passed": passed,
         "visibleByMs": args.android_visible_by_ms,
         "firstVisibleMs": first_visible,
-        "startupWelcomeFirstDrawMs": startup_welcome_first_draw_ms,
+        "activityDisplayedMs": activity_displayed_ms,
         "firstFrameWithinBudget": first_frame_within_budget,
+        "nativeWelcomeDetected": native_welcome_detected,
+        "nativeWelcomeHits": native_welcome_hits,
         "blueScreenDetected": blue_screen_detected,
         "plainBackgroundDetected": plain_background_detected,
         "flutterUiDisplayedMaxMs": args.android_flutter_ui_max_ms,
         "flutterUiDisplayedWithinBudget": flutter_ui_within_budget,
-        "flutterWelcomeSequenceContinuityWithinBudget": (
-            welcome_sequence_continuity_within_budget
-        ),
         "timings": timings,
         "screenshots": [item.to_json() for item in analyses],
     }
@@ -290,6 +277,11 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
 def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     app = Path(args.ios_app)
     if args.ios_install and app.exists():
+        run(
+            ["xcrun", "simctl", "uninstall", args.ios_device, args.ios_bundle],
+            check=False,
+            timeout=60,
+        )
         run(["xcrun", "simctl", "install", args.ios_device, str(app)], timeout=120)
     run(
         ["xcrun", "simctl", "terminate", args.ios_device, args.ios_bundle],
@@ -325,12 +317,29 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         ),
         None,
     )
+    blue_screen_detected = any(item.blue_background for item in analyses)
+    plain_background_detected = (
+        first_visible is None
+        and any(
+            item.plain_background
+            and item.offset_ms is not None
+            and item.offset_ms >= args.ios_visible_by_ms
+            for item in analyses
+        )
+    )
+    passed = (
+        first_visible is not None
+        and not blue_screen_detected
+        and not plain_background_detected
+    )
     return {
         "platform": "ios",
         "device": args.ios_device,
-        "passed": first_visible is not None,
+        "passed": passed,
         "visibleByMs": args.ios_visible_by_ms,
         "firstVisibleMs": first_visible,
+        "blueScreenDetected": blue_screen_detected,
+        "plainBackgroundDetected": plain_background_detected,
         "screenshots": [item.to_json() for item in analyses],
     }
 
@@ -368,7 +377,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=parse_offsets,
         default=[200, 250, 500, 2000, 3000],
     )
-    parser.add_argument("--android-visible-by-ms", type=int, default=250)
+    parser.add_argument("--android-visible-by-ms", type=int, default=3000)
     parser.add_argument("--android-flutter-ui-max-ms", type=int, default=3000)
     parser.add_argument("--ios-device")
     parser.add_argument("--ios-bundle", default=DEFAULT_IOS_BUNDLE)

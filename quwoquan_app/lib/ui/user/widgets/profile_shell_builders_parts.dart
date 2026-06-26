@@ -116,7 +116,6 @@ extension _ProfileShellBuilders on _ProfileShellState {
     required bool isDark,
     required String? avatarUrl,
     required String displayName,
-    required bool showEditPencil,
     required String? bio,
     required ProfileState state,
     required ProfileNotifier notifier,
@@ -181,7 +180,6 @@ extension _ProfileShellBuilders on _ProfileShellState {
                     displayName: displayName,
                     identityTags: effectiveIdentityTags,
                     verified: state.profile?.verified ?? false,
-                    showEdit: showEditPencil,
                     onEdit: () => context.push(AppRoutePaths.profileEdit),
                     showQrCode: isMine,
                     onQrCode: () => context.push(AppRoutePaths.myQrCode),
@@ -558,6 +556,12 @@ extension _ProfileShellBuilders on _ProfileShellState {
                                                         avatarUrl,
                                                       )
                                                       ? AppMediaImage(
+                                                          key:
+                                                              const ValueKey<
+                                                                String
+                                                              >(
+                                                                'profile-shell-compact-avatar-image',
+                                                              ),
                                                           imageSource:
                                                               avatarUrl,
                                                           fit: BoxFit.cover,
@@ -575,6 +579,12 @@ extension _ProfileShellBuilders on _ProfileShellState {
                                                           ),
                                                         )
                                                       : AppCachedNetworkImage(
+                                                          key:
+                                                              const ValueKey<
+                                                                String
+                                                              >(
+                                                                'profile-shell-compact-avatar-image',
+                                                              ),
                                                           imageUrl: avatarUrl,
                                                           fit: BoxFit.cover,
                                                           errorWidget: ColoredBox(

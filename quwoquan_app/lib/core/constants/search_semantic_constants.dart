@@ -27,10 +27,9 @@ class SearchSemanticConstants {
     color: AppColors.iosLabel(context),
   );
 
-  static TextStyle placeholderTextStyle(BuildContext context) =>
-      inputTextStyle(context).copyWith(
-        color: AppColors.iosSecondaryLabel(context).withValues(alpha: 0.96),
-      );
+  static TextStyle placeholderTextStyle(BuildContext context) => inputTextStyle(
+    context,
+  ).copyWith(color: AppColors.iosTertiaryLabel(context));
 
   static Color backgroundColor(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
@@ -98,9 +97,9 @@ class SearchSemanticConstants {
   ) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return inputTextStyle(context).copyWith(
-      color: AppColors.iosTertiaryLabel(context).withValues(
-        alpha: isDark ? 0.88 : 0.72,
-      ),
+      color: AppColors.iosTertiaryLabel(
+        context,
+      ).withValues(alpha: isDark ? 0.88 : 0.72),
     );
   }
 

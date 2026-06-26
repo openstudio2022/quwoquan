@@ -18,6 +18,8 @@ var (
 	ErrNotMutual = errors.New("CHAT.USER.not_mutual")
 	ErrGreetingRequired = errors.New("CHAT.USER.greeting_required")
 	ErrBlocked = errors.New("CHAT.USER.blocked")
+	ErrGroupMemberNotMutual = errors.New("CHAT.USER.group_member_not_mutual")
+	ErrGroupMemberBlocked = errors.New("CHAT.USER.group_member_blocked")
 	ErrInternalError = errors.New("CHAT.SYSTEM.internal_error")
 )
 
@@ -61,6 +63,18 @@ func AppErrorFromGreetingRequired(debugMessage string) *rerrors.AppError {
 func AppErrorFromBlocked(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrBlocked.Error()))
 	return rerrors.NewAppError(code, "当前状态不能继续发送消息", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromGroupMemberNotMutual returns *AppError for CHAT.USER.group_member_not_mutual (user_message from errors.yaml).
+func AppErrorFromGroupMemberNotMutual(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGroupMemberNotMutual.Error()))
+	return rerrors.NewAppError(code, "只能邀请互相关注的好友加入群聊", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromGroupMemberBlocked returns *AppError for CHAT.USER.group_member_blocked (user_message from errors.yaml).
+func AppErrorFromGroupMemberBlocked(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGroupMemberBlocked.Error()))
+	return rerrors.NewAppError(code, "存在已屏蔽的成员，无法发起群聊", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInternalError returns *AppError for CHAT.SYSTEM.internal_error (user_message from errors.yaml).

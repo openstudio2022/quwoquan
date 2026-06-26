@@ -325,7 +325,7 @@ void main() {
       expect(find.text(UITextConstants.profileGreet), findsNothing);
     });
 
-    testWidgets('旅程 D3：mine 模式渲染昵称编辑入口、分享与设置入口', (tester) async {
+    testWidgets('旅程 D3：mine 模式渲染二维码、分享与设置入口', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -334,6 +334,10 @@ void main() {
       await _pumpFrames(tester);
       expect(
         find.byKey(const ValueKey<String>('profile-header-edit')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('profile-header-qr-code')),
         findsOneWidget,
       );
       expect(

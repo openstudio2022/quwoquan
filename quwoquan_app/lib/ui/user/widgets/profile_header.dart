@@ -2,9 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
-import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 /// Profile header with left-aligned avatar that intrudes 1/3 into the
 /// background area above. Display name sits in a Row beside the avatar,
@@ -17,7 +17,6 @@ class ProfileHeader extends StatelessWidget {
     this.displayName,
     this.identityTags = const <String>[],
     this.verified = false,
-    this.showEdit = false,
     this.onEdit,
     this.showQrCode = false,
     this.onQrCode,
@@ -35,8 +34,6 @@ class ProfileHeader extends StatelessWidget {
   /// 认证标识（蓝勾）。云侧 verified 直出，端只读展示。
   final bool verified;
 
-  /// 我的主页昵称右侧编辑入口。
-  final bool showEdit;
   final VoidCallback? onEdit;
   final bool showQrCode;
   final VoidCallback? onQrCode;
@@ -54,15 +51,23 @@ class ProfileHeader extends StatelessWidget {
       avatarOuterDiameter * UserProfileUIConfig.headerLayout.avatarOverlapRatio;
   static double get avatarIntrusion => avatarOverlapPx;
 
+  Widget _avatarFallback(BuildContext context, Color fgSecondary) {
+    return ColoredBox(
+      color: AppColors.iosTintedFill(context),
+      child: Center(
+        child: Icon(
+          CupertinoIcons.camera_fill,
+          size: AppSpacing.iconLarge,
+          color: fgSecondary.withValues(alpha: 0.82),
+        ),
+      ),
+    );
+  }
+
   Widget _buildAvatar(BuildContext context, Color bg, Color fgSecondary) {
-    // 本地选取（未上传）路径原样交给 FileImage；服务端对象键 / 远端地址走解析器。
-    final resolvedAvatarUrl = isLocalFileImageSource(avatarUrl)
-        ? (avatarUrl ?? '')
-        : resolveAvatarImageUrl(avatarUrl);
-    final hasAvatar = resolvedAvatarUrl.isNotEmpty;
-    final avatarImage = hasAvatar
-        ? mediaImageProvider(resolvedAvatarUrl)
-        : null;
+    final normalizedAvatarUrl = (avatarUrl ?? '').trim();
+    final hasAvatar = normalizedAvatarUrl.isNotEmpty;
+    final fallback = _avatarFallback(context, fgSecondary);
     final avatar = Container(
       key: const ValueKey<String>('profile-header-avatar'),
       decoration: BoxDecoration(
@@ -76,22 +81,32 @@ class ProfileHeader extends StatelessWidget {
           ),
         ],
       ),
-      child: hasAvatar && avatarImage != null
-          ? CircleAvatar(
-              radius: avatarRadius,
-              backgroundColor: AppColors.iosSecondaryFill(context),
-              backgroundImage: avatarImage,
-              onBackgroundImageError: (e, s) {},
-            )
-          : CircleAvatar(
-              radius: avatarRadius,
-              backgroundColor: AppColors.iosTintedFill(context),
-              child: Icon(
-                CupertinoIcons.camera_fill,
-                size: AppSpacing.iconLarge,
-                color: fgSecondary.withValues(alpha: 0.82),
-              ),
-            ),
+      child: ClipOval(
+        child: SizedBox(
+          width: avatarRadius * 2,
+          height: avatarRadius * 2,
+          child: hasAvatar
+              ? (isLocalFileImageSource(normalizedAvatarUrl)
+                    ? AppMediaImage(
+                        key: const ValueKey<String>(
+                          'profile-header-avatar-image',
+                        ),
+                        imageSource: normalizedAvatarUrl,
+                        fit: BoxFit.cover,
+                        errorWidget: fallback,
+                      )
+                    : AppAvatarImage(
+                        key: const ValueKey<String>(
+                          'profile-header-avatar-image',
+                        ),
+                        imageUrl: normalizedAvatarUrl,
+                        size: avatarRadius * 2,
+                        fit: BoxFit.cover,
+                        errorWidget: fallback,
+                      ))
+              : fallback,
+        ),
+      ),
     );
     if (hasAvatar || !showUploadAvatarPrompt || onEdit == null) {
       return avatar;
@@ -133,110 +148,107 @@ class ProfileHeader extends StatelessWidget {
       children: [
         Padding(
           padding: EdgeInsets.only(left: avatarOuterDiameter + AppSpacing.sm),
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(height: AppSpacing.intraGroupXs),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Flexible(
-                    child: Text(
-                      displayName ?? '',
-                      style: TextStyle(
-                        fontSize: AppTypography.iosTitle3,
-                        fontWeight: AppTypography.regular,
-                        color: fg.withValues(alpha: 0.94),
-                        letterSpacing: -0.24,
-                        height: AppSpacing.textLineHeightDense,
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: AppSpacing.intraGroupXs),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            displayName ?? '',
+                            style: TextStyle(
+                              fontSize: AppTypography.iosTitle3,
+                              fontWeight: AppTypography.regular,
+                              color: fg.withValues(alpha: 0.94),
+                              letterSpacing: -0.24,
+                              height: AppSpacing.textLineHeightDense,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (verified) ...[
+                          SizedBox(width: AppSpacing.intraGroupXs),
+                          Icon(
+                            key: verifiedBadgeKey,
+                            CupertinoIcons.checkmark_seal_fill,
+                            size: AppSpacing.iconSmall,
+                            color: AppColors.iosAccent(context),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (tags.isNotEmpty) ...[
+                      SizedBox(height: AppSpacing.intraGroupXs),
+                      Text(
+                        key: const ValueKey<String>(
+                          'profile-header-identity-tags',
+                        ),
+                        tags.join(' · '),
+                        style: TextStyle(
+                          fontSize: AppTypography.iosFootnote,
+                          color: fgSecondary,
+                          letterSpacing: -0.08,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (verified) ...[
-                    SizedBox(width: AppSpacing.intraGroupXs),
-                    Icon(
-                      key: verifiedBadgeKey,
-                      CupertinoIcons.checkmark_seal_fill,
-                      size: AppSpacing.iconSmall,
-                      color: AppColors.iosAccent(context),
-                    ),
+                    ] else if (showIdentityTagPrompt && onEdit != null) ...[
+                      SizedBox(height: AppSpacing.intraGroupXs),
+                      CupertinoButton(
+                        key: const ValueKey<String>(
+                          'profile-header-tags-prompt',
+                        ),
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        onPressed: onEdit,
+                        child: Text(
+                          UITextConstants.profileEmptyTagsPrompt,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            color: fgSecondary,
+                            fontWeight: AppTypography.regular,
+                            letterSpacing: -0.08,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ],
-                  if (showQrCode && onQrCode != null) ...[
-                    SizedBox(width: AppSpacing.intraGroupXs),
-                    CupertinoButton(
-                      key: const ValueKey<String>('profile-header-qr-code'),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.intraGroupXs,
-                        vertical: AppSpacing.intraGroupXs,
-                      ),
-                      minimumSize: const Size(
-                        AppSpacing.buttonHeightSm,
-                        AppSpacing.buttonHeightSm,
-                      ),
-                      onPressed: onQrCode,
-                      child: Icon(
-                        CupertinoIcons.qrcode,
-                        size: AppSpacing.iconMedium,
-                        color: fg.withValues(alpha: 0.88),
-                      ),
-                    ),
-                  ],
-                  if (showEdit && onEdit != null) ...[
-                    SizedBox(width: AppSpacing.intraGroupXs),
-                    CupertinoButton(
-                      key: const ValueKey<String>('profile-header-edit'),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.intraGroupXs,
-                        vertical: AppSpacing.intraGroupXs,
-                      ),
-                      minimumSize: const Size(
-                        AppSpacing.buttonHeightSm,
-                        AppSpacing.buttonHeightSm,
-                      ),
-                      onPressed: onEdit,
-                      child: Icon(
-                        CupertinoIcons.square_pencil,
-                        size: AppSpacing.iconMedium,
-                        color: fg.withValues(alpha: 0.88),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              if (tags.isNotEmpty) ...[
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  key: const ValueKey<String>('profile-header-identity-tags'),
-                  tags.join(' · '),
-                  style: TextStyle(
-                    fontSize: AppTypography.iosFootnote,
-                    color: fgSecondary,
-                    letterSpacing: -0.08,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ] else if (showIdentityTagPrompt && onEdit != null) ...[
-                SizedBox(height: AppSpacing.intraGroupXs),
-                CupertinoButton(
-                  key: const ValueKey<String>('profile-header-tags-prompt'),
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  onPressed: onEdit,
-                  child: Text(
-                    UITextConstants.profileEmptyTagsPrompt,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosFootnote,
-                      color: fgSecondary,
-                      fontWeight: AppTypography.regular,
-                      letterSpacing: -0.08,
+              ),
+              if (showQrCode && onQrCode != null) ...[
+                SizedBox(width: AppSpacing.intraGroupXs),
+                Padding(
+                  padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
+                  child: CupertinoButton(
+                    key: const ValueKey<String>('profile-header-qr-code'),
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(
+                      AppSpacing.appChromeActionButtonSize,
+                      AppSpacing.appChromeActionButtonSize,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    onPressed: onQrCode,
+                    child: SizedBox(
+                      width: AppSpacing.appChromeActionButtonSize,
+                      height: AppSpacing.appChromeActionButtonSize,
+                      child: Center(
+                        child: Icon(
+                          CupertinoIcons.qrcode,
+                          size: AppSpacing.iconMedium,
+                          color: fg.withValues(alpha: 0.88),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],

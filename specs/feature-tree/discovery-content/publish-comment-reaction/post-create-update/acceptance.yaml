@@ -32,9 +32,10 @@ gwt_acceptance:
     - 相册下拉展示封面、名称、数量和选中态；切换后宫格只显示当前目录图片。
     - 宫格首项为拍摄，图片右上角空心圆选择态；选中后显示与底部顺序一致的蓝色编号。
     - 底部仅展示“编辑图片”和“完成(n)”，不出现“一键成片”或视频发布暗示。
-    - 宫格取消、底部点叉删除和拖动排序会同步更新底部缩略条、宫格编号与最终完成顺序。
+    - 底部缩略条在内容不足一屏时仍从左起始，不得视觉居中。
+    - 宫格取消、底部点叉删除和拖动排序会同步更新底部缩略条、宫格编号与最终完成顺序；拖拽悬停到目标槽位时，其余缩略图会先即时前移/后移空出目标位，松手后才提交最终顺序。
     done_when:
-    - 图片选择器可把当前顺序图片回填到创作编辑器当前位置。
+    - 图片选择器可把当前顺序图片回填到创作编辑器当前位置，且该顺序与底部缩略条悬停后的最终顺序一致。
     edge_cases:
     - 未授权相册权限时展示内联权限态和恢复动作。
     - 选中数达到上限时阻止新增并展示用户可理解提示。
@@ -48,10 +49,16 @@ gwt_acceptance:
     - 选中/取消/排序反馈 P95 <= 100ms，不能整页缩略图闪烁。
     tests:
       planned:
+      - file: quwoquan_app/test/local_contract/components/media/media_reorderable_view__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/photo_media_picker_commercial_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/photo_picker_reentry_append_journey__user_acceptance_test.dart
       recorded:
+      - file: quwoquan_app/test/local_contract/components/media/media_reorderable_view__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/photo_media_picker_commercial_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/photo_picker_reentry_append_journey__user_acceptance_test.dart
     status: partial
     test_evidence:
@@ -62,6 +69,21 @@ gwt_acceptance:
         - local_contract.discovery_content.publish_comment_reaction.post_create_update.photo_picker_dark_album_select_reorder
         envs: &id001
         - local
+      - layer: local_contract
+        suite: media_reorderable_view
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.media_reorderable_strip_left_align_hover_reflow
+        envs: *id001
+      - layer: local_contract
+        suite: image_editor_thumbnail_reorder_widget
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.image_editor_thumbnail_strip_left_align_reveal_not_center
+        envs: *id001
+      - layer: local_contract
+        suite: photo_create_page_surface
+        cases:
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.photo_create_page_title_and_hover_reorder
+        envs: *id001
       supporting:
       - layer: api_integration
         suite: photo_publish_upload_bind_roundtrip
@@ -84,6 +106,7 @@ gwt_acceptance:
     notes:
     - 2026-06-22 已记录图片模式展示规则、相册目录切换、视频防穿透、宫格选择、底部删除与完成回填 widget 合同；真实拖拽手势由后续真机巡检继续覆盖。
     - 2026-06-23 新增跨页面 user_acceptance：重入图片选择器不预选旧图，但确认后会把新图追加到已有图片末尾，不覆盖第一次选择。
+    - 2026-06-25 补充缩略条左对齐、悬停即时让位、图片创作标题与创作页图片网格重排 local_contract；仍未覆盖真机触控与长列表惯性拖拽。
   GWT2:
     title: 图片拍摄为高保黑色拍照确认流并统一进图片编辑页
     given:

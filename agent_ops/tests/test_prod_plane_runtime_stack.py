@@ -58,6 +58,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertIn("host.containers.internal", compose)
             self.assertIn("directConnection=true", compose)
             self.assertIn("/opt/quwoquan/gamma/state/local/gamma/media:/srv/media:ro", compose)
+            self.assertIn("./runtime/legal-static:/srv/legal:ro", compose)
             self.assertNotIn("./runtime/media", compose)
             self.assertNotIn("\n  postgres:\n", compose)
             self.assertNotIn("\n  mongodb:\n", compose)

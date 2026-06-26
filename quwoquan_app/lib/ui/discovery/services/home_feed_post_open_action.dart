@@ -5,6 +5,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, ReferralSource;
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
@@ -82,6 +83,7 @@ Future<void> openHomeFeedPost(
           : (post.isArticleLike ? 'article' : 'image'),
       source: 'home_feed',
       index: '$initialIndex',
+      sourceTheme: uiErrorAppearanceRouteValueFor(context),
     ),
     extra: MediaViewerExtra(
       posts: postViews,

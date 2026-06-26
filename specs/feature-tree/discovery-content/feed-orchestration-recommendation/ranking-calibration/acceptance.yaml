@@ -58,6 +58,7 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
+    - 2026-06-25 P1b replay report 已输出 calibration_error 并把 SLO 从 objective_only 推进到可观测入口；本 Story 的校准训练、参数生成和在线策略消费仍保持 pending。
     - '[migrated_from_planned] quwoquan_service/runtime/recommendation/ranking_calibration_test.go'
     - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_calibration_report.py'
 execution:

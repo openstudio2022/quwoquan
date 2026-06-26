@@ -20,6 +20,7 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/spacing/discovery_feed_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
@@ -572,10 +573,22 @@ void main() {
     await tester.pump();
 
     expect(find.text(UITextConstants.follow), findsOneWidget);
+    final followButton = find.byKey(
+      const ValueKey<String>('home-post-author-follow-button'),
+    );
+    expect(followButton, findsOneWidget);
+    final followWidth = tester.getSize(followButton).width;
+    expect(followWidth, AppSpacing.followButtonWidth);
+
     await tester.tap(find.text(UITextConstants.follow));
     await tester.pump();
 
     expect(find.text(UITextConstants.following), findsOneWidget);
+    final followingButton = find.byKey(
+      const ValueKey<String>('home-post-author-follow-button'),
+    );
+    expect(followingButton, findsOneWidget);
+    expect(tester.getSize(followingButton).width, followWidth);
   });
 
   testWidgets('首页 canonical mock feed 往返后保留交集 span 强调与点击目标', (tester) async {
@@ -1167,9 +1180,9 @@ void main() {
     expect(clicks.single.feedRequestId, isNotEmpty);
   });
 
-  // ── N6：交集 span 点击埋点带全归因（sourceRef + evidenceId 不再被丢） ──
+  // ── N6：交集 span 点击埋点带全归因，且保持 tag_click 推荐权重语义 ──
   testWidgets(
-    '点击交集名字 span → trackClick 透传 intersectionSourceRef + evidenceId',
+    '点击交集名字 span → trackTagClick 透传 intersectionSourceRef + evidenceId',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -1197,7 +1210,7 @@ void main() {
       await tracker.flush();
 
       final clicks = behaviorRepo.recorded
-          .where((event) => event.action == BehaviorAction.click)
+          .where((event) => event.action == BehaviorAction.tagClick)
           .toList(growable: false);
       expect(clicks, hasLength(1));
       final click = clicks.single;
@@ -1212,7 +1225,7 @@ void main() {
 }
 
 /// N6：带 GoRouter 的 feed 宿主，使交集 span 点击的 `context.push` 可达，
-/// 从而验证 onTrack → trackClick 的归因字段透传（`/user/:username` 复用
+/// 从而验证 onTrack → trackTagClick 的归因字段透传（`/user/:username` 复用
 /// resolvePath(userProfile) 的 codegen 路由）。
 Widget _routedFeed(
   PostBaseDto post, {

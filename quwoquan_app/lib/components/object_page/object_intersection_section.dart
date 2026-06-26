@@ -2,7 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
@@ -105,6 +108,32 @@ class ObjectIntersectionSection extends ConsumerWidget {
         // 涉及对象，整行对象级可达（消除「整行仅 track 不可下钻」断点 · §20.7 统一交互子契约）。
         _openReasonTarget(context, reason);
       },
+      onSpanTap: (reason, span) {
+        _reportReasonTap(ref, reason);
+        if (_openSpanTarget(context, reason, span)) {
+          return;
+        }
+        onReasonTap?.call(reason);
+      },
+      onVisualTap: (reason, visual) {
+        _reportReasonTap(ref, reason);
+        if (_openVisualTarget(context, reason, visual)) {
+          return;
+        }
+        onReasonTap?.call(reason);
+      },
+      onActionHintTap: (reason, hint) {
+        _reportReasonTap(ref, reason);
+        if (_openActionHintTarget(context, reason, hint)) {
+          return;
+        }
+        final external = onReasonTap;
+        if (external != null) {
+          external(reason);
+          return;
+        }
+        _openReasonTarget(context, reason);
+      },
     );
     return card ?? const SizedBox.shrink();
   }
@@ -115,6 +144,57 @@ class ObjectIntersectionSection extends ConsumerWidget {
     const IntersectionTargetNavigator().open(
       context,
       IntersectionTargetNavigator.targetForReason(reason),
+      sourceRef: reason.source,
+      attribution: _attributionFor(reason),
+    );
+  }
+
+  bool _openSpanTarget(
+    BuildContext context,
+    IntersectionReason reason,
+    IntersectionTextSpan span,
+  ) {
+    return const IntersectionTargetNavigator().open(
+      context,
+      span.target,
+      sourceRef: reason.source,
+      attribution: _attributionFor(reason),
+    );
+  }
+
+  bool _openVisualTarget(
+    BuildContext context,
+    IntersectionReason reason,
+    IntersectionVisual visual,
+  ) {
+    return const IntersectionTargetNavigator().open(
+      context,
+      visual.target,
+      sourceRef: reason.source,
+      attribution: _attributionFor(reason),
+    );
+  }
+
+  bool _openActionHintTarget(
+    BuildContext context,
+    IntersectionReason reason,
+    IntersectionActionHint hint,
+  ) {
+    return const IntersectionTargetNavigator().open(
+      context,
+      hint.target,
+      sourceRef: reason.source,
+      attribution: _attributionFor(reason),
+    );
+  }
+
+  IntersectionNavAttribution _attributionFor(IntersectionReason reason) {
+    return IntersectionNavAttribution(
+      intersectionId: reason.intersectionId,
+      dimension: reason.dimension,
+      intersectionClass: reason.intersectionClass,
+      sourceRef: reason.source,
+      tagRefs: reason.tagRefs,
     );
   }
 
@@ -137,5 +217,4 @@ class ObjectIntersectionSection extends ConsumerWidget {
           intersectionClass: reason.intersectionClass,
         );
   }
-
 }

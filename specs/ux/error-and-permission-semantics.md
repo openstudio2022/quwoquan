@@ -106,6 +106,8 @@ networkUnavailable      # 暂时无法加载，请检查网络后重试
 | `sourceCode` | 原始 error code（便于诊断与埋点） |
 | `failureKind` | 原始 `RuntimeFailureKind` |
 | `recoveryAction` | 归一化后的恢复动作，来源于 metadata / runtime recovery / 本地权限状态 |
+| `appearanceMode` | `inherit / light / dark`，错误页使用的局部外观模式；默认 `inherit` |
+| `sourceRouteId` / `sourceSurfaceId` | 可选来源路由/表面诊断信息，用于证明错误页保持来源上下文，不参与错误码事实 |
 
 统一规则：
 
@@ -113,6 +115,15 @@ networkUnavailable      # 暂时无法加载，请检查网络后重试
 - **服务端 `userMessage` 次之**：若 `RuntimeErrorResponse.userMessage` 存在，允许作为首选 message。
 - **runtime kind 回退**：domain code 与 `userMessage` 都不可用时，再退到 `RuntimeFailureKind`。
 - **场景覆盖**：同一错误在不同 `category + scope` 下可以映射为不同标题、按钮与载体。
+
+#### 1.7.1 来源外观模式（sourceAppearanceMode）
+
+内容消费、沉浸媒体、外链直达等页面可能在成功态强制深色，但失败态仍应回到用户进入该页时的来源外观。错误页语义因此增加 `sourceAppearanceMode` 约束：
+
+- 来源页面进入目标页时，若已经解析为浅色/深色，应通过路由或页面参数传递 `light` / `dark`；不保存 `system`，外部深链缺省时按当前全局主题继承。
+- `AppPageErrorState` 按 `UiErrorSemantic.appearanceMode` 包局部 `CupertinoTheme`，并使用同一背景、文字、按钮 token 渲染。
+- 成功进入沉浸式 viewer、相机、编辑器等专用场景时，页面可继续使用自身强制外观；但首屏拉取失败、内容不存在、权限失败等错误页必须保持来源外观。
+- `appearanceMode` 不改变 `RuntimeFailure`、`CloudException`、后端错误码或恢复动作；它只是 UI 展示约束，避免异常页继承错误的沉浸式深色上下文。
 
 ### 1.8 页面首屏 / 局部区块 / 列表追加语义契约
 

@@ -107,6 +107,7 @@ esac
 if [[ "${LOCAL_GAMMA_SKIP_FIXTURE_SEEDS:-0}" == "1" ]]; then
   ENABLE_FIXTURE_SEEDS=0
 fi
+LOCAL_GAMMA_LEGAL_STATIC_ROOT="${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-$ROOT/artifacts/legal-static-packages/${CONFIG_SOURCE_ENV}/current/public}"
 LOCAL_GAMMA_READY_INDEX_STREAM="${LOCAL_GAMMA_READY_INDEX_STREAM:-reliabletask:chat:avatar:ready:${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_GROUP="${LOCAL_GAMMA_READY_INDEX_GROUP:-chat.group_avatar_worker.${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_QUEUE="${LOCAL_GAMMA_READY_INDEX_QUEUE:-reliabletask.chat.avatar}"
@@ -124,6 +125,7 @@ export \
   LOCAL_GAMMA_READY_INDEX_QUEUE \
   LOCAL_GAMMA_CADDY_DATA_ROOT \
   LOCAL_GAMMA_CADDY_CONFIG_ROOT \
+  LOCAL_GAMMA_LEGAL_STATIC_ROOT \
   PREVIOUS_IMAGE_VERSION
 
 library_image() {
@@ -419,7 +421,8 @@ start_colima_tunnels_if_needed() {
     "${LOCAL_GAMMA_STATE_ROOT}" \
     "${LOCAL_GAMMA_MODEL_CACHE_ROOT}" \
     "${LOCAL_GAMMA_CADDY_DATA_ROOT}" \
-    "${LOCAL_GAMMA_CADDY_CONFIG_ROOT}"
+    "${LOCAL_GAMMA_CADDY_CONFIG_ROOT}" \
+    "${LOCAL_GAMMA_LEGAL_STATIC_ROOT}"
   stop_colima_tunnels
   colima ssh-config > "$ssh_config"
   : > "$tunnel_pid_file"
@@ -869,6 +872,18 @@ else:
             "\t}",
         ]
     )
+legal_static_block = "\n".join(
+    [
+        "\thandle /legal/* {",
+        "\t\theader {",
+        '\t\t\tCache-Control "public, max-age=300"',
+        '\t\t\tX-Content-Type-Options "nosniff"',
+        "\t\t}",
+        "\t\troot * /srv/legal",
+        "\t\tfile_server",
+        "\t}",
+    ]
+)
 
 content = f"""{{ 
 \tadmin 0.0.0.0:2019
@@ -938,6 +953,7 @@ gamma-api.localhost {{
 \thandle /v1/ops/* {{
 \t\treverse_proxy product-ops-service:18086
 \t}}
+{legal_static_block}
 {media_api_block}
 \thandle {{
 \t\trespond "local-gamma mirror route is not ready for this path" 404
@@ -1002,6 +1018,7 @@ gamma-product-ops.localhost {{
 \thandle /v1/ops/* {{
 \t\treverse_proxy product-ops-service:18086
 \t}}
+{legal_static_block}
 {media_pub_block}
 \thandle {{
 \t\trespond "local-gamma mirror route is not ready for this path" 404
@@ -1179,7 +1196,7 @@ fi
 
 prepare_config_root
 prepare_media_root
-mkdir -p "${LOCAL_GAMMA_MODEL_CACHE_ROOT}" "${LOCAL_GAMMA_ARTIFACT_ROOT}"
+mkdir -p "${LOCAL_GAMMA_MODEL_CACHE_ROOT}" "${LOCAL_GAMMA_ARTIFACT_ROOT}" "${LOCAL_GAMMA_LEGAL_STATIC_ROOT}"
 start_media_origin
 prepare_caddyfile
 
@@ -1540,6 +1557,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e LOCAL_GAMMA_TLS_MODE="${LOCAL_GAMMA_TLS_MODE:-internal}" \
     -v "${LOCAL_GAMMA_CADDYFILE}:/etc/caddy/Caddyfile:ro" \
     -v "${LOCAL_GAMMA_MEDIA_ROOT}:/srv/media:ro" \
+    -v "${LOCAL_GAMMA_LEGAL_STATIC_ROOT}:/srv/legal:ro" \
     -v "${LOCAL_GAMMA_CADDY_DATA_ROOT}:/data" \
     -v "${LOCAL_GAMMA_CADDY_CONFIG_ROOT}:/config" \
     -p "${LOCAL_GAMMA_HTTP_PORT:-19000}:443" \

@@ -123,6 +123,26 @@ journeys:
       - UAT_EXTERNAL_ACQUISITION
     status: draft
 
+  - id: intersection-action-to-companionship
+    title: 交集行动深化到结伴同行
+    user_goal: 用户从内容、实体与位置发现"同趣"的人和场，沿"围观→轻触→对话→同趣→同行→线下→实时"行动阶梯逐级深化，完成结伴同行、线下相聚与实时连接，并安全沉淀为可管理的关系（趣友/密友/联系人标签）。
+    scenario_refs:
+      - intersection-action-deepening-on-object
+      - companionship-and-nearby-connection
+      - contact-label-driven-connection
+    domain_services:
+      - object-homepage-network
+      - circle-community
+      - user-identity-profile-relationship
+      - recommendation-platform
+      - chat-conversation
+    uat_refs:
+      - UAT_INTERSECTION_ACTION_TO_COMPANIONSHIP
+    boundary_notes:
+      - 归属决策（复用扩展，不新建独立后端服务进程）：交集行动深化挂 object-homepage-network/intersection-unified-experience；附近同趣/结伴同行/线下局挂 circle-community 新 L2 companionship-and-nearby-connection；派生称谓与联系人标签挂 user-identity-profile-relationship/persona-follow-graph。
+      - UAT_INTERSECTION_ACTION_TO_COMPANIONSHIP 与下列 scenario 的新增 capability/story 为规划草案，待 design/acceptance 落地后回填双向绑定；当前 status:draft 仅登记归属与旅程范围。
+    status: draft
+
 scenarios:
   - id: global-route-edge-pop-contract
     title: 全局无底栏页面边缘返回
@@ -449,4 +469,66 @@ scenarios:
       - specs/feature-tree/acceptance.yaml#UAT_EXTERNAL_ACQUISITION
     boundary_notes:
       - 公开 HTML/SEO/中转页/安装转化归 public-content-web-entry；内容正文真相源仍归 discovery-content。
+    status: draft
+
+  - id: intersection-action-deepening-on-object
+    title: 对象页交集行动深化（同趣围观到破冰升级）
+    parent_journey: intersection-action-to-companionship
+    domain_services:
+      - object-homepage-network
+      - recommendation-platform
+      - chat-conversation
+    business_capabilities:
+      - object-homepage-network/intersection-unified-experience
+    stories:
+      - object-homepage-network/intersection-unified-experience/intersection-algorithm-closure
+      - object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign
+      - object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign
+    acceptance_refs:
+      - specs/feature-tree/object-homepage-network/intersection-unified-experience/acceptance.yaml
+    boundary_notes:
+      - 交集 kind/actionKey/objectKind 闭集真相源在 intersection_kind_registry.yaml；对象页行动区只读分发新增 actionHints，不维护第二套行动表。
+      - 行动阶梯 L3-L6（同趣/同行/线下/实时）新增 actionKey 已登记 metadata；无稳定数据源的 kind 先 status:deferred，不产出。
+    status: draft
+
+  - id: companionship-and-nearby-connection
+    title: 附近同趣·结伴同行·线下局
+    parent_journey: intersection-action-to-companionship
+    domain_services:
+      - circle-community
+      - recommendation-platform
+      - user-identity-profile-relationship
+      - chat-conversation
+    business_capabilities:
+      - circle-community/activity-member-governance
+      - circle-community/circle-collaboration-tools
+    stories:
+      - circle-community/activity-member-governance/circle-lifecycle
+      - circle-community/activity-member-governance/member-role-permission
+      - circle-community/activity-member-governance/activity-stream-paging
+    acceptance_refs:
+      - specs/feature-tree/circle-community/activity-member-governance/acceptance.yaml
+    boundary_notes:
+      - 规划新增 L2 circle-community/companionship-and-nearby-connection（含 nearby-affinity-discovery / companion-trip-formation / offline-meetup-gathering 三 L3）；落地前复用 activity-member-governance 的成员/活动/生命周期基座，不新建独立后端服务进程。
+      - trip/meetup 作为 circle 域 social 扩展对象；附近同趣复用 recommendation 交集 + integration/location 模糊位置 + 双向同意，不引入新关系等级。
+    status: draft
+
+  - id: contact-label-driven-connection
+    title: 派生称谓与联系人标签驱动连接
+    parent_journey: intersection-action-to-companionship
+    domain_services:
+      - user-identity-profile-relationship
+      - chat-conversation
+      - recommendation-platform
+    business_capabilities:
+      - user-identity-profile-relationship/persona-follow-graph
+    stories:
+      - user-identity-profile-relationship/persona-follow-graph/follow-relationship
+      - user-identity-profile-relationship/persona-follow-graph/social-graph-read
+      - user-identity-profile-relationship/persona-follow-graph/persona-management
+    acceptance_refs:
+      - specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
+    boundary_notes:
+      - 关系四层模型：L1 事实边（关注/拉黑/通讯录）+ L2 门禁（只由关注/互关/拉黑派生，严守 contact-and-session-governance §7，无双轨）+ L3 系统派生称谓（趣友/密友，只读不门禁）+ L4 用户私有标签（预定义系统标签集+自定义，不自动建议、对方不可见、不解锁权限）。
+      - 规划新增 L3 derived-title-and-contact-label（挂 persona-follow-graph）；联系人标签管理入口在消息→联系人 tab 标签分组视图；与系统兴趣 tagRef 不同对象。
     status: draft

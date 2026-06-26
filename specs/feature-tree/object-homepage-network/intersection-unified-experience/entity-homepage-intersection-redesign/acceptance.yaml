@@ -13,6 +13,7 @@ scope:
   - 关于这里卡标题「关于这里」，2~4 行 + 缩略图 + 查看更多介绍。
   - 一级 tab 改记录/讨论/相关圈子；记录流单列改双列瀑布 + PostBaseDto 流 + 卡内交集句。
   - 二级过滤新建（右侧漏斗 + ActionSheet，非胶囊），过滤项进 homepage_sub_tabs。
+  - 相关圈子卡片化并进入圈子主页；公开路径移除内部运维字段。
   - 头部头像簇 + N 关注单计数 + verified + 成立年份（契约预留 + alpha mock）。
   - 用户语言禁词清理（实体/Entity/兴趣圈/影响力/同趣事实化）。
   out_of_scope:
@@ -58,8 +59,9 @@ gwt_acceptance:
     - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（交集卡走
       ObjectIntersectionSection/objectBType=homepage，标题「为什么推荐这里」单结论句，无交集三态降级，2026-06-16
       green）'
-    - '[migrated_from_recorded] PENDING api_integration：gamma /v1/content/intersections/object（homepage）真实链路待
-      WP-D。'
+    - '[recorded] PENDING api_integration 2026-06-25：gamma-local 静态拓扑已包含 entity-service
+      与 circle-service，但 stackctl api_integration 仍因 gateway health SSL EOF 未进入 populated homepage
+      object intersection 探针；由 `object-homepage-gamma-real-data-closure` 继续收口。'
   GWT2:
     title: 关于这里卡 GWT
     given:
@@ -132,6 +134,8 @@ gwt_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
         envs: *id001
     notes:
+    - '[recorded] local_contract 2026-06-25：`flutter test test/ui/entity/pages/homepage_detail_page_widget_test.dart`
+      6/6 green；记录/讨论/相关圈子 Tab、相关圈子「打开圈子」卡、内部字段不外露断言已覆盖。'
     - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（一级
       tab 记录/讨论/相关圈子、记录流双列瀑布、二级过滤右侧非胶囊、每卡至多一条交集句，2026-06-16 green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma entity 记录流真实 PostBaseDto
@@ -174,6 +178,47 @@ gwt_acceptance:
       +「N 关注」单计数 + 认证标识 + 成立年份，verified/年份缺省优雅降级，2026-06-16 green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma entity homepage fields
       关注计数/认证/年份真实链路待 WP-D。'
+  GWT5:
+    title: 相关圈子卡片与公开信息去内部化 GWT
+    given:
+    - alpha mock homepage fixtures 或 object page bundle 含 relatedObjects。
+    when:
+    - 查看实体主页「相关圈子」Tab 与 fallback overview。
+    then:
+    - 相关圈子展示为可点击卡片，包含圈名、成员数、一句关联说明与「打开圈子」动作，点击进入圈子主页。
+    - 公开路径不展示「统一对象键/对象页模板/来源/认领状态/灰度 cohort/主页管理」等内部字段。
+    done_when:
+    - owner/认领/上报动作仅从右上角更多菜单触达。
+    edge_cases:
+    - relatedObjects 为空时展示可恢复空态；无封面字段时使用语义图标兜底，不伪造封面。
+    contract_refs:
+    - entity/homepage/projections/homepage_related_group_summary.yaml
+    performance_points: []
+    tests:
+      planned:
+      - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt5_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.gwt5_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
+        envs: *id001
+    notes:
+    - '[recorded] local_contract 2026-06-25：`flutter test test/ui/entity/pages/homepage_detail_page_widget_test.dart`
+      6/6 green；断言相关圈子「打开圈子」卡片渲染，并断言统一对象键/对象页模板/灰度 cohort/主页管理不外露。'
+    - '[recorded] PENDING api_integration 2026-06-25：相关圈子与跳转链路不再缺静态 compose/route，
+      剩余阻断是 gamma-local health、seed viewer 关系、`/v1/homepages/{id}/related-groups`
+      与 circle detail populated 探针；由 `object-homepage-gamma-real-data-closure` 与 R-IX05
+      继续追踪。'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

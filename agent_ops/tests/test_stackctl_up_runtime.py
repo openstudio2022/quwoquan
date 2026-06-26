@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from agent_ops.deploy import legal_static
 from agent_ops.deploy import stackctl
 from agent_ops.deploy.probes import run_environment_integration_probe as integration_probe
 from quwoquan_app.scripts.gamma import run_local_gamma_t3 as local_gamma_t3
@@ -16,6 +17,15 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         parser = stackctl.build_parser()
         cases = [
             ["package", "--env", "alpha", "--report-dir", "artifacts/stackctl/alpha/package"],
+            [
+                "package",
+                "--env",
+                "alpha",
+                "--kind",
+                "legal-static",
+                "--report-dir",
+                "artifacts/stackctl/alpha/legal-package",
+            ],
             [
                 "verify",
                 "--env",
@@ -28,6 +38,15 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "t1",
                 "--report-dir",
                 "artifacts/stackctl/alpha/verify",
+            ],
+            [
+                "verify",
+                "--env",
+                "alpha",
+                "--kind",
+                "legal-static",
+                "--report-dir",
+                "artifacts/stackctl/alpha/legal-verify",
             ],
             ["up", "--target", "alpha-local", "--report-dir", "artifacts/stackctl/alpha/up"],
             [
@@ -63,6 +82,23 @@ class StackctlUpRuntimeTest(unittest.TestCase):
 
     def test_format_stage_header(self) -> None:
         self.assertEqual(stackctl._format_stage_header(2, 3, "app-launch"), "[step 2/3] app-launch")
+
+    def test_legal_static_package_builds_current_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_root = Path(tmp_dir)
+            payload = legal_static.build_package("alpha", output_root=output_root)
+            self.assertEqual(payload["status"], "ok")
+            package_dir = output_root / "alpha" / "2026-06"
+            self.assertTrue((package_dir / "public/legal/user-agreement").is_file())
+            self.assertTrue((package_dir / "checksums.json").is_file())
+            self.assertTrue((output_root / "alpha" / "current").exists())
+
+            verified = legal_static.verify_package("alpha", output_root=output_root)
+            self.assertEqual(verified["status"], "ok")
+
+    def test_legal_static_prod_requires_final_legal_identity(self) -> None:
+        _, issues = legal_static.validate_manifest("prod")
+        self.assertTrue(any("placeholder" in issue for issue in issues))
 
     def test_is_interactive_terminal_false_when_stdout_not_tty(self) -> None:
         with (

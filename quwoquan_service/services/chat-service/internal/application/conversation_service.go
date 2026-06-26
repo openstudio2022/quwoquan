@@ -354,10 +354,10 @@ func (s *ConversationService) validateGroupInitialMembers(ctx context.Context, c
 			return err
 		}
 		if capability.IsBlocked || capability.IsBlockedBy {
-			return chatBlocked("group conversation member blocked by relationship gate")
+			return chatGroupMemberBlocked("group conversation member blocked by relationship gate")
 		}
 		if !capability.IsMutual {
-			return chatNotMutual("group conversation requires mutual follow with each invited member")
+			return chatGroupMemberNotMutual("group conversation requires mutual follow with each invited member")
 		}
 	}
 	return nil

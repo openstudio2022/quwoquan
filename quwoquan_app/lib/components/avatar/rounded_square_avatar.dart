@@ -44,7 +44,7 @@ class RoundedSquareAvatar extends StatelessWidget {
               height: size,
               fit: BoxFit.cover,
               cdnPreset: CdnImagePreset.avatar,
-              placeholder: _buildLoadingPlaceholder(radius, isDark),
+              placeholder: _buildFallback(radius, isDark),
               errorWidget: _buildFallback(radius, isDark),
             )
           : _buildFallback(radius, isDark),
@@ -55,19 +55,6 @@ class RoundedSquareAvatar extends StatelessWidget {
     }
 
     return avatar;
-  }
-
-  Widget _buildLoadingPlaceholder(double radius, bool isDark) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color:
-            backgroundColor ??
-            AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
-        borderRadius: BorderRadius.circular(radius),
-      ),
-    );
   }
 
   Widget _buildFallback(double radius, bool isDark) {

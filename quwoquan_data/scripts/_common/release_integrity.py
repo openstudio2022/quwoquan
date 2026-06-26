@@ -19,8 +19,11 @@ REPORT_SCHEMA = "quwoquan_data.release_integrity"
 BASE_DRAFT_LEDGER_SCHEMA = "quwoquan_data.base_draft_ledger"
 MIN_ARTICLE_BASE_DRAFT_CHARS = 600
 
+# 文章硬门分两类：
+# 1) COMMON——entity 文章与 route 文章两种 review builder 都会产出的检查，逐一必须 present+passed。
+# 2) 载体可变对——entity 用 entityCoverage/sectionShape，route 用 routeCoverage/narrativeContinuity；
+#    每对至少有一个 present+passed（修复历史错配：旧集合只列 entity 名，route 文章在 release 误报缺失）。
 ARTICLE_HARD_CHECKS = {
-    "entityCoverage",
     "provenanceRewrite",
     "evidenceQuality",
     "carrierConsistency",
@@ -28,15 +31,18 @@ ARTICLE_HARD_CHECKS = {
     "imageGate",
     "travelogueDensity",
     "crossArticleSimilarity",
-    "sectionShape",
     "generatorProvenance",
     "factTraceability",
     "baseDraftFidelity",
+    "sectionBalance",
+    "timelineOrder",
     "writingIntentConsistency",
     "registerMismatch",
     "contactInfo",
     "mechanicalHeading",
 }
+ARTICLE_COVERAGE_HARD_CHECKS = ("entityCoverage", "routeCoverage")
+ARTICLE_STRUCTURE_HARD_CHECKS = ("sectionShape", "narrativeContinuity")
 ENTITY_SOURCE_KINDS = (
     "百科",
     "encyclopedia",
@@ -180,6 +186,16 @@ def _review_gate_issues(post_rel: str, runtime_post: Path) -> list[str]:
         elif check.get("passed") is not True:
             detail = check.get("issues") or check.get("reason") or ""
             issues.append(f"{post_rel}: hard review check failed: {name} {detail}")
+    for pair in (ARTICLE_COVERAGE_HARD_CHECKS, ARTICLE_STRUCTURE_HARD_CHECKS):
+        present = [name for name in pair if isinstance(checks.get(name), Mapping)]
+        if not present:
+            issues.append(f"{post_rel}: hard review check missing: one of {'/'.join(pair)}")
+            continue
+        if not any(checks[name].get("passed") is True for name in present):
+            detail = checks[present[0]].get("issues") or checks[present[0]].get("reason") or ""
+            issues.append(
+                f"{post_rel}: hard review check failed: {'/'.join(present)} {detail}"
+            )
     return issues
 
 
@@ -341,13 +357,15 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
         issues.append(f"{release_id}: source runtime batch not found: {task_id} / {batch_id}")
 
     ledger: Mapping[str, Any] = {}
+    ledger_loaded = False
     if runtime_batch and runtime_batch.is_dir():
         ledger_path = runtime_batch / "_shared" / "base_draft_ledger.json"
         ledger = _json(ledger_path)
+        ledger_loaded = True
         schema = str(ledger.get("schemaVersion") or "")
-        if not ledger:
-            issues.append(f"{release_id}: missing _shared/base_draft_ledger.json")
-        elif schema != BASE_DRAFT_LEDGER_SCHEMA:
+        # 账本存在性判定延后到统计 articleCount 之后：image/video 作品不认领底稿，
+        # 纯图片/视频 release 合法缺账本，不应阻断（schema 异常仍立即报）。
+        if ledger and schema != BASE_DRAFT_LEDGER_SCHEMA:
             issues.append(
                 f"{release_id}: base_draft_ledger schemaVersion must be "
                 f"{BASE_DRAFT_LEDGER_SCHEMA}, got {schema or '<empty>'}"
@@ -422,6 +440,10 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
                     )
                 )
 
+    # 仅当 release 含认领底稿的文章/主页成品时才要求账本存在；纯图片/视频 release 合法缺账本。
+    if ledger_loaded and stats["articleCount"] > 0 and not ledger:
+        issues.append(f"{release_id}: missing _shared/base_draft_ledger.json")
+
     return {
         "schemaVersion": REPORT_SCHEMA,
         "releaseId": release_id,
@@ -471,9 +493,9 @@ def scan_runtime_batch_integrity(
     ledger_path = root / "_shared" / "base_draft_ledger.json"
     ledger = _json(ledger_path)
     schema = str(ledger.get("schemaVersion") or "")
-    if not ledger:
-        issues.append(f"{label}: missing _shared/base_draft_ledger.json")
-    elif schema != BASE_DRAFT_LEDGER_SCHEMA:
+    # 账本是否存在的判定延后到统计完成后：base_draft_ledger 只对认领底稿的文章/主页成品
+    # 必需；image/video 作品按设计不认领底稿，纯图片/视频 release 合法缺账本，不应阻断。
+    if ledger and schema != BASE_DRAFT_LEDGER_SCHEMA:
         issues.append(
             f"{label}: base_draft_ledger schemaVersion must be "
             f"{BASE_DRAFT_LEDGER_SCHEMA}, got {schema or '<empty>'}"
@@ -558,6 +580,11 @@ def scan_runtime_batch_integrity(
                         runtime_post=root / post_rel,
                     )
                 )
+
+    # 仅当存在认领底稿的文章/主页成品时才要求账本存在；纯图片/视频 release 合法缺账本，
+    # 对齐"诚实弃稿/允许配额不足"的优雅降级：实体只产出图片作品时不得因缺账本硬失败。
+    if stats["articleCount"] > 0 and not ledger:
+        issues.append(f"{label}: missing _shared/base_draft_ledger.json")
 
     return {
         "schemaVersion": REPORT_SCHEMA,

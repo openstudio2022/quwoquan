@@ -98,7 +98,7 @@ class SettingsPage extends ConsumerWidget {
                   icon: CupertinoIcons.moon,
                   label: UITextConstants.settingsDarkMode,
                   trailingText: _darkModeSummary(snapshot, appearanceState),
-                  onTap: () => _showDarkModeSheet(context, ref, snapshot),
+                  onTap: () => context.push(AppRoutePaths.settingsDarkMode),
                 ),
               ),
               _sectionGap(),
@@ -125,9 +125,8 @@ class SettingsPage extends ConsumerWidget {
                 child: Column(
                   children: <Widget>[
                     if (authSession.isAuthenticated) ...<Widget>[
-                      _SettingsActionRow(
+                      _SettingsCenteredActionRow(
                         isDark: isDark,
-                        icon: CupertinoIcons.person_crop_circle_badge_plus,
                         label: UITextConstants.switchAccount,
                         onTap: () => _handleLogout(
                           context,
@@ -137,17 +136,15 @@ class SettingsPage extends ConsumerWidget {
                         ),
                       ),
                       SettingsInsetFormSectionDivider(isDark: isDark),
-                      _SettingsActionRow(
+                      _SettingsCenteredActionRow(
                         isDark: isDark,
-                        icon: CupertinoIcons.square_arrow_right,
                         label: UITextConstants.logout,
                         isDestructive: true,
                         onTap: () => _confirmLogout(context, ref),
                       ),
                     ] else
-                      _SettingsActionRow(
+                      _SettingsCenteredActionRow(
                         isDark: isDark,
-                        icon: CupertinoIcons.person_crop_circle_badge_checkmark,
                         label: UITextConstants.profileLoginNow,
                         onTap: () => openLoginPage(
                           context,
@@ -204,42 +201,6 @@ class SettingsPage extends ConsumerWidget {
             ),
           ),
     );
-  }
-
-  static Future<void> _showDarkModeSheet(
-    BuildContext context,
-    WidgetRef ref,
-    AppearanceSettingsSnapshot snapshot,
-  ) async {
-    final selected = await showCupertinoModalPopup<AppearanceThemeMode>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text(UITextConstants.settingsDarkMode),
-        actions: AppearanceThemeMode.values
-            .map(
-              (mode) => CupertinoActionSheetAction(
-                isDefaultAction: snapshot.themeMode == mode,
-                onPressed: () => Navigator.of(ctx).pop(mode),
-                child: Text(settingsDarkModeLabel(mode)),
-              ),
-            )
-            .toList(),
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text(UITextConstants.logoutCancel),
-        ),
-      ),
-    );
-    if (selected == null || selected == snapshot.themeMode) {
-      return;
-    }
-    await ref
-        .read(appearanceSettingsControllerProvider.notifier)
-        .updateSettings(
-          themeMode: selected,
-          fontSizePreset: snapshot.fontSizePreset,
-          applyScope: AppearanceApplyScope.allAccounts,
-        );
   }
 
   static Future<void> _confirmLogout(
@@ -337,7 +298,6 @@ class _SettingsActionRow extends StatelessWidget {
     required this.label,
     this.trailingText,
     this.onTap,
-    this.isDestructive = false,
   });
 
   final bool isDark;
@@ -345,6 +305,83 @@ class _SettingsActionRow extends StatelessWidget {
   final String label;
   final String? trailingText;
   final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelColor = SettingsSemanticConstants.labelColor(isDark);
+    final secondaryColor = SettingsSemanticConstants.secondaryColor(isDark);
+    final trailing = trailingText;
+
+    return SizedBox(
+      width: double.infinity,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: AppSpacing.minInteractiveSize,
+            ),
+            child: Row(
+              children: <Widget>[
+                Icon(icon, size: AppSpacing.iconMedium, color: secondaryColor),
+                SizedBox(width: AppSpacing.containerSm),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosSubheadline,
+                      fontWeight: AppTypography.regular,
+                      color: labelColor,
+                    ),
+                  ),
+                ),
+                if (trailing != null && trailing.trim().isNotEmpty) ...<Widget>[
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  Flexible(
+                    child: Text(
+                      trailing,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosSubheadline,
+                        color: secondaryColor,
+                      ),
+                    ),
+                  ),
+                ],
+                if (onTap != null) ...<Widget>[
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  Icon(
+                    CupertinoIcons.chevron_forward,
+                    size: AppSpacing.iconSmall,
+                    color: secondaryColor,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsCenteredActionRow extends StatelessWidget {
+  const _SettingsCenteredActionRow({
+    required this.isDark,
+    required this.label,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  final bool isDark;
+  final String label;
+  final VoidCallback onTap;
   final bool isDestructive;
 
   @override
@@ -352,58 +389,30 @@ class _SettingsActionRow extends StatelessWidget {
     final labelColor = isDestructive
         ? AppColors.iosDestructive(context)
         : SettingsSemanticConstants.labelColor(isDark);
-    final secondaryColor = SettingsSemanticConstants.secondaryColor(isDark);
-    final trailing = trailingText;
-
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: AppSpacing.minInteractiveSize,
-          ),
-          child: Row(
-            children: <Widget>[
-              Icon(icon, size: AppSpacing.iconMedium, color: secondaryColor),
-              SizedBox(width: AppSpacing.containerSm),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    fontWeight: AppTypography.regular,
-                    color: labelColor,
-                  ),
+    return SizedBox(
+      width: double.infinity,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: AppSpacing.minInteractiveSize,
+            ),
+            child: Center(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.regular,
+                  color: labelColor,
                 ),
               ),
-              if (trailing != null && trailing.trim().isNotEmpty) ...<Widget>[
-                SizedBox(width: AppSpacing.intraGroupSm),
-                Flexible(
-                  child: Text(
-                    trailing,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosSubheadline,
-                      color: secondaryColor,
-                    ),
-                  ),
-                ),
-              ],
-              if (onTap != null) ...<Widget>[
-                SizedBox(width: AppSpacing.intraGroupSm),
-                Icon(
-                  CupertinoIcons.chevron_forward,
-                  size: AppSpacing.iconSmall,
-                  color: secondaryColor,
-                ),
-              ],
-            ],
+            ),
           ),
         ),
       ),

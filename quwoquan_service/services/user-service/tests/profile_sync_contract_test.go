@@ -16,7 +16,7 @@ func TestUpdateProfile_AvatarVersionAndSyncPatch(t *testing.T) {
 		t,
 		http.MethodPatch,
 		"/v1/user/profile",
-		`{"avatarUrl":"https://cdn.example.com/u1.png?v=2"}`,
+		`{"avatarAssetId":"ua_user_avatar_sync","avatarUrl":"https://cdn.example.com/u1.png?v=2"}`,
 		authHeaders("user_avatar_sync"),
 	)
 	if rec.Code != http.StatusOK {
@@ -74,7 +74,7 @@ func TestUpdateProfile_PublishesUserAvatarUpdatedEvent(t *testing.T) {
 		t,
 		http.MethodPatch,
 		"/v1/user/profile",
-		`{"avatarUrl":"https://cdn.example.com/u2.png?v=3"}`,
+		`{"avatarAssetId":"ua_user_avatar_event","avatarUrl":"https://cdn.example.com/u2.png?v=3"}`,
 		authHeaders("user_avatar_event"),
 	)
 	if rec.Code != http.StatusOK {

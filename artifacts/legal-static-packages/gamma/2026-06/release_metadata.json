@@ -1,0 +1,25 @@
+{
+  "artifactRoot": "artifacts/legal-static-packages",
+  "currentVersion": "2026-06",
+  "env": "gamma",
+  "generatedAt": "2026-06-25T20:26:56.254624Z",
+  "legalBaseUrl": "https://gamma-api.quwoquan-env.test:19000/legal",
+  "packageDir": "artifacts/legal-static-packages/gamma/2026-06",
+  "packageKind": "legal-static",
+  "prodCanonicalBaseUrl": "https://quwoquan.com/legal",
+  "prodRequiresGammaProbe": true,
+  "schemaVersion": "legal-static-release/v1",
+  "stableUrls": {
+    "permissions": "https://gamma-api.quwoquan-env.test:19000/legal/permissions",
+    "privacy-policy": "https://gamma-api.quwoquan-env.test:19000/legal/privacy-policy",
+    "third-party-sdk-list": "https://gamma-api.quwoquan-env.test:19000/legal/third-party-sdk-list",
+    "user-agreement": "https://gamma-api.quwoquan-env.test:19000/legal/user-agreement"
+  },
+  "version": "2026-06",
+  "versionedUrls": {
+    "permissions": "https://gamma-api.quwoquan-env.test:19000/legal/2026-06/permissions",
+    "privacy-policy": "https://gamma-api.quwoquan-env.test:19000/legal/2026-06/privacy-policy",
+    "third-party-sdk-list": "https://gamma-api.quwoquan-env.test:19000/legal/2026-06/third-party-sdk-list",
+    "user-agreement": "https://gamma-api.quwoquan-env.test:19000/legal/2026-06/user-agreement"
+  }
+}
