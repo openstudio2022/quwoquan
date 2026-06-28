@@ -15,6 +15,14 @@ routes:
     path: /
   - id: circles
     path: /circles
+  - id: plaza
+    path: /plaza
+  - id: plazaNearby
+    path: /plaza/nearby
+  - id: plazaCompanion
+    path: /plaza/companion
+  - id: plazaMeetup
+    path: /plaza/meetup
   - id: chat
     path: /chat
   - id: startGroupChat

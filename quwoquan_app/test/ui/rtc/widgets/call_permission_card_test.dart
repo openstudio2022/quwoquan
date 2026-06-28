@@ -16,7 +16,7 @@ void main() {
       );
       expect(semantic.category, UiErrorCategory.permissionRequired);
       expect(semantic.scope, UiErrorScope.dialog);
-      expect(semantic.presentation, UiErrorPresentation.actionDialog);
+      expect(semantic.presentation, UiErrorPresentation.gateCard);
       expect(semantic.tone, UiErrorTone.info);
       expect(semantic.title, UITextConstants.callPermissionMicTitle);
       expect(
@@ -33,7 +33,7 @@ void main() {
       expect(semantic.title, UITextConstants.callPermissionCameraTitle);
       expect(
         semantic.primaryAction?.label,
-        UITextConstants.callPermissionOpenSettings,
+        UITextConstants.openSettings,
       );
     });
   });

@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "quwoquan_data.scale_commercial_summary/1",
+  "planId": "cs100verify_20260626",
+  "batchId": "fresh_cs100verify_20260626",
+  "generatedAt": "2026-06-26T16:50:00+00:00",
+  "decision": "no_go",
+  "phase": "produce_author",
+  "progress": {
+    "agentJobsFinishedApprox": 20,
+    "agentJobsTotal": 49,
+    "remainingThisWave": 31,
+    "workflowComplete": false,
+    "commercialReadinessRun": false
+  },
+  "operationalBlockers": [
+    {
+      "id": "pipeline_incomplete",
+      "title": "fresh_cs100verify workflow not WORKFLOW COMPLETE",
+      "impact": "produce_author→annotate→review→publish still running; commercial scale-readiness blocked"
+    },
+    {
+      "id": "supervisor_stalls",
+      "title": "author supervisor interrupted by SIGTERM / macOS tooling gaps",
+      "impact": "fixed pgrep pattern, controllerYield cleanup, pid lock (no flock/setsid); must launch via user Terminal: agent_ops/runners/start_cs100_supervisors.sh"
+    }
+  ],
+  "commercialBlockers": [
+    {
+      "id": "R-CS02",
+      "title": "queueBackend=reliabletask not deployed",
+      "impact": "commercial scale-readiness may flag reliabletask for dailyTarget>=10000 projection"
+    },
+    {
+      "id": "throughput",
+      "title": "measured throughput evidence missing",
+      "impact": "cannot project daily capacity until cs100 batch completes with timing evidence"
+    },
+    {
+      "id": "import",
+      "title": "staging/gamma import evidence missing",
+      "impact": "ship/import closure not demonstrated"
+    },
+    {
+      "id": "token_ledger",
+      "title": "TokenLedger / firstPassRate at scale-100 not measured",
+      "impact": "unit cost and first-pass rate pending full batch"
+    }
+  ],
+  "resumeCommands": [
+    "export CURSOR_API_KEY=... QWQ_DATA_ROOT=$HOME/qwq_scale_verify",
+    "bash agent_ops/runners/start_cs100_supervisors.sh",
+    "tail -f $QWQ_DATA_ROOT/cs100_fresh_author_run.log",
+    "bash agent_ops/runners/scale_verify_monitor.sh cs100verify_20260626"
+  ],
+  "nextAfterGo": [
+    "bash agent_ops/runners/cs1000_prepare_loop.sh 60",
+    "bash agent_ops/runners/resume_cs1000verify_e2e.sh"
+  ]
+}

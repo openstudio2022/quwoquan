@@ -2,11 +2,12 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/app/navigation/app_router.dart';
+import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/rtc/callkit_service.dart';
 import 'package:quwoquan_app/cloud/rtc/models/rtc_signal_payloads.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signaling_client.dart';
+import 'package:quwoquan_app/cloud/runtime/startup_deferred_plugins.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
@@ -24,10 +25,12 @@ final rtcSignalingProvider = Provider<RtcSignalingClient>((ref) {
 });
 
 class IncomingCallCoordinator {
-  IncomingCallCoordinator({required this.ref, required this.router});
+  IncomingCallCoordinator({required this.ref, required this.readRouter});
 
   final Ref ref;
-  final GoRouter router;
+  final GoRouter Function() readRouter;
+
+  GoRouter get router => readRouter();
 
   StreamSubscription<RtcSignalEvent>? _signalSub;
   StreamSubscription<CallKitAction>? _callKitSub;
@@ -41,6 +44,7 @@ class IncomingCallCoordinator {
   String? _pendingCallType;
 
   void start(String userId) {
+    unawaited(StartupDeferredPlugins.ensureRtcPlugins());
     final signaling = ref.read(rtcSignalingProvider);
     final callKit = ref.read(callKitServiceProvider);
     final channel = resolveIncomingCallChannel(
@@ -212,12 +216,22 @@ IncomingCallChannel resolveIncomingCallChannel(PlatformCapabilities caps) {
   return IncomingCallChannel.inAppOnly;
 }
 
+final incomingCallRouterReaderProvider = Provider<GoRouter Function()>((ref) {
+  return () {
+    assert(
+      isAppRouterLibraryLoaded,
+      'Call ensureAppRouterLibraryLoaded() before reading incoming call router',
+    );
+    return ref.read(deferredAppRouterProvider);
+  };
+});
+
 final incomingCallCoordinatorProvider = Provider<IncomingCallCoordinator>((
   ref,
 ) {
   final coordinator = IncomingCallCoordinator(
     ref: ref,
-    router: ref.read(appRouterProvider),
+    readRouter: ref.watch(incomingCallRouterReaderProvider),
   );
   ref.onDispose(() => coordinator.dispose());
   return coordinator;

@@ -239,6 +239,44 @@ def load_base_draft_text(task_id: str, batch_id: str, base_source_ref: str | Non
     return ""
 
 
+def sibling_source_texts(
+    task_id: str, batch_id: str, base_source_ref: str | None
+) -> dict[str, str]:
+    """同一内容对象 `1.download/sources/` 下、除底稿外的其它 source unit 原文。
+
+    单底稿零参考反拼接门用：{sourceRef(relative): text}，供 `cross_source_overlap_issues`
+    扫描正文是否从「非底稿来源单元」长串照搬（如把同实体其它天行程/其它来源段落拼进来）。
+    """
+    if not base_source_ref:
+        return {}
+    candidate = batch_root(task_id, batch_id) / str(base_source_ref)
+    base_unit_dir = candidate if candidate.is_dir() else candidate.parent
+    sources_dir = base_unit_dir.parent
+    if sources_dir.name != "sources" or not sources_dir.is_dir():
+        return {}
+    out: dict[str, str] = {}
+    for unit_dir in sorted(p for p in sources_dir.iterdir() if p.is_dir()):
+        if unit_dir.resolve() == base_unit_dir.resolve():
+            continue
+        text = ""
+        for name in ("source.clean.md", "source.md"):
+            path = unit_dir / name
+            if path.is_file():
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except OSError:
+                    text = ""
+                break
+        if not text:
+            continue
+        try:
+            rel = (unit_dir / "source.md").relative_to(batch_root(task_id, batch_id)).as_posix()
+        except ValueError:
+            rel = unit_dir.name
+        out[rel] = text
+    return out
+
+
 def base_source_unit_meta(task_id: str, batch_id: str, base_source_ref: str | None) -> dict[str, Any]:
     """读取来源单元 meta.json（sourceId/platform/sourceUseMode 等），缺失返回空 dict。
 
@@ -690,6 +728,7 @@ __all__ = [
     "extract_base_draft_body",
     "intent_aligned_base_text",
     "load_base_draft_text",
+    "sibling_source_texts",
     "load_intent_aligned_base_draft_text",
     "base_source_use_mode",
     "base_draft_similarity",

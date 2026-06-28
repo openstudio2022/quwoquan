@@ -249,7 +249,8 @@ bool _looksLikeMediaObjectKey(String source) {
   final lower = source.toLowerCase();
   return lower.startsWith('media/avatar/') ||
       lower.startsWith('avatar/') ||
-      lower.startsWith('media/');
+      lower.startsWith('media/') ||
+      lower.startsWith('cold_start/');
 }
 
 String _rewriteArchivedSeedAvatarPath(String path) {

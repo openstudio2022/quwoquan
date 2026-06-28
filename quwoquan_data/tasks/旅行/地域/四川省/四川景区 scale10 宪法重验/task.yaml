@@ -1,0 +1,84 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/四川景区 scale10 宪法重验
+title: 四川省四川景区 scale10 宪法重验
+intentLabel: 四川景区scale10宪法重验
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: null
+parentTaskId: null
+status: active
+scope:
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 九寨沟
+  - entityType: 地点/景区
+    name: 黄龙
+  - entityType: 地点/景区
+    name: 峨眉山
+  - entityType: 地点/景区
+    name: 乐山大佛
+  - entityType: 地点/景区
+    name: 青城山
+  - entityType: 地点/景区
+    name: 稻城亚丁
+  - entityType: 地点/景区
+    name: 海螺沟
+  - entityType: 地点/景区
+    name: 剑门关
+  - entityType: 地点/景区
+    name: 阆中古城
+  - entityType: 地点/景区
+    name: 蜀南竹海
+  entityTypes:
+  - 地点/景区
+  region: 四川省
+provenance:
+  createdAt: '2026-06-26T10:44:54.681553+00:00'
+  createdBy: task run --mode fanout
+content:
+  angles:
+  - 体验
+  - 美图
+  - 攻略
+  audiences:
+  - 通用
+  carriers:
+  - article
+  - image
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    - article
+    - image
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+      article: 3
+      image: 4
+    imageAssetStrategy: open_license_publish
+    imageCountPolicy: score_bonus
+    allowAiImages: false
+  quotas:
+    entityArticlesPerTarget: 4
+    imageWorksPerTarget: 1
+    entityHomepagesPerTarget: 1
+    routeArticles: 0
+acceptance:
+  minEntities: 2
+  minPostsPerEntity: 5
+  requiredAngles:
+  - planning_consultation
+  - decision_experience
+  - route_transport
+  - seasonal_timing
+  scoredAngles:
+  - image
+workflowPolicy:
+  allowPartialContent: true
+  deliveryMode: partial_with_replacement_report
+  maxReplacementWaves: 3
+  maxReplacementCandidatesPerWave: 8
+  maxReplacementScreenedPerRun: 8

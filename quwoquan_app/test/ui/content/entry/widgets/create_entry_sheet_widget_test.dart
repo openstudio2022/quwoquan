@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
@@ -11,13 +10,13 @@ import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 
 void main() {
-  Icon iconFor(WidgetTester tester, IconData icon) =>
-      tester.widget<Icon>(find.byIcon(icon));
   Finder dragHandleFinder() => find.byWidgetPredicate(
     (widget) =>
         widget is Container &&
-        widget.constraints?.minWidth == AppSpacing.createEntrySheetHandleWidth &&
-        widget.constraints?.maxWidth == AppSpacing.createEntrySheetHandleWidth &&
+        widget.constraints?.minWidth ==
+            AppSpacing.createEntrySheetHandleWidth &&
+        widget.constraints?.maxWidth ==
+            AppSpacing.createEntrySheetHandleWidth &&
         widget.constraints?.minHeight ==
             AppSpacing.createEntrySheetHandleHeight &&
         widget.constraints?.maxHeight ==
@@ -67,29 +66,44 @@ void main() {
       find.text(UITextConstants.createActionAddContactShort),
       findsOneWidget,
     );
+    expect(find.text('发图片'), findsNothing);
+    expect(find.text('发视频'), findsNothing);
+    expect(find.text('写长文'), findsNothing);
+    expect(find.text('续草稿'), findsNothing);
+    expect(find.text('加联系'), findsNothing);
+    expect(find.text('建圈子'), findsNothing);
     expect(find.text(UITextConstants.cancel), findsOneWidget);
+    expect(find.byType(ConversationSheetListCard), findsNWidgets(2));
+    expect(find.byIcon(CupertinoIcons.chevron_forward), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(TestKeys.modalBottomSheetPanel),
+        matching: find.byType(Icon),
+      ),
+      findsNothing,
+    );
     expect(
       tester
           .getCenter(find.text(UITextConstants.createActionPostPhotoShort))
-          .dx,
+          .dy,
       lessThan(
         tester
             .getCenter(find.text(UITextConstants.createActionPostVideoShort))
-            .dx,
+            .dy,
       ),
     );
     expect(
       tester
           .getCenter(find.text(UITextConstants.createActionPostVideoShort))
-          .dx,
+          .dy,
       lessThan(
-        tester.getCenter(find.text(UITextConstants.createActionWriteLong)).dx,
+        tester.getCenter(find.text(UITextConstants.createActionWriteLong)).dy,
       ),
     );
     expect(
-      tester.getCenter(find.text(UITextConstants.createActionWriteLong)).dx,
+      tester.getCenter(find.text(UITextConstants.createActionWriteLong)).dy,
       lessThan(
-        tester.getCenter(find.text(UITextConstants.createActionResumeDraft)).dx,
+        tester.getCenter(find.text(UITextConstants.createActionResumeDraft)).dy,
       ),
     );
     expect(find.text('作品'), findsNothing);
@@ -199,46 +213,13 @@ void main() {
       find.text(UITextConstants.createActionCreateCircleShort),
       findsOneWidget,
     );
-    expect(find.byIcon(FluentIcons.image_add_24_regular), findsOneWidget);
-    expect(find.byIcon(FluentIcons.video_add_24_regular), findsOneWidget);
-    expect(find.byIcon(FluentIcons.document_edit_24_regular), findsOneWidget);
+    expect(find.byType(ConversationSheetListCard), findsNWidgets(2));
     expect(
-      find.byIcon(FluentIcons.document_text_clock_24_regular),
-      findsOneWidget,
-    );
-    expect(find.byIcon(FluentIcons.person_add_24_regular), findsOneWidget);
-    expect(find.byIcon(FluentIcons.chat_multiple_24_regular), findsOneWidget);
-    expect(
-      find.byIcon(FluentIcons.people_add_24_regular),
-      findsOneWidget,
-    );
-    expect(
-      iconFor(tester, FluentIcons.image_add_24_regular).color,
-      SettingsSemanticConstants.createSheetActionIconColor(false),
-    );
-    expect(
-      iconFor(tester, FluentIcons.video_add_24_regular).color,
-      SettingsSemanticConstants.createSheetActionIconColor(false),
-    );
-    expect(
-      iconFor(tester, FluentIcons.document_edit_24_regular).color,
-      SettingsSemanticConstants.createSheetActionIconColor(false),
-    );
-    expect(
-      iconFor(tester, FluentIcons.document_text_clock_24_regular).color,
-      SettingsSemanticConstants.createSheetDraftActionIconColor(false),
-    );
-    expect(
-      iconFor(tester, FluentIcons.person_add_24_regular).color,
-      SettingsSemanticConstants.createSheetActionIconColor(false),
-    );
-    expect(
-      iconFor(tester, FluentIcons.chat_multiple_24_regular).color,
-      SettingsSemanticConstants.createSheetActionIconColor(false),
-    );
-    expect(
-      iconFor(tester, FluentIcons.people_add_24_regular).color,
-      SettingsSemanticConstants.createSheetActionIconColor(false),
+      find.descendant(
+        of: find.byKey(TestKeys.modalBottomSheetPanel),
+        matching: find.byType(Icon),
+      ),
+      findsNothing,
     );
 
     await tester.tap(find.text(UITextConstants.createActionCreateCircleShort));
@@ -276,7 +257,7 @@ void main() {
 
     final panel = find.byKey(TestKeys.modalBottomSheetPanel);
     expect(panel, findsOneWidget);
-    expect(tester.getTopLeft(panel).dy, greaterThan(240));
+    expect(tester.getTopLeft(panel).dy, greaterThan(120));
   });
 
   testWidgets('点击上半区空白区域可关闭全屏弹层', (tester) async {

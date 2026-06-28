@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
+import 'package:quwoquan_app/core/platform/platform_target.dart';
 
 /// Example "behavior contract" decided purely from capabilities (not platform).
 ///
@@ -19,6 +20,11 @@ bool shouldUseWideShell(PlatformCapabilities caps) => caps.wideScreenLayout;
 
 bool shouldShowWechatLogin(PlatformCapabilities caps) => caps.wechatNativeLogin;
 
+bool canUseTargetedWechatShare(PlatformCapabilities caps) =>
+    caps.wechatTargetedShare;
+
+bool canUseSystemShareSheet(PlatformCapabilities caps) => caps.systemShareSheet;
+
 bool shouldShowSystemCredentialLogin(PlatformCapabilities caps) =>
     caps.systemCredentialLogin;
 
@@ -26,9 +32,7 @@ bool shouldShowPhoneContactsEntry(PlatformCapabilities caps) => caps.contacts;
 
 PlatformCapabilities _resolve(PlatformCapabilities profile) {
   final container = ProviderContainer(
-    overrides: [
-      platformCapabilitiesProvider.overrideWithValue(profile),
-    ],
+    overrides: [platformCapabilitiesProvider.overrideWithValue(profile)],
   );
   addTearDown(container.dispose);
   return container.read(platformCapabilitiesProvider);
@@ -54,6 +58,8 @@ void main() {
         expect(shouldShowIncomingCallSettings(caps), caps.incomingCallUi);
         expect(shouldUseWideShell(caps), caps.wideScreenLayout);
         expect(shouldShowWechatLogin(caps), caps.wechatNativeLogin);
+        expect(canUseTargetedWechatShare(caps), caps.wechatTargetedShare);
+        expect(canUseSystemShareSheet(caps), caps.systemShareSheet);
         expect(
           shouldShowSystemCredentialLogin(caps),
           caps.systemCredentialLogin,
@@ -89,6 +95,24 @@ void main() {
       expect(shouldShowPhoneContactsEntry(CapabilityProfile.mobile), isTrue);
       expect(shouldShowPhoneContactsEntry(CapabilityProfile.web), isFalse);
       expect(shouldShowPhoneContactsEntry(CapabilityProfile.ohos), isFalse);
+    });
+
+    test('微信定向分享与系统分享能力分离', () {
+      expect(canUseTargetedWechatShare(CapabilityProfile.mobile), isFalse);
+      expect(canUseSystemShareSheet(CapabilityProfile.mobile), isTrue);
+      expect(canUseTargetedWechatShare(CapabilityProfile.web), isFalse);
+      expect(canUseSystemShareSheet(CapabilityProfile.web), isTrue);
+      expect(canUseTargetedWechatShare(CapabilityProfile.ohos), isFalse);
+      expect(canUseSystemShareSheet(CapabilityProfile.ohos), isFalse);
+    });
+
+    test('Android 平台启用微信定向分享桥，iOS 仍降级系统分享', () {
+      final androidCaps = platformCapabilitiesFor(AppPlatform.android);
+      final iosCaps = platformCapabilitiesFor(AppPlatform.ios);
+      expect(androidCaps.wechatTargetedShare, isTrue);
+      expect(androidCaps.systemShareSheet, isTrue);
+      expect(iosCaps.wechatTargetedShare, isFalse);
+      expect(iosCaps.systemShareSheet, isTrue);
     });
   });
 }

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "quwoquan_data.creator_readiness_report/1",
+  "vertical": "travel",
+  "batchId": "travel_batch_100_v1",
+  "target": 100,
+  "mode": "trial",
+  "decision": "go",
+  "passed": true,
+  "checks": {
+    "creatorsValidatedRatio": 1.0,
+    "workflowAllReachedValidate": true,
+    "reviewGatePassRate": 1.0,
+    "provenanceCoverage": 1.0,
+    "tagResolveRate": 1.0,
+    "duplicatePersonaP95": 0.0,
+    "diversityMinBucketFill": 1.0,
+    "diversityEntropy": 0.9946,
+    "seedHandoffOk": true,
+    "contentBindSmokePass": 10,
+    "scale10PrerequisiteOk": true
+  },
+  "issues": [],
+  "generatedAt": "2026-06-27T02:12:16.633710+00:00"
+}

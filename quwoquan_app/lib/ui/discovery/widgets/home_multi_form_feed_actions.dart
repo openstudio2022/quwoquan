@@ -54,65 +54,60 @@ class _ActionRow extends StatelessWidget {
     ]).animate(likeCtrl);
 
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Expanded(
-          child: _chip(
-            context: context,
-            selected: isLiked,
-            semanticsLabel: UITextConstants.like,
-            child: ScaleTransition(
-              scale: likeScale,
-              child: AppMediaHeartIcon(
-                size: _feedToolbarIconSize,
-                color: likeColor,
-                filled: isLiked,
-              ),
-            ),
-            label: formatCompactActionCount(likeCount),
-            muted: actionIconColor,
-            onTap: onLike,
-          ),
-        ),
-        Expanded(
-          child: _chip(
-            context: context,
-            semanticsLabel: UITextConstants.share,
-            child: AppMediaShareIcon(
+        _chip(
+          context: context,
+          selected: isLiked,
+          semanticsLabel: UITextConstants.like,
+          alignment: Alignment.centerLeft,
+          child: ScaleTransition(
+            scale: likeScale,
+            child: AppMediaHeartIcon(
               size: _feedToolbarIconSize,
-              color: actionIconColor,
+              color: likeColor,
+              filled: isLiked,
             ),
-            label: formatCompactActionCount(shareCount),
-            muted: actionIconColor,
-            onTap: onShare,
           ),
+          label: formatCompactActionCount(likeCount),
+          muted: actionIconColor,
+          onTap: onLike,
         ),
-        Expanded(
-          child: _chip(
-            context: context,
-            semanticsLabel: UITextConstants.comment,
-            child: AppMediaCommentIcon(
-              size: _feedToolbarIconSize,
-              color: actionIconColor,
-            ),
-            label: formatCompactActionCount(commentCount),
-            muted: actionIconColor,
-            onTap: onComment,
+        _chip(
+          context: context,
+          semanticsLabel: UITextConstants.share,
+          child: AppMediaShareIcon(
+            size: _feedToolbarIconSize,
+            color: actionIconColor,
           ),
+          label: formatCompactActionCount(shareCount),
+          muted: actionIconColor,
+          onTap: onShare,
         ),
-        Expanded(
-          child: _chip(
-            context: context,
-            buttonKey: moreButtonKey,
-            semanticsLabel: UITextConstants.more,
-            child: Icon(
-              Icons.more_horiz_rounded,
-              size: _feedToolbarIconSize,
-              color: actionIconColor,
-            ),
-            label: UITextConstants.more,
-            muted: actionIconColor,
-            onTap: onMore,
+        _chip(
+          context: context,
+          semanticsLabel: UITextConstants.comment,
+          child: AppMediaCommentIcon(
+            size: _feedToolbarIconSize,
+            color: actionIconColor,
           ),
+          label: formatCompactActionCount(commentCount),
+          muted: actionIconColor,
+          onTap: onComment,
+        ),
+        _chip(
+          context: context,
+          buttonKey: moreButtonKey,
+          semanticsLabel: UITextConstants.more,
+          iconOnly: true,
+          alignment: Alignment.centerRight,
+          child: Icon(
+            Icons.more_horiz_rounded,
+            size: _feedToolbarIconSize,
+            color: actionIconColor,
+          ),
+          muted: actionIconColor,
+          onTap: onMore,
         ),
       ],
     );
@@ -121,12 +116,14 @@ class _ActionRow extends StatelessWidget {
   Widget _chip({
     required BuildContext context,
     required Widget child,
-    required String label,
     required Color muted,
     required VoidCallback onTap,
     Key? buttonKey,
     String? semanticsLabel,
+    String? label,
+    bool iconOnly = false,
     bool selected = false,
+    Alignment alignment = Alignment.center,
   }) {
     final foreground = selected ? AppColors.worksLike : muted;
 
@@ -140,24 +137,27 @@ class _ActionRow extends StatelessWidget {
         label: semanticsLabel,
         child: Container(
           height: AppSpacing.buttonHeightMdCompact,
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          alignment: alignment,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               child,
-              SizedBox(width: AppSpacing.intraGroupXs),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.fade,
-                softWrap: false,
-                style: TextStyle(
-                  fontSize: AppTypography.feedActionCountResponsive(context),
-                  color: foreground,
-                  fontWeight: AppTypography.regular,
-                  height: AppSpacing.one,
+              if (!iconOnly && label != null) ...[
+                SizedBox(width: AppSpacing.intraGroupXs),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.fade,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontSize: AppTypography.feedActionCountResponsive(context),
+                    color: foreground,
+                    fontWeight: AppTypography.regular,
+                    height: AppSpacing.one,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

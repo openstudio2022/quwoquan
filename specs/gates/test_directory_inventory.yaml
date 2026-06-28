@@ -3,7 +3,7 @@ generated_by: python3 agent_ops/scaffold/generate_test_directory_inventory.py
 areas:
   app:
     pending_count: 0
-    bridged_count: 377
+    bridged_count: 383
     entries:
     - current_path: quwoquan_app/test/app/app_startup_welcome_test.dart
       layer: local_contract
@@ -123,6 +123,11 @@ areas:
     - current_path: quwoquan_app/test/cloud/chat/contract/chat_inbox_dto_contract_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/cloud/chat/contract/chat_inbox_dto_contract__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:cloud
+    - current_path: quwoquan_app/test/cloud/chat/contract/chat_mock_remote_parity__contract_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/chat/contract/chat_mock_remote_parity__contract__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:cloud
     - current_path: quwoquan_app/test/cloud/chat/contract/chat_repository_contract_test.dart
@@ -463,6 +468,11 @@ areas:
     - current_path: quwoquan_app/test/cloud/services/business_beta_remote_repository_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/cloud/services/business_beta_remote_repository__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:cloud
+    - current_path: quwoquan_app/test/cloud/services/connection/connection_repository_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/cloud/services/connection/connection_repository__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:cloud
     - current_path: quwoquan_app/test/cloud/services/content/comment_counts_delta_mock_test.dart
@@ -928,6 +938,11 @@ areas:
     - current_path: quwoquan_app/test/core/widgets/app_cached_network_image_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/core/widgets/app_cached_network_image__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:core
+    - current_path: quwoquan_app/test/core/widgets/app_list_page_semantics_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/core/widgets/app_list_page_semantics__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:core
     - current_path: quwoquan_app/test/core/widgets/error_states/app_error_states_test.dart
@@ -1640,6 +1655,11 @@ areas:
       target_path: quwoquan_app/test/local_contract/ui/intersection/pages/object_intersection_list_page__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
+    - current_path: quwoquan_app/test/ui/plaza/widgets/connection_hub_page_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/plaza/widgets/connection_hub_page_widget__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/rtc/models/call_summary_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/ui/rtc/models/call_summary__local_contract_test.dart
@@ -1760,9 +1780,19 @@ areas:
       target_path: quwoquan_app/test/user_acceptance/ui/user/journeys/profile_tab_navigation_journey__user_acceptance_test.dart
       migration_status: bridged
       classification_basis: app:user_acceptance:ui
+    - current_path: quwoquan_app/test/ui/user/legal_document_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/legal_document_page__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/user/login_page_widget_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:ui
+    - current_path: quwoquan_app/test/ui/user/pages/career_interest_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/user/pages/career_interest_page__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart
@@ -1892,7 +1922,7 @@ areas:
       classification_basis: app:local_contract:widget_test.dart
   service:
     pending_count: 0
-    bridged_count: 183
+    bridged_count: 190
     entries:
     - current_path: quwoquan_service/services/assistant-service/cmd/api/main_test.go
       layer: local_contract
@@ -2004,6 +2034,11 @@ areas:
       target_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
       migration_status: bridged
       classification_basis: service:api_integration:assistant-service/tests
+    - current_path: quwoquan_service/services/chat-service/internal/adapters/http/message_home_projection_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/chat-service/tests/local_contract/internal/adapters/http/message_home_projection__local_contract_test.go
+      migration_status: bridged
+      classification_basis: service:local_contract:chat-service/internal
     - current_path: quwoquan_service/services/chat-service/internal/adapters/http/social_contact_resolver_client_test.go
       layer: local_contract
       target_path: quwoquan_service/services/chat-service/tests/local_contract/internal/adapters/http/social_contact_resolver_client__local_contract_test.go
@@ -2027,6 +2062,11 @@ areas:
     - current_path: quwoquan_service/services/chat-service/tests/benchmark_test.go
       layer: api_integration
       target_path: quwoquan_service/services/chat-service/tests/api_integration/benchmark__api_integration_test.go
+      migration_status: bridged
+      classification_basis: service:api_integration:chat-service/tests
+    - current_path: quwoquan_service/services/chat-service/tests/contact_home_projection_contract_test.go
+      layer: api_integration
+      target_path: quwoquan_service/services/chat-service/tests/api_integration/contact_home_projection_contract__api_integration_test.go
       migration_status: bridged
       classification_basis: service:api_integration:chat-service/tests
     - current_path: quwoquan_service/services/chat-service/tests/contract_fixture_seed_contract_test.go
@@ -2122,6 +2162,11 @@ areas:
     - current_path: quwoquan_service/services/chat-service/tests/message_unread_contract_test.go
       layer: api_integration
       target_path: quwoquan_service/services/chat-service/tests/api_integration/message_unread_contract__api_integration_test.go
+      migration_status: bridged
+      classification_basis: service:api_integration:chat-service/tests
+    - current_path: quwoquan_service/services/chat-service/tests/selectable_group_contract_test.go
+      layer: api_integration
+      target_path: quwoquan_service/services/chat-service/tests/api_integration/selectable_group_contract__api_integration_test.go
       migration_status: bridged
       classification_basis: service:api_integration:chat-service/tests
     - current_path: quwoquan_service/services/chat-service/tests/send_message_relationship_gate_test.go
@@ -2359,6 +2404,16 @@ areas:
       target_path: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/intersection_graph_materializer__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_projector_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/premium_pool_projector__local_contract_test.go
+      migration_status: bridged
+      classification_basis: service:local_contract:content-service/internal
+    - current_path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_source_test.go
+      layer: local_contract
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/premium_pool_source__local_contract_test.go
+      migration_status: bridged
+      classification_basis: service:local_contract:content-service/internal
     - current_path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source_test.go
       layer: local_contract
       target_path: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/read_model_intersection_source__local_contract_test.go
@@ -2402,6 +2457,11 @@ areas:
     - current_path: quwoquan_service/services/content-service/tests/contract_fixture_seed_contract_test.go
       layer: api_integration
       target_path: quwoquan_service/services/content-service/tests/api_integration/contract_fixture_seed_contract__api_integration_test.go
+      migration_status: bridged
+      classification_basis: service:api_integration:content-service/tests
+    - current_path: quwoquan_service/services/content-service/tests/creator_pool_content_feed_contract_test.go
+      layer: api_integration
+      target_path: quwoquan_service/services/content-service/tests/api_integration/creator_pool_content_feed_contract__api_integration_test.go
       migration_status: bridged
       classification_basis: service:api_integration:content-service/tests
     - current_path: quwoquan_service/services/content-service/tests/intersection_source_contract_test.go
@@ -2742,6 +2802,11 @@ areas:
     - current_path: quwoquan_service/services/user-service/tests/contact_discovery_contract_test.go
       layer: api_integration
       target_path: quwoquan_service/services/user-service/tests/api_integration/contact_discovery_contract__api_integration_test.go
+      migration_status: bridged
+      classification_basis: service:api_integration:user-service/tests
+    - current_path: quwoquan_service/services/user-service/tests/creator_pool_contract_fixture_seed_test.go
+      layer: api_integration
+      target_path: quwoquan_service/services/user-service/tests/api_integration/creator_pool_contract_fixture_seed__api_integration_test.go
       migration_status: bridged
       classification_basis: service:api_integration:user-service/tests
     - current_path: quwoquan_service/services/user-service/tests/credential_contract_test.go

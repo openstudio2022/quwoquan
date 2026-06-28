@@ -16,7 +16,9 @@
 
 - 法律文本与版本是上架硬阻断项；URL 不可达即 No-Go。
 - 协议正文不得放入业务领域服务代码，不随 App、service、内容页或数据工程内容包一起打包；唯一源目录为 `deploy/legal/`，发布包为 `artifacts/legal-static-packages/<env>/<version>/`。
+- alpha / `flutter run` 的 mock gateway 必须同样挂载 `legal-static` 的 `/legal/*` 静态目录，禁止回退到 mock 404 HTML 或业务 API mock 路由。
 - 隐私相关文案与同意版本以 `auth_legal_config.dart` + 登录契约为准，不得在业务代码硬编码第二套版本。
+- 协议页 URL 不可达、HTTP 非成功或 WebView 资源失败时，App 必须展示原生错误态与重试/返回动作；该错误不阻断用户返回登录页、勾选协议与继续验证码登录。
 - 权限用途、SDK 数据类别必须与端侧实际行为一致，禁止低报或漏报。
 - 错误码 / 用户文案走 metadata→codegen，不在审计/治理代码硬编码（R06）。
 - 生产包默认 Remote、无 Mock/Remote 切换入口、无 test_fixtures（与 `08-mock-data-isolation` 发行态一致）。

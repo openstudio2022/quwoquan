@@ -1,0 +1,563 @@
+{
+  "schemaVersion": "quwoquan_data.scale_readiness",
+  "taskId": "旅行/地域/四川省/景区/四川景点fresh scale100",
+  "batchId": "fanout_cs100verify_placeholder",
+  "mode": "commercial",
+  "dailyTarget": 100,
+  "passed": false,
+  "decision": "no_go",
+  "expectedObjects": {
+    "homepage": 17,
+    "article": 68,
+    "image": 17,
+    "routeArticle": 0,
+    "total": 102
+  },
+  "qualityTarget": {
+    "targetGoal": 100,
+    "minPassRate": 0.0,
+    "qualityPassedObjectCount": 0,
+    "targetSatisfactionRate": 0.0,
+    "sourceReadyGoal": 120,
+    "sourceReadyMultiplier": 1.2
+  },
+  "funnel": {
+    "targeted": 100,
+    "sourceReady": 0,
+    "homepagePassed": 0,
+    "contentPlanned": 0,
+    "authored": 0,
+    "reviewPassed": 0,
+    "published": 0,
+    "byObjectType": {
+      "article": {
+        "planned": 0,
+        "authored": 0,
+        "published": 0
+      },
+      "image": {
+        "planned": 0,
+        "published": 0
+      },
+      "video": {
+        "planned": 0,
+        "published": 0
+      },
+      "homepage": {
+        "published": 0
+      }
+    }
+  },
+  "sourceAdmission": {
+    "schemaVersion": "quwoquan_data.source_ready_admission/1",
+    "targetEntityCount": 17,
+    "sourceReadyEntityCount": 0,
+    "sourceReadyObjectCapacity": 0,
+    "requiredPerEntity": {
+      "homepage": 1,
+      "article": 4,
+      "image": 1
+    },
+    "perEntity": [
+      {
+        "entity": "九寨沟",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "黄龙",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "峨眉山",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "乐山大佛",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "青城山",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "稻城亚丁",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "海螺沟",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "剑门关",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "阆中古城",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "蜀南竹海",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "西岭雪山",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "牛背山",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "毕棚沟",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "木格措",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "若尔盖花湖",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "四姑娘山",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      },
+      {
+        "entity": "都江堰",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
+      }
+    ]
+  },
+  "abandonment": {
+    "entityCount": 0,
+    "contentObjectCount": 0
+  },
+  "partialDelivery": {
+    "mode": "commercial",
+    "allowPartialContent": true,
+    "abandonedContentByType": {},
+    "abandonedContentRatio": 0.0,
+    "maxTrialAbandonedContentRatio": 0.05,
+    "delivered": {
+      "posts": 0,
+      "articles": 0,
+      "images": 0,
+      "videos": 0
+    },
+    "fulfillment": {
+      "article": 0.0,
+      "image": 0.0
+    }
+  },
+  "replacementClosure": {
+    "baseTargetCount": 17,
+    "requiredActiveTargets": 17,
+    "activeTargetCount": 17,
+    "replacementCount": 0,
+    "closed": true,
+    "objects": []
+  },
+  "runtimeIntegrity": {
+    "passed": false,
+    "stats": {
+      "postCount": 0,
+      "articleCount": 0,
+      "imageCount": 0,
+      "videoCount": 0,
+      "assetCount": 0
+    }
+  },
+  "contentQualityCoverage": {
+    "articlePosts": 0,
+    "articleMentionCoveredPosts": 0,
+    "articleMentionCoverage": 1.0,
+    "totalSemanticMentions": 0,
+    "worksVerdictPresent": 0,
+    "nonWorkMaterialized": [],
+    "nonWorkMaterializedCount": 0
+  },
+  "creatorLoad": {
+    "schemaVersion": "quwoquan_data.creator_load_report/1",
+    "required": false,
+    "creatorCount": 0,
+    "plannedObjectCount": 0,
+    "publishedObjectCount": 0,
+    "maxPlannedPerCreator": 0,
+    "maxCreatorShare": 0.0,
+    "maxDailyPostsPerCreator": 1,
+    "missingAssignmentRefs": [],
+    "assignmentIssueCount": 0,
+    "assignmentIssues": [],
+    "overloadedCreatorProfileIds": [],
+    "byCreator": []
+  },
+  "sourceSufficiency": {
+    "homepage": {
+      "passed": 0,
+      "targetCount": 17,
+      "rate": 0.0
+    },
+    "article": {
+      "passed": 0,
+      "targetCount": 17,
+      "rate": 0.0
+    },
+    "image": {
+      "passed": 17,
+      "targetCount": 17,
+      "rate": 1.0
+    }
+  },
+  "workflowState": {
+    "status": null,
+    "waitingCheckpoint": null,
+    "nextAction": null,
+    "retryCounts": null,
+    "infrastructureRetryCounts": null,
+    "failedObjects": null
+  },
+  "executionReadiness": {
+    "queueBackend": "",
+    "maxConcurrency": 10,
+    "tokenLedgerCount": 0,
+    "tokenLedgerPaths": [],
+    "releaseId": "",
+    "releaseManifestExists": false,
+    "shipEvidencePaths": [],
+    "importEvidencePaths": [],
+    "requiredThroughputPerHour": 4.1667,
+    "requiredThroughputPerMinute": 0.0694,
+    "measuredThroughput": null,
+    "throughputProjection": {
+      "available": false,
+      "measurementMode": "projected_from_trial_per_worker_rate",
+      "perWorkerObjectsPerHour": 0.0,
+      "realizedWorkerCount": 0,
+      "committedConcurrency": 0,
+      "queueBackend": "",
+      "projectedObjectsPerHour": 0.0,
+      "projectedDailyCapacity": 0.0,
+      "requiredObjectsPerHour": 4.1667,
+      "finishedAuthorJobs": 0,
+      "authorActiveSeconds": 0.0,
+      "assumptions": [
+        "linear scaling of measured per-worker author throughput across committed reliabletask workers",
+        "source supply and review keep pace with committed concurrency"
+      ]
+    },
+    "firstPassRate": null
+  },
+  "envReady": {
+    "ready": false,
+    "reportPath": "",
+    "cursorStartup": {},
+    "issues": []
+  },
+  "downloadDiagnostics": {
+    "entitiesWithFetchReports": 0,
+    "plannedImages": 0,
+    "downloadedImages": 0,
+    "blockedImages": 0,
+    "rejectedByCategory": {
+      "fetch_or_non_image": 0,
+      "pixel_too_small": 0,
+      "safety_or_watermark": 0,
+      "rights": 0,
+      "duplicate": 0,
+      "other": 0
+    },
+    "sourcePlanCategories": {},
+    "topEntityIssues": []
+  },
+  "abandonmentDiagnostics": {
+    "totalIssueTexts": 68,
+    "categories": {
+      "imageOpenLicenseShortage": 0,
+      "imageRightsOrLicense": 0,
+      "imageFetchOrQuality": 0,
+      "entityFocusGap": 0,
+      "articleSourceShortage": 34,
+      "homepageSourceShortage": 34,
+      "workflowInterrupted": 0,
+      "other": 0
+    },
+    "dominantReasons": [
+      {
+        "category": "articleSourceShortage",
+        "count": 34,
+        "samples": [
+          "article sources=0 need>=4",
+          "article research needs >= 4 text-qualified base sources",
+          "article sources=0 need>=4",
+          "article research needs >= 4 text-qualified base sources",
+          "article sources=0 need>=4"
+        ]
+      },
+      {
+        "category": "homepageSourceShortage",
+        "count": 34,
+        "samples": [
+          "homepage sources=0 need>=1",
+          "homepage research needs encyclopedia or official evidence",
+          "homepage sources=0 need>=1",
+          "homepage research needs encyclopedia or official evidence",
+          "homepage sources=0 need>=1"
+        ]
+      }
+    ]
+  },
+  "imageAssetStrategy": {
+    "strategy": "open_license_publish",
+    "allowAiImages": false,
+    "licensedImageProvider": "",
+    "syntheticAssetProvider": "",
+    "requiresPublishableImages": true,
+    "releaseAllowed": true,
+    "expectedImageWorks": 17,
+    "openLicenseShortageCount": 0,
+    "structuralOpenLicenseShortage": false,
+    "structuralShortageThreshold": 5
+  },
+  "blockers": [
+    "env ready evidence missing or failed",
+    "Cursor SDK startup probe missing or failed;百级不得进入 author-runner",
+    "workflow status must be succeeded for scale; got missing",
+    "source-ready object capacity 0 < required 120",
+    "materialized publishable post count is zero",
+    "TokenLedger evidence missing; cannot project unit token/cost or cache hit rate",
+    "isolated release evidence missing; release verify cannot be proven",
+    "staging/gamma import evidence missing",
+    "measured throughput evidence missing; cannot project daily capacity",
+    "firstPassRate evidence missing"
+  ],
+  "warnings": [
+    "partial delivery accepted failedLaneCount=34; failed lanes must stay excluded from release/import",
+    "homepage lane source sufficiency 0.00% < 98%; treat as delivery success-rate evidence, not a release blocker",
+    "article lane source sufficiency 0.00% < 98%; treat as delivery success-rate evidence, not a release blocker",
+    "partial article delivery accepted: actual=0 abandoned=0 expected=68",
+    "partial image delivery accepted: actual=0 abandoned=0 expected=17",
+    "ship evidence missing; release/import closure should be captured by ship_report.json"
+  ]
+}

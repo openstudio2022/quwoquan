@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data.creator_bundle",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "creatorProfileId",
+    "subAccountId",
+    "authorId",
+    "creatorArchetype",
+    "profile",
+    "tags",
+    "content",
+    "operations",
+    "provenance"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.creator_bundle/1" },
+    "creatorProfileId": { "type": "string", "minLength": 1 },
+    "subAccountId": { "type": "string", "minLength": 1 },
+    "authorId": { "type": "string", "minLength": 1 },
+    "creatorArchetype": { "type": "string", "minLength": 1 },
+    "sourceMetrics": {
+      "type": "object",
+      "properties": {
+        "engagementScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "outputScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "platformStyle": { "type": "string" },
+        "popularityTier": { "enum": ["head", "waist", "rising", "niche_expert"] },
+        "outputTier": { "enum": ["prolific", "steady", "seasonal"] }
+      }
+    },
+    "diversitySlots": {
+      "type": "object",
+      "required": ["regionBucket", "archetypeBucket", "carrierBucket"],
+      "properties": {
+        "regionBucket": { "type": "string" },
+        "archetypeBucket": { "type": "string" },
+        "carrierBucket": { "type": "string" },
+        "platformBucket": { "type": "string" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["sourceKind", "derivationPolicy"],
+      "properties": {
+        "sourceKind": {
+          "enum": ["open_web_profile", "open_rss", "wikimedia", "tourism_board", "site_supply_author", "fixture_synthetic"]
+        },
+        "sourceUrl": { "type": "string" },
+        "extractedSignals": { "type": "object" },
+        "derivationPolicy": { "const": "derivative_persona_v1" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "required": ["displayName", "userHandle", "bio", "headline"],
+      "properties": {
+        "displayName": { "type": "string" },
+        "userHandle": { "type": "string" },
+        "bio": { "type": "string" },
+        "headline": { "type": "string" },
+        "avatarObjectKey": { "type": "string" },
+        "backgroundObjectKey": { "type": "string" },
+        "identityTags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "tags": {
+      "type": "object",
+      "properties": {
+        "occupationTagRef": { "type": "string" },
+        "interestTagRefs": { "type": "array", "items": { "type": "string" } },
+        "creatorClassTagRefs": { "type": "array", "items": { "type": "string" } },
+        "publicProfileTagRefs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "relations": {
+      "type": "object",
+      "properties": {
+        "joinedCircleIds": { "type": "array", "items": { "type": "string" } },
+        "followedHomepageCanonicalIds": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "content": {
+      "type": "object",
+      "required": ["verticalRefs", "carrierAffinity", "voiceStyle", "publishCadence", "disclosure", "claimPolicy"],
+      "properties": {
+        "verticalRefs": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "scenarioRefs": { "type": "array", "items": { "type": "string" } },
+        "carrierAffinity": {
+          "type": "object",
+          "required": ["article", "image", "video"],
+          "properties": {
+            "article": { "type": "number", "minimum": 0, "maximum": 1 },
+            "image": { "type": "number", "minimum": 0, "maximum": 1 },
+            "video": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "voiceStyle": { "type": "object" },
+        "publishCadence": { "type": "object" },
+        "disclosure": { "type": "object" },
+        "claimPolicy": { "type": "object" }
+      }
+    },
+    "operations": {
+      "type": "object",
+      "required": ["cohortId", "status"],
+      "properties": {
+        "cohortId": { "type": "string" },
+        "status": { "enum": ["draft", "active", "throttled", "retired"] },
+        "maxDailyPosts": { "type": "integer", "maximum": 1 },
+        "qualityScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "fatigueScore": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

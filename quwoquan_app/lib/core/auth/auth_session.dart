@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
@@ -512,7 +513,8 @@ class AuthSessionController extends Notifier<AuthSessionState> {
 
   @override
   AuthSessionState build() {
-    if (!_restoreStarted) {
+    final restoreGateOpen = ref.watch(startupAuthRestoreGateProvider);
+    if (restoreGateOpen && !_restoreStarted) {
       _restoreStarted = true;
       unawaited(restore());
     }

@@ -58,6 +58,11 @@ class BottomNavigationWidget extends ConsumerWidget {
         selectedIcon: FluentIcons.chat_multiple_24_regular,
       ),
       _BottomDestination(
+        label: AppConceptConstants.plaza,
+        icon: FluentIcons.people_community_24_regular,
+        selectedIcon: FluentIcons.people_community_24_filled,
+      ),
+      _BottomDestination(
         label: profileLabel,
         semanticLabel: profileLabel,
         iconBuilder: (color, selected, size) =>

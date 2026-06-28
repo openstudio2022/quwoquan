@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_shell.dart';
+import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/components/media/camera/camera_filter_strip.dart';
 import 'package:quwoquan_app/components/media/camera/camera_session_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_semantic_icon.dart';

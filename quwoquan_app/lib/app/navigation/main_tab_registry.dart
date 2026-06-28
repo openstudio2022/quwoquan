@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 
-enum MainTabDestination { home, featured, create, chat, profile }
+enum MainTabDestination { home, featured, create, chat, plaza, profile }
 
 extension MainTabDestinationX on MainTabDestination {
   static const List<MainTabDestination> bottomNavOrdered = <MainTabDestination>[
@@ -8,6 +8,7 @@ extension MainTabDestinationX on MainTabDestination {
     MainTabDestination.featured,
     MainTabDestination.create,
     MainTabDestination.chat,
+    MainTabDestination.plaza,
     MainTabDestination.profile,
   ];
 
@@ -16,7 +17,8 @@ extension MainTabDestinationX on MainTabDestination {
     MainTabDestination.featured => 1,
     MainTabDestination.create => 2,
     MainTabDestination.chat => 3,
-    MainTabDestination.profile => 4,
+    MainTabDestination.plaza => 4,
+    MainTabDestination.profile => 5,
   };
 
   String get routePath => switch (this) {
@@ -24,6 +26,7 @@ extension MainTabDestinationX on MainTabDestination {
     MainTabDestination.featured => AppRoutePaths.home,
     MainTabDestination.create => AppRoutePaths.createEntry,
     MainTabDestination.chat => AppRoutePaths.chat,
+    MainTabDestination.plaza => AppRoutePaths.plaza,
     MainTabDestination.profile => AppRoutePaths.profile,
   };
 
@@ -32,6 +35,7 @@ extension MainTabDestinationX on MainTabDestination {
     MainTabDestination.featured => 'featured',
     MainTabDestination.create => 'create',
     MainTabDestination.chat => 'chat',
+    MainTabDestination.plaza => 'plaza',
     MainTabDestination.profile => 'profile',
   };
 }
@@ -49,6 +53,9 @@ MainTabDestination mainTabFromLocation(String location) {
   }
   if (location.startsWith(AppRoutePaths.chat)) {
     return MainTabDestination.chat;
+  }
+  if (location.startsWith(AppRoutePaths.plaza)) {
+    return MainTabDestination.plaza;
   }
   if (location == AppRoutePaths.profile) {
     return MainTabDestination.profile;

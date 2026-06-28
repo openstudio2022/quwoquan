@@ -2,7 +2,7 @@
   "artifactRoot": "artifacts/legal-static-packages",
   "currentVersion": "2026-06",
   "env": "gamma",
-  "generatedAt": "2026-06-25T20:26:56.254624Z",
+  "generatedAt": "2026-06-26T16:08:31.702679Z",
   "legalBaseUrl": "https://gamma-api.quwoquan-env.test:19000/legal",
   "packageDir": "artifacts/legal-static-packages/gamma/2026-06",
   "packageKind": "legal-static",

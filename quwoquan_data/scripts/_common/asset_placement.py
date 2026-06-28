@@ -32,6 +32,13 @@ _GALLERY_HEADING = "## 图集"
 _MIN_WRAP_PARAGRAPH_CHARS = 80
 # 退化 caption 模式：纯数字-文件名（如 36661-Dujiangyan）或 upload 文件名 stem。
 _CAPTION_FILENAME_RE = re.compile(r"^\d{2,}[-_]")
+_CAPTION_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+_CAPTION_LATIN_RE = re.compile(r"[A-Za-z]")
+# 原文图片标记残留（wiki/file 语法、像素标注、图片扩展名）→ 非语义 caption。
+_CAPTION_RAW_MARKUP_RE = re.compile(
+    r"(\[\[|\]\]|\bfile:|\bimage:|文件:|圖像:|图像:|\bthumb\b|\d+\s*px\b|\.(?:jpe?g|png|gif|svg|webp)\b)",
+    re.IGNORECASE,
+)
 
 
 def referenced_asset_ids(text: str) -> set[str]:
@@ -237,7 +244,14 @@ def place_assets_in_markdown(
 
 
 def _caption_is_degraded(caption: str, *, file_name: str = "") -> bool:
-    """caption 是否退化为文件名占位（无中文语义）。"""
+    """caption 是否退化（文件名占位 / 原文标记残留 / 英文拉丁主导，缺中文语义）。
+
+    中文内容产品里 caption 必须以原文中文语义为基础：
+    - 空、纯数字文件名、等于文件名 stem → 退化；
+    - 含 wiki/file 原文图片标记（``[[``/``File:``/``.jpg`` 等）→ 退化；
+    - 无任何 CJK 字符（纯英文/拉丁/数字，如四姑娘山英文封面）→ 退化；
+    - 拉丁字母明显多于中文（英文主导）→ 退化。
+    """
     text = str(caption or "").strip()
     if not text:
         return True
@@ -248,8 +262,15 @@ def _caption_is_degraded(caption: str, *, file_name: str = "") -> bool:
         return True
     if stem and text.replace(" ", "") == stem.replace("_", "").replace("-", ""):
         return True
-    # 无 CJK 且长度很短 → 大概率文件名碎片。
-    if len(text) < 12 and not re.search(r"[\u4e00-\u9fff]", text):
+    if _CAPTION_RAW_MARKUP_RE.search(text):
+        return True
+    cjk = len(_CAPTION_CJK_RE.findall(text))
+    latin = len(_CAPTION_LATIN_RE.findall(text))
+    # 无中文语义（纯拉丁/英文/数字）→ 退化（含旧的「短且无 CJK」情形）。
+    if cjk == 0:
+        return True
+    # 英文/拉丁主导（拉丁字母数明显多于中文字符数）→ 退化。
+    if latin >= 6 and latin >= cjk * 2:
         return True
     return False
 

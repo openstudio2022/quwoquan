@@ -202,6 +202,17 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                 ),
 
                 const SizedBox(height: _feedCardSectionGap),
+                _HomeConnectionBadgesRow(
+                  item: item,
+                  sourceCircleName: widget.sourceCircleName,
+                  primaryReason: primaryReason,
+                ),
+                if (_HomeConnectionBadgesRow.hasAnyBadge(
+                  item: item,
+                  sourceCircleName: widget.sourceCircleName,
+                  primaryReason: primaryReason,
+                ))
+                  const SizedBox(height: AppSpacing.intraGroupSm),
                 if (item.isArticleLike)
                   _HomeArticlePostCard(
                     item: item,
@@ -531,6 +542,148 @@ class _FollowingArticleCard extends StatelessWidget {
   }
 }
 
+class _HomeConnectionBadgesRow extends StatelessWidget {
+  const _HomeConnectionBadgesRow({
+    required this.item,
+    required this.sourceCircleName,
+    required this.primaryReason,
+  });
+
+  final PostBaseDto item;
+  final String sourceCircleName;
+  final IntersectionReason? primaryReason;
+
+  static bool hasAnyBadge({
+    required PostBaseDto item,
+    required String sourceCircleName,
+    required IntersectionReason? primaryReason,
+  }) {
+    return _entityLabel(primaryReason) != null ||
+        sourceCircleName.trim().isNotEmpty ||
+        _showCompanionBadge(item, primaryReason);
+  }
+
+  static String? _entityLabel(IntersectionReason? reason) {
+    if (reason == null) {
+      return null;
+    }
+    final visualLabel = reason.objectVisual?.displayName.trim() ?? '';
+    if (visualLabel.isNotEmpty) {
+      return visualLabel;
+    }
+    for (final span in reason.primarySpans) {
+      final kind = span.target?.objectKind.trim() ?? '';
+      if (kind == 'homepage' || kind == 'place') {
+        final text = span.text.trim();
+        if (text.isNotEmpty) {
+          return text;
+        }
+      }
+    }
+    return null;
+  }
+
+  static bool _showCompanionBadge(
+    PostBaseDto item,
+    IntersectionReason? reason,
+  ) {
+    if (reason != null) {
+      for (final hint in reason.actionHints) {
+        if (IntersectionActionKeys.isHeavySocialAction(hint.actionKey)) {
+          return true;
+        }
+      }
+    }
+    final text = '${item.normalizedTitle} ${item.normalizedBody}';
+    const travelHints = <String>['稻城', '峨眉', '川西', '结伴', '同行'];
+    return travelHints.any(text.contains);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasAnyBadge(
+      item: item,
+      sourceCircleName: sourceCircleName,
+      primaryReason: primaryReason,
+    )) {
+      return const SizedBox.shrink();
+    }
+
+    final accent = AppColors.iosAccent(context);
+    final chips = <Widget>[];
+
+    final entity = _entityLabel(primaryReason);
+    if (entity != null) {
+      chips.add(
+        _badgeChip(
+          context,
+          label: entity,
+          prefix: PlazaTextConstants.feedBadgeEntity,
+          accent: accent,
+        ),
+      );
+    }
+
+    final circle = sourceCircleName.trim();
+    if (circle.isNotEmpty) {
+      chips.add(
+        _badgeChip(
+          context,
+          label: circle,
+          prefix: PlazaTextConstants.feedBadgeCircle,
+          accent: accent,
+        ),
+      );
+    }
+
+    if (_showCompanionBadge(item, primaryReason)) {
+      chips.add(
+        _badgeChip(
+          context,
+          label: PlazaTextConstants.feedBadgeCompanion,
+          accent: accent,
+        ),
+      );
+    }
+
+    return Wrap(
+      key: const ValueKey<String>('home-connection-badges-row'),
+      spacing: AppSpacing.intraGroupSm,
+      runSpacing: AppSpacing.intraGroupXs,
+      children: chips,
+    );
+  }
+
+  Widget _badgeChip(
+    BuildContext context, {
+    required String label,
+    String? prefix,
+    required Color accent,
+  }) {
+    final text = prefix == null || prefix.isEmpty ? label : '$prefix · $label';
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.intraGroupSm,
+        vertical: AppSpacing.intraGroupXs,
+      ),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: AppTypography.iosCaption2,
+          fontWeight: AppTypography.medium,
+          color: accent,
+        ),
+      ),
+    );
+  }
+}
+
 class _AuthorMetaLine extends StatelessWidget {
   const _AuthorMetaLine({
     required this.item,
@@ -600,19 +753,21 @@ class _FollowPillButton extends StatelessWidget {
       onPressed: onPressed,
       child: Container(
         key: const ValueKey<String>('home-post-author-follow-button'),
-        width: AppSpacing.followButtonWidth,
-        height: AppSpacing.buttonHeightSm,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+        width: AppSpacing.followButtonWidthCompact,
+        height: AppSpacing.buttonHeightXs,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(AppSpacing.buttonHeightSm / 2),
+          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
         ),
         child: Text(
           isFollowing ? UITextConstants.following : UITextConstants.follow,
+          maxLines: 1,
+          overflow: TextOverflow.fade,
+          softWrap: false,
           style: TextStyle(
-            fontSize: AppTypography.iosCaption1,
-            fontWeight: AppTypography.medium,
+            fontSize: AppTypography.xs,
+            fontWeight: AppTypography.semiBold,
             color: isFollowing ? AppColors.iosSecondaryLabel(context) : accent,
           ),
         ),

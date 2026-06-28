@@ -53,9 +53,17 @@ def parse_runtime_yaml(path: Path) -> dict[str, str]:
 
 
 def apply_overrides(values: dict[str, str], args: argparse.Namespace) -> dict[str, str]:
+    gateway_override = args.gateway_base_url or os.environ.get("LOCAL_GAMMA_GATEWAY_BASE_URL", "")
+    legal_override = args.legal_base_url or os.environ.get("APP_LEGAL_BASE_URL", "")
+    if not legal_override and gateway_override:
+        legal_override = (
+            "https://quwoquan.com/legal"
+            if args.env == "prod"
+            else f"{gateway_override.rstrip('/')}/legal"
+        )
     overrides = {
-        "gatewayBaseUrl": args.gateway_base_url or os.environ.get("LOCAL_GAMMA_GATEWAY_BASE_URL", ""),
-        "legalBaseUrl": args.legal_base_url or os.environ.get("APP_LEGAL_BASE_URL", ""),
+        "gatewayBaseUrl": gateway_override,
+        "legalBaseUrl": legal_override,
         "mediaAvatarCdnBaseUrl": args.media_avatar_base_url
         or args.media_base_url
         or os.environ.get("LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL", ""),

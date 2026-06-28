@@ -2,7 +2,6 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/app/navigation/app_router.dart';
 import 'package:quwoquan_app/cloud/rtc/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
@@ -13,19 +12,18 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('IncomingCallCoordinator — 装配与能力位', () {
     ProviderContainer makeContainer(PlatformCapabilities caps) {
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) => const _Empty(),
+          ),
+        ],
+      );
       return ProviderContainer(
         overrides: [
           platformCapabilitiesProvider.overrideWithValue(caps),
-          appRouterProvider.overrideWithValue(
-            GoRouter(
-              routes: [
-                GoRoute(
-                  path: '/',
-                  builder: (context, state) => const _Empty(),
-                ),
-              ],
-            ),
-          ),
+          incomingCallRouterReaderProvider.overrideWithValue(() => router),
         ],
       );
     }

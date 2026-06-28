@@ -54,6 +54,9 @@
 - A5：首屏失败、缓存回退失败、分页追加失败在列表页中有不同载体
 - A6：07-error-permission-semantics 规则与特性树节点一致
 - A7：沉浸式或跨页面入口的首屏错误必须保留来源 `sourceAppearanceMode`，错误页不继承错误的深色沉浸上下文
+- A8：JIT 权限（按住说话、RTC）默认无 L2 App primer，同手势无 2+ App modal
+- A9：聊天语音发送失败仅 status bar（`chatVoicePendingRetry`），禁止 actionDialog 叠加
+- A10：L2 primer 文案与「继续」按钮一致，含系统弹窗说明
 
 ## 测试目录约定（按领域服务划分）
 

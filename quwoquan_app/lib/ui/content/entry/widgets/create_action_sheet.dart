@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
@@ -38,49 +37,26 @@ class CreateActionSheet extends StatelessWidget {
         SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
     final primaryText =
         SettingsSemanticConstants.conversationSheetPrimaryLabelColor(isDark);
-    final secondaryText =
-        SettingsSemanticConstants.conversationSheetSecondaryLabelColor(isDark);
-    final actionColor = SettingsSemanticConstants.createSheetActionIconColor(
-      isDark,
-    );
-    final actionHaloColor =
-        SettingsSemanticConstants.createSheetActionHaloColor(isDark);
-    final draftActionColor =
-        SettingsSemanticConstants.createSheetDraftActionIconColor(isDark);
-    final draftHaloColor =
-        SettingsSemanticConstants.createSheetDraftActionHaloColor(isDark);
 
     final createActions = <_SheetActionSpec>[
       _SheetActionSpec(
         label: UITextConstants.createActionPostPhotoShort,
         labelKey: TestKeys.createActionGallery,
-        icon: FluentIcons.image_add_24_regular,
-        iconColor: actionColor,
-        haloColor: actionHaloColor,
         onPressed: () => onCreateAction(EditorStartAction.gallery),
       ),
       _SheetActionSpec(
         label: UITextConstants.createActionPostVideoShort,
         labelKey: TestKeys.createActionCapture,
-        icon: FluentIcons.video_add_24_regular,
-        iconColor: actionColor,
-        haloColor: actionHaloColor,
         onPressed: () => onCreateAction(EditorStartAction.capture),
       ),
       _SheetActionSpec(
         label: UITextConstants.createActionWriteLong,
         labelKey: TestKeys.createActionWrite,
-        icon: FluentIcons.document_edit_24_regular,
-        iconColor: actionColor,
-        haloColor: actionHaloColor,
         onPressed: () => onCreateAction(EditorStartAction.write),
       ),
       _SheetActionSpec(
         label: UITextConstants.createActionResumeDraft,
         labelKey: TestKeys.createActionContinueFromDraft,
-        icon: FluentIcons.document_text_clock_24_regular,
-        iconColor: draftActionColor,
-        haloColor: draftHaloColor,
         onPressed: onContinueFromDraft,
       ),
     ];
@@ -88,24 +64,15 @@ class CreateActionSheet extends StatelessWidget {
     final socialActions = <_SheetActionSpec>[
       _SheetActionSpec(
         label: UITextConstants.createActionAddContactShort,
-        icon: FluentIcons.person_add_24_regular,
-        iconColor: actionColor,
-        haloColor: actionHaloColor,
         onPressed: onAddContact,
       ),
       _SheetActionSpec(
         label: UITextConstants.createActionCreateGroupShort,
-        icon: FluentIcons.chat_multiple_24_regular,
-        iconColor: actionColor,
-        haloColor: actionHaloColor,
         onPressed: onStartGroupChat,
       ),
       if (onCreateCircle != null)
         _SheetActionSpec(
           label: UITextConstants.createActionCreateCircleShort,
-          icon: FluentIcons.people_add_24_regular,
-          iconColor: actionColor,
-          haloColor: actionHaloColor,
           onPressed: onCreateCircle!,
         ),
     ];
@@ -159,30 +126,30 @@ class CreateActionSheet extends StatelessWidget {
             children: [
               ConstrainedBox(
                 constraints: BoxConstraints(maxHeight: maxActionHeight),
-                child: ListView(
-                  shrinkWrap: true,
-                  primary: false,
-                  padding: EdgeInsets.zero,
+                child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
-                  children: [
-                    for (var i = 0; i < orderedGroups.length; i++) ...[
-                      _SheetActionGroup(
-                        title: orderedGroups[i].title,
-                        actions: orderedGroups[i].actions,
-                        titleColor: primaryText,
-                        labelColor: secondaryText,
-                        accentColor:
-                            SettingsSemanticConstants.createSheetSectionAccentColor(
-                              isDark,
-                            ),
-                      ),
-                      SizedBox(
-                        height: i == orderedGroups.length - 1
-                            ? AppSpacing.createActionSheetGroupTrailingGap
-                            : AppSpacing.createActionSheetGroupGap,
-                      ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var i = 0; i < orderedGroups.length; i++) ...[
+                        _SheetActionGroup(
+                          title: orderedGroups[i].title,
+                          actions: orderedGroups[i].actions,
+                          isDark: isDark,
+                          titleColor: primaryText,
+                          accentColor:
+                              SettingsSemanticConstants.createSheetSectionAccentColor(
+                                isDark,
+                              ),
+                        ),
+                        SizedBox(
+                          height: i == orderedGroups.length - 1
+                              ? AppSpacing.createActionSheetGroupTrailingGap
+                              : AppSpacing.createActionSheetGroupGap,
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
               ConversationSheetCancelBar(
@@ -202,17 +169,11 @@ class _SheetActionSpec {
   const _SheetActionSpec({
     required this.label,
     required this.onPressed,
-    required this.icon,
-    required this.iconColor,
-    required this.haloColor,
     this.labelKey,
   });
 
   final String label;
   final VoidCallback onPressed;
-  final IconData icon;
-  final Color iconColor;
-  final Color haloColor;
   final Key? labelKey;
 }
 
@@ -227,15 +188,15 @@ class _SheetActionGroup extends StatelessWidget {
   const _SheetActionGroup({
     required this.title,
     required this.actions,
+    required this.isDark,
     required this.titleColor,
-    required this.labelColor,
     required this.accentColor,
   });
 
   final String title;
   final List<_SheetActionSpec> actions;
+  final bool isDark;
   final Color titleColor;
-  final Color labelColor;
   final Color accentColor;
 
   @override
@@ -249,14 +210,21 @@ class _SheetActionGroup extends StatelessWidget {
           accentColor: accentColor,
         ),
         SizedBox(height: AppSpacing.createActionSheetSectionTitleGap),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            for (final action in actions)
-              Expanded(
-                child: _SheetActionTile(spec: action, labelColor: labelColor),
-              ),
-          ],
+        ConversationSheetListCard(
+          isDark: isDark,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < actions.length; i++) ...[
+                _SheetActionListRow(spec: actions[i], labelColor: titleColor),
+                if (i != actions.length - 1)
+                  ConversationSheetDivider(
+                    isDark: isDark,
+                    dividerLeftInset: AppSpacing.containerMd,
+                  ),
+              ],
+            ],
+          ),
         ),
       ],
     );
@@ -302,8 +270,8 @@ class _SheetSectionTitle extends StatelessWidget {
   }
 }
 
-class _SheetActionTile extends StatelessWidget {
-  const _SheetActionTile({required this.spec, required this.labelColor});
+class _SheetActionListRow extends StatelessWidget {
+  const _SheetActionListRow({required this.spec, required this.labelColor});
 
   final _SheetActionSpec spec;
   final Color labelColor;
@@ -312,41 +280,29 @@ class _SheetActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return CupertinoButton(
       padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
       onPressed: spec.onPressed,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: spec.haloColor,
-              shape: BoxShape.circle,
-            ),
-            child: SizedBox.square(
-              dimension: AppSpacing.createActionSheetActionHaloSize,
-              child: Center(
-                child: Icon(
-                  spec.icon,
-                  size: AppSpacing.createActionSheetActionIconSize,
-                  color: spec.iconColor,
-                ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: AppSpacing.buttonHeight + AppSpacing.containerXs,
+          ),
+          child: Center(
+            child: Text(
+              spec.label,
+              key: spec.labelKey,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppTypography.iosBody,
+                fontWeight: AppTypography.medium,
+                color: labelColor,
+                height: AppTypography.lineHeightTight,
               ),
             ),
           ),
-          SizedBox(height: AppSpacing.createActionSheetActionLabelGap),
-          Text(
-            spec.label,
-            key: spec.labelKey,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: AppTypography.iosCallout,
-              fontWeight: AppTypography.medium,
-              color: labelColor,
-              height: AppTypography.lineHeightTight,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -185,6 +185,8 @@ class AuthApiPolicy {
     'ListProfileInteractionActivitiesReceived': 'required',
     'ListProfileInteractionActivitiesSent': 'required',
     'ListRecentSearches': 'required',
+    'ListSelectableGroupContactMembers': 'required',
+    'ListSelectableGroupConversations': 'required',
     'ListSkillSubscriptions': 'required',
     'ListSkills': 'public',
     'ListTagChildren': 'public',

@@ -12,37 +12,77 @@ scope:
   out_of_scope: []
 gwt_acceptance:
   GWT1:
-    title: error permission display semantics  permission card display contract GWT
+    title: JIT 麦克风权限 — 无冗余 App modal
     given:
-    - 前置条件明确。
+    - 全新安装或清除数据，进入聊天页
     when:
-    - 用户或系统动作发生。
+    - 首次按住说话请求麦克风
     then:
-    - 可观察结果符合预期。
+    - 仅出现系统弹窗，无 App L2 primer；拒绝后最多一次 L3 gate
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - 同一次手势无 2+ App modal
     tests:
-      planned: []
+      planned:
+      - quwoquan_app/test/local_contract/core/services/app_permission_coordinator__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
-        suite: contract
+        suite: permission_card_jit_microphone
         cases:
-        - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics_permission_card_display_contract.contract
-        envs: &id001
+        - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics.permission_card_jit_microphone
+        envs:
         - local
-      - layer: local_contract
-        suite: gwt1_local_contract
-        cases:
-        - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics_permission_card_display_contract.gwt1_local_contract
-        envs: *id001
       supporting: []
-    notes: []
+  GWT2:
+    title: 语音发送失败 — 单一低打扰载体
+    given:
+    - 麦克风已授权，上传/发送 mock 失败
+    when:
+    - 松手发送语音
+    then:
+    - 仅 status bar 展示 chatVoicePendingRetry + 重试，无 actionDialog
+    done_when:
+    - modal 与 status bar 不同时出现
+    tests:
+      planned:
+      - quwoquan_app/test/local_contract/ui/chat/chat_voice_failure__local_contract_test.dart
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: permission_card_voice_failure
+        cases:
+        - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics.permission_card_voice_failure
+        envs:
+        - local
+      supporting: []
+  GWT3:
+    title: Page L2 primer 文案与继续按钮一致
+    given:
+    - 相册或定位页首次进入
+    when:
+    - 展示 L2 preBrief
+    then:
+    - 正文含系统弹窗说明，不含「请点允许」与「继续」矛盾
+    done_when:
+    - verify_permission_primer_copy.py 通过
+    tests:
+      planned:
+      - quwoquan_app/scripts/runtime/verify_permission_primer_copy.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: permission_primer_copy
+        cases:
+        - local_contract.runtime.runtime_client_foundation.error_permission_display_semantics.permission_primer_copy
+        envs:
+        - local
+      supporting: []
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

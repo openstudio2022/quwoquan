@@ -28,6 +28,18 @@ class AppRoutePaths {
   static const String circles = '/circles';
   static const String circlesSegment = 'circles';
 
+  static const String plaza = '/plaza';
+  static const String plazaSegment = 'plaza';
+
+  static const String plazaNearby = '/plaza/nearby';
+  static const String plazaNearbySegment = 'nearby';
+
+  static const String plazaCompanion = '/plaza/companion';
+  static const String plazaCompanionSegment = 'companion';
+
+  static const String plazaMeetup = '/plaza/meetup';
+  static const String plazaMeetupSegment = 'meetup';
+
   static const String chat = '/chat';
   static const String chatSegment = 'chat';
 

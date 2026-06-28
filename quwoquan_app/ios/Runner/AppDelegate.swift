@@ -65,9 +65,9 @@ import UIKit
 
 private enum StartupTransitionBackground {
   static let color = UIColor(
-    red: 0.0196078431,
-    green: 0.0235294118,
-    blue: 0.0313725490,
+    red: 0.0392156863,
+    green: 0.5176470588,
+    blue: 1.0,
     alpha: 1
   )
 }

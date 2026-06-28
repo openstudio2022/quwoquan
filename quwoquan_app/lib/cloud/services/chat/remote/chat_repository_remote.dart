@@ -17,6 +17,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
@@ -724,6 +725,68 @@ class RemoteChatRepository implements ChatRepository {
     return _decodeObjectItems(
       decoded,
       context: ChatRequestPageIds.listGroupCandidates,
+      fromMap: ChatContactRowDto.fromMap,
+    );
+  }
+
+  // ── 从群聊中选择联系人 ──────────────────────────────────────────────────────
+
+  @override
+  Future<List<SelectableGroupConversationRowDto>>
+  listSelectableGroupConversations({
+    String? query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final normalizedQuery = query?.trim() ?? '';
+    final uri = _uri(
+      ChatApiMetadata.listSelectableGroupConversationsPath,
+      queryParameters: <String, String>{
+        if (normalizedQuery.isNotEmpty) 'query': normalizedQuery,
+        'limit': '$limit',
+      },
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: await _resolveHeaders(
+        AppUiSurfaces.startGroupChat,
+        operationId: ChatApiMetadata.listSelectableGroupConversationsOperation,
+        clientPageId: ChatRequestPageIds.listSelectableGroupConversations,
+      ),
+    );
+    return _decodeObjectItems(
+      decoded,
+      context: ChatRequestPageIds.listSelectableGroupConversations,
+      fromMap: SelectableGroupConversationRowDto.fromMap,
+    );
+  }
+
+  @override
+  Future<List<ChatContactRowDto>> listSelectableGroupContactMembers({
+    required String conversationId,
+    String? query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final normalizedQuery = query?.trim() ?? '';
+    final uri = _uri(
+      ChatApiMetadata.listSelectableGroupContactMembersPath(
+        conversationId: conversationId,
+      ),
+      queryParameters: <String, String>{
+        if (normalizedQuery.isNotEmpty) 'query': normalizedQuery,
+        'limit': '$limit',
+      },
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: await _resolveHeaders(
+        AppUiSurfaces.startGroupChat,
+        operationId: ChatApiMetadata.listSelectableGroupContactMembersOperation,
+        clientPageId: ChatRequestPageIds.listSelectableGroupContactMembers,
+      ),
+    );
+    return _decodeObjectItems(
+      decoded,
+      context: ChatRequestPageIds.listSelectableGroupContactMembers,
       fromMap: ChatContactRowDto.fromMap,
     );
   }

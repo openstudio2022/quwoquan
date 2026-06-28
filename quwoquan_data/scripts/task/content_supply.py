@@ -466,6 +466,13 @@ def _author_id(spec: dict[str, Any], index: int) -> str:
 
 def _author_profile(spec: dict[str, Any], index: int) -> dict[str, Any]:
     pool = spec.get("authorPool") or {}
+    batch_id = str(pool.get("creatorBatchId") or "").strip()
+    if batch_id:
+        from _common.creator_pool.registry_bridge import author_pool_profile_from_batch
+
+        bridged = author_pool_profile_from_batch(batch_id, index)
+        if bridged:
+            return bridged
     archetypes = pool.get("creatorArchetypes") or ["general_creator"]
     archetype = str(archetypes[index % len(archetypes)])
     interval = 1 + (_stable_int(spec.get("supplyTaskId"), "interval", index) % 5)
@@ -726,6 +733,17 @@ def build_delta_plan(
             "shards": _shards(target, content_shard_size, "content"),
             "sample": sample_objects,
             "skippedDuplicateSample": skipped,
+            "creatorAssignmentPolicy": {
+                "samplePolicy": "preview_only_round_robin",
+                "previewOnly": True,
+                "note": (
+                    "delta_plan.sample 的 creator 为 round-robin 体量/排期预览，"
+                    "不是发布绑定真相源；真实内容生产必须经 match_creator / "
+                    "resolve_registry_creator_assignment 按 carrier/region/vertical/"
+                    "preferredBlueprintIds 择优绑定，并经 creator_assignment_issues 语义门校验。"
+                ),
+                "productionResolver": "resolve_registry_creator_assignment",
+            },
         },
         "dedupPolicy": {
             "beforeGeneration": True,

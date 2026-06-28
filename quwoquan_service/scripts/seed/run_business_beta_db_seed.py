@@ -21,7 +21,7 @@ DOMAIN_TESTS = {
     "content": {
         "cwd": SERVICE_ROOT / "services" / "content-service",
         "pattern": "TestContractFixtureSeed_ContentAlphaReadsViaHandler",
-        "seedRefs": ["content_discovery_core"],
+        "seedRefs": ["content_discovery_core", "comment_thread_core"],
         "resetScope": "fixture_* posts in content_test",
         "targetStore": "mongodb:content_test.posts",
         "insertedCount": 7,
@@ -59,6 +59,30 @@ DOMAIN_TESTS = {
             "/v1/circles/fixture_circle_photo/groups",
             "/v1/circles/fixture_circle_photo/members",
             "/v1/circles/fixture_circle_photo/files",
+        ],
+    },
+    "user": {
+        "cwd": SERVICE_ROOT / "services" / "user-service",
+        "pattern": "TestContractFixtureSeed_CreatorPoolBetaReadsViaHandler",
+        "seedRefs": ["user_profile_core", "creator_travel_travel_batch_100_v1_core"],
+        "resetScope": "fixture_user_* + creator_pool users in user-service test store",
+        "targetStore": "postgres:user-service:test_store",
+        "insertedCount": 20,
+        "verifiedEndpoints": [
+            "/v1/user/{subAccountId}",
+            "/v1/user/sub-accounts/{subAccountId}/homepage-bundle",
+        ],
+    },
+    "creator_pool": {
+        "cwd": SERVICE_ROOT / "services" / "user-service",
+        "pattern": "TestContractFixtureSeed_CreatorPoolFullBatchReadsViaHandler",
+        "seedRefs": ["creator_travel_batch100", "creator_travel_travel_batch_100_v1_core"],
+        "resetScope": "creator_pool full-batch (100) seeded personas in user-service test store",
+        "targetStore": "postgres:user-service:test_store",
+        "insertedCount": 100,
+        "verifiedEndpoints": [
+            "/v1/user/{subAccountId}",
+            "/v1/user/sub-accounts/{subAccountId}/homepage-bundle",
         ],
     },
 }
@@ -110,7 +134,10 @@ def main() -> int:
     )
     parser.add_argument(
         "--mongo-uri",
-        default=os.environ.get("TEST_MONGO_URI", "mongodb://localhost:27017"),
+        default=os.environ.get(
+            "TEST_MONGO_URI",
+            "mongodb://127.0.0.1:27017/?directConnection=true",
+        ),
         help="Mongo URI used by service handler harnesses.",
     )
     args = parser.parse_args()

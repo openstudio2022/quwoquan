@@ -83,6 +83,16 @@ class AppConceptConstants {
   static const String chat = '消息';
   static const String profile = '我';
 
+  // ==================== 同频/广场（社交连接一级入口） ====================
+  /// 同频/广场底栏标签：从内容交集走向同趣、同行、附近与线下局的连接中心
+  static const String plaza = '同频';
+
+  /// 同频/广场页标题（连接中心）
+  static const String plazaTitle = '同频广场';
+
+  /// 同频/广场副标题：以交集为半径，找到同趣同行的人
+  static const String plazaSubtitle = '以兴趣为半径，遇见同频的人';
+
   // ==================== 趣聊 Tab ====================
   static const String messages = '消息';
   static const String contacts = '联系人';

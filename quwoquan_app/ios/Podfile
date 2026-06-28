@@ -43,6 +43,16 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+      # permission_handler_apple：未启用宏时 request() 会直接返回 denied，无法弹出系统授权框。
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+        'PERMISSION_CAMERA=1',
+        'PERMISSION_MICROPHONE=1',
+        'PERMISSION_PHOTOS=1',
+        'PERMISSION_LOCATION=1',
+        'PERMISSION_CONTACTS=1',
+        'PERMISSION_SPEECH_RECOGNIZER=1',
+      ]
     end
     flutter_additional_ios_build_settings(target)
   end

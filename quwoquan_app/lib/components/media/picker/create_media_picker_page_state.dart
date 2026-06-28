@@ -54,9 +54,15 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   }
 
   Future<void> _loadInitial() async {
-    final granted = await widget.mediaPickerService.ensurePhotoPermission();
+    if (!mounted) {
+      return;
+    }
+    final outcome = await AppPermissionCoordinator.instance.ensure(
+      context,
+      AppPermissionKind.photos,
+    );
     if (!mounted) return;
-    if (!granted) {
+    if (outcome != AppPermissionEnsureOutcome.granted) {
       setState(() {
         _hasPermission = false;
         _loading = false;
@@ -647,10 +653,39 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           child: Center(
             child: Padding(
               padding: EdgeInsets.all(AppSpacing.containerLg),
-              child: Text(
-                UITextConstants.mediaPickerPermissionDenied,
-                style: TextStyle(color: sub, fontSize: AppTypography.base),
-                textAlign: TextAlign.center,
+              child: AppInlineGateState(
+                semantic: AppPermissionCoordinator.instance.permissionSemantic(
+                  AppPermissionKind.photos,
+                  openSettings: true,
+                  includeRetry: true,
+                ),
+                onAction: (action) async {
+                  switch (action.type) {
+                    case UiErrorActionType.retry:
+                    case UiErrorActionType.resubmit:
+                      setState(() => _loading = true);
+                      await _loadInitial();
+                      return;
+                    case UiErrorActionType.openSettings:
+                      await AppPermissionCoordinator.instance.openSettings(
+                        AppPermissionKind.photos,
+                        onReturn: (granted) {
+                          if (mounted && granted) {
+                            unawaited(_loadInitial());
+                          }
+                        },
+                      );
+                      return;
+                    case UiErrorActionType.dismiss:
+                    case UiErrorActionType.back:
+                      if (mounted) {
+                        Navigator.of(context).pop();
+                      }
+                      return;
+                    case UiErrorActionType.login:
+                      return;
+                  }
+                },
               ),
             ),
           ),

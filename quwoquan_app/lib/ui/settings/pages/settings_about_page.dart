@@ -43,38 +43,25 @@ class SettingsAboutPage extends ConsumerWidget {
                 children: <Widget>[
                   SettingsInsetGroupedSection(
                     isDark: isDark,
+                    density: SettingsInsetSectionDensity.compact,
                     child: Column(
                       children: <Widget>[
                         SettingsInsetFormRow(
                           isDark: isDark,
                           label: UITextConstants.loginBrandName,
-                          trailing: Text(
-                            UITextConstants.settingsAppOfficialName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              fontSize: AppTypography.iosSubheadline,
-                              color: SettingsSemanticConstants.secondaryColor(
-                                isDark,
-                              ),
-                            ),
+                          trailing: SettingsInsetTrailingText(
+                            isDark: isDark,
+                            value: UITextConstants.settingsAppOfficialName,
                           ),
                         ),
                         SettingsInsetFormSectionDivider(isDark: isDark),
                         SettingsInsetFormRow(
                           isDark: isDark,
                           label: UITextConstants.settingsVersion,
-                          trailing: Text(
-                            UITextConstants.settingsVersionValue(version),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              fontSize: AppTypography.iosSubheadline,
-                              color: SettingsSemanticConstants.secondaryColor(
-                                isDark,
-                              ),
+                          trailing: SettingsInsetTrailingText(
+                            isDark: isDark,
+                            value: UITextConstants.settingsVersionValue(
+                              version,
                             ),
                           ),
                         ),
@@ -84,18 +71,13 @@ class SettingsAboutPage extends ConsumerWidget {
                   SizedBox(height: AppSpacing.intraGroupSm),
                   SettingsInsetGroupedSection(
                     isDark: isDark,
+                    density: SettingsInsetSectionDensity.compact,
                     child: Column(
                       children: <Widget>[
                         SettingsInsetFormRow(
                           isDark: isDark,
                           label: UITextConstants.userAgreement,
-                          trailing: Icon(
-                            CupertinoIcons.chevron_forward,
-                            size: AppSpacing.iconSmall,
-                            color: SettingsSemanticConstants.secondaryColor(
-                              isDark,
-                            ),
-                          ),
+                          trailing: SettingsInsetChevron(isDark: isDark),
                           onTap: () {
                             context.push(AppRoutePaths.legalUserAgreement);
                           },
@@ -104,13 +86,7 @@ class SettingsAboutPage extends ConsumerWidget {
                         SettingsInsetFormRow(
                           isDark: isDark,
                           label: UITextConstants.privacyPolicy,
-                          trailing: Icon(
-                            CupertinoIcons.chevron_forward,
-                            size: AppSpacing.iconSmall,
-                            color: SettingsSemanticConstants.secondaryColor(
-                              isDark,
-                            ),
-                          ),
+                          trailing: SettingsInsetChevron(isDark: isDark),
                           onTap: () {
                             context.push(AppRoutePaths.legalPrivacyPolicy);
                           },

@@ -1,0 +1,38 @@
+schemaVersion: prefab_user_provenance/1
+description: |
+  预制用户唯一增量真相源声明。新增预制用户必须经 creator_pool 管线产出；
+  legacy fixture_user_* 在 T4 前只读保留，不得新增引用。
+
+defaultTrack: creator_pool
+legacyTrackPolicy: read_only_until_t4
+currentUserSlot: creator_pool.currentUserVariant
+
+tracks:
+  legacy:
+    prefabTrack: legacy
+    source: shared.avatar-user-pool
+    fixturePath: _shared/test_fixtures/user_pool.json
+    policy: read_only_until_t4
+  creator_pool:
+    prefabTrack: creator_pool
+    source: creator_pool.seed/1
+    fixturePath: _shared/test_fixtures/user_pool.creator_pool.json
+    manifestPath: _shared/test_fixtures/user_pool.manifest.json
+    policy: sole_incremental_source
+
+legacyAliases:
+  fixture_user_current:
+    resolvesTo: qwq_creator_current_user_variant
+    deprecated: true
+    note: T2+ dual-read alias; resolver maps to currentUserVariant slot
+  user_001:
+    resolvesTo: qwq_creator_current_user_variant
+    deprecated: true
+
+batchPolicy:
+  canonicalBatchId: travel_batch_100_v1
+  travel_batch_100_v1:
+    role: commercial_truth_source
+    seedTruth: true
+    seedFixture: creator_travel_batch100.seed.json
+    note: canonical 商用 100 作者 batch；seed/overlay/slice/manifest/scenario 单一真相源

@@ -801,6 +801,7 @@ def environment_preflight(
     *,
     require_cursor_key: bool = True,
     check_network: bool = True,
+    check_cursor_cloud_api: bool = True,
     endpoints: Iterable[str] | None = None,
     timeout_seconds: float = 5.0,
     check_cursor_startup: bool = False,
@@ -834,7 +835,7 @@ def environment_preflight(
             "endpoints": [],
             "issues": [],
         }
-    if require_cursor_key and not issues:
+    if require_cursor_key and check_cursor_cloud_api and not issues:
         cursor_cloud_api = _cursor_cloud_api_probe(timeout_seconds=max(3.0, timeout_seconds))
         issues.extend(cursor_cloud_api.get("issues") or [])
     else:
@@ -846,7 +847,11 @@ def environment_preflight(
             "skipReason": (
                 "cursor_key_not_required"
                 if not require_cursor_key
-                else "local_preflight_failed_or_network_unavailable"
+                else (
+                    "local_runtime_only"
+                    if not check_cursor_cloud_api
+                    else "local_preflight_failed_or_network_unavailable"
+                )
             ),
         }
     if check_cursor_startup and not issues and require_cursor_key:

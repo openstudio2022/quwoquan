@@ -508,6 +508,12 @@ void main() {
     );
     expect(phoneField.controller?.text, '18013813909');
     expect(find.text(UITextConstants.loginFailed), findsNothing);
+    final otpFieldFinder = find.byType(CupertinoTextField).last;
+    expect(
+      tester.widget<CupertinoTextField>(otpFieldFinder).focusNode?.hasFocus,
+      isTrue,
+      reason: '发码进入验证码态后应自动聚焦到验证码输入框',
+    );
   });
 
   testWidgets('过期 returning 记住手机号 + 未勾协议：点主按钮预填但不自动发码并提示勾选', (tester) async {
@@ -829,6 +835,13 @@ void main() {
     expect(repo.sendOtpCalls, 1);
     expect(find.textContaining('180****3909'), findsWidgets);
     expect(find.byType(OtpCodeBoxes), findsOneWidget);
+
+    final otpFieldFinder = find.byType(CupertinoTextField).last;
+    expect(
+      tester.widget<CupertinoTextField>(otpFieldFinder).focusNode?.hasFocus,
+      isTrue,
+      reason: '点击获取验证码后应自动聚焦到验证码输入框',
+    );
 
     await tester.enterText(find.byType(CupertinoTextField).last, '12 34 56');
     await tester.pump();

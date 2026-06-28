@@ -422,7 +422,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
         )
         lines.append("")
         if base_text and adapt_base:
-            lines.append("- 以下方底稿为基底做适度润色与人设适配，并用其它证据补全/校正事实；底稿合理的标题、小标题与结构可保留。")
+            lines.append("- 以下方底稿为**唯一**素材做适度润色与人设适配；底稿合理的标题、小标题与结构可保留。**禁止**引用、补全或校正自其它来源/其它文章（单底稿零参考）。")
         elif base_text:
             lines.append("- 以下方事实参考材料只用于抽取可核验事实、路线顺序、条件和数字；正文结构按 writingIntent 独立组织，禁止照搬来源段落。")
         else:
@@ -473,7 +473,8 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
             )
             lines.append(
                 f"- Review Gate 会检查 `baseDraftFidelity`，目标区间 {_base_fidelity_range_label()}；"
-                "不要用百科/官网/其它来源重新写一篇新文章，补充证据只能用于校正或补一句上下文。"
+                "**只能**基于这份底稿轻润色，**禁止**用百科/官网/其它来源或其它文章补全、校正或拼接段落（单底稿零参考，"
+                "review 会扫描与其它来源单元的长串重合并驳回）。"
             )
             lines.append(
                 "- **保真硬底线（连续 3 字重合度，低于 55% 直接驳回）**：必须**逐句沿用底稿原有措辞与短语**，"
@@ -531,11 +532,12 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
     lines.append("")
     lines.append(_fmt_list(pack.get("mustIncludeFacts") or []))
     lines.append("")
-    source_paths = [str(x) for x in (pack.get("sourcePaths") or []) if x]
-    if source_paths:
-        lines.append("## 允许引用的来源路径")
+    # 单底稿零参考：只暴露唯一底稿来源单元，禁止把实体全量 download 索引塞给 Agent。
+    base_source_ref = str(pack.get("baseSourceRef") or "").strip()
+    if base_source_ref:
+        lines.append("## 唯一底稿来源（全文只能来自这一份，禁止引用其它来源）")
         lines.append("")
-        lines.append(_fmt_list(source_paths))
+        lines.append(_fmt_list([base_source_ref]))
         lines.append("")
     if adapt_base:
         lines.append("## 章节意图（仅参考；结构以底稿为准，可自然调整，不要照抄为标题）")

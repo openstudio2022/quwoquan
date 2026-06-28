@@ -12,7 +12,7 @@ func TestFeedServiceNegativeFallbackLocalContractTest(t *testing.T) {
 		"test",
 		"../../../../internal/application",
 		"-run",
-		"^(TestListFeed_FallbackPath_FiltersDislikedContent|TestListFeed_TravelVerticalRoutesRecommendationAndFallback|TestListFeed_PremiumStreamRoutesToSimilarPresetSurface)$",
+		"^(TestListFeed_FallbackPath_FiltersDislikedContent|TestListFeed_PremiumStreamRoutesToSimilarPresetSurface|TestListFeed_TravelVerticalRoutesRecommendationAndFallback)$",
 		"-count=1",
 	)
 	output, err := cmd.CombinedOutput()

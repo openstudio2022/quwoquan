@@ -20,7 +20,7 @@
                                 <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                             </imageView>
                         </subviews>
-                        <color key="backgroundColor" red="0.0196078431" green="0.0235294118" blue="0.0313725490" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <color key="backgroundColor" red="0.0392156863" green="0.5176470588" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
                             <constraint firstItem="QWQ-LAUNCH-TRANSITION-BACKGROUND" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="QWQ-LAUNCH-TRANSITION-TOP"/>
                             <constraint firstItem="QWQ-LAUNCH-TRANSITION-BACKGROUND" firstAttribute="bottom" secondItem="Ze5-6b-2t3" secondAttribute="bottom" id="QWQ-LAUNCH-TRANSITION-BOTTOM"/>

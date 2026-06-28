@@ -2,148 +2,74 @@ part of 'start_group_chat_page.dart';
 
 class _SelectedMemberAvatar extends StatelessWidget {
   const _SelectedMemberAvatar({
+    super.key,
     required this.name,
     required this.avatarUrl,
-    required this.onRemove,
-    required this.isDark,
+    required this.onTap,
   });
 
   final String name;
   final String avatarUrl;
-  final VoidCallback onRemove;
-  final bool isDark;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: AppSpacing.iconButtonMinSizeMd,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RoundedSquareAvatar(
-                size: AppSpacing.largeButtonSize,
-                imageUrl: avatarUrl,
-                name: name,
-                fallbackIcon: CupertinoIcons.person_fill,
-              ),
-              SizedBox(height: AppSpacing.xs),
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: AppTypography.sm),
-              ),
-            ],
-          ),
-          Positioned(
-            right: -2,
-            top: -2,
-            child: GestureDetector(
-              onTap: onRemove,
-              child: Container(
-                width: AppSpacing.eighteen,
-                height: AppSpacing.eighteen,
-                decoration: BoxDecoration(
-                  color:
-                      SettingsSemanticConstants.selectionAvatarAccessoryBackground(
-                        isDark,
-                      ),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color:
-                        SettingsSemanticConstants.selectionAvatarAccessoryBorder(
-                          isDark,
-                        ),
-                  ),
-                ),
-                child: Icon(
-                  CupertinoIcons.clear,
-                  size: AppSpacing.ten + AppSpacing.one,
-                  color:
-                      SettingsSemanticConstants.selectionAvatarAccessoryForeground(
-                        isDark,
-                      ),
-                ),
-              ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RoundedSquareAvatar(
+              size: AppSpacing.largeButtonSize,
+              imageUrl: avatarUrl,
+              name: name,
+              fallbackIcon: CupertinoIcons.person_fill,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SelectionSectionLabel extends StatelessWidget {
-  const _SelectionSectionLabel({required this.title, required this.color});
-
-  final String title;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        SettingsSemanticConstants.blockHorizontalPadding,
-        AppSpacing.xs,
-        AppSpacing.xs,
-        AppSpacing.xs,
-      ),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: AppTypography.iosFootnote,
-          fontWeight: AppTypography.medium,
-          color: color,
+            SizedBox(height: AppSpacing.xs),
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: AppTypography.sm),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _SelectionCard extends StatelessWidget {
-  const _SelectionCard({
-    required this.isDark,
-    required this.child,
-    this.padding = EdgeInsets.zero,
+class _ContactListSectionBand extends StatelessWidget {
+  const _ContactListSectionBand({
+    super.key,
+    required this.title,
+    required this.color,
+    required this.bandColor,
   });
 
-  final bool isDark;
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(
-        SettingsSemanticConstants.insetFormSectionCornerRadius,
-      ),
-      child: ColoredBox(
-        color: SettingsSemanticConstants.insetFormSectionSurface(isDark),
-        child: Padding(padding: padding, child: child),
-      ),
-    );
-  }
-}
-
-class _SelectionListDivider extends StatelessWidget {
-  const _SelectionListDivider({required this.isDark, this.leadingInset = 0});
-
-  final bool isDark;
-  final double leadingInset;
+  final String title;
+  final Color color;
+  final Color bandColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: SettingsSemanticConstants.dividerThickness,
-      margin: EdgeInsets.only(
-        left: SettingsSemanticConstants.blockHorizontalPadding + leadingInset,
-        right: SettingsSemanticConstants.blockHorizontalPadding,
+      height: AppSpacing.twenty,
+      alignment: Alignment.centerLeft,
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      color: bandColor,
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: AppTypography.xs,
+          fontWeight: AppTypography.semiBold,
+          color: color,
+        ),
       ),
-      color: SettingsSemanticConstants.insetFormSectionDividerColor(isDark),
     );
   }
 }
@@ -157,9 +83,13 @@ class _RelatedFriendRow extends StatelessWidget {
     required this.fgPrimary,
     required this.fgSecondary,
     required this.locked,
+    required this.rowBackground,
+    required this.dividerColor,
     required this.onTap,
     required this.onAvatarTap,
   });
+
+  static const double _avatarSize = ChatConversationAvatarTokens.listSize;
 
   final String name;
   final String username;
@@ -168,6 +98,8 @@ class _RelatedFriendRow extends StatelessWidget {
   final Color fgPrimary;
   final Color fgSecondary;
   final bool locked;
+  final Color rowBackground;
+  final Color dividerColor;
   final VoidCallback? onTap;
   final VoidCallback onAvatarTap;
 
@@ -175,59 +107,179 @@ class _RelatedFriendRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return CupertinoButton(
       padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
       onPressed: onTap,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: SettingsSemanticConstants.selectionRowMinHeight,
+      child: Container(
+        key: ValueKey<String>('start-group-candidate-row-$username'),
+        color: rowBackground,
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(
+                vertical: AppSpacing.sm + AppSpacing.xs,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _SelectionIndicator(
+                    selected: selected,
+                    onTap: onTap,
+                    enabled: !locked && onTap != null,
+                  ),
+                  GestureDetector(
+                    onTap: onAvatarTap,
+                    child: RoundedSquareAvatar(
+                      size: _avatarSize,
+                      imageUrl: avatarUrl,
+                      name: name,
+                      fallbackIcon: CupertinoIcons.person_fill,
+                    ),
+                  ),
+                  SizedBox(width: ChatConversationAvatarTokens.leadingGap),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosBody,
+                            fontWeight: AppTypography.regular,
+                            color: locked ? fgSecondary : fgPrimary,
+                            height: AppTypography.lineHeightTight,
+                          ),
+                        ),
+                        if (locked) ...[
+                          SizedBox(height: AppSpacing.xs),
+                          Text(
+                            UITextConstants.startGroupChatAlreadyInGroup,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppTypography.iosFootnote,
+                              color: fgSecondary.withValues(alpha: 0.9),
+                              height: AppTypography.lineHeightCompact,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.only(
+                left: AppSpacing.minInteractiveSize +
+                    ChatConversationAvatarTokens.dividerInset(_avatarSize),
+              ),
+              child: Divider(
+                key: ValueKey<String>('start-group-candidate-divider-$username'),
+                height: AppSpacing.one,
+                thickness: AppSpacing.hairline,
+                color: dividerColor,
+              ),
+            ),
+          ],
         ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: SettingsSemanticConstants.blockHorizontalPadding,
-            vertical: AppSpacing.sm,
-          ),
-          child: Row(
-            children: [
-              _SelectionIndicator(
-                selected: selected,
-                onTap: onTap,
-                enabled: !locked && onTap != null,
+      ),
+    );
+  }
+}
+
+class _ActionEntryRow extends StatelessWidget {
+  const _ActionEntryRow({
+    required this.icon,
+    required this.title,
+    required this.rowBackground,
+    required this.dividerColor,
+    required this.fgPrimary,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final Color rowBackground;
+  final Color dividerColor;
+  final Color fgPrimary;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Container(
+        key: ValueKey<String>('start-group-action-entry-$title'),
+        color: rowBackground,
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(
+                vertical: AppSpacing.sm + AppSpacing.xs,
               ),
-              GestureDetector(
-                onTap: onAvatarTap,
-                child: RoundedSquareAvatar(
-                  size: AppSpacing.avatarSize,
-                  imageUrl: avatarUrl,
-                  name: name,
-                  fallbackIcon: CupertinoIcons.person_fill,
-                ),
-              ),
-              SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: TextStyle(
-                        fontSize: AppTypography.lg,
-                        color: locked ? fgSecondary : fgPrimary,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: AppSpacing.minInteractiveSize,
+                    height: AppSpacing.minInteractiveSize,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Icon(
+                        icon,
+                        size: AppSpacing.iconMedium,
+                        color: AppColors.primaryColor,
                       ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: ChatConversationAvatarTokens.listSize -
+                        AppSpacing.minInteractiveSize +
+                        ChatConversationAvatarTokens.leadingGap,
+                  ),
+                  Expanded(
+                    child: Text(
+                      title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                    ),
-                    if (locked)
-                      Text(
-                        UITextConstants.startGroupChatAlreadyInGroup,
-                        style: TextStyle(
-                          fontSize: AppTypography.sm,
-                          color: fgSecondary,
-                        ),
+                      style: TextStyle(
+                        fontSize: AppTypography.iosBody,
+                        fontWeight: AppTypography.regular,
+                        color: fgPrimary,
+                        height: AppTypography.lineHeightTight,
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+                  Icon(
+                    CupertinoIcons.chevron_right,
+                    size: AppSpacing.iconSmall,
+                    color: fgPrimary.withValues(alpha: 0.4),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            Padding(
+              padding: EdgeInsets.only(
+                left: AppSpacing.minInteractiveSize +
+                    ChatConversationAvatarTokens.dividerInset(
+                      ChatConversationAvatarTokens.listSize,
+                    ),
+              ),
+              child: Divider(
+                key: ValueKey<String>('start-group-action-entry-divider-$title'),
+                height: AppSpacing.one,
+                thickness: AppSpacing.hairline,
+                color: dividerColor,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -243,27 +295,35 @@ class _LetterIndex extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final fgSecondary = isDark
-        ? AppColors.white.withValues(alpha: 0.45)
-        : AppColors.black.withValues(alpha: 0.45);
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(letters.length, (i) {
-        return GestureDetector(
-          onTap: () => onTap(i),
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
-            child: Text(
-              letters[i],
-              style: TextStyle(
-                fontSize: AppTypography.xs,
-                color: fgSecondary,
-                fontWeight: FontWeight.normal,
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(letters.length, (i) {
+          return CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            onPressed: () => onTap(i),
+            child: Container(
+              width: AppSpacing.twenty,
+              height: AppSpacing.twenty,
+              alignment: Alignment.center,
+              margin: EdgeInsets.symmetric(vertical: AppSpacing.one),
+              child: Text(
+                letters[i],
+                style: TextStyle(
+                  fontSize: AppTypography.xs,
+                  fontWeight: AppTypography.semiBold,
+                  color: fgSecondary,
+                ),
               ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
+      ),
     );
   }
 }

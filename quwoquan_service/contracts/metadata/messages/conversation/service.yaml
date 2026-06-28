@@ -234,6 +234,26 @@ api_routes:
     auth: required
 
   - method: GET
+    path: /v1/chat/selectable-group-conversations
+    operation: ListSelectableGroupConversations
+    description: |
+      「从群聊中选择联系人」群列表（图四）。返回当前用户所在、且含与当前用户互关联系人的群会话，并给出每个群的互关好友数 friendMemberCount。
+      由 chat-service 聚合会话成员与关系能力（relationship gate）计算交集，friendMemberCount==0 的群不返回；前端不得再自行多次拉取成员逐群求交集。
+    query_params: [cursor, limit, query]
+    response_entity: SelectableGroupConversationRow
+    auth: required
+
+  - method: GET
+    path: /v1/chat/selectable-group-conversations/{conversationId}/contact-members
+    operation: ListSelectableGroupContactMembers
+    description: |
+      「从群聊中选择联系人」群成员列表（图五）。返回指定群成员中与当前用户互关的联系人（排除当前用户、排除已屏蔽），供发起群聊/添加成员选人。
+      与 ListSelectableGroupConversations 同源使用 relationship gate 判定 mutual；行形状复用联系人行。
+    query_params: [cursor, limit, query]
+    response_entity: ChatContactListRow
+    auth: required
+
+  - method: GET
     path: /v1/chat/contacts/search
     operation: SearchContacts
     description: 全局搜索联系人结果，直接承接“联系人”联想分组

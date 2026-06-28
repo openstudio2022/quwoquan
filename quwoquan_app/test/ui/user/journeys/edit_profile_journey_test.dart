@@ -112,6 +112,20 @@ class _AuthenticatedAuthSessionStore implements AuthSessionStore {
   Future<void> markForegroundAuthCheckNow() async {}
 }
 
+class _AuthenticatedSessionController extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    ownerId: 'user_001',
+    activeSubAccountId: 'user_001',
+    accountState: 'active',
+    identityOrigin: 'phone',
+    installId: 'install-id',
+  );
+}
+
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   @override
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
@@ -158,6 +172,9 @@ void main() {
           authSessionStoreProvider.overrideWithValue(
             const _AuthenticatedAuthSessionStore(),
           ),
+          authSessionControllerProvider.overrideWith(
+            _AuthenticatedSessionController.new,
+          ),
         ],
         child: MaterialApp.router(
           routerConfig: GoRouter(
@@ -185,12 +202,10 @@ void main() {
         find.byKey(const ValueKey<String>('profile-header-edit')),
         findsNothing,
       );
-      final editProfileAction = find
-          .text(UITextConstants.profileEditLabel)
-          .first;
-      expect(editProfileAction, findsOneWidget);
+      final editProfileAction = find.text(UITextConstants.profileEditLabel);
       await revealProfileSummaryWidget(tester, editProfileAction);
-      await tester.tap(editProfileAction);
+      expect(editProfileAction, findsAtLeastNWidgets(1));
+      await tester.tap(editProfileAction.first);
       await _pumpFrames(tester, count: 10);
 
       expect(find.text(UITextConstants.editProfile), findsOneWidget);

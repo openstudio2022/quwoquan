@@ -5,7 +5,7 @@
 #   （ui/**/pages/*_page.dart、welcome_screen、components/**/*_page.dart、app/shell）
 # 双向校验：quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py（矩阵路径 ⊆ 本清单 ui_pages）
 version: 1
-updated: "2026-06-25"
+updated: "2026-06-26"
 policy:
   mock_remote_same_return_types: true
   ui_domain_rows_should_be_codegen_dto: true
@@ -421,6 +421,35 @@ domains:
         target_dto: IntersectionReason
         target_read_projection: IntersectionPoint
         target_edit_draft: N/A
+
+        target_edit_draft: N/A
+
+  - id: connection
+    metadata_hint: specs/product/intersection-action-deepening-and-social-ia.md + contracts/metadata/_shared/test_fixtures/connection_plaza_seed.yaml
+    repository: ConnectionRepository
+    repository_notes:
+      status: partial
+      note: |
+        原型阶段 Mock 行内 canonical（不发 HTTP）；Remote 返回 structured unavailable（不整类委托 Mock，守 R16）。
+        后端 trip/meetup aggregate、附近 LBS、双向同意风控登记 backlog。
+    mock_remote_shared_types: true
+    ui_pages:
+      - path: quwoquan_app/lib/ui/plaza/pages/connection_hub_page.dart
+        status: partial
+        note: 同频连接中心四 tab；ConnectionHubSummary/PeerConnection/CompanionTrip/OfflineMeetup 强类型 ViewModel；P2/P3 待 service.yaml codegen
+        target_dto: ConnectionHubSummary
+      - path: quwoquan_app/lib/ui/plaza/pages/nearby_affinity_page.dart
+        status: partial
+        note: 附近同趣；模糊位置 + 权限态；GreetingRequest 破冰
+        target_dto: PeerConnection
+      - path: quwoquan_app/lib/ui/plaza/pages/companion_trip_page.dart
+        status: partial
+        note: 结伴行程；destinationEntityId 对齐 entity fixture
+        target_dto: CompanionTrip
+      - path: quwoquan_app/lib/ui/plaza/pages/offline_meetup_page.dart
+        status: partial
+        note: 线下局；joinMeetup → start_group_chat
+        target_dto: OfflineMeetup
 
   - id: search
     metadata_hint: quwoquan_service/contracts/metadata/_shared/search_contract.yaml + search_registry

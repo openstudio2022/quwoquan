@@ -38,6 +38,7 @@ import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/prefab_user_resolver.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
@@ -79,22 +80,28 @@ class MockUserProfileRepository extends UserProfileRepository {
     );
   }
 
-  /// Mock 本人态判定（开发态约定）：'me' / contract 当前用户 / 默认用户视为本人。
-  static const Set<String> _ownerLikeSubAccountIds = <String>{
+  /// Mock 本人态判定（开发态约定）：'me' / contract 当前用户 / legacy alias 视为本人。
+  static Set<String> get _ownerLikeSubAccountIds => {
     'me',
     'fixture_user_current',
     'user_001',
+    PrefabUserResolver.currentUserVariantSubAccountId,
+    PrefabUserResolver.currentUserVariantUserId,
   };
 
   @override
   Future<UserHomepageBundleViewData> getUserHomepageBundle(
     String subAccountId,
   ) async {
-    final profile = await getUserProfile(subAccountId);
+    final resolvedId = PrefabUserResolver.resolveSubAccountId(subAccountId);
+    final profile = await getUserProfile(resolvedId);
     final stats = UserProfileStatsViewData.fromProfile(profile);
-    final isOwner = _ownerLikeSubAccountIds.contains(subAccountId);
-    final relation = await getRelationship(subAccountId);
-    final viewerSubAccountId = isOwner ? subAccountId : 'fixture_user_current';
+    final isOwner = _ownerLikeSubAccountIds.contains(subAccountId) ||
+        _ownerLikeSubAccountIds.contains(resolvedId);
+    final relation = await getRelationship(resolvedId);
+    final viewerSubAccountId = isOwner
+        ? resolvedId
+        : PrefabUserResolver.currentUserVariantSubAccountId;
     final relationshipCapability = isOwner
         ? null
         : RelationshipCapabilityDto.fromFollowFlags(
@@ -186,7 +193,7 @@ class MockUserProfileRepository extends UserProfileRepository {
     }
     // mock 资料编辑恒为「编辑本人资料」，落到 canonical 当前用户上（与登录态
     // currentUserIdProvider 同源）。按 PATCH 语义只改本次携带的字段。
-    const subAccountId = kMockCurrentSubAccountId;
+    final subAccountId = kMockCurrentSubAccountId;
     var next = _baseProfileWire(subAccountId);
     final nickname = data.nickname;
     if (nickname != null) {

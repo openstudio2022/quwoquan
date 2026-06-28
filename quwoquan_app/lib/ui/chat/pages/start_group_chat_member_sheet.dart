@@ -1,17 +1,22 @@
 part of 'start_group_chat_page.dart';
 
-/// 群成员/圈成员多选 sheet（图三）
+/// 图五：从某个群聊中选择与当前用户 mutual 的联系人（群成员 ∩ 联系人）。
+///
+/// 选中项通过同一 [wizardId] 实时并入发起群聊向导；点击「选择(N)」pop 回主页，
+/// 主页选中横向条自动滚到尾部并展示。行样式与联系人列表 / 主候选列表同源
+/// （复用 [_RelatedFriendRow]，去卡片、全宽、头像 52、`iosBody`）。
 class _MemberSelectSheet extends ConsumerStatefulWidget {
   const _MemberSelectSheet({
-    required this.title,
-    required this.members,
+    super.key,
+    required this.group,
     required this.wizardId,
+    required this.isDark,
     required this.onBack,
   });
 
-  final String title;
-  final List<StartGroupPickableMember> members;
+  final GroupWithFriendCount group;
   final String wizardId;
+  final bool isDark;
   final VoidCallback onBack;
 
   @override
@@ -20,7 +25,67 @@ class _MemberSelectSheet extends ConsumerStatefulWidget {
 
 class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
   final TextEditingController _searchController = TextEditingController();
+  List<StartGroupPickableMember> _members = const <StartGroupPickableMember>[];
+  bool _loading = true;
   String _query = '';
+  UiErrorSemantic? _errorSemantic;
+
+  @override
+  void initState() {
+    super.initState();
+    // post-frame 触发首帧加载，避免在 build/initState 期间 setState。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadMembers();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadMembers() async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _errorSemantic = null;
+    });
+    try {
+      final wizard = ref.read(
+        startGroupMemberWizardProvider(widget.wizardId),
+      );
+      final members = await loadGroupContactMembers(
+        ref.read(chatRepositoryProvider),
+        widget.group,
+        wizard.lockedMemberIds,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _members = members;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _errorSemantic = runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        );
+      });
+    }
+  }
 
   String _memberId(StartGroupPickableMember member) {
     final userId = member.userId.trim();
@@ -31,7 +96,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
   }
 
   bool _allSelected(StartGroupMemberWizardState state) {
-    final selectableIds = widget.members
+    final selectableIds = _members
         .map(_memberId)
         .where((id) => id.isNotEmpty && !state.isLocked(id))
         .toList(growable: false);
@@ -41,12 +106,6 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
     return selectableIds.every((id) => state.selectedMembers.containsKey(id));
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
   void _toggleMember(StartGroupPickableMember member) {
     ref
         .read(startGroupMemberWizardProvider(widget.wizardId).notifier)
@@ -54,7 +113,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
   }
 
   void _toggleAll(StartGroupMemberWizardState state) {
-    final selectableMembers = widget.members
+    final selectableMembers = _members
         .where((member) {
           final id = _memberId(member);
           return id.isNotEmpty && !state.isLocked(id);
@@ -81,37 +140,50 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
     final wizardState = ref.watch(
       startGroupMemberWizardProvider(widget.wizardId),
     );
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final toolbarBg =
-        SettingsSemanticConstants.memberPickerNavigationBarBackground(isDark);
-    final listHorizontalPadding =
-        SettingsSemanticConstants.insetFormListHorizontalPadding;
+    final isDark = widget.isDark;
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
     );
-    final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
-    final filtered = widget.members
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final rowBackground = SettingsSemanticConstants.conversationSheetCardSurface(
+      isDark,
+    );
+    final rowDividerColor =
+        SettingsSemanticConstants.conversationSheetDividerColor(
+          isDark,
+        ).withValues(alpha: 0.9);
+    final toolbarBg =
+        SettingsSemanticConstants.memberPickerNavigationBarBackground(isDark);
+    final listHorizontalPadding =
+        SettingsSemanticConstants.insetFormListHorizontalPadding;
+    final normalizedQuery = _query.trim().toLowerCase();
+    final filtered = _members
         .where((member) {
-          final query = _query.trim().toLowerCase();
-          if (query.isEmpty) {
+          if (normalizedQuery.isEmpty) {
             return true;
           }
-          final name = member.displayName.toLowerCase();
-          final userId = _memberId(member).toLowerCase();
-          return name.contains(query) || userId.contains(query);
+          return pinyinMatches(member.displayName, normalizedQuery) ||
+              _memberId(member).toLowerCase().contains(normalizedQuery);
         })
         .toList(growable: false);
     final allSelected = _allSelected(wizardState);
-    final hasSelectableMembers = widget.members.any((member) {
+    final hasSelectableMembers = _members.any((member) {
       final id = _memberId(member);
       return id.isNotEmpty && !wizardState.isLocked(id);
     });
     final selectedCount = wizardState.selectedMembers.length;
+    final title = UITextConstants.startGroupChatGroupMemberTitle(
+      widget.group.title,
+      widget.group.friendCount,
+    );
 
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
-      title: widget.title,
+      title: title,
       onBack: widget.onBack,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -130,123 +202,14 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
             ),
           ),
           Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Text(
-                      UITextConstants.startGroupChatNoMatchedMembers,
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        color: fgSecondary,
-                      ),
-                    ),
-                  )
-                : ListView(
-                    padding: EdgeInsets.fromLTRB(
-                      listHorizontalPadding,
-                      0,
-                      listHorizontalPadding,
-                      listHorizontalPadding,
-                    ),
-                    children: [
-                      _SelectionCard(
-                        isDark: isDark,
-                        child: Column(
-                          children: [
-                            for (
-                              var index = 0;
-                              index < filtered.length;
-                              index++
-                            ) ...[
-                              Builder(
-                                builder: (context) {
-                                  final member = filtered[index];
-                                  final memberId = _memberId(member);
-                                  final selected = wizardState.isSelected(
-                                    memberId,
-                                  );
-                                  final locked = wizardState.isLocked(memberId);
-                                  return CupertinoButton(
-                                    padding: EdgeInsets.zero,
-                                    onPressed: locked
-                                        ? null
-                                        : () => _toggleMember(member),
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        minHeight: SettingsSemanticConstants
-                                            .selectionRowMinHeight,
-                                      ),
-                                      child: Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: SettingsSemanticConstants
-                                              .blockHorizontalPadding,
-                                          vertical: AppSpacing.sm,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            _SelectionIndicator(
-                                              selected: selected,
-                                              onTap: locked
-                                                  ? null
-                                                  : () => _toggleMember(member),
-                                              enabled: !locked,
-                                            ),
-                                            RoundedSquareAvatar(
-                                              size: AppSpacing.avatarSize,
-                                              imageUrl: member.avatarUrl,
-                                              name: member.displayName,
-                                              fallbackIcon:
-                                                  CupertinoIcons.person_fill,
-                                            ),
-                                            SizedBox(width: AppSpacing.sm),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    member.displayName,
-                                                    style: TextStyle(
-                                                      fontSize:
-                                                          AppTypography.lg,
-                                                      color: locked
-                                                          ? fgSecondary
-                                                          : fgPrimary,
-                                                    ),
-                                                  ),
-                                                  if (locked)
-                                                    Text(
-                                                      UITextConstants
-                                                          .startGroupChatAlreadyInGroup,
-                                                      style: TextStyle(
-                                                        fontSize:
-                                                            AppTypography.sm,
-                                                        color: fgSecondary,
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              if (index < filtered.length - 1)
-                                _SelectionListDivider(
-                                  isDark: isDark,
-                                  leadingInset:
-                                      AppSpacing.minInteractiveSize +
-                                      AppSpacing.avatarSize +
-                                      AppSpacing.sm,
-                                ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+            child: _buildBody(
+              fgPrimary: fgPrimary,
+              fgSecondary: fgSecondary,
+              rowBackground: rowBackground,
+              rowDividerColor: rowDividerColor,
+              filtered: filtered,
+              wizardState: wizardState,
+            ),
           ),
           Container(
             padding: EdgeInsets.fromLTRB(
@@ -289,7 +252,9 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
                         UITextConstants.selectAll,
                         style: TextStyle(
                           fontSize: AppTypography.lg,
-                          color: hasSelectableMembers ? fgPrimary : fgSecondary,
+                          color: hasSelectableMembers
+                              ? fgPrimary
+                              : fgSecondary,
                         ),
                       ),
                     ],
@@ -303,8 +268,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
                     vertical:
                         SettingsSemanticConstants.actionButtonPaddingVertical,
                   ),
-                  color:
-                      SettingsSemanticConstants.actionButtonPrimaryBackground,
+                  color: SettingsSemanticConstants.actionButtonPrimaryBackground,
                   disabledColor:
                       SettingsSemanticConstants.actionButtonDisabledBackground(
                         isDark,
@@ -314,7 +278,7 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
                   ),
                   onPressed: selectedCount == 0
                       ? null
-                      : () => Navigator.of(context).pop(),
+                      : () => Navigator.of(context).pop(true),
                   minimumSize: Size(
                     SettingsSemanticConstants.actionButtonHeightMedium,
                     SettingsSemanticConstants.actionButtonHeightMedium,
@@ -338,6 +302,77 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBody({
+    required Color fgPrimary,
+    required Color fgSecondary,
+    required Color rowBackground,
+    required Color rowDividerColor,
+    required List<StartGroupPickableMember> filtered,
+    required StartGroupMemberWizardState wizardState,
+  }) {
+    if (_loading) {
+      return const Center(child: CupertinoActivityIndicator());
+    }
+    if (_errorSemantic != null) {
+      return AppPageErrorState(
+        semantic: _errorSemantic!,
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _loadMembers();
+          }
+        },
+      );
+    }
+    if (filtered.isEmpty) {
+      return Center(
+        child: Text(
+          UITextConstants.startGroupChatNoMatchedMembers,
+          style: TextStyle(fontSize: AppTypography.base, color: fgSecondary),
+        ),
+      );
+    }
+    return ListView(
+      padding: EdgeInsets.only(bottom: AppSpacing.lg),
+      children: [
+        for (var index = 0; index < filtered.length; index++) ...[
+          Builder(
+            builder: (context) {
+              final member = filtered[index];
+              final memberId = _memberId(member);
+              final selected = wizardState.isSelected(memberId);
+              final locked = wizardState.isLocked(memberId);
+              return _RelatedFriendRow(
+                name: member.displayName,
+                username: memberId,
+                avatarUrl: member.avatarUrl,
+                selected: selected,
+                fgPrimary: fgPrimary,
+                fgSecondary: fgSecondary,
+                locked: locked,
+                rowBackground: rowBackground,
+                dividerColor: rowDividerColor,
+                onTap: locked ? null : () => _toggleMember(member),
+                onAvatarTap: () => context.push(
+                  AppRoutePaths.userProfile(username: memberId),
+                  extra: UserProfileRouteExtra(
+                    subAccountId: memberId,
+                    avatar: member.avatarUrl.isNotEmpty
+                        ? member.avatarUrl
+                        : null,
+                    displayName: member.displayName.isNotEmpty
+                        ? member.displayName
+                        : null,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ],
     );
   }
 }

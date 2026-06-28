@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data.creator_persona_quality",
+  "type": "object",
+  "required": ["schemaVersion", "bioMinLength", "headlineMinLength", "disclosureRequired", "forbiddenDisplayPatterns"],
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.creator_persona_quality/1" },
+    "bioMinLength": { "type": "integer", "minimum": 20 },
+    "headlineMinLength": { "type": "integer", "minimum": 8 },
+    "disclosureRequired": { "const": true },
+    "forbiddenDisplayPatterns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "maxDuplicatePersonaP95": { "type": "number", "maximum": 0.75 }
+  }
+}

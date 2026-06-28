@@ -22,6 +22,9 @@ void main() {
   /// 单次大跨度 `pump(Duration(seconds: N))` 无法让逐段串行的 await 正确恢复——
   /// 必须按 frame 节奏多次推进，让每段 microtask/动画都拿到调度机会。
   Future<void> settle(WidgetTester tester) async {
+    for (var i = 0; i < 8; i++) {
+      await tester.pump();
+    }
     // 序列内部有多段 await + 动画 + 保底停留，统一给足 buffer，避免假时钟下漏跑。
     for (var i = 0; i < 160; i++) {
       await tester.pump(const Duration(milliseconds: 50));
@@ -31,6 +34,11 @@ void main() {
   group('WelcomeScreen · 主动式 AI Native 升级', () {
     testWidgets('首帧即展示可识别品牌内容，花瓣不再从纯空状态开始', (tester) async {
       await tester.pumpWidget(wrap());
+
+      expect(find.text(UITextConstants.welcomeTitle), findsNothing);
+      expect(find.byType(WelcomeFlowerMark), findsOneWidget);
+
+      await tester.pump();
 
       expect(find.text(UITextConstants.welcomeTitle), findsOneWidget);
       expect(find.text(UITextConstants.welcomeMainSlogan), findsOneWidget);

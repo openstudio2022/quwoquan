@@ -12,7 +12,7 @@ func TestContractFixtureSeed_CircleAlphaReadsViaHandler(t *testing.T) {
 		t.Fatalf("expected seeded circle records, got %d", evidence.InsertedCount)
 	}
 
-	listRec := doRequest(t, http.MethodGet, "/v1/circles?limit=20", nil)
+	listRec := doRequest(t, http.MethodGet, "/v1/circles?limit=100", nil)
 	if listRec.Code != http.StatusOK {
 		t.Fatalf("circle list expected 200, got %d: %s", listRec.Code, listRec.Body.String())
 	}
@@ -43,7 +43,7 @@ func TestContractFixtureSeed_CircleAlphaReadsViaHandler(t *testing.T) {
 	}
 	memberBody := decodeBody(t, memberRec)
 	assertItemsContainUserID(t, memberBody["items"], "fixture_user_owner")
-	assertItemsContainUserID(t, memberBody["items"], "fixture_user_current")
+	assertItemsContainUserID(t, memberBody["items"], "fixture_user_photo")
 
 	fileRec := doRequest(t, http.MethodGet, "/v1/circles/fixture_circle_photo/files?limit=20", nil)
 	if fileRec.Code != http.StatusOK {

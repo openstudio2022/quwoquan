@@ -67,6 +67,31 @@ if chat_mock_data.exists():
             "contactTabFunGroups group avatars must use media/avatar object "
             "keys, not media/image placeholders"
         )
+    contact_circles = re.search(
+        r"contactTabCircles[\s\S]*?=>\s*\[[\s\S]*?\n\s*\];",
+        text,
+    )
+    if contact_circles and "media/image/" in contact_circles.group(0):
+        violations.append(
+            "contactTabCircles avatars must use media/avatar object keys, "
+            "not media/image placeholders"
+        )
+
+mock_repo = LIB / "cloud/services/chat/mock/chat_repository_mock.dart"
+if mock_repo.exists():
+    mock_text = mock_repo.read_text(errors="ignore")
+    if "AppContentPrototypeBundle" in mock_text:
+        violations.append(
+            "MockChatRepository must not merge AppContentPrototypeBundle contacts"
+        )
+
+prototype = LIB / "core/mock/prototype_mock_data.dart"
+if prototype.exists():
+    proto_text = prototype.read_text(errors="ignore")
+    if "mockChatContactAvatarFor" not in proto_text:
+        violations.append(
+            "PrototypeMockData must normalize chat contact avatars to media/avatar"
+        )
 
 avatar_bypass_pattern = re.compile(
     r"(avatar|authorAvatar|avatarUrl)[\s\S]{0,160}\b(NetworkImage|CachedNetworkImage|Image\.network)\s*\(",

@@ -505,7 +505,6 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
             Future<bool>.value(true));
     if (!mounted) return;
     if (!hasPermission) {
-      _emitToast(UITextConstants.chatVoicePermissionDenied);
       return;
     }
     if (!_voicePointerActive) {
@@ -1031,23 +1030,24 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (isPressed) ...[
-                    SizedBox(height: AppSpacing.lg, child: _buildWaveBars()),
-                    SizedBox(width: AppSpacing.sm),
-                  ],
-                  Text(
-                    isPressed
-                        ? (canceling
-                              ? UITextConstants.chatVoiceReleaseCancel
-                              : UITextConstants.chatVoiceReleaseToSend)
-                        : UITextConstants.chatVoiceHoldToTalk,
-                    style: _composerTextStyle(context).copyWith(
-                      color: isPressed
+                  Flexible(
+                    child: Text(
+                      isPressed
                           ? (canceling
-                                ? AppColors.error
-                                : AppColors.primaryColor)
-                          : _foregroundPrimary(context),
-                      fontWeight: AppTypography.regular,
+                                ? UITextConstants.chatVoiceReleaseCancel
+                                : UITextConstants.chatVoiceReleaseToSend)
+                          : UITextConstants.chatVoiceHoldToTalk,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: _composerTextStyle(context).copyWith(
+                        color: isPressed
+                            ? (canceling
+                                  ? AppColors.error
+                                  : AppColors.primaryColor)
+                            : _foregroundPrimary(context),
+                        fontWeight: AppTypography.regular,
+                      ),
                     ),
                   ),
                 ],

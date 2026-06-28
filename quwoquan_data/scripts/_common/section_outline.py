@@ -115,13 +115,45 @@ def outline_to_dicts(outline: list[SectionNode]) -> list[dict[str, Any]]:
     return [node.to_dict() for node in outline]
 
 
+# 百科真正的附录节（引用/链接/注释类）：允许 Agent 在 PII/无关内容清理时整节省略，
+# 不纳入关键章节覆盖门。注意：只收敛 wiki 引用/链接/注释类附录，
+# 实质内容节（如「其他」常含原文事实）不得擅自排除出覆盖门。
+_OUTLINE_APPENDIX_TITLES = frozenset(
+    {
+        "参考资料",
+        "參考資料",
+        "参考文献",
+        "參考文獻",
+        "外部链接",
+        "外部連結",
+        "注释",
+        "註釋",
+        "脚注",
+        "腳註",
+        "参见",
+        "參見",
+        "備註",
+        "备注",
+        "延伸阅读",
+        "延伸閱讀",
+        "相关条目",
+        "相關條目",
+    }
+)
+
+
 def outline_required_sections(
     outline: list[SectionNode],
     *,
     min_body_chars: int = 200,
 ) -> list[SectionNode]:
     """有实质正文（>= min_body_chars 去空白字）的关键章节，供覆盖门校验。"""
-    return [node for node in outline if node.body_chars >= min_body_chars]
+    return [
+        node
+        for node in outline
+        if node.body_chars >= min_body_chars
+        and node.title.strip() not in _OUTLINE_APPENDIX_TITLES
+    ]
 
 
 def render_outline_tree(outline: list[SectionNode], *, indent: str = "  ") -> str:
@@ -175,13 +207,31 @@ def page_section_slugs(page_text: str) -> set[str]:
     return slugs
 
 
+def _zh_slug_variants(slug: str) -> set[str]:
+    """简繁/异体 slug 变体，用于 outline 覆盖等价匹配。"""
+    variants = {slug}
+    pairs = (("關", "关"), ("蹟", "迹"), ("際", "际"), ("體", "体"), ("國", "国"))
+    for src, dst in pairs:
+        if src in slug:
+            variants.add(slug.replace(src, dst))
+        if dst in slug:
+            variants.add(slug.replace(dst, src))
+    return variants
+
+
 def _slug_matches(required_slug: str, page_slug: str) -> bool:
-    """章节 slug 等价：完全相等或互为前缀（容忍轻改标题措辞）。"""
+    """章节 slug 等价：完全相等、互为前缀，或简繁变体一致。"""
     if not required_slug or not page_slug:
         return False
-    if required_slug == page_slug:
-        return True
-    return required_slug.startswith(page_slug) or page_slug.startswith(required_slug)
+    req_vars = _zh_slug_variants(required_slug)
+    page_vars = _zh_slug_variants(page_slug)
+    for req in req_vars:
+        for pg in page_vars:
+            if req == pg:
+                return True
+            if req.startswith(pg) or pg.startswith(req):
+                return True
+    return False
 
 
 def outline_coverage_issues(

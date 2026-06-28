@@ -45,7 +45,11 @@ def test_chuanxi_region_content_prefers_regional_creator():
     assert creator["authorId"] == "builtin_travel_blogger_chuanxi"
 
 
-def test_non_chuanxi_content_prefers_nationwide_creator():
+def test_specialty_content_prefers_matching_specialist_creator():
+    # 标签体系规范化（2 级短标签 → 3 级规范叶子）后，内容 tagRef 能与池内专精作者的
+    # recommendationTagRefs 精确重叠：海岛度假内容必须命中携带该专精标签的作者，而非泛化全国
+    # builtin。这正是放量到 100「按内容适配把内容分摊给专精作者」的目标行为；
+    # 「无信号回退全国作者」由 test_no_region_signal_defaults_to_nationwide 守护。
     creator = match_creator(
         _registry(),
         _TRAVEL_BLUEPRINT,
@@ -55,7 +59,10 @@ def test_non_chuanxi_content_prefers_nationwide_creator():
         vertical="travel",
         seed="entity/地点/景区/鼓浪屿",
     )
-    assert creator["creatorProfileId"] == "qwq_creator_travel_blogger_001"
+    creator_tags = set(creator.get("publicProfileTagRefs", [])) | set(
+        creator.get("recommendationTagRefs", [])
+    )
+    assert "Topic/旅行/旅行主题/海岛度假" in creator_tags, creator["creatorProfileId"]
 
 
 def test_no_region_signal_defaults_to_nationwide():

@@ -29,6 +29,10 @@ APP_CHAT_MOCK_DATA_PATH = (
     / "mock"
     / "chat_mock_data.dart"
 )
+APP_PROTOTYPE_MOCK_DATA_PATH = (
+    ROOT / "quwoquan_app" / "lib" / "core" / "mock" / "prototype_mock_data.dart"
+)
+MEDIA_AVATAR_LITERAL_RE = re.compile(r"['\"](media/avatar/[^'\"]+)['\"]")
 MEDIA_ROOT = (
     ROOT
     / "quwoquan_service"
@@ -205,6 +209,24 @@ def _collect_app_mock_group_avatar_refs() -> set[str]:
     }
 
 
+def _collect_dart_media_avatar_literals(path: Path) -> set[str]:
+    if not path.is_file():
+        return set()
+    text = path.read_text(encoding="utf-8")
+    refs: set[str] = set()
+    for match in MEDIA_AVATAR_LITERAL_RE.finditer(text):
+        object_key = match.group(1).strip().lstrip("/")
+        if object_key.startswith("media/avatar/"):
+            refs.add(object_key)
+    return refs
+
+
+def _collect_app_chat_and_prototype_avatar_refs() -> set[str]:
+    refs = _collect_dart_media_avatar_literals(APP_CHAT_MOCK_DATA_PATH)
+    refs.update(_collect_dart_media_avatar_literals(APP_PROTOTYPE_MOCK_DATA_PATH))
+    return refs
+
+
 def _expected_content_type_prefix(object_key: str) -> str | None:
     if object_key.startswith(("media/avatar/", "media/image/", "media/background/")):
         return "image/"
@@ -325,6 +347,7 @@ def main(argv: list[str] | None = None) -> int:
         object_origins.setdefault(object_key, set()).update(origins)
 
     app_mock_group_refs: set[str] = set()
+    app_chat_prototype_refs: set[str] = set()
     if _include_app_mock_group_avatars(env_name, str(args.include_app_mock_group_avatars)):
         app_mock_group_refs = _collect_app_mock_group_avatar_refs()
         object_keys.update(app_mock_group_refs)
@@ -332,6 +355,16 @@ def main(argv: list[str] | None = None) -> int:
             object_origins.setdefault(object_key, set()).add(
                 APP_CHAT_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
             )
+        app_chat_prototype_refs = _collect_app_chat_and_prototype_avatar_refs()
+        object_keys.update(app_chat_prototype_refs)
+        for object_key in app_chat_prototype_refs:
+            object_origins.setdefault(object_key, set()).add(
+                APP_CHAT_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
+            )
+            if APP_PROTOTYPE_MOCK_DATA_PATH.is_file():
+                object_origins.setdefault(object_key, set()).add(
+                    APP_PROTOTYPE_MOCK_DATA_PATH.relative_to(ROOT).as_posix()
+                )
 
     for object_key in sorted(object_keys):
         source_file = MEDIA_ROOT / object_key
@@ -375,6 +408,7 @@ def main(argv: list[str] | None = None) -> int:
         "[verify_alpha_media_fixture_surface] OK "
         f"env={env_name} target={target_name} checked={checked} "
         f"fixtureRefs={len(fixture_refs)} appMockGroupRefs={len(app_mock_group_refs)} "
+        f"appChatPrototypeAvatarRefs={len(app_chat_prototype_refs)} "
         f"videoRange={video_checked} avatarBase={base_urls['avatar']} "
         f"imageBase={base_urls['image']} videoBase={base_urls['video']}"
     )

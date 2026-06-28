@@ -1,0 +1,378 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/景区/四川景点 scale1000
+title: 四川省景区四川景点 scale1000
+intentLabel: 四川景点scale1000
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 四川省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 九寨沟风景名胜区
+  - entityType: 地点/景区
+    name: 黄龙国家级风景名胜区
+  - entityType: 地点/景区
+    name: 峨眉山风景名胜区
+  - entityType: 地点/景区
+    name: 乐山大佛景区
+  - entityType: 地点/景区
+    name: 青城山--都江堰旅游景区
+  - entityType: 地点/景区
+    name: 甘孜州稻城亚丁景区
+  - entityType: 地点/景区
+    name: 泸定海螺沟冰川森林公园
+  - entityType: 地点/景区
+    name: 剑门蜀道剑门关旅游景区
+  - entityType: 地点/景区
+    name: 南充市阆中古城旅游区
+  - entityType: 地点/景区
+    name: 宜宾市蜀南竹海风景名胜区
+  - entityType: 地点/景区
+    name: 成都市西岭雪山景区
+  - entityType: 地点/景区
+    name: 牛背山景区
+  - entityType: 地点/景区
+    name: 毕棚沟旅游景区
+  - entityType: 地点/景区
+    name: 康定情歌(木格措)风景区
+  - entityType: 地点/景区
+    name: 若尔盖花湖
+  - entityType: 地点/景区
+    name: 四姑娘山景区
+  - entityType: 地点/景区
+    name: 都江堰市茶溪谷旅游景区
+  - entityType: 地点/景区
+    name: 汶川特别旅游区
+  - entityType: 地点/景区
+    name: 北川羌城旅游区
+  - entityType: 地点/景区
+    name: 邓小平故里旅游区
+  - entityType: 地点/景区
+    name: 朱德故里景区
+  - entityType: 地点/景区
+    name: 碧峰峡旅游景区
+  - entityType: 地点/景区
+    name: 巴中市光雾山景区
+  - entityType: 地点/景区
+    name: 安仁古镇景区
+  - entityType: 地点/景区
+    name: 天台山景区
+  - entityType: 地点/景区
+    name: 四川广汉三星堆博物馆
+  - entityType: 地点/景区
+    name: 自贡恐龙博物馆
+  - entityType: 地点/景区
+    name: 遂宁市中国死海旅游度假区
+  - entityType: 地点/景区
+    name: 兴文石海洞乡旅游区
+  - entityType: 地点/景区
+    name: 雅安蒙顶山旅游景区
+  - entityType: 地点/景区
+    name: 绵阳市江油窦圌山风景区
+  - entityType: 地点/景区
+    name: 广安华蓥山旅游区
+  - entityType: 地点/景区
+    name: 三圣花乡观光旅游区
+  - entityType: 地点/景区
+    name: 梓橦县七曲山风景区
+  - entityType: 地点/景区
+    name: 九皇山
+  - entityType: 地点/景区
+    name: 成都武侯祠博物馆
+  - entityType: 地点/景区
+    name: 成都杜甫草堂博物馆
+  - entityType: 地点/景区
+    name: 成都大熊猫繁育研究基地
+  - entityType: 地点/景区
+    name: 洛带古镇
+  - entityType: 地点/景区
+    name: 南充市西山风景区
+  - entityType: 地点/景区
+    name: 皇泽寺博物馆
+  - entityType: 地点/景区
+    name: 西昌市邛海泸山风景名胜区
+  - entityType: 地点/景区
+    name: 冕宁县灵山旅游景区
+  - entityType: 地点/景区
+    name: 凉山州普格县螺髻山旅游景区
+  - entityType: 地点/景区
+    name: 夕佳山民居
+  - entityType: 地点/景区
+    name: 成都市宝光桂湖文化旅游区
+  - entityType: 地点/景区
+    name: 成都市双流区黄龙溪旅游区
+  - entityType: 地点/景区
+    name: 成都国色天乡乐园
+  - entityType: 地点/景区
+    name: 邛崃市平乐古镇
+  - entityType: 地点/景区
+    name: 遂宁市中国观音故里旅游区
+  - entityType: 地点/景区
+    name: 夹江天福观光茶园
+  - entityType: 地点/景区
+    name: 攀枝花市二滩国家森林公园
+  - entityType: 地点/景区
+    name: 凉山州泸沽湖旅游景区
+  - entityType: 地点/景区
+    name: 绵阳市平武报恩寺
+  - entityType: 地点/景区
+    name: 广元市曾家山景区
+  - entityType: 地点/景区
+    name: 成都金沙遗址博物馆
+  - entityType: 地点/景区
+    name: 攀枝花市格萨拉生态旅游景区
+  - entityType: 地点/景区
+    name: 南充市凌云山景区
+  - entityType: 地点/景区
+    name: 宜宾市李庄古镇
+  - entityType: 地点/景区
+    name: 广元市昭化古城
+  - entityType: 地点/景区
+    name: 苍溪红军渡·西武当山景区
+  - entityType: 地点/景区
+    name: 泸州老窖旅游区
+  - entityType: 地点/景区
+    name: 成都欢乐谷
+  - entityType: 地点/景区
+    name: 嘉陵第一桑梓风景区
+  - entityType: 地点/景区
+    name: 三苏祠景区
+  - entityType: 地点/景区
+    name: 资阳市陈毅故里景区
+  - entityType: 地点/景区
+    name: 达州市真佛山景区
+  - entityType: 地点/景区
+    name: 成都崇州街子古镇
+  - entityType: 地点/景区
+    name: 阆中天宫院风水文化景区
+  - entityType: 地点/景区
+    name: 青川东河口地震遗址公园
+  - entityType: 地点/景区
+    name: 成都市花水湾温泉度假旅游区
+  - entityType: 地点/景区
+    name: 自贡市荣县大佛文化旅游区
+  - entityType: 地点/景区
+    name: 广元市明月峡景区
+  - entityType: 地点/景区
+    name: 广元市鼓城山—七里峡景区
+  - entityType: 地点/景区
+    name: 遂宁市中华侏罗纪探秘旅游区
+  - entityType: 地点/景区
+    name: 乐山市乌木文化博览苑
+  - entityType: 地点/景区
+    name: 乐山市峨眉山大佛禅院佛教文化旅游区
+  - entityType: 地点/景区
+    name: 南部县升钟湖旅游景区
+  - entityType: 地点/景区
+    name: 达古冰川风景名胜区
+  - entityType: 地点/景区
+    name: 成都市虹口旅游景区
+  - entityType: 地点/景区
+    name: 汶川大禹文化旅游区
+  - entityType: 地点/景区
+    name: 绵竹市九龙山—麓棠山旅游区
+  - entityType: 地点/景区
+    name: 中国绵竹年画村景区
+  - entityType: 地点/景区
+    name: 成都市花舞人间旅游景区
+  - entityType: 地点/景区
+    name: 成都市海昌极地海洋世界景区
+  - entityType: 地点/景区
+    name: 乐山市黑竹沟风景区
+  - entityType: 地点/景区
+    name: 金川观音桥旅游景区
+  - entityType: 地点/景区
+    name: 成都市桃花故里旅游景区
+  - entityType: 地点/景区
+    name: 达州市渠县賨人谷旅游景区
+  - entityType: 地点/景区
+    name: 广元市唐家河景区
+  - entityType: 地点/景区
+    name: 广元天曌山景区
+  - entityType: 地点/景区
+    name: 资阳市安岳石刻·圆觉洞景区
+  - entityType: 地点/景区
+    name: 遂宁市龙凤古镇景区
+  - entityType: 地点/景区
+    name: 农科村景区
+  - entityType: 地点/景区
+    name: 黄荆老林旅游景区
+  - entityType: 地点/景区
+    name: 四渡赤水·太平古镇景区
+  - entityType: 地点/景区
+    name: 广元市千佛崖石刻艺术博物馆
+  - entityType: 地点/景区
+    name: 乐山东方佛都旅游区
+  - entityType: 地点/景区
+    name: 江油李白纪念馆景区
+  - entityType: 地点/景区
+    name: 甘堡藏寨-桃坪羌寨旅游景区
+  - entityType: 地点/景区
+    name: 新场古镇
+  - entityType: 地点/景区
+    name: 国际非物质文化遗产博览园
+  - entityType: 地点/景区
+    name: 子昂故里文化旅游区
+  - entityType: 地点/景区
+    name: 内江市隆昌市石牌坊旅游区
+  - entityType: 地点/景区
+    name: 雅安市雨城区上里古镇
+  - entityType: 地点/景区
+    name: 王坪旅游景区
+  - entityType: 地点/景区
+    name: 米仓山国家森林公园
+  - entityType: 地点/景区
+    name: 东郊记忆
+  - entityType: 地点/景区
+    name: 青溪古城
+  - entityType: 地点/景区
+    name: 乐山市郭沫若故居
+  - entityType: 地点/景区
+    name: 东拉山大峡谷
+  - entityType: 地点/景区
+    name: 石棉县安顺场景区
+  - entityType: 地点/景区
+    name: 绵阳市北川药王谷旅游景区
+  - entityType: 地点/景区
+    name: 叠溪--松坪沟景区
+  - entityType: 地点/景区
+    name: 望丛祠
+  - entityType: 地点/景区
+    name: 西部最美水乡·三道堰旅游景区
+  - entityType: 地点/景区
+    name: 广元市平乐旅游区
+  - entityType: 地点/景区
+    name: 观音湖湿地公园旅游景区
+  - entityType: 地点/景区
+    name: 黑龙滩旅游景区
+  - entityType: 地点/景区
+    name: 武胜县宝箴塞
+  - entityType: 地点/景区
+    name: 神龙山巴人石头城
+  - entityType: 地点/景区
+    name: 熊猫古城景区
+  - entityType: 地点/景区
+    name: 巴中市诺水河景区
+  - entityType: 地点/景区
+    name: 卓克基土司官寨文化旅游景区
+  - entityType: 地点/景区
+    name: 五凤溪景区
+  - entityType: 地点/景区
+    name: 石象湖景区
+  - entityType: 地点/景区
+    name: 白鹿音乐小镇
+  - entityType: 地点/景区
+    name: 宝山旅游区
+  - entityType: 地点/景区
+    name: 天仙硐旅游景区
+  - entityType: 地点/景区
+    name: 泸州市张坝桂圆林旅游景区
+  - entityType: 地点/景区
+    name: 绵阳市科技馆旅游景区
+  - entityType: 地点/景区
+    name: 巴中市佛头山旅游景区
+  - entityType: 地点/景区
+    name: 白坪—飞龙旅游区
+  - entityType: 地点/景区
+    name: 天意谷景区
+  - entityType: 地点/景区
+    name: 金凤山景区
+  - entityType: 地点/景区
+    name: 黄河九曲第一湾
+  - entityType: 地点/景区
+    name: 罗江白马关景区
+  - entityType: 地点/景区
+    name: 绵阳市江油李白故居旅游景区
+  - entityType: 地点/景区
+    name: 绵阳市北川维斯特农业休闲旅游区
+  - entityType: 地点/景区
+    name: 龙门阁景区
+  - entityType: 地点/景区
+    name: 遂宁市安居区七彩明珠景区
+  - entityType: 地点/景区
+    name: 乐山市犍为县嘉阳.桫椤湖景区
+  - entityType: 地点/景区
+    name: 张澜故里景区
+  - entityType: 地点/景区
+    name: 巴灵台旅游风景区
+  - entityType: 地点/景区
+    name: 达州市宣汉县洋烈水乡景区
+  - entityType: 地点/景区
+    name: 荥经县云峰山景区
+  - entityType: 地点/景区
+    name: 江湾神木园
+  - entityType: 地点/景区
+    name: 硗碛藏寨·神木垒景区
+  - entityType: 地点/景区
+    name: 宜宾市长宁县七洞沟旅游景区
+  - entityType: 地点/景区
+    name: 宜宾市流杯池公园
+  - entityType: 地点/景区
+    name: 南溪古街旅游景区
+  - entityType: 地点/景区
+    name: 桃源山居旅游景区
+  - entityType: 地点/景区
+    name: 广元水磨沟景区
+  - entityType: 地点/景区
+    name: 成都市崇州元通古镇景区
+  - entityType: 地点/景区
+    name: 绵阳市仙海旅游景区
+  - entityType: 地点/景区
+    name: 寻龙山景区
+  - entityType: 地点/景区
+    name: 花海果乡旅游景区
+  - entityType: 地点/景区
+    name: 雅安周公山景区
+  - entityType: 地点/景区
+    name: 醉美玉湖-七彩长滩旅游景区
+  - entityType: 地点/景区
+    name: 驷马水乡旅游景区
+  - entityType: 地点/景区
+    name: 柳江古镇旅游景区
+  - entityType: 地点/景区
+    name: 松潘县川主寺旅游景区
+  - entityType: 地点/景区
+    name: 会理古城旅游景区
+  - entityType: 地点/景区
+    name: 灌县古城
+  - entityType: 地点/景区
+    name: 成都市锦门景区
+  - entityType: 地点/景区
+    name: 成都市双流区海滨城景区
+  - entityType: 地点/景区
+    name: 隆昌市古宇湖旅游区
+  - entityType: 地点/景区
+    name: 雅安二郎山·喇叭河景区
+  - entityType: 地点/景区
+    name: 芦山县龙门古镇旅游景区
+  - entityType: 地点/景区
+    name: 花田酒地旅游景区
+content:
+  modalityContract: separated_research
+  queueBackend: reliabletask
+  research:
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+      article: 3
+      image: 4
+    imageAssetStrategy: open_license_publish
+    allowAiImages: false
+  quotas:
+    entityHomepagesPerTarget: 1
+    entityArticlesPerTarget: 4
+    imageWorksPerTarget: 1
+    routeArticles: 0
+workflowPolicy:
+  allowPartialContent: true
+  deliveryMode: partial_with_replacement_report
+  maxReplacementWaves: 3
+  maxReplacementCandidatesPerWave: 8
+  maxReplacementScreenedPerRun: 8

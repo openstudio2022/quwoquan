@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -60,7 +61,10 @@ func (s *MongoChatStore) FindConversationByID(ctx context.Context, id string) (*
 	var conv model.Conversation
 	err := s.conversations.FindOne(ctx, bson.M{"_id": id}).Decode(&conv)
 	if err != nil {
-		return nil, fmt.Errorf("conversation not found: %w", err)
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, fmt.Errorf("%w: %s", model.ErrConversationNotFound, id)
+		}
+		return nil, fmt.Errorf("find conversation %s: %w", id, err)
 	}
 	return &conv, nil
 }

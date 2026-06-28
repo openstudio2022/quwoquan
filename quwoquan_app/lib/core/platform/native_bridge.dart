@@ -10,6 +10,8 @@ import 'package:flutter/services.dart';
 ///                                      by `PlatformCapabilities.nativeVideoEditing`.
 ///  - `personal_assistant/native_api`-> abstracted here as
 ///                                      [AssistantLocalContextBridge].
+///  - `quwoquan/share/native_bridge` -> abstracted here as
+///                                      [NativeShareBridge].
 ///
 /// New native surfaces MUST be added behind an interface here (never a raw
 /// `MethodChannel` in business code), and unimplemented platforms must return a
@@ -17,6 +19,40 @@ import 'package:flutter/services.dart';
 enum NativeAuthProvider { wechat, alipay, qq, apple, systemCredential, passkey }
 
 enum NativeAuthAvailability { available, unavailable }
+
+enum NativeShareTarget { wechatFriend, wechatMoments }
+
+enum NativeShareAvailability { available, unavailable }
+
+enum NativeShareDelivery { delivered, unavailable }
+
+class NativeShareCapability {
+  const NativeShareCapability({
+    required this.target,
+    required this.availability,
+    this.reason = '',
+  });
+
+  final NativeShareTarget target;
+  final NativeShareAvailability availability;
+  final String reason;
+
+  bool get isAvailable => availability == NativeShareAvailability.available;
+}
+
+class NativeShareResult {
+  const NativeShareResult({
+    required this.target,
+    required this.delivery,
+    this.reason = '',
+  });
+
+  final NativeShareTarget target;
+  final NativeShareDelivery delivery;
+  final String reason;
+
+  bool get isDelivered => delivery == NativeShareDelivery.delivered;
+}
 
 class NativeAuthCapability {
   const NativeAuthCapability({
@@ -59,6 +95,16 @@ abstract interface class NativeAuthBridge {
   });
 }
 
+abstract interface class NativeShareBridge {
+  Future<NativeShareCapability> getCapability(NativeShareTarget target);
+
+  Future<NativeShareResult> shareText({
+    required NativeShareTarget target,
+    required String text,
+    required String subject,
+  });
+}
+
 abstract interface class AssistantLocalContextBridge {
   /// Whether a native local-context provider is wired on this platform.
   bool get isSupported;
@@ -69,6 +115,108 @@ abstract interface class AssistantLocalContextBridge {
   Future<Map<String, dynamic>> getLocalContext({
     List<String> requestedFields = const <String>[],
   });
+}
+
+class MethodChannelNativeShareBridge implements NativeShareBridge {
+  MethodChannelNativeShareBridge({
+    this.channel = const MethodChannel('quwoquan/share/native_bridge'),
+  });
+
+  final MethodChannel channel;
+
+  @override
+  Future<NativeShareCapability> getCapability(NativeShareTarget target) async {
+    try {
+      final result = await channel.invokeMapMethod<String, dynamic>(
+        'getCapability',
+        <String, dynamic>{'target': target.name},
+      );
+      final available = result?['available'] == true;
+      return NativeShareCapability(
+        target: target,
+        availability: available
+            ? NativeShareAvailability.available
+            : NativeShareAvailability.unavailable,
+        reason: result?['reason']?.toString() ?? '',
+      );
+    } on MissingPluginException {
+      return NativeShareCapability(
+        target: target,
+        availability: NativeShareAvailability.unavailable,
+        reason: 'missing_plugin',
+      );
+    } on PlatformException catch (error) {
+      return NativeShareCapability(
+        target: target,
+        availability: NativeShareAvailability.unavailable,
+        reason: error.code,
+      );
+    }
+  }
+
+  @override
+  Future<NativeShareResult> shareText({
+    required NativeShareTarget target,
+    required String text,
+    required String subject,
+  }) async {
+    try {
+      final result = await channel.invokeMapMethod<String, dynamic>(
+        'shareText',
+        <String, dynamic>{
+          'target': target.name,
+          'text': text,
+          'subject': subject,
+        },
+      );
+      final delivered = result?['delivered'] == true;
+      return NativeShareResult(
+        target: target,
+        delivery: delivered
+            ? NativeShareDelivery.delivered
+            : NativeShareDelivery.unavailable,
+        reason: result?['reason']?.toString() ?? '',
+      );
+    } on MissingPluginException {
+      return NativeShareResult(
+        target: target,
+        delivery: NativeShareDelivery.unavailable,
+        reason: 'missing_plugin',
+      );
+    } on PlatformException catch (error) {
+      return NativeShareResult(
+        target: target,
+        delivery: NativeShareDelivery.unavailable,
+        reason: error.code,
+      );
+    }
+  }
+}
+
+class UnsupportedNativeShareBridge implements NativeShareBridge {
+  const UnsupportedNativeShareBridge();
+
+  @override
+  Future<NativeShareCapability> getCapability(NativeShareTarget target) async {
+    return NativeShareCapability(
+      target: target,
+      availability: NativeShareAvailability.unavailable,
+      reason: 'unsupported_platform',
+    );
+  }
+
+  @override
+  Future<NativeShareResult> shareText({
+    required NativeShareTarget target,
+    required String text,
+    required String subject,
+  }) async {
+    return NativeShareResult(
+      target: target,
+      delivery: NativeShareDelivery.unavailable,
+      reason: 'unsupported_platform',
+    );
+  }
 }
 
 /// Default implementation backed by the `personal_assistant/native_api` channel.

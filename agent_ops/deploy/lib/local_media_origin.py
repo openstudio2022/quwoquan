@@ -81,7 +81,8 @@ class LocalMediaOriginHandler(SimpleHTTPRequestHandler):
         conversation_id = self._conversation_avatar_alias_id(parts)
         if conversation_id is None:
             return None
-        return _CONVERSATION_AVATAR_ALIASES.get(conversation_id, _DEFAULT_GROUP_AVATAR)
+        # 仅显式映射的 legacy 会话走 alias；conv_grid_* 等差异化资产直出磁盘。
+        return _CONVERSATION_AVATAR_ALIASES.get(conversation_id)
 
     @staticmethod
     def _conversation_avatar_alias_id(parts: tuple[str, ...]) -> str | None:

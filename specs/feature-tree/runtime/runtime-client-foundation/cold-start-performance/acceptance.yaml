@@ -1,0 +1,80 @@
+version: 2
+node:
+  id: cold-start-performance
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance
+  title: cold start performance
+  parent_domain_service: runtime
+  parent_business_capability: runtime-client-foundation
+scope:
+  summary: 冷启动 TTID 测量、分段观测、Phase1/Phase3 减重与 ratchet 门禁。
+  in_scope:
+  - TTID 探针多轮 P50/P95 与 QWQStartup 全分段解析
+  - Welcome 首帧静态化与 ScreenUtilInit 后移
+  - app_router deferred import 与 Android 懒插件注册
+  - startup_ttid ratchet 与 acceptance 契约测试
+  out_of_scope:
+  - 欢迎动效缩短（阻塞于 TTID SLA）
+  - native 镜像欢迎页回归
+gwt_acceptance:
+  GWT1:
+    title: 欢迎首帧与 init gate 不回退
+    given:
+    - 应用冷启动进入 Flutter WelcomeScreen
+    when:
+    - 首帧绘制与 welcomeShown 打点
+    then:
+    - 无 native 镜像欢迎；auth restore 不早于 markWelcomeShown
+    done_when:
+    - local_contract 绿
+    tests:
+      planned:
+      - file: quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_native_launch_screen__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_auth_restore_gate__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_ttid__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_deferred_router__local_contract_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_native_launch_screen__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_auth_restore_gate__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_ttid__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/startup_deferred_router__local_contract_test.dart
+    status: implemented
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: startup_ttid_contract
+        cases:
+        - local_contract.runtime.runtime_client_foundation.cold_start_performance.contract
+        envs:
+        - local
+  GWT2:
+    title: release TTID SLA（真机 user_acceptance）
+    given:
+    - release 包中端 Android 真机或 iPhone 真机
+    when:
+    - 连续冷启动 ≥5 次
+    then:
+    - TTID P50 ≤ 1000ms，P95 ≤ 2000ms
+    done_when:
+    - verify_startup_first_frame.py SLA 模式绿且 baseline JSON 更新
+    tests:
+      planned:
+      - file: quwoquan_app/scripts/device/verify_startup_first_frame.py
+      - file: quwoquan_app/scripts/device/verify_startup_ttid_baseline.py
+      recorded: []
+    status: partial
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        suite: startup_ttid_probe
+        cases:
+        - user_acceptance.runtime.runtime_client_foundation.cold_start_performance.ttid_sla
+        envs:
+        - gamma_local
+execution:
+  local_gate:
+  - make verify-app-startup-ttid
+  full_gate:
+  - make gate

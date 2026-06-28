@@ -82,6 +82,20 @@ class _AuthedSessionStore implements AuthSessionStore {
   Future<void> markForegroundAuthCheckNow() async {}
 }
 
+class _AuthenticatedSessionController extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    ownerId: 'test_viewer',
+    activeSubAccountId: 'test_viewer',
+    accountState: 'active',
+    identityOrigin: 'phone',
+    installId: 'install-id',
+  );
+}
+
 /// 在 pump 期间主动 watch 登录态，让他人主页关注/私信按钮的 requireLogin 放行。
 class _AuthWarmup extends ConsumerWidget {
   const _AuthWarmup({required this.child});
@@ -180,6 +194,9 @@ Widget _scopedApp({
         _NotFollowingRelationshipCapability(),
       ),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
+      authSessionControllerProvider.overrideWith(
+        _AuthenticatedSessionController.new,
+      ),
       ...extraOverrides,
     ],
     child: MaterialApp(

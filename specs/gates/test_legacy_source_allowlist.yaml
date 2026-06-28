@@ -33,6 +33,7 @@ grandfathered_current_paths:
 - quwoquan_app/test/cloud/chat/chat_message_snapshot_contract_test.dart
 - quwoquan_app/test/cloud/chat/contract/chat_error_code_contract_test.dart
 - quwoquan_app/test/cloud/chat/contract/chat_inbox_dto_contract_test.dart
+- quwoquan_app/test/cloud/chat/contract/chat_mock_remote_parity__contract_test.dart
 - quwoquan_app/test/cloud/chat/contract/chat_repository_contract_test.dart
 - quwoquan_app/test/cloud/chat/dto/contract/conversation_dto_contract_test.dart
 - quwoquan_app/test/cloud/chat/dto/contract/member_dto_contract_test.dart
@@ -101,6 +102,7 @@ grandfathered_current_paths:
 - quwoquan_app/test/cloud/runtime/recommendation/intersection_action_keys_test.dart
 - quwoquan_app/test/cloud/services/assistant/assistant_creation_suggest_repository_test.dart
 - quwoquan_app/test/cloud/services/business_beta_remote_repository_test.dart
+- quwoquan_app/test/cloud/services/connection/connection_repository_test.dart
 - quwoquan_app/test/cloud/services/content/comment_counts_delta_mock_test.dart
 - quwoquan_app/test/cloud/services/content/comment_counts_delta_remote_test.dart
 - quwoquan_app/test/cloud/services/content/comment_sort_consistency_test.dart
@@ -338,6 +340,7 @@ grandfathered_current_paths:
 - quwoquan_app/test/ui/entity/pages/homepage_picker_page_widget_test.dart
 - quwoquan_app/test/ui/entity/pages/suggest_homepage_page_widget_test.dart
 - quwoquan_app/test/ui/intersection/pages/object_intersection_list_page_test.dart
+- quwoquan_app/test/ui/plaza/widgets/connection_hub_page_widget_test.dart
 - quwoquan_app/test/ui/rtc/models/call_summary_test.dart
 - quwoquan_app/test/ui/rtc/providers/call_session_provider_lifecycle_test.dart
 - quwoquan_app/test/ui/rtc/widgets/active_call_bar_test.dart
@@ -362,6 +365,7 @@ grandfathered_current_paths:
 - quwoquan_app/test/ui/user/journeys/other_profile_journey_test.dart
 - quwoquan_app/test/ui/user/journeys/persona_management_journey_test.dart
 - quwoquan_app/test/ui/user/journeys/profile_tab_navigation_journey_test.dart
+- quwoquan_app/test/ui/user/legal_document_page_test.dart
 - quwoquan_app/test/ui/user/login_page_widget_test.dart
 - quwoquan_app/test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart
 - quwoquan_app/test/ui/user/pages/my_footprint_page_test.dart
@@ -505,11 +509,13 @@ grandfathered_current_paths:
 - quwoquan_service/services/assistant-service/internal/infrastructure/persistence/app_message_bson_test.go
 - quwoquan_service/services/assistant-service/internal/infrastructure/userprofile/interest_profile_client_test.go
 - quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
+- quwoquan_service/services/chat-service/internal/adapters/http/message_home_projection_test.go
 - quwoquan_service/services/chat-service/internal/adapters/http/social_contact_resolver_client_test.go
 - quwoquan_service/services/chat-service/internal/application/group_avatar_support_test.go
 - quwoquan_service/services/chat-service/internal/application/runtime_media_status_test.go
 - quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
 - quwoquan_service/services/chat-service/tests/benchmark_test.go
+- quwoquan_service/services/chat-service/tests/contact_home_projection_contract_test.go
 - quwoquan_service/services/chat-service/tests/contract_fixture_seed_contract_test.go
 - quwoquan_service/services/chat-service/tests/conversation_compat_contract_test.go
 - quwoquan_service/services/chat-service/tests/conversation_crud_contract_test.go
@@ -529,6 +535,7 @@ grandfathered_current_paths:
 - quwoquan_service/services/chat-service/tests/message_crud_contract_test.go
 - quwoquan_service/services/chat-service/tests/message_sync_contract_test.go
 - quwoquan_service/services/chat-service/tests/message_unread_contract_test.go
+- quwoquan_service/services/chat-service/tests/selectable_group_contract_test.go
 - quwoquan_service/services/chat-service/tests/send_message_relationship_gate_test.go
 - quwoquan_service/services/chat-service/tests/social_contacts_contract_test.go
 - quwoquan_service/services/circle-service/cmd/api/config_sync_test.go
@@ -587,6 +594,7 @@ grandfathered_current_paths:
 - quwoquan_service/services/content-service/tests/comment_keyset_explain_bench_test.go
 - quwoquan_service/services/content-service/tests/comment_persistence_migration_contract_test.go
 - quwoquan_service/services/content-service/tests/contract_fixture_seed_contract_test.go
+- quwoquan_service/services/content-service/tests/creator_pool_content_feed_contract_test.go
 - quwoquan_service/services/content-service/tests/intersection_source_contract_test.go
 - quwoquan_service/services/content-service/tests/intersection_watermark_store_contract_test.go
 - quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
@@ -655,6 +663,7 @@ grandfathered_current_paths:
 - quwoquan_service/services/user-service/tests/block_cascade_contract_test.go
 - quwoquan_service/services/user-service/tests/block_contract_test.go
 - quwoquan_service/services/user-service/tests/contact_discovery_contract_test.go
+- quwoquan_service/services/user-service/tests/creator_pool_contract_fixture_seed_test.go
 - quwoquan_service/services/user-service/tests/credential_contract_test.go
 - quwoquan_service/services/user-service/tests/error_contract_test.go
 - quwoquan_service/services/user-service/tests/follow_contract_test.go

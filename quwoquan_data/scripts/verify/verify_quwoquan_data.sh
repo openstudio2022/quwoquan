@@ -87,6 +87,8 @@ python3 quwoquan_data/tests/build/test_build_homepage.py
 # Phase 1：实体主页图片闭环全量扫描/修复（page.md ↔ manifest.assets ↔ assets/）
 python3 quwoquan_data/tests/homepage_assets/test_homepage_assets.py
 python3 quwoquan_data/scripts/cli.py homepage-assets --dirty-only --fail-on-issues --include-runtime --include-publish
+# 实体主页结构(原文关键章节覆盖) + 配图 caption 语义门（新批次 opt-in：batch_manifest.homepageStructureGate=true）
+python3 quwoquan_data/scripts/verify/verify_homepage_structure_and_assets.py --all-runtime-opt-in
 # 历史脏数据：工程污染主页 / 伪图片 / 悬空 asset 必须清零
 python3 quwoquan_data/tests/quality/test_dirty_data_cleanup.py
 python3 quwoquan_data/scripts/cli.py quality dirty-scan --fail-on-issues

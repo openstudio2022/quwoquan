@@ -1,0 +1,10 @@
+id: CR-creator-pool-metadata-scale
+title: Creator pool metadata scale import
+status: planned
+scope:
+  - Persona wire extension for platform_virtual_creator disclosure
+  - admin import API for creatorProfile bulk upsert
+  - content_supply authorPool shard metadata alignment
+notes: |
+  当前 Batch-100 通过 contracts test_fixtures seed 交付。
+  万级放量需后续 metadata CR + codegen 后再切换 Remote import。

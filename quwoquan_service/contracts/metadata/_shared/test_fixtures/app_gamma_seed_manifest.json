@@ -83,6 +83,20 @@
       ]
     },
     {
+      "domain": "creator_pool",
+      "fixturePath": "_shared/test_fixtures/creator_pool/creator_pool_scenarios.json",
+      "refs": [
+        "creator_travel_batch100",
+        "creator_travel_travel_batch_100_v1_core"
+      ],
+      "resetScope": "fixture_creator_pool_*",
+      "targetStore": "user-service:gamma_test_namespace",
+      "verifiedEndpoints": [
+        "/v1/user/{subAccountId}",
+        "/v1/user/sub-accounts/{subAccountId}/homepage-bundle"
+      ]
+    },
+    {
       "domain": "entity",
       "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.gamma-curated.json",
       "refs": [

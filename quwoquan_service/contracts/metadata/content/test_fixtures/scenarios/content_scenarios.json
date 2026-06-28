@@ -51880,6 +51880,113 @@
           "occurredAgoHours": 96
         }
       ]
+    },
+    "creator_authored_core": {
+      "description": "batch-100 虚拟创作者经 match_creator 绑定的文章/图片/视频内容（Phase3 E2E）。",
+      "posts": [
+        {
+          "postId": "fixture_creator_content_article_001",
+          "id": "fixture_creator_content_article_001",
+          "contentType": "article",
+          "type": "article",
+          "contentIdentity": "work",
+          "identity": "work",
+          "authorId": "agent_author_travel_travel_batch_100_v1_003",
+          "subAccountId": "agent_author_travel_travel_batch_100_v1_003",
+          "creatorProfileId": "qwq_creator_travel_casual_tourist_003",
+          "displayName": "西南行者003",
+          "authorAvatarUrl": "cold_start/creators/travel_batch_100_v1/travel_casual_tourist_003/avatar.jpg",
+          "avatarUrl": "cold_start/creators/travel_batch_100_v1/travel_casual_tourist_003/avatar.jpg",
+          "title": "西南·景区_体验",
+          "summary": "西南 article 内容（平台虚拟创作者出品）",
+          "body": "西南主题 article 内容，由平台虚拟创作者西南行者003（casual_tourist）出品。",
+          "coverUrl": "cold_start/creators/travel_batch_100_v1/travel_casual_tourist_003/cover.jpg",
+          "thumbnailUrl": "cold_start/creators/travel_batch_100_v1/travel_casual_tourist_003/cover.jpg",
+          "mediaUrls": [
+            "cold_start/creators/travel_batch_100_v1/travel_casual_tourist_003/cover.jpg"
+          ],
+          "imageUrls": [
+            "cold_start/creators/travel_batch_100_v1/travel_casual_tourist_003/cover.jpg"
+          ],
+          "videoUrl": null,
+          "tagRefs": [
+            "Topic/旅行/旅行主题/文化深度游"
+          ],
+          "locationName": "西南",
+          "likeCount": 12,
+          "commentCount": 3,
+          "shareCount": 1,
+          "createdAt": "2026-06-01T08:00:00Z"
+        },
+        {
+          "postId": "fixture_creator_content_image_002",
+          "id": "fixture_creator_content_image_002",
+          "contentType": "image",
+          "type": "image",
+          "contentIdentity": "work",
+          "identity": "work",
+          "authorId": "agent_author_travel_travel_batch_100_v1_067",
+          "subAccountId": "agent_author_travel_travel_batch_100_v1_067",
+          "creatorProfileId": "qwq_creator_travel_geo_editor_067",
+          "displayName": "西北地理志067",
+          "authorAvatarUrl": "cold_start/creators/travel_batch_100_v1/travel_geo_editor_067/avatar.jpg",
+          "avatarUrl": "cold_start/creators/travel_batch_100_v1/travel_geo_editor_067/avatar.jpg",
+          "title": "西北·景区_攻略",
+          "summary": "西北 image 内容（平台虚拟创作者出品）",
+          "body": "西北主题 image 内容，由平台虚拟创作者西北地理志067（geo_editor）出品。",
+          "coverUrl": "cold_start/creators/travel_batch_100_v1/travel_geo_editor_067/cover.jpg",
+          "thumbnailUrl": "cold_start/creators/travel_batch_100_v1/travel_geo_editor_067/cover.jpg",
+          "mediaUrls": [
+            "cold_start/creators/travel_batch_100_v1/travel_geo_editor_067/cover.jpg"
+          ],
+          "imageUrls": [
+            "cold_start/creators/travel_batch_100_v1/travel_geo_editor_067/cover.jpg"
+          ],
+          "videoUrl": null,
+          "tagRefs": [
+            "Topic/旅行/旅行主题/文化深度游"
+          ],
+          "locationName": "西北",
+          "likeCount": 13,
+          "commentCount": 4,
+          "shareCount": 2,
+          "createdAt": "2026-06-01T08:00:00Z"
+        },
+        {
+          "postId": "fixture_creator_content_video_003",
+          "id": "fixture_creator_content_video_003",
+          "contentType": "video",
+          "type": "video",
+          "contentIdentity": "work",
+          "identity": "work",
+          "authorId": "agent_author_travel_travel_batch_100_v1_079",
+          "subAccountId": "agent_author_travel_travel_batch_100_v1_079",
+          "creatorProfileId": "qwq_creator_travel_food_columnist_079",
+          "displayName": "东北食旅记079",
+          "authorAvatarUrl": "cold_start/creators/travel_batch_100_v1/travel_food_columnist_079/avatar.jpg",
+          "avatarUrl": "cold_start/creators/travel_batch_100_v1/travel_food_columnist_079/avatar.jpg",
+          "title": "东北·餐厅_探店",
+          "summary": "东北 video 内容（平台虚拟创作者出品）",
+          "body": "东北主题 video 内容，由平台虚拟创作者东北食旅记079（food_columnist）出品。",
+          "coverUrl": "cold_start/creators/travel_batch_100_v1/travel_food_columnist_079/cover.jpg",
+          "thumbnailUrl": "cold_start/creators/travel_batch_100_v1/travel_food_columnist_079/cover.jpg",
+          "mediaUrls": [
+            "cold_start/creators/travel_batch_100_v1/travel_food_columnist_079/cover.jpg"
+          ],
+          "imageUrls": [
+            "cold_start/creators/travel_batch_100_v1/travel_food_columnist_079/cover.jpg"
+          ],
+          "videoUrl": "media/video/s/archived-video/beta-sample.mp4",
+          "tagRefs": [
+            "Topic/旅行/旅行主题/文化深度游"
+          ],
+          "locationName": "东北",
+          "likeCount": 14,
+          "commentCount": 5,
+          "shareCount": 3,
+          "createdAt": "2026-06-01T08:00:00Z"
+        }
+      ]
     }
   },
   "scenarios": [

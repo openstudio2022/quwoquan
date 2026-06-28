@@ -596,6 +596,15 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: mentionUnreadCount
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: "@我且未读的消息数"
+
       - name: muted
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]

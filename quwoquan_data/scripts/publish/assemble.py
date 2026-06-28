@@ -73,6 +73,21 @@ def assemble_release(task_id: str, release_id: str, *, batch_id: str = "") -> Pa
         "sourceBatchId": batch_id,
         "status": "assembled",
     })
+    if batch_id:
+        write_json(
+            root / "evidence_index.json",
+            {
+                "schemaVersion": "quwoquan_data.release_evidence_index/1",
+                "releaseId": release_id,
+                "sourceTaskId": task_id,
+                "sourceBatchId": batch_id,
+                "batchRuntimeRef": f"runtime/batches/{release_id}",
+                "note": (
+                    "Process stages 1.download–4.draft remain in batch runtime; "
+                    "release carries 5.review sidecars and final surfaces only."
+                ),
+            },
+        )
 
     return root
 

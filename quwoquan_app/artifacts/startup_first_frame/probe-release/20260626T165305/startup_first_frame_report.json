@@ -1,0 +1,138 @@
+{
+  "outputDir": "artifacts/startup_first_frame/probe-release/20260626T165305",
+  "passed": true,
+  "results": [
+    {
+      "platform": "android",
+      "device": "emulator-5554",
+      "passed": true,
+      "visibleByMs": 3000,
+      "firstVisibleMs": 2296,
+      "activityDisplayedMs": 1945,
+      "firstFrameWithinBudget": true,
+      "nativeWelcomeDetected": false,
+      "nativeWelcomeHits": [],
+      "blueScreenDetected": false,
+      "plainBackgroundDetected": false,
+      "flutterUiDisplayedMaxMs": 3000,
+      "flutterUiDisplayedWithinBudget": true,
+      "timings": {
+        "android_activity_displayed_ms": 1945
+      },
+      "screenshots": [
+        {
+          "path": "artifacts/startup_first_frame/probe-release/20260626T165305/android-0200ms.png",
+          "offsetMs": 200,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-release/20260626T165305/android-0400ms.png",
+          "offsetMs": 1494,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-release/20260626T165305/android-0600ms.png",
+          "offsetMs": 2296,
+          "foregroundRatio": 0.16975,
+          "stddevAvg": 22.069,
+          "medianRgb": [
+            14,
+            130,
+            247
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-release/20260626T165305/android-0800ms.png",
+          "offsetMs": 3537,
+          "foregroundRatio": 0.23897,
+          "stddevAvg": 33.163,
+          "medianRgb": [
+            15,
+            132,
+            247
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-release/20260626T165305/android-1000ms.png",
+          "offsetMs": 4463,
+          "foregroundRatio": 0.0159,
+          "stddevAvg": 21.868,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-release/20260626T165305/android-1500ms.png",
+          "offsetMs": 5129,
+          "foregroundRatio": 0.0159,
+          "stddevAvg": 21.868,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-release/20260626T165305/android-2000ms.png",
+          "offsetMs": 6027,
+          "foregroundRatio": 0.0159,
+          "stddevAvg": 21.868,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-release/20260626T165305/android-3000ms.png",
+          "offsetMs": 6682,
+          "foregroundRatio": 0.0159,
+          "stddevAvg": 21.868,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        }
+      ]
+    }
+  ]
+}

@@ -6,7 +6,10 @@ import hashlib
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+
+ROOT = Path(__file__).resolve().parents[3]
 
 
 class MockPublicPlaneHandler(BaseHTTPRequestHandler):
@@ -16,6 +19,7 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
     gateway_base_url: str = ""
     product_ops_base_url: str = ""
     media_base_url: str = ""
+    legal_static_root: str = ""
     ops_policy_version: str = "mock-alpha"
     ops_lock = threading.Lock()
     ops_event_ids: set[str] = set()
@@ -41,6 +45,7 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
                     "appRuntimeEnv": self.runtime_env,
                     "dataSource": self.data_source,
                     "gatewayBaseUrl": self.gateway_base_url,
+                    "legalBaseUrl": self._legal_base_url(),
                     "productOpsBaseUrl": self.product_ops_base_url,
                     "mediaBaseUrl": self.media_base_url,
                 }
@@ -48,6 +53,9 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
             return
         if self.mode == "api" and path.startswith("/media/"):
             self._redirect_to_media(path, query)
+            return
+        if self.mode == "api" and path.startswith("/legal/"):
+            self._handle_legal_static(path, include_body=True)
             return
         if self.mode == "api" and path.startswith("/v1/content/feed"):
             self._send_json({"items": [], "nextCursor": None, "mockBoundary": True})
@@ -64,6 +72,13 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         if self._supports_ops() and path.startswith("/v1/ops/"):
             if self._handle_ops_get(path, query_params):
                 return
+        self.send_error(404, f"{self.mode} mock route is not ready")
+
+    def do_HEAD(self) -> None:
+        path, _query = self._split_path()
+        if self.mode == "api" and path.startswith("/legal/"):
+            self._handle_legal_static(path, include_body=False)
+            return
         self.send_error(404, f"{self.mode} mock route is not ready")
 
     def do_POST(self) -> None:
@@ -110,6 +125,75 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         self.send_header("Location", target)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
+
+    def _legal_base_url(self) -> str:
+        gateway_base = self.gateway_base_url.rstrip("/")
+        if not gateway_base:
+            return ""
+        return f"{gateway_base}/legal"
+
+    def _legal_root(self) -> Path:
+        configured = type(self).legal_static_root.strip()
+        if configured:
+            return Path(configured).expanduser().resolve()
+        return (
+            ROOT
+            / "artifacts"
+            / "legal-static-packages"
+            / self.runtime_env
+            / "current"
+            / "public"
+        ).resolve()
+
+    def _resolve_legal_static_path(self, path: str) -> Path | None:
+        root = self._legal_root()
+        if not root.is_dir():
+            return None
+        normalized = path.strip("/")
+        if normalized == "legal":
+            normalized = "legal/manifest.json"
+        candidate = (root / normalized).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            return None
+        if candidate.is_file():
+            return candidate
+        if candidate.suffix:
+            return None
+        html_candidate = candidate.with_suffix(".html")
+        try:
+            html_candidate.relative_to(root)
+        except ValueError:
+            return None
+        if html_candidate.is_file():
+            return html_candidate
+        return None
+
+    def _handle_legal_static(self, path: str, *, include_body: bool) -> None:
+        target = self._resolve_legal_static_path(path)
+        if target is None:
+            root = self._legal_root()
+            if root.is_dir():
+                self.send_error(404, "legal-static document is not ready")
+            else:
+                self.send_error(503, "legal-static package is not ready")
+            return
+        body = target.read_bytes() if include_body else b""
+        file_size = target.stat().st_size
+        content_type = self._legal_content_type(target)
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(file_size))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        if include_body:
+            self.wfile.write(body)
+
+    def _legal_content_type(self, path: Path) -> str:
+        if path.suffix == ".json":
+            return "application/json; charset=utf-8"
+        return "text/html; charset=utf-8"
 
     def _handle_ops_get(
         self,
@@ -475,6 +559,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gateway-base-url", default="")
     parser.add_argument("--product-ops-base-url", default="")
     parser.add_argument("--media-base-url", default="")
+    parser.add_argument("--legal-static-root", default="")
     return parser.parse_args()
 
 
@@ -486,6 +571,7 @@ def main() -> int:
     MockPublicPlaneHandler.gateway_base_url = args.gateway_base_url.rstrip("/")
     MockPublicPlaneHandler.product_ops_base_url = args.product_ops_base_url.rstrip("/")
     MockPublicPlaneHandler.media_base_url = args.media_base_url.rstrip("/")
+    MockPublicPlaneHandler.legal_static_root = args.legal_static_root.rstrip("/")
     server = ThreadingHTTPServer((args.listen_host, args.listen_port), MockPublicPlaneHandler)
     print(
         "[mock-public-plane] listening http://{host}:{port} mode={mode}".format(

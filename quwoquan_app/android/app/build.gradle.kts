@@ -28,6 +28,7 @@ val alphaLocalDefaultDartDefines =
         "APP_RUNTIME_ENV" to "alpha",
         "APP_DATA_SOURCE" to "mock",
         "CLOUD_GATEWAY_BASE_URL" to "https://localhost:17000",
+        "APP_LEGAL_BASE_URL" to "https://localhost:17000/legal",
         "MEDIA_AVATAR_CDN_BASE_URL" to "https://localhost:17100",
         "MEDIA_IMAGE_CDN_BASE_URL" to "https://localhost:17100",
         "MEDIA_VIDEO_CDN_BASE_URL" to "https://localhost:17100",
@@ -63,6 +64,10 @@ android {
         // Patrol native 接线：让 Android Test Orchestrator 能发现并执行 Dart 测试。
         testInstrumentationRunner = "pl.leancode.patrol.PatrolJUnitRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
+        ndk {
+            // splits.abi 与 Flutter 默认 abiFilters 冲突；清掉后者由 split 决定 ABI。
+            abiFilters.clear()
+        }
     }
 
     testOptions {
@@ -72,6 +77,15 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
+            isUniversalApk = false
         }
     }
 }

@@ -39,6 +39,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
   @override
   void initState() {
     super.initState();
+    unawaited(StartupDeferredPlugins.ensureContentEntryPlugins());
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_handleScroll);
     _titleFocusNode.addListener(_handleFocusLossFlush);

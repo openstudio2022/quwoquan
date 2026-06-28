@@ -742,7 +742,7 @@ def _copy_homepage_asset(
         "assetId": asset_id,
         "fileName": file_name,
         "role": role,
-        "caption": str(image.get("caption") or image.get("relevance") or "实体主页图片").strip(),
+        "caption": str(image.get("caption") or image.get("relevance") or name).strip(),
         "license": str(image.get("license") or "").strip(),
         "credit": str(image.get("creator") or "").strip(),
         "relevance": str(image.get("relevance") or "").strip(),
@@ -918,14 +918,36 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
         if str(p.get("caption") or "").strip()
     }
     if placement_caption_by_file:
+        from urllib.parse import unquote
+
         for asset in assets:
-            src_asset = str(asset.get("sourceAssetRef") or "")
+            hay = unquote(
+                " ".join(
+                    [
+                        str(asset.get("sourceAssetRef") or ""),
+                        str(asset.get("fileName") or ""),
+                        str(asset.get("authorizationProof") or ""),
+                    ]
+                )
+            ).lower().replace("%20", " ")
             for file_key, cap in placement_caption_by_file.items():
-                if file_key and file_key.replace("_", " ") in src_asset.lower().replace("%20", " "):
+                stem = Path(file_key).stem.lower()
+                if file_key and (file_key in hay or stem in hay):
                     asset["caption"] = cap
                     break
 
-  # wikitext imagePlacements 用 fileName 锚点；finalize 已分配 assetId，在此对齐。
+    from _common.asset_placement import _caption_is_degraded
+
+    for asset in assets:
+        if str(asset.get("role") or "") != "cover":
+            continue
+        caption = str(asset.get("caption") or "")
+        file_name = str(asset.get("fileName") or "")
+        if _caption_is_degraded(caption, file_name=file_name):
+            # 退化 caption 一律回退到原文标题（实体名），禁止任何领域硬编码补全。
+            asset["caption"] = name
+
+    # wikitext imagePlacements 用 fileName 锚点；finalize 已分配 assetId，在此对齐。
     resolved_placements: list[dict[str, Any]] = []
     for row in image_placements:
         if not isinstance(row, dict):
@@ -933,12 +955,17 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
         file_name = str(row.get("fileName") or "").lower()
         matched_id = ""
         for asset in assets:
-            hay = " ".join(
-                [
-                    str(asset.get("sourceAssetRef") or ""),
-                    str(asset.get("fileName") or ""),
-                ]
-            ).lower()
+            from urllib.parse import unquote
+
+            hay = unquote(
+                " ".join(
+                    [
+                        str(asset.get("sourceAssetRef") or ""),
+                        str(asset.get("fileName") or ""),
+                        str(asset.get("authorizationProof") or ""),
+                    ]
+                )
+            ).lower().replace("%20", " ")
             if file_name and (file_name in hay or Path(file_name).stem in hay):
                 matched_id = str(asset.get("assetId") or "")
                 break
@@ -971,7 +998,7 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
             "type": etype,
             "sourceTaskId": task_id,
             "entityRef": entity_ref(domain, etype, name),
-            "summary": _homepage_summary(name, facts)[:180],
+            "summary": _homepage_summary(name, facts, base_text=gate_body or base_text),
             "sourceRefs": source_refs,
             "textSourceRefs": text_source_refs,
             "imageSourceRefs": image_source_refs,

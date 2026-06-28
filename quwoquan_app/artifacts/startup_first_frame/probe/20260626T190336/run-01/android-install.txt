@@ -1,0 +1,6 @@
+adb: failed to install build/app/outputs/flutter-apk/app-x86_64-release.apk: Failure [INSTALL_FAILED_NO_MATCHING_ABIS: INSTALL_FAILED_NO_MATCHING_ABIS: Failed to extract native libraries, res=-113]
+Performing Streamed Install
+
+--- reinstall ---
+adb: failed to install build/app/outputs/flutter-apk/app-x86_64-release.apk: Failure [INSTALL_FAILED_NO_MATCHING_ABIS: INSTALL_FAILED_NO_MATCHING_ABIS: Failed to extract native libraries, res=-113]
+Performing Streamed Install

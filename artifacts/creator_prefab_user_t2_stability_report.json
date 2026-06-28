@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "creator_prefab_user_t2_stability/1",
+  "generatedAt": "2026-06-27T10:37:25.699134+00:00",
+  "decision": "go",
+  "checks": {
+    "prefabUserProvenanceGate": {
+      "exitCode": 0,
+      "passed": true
+    },
+    "creatorPoolSeedConsistency": {
+      "exitCode": 0,
+      "passed": true
+    },
+    "creatorPoolApiIntegration": {
+      "exitCode": 0,
+      "passed": true,
+      "note": "ok  \tquwoquan_service/services/user-service/tests\t6.548s\n"
+    },
+    "dualTrackConsistency": {
+      "creatorPoolUserCount": 101,
+      "legacyUserCount": 108,
+      "passed": true
+    }
+  },
+  "blockers": []
+}

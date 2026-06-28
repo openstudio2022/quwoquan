@@ -163,6 +163,21 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
     }
   }
 
+  /// 添加成员后从云端刷新 roster。
+  Future<void> addMembers(List<String> userIds) async {
+    await _repo.addMembers(conversationId: _conversationId, userIds: userIds);
+    await load();
+  }
+
+  /// 移除成员后从云端刷新 roster。
+  Future<void> removeMember(String userId) async {
+    await _repo.removeMember(
+      conversationId: _conversationId,
+      userId: userId,
+    );
+    await load();
+  }
+
   static List<ChatConversationMemberDto> _applyAdminChange(
     List<ChatConversationMemberDto> members,
     List<String> adminIds,

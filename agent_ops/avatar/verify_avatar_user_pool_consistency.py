@@ -20,6 +20,12 @@ MEDIA_ROOT = SHARED / "media"
 USER_POOL_PATH = SHARED / "user_pool.json"
 SOURCE_CATALOG_PATH = SHARED / "source_catalog.json"
 COMPOSITION_RULES_PATH = SHARED / "composition_rules.json"
+CREATOR_POOL_SEED = SHARED / "creator_pool" / "creator_travel_batch100.seed.json"
+CREATOR_POOL_CANONICAL_REFS = ["creator_travel_batch100", "creator_travel_travel_batch_100_v1_core"]
+CREATOR_POOL_CURRENT_USER_MEDIA = [
+    "cold_start/creators/travel_batch_100_v1/current_user_variant/avatar.jpg",
+    "cold_start/creators/travel_batch_100_v1/current_user_variant/cover.jpg",
+]
 USER_SCENARIOS = METADATA / "user" / "test_fixtures" / "scenarios" / "user_scenarios.json"
 CONTENT_SCENARIOS = METADATA / "content" / "test_fixtures" / "scenarios" / "content_scenarios.json"
 CIRCLE_SCENARIOS = METADATA / "social" / "circle" / "test_fixtures" / "scenarios" / "circle_scenarios.json"
@@ -626,6 +632,65 @@ def verify_gamma_curated_media_bundle(
         fail(errors, f"gamma curated scenarios reference media outside curated bundle: {missing[:10]}")
 
 
+def verify_creator_pool_media(errors: list[str]) -> None:
+    """Creator pool (batch-100) avatar/cover media must be in VCS and valid JPEGs.
+
+    Creator media lives under media/cold_start/creators/<batch>/<handle>/ (its own
+    tree, outside the curated bundle). The gate guarantees every seeded creator —
+    plus the logged-in currentUserVariant slot consumed by the App — has its
+    avatar + cover present on disk (i.e. committed) and a valid JPEG header.
+    """
+    if not CREATOR_POOL_SEED.is_file():
+        fail(errors, f"creator_pool seed missing: {CREATOR_POOL_SEED.relative_to(ROOT)}")
+        return
+    seed = load_json(CREATOR_POOL_SEED)
+    users = seed.get("users") or []
+    if not isinstance(users, list) or not users:
+        fail(errors, "creator_pool seed has no users")
+        return
+    object_keys: list[tuple[str, str]] = []
+    for user in users:
+        handle = str(user.get("userHandle") or user.get("subAccountId") or "?")
+        for field in ("avatarObjectKey", "backgroundObjectKey"):
+            object_keys.append((handle, str(user.get(field) or "")))
+    for key in CREATOR_POOL_CURRENT_USER_MEDIA:
+        object_keys.append(("current_user_variant", key))
+    for handle, object_key in object_keys:
+        if not object_key.startswith("cold_start/creators/"):
+            fail(errors, f"creator_pool[{handle}] media must be a cold_start/creators object key, got {object_key!r}")
+            continue
+        path = MEDIA_ROOT / object_key
+        if not path.is_file():
+            fail(errors, f"creator_pool[{handle}] media missing in VCS: media/{object_key}")
+            continue
+        raw = path.read_bytes()
+        if len(raw) < 3 or raw[:2] != b"\xff\xd8":
+            fail(errors, f"creator_pool[{handle}] media is not a valid JPEG: media/{object_key}")
+
+
+def verify_creator_pool_manifests(errors: list[str], manifests: dict[str, dict[str, Any]]) -> None:
+    entries: dict[str, dict[str, Any]] = {}
+    for env, manifest in manifests.items():
+        item = next(
+            (it for it in manifest.get("seedRefs", []) if it.get("domain") == "creator_pool"),
+            None,
+        )
+        if not item:
+            fail(errors, f"{env} manifest missing creator_pool domain")
+            continue
+        entries[env] = item
+    if len(entries) != len(manifests):
+        return
+    fixture_paths = {it.get("fixturePath") for it in entries.values()}
+    if len(fixture_paths) != 1:
+        fail(errors, f"creator_pool fixturePath must match across environments: {sorted(map(str, fixture_paths))}")
+    refs_set = {tuple(it.get("refs") or []) for it in entries.values()}
+    if len(refs_set) != 1:
+        fail(errors, f"creator_pool refs must match across environments: {sorted(map(str, refs_set))}")
+    if tuple(entries["alpha"].get("refs") or []) != tuple(CREATOR_POOL_CANONICAL_REFS):
+        fail(errors, f"creator_pool refs must be canonical v1 set {CREATOR_POOL_CANONICAL_REFS}")
+
+
 def verify_entity_scale(
     errors: list[str],
     rules: dict[str, Any],
@@ -671,6 +736,8 @@ def main() -> int:
     verify_circle_fixture(errors, users, pool, circles_by_id, circle)
     verify_chat_fixture(errors, users, pool, conversations_by_id, chat)
     manifests = verify_manifests(errors)
+    verify_creator_pool_media(errors)
+    verify_creator_pool_manifests(errors, manifests)
     verify_entity_scale(errors, rules, user_doc, content, circle, chat)
     for label, document in (
         ("user_scenarios", user_doc),

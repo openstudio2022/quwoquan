@@ -1,0 +1,26 @@
+schemaVersion: prefab_cutover/1
+description: |
+  域级预制用户切流开关。T2 默认 legacy；T3 逐域切 creator_pool；单域失败可回滚。
+
+migrationPhase: T3
+defaultTrack: creator_pool
+
+domains:
+  content:
+    defaultTrack: creator_pool
+    cutover: done
+    pilotScenario: content_pilot_20
+  user:
+    defaultTrack: creator_pool
+    cutover: done
+    pilotScenario: creator_travel_travel_batch_100_v1_core
+  chat:
+    defaultTrack: creator_pool
+    cutover: done
+  circle:
+    defaultTrack: creator_pool
+    cutover: done
+
+rollback:
+  enabled: true
+  note: 将单域 defaultTrack 改回 legacy 即可回滚，无需 revert user_pool.json

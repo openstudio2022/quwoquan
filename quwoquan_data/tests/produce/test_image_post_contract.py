@@ -205,9 +205,13 @@ def test_image_materialize_writes_download_stage_source_refs():
     snapshot = post_dir / "1.download" / "source_refs.json"
     assert snapshot.is_file(), "图片作品缺 1.download/source_refs.json"
     data = read_json(snapshot)
-    assert data["schemaVersion"] == "quwoquan_data.source_refs"
-    # 图片作品引证了来源图集 source unit
-    assert data.get("citedSourceRefs"), data
+    # 单底稿零参考 v2：图片作品的底稿来源单元 = 资产所属同一图集 source unit。
+    assert data["schemaVersion"] == "quwoquan_data.source_refs/2"
+    assert data["baseSourceRef"], data
+    assert len(data["sources"]) == 1
+    assert data["sources"][0]["role"] == "base"
+    assert "citedSourceRefs" not in data
+    assert "sourcePaths" not in data
     assert not (post_dir / "5.review" / "finalization_report.json").exists()
 
 

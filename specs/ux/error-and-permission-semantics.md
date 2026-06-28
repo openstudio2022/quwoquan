@@ -300,12 +300,15 @@ networkUnavailable      # 暂时无法加载，请检查网络后重试
 
 ### 2.2 权限状态与展示方式
 
-| 状态 | 说明 | 展示方式 |
-|------|------|----------|
-| **未请求** | 首次进入功能，尚未弹出系统对话框 | 功能入口处引导 → 触发 request |
-| **已拒绝（可再请求）** | 用户点了「不允许」，可再次请求 | 权限卡片内联占位 + 说明 |
-| **永久拒绝** | 用户点了「不允许」且勾选「不再询问」/ iOS 设置中关闭 | 权限卡片 + **去设置** 主操作 |
-| **已授予** | 正常使用 | 无提示 |
+| 状态 | 说明 | 展示方式 | `AppPermissionPhase` | L 阶段 |
+|------|------|----------|----------------------|--------|
+| **未请求** | 首次进入功能，尚未弹出系统对话框 | 功能入口处引导 → 触发 request | `requestable` | L1/L2 |
+| **已拒绝（可再请求）** | 用户点了「不允许」，可再次请求（Android 常见） | 轻 Toast 或 inline 说明 | `requestable` | L1 + 轻提示 |
+| **永久拒绝** | 用户点了「不允许」且勾选「不再询问」/ iOS 首次拒 | 权限 gate + **去设置** 主操作 | `settingsRequired` | L3 |
+| **已授予** | 正常使用 | 无提示 | `granted` | L0 |
+| **策略限制** | 家长控制 / 企业策略 | 仅 Toast，无去设置 | `restricted` | — |
+
+统一状态机真相源：`AppPermissionCoordinator`（见 §2.8、§2.9）。
 
 ### 2.3 权限卡片统一形态
 
@@ -361,7 +364,105 @@ openSettings             # 去设置
 1. **进入功能** → 检查权限
 2. **未授予** → 请求 `requestPermission()`
 3. **拒绝** → 若可再请求，展示权限卡片 + 副说明；若永久拒绝，展示权限卡片 + 「去设置」
-4. **去设置** → 调用 `Geolocator.openAppSettings()` 或 `openLocationSettings()`，返回后重新检查权限并刷新 UI
+4. **去设置** → 经 `AppPermissionCoordinator.openSettings()` 标记 pending，用户主动跳转；**禁止**跳转后立即 `request()` / reload / 再次 `ensure(showUi=true)`
+5. **设置返回** → Coordinator 在 `AppLifecycleState.resumed` 静默 recheck，**仅一次** Toast 反馈（见 §2.8）
+
+### 2.8 防死循环与设置返回（强制）
+
+统一入口：`AppPermissionCoordinator`（`quwoquan_app/lib/core/services/app_permission_coordinator.dart`）。
+新功能 **禁止** 直接 `Permission.xxx.request()` 或裸 `openAppSettings()`；必须登记 `AppPermissionKind` 并走 Coordinator。
+
+#### 2.8.1 阶段漏斗（L0–L4）
+
+| 阶段 | 行为 | 是否跳转设置 |
+|------|------|--------------|
+| **L0 已授权** | 直接执行功能 | 否 |
+| **L1 系统 request** | 用户主动触发时调用 `request()` / 插件等价 API | 否（系统原生弹窗） |
+| **L2 Pre-Permission 说明** | 首次前应用内 1 句说明 +「继续」 | 否 |
+| **L3 永久拒绝 / 不可再 request** | 应用内 gateCard/dialog：**一次**说明 + 用户 **主动点击**「去设置」 | 是（唯一入口） |
+| **L4 设置返回** | 静默 recheck → **仅一次**反馈 | 否（禁止自动再跳） |
+
+#### 2.8.2 会话状态契约
+
+| 字段 | 含义 |
+|------|------|
+| `settingsVisitPending` | 仅用户点击「去设置」时置位；resume 时处理 **一次** 后清除 |
+| `suppressSettingsPrompt` | 设置返回且仍未授权 → 置 `true`；本会话内后续 `ensure()` **禁止**再弹含「去设置」的 modal |
+
+#### 2.8.3 六条防循环军规
+
+1. **`suppressSettingsPrompt`**：设置返回未授权后，后续 `ensure()` 只展示 `AppToast` 或 inline 轻提示（文案：`permissionStillDeniedMessage`），**不**再弹含「去设置」的 dialog/gateCard。
+2. **`settingsVisitPending` + resume**：granted → 成功 Toast（`permissionGrantedMessage`）并清除 suppress；not granted → 失败 Toast **一次** + 置 suppress + 清除 pending。
+3. **禁止链式触发**：`openAppSettings()` 后不得立即 `request()` / `_loadNearby()` / 再次 `ensure(showUi=true)`。
+4. **禁止 resume 自动跳设置**：生命周期回调只做 recheck + Toast，不得自动 `openAppSettings()`。
+5. **显式重试**：页面级 gate 提供「重试授权」→ 清除 `suppressSettingsPrompt`（`forceRetry: true`）；若仍为 `settingsRequired` 才允许再次展示「去设置」。
+6. **会话边界**：冷启动或登出后清除 suppress；SharedPreferences 仅存 primer 已展示，**不**持久化 suppress。
+
+#### 2.8.4 UI 载体（与 §1.12 对齐）
+
+| 场景 | 载体 |
+|------|------|
+| JIT 功能（按住说话、发起通话） | **L1 系统弹窗直出**（默认无 L2）；L3 用 gateCard **至多 1 次/会话** |
+| 页面级阻塞（选位置、相册） | L2 preBrief（继续/取消）→ L1；L3 用 `AppInlineGateState` / `AppPageErrorState` |
+| suppress 后重复触发 | **仅 `AppToast`** |
+| 设置返回未授权 | **一次性 Toast**，无 modal |
+
+#### 2.8.5 验证
+
+- **local_contract**：`test/local_contract/core/services/app_permission_coordinator__local_contract_test.dart`
+- **adoption 门禁**：`quwoquan_app/scripts/runtime/verify_permission_coordinator_adoption.py`
+- **primer 文案门禁**：`quwoquan_app/scripts/runtime/verify_permission_primer_copy.py`
+- **user_acceptance**：`specs/ux/app-permission-coordinator-uat-matrix.md`
+
+### 2.9 权限载体决策矩阵（权威边界）
+
+> 代码真相源：`AppPermissionCoordinator.ensure()` + `AppPermissionSurface`（`jit` / `page`）。
+> 与 §1.13 错误矩阵并列；permission 子域冲突时以本节 + §2.8 为准。
+
+**判定优先级（自上而下短路）**：
+
+```
+phase == granted → 无 UI
+phase == restricted → AppToast（permissionRestrictedMessage）
+suppressSettingsPrompt → AppToast（permissionStillDeniedMessage），禁止 L3 modal
+phase == settingsRequired → L3 gateCard（去设置 + 取消[/重试授权]），仅一次
+surface == page 且 primer 未展示 → L2 preBrief（继续/取消）
+否则 requestable → L1 仅系统 request（App 层零 modal；JIT 默认跳过 L2）
+```
+
+| 载体 | 组件 | 适用阶段 |
+|------|------|----------|
+| **preBrief** | `CupertinoAlertDialog`（继续/取消） | L2，仅 `AppPermissionSurface.page` |
+| **systemSheet** | OS 系统弹窗 | L1 |
+| **permissionGate** | `gateCard` / JIT 下 `AppActionErrorFeedback` | L3 |
+| **permissionToast** | `AppToast` | L4 / suppress |
+
+**红线**：
+
+- 同一次用户手势（如「按住说话」）App 层 **最多 1 个 modal**（JIT 默认 0 个 L2）。
+- L2 主按钮为「继续」时，正文 **禁止** 仅写「请点允许」而不说明系统弹窗。
+- L3 标题使用 `permissionSettingsGateTitle`，与 L2 标题区分。
+- **禁止** `permission.request()` 后再链式 `record.hasPermission(request: true)`。
+
+### 2.10 JIT 动作失败（以聊天语音为例）
+
+- **分类**：`UiErrorCategory.backgroundAction`（非 `submit`）
+- **载体**：输入区上方 **voiceStatusBar**（持久至重试或 dismiss）
+- **文案**：`chatVoicePendingRetry`（「语音没发出去，已保存，点重试」）
+- **主操作**：**重试** → `voiceOfflineQueue.drain()`，非再次弹权限
+- **禁止**：`actionDialog` 与 status bar **同时**出现
+
+### 2.11 文案 key 注册表（权限 + JIT 语音）
+
+| Key | 用途 |
+|-----|------|
+| `permissionPrimerContinue` | L2 主按钮「继续」 |
+| `permissionSettingsGateTitle(label)` | L3 标题 |
+| `permissionStillDeniedMessage(label)` | L4 失败 Toast |
+| `permissionGrantedMessage(label)` | L4 成功 Toast |
+| `permissionRetryAuthorization` | L3 次操作 / 重试授权 |
+| `chatVoicePendingRetry` | 语音发送失败 status bar |
+| 各 kind `*PrimerMessage` | 必须含「点继续 → 系统弹窗点允许」语义 |
 
 ---
 

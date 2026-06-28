@@ -51,7 +51,7 @@
     }
   ],
   "env": "gamma",
-  "generatedAt": "2026-06-25T20:26:56.254132Z",
+  "generatedAt": "2026-06-26T16:08:31.702045Z",
   "legalBaseUrl": "https://gamma-api.quwoquan-env.test:19000/legal",
   "packageKind": "legal-static",
   "schemaVersion": "legal-static-public/v1"

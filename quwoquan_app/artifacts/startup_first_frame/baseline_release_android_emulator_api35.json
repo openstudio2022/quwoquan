@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-06-26",
+  "platform": "android",
+  "deviceProfile": "emulator-5554-arm64",
+  "buildMode": "release",
+  "entrypoint": "lib/main_prod.dart",
+  "dartDefines": {
+    "APP_DATA_SOURCE": "remote"
+  },
+  "metric": "brandWelcomeFirstVisibleMs",
+  "metricDefinition": "first screenshot within budget where branded_or_content_visible (flower/title), not native launch-screen blue",
+  "notes": "arm64-v8a-release.apk; deferred plugins patch; warm emulator; probe offsets 200-2000ms; re-scored with branded-only metric",
+  "samples": [
+    {
+      "runId": "20260626T190940-run-01",
+      "activityDisplayedMs": 873,
+      "activityOnCreateMs": 3,
+      "flutterEngineConfiguredMs": 125,
+      "firstVisibleMs": 600,
+      "reportPath": "artifacts/startup_first_frame/probe/20260626T190940"
+    },
+    {
+      "runId": "20260626T190940-run-02",
+      "activityDisplayedMs": 707,
+      "activityOnCreateMs": 1,
+      "flutterEngineConfiguredMs": 38,
+      "firstVisibleMs": 600,
+      "reportPath": "artifacts/startup_first_frame/probe/20260626T190940"
+    },
+    {
+      "runId": "20260626T190940-run-03",
+      "activityDisplayedMs": 554,
+      "activityOnCreateMs": 2,
+      "flutterEngineConfiguredMs": 25,
+      "firstVisibleMs": 600,
+      "reportPath": "artifacts/startup_first_frame/probe/20260626T190940"
+    },
+    {
+      "runId": "20260626T190940-run-04",
+      "activityDisplayedMs": 575,
+      "activityOnCreateMs": 3,
+      "flutterEngineConfiguredMs": 32,
+      "firstVisibleMs": 600,
+      "reportPath": "artifacts/startup_first_frame/probe/20260626T190940"
+    },
+    {
+      "runId": "20260626T190940-run-05",
+      "activityDisplayedMs": 599,
+      "activityOnCreateMs": 2,
+      "flutterEngineConfiguredMs": 37,
+      "firstVisibleMs": 600,
+      "reportPath": "artifacts/startup_first_frame/probe/20260626T190940"
+    }
+  ],
+  "p50": {
+    "activityDisplayedMs": 599,
+    "activityOnCreateMs": 2,
+    "flutterEngineConfiguredMs": 37,
+    "firstVisibleMs": 600
+  },
+  "p95": {
+    "activityDisplayedMs": 873,
+    "activityOnCreateMs": 3,
+    "flutterEngineConfiguredMs": 125,
+    "firstVisibleMs": 600
+  },
+  "slaTargetRelease": {
+    "ttidP50Ms": 1000,
+    "ttidP95Ms": 2000
+  },
+  "ios": {
+    "note": "Simulator debug build; branded welcome typically >2s on iPhone 17 Pro debug. Release/profile on device pending.",
+    "debugReference": {
+      "reportPath": "artifacts/startup_first_frame/probe/20260626T193718",
+      "brandedFirstVisibleMsP50": 2791
+    }
+  },
+  "priorBaseline": {
+    "capturedAt": "2026-06-26-pre-deferred-plugins",
+    "p50FirstVisibleMs": 2296,
+    "p50ActivityDisplayedMs": 2613
+  },
+  "sourceReport": "artifacts/startup_first_frame/probe/20260626T190940/startup_first_frame_report.json"
+}

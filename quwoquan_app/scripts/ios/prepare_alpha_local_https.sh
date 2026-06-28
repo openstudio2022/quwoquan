@@ -45,4 +45,8 @@ if [[ -n "$RUNTIME_ENV" && "$RUNTIME_ENV" != "alpha" ]]; then
 fi
 
 echo "[ios-alpha-local] preparing alpha HTTPS public plane for flutter run"
-bash "$ROOT_DIR/agent_ops/deploy/alpha/start_alpha_mock_stack.sh" up
+# iOS Simulator validates HTTPS against the booted simulator keychain, not the
+# macOS login keychain. Skip macOS trustRoot writes here to avoid the repeated
+# Certificate Trust Settings password prompt on every flutter run build.
+QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip \
+  bash "$ROOT_DIR/agent_ops/deploy/alpha/start_alpha_mock_stack.sh" up

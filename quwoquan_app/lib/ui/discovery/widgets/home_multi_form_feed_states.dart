@@ -156,6 +156,14 @@ class _HomeFeedEmptyState extends StatelessWidget {
     final pageBackground = SettingsSemanticConstants.conversationSheetCardSurface(
       isDark,
     );
+    final primaryText = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final secondaryText = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     final accent = AppColors.iosAccent(context);
     return ColoredBox(
       color: pageBackground,
@@ -170,13 +178,16 @@ class _HomeFeedEmptyState extends StatelessWidget {
                 width: AppSpacing.avatarUserLg,
                 height: AppSpacing.avatarUserLg,
                 decoration: BoxDecoration(
-                  color: AppColors.iosFill(context),
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.surfaceMuted,
+                  ),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   CupertinoIcons.sparkles,
                   size: AppSpacing.iconMedium,
-                  color: AppColors.iosSecondaryLabel(context),
+                  color: secondaryText,
                 ),
               ),
               const SizedBox(height: AppSpacing.containerSm),
@@ -186,7 +197,7 @@ class _HomeFeedEmptyState extends StatelessWidget {
                 style: TextStyle(
                   fontSize: AppTypography.iosSubheadline,
                   fontWeight: AppTypography.semiBold,
-                  color: AppColors.iosLabel(context),
+                  color: primaryText,
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -194,8 +205,9 @@ class _HomeFeedEmptyState extends StatelessWidget {
                 DiscoveryFeedText.homeFeedEmptyDescription,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: AppTypography.iosFootnote,
-                  color: AppColors.iosTertiaryLabel(context),
+                  fontSize: AppTypography.iosBody,
+                  color: secondaryText,
+                  height: AppSpacing.textLineHeightBody,
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),

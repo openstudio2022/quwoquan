@@ -25,6 +25,8 @@ class ChatRequestPageIds {
     'ListMembers': 'chat.member.list',
     'ListMessageHome': 'chat.list.message.home',
     'ListMessages': 'chat.message.list',
+    'ListSelectableGroupContactMembers': 'chat.list.selectable.group.contact.members',
+    'ListSelectableGroupConversations': 'chat.list.selectable.group.conversations',
     'MarkAsRead': 'chat.message.read',
     'RecallMessage': 'chat.message.recall',
     'RemoveAssistant': 'chat.assistant.remove',
@@ -60,6 +62,8 @@ class ChatRequestPageIds {
   static const String listMembers = 'chat.member.list';
   static const String listMessageHome = 'chat.list.message.home';
   static const String listMessages = 'chat.message.list';
+  static const String listSelectableGroupContactMembers = 'chat.list.selectable.group.contact.members';
+  static const String listSelectableGroupConversations = 'chat.list.selectable.group.conversations';
   static const String markAsRead = 'chat.message.read';
   static const String recallMessage = 'chat.message.recall';
   static const String removeAssistant = 'chat.assistant.remove';

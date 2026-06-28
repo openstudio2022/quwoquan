@@ -422,6 +422,7 @@ func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) 
 		if state.UnreadCount < 0 {
 			state.UnreadCount = 0
 		}
+		state.MentionUnreadCount = 0
 		state.UpdatedAt = time.Now()
 		if err := s.repo.UpsertUserState(ctx, state); err != nil {
 			return err

@@ -408,6 +408,9 @@ class UITextConstants {
   // 权限不足（对应 AUTH.PERMISSION.DENIED）。
   static const String authPermissionDenied = '当前账号暂无权限';
   static const String legalLoadFailed = '页面加载失败，请重试';
+  static const String legalUnavailableTitle = '页面暂时打不开';
+  static const String legalUnavailableMessage =
+      '协议内容暂时无法获取，请检查网络后重试。你可以返回继续登录流程。';
   static const String profileLoginCardTitle = '登录后，可同步使用记录';
   static const String profileLoginCardSubtitle = '作品、足迹、赞过、消息与分身资料会跟随账号保存。';
   static const String profileLoginNow = '立即登录';
@@ -427,11 +430,12 @@ class UITextConstants {
   static const String logoutConfirm = '确定退出';
 
   /// 退出登录二级选择：默认软退出（保留快速登录），可选彻底清除。
-  static const String logoutSheetTitle = '退出登录';
-  static const String logoutSheetMessage = '退出后本机会保留登录信息，有效期内可免验证码快速登录。';
-  static const String logoutSoftAction = '退出登录';
-  static const String logoutHardAction = '退出并清除本机登录信息';
-  static const String logoutCancel = '取消';
+  static const String logoutDialogTitle = '退出登录';
+  static const String logoutDialogMessage =
+      '退出后本机会保留登录信息，有效期内可免验证码快速登录。也可以清除本机登录信息，下次登录需重新验证。';
+  static const String logoutDialogSoftAction = '退出登录';
+  static const String logoutDialogHardAction = '清除登录信息并退出';
+  static const String logoutDialogCancel = '取消';
 
   /// 软退出后提示：有效期内可免验证码快速登录。{days} 为有效期天数。
   static const String loginSoftLogoutToast = '已退出登录，{days} 天内可免验证码快速登录';
@@ -1164,8 +1168,57 @@ class UITextConstants {
   static const String chatVoiceCanceled = '已取消';
   static const String chatVoiceSending = '发送中';
   static const String chatVoicePermissionDenied = '未获得录音权限';
-  static const String chatVoicePermissionOpenSettings = '请在系统设置中打开麦克风权限后再发送语音';
+  static const String chatVoicePermissionOpenSettings =
+      '请在 设置 → 趣我圈 → 麦克风中开启权限后再发送语音';
+  static const String chatVoicePermissionPrimerTitle = '需要麦克风权限';
+  static const String chatVoicePermissionPrimerMessage =
+      '按住说话发送语音消息需要使用麦克风。点「继续」后，请在系统弹窗中选择「允许」。';
+  static const String chatVoicePermissionPrimerContinue = '继续';
+  static const String permissionPrimerContinue = '继续';
+  static const String chatVoicePermissionGrantedAfterSettings =
+      '麦克风已开启，可以发送语音了';
+  static const String permissionMicrophoneLabel = '麦克风';
+  static const String permissionCameraLabel = '相机';
+  static const String permissionPhotosLabel = '相册';
+  static const String permissionLocationLabel = '定位';
+  static const String permissionContactsLabel = '通讯录';
+  static const String permissionNotificationsLabel = '通知';
+  static const String permissionRetryAuthorization = '重试授权';
+  static String permissionSettingsGateTitle(String permissionLabel) =>
+      '需要在设置中开启$permissionLabel';
+  static const String permissionPhotosOpenSettings =
+      '请在 设置 → 趣我圈 → 相册中开启权限后再选择媒体';
+  static const String permissionPhotosPrimerTitle = '需要相册权限';
+  static const String permissionPhotosPrimerMessage =
+      '选择图片或视频需要访问相册。点「继续」后，请在系统弹窗中选择「允许」。';
+  static const String permissionLocationPrimerTitle = '需要定位权限';
+  static const String permissionLocationPrimerMessage =
+      '展示附近地点需要获取你的位置。点「继续」后，请在系统弹窗中选择「允许」。';
+  static const String permissionLocationOpenSettings =
+      '请在 设置 → 趣我圈 → 定位中开启权限，并确认系统定位服务已打开';
+  static const String permissionLocationDenied = '未获得定位权限';
+  static const String permissionContactsPrimerTitle = '需要通讯录权限';
+  static const String permissionContactsPrimerMessage =
+      '发现已注册联系人需要访问通讯录。点「继续」后，请在系统弹窗中选择「允许」。';
+  static const String permissionContactsOpenSettings = '请在 设置 → 趣我圈 → 通讯录中开启权限';
+  static const String permissionContactsDenied = '未获得通讯录权限';
+  static const String permissionNotificationsPrimerTitle = '需要通知权限';
+  static const String permissionNotificationsPrimerMessage =
+      '接收消息提醒需要通知权限。点「继续」后，请在系统弹窗中选择「允许」。';
+  static const String permissionNotificationsOpenSettings =
+      '请在 设置 → 趣我圈 → 通知中开启权限';
+  static const String permissionNotificationsDenied = '未获得通知权限';
+
+  static String permissionStillDeniedMessage(String permissionLabel) =>
+      '$permissionLabel 仍未开启，请按 设置 → 趣我圈 → $permissionLabel 手动开启';
+
+  static String permissionGrantedMessage(String permissionLabel) =>
+      '$permissionLabel 已开启';
+
+  static String permissionRestrictedMessage(String permissionLabel) =>
+      '$permissionLabel 权限受系统限制，暂不可用';
   static const String chatVoiceRecordUnavailable = '暂时无法录音，请稍后重试';
+  static const String chatVoicePendingRetry = '语音没发出去，已保存，点重试';
   static const String chatVoiceUploadFailed = '语音上传失败，请重试';
   static const String chatVoiceSendFailedTitle = '语音发送失败';
   static const String chatVoiceSendFailed = '语音发送失败，请重试';
@@ -1404,6 +1457,30 @@ class UITextConstants {
   static const String editProfileQrShareAction = '分享';
   static const String editProfileQrSaveAction = '保存图片';
   static const String editProfileQrSaveFallbackToast = '二维码链接已复制';
+  static String profileQrForwardTitle(String displayName) =>
+      '${displayName.trim().isNotEmpty ? displayName.trim() : editProfileQrCardTitle} 的二维码';
+
+  /// 应用内统一转发旅程。
+  static const String forwardSheetTitle = '转发给';
+  static const String forwardMostContacted = '最常联系';
+  static const String forwardActionAppContacts = '发送给联系人';
+  static const String forwardActionWechatFriend = '发送给微信好友';
+  static const String forwardActionWechatMoments = '微信朋友圈';
+  static const String forwardSelectChatTitle = '选择聊天';
+  static const String forwardRecentForwards = '最近转发';
+  static const String forwardRecentChats = '最近聊天';
+  static const String forwardContacts = '联系人';
+  static const String forwardSendToLabel = '发送给：';
+  static const String forwardMessagePlaceholder = '发消息';
+  static const String forwardNoRecentChats = '暂无最近聊天';
+  static const String forwardNoRecipients = '暂无可转发联系人';
+  static const String forwardSendSuccess = '已发送';
+  static const String forwardSendFailed = '转发失败，请稍后再试';
+  static const String forwardOpeningWechat = '正在打开微信';
+  static const String forwardShareSystemFallback = '已打开系统分享，请在系统面板选择目标';
+  static const String forwardExternalShareUnavailable = '当前平台暂不支持分享';
+  static const String forwardCardUnavailable = '此联系人暂不可转发';
+  static String forwardRecipientGroupMemberCount(int count) => '$count人';
   static const String editProfileSignatureTitle = '个性签名';
   static const String editProfileSignaturePlaceholder = '写一句介绍自己';
   static const String editProfileTagsTitle = '标签';
@@ -1620,10 +1697,10 @@ class UITextConstants {
   static const String postArticle = '写笔记';
   static const String publish = '发表';
   static const String publishAction = '发布';
-  static const String createActionPostPhotoShort = postPhoto;
-  static const String createActionPostVideoShort = postVideo;
-  static const String createActionWriteLong = '写长文';
-  static const String createActionResumeDraft = '续草稿';
+  static const String createActionPostPhotoShort = '发布图片';
+  static const String createActionPostVideoShort = '发布视频';
+  static const String createActionWriteLong = '写一篇长文';
+  static const String createActionResumeDraft = '从草稿开始';
   static const String localDraftsTitle = '本地草稿';
   static const String localDraftsDeviceOnlyNotice =
       '草稿仅保存在当前设备，卸载应用后会被删除，请及时发布。';
@@ -1636,9 +1713,9 @@ class UITextConstants {
   static const String localDraftUnavailableTitle = '这条草稿暂时无法恢复';
   static const String localDraftMissingImageDesc = '原始图片已不可用，可删除这条草稿或返回。';
   static const String localDraftMissingVideoDesc = '原始视频已不可用，可删除这条草稿或返回。';
-  static const String createActionAddContactShort = '加联系';
+  static const String createActionAddContactShort = homeObjectActionAddContact;
   static const String createActionCreateGroupShort = '发起群聊';
-  static const String createActionCreateCircleShort = '建圈子';
+  static const String createActionCreateCircleShort = createCircle;
   static const String createActionPublishGroupTitle = publishAction;
   static const String createActionSocialGroupTitle = profileTabInteraction;
   static const String createPageTitle = '创作';
@@ -1743,6 +1820,14 @@ class UITextConstants {
   static const String startGroupChatSyncingMemberState = '正在同步群成员状态…';
   static const String startGroupChatAlreadyInGroup = '已在群中';
   static const String startGroupChatNoMatchedMembers = '暂无匹配成员';
+  static const String startGroupChatPickFromGroup = '从群聊中选择';
+  static const String startGroupChatPickFromGroupSearch = '搜索群聊';
+  static const String startGroupChatGroupPickerTitle = '选择群聊';
+  static const String startGroupChatGroupPickerEmpty = '暂无可选的群聊';
+  static String startGroupChatRemovedMember(String name) => '已移除 $name';
+  static String startGroupChatFriendsCount(int count) => '$count 个朋友';
+  static String startGroupChatGroupMemberTitle(String name, int count) =>
+      '$name（$count 个朋友）';
   static const String locationSearchHint = '搜索地点';
   static const String locationNearbyTitle = '附近位置';
   static const String locationSearchingNearby = '正在搜索附近位置';
@@ -2027,6 +2112,8 @@ class UITextConstants {
   static const String cameraUnavailable = '相机不可用';
   static const String cameraUnavailableRecovery = '请检查相机权限，或切换到支持相机的设备后再试';
   static const String cameraPermissionRequiredTitle = '需要相机权限';
+  static const String cameraPermissionPrimerMessage =
+      '拍照或录像需要使用相机。点「继续」后，请在系统弹窗中选择「允许」。';
   static const String cameraPermissionRequired = '请允许相机权限后再拍照';
   static const String cameraPermissionRequiredRecovery =
       '可前往系统设置开启相机权限，或返回继续选择相册图片';

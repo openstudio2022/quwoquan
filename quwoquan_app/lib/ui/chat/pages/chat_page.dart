@@ -21,6 +21,7 @@ import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart'
 import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page_visit_recorder.dart';
+import 'package:quwoquan_app/ui/chat/utils/chat_contact_initials.dart';
 part 'chat_page_state.dart';
 
 final chatGreetingInboxProvider = FutureProvider.autoDispose
@@ -58,90 +59,7 @@ class _ContactsListWithIndex extends StatefulWidget {
   State<_ContactsListWithIndex> createState() => _ContactsListWithIndexState();
 }
 
-String _getInitial(String name) {
-  if (name.isEmpty) return '#';
-  final first = name[0].toUpperCase();
-  if (RegExp(r'[A-Z]').hasMatch(first)) return first;
-  const map = {
-    '赵': 'Z',
-    '钱': 'Q',
-    '孙': 'S',
-    '李': 'L',
-    '周': 'Z',
-    '吴': 'W',
-    '郑': 'Z',
-    '王': 'W',
-    '冯': 'F',
-    '陈': 'C',
-    '卫': 'W',
-    '蒋': 'J',
-    '沈': 'S',
-    '韩': 'H',
-    '杨': 'Y',
-    '朱': 'Z',
-    '秦': 'Q',
-    '许': 'X',
-    '何': 'H',
-    '吕': 'L',
-    '施': 'S',
-    '张': 'Z',
-    '孔': 'K',
-    '曹': 'C',
-    '严': 'Y',
-    '华': 'H',
-    '金': 'J',
-    '魏': 'W',
-    '陶': 'T',
-    '姜': 'J',
-    '谢': 'X',
-    '邹': 'Z',
-    '柏': 'B',
-    '窦': 'D',
-    '章': 'Z',
-    '云': 'Y',
-    '苏': 'S',
-    '潘': 'P',
-    '葛': 'G',
-    '奚': 'X',
-    '范': 'F',
-    '彭': 'P',
-    '郎': 'L',
-    '鲁': 'L',
-    '韦': 'W',
-    '马': 'M',
-    '苗': 'M',
-    '方': 'F',
-    '俞': 'Y',
-    '任': 'R',
-    '袁': 'Y',
-    '柳': 'L',
-    '史': 'S',
-    '唐': 'T',
-    '罗': 'L',
-    '毕': 'B',
-    '郝': 'H',
-    '安': 'A',
-    '常': 'C',
-    '乐': 'L',
-    '于': 'Y',
-    '时': 'S',
-    '傅': 'F',
-    '齐': 'Q',
-    '康': 'K',
-    '伍': 'W',
-    '余': 'Y',
-    '顾': 'G',
-    '孟': 'M',
-    '平': 'P',
-    '黄': 'H',
-    '书': 'S',
-    '小': 'X',
-    '大': 'D',
-    '老': 'L',
-    '阿': 'A',
-  };
-  return map[name[0]] ?? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[name.codeUnitAt(0) % 26];
-}
+String _getInitial(String name) => chatContactInitial(name);
 
 const double _kSectionHeaderHeight = AppSpacing.twenty;
 const double _kContactRowHeight = 56;

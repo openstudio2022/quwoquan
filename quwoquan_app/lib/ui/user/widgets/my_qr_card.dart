@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
-import 'package:share_plus/share_plus.dart';
 
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
@@ -13,6 +12,8 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/ui/share/forward_share_models.dart';
+import 'package:quwoquan_app/ui/share/widgets/forward_share_sheet.dart';
 
 /// 「我的二维码」名片卡（添加我为联系人）。
 ///
@@ -46,12 +47,9 @@ class MyQrCardView extends StatelessWidget {
               child: ProfileIosActionButton(
                 label: UITextConstants.editProfileQrShareAction,
                 style: ProfileIosActionStyle.plain,
-                onPressed: () => SharePlus.instance.share(
-                  ShareParams(
-                    text: card.shareText.isEmpty
-                        ? card.qrPayload
-                        : card.shareText,
-                  ),
+                onPressed: () => ForwardShareSheet.show(
+                  context,
+                  payload: _buildProfileQrForwardPayload(card),
                 ),
               ),
             ),
@@ -91,16 +89,16 @@ class MyQrCardContent extends StatelessWidget {
     );
     final headingFontSize = compact
         ? AppTypography.iosBody
-        : AppTypography.iosTitle2;
+        : AppTypography.iosNavTitle;
     final headingWeight = compact
         ? AppTypography.regular
         : AppTypography.semiBold;
     final avatarSize = compact
         ? AppSpacing.avatarUserLg
-        : AppSpacing.avatarUserXl;
+        : AppSpacing.avatarUserLg;
     final nameFontSize = compact
         ? AppTypography.iosBody
-        : AppTypography.iosTitle3;
+        : AppTypography.iosBody;
     final nameWeight = compact ? AppTypography.regular : AppTypography.semiBold;
     final qrMaxSize = compact
         ? AppSpacing.twoHundredTwenty
@@ -172,7 +170,78 @@ class MyQrCardContent extends StatelessWidget {
             maxSize: qrMaxSize,
             padding: qrPadding,
           ),
+          if (!compact) ...<Widget>[
+            SizedBox(height: AppSpacing.containerMd),
+            Text(
+              UITextConstants.editProfileQrCardHint,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: AppColors.iosSecondaryLabel(context),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class ProfileQrForwardPreview extends StatelessWidget {
+  const ProfileQrForwardPreview({super.key, required this.card});
+
+  final ProfileQrCardData card;
+
+  @override
+  Widget build(BuildContext context) {
+    final qrPreviewSize =
+        AppSpacing.twoHundredTwenty - AppSpacing.largeButtonSize;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.iosSystemBackground(context),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+        border: Border.all(
+          color: AppColors.iosSeparator(context),
+          width: AppSpacing.hairline,
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                _Avatar(
+                  url: card.avatarUrl,
+                  name: card.displayName,
+                  size: AppSpacing.avatarUserMd,
+                  initialFontSize: AppTypography.iosFootnote,
+                ),
+                SizedBox(width: AppSpacing.intraGroupSm),
+                Expanded(
+                  child: Text(
+                    card.displayName,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosSubheadline,
+                      fontWeight: AppTypography.semiBold,
+                      color: AppColors.iosLabel(context),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: AppSpacing.containerSm),
+            _QrPayloadView(
+              data: card.qrPayload,
+              maxSize: qrPreviewSize,
+              padding: AppSpacing.intraGroupXs,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -270,4 +339,27 @@ class _Avatar extends StatelessWidget {
       ),
     );
   }
+}
+
+AppForwardPayload _buildProfileQrForwardPayload(ProfileQrCardData card) {
+  final shareText = card.shareText.trim().isNotEmpty
+      ? card.shareText.trim()
+      : card.qrPayload.trim();
+  return AppForwardPayload(
+    kind: AppForwardSubjectKind.profileQr,
+    title: UITextConstants.profileQrForwardTitle(card.displayName),
+    subtitle: card.region,
+    thumbnailUrl: card.avatarUrl,
+    deeplink: card.qrPayload,
+    landingUrl: card.publicProfileUrl,
+    shareText: shareText,
+    previewBuilder: (_) => ProfileQrForwardPreview(card: card),
+    extra: <String, Object?>{
+      'qrPayload': card.qrPayload,
+      'qrTokenId': card.qrTokenId,
+      'styleVersion': card.styleVersion,
+      'displayName': card.displayName,
+      'region': card.region,
+    },
+  );
 }

@@ -1114,21 +1114,22 @@ class ChatMockData {
   ];
 
   /// 联系人 Tab「圈子」占位（与记录 UI prototypeCircles 对齐）。
+  static String circleAvatarFor(String circleId) =>
+      'media/avatar/s/archived-avatar/circle/$circleId/v1/avatar.png';
+
   static List<Map<String, dynamic>> get contactTabCircles => [
     {
       'circleId': 'circle_1',
       'id': 'circle_1',
       'displayName': '风光摄影圈',
-      'avatarUrl':
-          'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
+      'avatarUrl': circleAvatarFor('circle_1'),
       'subtitle': '1.2k',
     },
     {
       'circleId': 'circle_2',
       'id': 'circle_2',
       'displayName': '人像摄影圈',
-      'avatarUrl':
-          'media/image/s/mock/seed/p_1531746020798-e6953c6e8e04/v1/image.jpg',
+      'avatarUrl': circleAvatarFor('circle_2'),
       'subtitle': '890',
     },
   ];

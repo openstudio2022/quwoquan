@@ -97,6 +97,7 @@ func (s *InboxService) MarkAsRead(ctx context.Context, userId, conversationId st
 		state.ReadSeq = readSeq
 	}
 	state.UnreadCount = 0
+	state.MentionUnreadCount = 0
 	state.LastReadAt = time.Now()
 	state.UpdatedAt = time.Now()
 	return s.repo.UpsertUserState(ctx, state)

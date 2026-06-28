@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -25,10 +26,17 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_crea
 import 'package:quwoquan_app/ui/chat/models/start_group_pickable_member.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/start_group_member_wizard_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/start_group_from_group_provider.dart';
+import 'package:quwoquan_app/ui/chat/utils/chat_contact_initials.dart';
+import 'package:quwoquan_app/ui/chat/utils/chat_pinyin_match.dart';
+import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 
 part 'start_group_chat_page_widgets.dart';
 part 'start_group_chat_member_sheet.dart';
+part 'start_group_chat_group_picker_sheet.dart';
 
 /// 与云侧 CreateConversation 默认 maxGroupSize 对齐的前置上限；超限由服务端
 /// 二次校验并通过结构化错误回传，客户端仅做即时拦截。
@@ -61,17 +69,18 @@ class StartGroupChatPage extends ConsumerStatefulWidget {
 class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _listScrollController = ScrollController();
+  final ScrollController _selectedScrollController = ScrollController();
   late final String _wizardId;
   late final PageLifecycleObservability _pageObservability;
   late final JourneyEventTracker _journeyTracker;
   late final DateTime _enteredAt;
 
   List<ChatContactRowDto> _contacts = [];
-  bool _selectedExpanded = false;
   bool _submitting = false;
   String _query = '';
   bool _isLoading = true;
   UiErrorSemantic? _pageErrorSemantic;
+  int _lastSelectedCount = 0;
 
   String get _analyticsPageName =>
       widget.isCreateMode ? _kCreateModePageName : _kAddMemberModePageName;
@@ -170,6 +179,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     );
     _searchController.dispose();
     _listScrollController.dispose();
+    _selectedScrollController.dispose();
     super.dispose();
   }
 
@@ -243,6 +253,24 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         .toggleMember(member);
   }
 
+  /// 打开「从群聊中选择联系人」二级流程（图四 → 图五）。
+  ///
+  /// 用 Navigator.push(CupertinoPageRoute) 承载，不新增 GoRouter 路由/surface；
+  /// wizardId 贯穿，图五选中项直接并入当前向导，返回后选中横向条自动滚到尾部。
+  void _pushGroupPicker() {
+    final isDark = ref.read(isDarkProvider);
+    Navigator.of(context).push(
+      CupertinoPageRoute<void>(
+        builder: (_) => _GroupPickerSheet(
+          key: const ValueKey<String>('start-group-group-picker-sheet'),
+          wizardId: _wizardId,
+          isDark: isDark,
+          onBack: () => Navigator.of(context).pop(),
+        ),
+      ),
+    );
+  }
+
   /// 上报发起群聊 / 添加成员的转化结果到 journey funnel 与页面观测；
   /// 失败时携带结构化错误（sourceCode / failureKind 由观测层统一抽取），
   /// 与上一轮服务端 not_mutual / blocked / size 错误码同源。
@@ -314,12 +342,15 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         }
         _handleCreateConversationSuccess(conversationId);
       } else {
-        await repo.addMembers(
-          conversationId: widget.conversationId!,
-          userIds: selectedIds,
-        );
+        await ref
+            .read(
+              conversationMembersProvider(widget.conversationId!).notifier,
+            )
+            .addMembers(selectedIds);
         _recordSubmitOutcome(success: true, memberCount: selectedIds.length);
         await _refreshChatEntryLists();
+        ref.invalidate(conversationMembersProvider(widget.conversationId!));
+        ref.invalidate(groupHomeProvider(widget.conversationId!));
         if (!context.mounted) {
           return;
         }
@@ -342,18 +373,14 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     }
   }
 
-  /// 按首字母分组：A-Z, #，返回有序 keys 与 map
+  /// 按首字母分组：A-Z, #，返回有序 keys 与 map。
+  ///
+  /// 首字母真相源为 [chatContactInitial]（百家姓映射），与 chat 联系人列表同源。
   static ({List<String> keys, Map<String, List<StartGroupFriendLetterRow>> map})
   _groupByLetter(List<StartGroupFriendLetterRow> list) {
     final map = <String, List<StartGroupFriendLetterRow>>{};
     for (final m in list) {
-      final name = m.displayName;
-      final letter = m.letter.isNotEmpty
-          ? m.letter
-          : (name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '#');
-      final key = RegExp(r'[A-Za-z]').hasMatch(letter)
-          ? letter.toUpperCase()
-          : '#';
+      final key = m.letter.isNotEmpty ? m.letter : '#';
       map.putIfAbsent(key, () => []).add(m);
     }
     for (final key in map.keys) {
@@ -408,21 +435,26 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     final selectedMembers = wizardState.selectedMembers.values.toList(
       growable: false,
     );
-    final visibleSelectedCount = _selectedExpanded
-        ? selectedMembers.length
-        : (selectedMembers.length > 12 ? 12 : selectedMembers.length);
+    final rowBackground =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final rowDividerColor =
+        SettingsSemanticConstants.conversationSheetDividerColor(
+          isDark,
+        ).withValues(alpha: 0.9);
+    final sectionBandColor =
+        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
     final friendsWithLetter = _contacts
         .where((contact) {
           final userId = contact.userId;
           if (userId.isEmpty) {
             return false;
           }
-          final displayName = contact.displayName;
           final normalizedQuery = _query.trim().toLowerCase();
           if (normalizedQuery.isEmpty) {
             return true;
           }
-          return displayName.toLowerCase().contains(normalizedQuery) ||
+          // 拼音搜索（li→李）+ userId 兜底，与联系人列表同源。
+          return pinyinMatches(contact.displayName, normalizedQuery) ||
               userId.toLowerCase().contains(normalizedQuery);
         })
         .map((c) {
@@ -431,21 +463,34 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             displayName: displayName,
             userId: c.userId,
             avatarUrl: c.avatarUrl,
-            letter: displayName.isNotEmpty
-                ? displayName.substring(0, 1).toUpperCase()
-                : '#',
+            letter: chatContactInitial(displayName),
           );
         })
         .toList();
     final grouped = _groupByLetter(friendsWithLetter);
-    final indexLetters = ['↑', '☆', ...grouped.keys];
+    final indexLetters = ['↑', ...grouped.keys];
 
     final letterKeys = <String, GlobalKey>{};
     for (final k in grouped.keys) {
       letterKeys[k] = GlobalKey();
     }
 
-    final topChildren = <Widget>[
+    // 选中成员新增时，把横向选择条滚到尾部，确保最新加入者可见。
+    if (selectedMembers.length > _lastSelectedCount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_selectedScrollController.hasClients) {
+          return;
+        }
+        _selectedScrollController.animateTo(
+          _selectedScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+    _lastSelectedCount = selectedMembers.length;
+
+    final listChildren = <Widget>[
       if (!selectionReady) ...[
         SizedBox(height: AppSpacing.sm),
         Row(
@@ -464,88 +509,69 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           ],
         ),
       ],
-      _SelectionSectionLabel(
-        title: UITextConstants.relatedMutualFollow,
-        color: fgSecondary,
-      ),
-      SizedBox(height: AppSpacing.xs),
-    ];
-
-    final relatedChildren = <Widget>[];
-    for (final letter in grouped.keys) {
-      final membersForLetter = grouped.map[letter]!;
-      relatedChildren.add(
-        Column(
-          key: letterKeys[letter],
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _SelectionSectionLabel(title: letter, color: fgSecondary),
-            SizedBox(height: AppSpacing.xs),
-            _SelectionCard(
-              isDark: isDark,
-              child: Column(
-                children: [
-                  for (
-                    var index = 0;
-                    index < membersForLetter.length;
-                    index++
-                  ) ...[
-                    Builder(
-                      builder: (context) {
-                        final m = membersForLetter[index];
-                        final username = m.userId;
-                        final selected = wizardState.isSelected(username);
-                        final locked = wizardState.isLocked(username);
-                        final pickable = StartGroupPickableMember(
-                          userId: username,
-                          displayName: m.displayName.isNotEmpty
-                              ? m.displayName
-                              : username,
-                          avatarUrl: m.avatarUrl,
-                        );
-                        return _RelatedFriendRow(
-                          name: m.displayName,
-                          username: username,
-                          avatarUrl: m.avatarUrl,
-                          selected: selected,
-                          fgPrimary: fgPrimary,
-                          fgSecondary: fgSecondary,
-                          locked: locked,
-                          onTap: selectionReady && !locked
-                              ? () => _toggleSelectedMember(pickable)
-                              : null,
-                          onAvatarTap: () => context.push(
-                            AppRoutePaths.userProfile(username: username),
-                            extra: UserProfileRouteExtra(
-                              subAccountId: username,
-                              avatar: m.avatarUrl.isNotEmpty
-                                  ? m.avatarUrl
-                                  : null,
-                              displayName: m.displayName.isNotEmpty
-                                  ? m.displayName
-                                  : null,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    if (index < membersForLetter.length - 1)
-                      _SelectionListDivider(
-                        isDark: isDark,
-                        leadingInset:
-                            AppSpacing.minInteractiveSize +
-                            AppSpacing.avatarSize +
-                            AppSpacing.sm,
-                      ),
-                  ],
-                ],
-              ),
-            ),
-            SizedBox(height: AppSpacing.sm),
-          ],
+      // 「从群聊中选择」入口（图三微信菜单项对齐），仅在无搜索词时展示。
+      if (_query.trim().isEmpty)
+        _ActionEntryRow(
+          icon: CupertinoIcons.group,
+          title: UITextConstants.startGroupChatPickFromGroup,
+          rowBackground: rowBackground,
+          dividerColor: rowDividerColor,
+          fgPrimary: fgPrimary,
+          onTap: () => _pushGroupPicker(),
         ),
-      );
-    }
+      for (final letter in grouped.keys) ...[
+        _ContactListSectionBand(
+          key: letterKeys[letter],
+          title: letter,
+          color: fgSecondary,
+          bandColor: sectionBandColor,
+        ),
+        for (var index = 0; index < grouped.map[letter]!.length; index++) ...[
+          Builder(
+            builder: (context) {
+              final m = grouped.map[letter]![index];
+              final username = m.userId;
+              final selected = wizardState.isSelected(username);
+              final locked = wizardState.isLocked(username);
+              final pickable = StartGroupPickableMember(
+                userId: username,
+                displayName: m.displayName.isNotEmpty
+                    ? m.displayName
+                    : username,
+                avatarUrl: m.avatarUrl,
+              );
+              return _RelatedFriendRow(
+                name: m.displayName,
+                username: username,
+                avatarUrl: m.avatarUrl,
+                selected: selected,
+                fgPrimary: fgPrimary,
+                fgSecondary: fgSecondary,
+                locked: locked,
+                rowBackground: rowBackground,
+                dividerColor: rowDividerColor,
+                onTap: selectionReady && !locked
+                    ? () => _toggleSelectedMember(pickable)
+                    : null,
+                onAvatarTap: () => context.push(
+                  AppRoutePaths.userProfile(username: username),
+                  extra: UserProfileRouteExtra(
+                    subAccountId: username,
+                    avatar: m.avatarUrl.isNotEmpty
+                        ? m.avatarUrl
+                        : null,
+                    displayName: m.displayName.isNotEmpty
+                        ? m.displayName
+                        : null,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ],
+      SizedBox(height: AppSpacing.xl),
+    ];
 
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
@@ -570,76 +596,75 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           if (selectedMembers.isNotEmpty)
             Padding(
               padding: EdgeInsets.fromLTRB(
-                listHorizontalPadding,
                 0,
-                listHorizontalPadding,
+                0,
+                0,
                 AppSpacing.sm,
               ),
-              child: _SelectionCard(
-                isDark: isDark,
-                padding: EdgeInsets.all(
-                  SettingsSemanticConstants.blockHorizontalPadding,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          UITextConstants.startGroupChatSelectedCount(
-                            selectedMembers.length,
-                          ),
-                          style: TextStyle(
-                            fontSize: AppTypography.md,
-                            fontWeight: FontWeight.w600,
-                            color: fgPrimary,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (selectedMembers.length > 12)
-                          CupertinoButton(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            onPressed: () => setState(
-                              () => _selectedExpanded = !_selectedExpanded,
-                            ),
-                            child: Text(
-                              _selectedExpanded
-                                  ? UITextConstants.collapse
-                                  : UITextConstants.moreMembers,
-                              style: TextStyle(
-                                fontSize: AppTypography.sm,
-                                color: AppColors.primaryColor,
-                              ),
-                            ),
-                          ),
-                      ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: listHorizontalPadding,
                     ),
-                    SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: List.generate(visibleSelectedCount, (index) {
+                    child: Text(
+                      UITextConstants.startGroupChatSelectedCount(
+                        selectedMembers.length,
+                      ),
+                      style: TextStyle(
+                        fontSize: AppTypography.iosFootnote,
+                        fontWeight: AppTypography.medium,
+                        color: fgSecondary,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.xs),
+                  SizedBox(
+                    height: AppSpacing.largeButtonSize + AppSpacing.twentyEight,
+                    child: ListView.separated(
+                      key: const ValueKey<String>('start-group-selected-list'),
+                      controller: _selectedScrollController,
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: listHorizontalPadding,
+                      ),
+                      itemCount: selectedMembers.length,
+                      separatorBuilder: (_, _) =>
+                          SizedBox(width: AppSpacing.sm),
+                      itemBuilder: (context, index) {
                         final member = selectedMembers[index];
                         final userId = member.userId;
                         return _SelectedMemberAvatar(
+                          key: ValueKey<String>(
+                            'start-group-selected-avatar-$userId',
+                          ),
                           name: member.displayName.isNotEmpty
                               ? member.displayName
                               : userId,
                           avatarUrl: member.avatarUrl,
-                          isDark: isDark,
-                          onRemove: () => ref
-                              .read(
-                                startGroupMemberWizardProvider(
-                                  _wizardId,
-                                ).notifier,
-                              )
-                              .deselectMemberIds(<String>[userId]),
+                          onTap: () {
+                            ref
+                                .read(
+                                  startGroupMemberWizardProvider(
+                                    _wizardId,
+                                  ).notifier,
+                                )
+                                .deselectMemberIds(<String>[userId]);
+                            AppToast.show(
+                              context,
+                              UITextConstants.startGroupChatRemovedMember(
+                                member.displayName.isNotEmpty
+                                    ? member.displayName
+                                    : userId,
+                              ),
+                            );
+                          },
                         );
-                      }),
+                      },
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           Expanded(
@@ -648,44 +673,44 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                 ListView(
                   controller: _listScrollController,
                   padding: EdgeInsets.only(
-                    left: listHorizontalPadding,
-                    right: listHorizontalPadding + 28,
                     bottom: AppSpacing.lg,
                   ),
-                  children: [...topChildren, ...relatedChildren],
+                  children: listChildren,
                 ),
                 if (_isLoading)
                   const Positioned.fill(
                     child: Center(child: CupertinoActivityIndicator()),
                   ),
-                Positioned(
-                  right: AppSpacing.sm,
-                  top: 0,
-                  bottom: 0,
-                  child: _LetterIndex(
-                    letters: indexLetters,
-                    onTap: (i) {
-                      if (i <= 1) {
-                        _listScrollController.animateTo(
-                          0,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeOut,
-                        );
-                        return;
-                      }
-                      final letter = indexLetters[i];
-                      final key = letterKeys[letter];
-                      if (key?.currentContext != null) {
-                        Scrollable.ensureVisible(
-                          key!.currentContext!,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeOut,
-                          alignment: 0,
-                        );
-                      }
-                    },
+                if (_query.trim().isEmpty)
+                  Positioned(
+                    key: const ValueKey<String>('start-group-letter-index'),
+                    right: 4,
+                    top: 0,
+                    bottom: 0,
+                    child: _LetterIndex(
+                      letters: indexLetters,
+                      onTap: (i) {
+                        if (i == 0) {
+                          _listScrollController.animateTo(
+                            0,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                          );
+                          return;
+                        }
+                        final letter = indexLetters[i];
+                        final key = letterKeys[letter];
+                        if (key?.currentContext != null) {
+                          Scrollable.ensureVisible(
+                            key!.currentContext!,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                            alignment: 0,
+                          );
+                        }
+                      },
+                    ),
                   ),
-                ),
               ],
             ),
           ),

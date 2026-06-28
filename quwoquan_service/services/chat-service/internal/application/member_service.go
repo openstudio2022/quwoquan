@@ -22,6 +22,7 @@ type MemberService struct {
 	profiles       ProfileSnapshotResolver
 	relationships  RelationshipGate
 	socialContacts SocialContactResolver
+	circles        CircleListResolver
 	media          GroupAvatarAssetizer
 	syncPublisher  UserSyncPublisher
 	scheduler      GroupAvatarTaskScheduler
@@ -36,6 +37,14 @@ func WithSocialContactResolver(resolver SocialContactResolver) MemberServiceOpti
 	return func(s *MemberService) {
 		if resolver != nil {
 			s.socialContacts = resolver
+		}
+	}
+}
+
+func WithCircleListResolver(resolver CircleListResolver) MemberServiceOption {
+	return func(s *MemberService) {
+		if resolver != nil {
+			s.circles = resolver
 		}
 	}
 }
@@ -70,6 +79,7 @@ func NewMemberService(
 	svc := &MemberService{
 		repo: repo, cache: cache, publisher: publisher, profiles: profiles, media: media, syncPublisher: syncPublisher, scheduler: scheduler,
 		socialContacts: noopSocialContactResolver{},
+		circles:        noopCircleListResolver{},
 		relationships:  nil,
 		rosterTimers:   make(map[string]*time.Timer),
 		rosterDebounce: 80 * time.Millisecond,
@@ -469,6 +479,20 @@ func (s *MemberService) ListContacts(
 		return nil, err
 	}
 	return contactHitsToMaps(hits), nil
+}
+
+func (s *MemberService) ListContactHomeCircles(
+	ctx context.Context,
+	userID string,
+	limit int,
+) ([]ContactHomeCircleHit, error) {
+	if s.circles == nil {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	return s.circles.ListCircles(ctx, userID, limit)
 }
 
 func (s *MemberService) ListGroupCandidates(

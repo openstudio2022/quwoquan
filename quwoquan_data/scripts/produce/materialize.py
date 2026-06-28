@@ -726,7 +726,8 @@ def materialize_posts(
                 {
                     "assetId": cover_id,
                     "fileName": f"{cover_id}.jpg",
-                    "caption": "封面",
+                    # 冷启动封面 caption 以原文为基础：实体名 > 文章标题，禁止「封面」占位。
+                    "caption": str(first_entity or title or "").strip(),
                     "kind": "image",
                     "scope": "cold_start",
                     "objectKey": compose_payload.get("coverObjectKey", ""),

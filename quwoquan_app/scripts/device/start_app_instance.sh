@@ -8,6 +8,7 @@ STATE_ROOT="${APP_INSTANCE_STATE_ROOT:-$ROOT_DIR/state/app-instances}"
 ENV_NAME=""
 DEVICE_ID=""
 GATEWAY_BASE_URL=""
+LEGAL_BASE_URL=""
 MEDIA_BASE_URL=""
 MEDIA_AVATAR_BASE_URL=""
 MEDIA_IMAGE_BASE_URL=""
@@ -26,6 +27,7 @@ Usage:
 
 Options:
   --gateway-base-url <url>        Override CLOUD_GATEWAY_BASE_URL.
+  --legal-base-url <url>          Override APP_LEGAL_BASE_URL.
   --media-base-url <url>          Override all MEDIA_* base URLs.
   --media-avatar-base-url <url>   Override MEDIA_AVATAR_CDN_BASE_URL only.
   --media-image-base-url <url>    Override MEDIA_IMAGE_CDN_BASE_URL only.
@@ -57,6 +59,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --gateway-base-url)
       GATEWAY_BASE_URL="${2:-}"
+      shift 2
+      ;;
+    --legal-base-url)
+      LEGAL_BASE_URL="${2:-}"
       shift 2
       ;;
     --media-base-url)
@@ -152,6 +158,9 @@ define_cmd=(
 if [[ -n "$GATEWAY_BASE_URL" ]]; then
   define_cmd+=(--gateway-base-url "$GATEWAY_BASE_URL")
 fi
+if [[ -n "$LEGAL_BASE_URL" ]]; then
+  define_cmd+=(--legal-base-url "$LEGAL_BASE_URL")
+fi
 if [[ -n "$MEDIA_BASE_URL" ]]; then
   define_cmd+=(--media-base-url "$MEDIA_BASE_URL")
 fi
@@ -244,6 +253,7 @@ try:
         "pgid": os.getpgid(child.pid),
         "startedAt": utc_now(),
         "gatewayBaseUrl": defines.get("CLOUD_GATEWAY_BASE_URL", ""),
+        "legalBaseUrl": defines.get("APP_LEGAL_BASE_URL", ""),
         "command": command,
     }
     state_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

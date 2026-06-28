@@ -431,7 +431,7 @@ class CameraBlockingState extends StatelessWidget {
                   style: TextStyle(
                     color: AppColorsFunctional.getColor(
                       true,
-                      ColorType.foregroundTertiary,
+                      ColorType.foregroundSecondary,
                     ),
                     fontSize: AppTypography.iosFootnote,
                     decoration: TextDecoration.none,

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
@@ -20,10 +21,19 @@ final class AppStartupRuntime {
   bool _postFirstFrameWarmupScheduled = false;
   bool _homeReadyReported = false;
 
+  int? _runAppMs;
   int? _firstFrameMs;
   int? _welcomeShownMs;
+  int? _welcomeWindowInitMs;
+  int? _welcomeCompletedMs;
   int? _homeFeedWarmMs;
   int? _homeReadyMs;
+  int? _androidActivityOnCreateMs;
+  int? _androidFlutterEngineConfiguredMs;
+
+  static const MethodChannel _nativeTimingsChannel = MethodChannel(
+    'quwoquan/startup/timings',
+  );
 
   void markBootstrapStarted() {
     if (_bootstrapStarted) {
@@ -33,12 +43,53 @@ final class AppStartupRuntime {
     _stopwatch.start();
   }
 
+  void markRunAppCalled() {
+    _runAppMs ??= _elapsedMs;
+  }
+
   void markFirstFramePainted() {
     _firstFrameMs ??= _elapsedMs;
   }
 
   void markWelcomeShown() {
     _welcomeShownMs ??= _elapsedMs;
+  }
+
+  Future<void> hydrateNativeProcessSegments() async {
+    if (_androidFlutterEngineConfiguredMs != null) {
+      return;
+    }
+    try {
+      final raw = await _nativeTimingsChannel.invokeMethod<Object?>(
+        'readProcessSegments',
+      );
+      if (raw is Map) {
+        final activity = raw['androidActivityOnCreateMs'];
+        final engine = raw['androidFlutterEngineConfiguredMs'];
+        if (activity is int) {
+          _androidActivityOnCreateMs = activity;
+        } else if (activity is num) {
+          _androidActivityOnCreateMs = activity.round();
+        }
+        if (engine is int) {
+          _androidFlutterEngineConfiguredMs = engine;
+        } else if (engine is num) {
+          _androidFlutterEngineConfiguredMs = engine.round();
+        }
+      }
+    } on MissingPluginException {
+      // iOS / Web 无 native 分段通道。
+    } on PlatformException {
+      // best effort
+    }
+  }
+
+  void markWelcomeWindowInitStarted() {
+    _welcomeWindowInitMs ??= _elapsedMs;
+  }
+
+  void markWelcomeCompleted() {
+    _welcomeCompletedMs ??= _elapsedMs;
   }
 
   void markHomeFeedWarm() {
@@ -98,6 +149,10 @@ final class AppStartupRuntime {
     }
   }
 
+  Map<String, dynamic> snapshotProperties({required String phase}) {
+    return _snapshotProperties(phase: phase);
+  }
+
   Future<void> _warmupAfterFirstFrame(ProviderReader read) async {
     unawaited(
       AppExceptionTelemetryService.instance.flushPending().catchError((_) {}),
@@ -131,8 +186,16 @@ final class AppStartupRuntime {
   Map<String, dynamic> _snapshotProperties({required String phase}) {
     return <String, dynamic>{
       'phase': phase,
+      if (_runAppMs != null) 'runAppMs': _runAppMs,
       if (_firstFrameMs != null) 'firstFrameMs': _firstFrameMs,
       if (_welcomeShownMs != null) 'welcomeShownMs': _welcomeShownMs,
+      if (_welcomeWindowInitMs != null)
+        'welcomeWindowInitMs': _welcomeWindowInitMs,
+      if (_welcomeCompletedMs != null) 'welcomeCompletedMs': _welcomeCompletedMs,
+      if (_androidActivityOnCreateMs != null)
+        'androidActivityOnCreateMs': _androidActivityOnCreateMs,
+      if (_androidFlutterEngineConfiguredMs != null)
+        'androidFlutterEngineConfiguredMs': _androidFlutterEngineConfiguredMs,
       if (_homeFeedWarmMs != null) 'homeFeedWarmMs': _homeFeedWarmMs,
       if (_homeReadyMs != null) 'homeReadyMs': _homeReadyMs,
       'elapsedMs': _elapsedMs,

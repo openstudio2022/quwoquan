@@ -344,21 +344,35 @@ def _homepage_sentence_has_fact_signal(sentence: str, *, entity_tokens: set[str]
         return True
     if has_signal and has_unit_fact:
         return True
-    if has_signal and any(token in sentence for token in ("长城", "大坝", "水电站", "遗产", "文物", "遗址", "博物馆")):
-        return True
     if has_signal and any(token in sentence for token in _HOMEPAGE_SPATIAL_PRACTICAL_MARKERS) and len(sentence) >= 18:
         return True
     if has_unit_fact and any(token in sentence for token in _HOMEPAGE_SPATIAL_PRACTICAL_MARKERS) and len(sentence) >= 12:
         return True
     if has_signal and _HOMEPAGE_LOCATION_RE.search(sentence) and len(sentence) >= 10:
         return True
-    if has_signal and any(token in sentence for token in ("景点", "景點", "古寺", "寺", "桥", "橋")) and len(sentence) >= 12:
-        return True
     return False
 
 
-def _homepage_summary(name: str, facts: list[str]) -> str:
+def _homepage_summary(name: str, facts: list[str], *, base_text: str = "") -> str:
+    """以原文为基础派生主页摘要，绝不使用捏造模板或领域关键词补全。
+
+    取材优先级（全部来自原文/底稿）：
+    1. 提及实体名的原文事实句；
+    2. 原文首个事实句；
+    3. 原文正文首句（剥离 frontmatter/标题/噪声行）。
+    三者皆无则返回空串，由下游按原文重新派生，不再凭空生成摘要。
+    """
     for fact in facts:
-        if name in fact and ("位于" in fact or "遗产" in fact or "博物馆" in fact or "景区" in fact):
-            return fact.rstrip("。") + "。"
-    return f"{name} 是本任务覆盖的实体主页对象，本页基于百科、官方或文旅来源整理基础事实。"
+        cleaned = str(fact or "").strip()
+        if cleaned and name and name in cleaned:
+            return (cleaned.rstrip("。") + "。")[:180]
+    for fact in facts:
+        cleaned = str(fact or "").strip()
+        if cleaned:
+            return (cleaned.rstrip("。") + "。")[:180]
+    body = _strip_frontmatter(base_text)
+    for chunk in _HOMEPAGE_TERMINAL_SPLIT_RE.findall(body):
+        sentence = re.sub(r"\s+", "", str(chunk or "")).strip(" \t\r\n，,、：:；;>")
+        if len(sentence) >= 8 and not any(marker in sentence for marker in _HOMEPAGE_FACT_NOISE_MARKERS):
+            return (sentence[:120].rstrip("。") + "。")
+    return ""

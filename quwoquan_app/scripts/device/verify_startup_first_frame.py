@@ -52,6 +52,10 @@ class ScreenshotAnalysis:
     blue_background: bool
     branded_or_content_visible: bool
 
+    @property
+    def brand_transition_visible(self) -> bool:
+        return self.blue_background or self.branded_or_content_visible
+
     def to_json(self) -> dict[str, Any]:
         return {
             "path": self.path,
@@ -62,6 +66,7 @@ class ScreenshotAnalysis:
             "plainBackground": self.plain_background,
             "blueBackground": self.blue_background,
             "brandedOrContentVisible": self.branded_or_content_visible,
+            "brandTransitionVisible": self.brand_transition_visible,
         }
 
 
@@ -108,20 +113,29 @@ def analyze_screenshot(path: Path, offset_ms: int | None = None) -> ScreenshotAn
     foreground_ratio = foreground / max(len(pixels), 1)
     stddev = ImageStat.Stat(crop).stddev
     stddev_avg = sum(stddev) / max(len(stddev), 1)
-    branded_or_content_visible = foreground_ratio >= 0.18 or stddev_avg >= 14.0
+    near_white_background = min(median_rgb) >= 250
+    branded_or_content_visible = (
+        foreground_ratio >= 0.18
+        or (
+            stddev_avg >= 14.0
+            and foreground_ratio >= 0.08
+            and not near_white_background
+        )
+    )
     blue_background = (
         not branded_or_content_visible
         and median_rgb[0] <= 40
         and 90 <= median_rgb[1] <= 170
         and median_rgb[2] >= 210
     )
+    brand_transition_visible = blue_background or branded_or_content_visible
     return ScreenshotAnalysis(
         path=str(path),
         offset_ms=offset_ms,
         foreground_ratio=foreground_ratio,
         stddev_avg=stddev_avg,
         median_rgb=median_rgb,
-        plain_background=not branded_or_content_visible,
+        plain_background=not brand_transition_visible,
         blue_background=blue_background,
         branded_or_content_visible=branded_or_content_visible,
     )
@@ -129,7 +143,11 @@ def analyze_screenshot(path: Path, offset_ms: int | None = None) -> ScreenshotAn
 
 def parse_qwqstartup_log(raw: str) -> dict[str, int]:
     values: dict[str, int] = {}
-    for key in ("android_flutter_engine_configured", "android_flutter_ui_displayed"):
+    for key in (
+        "android_activity_on_create",
+        "android_flutter_engine_configured",
+        "android_flutter_ui_displayed",
+    ):
         match = re.search(rf"{re.escape(key)} elapsedMs=(\d+)", raw)
         if match:
             values[key] = int(match.group(1))
@@ -142,6 +160,47 @@ def parse_qwqstartup_log(raw: str) -> dict[str, int]:
         milliseconds = int(displayed_match.group(3))
         values["android_activity_displayed_ms"] = seconds * 1000 + milliseconds
     return values
+
+
+def percentile(values: list[int], ratio: float) -> int | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    index = max(0, min(len(ordered) - 1, round((len(ordered) - 1) * ratio)))
+    return ordered[index]
+
+
+def summarize_metric_runs(samples: list[dict[str, Any]], key: str) -> dict[str, int | None]:
+    values = [int(item[key]) for item in samples if item.get(key) is not None]
+    return {
+        "p50": percentile(values, 0.5),
+        "p95": percentile(values, 0.95),
+    }
+
+
+def resolve_first_visible_ms(
+    analyses: list[ScreenshotAnalysis],
+    budget_ms: int,
+    *,
+    require_branded: bool,
+) -> int | None:
+    predicate = (
+        (lambda item: item.branded_or_content_visible)
+        if require_branded
+        else (lambda item: item.brand_transition_visible)
+    )
+    return next(
+        (
+            item.offset_ms
+            for item in analyses
+            if predicate(item)
+            and item.offset_ms is not None
+            and item.offset_ms <= budget_ms
+        ),
+        None,
+    )
 
 
 def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
@@ -214,34 +273,33 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         if pattern in log
     ]
     native_welcome_detected = bool(native_welcome_hits)
-    first_visible = next(
-        (
-            item.offset_ms
-            for item in analyses
-            if item.branded_or_content_visible
-            and item.offset_ms is not None
-            and item.offset_ms <= args.android_visible_by_ms
-        ),
-        None,
+    first_visible = resolve_first_visible_ms(
+        analyses,
+        args.android_visible_by_ms,
+        require_branded=args.require_branded_visible,
     )
     flutter_ui_ms = timings.get("android_flutter_ui_displayed")
     activity_displayed_ms = timings.get("android_activity_displayed_ms")
-    blue_screen_detected = any(
-        item.blue_background
-        and item.offset_ms is not None
-        and item.offset_ms >= args.android_visible_by_ms
-        for item in analyses
+    activity_on_create_ms = timings.get("android_activity_on_create")
+    engine_configured_ms = timings.get("android_flutter_engine_configured")
+    ttid_within_budget = (
+        first_visible is not None and first_visible <= args.android_visible_by_ms
+    )
+    blue_screen_detected = (
+        not ttid_within_budget
+        and any(
+            item.blue_background
+            and not item.branded_or_content_visible
+            and item.offset_ms is not None
+            and item.offset_ms >= args.android_visible_by_ms
+            for item in analyses
+        )
     )
     flutter_ui_within_budget = (
         flutter_ui_ms is None or flutter_ui_ms <= args.android_flutter_ui_max_ms
     )
-    first_frame_within_budget = (
-        activity_displayed_ms <= args.android_visible_by_ms
-        if activity_displayed_ms is not None
-        else first_visible is not None
-    )
     plain_background_detected = (
-        not first_frame_within_budget
+        not ttid_within_budget
         and any(
             item.plain_background
             and item.offset_ms is not None
@@ -253,7 +311,9 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         not native_welcome_detected
         and not blue_screen_detected
         and not plain_background_detected
-        and first_frame_within_budget
+        and ttid_within_budget
+        and (first_visible is not None or not args.require_branded_visible)
+        and flutter_ui_within_budget
     )
     return {
         "platform": "android",
@@ -261,8 +321,10 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         "passed": passed,
         "visibleByMs": args.android_visible_by_ms,
         "firstVisibleMs": first_visible,
+        "ttidWithinBudget": ttid_within_budget,
         "activityDisplayedMs": activity_displayed_ms,
-        "firstFrameWithinBudget": first_frame_within_budget,
+        "activityOnCreateMs": activity_on_create_ms,
+        "flutterEngineConfiguredMs": engine_configured_ms,
         "nativeWelcomeDetected": native_welcome_detected,
         "nativeWelcomeHits": native_welcome_hits,
         "blueScreenDetected": blue_screen_detected,
@@ -307,19 +369,26 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         )
         analyses.append(analyze_screenshot(screenshot, actual_offset_ms))
 
-    first_visible = next(
-        (
-            item.offset_ms
-            for item in analyses
-            if item.branded_or_content_visible
-            and item.offset_ms is not None
-            and item.offset_ms <= args.ios_visible_by_ms
-        ),
-        None,
+    first_visible = resolve_first_visible_ms(
+        analyses,
+        args.ios_visible_by_ms,
+        require_branded=True,
     )
-    blue_screen_detected = any(item.blue_background for item in analyses)
+    ttid_within_budget = (
+        first_visible is not None and first_visible <= args.ios_visible_by_ms
+    )
+    blue_screen_detected = (
+        not ttid_within_budget
+        and any(
+            item.blue_background
+            and not item.branded_or_content_visible
+            and item.offset_ms is not None
+            and item.offset_ms >= args.ios_visible_by_ms
+            for item in analyses
+        )
+    )
     plain_background_detected = (
-        first_visible is None
+        not ttid_within_budget
         and any(
             item.plain_background
             and item.offset_ms is not None
@@ -328,7 +397,7 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         )
     )
     passed = (
-        first_visible is not None
+        ttid_within_budget
         and not blue_screen_detected
         and not plain_background_detected
     )
@@ -338,6 +407,7 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         "passed": passed,
         "visibleByMs": args.ios_visible_by_ms,
         "firstVisibleMs": first_visible,
+        "ttidWithinBudget": ttid_within_budget,
         "blueScreenDetected": blue_screen_detected,
         "plainBackgroundDetected": plain_background_detected,
         "screenshots": [item.to_json() for item in analyses],
@@ -375,15 +445,34 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--android-offsets-ms",
         type=parse_offsets,
-        default=[200, 250, 500, 2000, 3000],
+        default=[400, 600, 800, 1000, 1500, 2000],
     )
-    parser.add_argument("--android-visible-by-ms", type=int, default=3000)
+    parser.add_argument("--android-visible-by-ms", type=int, default=2000)
     parser.add_argument("--android-flutter-ui-max-ms", type=int, default=3000)
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        help="Repeat cold-start probe N times and emit p50/p95 summary.",
+    )
+    parser.add_argument(
+        "--write-baseline",
+        help="Write aggregated baseline JSON to this path after multi-run probe.",
+    )
+    parser.add_argument(
+        "--require-branded-visible",
+        action="store_true",
+        help="Fail when branded welcome is not visible within visible-by-ms.",
+    )
     parser.add_argument("--ios-device")
     parser.add_argument("--ios-bundle", default=DEFAULT_IOS_BUNDLE)
     parser.add_argument("--ios-app", default=str(DEFAULT_IOS_APP))
     parser.add_argument("--ios-install", action="store_true")
-    parser.add_argument("--ios-offsets-ms", type=parse_offsets, default=[200, 1400])
+    parser.add_argument(
+        "--ios-offsets-ms",
+        type=parse_offsets,
+        default=[200, 400, 600, 800, 1000, 1400],
+    )
     parser.add_argument("--ios-visible-by-ms", type=int, default=1500)
     parser.add_argument(
         "--screenshot",
@@ -401,22 +490,120 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[dict[str, Any]] = []
-    if args.android_device:
-        results.append(capture_android(args, output_dir))
-    if args.ios_device:
-        results.append(capture_ios(args, output_dir))
-    results.extend(analyze_existing_screenshots(args))
-    if not results:
-        print("No startup probe target supplied.", file=sys.stderr)
-        return 2
+    run_reports: list[dict[str, Any]] = []
+    for run_index in range(max(args.runs, 1)):
+        run_dir = output_dir
+        if args.runs > 1:
+            run_dir = output_dir / f"run-{run_index + 1:02d}"
+            run_dir.mkdir(parents=True, exist_ok=True)
+        run_results: list[dict[str, Any]] = []
+        if args.android_device:
+            run_results.append(capture_android(args, run_dir))
+        if args.ios_device:
+            run_results.append(capture_ios(args, run_dir))
+        if run_index == 0:
+            run_results.extend(analyze_existing_screenshots(args))
+        if not run_results and run_index == 0:
+            print("No startup probe target supplied.", file=sys.stderr)
+            return 2
+        results.extend(run_results)
+        if args.runs > 1 and run_results:
+            run_reports.append(
+                {
+                    "run": run_index + 1,
+                    "outputDir": str(run_dir),
+                    "results": run_results,
+                }
+            )
+        if args.runs > 1 and args.android_device and run_index + 1 < args.runs:
+            time.sleep(1.5)
+
+    summary: dict[str, Any] | None = None
+    android_samples = [
+        {
+            "runId": stamp if args.runs <= 1 else f"{stamp}-run-{index + 1:02d}",
+            "activityDisplayedMs": item.get("activityDisplayedMs"),
+            "activityOnCreateMs": item.get("activityOnCreateMs"),
+            "flutterEngineConfiguredMs": item.get("flutterEngineConfiguredMs"),
+            "firstVisibleMs": item.get("firstVisibleMs"),
+            "reportPath": str(output_dir),
+        }
+        for index, item in enumerate(results)
+        if item.get("platform") == "android"
+    ]
+    if android_samples:
+        summary = {
+            "samples": android_samples,
+            "p50": {
+                "activityDisplayedMs": summarize_metric_runs(
+                    android_samples,
+                    "activityDisplayedMs",
+                )["p50"],
+                "activityOnCreateMs": summarize_metric_runs(
+                    android_samples,
+                    "activityOnCreateMs",
+                )["p50"],
+                "flutterEngineConfiguredMs": summarize_metric_runs(
+                    android_samples,
+                    "flutterEngineConfiguredMs",
+                )["p50"],
+                "firstVisibleMs": summarize_metric_runs(
+                    android_samples,
+                    "firstVisibleMs",
+                )["p50"],
+            },
+            "p95": {
+                "activityDisplayedMs": summarize_metric_runs(
+                    android_samples,
+                    "activityDisplayedMs",
+                )["p95"],
+                "activityOnCreateMs": summarize_metric_runs(
+                    android_samples,
+                    "activityOnCreateMs",
+                )["p95"],
+                "flutterEngineConfiguredMs": summarize_metric_runs(
+                    android_samples,
+                    "flutterEngineConfiguredMs",
+                )["p95"],
+                "firstVisibleMs": summarize_metric_runs(
+                    android_samples,
+                    "firstVisibleMs",
+                )["p95"],
+            },
+        }
 
     report = {
         "outputDir": str(output_dir),
+        "runs": args.runs,
         "passed": all(item["passed"] for item in results),
+        "summary": summary,
+        "runReports": run_reports or None,
         "results": results,
     }
     report_path = output_dir / "startup_first_frame_report.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    if args.write_baseline:
+        baseline_path = Path(args.write_baseline)
+        baseline_path.parent.mkdir(parents=True, exist_ok=True)
+        baseline = {
+            "schemaVersion": 1,
+            "capturedAt": time.strftime("%Y-%m-%d"),
+            "platform": "android",
+            "deviceProfile": args.android_device or "unknown",
+            "buildMode": "release",
+            "metric": "brandWelcomeFirstVisibleMs",
+            "samples": android_samples,
+            "p50": summary["p50"] if summary else {},
+            "p95": summary["p95"] if summary else {},
+            "slaTargetRelease": {"ttidP50Ms": 1000, "ttidP95Ms": 2000},
+            "sourceReport": str(report_path),
+        }
+        baseline_path.write_text(
+            json.dumps(baseline, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["passed"] else 1
 

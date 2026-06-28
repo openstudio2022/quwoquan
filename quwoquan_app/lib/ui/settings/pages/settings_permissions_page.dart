@@ -36,6 +36,7 @@ class SettingsPermissionsPage extends ConsumerWidget {
             children: <Widget>[
               SettingsInsetGroupedSection(
                 isDark: isDark,
+                density: SettingsInsetSectionDensity.compact,
                 header: UITextConstants.settingsPermissionLayerSection,
                 child: Column(
                   children: <Widget>[
@@ -80,15 +81,9 @@ class _PermissionLayerRow extends StatelessWidget {
         SettingsPermissionLayer.entities =>
           UITextConstants.settingsEntitiesPermission,
       },
-      trailing: Text(
-        UITextConstants.settingsPermissionReserved,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.right,
-        style: TextStyle(
-          fontSize: AppTypography.iosSubheadline,
-          color: SettingsSemanticConstants.secondaryColor(isDark),
-        ),
+      trailing: SettingsInsetTrailingText(
+        isDark: isDark,
+        value: UITextConstants.settingsPermissionReserved,
       ),
     );
   }

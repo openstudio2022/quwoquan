@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data.diversity_matrix",
+  "type": "object",
+  "required": ["schemaVersion", "vertical", "dimensions"],
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.diversity_matrix/1" },
+    "vertical": { "type": "string" },
+    "dimensions": {
+      "type": "object",
+      "required": ["archetype", "region", "carrier"],
+      "properties": {
+        "archetype": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "region": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "carrier": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "platform": { "type": "object", "additionalProperties": { "type": "integer" } }
+      }
+    },
+    "minBucketFillRate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "targetEntropy": { "type": "number", "minimum": 0, "maximum": 1 }
+  }
+}

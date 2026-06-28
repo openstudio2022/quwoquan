@@ -45,7 +45,7 @@ func (h *ChatHandler) inboxItemToWire(ctx context.Context, item application.Inbo
 	conv := h.conversationToWire(ctx, item.Conversation)
 	conv["lastSeq"] = item.Conversation.MaxSeq
 	conv["unreadCount"] = item.UserState.UnreadCount
-	conv["mentionUnreadCount"] = 0
+	conv["mentionUnreadCount"] = item.UserState.MentionUnreadCount
 	conv["muted"] = item.UserState.Muted
 	conv["pinned"] = item.UserState.Pinned
 	return conv
@@ -65,7 +65,7 @@ func (h *ChatHandler) messageHomeRowToWire(ctx context.Context, item application
 		"groupAvatarVersion": item.Conversation.GroupAvatarVersion,
 		"lastActiveAt":       item.Conversation.LastMessageTime,
 		"unreadCount":        item.UserState.UnreadCount,
-		"mentionUnreadCount": 0,
+		"mentionUnreadCount": item.UserState.MentionUnreadCount,
 		"muted":              item.UserState.Muted,
 		"pinned":             item.UserState.Pinned,
 		"notificationType":   "",
@@ -93,6 +93,21 @@ func contactHomeUserRowToWire(contact map[string]any) map[string]any {
 		"lastActiveAt":         parseOptionalRFC3339(lastInteraction),
 		"sortKey":              lastInteraction,
 		"isStarred":            boolFromMap(contact, "isStarred"),
+	}
+}
+
+func contactHomeCircleRowToWire(hit application.ContactHomeCircleHit) map[string]any {
+	circleID := strings.TrimSpace(hit.CircleID)
+	return map[string]any{
+		"id":                   circleID,
+		"kind":                 "circle",
+		"objectId":             circleID,
+		"circleId":             circleID,
+		"title":                strings.TrimSpace(hit.DisplayName),
+		"subtitle":             strings.TrimSpace(hit.Subtitle),
+		"avatarUrl":            strings.TrimSpace(hit.AvatarURL),
+		"summaryIntersections": []string{},
+		"sortKey":              circleID,
 	}
 }
 

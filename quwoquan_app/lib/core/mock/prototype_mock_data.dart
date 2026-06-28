@@ -1089,9 +1089,16 @@ class PrototypeMockData {
     return chatMockConversations.where((c) => c['hasMention'] == true).toList();
   }
 
+  /// Mock 联系人头像 object key（与 [ChatMockData.avatarFor] 契约一致）。
+  static String mockChatContactAvatarFor(String userId) =>
+      'media/avatar/s/mock/user/$userId/v1/avatar.png';
+
+  static String mockChatCircleAvatarFor(String circleId) =>
+      'media/avatar/s/archived-avatar/circle/$circleId/v1/avatar.png';
+
   /// 联系人 Tab - 联系人（含趣聊中的会话对象，至少两屏；1:1 MockMessageData MOCK_CONTACTS 扩展）
   static List<Map<String, dynamic>> get chatMockContacts {
-    return [
+    final rows = [
       // 星标 + 与趣聊会话对应
       {
         'id': 'user_123',
@@ -1492,11 +1499,21 @@ class PrototypeMockData {
         'lastInteractionTime': '昨天',
       },
     ];
+    return rows
+        .map((row) {
+          final id = row['id']?.toString().trim() ?? '';
+          if (id.isEmpty) {
+            return row;
+          }
+          return Map<String, dynamic>.from(row)
+            ..['avatar'] = mockChatContactAvatarFor(id);
+        })
+        .toList(growable: false);
   }
 
   /// 联系人 Tab - 圈子列表（简化）
   static List<Map<String, dynamic>> get chatMockContactCircles {
-    return [
+    final rows = [
       {
         'id': 'circle_1',
         'name': '风光摄影圈',
@@ -1512,6 +1529,16 @@ class PrototypeMockData {
         'memberCount': '890',
       },
     ];
+    return rows
+        .map((row) {
+          final id = row['id']?.toString().trim() ?? '';
+          if (id.isEmpty) {
+            return row;
+          }
+          return Map<String, dynamic>.from(row)
+            ..['avatar'] = mockChatCircleAvatarFor(id);
+        })
+        .toList(growable: false);
   }
 
   /// 联系人 Tab - 群聊列表（与对话中的 group 对应）
