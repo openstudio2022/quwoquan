@@ -15,7 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
-	"quwoquan_service/services/content-service/internal/application"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 )
 
 const (
@@ -84,13 +84,13 @@ var (
 )
 
 // Recorder is the Prometheus-backed implementation of
-// application.IntersectionMetricsRecorder.
+// intersectionapp.IntersectionMetricsRecorder.
 type Recorder struct{}
 
 // New returns a Prometheus intersection metrics recorder.
 func New() *Recorder { return &Recorder{} }
 
-var _ application.IntersectionMetricsRecorder = (*Recorder)(nil)
+var _ intersectionapp.IntersectionMetricsRecorder = (*Recorder)(nil)
 
 func norm(v, fallback string) string {
 	v = strings.TrimSpace(v)
@@ -100,34 +100,34 @@ func norm(v, fallback string) string {
 	return v
 }
 
-// ObserveFeedCandidate implements application.IntersectionMetricsRecorder.
+// ObserveFeedCandidate implements intersectionapp.IntersectionMetricsRecorder.
 func (*Recorder) ObserveFeedCandidate(channel, class, rankState string) {
 	feedCandidates.WithLabelValues(norm(channel, "default"), norm(class, "fact"), norm(rankState, "fresh")).Inc()
 }
 
-// ObserveFeedFiltered implements application.IntersectionMetricsRecorder.
+// ObserveFeedFiltered implements intersectionapp.IntersectionMetricsRecorder.
 func (*Recorder) ObserveFeedFiltered(channel, reason string) {
 	feedFiltered.WithLabelValues(norm(channel, "default"), norm(reason, "unknown")).Inc()
 }
 
-// ObserveExposureReported implements application.IntersectionMetricsRecorder.
+// ObserveExposureReported implements intersectionapp.IntersectionMetricsRecorder.
 func (*Recorder) ObserveExposureReported(count int) {
 	if count > 0 {
 		exposureReported.Add(float64(count))
 	}
 }
 
-// ObserveInboxVisit implements application.IntersectionMetricsRecorder.
+// ObserveInboxVisit implements intersectionapp.IntersectionMetricsRecorder.
 func (*Recorder) ObserveInboxVisit(dimension string) {
 	inboxVisit.WithLabelValues(norm(dimension, "all")).Inc()
 }
 
-// ObserveInboxFiltered implements application.IntersectionMetricsRecorder.
+// ObserveInboxFiltered implements intersectionapp.IntersectionMetricsRecorder.
 func (*Recorder) ObserveInboxFiltered(reason string) {
 	inboxFiltered.WithLabelValues(norm(reason, "unknown")).Inc()
 }
 
-// ObserveRedisDegraded implements application.IntersectionMetricsRecorder.
+// ObserveRedisDegraded implements intersectionapp.IntersectionMetricsRecorder.
 func (*Recorder) ObserveRedisDegraded(op string) {
 	redisDegraded.WithLabelValues(norm(op, "unknown")).Inc()
 }

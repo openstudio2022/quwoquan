@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	app "quwoquan_service/services/content-service/internal/application"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 )
 
 // defaultIntersectionFreshnessTTL 是 policy 未声明某维度保鲜期时的兜底 TTL。
@@ -23,10 +23,10 @@ const defaultIntersectionFreshnessTTL = 7 * 24 * time.Hour
 // 架构基线 v2 §21：edgeWeight / lifecycleState / previousStrength / strengthDelta 全部在「写/刷新
 // 路径」物化完成，读路径（summary/list/feed 热命中）仅消费快照、零计算、零同步打分（R-IX01）。
 //
-// 它本身满足 app.IntersectionSource，可在 main.go 中透明包裹 MongoIntersectionSource，
+// 它本身满足 intersectionapp.IntersectionSource，可在 main.go 中透明包裹 MongoIntersectionSource，
 // 上层 IntersectionService 的 summary/list/feed 无需改动即从读模型取数。
 type ReadModelIntersectionSource struct {
-	compute        app.IntersectionSource
+	compute        intersectionapp.IntersectionSource
 	store          ViewerIntersectionReadModel
 	ttlByDimension map[string]time.Duration
 	now            func() time.Time
@@ -35,7 +35,7 @@ type ReadModelIntersectionSource struct {
 // NewReadModelIntersectionSource 构造读穿透源。ttlDaysByDimension 来自
 // recpolicy.Intersection.FreshnessTTLDaysByDimension（metadata 单源）。
 func NewReadModelIntersectionSource(
-	compute app.IntersectionSource,
+	compute intersectionapp.IntersectionSource,
 	store ViewerIntersectionReadModel,
 	ttlDaysByDimension map[string]int,
 ) *ReadModelIntersectionSource {
@@ -75,7 +75,7 @@ func (s *ReadModelIntersectionSource) recomputeDeadline(doc ViewerIntersectionDo
 	return deadline
 }
 
-func (s *ReadModelIntersectionSource) FactReasons(ctx context.Context, userID, channel string) ([]app.IntersectionReasonView, error) {
+func (s *ReadModelIntersectionSource) FactReasons(ctx context.Context, userID, channel string) ([]intersectionapp.IntersectionReasonView, error) {
 	now := s.now()
 	// 单次 Load 既用于保鲜命中判断，又作为 Lifecycle 增量比对的上一次快照基线。
 	prevDoc, prevFound, _ := s.store.Load(ctx, userID)
@@ -90,7 +90,7 @@ func (s *ReadModelIntersectionSource) FactReasons(ctx context.Context, userID, c
 		}
 		return nil, err
 	}
-	var prevReasons []app.IntersectionReasonView
+	var prevReasons []intersectionapp.IntersectionReasonView
 	if prevFound {
 		prevReasons = prevDoc.Reasons
 	}
@@ -100,7 +100,7 @@ func (s *ReadModelIntersectionSource) FactReasons(ctx context.Context, userID, c
 	return enriched, nil
 }
 
-func (s *ReadModelIntersectionSource) AffinityReasons(ctx context.Context, userID, channel string) ([]app.IntersectionReasonView, error) {
+func (s *ReadModelIntersectionSource) AffinityReasons(ctx context.Context, userID, channel string) ([]intersectionapp.IntersectionReasonView, error) {
 	reasons, err := s.compute.AffinityReasons(ctx, userID, channel)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (s *ReadModelIntersectionSource) AffinityReasons(ctx context.Context, userI
 	return applyGraphWeights(reasons, s.now()), nil
 }
 
-func (s *ReadModelIntersectionSource) ObjectReasons(ctx context.Context, viewerID, objectID, objectType string) ([]app.IntersectionReasonView, error) {
+func (s *ReadModelIntersectionSource) ObjectReasons(ctx context.Context, viewerID, objectID, objectType string) ([]intersectionapp.IntersectionReasonView, error) {
 	reasons, err := s.compute.ObjectReasons(ctx, viewerID, objectID, objectType)
 	if err != nil {
 		return nil, err

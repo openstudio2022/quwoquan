@@ -42,7 +42,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed_service_negative_fallback__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed/feed_service_negative_fallback__local_contract_test.go
       - file: quwoquan_service/services/product-ops-service/tests/local_contract/cmd/api/main__local_contract_test.go
       - file: quwoquan_app/test/local_contract/ui/content/widgets/intersection_reason_chip_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart

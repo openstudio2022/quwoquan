@@ -6,6 +6,12 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
+	feedapp "quwoquan_service/services/content-service/internal/application/feed"
+	"quwoquan_service/services/content-service/internal/application/identity"
+	"quwoquan_service/services/content-service/internal/application/ports"
+	postapp "quwoquan_service/services/content-service/internal/application/post"
+	reportapp "quwoquan_service/services/content-service/internal/application/report"
 	"strings"
 	"testing"
 
@@ -19,14 +25,13 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/testinfra"
 	contenhttp "quwoquan_service/services/content-service/internal/adapters/http"
-	"quwoquan_service/services/content-service/internal/application"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
 
 var (
 	testHandler     http.Handler
-	testPostService *application.PostService
+	testPostService *postapp.PostService
 	eventSpy        *testinfra.EventSpy
 	mongoDB         *mongo.Database
 	mongoClient     *mongo.Client
@@ -116,7 +121,7 @@ func TestMain(m *testing.M) {
 	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec")))
 	source := recinfra.NewPostRepositorySource(postStore)
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
-	feedService := application.NewFeedService(engine, source)
+	feedService := feedapp.NewFeedService(engine, source)
 
 	// Comments run against the authoritative Mongo persistence path (keyset
 	// pagination over compound indexes + exact indexed Count) so the L2 contract
@@ -125,26 +130,26 @@ func TestMain(m *testing.M) {
 	// removed (write-only / racy); the post total stays single-sourced on Mongo.
 	commentStore := persistence.NewMongoCommentStore(mongoDB, slog.Default())
 	commentReactionStore := persistence.NewMongoCommentReactionStore(mongoDB, slog.Default())
-	postService := application.NewPostService(
+	postService := postapp.NewPostService(
 		postStore,
-		application.WithEventPublisher(eventSpy),
-		application.WithCommentStore(commentStore),
-		application.WithCommentReactionStore(commentReactionStore),
-		application.WithProjector(&testProjectorAdapter{
+		postapp.WithEventPublisher(eventSpy),
+		postapp.WithCommentStore(commentStore),
+		postapp.WithCommentReactionStore(commentReactionStore),
+		postapp.WithProjector(&testProjectorAdapter{
 			p: recinfra.NewDiscoveryFeedProjector(mongoDB),
 		}),
 	)
 	testPostService = postService
-	reportService := application.NewReportService(reportStore, eventSpy)
+	reportService := reportapp.NewReportService(reportStore, eventSpy)
 	dailyMetricsStore := persistence.NewDailyMetricsStore(mongoDB, slog.Default())
 	authorImpactStore := persistence.NewAuthorImpactStore(mongoDB, slog.Default())
 	authorImpactEvidenceStore := persistence.NewAuthorImpactEvidenceStore(mongoDB, slog.Default())
-	behaviorService := application.NewBehaviorService(
+	behaviorService := behaviorapp.NewBehaviorService(
 		hotPath,
 		postStore,
-		application.WithDailyMetricsStore(dailyMetricsStore),
-		application.WithAuthorImpactStore(authorImpactStore),
-		application.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
+		behaviorapp.WithDailyMetricsStore(dailyMetricsStore),
+		behaviorapp.WithAuthorImpactStore(authorImpactStore),
+		behaviorapp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
 	)
 	baseHandler := contenhttp.NewContentHandler(
 		feedService,
@@ -156,7 +161,7 @@ func TestMain(m *testing.M) {
 	).Routes()
 	testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")) == "" {
-			subAccountID := application.AnonymousFallbackSubAccountID
+			subAccountID := identity.AnonymousFallbackSubAccountID
 			if userID := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); userID != "" {
 				subAccountID = userID
 			}
@@ -212,7 +217,7 @@ type testProjectorAdapter struct {
 	p *recinfra.DiscoveryFeedProjector
 }
 
-func (a *testProjectorAdapter) Project(ctx context.Context, event application.ProjectorEvent) error {
+func (a *testProjectorAdapter) Project(ctx context.Context, event ports.ProjectorEvent) error {
 	return a.p.Project(ctx, recinfra.ProjectorEvent{
 		Type:          event.Type,
 		AggregateType: event.AggregateType,

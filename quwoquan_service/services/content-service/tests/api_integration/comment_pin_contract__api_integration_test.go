@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"quwoquan_service/services/content-service/internal/application/identity"
+	postapp "quwoquan_service/services/content-service/internal/application/post"
 	"strings"
 	"testing"
 
@@ -19,7 +21,6 @@ import (
 	"quwoquan_service/runtime/repository"
 	"quwoquan_service/runtime/testinfra"
 	contenhttp "quwoquan_service/services/content-service/internal/adapters/http"
-	"quwoquan_service/services/content-service/internal/application"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
@@ -211,16 +212,16 @@ func setupCommentPinAPIEnv(t *testing.T) *commentPinAPIEnv {
 	postStore := persistence.NewMongoPostStore(db.Collection("posts"))
 	commentStore := persistence.NewMongoCommentStore(db, slog.Default())
 	commentReactionStore := persistence.NewMongoCommentReactionStore(db, slog.Default())
-	postService := application.NewPostService(
+	postService := postapp.NewPostService(
 		postStore,
-		application.WithEventPublisher(eventSpy),
-		application.WithCommentStore(commentStore),
-		application.WithCommentReactionStore(commentReactionStore),
+		postapp.WithEventPublisher(eventSpy),
+		postapp.WithCommentStore(commentStore),
+		postapp.WithCommentReactionStore(commentReactionStore),
 	)
 	baseHandler := contenhttp.NewContentHandler(nil, postService, nil, nil).Routes()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")) == "" {
-			subAccountID := application.AnonymousFallbackSubAccountID
+			subAccountID := identity.AnonymousFallbackSubAccountID
 			if userID := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); userID != "" {
 				subAccountID = userID
 			}

@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	rtrec "quwoquan_service/runtime/recommendation"
-	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/application/identity"
 )
 
 // TagRecallSource retrieves candidates matching user interest tags.
@@ -129,7 +129,7 @@ func NewAuthorRecallSource(db *mongo.Database) *AuthorRecallSource {
 }
 
 func (s *AuthorRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
-	if strings.TrimSpace(req.UserID) == "" || req.UserID == application.AnonymousFallbackSubAccountID {
+	if strings.TrimSpace(req.UserID) == "" || req.UserID == identity.AnonymousFallbackSubAccountID {
 		return nil, nil
 	}
 

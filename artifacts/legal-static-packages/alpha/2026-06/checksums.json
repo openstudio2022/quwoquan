@@ -1,5 +1,5 @@
 {
-  "manifest.json": "sha256:974b43fa8fcfa5f47e4fb6222d964d1f7a5888d699c1fcac4b93f70727e09dee",
+  "manifest.json": "sha256:ef8ae54c4b554d5c43b8b67ff3ad73fe86fbb7c928a5fb2658e656e98273ec84",
   "manifest.yaml": "sha256:c9051f730fb077d108cb6e6c2b32d450ef84cf24870573cdfdbf5fc6e1318838",
   "public/legal/2026-06/permissions": "sha256:79e054da513ba3297639cd2a726ece743254d483d3cde727195ef6b465071cf9",
   "public/legal/2026-06/permissions.html": "sha256:79e054da513ba3297639cd2a726ece743254d483d3cde727195ef6b465071cf9",
@@ -9,7 +9,7 @@
   "public/legal/2026-06/third-party-sdk-list.html": "sha256:67689beac41f851914dcdb3c0db6641da3088751aad165fa77d7e4083c9985f7",
   "public/legal/2026-06/user-agreement": "sha256:e5f7e40fec663cd844a8d924fe94c07478ce8e97e62dd67b91e28ff122b60781",
   "public/legal/2026-06/user-agreement.html": "sha256:e5f7e40fec663cd844a8d924fe94c07478ce8e97e62dd67b91e28ff122b60781",
-  "public/legal/manifest.json": "sha256:974b43fa8fcfa5f47e4fb6222d964d1f7a5888d699c1fcac4b93f70727e09dee",
+  "public/legal/manifest.json": "sha256:ef8ae54c4b554d5c43b8b67ff3ad73fe86fbb7c928a5fb2658e656e98273ec84",
   "public/legal/permissions": "sha256:79e054da513ba3297639cd2a726ece743254d483d3cde727195ef6b465071cf9",
   "public/legal/permissions.html": "sha256:79e054da513ba3297639cd2a726ece743254d483d3cde727195ef6b465071cf9",
   "public/legal/privacy-policy": "sha256:728f74ccce2eeffb713fb5754f42f2d5047dfc57b3cc8185140c56b805105aa3",
@@ -18,5 +18,5 @@
   "public/legal/third-party-sdk-list.html": "sha256:67689beac41f851914dcdb3c0db6641da3088751aad165fa77d7e4083c9985f7",
   "public/legal/user-agreement": "sha256:e5f7e40fec663cd844a8d924fe94c07478ce8e97e62dd67b91e28ff122b60781",
   "public/legal/user-agreement.html": "sha256:e5f7e40fec663cd844a8d924fe94c07478ce8e97e62dd67b91e28ff122b60781",
-  "release_metadata.json": "sha256:987b7306a9252e595de8c5ac0b0b4e6f70f045e8351f8fb5a6288dc26d7cdcee"
+  "release_metadata.json": "sha256:bff059adb2672391925105e9a540b90e3ddde83f53e7afa008de3ed94693307a"
 }

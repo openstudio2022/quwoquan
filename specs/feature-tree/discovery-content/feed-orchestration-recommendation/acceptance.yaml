@@ -66,7 +66,7 @@ sit_acceptance:
       - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/quality_score_fusion__local_contract_test.go
       - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/collaborative_recall__local_contract_test.go
       - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/observability_attribution__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed_service_negative_fallback__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed/feed_service_negative_fallback__local_contract_test.go
     status: implemented
     test_evidence:
       primary:

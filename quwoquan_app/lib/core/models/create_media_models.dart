@@ -6,7 +6,23 @@ enum CreateMediaSource { album, camera }
 
 enum MediaPickerCategory { all, video, photo, live, fullscreen }
 
-enum MediaPickerEntryMode { image, video }
+enum MediaPickerEntryMode { image, video, mixed }
+
+enum CreateEntryMediaResolution { empty, imageBatch, video }
+
+CreateEntryMediaResolution resolveCreateEntryMediaResolution(
+  Iterable<CreateMediaItem> items,
+) {
+  for (final item in items) {
+    if (item.isVideo) {
+      return CreateEntryMediaResolution.video;
+    }
+    if (item.isImage) {
+      return CreateEntryMediaResolution.imageBatch;
+    }
+  }
+  return CreateEntryMediaResolution.empty;
+}
 
 @immutable
 class CreateMediaItem {

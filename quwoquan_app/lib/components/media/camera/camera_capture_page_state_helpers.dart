@@ -484,6 +484,11 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
     required String? capturedPhotoPath,
     required String? recordedVideoPath,
   }) {
+    final canShowModeSwitcher =
+        _canSwitchCaptureMode &&
+        capturedPhotoPath == null &&
+        recordedVideoPath == null &&
+        !_isRecording;
     return SafeArea(
       key: const ValueKey<String>('camera-bottom-dock'),
       top: false,
@@ -497,6 +502,10 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (canShowModeSwitcher) ...[
+              _buildModeSwitcher(),
+              SizedBox(height: AppSpacing.containerSm),
+            ],
             _buildPrimaryControls(
               capturedPhotoPath: capturedPhotoPath,
               recordedVideoPath: recordedVideoPath,
@@ -513,6 +522,101 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
         ),
       ),
     );
+  }
+
+  Widget _buildModeSwitcher() {
+    final surface = AppColors.white.withValues(alpha: 0.14);
+    return Center(
+      child: Container(
+        key: const ValueKey<String>('camera-mode-switcher'),
+        height: AppSpacing.buttonHeightSm,
+        padding: EdgeInsets.all(AppSpacing.hairline * 2),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildModeSegment(
+              key: const ValueKey<String>('camera-mode-photo'),
+              label: UITextConstants.cameraPhotoMode,
+              selected: !_isVideoMode,
+              mode: MediaPickerEntryMode.image,
+            ),
+            _buildModeSegment(
+              key: const ValueKey<String>('camera-mode-video'),
+              label: UITextConstants.cameraVideoRecord,
+              selected: _isVideoMode,
+              mode: MediaPickerEntryMode.video,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeSegment({
+    required Key key,
+    required String label,
+    required bool selected,
+    required MediaPickerEntryMode mode,
+  }) {
+    final foreground = selected
+        ? AppColors.black
+        : AppColors.white.withValues(alpha: 0.78);
+    return CupertinoButton(
+      key: key,
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerMd,
+        vertical: 0,
+      ),
+      minSize: AppSpacing.buttonHeightSm - AppSpacing.hairline * 4,
+      onPressed: selected || _isBusy
+          ? null
+          : () => unawaited(_switchCaptureMode(mode)),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerXs),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.white : AppColors.transparent,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: foreground,
+            fontSize: AppTypography.iosCaption1,
+            fontWeight: AppTypography.bold,
+            height: AppTypography.lineHeightTight,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _switchCaptureMode(MediaPickerEntryMode mode) async {
+    if (!_canSwitchCaptureMode ||
+        _mode == mode ||
+        _isBusy ||
+        _isRecording ||
+        _capturedPhotoPath != null ||
+        _recordedVideoPath != null) {
+      return;
+    }
+    setState(() {
+      _mode = mode;
+      _audioEnabled = _isVideoMode;
+      _flashMode = CameraPhotoFlashMode.off;
+      _surfaceState = CameraPhotoSurfaceState.ready;
+    });
+    if (widget.previewBuilder == null && _controller != null) {
+      await _initControllerByIndex(_cameraIndex, enableAudio: _audioEnabled);
+    }
+    await (_isVideoMode
+        ? _emitVideoTelemetry('camera_video_enter')
+        : _emitTelemetry('camera_photo_enter'));
   }
 
   Widget _buildPhotoControls() {

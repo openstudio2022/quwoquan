@@ -563,7 +563,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/comment_display_fields__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/comment_display_fields__local_contract_test.go
       - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/comment_pin_contract__api_integration_test.go
@@ -611,7 +611,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/comment_display_fields__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/comment_display_fields__local_contract_test.go
       - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
     status: implemented
@@ -651,7 +651,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/comment_display_fields__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/comment_display_fields__local_contract_test.go
       - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart

@@ -24,7 +24,7 @@ void main() {
     description: 'sheet drag handle',
   );
 
-  testWidgets('创作入口收口为图片/视频/长文/续草稿', (tester) async {
+  testWidgets('创作入口收口为相册/相机/文字三项', (tester) async {
     EditorStartAction? selected;
 
     await tester.pumpWidget(
@@ -46,8 +46,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('创作'), findsNothing);
-    expect(find.text('连接'), findsNothing);
+    expect(
+      find.text(UITextConstants.createActionPublishGroupTitle),
+      findsNothing,
+    );
+    expect(
+      find.text(UITextConstants.createActionSocialGroupTitle),
+      findsNothing,
+    );
     expect(
       find.text(UITextConstants.createActionPostPhotoShort),
       findsOneWidget,
@@ -57,14 +63,18 @@ void main() {
       find.text(UITextConstants.createActionPostVideoShort),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.createActionResumeDraft), findsOneWidget);
+    expect(
+      find.text(UITextConstants.createActionCameraSubtitle),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.createActionResumeDraft), findsNothing);
     expect(
       find.text(UITextConstants.createActionCreateGroupShort),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.text(UITextConstants.createActionAddContactShort),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('发图片'), findsNothing);
     expect(find.text('发视频'), findsNothing);
@@ -73,7 +83,8 @@ void main() {
     expect(find.text('加联系'), findsNothing);
     expect(find.text('建圈子'), findsNothing);
     expect(find.text(UITextConstants.cancel), findsOneWidget);
-    expect(find.byType(ConversationSheetListCard), findsNWidgets(2));
+    expect(find.byKey(TestKeys.createActionContinueFromDraft), findsNothing);
+    expect(find.byType(ConversationSheetListCard), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.chevron_forward), findsNothing);
     expect(
       find.descendant(
@@ -102,8 +113,10 @@ void main() {
     );
     expect(
       tester.getCenter(find.text(UITextConstants.createActionWriteLong)).dy,
-      lessThan(
-        tester.getCenter(find.text(UITextConstants.createActionResumeDraft)).dy,
+      greaterThan(
+        tester
+            .getCenter(find.text(UITextConstants.createActionPostVideoShort))
+            .dy,
       ),
     );
     expect(find.text('作品'), findsNothing);
@@ -154,7 +167,7 @@ void main() {
     );
   });
 
-  testWidgets('趣信上下文优先突出连接动作组', (tester) async {
+  testWidgets('趣信上下文优先级不改变移动端三项创作入口', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         child: ScreenUtilInit(
@@ -175,16 +188,20 @@ void main() {
     );
     await tester.pump();
 
-    final discussionY = tester
-        .getCenter(find.text(UITextConstants.createActionCreateGroupShort))
-        .dy;
     final galleryY = tester
         .getCenter(find.text(UITextConstants.createActionPostPhotoShort))
         .dy;
-    expect(discussionY, lessThan(galleryY));
+    final cameraY = tester
+        .getCenter(find.text(UITextConstants.createActionPostVideoShort))
+        .dy;
+    expect(galleryY, lessThan(cameraY));
+    expect(
+      find.text(UITextConstants.createActionCreateGroupShort),
+      findsNothing,
+    );
   });
 
-  testWidgets('社交动作组支持新建圈子入口', (tester) async {
+  testWidgets('移动端加号面板不渲染社交动作', (tester) async {
     var createCircleTapped = false;
 
     await tester.pumpWidget(
@@ -211,9 +228,17 @@ void main() {
 
     expect(
       find.text(UITextConstants.createActionCreateCircleShort),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.byType(ConversationSheetListCard), findsNWidgets(2));
+    expect(
+      find.text(UITextConstants.createActionAddContactShort),
+      findsNothing,
+    );
+    expect(
+      find.text(UITextConstants.createActionCreateGroupShort),
+      findsNothing,
+    );
+    expect(find.byType(ConversationSheetListCard), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(TestKeys.modalBottomSheetPanel),
@@ -222,10 +247,7 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.text(UITextConstants.createActionCreateCircleShort));
-    await tester.pump();
-
-    expect(createCircleTapped, isTrue);
+    expect(createCircleTapped, isFalse);
   });
 
   testWidgets('iPad 下发起弹窗保持内容驱动高度', (tester) async {

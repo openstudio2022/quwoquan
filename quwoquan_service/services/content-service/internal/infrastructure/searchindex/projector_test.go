@@ -15,7 +15,8 @@ import (
 
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
-	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/application/ports"
+	"quwoquan_service/services/content-service/internal/application/searchprojection"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 )
 
@@ -130,7 +131,7 @@ func TestProjectorUpsertsOnPublish(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
-	if err := proj.Project(context.Background(), application.ProjectorEvent{
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
 		Type: "PostPublished", AggregateType: "Post", AggregateID: post.ID,
 	}); err != nil {
 		t.Fatalf("Project err=%v", err)
@@ -150,19 +151,19 @@ func TestProjectorUpsertsOnPublish(t *testing.T) {
 }
 
 // TestProjectorSharesProjectionWithCandidateSource proves the projector indexes
-// exactly what application.ProjectPostToSearchDocument produces (the same function
+// exactly what searchprojection.ProjectPostToSearchDocument produces (the same function
 // PostCandidateSource uses) — a single projection truth source.
 func TestProjectorSharesProjectionWithCandidateSource(t *testing.T) {
 	post := publishedPost()
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
-	if err := proj.Project(context.Background(), application.ProjectorEvent{
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
 		Type: "PostPublished", AggregateID: post.ID,
 	}); err != nil {
 		t.Fatalf("Project err=%v", err)
 	}
 
-	want := es.DocumentToIndex(application.ProjectPostToSearchDocument(post))
+	want := es.DocumentToIndex(searchprojection.ProjectPostToSearchDocument(post))
 	// Normalize through JSON because the fake ES decodes the stored doc from JSON.
 	raw, _ := json.Marshal(want)
 	var wantJSON map[string]any
@@ -178,7 +179,7 @@ func TestProjectorDeletesOnDelete(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{})
 
-	if err := proj.Project(context.Background(), application.ProjectorEvent{
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
 		Type: "PostDeleted", AggregateID: "post_1",
 	}); err != nil {
 		t.Fatalf("Project err=%v", err)
@@ -194,7 +195,7 @@ func TestProjectorDeletesWhenNoLongerEligible(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
-	if err := proj.Project(context.Background(), application.ProjectorEvent{
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
 		Type: "PostSettingsUpdated", AggregateID: post.ID,
 	}); err != nil {
 		t.Fatalf("Project err=%v", err)
@@ -211,7 +212,7 @@ func TestProjectorDeletesWhenPostMissing(t *testing.T) {
 	f := newFakeES()
 	proj := newProjectorWithFakeES(t, f, fakeReader{}) // store returns not-found
 
-	if err := proj.Project(context.Background(), application.ProjectorEvent{
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
 		Type: "PostPublished", AggregateID: "post_gone",
 	}); err != nil {
 		t.Fatalf("Project err=%v", err)
@@ -227,7 +228,7 @@ func TestProjectorIgnoresCounterOnlyEvents(t *testing.T) {
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
 	for _, et := range []string{"ContentReacted", "BehaviorBatchReported", "SomethingElse"} {
-		if err := proj.Project(context.Background(), application.ProjectorEvent{Type: et, AggregateID: post.ID}); err != nil {
+		if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: et, AggregateID: post.ID}); err != nil {
 			t.Fatalf("Project(%s) err=%v", et, err)
 		}
 	}
@@ -244,7 +245,7 @@ func TestProjectorESOutageDoesNotBlock(t *testing.T) {
 	f.writeFailStatus = http.StatusServiceUnavailable
 	proj := newProjectorWithFakeES(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}})
 
-	if err := proj.Project(context.Background(), application.ProjectorEvent{
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{
 		Type: "PostPublished", AggregateID: post.ID,
 	}); err != nil {
 		t.Fatalf("ES outage must not propagate to the write path, got err=%v", err)
@@ -253,11 +254,11 @@ func TestProjectorESOutageDoesNotBlock(t *testing.T) {
 
 func TestProjectorNilIndexerIsNoOp(t *testing.T) {
 	var proj *Projector // nil receiver
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
 		t.Fatalf("nil projector must be a no-op, got %v", err)
 	}
 	proj = NewProjector(nil, fakeReader{}) // nil indexer
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
 		t.Fatalf("nil indexer must be a no-op, got %v", err)
 	}
 }

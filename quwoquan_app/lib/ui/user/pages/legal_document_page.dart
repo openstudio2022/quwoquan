@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 typedef LegalDocumentAvailabilityProbe = Future<bool> Function(Uri uri);
+typedef LegalDocumentHtmlLoader = Future<String> Function(Uri uri);
 typedef LegalDocumentWebViewBuilder =
     Widget Function(BuildContext context, WebViewController controller);
 
@@ -20,12 +22,14 @@ class LegalDocumentPage extends ConsumerStatefulWidget {
     required this.title,
     required this.url,
     this.availabilityProbe = _defaultLegalDocumentAvailabilityProbe,
+    this.htmlLoader = defaultLegalDocumentHtmlLoader,
     this.webViewBuilder = _defaultLegalDocumentWebViewBuilder,
   });
 
   final String title;
   final String url;
   final LegalDocumentAvailabilityProbe availabilityProbe;
+  final LegalDocumentHtmlLoader htmlLoader;
   final LegalDocumentWebViewBuilder webViewBuilder;
 
   @override
@@ -121,7 +125,11 @@ class _LegalDocumentPageState extends ConsumerState<LegalDocumentPage> {
       setState(() {});
     }
     try {
-      await controller.loadRequest(uri);
+      final html = await widget.htmlLoader(uri);
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+      await controller.loadHtmlString(html, baseUrl: uri.toString());
     } catch (_) {
       _markLoadFailed(generation: generation, reason: 'load_request_failed');
     }
@@ -269,6 +277,27 @@ Future<bool> _defaultLegalDocumentAvailabilityProbe(Uri uri) async {
         getResponse.statusCode == 206;
   } catch (_) {
     return false;
+  }
+}
+
+Future<String> defaultLegalDocumentHtmlLoader(
+  Uri uri, {
+  http.Client? client,
+}) async {
+  final effectiveClient = client ?? http.Client();
+  final shouldCloseClient = client == null;
+  try {
+    final response = await effectiveClient
+        .get(uri)
+        .timeout(const Duration(seconds: 5));
+    if (!_isSuccessfulLegalStatus(response.statusCode)) {
+      throw StateError('legal_document_http_${response.statusCode}');
+    }
+    return utf8.decode(response.bodyBytes);
+  } finally {
+    if (shouldCloseClient) {
+      effectiveClient.close();
+    }
   }
 }
 

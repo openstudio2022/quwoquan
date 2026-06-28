@@ -11,7 +11,7 @@ affected_nodes:
   - quwoquan_app/lib/core/providers/feed_session_provider.dart
   - quwoquan_app/lib/ui/discovery/providers/discovery_feed_provider.dart
   - quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart
-  - quwoquan_service/services/content-service/internal/application/behavior_service.go
+  - quwoquan_service/services/content-service/internal/application/behavior/behavior_service.go
   - quwoquan_service/services/content-service/internal/infrastructure/persistence/behavior_event_store.go
   - quwoquan_service/services/content-service/internal/infrastructure/recommendation/recommend_feature.go
   - quwoquan_service/runtime/recommendation/hotpath.go

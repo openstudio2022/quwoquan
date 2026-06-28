@@ -36,7 +36,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed_service_negative_fallback__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed/feed_service_negative_fallback__local_contract_test.go
     status: partial
     test_evidence:
       primary:

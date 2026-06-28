@@ -22,8 +22,9 @@
 ### 入口与路由
 
 - 图片作品入口使用现有 `create-entry` / `create` 路由体系，不新增第二套路由真相源。
-- `/create?type=gallery` 进入图片选择；`/create?type=capture` 进入图片拍摄；`/create/edit-image` 继续作为图片编辑深链。
-- 图片与视频必须在入口、选择器、拍摄页和发布 payload 上保持互斥：图片路径不得展示“一键成片”或视频发布暗示；视频路径不得复用图片完成按钮语义。
+- 全局 `/create?type=gallery` 为混合相册入口，选择图片后进入图片发布子流程；图片专用追加/深链仍使用 `MediaPickerEntryMode.image`。
+- 全局 `/create?type=capture` 为可切换相机入口，拍照后进入图片发布子流程；图片专用调用仍使用 `CameraCaptureModePolicy.photoOnly`；`/create/edit-image` 继续作为图片编辑深链。
+- 图片与视频必须在选择结果、编辑页和发布 payload 上保持互斥：图片路径不得展示“一键成片”或视频发布暗示；视频路径不得复用图片完成按钮语义。
 - 用户可见文案必须来自 `UITextConstants` 或 l10n；新增中文不得散落在页面实现中。
 
 ### 图片选择器
@@ -64,8 +65,9 @@
 ### 入口与路由
 
 - 视频作品入口使用现有 `create-entry` / `create` 路由体系，不新增第二套路由真相源。
-- `/create?type=video` 进入视频选择；视频入口打开相机时进入视频专用拍摄模式。
-- 图片与视频必须在入口、选择器、拍摄页、编辑页和发布 payload 上保持互斥：视频路径不得复用图片“完成(n)”语义，图片路径不得展示视频“一键成片”或封面时间轴。
+- 全局 `/create?type=gallery` 为混合相册入口，选择视频后进入视频编辑/选封面页；视频专用深链 `/create?type=video` 仍进入视频选择。
+- 全局 `/create?type=capture` 为可切换相机入口，录像后进入视频编辑/选封面页；视频专用调用仍使用 `CameraCaptureModePolicy.videoOnly`。
+- 图片与视频必须在选择结果、编辑页和发布 payload 上保持互斥：视频路径不得复用图片“完成(n)”语义，图片路径不得展示视频“一键成片”或封面时间轴。
 - 视频创作页全链路使用深色 iOS 沉浸体验，不跟随系统浅色退化；新增文案必须来自 `UITextConstants` 或 l10n。
 
 ### 视频选择与拍摄

@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"quwoquan_service/services/content-service/internal/application/identity"
 	"strings"
 	"testing"
-
-	"quwoquan_service/services/content-service/internal/application"
 )
 
 func TestCreateMarkdownArticleContract(t *testing.T) {
@@ -40,7 +39,7 @@ coverImage: asset://cover
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	created := createDraftPostWithAuthor(t, application.AnonymousFallbackSubAccountID, string(raw))
+	created := createDraftPostWithAuthor(t, identity.AnonymousFallbackSubAccountID, string(raw))
 
 	if created["articleMarkdown"] == "" {
 		t.Fatalf("expected articleMarkdown in response: %+v", created)
@@ -67,8 +66,8 @@ func TestCreateMarkdownArticleRejectsMissingManifestAsset(t *testing.T) {
 	}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Client-User-Id", application.AnonymousFallbackSubAccountID)
-	req.Header.Set("X-Client-Sub-Account-Id", application.AnonymousFallbackSubAccountID)
+	req.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	req.Header.Set("X-Client-Sub-Account-Id", identity.AnonymousFallbackSubAccountID)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -106,7 +105,7 @@ func TestBindMediaAssetsToPostContract(t *testing.T) {
 		strings.NewReader(`{"mediaType":"image","assetScope":"draft","sourceKind":"user_upload"}`),
 	)
 	initReq.Header.Set("Content-Type", "application/json")
-	initReq.Header.Set("X-Client-User-Id", application.AnonymousFallbackSubAccountID)
+	initReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
 	initRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(initRec, initReq)
 	if initRec.Code != http.StatusOK {

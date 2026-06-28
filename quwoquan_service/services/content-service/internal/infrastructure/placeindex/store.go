@@ -24,7 +24,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	rtsearch "quwoquan_service/runtime/search"
-	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/application/searchprojection"
 )
 
 // PlaceSnapshotCollection is the Mongo collection holding first-party place
@@ -39,17 +39,17 @@ type PlaceStore interface {
 	// AddReference records that postID references the place described by ref,
 	// upserting the place record (latest name/geo win) and returning the updated
 	// snapshot.
-	AddReference(ctx context.Context, ref application.PlaceRef, postID string) (application.PlaceSnapshot, error)
+	AddReference(ctx context.Context, ref searchprojection.PlaceRef, postID string) (searchprojection.PlaceSnapshot, error)
 	// RemoveReference drops postID from a place's reference set and returns the
 	// updated snapshot plus how many references remain. When the last reference
 	// is removed the record is deleted and remaining is 0.
-	RemoveReference(ctx context.Context, placeID, postID string) (snapshot application.PlaceSnapshot, remaining int, err error)
+	RemoveReference(ctx context.Context, placeID, postID string) (snapshot searchprojection.PlaceSnapshot, remaining int, err error)
 	// PlacesReferencing returns every place currently referencing postID (the
 	// reverse lookup the projector uses to retract stale references).
-	PlacesReferencing(ctx context.Context, postID string) ([]application.PlaceSnapshot, error)
+	PlacesReferencing(ctx context.Context, postID string) ([]searchprojection.PlaceSnapshot, error)
 	// Upsert replaces a place record wholesale with the given snapshot. It is the
 	// authoritative rebuild path used by backfill.
-	Upsert(ctx context.Context, snapshot application.PlaceSnapshot) error
+	Upsert(ctx context.Context, snapshot searchprojection.PlaceSnapshot) error
 }
 
 // --- In-memory implementation (tests + non-mongo dev) ---
@@ -57,20 +57,20 @@ type PlaceStore interface {
 // InMemoryPlaceStore is a goroutine-safe in-memory PlaceStore.
 type InMemoryPlaceStore struct {
 	mu     sync.Mutex
-	places map[string]*application.PlaceSnapshot
+	places map[string]*searchprojection.PlaceSnapshot
 }
 
 // NewInMemoryPlaceStore builds an empty in-memory place store.
 func NewInMemoryPlaceStore() *InMemoryPlaceStore {
-	return &InMemoryPlaceStore{places: map[string]*application.PlaceSnapshot{}}
+	return &InMemoryPlaceStore{places: map[string]*searchprojection.PlaceSnapshot{}}
 }
 
-func (s *InMemoryPlaceStore) AddReference(_ context.Context, ref application.PlaceRef, postID string) (application.PlaceSnapshot, error) {
+func (s *InMemoryPlaceStore) AddReference(_ context.Context, ref searchprojection.PlaceRef, postID string) (searchprojection.PlaceSnapshot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rec := s.places[ref.PlaceID]
 	if rec == nil {
-		rec = &application.PlaceSnapshot{PlaceID: ref.PlaceID}
+		rec = &searchprojection.PlaceSnapshot{PlaceID: ref.PlaceID}
 		s.places[ref.PlaceID] = rec
 	}
 	rec.Name = ref.Name
@@ -79,12 +79,12 @@ func (s *InMemoryPlaceStore) AddReference(_ context.Context, ref application.Pla
 	return cloneSnapshot(*rec), nil
 }
 
-func (s *InMemoryPlaceStore) RemoveReference(_ context.Context, placeID, postID string) (application.PlaceSnapshot, int, error) {
+func (s *InMemoryPlaceStore) RemoveReference(_ context.Context, placeID, postID string) (searchprojection.PlaceSnapshot, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rec := s.places[placeID]
 	if rec == nil {
-		return application.PlaceSnapshot{PlaceID: placeID}, 0, nil
+		return searchprojection.PlaceSnapshot{PlaceID: placeID}, 0, nil
 	}
 	rec.RefPostIDs = removeValue(rec.RefPostIDs, postID)
 	if len(rec.RefPostIDs) == 0 {
@@ -95,10 +95,10 @@ func (s *InMemoryPlaceStore) RemoveReference(_ context.Context, placeID, postID 
 	return cloneSnapshot(*rec), len(rec.RefPostIDs), nil
 }
 
-func (s *InMemoryPlaceStore) PlacesReferencing(_ context.Context, postID string) ([]application.PlaceSnapshot, error) {
+func (s *InMemoryPlaceStore) PlacesReferencing(_ context.Context, postID string) ([]searchprojection.PlaceSnapshot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var out []application.PlaceSnapshot
+	var out []searchprojection.PlaceSnapshot
 	for _, rec := range s.places {
 		for _, id := range rec.RefPostIDs {
 			if id == postID {
@@ -110,7 +110,7 @@ func (s *InMemoryPlaceStore) PlacesReferencing(_ context.Context, postID string)
 	return out, nil
 }
 
-func (s *InMemoryPlaceStore) Upsert(_ context.Context, snapshot application.PlaceSnapshot) error {
+func (s *InMemoryPlaceStore) Upsert(_ context.Context, snapshot searchprojection.PlaceSnapshot) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rec := cloneSnapshot(snapshot)
@@ -135,8 +135,8 @@ type geoRecord struct {
 	Lng float64 `bson:"lng"`
 }
 
-func (r placeRecord) toSnapshot() application.PlaceSnapshot {
-	snap := application.PlaceSnapshot{PlaceID: r.ID, Name: r.Name, RefPostIDs: r.RefPostIDs}
+func (r placeRecord) toSnapshot() searchprojection.PlaceSnapshot {
+	snap := searchprojection.PlaceSnapshot{PlaceID: r.ID, Name: r.Name, RefPostIDs: r.RefPostIDs}
 	if r.Geo != nil {
 		snap.Geo = &rtsearch.GeoPoint{Lat: r.Geo.Lat, Lng: r.Geo.Lng}
 	}
@@ -177,7 +177,7 @@ func geoToRecord(geo *rtsearch.GeoPoint) *geoRecord {
 	return &geoRecord{Lat: geo.Lat, Lng: geo.Lng}
 }
 
-func (s *MongoPlaceStore) AddReference(ctx context.Context, ref application.PlaceRef, postID string) (application.PlaceSnapshot, error) {
+func (s *MongoPlaceStore) AddReference(ctx context.Context, ref searchprojection.PlaceRef, postID string) (searchprojection.PlaceSnapshot, error) {
 	now := time.Now().UTC()
 	set := bson.M{"name": ref.Name, "updatedAt": now}
 	if rec := geoToRecord(ref.Geo); rec != nil {
@@ -189,24 +189,24 @@ func (s *MongoPlaceStore) AddReference(ctx context.Context, ref application.Plac
 		"$addToSet":    bson.M{"refPostIds": postID},
 	}
 	if _, err := s.coll.UpdateOne(ctx, bson.M{"_id": ref.PlaceID}, update, options.UpdateOne().SetUpsert(true)); err != nil {
-		return application.PlaceSnapshot{}, err
+		return searchprojection.PlaceSnapshot{}, err
 	}
 	snap, _, err := s.get(ctx, ref.PlaceID)
 	return snap, err
 }
 
-func (s *MongoPlaceStore) RemoveReference(ctx context.Context, placeID, postID string) (application.PlaceSnapshot, int, error) {
+func (s *MongoPlaceStore) RemoveReference(ctx context.Context, placeID, postID string) (searchprojection.PlaceSnapshot, int, error) {
 	now := time.Now().UTC()
 	update := bson.M{"$pull": bson.M{"refPostIds": postID}, "$set": bson.M{"updatedAt": now}}
 	if _, err := s.coll.UpdateOne(ctx, bson.M{"_id": placeID}, update); err != nil {
-		return application.PlaceSnapshot{PlaceID: placeID}, 0, err
+		return searchprojection.PlaceSnapshot{PlaceID: placeID}, 0, err
 	}
 	snap, ok, err := s.get(ctx, placeID)
 	if err != nil {
-		return application.PlaceSnapshot{PlaceID: placeID}, 0, err
+		return searchprojection.PlaceSnapshot{PlaceID: placeID}, 0, err
 	}
 	if !ok {
-		return application.PlaceSnapshot{PlaceID: placeID}, 0, nil
+		return searchprojection.PlaceSnapshot{PlaceID: placeID}, 0, nil
 	}
 	if len(snap.RefPostIDs) == 0 {
 		if _, err := s.coll.DeleteOne(ctx, bson.M{"_id": placeID}); err != nil {
@@ -217,13 +217,13 @@ func (s *MongoPlaceStore) RemoveReference(ctx context.Context, placeID, postID s
 	return snap, len(snap.RefPostIDs), nil
 }
 
-func (s *MongoPlaceStore) PlacesReferencing(ctx context.Context, postID string) ([]application.PlaceSnapshot, error) {
+func (s *MongoPlaceStore) PlacesReferencing(ctx context.Context, postID string) ([]searchprojection.PlaceSnapshot, error) {
 	cur, err := s.coll.Find(ctx, bson.M{"refPostIds": postID})
 	if err != nil {
 		return nil, err
 	}
 	defer cur.Close(ctx)
-	var out []application.PlaceSnapshot
+	var out []searchprojection.PlaceSnapshot
 	for cur.Next(ctx) {
 		var rec placeRecord
 		if err := cur.Decode(&rec); err != nil {
@@ -234,7 +234,7 @@ func (s *MongoPlaceStore) PlacesReferencing(ctx context.Context, postID string) 
 	return out, cur.Err()
 }
 
-func (s *MongoPlaceStore) Upsert(ctx context.Context, snapshot application.PlaceSnapshot) error {
+func (s *MongoPlaceStore) Upsert(ctx context.Context, snapshot searchprojection.PlaceSnapshot) error {
 	now := time.Now().UTC()
 	rec := placeRecord{
 		ID:         snapshot.PlaceID,
@@ -247,14 +247,14 @@ func (s *MongoPlaceStore) Upsert(ctx context.Context, snapshot application.Place
 	return err
 }
 
-func (s *MongoPlaceStore) get(ctx context.Context, placeID string) (application.PlaceSnapshot, bool, error) {
+func (s *MongoPlaceStore) get(ctx context.Context, placeID string) (searchprojection.PlaceSnapshot, bool, error) {
 	var rec placeRecord
 	err := s.coll.FindOne(ctx, bson.M{"_id": placeID}).Decode(&rec)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return application.PlaceSnapshot{PlaceID: placeID}, false, nil
+			return searchprojection.PlaceSnapshot{PlaceID: placeID}, false, nil
 		}
-		return application.PlaceSnapshot{PlaceID: placeID}, false, err
+		return searchprojection.PlaceSnapshot{PlaceID: placeID}, false, err
 	}
 	return rec.toSnapshot(), true, nil
 }
@@ -269,8 +269,8 @@ func cloneGeo(geo *rtsearch.GeoPoint) *rtsearch.GeoPoint {
 	return &g
 }
 
-func cloneSnapshot(s application.PlaceSnapshot) application.PlaceSnapshot {
-	out := application.PlaceSnapshot{PlaceID: s.PlaceID, Name: s.Name, Geo: cloneGeo(s.Geo)}
+func cloneSnapshot(s searchprojection.PlaceSnapshot) searchprojection.PlaceSnapshot {
+	out := searchprojection.PlaceSnapshot{PlaceID: s.PlaceID, Name: s.Name, Geo: cloneGeo(s.Geo)}
 	if len(s.RefPostIDs) > 0 {
 		out.RefPostIDs = append([]string(nil), s.RefPostIDs...)
 	}

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"quwoquan_service/services/content-service/internal/application/ports"
+
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -32,36 +34,8 @@ func StableImpactID(authorID, helpType, action, dimension, tagRef, source string
 	return hex.EncodeToString(sum[:])[:20]
 }
 
-// AuthorImpactEvidenceRecord is a single materialized impact fact (one real
-// behavior that helped the author), keyed by content for privacy-safe display.
-// actorId is stored for dedupe/idempotency only and is never surfaced.
-type AuthorImpactEvidenceRecord struct {
-	AuthorID              string
-	ImpactID              string
-	SourceEventID         string
-	ActorID               string
-	ContentID             string
-	ContentType           string
-	HelpType              string
-	Action                string
-	IntersectionDimension string
-	TagRef                string
-	Source                string
-	OccurredAt            time.Time
-}
-
-// AuthorImpactEvidenceRaw is a stored evidence fact returned to the application
-// layer for hydration (content title/cover) and conclusion-sentence rendering.
-type AuthorImpactEvidenceRaw struct {
-	EvidenceID            string
-	ImpactID              string
-	ContentID             string
-	ContentType           string
-	HelpType              string
-	Action                string
-	IntersectionDimension string
-	OccurredAt            time.Time
-}
+type AuthorImpactEvidenceRecord = ports.AuthorImpactEvidenceRecord
+type AuthorImpactEvidenceRaw = ports.AuthorImpactEvidenceRaw
 
 // AuthorImpactEvidenceStore maintains rm_author_impact_evidence: the paginated,
 // idempotent detail behind each rm_author_impact summary row.

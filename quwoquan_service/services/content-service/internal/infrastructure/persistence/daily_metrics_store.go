@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"time"
 
+	"quwoquan_service/services/content-service/internal/application/ports"
+
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -22,42 +24,18 @@ const (
 // carried a divergent "referral" dimension was removed: it was never scheduled
 // and violated the spec's single-source rule.
 const (
-	DailyMetricDimensionAction       = "action"
-	DailyMetricDimensionContent      = "content"
-	DailyMetricDimensionAuthor       = "author"
-	DailyMetricDimensionIntersection = "intersection"
+	DailyMetricDimensionAction       = ports.DailyMetricDimensionAction
+	DailyMetricDimensionContent      = ports.DailyMetricDimensionContent
+	DailyMetricDimensionAuthor       = ports.DailyMetricDimensionAuthor
+	DailyMetricDimensionIntersection = ports.DailyMetricDimensionIntersection
 )
 
 // DailyMetricDimensions is the ordered, exhaustive dimension set; consumers and
 // the consistency gate enumerate it instead of hardcoding dimension strings.
-var DailyMetricDimensions = []string{
-	DailyMetricDimensionAction,
-	DailyMetricDimensionContent,
-	DailyMetricDimensionAuthor,
-	DailyMetricDimensionIntersection,
-}
+var DailyMetricDimensions = ports.DailyMetricDimensions
 
 // DailyMetric is a pre-aggregated daily metric row.
-type DailyMetric struct {
-	Date                  string    `bson:"date"`
-	Dimension             string    `bson:"dimension"`
-	DimensionKey          string    `bson:"dimensionKey"`
-	Impressions           int64     `bson:"impressions"`
-	Clicks                int64     `bson:"clicks"`
-	Dwells                int64     `bson:"dwells"`
-	Likes                 int64     `bson:"likes"`
-	Shares                int64     `bson:"shares"`
-	Comments              int64     `bson:"comments"`
-	Dislikes              int64     `bson:"dislikes"`
-	Reports               int64     `bson:"reports"`
-	FollowConversions     int64     `bson:"followConversions"`
-	JoinCircleConversions int64     `bson:"joinCircleConversions"`
-	AddContactConversions int64     `bson:"addContactConversions"`
-	TotalDwellMs          int64     `bson:"totalDwellMs"`
-	AvgDepth              float64   `bson:"avgDepth"`
-	UniqueUsers           int64     `bson:"uniqueUsers"`
-	CreatedAt             time.Time `bson:"createdAt"`
-}
+type DailyMetric = ports.DailyMetric
 
 // DailyMetricsStore manages pre-aggregated daily metrics.
 type DailyMetricsStore struct {

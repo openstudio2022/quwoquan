@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"time"
 
+	"quwoquan_service/services/content-service/internal/application/ports"
+
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -15,58 +17,8 @@ const (
 	behaviorEventTTLDays     = 30
 )
 
-// BehaviorEventStore persists raw user behavior events for offline analytics.
-type BehaviorEventStore interface {
-	InsertBatch(ctx context.Context, events []RawBehaviorEvent) error
-	// ListUserFootprint 按用户读取最近行为边（我的足迹只读契约的数据源；
-	// 无新写路径，复用既有行为事件）。actions 为空表示全部消费型行为；
-	// before 非零时只取更早的事件（cursor 分页）。
-	ListUserFootprint(ctx context.Context, userID string, actions []string, before time.Time, limit int) ([]RawBehaviorEvent, error)
-}
-
-// RawBehaviorEvent is the persistent form of a user behavior event.
-type RawBehaviorEvent struct {
-	ClientEventID   string   `bson:"clientEventId,omitempty"`
-	State           string   `bson:"state,omitempty"`
-	UserID          string   `bson:"userId"`
-	DeviceActorID   string   `bson:"deviceActorId,omitempty"`
-	SessionID       string   `bson:"sessionId"`
-	ContentID       string   `bson:"contentId"`
-	Action          string   `bson:"action"`
-	Tags            []string `bson:"tagRefs,omitempty"`
-	Duration        float64  `bson:"duration,omitempty"`
-	AuthorID        string   `bson:"authorId,omitempty"`
-	ReferralSource  string   `bson:"referralSource,omitempty"`
-	EngagementDepth int      `bson:"engagementDepth,omitempty"`
-	ConsumedRatio   float64  `bson:"consumedRatio,omitempty"`
-	TotalUnits      int      `bson:"totalUnits,omitempty"`
-	EntityRefs      []string `bson:"entityRefs,omitempty"`
-	FeedRequestID   string   `bson:"feedRequestId,omitempty"`
-	// Position 是事件发生时的 feed 内序位（曝光/点击位置），与 FeedRequestID 组合可还原
-	// 「某一次 feed 下发的第几位被点击/停留」，供位置偏置校正与离线 replay 归因。
-	Position int `bson:"position,omitempty"`
-	// CommentLength 是评论行为的正文长度，供评论质量/深度互动信号离线分析。
-	CommentLength int `bson:"commentLength,omitempty"`
-	// ChannelID/RankingVersion 是阶段五归因字段：feed 下发频道与精排版本；与 FeedRequestID 组合可
-	// 离线还原「某次 feed 下发(频道/精排版本)的第几位被曝光/点击/转化」，供位置偏置校正与 AB / replay。
-	ChannelID       string `bson:"channelId,omitempty"`
-	RankingVersion  string `bson:"rankingVersion,omitempty"`
-	ReasonVersion   string `bson:"reasonVersion,omitempty"`
-	RecallPath      string `bson:"recallPath,omitempty"`
-	ContentVertical string `bson:"contentVertical,omitempty"`
-	SupplySource    string `bson:"supplySource,omitempty"`
-	// 交集转化归因（S6）：触发交集行动（follow/join_circle/add_contact）的维度与路径制 tagRef。
-	IntersectionDimension string   `bson:"intersectionDimension,omitempty"`
-	IntersectionTagRefs   []string `bson:"intersectionTagRefs,omitempty"`
-	// 交集漏斗归因（曝光/点击/转化，R08 端云对齐）：交集稳定标识、类别（fact|affinity）、
-	// 来源 kind 与点级证据 id，使「交集曝光 → 点击 → 转化」可按同一 intersectionId 离线下钻。
-	IntersectionID         string    `bson:"intersectionId,omitempty"`
-	IntersectionClass      string    `bson:"intersectionClass,omitempty"`
-	IntersectionSourceRef  string    `bson:"intersectionSourceRef,omitempty"`
-	IntersectionEvidenceID string    `bson:"intersectionEvidenceId,omitempty"`
-	OccurredAt             string    `bson:"occurredAt"`
-	CreatedAt              time.Time `bson:"createdAt"`
-}
+type BehaviorEventStore = ports.BehaviorEventStore
+type RawBehaviorEvent = ports.RawBehaviorEvent
 
 // MongoBehaviorEventStore persists raw behavior events to MongoDB with TTL.
 type MongoBehaviorEventStore struct {

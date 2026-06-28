@@ -7,12 +7,12 @@ package tests
 import (
 	"context"
 	"log/slog"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 	"testing"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"quwoquan_service/services/content-service/internal/application"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
 
@@ -24,7 +24,7 @@ func TestViewerObjectIntersectionStore_RoundTrip(t *testing.T) {
 	t.Cleanup(func() { _, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^vois_"}}) })
 
 	store := recinfra.NewMongoViewerIntersectionStore(db, slog.Default())
-	want := []application.IntersectionReasonView{
+	want := []intersectionapp.IntersectionReasonView{
 		{
 			IntersectionID:    "vois_r1",
 			IntersectionClass: "fact",
@@ -60,35 +60,35 @@ func TestViewerObjectIntersectionStore_RoundTrip(t *testing.T) {
 // countingFactSource 是只计 FactReasons 调用次数的事实源，用于断言读穿透零回算。
 type countingFactSource struct {
 	calls   int
-	reasons []application.IntersectionReasonView
+	reasons []intersectionapp.IntersectionReasonView
 }
 
-func (c *countingFactSource) FactReasons(context.Context, string, string) ([]application.IntersectionReasonView, error) {
+func (c *countingFactSource) FactReasons(context.Context, string, string) ([]intersectionapp.IntersectionReasonView, error) {
 	c.calls++
 	return c.reasons, nil
 }
-func (c *countingFactSource) AffinityReasons(context.Context, string, string) ([]application.IntersectionReasonView, error) {
+func (c *countingFactSource) AffinityReasons(context.Context, string, string) ([]intersectionapp.IntersectionReasonView, error) {
 	return nil, nil
 }
-func (c *countingFactSource) ObjectReasons(context.Context, string, string, string) ([]application.IntersectionReasonView, error) {
+func (c *countingFactSource) ObjectReasons(context.Context, string, string, string) ([]intersectionapp.IntersectionReasonView, error) {
 	return nil, nil
 }
 
 // materializeFactSource 返回带真实信号（strength/points/freshAt）的事实理由，
 // 用于断言 ReadModelIntersectionSource 写路径会真算物化 edgeWeight + lifecycle 并固化进 Mongo。
 type materializeFactSource struct {
-	reasons []application.IntersectionReasonView
+	reasons []intersectionapp.IntersectionReasonView
 }
 
-func (m *materializeFactSource) FactReasons(context.Context, string, string) ([]application.IntersectionReasonView, error) {
-	out := make([]application.IntersectionReasonView, len(m.reasons))
+func (m *materializeFactSource) FactReasons(context.Context, string, string) ([]intersectionapp.IntersectionReasonView, error) {
+	out := make([]intersectionapp.IntersectionReasonView, len(m.reasons))
 	copy(out, m.reasons)
 	return out, nil
 }
-func (m *materializeFactSource) AffinityReasons(context.Context, string, string) ([]application.IntersectionReasonView, error) {
+func (m *materializeFactSource) AffinityReasons(context.Context, string, string) ([]intersectionapp.IntersectionReasonView, error) {
 	return nil, nil
 }
-func (m *materializeFactSource) ObjectReasons(context.Context, string, string, string) ([]application.IntersectionReasonView, error) {
+func (m *materializeFactSource) ObjectReasons(context.Context, string, string, string) ([]intersectionapp.IntersectionReasonView, error) {
 	return nil, nil
 }
 
@@ -102,14 +102,14 @@ func TestViewerObjectIntersectionMaterialization_PersistsGraphLifecycle(t *testi
 	t.Cleanup(func() { _, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^voim_"}}) })
 
 	now := time.Now().UTC()
-	compute := &materializeFactSource{reasons: []application.IntersectionReasonView{
+	compute := &materializeFactSource{reasons: []intersectionapp.IntersectionReasonView{
 		{
 			IntersectionID:    "voim_edge",
 			IntersectionClass: "fact",
 			Dimension:         "relationship",
 			Strength:          0.8,
 			FreshAt:           now.Format(time.RFC3339),
-			IntersectionPoints: []application.IntersectionPointView{
+			IntersectionPoints: []intersectionapp.IntersectionPointView{
 				{Count: 1}, {Count: 1}, {Count: 1}, {Count: 1},
 			},
 		},
@@ -145,7 +145,7 @@ func TestViewerObjectIntersectionReadThrough_FreshHitZeroCompute(t *testing.T) {
 	_, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^voirt_"}})
 	t.Cleanup(func() { _, _ = coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$regex": "^voirt_"}}) })
 
-	compute := &countingFactSource{reasons: []application.IntersectionReasonView{
+	compute := &countingFactSource{reasons: []intersectionapp.IntersectionReasonView{
 		{IntersectionID: "voirt_r", IntersectionClass: "fact", Dimension: "content"},
 	}}
 	store := recinfra.NewMongoViewerIntersectionStore(db, slog.Default())

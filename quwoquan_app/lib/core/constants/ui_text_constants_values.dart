@@ -91,20 +91,20 @@ class UITextConstants {
   static const String webPcFeaturedRailBody =
       '以多列瀑布墙展示图片、视频与文章封面，点击任意内容进入沉浸浏览。';
   static const String webPcFeaturedFeedTitle = '精品内容';
-  static const String webPcCreateRailTitle = '创作与社交';
-  static const String webPcCreateRailBody =
-      '左侧可发布内容，也可以发起群聊、添加联系人或创建圈子，全部复用移动端能力。';
+  static const String webPcCreateRailTitle = '创作';
+  static const String webPcCreateRailBody = '从相册、相机或文字开始，Web 端保持与移动端一致的创作入口。';
   static const String webPcCreateWorkspaceTitle = '添加';
-  static const String webPcCreateWorkspaceSubtitle =
-      '选择一种方式开始：发布内容，或建立社交关系，Web 端复用现有发布与社交链路。';
-  static const String webPcCreateContentGroupTitle = '内容创作';
+  static const String webPcCreateWorkspaceSubtitle = '选择一种方式开始创作。';
+  static const String webPcCreateContentGroupTitle = '创作方式';
   static const String webPcCreateSocialGroupTitle = '社交关系';
-  static const String webPcCreateVideoTitle = '发布视频';
-  static const String webPcCreateVideoSubtitle = '上传视频素材，补充标题、标签与封面。';
+  static const String webPcCreateCameraTitle = '相机';
+  static const String webPcCreateCameraSubtitle = '拍照或录像，完成后进入对应编辑页。';
+  static const String webPcCreateVideoTitle = webPcCreateCameraTitle;
+  static const String webPcCreateVideoSubtitle = webPcCreateCameraSubtitle;
   static const String webPcCreateGalleryTitle = '从相册选择';
-  static const String webPcCreateGallerySubtitle = '挑选图片或素材，发布成点滴或作品。';
+  static const String webPcCreateGallerySubtitle = '挑选图片或视频，按实际类型进入编辑。';
   static const String webPcCreateTextTitle = '写文字';
-  static const String webPcCreateTextSubtitle = '快速记录想法，也可以继续打磨成长文。';
+  static const String webPcCreateTextSubtitle = '记录想法，也可以继续打磨成长文。';
   static const String webPcCreateDraftsTitle = '继续草稿';
   static const String webPcCreateDraftsSubtitle = '打开移动端同源草稿入口，继续未完成内容。';
   static const String webPcCreateGroupChatTitle = '发起群聊';
@@ -1697,9 +1697,10 @@ class UITextConstants {
   static const String postArticle = '写笔记';
   static const String publish = '发表';
   static const String publishAction = '发布';
-  static const String createActionPostPhotoShort = '发布图片';
-  static const String createActionPostVideoShort = '发布视频';
-  static const String createActionWriteLong = '写一篇长文';
+  static const String createActionPostPhotoShort = '从相册选择';
+  static const String createActionPostVideoShort = '相机';
+  static const String createActionCameraSubtitle = '拍照或录像';
+  static const String createActionWriteLong = '写文字';
   static const String createActionResumeDraft = '从草稿开始';
   static const String localDraftsTitle = '本地草稿';
   static const String localDraftsDeviceOnlyNotice =
@@ -1713,6 +1714,10 @@ class UITextConstants {
   static const String localDraftUnavailableTitle = '这条草稿暂时无法恢复';
   static const String localDraftMissingImageDesc = '原始图片已不可用，可删除这条草稿或返回。';
   static const String localDraftMissingVideoDesc = '原始视频已不可用，可删除这条草稿或返回。';
+  static const String createDraftToolbar = '草稿';
+  static const String createDraftSaving = '保存中...';
+  static const String createDraftSaved = '已保存';
+  static const String createDraftSaveFailed = '保存失败，点按重试';
   static const String createActionAddContactShort = homeObjectActionAddContact;
   static const String createActionCreateGroupShort = '发起群聊';
   static const String createActionCreateCircleShort = createCircle;
@@ -2087,6 +2092,11 @@ class UITextConstants {
   static const String mediaPickerCategoryLive = '实况图';
   static const String mediaPickerCategoryFullscreen = '全屏图';
   static const String mediaPickerCameraEntry = '拍照';
+  static const String mediaPickerMixedTitle = '照片和视频';
+  static const String mediaPickerMixedCameraEntry = '拍摄';
+  static const String mediaPickerMixedAlbumEmpty = '暂无照片或视频';
+  static const String mediaPickerMixedImageLocked = '已选择图片，清空后可选视频';
+  static const String mediaPickerMixedVideoLocked = '已选择视频，清空后可选图片';
   static const String mediaPickerVideoTitle = '全部视频';
   static const String mediaPickerVideoCameraEntry = '现在开拍';
   static const String mediaPickerOneTapMovie = '一键成片';

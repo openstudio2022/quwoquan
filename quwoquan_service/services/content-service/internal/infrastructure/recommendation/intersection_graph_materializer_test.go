@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	app "quwoquan_service/services/content-service/internal/application"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 )
 
 func approxEqual(a, b float64) bool { return math.Abs(a-b) < 1e-4 }
@@ -14,10 +14,10 @@ func approxEqual(a, b float64) bool { return math.Abs(a-b) < 1e-4 }
 // 且全部由理由自身真实信号确定性派生（无外部打分调用）。
 func TestComputeEdgeWeight_ThreeFactorProduct(t *testing.T) {
 	now := time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
-	r := app.IntersectionReasonView{
+	r := intersectionapp.IntersectionReasonView{
 		Strength: 0.8,
 		FreshAt:  now.Format(time.RFC3339), // 刚生成 → decay=1
-		IntersectionPoints: []app.IntersectionPointView{
+		IntersectionPoints: []intersectionapp.IntersectionPointView{
 			{Count: 1}, {Count: 1}, {Count: 1}, // 绝对多跳计数 3
 		},
 	}
@@ -55,12 +55,12 @@ func TestRecencyDecay_OldEdgeDecays(t *testing.T) {
 
 // TestInteractionFrequency_AbsoluteMultiHopCount 验证 Propagation：频率单调随绝对多跳计数增长、收敛 <1。
 func TestInteractionFrequency_AbsoluteMultiHopCount(t *testing.T) {
-	mk := func(count int) app.IntersectionReasonView {
-		pts := make([]app.IntersectionPointView, count)
+	mk := func(count int) intersectionapp.IntersectionReasonView {
+		pts := make([]intersectionapp.IntersectionPointView, count)
 		for i := range pts {
-			pts[i] = app.IntersectionPointView{Count: 1}
+			pts[i] = intersectionapp.IntersectionPointView{Count: 1}
 		}
-		return app.IntersectionReasonView{IntersectionPoints: pts}
+		return intersectionapp.IntersectionReasonView{IntersectionPoints: pts}
 	}
 	f1 := interactionFrequency(mk(1))
 	f3 := interactionFrequency(mk(3))
@@ -71,21 +71,21 @@ func TestInteractionFrequency_AbsoluteMultiHopCount(t *testing.T) {
 	if f10 >= 1.0 {
 		t.Fatalf("saturating frequency must stay <1: f10=%.4f", f10)
 	}
-	if f0 := interactionFrequency(app.IntersectionReasonView{}); f0 != 0 {
+	if f0 := interactionFrequency(intersectionapp.IntersectionReasonView{}); f0 != 0 {
 		t.Fatalf("zero evidence → zero frequency, got %.4f", f0)
 	}
 }
 
 // TestEvidenceCount_PrefersPointSum 验证多跳证据计数取点 Count 求和，回退聚合计数。
 func TestEvidenceCount_PrefersPointSum(t *testing.T) {
-	r := app.IntersectionReasonView{
-		IntersectionPoints: []app.IntersectionPointView{{Count: 2}, {Count: 3}},
+	r := intersectionapp.IntersectionReasonView{
+		IntersectionPoints: []intersectionapp.IntersectionPointView{{Count: 2}, {Count: 3}},
 		TotalPointCount:    99,
 	}
 	if n := evidenceCount(r); n != 5 {
 		t.Fatalf("point sum should win: got %d want 5", n)
 	}
-	fallback := app.IntersectionReasonView{TotalPointCount: 4, MutualCount: 7, FactPointCount: 2}
+	fallback := intersectionapp.IntersectionReasonView{TotalPointCount: 4, MutualCount: 7, FactPointCount: 2}
 	if n := evidenceCount(fallback); n != 7 {
 		t.Fatalf("fallback should be max(total,mutual,fact): got %d want 7", n)
 	}
@@ -96,19 +96,19 @@ func TestMaterializeFactReasons_LifecycleStateMachine(t *testing.T) {
 	now := time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
 
 	// 第一次：无 prev → 全部 new。
-	r := func(id string, strength float64, pts int) app.IntersectionReasonView {
-		points := make([]app.IntersectionPointView, pts)
+	r := func(id string, strength float64, pts int) intersectionapp.IntersectionReasonView {
+		points := make([]intersectionapp.IntersectionPointView, pts)
 		for i := range points {
-			points[i] = app.IntersectionPointView{Count: 1}
+			points[i] = intersectionapp.IntersectionPointView{Count: 1}
 		}
-		return app.IntersectionReasonView{
+		return intersectionapp.IntersectionReasonView{
 			IntersectionID:     id,
 			Strength:           strength,
 			FreshAt:            now.Format(time.RFC3339),
 			IntersectionPoints: points,
 		}
 	}
-	gen1 := materializeFactReasons(nil, []app.IntersectionReasonView{r("e1", 0.8, 3)}, now)
+	gen1 := materializeFactReasons(nil, []intersectionapp.IntersectionReasonView{r("e1", 0.8, 3)}, now)
 	if gen1[0].LifecycleState != "new" {
 		t.Fatalf("first appearance must be new, got %q", gen1[0].LifecycleState)
 	}
@@ -117,7 +117,7 @@ func TestMaterializeFactReasons_LifecycleStateMachine(t *testing.T) {
 	}
 
 	// 第二次：边权显著上升 → strengthened。
-	gen2 := materializeFactReasons(gen1, []app.IntersectionReasonView{r("e1", 1.0, 10)}, now)
+	gen2 := materializeFactReasons(gen1, []intersectionapp.IntersectionReasonView{r("e1", 1.0, 10)}, now)
 	if gen2[0].LifecycleState != "strengthened" {
 		t.Fatalf("rising edge must be strengthened, got %q (delta=%.4f)", gen2[0].LifecycleState, gen2[0].StrengthDelta)
 	}
@@ -126,19 +126,19 @@ func TestMaterializeFactReasons_LifecycleStateMachine(t *testing.T) {
 	}
 
 	// 第三次：边权基本不变 → stable。
-	gen3 := materializeFactReasons(gen2, []app.IntersectionReasonView{r("e1", 1.0, 10)}, now)
+	gen3 := materializeFactReasons(gen2, []intersectionapp.IntersectionReasonView{r("e1", 1.0, 10)}, now)
 	if gen3[0].LifecycleState != "stable" {
 		t.Fatalf("unchanged edge must be stable, got %q (delta=%.4f)", gen3[0].LifecycleState, gen3[0].StrengthDelta)
 	}
 
 	// 第四次：边权显著下降 → weakened。
-	gen4 := materializeFactReasons(gen3, []app.IntersectionReasonView{r("e1", 0.55, 1)}, now)
+	gen4 := materializeFactReasons(gen3, []intersectionapp.IntersectionReasonView{r("e1", 0.55, 1)}, now)
 	if gen4[0].LifecycleState != "weakened" {
 		t.Fatalf("falling edge must be weakened, got %q (delta=%.4f)", gen4[0].LifecycleState, gen4[0].StrengthDelta)
 	}
 
 	// 第五次：曾衰退、本轮重新增强 → reactivated。
-	gen5 := materializeFactReasons(gen4, []app.IntersectionReasonView{r("e1", 1.0, 10)}, now)
+	gen5 := materializeFactReasons(gen4, []intersectionapp.IntersectionReasonView{r("e1", 1.0, 10)}, now)
 	if gen5[0].LifecycleState != "reactivated" {
 		t.Fatalf("re-rising after weakened must be reactivated, got %q (delta=%.4f)", gen5[0].LifecycleState, gen5[0].StrengthDelta)
 	}
@@ -147,12 +147,12 @@ func TestMaterializeFactReasons_LifecycleStateMachine(t *testing.T) {
 // TestApplyGraphWeights_DeterministicAndBounded 验证边权物化幂等、确定性、有界。
 func TestApplyGraphWeights_DeterministicAndBounded(t *testing.T) {
 	now := time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
-	in := []app.IntersectionReasonView{
+	in := []intersectionapp.IntersectionReasonView{
 		{IntersectionID: "a", Strength: 0.9, FreshAt: now.Format(time.RFC3339), TotalPointCount: 4},
 		{IntersectionID: "b"}, // 无信号
 	}
-	first := applyGraphWeights(append([]app.IntersectionReasonView(nil), in...), now)
-	second := applyGraphWeights(append([]app.IntersectionReasonView(nil), in...), now)
+	first := applyGraphWeights(append([]intersectionapp.IntersectionReasonView(nil), in...), now)
+	second := applyGraphWeights(append([]intersectionapp.IntersectionReasonView(nil), in...), now)
 	for i := range first {
 		if first[i].EdgeWeight != second[i].EdgeWeight {
 			t.Fatalf("edgeWeight must be deterministic at idx %d: %.4f vs %.4f", i, first[i].EdgeWeight, second[i].EdgeWeight)
@@ -168,16 +168,16 @@ func TestApplyGraphWeights_DeterministicAndBounded(t *testing.T) {
 
 // TestReasonIdentityKey_StableMatching 验证跨快照同一条边的稳定匹配键优先级。
 func TestReasonIdentityKey_StableMatching(t *testing.T) {
-	if k := reasonIdentityKey(app.IntersectionReasonView{DedupeKey: "dk", IntersectionID: "ix"}); k != "d:dk" {
+	if k := reasonIdentityKey(intersectionapp.IntersectionReasonView{DedupeKey: "dk", IntersectionID: "ix"}); k != "d:dk" {
 		t.Fatalf("dedupeKey must win, got %q", k)
 	}
-	if k := reasonIdentityKey(app.IntersectionReasonView{IntersectionID: "ix"}); k != "i:ix" {
+	if k := reasonIdentityKey(intersectionapp.IntersectionReasonView{IntersectionID: "ix"}); k != "i:ix" {
 		t.Fatalf("intersectionId fallback, got %q", k)
 	}
-	if k := reasonIdentityKey(app.IntersectionReasonView{ActionTargetID: "at"}); k != "a:at" {
+	if k := reasonIdentityKey(intersectionapp.IntersectionReasonView{ActionTargetID: "at"}); k != "a:at" {
 		t.Fatalf("actionTargetId fallback, got %q", k)
 	}
-	if k := reasonIdentityKey(app.IntersectionReasonView{Dimension: "d", DisplayName: "n"}); k != "n:d|n" {
+	if k := reasonIdentityKey(intersectionapp.IntersectionReasonView{Dimension: "d", DisplayName: "n"}); k != "n:d|n" {
 		t.Fatalf("last-resort key, got %q", k)
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	app "quwoquan_service/services/content-service/internal/application"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 )
 
 // fakeIntersectionCompute 是可计数的底层 compute 源，用于断言读穿透是否回算。
@@ -15,10 +15,10 @@ type fakeIntersectionCompute struct {
 	mu        sync.Mutex
 	factCalls int
 	factErr   error
-	reasons   []app.IntersectionReasonView
+	reasons   []intersectionapp.IntersectionReasonView
 }
 
-func (f *fakeIntersectionCompute) FactReasons(context.Context, string, string) ([]app.IntersectionReasonView, error) {
+func (f *fakeIntersectionCompute) FactReasons(context.Context, string, string) ([]intersectionapp.IntersectionReasonView, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.factCalls++
@@ -28,12 +28,12 @@ func (f *fakeIntersectionCompute) FactReasons(context.Context, string, string) (
 	return f.reasons, nil
 }
 
-func (f *fakeIntersectionCompute) AffinityReasons(context.Context, string, string) ([]app.IntersectionReasonView, error) {
-	return []app.IntersectionReasonView{{IntersectionID: "aff", IntersectionClass: "affinity"}}, nil
+func (f *fakeIntersectionCompute) AffinityReasons(context.Context, string, string) ([]intersectionapp.IntersectionReasonView, error) {
+	return []intersectionapp.IntersectionReasonView{{IntersectionID: "aff", IntersectionClass: "affinity"}}, nil
 }
 
-func (f *fakeIntersectionCompute) ObjectReasons(context.Context, string, string, string) ([]app.IntersectionReasonView, error) {
-	return []app.IntersectionReasonView{{IntersectionID: "obj", IntersectionClass: "fact"}}, nil
+func (f *fakeIntersectionCompute) ObjectReasons(context.Context, string, string, string) ([]intersectionapp.IntersectionReasonView, error) {
+	return []intersectionapp.IntersectionReasonView{{IntersectionID: "obj", IntersectionClass: "fact"}}, nil
 }
 
 // memViewerStore 是内存读模型，避免单测依赖 Mongo/Docker。
@@ -43,7 +43,9 @@ type memViewerStore struct {
 	save int
 }
 
-func newMemViewerStore() *memViewerStore { return &memViewerStore{docs: map[string]ViewerIntersectionDoc{}} }
+func newMemViewerStore() *memViewerStore {
+	return &memViewerStore{docs: map[string]ViewerIntersectionDoc{}}
+}
 
 func (m *memViewerStore) Load(_ context.Context, viewerID string) (ViewerIntersectionDoc, bool, error) {
 	m.mu.Lock()
@@ -60,7 +62,7 @@ func (m *memViewerStore) Save(_ context.Context, doc ViewerIntersectionDoc) erro
 	return nil
 }
 
-func newSourceAt(compute app.IntersectionSource, store ViewerIntersectionReadModel, now *time.Time, ttlDays map[string]int) *ReadModelIntersectionSource {
+func newSourceAt(compute intersectionapp.IntersectionSource, store ViewerIntersectionReadModel, now *time.Time, ttlDays map[string]int) *ReadModelIntersectionSource {
 	s := NewReadModelIntersectionSource(compute, store, ttlDays)
 	s.now = func() time.Time { return *now }
 	return s
@@ -68,7 +70,7 @@ func newSourceAt(compute app.IntersectionSource, store ViewerIntersectionReadMod
 
 func TestReadModelSource_FirstReadComputesAndMaterializes(t *testing.T) {
 	now := time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
-	compute := &fakeIntersectionCompute{reasons: []app.IntersectionReasonView{
+	compute := &fakeIntersectionCompute{reasons: []intersectionapp.IntersectionReasonView{
 		{IntersectionID: "r1", IntersectionClass: "fact", Dimension: "content"},
 	}}
 	store := newMemViewerStore()
@@ -91,7 +93,7 @@ func TestReadModelSource_FirstReadComputesAndMaterializes(t *testing.T) {
 
 func TestReadModelSource_FreshHitServesReadModelZeroCompute(t *testing.T) {
 	now := time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
-	compute := &fakeIntersectionCompute{reasons: []app.IntersectionReasonView{
+	compute := &fakeIntersectionCompute{reasons: []intersectionapp.IntersectionReasonView{
 		{IntersectionID: "r1", IntersectionClass: "fact", Dimension: "content"},
 	}}
 	store := newMemViewerStore()
@@ -117,7 +119,7 @@ func TestReadModelSource_FreshHitServesReadModelZeroCompute(t *testing.T) {
 func TestReadModelSource_PerDimensionFreshnessTriggersRecompute(t *testing.T) {
 	now := time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
 	// 快照含 content(7d) 与 identity(30d) 两维度：按最短者 content 7d 触发整快照刷新。
-	compute := &fakeIntersectionCompute{reasons: []app.IntersectionReasonView{
+	compute := &fakeIntersectionCompute{reasons: []intersectionapp.IntersectionReasonView{
 		{IntersectionID: "c1", IntersectionClass: "fact", Dimension: "content"},
 		{IntersectionID: "i1", IntersectionClass: "fact", Dimension: "identity"},
 	}}
@@ -142,7 +144,7 @@ func TestReadModelSource_PerDimensionFreshnessTriggersRecompute(t *testing.T) {
 
 func TestReadModelSource_ComputeErrorServesStaleSnapshot(t *testing.T) {
 	now := time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
-	compute := &fakeIntersectionCompute{reasons: []app.IntersectionReasonView{
+	compute := &fakeIntersectionCompute{reasons: []intersectionapp.IntersectionReasonView{
 		{IntersectionID: "r1", IntersectionClass: "fact", Dimension: "content"},
 	}}
 	store := newMemViewerStore()
@@ -182,10 +184,10 @@ func TestReadModelSource_AffinityAndObjectDelegateToCompute(t *testing.T) {
 // 用于断言 lifecycle 跨快照的增量真算。
 type genCompute struct {
 	calls int
-	gens  [][]app.IntersectionReasonView
+	gens  [][]intersectionapp.IntersectionReasonView
 }
 
-func (g *genCompute) FactReasons(context.Context, string, string) ([]app.IntersectionReasonView, error) {
+func (g *genCompute) FactReasons(context.Context, string, string) ([]intersectionapp.IntersectionReasonView, error) {
 	idx := g.calls
 	if idx >= len(g.gens) {
 		idx = len(g.gens) - 1
@@ -193,14 +195,14 @@ func (g *genCompute) FactReasons(context.Context, string, string) ([]app.Interse
 	g.calls++
 	// 返回深拷贝，避免物化原地写回污染下一代输入。
 	src := g.gens[idx]
-	out := make([]app.IntersectionReasonView, len(src))
+	out := make([]intersectionapp.IntersectionReasonView, len(src))
 	copy(out, src)
 	return out, nil
 }
-func (g *genCompute) AffinityReasons(context.Context, string, string) ([]app.IntersectionReasonView, error) {
+func (g *genCompute) AffinityReasons(context.Context, string, string) ([]intersectionapp.IntersectionReasonView, error) {
 	return nil, nil
 }
-func (g *genCompute) ObjectReasons(context.Context, string, string, string) ([]app.IntersectionReasonView, error) {
+func (g *genCompute) ObjectReasons(context.Context, string, string, string) ([]intersectionapp.IntersectionReasonView, error) {
 	return nil, nil
 }
 
@@ -209,12 +211,12 @@ func (g *genCompute) ObjectReasons(context.Context, string, string, string) ([]a
 // 并随快照固化；fresh 命中读路径零回算地消费已物化字段（R-IX01 不变量）。
 func TestReadModelSource_MaterializesEdgeWeightAndLifecycleAcrossRecompute(t *testing.T) {
 	now := time.Date(2026, 6, 16, 0, 0, 0, 0, time.UTC)
-	mk := func(strength float64, pts int) app.IntersectionReasonView {
-		points := make([]app.IntersectionPointView, pts)
+	mk := func(strength float64, pts int) intersectionapp.IntersectionReasonView {
+		points := make([]intersectionapp.IntersectionPointView, pts)
 		for i := range points {
-			points[i] = app.IntersectionPointView{Count: 1}
+			points[i] = intersectionapp.IntersectionPointView{Count: 1}
 		}
-		return app.IntersectionReasonView{
+		return intersectionapp.IntersectionReasonView{
 			IntersectionID:     "edge-1",
 			IntersectionClass:  "fact",
 			Dimension:          "relationship",
@@ -223,7 +225,7 @@ func TestReadModelSource_MaterializesEdgeWeightAndLifecycleAcrossRecompute(t *te
 			IntersectionPoints: points,
 		}
 	}
-	compute := &genCompute{gens: [][]app.IntersectionReasonView{
+	compute := &genCompute{gens: [][]intersectionapp.IntersectionReasonView{
 		{mk(0.6, 1)},  // 第 1 代：弱边
 		{mk(1.0, 12)}, // 第 2 代：显著增强
 	}}

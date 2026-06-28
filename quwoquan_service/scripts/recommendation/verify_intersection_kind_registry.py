@@ -39,11 +39,11 @@ GENERATED_TABLE = (
 )
 SERVICE_GO = (
     REPO_ROOT
-    / "quwoquan_service/services/content-service/internal/application/intersection_service.go"
+    / "quwoquan_service/services/content-service/internal/application/intersection/intersection_service.go"
 )
 HYDRATION_GO = (
     REPO_ROOT
-    / "quwoquan_service/services/content-service/internal/application/intersection_hydration.go"
+    / "quwoquan_service/services/content-service/internal/application/intersection/intersection_hydration.go"
 )
 
 VALUE_TIERS = {"T1", "T2", "T3", "T4"}

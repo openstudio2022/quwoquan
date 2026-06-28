@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	"quwoquan_service/services/content-service/internal/infrastructure/cache"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
-	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 )
 
 func TestCacheFindByID_MissThenHit(t *testing.T) {

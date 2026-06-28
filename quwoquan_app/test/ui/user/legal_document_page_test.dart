@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/user/pages/legal_document_page.dart';
 
@@ -57,4 +60,45 @@ void main() {
     expect(probeCount, 2);
     expect(find.text(UITextConstants.legalUnavailableTitle), findsOneWidget);
   });
+
+  test(
+    'decodes UTF-8 legal document bytes without relying on charset',
+    () async {
+      final html = await defaultLegalDocumentHtmlLoader(
+        Uri.parse(
+          'https://alpha-api.quwoquan-env.test:17000/legal/user-agreement',
+        ),
+        client: _FakeHttpClient(
+          (_) async => http.Response.bytes(
+            utf8.encode('<html><body><h1>趣我圈用户协议</h1></body></html>'),
+            200,
+            headers: const <String, String>{'content-type': 'text/html'},
+          ),
+        ),
+      );
+
+      expect(html, contains('趣我圈用户协议'));
+    },
+  );
+}
+
+class _FakeHttpClient extends http.BaseClient {
+  _FakeHttpClient(this._handler);
+
+  final Future<http.Response> Function(http.BaseRequest request) _handler;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final response = await _handler(request);
+    return http.StreamedResponse(
+      Stream<List<int>>.value(response.bodyBytes),
+      response.statusCode,
+      contentLength: response.contentLength,
+      request: request,
+      headers: response.headers,
+      isRedirect: response.isRedirect,
+      persistentConnection: response.persistentConnection,
+      reasonPhrase: response.reasonPhrase,
+    );
+  }
 }

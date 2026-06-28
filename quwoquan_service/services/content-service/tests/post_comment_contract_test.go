@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	postapp "quwoquan_service/services/content-service/internal/application/post"
 	"strings"
 	"testing"
 	"time"
 
-	"quwoquan_service/services/content-service/internal/application"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
@@ -922,16 +922,16 @@ func TestGetAppConfig(t *testing.T) {
 }
 
 func TestGetAppConfigRuntimeOverrides(t *testing.T) {
-	service := application.NewPostService(
+	service := postapp.NewPostService(
 		persistence.NewPostStore(nil),
-		application.WithStoryRuntimeConfig(application.StoryRuntimeConfig{
+		postapp.WithStoryRuntimeConfig(postapp.StoryRuntimeConfig{
 			FeatureFlags: map[string]bool{
 				"enable_identity_share_template":          false,
 				"enable_assistant_content_identity_index": false,
 			},
 			ExperimentBucket: "rollout_20",
 			CurrentStage:     "20%",
-			CanaryMatrix: []application.StoryCanaryStage{
+			CanaryMatrix: []postapp.StoryCanaryStage{
 				{Stage: "5%", RolloutPercent: 5},
 				{Stage: "20%", RolloutPercent: 20},
 			},

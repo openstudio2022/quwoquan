@@ -19,8 +19,13 @@ sit_acceptance:
     performance_points: []
     tests:
       planned: []
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/video_cover_contract__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/searchprojection/place_search_projection__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_service__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/behavior/behavior_feed_patch__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/authorimpact/author_impact_travel__local_contract_test.go
+    status: implemented
     test_evidence:
       primary:
       - layer: local_contract
@@ -42,7 +47,11 @@ sit_acceptance:
         cases:
         - local_contract.discovery_content.content_service_contract_foundation.sit1.sit1_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - '2026-06-28 content domain directory restructure：application 根包不再承载业务实现；post/feed/intersection/behavior/report/importer/authorimpact/searchprojection/identity/ports
+      按能力拆分；verify-content-architecture 禁止 application 生产代码 import infrastructure。'
+    - 'Recorded evidence：go test ./services/content-service/internal/... -count=1、go test ./services/content-service/tests/local_contract/... -count=1、make
+      verify-content-architecture。'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

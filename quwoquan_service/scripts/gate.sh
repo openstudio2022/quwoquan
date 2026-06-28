@@ -739,6 +739,10 @@ echo "[gate] running assistant-service contract tests"
 ) || fail "assistant-service go tests failed"
 
 # ── L2: content-service contract tests ───────────────────────────────────────
+echo "[gate] verifying content-service application architecture"
+make verify-content-architecture \
+  || fail "content-service application architecture verification failed"
+
 echo "[gate] running content-service contract tests"
 go test ./services/content-service/... -count=1 -timeout=120s \
   || fail "content-service go tests failed"
@@ -846,4 +850,3 @@ if [ "${RUN_REC_DRIFT:-0}" = "1" ]; then
 fi
 
 echo "[gate] OK"
-

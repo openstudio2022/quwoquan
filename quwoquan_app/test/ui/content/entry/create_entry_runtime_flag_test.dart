@@ -7,7 +7,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 
 void main() {
-  testWidgets('关闭旧 flag 时仍保留统一创作动作入口（含从草稿继续）', (tester) async {
+  testWidgets('关闭旧 flag 时仍保留统一三项创作入口', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -40,7 +40,11 @@ void main() {
       findsOneWidget,
     );
     expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
-    expect(find.text(UITextConstants.createActionResumeDraft), findsOneWidget);
+    expect(find.text(UITextConstants.createActionResumeDraft), findsNothing);
+    expect(
+      find.text(UITextConstants.createActionCameraSubtitle),
+      findsOneWidget,
+    );
     expect(
       find.text(UITextConstants.createActionPostVideoShort),
       findsOneWidget,

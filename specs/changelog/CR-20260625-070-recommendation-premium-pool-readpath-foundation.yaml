@@ -40,7 +40,7 @@ entries:
         sections:
           - PremiumPoolSource wiring
           - disable_premium_pool_source rollback flag
-      - path: quwoquan_service/services/content-service/internal/application/feed_service.go
+      - path: quwoquan_service/services/content-service/internal/application/feed/feed_service.go
         sections:
           - sourceTaskId feed attribution
       - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md

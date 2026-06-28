@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"quwoquan_service/services/content-service/internal/application/identity"
 	"strings"
 	"testing"
-
-	"quwoquan_service/services/content-service/internal/application"
 )
 
 // createPost is a shared test helper: create draft then publish it, returning
@@ -52,7 +51,7 @@ func createDraftPostWithAuthor(t *testing.T, authorID string, payload string) ma
 	t.Helper()
 	payload = normalizeCreatePostPayloadForTest(t, payload)
 	if strings.TrimSpace(authorID) == "" {
-		authorID = application.AnonymousFallbackSubAccountID
+		authorID = identity.AnonymousFallbackSubAccountID
 	}
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
@@ -132,7 +131,7 @@ func publishPostWithAuthor(
 ) map[string]any {
 	t.Helper()
 	if strings.TrimSpace(authorID) == "" {
-		authorID = application.AnonymousFallbackSubAccountID
+		authorID = identity.AnonymousFallbackSubAccountID
 	}
 	req := httptest.NewRequest(
 		http.MethodPost,

@@ -11,7 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	app "quwoquan_service/services/content-service/internal/application"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 )
 
 // viewerObjectIntersectionCollection 是事实交集读模型集合（WP-2 预物化）。
@@ -22,7 +22,7 @@ const viewerObjectIntersectionCollection = "rm_viewer_object_intersection"
 // ViewerIntersectionDoc 是单个 viewer 的事实交集预物化快照。
 type ViewerIntersectionDoc struct {
 	ViewerID   string
-	Reasons    []app.IntersectionReasonView
+	Reasons    []intersectionapp.IntersectionReasonView
 	ComputedAt time.Time
 }
 
@@ -35,7 +35,7 @@ type ViewerIntersectionReadModel interface {
 
 // MongoViewerIntersectionStore 是 Mongo 实现（一 viewer 一文档）。
 // reasons 以 JSON blob 存储：读模型只整文档点查，无需按字段查询，JSON 保证
-// app.IntersectionReasonView 全字段精确往返，避免 bson 字段名映射歧义。
+// intersectionapp.IntersectionReasonView 全字段精确往返，避免 bson 字段名映射歧义。
 type MongoViewerIntersectionStore struct {
 	coll   *mongo.Collection
 	logger *slog.Logger

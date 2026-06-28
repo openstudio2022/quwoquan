@@ -4,7 +4,7 @@
 // backfill entry point rebuilds the index from the live store for cold start.
 //
 // It is a pure producer: it never serves queries. The post→Document projection is
-// owned by application.ProjectPostToSearchDocument (single source of truth, shared
+// owned by searchprojection.ProjectPostToSearchDocument (single source of truth, shared
 // with the native retrieve candidate source) and the ES document shape is owned by
 // runtime/search/es. This package only decides which lifecycle events upsert vs
 // delete, reads back the full post, and forwards to the indexer.
@@ -17,7 +17,8 @@ import (
 
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
-	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/application/ports"
+	"quwoquan_service/services/content-service/internal/application/searchprojection"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 )
 
@@ -30,7 +31,7 @@ type PostReader interface {
 }
 
 // Projector applies post lifecycle events to the unified ES index. It implements
-// application.Projector so it can be composed into the in-process projector
+// ports.Projector so it can be composed into the in-process projector
 // fan-out alongside the discovery/recommend projectors.
 //
 // Indexing failures are recorded structurally (logged with event/post context)
@@ -73,7 +74,7 @@ func NewProjector(indexer *es.Indexer, reader PostReader, opts ...Option) *Proje
 // (reactions, behavior batches) do not change the searchable surface and are
 // ignored. It always returns nil so a failing index write cannot break the
 // projector fan-out or the primary write path.
-func (p *Projector) Project(ctx context.Context, event application.ProjectorEvent) error {
+func (p *Projector) Project(ctx context.Context, event ports.ProjectorEvent) error {
 	if p == nil || p.indexer == nil {
 		return nil
 	}
@@ -107,7 +108,7 @@ func (p *Projector) reconcile(ctx context.Context, postID, eventType string) {
 		p.delete(ctx, postID, eventType)
 		return
 	}
-	doc := application.ProjectPostToSearchDocument(*post)
+	doc := searchprojection.ProjectPostToSearchDocument(*post)
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: doc}); err != nil {
 		p.logger.Warn("search index upsert failed",
 			"event", eventType, "postId", postID, "err", err)

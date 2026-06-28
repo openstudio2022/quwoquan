@@ -156,7 +156,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       case EditorStartAction.capture:
         state = state.copyWith(
           editorKind: CreateEditorKind.media,
-          draftFlowKind: CreateDraftFlowKind.video,
+          draftFlowKind: CreateDraftFlowKind.image,
         );
         return;
       case EditorStartAction.write:

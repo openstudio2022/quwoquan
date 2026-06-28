@@ -1,0 +1,81 @@
+id: CR-20260628-074-content-domain-directory-restructure
+title: Content 域目录结构规范整改
+slug: content-domain-directory-restructure
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/content-service-contract-foundation
+  - specs/feature-tree/discovery-content/content-service-cloud-production
+  - quwoquan_service/contracts/metadata/content/post/aggregate.yaml
+  - quwoquan_service/contracts/metadata/content/report/entity.yaml
+  - quwoquan_service/services/content-service/internal/application
+  - quwoquan_service/services/content-service/internal/adapters/http
+  - quwoquan_service/services/content-service/internal/infrastructure
+  - quwoquan_service/services/content-service/tests/local_contract
+  - quwoquan_service/services/content-service/tests/api_integration
+  - specs/gates/test_directory_inventory.yaml
+  - specs/gates/test_legacy_source_allowlist.yaml
+
+entries:
+  - timestamp: "2026-06-28T18:30:00+08:00"
+    summary: |
+      Content-service application 层按能力包重构为 post/feed/intersection/behavior/report/importer/
+      authorimpact/searchprojection/identity/ports，不保留旧根 facade；Post/Behavior/Report 等应用服务
+      通过 application/ports 依赖仓储与投影端口，清除 application -> infrastructure 反向依赖。
+    reason: |
+      原 internal/application 根包混合业务能力、读模型投影和基础设施接口，metadata DDD 映射与真实代码漂移，
+      local_contract bridge 与脚本门禁也硬编码旧路径。此次整改让目录结构表达真实能力边界，并用 gate 防回潮。
+    change_type:
+      - content_service
+      - architecture
+      - metadata
+      - acceptance
+      - test_governance
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/content/post/aggregate.yaml
+        sections:
+          - ddd_layer_mapping
+      - path: quwoquan_service/contracts/metadata/content/report/entity.yaml
+        sections:
+          - ddd_layer_mapping
+      - path: quwoquan_service/services/content-service/internal/application/ports
+        sections:
+          - application repository/projector/store ports
+      - path: quwoquan_service/services/content-service/internal/application/post
+        sections:
+          - post use cases
+          - comment/media/share/search helpers
+      - path: quwoquan_service/services/content-service/internal/application/searchprojection
+        sections:
+          - post/place search projections
+      - path: quwoquan_service/scripts/verify/verify_content_application_boundaries.py
+        sections:
+          - application root and infrastructure import guard
+      - path: specs/gates/test_directory_inventory.yaml
+        sections:
+          - content-service local_contract bridge paths
+      - path: specs/gates/test_legacy_source_allowlist.yaml
+        sections:
+          - content-service application test source paths
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: low
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - go test ./services/content-service/internal/... -count=1
+        - go test ./services/content-service/tests -count=1
+        - go test ./services/content-service/tests/local_contract/... -count=1
+        - make verify-content-architecture
+        - python3 scripts/recommendation/verify_impact_help_type_registry.py
+        - python3 scripts/recommendation/verify_intersection_kind_registry.py
+        - python3 scripts/recommendation/verify_daily_metrics_dimension_consistency.py
+    notes:
+      - 外部 HTTP route、wire DTO、错误码语义与 App/Data 调用契约不变。
+      - 删除旧 internal/application generated bridge 残留，canonical evidence 改为 capability package 路径。
+      - 生产 application 代码禁止 import content-service infrastructure，并由 verify-content-architecture 强制执行。

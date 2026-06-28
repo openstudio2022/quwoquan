@@ -29,7 +29,13 @@ import (
 	rtrecpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
 	httpadapter "quwoquan_service/services/content-service/internal/adapters/http"
-	"quwoquan_service/services/content-service/internal/application"
+	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
+	feedapp "quwoquan_service/services/content-service/internal/application/feed"
+	importerapp "quwoquan_service/services/content-service/internal/application/importer"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
+	"quwoquan_service/services/content-service/internal/application/ports"
+	postapp "quwoquan_service/services/content-service/internal/application/post"
+	reportapp "quwoquan_service/services/content-service/internal/application/report"
 	"quwoquan_service/services/content-service/internal/infrastructure/cache"
 	"quwoquan_service/services/content-service/internal/infrastructure/intersectionmetrics"
 	"quwoquan_service/services/content-service/internal/infrastructure/messaging"
@@ -181,23 +187,23 @@ func main() {
 	// Storage layer: MongoDB when mongo.uri is configured, else InMemory with seeds.
 	var store persistence.PostRepository
 	var reportStore persistence.ReportRepository
-	var postServiceOpts []application.PostServiceOption
-	var sharedProjector application.Projector
+	var postServiceOpts []postapp.PostServiceOption
+	var sharedProjector ports.Projector
 	var mongoCandidateSources []rtrec.CandidateSource
-	var bulkImportService *application.BulkImportService
+	var bulkImportService *importerapp.BulkImportService
 	var behaviorEventStore persistence.BehaviorEventStore = persistence.NoopBehaviorEventStore{}
 	var dailyMetricsStore *persistence.DailyMetricsStore
 	var authorImpactStore *persistence.AuthorImpactStore
 	var authorImpactEvidenceStore *persistence.AuthorImpactEvidenceStore
-	var intersectionService *application.IntersectionService
+	var intersectionService *intersectionapp.IntersectionService
 	recOpts := []rtrec.EngineOption{
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
 		rtrec.WithLogger(logger),
 	}
 	var learningSink runtimelearning.Sink = &runtimelearning.LogSink{Logger: logger}
-	postServiceOpts = append(postServiceOpts, application.WithSignalProcessor(bufferedWriter))
-	postServiceOpts = append(postServiceOpts, application.WithLogger(logger))
-	postServiceOpts = append(postServiceOpts, application.WithStoryRuntimeConfig(resolveStoryRuntimeConfig()))
+	postServiceOpts = append(postServiceOpts, postapp.WithSignalProcessor(bufferedWriter))
+	postServiceOpts = append(postServiceOpts, postapp.WithLogger(logger))
+	postServiceOpts = append(postServiceOpts, postapp.WithStoryRuntimeConfig(resolveStoryRuntimeConfig()))
 
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register("redis", func(hctx context.Context) error {
@@ -243,13 +249,13 @@ func main() {
 		commentStore := persistence.NewMongoCommentStore(db, logger)
 		commentReactionStore := persistence.NewMongoCommentReactionStore(db, logger)
 		postServiceOpts = append(postServiceOpts,
-			application.WithCommentStore(commentStore),
-			application.WithCommentReactionStore(commentReactionStore),
+			postapp.WithCommentStore(commentStore),
+			postapp.WithCommentReactionStore(commentReactionStore),
 		)
 		log.Printf("content-service comments storage=mongodb (collections=comments,comment_reactions; ranking/count=indexed keyset)")
 
 		// Event publisher: Redis Pub/Sub for cross-service consumption
-		postServiceOpts = append(postServiceOpts, application.WithEventPublisher(eventPub))
+		postServiceOpts = append(postServiceOpts, postapp.WithEventPublisher(eventPub))
 
 		// Entity tag index for entity interest propagation in projector
 		entityTagIndex := recinfra.NewMongoEntityTagIndex(db)
@@ -306,7 +312,7 @@ func main() {
 		// decay each day. Read-time freshness decay (ComputeInterestProfile) is
 		// separate; this decays the stored affinity counters themselves.
 		startDailyAffinityDecay(ctx, interestAgg, router.Scene("general"), logger)
-		postServiceOpts = append(postServiceOpts, application.WithProjector(sharedProjector))
+		postServiceOpts = append(postServiceOpts, postapp.WithProjector(sharedProjector))
 		recOpts = append(recOpts, rtrec.WithFeatureProvider(recinfra.NewFeatureStore(db)))
 
 		// Multi-channel recall sources
@@ -385,29 +391,33 @@ func main() {
 			recinfra.NewMongoViewerIntersectionStore(db, logger),
 			intersectionPolicy.FreshnessTTLDaysByDimension,
 		)
-		intersectionOpts := []application.IntersectionServiceOption{
-			application.WithIntersectionSource(intersectionReadModel),
-			application.WithIntersectionMetrics(intersectionmetrics.New()),
+		intersectionOpts := []intersectionapp.IntersectionServiceOption{
+			intersectionapp.WithIntersectionSource(intersectionReadModel),
+			intersectionapp.WithIntersectionMetrics(intersectionmetrics.New()),
 			// 已读水位耐久兜底：Redis 退化为加速缓存，Redis flush/宕机后读位不丢、写降级不阻断主请求。
-			application.WithIntersectionWatermarkStore(recinfra.NewMongoWatermarkStore(db, logger)),
-			application.WithIntersectionLogger(logger),
+			intersectionapp.WithIntersectionWatermarkStore(recinfra.NewMongoWatermarkStore(db, logger)),
+			intersectionapp.WithIntersectionLogger(logger),
 		}
 		if intersectionPolicy.CooldownDays > 0 {
-			intersectionOpts = append(intersectionOpts, application.WithIntersectionCooldownDays(intersectionPolicy.CooldownDays))
+			intersectionOpts = append(intersectionOpts, intersectionapp.WithIntersectionCooldownDays(intersectionPolicy.CooldownDays))
 		}
 		if intersectionPolicy.MaxCandidateWindow > 0 {
-			intersectionOpts = append(intersectionOpts, application.WithIntersectionMaxCandidateWindow(intersectionPolicy.MaxCandidateWindow))
+			intersectionOpts = append(intersectionOpts, intersectionapp.WithIntersectionMaxCandidateWindow(intersectionPolicy.MaxCandidateWindow))
 		}
-		intersectionService = application.NewIntersectionService(router, intersectionOpts...)
+		intersectionService = intersectionapp.NewIntersectionService(router, intersectionOpts...)
 		log.Printf("content-service social recall + social miner enabled")
 
-		bulkImportService = application.NewBulkImportService(recinfra.NewMongoBulkImportStore(db))
+		bulkImportService = importerapp.NewBulkImportService(recinfra.NewMongoBulkImportStore(db))
 		behaviorEventStore = persistence.NewMongoBehaviorEventStore(db, logger)
 		dailyMetricsStore = persistence.NewDailyMetricsStore(db, logger)
 		authorImpactStore = persistence.NewAuthorImpactStore(db, logger)
 		authorImpactEvidenceStore = persistence.NewAuthorImpactEvidenceStore(db, logger)
 	} else {
 		store = persistence.NewPostStore(recinfra.DefaultSeedPosts())
+		postServiceOpts = append(postServiceOpts,
+			postapp.WithCommentStore(persistence.NewMemoryCommentStore()),
+			postapp.WithCommentReactionStore(persistence.NewMemoryCommentReactionStore()),
+		)
 		log.Printf("content-service storage=inmemory (no mongo.uri configured)")
 	}
 
@@ -466,7 +476,7 @@ func main() {
 		log.Printf("content-service oss presigner=stub (no access_key_id or endpoint)")
 	}
 	if ossCfg.CDNDomain != "" || ossCfg.Endpoint != "" {
-		postServiceOpts = append(postServiceOpts, application.WithMediaURLConfig(ossCfg.CDNDomain, ossCfg.Endpoint))
+		postServiceOpts = append(postServiceOpts, postapp.WithMediaURLConfig(ossCfg.CDNDomain, ossCfg.Endpoint))
 	}
 	if ossCfg.CDNDomain != "" && ossCfg.Bucket != "" {
 		mediaStore := runtimemedia.NewOSSMediaStore(
@@ -476,7 +486,7 @@ func main() {
 			nil,
 			ossPresigner,
 		)
-		postServiceOpts = append(postServiceOpts, application.WithMediaStore(mediaStore))
+		postServiceOpts = append(postServiceOpts, postapp.WithMediaStore(mediaStore))
 	}
 
 	source := recinfra.NewPostRepositorySource(store)
@@ -518,31 +528,31 @@ func main() {
 	recOpts = append(recOpts, rtrec.WithExposureGovernance(sessionCache, sessionCache))
 
 	engine := rtrec.NewEngine(sessionCache, candidateSources, recOpts...)
-	feedServiceOpts := []application.FeedServiceOption{}
+	feedServiceOpts := []feedapp.FeedServiceOption{}
 	if intersectionService != nil {
-		feedServiceOpts = append(feedServiceOpts, application.WithFeedIntersectionProvider(intersectionService))
+		feedServiceOpts = append(feedServiceOpts, feedapp.WithFeedIntersectionProvider(intersectionService))
 	}
-	feedService := application.NewFeedService(engine, source, feedServiceOpts...)
-	postService := application.NewPostService(store, postServiceOpts...)
-	reportService := application.NewReportService(reportStore, eventPub)
+	feedService := feedapp.NewFeedService(engine, source, feedServiceOpts...)
+	postService := postapp.NewPostService(store, postServiceOpts...)
+	reportService := reportapp.NewReportService(reportStore, eventPub)
 	// 低风险实时推荐 patch（阶段七 §G）：复用 realtime redis scene 的 per-user pub/sub
 	// 在安全边界发射 negative_feedback_removal / new_candidate_hint / refresh_suggestion。
 	feedPatchEmitter := rtrec.NewFeedPatchEmitter(
 		router.Scene("realtime"),
 		rtrec.WithFeedPatchLogger(logger),
 	)
-	behaviorService := application.NewBehaviorService(
+	behaviorService := behaviorapp.NewBehaviorService(
 		bufferedWriter,
 		store,
-		application.WithBehaviorEventPublisher(eventPub),
-		application.WithBehaviorProjector(sharedProjector),
-		application.WithBehaviorFeedbackRecorder(recFeedback),
-		application.WithSessionCacheInvalidator(sessionCache.Invalidate),
-		application.WithBehaviorEventStore(behaviorEventStore),
-		application.WithDailyMetricsStore(dailyMetricsStore),
-		application.WithAuthorImpactStore(authorImpactStore),
-		application.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
-		application.WithFeedPatchEmitter(feedPatchEmitter),
+		behaviorapp.WithBehaviorEventPublisher(eventPub),
+		behaviorapp.WithBehaviorProjector(sharedProjector),
+		behaviorapp.WithBehaviorFeedbackRecorder(recFeedback),
+		behaviorapp.WithSessionCacheInvalidator(sessionCache.Invalidate),
+		behaviorapp.WithBehaviorEventStore(behaviorEventStore),
+		behaviorapp.WithDailyMetricsStore(dailyMetricsStore),
+		behaviorapp.WithAuthorImpactStore(authorImpactStore),
+		behaviorapp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
+		behaviorapp.WithFeedPatchEmitter(feedPatchEmitter),
 	)
 
 	var handlerOpts []httpadapter.ContentHandlerOption
@@ -862,7 +872,7 @@ func hostname() string {
 	return h
 }
 
-// projectorAdapter bridges content read-model projectors to application.Projector.
+// projectorAdapter bridges content read-model projectors to ports.Projector.
 type projectorAdapter struct {
 	discovery *recinfra.DiscoveryFeedProjector
 	recommend *recinfra.RecommendFeatureProjector
@@ -871,7 +881,7 @@ type projectorAdapter struct {
 	place     *placeindex.PlaceProjector
 }
 
-func (a *projectorAdapter) Project(ctx context.Context, event application.ProjectorEvent) error {
+func (a *projectorAdapter) Project(ctx context.Context, event ports.ProjectorEvent) error {
 	projectorEvent := recinfra.ProjectorEvent{
 		Type:          event.Type,
 		AggregateType: event.AggregateType,
@@ -931,8 +941,8 @@ func resolveReportDSN(cfg config) string {
 	return dsn
 }
 
-func resolveStoryRuntimeConfig() application.StoryRuntimeConfig {
-	return application.StoryRuntimeConfig{
+func resolveStoryRuntimeConfig() postapp.StoryRuntimeConfig {
+	return postapp.StoryRuntimeConfig{
 		FeatureFlags: map[string]bool{
 			"enable_create_action_entry": parseBoolEnv(
 				"CONTENT_FLAG_ENABLE_CREATE_ACTION_ENTRY",
@@ -960,7 +970,7 @@ func resolveStoryRuntimeConfig() application.StoryRuntimeConfig {
 			"local_story_enabled",
 		),
 		CurrentStage: getenvOrDefault("CONTENT_STORY_CURRENT_STAGE", "100%"),
-		CanaryMatrix: []application.StoryCanaryStage{
+		CanaryMatrix: []postapp.StoryCanaryStage{
 			{Stage: "5%", RolloutPercent: 5},
 			{Stage: "20%", RolloutPercent: 20},
 			{Stage: "50%", RolloutPercent: 50},

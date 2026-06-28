@@ -190,7 +190,7 @@ sit_acceptance:
     - 冷却查询 O(logN)（Redis sorted set ZRANGEBYSCORE）。
     tests:
       planned:
-      - file: quwoquan_service/services/content-service/internal/application/intersection_service_test.go
+      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_service_test.go
       - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source_test.go
       - file: quwoquan_service/services/content-service/tests/viewer_object_intersection_store_contract_test.go
       - file: quwoquan_app/test/core/trackers/intersection_attribution_test.dart
@@ -215,7 +215,7 @@ sit_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.sit4.sit4_local_contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] api_integration quwoquan_service/services/content-service/internal/application/intersection_service_test.go（ExposureRetainsButDemotesSeen
+    - '[migrated_from_recorded] api_integration quwoquan_service/services/content-service/internal/application/intersection/intersection_service_test.go（ExposureRetainsButDemotesSeen
       冷却窗口、MaxCandidateWindowCapsBeforeLimit O(logN) 窗口、SummaryNewCountAndVisitClears
       水位清零，2026-06-16 green）'
     - '[migrated_from_recorded] api_integration quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source_test.go（PerDimensionFreshnessTriggersRecompute：computedAt/expiresAt
@@ -225,7 +225,7 @@ sit_acceptance:
     - '[migrated_from_recorded] local_contract quwoquan_app/test/core/trackers/intersection_attribution_test.dart（曝光/点击携带
       intersectionId/dimension/class/sourceRef/evidenceId，转化携带 dimension/sourceRef/tagRefs，2026-06-16
       green）'
-    - '[migrated_from_recorded] local_contract quwoquan_service/services/content-service/internal/application/intersection_metrics_test.go（TestIntersectionService_FunnelMetrics：Feed
+    - '[migrated_from_recorded] local_contract quwoquan_service/services/content-service/internal/application/intersection/intersection_metrics_test.go（TestIntersectionService_FunnelMetrics：Feed
       候选 fact/affinity·fresh/seen、stale 与 display_incomplete 过滤、ReportExposure 冷却写入、MarkVisited
       清零按维度发射业务 SLI，2026-06-16 green）'
     - '[migrated_from_recorded] OBS（WP-E）：业务漏斗指标 intersection_feed_candidates_total/feed_filtered_total/cooldown_exposure_reported_total/inbox_visit_total/inbox_filtered_total

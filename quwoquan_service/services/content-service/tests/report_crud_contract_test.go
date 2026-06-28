@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	reportapp "quwoquan_service/services/content-service/internal/application/report"
 	"strings"
 	"testing"
 
 	"quwoquan_service/runtime/testinfra"
 	contenhttp "quwoquan_service/services/content-service/internal/adapters/http"
-	"quwoquan_service/services/content-service/internal/application"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
@@ -114,7 +114,7 @@ func newReportTestHandler(t *testing.T, db *sql.DB) (persistence.ReportRepositor
 		t.Fatalf("init pg report store: %v", err)
 	}
 	spy := testinfra.NewEventSpy()
-	reportService := application.NewReportService(reportRepo, spy)
+	reportService := reportapp.NewReportService(reportRepo, spy)
 	handler := contenhttp.NewContentHandler(nil, nil, reportService, nil).Routes()
 	return reportRepo, spy, handler
 }

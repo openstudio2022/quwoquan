@@ -45,11 +45,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     _titleFocusNode.addListener(_handleFocusLossFlush);
     _bodyFocusNode.addListener(_handleFocusLossFlush);
     _draftSessionController = CreateDraftSessionController(
-      onFlushDirty: (reason) => _saveDraft(
-        silent: true,
-        markSessionClean: false,
-        flushReason: reason,
-      ),
+      onFlushDirty: (reason) => _saveDraft(silent: true, flushReason: reason),
     )..start();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) {
@@ -205,6 +201,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   MediaPickerEntryMode? _resolveInitialEntryMediaMode() {
+    if (widget.initialAction == EditorStartAction.gallery) {
+      return MediaPickerEntryMode.mixed;
+    }
+    if (widget.initialAction == EditorStartAction.capture) {
+      return (widget.initialTabKey ?? '').trim() == 'video'
+          ? MediaPickerEntryMode.video
+          : MediaPickerEntryMode.image;
+    }
     switch ((widget.initialTabKey ?? '').trim()) {
       case 'photo':
         return MediaPickerEntryMode.image;
@@ -214,13 +218,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
         break;
     }
     switch (widget.initialAction) {
-      case EditorStartAction.gallery:
-        return MediaPickerEntryMode.image;
-      case EditorStartAction.capture:
-        return MediaPickerEntryMode.video;
       case EditorStartAction.write:
       case null:
         return null;
+      case EditorStartAction.gallery:
+        return MediaPickerEntryMode.mixed;
+      case EditorStartAction.capture:
+        return MediaPickerEntryMode.image;
     }
   }
 
@@ -230,6 +234,8 @@ class _CreatePageState extends ConsumerState<CreatePage>
         return CreateDraftFlowKind.image;
       case MediaPickerEntryMode.video:
         return CreateDraftFlowKind.video;
+      case MediaPickerEntryMode.mixed:
+        return CreateDraftFlowKind.image;
       case null:
         return CreateDraftFlowKind.article;
     }
@@ -326,15 +332,15 @@ class _CreatePageState extends ConsumerState<CreatePage>
     final initialMediaMode = _resolveInitialEntryMediaMode();
     switch (widget.initialAction) {
       case EditorStartAction.gallery:
-        if (initialMediaMode == MediaPickerEntryMode.video) {
-          await _pickVideoForMedia();
-        } else {
-          await _pickImagesForCurrentEditor();
-        }
+        await _pickMixedMediaFromGallery(closeWhenEmptyOnCancel: true);
         return;
       case EditorStartAction.capture:
         await _openCameraForCurrentEditor(
-          forcedMode: initialMediaMode ?? MediaPickerEntryMode.video,
+          forcedMode: initialMediaMode == MediaPickerEntryMode.video
+              ? MediaPickerEntryMode.video
+              : MediaPickerEntryMode.image,
+          modePolicy: CameraCaptureModePolicy.switchable,
+          closeWhenEmptyOnCancel: true,
         );
         return;
       case EditorStartAction.write:
@@ -435,13 +441,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   Future<void> _saveDraft({
     bool silent = false,
-    bool markSessionClean = true,
     String flushReason = 'explicit',
   }) async {
     final state = ref.read(createEditorProvider);
     if (!state.hasContent && _activeDraftId == null) {
+      _draftSessionController.markIdle();
       return;
     }
+    _draftSessionController.markSaving();
     final now = DateTime.now().millisecondsSinceEpoch;
     final nextId = _activeDraftId ?? state.draftId ?? 'draft_$now';
     final nextDraft = CreateDraft(
@@ -449,23 +456,35 @@ class _CreatePageState extends ConsumerState<CreatePage>
       updatedAtMs: now,
       state: state.copyWith(draftId: nextId),
     );
-    ref.read(createEditorProvider.notifier).setDraftId(nextId);
-    await ref
-        .read(createDraftStoreProvider.notifier)
-        .saveDraft(nextDraft, currentDraftId: nextId);
-    if (markSessionClean) {
-      _draftSessionController.markClean();
-    }
-    await reportCreateEditorSurfaceEvent(
-      ref,
-      flushReason == 'explicit' ? 'create_draft_saved' : 'draft_autosave_flush',
-      <String, Object?>{
-        ...createEditorSurfaceExtrasEditorKind(nextDraft.state.editorKind),
-        'reason': flushReason,
-      },
-    );
-    if (!silent && mounted) {
-      AppToast.show(context, UITextConstants.saveDraft);
+    try {
+      ref.read(createEditorProvider.notifier).setDraftId(nextId);
+      final draftStore = ref.read(createDraftStoreProvider.notifier);
+      await draftStore.saveDraft(nextDraft, currentDraftId: nextId);
+      await draftStore.reload();
+      final verified = await draftStore.getDraft(nextId);
+      if (verified == null || verified.id != nextId) {
+        throw StateError('saved draft is not readable: $nextId');
+      }
+      _draftSessionController.markSaved();
+      await reportCreateEditorSurfaceEvent(
+        ref,
+        flushReason == 'explicit'
+            ? 'create_draft_saved'
+            : 'draft_autosave_flush',
+        <String, Object?>{
+          ...createEditorSurfaceExtrasEditorKind(nextDraft.state.editorKind),
+          'reason': flushReason,
+        },
+      );
+      if (!silent && mounted) {
+        AppToast.show(context, UITextConstants.saveDraft);
+      }
+    } catch (_) {
+      _draftSessionController.markFailed();
+      if (!silent && mounted) {
+        AppToast.show(context, UITextConstants.createDraftSaveFailed);
+      }
+      rethrow;
     }
   }
 
@@ -478,7 +497,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     await ref
         .read(createDraftStoreProvider.notifier)
         .deleteDraft(currentDraftId);
-    _draftSessionController.markClean();
+    _draftSessionController.markIdle();
   }
 
   Future<void> _restoreDraft(CreateDraft draft) async {
@@ -621,6 +640,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
   Widget _buildCameraPageForCurrentEditor(
     BuildContext context, {
     required MediaPickerEntryMode initialMode,
+    required CameraCaptureModePolicy modePolicy,
     required int selectedCountBeforeCapture,
   }) {
     final caller = CameraPhotoCaller.create;
@@ -637,7 +657,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     }
     return CameraCapturePage(
       initialMode: initialMode,
-      allowVideoMode: initialMode == MediaPickerEntryMode.video,
+      modePolicy: modePolicy,
       caller: caller,
       entrySource: entrySource,
       selectedCountBeforeCapture: selectedCountBeforeCapture,

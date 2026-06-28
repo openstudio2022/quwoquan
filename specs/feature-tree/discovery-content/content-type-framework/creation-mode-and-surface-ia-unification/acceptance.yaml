@@ -7,35 +7,42 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: content-type-framework
 scope:
-  summary: 创作入口与媒体编辑器 IA 收敛验收；本轮补充图片/视频子流程分流。
+  summary: 创作入口与媒体编辑器 IA 收敛验收；本轮补充小红书式三动作入口、混合相册、可切相机与顶栏草稿保存状态。
   in_scope:
-  - 创作首层动作语义与媒体编辑器双编辑器心智。
-  - 图片和视频在媒体工具内的发布意图分流。
+  - 创作首层三动作菜单与媒体编辑器双编辑器心智。
+  - 混合相册、可切相机和图片/视频真实结果分流。
   - 图片路径不暴露一键成片、拍视频或录像语义。
-  - 本地草稿页、自动保存、继续编辑与清稿时机统一。
+  - 编辑器顶栏草稿入口、保存状态、本地草稿页、自动保存、继续编辑与清稿时机统一。
   out_of_scope:
   - 重做图片编辑器内部工具。
   - 新增外部分享 SDK。
   - 新增 metadata 字段。
 gwt_acceptance:
   GWT1:
-    title: 媒体编辑器内部图片与视频子流程互斥且语义清晰
+    title: 三动作入口进入混合相册或可切相机后按真实结果分流
     given:
-    - 用户从创作入口进入媒体编辑器。
-    - 当前 entry mode 为图片或视频之一。
+    - 用户从底栏或发现页全局 `+` 打开创作入口。
+    - 设备相册和相机权限可用，且相册内同时存在图片和视频。
     when:
-    - 用户进入相册选择、拍摄、底部操作和发布前状态。
+    - 用户查看入口 sheet，并分别点击“从相册选择”“相机”“写文字”。
+    - 用户在混合相册或可切相机中选择/拍摄图片或视频。
     then:
+    - 移动端入口只显示 `从相册选择`、`相机`、`写文字` 与 `取消`，不显示发布/互动分组、社交入口或草稿行。
+    - "`/create?type=gallery` 打开混合相册选择器，底部只使用下一步语义；第一项选中后锁定本批次媒体类型，图片可多选，视频单选，图片和视频不能混选。"
+    - "`/create?type=capture` 打开默认拍照的可切相机，同页可切到录像；拍照返回图片编辑状态，录像返回视频编辑状态。"
+    - "`/create?type=write` 直接进入文字为主编辑器。"
+    - 相册/相机取消且编辑器无内容时关闭创作页回到来源页。
     - 图片 entry mode 下，相册选择器和拍摄页只表达图片发布，不展示“一键成片”“拍视频”“录像”等视频语义。
     - 图片 flow 的创作页顶栏标题为“图片创作”，并使用主导航标题语义，不在首屏淡化。
     - 图片选择器已选缩略条、图片编辑器缩略条与创作页图片网格共用统一拖拽重排行为：内容不足一屏时左对齐，拖拽悬停时目标区间兄弟项即时前移/后移空出目标位。
     - 视频 entry mode 下，可使用视频选择和成片能力，但不复用图片路径的“编辑图片/完成(n)”按钮语义。
     - 图片与视频互斥，切换类型前必须删空当前媒体，不存在图片和视频混合发布草稿。
     done_when:
-    - "用户能够明确区分图片作品发布与视频/成片发布，且发布 payload 的 `contentType` 与当前 entry mode 一致。"
+    - "用户只需要在入口选择开始动作，系统能根据真实媒体结果进入图片或视频编辑状态，且发布 payload 的 `contentType` 与最终媒体类型一致。"
     edge_cases:
     - 从旧草稿恢复时，根据草稿媒体类型进入正确子流程。
-    - 从相机拍照回填后仍保持图片 entry mode。
+    - 从相机拍照回填后进入图片 entry mode，录像回填后进入视频 entry mode。
+    - 旧图片/视频专用深链仍保持 photoOnly / videoOnly 专用模式，不被全局可切相机影响。
     contract_refs:
     - specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md
     - quwoquan_app/lib/components/media/picker/create_media_picker_page.dart
@@ -44,10 +51,24 @@ gwt_acceptance:
     - 入口到媒体工具可交互 warm P95 <= 1.2s。
     tests:
       planned:
+      - file: quwoquan_app/test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart
+      - file: quwoquan_app/test/ui/content/entry/create_entry_information_architecture_widget_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/create_video_entry_mode__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
       recorded:
+      - file: quwoquan_app/test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart
+      - file: quwoquan_app/test/ui/content/entry/create_entry_information_architecture_widget_test.dart
+      - file: quwoquan_app/test/ui/content/entry/create_entry_runtime_flag_test.dart
+      - file: quwoquan_app/test/app/shell/main_app_shell_widget_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/create_video_entry_mode__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
@@ -55,12 +76,38 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
+        suite: creation_mixed_media_picker
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.mixed_picker_uses_next_step_and_type_lock
+        envs: &id001
+        - local
+      - layer: local_contract
+        suite: camera_capture_mode_switch
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.switchable_camera_defaults_photo_and_can_switch_video
+        envs: *id001
+      - layer: local_contract
+        suite: create_video_entry_mode
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.gallery_opens_mixed_picker_and_capture_defaults_photo
+        envs: *id001
+      - layer: local_contract
+        suite: create_entry_media_resolution
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.mixed_gallery_result_resolves_image_or_video_flow
+        envs: *id001
+      - layer: local_contract
         suite: creation_media_mode_split
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.image_mode_hides_video_actions
-        envs: &id001
-        - local
+        envs: *id001
       supporting:
+      - layer: user_acceptance
+        suite: create_entry_sheet_widget
+        cases:
+        - user_acceptance.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.entry_sheet_only_album_camera_write_cancel
+        envs:
+        - gamma_local
       - layer: local_contract
         suite: photo_create_page_surface
         cases:
@@ -86,17 +133,21 @@ gwt_acceptance:
     notes:
     - 2026-06-22 已记录图片/视频 picker 动作互斥与发布 payload contentType 互斥合同。
     - 2026-06-25 补充图片 flow 顶栏标题“图片创作”、缩略条左对齐与悬停即时让位验收口径，三处列表继续共用同一拖拽真相源。
+    - 2026-06-28 移动端 `+` 面板收口为三动作；gallery 改为 mixed picker，capture 改为 switchable camera，并以真实返回媒体类型进入图片/视频编辑状态。
   GWT2:
-    title: 续草稿进入统一本地草稿页并保持保存/清除时机一致
+    title: 编辑器顶栏草稿入口与保存状态可靠反映本地草稿
     given:
     - 用户已通过创作入口产生至少一条图片、视频或长文草稿，且草稿仍保存在当前设备。
     - 本地草稿可能完整，也可能只剩标题、配文或部分媒体引用。
     when:
-    - 用户从底栏 `+` 动作面板点击“续草稿”，进入本地草稿页并选择任一草稿继续编辑。
+    - 用户从底栏 `+` 进入任一编辑器，未编辑时点击顶栏 `草稿`，进入本地草稿页并选择任一草稿继续编辑。
     - 用户在创作页内继续编辑、切到子页面、切后台、关闭创作页或发布内容。
     then:
-    - “续草稿”进入全屏本地草稿页，不再使用底部 sheet 草稿列表。
+    - 入口 sheet 不显示草稿行；编辑器顶栏初始空白态显示 `草稿` 并进入全屏本地草稿页。
+    - 发生编辑后，顶栏从 `草稿` 变为 `保存中...`、`已保存` 或 `保存失败，点按重试`；保存失败可点按重试。
+    - "`已保存` 只能在写入成功并 reload 校验 payload 与索引均可读后出现。"
     - 本地草稿页按最近更新时间倒序展示草稿卡片，卡片能区分图片、视频、长文；图片/视频缺素材时仍保留原类型并显示占位。
+    - 本地草稿页每次进入或 App 恢复时 reload 当前登录用户 scope；从底栏加号真实链路保存的草稿不得落到游客或其他用户 scope。
     - 只有当草稿发生编辑变化时才进入自动保存；dirty 状态下最多每 10 秒自动保存一次。
     - 切到相册、相机、图片编辑、视频编辑、位置、圈子、发布确认等子页面，或创作页失焦 / App 退后台时，会立即保存一次当前草稿。
     - 关闭创作页时弹出“是否保存草稿”确认：保存=写回最新状态，放弃=清除当前草稿，取消=继续编辑且不清稿。
@@ -104,7 +155,7 @@ gwt_acceptance:
     done_when:
     - 用户能从同一本地草稿入口恢复三类草稿，并且保存/清除时机与退出确认语义一致，不出现误清稿或旧状态覆盖新状态。
     edge_cases:
-    - 游客点击“续草稿”先进入登录门；关闭登录返回安全态，登录成功回到本地草稿页或目标草稿。
+    - 游客进入创作具体动作先进入登录门；关闭登录返回安全态，登录成功后继续进入目标编辑器。
     - 用户选择“放弃”后，后台自动保存或失焦保存不得把刚清掉的草稿写回。
     - 图片/视频文件缺失时，草稿页提供可理解的占位与删除/返回动作，不得直接崩溃或 silently 丢草稿。
     contract_refs:
@@ -120,9 +171,14 @@ gwt_acceptance:
       - file: quwoquan_app/test/local_contract/content/create/create_local_draft_repository__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/create_local_draft_page__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/create_draft_autosave_timing__local_contract_test.dart
+      - file: quwoquan_app/test/ui/content/entry/draft_recovery_widget_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/content/localDrafts/localDrafts_page__user_acceptance_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_repository__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/create_draft_autosave_timing__local_contract_test.dart
+      - file: quwoquan_app/test/ui/content/entry/draft_recovery_widget_test.dart
+    status: completed
     test_evidence:
       primary:
       - layer: local_contract
@@ -131,23 +187,25 @@ gwt_acceptance:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.local_draft_repository_preserves_flow_kind_and_order
         envs: *id001
       - layer: local_contract
+        suite: create_local_draft_page
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.local_draft_page_reloads_and_preserves_missing_media_type
+        envs: *id001
+      - layer: local_contract
         suite: create_draft_autosave_timing
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.dirty_state_saves_every_10s_and_flushes_on_blur
         envs: *id001
       supporting:
       - layer: user_acceptance
-        suite: local_drafts_page
+        suite: draft_recovery_widget
         cases:
-        - user_acceptance.page.localDrafts.load_success
-        - user_acceptance.page.localDrafts.empty_permission_error
-        - user_acceptance.page.localDrafts.primary_cta
-        - user_acceptance.page.localDrafts.trace_context
-        - user_acceptance.page.localDrafts.resume_delete_and_publish_clear
+        - user_acceptance.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.bottom_plus_write_saves_recovers_and_publish_clears_draft
         envs:
         - gamma_local
     notes:
     - 2026-06-22 待以本地草稿页 + 新仓储 + 时机矩阵实现收口。
+    - 2026-06-28 草稿入口从 sheet 移至编辑器顶栏；保存状态由同一 session controller 驱动，保存成功后 reload 校验再显示 `已保存`，本地草稿页进入/恢复时 reload。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
