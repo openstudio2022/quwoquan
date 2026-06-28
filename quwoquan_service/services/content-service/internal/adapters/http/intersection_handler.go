@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/services/content-service/internal/application"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 )
 
 // handleGetMyIntersectionSummary 我的主页「我的交集」聚合摘要。
@@ -49,7 +49,7 @@ func (h *ContentHandler) handleListMyIntersections(w http.ResponseWriter, r *htt
 			limit = parsed
 		}
 	}
-	items, nextCursor, hasMore, err := h.intersectionService.List(r.Context(), userID, application.IntersectionListQuery{
+	items, nextCursor, hasMore, err := h.intersectionService.List(r.Context(), userID, intersectionapp.IntersectionListQuery{
 		Dimension:  dimension,
 		Filter:     strings.TrimSpace(q.Get("filter")),
 		SourceRef:  strings.TrimSpace(q.Get("sourceRef")),

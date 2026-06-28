@@ -83,8 +83,12 @@ extension _CreatePageStateHelpers on _CreatePageState {
               isDefaultAction: true,
               onPressed: () async {
                 Navigator.of(dialogContext).pop();
-                await _saveDraft(flushReason: 'explicit');
-                _doClose();
+                try {
+                  await _saveDraft(flushReason: 'explicit');
+                  _doClose();
+                } catch (_) {
+                  // 保存失败时留在编辑器，顶栏会显示失败状态。
+                }
               },
               child: const Text(UITextConstants.saveDraft),
             ),
@@ -283,8 +287,112 @@ extension _CreatePageStateHelpers on _CreatePageState {
     }
   }
 
+  Future<void> _pickMixedMediaFromGallery({
+    bool closeWhenEmptyOnCancel = false,
+  }) async {
+    if (!await requireLogin(ref, context, AuthGateReason.mediaUpload)) {
+      return;
+    }
+    if (!mounted) return;
+    final result = await _openMediaPicker(
+      mode: MediaPickerEntryMode.mixed,
+      maxSelection: _CreatePageState._kMaxMediaImages,
+      initialPaths: const <String>[],
+    );
+    if (!mounted || result == null || result.items.isEmpty) {
+      if (closeWhenEmptyOnCancel &&
+          !ref.read(createEditorProvider).hasContent) {
+        _doClose();
+      }
+      return;
+    }
+    await _applyPickedMediaItems(result.items);
+  }
+
+  Future<void> _applyPickedMediaItems(List<CreateMediaItem> items) async {
+    if (items.isEmpty) {
+      return;
+    }
+    final state = ref.read(createEditorProvider);
+    switch (resolveCreateEntryMediaResolution(items)) {
+      case CreateEntryMediaResolution.empty:
+        return;
+      case CreateEntryMediaResolution.video:
+        final first = items.firstWhere((item) => item.isVideo);
+        if (state.imagePaths.isNotEmpty) {
+          AppToast.show(context, UITextConstants.createClearImagesBeforeVideo);
+          return;
+        }
+        await _applyVideoPathToMediaEditor(first.path, previousState: state);
+        if (mounted) {
+          await _editCurrentVideo();
+        }
+        return;
+      case CreateEntryMediaResolution.imageBatch:
+        if (state.hasVideo) {
+          AppToast.show(context, UITextConstants.createDeleteVideoBeforeImages);
+          return;
+        }
+        final paths = items
+            .where((item) => item.isImage)
+            .map((item) => item.path)
+            .take(_CreatePageState._kMaxMediaImages)
+            .toList(growable: false);
+        if (paths.isEmpty) {
+          return;
+        }
+        ref
+            .read(createEditorProvider.notifier)
+            .appendImages(
+              paths,
+              editorKind: CreateEditorKind.media,
+              maxImages: _CreatePageState._kMaxMediaImages,
+            );
+        await reportCreateEditorSurfaceEvent(
+          ref,
+          'create_media_images_selected',
+          createEditorSurfaceExtrasMediaBatch(
+            count: paths.length,
+            editorKind: CreateEditorKind.media,
+          ),
+        );
+    }
+  }
+
+  Future<void> _applyVideoPathToMediaEditor(
+    String path, {
+    required CreateEditorState previousState,
+  }) async {
+    await waitForLocalVideoPlayable(path);
+    final thumbnail = await _generateVideoThumbnail(path);
+    final metadata = await _loadVideoMetadata(path);
+    final preserved = _deriveVideoEditContext(
+      previousState: previousState,
+      nextDurationMs: metadata.durationMs,
+    );
+    ref
+        .read(createEditorProvider.notifier)
+        .setVideo(
+          path,
+          editorKind: CreateEditorKind.media,
+          thumbnail: thumbnail ?? '',
+          originalPath: path,
+          durationMs: metadata.durationMs,
+          trimStartMs: preserved.trimStartMs,
+          trimEndMs: preserved.trimEndMs,
+          coverTimeMs: preserved.coverTimeMs,
+          coverStrategy: preserved.coverTimeMs > 0 ? 'manual' : 'first_frame',
+          width: metadata.width,
+          height: metadata.height,
+          muted: preserved.muted,
+        );
+    await reportCreateEditorSurfaceEvent(ref, 'create_media_video_selected');
+  }
+
   Future<void> _openCameraForCurrentEditor({
     MediaPickerEntryMode? forcedMode,
+    CameraCaptureModePolicy modePolicy = CameraCaptureModePolicy.photoOnly,
+    bool closeWhenEmptyOnCancel = false,
   }) async {
     final state = ref.read(createEditorProvider);
     final initialMode =
@@ -314,11 +422,16 @@ extension _CreatePageStateHelpers on _CreatePageState {
         builder: (context) => _buildCameraPageForCurrentEditor(
           context,
           initialMode: initialMode,
+          modePolicy: modePolicy,
           selectedCountBeforeCapture: state.imagePaths.length,
         ),
       ),
     );
     if (!mounted || result == null) {
+      if (closeWhenEmptyOnCancel &&
+          !ref.read(createEditorProvider).hasContent) {
+        _doClose();
+      }
       return;
     }
     if (state.editorKind == CreateEditorKind.text) {
@@ -339,29 +452,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
         AppToast.show(context, UITextConstants.createClearImagesBeforeVideo);
         return;
       }
-      await waitForLocalVideoPlayable(result.path);
-      final thumbnail = await _generateVideoThumbnail(result.path);
-      final metadata = await _loadVideoMetadata(result.path);
-      final preserved = _deriveVideoEditContext(
-        previousState: state,
-        nextDurationMs: metadata.durationMs,
-      );
-      ref
-          .read(createEditorProvider.notifier)
-          .setVideo(
-            result.path,
-            editorKind: CreateEditorKind.media,
-            thumbnail: thumbnail ?? '',
-            originalPath: result.path,
-            durationMs: metadata.durationMs,
-            trimStartMs: preserved.trimStartMs,
-            trimEndMs: preserved.trimEndMs,
-            coverTimeMs: preserved.coverTimeMs,
-            coverStrategy: preserved.coverTimeMs > 0 ? 'manual' : 'first_frame',
-            width: metadata.width,
-            height: metadata.height,
-            muted: preserved.muted,
-          );
+      await _applyVideoPathToMediaEditor(result.path, previousState: state);
       if (mounted) {
         await _editCurrentVideo();
       }
@@ -666,6 +757,8 @@ extension _CreatePageStateHelpers on _CreatePageState {
               ),
             ),
           ),
+          _buildDraftToolbarAction(immersiveDark: true),
+          SizedBox(width: AppSpacing.intraGroupSm),
           CupertinoButton(
             key: TestKeys.createPublishButton,
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
@@ -732,6 +825,8 @@ extension _CreatePageStateHelpers on _CreatePageState {
               ),
             ),
           ),
+          _buildDraftToolbarAction(),
+          SizedBox(width: AppSpacing.intraGroupSm),
           CupertinoButton(
             key: TestKeys.createPublishButton,
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
@@ -753,6 +848,68 @@ extension _CreatePageStateHelpers on _CreatePageState {
         ],
       ),
     );
+  }
+
+  Widget _buildDraftToolbarAction({bool immersiveDark = false}) {
+    return ValueListenableBuilder<CreateDraftSaveStatus>(
+      valueListenable: _draftSessionController.saveStatusListenable,
+      builder: (context, status, _) {
+        final label = _draftToolbarLabel(status);
+        final isRetry = status == CreateDraftSaveStatus.failed;
+        final isDraftEntry = status == CreateDraftSaveStatus.idle;
+        final foreground = immersiveDark
+            ? AppColors.white.withValues(alpha: isRetry ? 0.96 : 0.74)
+            : CupertinoColors.secondaryLabel.resolveFrom(context);
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 132),
+          child: CupertinoButton(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerXs),
+            minimumSize: const Size(0, AppSpacing.buttonHeightSm),
+            onPressed: isRetry
+                ? () => unawaited(
+                    _draftSessionController.flushIfDirty(
+                      reason: 'toolbar_retry',
+                    ),
+                  )
+                : isDraftEntry
+                ? _openLocalDrafts
+                : null,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: foreground,
+                fontSize: AppTypography.iosCaption1,
+                fontWeight: isRetry
+                    ? AppTypography.semiBold
+                    : AppTypography.medium,
+                height: AppTypography.lineHeightTight,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _draftToolbarLabel(CreateDraftSaveStatus status) {
+    return switch (status) {
+      CreateDraftSaveStatus.idle => UITextConstants.createDraftToolbar,
+      CreateDraftSaveStatus.dirty => UITextConstants.createDraftSaving,
+      CreateDraftSaveStatus.saving => UITextConstants.createDraftSaving,
+      CreateDraftSaveStatus.saved => UITextConstants.createDraftSaved,
+      CreateDraftSaveStatus.failed => UITextConstants.createDraftSaveFailed,
+    };
+  }
+
+  void _openLocalDrafts() {
+    try {
+      context.push(AppRoutePaths.localDrafts);
+    } catch (_) {
+      // Widget tests may mount the page without a GoRouter.
+    }
   }
 
   Widget _buildMediaEditor(CreateEditorState state) {

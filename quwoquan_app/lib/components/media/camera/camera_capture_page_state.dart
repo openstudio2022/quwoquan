@@ -33,12 +33,39 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
 
   bool get _isVideoMode => _mode == MediaPickerEntryMode.video;
 
+  CameraCaptureModePolicy get _modePolicy {
+    final policy = widget.modePolicy;
+    if (policy != null) {
+      return policy;
+    }
+    if (!widget.allowVideoMode) {
+      return CameraCaptureModePolicy.photoOnly;
+    }
+    return widget.initialMode == MediaPickerEntryMode.video
+        ? CameraCaptureModePolicy.videoOnly
+        : CameraCaptureModePolicy.photoOnly;
+  }
+
+  bool get _canSwitchCaptureMode =>
+      _modePolicy == CameraCaptureModePolicy.switchable;
+
+  MediaPickerEntryMode _normalizedInitialMode() {
+    switch (_modePolicy) {
+      case CameraCaptureModePolicy.photoOnly:
+        return MediaPickerEntryMode.image;
+      case CameraCaptureModePolicy.videoOnly:
+        return MediaPickerEntryMode.video;
+      case CameraCaptureModePolicy.switchable:
+        return widget.initialMode == MediaPickerEntryMode.video
+            ? MediaPickerEntryMode.video
+            : MediaPickerEntryMode.image;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    _mode = widget.allowVideoMode
-        ? widget.initialMode
-        : MediaPickerEntryMode.image;
+    _mode = _normalizedInitialMode();
     _audioEnabled = _isVideoMode;
     _capturedPhotoPath =
         widget.initialCapturedPhotoPath?.trim().isNotEmpty == true

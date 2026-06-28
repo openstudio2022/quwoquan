@@ -13,8 +13,8 @@ affected_nodes:
   - quwoquan_app/lib/ui/content/entry/services/create_page_remote_helpers.dart
   - quwoquan_app/test/ui/content/entry/contract/publish_payload_contract_test.dart
   - quwoquan_app/test/ui/content/entry/publish_draft_projection_bridge_test.dart
-  - quwoquan_service/services/content-service/internal/application/post_service.go
-  - quwoquan_service/services/content-service/internal/application/create_semantic_projection_test.go
+  - quwoquan_service/services/content-service/internal/application/post/post_service.go
+  - quwoquan_service/services/content-service/internal/application/post/create_semantic_projection_test.go
 
 entries:
   - timestamp: "2026-06-21T18:00:00+08:00"

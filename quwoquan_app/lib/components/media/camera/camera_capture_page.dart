@@ -81,11 +81,14 @@ enum _MicrophoneDecision { audio, muted, abort }
 
 enum _MicrophoneChoice { openSettings, continueMuted }
 
+enum CameraCaptureModePolicy { photoOnly, videoOnly, switchable }
+
 class CameraCapturePage extends StatefulWidget {
   const CameraCapturePage({
     super.key,
     required this.initialMode,
     this.allowVideoMode = true,
+    this.modePolicy,
     this.initialCapturedPhotoPath,
     this.caller = CameraPhotoCaller.picker,
     this.entrySource = CameraPhotoEntrySource.photoPicker,
@@ -108,6 +111,7 @@ class CameraCapturePage extends StatefulWidget {
 
   final MediaPickerEntryMode initialMode;
   final bool allowVideoMode;
+  final CameraCaptureModePolicy? modePolicy;
   final String? initialCapturedPhotoPath;
   final CameraPhotoCaller caller;
   final CameraPhotoEntrySource entrySource;

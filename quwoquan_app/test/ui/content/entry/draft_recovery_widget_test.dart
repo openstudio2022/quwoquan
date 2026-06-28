@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
@@ -176,6 +177,7 @@ Widget _buildApp(_TrackingContentRepository repository) {
       currentUserIdProvider.overrideWithValue('user_001'),
       contentRepositoryProvider.overrideWithValue(repository),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
+      startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
     ],
     child: ScreenUtilInit(
@@ -190,6 +192,11 @@ Widget _buildApp(_TrackingContentRepository repository) {
       ),
     ),
   );
+}
+
+class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
+  @override
+  bool build() => true;
 }
 
 void main() {
@@ -226,9 +233,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(TestKeys.localDraftPage), findsOneWidget);
-    await tester.tap(
-      find.byKey(ValueKey<String>('local_draft_card_$draftId')),
-    );
+    await tester.tap(find.byKey(ValueKey<String>('local_draft_card_$draftId')));
     await tester.pumpAndSettle();
 
     expect(find.text('待会继续写的内容'), findsOneWidget);

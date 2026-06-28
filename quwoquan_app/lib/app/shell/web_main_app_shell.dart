@@ -12,7 +12,6 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_post_open_action.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:quwoquan_app/ui/plaza/pages/connection_hub_page.dart';
@@ -680,19 +679,18 @@ class _WebCreateWorkspace extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final contentActions = <_CreateCardSpec>[
       _CreateCardSpec(
-        id: 'video',
-        icon: CupertinoIcons.videocam,
-        title: UITextConstants.webPcCreateVideoTitle,
-        subtitle: UITextConstants.webPcCreateVideoSubtitle,
-        action: () =>
-            _openCreate(context, EditorStartAction.gallery, tab: 'video'),
-      ),
-      _CreateCardSpec(
-        id: 'gallery',
+        id: 'album',
         icon: CupertinoIcons.photo_on_rectangle,
         title: UITextConstants.webPcCreateGalleryTitle,
         subtitle: UITextConstants.webPcCreateGallerySubtitle,
         action: () => _openCreate(context, EditorStartAction.gallery),
+      ),
+      _CreateCardSpec(
+        id: 'camera',
+        icon: CupertinoIcons.camera,
+        title: UITextConstants.webPcCreateCameraTitle,
+        subtitle: UITextConstants.webPcCreateCameraSubtitle,
+        action: () => _openCreate(context, EditorStartAction.capture),
       ),
       _CreateCardSpec(
         id: 'write',
@@ -700,59 +698,6 @@ class _WebCreateWorkspace extends ConsumerWidget {
         title: UITextConstants.webPcCreateTextTitle,
         subtitle: UITextConstants.webPcCreateTextSubtitle,
         action: () => _openCreate(context, EditorStartAction.write),
-      ),
-      _CreateCardSpec(
-        id: 'drafts',
-        icon: CupertinoIcons.doc_text,
-        title: UITextConstants.webPcCreateDraftsTitle,
-        subtitle: UITextConstants.webPcCreateDraftsSubtitle,
-        action: () => runWhenLoggedIn(
-          ref,
-          context,
-          AuthGateReason.createPost,
-          () => presentCreateDraftPickerAndGo(context, GoRouter.of(context)),
-          redirect: AppRoutePaths.localDrafts,
-          dismissFallback: AppRoutePaths.home,
-          allowGuestDismissPop: false,
-        ),
-      ),
-    ];
-    final socialActions = <_CreateCardSpec>[
-      _CreateCardSpec(
-        id: 'group-chat',
-        icon: CupertinoIcons.chat_bubble_2,
-        title: UITextConstants.webPcCreateGroupChatTitle,
-        subtitle: UITextConstants.webPcCreateGroupChatSubtitle,
-        action: () => runWhenLoggedIn(
-          ref,
-          context,
-          AuthGateReason.startGroupChat,
-          () => GlobalQuickActionSheet.openStartGroupChat(context),
-        ),
-      ),
-      _CreateCardSpec(
-        id: 'add-contact',
-        icon: CupertinoIcons.person_add,
-        title: UITextConstants.webPcCreateAddContactTitle,
-        subtitle: UITextConstants.webPcCreateAddContactSubtitle,
-        action: () => runWhenLoggedIn(
-          ref,
-          context,
-          AuthGateReason.addContact,
-          () => GlobalQuickActionSheet.openAddContact(context),
-        ),
-      ),
-      _CreateCardSpec(
-        id: 'create-circle',
-        icon: CupertinoIcons.circle_grid_hex,
-        title: UITextConstants.webPcCreateCircleTitle,
-        subtitle: UITextConstants.webPcCreateCircleSubtitle,
-        action: () => runWhenLoggedIn(
-          ref,
-          context,
-          AuthGateReason.createCircle,
-          () => GlobalQuickActionSheet.openCreateCircle(context),
-        ),
       ),
     ];
     return _WebDesktopFrame(
@@ -780,13 +725,6 @@ class _WebCreateWorkspace extends ConsumerWidget {
             groupKey: const ValueKey<String>('web-create-group-content'),
             title: UITextConstants.webPcCreateContentGroupTitle,
             cards: contentActions,
-            activeTabId: activeTabId,
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          _WebCreateGroup(
-            groupKey: const ValueKey<String>('web-create-group-social'),
-            title: UITextConstants.webPcCreateSocialGroupTitle,
-            cards: socialActions,
             activeTabId: activeTabId,
           ),
         ],

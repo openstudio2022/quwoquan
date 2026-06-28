@@ -34,9 +34,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   @override
   void initState() {
     super.initState();
-    final initialSelection = widget.entryMode == MediaPickerEntryMode.image
-        ? const <CreateMediaItem>[]
-        : widget.initialSelection;
+    final initialSelection = widget.entryMode == MediaPickerEntryMode.video
+        ? widget.initialSelection
+        : const <CreateMediaItem>[];
     _selectedItems.addAll(initialSelection);
     for (final item in initialSelection) {
       _selectedById[item.id] = item;
@@ -92,7 +92,8 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     }
     final entries = <_AlbumSortEntry>[];
     for (final album in source) {
-      if (_isVideoOnlyAlbum(album)) {
+      if (widget.entryMode == MediaPickerEntryMode.image &&
+          _isVideoOnlyAlbum(album)) {
         continue;
       }
       final count = await widget.mediaPickerService.loadAlbumAssetCount(album);
@@ -141,6 +142,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     // 系统聚合相册（isAll，iOS 的 Recents / Android 的 All）统一显示为「全部照片」，
     // 避免出现「最近项目 / Recents」等不一致命名。
     if (album.isAll) {
+      if (widget.entryMode == MediaPickerEntryMode.mixed) {
+        return UITextConstants.mediaPickerMixedTitle;
+      }
       return UITextConstants.mediaPickerAlbumAllPhotos;
     }
     final name = album.name.trim();
@@ -160,9 +164,11 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   }
 
   RequestType _requestTypeByEntryMode() {
-    return widget.entryMode == MediaPickerEntryMode.video
-        ? RequestType.video
-        : RequestType.image;
+    return switch (widget.entryMode) {
+      MediaPickerEntryMode.image => RequestType.image,
+      MediaPickerEntryMode.video => RequestType.video,
+      MediaPickerEntryMode.mixed => RequestType.common,
+    };
   }
 
   void _onScroll() {
@@ -206,23 +212,26 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   }
 
   bool _matchesEntryMode(AssetEntity entity) {
-    if (widget.entryMode == MediaPickerEntryMode.video) {
-      return entity.type == AssetType.video;
-    }
-    return entity.type == AssetType.image;
+    return switch (widget.entryMode) {
+      MediaPickerEntryMode.image => entity.type == AssetType.image,
+      MediaPickerEntryMode.video => entity.type == AssetType.video,
+      MediaPickerEntryMode.mixed =>
+        entity.type == AssetType.image || entity.type == AssetType.video,
+    };
   }
 
   Future<void> _toggleAsset(AssetEntity entity) async {
     final key = entity.id;
     if (_selectedById.containsKey(key)) {
       final selectedIndex = _selectedItems.indexWhere((item) => item.id == key);
-      if (widget.entryMode == MediaPickerEntryMode.image &&
-          selectedIndex >= 0) {
+      if (widget.entryMode != MediaPickerEntryMode.video &&
+          selectedIndex >= 0 &&
+          _selectedItems[selectedIndex].isImage) {
         await _editSelectedImageAt(selectedIndex);
       }
       return;
     }
-    if (_selectedItems.length >= widget.maxSelection) {
+    if (_selectionReachedLimit()) {
       if (!mounted) return;
       AppToast.show(context, UITextConstants.mediaPickerOverLimit);
       return;
@@ -234,6 +243,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       AppToast.show(context, UITextConstants.mediaPickerImageOnly);
       return;
     }
+    if (!_canAcceptSelection(item)) {
+      return;
+    }
     setState(() {
       _selectedItems.add(item);
       _selectedById[key] = item;
@@ -241,7 +253,12 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   }
 
   Future<void> _openCamera() async {
-    if (_selectedItems.length >= widget.maxSelection) {
+    if (widget.entryMode == MediaPickerEntryMode.mixed &&
+        _selectedTypeLock == CreateMediaType.video) {
+      AppToast.show(context, UITextConstants.mediaPickerMixedVideoLocked);
+      return;
+    }
+    if (_selectionReachedLimit()) {
       AppToast.show(context, UITextConstants.mediaPickerOverLimit);
       return;
     }
@@ -254,7 +271,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       ),
     );
     if (!mounted || result == null) return;
-    if (_selectedItems.length >= widget.maxSelection) {
+    if (_selectionReachedLimit()) {
       AppToast.show(context, UITextConstants.mediaPickerOverLimit);
       return;
     }
@@ -263,6 +280,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       source: CreateMediaSource.camera,
       type: result.type,
     );
+    if (!_canAcceptSelection(item)) {
+      return;
+    }
     setState(() {
       _selectedItems.add(item);
       _selectedById[item.id] = item;
@@ -277,12 +297,62 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       return builder(context, caller, entrySource, _selectedItems.length);
     }
     return CameraCapturePage(
-      initialMode: widget.entryMode,
-      allowVideoMode: widget.entryMode == MediaPickerEntryMode.video,
+      initialMode: widget.entryMode == MediaPickerEntryMode.video
+          ? MediaPickerEntryMode.video
+          : MediaPickerEntryMode.image,
+      modePolicy: switch (widget.entryMode) {
+        MediaPickerEntryMode.image => CameraCaptureModePolicy.photoOnly,
+        MediaPickerEntryMode.video => CameraCaptureModePolicy.videoOnly,
+        MediaPickerEntryMode.mixed => CameraCaptureModePolicy.switchable,
+      },
       caller: caller,
       entrySource: entrySource,
       selectedCountBeforeCapture: _selectedItems.length,
     );
+  }
+
+  bool _selectionReachedLimit() {
+    if (widget.entryMode == MediaPickerEntryMode.mixed &&
+        _selectedTypeLock == CreateMediaType.video) {
+      return false;
+    }
+    return _selectedItems.length >= widget.maxSelection;
+  }
+
+  CreateMediaType? get _selectedTypeLock {
+    if (_selectedItems.isEmpty) {
+      return null;
+    }
+    return _selectedItems.first.isVideo
+        ? CreateMediaType.video
+        : CreateMediaType.image;
+  }
+
+  bool _canAcceptSelection(CreateMediaItem item) {
+    final reason = mediaPickerSelectionBlockReason(
+      mode: widget.entryMode,
+      selectedItems: _selectedItems,
+      candidate: item,
+      maxSelection: widget.maxSelection,
+    );
+    switch (reason) {
+      case MediaPickerSelectionBlockReason.none:
+        return true;
+      case MediaPickerSelectionBlockReason.overLimit:
+        AppToast.show(context, UITextConstants.mediaPickerOverLimit);
+        return false;
+      case MediaPickerSelectionBlockReason.imageOnly:
+        AppToast.show(context, UITextConstants.mediaPickerImageOnly);
+        return false;
+      case MediaPickerSelectionBlockReason.videoOnly:
+        return false;
+      case MediaPickerSelectionBlockReason.imageLocked:
+        AppToast.show(context, UITextConstants.mediaPickerMixedImageLocked);
+        return false;
+      case MediaPickerSelectionBlockReason.videoLocked:
+        AppToast.show(context, UITextConstants.mediaPickerMixedVideoLocked);
+        return false;
+    }
   }
 
   Future<void> _selectAlbum() async {
@@ -777,8 +847,8 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
               ),
               SizedBox(height: AppSpacing.intraGroupSm),
               Text(
-                widget.entryMode == MediaPickerEntryMode.video
-                    ? UITextConstants.mediaPickerVideoCameraEntry
+                widget.entryMode == MediaPickerEntryMode.mixed
+                    ? UITextConstants.mediaPickerMixedCameraEntry
                     : UITextConstants.mediaPickerCameraEntry,
                 style: TextStyle(
                   color: AppColorsFunctional.getColor(

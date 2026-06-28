@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"quwoquan_service/runtime/search/es"
-	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/application/searchprojection"
 )
 
 // defaultBackfillBatchSize bounds how many place docs go into one _bulk round trip.
@@ -49,10 +49,10 @@ func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, store
 
 	// Aggregate posts → canonical place snapshots (preserving first-seen order
 	// so the rebuild is deterministic).
-	agg := map[string]*application.PlaceSnapshot{}
+	agg := map[string]*searchprojection.PlaceSnapshot{}
 	order := make([]string, 0)
 	for i := range posts {
-		ref, ok := application.DerivePlaceRef(posts[i])
+		ref, ok := searchprojection.DerivePlaceRef(posts[i])
 		if !ok {
 			report.SkippedPosts++
 			continue
@@ -60,7 +60,7 @@ func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, store
 		report.ReferencedPosts++
 		snap := agg[ref.PlaceID]
 		if snap == nil {
-			snap = &application.PlaceSnapshot{PlaceID: ref.PlaceID, Name: ref.Name, Geo: ref.Geo}
+			snap = &searchprojection.PlaceSnapshot{PlaceID: ref.PlaceID, Name: ref.Name, Geo: ref.Geo}
 			agg[ref.PlaceID] = snap
 			order = append(order, ref.PlaceID)
 		}
@@ -88,7 +88,7 @@ func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, store
 		if err := store.Upsert(ctx, snap); err != nil {
 			return report, err
 		}
-		batch = append(batch, es.ChangeEvent{Op: es.OpUpsert, Doc: application.ProjectPlaceToSearchDocument(snap)})
+		batch = append(batch, es.ChangeEvent{Op: es.OpUpsert, Doc: searchprojection.ProjectPlaceToSearchDocument(snap)})
 		report.IndexedPlaces++
 		if len(batch) >= batchSize {
 			if err := flush(); err != nil {

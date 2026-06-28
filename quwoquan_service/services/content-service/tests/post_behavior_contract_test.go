@@ -18,6 +18,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"quwoquan_service/services/content-service/internal/application/authorimpact"
+	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
+	"quwoquan_service/services/content-service/internal/application/ports"
 	"strings"
 	"testing"
 	"time"
@@ -27,7 +30,6 @@ import (
 	rtimpact "quwoquan_service/runtime/impact"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/content-service/internal/application"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
@@ -174,7 +176,7 @@ func TestBehaviorEventInputDecodesAttributionFields(t *testing.T) {
 		`"recallPath":"collab_i2i","contentVertical":"travel_photography","supplySource":"data_engineering",` +
 		`"intersectionSourceRef":"shared_city","intersectionClass":"fact","intersectionEvidenceId":"ev_attr_1",` +
 		`"commentLength":42}`
-	var in application.BehaviorEventInput
+	var in behaviorapp.BehaviorEventInput
 	if err := json.Unmarshal([]byte(raw), &in); err != nil {
 		t.Fatalf("decode behavior event input: %v", err)
 	}
@@ -224,12 +226,12 @@ func TestBehaviorEventInputDecodesAttributionFields(t *testing.T) {
 
 func TestBehaviorBatchDeduplicatesClientEventID(t *testing.T) {
 	ctx := context.Background()
-	behaviorService := application.NewBehaviorService(
+	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
 	)
 
-	err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
+	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
 		{
 			ClientEventID: "evt-dedup-001",
 			UserID:        "user_dedup_001",
@@ -296,15 +298,15 @@ func TestBehaviorBatchAssistantInterestProjectsTagInteraction(t *testing.T) {
 	if _, err := featureColl.DeleteMany(ctx, bson.M{"userId": "user_assistant_interest_projector_001"}); err != nil {
 		t.Fatalf("clean recommend feature: %v", err)
 	}
-	behaviorService := application.NewBehaviorService(
+	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		application.WithBehaviorProjector(&recommendOnlyProjectorAdapter{
+		behaviorapp.WithBehaviorProjector(&recommendOnlyProjectorAdapter{
 			p: recinfra.NewRecommendFeatureProjector(mongoDB),
 		}),
 	)
 
-	err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
+	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
 		{
 			UserID:    "user_assistant_interest_projector_001",
 			SessionID: "sess_assistant_interest_projector_001",
@@ -340,15 +342,15 @@ func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.
 	if _, err := featureColl.DeleteMany(ctx, bson.M{"userId": userID}); err != nil {
 		t.Fatalf("clean recommend feature: %v", err)
 	}
-	behaviorService := application.NewBehaviorService(
+	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		application.WithBehaviorProjector(&recommendOnlyProjectorAdapter{
+		behaviorapp.WithBehaviorProjector(&recommendOnlyProjectorAdapter{
 			p: recinfra.NewRecommendFeatureProjector(mongoDB),
 		}),
 	)
 
-	err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
+	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
 		{UserID: userID, ContentID: "post_ss_visible", Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
 		{UserID: userID, ContentID: "post_ss_impressed", Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
 		{UserID: userID, ContentID: "post_ss_click", Action: "click", State: "click", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
@@ -383,14 +385,14 @@ func TestBehaviorBatchIntersectionConversionsUpdateMetricsAndAuthorImpact(t *tes
 	if _, err := mongoDB.Collection("rm_author_impact").DeleteMany(ctx, bson.M{"authorId": authorID}); err != nil {
 		t.Fatalf("clean author impact: %v", err)
 	}
-	behaviorService := application.NewBehaviorService(
+	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		application.WithDailyMetricsStore(persistence.NewDailyMetricsStore(mongoDB, nilLogger())),
-		application.WithAuthorImpactStore(persistence.NewAuthorImpactStore(mongoDB, nilLogger())),
+		behaviorapp.WithDailyMetricsStore(persistence.NewDailyMetricsStore(mongoDB, nilLogger())),
+		behaviorapp.WithAuthorImpactStore(persistence.NewAuthorImpactStore(mongoDB, nilLogger())),
 	)
 
-	err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
+	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
 		{
 			UserID:                "viewer_intersection_001",
 			ContentID:             "post_follow_001",
@@ -514,15 +516,15 @@ func TestAuthorImpactTravelCountTargetFromBehaviorAggregation(t *testing.T) {
 	if _, err := mongoDB.Collection("rm_author_impact").DeleteMany(ctx, bson.M{"authorId": authorID}); err != nil {
 		t.Fatalf("clean author impact: %v", err)
 	}
-	behaviorService := application.NewBehaviorService(
+	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		application.WithAuthorImpactStore(persistence.NewAuthorImpactStore(mongoDB, nilLogger())),
+		behaviorapp.WithAuthorImpactStore(persistence.NewAuthorImpactStore(mongoDB, nilLogger())),
 	)
 
 	// viewer 在作者旅行攻略上的真实 decision 行为（entity_page_view → decision），
 	// 携带旅行 tagRef；两条同 route tag 聚合为 count=2。
-	if err := behaviorService.ProcessBatch(ctx, []application.BehaviorEventInput{
+	if err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
 		{
 			UserID:                "viewer_travel_impact_001",
 			ContentID:             "post_travel_route_001",
@@ -557,7 +559,7 @@ func TestAuthorImpactTravelCountTargetFromBehaviorAggregation(t *testing.T) {
 		t.Fatalf("get author impact summary: %v", err)
 	}
 	// 云侧装饰（与 handler 同路径）后派生旅行下钻目标。
-	decorated := application.DecorateAuthorImpact(summary, false)
+	decorated := authorimpact.DecorateAuthorImpact(summary, false)
 
 	byTag := map[string]persistence.AuthorImpactItem{}
 	for _, item := range decorated.Items {
@@ -593,7 +595,7 @@ func nilLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-func (a *recommendOnlyProjectorAdapter) Project(ctx context.Context, event application.ProjectorEvent) error {
+func (a *recommendOnlyProjectorAdapter) Project(ctx context.Context, event ports.ProjectorEvent) error {
 	return a.p.Project(ctx, recinfra.ProjectorEvent{
 		Type:          event.Type,
 		AggregateType: event.AggregateType,

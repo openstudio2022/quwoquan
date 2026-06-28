@@ -6,11 +6,11 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
     final albumName = selectedAlbum == null
         ? UITextConstants.mediaPickerAlbumAll
         : _albumDisplayName(selectedAlbum);
-    final title = widget.entryMode == MediaPickerEntryMode.video
-        ? UITextConstants.mediaPickerVideoTitle
-        : isPhotoCreationEntryMode(widget.entryMode)
-        ? UITextConstants.mediaPickerPhotoTitle
-        : albumName;
+    final title = switch (widget.entryMode) {
+      MediaPickerEntryMode.image => UITextConstants.mediaPickerPhotoTitle,
+      MediaPickerEntryMode.video => UITextConstants.mediaPickerVideoTitle,
+      MediaPickerEntryMode.mixed => albumName,
+    };
     return SizedBox(
       key: _topBarKey,
       height: AppSpacing.toolbarHeight,
@@ -158,7 +158,9 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
               ),
               SizedBox(height: AppSpacing.interGroupSm),
               Text(
-                UITextConstants.mediaPickerAlbumEmpty,
+                widget.entryMode == MediaPickerEntryMode.mixed
+                    ? UITextConstants.mediaPickerMixedAlbumEmpty
+                    : UITextConstants.mediaPickerAlbumEmpty,
                 style: TextStyle(
                   color: primary,
                   fontSize: AppTypography.lg,
@@ -167,7 +169,9 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
               ),
               SizedBox(height: AppSpacing.intraGroupXs),
               Text(
-                UITextConstants.mediaPickerCameraEntry,
+                widget.entryMode == MediaPickerEntryMode.mixed
+                    ? UITextConstants.mediaPickerMixedCameraEntry
+                    : UITextConstants.mediaPickerCameraEntry,
                 style: TextStyle(color: secondary, fontSize: AppTypography.sm),
               ),
             ],

@@ -13,7 +13,8 @@ import (
 
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
-	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/application/ports"
+	"quwoquan_service/services/content-service/internal/application/searchprojection"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 )
 
@@ -107,7 +108,7 @@ func newProjector(t *testing.T, f *fakeES, reader PostReader, store PlaceStore) 
 
 func docID(name string, post postmodel.Post) string {
 	geo := &rtsearch.GeoPoint{Lat: post.Location.Latitude, Lng: post.Location.Longitude}
-	return rtsearch.ObjectTypeLocation + ":" + application.CanonicalPlaceID(name, geo)
+	return rtsearch.ObjectTypeLocation + ":" + searchprojection.CanonicalPlaceID(name, geo)
 }
 
 func TestPlaceProjectorUpsertsOnPublish(t *testing.T) {
@@ -116,7 +117,7 @@ func TestPlaceProjectorUpsertsOnPublish(t *testing.T) {
 	store := NewInMemoryPlaceStore()
 	proj := newProjector(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}}, store)
 
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: "PostPublished", AggregateID: post.ID}); err != nil {
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: post.ID}); err != nil {
 		t.Fatalf("Project err=%v", err)
 	}
 	id := docID("宽窄巷子", post)
@@ -141,7 +142,7 @@ func TestPlaceProjectorDedupAcrossPosts(t *testing.T) {
 	proj := newProjector(t, f, reader, store)
 
 	for _, id := range []string{p1.ID, p2.ID} {
-		if err := proj.Project(context.Background(), application.ProjectorEvent{Type: "PostPublished", AggregateID: id}); err != nil {
+		if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: id}); err != nil {
 			t.Fatalf("Project(%s) err=%v", id, err)
 		}
 	}
@@ -162,7 +163,7 @@ func TestPlaceProjectorSingleSourceOnEntityBinding(t *testing.T) {
 	reader := fakeReader{byID: map[string]postmodel.Post{post.ID: post}}
 	proj := newProjector(t, f, reader, store)
 
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: "PostPublished", AggregateID: post.ID}); err != nil {
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: post.ID}); err != nil {
 		t.Fatalf("Project err=%v", err)
 	}
 	id := docID("茶马古道", post)
@@ -175,7 +176,7 @@ func TestPlaceProjectorSingleSourceOnEntityBinding(t *testing.T) {
 	bound := post
 	bound.CanonicalEntityId = "entity_777"
 	reader.byID[post.ID] = bound
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: "PostUpdated", AggregateID: post.ID}); err != nil {
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostUpdated", AggregateID: post.ID}); err != nil {
 		t.Fatalf("Project(update) err=%v", err)
 	}
 	if len(f.deletes) != 1 || f.deletes[0] != id {
@@ -193,10 +194,10 @@ func TestPlaceProjectorDeleteOnPostDeleted(t *testing.T) {
 	reader := fakeReader{byID: map[string]postmodel.Post{post.ID: post}}
 	proj := newProjector(t, f, reader, store)
 
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: "PostPublished", AggregateID: post.ID}); err != nil {
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: post.ID}); err != nil {
 		t.Fatalf("Project err=%v", err)
 	}
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: "PostDeleted", AggregateID: post.ID}); err != nil {
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostDeleted", AggregateID: post.ID}); err != nil {
 		t.Fatalf("Project(delete) err=%v", err)
 	}
 	id := docID("玉龙雪山", post)
@@ -212,7 +213,7 @@ func TestPlaceProjectorIneligibleNotIndexed(t *testing.T) {
 	store := NewInMemoryPlaceStore()
 	proj := newProjector(t, f, fakeReader{byID: map[string]postmodel.Post{post.ID: post}}, store)
 
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: "PostSettingsUpdated", AggregateID: post.ID}); err != nil {
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostSettingsUpdated", AggregateID: post.ID}); err != nil {
 		t.Fatalf("Project err=%v", err)
 	}
 	if len(f.upserts) != 0 {
@@ -222,11 +223,11 @@ func TestPlaceProjectorIneligibleNotIndexed(t *testing.T) {
 
 func TestPlaceProjectorNilIsNoOp(t *testing.T) {
 	var proj *PlaceProjector
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
 		t.Fatalf("nil projector must be a no-op, got %v", err)
 	}
 	proj = NewProjector(nil, fakeReader{}, NewInMemoryPlaceStore())
-	if err := proj.Project(context.Background(), application.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
+	if err := proj.Project(context.Background(), ports.ProjectorEvent{Type: "PostPublished", AggregateID: "x"}); err != nil {
 		t.Fatalf("nil indexer must be a no-op, got %v", err)
 	}
 }

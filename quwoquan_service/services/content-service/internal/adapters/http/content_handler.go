@@ -14,29 +14,36 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rthealth "quwoquan_service/runtime/health"
 	rtrec "quwoquan_service/runtime/recommendation"
-	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/application/authorimpact"
+	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
+	feedapp "quwoquan_service/services/content-service/internal/application/feed"
+	"quwoquan_service/services/content-service/internal/application/identity"
+	importerapp "quwoquan_service/services/content-service/internal/application/importer"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
+	"quwoquan_service/services/content-service/internal/application/ports"
+	postapp "quwoquan_service/services/content-service/internal/application/post"
+	reportapp "quwoquan_service/services/content-service/internal/application/report"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
-	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
 type ContentHandler struct {
-	feedService               *application.FeedService
-	postService               *application.PostService
-	reportService             *application.ReportService
-	behaviorService           *application.BehaviorService
-	importService             *application.BulkImportService
-	intersectionService       *application.IntersectionService
-	authorImpactStore         *persistence.AuthorImpactStore
-	authorImpactEvidenceStore *persistence.AuthorImpactEvidenceStore
+	feedService               *feedapp.FeedService
+	postService               *postapp.PostService
+	reportService             *reportapp.ReportService
+	behaviorService           *behaviorapp.BehaviorService
+	importService             *importerapp.BulkImportService
+	intersectionService       *intersectionapp.IntersectionService
+	authorImpactStore         ports.AuthorImpactStore
+	authorImpactEvidenceStore ports.AuthorImpactEvidenceStore
 	healthChecker             *rthealth.Checker
 }
 
 func NewContentHandler(
-	feedService *application.FeedService,
-	postService *application.PostService,
-	reportService *application.ReportService,
-	behaviorService *application.BehaviorService,
+	feedService *feedapp.FeedService,
+	postService *postapp.PostService,
+	reportService *reportapp.ReportService,
+	behaviorService *behaviorapp.BehaviorService,
 	opts ...ContentHandlerOption,
 ) *ContentHandler {
 	h := &ContentHandler{
@@ -54,7 +61,7 @@ func NewContentHandler(
 // ContentHandlerOption configures the ContentHandler.
 type ContentHandlerOption func(*ContentHandler)
 
-func WithBulkImportService(svc *application.BulkImportService) ContentHandlerOption {
+func WithBulkImportService(svc *importerapp.BulkImportService) ContentHandlerOption {
 	return func(h *ContentHandler) { h.importService = svc }
 }
 
@@ -63,15 +70,15 @@ func WithHealthChecker(c *rthealth.Checker) ContentHandlerOption {
 }
 
 // WithIntersectionService 注入交集统一体验服务（事实/概率合并、冷却窗口、已读水位）。
-func WithIntersectionService(svc *application.IntersectionService) ContentHandlerOption {
+func WithIntersectionService(svc *intersectionapp.IntersectionService) ContentHandlerOption {
 	return func(h *ContentHandler) { h.intersectionService = svc }
 }
 
-func WithAuthorImpactStore(store *persistence.AuthorImpactStore) ContentHandlerOption {
+func WithAuthorImpactStore(store ports.AuthorImpactStore) ContentHandlerOption {
 	return func(h *ContentHandler) { h.authorImpactStore = store }
 }
 
-func WithAuthorImpactEvidenceStore(store *persistence.AuthorImpactEvidenceStore) ContentHandlerOption {
+func WithAuthorImpactEvidenceStore(store ports.AuthorImpactEvidenceStore) ContentHandlerOption {
 	return func(h *ContentHandler) { h.authorImpactEvidenceStore = store }
 }
 
@@ -196,7 +203,7 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params := BindGeneratedGetFeedParams(r, 20)
-	resp, err := h.feedService.ListFeed(r.Context(), application.ListFeedRequest{
+	resp, err := h.feedService.ListFeed(r.Context(), feedapp.ListFeedRequest{
 		UserID:          resolveUserID(r),
 		SessionID:       resolveSessionID(r),
 		Identity:        params.Identity,
@@ -226,7 +233,7 @@ func (h *ContentHandler) handleSearchPosts(w http.ResponseWriter, r *http.Reques
 	if err != nil || limit <= 0 {
 		limit = 20
 	}
-	items, nextCursor, err := h.postService.SearchPosts(r.Context(), application.SearchPostsRequest{
+	items, nextCursor, err := h.postService.SearchPosts(r.Context(), postapp.SearchPostsRequest{
 		Query:         q.Get("query"),
 		Identity:      q.Get("identity"),
 		RequestedType: q.Get("type"),
@@ -278,7 +285,7 @@ func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Re
 		return
 	}
 	viewerID := strings.TrimSpace(resolveUserID(r))
-	summary = application.DecorateAuthorImpact(summary, viewerID != "" && viewerID == authorID)
+	summary = authorimpact.DecorateAuthorImpact(summary, viewerID != "" && viewerID == authorID)
 	writeJSON(w, http.StatusOK, summary)
 }
 
@@ -321,7 +328,7 @@ func (h *ContentHandler) handleListAuthorImpactEvidence(w http.ResponseWriter, r
 	viewerID := strings.TrimSpace(resolveUserID(r))
 	viewerIsAuthor := viewerID != "" && viewerID == authorID
 	if h.authorImpactEvidenceStore == nil {
-		writeJSON(w, http.StatusOK, application.BuildAuthorImpactEvidencePage(nil, nil, nil, impactID, snapshotID, "", 0, false, viewerIsAuthor))
+		writeJSON(w, http.StatusOK, authorimpact.BuildAuthorImpactEvidencePage(nil, nil, nil, impactID, snapshotID, "", 0, false, viewerIsAuthor))
 		return
 	}
 	raws, nextCursor, hasMore, total, err := h.authorImpactEvidenceStore.ListPageWithTotal(r.Context(), authorID, impactID, cursor, limit)
@@ -344,7 +351,7 @@ func (h *ContentHandler) handleListAuthorImpactEvidence(w http.ResponseWriter, r
 			}
 		}
 	}
-	page := application.BuildAuthorImpactEvidencePage(
+	page := authorimpact.BuildAuthorImpactEvidencePage(
 		raws, posts, nil,
 		impactID, snapshotID, nextCursor, total, hasMore, viewerIsAuthor,
 	)
@@ -498,7 +505,7 @@ func (h *ContentHandler) handleCreateReport(w http.ResponseWriter, r *http.Reque
 	}
 	reporterID := resolveUserID(r)
 	if strings.TrimSpace(reporterID) == "" {
-		reporterID = application.AnonymousFallbackSubAccountID
+		reporterID = identity.AnonymousFallbackSubAccountID
 	}
 	report, err := h.reportService.CreateReport(r.Context(), reporterID, body)
 	if err != nil {
@@ -766,7 +773,7 @@ func (h *ContentHandler) handleRequestOriginalImageAccess(w http.ResponseWriter,
 	if purpose == "" {
 		purpose = "view"
 	}
-	resp, err := h.postService.RequestOriginalImageAccess(r.Context(), application.RequestOriginalImageAccessInput{
+	resp, err := h.postService.RequestOriginalImageAccess(r.Context(), postapp.RequestOriginalImageAccessInput{
 		MediaID:   mediaID,
 		Purpose:   purpose,
 		ViewerID:  resolveUserID(r),
@@ -855,7 +862,7 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 		UserID        string                           `json:"userId"`
 		SessionID     string                           `json:"sessionId"`
 		FeedSessionID string                           `json:"feedSessionId"`
-		Events        []application.BehaviorEventInput `json:"events"`
+		Events        []behaviorapp.BehaviorEventInput `json:"events"`
 	}
 	if err := json.Unmarshal(raw, &batch); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
@@ -1057,12 +1064,12 @@ func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	// 受信代理头解析客户端 IP，注入 context 供评论属地解析（创建时落库快照）。
-	clientIP := application.ParseTrustedClientIP(
+	clientIP := postapp.ParseTrustedClientIP(
 		r.Header.Get("X-Forwarded-For"),
 		r.Header.Get("X-Real-IP"),
 		r.RemoteAddr,
 	)
-	ctx := application.WithClientIP(r.Context(), clientIP)
+	ctx := postapp.WithClientIP(r.Context(), clientIP)
 	comment, commentCount, err := h.postService.AddComment(
 		ctx,
 		postID,

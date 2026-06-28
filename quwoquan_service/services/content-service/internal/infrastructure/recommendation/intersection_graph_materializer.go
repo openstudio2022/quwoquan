@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	app "quwoquan_service/services/content-service/internal/application"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 )
 
 // 架构基线 v2 §21 —— 交集 Graph / Lifecycle / Propagation 物化器（异步真算，读路径零计算消费）。
@@ -34,9 +34,9 @@ const (
 
 // materializeFactReasons 物化事实交集：先填 Graph 边权（纯函数），再叠加 Lifecycle 状态机
 // （依赖上一次快照 prev 做增量比对）。返回值即写入 rm_viewer_object_intersection 的快照理由。
-func materializeFactReasons(prev, fresh []app.IntersectionReasonView, now time.Time) []app.IntersectionReasonView {
+func materializeFactReasons(prev, fresh []intersectionapp.IntersectionReasonView, now time.Time) []intersectionapp.IntersectionReasonView {
 	fresh = applyGraphWeights(fresh, now)
-	prevByKey := make(map[string]app.IntersectionReasonView, len(prev))
+	prevByKey := make(map[string]intersectionapp.IntersectionReasonView, len(prev))
 	for _, p := range prev {
 		prevByKey[reasonIdentityKey(p)] = p
 	}
@@ -49,7 +49,7 @@ func materializeFactReasons(prev, fresh []app.IntersectionReasonView, now time.T
 
 // applyGraphWeights 为每条理由填充 Graph 边权（纯函数，无既往依赖；affinity 通道复用此真算
 // 替换原裸 count 启发式，得到与事实交集同尺度的可排序边权）。
-func applyGraphWeights(reasons []app.IntersectionReasonView, now time.Time) []app.IntersectionReasonView {
+func applyGraphWeights(reasons []intersectionapp.IntersectionReasonView, now time.Time) []intersectionapp.IntersectionReasonView {
 	for i := range reasons {
 		reasons[i].EdgeWeight = round4(computeEdgeWeight(reasons[i], now))
 	}
@@ -57,7 +57,7 @@ func applyGraphWeights(reasons []app.IntersectionReasonView, now time.Time) []ap
 }
 
 // applyLifecycle 依据上一次物化的边权基线，给单条理由落生命周期弱标 + previousStrength / strengthDelta。
-func applyLifecycle(r *app.IntersectionReasonView, prev app.IntersectionReasonView, hadPrev bool) {
+func applyLifecycle(r *intersectionapp.IntersectionReasonView, prev intersectionapp.IntersectionReasonView, hadPrev bool) {
 	if !hadPrev {
 		// 首次出现的边：标记 new，previousStrength 归零，delta 即当前边权。
 		r.LifecycleState = "new"
@@ -82,14 +82,14 @@ func applyLifecycle(r *app.IntersectionReasonView, prev app.IntersectionReasonVi
 }
 
 // computeEdgeWeight 真算单条交集边权（确定性，无外部调用）。
-func computeEdgeWeight(r app.IntersectionReasonView, now time.Time) float64 {
+func computeEdgeWeight(r intersectionapp.IntersectionReasonView, now time.Time) float64 {
 	w := relationStrength(r) * interactionFrequency(r) * recencyDecay(r.FreshAt, now)
 	return clamp01(w)
 }
 
 // relationStrength 关系强度：优先取理由自身 Strength（scoreFromCount 真实派生，基线 0.5）；
 // 缺省时从证据频率回退派生，保证可参与排序。
-func relationStrength(r app.IntersectionReasonView) float64 {
+func relationStrength(r intersectionapp.IntersectionReasonView) float64 {
 	if r.Strength > 0 {
 		return clamp01(r.Strength)
 	}
@@ -98,7 +98,7 @@ func relationStrength(r app.IntersectionReasonView) float64 {
 
 // interactionFrequency 交互/多跳频率：对绝对证据计数做指数饱和（1 - e^{-n/k}），范围 (0,1)，
 // 体现多跳证据的边际递减；n 为可追溯的绝对计数（Propagation 真实多跳条数）。
-func interactionFrequency(r app.IntersectionReasonView) float64 {
+func interactionFrequency(r intersectionapp.IntersectionReasonView) float64 {
 	n := evidenceCount(r)
 	if n <= 0 {
 		return 0
@@ -108,7 +108,7 @@ func interactionFrequency(r app.IntersectionReasonView) float64 {
 
 // evidenceCount 取理由的多跳证据绝对计数：优先按交集点 Count 求和（最细粒度且可追溯），
 // 回退到 TotalPointCount / MutualCount / FactPointCount 中的最大者。
-func evidenceCount(r app.IntersectionReasonView) int {
+func evidenceCount(r intersectionapp.IntersectionReasonView) int {
 	if len(r.IntersectionPoints) > 0 {
 		sum := 0
 		for _, p := range r.IntersectionPoints {
@@ -151,7 +151,7 @@ func recencyDecay(freshAt string, now time.Time) float64 {
 }
 
 // reasonIdentityKey 跨快照稳定地标识同一条交集边，用于 lifecycle 增量比对。
-func reasonIdentityKey(r app.IntersectionReasonView) string {
+func reasonIdentityKey(r intersectionapp.IntersectionReasonView) string {
 	switch {
 	case strings.TrimSpace(r.DedupeKey) != "":
 		return "d:" + r.DedupeKey

@@ -39,9 +39,9 @@ DART_META = (
 )
 RESOLVER = REPO_ROOT / "quwoquan_app/lib/components/object_page/intersection_icon_resolver.dart"
 
-LANG_GO = SVC / "services/content-service/internal/application/author_impact_language.go"
-EVIDENCE_GO = SVC / "services/content-service/internal/application/author_impact_evidence_view.go"
-BEHAVIOR_GO = SVC / "services/content-service/internal/application/behavior_service.go"
+LANG_GO = SVC / "services/content-service/internal/application/authorimpact/author_impact_language.go"
+EVIDENCE_GO = SVC / "services/content-service/internal/application/authorimpact/author_impact_evidence_view.go"
+BEHAVIOR_GO = SVC / "services/content-service/internal/application/behavior/behavior_service.go"
 STORE_GO = SVC / "services/content-service/internal/infrastructure/persistence/author_impact_store.go"
 CIRCLE_GO = SVC / "services/circle-service/internal/application/circle_service.go"
 

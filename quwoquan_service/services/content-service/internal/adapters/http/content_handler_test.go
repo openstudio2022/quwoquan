@@ -10,7 +10,10 @@ import (
 	"testing"
 
 	rtrec "quwoquan_service/runtime/recommendation"
-	"quwoquan_service/services/content-service/internal/application"
+	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
+	feedapp "quwoquan_service/services/content-service/internal/application/feed"
+	postapp "quwoquan_service/services/content-service/internal/application/post"
+	reportapp "quwoquan_service/services/content-service/internal/application/report"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
@@ -21,10 +24,14 @@ func newTestHandler() http.Handler {
 	store := persistence.NewPostStore(recinfra.DefaultSeedPosts())
 	source := recinfra.NewPostRepositorySource(store)
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
-	feedService := application.NewFeedService(engine, source)
-	postService := application.NewPostService(store)
-	reportService := application.NewReportService(persistence.NewInMemoryReportStore(), nil)
-	behaviorService := application.NewBehaviorService(hotPath, store)
+	feedService := feedapp.NewFeedService(engine, source)
+	postService := postapp.NewPostService(
+		store,
+		postapp.WithCommentStore(persistence.NewMemoryCommentStore()),
+		postapp.WithCommentReactionStore(persistence.NewMemoryCommentReactionStore()),
+	)
+	reportService := reportapp.NewReportService(persistence.NewInMemoryReportStore(), nil)
+	behaviorService := behaviorapp.NewBehaviorService(hotPath, store)
 	return NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
 }
 
@@ -34,10 +41,14 @@ func newFeedHandlerWithFeatures(features rtrec.FeatureProvider) http.Handler {
 	store := persistence.NewPostStore(recinfra.DefaultSeedPosts())
 	source := recinfra.NewPostRepositorySource(store)
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source}, rtrec.WithFeatureProvider(features))
-	feedService := application.NewFeedService(engine, source)
-	postService := application.NewPostService(store)
-	reportService := application.NewReportService(persistence.NewInMemoryReportStore(), nil)
-	behaviorService := application.NewBehaviorService(hotPath, store)
+	feedService := feedapp.NewFeedService(engine, source)
+	postService := postapp.NewPostService(
+		store,
+		postapp.WithCommentStore(persistence.NewMemoryCommentStore()),
+		postapp.WithCommentReactionStore(persistence.NewMemoryCommentReactionStore()),
+	)
+	reportService := reportapp.NewReportService(persistence.NewInMemoryReportStore(), nil)
+	behaviorService := behaviorapp.NewBehaviorService(hotPath, store)
 	return NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
 }
 

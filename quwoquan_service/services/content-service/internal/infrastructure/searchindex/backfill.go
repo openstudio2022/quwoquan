@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"quwoquan_service/runtime/search/es"
-	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/application/searchprojection"
 )
 
 // defaultBackfillBatchSize bounds how many docs go into one _bulk round trip.
@@ -62,7 +62,7 @@ func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, batch
 			report.SkippedPosts++
 			continue
 		}
-		doc := application.ProjectPostToSearchDocument(posts[i])
+		doc := searchprojection.ProjectPostToSearchDocument(posts[i])
 		batch = append(batch, es.ChangeEvent{Op: es.OpUpsert, Doc: doc})
 		report.IndexedPosts++
 		if len(batch) >= batchSize {

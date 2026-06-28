@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	app "quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/application/ports"
 )
 
 // intersectionWatermarkCollection 是「我的交集」已读水位的耐久兜底集合。
@@ -18,7 +18,7 @@ import (
 // 用户已读位（清零状态）不丢失，写降级也不阻断主请求。一 user 一文档。
 const intersectionWatermarkCollection = "rm_intersection_watermark"
 
-// MongoWatermarkStore 是 app.WatermarkStore 的 Mongo 实现。
+// MongoWatermarkStore 是 ports.WatermarkStore 的 Mongo 实现。
 // 文档形如 {_id: userID, wm: {identity: ts, content: ts, ...}, updatedAt}；
 // 写入用 $max 逐维度合并，保证已读水位单调推进（晚到的旧时间戳不会回退已推进的位）。
 type MongoWatermarkStore struct {
@@ -37,7 +37,7 @@ func NewMongoWatermarkStore(db *mongo.Database, logger *slog.Logger) *MongoWater
 	}
 }
 
-var _ app.WatermarkStore = (*MongoWatermarkStore)(nil)
+var _ ports.WatermarkStore = (*MongoWatermarkStore)(nil)
 
 // LoadWatermarks 返回 userID 的 per-dimension 已读水位（unix 秒）。无记录返回空 map。
 func (s *MongoWatermarkStore) LoadWatermarks(ctx context.Context, userID string) (map[string]int64, error) {

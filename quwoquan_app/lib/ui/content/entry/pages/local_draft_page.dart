@@ -22,8 +22,34 @@ class LocalDraftPage extends ConsumerStatefulWidget {
   ConsumerState<LocalDraftPage> createState() => _LocalDraftPageState();
 }
 
-class _LocalDraftPageState extends ConsumerState<LocalDraftPage> {
+class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
+    with WidgetsBindingObserver {
   bool _didReportOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(ref.read(createDraftStoreProvider.notifier).reload());
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(ref.read(createDraftStoreProvider.notifier).reload());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

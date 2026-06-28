@@ -2264,94 +2264,94 @@ areas:
       target_path: quwoquan_service/services/content-service/tests/local_contract/internal/adapters/http/content_handler__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/author_impact_travel_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/authorimpact/author_impact_travel_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/author_impact_travel__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/authorimpact/author_impact_travel__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/behavior_feed_patch_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/behavior/behavior_feed_patch_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/behavior_feed_patch__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/behavior/behavior_feed_patch__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/bulk_import_service_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/feed/feed_service_negative_fallback_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/bulk_import_service__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed/feed_service_negative_fallback__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/comment_display_fields_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/importer/bulk_import_service_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/comment_display_fields__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/importer/bulk_import_service__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/comment_sort_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/intersection/intersection_hydration_vertical_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/comment_sort_contract__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_hydration_vertical__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/create_semantic_projection_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/intersection/intersection_metrics_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/create_semantic_projection__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_metrics__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/feed_service_negative_fallback_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/intersection/intersection_readpath_invariant_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed_service_negative_fallback__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_readpath_invariant__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/intersection_hydration_vertical_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/intersection/intersection_service_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection_hydration_vertical__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_service__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/intersection_metrics_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/post/comment_display_fields_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection_metrics__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/comment_display_fields__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/intersection_readpath_invariant_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/post/comment_sort_contract_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection_readpath_invariant__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/comment_sort_contract__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/intersection_service_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/post/create_semantic_projection_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection_service__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/create_semantic_projection__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/media_upload_url_contract_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/post/media_upload_url_contract_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/media_upload_url_contract__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/media_upload_url_contract__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/place_search_projection_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/post/post_object_anchor_normalization_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/place_search_projection__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/post_object_anchor_normalization__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/post_object_anchor_normalization_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/post/post_retrieve_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/post_object_anchor_normalization__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/post_retrieve__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/post_retrieve_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/post/profile_interaction_activity_view_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/post_retrieve__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/profile_interaction_activity_view__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/profile_interaction_activity_view_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/post/reaction_device_actor_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/profile_interaction_activity_view__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/reaction_device_actor__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/reaction_device_actor_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/post/semantic_mentions_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/reaction_device_actor__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/semantic_mentions__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
-    - current_path: quwoquan_service/services/content-service/internal/application/semantic_mentions_test.go
+    - current_path: quwoquan_service/services/content-service/internal/application/searchprojection/place_search_projection_test.go
       layer: local_contract
-      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/semantic_mentions__local_contract_test.go
+      target_path: quwoquan_service/services/content-service/tests/local_contract/internal/application/searchprojection/place_search_projection__local_contract_test.go
       migration_status: bridged
       classification_basis: service:local_contract:content-service/internal
     - current_path: quwoquan_service/services/content-service/internal/domain/post/semantic/mentions_test.go

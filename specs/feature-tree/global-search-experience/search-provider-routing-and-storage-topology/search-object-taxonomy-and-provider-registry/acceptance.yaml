@@ -83,7 +83,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/place_search_projection__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/searchprojection/place_search_projection__local_contract_test.go
       - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/placeindex/projector__local_contract_test.go
       - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/placeindex/backfill__local_contract_test.go
     status: completed

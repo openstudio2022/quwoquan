@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"quwoquan_service/services/content-service/internal/application/identity"
+	postapp "quwoquan_service/services/content-service/internal/application/post"
 	"strings"
 	"testing"
 
 	contenhttp "quwoquan_service/services/content-service/internal/adapters/http"
-	"quwoquan_service/services/content-service/internal/application"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
@@ -180,7 +181,7 @@ func TestGetDeletedPostAfterServiceRestartStillReturnsConflict(t *testing.T) {
 	restartedStore := persistence.NewMongoPostStore(mongoDB.Collection("posts"))
 	restartedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")) == "" {
-			subAccountID := application.AnonymousFallbackSubAccountID
+			subAccountID := identity.AnonymousFallbackSubAccountID
 			if userID := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); userID != "" {
 				subAccountID = userID
 			}
@@ -188,7 +189,7 @@ func TestGetDeletedPostAfterServiceRestartStillReturnsConflict(t *testing.T) {
 		}
 		contenhttp.NewContentHandler(
 			nil,
-			application.NewPostService(restartedStore),
+			postapp.NewPostService(restartedStore),
 			nil,
 			nil,
 		).Routes().ServeHTTP(w, r)

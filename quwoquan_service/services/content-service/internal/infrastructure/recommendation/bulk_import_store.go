@@ -8,10 +8,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	"quwoquan_service/services/content-service/internal/application"
+	importerapp "quwoquan_service/services/content-service/internal/application/importer"
 )
 
-// MongoBulkImportStore implements application.BulkImportStore
+// MongoBulkImportStore implements importer.BulkImportStore
 // using the rm_discovery_feed and rm_entity_tags MongoDB collections.
 type MongoBulkImportStore struct {
 	feedColl   *mongo.Collection
@@ -25,7 +25,7 @@ func NewMongoBulkImportStore(db *mongo.Database) *MongoBulkImportStore {
 	}
 }
 
-func (s *MongoBulkImportStore) UpsertDiscoveryFeedItem(ctx context.Context, item application.BulkImportItem) error {
+func (s *MongoBulkImportStore) UpsertDiscoveryFeedItem(ctx context.Context, item importerapp.BulkImportItem) error {
 	publishedAt, _ := time.Parse(time.RFC3339, item.PublishedAt)
 	if publishedAt.IsZero() {
 		publishedAt = time.Now().UTC()

@@ -53,11 +53,13 @@ members:
     description: 已删除内容墓碑，用于 URL 访问返回“已删除”
 
 ddd_layer_mapping:
-  domain_model: internal/domain/content/model
-  repository: internal/domain/content/repository
-  application: internal/application/content
-  adapter_rest: internal/adapter/rest/content
-  adapter_event: internal/adapter/event/content
+  domain_model: internal/domain/post/model
+  repository: internal/application/ports
+  repository_implementation: internal/infrastructure/persistence
+  application: internal/application/post
+  search_projection: internal/application/searchprojection
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/infrastructure/messaging
 
 counter_strategy:
   description: |

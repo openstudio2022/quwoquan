@@ -7,7 +7,8 @@ import (
 
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
-	"quwoquan_service/services/content-service/internal/application"
+	"quwoquan_service/services/content-service/internal/application/ports"
+	"quwoquan_service/services/content-service/internal/application/searchprojection"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 )
 
@@ -20,7 +21,7 @@ type PostReader interface {
 }
 
 // PlaceProjector keeps the first-party place snapshot store and the unified ES
-// index aligned with post lifecycle events. It implements application.Projector
+// index aligned with post lifecycle events. It implements ports.Projector
 // so it composes into the in-process projector fan-out alongside the post
 // search-index projector.
 //
@@ -59,7 +60,7 @@ func NewProjector(indexer *es.Indexer, reader PostReader, store PlaceStore, opts
 // Project reconciles a post lifecycle event into the place snapshot store + ES
 // index. It always returns nil so a failing index write cannot break the
 // projector fan-out or the primary write path.
-func (p *PlaceProjector) Project(ctx context.Context, event application.ProjectorEvent) error {
+func (p *PlaceProjector) Project(ctx context.Context, event ports.ProjectorEvent) error {
 	if p == nil || p.indexer == nil || p.store == nil || p.reader == nil {
 		return nil
 	}
@@ -81,13 +82,13 @@ func (p *PlaceProjector) Project(ctx context.Context, event application.Projecto
 // reconcile reads the post back, materializes the place it references now (when
 // eligible), and retracts the post from any other place it used to reference
 // (location changed, turned private, or got bound to a canonical entity). The
-// single-source rule lives in application.DerivePlaceRef: a post bound to a
+// single-source rule lives in searchprojection.DerivePlaceRef: a post bound to a
 // canonical entity yields no ref, so its old place loses this reference (and is
 // deleted once its last free-text reference is gone — carried by entity.homepage).
 func (p *PlaceProjector) reconcile(ctx context.Context, postID, eventType string) {
 	currentID := ""
 	if post, ok := p.reader.FindByID(ctx, postID); ok && post != nil {
-		if ref, eligible := application.DerivePlaceRef(*post); eligible {
+		if ref, eligible := searchprojection.DerivePlaceRef(*post); eligible {
 			currentID = ref.PlaceID
 			if snap, err := p.store.AddReference(ctx, ref, postID); err != nil {
 				p.logger.Warn("place store add reference failed", "event", eventType, "postId", postID, "err", err)
@@ -136,8 +137,8 @@ func (p *PlaceProjector) retract(ctx context.Context, placeID, postID, eventType
 	p.indexUpsert(ctx, snap, eventType)
 }
 
-func (p *PlaceProjector) indexUpsert(ctx context.Context, snap application.PlaceSnapshot, eventType string) {
-	doc := application.ProjectPlaceToSearchDocument(snap)
+func (p *PlaceProjector) indexUpsert(ctx context.Context, snap searchprojection.PlaceSnapshot, eventType string) {
+	doc := searchprojection.ProjectPlaceToSearchDocument(snap)
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: doc}); err != nil {
 		p.logger.Warn("place index upsert failed", "event", eventType, "placeId", snap.PlaceID, "err", err)
 	}

@@ -8,6 +8,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/app/shell/web_app_install_banner.dart';
@@ -30,11 +31,18 @@ import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+dynamic _openStartupAuthGateOverride() {
+  return startupAuthRestoreGateProvider.overrideWith(
+    () => _OpenStartupAuthGate(),
+  );
+}
+
 Widget _buildShell(String location, {bool authenticated = true}) {
   return ScreenUtilInit(
     designSize: const Size(393, 852),
     child: ProviderScope(
       overrides: [
+        _openStartupAuthGateOverride(),
         authSessionStoreProvider.overrideWithValue(
           _TestAuthSessionStore(authenticated: authenticated),
         ),
@@ -56,12 +64,18 @@ Widget _buildShell(String location, {bool authenticated = true}) {
   );
 }
 
+class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
+  @override
+  bool build() => true;
+}
+
 Widget _buildDarkShell(String location, {bool authenticated = true}) {
   return ScreenUtilInit(
     designSize: const Size(393, 852),
     child: ProviderScope(
       overrides: [
         isDarkProvider.overrideWith((ref) => true),
+        _openStartupAuthGateOverride(),
         authSessionStoreProvider.overrideWithValue(
           _TestAuthSessionStore(authenticated: authenticated),
         ),
@@ -88,6 +102,7 @@ Widget _buildShellRouter({required bool authenticated}) {
     designSize: const Size(393, 852),
     child: ProviderScope(
       overrides: [
+        _openStartupAuthGateOverride(),
         authSessionStoreProvider.overrideWithValue(
           _TestAuthSessionStore(authenticated: authenticated),
         ),
@@ -122,6 +137,20 @@ Widget _buildShellRouter({required bool authenticated}) {
                 ),
               ),
             ),
+            GoRoute(
+              path: AppRoutePaths.createPathTemplate,
+              builder: (context, state) {
+                if (!authenticated) {
+                  return LoginPage(
+                    reason: AuthGateReason.createPost.name,
+                    redirect: state.uri.toString(),
+                    dismissFallback: AppRoutePaths.home,
+                    allowGuestDismissPop: false,
+                  );
+                }
+                return const Scaffold(body: Center(child: Text('CREATE_PAGE')));
+              },
+            ),
           ],
         ),
       ),
@@ -133,7 +162,10 @@ Widget _buildShellRouterWithStore(AuthSessionStore store) {
   return ScreenUtilInit(
     designSize: const Size(393, 852),
     child: ProviderScope(
-      overrides: [authSessionStoreProvider.overrideWithValue(store)],
+      overrides: [
+        _openStartupAuthGateOverride(),
+        authSessionStoreProvider.overrideWithValue(store),
+      ],
       child: MaterialApp.router(
         localizationsDelegates: const [
           AppLocalizations.delegate,
@@ -181,6 +213,7 @@ Widget _buildGuardedRouter({
     designSize: const Size(393, 852),
     child: ProviderScope(
       overrides: [
+        _openStartupAuthGateOverride(),
         authSessionStoreProvider.overrideWithValue(
           _TestAuthSessionStore(authenticated: authenticated),
         ),
@@ -548,11 +581,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('发布'), findsOneWidget);
-      expect(find.text('互动'), findsOneWidget);
+      expect(find.text('发布'), findsNothing);
+      expect(find.text('互动'), findsNothing);
       expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
       expect(
         find.text(UITextConstants.createActionPostPhotoShort),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.createActionCameraSubtitle),
         findsOneWidget,
       );
     });
@@ -576,11 +613,11 @@ void main() {
       expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
       expect(
         find.text(UITextConstants.createActionAddContactShort),
-        findsOneWidget,
+        findsNothing,
       );
 
-      // 选「添加联系人」这一账号态动作时才触发登录。
-      await tester.tap(find.text(UITextConstants.createActionAddContactShort));
+      // 选具体创作动作时才触发登录。
+      await tester.tap(find.text(UITextConstants.createActionWriteLong));
       await tester.pumpAndSettle();
 
       expect(find.byType(LoginPage), findsOneWidget);
@@ -1032,6 +1069,7 @@ void main() {
               platformCapabilitiesProvider.overrideWithValue(
                 CapabilityProfile.web,
               ),
+              _openStartupAuthGateOverride(),
               authSessionStoreProvider.overrideWithValue(
                 const _TestAuthSessionStore(authenticated: true),
               ),
@@ -1093,6 +1131,7 @@ void main() {
               platformCapabilitiesProvider.overrideWithValue(
                 CapabilityProfile.web,
               ),
+              _openStartupAuthGateOverride(),
               authSessionStoreProvider.overrideWithValue(
                 const _TestAuthSessionStore(authenticated: true),
               ),
@@ -1245,6 +1284,7 @@ void main() {
               platformCapabilitiesProvider.overrideWithValue(
                 CapabilityProfile.web,
               ),
+              _openStartupAuthGateOverride(),
               authSessionStoreProvider.overrideWithValue(
                 const _TestAuthSessionStore(authenticated: false),
               ),

@@ -32,11 +32,11 @@ void main() {
 
     expect(find.byKey(TestKeys.createActionGallery), findsOneWidget);
     expect(find.byKey(TestKeys.createActionWrite), findsOneWidget);
-    expect(find.byKey(TestKeys.createActionContinueFromDraft), findsOneWidget);
+    expect(find.byKey(TestKeys.createActionContinueFromDraft), findsNothing);
     expect(find.byKey(TestKeys.createActionCapture), findsOneWidget);
 
-    expect(find.text('发布'), findsOneWidget);
-    expect(find.text('互动'), findsOneWidget);
+    expect(find.text('发布'), findsNothing);
+    expect(find.text('互动'), findsNothing);
     expect(
       find.text(UITextConstants.createActionPostPhotoShort),
       findsOneWidget,
@@ -46,14 +46,18 @@ void main() {
       findsOneWidget,
     );
     expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
-    expect(find.text(UITextConstants.createActionResumeDraft), findsOneWidget);
+    expect(
+      find.text(UITextConstants.createActionCameraSubtitle),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.createActionResumeDraft), findsNothing);
     expect(
       find.text(UITextConstants.createActionAddContactShort),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.text(UITextConstants.createActionCreateGroupShort),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('发图片'), findsNothing);
     expect(find.text('发视频'), findsNothing);

@@ -3,7 +3,7 @@
 //
 // It ensures the shared ES/OpenSearch index exists, then lists every published +
 // public post, projects it through the single shared projection
-// (application.ProjectPostToSearchDocument) and bulk-upserts it. Run it after a
+// (searchprojection.ProjectPostToSearchDocument) and bulk-upserts it. Run it after a
 // fresh import or to repair drift; the write-time projector keeps the index in
 // sync afterwards.
 //

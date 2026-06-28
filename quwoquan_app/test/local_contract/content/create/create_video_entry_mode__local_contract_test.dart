@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
+import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
@@ -18,56 +19,60 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('发布视频入口 gallery + tab=video 会自动打开视频选择器', (tester) async {
+  testWidgets('相册入口始终打开混合媒体选择器', (tester) async {
     final requestedModes = <MediaPickerEntryMode>[];
     await tester.pumpWidget(
       _buildHarness(
         initialAction: EditorStartAction.gallery,
         initialTabKey: 'video',
-        mediaPickerLauncher: (
-          context, {
-          required mode,
-          required maxSelection,
-          List<String> initialPaths = const <String>[],
-        }) async {
-          requestedModes.add(mode);
-          return null;
-        },
+        mediaPickerLauncher:
+            (
+              context, {
+              required mode,
+              required maxSelection,
+              List<String> initialPaths = const <String>[],
+            }) async {
+              requestedModes.add(mode);
+              return null;
+            },
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(requestedModes, <MediaPickerEntryMode>[MediaPickerEntryMode.video]);
+    expect(requestedModes, <MediaPickerEntryMode>[MediaPickerEntryMode.mixed]);
   });
 
-  testWidgets('发布视频入口 capture 会自动打开摄像模式而不是拍照模式', (tester) async {
+  testWidgets('相机入口默认拍照，由相机页负责切到录像', (tester) async {
     MediaPickerEntryMode? openedMode;
     await tester.pumpWidget(
       _buildHarness(
         initialAction: EditorStartAction.capture,
-        cameraPageBuilder: (
-          context, {
-          required initialMode,
-          required caller,
-          required entrySource,
-          required selectedCountBeforeCapture,
-        }) {
-          openedMode = initialMode;
-          return CupertinoPageScaffold(
-            child: Center(
-              child: Text(
-                initialMode == MediaPickerEntryMode.video ? 'video-camera' : 'image-camera',
-              ),
-            ),
-          );
-        },
+        cameraPageBuilder:
+            (
+              context, {
+              required initialMode,
+              required caller,
+              required entrySource,
+              required selectedCountBeforeCapture,
+            }) {
+              openedMode = initialMode;
+              return CupertinoPageScaffold(
+                child: Center(
+                  child: Text(
+                    initialMode == MediaPickerEntryMode.video
+                        ? 'video-camera'
+                        : 'image-camera',
+                  ),
+                ),
+              );
+            },
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(openedMode, MediaPickerEntryMode.video);
-    expect(find.text('video-camera'), findsOneWidget);
-    expect(find.text('image-camera'), findsNothing);
+    expect(openedMode, MediaPickerEntryMode.image);
+    expect(find.text('image-camera'), findsOneWidget);
+    expect(find.text('video-camera'), findsNothing);
   });
 }
 
@@ -80,6 +85,7 @@ Widget _buildHarness({
   return ProviderScope(
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
+      startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
       contentRepositoryProvider.overrideWithValue(MockContentRepository()),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
@@ -101,6 +107,11 @@ Widget _buildHarness({
       ),
     ),
   );
+}
+
+class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
+  @override
+  bool build() => true;
 }
 
 class _AuthedSessionStore implements AuthSessionStore {

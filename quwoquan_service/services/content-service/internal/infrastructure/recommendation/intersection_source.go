@@ -11,7 +11,7 @@ import (
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	rtrec "quwoquan_service/runtime/recommendation"
-	app "quwoquan_service/services/content-service/internal/application"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 )
 
 type MongoIntersectionSource struct {
@@ -38,9 +38,9 @@ func NewMongoIntersectionSource(
 	}
 }
 
-func (s *MongoIntersectionSource) FactReasons(ctx context.Context, userID, channel string) ([]app.IntersectionReasonView, error) {
+func (s *MongoIntersectionSource) FactReasons(ctx context.Context, userID, channel string) ([]intersectionapp.IntersectionReasonView, error) {
 	now := time.Now().UTC()
-	reasons := make([]app.IntersectionReasonView, 0, 3)
+	reasons := make([]intersectionapp.IntersectionReasonView, 0, 3)
 
 	if circleTags, err := s.socialCircleTags(ctx, userID); err == nil && len(circleTags) > 0 {
 		reasons = append(reasons, buildTagReason(
@@ -75,9 +75,9 @@ func (s *MongoIntersectionSource) FactReasons(ctx context.Context, userID, chann
 	return reasons, nil
 }
 
-func (s *MongoIntersectionSource) AffinityReasons(ctx context.Context, userID, channel string) ([]app.IntersectionReasonView, error) {
+func (s *MongoIntersectionSource) AffinityReasons(ctx context.Context, userID, channel string) ([]intersectionapp.IntersectionReasonView, error) {
 	now := time.Now().UTC()
-	reasons := make([]app.IntersectionReasonView, 0, 2)
+	reasons := make([]intersectionapp.IntersectionReasonView, 0, 2)
 
 	if circleIDs, err := s.social.GetUserCircleIDs(ctx, userID); err == nil && len(circleIDs) > 0 {
 		candidates, err := s.candidates.GetCircleHotContent(ctx, circleIDs, 4, 7*24*time.Hour)
@@ -106,7 +106,7 @@ func (s *MongoIntersectionSource) AffinityReasons(ctx context.Context, userID, c
 	return reasons, nil
 }
 
-func (s *MongoIntersectionSource) ObjectReasons(ctx context.Context, viewerID, objectID, objectType string) ([]app.IntersectionReasonView, error) {
+func (s *MongoIntersectionSource) ObjectReasons(ctx context.Context, viewerID, objectID, objectType string) ([]intersectionapp.IntersectionReasonView, error) {
 	now := time.Now().UTC()
 	dimension := objectDimension(objectType)
 	objectTags, err := s.entityTags.GetEntityTags(ctx, objectID)
@@ -114,7 +114,7 @@ func (s *MongoIntersectionSource) ObjectReasons(ctx context.Context, viewerID, o
 		objectTags = nil
 	}
 
-	reasons := make([]app.IntersectionReasonView, 0, 3)
+	reasons := make([]intersectionapp.IntersectionReasonView, 0, 3)
 	if len(objectTags) > 0 {
 		reasons = append(reasons, buildTagReason(
 			now,
@@ -163,14 +163,14 @@ func (s *MongoIntersectionSource) socialFriendTags(ctx context.Context, userID s
 	return topWeightKeys(tags, 3), nil
 }
 
-func (s *MongoIntersectionSource) friendContentReason(ctx context.Context, now time.Time, userID string) (app.IntersectionReasonView, bool) {
+func (s *MongoIntersectionSource) friendContentReason(ctx context.Context, now time.Time, userID string) (intersectionapp.IntersectionReasonView, bool) {
 	contentIDs, err := s.social.GetFriendInteractedContent(ctx, userID, 5)
 	if err != nil || len(contentIDs) == 0 {
-		return app.IntersectionReasonView{}, false
+		return intersectionapp.IntersectionReasonView{}, false
 	}
 	candidates, err := s.candidates.GetCandidatesByIDs(ctx, contentIDs)
 	if err != nil || len(candidates) == 0 {
-		return app.IntersectionReasonView{}, false
+		return intersectionapp.IntersectionReasonView{}, false
 	}
 	return buildContentReason(
 		now,
@@ -273,9 +273,9 @@ func intersectKeys(a, b map[string]struct{}, exclude ...string) []string {
 // sharedFollowees（共同关注的人）/ sharedCircle（共同圈子）/
 // coCommented（共同讨论）/ coVisitedEntity（共同到访实体）。
 // 关注状态本身（互关/单向）不再作为交集点，由 relationKind 承载。
-func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now time.Time, viewerID, objectID, objectType string) (app.IntersectionReasonView, bool) {
+func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now time.Time, viewerID, objectID, objectType string) (intersectionapp.IntersectionReasonView, bool) {
 	if s.social == nil || s.social.db == nil {
-		return app.IntersectionReasonView{}, false
+		return intersectionapp.IntersectionReasonView{}, false
 	}
 	followColl := s.social.db.Collection("follow_edges")
 	var follow struct {
@@ -285,13 +285,13 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 	viewerFollows := followColl.FindOne(ctx, bson.M{"followerId": viewerID, "followeeId": objectID}).Decode(&follow) == nil
 	objectFollows := followColl.FindOne(ctx, bson.M{"followerId": objectID, "followeeId": viewerID}).Decode(&follow) == nil
 
-	points := make([]app.IntersectionPointView, 0, 4)
+	points := make([]intersectionapp.IntersectionPointView, 0, 4)
 
 	// sharedFollowees：双方共同关注的第三方集合（排除彼此）。
 	sharedFollowees := intersectKeys(
 		s.followeeSet(ctx, viewerID), s.followeeSet(ctx, objectID), viewerID, objectID)
 	if n := len(sharedFollowees); n > 0 {
-		points = append(points, app.IntersectionPointView{
+		points = append(points, intersectionapp.IntersectionPointView{
 			PointID:     objectID + "_shared_followees",
 			PointClass:  "fact",
 			Dimension:   "relationship",
@@ -306,7 +306,7 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 
 	// sharedCircle：共同圈子。
 	if circleCount := s.sharedCircleCount(ctx, viewerID, objectID); circleCount > 0 {
-		points = append(points, app.IntersectionPointView{
+		points = append(points, intersectionapp.IntersectionPointView{
 			PointID:     objectID + "_circle",
 			PointClass:  "fact",
 			Dimension:   "relationship",
@@ -323,7 +323,7 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 		s.behaviorRefs(ctx, viewerID, "comment", false),
 		s.behaviorRefs(ctx, objectID, "comment", false))
 	if n := len(coCommented); n > 0 {
-		points = append(points, app.IntersectionPointView{
+		points = append(points, intersectionapp.IntersectionPointView{
 			PointID:     objectID + "_co_commented",
 			PointClass:  "fact",
 			Dimension:   "content",
@@ -341,7 +341,7 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 		s.behaviorRefs(ctx, viewerID, "entity_page_view", true),
 		s.behaviorRefs(ctx, objectID, "entity_page_view", true))
 	if n := len(coVisited); n > 0 {
-		points = append(points, app.IntersectionPointView{
+		points = append(points, intersectionapp.IntersectionPointView{
 			PointID:     objectID + "_co_visited",
 			PointClass:  "fact",
 			Dimension:   "location",
@@ -355,7 +355,7 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 	}
 
 	if len(points) == 0 {
-		return app.IntersectionReasonView{}, false
+		return intersectionapp.IntersectionReasonView{}, false
 	}
 	relationKind := "mutual"
 	if !viewerFollows && objectFollows {
@@ -370,7 +370,7 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 	if displayName == "" {
 		displayName = objectLabel(objectType)
 	}
-	return app.IntersectionReasonView{
+	return intersectionapp.IntersectionReasonView{
 		IntersectionID:     objectID + "_relationship",
 		IntersectionClass:  "fact",
 		Dimension:          "relationship",
@@ -392,13 +392,13 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 }
 
 // followeeVisitedReason 桥接型交集：viewer 关注的人里有谁到访过该对象（实体/地点页）。
-func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now time.Time, viewerID, objectID, objectType string) (app.IntersectionReasonView, bool) {
+func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now time.Time, viewerID, objectID, objectType string) (intersectionapp.IntersectionReasonView, bool) {
 	if s.social == nil || s.social.db == nil || strings.TrimSpace(viewerID) == "" {
-		return app.IntersectionReasonView{}, false
+		return intersectionapp.IntersectionReasonView{}, false
 	}
 	followees := s.followeeSet(ctx, viewerID)
 	if len(followees) == 0 {
-		return app.IntersectionReasonView{}, false
+		return intersectionapp.IntersectionReasonView{}, false
 	}
 	followeeIDs := make([]string, 0, len(followees))
 	for id := range followees {
@@ -410,7 +410,7 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 		"entityRefs": objectID,
 	}, mongoFindLimit(maxBehaviorScan))
 	if err != nil {
-		return app.IntersectionReasonView{}, false
+		return intersectionapp.IntersectionReasonView{}, false
 	}
 	defer cur.Close(ctx)
 	visitors := map[string]struct{}{}
@@ -423,7 +423,7 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 		}
 	}
 	if len(visitors) == 0 {
-		return app.IntersectionReasonView{}, false
+		return intersectionapp.IntersectionReasonView{}, false
 	}
 	visitorIDs := make([]string, 0, len(visitors))
 	for id := range visitors {
@@ -433,7 +433,7 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 	n := len(visitorIDs)
 	// R-ID01：桥接型统一为单聚合点 Count=n（取代 reason 级 SharedCount），
 	// 端/Explain 经 anchor.Count 取数；样本走 SampleText（前 maxIntersectionPoint 个访客）。
-	points := []app.IntersectionPointView{{
+	points := []intersectionapp.IntersectionPointView{{
 		PointID:     objectID + "_followee_visited",
 		PointClass:  "fact",
 		Dimension:   "relationship",
@@ -444,7 +444,7 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 		Count:       n,
 		SampleText:  strings.Join(headKeys(visitorIDs, maxIntersectionPoint), "、"),
 	}}
-	return app.IntersectionReasonView{
+	return intersectionapp.IntersectionReasonView{
 		IntersectionID:     objectID + "_followee_visited",
 		IntersectionClass:  "fact",
 		Dimension:          "relationship",
@@ -545,10 +545,10 @@ func buildTagReason(
 	actionType string,
 	values []string,
 	ttl time.Duration,
-) app.IntersectionReasonView {
-	points := make([]app.IntersectionPointView, 0, len(values))
+) intersectionapp.IntersectionReasonView {
+	points := make([]intersectionapp.IntersectionPointView, 0, len(values))
 	for i, value := range values {
-		points = append(points, app.IntersectionPointView{
+		points = append(points, intersectionapp.IntersectionPointView{
 			PointID:     intersectionID + "_p_" + strconv.Itoa(i),
 			PointClass:  "fact",
 			Dimension:   dimension,
@@ -560,7 +560,7 @@ func buildTagReason(
 			SampleText:  value,
 		})
 	}
-	return app.IntersectionReasonView{
+	return intersectionapp.IntersectionReasonView{
 		IntersectionID:     intersectionID,
 		IntersectionClass:  "fact",
 		Dimension:          dimension,
@@ -588,15 +588,15 @@ func buildContentReason(
 	candidates []rtrec.ContentCandidate,
 	ttl time.Duration,
 	class string,
-) app.IntersectionReasonView {
+) intersectionapp.IntersectionReasonView {
 	limit := len(candidates)
 	if limit > 3 {
 		limit = 3
 	}
-	points := make([]app.IntersectionPointView, 0, limit)
+	points := make([]intersectionapp.IntersectionPointView, 0, limit)
 	for i := 0; i < limit; i++ {
 		c := candidates[i]
-		points = append(points, app.IntersectionPointView{
+		points = append(points, intersectionapp.IntersectionPointView{
 			PointID:     c.ContentID,
 			PointClass:  "fact",
 			Dimension:   dimension,
@@ -608,7 +608,7 @@ func buildContentReason(
 			SampleText:  c.Title,
 		})
 	}
-	return app.IntersectionReasonView{
+	return intersectionapp.IntersectionReasonView{
 		IntersectionID:     intersectionID,
 		IntersectionClass:  class,
 		Dimension:          dimension,

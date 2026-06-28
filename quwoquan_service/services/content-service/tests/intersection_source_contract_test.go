@@ -6,13 +6,13 @@ package tests
 
 import (
 	"context"
+	intersectionapp "quwoquan_service/services/content-service/internal/application/intersection"
 	"strings"
 	"testing"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"quwoquan_service/services/content-service/internal/application"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
 
@@ -74,11 +74,11 @@ func seedIntersectionSourceFixtures(t *testing.T) {
 	}
 }
 
-func newRealIntersectionService(t *testing.T) *application.IntersectionService {
+func newRealIntersectionService(t *testing.T) *intersectionapp.IntersectionService {
 	t.Helper()
 	src := recinfra.NewMongoIntersectionSource(
 		recinfra.NewMongoSocialGraphProvider(mongoDB), nil, nil)
-	return application.NewIntersectionService(nil, application.WithIntersectionSource(src))
+	return intersectionapp.NewIntersectionService(nil, intersectionapp.WithIntersectionSource(src))
 }
 
 // TestIntersectionSource_PersonObjectProducesStandardFactKinds 断言人↔人对象页
@@ -96,7 +96,7 @@ func TestIntersectionSource_PersonObjectProducesStandardFactKinds(t *testing.T) 
 		t.Fatalf("want relation reason, got none")
 	}
 
-	kinds := map[string]application.IntersectionPointView{}
+	kinds := map[string]intersectionapp.IntersectionPointView{}
 	for _, r := range reasons {
 		if strings.TrimSpace(r.PrimaryText) == "" {
 			t.Fatalf("reason %s missing primaryText (G2 cloud-authored copy)", r.IntersectionID)
@@ -176,7 +176,7 @@ func TestIntersectionSource_PersonReasonBackfillsDisplayProfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("object intersections: %v", err)
 	}
-	var relation *application.IntersectionReasonView
+	var relation *intersectionapp.IntersectionReasonView
 	for i := range reasons {
 		if reasons[i].Dimension == "relationship" {
 			relation = &reasons[i]
@@ -203,7 +203,7 @@ func TestIntersectionSource_EntityObjectProducesFolloweeVisited(t *testing.T) {
 	if err != nil {
 		t.Fatalf("entity intersections: %v", err)
 	}
-	var hit *application.IntersectionReasonView
+	var hit *intersectionapp.IntersectionReasonView
 	for i := range reasons {
 		for _, p := range reasons[i].IntersectionPoints {
 			if p.SourceRef == "followeeVisited" {
@@ -266,7 +266,7 @@ func TestIntersectionSource_FeedFactReasonUsesRegistryKinds(t *testing.T) {
 	}
 }
 
-func kindNames(kinds map[string]application.IntersectionPointView) []string {
+func kindNames(kinds map[string]intersectionapp.IntersectionPointView) []string {
 	out := make([]string, 0, len(kinds))
 	for k := range kinds {
 		out = append(out, k)

@@ -1,0 +1,67 @@
+id: CR-20260628-075-xhs-create-entry-mixed-media-draft-toolbar
+title: 小红书式创作入口与混合媒体草稿顶栏
+slug: xhs-create-entry-mixed-media-draft-toolbar
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification
+  - specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update
+  - quwoquan_app/lib/ui/content/entry
+  - quwoquan_app/lib/components/media
+
+entries:
+  - timestamp: "2026-06-28T18:56:00+08:00"
+    summary: |
+      移动端全局 `+` 面板收口为 `从相册选择`、`相机`、`写文字` 与 `取消`，去掉发布/互动分组、图标、社交动作和草稿行。
+      `/create?type=gallery` 重新定义为混合相册入口，`/create?type=capture` 重新定义为默认拍照且可切录像的相机入口；CreatePage 按实际返回图片或视频进入对应编辑状态。
+      草稿入口移入编辑器顶栏，编辑后显示保存状态；保存成功前会写入并 reload 校验草稿 payload 与索引可读，本地草稿页进入/恢复时 reload 当前用户 scope。
+    reason: |
+      原入口仍按图片/视频/互动入口拆分，图标难以准确表达且左右布局漂移；相册和相机被提前绑定到图片或视频，导致用户在开始阶段被迫做内容类型判断。
+      草稿入口放在 sheet 中也让保存状态不可见，且缺少真实底栏加号链路保存后立即可读的回归证据。本轮用动作优先的 iOS 列表和编辑器顶栏状态机统一体验。
+    change_type:
+      - ux-spec
+      - app-feature
+      - local-contract
+      - user-acceptance
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md
+        sections:
+          - F1. 全局 `+` 入口统一为小红书式 iOS 动作菜单
+          - F3.1 相册 / 相机结果分流
+          - F7. 草稿与连续性
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/acceptance.yaml
+        sections:
+          - GWT1
+          - GWT2
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md
+        sections:
+          - 图片作品商用创作链路 / 入口与路由
+          - 视频作品商用创作与封面闭环 / 入口与路由
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/acceptance.yaml
+        sections:
+          - GWT1
+          - GWT2
+          - GWT4
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: low
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - cd quwoquan_app && flutter analyze <touched dart files>
+        - cd quwoquan_app && flutter test test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart test/ui/content/entry/create_entry_information_architecture_widget_test.dart test/ui/content/entry/create_entry_runtime_flag_test.dart
+        - cd quwoquan_app && flutter test test/local_contract/content/create/create_video_entry_mode__local_contract_test.dart test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
+        - cd quwoquan_app && flutter test test/app/shell/main_app_shell_widget_test.dart
+        - cd quwoquan_app && flutter test test/local_contract/content/create/create_local_draft_repository__local_contract_test.dart test/local_contract/content/create/create_local_draft_page__local_contract_test.dart test/local_contract/content/create/create_draft_autosave_timing__local_contract_test.dart test/ui/content/entry/draft_recovery_widget_test.dart
+        - bash agent_ops/scaffold/verify_acceptance_standard.sh
+        - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+        - make verify-app-page-horizontal-quality
+        - make verify-app-mock-isolation
+    notes:
+      - 本轮不新增公开 route、metadata 字段或服务端发布契约；`gallery` / `capture` 仅更新 App route query 语义和端侧分流。
+      - 社交入口路由保留在业务上下文中，移动端底栏 `+` 不再露出。

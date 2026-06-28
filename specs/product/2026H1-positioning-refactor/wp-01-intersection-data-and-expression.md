@@ -96,8 +96,8 @@
 ## 4. 改动范围
 
 - `quwoquan_service/services/content-service/internal/infrastructure/recommendation/intersection_source.go`（新数据源 + 文案 + 字段补全 + kind 标准名迁移）
-- `quwoquan_service/services/content-service/internal/application/intersection_service.go`（`evidenceKindRank` 标准化、保鲜、候选过滤）
-- `quwoquan_service/services/content-service/internal/application/feed_intersection_mixer.go`（feed 理由混排消费新 kind）
+- `quwoquan_service/services/content-service/internal/application/intersection/intersection_service.go`（`evidenceKindRank` 标准化、保鲜、候选过滤）
+- `quwoquan_service/services/content-service/internal/application/feed/feed_intersection_mixer.go`（feed 理由混排消费新 kind）
 - favorite 退场触达面：`contracts/metadata/content/post/{service,fields,behaviors,events,storage,aggregate,ui_config}.yaml`、`_shared/{request_context,types,redis_keyspace}.yaml`、5 个投影 yaml、`recommendation/rec_model/projections/learning_events.yaml`、`assistant/assistant_run/fields.yaml`；content-service handler/application/推荐管线；rec-model-service 与 `scripts/ml/**`；端侧（详见 WP 各包与词典退场清单）
 - `contracts/metadata/content/test_fixtures/**`、`_shared/test_fixtures/app_{alpha,beta}_seed_manifest.json`
 - `contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml`（字段收敛 + description 注记；见 §18 契约表）
@@ -127,7 +127,7 @@
 
 ## 附录 A · kind → rank / icon / 维度短语映射清单（T6，交接 WP3）
 
-> 真相源：云侧 `intersection_service.go#evidenceKindRank`（rank 数值同源）+ 交集词典 §5.4 唯一注册表。
+> 真相源：云侧 `contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml` + 生成表 `internal/generated/intersection_kind_table.go`（rank 数值同源）+ 交集词典 §5.4 唯一注册表。
 > 端侧约束（G2）：本清单**只用于展示层降级**（排序分组与 fallback 图标选择）；文案一律消费云侧 `primaryText/secondaryText/displayText`，端侧不得依据 kind 做语义分支或本地拼装文案；未知 kind 必须优雅降级（落「未知」行，不崩溃、不过滤）。
 
 | rank | 维度短语 | kind（注册表标准名） | fallback 图标语义 |

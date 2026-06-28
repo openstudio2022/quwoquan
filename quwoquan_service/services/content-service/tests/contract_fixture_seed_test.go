@@ -31,27 +31,27 @@ type contentFixtureSeedSet struct {
 }
 
 type contentFixturePost struct {
-	ID            string   `json:"id"`
-	PostID        string   `json:"postId"`
-	ContentType   string   `json:"contentType"`
-	Identity      string   `json:"contentIdentity"`
-	AuthorID      string   `json:"authorId"`
-	DisplayName   string   `json:"displayName"`
-	AvatarURL     string   `json:"authorAvatarUrl"`
-	Title         string   `json:"title"`
-	Body          string   `json:"body"`
-	Summary       string   `json:"summary"`
-	Tags          []string `json:"tagRefs"`
-	CoverURL      string   `json:"coverUrl"`
-	ImageURLs     []string `json:"imageUrls"`
-	VideoURL      string   `json:"videoUrl"`
-	LocationName  string   `json:"locationName"`
-	LikeCount     int64    `json:"likeCount"`
-	CommentCount  int64    `json:"commentCount"`
-	ShareCount    int64    `json:"shareCount"`
-	CreatedAt     string   `json:"createdAt"`
-	UpdatedAt     string   `json:"updatedAt"`
-	PublishedAt   string   `json:"publishedAt"`
+	ID           string   `json:"id"`
+	PostID       string   `json:"postId"`
+	ContentType  string   `json:"contentType"`
+	Identity     string   `json:"contentIdentity"`
+	AuthorID     string   `json:"authorId"`
+	DisplayName  string   `json:"displayName"`
+	AvatarURL    string   `json:"authorAvatarUrl"`
+	Title        string   `json:"title"`
+	Body         string   `json:"body"`
+	Summary      string   `json:"summary"`
+	Tags         []string `json:"tagRefs"`
+	CoverURL     string   `json:"coverUrl"`
+	ImageURLs    []string `json:"imageUrls"`
+	VideoURL     string   `json:"videoUrl"`
+	LocationName string   `json:"locationName"`
+	LikeCount    int64    `json:"likeCount"`
+	CommentCount int64    `json:"commentCount"`
+	ShareCount   int64    `json:"shareCount"`
+	CreatedAt    string   `json:"createdAt"`
+	UpdatedAt    string   `json:"updatedAt"`
+	PublishedAt  string   `json:"publishedAt"`
 }
 
 type contentFixtureComment struct {

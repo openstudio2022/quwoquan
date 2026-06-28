@@ -50,8 +50,8 @@ sit_acceptance:
       - artifact: artifacts/search-load/<prod-sim-or-real-cluster>/search_repeatability_multi_replica_report.json
       - artifact: artifacts/stackctl/prod/<run-id>/search_release_verify_report.json
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/post_retrieve__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/place_search_projection__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/post_retrieve__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/searchprojection/place_search_projection__local_contract_test.go
       - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/search_signal_consumer__local_contract_test.go
       - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
       - file: quwoquan_service/services/circle-service/tests/api_integration/circle_search_contract__api_integration_test.go
