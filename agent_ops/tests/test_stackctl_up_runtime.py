@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import io
 import tempfile
 import unittest
@@ -8,6 +9,7 @@ from unittest import mock
 
 from agent_ops.deploy import legal_static
 from agent_ops.deploy import stackctl
+from agent_ops.deploy.lib.common import load_json_yaml
 from agent_ops.deploy.probes import run_environment_integration_probe as integration_probe
 from quwoquan_app.scripts.gamma import run_local_gamma_t3 as local_gamma_t3
 
@@ -95,6 +97,34 @@ class StackctlUpRuntimeTest(unittest.TestCase):
 
             verified = legal_static.verify_package("alpha", output_root=output_root)
             self.assertEqual(verified["status"], "ok")
+
+    def test_legal_static_package_builds_when_pyyaml_is_unavailable(self) -> None:
+        real_import = builtins.__import__
+
+        def fake_import(name: str, *args: object, **kwargs: object) -> object:
+            if name == "yaml":
+                raise ModuleNotFoundError(name)
+            return real_import(name, *args, **kwargs)
+
+        with (
+            mock.patch("builtins.__import__", side_effect=fake_import),
+            tempfile.TemporaryDirectory() as tmp_dir,
+        ):
+            manifest = load_json_yaml(legal_static.DEFAULT_MANIFEST)
+            payload = legal_static.build_package("alpha", output_root=Path(tmp_dir))
+
+        self.assertEqual(manifest["schemaVersion"], "legal-static/v1")
+        self.assertEqual(manifest["owner"]["appName"], "趣我圈")
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(
+            [doc["slug"] for doc in manifest["documents"]],
+            [
+                "user-agreement",
+                "privacy-policy",
+                "permissions",
+                "third-party-sdk-list",
+            ],
+        )
 
     def test_legal_static_prod_requires_final_legal_identity(self) -> None:
         _, issues = legal_static.validate_manifest("prod")

@@ -1,0 +1,945 @@
+--------- beginning of system
+06-26 16:53:04.824   559  1919 I ActivityManager: Force stopping com.quwoquan.quwoquan_app appid=10206 user=0: from pid 3848
+06-26 16:53:04.826   559  1919 I ActivityManager: Killing 3652:com.quwoquan.quwoquan_app/u0a206 (adj 0): stop com.quwoquan.quwoquan_app due to from pid 3848
+--------- beginning of main
+06-26 16:53:04.827   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-26 16:53:04.827   559   589 D DisplayManagerService: Drop pending events for gone uid 10206
+06-26 16:53:04.827   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-26 16:53:04.827   559   713 D InetDiagMessage: Destroyed live tcp sockets for uids={10206} in 1ms
+06-26 16:53:04.828   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-26 16:53:04.828   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-26 16:53:04.828   559   713 D InetDiagMessage: Destroyed live tcp sockets for uids={20206} in 0ms
+06-26 16:53:04.830   559  1919 W ActivityTaskManager: Force removing ActivityRecord{7298978 u0 com.quwoquan.quwoquan_app/.MainActivity t22 f}}: app died, no saved state
+06-26 16:53:04.835   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-26 16:53:04.839   830   881 V WindowManagerShell: Transition requested (#11): android.os.BinderProxy@2928326 TransitionRequestInfo { type = CLOSE, triggerTask = TaskInfo{userId=0 taskId=22 displayId=0 isRunning=false baseIntent=Intent { flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity } baseActivity=null topActivity=null origActivity=null realActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} numActivities=0 lastActiveTime=52093 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{android.window.IWindowContainerToken$Stub$Proxy@1bb9b67} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=null launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 11 }
+06-26 16:53:04.843   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10206/pid_3652
+06-26 16:53:04.843   559  1923 I ImeTracker: com.quwoquan.quwoquan_app:1b291552: onRequestHide at ORIGIN_SERVER reason HIDE_REMOVE_CLIENT fromUser false
+06-26 16:53:04.843   355   355 I Zygote  : Process 3652 exited due to signal 9 (Killed)
+06-26 16:53:04.843   559  1923 I ImeTracker: com.quwoquan.quwoquan_app:1b291552: onCancelled at PHASE_SERVER_SHOULD_HIDE
+06-26 16:53:04.848   559   584 I WindowManager: WIN DEATH: Window{1fef874 u0 com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity}
+06-26 16:53:04.848   559   584 W InputManager-JNI: Input channel object '1fef874 com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity (client)' was disposed without first being removed with the input manager!
+06-26 16:53:04.850   559  1919 I AppsFilter: interaction: PackageSetting{35db86f com.example.quwoquan_app/10204} -> PackageSetting{bc07b68 com.quwoquan.quwoquan_app/10206} BLOCKED
+06-26 16:53:04.853   559   591 W ActivityManager: setHasOverlayUi called on unknown pid: 3652
+06-26 16:53:04.855   990   990 D CarrierSvcBindHelper: onHandleForceStop: [com.quwoquan.quwoquan_app]
+06-26 16:53:04.856   559   639 V ActivityManager: Got obituary of 3652:com.quwoquan.quwoquan_app
+06-26 16:53:04.859   397   397 I BpBinder: onLastStrongRef automatically unlinking death recipients:
+06-26 16:53:04.861   830   881 D WindowManagerShell: setLauncherKeepClearAreaHeight: visible=true, height=527
+06-26 16:53:04.864   559   713 D InetDiagMessage: Destroyed 1 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-26 16:53:04.864   559   713 D InetDiagMessage: Destroyed live tcp sockets for uids={10197} in 31ms
+06-26 16:53:04.865   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-26 16:53:04.865   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-26 16:53:04.865   559   713 D InetDiagMessage: Destroyed live tcp sockets for uids={20197} in 0ms
+06-26 16:53:04.868   990   990 D CarrierSvcBindHelper: No carrier app for: 0
+06-26 16:53:04.882  1436  1436 D NexusLauncherModelDelegate: notifySmartspaceEvent: SmartspaceTargetEvent{mSmartspaceTarget=null, mSmartspaceActionId='null', mEventType=6}
+06-26 16:53:04.919   559   591 V WindowManager: Unknown focus tokens, dropping reportFocusChanged
+06-26 16:53:04.940  1436  1436 D BaseDepthController: setSurface:
+06-26 16:53:04.940  1436  1436 D BaseDepthController: 	mWaitingOnSurfaceValidity: false
+06-26 16:53:04.940  1436  1436 D BaseDepthController: 	mSurface: Surface(name=com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity)/@0x47390fa
+06-26 16:53:04.958   559  1080 W ActivityTaskManager: callingPackage for (uid=2000, pid=3853) has no WPC
+06-26 16:53:04.971   559  1080 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_OVERRIDE
+06-26 16:53:04.971   559  1080 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_FULLSCREEN_OVERRIDE
+06-26 16:53:04.971   559  1080 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE
+06-26 16:53:04.972   559  1080 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@e7ab1a32 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+06-26 16:53:04.974   559  1080 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_RESIZEABLE_ACTIVITY_OVERRIDES
+06-26 16:53:04.974   559  1080 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_MIN_ASPECT_RATIO_OVERRIDE
+06-26 16:53:04.976  1436  1436 I TopTaskTracker: onTaskMovedToFront: (moved taskInfo to front) taskId=20, baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.HOME] flg=0x10000100 cmp=com.google.android.apps.nexuslauncher/.NexusLauncherActivity }
+06-26 16:53:04.978  1436  1436 D StatsLog: LAUNCHER_ONRESUME
+06-26 16:53:04.981   559   580 I system_server: Background concurrent mark compact GC freed 24MB AllocSpace bytes, 4(128KB) LOS objects, 46% free, 28MB/52MB, paused 2.295ms,5.486ms total 126.776ms
+06-26 16:53:04.985   559   584 D OomAdjuster: Not killing cached processes
+06-26 16:53:04.987   559  1080 I ActivityTaskManager: Add Task{e87a8b6 #22 type=standard A=10206:com.quwoquan.quwoquan_app} to hidden list because adding Task{5975d5f #23 type=standard A=10206:com.quwoquan.quwoquan_app}
+06-26 16:53:04.989   559  1080 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity} with LAUNCH_SINGLE_TOP from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+06-26 16:53:04.991   559   591 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@e7ab1a32 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+06-26 16:53:04.997  1436  1528 D QuickstepModelDelegate: notifyAppTargetEvent action=1 launchLocation=workspace/0/[-1,-1]/[1,1]
+06-26 16:53:05.005   559   582 W System  : A resource failed to call release.
+06-26 16:53:05.014  1249  1249 I NearbySharing: SharingTileService destroyed
+06-26 16:53:05.042  1436  1436 W SplitSelectStateCtor: Missing session instanceIds
+06-26 16:53:05.042  1436  1436 D StatsLog: LAUNCHER_SPLIT_SELECTION_EXIT_INTERRUPTED
+06-26 16:53:05.044   830   881 D WindowManagerShell: setLauncherKeepClearAreaHeight: visible=false, height=527
+06-26 16:53:05.044   559   639 I AppsFilter: interaction: PackageSetting{35db86f com.example.quwoquan_app/10204} -> PackageSetting{f13f517 com.quwoquan.quwoquan_app/10206} BLOCKED
+06-26 16:53:05.047  1596  1768 I AiAiEcho: Predicting[0]:  [CONTEXT sampling_count=5 ]
+06-26 16:53:05.048  1596  1768 I AiAiEcho: EchoTargets:
+06-26 16:53:05.048  1596  1768 I AiAiEcho: Filtered by AiAi flag check:
+06-26 16:53:05.048  1596  1768 I AiAiEcho: [CONTEXT ratelimit_period="10 SECONDS" ]
+06-26 16:53:05.048  1596  1768 I AiAiEcho: Ranked targets strategy: SORT, count: 0, ranking metadata:  [CONTEXT ratelimit_period="10 SECONDS" ]
+06-26 16:53:05.048  1596  1768 I AiAiEcho: #remoteViewsTwiddler: feature disabled.
+06-26 16:53:05.050  1596  1768 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface home with targets# 0 (types=[])
+06-26 16:53:05.050  1436  1436 I TopTaskTracker: onTaskMovedToFront: (moved taskInfo to front) taskId=23, baseIntent=Intent { flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity }
+06-26 16:53:05.053   355   355 D Zygote  : Forked child process 3859
+06-26 16:53:05.055   559   599 I ActivityManager: Start proc 3859:com.quwoquan.quwoquan_app/u0a206 for next-top-activity {com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity}
+06-26 16:53:05.055  1436  1436 D SsBaseTemplateCard: No text view can be set up
+06-26 16:53:05.055  1436  1436 D SsBaseTemplateCard: Passed-in item info is null
+06-26 16:53:05.055  1436  1436 D SsBaseTemplateCard: Passed-in item info is null
+06-26 16:53:05.055  1436  1436 D SsBaseTemplateCard: Passed-in item info is null
+06-26 16:53:05.055  1436  1436 I SsBaseTemplateCard: Secondary card pane is null
+06-26 16:53:05.067   559  1640 W AppSearchIcing: icing-search-engine.cc:321: Error: 5, Message: Document (com.google.android.googlequicksearchbox$OneSearchZeroStateGoogleSuggestions/default, zp) not found.
+06-26 16:53:05.075   559   639 D CoreBackPreview: Window{30789c u0 Splash Screen com.quwoquan.quwoquan_app}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@b03667a, mPriority=0, mIsAnimationCallback=false}
+06-26 16:53:05.076  3859  3859 I an.quwoquan_app: Using CollectorTypeCMC GC.
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: AppSearch 0-state cache not available, fallback to AGA
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: java.util.concurrent.CompletionException: java.util.NoSuchElementException: No value present
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at java.util.concurrent.CompletableFuture.encodeThrowable(CompletableFuture.java:308)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at java.util.concurrent.CompletableFuture.completeThrowable(CompletableFuture.java:323)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at java.util.concurrent.CompletableFuture$UniAccept.tryFire(CompletableFuture.java:684)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:486)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at java.util.concurrent.CompletableFuture.completeExceptionally(CompletableFuture.java:2138)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at com.google.android.apps.nexuslauncher.allapps.E0.onResult(go/retraceme 2855a437b73635ce9cad76b9289087e631bbb67fc90008a0da13d343a00e5041:67)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at android.app.appsearch.SearchSessionUtil$1.lambda$onResult$0(go/retraceme 64eee9e9f568ff45978879ad2ff83146f2618ee8a88278736fbdf5fae931976e:144)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at android.app.appsearch.SearchSessionUtil$1.$r8$lambda$CEk3q8sDAQVhU3rQwVueB8FAj_M(go/retraceme 64eee9e9f568ff45978879ad2ff83146f2618ee8a88278736fbdf5fae931976e:1)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at android.app.appsearch.SearchSessionUtil$1$$ExternalSyntheticLambda0.run(go/retraceme 64eee9e9f568ff45978879ad2ff83146f2618ee8a88278736fbdf5fae931976e:22)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at android.os.Handler.handleCallback(Handler.java:959)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at android.os.Handler.dispatchMessage(Handler.java:100)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at android.os.Looper.loopOnce(Looper.java:232)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at android.os.Looper.loop(Looper.java:317)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at android.os.HandlerThread.run(HandlerThread.java:85)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: Caused by: java.util.NoSuchElementException: No value present
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at java.util.Optional.get(Optional.java:143)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	at com.google.android.apps.nexuslauncher.allapps.E0.onResult(go/retraceme 2855a437b73635ce9cad76b9289087e631bbb67fc90008a0da13d343a00e5041:28)
+06-26 16:53:05.085  1436  1776 D OneSearchSuggestProvider: 	... 8 more
+06-26 16:53:05.086  1436  1776 D OneSearchSuggestProvider: Created the binder channel successfully for end point service =com.google.android.apps.search.googleapp.search.suggest.plugins.onesearch.server.OneSearchSuggestService , mChannel=i1{delegate=f{logId=9, target=directaddress:///AndroidComponentAddress%5BIntent%20%7B%20act=grpc.io.action.BIND%20cmp=com.google.android.googlequicksearchbox/com.google.android.apps.search.googleapp.search.suggest.plugins.onesearch.server.OneSearchSuggestService%20%7D%5D}} , mOneSearchConnection=l2.Z@afde5e5
+06-26 16:53:05.092  3859  3859 E an.quwoquan_app: Not starting debugger since process cannot load the jdwp agent.
+06-26 16:53:05.119  3859  3859 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+06-26 16:53:05.140  1726  1726 I A       : (REDACTED) Created gRPC endpoint for service %s
+06-26 16:53:05.148  3859  3859 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+06-26 16:53:05.148  3859  3859 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+06-26 16:53:05.167  1726  1726 I BgTaskExecutorImpl: (REDACTED) Starting %s background task %s.
+06-26 16:53:05.183  3859  3859 D nativeloader: Configuring clns-7 for other apk /data/app/~~XBUgZk6WrpnuwwOL9FqkEQ==/com.quwoquan.quwoquan_app-Cnv3docJa91-6v1nBLhgPQ==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~XBUgZk6WrpnuwwOL9FqkEQ==/com.quwoquan.quwoquan_app-Cnv3docJa91-6v1nBLhgPQ==/lib/arm64:/data/app/~~XBUgZk6WrpnuwwOL9FqkEQ==/com.quwoquan.quwoquan_app-Cnv3docJa91-6v1nBLhgPQ==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.quwoquan.quwoquan_app
+06-26 16:53:05.201  1436  1436 D SearchTargetUtil: queryLength=0 size=0
+06-26 16:53:05.210  3859  3859 V GraphicsEnvironment: Currently set values for:
+06-26 16:53:05.210  3859  3859 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+06-26 16:53:05.210  3859  3859 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+06-26 16:53:05.210  3859  3859 V GraphicsEnvironment: Global.Settings values are invalid: number of packages: 0, number of values: 0
+06-26 16:53:05.210  3859  3859 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+06-26 16:53:05.233  1726  2380 I NetworkRecognitionRnr: Using pair HTTP connection
+06-26 16:53:05.236   559  1923 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ENABLE_FAKE_FOCUS
+06-26 16:53:05.279   830  3857 V WindowManagerShell: onTransitionReady(transaction=2400886718938)
+06-26 16:53:05.279   830   881 V WindowManagerShell: onTransitionReady (#11) android.os.BinderProxy@2928326: {id=11 t=CLOSE f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@945d1f1} m=OPEN f=MOVE_TO_TOP leash=Surface(name=Task=23)/@0x9947375 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@a1801d6} m=CLOSE f=NONE leash=Surface(name=Task=22)/@0xe0ff0a sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{null m=TO_FRONT f=IS_WALLPAPER leash=Surface(name=WallpaperWindowToken{bf88452 token=android.os.Binder@23d20dd})/@0x93dd37b sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0}]}
+06-26 16:53:05.280   830   881 V WindowManagerShell: Playing animation for (#11) android.os.BinderProxy@2928326@0
+06-26 16:53:05.281   830   881 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultMixedHandler@dcef271
+06-26 16:53:05.281   830   881 V WindowManagerShell:  try handler com.android.wm.shell.keyguard.KeyguardTransitionHandler@361d856
+06-26 16:53:05.281   830   881 V WindowManagerShell:  try handler com.android.wm.shell.pip.PipTransition@91780d7
+06-26 16:53:05.281   830   881 V WindowManagerShell:  try handler com.android.wm.shell.activityembedding.ActivityEmbeddingController@58d8dc4
+06-26 16:53:05.282   830   881 V WindowManagerShell:  try handler com.android.wm.shell.recents.RecentsTransitionHandler@80f44ad
+06-26 16:53:05.282   830   881 V ShellRecents: RecentsTransitionHandler.startAnimation: no controller found
+06-26 16:53:05.282   830   881 V WindowManagerShell:  try handler com.android.wm.shell.splitscreen.StageCoordinator@3b23e2
+06-26 16:53:05.282   830   881 V WindowManagerShell:  try handler com.android.wm.shell.transition.RemoteTransitionHandler@e95373
+06-26 16:53:05.282   830   881 V WindowManagerShell: Transition doesn't have explicit remote, search filters for match for {id=11 t=CLOSE f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@945d1f1} m=OPEN f=MOVE_TO_TOP leash=Surface(name=Task=23)/@0x9947375 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@a1801d6} m=CLOSE f=NONE leash=Surface(name=Task=22)/@0xe0ff0a sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{null m=TO_FRONT f=IS_WALLPAPER leash=Surface(name=WallpaperWindowToken{bf88452 token=android.os.Binder@23d20dd})/@0x93dd37b sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0}]}
+06-26 16:53:05.282   830   881 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=undefined independent=true modes=[OPEN,TO_FRONT] flags=IN_TASK_WITH_EMBEDDED_ACTIVITY mustBeTask=false order=ANY topActivity=ComponentInfo{com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity} launchCookie=null},{atype=undefined independent=true modes=[CLOSE,TO_BACK] flags=IN_TASK_WITH_EMBEDDED_ACTIVITY mustBeTask=false order=ANY topActivity=null launchCookie=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@c8529c0, appThread = android.app.IApplicationThread$Stub$Proxy@1eb76f9, debugName = OverlaySwipeBack }}
+06-26 16:53:05.282   830   881 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=dream independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null},{atype=home independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@46b9c2e, appThread = android.app.IApplicationThread$Stub$Proxy@4fbb3cf, debugName = LauncherToDream }}
+06-26 16:53:05.282   830   881 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x100 checks=[{atype=home independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=TOP topActivity=ComponentInfo{com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity} launchCookie=null},{atype=standard independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@10ed15c, appThread = android.app.IApplicationThread$Stub$Proxy@415c65, debugName = QuickstepLaunchHome }}
+06-26 16:53:05.282   830   881 V WindowManagerShell:  Delegate animation for (#11) to null
+06-26 16:53:05.282   830   881 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultTransitionHandler@1194d3a
+06-26 16:53:05.282   830   881 V WindowManagerShell: start default transition animation, info = {id=11 t=CLOSE f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@945d1f1} m=OPEN f=MOVE_TO_TOP leash=Surface(name=Task=23)/@0x9947375 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@a1801d6} m=CLOSE f=NONE leash=Surface(name=Task=22)/@0xe0ff0a sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{null m=TO_FRONT f=IS_WALLPAPER leash=Surface(name=WallpaperWindowToken{bf88452 token=android.os.Binder@23d20dd})/@0x93dd37b sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0}]}
+06-26 16:53:05.282   830   881 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@e4c2c57 animAttr=0xb type=CLOSE isEntrance=false
+06-26 16:53:05.283  1726  2775 I A       : [Upload] Connected
+06-26 16:53:05.284   830   881 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@e3b9344 animAttr=0xa type=CLOSE isEntrance=true
+06-26 16:53:05.285   830   881 V WindowManagerShell:  animated by com.android.wm.shell.transition.DefaultTransitionHandler@1194d3a
+06-26 16:53:05.299   559   588 V WindowManager: Sent Transition (#11) createdAt=06-26 16:53:04.831 via request=TransitionRequestInfo { type = CLOSE, triggerTask = TaskInfo{userId=0 taskId=22 displayId=0 isRunning=false baseIntent=Intent { flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity } baseActivity=null topActivity=null origActivity=null realActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} numActivities=0 lastActiveTime=52093 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{RemoteToken{95bcd9 Task{e87a8b6 #22 type=standard A=10206:com.quwoquan.quwoquan_app}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=null launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 11 }
+06-26 16:53:05.299   559   588 V WindowManager:     startWCT=WindowContainerTransaction { changes = {} hops = [] errorCallbackToken=null taskFragmentOrganizer=null }
+06-26 16:53:05.299   559   588 V WindowManager:     info={id=11 t=CLOSE f=0x0 trk=0 r=[0@Point(0, 0)] c=[
+06-26 16:53:05.299   559   588 V WindowManager:         {WCT{RemoteToken{b79db8 Task{5975d5f #23 type=standard A=10206:com.quwoquan.quwoquan_app}}} m=OPEN f=MOVE_TO_TOP leash=Surface(name=Task=23)/@0x42622a sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},
+06-26 16:53:05.299   559   588 V WindowManager:         {WCT{RemoteToken{95bcd9 Task{e87a8b6 #22 type=standard A=10206:com.quwoquan.quwoquan_app}}} m=CLOSE f=NONE leash=Surface(name=Task=22)/@0x41c6a8f sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},
+06-26 16:53:05.299   559   588 V WindowManager:         {null m=TO_FRONT f=IS_WALLPAPER leash=Surface(name=WallpaperWindowToken{bf88452 token=android.os.Binder@23d20dd})/@0x4d5f5ee sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0}
+06-26 16:53:05.299   559   588 V WindowManager:     ]}
+06-26 16:53:05.304   559   639 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 16:53:05.306  1726  2775 I NetworkRecognitionRnr: Using pair HTTP connection
+06-26 16:53:05.311  1726  1726 E A       : onError
+06-26 16:53:05.311  1726  1726 E A       : com.google.android.apps.gsa.shared.speech.b.l: errorCode: 65561, engine: 2
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.staticplugins.bp.a.f.a(PG:23)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.s3.o.hg(PG:13)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.ch.g.a.f.e(PG:9)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.d(PG:162)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.iN(PG:26)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.s3.p.c(PG:102)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.s3.q.run(PG:1)
+06-26 16:53:05.311  1726  1726 E A       : 	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:487)
+06-26 16:53:05.311  1726  1726 E A       : 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.e.run(PG:12)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.bg.run(PG:3)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.bg.run(PG:3)
+06-26 16:53:05.311  1726  1726 E A       : 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+06-26 16:53:05.311  1726  1726 E A       : 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+06-26 16:53:05.311  1726  1726 E A       : 	at java.lang.Thread.run(Thread.java:1012)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.l.run(PG:42)
+06-26 16:53:05.311  1726  1726 E A       : Caused by: com.google.android.apps.gsa.shared.speech.b.n: errorCode: 65586, engine: 2
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.s3.o.hg(PG:6)
+06-26 16:53:05.311  1726  1726 E A       : 	... 14 more
+06-26 16:53:05.311  1726  1726 E A       : Caused by: com.google.android.apps.gsa.shared.speech.b.j: errorCode: 401, engine: 2
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.assistant.shared.n.i.b(PG:30)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.s3.producers.j.hq(PG:11)
+06-26 16:53:05.311  1726  1726 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.d(PG:135)
+06-26 16:53:05.311  1726  1726 E A       : 	... 12 more
+06-26 16:53:05.314  1726  2765 I A       : [Upload] Connected
+06-26 16:53:05.317  1726  1726 W A       : Failed to sync device settings.
+06-26 16:53:05.317  1726  1726 I A       : Retrying to sync device settings.
+06-26 16:53:05.319  1726  1726 W JobInfo : Job 'com.google.android.googlequicksearchbox/com.google.android.apps.gsa.tasks.BackgroundTasksJobService#-353' has a deadline with functional constraints and an extremely short time window of 0 ms (delay=30000, deadline=30000). The functional constraints are not likely to be satisfied when the job runs.
+06-26 16:53:05.321   559  1812 W JobInfo : Job 'com.google.android.googlequicksearchbox/com.google.android.apps.gsa.tasks.BackgroundTasksJobService#-353' has a deadline with functional constraints and an extremely short time window of 0 ms (delay=30000, deadline=30000). The functional constraints are not likely to be satisfied when the job runs.
+06-26 16:53:05.321   559  1812 W JobInfo : Job 'com.google.android.googlequicksearchbox/com.google.android.apps.gsa.tasks.BackgroundTasksJobService#-353' has a deadline with functional constraints and an extremely short time window of 0 ms (delay=30000, deadline=30000). The functional constraints are not likely to be satisfied when the job runs.
+06-26 16:53:05.339   559  1812 W JobScheduler: Job didn't exist in JobStore: 8135b0c #u0a145/-353 com.google.android.googlequicksearchbox/com.google.android.apps.gsa.tasks.BackgroundTasksJobService
+06-26 16:53:05.436  3859  3882 D nativeloader: Load /data/app/~~XBUgZk6WrpnuwwOL9FqkEQ==/com.quwoquan.quwoquan_app-Cnv3docJa91-6v1nBLhgPQ==/base.apk!/lib/arm64-v8a/libflutter.so using ns clns-7 from class loader (caller=/data/app/~~XBUgZk6WrpnuwwOL9FqkEQ==/com.quwoquan.quwoquan_app-Cnv3docJa91-6v1nBLhgPQ==/base.apk): ok
+06-26 16:53:05.442   559  1919 D FileUtils: Rounded bytes from 2095906816 to 4000000000
+06-26 16:53:05.450  1726  1749 W earchbox:search: Missing inline cache for void com.google.android.apps.gsa.tasks.n.g(int, com.google.android.apps.gsa.tasks.bd, com.google.android.apps.gsa.tasks.u)
+06-26 16:53:05.459  3859  3883 D skia    : [SkFontMgr Android Parser] '/product/etc/fonts_customization.xml' could not be opened
+06-26 16:53:05.484  3859  3884 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+06-26 16:53:05.484  3859  3884 I EGL_emulation: Opening libGLESv2_emulation.so
+06-26 16:53:05.471  3859  3859 W an.quwoquan_app: type=1400 audit(0.0:68): avc:  denied  { read } for  name="max_map_count" dev="proc" ino=19287 scontext=u:r:untrusted_app:s0:c206,c256,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.quwoquan.quwoquan_app
+06-26 16:53:05.488  1436  1703 D EGL_emulation: app_time_stats: avg=1610.31ms min=1.21ms max=7961.37ms count=5
+06-26 16:53:05.582  3859  3884 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+06-26 16:53:05.591   559  1919 D WifiNl80211Manager: Scan result ready event
+06-26 16:53:05.591   559  1919 D WifiNative: Scan result ready event
+06-26 16:53:05.603   559   704 I HalDevMgr: bestIfaceCreationProposal is null, requestIface=STA, existingIface=[name=wlan0 type=STA]
+06-26 16:53:05.607   841  2181 I FrewleTileCacheManagerV: (REDACTED) Fetched %d AP models from cache
+06-26 16:53:05.619   841  1974 I ActivityScheduler: nextTriggerTime: 276834, in 211429ms, detectorType: 39, FULL_TYPE alarmWindowMillis: 80000
+06-26 16:53:05.786   559   639 W Telecom : TelecomServiceImpl$1: registerPhoneAccount - attempt to set a group from a non-system caller.: TSI.rPA(cqq)@AHw
+06-26 16:53:05.786   559   639 I Telecom : TelecomServiceImpl$1: registerPhoneAccount: account=[[ ] PhoneAccount: ComponentInfo{com.quwoquan.quwoquan_app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0} Capabilities: SelfManaged  Audio Routes: BESW Schemes: tel  Extras: null GroupId: *** SC Restrictions: [NONE]]: TSI.rPA(cqq)@AHw
+06-26 16:53:05.787   559   639 I Telecom : PhoneAccountRegistrar: Modify account: [ComponentInfo{com.quwoquan.quwoquan_app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0}(lbl: Callkit Incoming In-App Call -> 趣我圈)]: TSI.rPA(cqq)@AHw
+06-26 16:53:05.788   559   639 I Telecom : AppLabelProxy: package com.quwoquan.quwoquan_app: name is 趣我圈: TSI.rPA(cqq)@AHw
+06-26 16:53:05.794   559   639 I Telecom : CallsManager: handlePhoneAccountChanged: phoneAccount=[[X] PhoneAccount: ComponentInfo{com.quwoquan.quwoquan_app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0} Capabilities: SelfManaged  Audio Routes: BESW Schemes: tel  Extras: null GroupId: *** SC Restrictions: [NONE]]: TSI.rPA(cqq)@AHw
+06-26 16:53:05.794  3859  3859 D InAppCallManager: PhoneAccount registered.
+06-26 16:53:05.794   830   881 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#11) android.os.BinderProxy@2928326@0
+06-26 16:53:05.798   559  1812 E IPCThreadState: Binder transaction failure. id: 132302, BR_*: 29189, error: -22 (Invalid argument)
+06-26 16:53:05.800   559  1812 W ActivityManager: pid 559 system sent binder code 7 with flags 1 to frozen apps and got error -32
+06-26 16:53:05.800   559   660 D ActivityManager: freezing 3634 com.android.imsserviceentitlement
+06-26 16:53:05.803  3859  3859 D nativeloader: Load /data/app/~~XBUgZk6WrpnuwwOL9FqkEQ==/com.quwoquan.quwoquan_app-Cnv3docJa91-6v1nBLhgPQ==/base.apk!/lib/arm64-v8a/libdartjni.so using ns clns-7 from class loader (caller=/data/app/~~XBUgZk6WrpnuwwOL9FqkEQ==/com.quwoquan.quwoquan_app-Cnv3docJa91-6v1nBLhgPQ==/base.apk): ok
+06-26 16:53:05.805   559   588 V WindowManager: Finish Transition (#11): created at 06-26 16:53:04.831 collect-started=0.064ms request-sent=0.292ms started=13.557ms ready=406.129ms sent=447.443ms finished=967.146ms
+06-26 16:53:05.806   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-26 16:53:05.806   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-26 16:53:05.806   559   713 D InetDiagMessage: Destroyed live tcp sockets for uids={10133} in 0ms
+06-26 16:53:05.808   559  1812 W WindowManager: Exception thrown during dispatchAppVisibility Window{1fef874 u0 com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity EXITING}
+06-26 16:53:05.808   559  1812 W WindowManager: android.os.DeadObjectException
+06-26 16:53:05.808   559  1812 W WindowManager: 	at android.os.BinderProxy.transactNative(Native Method)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at android.os.BinderProxy.transact(BinderProxy.java:586)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at android.view.IWindow$Stub$Proxy.dispatchAppVisibility(IWindow.java:553)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at com.android.server.wm.WindowState.sendAppVisibilityToClients(WindowState.java:3253)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at com.android.server.wm.WindowContainer.sendAppVisibilityToClients(WindowContainer.java:1289)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at com.android.server.wm.WindowToken.setClientVisible(WindowToken.java:403)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at com.android.server.wm.ActivityRecord.setClientVisible(ActivityRecord.java:7166)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at com.android.server.wm.ActivityRecord.postApplyAnimation(ActivityRecord.java:5881)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at com.android.server.wm.ActivityRecord.commitVisibility(ActivityRecord.java:5823)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at com.android.server.wm.Transition.finishTransition(Transition.java:1286)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at com.android.server.wm.TransitionController.finishTransition(TransitionController.java:937)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.finishTransition(WindowOrganizerController.java:494)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at android.window.IWindowOrganizerController$Stub.onTransact(IWindowOrganizerController.java:289)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.onTransact(WindowOrganizerController.java:204)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at android.os.Binder.execTransactInternal(Binder.java:1500)
+06-26 16:53:05.808   559  1812 W WindowManager: 	at android.os.Binder.execTransact(Binder.java:1444)
+06-26 16:53:05.808   559  1812 W Process : Unable to open /proc/3652/status
+06-26 16:53:05.826   830   881 V WindowManagerShell: Track 0 became idle
+06-26 16:53:05.826   830   881 V WindowManagerShell: All active transition animations finished
+06-26 16:53:05.830   559  1919 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 16:53:05.832   559  1919 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 16:53:05.833  1436  1436 I TopTaskTracker: onTaskRemoved: taskId=22
+06-26 16:53:05.834   559  1919 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 16:53:05.834  1436  1436 I TopTaskTracker: onTaskRemoved: taskId=22
+06-26 16:53:05.853  3859  3859 W HWUI    : Unknown dataspace 0
+06-26 16:53:05.858   397   397 E BpTransactionCompletedListener: Failed to transact (-32)
+06-26 16:53:05.858   397   397 E BpTransactionCompletedListener: Failed to transact (-32)
+06-26 16:53:05.930   841  2030 I NetworkScheduler.Stats: (REDACTED) Task %s/%s started execution. cause:%s exec_start_elapsed_seconds: %s
+06-26 16:53:05.939  3878  3878 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:53:05.940  3878  3878 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:53:05.955   841  1059 I NetworkScheduler.Stats: (REDACTED) Task %s/%s started execution. cause:%s exec_start_elapsed_seconds: %s
+06-26 16:53:05.956   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:53:05.956  3878  3893 I Gralloc4: mapper 4.x is not supported
+06-26 16:53:05.959   841  1059 I NetworkScheduler.Stats: (REDACTED) Task %s/%s finished executing. cause:%s result: %s elapsed_millis: %s uptime_millis: %s exec_start_elapsed_seconds: %s
+06-26 16:53:06.103   841  2030 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.onetimeinitializer
+06-26 16:53:06.152  3859  3859 I Choreographer: Skipped 54 frames!  The application may be doing too much work on its main thread.
+06-26 16:53:06.156  3859  3859 I WindowExtensionsImpl: Initializing Window Extensions, vendor API level=6, activity embedding enabled=true
+06-26 16:53:06.162   559   639 D CoreBackPreview: Window{1d010d7 u0 com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@fadd5dc, mPriority=0, mIsAnimationCallback=false}
+06-26 16:53:06.166  3859  3879 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+06-26 16:53:06.166   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:53:06.166  3859  3884 I Gralloc4: mapper 4.x is not supported
+06-26 16:53:06.166  3859  3879 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+06-26 16:53:06.258  1726  2380 E BistoWorker: Couldn't get logged in Google account.
+06-26 16:53:06.291  1625  2112 I BistoIntentUtil: (REDACTED) isGrpcDeviceIntent: %s
+06-26 16:53:06.464   841  2030 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.devicelockcontroller
+06-26 16:53:06.585   841  2030 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.modulemetadata
+06-26 16:53:06.596  3906  3906 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:53:06.596  3906  3906 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:53:06.607   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:53:06.607  3906  3907 I Gralloc4: mapper 4.x is not supported
+06-26 16:53:06.651  3859  3859 D FlutterGeolocator: Creating service.
+06-26 16:53:06.651  3859  3859 D FlutterGeolocator: Binding to location service.
+06-26 16:53:06.657   559   639 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_IGNORE_REQUESTED_ORIENTATION
+06-26 16:53:06.657   559   639 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_IGNORING_ORIENTATION_REQUEST_WHEN_LOOP_DETECTED
+06-26 16:53:06.659  3859  3859 D FlutterWebRTCPlugin: audioDeviceChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+06-26 16:53:06.676  3859  3859 I Choreographer: Skipped 30 frames!  The application may be doing too much work on its main thread.
+06-26 16:53:06.681  3859  3859 D FlutterGeolocator: Flutter engine connected. Connected engine count 1
+06-26 16:53:06.682  3859  3859 I flutter : LongPollTransport: error: HandshakeException: Handshake error in client (OS Error:
+06-26 16:53:06.682  3859  3859 I flutter : 	CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate(handshake.cc:298))
+06-26 16:53:06.692   841  2087 I FontLog : (REDACTED) Received query %s, URI %s
+06-26 16:53:06.692   841  2087 I FontLog : (REDACTED) Query [%s] resolved to %s
+06-26 16:53:06.696  3859  3859 I flutter : LongPollTransport: error: HandshakeException: Connection terminated during handshake
+06-26 16:53:06.702   841  2087 I FontLog : (REDACTED) Fetch %s end status %s
+06-26 16:53:06.705   841  2087 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+06-26 16:53:06.712   841  2087 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+06-26 16:53:06.713  3859  3859 I flutter : LongPollTransport: error: HandshakeException: Connection terminated during handshake
+06-26 16:53:06.725  3859  3859 I flutter : LongPollTransport: error: HandshakeException: Handshake error in client (OS Error:
+06-26 16:53:06.725  3859  3859 I flutter : 	CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate(handshake.cc:298))
+06-26 16:53:06.738  3859  3859 I flutter : LongPollTransport: error: HandshakeException: Handshake error in client (OS Error:
+06-26 16:53:06.739  3859  3859 I flutter : 	CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate(handshake.cc:298))
+06-26 16:53:06.804   841  2030 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.gsf
+06-26 16:53:06.809   841  2030 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.tag
+06-26 16:53:06.875   841  2030 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.apps.nexuslauncher
+06-26 16:53:06.889   841  2030 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.feedback
+06-26 16:53:06.909  1436  1436 D BaseDepthController: setSurface:
+06-26 16:53:06.909  1436  1436 D BaseDepthController: 	mWaitingOnSurfaceValidity: false
+06-26 16:53:06.909  1436  1436 D BaseDepthController: 	mSurface: null
+06-26 16:53:06.914  1436  1436 D BaseDepthController: mSurface is null and mCurrentBlur is: 0
+06-26 16:53:06.929  1436  1436 D StateManager: goToState - fromState: Normal, toState: Normal, partial trace:
+06-26 16:53:06.929  1436  1436 D StateManager: 	at com.android.launcher3.statemanager.StateManager.moveToRestState(go/retraceme 2855a437b73635ce9cad76b9289087e631bbb67fc90008a0da13d343a00e5041:4)
+06-26 16:53:06.929  1436  1436 D StateManager: 	at com.android.launcher3.statemanager.StateManager.moveToRestState(go/retraceme 2855a437b73635ce9cad76b9289087e631bbb67fc90008a0da13d343a00e5041:1)
+06-26 16:53:06.929  1436  1436 D StateManager: 	at com.android.launcher3.statemanager.StatefulActivity.onStop(go/retraceme 2855a437b73635ce9cad76b9289087e631bbb67fc90008a0da13d343a00e5041:34)
+06-26 16:53:06.931  1436  1436 D StatsLog: LAUNCHER_ONSTOP
+06-26 16:53:06.981  1436  1776 D OneSearchSuggestProvider: Shut down the binder channel
+06-26 16:53:06.984  1436  1478 I IPCThreadState: oneway function results for code 2 on binder at 0xb4007564462af6b0 will be dropped but finished with status UNKNOWN_TRANSACTION
+06-26 16:53:06.990  1436  1436 D StatsLog: LAUNCHER_GOOGLE_SEARCH_RESTORE_LIST_SIZE_AFTER_ACTIVITY_RESTART
+06-26 16:53:06.990  1436  1436 D NexusLauncherModelDelegate: notifySmartspaceEvent: SmartspaceTargetEvent{mSmartspaceTarget=null, mSmartspaceActionId='null', mEventType=7}
+06-26 16:53:06.993  1436  1436 D NexusLauncherModelDelegate: notifySmartspaceEvent: SmartspaceTargetEvent{mSmartspaceTarget=null, mSmartspaceActionId='null', mEventType=7}
+06-26 16:53:06.996   559   588 I ActivityTaskManager: Displayed com.quwoquan.quwoquan_app/.MainActivity for user 0: +1s945ms
+06-26 16:53:06.996   559   588 W Looper  : Slow dispatch took 109ms android.fg h=android.os.Handler c=com.android.server.wm.ActivityMetricsLogger$$ExternalSyntheticLambda0@749333f m=0
+06-26 16:53:07.009   559   677 I ImeTracker: com.quwoquan.quwoquan_app:1ab7028a: onRequestHide at ORIGIN_SERVER reason HIDE_UNSPECIFIED_WINDOW fromUser false
+06-26 16:53:07.009   559   677 I ImeTracker: com.quwoquan.quwoquan_app:1ab7028a: onCancelled at PHASE_SERVER_SHOULD_HIDE
+06-26 16:53:07.028   990   990 D TelephonyManager: requestModemActivityInfo: Sending result to app: ModemActivityInfo{ mTimestamp=66813 mSleepTimeMs=0 mIdleTimeMs=66792 mActivityStatsTechSpecificInfo=[{mRat=UNKNOWN,mFrequencyRange=UNKNOWN,mTxTimeMs[]=[0, 0, 0, 0, 0],mRxTimeMs=0}]}
+06-26 16:53:07.068  1457  1457 I GoogleInputMethodService: GoogleInputMethodService.onFinishInput():3157
+06-26 16:53:07.114  1457  1457 W NotificationCenter: NotificationCenter$ListenerData.notifyOnExecutor():672 Heavy notify work detected on UI thread: |kga->jjc| takes 36ms
+06-26 16:53:07.150  1457  1457 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2248 repeatCheckTimes = 0, locked = false
+06-26 16:53:07.151  1457  1457 I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1986 onStartInput(EditorInfo{EditorInfo{packageName=com.quwoquan.quwoquan_app, inputType=0, inputTypeString=NULL, enableLearning=false, autoCorrection=false, autoComplete=false, imeOptions=0, privateImeOptions=null, actionName=UNSPECIFIED, actionLabel=null, initialSelStart=-1, initialSelEnd=-1, initialCapsMode=0, label=null, fieldId=0, fieldName=null, extras=null, hintText=null, hintLocales=[]}}, false)
+06-26 16:53:07.151   841  2030 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.gms.supervision
+06-26 16:53:07.151  1457  1457 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2248 repeatCheckTimes = 1, locked = false
+06-26 16:53:07.170  1457  1457 I AndroidIME: InputBundleManager.loadActiveInputBundleId():450 loadActiveInputBundleId: und-Latn-x-password, password
+06-26 16:53:07.183   841  2030 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.android.settings
+06-26 16:53:07.190   559   639 W PackageConfigPersister: App-specific configuration not found for packageName: com.quwoquan.quwoquan_app and userId: 0
+06-26 16:53:07.231   841   841 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.contextmanager.service.ContextManagerService.START pkg=com.google.android.gms }
+06-26 16:53:07.354   830   940 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=android.view.ViewRootImpl$$ExternalSyntheticLambda11@3da9680
+06-26 16:53:07.355   559  1919 W InputManager-JNI: Input channel object '30789c Splash Screen com.quwoquan.quwoquan_app (client)' was disposed without first being removed with the input manager!
+06-26 16:53:07.358   559   639 D CoreBackPreview: Window{30789c u0 Splash Screen com.quwoquan.quwoquan_app EXITING}: Setting back callback null
+06-26 16:53:07.360   841  2030 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.google.android.apps.wallpaper
+06-26 16:53:07.371   841  2030 I PhenotypeResourceReader: unable to find any Phenotype resource metadata for com.android.systemui
+06-26 16:53:07.467   841   849 I .gms.persistent: Background concurrent mark compact GC freed 16MB AllocSpace bytes, 2(176KB) LOS objects, 49% free, 14MB/28MB, paused 1.907ms,5.025ms total 260.463ms
+06-26 16:53:07.473   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~vGj_6XYNJuBtQVltQHwYmg==/com.google.android.gms-gcBmEY7J-Ll-EeZ36rCTkg==/split_AdsDynamite_installtime.apk' with 1 weak references
+06-26 16:53:07.473   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~vGj_6XYNJuBtQVltQHwYmg==/com.google.android.gms-gcBmEY7J-Ll-EeZ36rCTkg==/split_CronetDynamite_installtime.apk' with 1 weak references
+06-26 16:53:07.473   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~vGj_6XYNJuBtQVltQHwYmg==/com.google.android.gms-gcBmEY7J-Ll-EeZ36rCTkg==/split_DynamiteLoader_installtime.apk' with 1 weak references
+06-26 16:53:07.474   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~vGj_6XYNJuBtQVltQHwYmg==/com.google.android.gms-gcBmEY7J-Ll-EeZ36rCTkg==/split_DynamiteModulesA_installtime.apk' with 1 weak references
+06-26 16:53:07.474   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~vGj_6XYNJuBtQVltQHwYmg==/com.google.android.gms-gcBmEY7J-Ll-EeZ36rCTkg==/split_DynamiteModulesC_installtime.apk' with 1 weak references
+06-26 16:53:07.474   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~vGj_6XYNJuBtQVltQHwYmg==/com.google.android.gms-gcBmEY7J-Ll-EeZ36rCTkg==/split_GoogleCertificates_installtime.apk' with 1 weak references
+06-26 16:53:07.474   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~vGj_6XYNJuBtQVltQHwYmg==/com.google.android.gms-gcBmEY7J-Ll-EeZ36rCTkg==/split_MapsDynamite_installtime.apk' with 1 weak references
+06-26 16:53:07.474   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~vGj_6XYNJuBtQVltQHwYmg==/com.google.android.gms-gcBmEY7J-Ll-EeZ36rCTkg==/split_MeasurementDynamite_installtime.apk' with 1 weak references
+06-26 16:53:07.474   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~vGj_6XYNJuBtQVltQHwYmg==/com.google.android.gms-gcBmEY7J-Ll-EeZ36rCTkg==/split_all_locale_splits.apk' with 1 weak references
+06-26 16:53:07.474   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/Velvet/Velvet.apk' with 1 weak references
+06-26 16:53:07.475   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/PrebuiltBugle/PrebuiltBugle.apk' with 1 weak references
+06-26 16:53:07.475   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/SoundPickerPrebuilt/SoundPickerPrebuilt.apk' with 1 weak references
+06-26 16:53:07.475   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/ConfigUpdater/ConfigUpdater.apk' with 1 weak references
+06-26 16:53:07.475   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/SafetyHubPrebuilt/SafetyHubPrebuilt.apk' with 1 weak references
+06-26 16:53:07.475   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/talkback/talkback.apk' with 1 weak references
+06-26 16:53:07.483  3937  3937 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:53:07.483  3937  3937 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:53:07.483   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '/vendor/overlay/EmulatorTalkBackOverlay/EmulatorTalkBackOverlay.apk' with 1 weak references
+06-26 16:53:07.483   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/PrebuiltDeskClockGoogle/PrebuiltDeskClockGoogle.apk' with 1 weak references
+06-26 16:53:07.483   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/DevicePersonalizationPrebuiltPixel2021-aiai_20240329.00_RC16/DevicePersonalizationPrebuiltPixel2021-aiai_20240329.00_RC16.apk' with 1 weak references
+06-26 16:53:07.483   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/WellbeingPrebuilt/WellbeingPrebuilt.apk' with 1 weak references
+06-26 16:53:07.484   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/GoogleDialer/GoogleDialer.apk' with 1 weak references
+06-26 16:53:07.484   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/Maps/Maps.apk' with 1 weak references
+06-26 16:53:07.484   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/GoogleContacts/GoogleContacts.apk' with 1 weak references
+06-26 16:53:07.484   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~c1ONbQveFEmF03EprUfRmw==/com.android.chrome-dFQVwYiP4-nhXPKymS9IpQ==/Chrome.apk' with 1 weak references
+06-26 16:53:07.484   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~qBBsYjj6BglpLVSWEaglFQ==/com.google.android.trichromelibrary_636771932-Luywulu-1ewwLhAiuVnTMA==/TrichromeLibrary.apk' with 1 weak references
+06-26 16:53:07.484   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/GoogleTTS/GoogleTTS.apk' with 1 weak references
+06-26 16:53:07.484   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/PartnerSetupPrebuilt/PartnerSetupPrebuilt.apk' with 1 weak references
+06-26 16:53:07.487   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/CalendarGooglePrebuilt/CalendarGooglePrebuilt.apk' with 1 weak references
+06-26 16:53:07.487   841   851 W .gms.persistent: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/AndroidAutoStubPrebuilt/AndroidAutoStubPrebuilt.apk' with 1 weak references
+06-26 16:53:07.586   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:53:07.586  3937  3938 I Gralloc4: mapper 4.x is not supported
+06-26 16:53:07.709   830  1010 D EGL_emulation: app_time_stats: avg=7636.20ms min=7636.20ms max=7636.20ms count=1
+06-26 16:53:07.857  3859  3884 D EGL_emulation: app_time_stats: avg=148.61ms min=18.68ms max=267.04ms count=7
+06-26 16:53:08.260   841  2030 I HeterodyneSyncer: (REDACTED) Removed %d invalid users
+06-26 16:53:08.351   841   848 I .gms.persistent: Compiler allocated 6269KB to compile fgaw fgax.t(hiwi, hrfx, java.lang.String, boolean, hivi, hiwi, boolean, jdsl)
+06-26 16:53:08.389   841  2030 I HeterodyneSyncer: (REDACTED) Syncing with Heterodyne. Reason: %s
+06-26 16:53:08.396   841   848 I .gms.persistent: Compiler allocated 6740KB to compile fgaw fgax.t(hiwi, hrfx, java.lang.String, boolean, hivi, hiwi, boolean, jdsl)
+06-26 16:53:08.482   841  3548 D TrafficStats: tagSocket(271) with statsTag=0x4001203, statsUid=10144
+06-26 16:53:08.484   841  3548 D TrafficStats: tagSocket(272) with statsTag=0x4001203, statsUid=10144
+06-26 16:53:08.588   559   771 D ShortcutService: received package broadcast intent: Intent { act=android.intent.action.PACKAGE_CHANGED dat=package: flg=0x45000010 (has extras) }
+06-26 16:53:08.588   559   771 D ShortcutService: changing package: com.google.android.gms userId0
+06-26 16:53:08.588   559   771 D ShortcutService: handlePackageChanged: com.google.android.gms user=0
+06-26 16:53:08.592   559   771 D ShortcutService: rescanPackageIfNeeded 0@com.google.android.gms, forceRescan=true , isNewApp=false
+06-26 16:53:08.594   990   990 D CarrierSvcBindHelper: onPackageModified: com.google.android.gms
+06-26 16:53:08.596   990   990 D CarrierSvcBindHelper: No carrier app for: 0
+06-26 16:53:08.601   830   830 D ControlsListingControllerImpl: ServiceConfig reloaded, count: 0
+06-26 16:53:08.604   990   990 E SmsApplication: com.google.android.apps.messaging lost android:read_cell_broadcasts:  (fixing)
+06-26 16:53:08.604   559  1981 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 10142, code = READ_CELL_BROADCASTS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:53:08.605   559   663 I RoleService: Granting default roles...
+06-26 16:53:08.609   990   990 E CellBroadcastUtils: getDefaultCellBroadcastReceiverPackageName: no package found
+06-26 16:53:08.609   559  1080 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = READ_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:53:08.609   559  1080 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = RECEIVE_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:53:08.609   559  1080 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = RECEIVE_WAP_PUSH, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:53:08.609   559  1080 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = SEND_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:53:08.609   559  1080 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = READ_CELL_BROADCASTS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:53:08.612   990  1186 D ImsResolver: maybeAddedImsService, packageName: com.google.android.gms
+06-26 16:53:08.613  1066  1087 I PermissionControllerServiceImpl: Updating user sensitive for uid 10144
+06-26 16:53:08.620   559   948 W Role    : Default holder doesn't have required signing certificate: com.google.android.retaildemo:6547c73dee150c103980bfdffe55cc9a011d785dd694a5f99afd8205bcaf1f80
+06-26 16:53:08.620   559   948 E RoleControllerServiceImpl: Default/fallback role holder package doesn't qualify for the role, package: com.google.android.gms.supervision, role: android.app.role.SYSTEM_SUPERVISION
+06-26 16:53:08.621   559   948 W Role    : Default holder doesn't have required signing certificate: com.google.android.apps.work.clouddpc:23962F4B43B9857638EA66F4D419518EAE282491ACDA4B94707BD59003C45E58
+06-26 16:53:08.626   559   948 W Role    : Cannot get ApplicationInfo for default holder: com.google.android.apps.photos
+06-26 16:53:08.627  3944  3944 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:53:08.627  3944  3944 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:53:08.635   559   948 E RoleControllerServiceImpl: Default/fallback role holder package doesn't qualify for the role, package: com.google.android.gms, role: android.app.role.WALLET
+06-26 16:53:08.639   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:53:08.639  3944  3947 I Gralloc4: mapper 4.x is not supported
+06-26 16:53:08.643   559   948 E RoleControllerServiceImpl: Default/fallback role holder package doesn't qualify for the role, package: com.google.android.devicelockcontroller, role: android.app.role.SYSTEM_FINANCED_DEVICE_CONTROLLER
+06-26 16:53:08.747   830  1010 D EGL_emulation: app_time_stats: avg=259.08ms min=14.07ms max=847.64ms count=4
+06-26 16:53:08.807   559   771 D ShortcutService: Package com.google.android.gms has 0 manifest shortcut(s), and 2 share target(s)
+06-26 16:53:08.807   559   771 D ShortcutService: Package com.google.android.gms updated, version 262334035 -> 262334035
+06-26 16:53:08.808   559   771 D ShortcutService: Package com.google.android.gms: publishing manifest shortcuts
+06-26 16:53:08.873  3295  3303 I oadcastreceiver: Background concurrent mark compact GC freed 832KB AllocSpace bytes, 2(64KB) LOS objects, 49% free, 2015KB/4031KB, paused 87us,21.107ms total 110.351ms
+06-26 16:53:08.927   559   771 D ShortcutService: Saving package item com.google.android.gms to /data/system_ce/0/shortcut_service/packages/com.google.android.gms.xml
+06-26 16:53:08.972  3859  3884 D EGL_emulation: app_time_stats: avg=123.90ms min=45.53ms max=267.24ms count=9
+06-26 16:53:09.021   559  1668 E TaskPersister: File error accessing recents directory (directory doesn't exist?).
+06-26 16:53:09.054  1726  2773 W A       : (REDACTED) [%s] response code: %d
+06-26 16:53:09.084  1436  1703 D EGL_emulation: app_time_stats: avg=585.85ms min=0.94ms max=3461.56ms count=6
+06-26 16:53:09.194   559   597 W MagnificationConnectionManager: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+06-26 16:53:09.201  1436  1528 D PackageUpdatedTask: Package updated: mOp=UPDATE packages=[com.google.android.gms]
+06-26 16:53:09.203   559   597 I CredentialManager: CredentialManagerServiceImpl constructed for: com.google.android.gms/com.google.android.gms.auth.api.credentials.credman.service.PasswordAndPasskeyService
+06-26 16:53:09.203   559   597 I CredentialManager: newServiceInfoLocked, mInfo null, com.google.android.gms/com.google.android.gms.auth.api.credentials.credman.service.PasswordAndPasskeyService
+06-26 16:53:09.205  1596  1596 I AiAiEcho: AppFetcherImpl onPackageChanged com.google.android.gms.
+06-26 16:53:09.206  1249  1662 I PeopleGalProvider: Gal directories started.
+06-26 16:53:09.207  1249  1662 I PeopleGalProvider: Method 1 completed.
+06-26 16:53:09.207  1249  1662 I PeopleGalProvider: Method 1 finished successfully.
+06-26 16:53:09.224  1596  2954 I AiAiEcho: AppIndexer Package:[com.google.android.gms] UserProfile:[0] Enabled:[true].
+06-26 16:53:09.224  1596  2954 I AiAiEcho: AppFetcherImplV2 updateApps package:[com.google.android.gms], userId:[0], reason:[package is updated.].
+06-26 16:53:09.227  1249  3987 I FraudProtectUtils: Not in testing population, skipping local test bank apps. [CONTEXT service_id=469 ]
+06-26 16:53:09.227  1249  3987 I FraudProtectUtils: (REDACTED) Latest bank app list size: %d, %s isBankApp: false
+06-26 16:53:09.227  1249  3987 W ComponentChangedIO: No package name in intent data or package is not a bank app [CONTEXT service_id=469 ]
+06-26 16:53:09.232  2085  2182 I Bugle   : BroadcastReceiverAsyncWorkTracker: Acknowledging broadcast of buoi@c9b1e81
+06-26 16:53:09.233   559   597 D ShortcutService: Getting shortcuts for launcher= com.google.android.apps.nexuslauncheruser=0 pkg=com.google.android.gms
+06-26 16:53:09.234   559   597 D ShortcutService: Getting shortcuts for launcher= com.android.systemuiuser=0 pkg=com.google.android.gms
+06-26 16:53:09.234   559   597 D ShortcutService: Getting shortcuts for launcher= com.google.android.asuser=0 pkg=com.google.android.gms
+06-26 16:53:09.253  1436  1528 W AllAppsList: updatePromiseInstallInfo: no Activities matched updated package, removing all apps from package=com.google.android.gms
+06-26 16:53:09.551  3991  3991 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:53:09.551  3991  3991 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:53:09.559   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:53:09.559  3991  3992 I Gralloc4: mapper 4.x is not supported
+06-26 16:53:09.578   559   660 D ActivityManager: freezing 3122 com.android.providers.calendar
+06-26 16:53:09.580   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-26 16:53:09.580   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-26 16:53:09.580   559   713 D InetDiagMessage: Destroyed live tcp sockets for uids={10094} in 1ms
+06-26 16:53:10.159  1066  1087 I PermissionControllerServiceImpl: Updating user sensitive for user 0
+06-26 16:53:10.171   559  1105 W ParceledListSlice: Element #62 is 140132 bytes.
+06-26 16:53:10.171   559  1105 W ParceledListSlice: Overly large reply size: 160508
+06-26 16:53:10.173   559  1981 W ParceledListSlice: Element #135 is 72212 bytes.
+06-26 16:53:10.173   559  1981 W ParceledListSlice: Overly large reply size: 117224
+06-26 16:53:10.174   559  1981 W ParceledListSlice: Element #136 is 17048 bytes.
+06-26 16:53:10.174   559  1981 W ParceledListSlice: Element #185 is 21804 bytes.
+06-26 16:53:10.176   559  1981 W ParceledListSlice: Element #215 is 29268 bytes.
+06-26 16:53:10.210  1066  1071 I ssioncontroller: Background concurrent mark compact GC freed 1905KB AllocSpace bytes, 23(864KB) LOS objects, 49% free, 5890KB/11MB, paused 8.752ms,627us total 34.878ms
+06-26 16:53:10.212  1066  1073 W ssioncontroller: ApkAssets: Deleting an ApkAssets object '<empty> and /system/framework/framework-res.apk' with 1 weak references
+06-26 16:53:10.213  1066  1073 W ssioncontroller: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.permission/priv-app/GoogleSafetyCenterResources@AE3A.240806.019/GoogleSafetyCenterResources.apk' with 1 weak references
+06-26 16:53:10.213  1066  1073 W ssioncontroller: ApkAssets: Deleting an ApkAssets object '<empty> and /apex/com.android.healthfitness/priv-app/HealthConnectControllerGoogle@AE3A.240806.019/HealthConnectControllerGoogle.apk' with 1 weak references
+06-26 16:53:10.229   559  1080 D OomAdjuster: Not killing cached processes
+06-26 16:53:10.229  3995  3995 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:53:10.229  3995  3995 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:53:10.243   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:53:10.243  3995  3996 I Gralloc4: mapper 4.x is not supported
+06-26 16:53:11.124  3999  3999 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:53:11.124  3999  3999 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:53:11.136   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:53:11.136  3999  4000 I Gralloc4: mapper 4.x is not supported
+06-26 16:53:11.198  2008  2008 I Finsky  : [2] HC: beginRecoverGmscoreIfApplicable
+06-26 16:53:11.222  2008  2008 I Finsky  : [2] HC: No target version, skip Gmscore recovery.
+06-26 16:53:11.284   841   841 I NearbyUWB: (REDACTED) Initiating shutdown of ServiceControllerRouter %s.
+06-26 16:53:11.292   841  2237 I NearbyUWB: (REDACTED) Completed shutdown of ServiceControllerRouter %s.
+06-26 16:53:11.294   841   841 I Nearby  : (REDACTED) Successfully shutdown executor %s.
+06-26 16:53:11.294   841   841 I Nearby  : (REDACTED) Successfully shutdown executor %s.
+06-26 16:53:11.315  2008  2272 I Finsky  : [54] SUH: Syncing device attributes was successful in self update.
+06-26 16:53:11.404   841   841 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.clearcut.service.START pkg=com.google.android.gms }
+06-26 16:53:11.508  3859  4001 D ProfileInstaller: Skipping profile installation for com.quwoquan.quwoquan_app
+06-26 16:53:11.522   158   158 I lowmemorykiller: Kill 'android.process.media' (1840), uid 10097, oom_score_adj 985 to free 73472kB rss, 34816kB swap; reason: low watermark is breached
+06-26 16:53:11.531   355   355 I Zygote  : Process 1840 exited due to signal 9 (Killed)
+06-26 16:53:11.531   559   637 I ActivityManager: Process android.process.media (pid 1840) has died: cch+85 CEM
+06-26 16:53:11.538   158   164 W lowmemorykiller: Failed to open /proc/1840/task; errno=2: process pid(1840) might have died
+06-26 16:53:11.538   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10097/pid_1840
+06-26 16:53:11.538   158   164 E lowmemorykiller: process_mrelease 1840 failed: No such process
+06-26 16:53:11.539   559   589 D DisplayManagerService: Drop pending events for gone uid 10097
+06-26 16:53:11.651   559   660 D ActivityManager: freezing 2817 com.google.android.deskclock
+06-26 16:53:11.653   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-26 16:53:11.653   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-26 16:53:11.653   559   713 D InetDiagMessage: Destroyed live tcp sockets for uids={10164} in 0ms
+06-26 16:53:11.676  2008  2008 I Finsky  : [2] SUH: [self-update] Skipping DFE self-update. Local Version [version=85191730,derivedid=3,splits=[config.arm64_v8a, config.en, phonesky_data_loader, phonesky_data_loader.config.arm64_v8a, phonesky_webrtc_native_lib, phonesky_webrtc_native_lib.config.arm64_v8a]] > Server Version [version=-1,derivedid=-1,splits=[]]
+06-26 16:53:11.699  1249  1249 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.chimera.container.moduleinstall.ModuleInstallService.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.GmsApiService }
+06-26 16:53:11.701   355   355 D Zygote  : Forked child process 4002
+06-26 16:53:11.701   559   599 I ActivityManager: Start proc 4002:com.android.vending:quick_launch/u0a140 for service {com.android.vending/com.google.frameworks.client.data.android.server.play.QuickLaunchProcessEndpointService}
+06-26 16:53:11.715  3111  3179 I Finsky:background: [56] SCH: Received scheduling request: Id: 10-115, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.715  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-1, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-4, Constraints: [{ L: 1200000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  3111  3179 I Finsky:background: [56] SCH: Received scheduling request: Id: 10-105, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 16:53:11.716  3111  3179 I Finsky:background: [56] SCH: Received scheduling request: Id: 10-83, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  3111  3179 I Finsky:background: [56] SCH: Received scheduling request: Id: 10-53, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  3111  3179 I Finsky:background: [56] SCH: Received scheduling request: Id: 10-46, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  3111  3179 I Finsky:background: [56] SCH: Received scheduling request: Id: 10-96, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 16:53:11.716  3111  3179 I Finsky:background: [56] SCH: Received scheduling request: Id: 10-140, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  3111  3179 I Finsky:background: [56] SCH: Received scheduling request: Id: 10-183, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  3111  3179 I Finsky:background: [56] SCH: Received scheduling request: Id: 10-184, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-11, Constraints: [{ L: 600000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-18, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-22, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-39, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-50, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-12, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-135, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-47, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-33, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-26, Constraints: [{ L: 600000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-8, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-3, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-30, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-14, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-15, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.716  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-20, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-42, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-55, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-48, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-98, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-9, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-113, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-82, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-41, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-51, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-66, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-71, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-73, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-76, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-79, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_REQUIRED, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-168, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_REQUIRED, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-87, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-107, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-152, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-170, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-171, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-122, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-101, Constraints: [{ L: 60000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-176, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-116, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-123, Constraints: [{ L: 600000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-127, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.717  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-130, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.718  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-131, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.718  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-139, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.718  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-142, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.718  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-146, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.718  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-162, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.718  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-175, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 16:53:11.718  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-179, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.718  2008  2153 I Finsky  : [42] SCH: Received scheduling request: Id: 10-178, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.733  4002  4002 I ng:quick_launch: Using CollectorTypeCMC GC.
+06-26 16:53:11.738  4002  4002 E ng:quick_launch: Not starting debugger since process cannot load the jdwp agent.
+06-26 16:53:11.751  4002  4002 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+06-26 16:53:11.755  3111  3161 I Finsky:background: [45] WM::SCH: Logging work initialize for 10-115
+06-26 16:53:11.755  3111  3161 I Finsky:background: [45] WM::SCH: Logging work initialize for 10-105
+06-26 16:53:11.755  3111  3161 I Finsky:background: [45] WM::SCH: Logging work initialize for 10-83
+06-26 16:53:11.755  3111  3161 I Finsky:background: [45] WM::SCH: Logging work initialize for 10-53
+06-26 16:53:11.755  3111  3161 I Finsky:background: [45] WM::SCH: Logging work initialize for 10-46
+06-26 16:53:11.755  3111  3161 I Finsky:background: [45] WM::SCH: Logging work initialize for 10-96
+06-26 16:53:11.755  3111  3161 I Finsky:background: [45] WM::SCH: Logging work initialize for 10-140
+06-26 16:53:11.755  3111  3161 I Finsky:background: [45] WM::SCH: Logging work initialize for 10-183
+06-26 16:53:11.755  3111  3161 I Finsky:background: [45] WM::SCH: Logging work initialize for 10-184
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-1
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-4
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-11
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-18
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-22
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-39
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-50
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-12
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-135
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-47
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-33
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-26
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-8
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-3
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-30
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-14
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-15
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-20
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-42
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-55
+06-26 16:53:11.757  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-48
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-98
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-9
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-113
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-82
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-41
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-51
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-66
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-71
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-73
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-76
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-79
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-168
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-87
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-107
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-152
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-170
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-171
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-122
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-101
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-176
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-116
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-123
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-127
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-130
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-131
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-139
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-142
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-146
+06-26 16:53:11.758  3859  3859 I flutter : LongPollTransport: error: HandshakeException: Connection terminated during handshake
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-162
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-175
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-179
+06-26 16:53:11.758  2008  2241 I Finsky  : [47] WM::SCH: Logging work initialize for 10-178
+06-26 16:53:11.774  3111  3177 I Finsky:background: [54] SCH: Scheduling phonesky job Id: 10-115, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.774  3111  3177 I Finsky:background: [54] SCH: Scheduling phonesky job Id: 10-105, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.774  3111  3177 I Finsky:background: [54] SCH: Scheduling phonesky job Id: 10-83, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.774  3111  3177 I Finsky:background: [54] SCH: Scheduling phonesky job Id: 10-53, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.774  3111  3177 I Finsky:background: [54] SCH: Scheduling phonesky job Id: 10-46, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.774  3111  3177 I Finsky:background: [54] SCH: Scheduling phonesky job Id: 10-96, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.774  3111  3177 I Finsky:background: [54] SCH: Scheduling phonesky job Id: 10-140, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.774  3111  3177 I Finsky:background: [54] SCH: Scheduling phonesky job Id: 10-183, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.774  3111  3177 I Finsky:background: [54] SCH: Scheduling phonesky job Id: 10-184, CT: 1782463991716, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-1, CT: 1782463991715, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-4, CT: 1782463991716, Constraints: [{ L: 1200000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-11, CT: 1782463991716, Constraints: [{ L: 600000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-18, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-22, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-39, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-50, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-12, CT: 1782463991716, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-135, CT: 1782463991716, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-47, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-33, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-26, CT: 1782463991716, Constraints: [{ L: 600000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-8, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.776  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-3, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-30, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-14, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-15, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-20, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-42, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-55, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-48, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-98, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-9, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-113, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-82, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-41, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-51, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-66, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-71, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-73, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-76, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-79, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_REQUIRED, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-168, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_REQUIRED, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-87, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-107, CT: 1782463991717, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-152, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-170, CT: 1782463991717, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-171, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-122, CT: 1782463991717, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-101, CT: 1782463991717, Constraints: [{ L: 60000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-176, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-116, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-123, CT: 1782463991717, Constraints: [{ L: 600000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-127, CT: 1782463991717, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-130, CT: 1782463991717, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-131, CT: 1782463991718, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-139, CT: 1782463991718, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-142, CT: 1782463991718, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-146, CT: 1782463991718, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-162, CT: 1782463991718, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-175, CT: 1782463991718, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-179, CT: 1782463991718, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.777  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-178, CT: 1782463991718, Constraints: [{ L: 0, D: 43200000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:11.781  3111  3169 I Finsky:background: [50] SCH: Scheduling 2 system job(s)
+06-26 16:53:11.781  3111  3169 I Finsky:background: [50] SCH: Scheduling expedited system job 10115
+06-26 16:53:11.789  3111  3111 I Finsky:background: [2] SCH: job service start with id 10115.
+06-26 16:53:11.790  3111  3169 I Finsky:background: [50] SCH: Scheduling system job Id: 10116, L: 0, D: 86399926, C: false, I: false, N: 1
+06-26 16:53:11.796  3111  3160 I Finsky:background: [44] SCH: Satisfied jobs for 10115 are: 10-46, 10-53, 10-83, 10-96, 10-105, 10-115, 10-140, 10-183, 10-184
+06-26 16:53:11.798  2008  2267 I Finsky  : [53] SCH: Scheduling 0 system job(s)
+06-26 16:53:11.799  3111  3208 I Finsky:background: [74] SCH: Job 10-46 starting
+06-26 16:53:11.800  3111  3208 I Finsky:background: [74] SCH: Job 10-53 starting
+06-26 16:53:11.801  3111  3208 I Finsky:background: [74] SCH: Job 10-83 starting
+06-26 16:53:11.801  3111  3208 I Finsky:background: [74] SCH: Job 10-96 starting
+06-26 16:53:11.801  3111  3111 I Finsky:background: [2] WM::SCH: Logging work start for 10-46
+06-26 16:53:11.801  4002  4002 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/org.apache.http.legacy.jar
+06-26 16:53:11.801  4002  4002 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+06-26 16:53:11.801  4002  4002 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+06-26 16:53:11.803  3111  3208 I Finsky:background: [74] SCH: Job 10-105 starting
+06-26 16:53:11.803  3111  3208 I Finsky:background: [74] SCH: Job 10-115 starting
+06-26 16:53:11.803  3111  3208 I Finsky:background: [74] SCH: Job 10-140 starting
+06-26 16:53:11.804  3111  3208 I Finsky:background: [74] SCH: Job 10-183 starting
+06-26 16:53:11.806  3111  3208 I Finsky:background: [74] SCH: Job 10-184 starting
+06-26 16:53:11.825  4005  4005 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:53:11.826  4005  4005 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:53:11.842   158   158 I lowmemorykiller: Kill 'com.google.android.apps.wallpaper' (2418), uid 10179, oom_score_adj 975 to free 72880kB rss, 31680kB swap; reason: low watermark is breached
+06-26 16:53:11.849  3111  3111 I Finsky:background: [2] SCH: jobFinished: 10-46. TimeElapsed: 48ms.
+06-26 16:53:11.849  3111  3111 I Finsky:background: [2] WM::SCH: Logging work end for 10-46
+06-26 16:53:11.851  3111  3111 I Finsky:background: [2] WM::SCH: Logging work start for 10-53
+06-26 16:53:11.852   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:53:11.854  4005  4018 I Gralloc4: mapper 4.x is not supported
+06-26 16:53:11.864  3111  3111 I Finsky:background: [2] WM::SCH: Logging work start for 10-83
+06-26 16:53:11.864  3111  3111 I Finsky:background: [2] BL: Hygiene job starting
+06-26 16:53:11.867  3111  3111 I Finsky:background: [2] WM::SCH: Logging work start for 10-96
+06-26 16:53:11.872  3111  3111 I Finsky:background: [2] WM::SCH: Logging work start for 10-105
+06-26 16:53:11.872  3111  3111 I Finsky:background: [2] IV2HygieneJob: Performing hygiene cleanup for InstallerV2
+06-26 16:53:11.878   158   163 E lowmemorykiller: process_mrelease 2418 failed: No such process
+06-26 16:53:11.893  3111  3111 I Finsky:background: [2] SCH: jobFinished: 10-105. TimeElapsed: 21ms.
+06-26 16:53:11.893  3111  3111 I Finsky:background: [2] WM::SCH: Logging work end for 10-105
+06-26 16:53:11.894  3111  3111 I Finsky:background: [2] WM::SCH: Logging work start for 10-115
+06-26 16:53:11.899  3111  3159 I Finsky:background: [43] Submitter::VS: 0 stale entries pruned with 0 active entries remaining
+06-26 16:53:11.899  3111  3159 E Finsky:background: [43] [Counters] attempted to use a non-positive increment for: 1449
+06-26 16:53:11.899  3111  3159 E Finsky:background: [43] [Counters] attempted to use a non-positive increment for: 1422
+06-26 16:53:11.901  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_config.arm64_v8a.dm': No such file or directory
+06-26 16:53:11.901  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_config.arm64_v8a.dm': No such file or directory
+06-26 16:53:11.902  3111  3111 I Finsky:background: [2] WM::SCH: Logging work start for 10-140
+06-26 16:53:11.902  4002  4002 W ng:quick_launch: Entry not found
+06-26 16:53:11.903  3111  3111 I Finsky:background: [2] [WM] Starting Hygiene job.
+06-26 16:53:11.903  3111  3111 I Finsky:background: [2] WM::SCH: Logging work start for 10-183
+06-26 16:53:11.907   355   355 I Zygote  : Process 2418 exited due to signal 9 (Killed)
+06-26 16:53:11.907   559   637 I ActivityManager: Process com.google.android.apps.wallpaper (pid 2418) has died: cch+75 CEM
+06-26 16:53:11.907   158   158 I lowmemorykiller: Kill 'com.google.android.deskclock' (2817), uid 10164, oom_score_adj 965 to free 74000kB rss, 40800kB swap; reason: low watermark is breached
+06-26 16:53:11.908   559   589 D DisplayManagerService: Drop pending events for gone uid 10179
+06-26 16:53:11.910  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_config.en.dm': No such file or directory
+06-26 16:53:11.910  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_config.en.dm': No such file or directory
+06-26 16:53:11.911  4002  4002 W ng:quick_launch: Entry not found
+06-26 16:53:11.911  3111  4027 I Finsky:background: [96] Adding column epoch_time (INTEGER) to work
+06-26 16:53:11.912   158   164 E lowmemorykiller: process_mrelease 2817 failed: No such process
+06-26 16:53:11.913   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10179/pid_2418
+06-26 16:53:11.914  3111  3111 I Finsky:background: [2] WM::SCH: Logging work start for 10-184
+06-26 16:53:11.914  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_data_loader.dm': No such file or directory
+06-26 16:53:11.914  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_data_loader.dm': No such file or directory
+06-26 16:53:11.915  4002  4002 W ng:quick_launch: Entry not found
+06-26 16:53:11.915  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_data_loader.config.arm64_v8a.dm': No such file or directory
+06-26 16:53:11.915  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_data_loader.config.arm64_v8a.dm': No such file or directory
+06-26 16:53:11.916  3111  3160 I Finsky:background: [44] AV::VS: 0 stale entries pruned with 0 active entries remaining
+06-26 16:53:11.916  3111  3160 E Finsky:background: [44] [Counters] attempted to use a non-positive increment for: 1450
+06-26 16:53:11.916  3111  3160 E Finsky:background: [44] [Counters] attempted to use a non-positive increment for: 1424
+06-26 16:53:11.919  4002  4002 W ng:quick_launch: Entry not found
+06-26 16:53:11.920  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_webrtc_native_lib.dm': No such file or directory
+06-26 16:53:11.920  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_webrtc_native_lib.dm': No such file or directory
+06-26 16:53:11.921  3111  3179 I Finsky:background: [56] GUC: No account has a gamer profile v2. Cancelling job with ID 1.
+06-26 16:53:11.923  4002  4002 W ng:quick_launch: Entry not found
+06-26 16:53:11.923  3111  3166 I Finsky:background: [47] SCH: jobFinished: 10-96. TimeElapsed: 56ms.
+06-26 16:53:11.923  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_webrtc_native_lib.config.arm64_v8a.dm': No such file or directory
+06-26 16:53:11.923  4002  4002 W ziparchive: Unable to open '/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_webrtc_native_lib.config.arm64_v8a.dm': No such file or directory
+06-26 16:53:11.923  3111  3166 I Finsky:background: [47] WM::SCH: Logging work end for 10-96
+06-26 16:53:11.927  4002  4002 W ng:quick_launch: Entry not found
+06-26 16:53:11.931  4002  4002 D nativeloader: Configuring clns-7 for other apk /data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/base.apk:/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_config.arm64_v8a.apk:/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_config.en.apk:/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_data_loader.apk:/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_data_loader.config.arm64_v8a.apk:/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_webrtc_native_lib.apk:/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_phonesky_webrtc_native_lib.config.arm64_v8a.apk. target_sdk_version=37, uses_libraries=, library_path=/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/lib/arm64:/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.and
+06-26 16:53:11.932  3111  3181 I Finsky:background: [57] PWM: Performing regular maintenance, clearing 0 stale workers: []
+06-26 16:53:11.937  3111  3181 I Finsky:background: [57] SCH: jobFinished: 10-183. TimeElapsed: 32ms.
+06-26 16:53:11.937  3111  3181 I Finsky:background: [57] WM::SCH: Logging work end for 10-183
+06-26 16:53:11.939  3111  4020 I Finsky:background: [89] SCH: jobFinished: 10-83. TimeElapsed: 75ms.
+06-26 16:53:11.941  3111  4020 I Finsky:background: [89] WM::SCH: Logging work end for 10-83
+06-26 16:53:11.949   559   584 I ActivityManager: Process com.google.android.deskclock (pid 2817) has died: cch+65 CEM
+06-26 16:53:11.950   559   589 D DisplayManagerService: Drop pending events for gone uid 10164
+06-26 16:53:11.952   158   158 I lowmemorykiller: Kill 'com.android.providers.calendar' (3122), uid 10094, oom_score_adj 955 to free 70192kB rss, 36736kB swap; reason: low watermark is breached
+06-26 16:53:11.952   355   355 I Zygote  : Process 2817 exited due to signal 9 (Killed)
+06-26 16:53:11.961  3111  3167 I Finsky:background: [48] DSC: reviveDownloads()
+06-26 16:53:11.967   841   848 W .gms.persistent: Missing inline cache for hrgo fgbm.a(java.io.InputStream)
+06-26 16:53:11.968   841   848 W .gms.persistent: Missing inline cache for hrgo fgbm.a(java.io.InputStream)
+06-26 16:53:11.968   841   848 W .gms.persistent: Missing inline cache for hrgo fgbm.a(java.io.InputStream)
+06-26 16:53:11.968   841   848 W .gms.persistent: Missing inline cache for hrgo fgbm.a(java.io.InputStream)
+06-26 16:53:11.969  3111  3181 I Finsky:background: [57] DS: reviveDownloads()
+06-26 16:53:11.970   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10164/pid_2817
+06-26 16:53:11.970   158   163 E lowmemorykiller: process_mrelease 3122 failed: No such process
+06-26 16:53:11.976  3111  3167 E Finsky:background: [48] [Counters] attempted to use a non-positive increment for: 1443
+06-26 16:53:11.978  3111  3167 I Finsky:background: [48] SCH: jobFinished: 10-115. TimeElapsed: 84ms.
+06-26 16:53:11.978  3111  3167 I Finsky:background: [48] WM::SCH: Logging work end for 10-115
+06-26 16:53:11.990  3111  3181 I Finsky:background: [57] SCH: jobFinished: 10-184. TimeElapsed: 76ms.
+06-26 16:53:11.990  3111  3181 I Finsky:background: [57] WM::SCH: Logging work end for 10-184
+06-26 16:53:11.999  4002  4002 V GraphicsEnvironment: Currently set values for:
+06-26 16:53:11.999  4002  4002 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+06-26 16:53:11.999  4002  4002 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+06-26 16:53:11.999  4002  4002 V GraphicsEnvironment: Global.Settings values are invalid: number of packages: 0, number of values: 0
+06-26 16:53:12.000  4002  4002 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+06-26 16:53:12.008  2008  2017 I android.vending: Background concurrent mark compact GC freed 4552KB AllocSpace bytes, 16(880KB) LOS objects, 49% free, 6612KB/12MB, paused 263us,8.709ms total 230.568ms
+06-26 16:53:12.023   355   355 I Zygote  : Process 3122 exited due to signal 9 (Killed)
+06-26 16:53:12.024   158   158 I lowmemorykiller: Kill 'com.android.chrome' (3042), uid 10146, oom_score_adj 945 to free 69280kB rss, 38912kB swap; reason: low watermark is breached
+06-26 16:53:12.041   559  1105 I ActivityManager: Process com.android.providers.calendar (pid 3122) has died: cch+55 CEM
+06-26 16:53:12.043   158   164 E lowmemorykiller: process_mrelease 3042 failed: No such process
+06-26 16:53:12.043   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10094/pid_3122
+06-26 16:53:12.046   559   589 D DisplayManagerService: Drop pending events for gone uid 10094
+06-26 16:53:12.050  4002  4002 I Finsky:quick_launch: [2] Process created at version: 51.9.17-31 [0] [PR] 931367114
+06-26 16:53:12.061   355   355 I Zygote  : Process 3042 exited due to signal 9 (Killed)
+06-26 16:53:12.061   158   158 I lowmemorykiller: Kill 'com.google.android.partnersetup' (2940), uid 10136, oom_score_adj 935 to free 74592kB rss, 37760kB swap; reason: low watermark is breached
+06-26 16:53:12.062   559  1105 I ActivityManager: Process com.android.chrome (pid 3042) has died: cch+45 CEM
+06-26 16:53:12.063   559   589 D DisplayManagerService: Drop pending events for gone uid 10146
+06-26 16:53:12.067   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10146/pid_3042
+06-26 16:53:12.092  4002  4002 I Finsky:quick_launch: [2] Finished reading experiment flags from file [0tGUNCGIkbk4o6-fQ335kUYSKwVj4lusnHT-A5Dsy08] numFlags=2359.
+06-26 16:53:12.102   158   158 I lowmemorykiller: Kill 'com.android.imsserviceentitlement' (3634), uid 10133, oom_score_adj 925 to free 68128kB rss, 36336kB swap; reason: low watermark is breached
+06-26 16:53:12.104   559  1924 I ActivityManager: Process com.google.android.partnersetup (pid 2940) has died: cch+35 CEM
+06-26 16:53:12.105   559   589 D DisplayManagerService: Drop pending events for gone uid 10136
+06-26 16:53:12.107   355   355 I Zygote  : Process 2940 exited due to signal 9 (Killed)
+06-26 16:53:12.107  4002  4033 D nativeloader: Load /data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/split_config.arm64_v8a.apk!/lib/arm64-v8a/libmappedcountercacheversionjni.so using ns clns-7 from class loader (caller=/data/app/~~ivdET5_HBAF6Upap3l2kQw==/com.android.vending-CqEFZIlKwsANdOAsGJfMeQ==/base.apk): ok
+06-26 16:53:12.110  3111  3185 I Finsky:background: [61] [WM] Flush complete with 1 successes and 0 failures.
+06-26 16:53:12.110  3111  3185 I Finsky:background: [61] SCH: jobFinished: 10-140. TimeElapsed: 208ms.
+06-26 16:53:12.110  3111  3185 I Finsky:background: [61] WM::SCH: Logging work end for 10-140
+06-26 16:53:12.116  4002  4002 I Finsky:quick_launch: [2] Finished reading experiment flags from file [Se-xCc4LzNyh3UrKMIU2sUf-PUKz4oQEbpKZDMuaFno] numFlags=2037.
+06-26 16:53:12.122   158   164 E lowmemorykiller: process_mrelease 3634 failed: No such process
+06-26 16:53:12.123   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10136/pid_2940
+06-26 16:53:12.131   559  1919 I ActivityManager: Process com.android.imsserviceentitlement (pid 3634) has died: cch+25 CEM
+06-26 16:53:12.132   559   589 D DisplayManagerService: Drop pending events for gone uid 10133
+06-26 16:53:12.132   355   355 I Zygote  : Process 3634 exited due to signal 9 (Killed)
+06-26 16:53:12.137  4002  4002 I Endpoint: Created gRPC endpoint for service class com.google.frameworks.client.data.android.server.play.QuickLaunchProcessEndpointService
+06-26 16:53:12.142   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10133/pid_3634
+06-26 16:53:12.144  4002  4002 I Finsky:quick_launch: [2] This process start was not selected for Play memory metrics collection.
+06-26 16:53:12.171  3374  3413 W System  : A resource failed to call AbstractCursor.close.
+06-26 16:53:12.172  3111  4019 I Finsky:background: [88] SCH: jobFinished: 10-53. TimeElapsed: 321ms.
+06-26 16:53:12.172  3111  4019 I Finsky:background: [88] WM::SCH: Logging work end for 10-53
+06-26 16:53:12.185  3111  3123 W ding:background: Missing inline cache for java.lang.Object abrc.apply(java.lang.Object)
+06-26 16:53:12.185  3111  3123 W ding:background: Missing inline cache for java.lang.Object abrc.apply(java.lang.Object)
+06-26 16:53:12.185  3111  3123 W ding:background: Missing inline cache for java.lang.Object abrc.apply(java.lang.Object)
+06-26 16:53:12.185  3111  3123 W ding:background: Missing inline cache for java.lang.Object abrc.apply(java.lang.Object)
+06-26 16:53:12.188  4002  4041 I Finsky:quick_launch: [51] SCH: Received scheduling request: Id: 10-141, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:12.195  4002  4041 I Finsky:quick_launch: [51] SCH: Deleting scheduler db
+06-26 16:53:12.195  4002  4041 I Finsky:quick_launch: [51] Resetting scheduler db
+06-26 16:53:12.203  3111  3177 I Finsky:background: [54] SCH: no pending jobs to schedule.
+06-26 16:53:12.203  3111  3208 I Finsky:background: [74] SCH: job service finished with id 10115.
+06-26 16:53:12.251   559  1919 D ShortcutService: Getting shortcuts for launcher= com.google.android.asuser=0 pkg=com.google.android.gms
+06-26 16:53:12.258  4002  4044 I Finsky:quick_launch: [54] SCH: no pending jobs to schedule.
+06-26 16:53:12.293  4002  4045 D TrafficStats: tagSocket(95) with statsTag=0xffffffff, statsUid=-1
+06-26 16:53:12.435   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-26 16:53:12.435   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-26 16:53:12.435   559   713 D InetDiagMessage: Destroyed live tcp sockets for uids={10141} in 0ms
+06-26 16:53:12.435   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-26 16:53:12.435   559   713 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-26 16:53:12.435   559   713 D InetDiagMessage: Destroyed live tcp sockets for uids={20141} in 1ms
+06-26 16:53:12.465  4002  4036 I Finsky:quick_launch: [46] WM::SCH: Logging work initialize for 10-141
+06-26 16:53:12.476  4002  4052 I Finsky:quick_launch: [59] SCH: Scheduling phonesky job Id: 10-141, CT: 1782463992188, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:12.483  4002  4051 I Finsky:quick_launch: [58] SCH: Scheduling 1 system job(s)
+06-26 16:53:12.483  4002  4051 I Finsky:quick_launch: [58] SCH: Scheduling expedited system job 11018
+06-26 16:53:12.487  4002  4002 I Finsky:quick_launch: [2] SCH: job service start with id 11018.
+06-26 16:53:12.492  2008  2008 I Finsky  : [2] Hygiene tasks scheduled
+06-26 16:53:12.495  2008  2008 I Finsky  : [2] SCH: jobFinished: 1-1337. TimeElapsed: 31375ms.
+06-26 16:53:12.495  2008  2008 I Finsky  : [2] WM::SCH: Logging work end for 1-1337
+06-26 16:53:12.496  4002  4042 I Finsky:quick_launch: [52] SCH: Satisfied jobs for 11018 are: 10-141
+06-26 16:53:12.497  4002  4054 I Finsky:quick_launch: [61] SCH: Job 10-141 starting
+06-26 16:53:12.497  4002  4002 I Finsky:quick_launch: [2] WM::SCH: Logging work start for 10-141
+06-26 16:53:12.497  4002  4002 I Finsky:quick_launch: [2] [WM] Starting Hygiene job.
+06-26 16:53:12.500  4002  4055 I Finsky:quick_launch: [62] Adding column epoch_time (INTEGER) to work
+06-26 16:53:12.506  2008  2299 I Finsky  : [58] SCH: Attempting to reschedule job: Id: 1-1337, Constraints: [{ L: 40503405, D: 83703405, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 16:53:12.507  2008  2299 I Finsky  : [58] SCH: Satisfied jobs for 9033 are: 10-1, 10-3, 10-8, 10-9, 10-12, 10-14, 10-15, 10-18, 10-20, 10-22, 10-30, 10-33, 10-39, 10-41, 10-42, 10-47, 10-48, 10-50, 10-51, 10-55, 10-66, 10-71, 10-73, 10-76, 10-82, 10-87, 10-98, 10-107, 10-113, 10-116, 10-122, 10-127, 10-130, 10-131, 10-135, 10-139, 10-142, 10-146, 10-152, 10-162, 10-170, 10-171, 10-175, 10-176, 10-178, 10-179
+06-26 16:53:12.512  2008  2332 I Finsky  : [66] SCH: Job 10-1 starting
+06-26 16:53:12.512  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-1
+06-26 16:53:12.514  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-8, CT: 1782463991716, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:12.514  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-26, CT: 1782463991716, Constraints: [{ L: 600000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 16:53:12.514  2008  2257 I Finsky  : [52] SCH: Scheduling phonesky job Id: 10-175, CT: 1782463991718, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-26 16:53:12.517  2008  2332 I Finsky  : [66] SCH: Job 10-3 starting
+06-26 16:53:12.520  2008  2332 I Finsky  : [66] SCH: Job 10-8 starting
+06-26 16:53:12.520  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-3
+06-26 16:53:12.520  2008  2332 I Finsky  : [66] SCH: Job 10-9 starting
+06-26 16:53:12.521  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-8
+06-26 16:53:12.522  2008  4058 I PlayCore: UID: [10140]  PID: [2008] StandardIntegrity : warmUpIntegrityToken(815409574534)
+06-26 16:53:12.522  2008  2272 I Finsky  : [54] SCH: Scheduling 1 system job(s)
+06-26 16:53:12.522  2008  2272 I Finsky  : [54] SCH: Scheduling system job Id: 9142, L: 0, D: 86399194, C: false, I: false, N: 1
+06-26 16:53:12.523  2008  4057 I PlayCore: UID: [10140]  PID: [2008] StandardIntegrity : Initiate binding to the service.
+06-26 16:53:12.523  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-9
+06-26 16:53:12.526  4002  4055 I Finsky:quick_launch: [62] [WM] Flush complete with 1 successes and 0 failures.
+06-26 16:53:12.526  4002  4055 I Finsky:quick_launch: [62] SCH: jobFinished: 10-141. TimeElapsed: 30ms.
+06-26 16:53:12.526  4002  4055 I Finsky:quick_launch: [62] WM::SCH: Logging work end for 10-141
+06-26 16:53:12.530  2008  4056 I Finsky  : [110] Running CheckAppUpdatesTask
+06-26 16:53:12.531  2008  2289 I Finsky  : [56] VerifyApps: CheckAppUpdatesTask was run.
+06-26 16:53:12.531  2008  4058 I Finsky  : [112] SCH: jobFinished: 10-9. TimeElapsed: 8ms.
+06-26 16:53:12.531  2008  4058 I Finsky  : [112] WM::SCH: Logging work end for 10-9
+06-26 16:53:12.533  2008  2332 I Finsky  : [66] SCH: job service finished with id 9030.
+06-26 16:53:12.534  2008  2289 I Finsky  : [56] VerifyApps: CheckAppUpdatesTask found 0 Play-installed PHAs with available updates
+06-26 16:53:12.535  2008  4056 I Finsky  : [110] SCH: jobFinished: 10-8. TimeElapsed: 14ms.
+06-26 16:53:12.535  2008  4056 I Finsky  : [110] WM::SCH: Logging work end for 10-8
+06-26 16:53:12.536  2008  2239 I Finsky  : [45] WM::SCH: Logging work initialize for 1-1337
+06-26 16:53:12.540  2008  2008 I PlayCore: UID: [10140]  PID: [2008] StandardIntegrity : ServiceConnectionImpl.onServiceConnected(ComponentInfo{com.android.vending/com.google.android.finsky.expressintegrityservice.ExpressIntegrityService})
+06-26 16:53:12.541  2008  2289 I Finsky  : [56] AU2: current managed auto update config: AUTO_UPDATE_POLICY_UNSPECIFIED
+06-26 16:53:12.541  2008  2289 I Finsky  : [56] AU2: current managed auto update config: AUTO_UPDATE_POLICY_UNSPECIFIED
+06-26 16:53:12.541  2008  4057 I PlayCore: UID: [10140]  PID: [2008] StandardIntegrity : linkToDeath
+06-26 16:53:12.546  2008  2289 W Settings: Setting install_non_market_apps has moved from android.provider.Settings.Global to android.provider.Settings.Secure, returning read-only value.
+06-26 16:53:12.549  2008  2289 W Settings: Setting download_manager_max_bytes_over_mobile has moved from android.provider.Settings.Secure to android.provider.Settings.Global.
+06-26 16:53:12.550  2008  2008 I Finsky  : [2] SCH: Job 10-12 starting
+06-26 16:53:12.550  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-12
+06-26 16:53:12.551  2008  2289 I Finsky  : [56] SCH: jobFinished: 10-1. TimeElapsed: 39ms.
+06-26 16:53:12.551  2008  2289 I Finsky  : [56] WM::SCH: Logging work end for 10-1
+06-26 16:53:12.552  4002  4044 I Finsky:quick_launch: [54] SCH: no pending jobs to schedule.
+06-26 16:53:12.553  4002  4054 I Finsky:quick_launch: [61] SCH: job service finished with id 11018.
+06-26 16:53:12.554  2008  2424 I PlayCommon: [69] Preparing logs for uploading
+06-26 16:53:12.555  2008  2424 I PlayCommon: [69] Connecting to server for timestamp: https://play.googleapis.com/play/log/timestamp
+06-26 16:53:12.561  2008  2424 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+06-26 16:53:12.561  2008  2008 I Finsky  : [2] SCH: Job 10-14 starting
+06-26 16:53:12.562  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-14
+06-26 16:53:12.562  2008  2008 I Finsky  : [2] Instant App status sync triggered from migrated hygiene.
+06-26 16:53:12.563  2008  2257 I Finsky  : [52] Enqueue status sync job.
+06-26 16:53:12.564  2008  2257 W JobInfo : Job 'com.android.vending/com.google.android.finsky.instantapps.statussync.EnabledStatusSyncService#160422051' has a deadline with no functional constraints. The deadline won't improve job execution latency. Consider removing the deadline.
+06-26 16:53:12.565   559  1919 W JobInfo : Job 'com.android.vending/com.google.android.finsky.instantapps.statussync.EnabledStatusSyncService#160422051' has a deadline with no functional constraints. The deadline won't improve job execution latency. Consider removing the deadline.
+06-26 16:53:12.565  2008  2257 I Finsky  : [52] SCH: jobFinished: 10-14. TimeElapsed: 4ms.
+06-26 16:53:12.565  2008  2257 I Finsky  : [52] WM::SCH: Logging work end for 10-14
+06-26 16:53:12.573  2008  2289 I Finsky  : [56] SCH: Scheduling phonesky job Id: 1-1337, CT: 1782463992506, Constraints: [{ L: 40503405, D: 83703405, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-26 16:53:12.577  2008  2272 I Finsky  : [54] SCH: Scheduling 1 system job(s)
+06-26 16:53:12.577  2008  2272 I Finsky  : [54] SCH: Scheduling system job Id: 9142, L: 0, D: 83703334, C: false, I: false, N: 1
+06-26 16:53:12.582  2008  2008 I Finsky  : [2] SCH: Job 10-15 starting
+06-26 16:53:12.582  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-15
+06-26 16:53:12.584  2008  4056 D AdvertisingIdClient: Creating AdvertisingIdClient
+06-26 16:53:12.584  2008  4056 D AdvertisingIdClient: AdvertisingIdClient already created.
+06-26 16:53:12.584  2008  4056 D AdvertisingIdClient: AdvertisingIdClient is not bounded. Starting to bind it...
+06-26 16:53:12.593   841   841 D BoundBrokerSvc: onRebind: Intent { act=com.google.android.gms.common.telemetry.service.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.PersistentApiService }
+06-26 16:53:12.597  2008  2008 I Finsky  : [2] SCH: Job 10-18 starting
+06-26 16:53:12.598  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-18
+06-26 16:53:12.604  2008  2272 I Finsky  : [54] SCH: jobFinished: 10-18. TimeElapsed: 6ms.
+06-26 16:53:12.604  2008  2272 I Finsky  : [54] WM::SCH: Logging work end for 10-18
+06-26 16:53:12.606  2008  4056 D AdvertisingIdClient: AdvertisingIdClient is bounded
+06-26 16:53:12.618  2008  2008 I Finsky  : [2] SCH: Job 10-20 starting
+06-26 16:53:12.619  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-20
+06-26 16:53:12.619  2008  2008 I Finsky  : [2] Start Vpa Service for Deferred Setup Notification
+06-26 16:53:12.619  2008  2008 I Finsky  : [2] setup::PAI: Deferred PAI is not allowed
+06-26 16:53:12.619  2008  2008 I Finsky  : [2] SCH: jobFinished: 10-20. TimeElapsed: 0ms.
+06-26 16:53:12.619  2008  2008 I Finsky  : [2] WM::SCH: Logging work end for 10-20
+06-26 16:53:12.624   559  2052 I RemoteProvisionSysSvc: getRegistration(android.hardware.security.keymint.IRemotelyProvisionedComponent/default)
+06-26 16:53:12.624  2008  4056 I AdvertisingIdClient: shouldSendLog -1
+06-26 16:53:12.625  2008  4056 I AdvertisingIdClient: GetInfoInternal elapse 40ms
+06-26 16:53:12.626  2008  4056 I Finsky  : [110] SCH: jobFinished: 10-15. TimeElapsed: 43ms.
+06-26 16:53:12.626  2008  4056 I Finsky  : [110] WM::SCH: Logging work end for 10-15
+06-26 16:53:12.626  2008  2008 I AdvertisingIdClient: getting error as 17: API: ClientTelemetry.API is not available on this device. Connection failed with: ConnectionResult{statusCode=API_DISABLED_FOR_CONNECTION, resolution=null, message=null, clientMethodKey=null}
+06-26 16:53:12.635  2008  2008 I Finsky  : [2] SCH: Job 10-22 starting
+06-26 16:53:12.635  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-22
+06-26 16:53:12.636   559   559 I RegistrationProxy: onServiceConnected: com.android.rkpdapp.service.RemoteProvisioningService
+06-26 16:53:12.637  2008  4056 I Finsky  : [110] SCH: jobFinished: 10-22. TimeElapsed: 1ms.
+06-26 16:53:12.637  2008  4056 I Finsky  : [110] WM::SCH: Logging work end for 10-22
+06-26 16:53:12.651  2008  2008 I Finsky  : [2] SCH: Job 10-30 starting
+06-26 16:53:12.651  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-30
+06-26 16:53:12.651  2008  2008 I Finsky  : [2] SCH: jobFinished: 10-30. TimeElapsed: 0ms.
+06-26 16:53:12.651  2008  2008 I Finsky  : [2] WM::SCH: Logging work end for 10-30
+06-26 16:53:12.661   559  2047 I RegistrationProxy: IGetRegistrationCallback.onSuccess
+06-26 16:53:12.666   559  1919 I RemoteProvisionSysSvc: Fetching key 10140 for client 179987455
+06-26 16:53:12.667   559  1919 I RegistrationProxy: getKeyAsync operation started with callback 34502092
+06-26 16:53:12.671  2959  3057 I RkpdRegistrationBinder: Key requested for : android.hardware.security.keymint.IRemotelyProvisionedComponent/default, clientUid: 1017, keyId: 10140, callback: 49400863
+06-26 16:53:12.683  2959  3057 I RkpdRegistrationBinder: No key assigned, looking for an available key with expiry of 2026-06-29T08:53:12.681475Z
+06-26 16:53:12.691  2008  2008 I Finsky  : [2] SCH: Job 10-33 starting
+06-26 16:53:12.692  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-33
+06-26 16:53:12.693  2008  2008 I Finsky  : [2] AU2: hygiene task started
+06-26 16:53:12.697  2008  4066 I Finsky  : [115] [UUC]: UUCM: Fetching UUC from CloudDPC: Flag is disabled.
+06-26 16:53:12.699  2959  3057 I RkpdKeyPoolStats: Sufficient keys are available, no CSR needed.
+06-26 16:53:12.699  2959  3057 I RkpdKeyPoolStats: PoolStats{keysInUse=2, idealTotalSignedKeys=14, keysToGenerate=0, keysUnassigned=10}
+06-26 16:53:12.700  2008  2008 I Finsky  : [2] AU2: current managed auto update config: AUTO_UPDATE_POLICY_UNSPECIFIED
+06-26 16:53:12.701  2008  2008 I Finsky  : [2] AU2: current managed auto update config: AUTO_UPDATE_POLICY_UNSPECIFIED
+06-26 16:53:12.703  2959  3057 I RkpdRegistrationBinder: Key successfully assigned to client
+06-26 16:53:12.703   559   559 I RemoteProvisionSysSvc: Successfully fetched key for client 179987455
+06-26 16:53:12.706  2008  2008 I Finsky  : [2] AU2: current managed auto update config: AUTO_UPDATE_POLICY_UNSPECIFIED
+06-26 16:53:12.707  2008  2008 I Finsky  : [2] AU2: current managed auto update config: AUTO_UPDATE_POLICY_UNSPECIFIED
+06-26 16:53:12.707  2008  2008 I Finsky  : [2] AU2: current managed auto update config: AUTO_UPDATE_POLICY_UNSPECIFIED
+06-26 16:53:12.707  2008  2008 I Finsky  : [2] AU2: current managed auto update config: AUTO_UPDATE_POLICY_UNSPECIFIED
+06-26 16:53:12.710  2008  2267 I Finsky  : [53] PSR: Package cache is empty, setup cache.
+06-26 16:53:12.710  2008  2257 I Finsky  : [52] PSR: Package cache is empty, setup cache.
+06-26 16:53:12.720  2008  2008 I Finsky  : [2] SCH: Job 10-39 starting
+06-26 16:53:12.723  2008  4069 E ActivityThread: Failed to find provider info for androidx.car.app.connection
+06-26 16:53:12.727  2008  2008 I Finsky  : [2] WM::SCH: Logging work start for 10-39
+06-26 16:53:12.730  2008  2008 I Finsky  : [2] Running dev-triggered-update hygiene
+06-26 16:53:12.730  2008  2008 W CarApp.Conn: Null response from content provider when checking connection to the car, treating as disconnected
+06-26 16:53:12.731  2008  2008 I Finsky  : [2] GH::GSM: IsProjecting:false
+06-26 16:53:12.731  2008  2008 I Finsky  : [2] GH::GSM: Gearhead listeners Notified that Projection is: false
+06-26 16:53:12.733  2008  2424 W PlayCommon: [69] No account for auth token provided
+06-26 16:53:12.735  2008  4071 I Finsky  : [120] Removed 0 uncompleted downloaded updates.
+06-26 16:53:12.735  2008  2424 I PlayCommon: [69] Connecting to server: https://play.googleapis.com/play/log?format=raw&proto_v2=true
+06-26 16:53:12.736  2008  2289 I Finsky  : [56] Removed obsolete update files for 0 packages.
+06-26 16:53:12.737  2008  4071 I Finsky  : [120] Reset 0 obsolete 'installing' bits.
+06-26 16:53:12.741  2008  4073 I Finsky  : [121] Finished completion of 0 dev-triggered updates. Successful: 0. Failed: 0.
+06-26 16:53:12.744  2008  2272 I Finsky  : [54] SCH: jobFinished: 10-39. TimeElapsed: 22ms.
+06-26 16:53:12.744  2008  2272 I Finsky  : [54] WM::SCH: Logging work end for 10-39

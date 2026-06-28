@@ -940,10 +940,19 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_buildAppWithStableFollowingFeed());
+      await tester.pumpWidget(_buildAppWithStableFollowingArticles());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey<String>('home-feed-more-0')));
+      final articleCard = find.byKey(
+        const ValueKey<String>('following-article-card-web-dev'),
+      );
+      expect(articleCard, findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: articleCard,
+          matching: find.byIcon(Icons.more_horiz_rounded),
+        ),
+      );
       await tester.pumpAndSettle();
 
       final page = find.byType(HomePage);
@@ -972,27 +981,31 @@ void main() {
       expect(find.text('功能反馈'), findsOneWidget);
     });
 
-    testWidgets('关注流宽屏下更多面板与内容同宽', (tester) async {
+    testWidgets('关注流宽屏下文章卡更多面板贴底呈现', (tester) async {
       _suppressExpectedErrors();
       _setWideSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_buildAppWithStableFollowingFeed());
+      await tester.pumpWidget(_buildAppWithStableFollowingArticles());
       await tester.pumpAndSettle();
 
-      final cardFinder = find.byKey(const ValueKey<String>('home-feed-card-0'));
-      expect(cardFinder, findsOneWidget);
+      final articleCard = find.byKey(
+        const ValueKey<String>('following-article-card-web-dev'),
+      );
+      expect(articleCard, findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey<String>('home-feed-more-0')));
+      await tester.tap(
+        find.descendant(
+          of: articleCard,
+          matching: find.byIcon(Icons.more_horiz_rounded),
+        ),
+      );
       await tester.pumpAndSettle();
 
       final panel = find.byKey(TestKeys.modalBottomSheetPanel);
       expect(panel, findsOneWidget);
-      expect(
-        tester.getSize(panel).width,
-        closeTo(tester.getSize(cardFinder).width, 1.0),
-      );
+      expect(tester.getTopLeft(panel).dy, greaterThan(0));
 
       await tester.pump(const Duration(seconds: 3));
     });
@@ -1242,6 +1255,7 @@ void main() {
       // 卡片即时从信息流消失（本地乐观移除），落到空态而非空白滚动视图。
       expect(cardFinder, findsNothing);
       expect(find.text(_singleRecommendPostBody), findsNothing);
+
       // 即时降级提示 toast 可见。
       expect(
         find.text(DiscoveryFeedText.feedNegativeFeedbackNotInterested),

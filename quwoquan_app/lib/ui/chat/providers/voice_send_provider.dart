@@ -125,7 +125,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
         _trackUploadFailed(enqueued.error);
         state = state.copyWith(
           status: VoiceSendStatus.failed,
-          error: _uploadFailureMessage(enqueued.error),
+          error: _userFacingVoiceFailureMessage(enqueued.error),
         );
         return;
       }
@@ -149,7 +149,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
           _trackUploadFailed(update.error);
           state = state.copyWith(
             status: VoiceSendStatus.failed,
-            error: _uploadFailureMessage(update.error),
+            error: _userFacingVoiceFailureMessage(update.error),
           );
           return;
         }
@@ -165,7 +165,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
       );
       state = state.copyWith(
         status: VoiceSendStatus.failed,
-        error: runtimeErrorDisplayMessage(e),
+        error: _userFacingVoiceFailureMessage(e),
       );
     }
   }
@@ -187,7 +187,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
       _trackUploadFailed('empty_cdn_url');
       state = state.copyWith(
         status: VoiceSendStatus.failed,
-        error: UITextConstants.chatVoiceUploadFailed,
+        error: UITextConstants.chatVoicePendingRetry,
       );
       return;
     }
@@ -226,7 +226,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
       );
       state = state.copyWith(
         status: VoiceSendStatus.failed,
-        error: UITextConstants.chatVoiceSendFailed,
+        error: UITextConstants.chatVoicePendingRetry,
       );
       return;
     }
@@ -245,15 +245,14 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
     state = const VoiceSendState();
   }
 
-  String _uploadFailureMessage(String? raw) {
-    final message = raw?.trim() ?? '';
-    if (message.isEmpty) {
-      return UITextConstants.chatVoiceUploadFailed;
+  String _userFacingVoiceFailureMessage(Object? raw) {
+    if (raw is String) {
+      final message = raw.trim();
+      if (message.contains('文件大小') || message.contains('文件类型')) {
+        return message;
+      }
     }
-    if (message.contains('文件大小') || message.contains('文件类型')) {
-      return message;
-    }
-    return UITextConstants.chatVoiceUploadFailed;
+    return UITextConstants.chatVoicePendingRetry;
   }
 
   void _trackUploadFailed(String? raw) {

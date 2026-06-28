@@ -255,6 +255,27 @@ class _OtpCodeBoxesBodyState extends State<_OtpCodeBoxesBody> {
     super.initState();
     _focusNode = FocusNode();
     _focusNode.addListener(_handleFocusChanged);
+    _scheduleOtpFocusRequest();
+  }
+
+  @override
+  void didUpdateWidget(covariant _OtpCodeBoxesBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.enabled && !oldWidget.enabled) {
+      _scheduleOtpFocusRequest();
+    }
+  }
+
+  void _scheduleOtpFocusRequest() {
+    if (!widget.enabled) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.enabled) {
+        return;
+      }
+      _focusNode.requestFocus();
+    });
   }
 
   @override

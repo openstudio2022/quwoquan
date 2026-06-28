@@ -1,8 +1,15 @@
 package model
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 var _ = time.Now
+
+// ErrConversationNotFound 是「会话不存在」的领域哨兵错误。基础设施层在查询无命中时
+// 必须 wrap 本哨兵，应用层据此映射结构化 not_found，而无需 import 任何存储驱动。
+var ErrConversationNotFound = errors.New("conversation not found")
 
 // Conversation is the aggregate root for the chat domain.
 type Conversation struct {
@@ -78,7 +85,8 @@ type ConversationUserState struct {
 	ConversationId string    `json:"conversationId" bson:"conversationId"`
 	ReadSeq        int64     `json:"readSeq" bson:"readSeq"`
 	UnreadCount    int       `json:"unreadCount" bson:"unreadCount"`
-	Muted          bool      `json:"muted" bson:"muted"`
+	MentionUnreadCount int       `json:"mentionUnreadCount" bson:"mentionUnreadCount"`
+	Muted              bool      `json:"muted" bson:"muted"`
 	Pinned         bool      `json:"pinned" bson:"pinned"`
 	LastReadAt     time.Time `json:"lastReadAt" bson:"lastReadAt"`
 	UpdatedAt      time.Time `json:"updatedAt" bson:"updatedAt"`

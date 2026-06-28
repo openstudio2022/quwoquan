@@ -1,7 +1,7 @@
 id: CR-20260626-073-legal-static-independent-package
 title: 法律协议静态资源独立发布单元
 slug: legal-static-independent-package
-revision: 1
+revision: 2
 status: active
 
 affected_nodes:
@@ -10,6 +10,60 @@ affected_nodes:
   - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/onboarding-consent-flow--consent-record-contract
 
 entries:
+  - timestamp: "2026-06-26T23:45:00+08:00"
+    summary: |
+      补齐 `flutter run` / alpha mock public plane 的 `/legal/*` 静态资源挂载，启动 alpha mock 栈前先构建 `legal-static` alpha 包，并对 `/legal/user-agreement` 做健康探测。
+      dev-up、start_app_instance、plain Android flutter run 与 app env dart-defines 统一注入 `APP_LEGAL_BASE_URL`，避免 gateway override 与 legal base 分叉；真实 prod 继续使用 `https://quwoquan.com/legal` canonical。
+      `LegalDocumentPage` 增加 HTTP 预检、WebView HTTP/资源错误兜底、原生错误态、重试/返回动作和脱敏 journey 事件，协议不可达不再展示 mock/raw HTTP HTML，也不阻断登录流程。
+    reason: |
+      点击登录页用户协议/隐私政策时，alpha mock gateway 未挂载 `/legal/*`，导致 WebView 渲染 `api mock route is not ready` 的 404 HTML。该错误属于法律协议静态资源可达性断点，应在环境路由与 App 页面错误语义两端同时收口。
+    change_type:
+      - ops-release
+      - app-runtime
+      - local-contract
+      - user-acceptance
+    changed_documents:
+      - path: specs/feature-tree/platform-ops-governance/security-privacy-audit/spec.md
+        sections:
+          - 约束
+      - path: specs/feature-tree/platform-ops-governance/security-privacy-audit/acceptance.yaml
+        sections:
+          - SIT1
+    changed_code:
+      - path: agent_ops/deploy/lib/mock_public_plane.py
+      - path: agent_ops/deploy/lib/dev_up.py
+      - path: agent_ops/deploy/alpha/start_alpha_mock_stack.sh
+      - path: agent_ops/gate/verify_dev_up_cli_surface.py
+      - path: quwoquan_app/scripts/env/print_app_env_dart_defines.py
+      - path: quwoquan_app/scripts/device/start_app_instance.sh
+      - path: quwoquan_app/run.sh
+      - path: quwoquan_app/android/app/build.gradle.kts
+      - path: quwoquan_app/lib/ui/user/pages/legal_document_page.dart
+      - path: quwoquan_app/lib/core/constants/ui_text_constants_values.dart
+      - path: agent_ops/tests/test_dev_up.py
+      - path: quwoquan_app/test/ui/user/legal_document_page_test.dart
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: low
+      breaking_contract: false
+    verification:
+      - "通过：python3 -m unittest agent_ops.tests.test_dev_up"
+      - "通过：python3 agent_ops/gate/verify_dev_up_cli_surface.py"
+      - "通过：cd quwoquan_app && flutter analyze lib/ui/user/pages/legal_document_page.dart test/ui/user/legal_document_page_test.dart"
+      - "通过：cd quwoquan_app && flutter test test/ui/user/legal_document_page_test.dart"
+      - "通过：python3 agent_ops/deploy/stackctl.py package --env alpha --kind legal-static"
+      - "通过：python3 agent_ops/deploy/stackctl.py verify --env alpha --kind legal-static"
+      - "通过：python3 agent_ops/deploy/stackctl.py verify --env gamma --kind legal-static"
+      - "通过：QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP=skip QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip bash agent_ops/deploy/alpha/start_alpha_mock_stack.sh up，随后 curl https://localhost:17000/legal/user-agreement 返回 200 text/html 且正文包含“趣我圈用户协议”，未包含 mock 404 文案；验证后已执行 down"
+      - "已执行但存在既有阻断：bash agent_ops/scaffold/verify_acceptance_standard.sh 仍因 runtime-client-foundation/error-permission-display-semantics--permission-card-display-contract 缺 test_evidence 失败，与本 CR 无关"
+    notes:
+      - App 不内置协议 HTML；legal-static 仍是唯一正文来源。
+      - prod 法务主体/备案/联系方式占位未清理前，legal-static prod 包继续按预期 GATE_BLOCK。
   - timestamp: "2026-06-26T14:30:00+08:00"
     summary: |
       新增 `deploy/legal` 法律协议源目录和 `legal-static` 独立静态资源发布单元，首版包含用户协议、隐私政策、权限说明、第三方 SDK 清单。

@@ -9,6 +9,7 @@ import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -169,7 +170,7 @@ void main() {
       final chevron = find.descendant(
         of: find.ancestor(
           of: find.text(UITextConstants.settingsDarkMode),
-          matching: find.byType(CupertinoButton),
+          matching: find.byType(SettingsInsetNavigationRow),
         ),
         matching: find.byIcon(CupertinoIcons.chevron_forward),
       );
@@ -179,6 +180,12 @@ void main() {
         tester.getTopRight(modeText).dx,
         lessThan(tester.getTopLeft(chevron).dx),
       );
+      expect(
+        tester.getTopLeft(chevron).dx - tester.getTopRight(modeText).dx,
+        lessThanOrEqualTo(AppSpacing.sm),
+      );
+      expect(find.byType(SettingsInsetNavigationRow), findsNWidgets(5));
+      expect(find.byType(SettingsInsetFormSectionDivider), findsNWidgets(2));
 
       final switchAccountButton = find.ancestor(
         of: find.text(UITextConstants.switchAccount),
@@ -253,27 +260,30 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await _openLogoutSheet(tester);
+      await _openLogoutDialog(tester);
 
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.text(UITextConstants.logoutDialogTitle), findsWidgets);
+      expect(find.byType(CupertinoActionSheet), findsNothing);
       expect(
         find.widgetWithText(
-          CupertinoActionSheetAction,
-          UITextConstants.logoutSoftAction,
+          CupertinoDialogAction,
+          UITextConstants.logoutDialogSoftAction,
         ),
         findsOneWidget,
       );
       expect(
         find.widgetWithText(
-          CupertinoActionSheetAction,
-          UITextConstants.logoutHardAction,
+          CupertinoDialogAction,
+          UITextConstants.logoutDialogHardAction,
         ),
         findsOneWidget,
       );
 
       await tester.tap(
         find.widgetWithText(
-          CupertinoActionSheetAction,
-          UITextConstants.logoutSoftAction,
+          CupertinoDialogAction,
+          UITextConstants.logoutDialogSoftAction,
         ),
       );
       await tester.pumpAndSettle();
@@ -292,12 +302,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await _openLogoutSheet(tester);
+      await _openLogoutDialog(tester);
 
       await tester.tap(
         find.widgetWithText(
-          CupertinoActionSheetAction,
-          UITextConstants.logoutHardAction,
+          CupertinoDialogAction,
+          UITextConstants.logoutDialogHardAction,
         ),
       );
       await tester.pumpAndSettle();
@@ -310,7 +320,7 @@ void main() {
   });
 }
 
-Future<void> _openLogoutSheet(WidgetTester tester) async {
+Future<void> _openLogoutDialog(WidgetTester tester) async {
   _useTallViewport(tester);
   await tester.pumpAndSettle();
 
@@ -336,6 +346,9 @@ Widget _buildSettingsApp({
       ),
       authSessionStoreProvider.overrideWithValue(
         store ?? _SpyAuthSessionStore(),
+      ),
+      authSessionControllerProvider.overrideWith(
+        _SettingsTestAuthSessionController.new,
       ),
       if (authRepository != null)
         authRepositoryProvider.overrideWithValue(authRepository),
@@ -473,4 +486,18 @@ class _SpyAuthRepository extends MockAuthRepository {
   Future<void> logout({String? refreshToken, String? deviceId}) async {
     logoutCount += 1;
   }
+}
+
+final class _SettingsTestAuthSessionController extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    ownerId: 'owner-id',
+    activeSubAccountId: 'sub-id',
+    accountState: 'active',
+    identityOrigin: 'settings-test',
+    installId: 'install-id',
+  );
 }

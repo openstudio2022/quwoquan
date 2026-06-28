@@ -550,8 +550,11 @@ void main() {
 
       expect(find.text('发布'), findsOneWidget);
       expect(find.text('互动'), findsOneWidget);
-      expect(find.text('写长文'), findsOneWidget);
-      expect(find.text('发图片'), findsOneWidget);
+      expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
+      expect(
+        find.text(UITextConstants.createActionPostPhotoShort),
+        findsOneWidget,
+      );
     });
 
     testWidgets('游客点加号先开动作面板（不弹登录），后置到具体动作再拦截', (tester) async {
@@ -570,11 +573,14 @@ void main() {
 
       // 加号后置登录：先出现动作面板，不弹登录页。
       expect(find.byType(LoginPage), findsNothing);
-      expect(find.text('写长文'), findsOneWidget);
-      expect(find.text('加联系'), findsOneWidget);
+      expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
+      expect(
+        find.text(UITextConstants.createActionAddContactShort),
+        findsOneWidget,
+      );
 
       // 选「添加联系人」这一账号态动作时才触发登录。
-      await tester.tap(find.text('加联系'));
+      await tester.tap(find.text(UITextConstants.createActionAddContactShort));
       await tester.pumpAndSettle();
 
       expect(find.byType(LoginPage), findsOneWidget);
@@ -856,10 +862,7 @@ void main() {
         tester.widget<AppOpenWindowIcon>(premiumIcon).color,
         inactiveColor,
       );
-      expect(
-        tester.widget<Icon>(contactsIcon).size,
-        expectedIconSize,
-      );
+      expect(tester.widget<Icon>(contactsIcon).size, expectedIconSize);
       expect(tester.widget<Icon>(contactsIcon).color, inactiveColor);
       expect(
         tester.widget<AppProfilePersonIcon>(profileIcon).size,

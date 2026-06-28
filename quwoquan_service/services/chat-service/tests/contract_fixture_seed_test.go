@@ -101,6 +101,7 @@ func seedChatContractFixture(t *testing.T, seedRef string) contractSeedEvidence 
 
 	resetChatFixtureNamespace(t)
 	inserted := 0
+	seenMembers := make(map[string]struct{})
 	for _, fc := range seedSet.Conversations {
 		conv := chatConversationFromFixture(fc)
 		if _, err := mongoDB.Collection("conversations").InsertOne(ctx, conv); err != nil {
@@ -110,6 +111,11 @@ func seedChatContractFixture(t *testing.T, seedRef string) contractSeedEvidence 
 	}
 	for conversationID, members := range seedSet.Members {
 		for idx, fm := range members {
+			memberKey := conversationID + "/" + fm.UserID
+			if _, exists := seenMembers[memberKey]; exists {
+				continue
+			}
+			seenMembers[memberKey] = struct{}{}
 			member := chatMemberFromFixture(conversationID, idx, fm)
 			if _, err := mongoDB.Collection("conversation_members").InsertOne(ctx, member); err != nil {
 				t.Fatalf("seed member %s/%s: %v", conversationID, fm.UserID, err)

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from _common import ops_governance as og
-from _common.creator_assignment import creator_from_payload
+from _common.creator_assignment import CREATOR_ASSIGNMENT_FIELDS, creator_from_payload
 from _common.io import read_json, write_json
 from task import object_queue_bridge
 from task import production_contracts as pc
@@ -121,6 +121,35 @@ def renew_lease(task_id: str, batch_id: str, job_id: str, lease: str, *, ttl_sec
     write_json(_job_path(task_id, batch_id, job_id), job)
     return job
 
+def _stamp_locked_creator(job: Mapping[str, Any], draft_meta: dict[str, Any], meta_path: Path) -> bool:
+    """把 job 包里冻结的创作者锁定到 draft_meta（治理元数据系统所有，非 Agent 转写）。
+
+    创作者分配在 content_plan 阶段已锁定并随 job 包下发，是唯一真相源；正文由 Agent 创作，
+    但锁定创作者不应依赖 Agent 手工誊抄（漏写一字即整单 dead，放量必崩）。这里在完成校验前
+    用 job 包的锁定值确定性回填 draft_meta，缺失或与锁定值不一致都以系统锁定值为准。
+    返回是否发生回填（用于判断是否需要落盘）。
+    """
+    locked = creator_from_payload(job)
+    if not locked:
+        return False
+    changed = False
+    for field in CREATOR_ASSIGNMENT_FIELDS:
+        value = locked.get(field)
+        if value in (None, "", {}):
+            continue
+        # 只回填缺失字段（Agent 漏写）；若 Agent 写入与锁定值冲突的非空值，保留原值，
+        # 交由下面的创作者校验暴露冲突，不静默覆盖以免掩盖真实的分配偏离。
+        if draft_meta.get(field) in (None, "", {}):
+            draft_meta[field] = value
+            changed = True
+    if changed:
+        try:
+            write_json(meta_path, draft_meta)
+        except Exception:  # noqa: BLE001
+            return False
+    return changed
+
+
 def _author_completion_issues(job: Mapping[str, Any]) -> list[str]:
     if str(job.get("stage") or "") != "author":
         return []
@@ -138,6 +167,7 @@ def _author_completion_issues(job: Mapping[str, Any]) -> list[str]:
     draft_path = root / content_dir / "4.draft" / "draft.article.md"
     meta_path = root / content_dir / "4.draft" / "draft_meta.json"
     issues: list[str] = []
+    article_ok = False
     if not draft_path.is_file():
         issues.append(f"author output missing: {draft_path.relative_to(root).as_posix()}")
     else:
@@ -148,6 +178,8 @@ def _author_completion_issues(job: Mapping[str, Any]) -> list[str]:
         else:
             if is_placeholder(article):
                 issues.append("author output remains placeholder")
+            else:
+                article_ok = True
     try:
         draft_meta = read_json(meta_path)
     except Exception as exc:  # noqa: BLE001
@@ -156,6 +188,10 @@ def _author_completion_issues(job: Mapping[str, Any]) -> list[str]:
     generator = str(draft_meta.get("generator") or "").strip()
     if generator != "agent":
         issues.append(f"draft_meta.generator is {generator or '<missing>'}, expected agent")
+    # 治理元数据系统所有：仅对真正完成创作的草稿（正文非占位、generator=agent）确定性回填
+    # 锁定创作者，避免 Agent 漏写冻结创作者导致整单 dead；占位/非 agent 草稿仍按上面硬失败。
+    if article_ok and generator == "agent" and isinstance(draft_meta, dict):
+        _stamp_locked_creator(job, draft_meta, meta_path)
     expected_creator = creator_from_payload(job)
     if expected_creator:
         actual_creator = creator_from_payload(draft_meta)

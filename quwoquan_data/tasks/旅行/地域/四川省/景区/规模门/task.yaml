@@ -1,0 +1,79 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/景区/规模门
+title: 四川省景区规模门
+intentLabel: 规模门
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 四川省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 四川景区00
+  - entityType: 地点/景区
+    name: 四川景区01
+  - entityType: 地点/景区
+    name: 四川景区02
+  - entityType: 地点/景区
+    name: 四川景区03
+  - entityType: 地点/景区
+    name: 四川景区04
+  - entityType: 地点/景区
+    name: 四川景区05
+  - entityType: 地点/景区
+    name: 四川景区06
+  - entityType: 地点/景区
+    name: 四川景区07
+  - entityType: 地点/景区
+    name: 四川景区08
+  - entityType: 地点/景区
+    name: 四川景区09
+  - entityType: 地点/景区
+    name: 四川景区10
+  - entityType: 地点/景区
+    name: 四川景区11
+  - entityType: 地点/景区
+    name: 四川景区12
+  - entityType: 地点/景区
+    name: 四川景区13
+  - entityType: 地点/景区
+    name: 四川景区14
+  - entityType: 地点/景区
+    name: 四川景区15
+  - entityType: 地点/景区
+    name: 四川景区16
+  - entityType: 地点/景区
+    name: 四川景区17
+  - entityType: 地点/景区
+    name: 四川景区18
+  - entityType: 地点/景区
+    name: 四川景区19
+  - entityType: 地点/景区
+    name: 四川景区20
+  - entityType: 地点/景区
+    name: 四川景区21
+  - entityType: 地点/景区
+    name: 四川景区22
+  - entityType: 地点/景区
+    name: 四川景区23
+  - entityType: 地点/景区
+    name: 四川景区24
+provenance:
+  createdAt: '2026-06-26T10:27:21.340716+00:00'
+  createdBy: task new
+content:
+  modalityContract: separated_research
+  queueBackend: reliabletask
+  research:
+    maxConcurrency: 10
+  quotas:
+    entityHomepagesPerTarget: 1
+    entityArticlesPerTarget: 4
+    imageWorksPerTarget: 1
+    routeArticles: 0

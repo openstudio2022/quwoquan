@@ -208,6 +208,18 @@ def _stable_jitter(creator_id: str, seed: str) -> float:
     return int(digest[:8], 16) / 0xFFFFFFFF
 
 
+def blueprint_preference_fit(creator: dict[str, Any], blueprint_id: str | None) -> float:
+    """1.0 当 blueprint.templateId ∈ creator.preferredBlueprintIds（软偏好），否则 0.0。
+
+    让 persona 的 preferredBlueprintIds 真正参与路由：同 archetype/载体候选里，
+    显式偏好该蓝图的作者优先胜出，而不再是死元数据。
+    """
+    if not blueprint_id:
+        return 0.0
+    preferred = {str(b) for b in (creator.get("preferredBlueprintIds") or [])}
+    return 1.0 if blueprint_id in preferred else 0.0
+
+
 def _creator_match_score(
     creator: dict[str, Any],
     *,
@@ -216,6 +228,7 @@ def _creator_match_score(
     region: str | None,
     vertical: str | None,
     seed: str,
+    blueprint_id: str | None = None,
 ) -> float:
     range_fit = coverage_range_fit(creator, region=region, tag_refs=tag_refs)
     affinity = carrier_affinity(creator, carrier)
@@ -223,11 +236,13 @@ def _creator_match_score(
     quality = float(creator.get("qualityScore") or 0.0)
     fatigue = float(creator.get("fatigueScore") or 0.0)
     vertical_fit = 1.0 if (vertical and vertical in [str(v) for v in creator.get("verticalRefs", [])]) else 0.0
+    blueprint_fit = blueprint_preference_fit(creator, blueprint_id)
     jitter = _stable_jitter(str(creator.get("creatorProfileId") or ""), seed)
     return (
         3.0 * range_fit
         + 2.0 * affinity
         + 1.5 * tag_fit
+        + 1.2 * blueprint_fit
         + 0.5 * vertical_fit
         + 1.0 * quality
         - 1.0 * fatigue
@@ -262,6 +277,7 @@ def match_creator(
 
     archetype = preferred_archetype or str(persona.get("archetype", ""))
     eff_carrier = str(carrier or blueprint.get("carrier") or "article")
+    blueprint_id = str(blueprint.get("templateId") or "")
 
     def is_active(creator: dict[str, Any]) -> bool:
         return str(creator.get("status") or "") == "active"
@@ -289,6 +305,7 @@ def match_creator(
             region=region,
             vertical=vertical,
             seed=seed,
+            blueprint_id=blueprint_id,
         ),
     )
 

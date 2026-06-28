@@ -28,6 +28,76 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     );
   }
 
+  /// 实体页「想去 · 正在去 · 结伴」行动模块：把内容消费就地接到同频结伴。
+  ///
+  /// 常驻入口（不依赖是否已有交集），点击进入结伴页（围绕该目的地实体沉淀同行者）。
+  /// 仅做展示 + 导航（push 路由常量），不跨 UI 模块 import plaza 内部组件/Provider，
+  /// 守 [01-arch-constraints] §2.4「禁止 import 其他 UI 模块内部」。
+  Widget _buildEntityCompanionModule(BuildContext context) {
+    if (widget.selectionMode) {
+      return const SizedBox.shrink();
+    }
+    final accent = AppColors.iosAccent(context);
+    return Padding(
+      padding: EdgeInsets.only(top: AppSpacing.containerSm),
+      child: CupertinoButton(
+        key: const ValueKey<String>('homepage-companion-entry-button'),
+        padding: EdgeInsets.zero,
+        onPressed: () => context.push(AppRoutePaths.plazaCompanion),
+        child: ProfileIosSectionCard(
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: AppSpacing.avatarUserMd,
+                height: AppSpacing.avatarUserMd,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  CupertinoIcons.location_solid,
+                  size: AppSpacing.iconSmall,
+                  color: accent,
+                ),
+              ),
+              SizedBox(width: AppSpacing.containerSm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      PlazaTextConstants.entityCompanionSectionTitle,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosSubheadline,
+                        fontWeight: AppTypography.semiBold,
+                        color: AppColors.iosLabel(context),
+                      ),
+                    ),
+                    SizedBox(height: AppSpacing.intraGroupXs),
+                    Text(
+                      PlazaTextConstants.entityCompanionSectionSubtitle,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosFootnote,
+                        color: AppColors.iosSecondaryLabel(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: AppSpacing.intraGroupSm),
+              Icon(
+                CupertinoIcons.chevron_forward,
+                size: AppSpacing.iconXSmall,
+                color: AppColors.iosTertiaryLabel(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildIdentityMedia(BuildContext context, String? coverUrl) {
     final source = (coverUrl ?? '').trim();
     if (source.isEmpty) {
@@ -282,6 +352,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
             ],
             SizedBox(height: AppSpacing.containerSm),
             _buildIntersectionCard(isDark),
+            _buildEntityCompanionModule(context),
             _buildEntityIntroCard(context),
           ],
         ),

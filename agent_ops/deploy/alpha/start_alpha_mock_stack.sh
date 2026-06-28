@@ -4,11 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 STATE_DIR="$ROOT_DIR/state/local/alpha_stack"
 MEDIA_DIR="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
+LEGAL_STATIC_ROOT="$ROOT_DIR/artifacts/legal-static-packages/alpha/current/public"
 
 eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile alpha-local --format shell-defaults)"
 
 ACTION="${1:-up}"
 PUBLIC_HOST_SETUP_MODE="${QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP:-require}"
+MACOS_KEYCHAIN_TRUST_MODE="${QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST:-auto}"
+MACOS_KEYCHAIN_TRUST_MARKER="$STATE_DIR/macos_login_keychain_trust.sha256"
 PUBLIC_API_HOST="alpha-api.quwoquan-env.test"
 PUBLIC_PRODUCT_OPS_HOST="alpha-product-ops.quwoquan-env.test"
 PUBLIC_MEDIA_HOSTS=(
@@ -110,6 +113,59 @@ stop_bg() {
   rm -f "$pid_file" "$pgid_file"
 }
 
+stop_repo_listener_on_port() {
+  local port="$1"
+  local pids=""
+  if ! command -v lsof >/dev/null 2>&1; then
+    return 0
+  fi
+  pids="$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+  if [[ -z "$pids" ]]; then
+    return 0
+  fi
+  local pid=""
+  local stopped_any=0
+  for pid in $pids; do
+    local command_line=""
+    command_line="$(ps -p "$pid" -ww -o command= 2>/dev/null || true)"
+    case "$command_line" in
+      *"$ROOT_DIR/agent_ops/deploy/lib/mock_public_plane.py"*|\
+      *"$ROOT_DIR/agent_ops/deploy/lib/local_media_origin.py"*|\
+      *"$ROOT_DIR/agent_ops/deploy/lib/http_reverse_proxy.py"*|\
+      *"$ROOT_DIR/agent_ops/deploy/lib/tls_reverse_proxy.py"*)
+        kill "$pid" >/dev/null 2>&1 || true
+        stopped_any=1
+        ;;
+      *)
+        ;;
+    esac
+  done
+  if [[ "$stopped_any" != "1" ]]; then
+    return 0
+  fi
+  local deadline=$((SECONDS + 5))
+  while lsof -nP -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      break
+    fi
+    sleep 0.2
+  done
+}
+
+stop_alpha_reserved_listeners() {
+  local port=""
+  for port in \
+    "$API_EDGE_PORT" \
+    "$PRODUCT_OPS_PORT" \
+    "$MEDIA_EDGE_PORT" \
+    "$MEDIA_ORIGIN_PORT" \
+    "$CONTENT_PORT" \
+    "$PRODUCT_OPS_SERVICE_PORT" \
+    "$MEDIA_PROCESSOR_PORT"; do
+    stop_repo_listener_on_port "$port"
+  done
+}
+
 wait_http_ok() {
   local url="$1"
   local timeout="${2:-30}"
@@ -134,6 +190,29 @@ wait_http_range_ok() {
     fi
     sleep 0.5
   done
+}
+
+ensure_legal_static_package() {
+  python3 "$ROOT_DIR/agent_ops/deploy/legal_static.py" package --env alpha >/dev/null
+  if [[ ! -f "$LEGAL_STATIC_ROOT/legal/user-agreement" ]]; then
+    echo "[alpha] FAIL: legal-static package missing user-agreement at $LEGAL_STATIC_ROOT" >&2
+    return 1
+  fi
+}
+
+assert_distinct_http_body_sha256() {
+  local url_a="$1"
+  local url_b="$2"
+  local hash_a hash_b
+  hash_a="$(curl -fsS "$url_a" | shasum -a 256 | awk '{print $1}')"
+  hash_b="$(curl -fsS "$url_b" | shasum -a 256 | awk '{print $1}')"
+  if [[ -z "$hash_a" || -z "$hash_b" || "$hash_a" == "$hash_b" ]]; then
+    echo "[alpha] FAIL: expected distinct conv_grid avatar bodies for:" >&2
+    echo "  $url_a" >&2
+    echo "  $url_b" >&2
+    return 1
+  fi
+  echo "[alpha] conv_grid avatar sha256 distinct: conv_grid_3=${hash_a:0:12} conv_grid_8=${hash_b:0:12}"
 }
 
 stop_tls_proxy() {
@@ -393,25 +472,59 @@ if failed:
 PY
 }
 
+local_root_ca_fingerprint_sha256() {
+  openssl x509 -in "$TLS_ROOT_CERT" -noout -fingerprint -sha256 2>/dev/null \
+    | cut -d= -f2 | tr -d ':' | tr '[:upper:]' '[:lower:]'
+}
+
+macos_login_keychain_trust_is_current() {
+  local expected recorded
+  expected="$(local_root_ca_fingerprint_sha256)"
+  [[ -n "$expected" && -f "$MACOS_KEYCHAIN_TRUST_MARKER" ]] || return 1
+  recorded="$(tr -d '[:space:]' < "$MACOS_KEYCHAIN_TRUST_MARKER")"
+  [[ "$recorded" == "$expected" ]]
+}
+
+install_macos_login_keychain_trust() {
+  if [[ "$MACOS_KEYCHAIN_TRUST_MODE" == "skip" ]]; then
+    echo "[alpha] macOS login keychain trust skipped (QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip)"
+    return 0
+  fi
+  if macos_login_keychain_trust_is_current; then
+    echo "[alpha] macOS login keychain already trusts local root CA (marker ok)"
+    return 0
+  fi
+  if ! command -v security >/dev/null 2>&1; then
+    return 0
+  fi
+  security add-trusted-cert \
+    -r trustRoot \
+    -p ssl \
+    -k "$HOME/Library/Keychains/login.keychain-db" \
+    "$TLS_ROOT_CERT" || {
+      echo "[alpha] GATE_BLOCK: failed to trust alpha local root CA in the user keychain: $TLS_ROOT_CERT" >&2
+      return 1
+    }
+  local_root_ca_fingerprint_sha256 > "$MACOS_KEYCHAIN_TRUST_MARKER"
+  echo "[alpha] macOS login keychain trust installed for local root CA"
+}
+
+install_booted_simulator_root_ca() {
+  if ! command -v xcrun >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! xcrun simctl list devices booted -j >/dev/null 2>&1; then
+    return 0
+  fi
+  xcrun simctl keychain booted add-root-cert "$TLS_ROOT_CERT" >/dev/null 2>&1 || true
+}
+
 install_local_ca_trust() {
   if [[ "$(uname -s)" != "Darwin" ]]; then
     return 0
   fi
-  if command -v security >/dev/null 2>&1; then
-    security add-trusted-cert \
-      -r trustRoot \
-      -p ssl \
-      -k "$HOME/Library/Keychains/login.keychain-db" \
-      "$TLS_ROOT_CERT" >/dev/null 2>&1 || {
-        echo "[alpha] GATE_BLOCK: failed to trust alpha local root CA in the user keychain: $TLS_ROOT_CERT" >&2
-        return 1
-      }
-  fi
-  if command -v xcrun >/dev/null 2>&1; then
-    if xcrun simctl list devices booted -j >/dev/null 2>&1; then
-      xcrun simctl keychain booted add-root-cert "$TLS_ROOT_CERT" >/dev/null 2>&1 || true
-    fi
-  fi
+  install_macos_login_keychain_trust
+  install_booted_simulator_root_ca
 }
 
 write_report() {
@@ -457,6 +570,7 @@ case "$ACTION" in
     stop_bg media-edge
     stop_bg media-origin
     stop_tls_proxy
+    stop_alpha_reserved_listeners
     start_bg media-origin \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/local_media_origin.py" \
         --listen-host 127.0.0.1 \
@@ -469,6 +583,11 @@ case "$ACTION" in
     wait_http_range_ok "$MEDIA_ORIGIN_BASE_URL/media/video/s/archived-video/beta-sample.mp4" 30
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/conversation/conv_002/v1/mock.png" 30
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
+    wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/s/archived-avatar/conversation/conv_grid_3/v1/mock.png" 30
+    wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/s/archived-avatar/conversation/conv_grid_8/v1/mock.png" 30
+    assert_distinct_http_body_sha256 \
+      "$MEDIA_ORIGIN_BASE_URL/media/avatar/s/archived-avatar/conversation/conv_grid_3/v1/mock.png" \
+      "$MEDIA_ORIGIN_BASE_URL/media/avatar/s/archived-avatar/conversation/conv_grid_8/v1/mock.png"
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
     start_bg media-edge \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/http_reverse_proxy.py" \
@@ -481,6 +600,7 @@ case "$ACTION" in
     wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/avatar/conversation/conv_002/v1/mock.png" 30
     wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
     wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
+    ensure_legal_static_package
     start_bg api-edge \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/mock_public_plane.py" \
         --listen-host 127.0.0.1 \
@@ -490,9 +610,11 @@ case "$ACTION" in
         --data-source mock \
         --gateway-base-url "$API_BASE_URL" \
         --product-ops-base-url "$PRODUCT_OPS_BASE_URL" \
-        --media-base-url "$MEDIA_BASE_URL"
+        --media-base-url "$MEDIA_BASE_URL" \
+        --legal-static-root "$LEGAL_STATIC_ROOT"
     wait_http_ok "$INTERNAL_API_BASE_URL/healthz" 30
     wait_http_ok "$INTERNAL_API_BASE_URL/v1/config/app" 30
+    wait_http_ok "$INTERNAL_API_BASE_URL/legal/user-agreement" 30
     start_bg product-ops \
       python3 "$ROOT_DIR/agent_ops/deploy/lib/mock_public_plane.py" \
         --listen-host 127.0.0.1 \
@@ -502,12 +624,14 @@ case "$ACTION" in
         --data-source mock \
         --gateway-base-url "$API_BASE_URL" \
         --product-ops-base-url "$PRODUCT_OPS_BASE_URL" \
-        --media-base-url "$MEDIA_BASE_URL"
+        --media-base-url "$MEDIA_BASE_URL" \
+        --legal-static-root "$LEGAL_STATIC_ROOT"
     wait_http_ok "$INTERNAL_PRODUCT_OPS_BASE_URL/healthz" 30
     start_tls_proxy
     if [[ "$PUBLIC_HOST_SETUP_MODE" == "skip" ]]; then
       wait_https_with_ca_ok "localhost" "$API_EDGE_PORT" "/healthz" 30
       wait_https_with_ca_ok "localhost" "$API_EDGE_PORT" "/v1/config/app" 30
+      wait_https_with_ca_ok "localhost" "$API_EDGE_PORT" "/legal/user-agreement" 30
       wait_https_with_ca_ok "localhost" "$PRODUCT_OPS_PORT" "/healthz" 30
       wait_https_with_ca_ok "localhost" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
       wait_https_with_ca_range_ok "localhost" "$MEDIA_EDGE_PORT" "/media/video/s/archived-video/beta-sample.mp4" 30
@@ -517,14 +641,27 @@ case "$ACTION" in
     else
       ensure_public_hosts_mapping
       install_local_ca_trust
-      wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/healthz" 30
-      wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/v1/config/app" 30
-      wait_https_ok "$PUBLIC_PRODUCT_OPS_HOST" "$PRODUCT_OPS_PORT" "/healthz" 30
-      wait_https_ok "alpha-image.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-      wait_https_range_ok "alpha-video.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/video/s/archived-video/beta-sample.mp4" 30
-      wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/conversation/conv_002/v1/mock.png" 30
-      wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
-      wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
+      if [[ "$MACOS_KEYCHAIN_TRUST_MODE" == "skip" ]]; then
+        wait_https_with_ca_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/healthz" 30
+        wait_https_with_ca_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/v1/config/app" 30
+        wait_https_with_ca_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/user-agreement" 30
+        wait_https_with_ca_ok "$PUBLIC_PRODUCT_OPS_HOST" "$PRODUCT_OPS_PORT" "/healthz" 30
+        wait_https_with_ca_ok "alpha-image.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
+        wait_https_with_ca_range_ok "alpha-video.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/video/s/archived-video/beta-sample.mp4" 30
+        wait_https_with_ca_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/conversation/conv_002/v1/mock.png" 30
+        wait_https_with_ca_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
+        wait_https_with_ca_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
+      else
+        wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/healthz" 30
+        wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/v1/config/app" 30
+        wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/user-agreement" 30
+        wait_https_ok "$PUBLIC_PRODUCT_OPS_HOST" "$PRODUCT_OPS_PORT" "/healthz" 30
+        wait_https_ok "alpha-image.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
+        wait_https_range_ok "alpha-video.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/video/s/archived-video/beta-sample.mp4" 30
+        wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/conversation/conv_002/v1/mock.png" 30
+        wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png" 30
+        wait_https_ok "alpha-avatar.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png" 30
+      fi
     fi
     write_report
     echo "[alpha] mock public plane ready: $API_BASE_URL, $MEDIA_BASE_URL"
@@ -535,6 +672,7 @@ case "$ACTION" in
     stop_bg media-edge
     stop_bg media-origin
     stop_tls_proxy
+    stop_alpha_reserved_listeners
     rm -f "$STATE_DIR/report.json"
     echo "[alpha] mock public plane stopped"
     ;;

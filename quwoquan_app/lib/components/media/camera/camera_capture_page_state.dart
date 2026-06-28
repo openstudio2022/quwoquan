@@ -400,12 +400,15 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
   }
 
   Future<bool> _defaultMicrophonePermission() async {
-    try {
-      final status = await Permission.microphone.request();
-      return status.isGranted;
-    } catch (_) {
+    if (!mounted) {
       return false;
     }
+    final outcome = await AppPermissionCoordinator.instance.ensure(
+      context,
+      AppPermissionKind.microphone,
+      showPrimer: false,
+    );
+    return outcome == AppPermissionEnsureOutcome.granted;
   }
 
   Future<void> _deleteTempFile(String? path) async {
@@ -719,7 +722,14 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       case UiErrorActionType.login:
         return;
       case UiErrorActionType.openSettings:
-        await openAppSettings();
+        await AppPermissionCoordinator.instance.openSettings(
+          AppPermissionKind.camera,
+          onReturn: (granted) {
+            if (mounted && granted) {
+              unawaited(_initCamera());
+            }
+          },
+        );
         return;
     }
   }

@@ -289,6 +289,43 @@ def _compose_payload_from_pack(
     return payload
 
 
+def _same_source_unit(a: str, b: str) -> bool:
+    marker = "/1.download/sources/"
+
+    def unit(ref: str) -> str:
+        text = str(ref or "").replace("\\", "/")
+        if marker in text:
+            head, tail = text.split(marker, 1)
+            return head + marker + tail.split("/", 1)[0]
+        return text
+
+    return bool(a) and bool(b) and unit(a) == unit(b)
+
+
+def _single_base_asset_issues(
+    compose_payload: Mapping[str, Any],
+    base_source_ref: str,
+    *,
+    carrier: str,
+) -> list[str]:
+    """资产同源硬门：每张配图的 sourceRef 必须与底稿同一 source unit（单底稿零参考）。"""
+    if not base_source_ref:
+        return []
+    issues: list[str] = []
+    for asset in compose_payload.get("assets") or []:
+        if not isinstance(asset, Mapping):
+            continue
+        asset_source_ref = str(asset.get("sourceRef") or "").strip()
+        if not asset_source_ref:
+            continue
+        if not _same_source_unit(asset_source_ref, base_source_ref):
+            issues.append(
+                f"配图 {asset.get('assetId') or asset.get('fileName') or '?'} 的 sourceRef 不在底稿来源单元内"
+                f"（跨 source unit 借图）：{asset_source_ref}"
+            )
+    return issues
+
+
 def _source_ref_from_asset_path(value: Any) -> str:
     raw = str(value or "").replace("\\", "/").strip()
     if not raw:
@@ -469,6 +506,27 @@ def review_entity_draft(
         "passed": not fidelity,
         "issues": fidelity,
         "suggestions": ["以底稿为基础适度加工：相似度过低则贴回底稿叙事；过高则进一步改写表达、去版权痕迹。"] if fidelity else [],
+    }
+    # 单底稿零参考硬门（仅对声明了唯一底稿的可轻改文章生效）：
+    # ① 正文不得从同实体其它来源单元长串照搬（反拼接）；② 配图必须与底稿同一 source unit。
+    single_base_issues: list[str] = []
+    base_source_ref = str(brief.get("baseSourceRef") or "").strip()
+    if carrier not in ("image", "gallery") and base_source_ref:
+        from _common.base_draft import cross_source_overlap_issues, sibling_source_texts
+
+        others = sibling_source_texts(task_id, batch_id, base_source_ref)
+        single_base_issues.extend(
+            cross_source_overlap_issues(body, base_text, others, carrier=carrier)
+        )
+    single_base_issues.extend(
+        _single_base_asset_issues(compose_payload, base_source_ref, carrier=carrier)
+    )
+    checks["singleBaseZeroReference"] = {
+        "passed": not single_base_issues,
+        "issues": single_base_issues,
+        "suggestions": [
+            "全文与配图只能来自唯一底稿来源单元：删除从其它来源单元搬迁的段落；配图改用底稿同 source unit 内的已授权图。"
+        ] if single_base_issues else [],
     }
     from _common import quality_gates as qg
 
@@ -658,6 +716,8 @@ def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     if not checks.get("factTraceability", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("baseDraftFidelity", {"passed": True})["passed"]:
+        return "agent_compose"
+    if not checks.get("singleBaseZeroReference", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("provenanceRewrite", {"passed": True})["passed"]:
         return "agent_compose"

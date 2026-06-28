@@ -12,7 +12,7 @@ func TestProfileCrudContractApiIntegrationTest(t *testing.T) {
 		"test",
 		"..",
 		"-run",
-		"^(TestGetProfileEditSnapshot_ReturnsCommercialFields|TestGetProfileQRCard_IssuesOpaqueResolvableToken|TestGetProfile_CacheHit|TestGetProfile_NotFound|TestGetProfile_Success|TestResolveProfileQRToken_InvalidToken|TestUpdateProfile_DuplicateNicknameAllowed|TestUpdateProfile_RejectsBareBackgroundURL|TestUpdateProfile_Success)$",
+		"^(TestGetProfileEditSnapshot_ReturnsCommercialFields|TestGetProfileQRCard_IssuesOpaqueResolvableToken|TestGetProfile_CacheHit|TestGetProfile_NotFound|TestGetProfile_Success|TestResolveProfileQRToken_InvalidToken|TestUpdateProfile_DuplicateNicknameAllowed|TestUpdateProfile_InvalidRegionTagRefReturnsInvalidRegion|TestUpdateProfile_RegionTagRefUpdatesDerivedDisplay|TestUpdateProfile_RejectsBareBackgroundURL|TestUpdateProfile_RejectsClientRegionDisplayWithoutTagRef|TestUpdateProfile_Success)$",
 		"-count=1",
 	)
 	output, err := cmd.CombinedOutput()

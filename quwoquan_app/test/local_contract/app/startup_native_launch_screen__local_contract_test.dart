@@ -144,7 +144,7 @@ void main() {
         expect(welcome, isNot(contains('initialSequenceElapsed')));
         expect(welcome, isNot(contains('sequenceEnabled')));
         expect(welcome, isNot(contains('onFlutterWelcomeReady')));
-        expect(welcome, contains('_startSequenceAfterFirstStableFrame'));
+        expect(welcome, contains('_beginAnimatedSequence'));
         expect(welcome, contains('waitUntilFirstFrameRasterized'));
         expect(welcome, contains('_visibleFrameGuard'));
         expect(shell, contains('_maxStartupWelcomeReplayCount = 2'));
@@ -177,7 +177,7 @@ void main() {
         expect(
           probe,
           contains(
-            'parser.add_argument("--android-visible-by-ms", type=int, default=3000)',
+            'parser.add_argument("--android-visible-by-ms", type=int, default=2000)',
           ),
         );
       },
@@ -206,9 +206,9 @@ void main() {
       expect(storyboard, contains('QWQ-LAUNCH-TRANSITION-BACKGROUND'));
       expect(storyboard, contains('backgroundColor'));
       expect(mainStoryboard, contains('red="0.0196078431"'));
-      expect(storyboard, isNot(contains('red="0.0392156863"')));
-      expect(storyboard, isNot(contains('green="0.517647059"')));
-      expect(storyboard, isNot(contains('blue="1"')));
+      expect(storyboard, contains('red="0.0392156863"'));
+      expect(storyboard, contains('green="0.5176470588"'));
+      expect(storyboard, contains('blue="1"'));
     });
 
     test(
@@ -229,9 +229,10 @@ void main() {
         );
 
         final shell = _readAppFile('lib/quwoquan_app_shell.dart');
+        final scheduler = _readAppFile('lib/app/startup_init_scheduler.dart');
         expect(shell, contains('startupPrerequisites'));
         expect(shell, contains('_startupPrerequisiteBudget'));
-        expect(shell, contains('_completeStartupPrerequisitesThenReady'));
+        expect(scheduler, contains('_completeStartupPrerequisitesThenReady'));
       },
     );
   });

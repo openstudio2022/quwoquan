@@ -24,10 +24,143 @@ def load_json_yaml(path: Path) -> Any:
     try:
         import yaml  # type: ignore
     except ModuleNotFoundError as exc:  # pragma: no cover - exercised in shell usage
-        raise RuntimeError(
-            f"Cannot parse manifest without PyYAML installed: {path}"
-        ) from exc
+        try:
+            return _load_simple_yaml(text)
+        except ValueError as parse_error:
+            raise RuntimeError(
+                f"Cannot parse manifest without PyYAML installed: {path}"
+            ) from parse_error
     return yaml.safe_load(text)
+
+
+def _load_simple_yaml(text: str) -> Any:
+    """Parse the small YAML subset used by local build manifests.
+
+    Xcode script phases may run with a stripped Python environment that lacks
+    PyYAML. This fallback intentionally supports only plain mappings, lists,
+    quoted/unquoted scalars, booleans and nulls. Complex YAML should still use
+    PyYAML in CI and developer shells.
+    """
+
+    lines: list[tuple[int, str]] = []
+    for raw_line in text.splitlines():
+        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        if indent % 2 != 0:
+            raise ValueError(f"unsupported odd indentation: {raw_line!r}")
+        lines.append((indent, raw_line.strip()))
+    if not lines:
+        return None
+
+    def parse_block(index: int, indent: int) -> tuple[Any, int]:
+        if index >= len(lines):
+            return {}, index
+        line_indent, content = lines[index]
+        if line_indent != indent:
+            raise ValueError(f"expected indent {indent}, got {line_indent}")
+        if content.startswith("- "):
+            return parse_list(index, indent)
+        return parse_mapping(index, indent)
+
+    def parse_mapping(index: int, indent: int) -> tuple[dict[str, Any], int]:
+        payload: dict[str, Any] = {}
+        while index < len(lines):
+            line_indent, content = lines[index]
+            if line_indent < indent:
+                break
+            if line_indent > indent:
+                raise ValueError(f"unexpected nested mapping line: {content!r}")
+            if content.startswith("- "):
+                break
+            key, value = split_key_value(content)
+            if value is None:
+                if index + 1 < len(lines) and lines[index + 1][0] > indent:
+                    child, index = parse_block(index + 1, lines[index + 1][0])
+                    payload[key] = child
+                else:
+                    payload[key] = {}
+                    index += 1
+            else:
+                payload[key] = parse_scalar(value)
+                index += 1
+        return payload, index
+
+    def parse_list(index: int, indent: int) -> tuple[list[Any], int]:
+        payload: list[Any] = []
+        while index < len(lines):
+            line_indent, content = lines[index]
+            if line_indent < indent:
+                break
+            if line_indent != indent or not content.startswith("- "):
+                break
+            item_text = content[2:].strip()
+            if not item_text:
+                if index + 1 < len(lines) and lines[index + 1][0] > indent:
+                    child, index = parse_block(index + 1, lines[index + 1][0])
+                    payload.append(child)
+                else:
+                    payload.append(None)
+                    index += 1
+                continue
+            if ":" in item_text:
+                item: dict[str, Any] = {}
+                key, value = split_key_value(item_text)
+                if value is None:
+                    if index + 1 < len(lines) and lines[index + 1][0] > indent:
+                        child, index = parse_block(index + 1, lines[index + 1][0])
+                        item[key] = child
+                    else:
+                        item[key] = {}
+                        index += 1
+                else:
+                    item[key] = parse_scalar(value)
+                    index += 1
+                if index < len(lines) and lines[index][0] > indent:
+                    extra, index = parse_mapping(index, lines[index][0])
+                    item.update(extra)
+                payload.append(item)
+                continue
+            payload.append(parse_scalar(item_text))
+            index += 1
+        return payload, index
+
+    def split_key_value(content: str) -> tuple[str, str | None]:
+        if ":" not in content:
+            raise ValueError(f"expected key/value line: {content!r}")
+        key, value = content.split(":", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError(f"empty key in line: {content!r}")
+        value = value.strip()
+        return key, value if value else None
+
+    def parse_scalar(value: str) -> Any:
+        value = value.strip()
+        if not value:
+            return ""
+        if value in {"''", '""'}:
+            return ""
+        if (value.startswith('"') and value.endswith('"')) or (
+            value.startswith("'") and value.endswith("'")
+        ):
+            return value[1:-1]
+        lowered = value.lower()
+        if lowered in {"true", "false"}:
+            return lowered == "true"
+        if lowered in {"null", "none", "~"}:
+            return None
+        if value.startswith("[") or value.startswith("{"):
+            return json.loads(value)
+        try:
+            return int(value)
+        except ValueError:
+            return value
+
+    result, next_index = parse_block(0, lines[0][0])
+    if next_index != len(lines):
+        raise ValueError("unparsed YAML content remains")
+    return result
 
 
 def write_json(path: Path, payload: Any) -> None:

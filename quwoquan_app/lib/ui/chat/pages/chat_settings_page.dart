@@ -1,12 +1,10 @@
 // ignore_for_file: deprecated_member_use
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
-import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -59,9 +57,13 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     final selfId = ref.read(currentUserIdProvider);
     try {
       await ref
-          .read(chatRepositoryProvider)
-          .removeMember(conversationId: widget.conversationId, userId: selfId);
+          .read(
+            conversationMembersProvider(widget.conversationId).notifier,
+          )
+          .removeMember(selfId);
       if (!mounted) return;
+      ref.invalidate(conversationMembersProvider(widget.conversationId));
+      ref.invalidate(groupHomeProvider(widget.conversationId));
       AppToast.show(context, UITextConstants.exitGroupChatSuccess);
       context.go(AppRoutePaths.chat);
     } catch (error) {
@@ -199,23 +201,19 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     final isAdminOrOwner = membersState.isAdminOrOwner;
     final privacyShield = membersState.groupSettings.privacyShieldAdminOnly;
 
+    final memberCount = members.isNotEmpty
+        ? members.length
+        : (groupHome?.memberCount ?? 0);
+    final groupTitle = groupHome?.title.trim().isNotEmpty == true
+        ? groupHome!.title.trim()
+        : UITextConstants.groupNameHint;
+    final announcement = groupHome?.announcement.trim() ?? '';
+
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final borderColor = AppColorsFunctional.getColor(
       isDark,
       ColorType.borderPrimary,
     );
-    final memberCount = groupHome?.memberCount == 0 || groupHome == null
-        ? members.length
-        : groupHome.memberCount;
-    final groupTitle = groupHome?.title.trim().isNotEmpty == true
-        ? groupHome!.title.trim()
-        : UITextConstants.groupNameHint;
-    final sourceText = _formatGroupSource(
-      groupHome?.sourceEntityTitle,
-      groupHome?.sourceCircleTitle,
-      memberCount,
-    );
-    final announcement = groupHome?.announcement.trim() ?? '';
     final memberGridCount = members.length;
     final memberGridOverflow = memberGridCount > _collapsedMemberCapacity;
     final visibleMemberCount = !memberGridOverflow || _membersExpanded
@@ -233,361 +231,297 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       isDark: isDark,
       title: '${UITextConstants.chatInfoTitle}($memberCount)',
       onBack: () => context.pop(),
-      trailing: memberCount > 5
-          ? GlobalTopBarIconButton(
-              icon: CupertinoIcons.search,
-              onTap: () => context.push(
-                AppRoutePaths.chatMemberSearch(id: widget.conversationId),
-              ),
-            )
-          : null,
-      body: SizedBox.expand(
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.only(
-            left: SettingsSemanticConstants.insetFormListHorizontalPadding,
-            right: SettingsSemanticConstants.insetFormListHorizontalPadding,
-            top: AppSpacing.intraGroupSm,
-            bottom: AppSpacing.xl + MediaQuery.paddingOf(context).bottom,
-          ),
-          children: [
-            if (groupHomeAsync.isLoading && groupHome == null) ...[
-              const Center(child: CupertinoActivityIndicator()),
-              SizedBox(
-                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
-              ),
-            ],
-            if (sourceText.isNotEmpty || announcement.isNotEmpty) ...[
+      body: WebPageMaxWidthFrame(
+        child: SafeArea(
+          bottom: false,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(
+              left: SettingsSemanticConstants.insetFormListHorizontalPadding,
+              right: SettingsSemanticConstants.insetFormListHorizontalPadding,
+              top: AppSpacing.intraGroupSm,
+              bottom: AppSpacing.xl + MediaQuery.paddingOf(context).bottom,
+            ),
+            children: [
+              if (groupHomeAsync.isLoading && groupHome == null) ...[
+                const Center(child: CupertinoActivityIndicator()),
+                SizedBox(
+                  height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+                ),
+              ],
               SettingsInsetGroupedSection(
                 isDark: isDark,
                 density: SettingsInsetSectionDensity.compact,
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.md),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        groupTitle,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosTitle3,
-                          fontWeight: AppTypography.bold,
-                          color: fgPrimary,
-                        ),
-                      ),
-                      if (sourceText.isNotEmpty) ...[
-                        SizedBox(height: AppSpacing.xs),
-                        Text(
-                          sourceText,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosFootnote,
-                            color: secondaryText,
-                          ),
-                        ),
-                      ],
-                      if (announcement.isNotEmpty) ...[
-                        SizedBox(height: AppSpacing.sm),
-                        Text(
-                          '${UITextConstants.groupAnnouncement}：$announcement',
-                          style: TextStyle(
-                            fontSize: AppTypography.iosFootnote,
-                            color: secondaryText,
-                            height: AppTypography.lineHeightRelaxed,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                child: _GroupCapabilityGrid(
+                  isDark: isDark,
+                  enabledCapabilities:
+                      groupHome?.capabilities ?? const <String>[],
                 ),
               ),
               SizedBox(
                 height: SettingsSemanticConstants.insetFormSectionVerticalGap,
               ),
-            ],
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              density: SettingsInsetSectionDensity.standard,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final totalCells = visibleMemberCount + 1;
-                      final gridGap = AppSpacing.sm;
-                      final availableWidth = constraints.maxWidth.isFinite
-                          ? constraints.maxWidth
-                          : MediaQuery.sizeOf(context).width -
-                                SettingsSemanticConstants
-                                        .insetFormListHorizontalPadding *
-                                    2;
-                      final memberCellWidth =
-                          (availableWidth - gridGap * (_memberColumns - 1)) /
-                          _memberColumns;
-                      final memberLabelHeight =
-                          AppTypography.xs * AppTypography.lineHeightCompact;
-                      final memberCellHeight =
-                          AppSpacing.avatarUserLg +
-                          AppSpacing.xs +
-                          memberLabelHeight +
-                          AppSpacing.xs;
-                      return GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: _memberColumns,
-                          childAspectRatio: memberCellWidth / memberCellHeight,
-                          crossAxisSpacing: gridGap,
-                          mainAxisSpacing: gridGap,
-                        ),
-                        itemCount: totalCells,
-                        itemBuilder: (context, index) {
-                          if (index == visibleMemberCount) {
-                            return Align(
-                              alignment: Alignment.topCenter,
-                              child: _AddMemberPlaceholder(
-                                borderColor: borderColor,
-                                size: AppSpacing.avatarUserLg,
-                                onTap: () => context.push(
-                                  AppRoutePaths.chatAddMembers(
-                                    id: widget.conversationId,
+              SettingsInsetGroupedSection(
+                isDark: isDark,
+                density: SettingsInsetSectionDensity.standard,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final totalCells = visibleMemberCount + 1;
+                        final gridGap = AppSpacing.sm;
+                        final availableWidth = constraints.maxWidth.isFinite
+                            ? constraints.maxWidth
+                            : MediaQuery.sizeOf(context).width -
+                                  SettingsSemanticConstants
+                                          .insetFormListHorizontalPadding *
+                                      2;
+                        final memberCellWidth =
+                            (availableWidth -
+                                gridGap * (_memberColumns - 1)) /
+                            _memberColumns;
+                        final memberLabelHeight =
+                            AppTypography.xs *
+                            AppTypography.lineHeightCompact;
+                        final memberCellHeight =
+                            AppSpacing.avatarUserLg +
+                            AppSpacing.xs +
+                            memberLabelHeight +
+                            AppSpacing.xs;
+                        return GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: _memberColumns,
+                            childAspectRatio:
+                                memberCellWidth / memberCellHeight,
+                            crossAxisSpacing: gridGap,
+                            mainAxisSpacing: gridGap,
+                          ),
+                          itemCount: totalCells,
+                          itemBuilder: (context, index) {
+                            if (index == visibleMemberCount) {
+                              return Align(
+                                alignment: Alignment.topCenter,
+                                child: _AddMemberPlaceholder(
+                                  borderColor: borderColor,
+                                  size: AppSpacing.avatarUserLg,
+                                  onTap: () => context.push(
+                                    AppRoutePaths.chatAddMembers(
+                                      id: widget.conversationId,
+                                    ),
                                   ),
+                                ),
+                              );
+                            }
+                            final m = members[index];
+                            final username = m.userId.isNotEmpty
+                                ? m.userId
+                                : 'user_$index';
+                            return _MemberAvatar(
+                              name: m.displayName,
+                              avatarUrl: m.avatarUrl,
+                              textColor: fgPrimary,
+                              username: username,
+                              role: m.role,
+                              onTap: () => context.push(
+                                AppRoutePaths.userProfile(username: username),
+                                extra: UserProfileRouteExtra(
+                                  subAccountId: username,
+                                  avatar: m.avatarUrl,
+                                  displayName: m.displayName,
                                 ),
                               ),
                             );
-                          }
-                          final m = members[index];
-                          final username = m.userId.isNotEmpty
-                              ? m.userId
-                              : 'user_$index';
-                          return _MemberAvatar(
-                            name: m.displayName,
-                            avatarUrl: m.avatarUrl,
-                            textColor: fgPrimary,
-                            username: username,
-                            role: m.role,
-                            onTap: () => context.push(
-                              AppRoutePaths.userProfile(username: username),
-                              extra: UserProfileRouteExtra(
-                                subAccountId: username,
-                                avatar: m.avatarUrl,
-                                displayName: m.displayName,
+                          },
+                        );
+                      },
+                    ),
+                    if (memberGridOverflow) ...[
+                      SizedBox(height: AppSpacing.xs),
+                      Center(
+                        child: GestureDetector(
+                          onTap: () => setState(
+                            () => _membersExpanded = !_membersExpanded,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _membersExpanded
+                                    ? UITextConstants.collapseMembers
+                                    : UITextConstants.moreMembers,
+                                style: TextStyle(
+                                  fontSize: AppTypography.md,
+                                  color: fgPrimary.withValues(alpha: 0.75),
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                  if (memberGridOverflow) ...[
-                    SizedBox(height: AppSpacing.xs),
-                    Center(
-                      child: GestureDetector(
-                        onTap: () => setState(
-                          () => _membersExpanded = !_membersExpanded,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _membersExpanded
-                                  ? UITextConstants.collapseMembers
-                                  : UITextConstants.moreMembers,
-                              style: TextStyle(
-                                fontSize: AppTypography.md,
+                              SizedBox(width: AppSpacing.xs),
+                              Icon(
+                                _membersExpanded
+                                    ? CupertinoIcons.chevron_up
+                                    : CupertinoIcons.chevron_down,
+                                size: AppSpacing.iconMedium,
                                 color: fgPrimary.withValues(alpha: 0.75),
                               ),
-                            ),
-                            SizedBox(width: AppSpacing.xs),
-                            Icon(
-                              _membersExpanded
-                                  ? Icons.keyboard_arrow_up
-                                  : Icons.keyboard_arrow_down,
-                              size: AppSpacing.iconMedium,
-                              color: fgPrimary.withValues(alpha: 0.75),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            SizedBox(
-              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
-            ),
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              density: SettingsInsetSectionDensity.compact,
-              child: Column(
-                children: [
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.groupName,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.4,
-                          ),
-                          child: Text(
-                            groupTitle,
-                            style: TextStyle(
-                              fontSize: AppTypography.base,
-                              fontWeight: AppTypography.medium,
-                              color: secondaryText,
+              SizedBox(
+                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+              ),
+              SettingsInsetGroupedSection(
+                isDark: isDark,
+                density: SettingsInsetSectionDensity.compact,
+                child: Column(
+                  children: [
+                    SettingsInsetFormRow(
+                      isDark: isDark,
+                      label: UITextConstants.groupName,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.of(context).size.width * 0.4,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.right,
+                            child: Text(
+                              groupTitle,
+                              style: TextStyle(
+                                fontSize: AppTypography.base,
+                                fontWeight: AppTypography.medium,
+                                color: secondaryText,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                            ),
                           ),
+                          SizedBox(width: AppSpacing.containerSm),
+                          Icon(
+                            CupertinoIcons.chevron_forward,
+                            size: AppSpacing.iconMedium,
+                            color: chevronColor,
+                          ),
+                        ],
+                      ),
+                      onTap: _showEditGroupNameDialog,
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    SettingsInsetFormRow(
+                      isDark: isDark,
+                      label: UITextConstants.groupAnnouncement,
+                      trailing: Text(
+                        announcement.isEmpty
+                            ? UITextConstants.groupAnnouncementEmpty
+                            : announcement,
+                        style: TextStyle(
+                          fontSize: AppTypography.base,
+                          color: secondaryText,
                         ),
-                        SizedBox(width: AppSpacing.containerSm),
-                        Icon(
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isAdminOrOwner) ...[
+                      SettingsInsetFormSectionDivider(isDark: isDark),
+                      SettingsInsetFormRow(
+                        isDark: isDark,
+                        label: UITextConstants.groupManagement,
+                        trailing: Icon(
                           CupertinoIcons.chevron_forward,
                           size: AppSpacing.iconMedium,
                           color: chevronColor,
                         ),
-                      ],
-                    ),
-                    onTap: _showEditGroupNameDialog,
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.groupAnnouncement,
-                    trailing: Text(
-                      announcement.isEmpty
-                          ? UITextConstants.groupAnnouncementEmpty
-                          : announcement,
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        color: secondaryText,
+                        onTap: () => context.push(
+                          AppRoutePaths.chatManage(id: widget.conversationId),
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    ],
+                  ],
+                ),
+              ),
+              SizedBox(
+                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+              ),
+              SettingsInsetGroupedSection(
+                isDark: isDark,
+                density: SettingsInsetSectionDensity.compact,
+                child: Column(
+                  children: [
+                    SettingsInsetFormRow(
+                      isDark: isDark,
+                      label: UITextConstants.muteNotifications,
+                      trailing: _buildSettingSwitch(
+                        isDark: isDark,
+                        value: _mute,
+                        onChanged: (v) => setState(() => _mute = v),
+                      ),
                     ),
-                  ),
-                  if (isAdminOrOwner) ...[
                     SettingsInsetFormSectionDivider(isDark: isDark),
                     SettingsInsetFormRow(
                       isDark: isDark,
-                      label: UITextConstants.groupManagement,
-                      trailing: Icon(
-                        CupertinoIcons.chevron_forward,
-                        size: AppSpacing.iconMedium,
-                        color: chevronColor,
+                      label: UITextConstants.pinChat,
+                      trailing: _buildSettingSwitch(
+                        isDark: isDark,
+                        value: _pin,
+                        onChanged: (v) => setState(() => _pin = v),
                       ),
-                      onTap: () => context.push(
-                        AppRoutePaths.chatManage(id: widget.conversationId),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    SettingsInsetFormRow(
+                      isDark: isDark,
+                      label: UITextConstants.privacyShield,
+                      trailing: _buildSettingSwitch(
+                        isDark: isDark,
+                        value: privacyShield,
+                        onChanged: isAdminOrOwner
+                            ? (v) {
+                                final cur = ref.read(
+                                  conversationMembersProvider(
+                                    widget.conversationId,
+                                  ),
+                                );
+                                ref
+                                    .read(
+                                      conversationMembersProvider(
+                                        widget.conversationId,
+                                      ).notifier,
+                                    )
+                                    .updateGroupSettings(
+                                      cur.groupSettings.copyWith(
+                                        privacyShieldAdminOnly: v,
+                                      ),
+                                    );
+                              }
+                            : null,
                       ),
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
-            SizedBox(
-              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
-            ),
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              density: SettingsInsetSectionDensity.compact,
-              child: _GroupCapabilityGrid(
+              SizedBox(
+                height: SettingsSemanticConstants.insetFormSectionVerticalGap,
+              ),
+              SettingsInsetGroupedSection(
                 isDark: isDark,
-                enabledCapabilities:
-                    groupHome?.capabilities ?? const <String>[],
-                onMembersTap: () => context.push(
-                  AppRoutePaths.chatMemberSearch(id: widget.conversationId),
+                density: SettingsInsetSectionDensity.compact,
+                child: SettingsInsetCenteredActionRow(
+                  isDark: isDark,
+                  label: UITextConstants.exitGroupChat,
+                  isDestructive: true,
+                  onTap: _confirmExitGroup,
                 ),
               ),
-            ),
-            SizedBox(
-              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
-            ),
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              density: SettingsInsetSectionDensity.compact,
-              child: Column(
-                children: [
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.muteNotifications,
-                    trailing: _buildSettingSwitch(
-                      isDark: isDark,
-                      value: _mute,
-                      onChanged: (v) => setState(() => _mute = v),
-                    ),
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.pinChat,
-                    trailing: _buildSettingSwitch(
-                      isDark: isDark,
-                      value: _pin,
-                      onChanged: (v) => setState(() => _pin = v),
-                    ),
-                  ),
-                  SettingsInsetFormSectionDivider(isDark: isDark),
-                  SettingsInsetFormRow(
-                    isDark: isDark,
-                    label: UITextConstants.privacyShield,
-                    trailing: _buildSettingSwitch(
-                      isDark: isDark,
-                      value: privacyShield,
-                      onChanged: isAdminOrOwner
-                          ? (v) {
-                              final cur = ref.read(
-                                conversationMembersProvider(
-                                  widget.conversationId,
-                                ),
-                              );
-                              ref
-                                  .read(
-                                    conversationMembersProvider(
-                                      widget.conversationId,
-                                    ).notifier,
-                                  )
-                                  .updateGroupSettings(
-                                    cur.groupSettings.copyWith(
-                                      privacyShieldAdminOnly: v,
-                                    ),
-                                  );
-                            }
-                          : null,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: SettingsSemanticConstants.insetFormSectionVerticalGap,
-            ),
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              density: SettingsInsetSectionDensity.compact,
-              child: CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: _confirmExitGroup,
-                child: SizedBox(
-                  width: double.infinity,
-                  height: AppSpacing.buttonHeight,
-                  child: Center(
-                    child: Text(
-                      UITextConstants.exitGroupChat,
-                      style: TextStyle(
-                        fontSize: AppTypography.lg,
-                        fontWeight: AppTypography.medium,
-                        color: SettingsSemanticConstants.exitActionColor(
-                          isDark,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -608,31 +542,16 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       ),
     );
   }
-
-  String _formatGroupSource(
-    String? entityTitle,
-    String? circleTitle,
-    int memberCount,
-  ) {
-    final parts = <String>[
-      if ((entityTitle ?? '').trim().isNotEmpty) entityTitle!.trim(),
-      if ((circleTitle ?? '').trim().isNotEmpty) circleTitle!.trim(),
-      '$memberCount${UITextConstants.groupMemberCountSuffix}',
-    ];
-    return '${UITextConstants.groupSourcePrefix}${parts.join(' · ')}';
-  }
 }
 
 class _GroupCapabilityGrid extends StatelessWidget {
   const _GroupCapabilityGrid({
     required this.isDark,
     required this.enabledCapabilities,
-    required this.onMembersTap,
   });
 
   final bool isDark;
   final List<String> enabledCapabilities;
-  final VoidCallback onMembersTap;
 
   bool _enabled(String capability) {
     return enabledCapabilities.isEmpty ||
@@ -652,58 +571,41 @@ class _GroupCapabilityGrid extends StatelessWidget {
         icon: CupertinoIcons.folder,
         enabled: _enabled('file'),
       ),
-      _GroupCapabilityItem(
-        label: UITextConstants.groupCapabilityActivity,
-        icon: CupertinoIcons.calendar,
-        enabled: _enabled('activity'),
-      ),
-      _GroupCapabilityItem(
-        label: UITextConstants.groupCapabilityMembers,
-        icon: CupertinoIcons.person_2,
-        enabled: true,
-        onTap: onMembersTap,
-      ),
     ];
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundSecondary,
     );
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        children: items
-            .map(
-              (item) => Expanded(
-                child: CupertinoButton(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  onPressed: item.enabled ? item.onTap : null,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        item.icon,
-                        size: AppSpacing.iconLarge,
+    return Row(
+      children: items
+          .map(
+            (item) => Expanded(
+              child: CupertinoButton(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                onPressed: null,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      item.icon,
+                      size: AppSpacing.iconLarge,
+                      color: item.enabled ? fgPrimary : fgSecondary,
+                    ),
+                    SizedBox(height: AppSpacing.xs),
+                    Text(
+                      item.label,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosFootnote,
                         color: item.enabled ? fgPrimary : fgSecondary,
                       ),
-                      SizedBox(height: AppSpacing.xs),
-                      Text(
-                        item.label,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosFootnote,
-                          color: item.enabled ? fgPrimary : fgSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            )
-            .toList(growable: false),
-      ),
+            ),
+          )
+          .toList(growable: false),
     );
   }
 }
@@ -713,13 +615,11 @@ class _GroupCapabilityItem {
     required this.label,
     required this.icon,
     required this.enabled,
-    this.onTap,
   });
 
   final String label;
   final IconData icon;
   final bool enabled;
-  final VoidCallback? onTap;
 }
 
 class _MemberAvatar extends StatelessWidget {
@@ -816,8 +716,6 @@ class _AddMemberPlaceholder extends StatelessWidget {
   });
 
   final Color borderColor;
-
-  /// 与 [_MemberAvatar] 中 [RoundedSquareAvatar] 边长一致。
   final double size;
   final VoidCallback onTap;
 
@@ -834,7 +732,7 @@ class _AddMemberPlaceholder extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
           ),
           child: Icon(
-            Icons.add,
+            CupertinoIcons.add,
             size: AppSpacing.iconMedium,
             color: borderColor,
           ),

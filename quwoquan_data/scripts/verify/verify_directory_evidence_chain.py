@@ -30,7 +30,7 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common.batch_scan import iter_batch_object_dirs  # noqa: E402
-from _common.article_package import compute_document_sha256, sha256_text  # noqa: E402
+from _common.article_package import compute_document_sha256  # noqa: E402
 from _common.io import read_json  # noqa: E402
 from _common.image_rules import pixel_size_issue, relevance_issue  # noqa: E402
 from _common.paths import (  # noqa: E402
@@ -170,58 +170,69 @@ def _scan_json_for_absolute(path: Path, issues: list[str]) -> None:
 
 
 def _source_refs_issues(obj: Path, batch: Path) -> list[str]:
-    """post `1.download/source_refs.json` 必须能回查实体 source units，且镜像自洽。"""
+    """post `1.download/source_refs.json` 必须满足单底稿零参考宪法 v2：
+
+    - `sources` 长度恒为 1（唯一底稿来源单元，`role == base`）。
+    - `baseSourceRef` 非空且与该唯一来源一致，源文件/来源单元可回查。
+    - 禁止 `citedSourceRefs` / `sourcePaths` / `referenceSourceRefs` 等第二来源或全量索引。
+    - 禁止内联 `sourceMarkdown` / `sourceCleanMarkdown` 原文镜像（只留 sha256）。
+    - 文件体积受限（避免回归到全文镜像的臃肿索引）。
+    """
+    from _common.post_evidence_chain import SOURCE_REFS_MAX_BYTES
+
     rel = obj.relative_to(batch)
     has_final = (obj / "article.md").is_file() or (obj / "gallery.md").is_file()
     if not has_final:
         return []
     snapshot_path = obj / "1.download" / "source_refs.json"
     if not snapshot_path.is_file():
-        return [f"{rel}: 内容对象缺 `1.download/source_refs.json`（post 必须自持来源索引/镜像）"]
+        return [f"{rel}: 内容对象缺 `1.download/source_refs.json`（post 必须自持来源索引）"]
     try:
         data = read_json(snapshot_path)
     except Exception as exc:  # noqa: BLE001
         return [f"{rel}: source_refs.json unreadable ({exc})"]
     issues: list[str] = []
+    if snapshot_path.stat().st_size > SOURCE_REFS_MAX_BYTES:
+        issues.append(
+            f"{rel}: source_refs.json 过大（{snapshot_path.stat().st_size}B > {SOURCE_REFS_MAX_BYTES}B），"
+            "疑似回归到全文镜像/多源索引"
+        )
+    for banned in ("citedSourceRefs", "referenceSourceRefs", "sourcePaths"):
+        if data.get(banned):
+            issues.append(
+                f"{rel}: source_refs.json 禁止出现 `{banned}`（单底稿零参考宪法：无第二来源/全量索引）"
+            )
     sources = data.get("sources") or []
-    if not isinstance(sources, list) or not sources:
-        issues.append(f"{rel}: source_refs.json.sources 为空（至少需登记 base/cited 来源单元）")
+    if not isinstance(sources, list) or len(sources) != 1:
+        issues.append(
+            f"{rel}: source_refs.json.sources 长度必须为 1（单底稿），实得 {len(sources) if isinstance(sources, list) else '非法'}"
+        )
         return issues
-    source_refs = {
-        str(entry.get("sourceRef") or "")
-        for entry in sources
-        if isinstance(entry, dict) and str(entry.get("sourceRef") or "")
-    }
+    entry = sources[0]
+    if not isinstance(entry, dict):
+        return [f"{rel}: source_refs.json.sources 含非法条目"]
+    source_ref = str(entry.get("sourceRef") or "")
+    unit_ref = str(entry.get("sourceUnitRef") or "")
     base_source_ref = str(data.get("baseSourceRef") or "")
-    if base_source_ref and base_source_ref not in source_refs:
-        issues.append(f"{rel}: baseSourceRef 未落入 source_refs.json.sources：{base_source_ref}")
-    for field in ("citedSourceRefs", "sourcePaths"):
-        for ref in data.get(field) or []:
-            text = str(ref or "")
-            if text and text not in source_refs:
-                issues.append(f"{rel}: {field} 未落入 source_refs.json.sources：{text}")
-    for entry in sources:
-        if not isinstance(entry, dict):
-            issues.append(f"{rel}: source_refs.json.sources 含非法条目")
-            continue
-        source_ref = str(entry.get("sourceRef") or "")
-        unit_ref = str(entry.get("sourceUnitRef") or "")
-        if not source_ref:
-            issues.append(f"{rel}: source_refs.json.sources 缺 sourceRef")
-            continue
-        source_path = batch / source_ref
-        if not source_path.is_file():
-            issues.append(f"{rel}: sourceRef 源文件缺失（证据链断裂）：{source_ref}")
-            continue
-        if unit_ref and not (batch / unit_ref).is_dir():
-            issues.append(f"{rel}: sourceUnitRef 源单元缺失（不可回查）：{unit_ref}")
-        source_markdown = entry.get("sourceMarkdown")
-        if isinstance(source_markdown, str):
-            digest = str(entry.get("sourceMarkdownSha256") or "")
-            if digest and digest != sha256_text(source_markdown):
-                issues.append(f"{rel}: sourceMarkdownSha256 与 sourceMarkdown 不一致：{source_ref}")
-            if source_path.read_text(encoding="utf-8") != source_markdown:
-                issues.append(f"{rel}: sourceMarkdown 与 sourceRef 实际内容不一致：{source_ref}")
+    if not base_source_ref:
+        issues.append(f"{rel}: source_refs.json.baseSourceRef 为空（必须声明唯一底稿）")
+    if not source_ref:
+        issues.append(f"{rel}: source_refs.json.sources[0] 缺 sourceRef")
+        return issues
+    if base_source_ref and base_source_ref != source_ref:
+        issues.append(
+            f"{rel}: baseSourceRef 与唯一来源不一致：{base_source_ref} != {source_ref}"
+        )
+    role = str(entry.get("role") or "base")
+    if role != "base":
+        issues.append(f"{rel}: source_refs.json.sources[0].role 必须为 base，实得 {role}")
+    if entry.get("sourceMarkdown") is not None or entry.get("sourceCleanMarkdown") is not None:
+        issues.append(f"{rel}: source_refs.json 禁止内联 sourceMarkdown 原文镜像（只留 sha256）")
+    source_path = batch / source_ref
+    if not source_path.is_file():
+        issues.append(f"{rel}: sourceRef 源文件缺失（证据链断裂）：{source_ref}")
+    elif unit_ref and not (batch / unit_ref).is_dir():
+        issues.append(f"{rel}: sourceUnitRef 源单元缺失（不可回查）：{unit_ref}")
     return issues
 
 

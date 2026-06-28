@@ -359,6 +359,42 @@ void main() {
       await tester.pump();
     });
 
+    testWidgets('compact 宽度下语音按住录音不产生 overflow', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 680));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                onRequestMicPermission: () async => true,
+                onStartRecord: () async => true,
+                onStopRecord: (_) async {},
+                onSend: (_) async {},
+                showEmojiButton: true,
+                enableVoiceInput: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(TestKeys.chatInputVoiceToggleButton));
+      await tester.pump();
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(TestKeys.chatInputVoiceHoldButton)),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(TestKeys.chatInputVoiceRecordHud), findsOneWidget);
+      expect(find.byKey(TestKeys.chatInputVoiceWaveform), findsOneWidget);
+
+      await gesture.up();
+      await tester.pump();
+    });
+
     testWidgets('compact 宽度下群聊输入栏不挤出 overflow', (tester) async {
       await tester.binding.setSurfaceSize(const Size(320, 680));
       addTearDown(() => tester.binding.setSurfaceSize(null));

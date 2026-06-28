@@ -201,6 +201,10 @@ def write_brief_object(
             except (TypeError, ValueError):
                 pass
     register_from_brief(task_id, batch_id, ref, payload, content_type)
+    from _common.paths import STAGE_COMPOSE, ensure_object_stages
+
+    obj_dir = content_object_dir(task_id, batch_id, ref)
+    ensure_object_stages(obj_dir, through_stage=STAGE_COMPOSE)
     path = content_object_stage_dir(task_id, batch_id, ref, STAGE_COMPOSE) / BRIEF_FILE
     write_json(path, payload)
     return path

@@ -564,6 +564,20 @@ func (h *ChatHandler) handleListContactHome(w http.ResponseWriter, r *http.Reque
 			}
 		}
 	}
+	if filter == "all" || filter == "circle" {
+		circles, err := h.memberService.ListContactHomeCircles(r.Context(), userID, limit)
+		if err != nil {
+			writeHTTPError(w, r, err)
+			return
+		}
+		for _, circle := range circles {
+			rows = append(rows, contactHomeCircleRowToWire(circle))
+			if len(rows) >= limit {
+				writeJSON(w, http.StatusOK, map[string]any{"items": rows})
+				return
+			}
+		}
+	}
 	if filter == "all" || filter == "group" {
 		conversations, err := h.conversationService.ListConversations(r.Context(), application.ListConversationsRequest{
 			UserId: userID,

@@ -1,0 +1,508 @@
+--------- beginning of main
+06-26 16:54:19.244   830   836 I ndroid.systemui: Background concurrent mark compact GC freed 9656KB AllocSpace bytes, 40(1280KB) LOS objects, 49% free, 17MB/35MB, paused 545us,5.907ms total 345.204ms
+06-26 16:54:19.254   830   873 I ndroid.systemui: WaitForGcToComplete blocked ProfileSaver on Background for 346.357ms
+06-26 16:54:19.288   830   838 W ndroid.systemui: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~XBUgZk6WrpnuwwOL9FqkEQ==/com.quwoquan.quwoquan_app-Cnv3docJa91-6v1nBLhgPQ==/base.apk' with 1 weak references
+06-26 16:54:19.302   830   838 W System  : A resource failed to call release.
+06-26 16:54:19.311   830   838 W ndroid.systemui: ApkAssets: Deleting an ApkAssets object '<empty> and /product/priv-app/Velvet/Velvet.apk' with 1 weak references
+06-26 16:54:19.312   830   838 W System  : A resource failed to call release.
+06-26 16:54:19.312   830   838 W System  : A resource failed to call release.
+06-26 16:54:19.312   830   838 W System  : A resource failed to call release.
+06-26 16:54:19.315  1726  1726 I A       : (REDACTED) Created gRPC endpoint for service %s
+06-26 16:54:19.365   378   472 I RanchuHwc: logCompositionFallbackIfChanged: layer 7 CompositionType fallback from 2 to 1
+06-26 16:54:19.365   378   472 I RanchuHwc: logCompositionFallbackIfChanged: layer 4 CompositionType fallback from 2 to 1
+06-26 16:54:19.369   830   838 W System  : A resource failed to call release.
+06-26 16:54:19.369   830   838 W System  : A resource failed to call release.
+06-26 16:54:19.369   830   838 W System  : A resource failed to call release.
+06-26 16:54:19.369   830   838 W System  : A resource failed to call release.
+--------- beginning of system
+06-26 16:54:19.370   559   639 W ProcessStats: Tracking association SourceState{ba157ee com.google.android.apps.nexuslauncher/10174 BTop #2742} whose proc state 2 is better than process ProcessState{4925d0 com.google.android.googlequicksearchbox:search/10145 pkg=com.google.android.googlequicksearchbox} proc state 14 (0 skipped)
+06-26 16:54:19.377   381   381 I android.hardware.power-service.example: Power isModeSupported: 6
+06-26 16:54:19.378   830   830 D ControlsListingControllerImpl: ServiceConfig reloaded, count: 0
+06-26 16:54:19.382   830   830 D ControlsListingControllerImpl: ServiceConfig reloaded, count: 0
+06-26 16:54:19.390   830   830 D ControlsListingControllerImpl: ServiceConfig reloaded, count: 0
+06-26 16:54:19.394   559   598 D ActivityManager: sync unfroze 4002 com.android.vending:quick_launch for 3
+06-26 16:54:19.396  1584  1584 W MediaProvider: WorkProfileOwnerApps cache is empty
+06-26 16:54:19.399  4002  4002 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 16:54:19.399   990   990 E SmsApplication: com.google.android.apps.messaging lost android:read_cell_broadcasts:  (fixing)
+06-26 16:54:19.402   559   949 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 10142, code = READ_CELL_BROADCASTS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.406  4002  4002 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 16:54:19.411  4002  4030 I Finsky:quick_launch: [41] Stats for Executor: bgExecutor wgz@7e8a024[Running, pool size = 4, active threads = 0, queued tasks = 0, completed tasks = 21]
+06-26 16:54:19.411  4002  4030 I Finsky:quick_launch: [41] Stats for Executor: LightweightExecutor wgz@eaf578d[Running, pool size = 3, active threads = 0, queued tasks = 0, completed tasks = 16]
+06-26 16:54:19.411  4002  4030 I Finsky:quick_launch: [41] Stats for Executor: BlockingExecutor wgz@1636d42[Running, pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 1]
+06-26 16:54:19.415   990   990 E CellBroadcastUtils: getDefaultCellBroadcastReceiverPackageName: no package found
+06-26 16:54:19.416   559   949 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = READ_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.420   559   948 E RoleControllerServiceImpl: Default/fallback role holder package doesn't qualify for the role, package: com.google.android.gms, role: android.app.role.WALLET
+06-26 16:54:19.422  4002  4002 I Finsky:quick_launch: [2] Memory trim requested to level 40
+06-26 16:54:19.424   559   598 D ActivityManager: sync unfroze 3111 com.android.vending:background for 3
+06-26 16:54:19.450   559   949 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = RECEIVE_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.450   559   949 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = RECEIVE_WAP_PUSH, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.459   559   952 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = SEND_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.465  1584  1584 D PickerSyncLockManager: Trying to acquire lock com.android.providers.media.photopicker.sync.CloseableReentrantLock@407d9ab[Unlocked]. Lock Name = CLOUD_PROVIDER_LOCK. Threads that may be waiting to acquire this lock = []
+06-26 16:54:19.465  1584  1584 D CloseableReentrantLock: Successfully acquired lock com.android.providers.media.photopicker.sync.CloseableReentrantLock@407d9ab[Locked by thread main]. Lock Name = CLOUD_PROVIDER_LOCK. Threads that may be waiting to acquire this lock = []
+06-26 16:54:19.465  1584  1584 D CloseableReentrantLock: Successfully released lock com.android.providers.media.photopicker.sync.CloseableReentrantLock@407d9ab[Unlocked]. Lock Name = CLOUD_PROVIDER_LOCK. Threads that may be waiting to acquire this lock = []
+06-26 16:54:19.483  2008  2008 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 16:54:19.500   559   952 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = READ_CELL_BROADCASTS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.505   559   597 W MagnificationConnectionManager: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+06-26 16:54:19.506  2008  2008 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 16:54:19.511   559   559 W IPCThreadState: Sending oneway calls to frozen process.
+06-26 16:54:19.511   559   580 I system_server: Background concurrent mark compact GC freed 19MB AllocSpace bytes, 17(624KB) LOS objects, 45% free, 29MB/53MB, paused 16.425ms,63.400ms total 640.550ms
+06-26 16:54:19.515   559   597 W MagnificationConnectionManager: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+06-26 16:54:19.518   559   559 W IPCThreadState: Sending oneway calls to frozen process.
+06-26 16:54:19.518   559   582 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~XBUgZk6WrpnuwwOL9FqkEQ==/com.quwoquan.quwoquan_app-Cnv3docJa91-6v1nBLhgPQ==/base.apk' with 1 weak references
+06-26 16:54:19.519   559   582 W System  : A resource failed to call close.
+06-26 16:54:19.520   559   582 W System  : A resource failed to call release.
+06-26 16:54:19.520   559   582 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/InputDevices/InputDevices.apk' with 1 weak references
+06-26 16:54:19.521  3111  3111 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 16:54:19.530  3111  3111 D ActivityThread: Package [com.quwoquan.quwoquan_app] reported as REPLACED, but missing application info. Assuming REMOVED.
+06-26 16:54:19.535   559   598 D ActivityManager: sync unfroze 2008 com.android.vending for 3
+06-26 16:54:19.536  3111  3111 I Finsky:background: [2] Memory trim requested to level 40
+06-26 16:54:19.542  4002  4002 I Finsky:quick_launch: [2] Memory trim requested to level 40
+06-26 16:54:19.543  4002  4002 I Finsky:quick_launch: [2] Memory trim requested to level 40
+06-26 16:54:19.543  4002  4002 I Finsky:quick_launch: [2] Memory trim requested to level 40
+06-26 16:54:19.543  2008  2008 I Finsky  : [2] Memory trim requested to level 40
+06-26 16:54:19.543  2008  2008 I Finsky  : [2] Flushing in-memory image cache
+06-26 16:54:19.544  2008  2008 I Finsky  : [2] Memory trim requested to level 40
+06-26 16:54:19.544  2008  2008 I Finsky  : [2] Flushing in-memory image cache
+06-26 16:54:19.558  3111  3668 I PlayCommon: [84] Preparing logs for uploading
+06-26 16:54:19.560  3111  3111 I Finsky:background: [2] Memory trim requested to level 40
+06-26 16:54:19.561  3111  3111 I Finsky:background: [2] Memory trim requested to level 40
+06-26 16:54:19.570  1625  1625 I GsaVoiceInteractionSrv: (REDACTED) O received %s
+06-26 16:54:19.572  1596  1596 I AiAiEcho: AppFetcherImpl onPackageChanged com.quwoquan.quwoquan_app.
+06-26 16:54:19.577  1596  2276 I AiAiEcho: AppIndexer Package:[com.quwoquan.quwoquan_app] UserProfile:[0] Enabled:[true].
+06-26 16:54:19.577  1596  2276 I AiAiEcho: AppFetcherImplV2 updateApps package:[com.quwoquan.quwoquan_app], userId:[0], reason:[package is updated.].
+06-26 16:54:19.577  3111  3111 I Finsky:background: [2] aknz - Received: android.intent.action.PACKAGE_REMOVED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 16:54:19.587  2085  4600 I Bugle   : getRawTelephonyPhoneNumber redacted-pii[12-chars] [CONTEXT sub_id=1 ]
+06-26 16:54:19.588   559   637 I ActivityManager: Force stopping com.quwoquan.quwoquan_app appid=10206 user=0: from pid 4613
+06-26 16:54:19.588   559   637 I WindowManager:   Force removing ActivityRecord{f8cb1fe u0 com.quwoquan.quwoquan_app/.MainActivity t23 f} isExiting}
+06-26 16:54:19.588   559   637 W WindowManager: removeAppToken: Attempted to remove non-existing token: Token{65fe3ac ActivityRecord{f8cb1fe u0 com.quwoquan.quwoquan_app/.MainActivity t23 f} isExiting}}
+06-26 16:54:19.591  2085  4600 W BugleDataModel: SubscriptionsTracker: Failed to update self participants' subscription info for, subId: -1, updateCount: 0
+06-26 16:54:19.595   559   637 I AppsFilter: interaction: PackageSetting{35db86f com.example.quwoquan_app/10204} -> PackageSetting{f0bc262 com.quwoquan.quwoquan_app/10206} BLOCKED
+06-26 16:54:19.603   990   990 E SmsApplication: com.google.android.apps.messaging lost android:read_cell_broadcasts:  (fixing)
+06-26 16:54:19.608  2008  2008 I Finsky  : [2] akoj - Received: android.intent.action.PACKAGE_REMOVED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 16:54:19.608   559   585 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 10142, code = READ_CELL_BROADCASTS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.616   990   990 E CellBroadcastUtils: getDefaultCellBroadcastReceiverPackageName: no package found
+06-26 16:54:19.616   559   637 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = READ_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.627   559   637 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = RECEIVE_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.627   559   637 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = RECEIVE_WAP_PUSH, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.628  1625  1625 I GsaVoiceInteractionSrv: (REDACTED) O received %s
+06-26 16:54:19.628  1625  1625 I GsaVoiceInteractionSrv: (REDACTED) O received %s
+06-26 16:54:19.647   559   585 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = SEND_SMS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.649   559   949 W AppOpService: Ignored setUidMode call for runtime permission app op: uid = 1001, code = READ_CELL_BROADCASTS, mode = allow, callingUid = 1001, oldMode = allow
+06-26 16:54:19.659   990  1186 D ImsResolver: maybeAddedImsService, packageName: com.quwoquan.quwoquan_app
+06-26 16:54:19.696  2085  4600 I Bugle   : getRawTelephonyPhoneNumber redacted-pii[12-chars] [CONTEXT sub_id=1 ]
+06-26 16:54:19.697   559   585 W ActivityTaskManager: callingPackage for (uid=2000, pid=4626) has no WPC
+06-26 16:54:19.717  1436  1436 D SsBaseTemplateCard: No text view can be set up
+06-26 16:54:19.718  3111  3668 W PlayCommon: [84] No account for auth token provided
+06-26 16:54:19.718   397   543 D PermissionCache: checking android.permission.WAKEUP_SURFACE_FLINGER for uid=10174 => granted (9328 us)
+06-26 16:54:19.720  3111  3668 I PlayCommon: [84] Connecting to server: https://play.googleapis.com/play/log?format=raw&proto_v2=true
+06-26 16:54:19.724  1436  1436 D SsBaseTemplateCard: Passed-in item info is null
+06-26 16:54:19.724  1436  1436 D SsBaseTemplateCard: Passed-in item info is null
+06-26 16:54:19.724  1436  1436 D SsBaseTemplateCard: Passed-in item info is null
+06-26 16:54:19.724  1436  1436 I SsBaseTemplateCard: Secondary card pane is null
+06-26 16:54:19.735  2085  4600 I Bugle   : SubscriptionUtils.getCanonicalForSelf: self=redacted-pii[12-chars], country=US [CONTEXT sub_id=1 ]
+06-26 16:54:19.747   830   881 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#12) android.os.BinderProxy@30f33b@0
+06-26 16:54:19.764   559   585 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_OVERRIDE
+06-26 16:54:19.764   559   585 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_FULLSCREEN_OVERRIDE
+06-26 16:54:19.764   559   585 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE
+06-26 16:54:19.782   559   585 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@e7ab1a32 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+06-26 16:54:19.790  1436  1478 I HWUI    : Davey! duration=815ms; Flags=0, FrameTimelineVsyncId=22197, IntendedVsync=138710655243, Vsync=139110655227, InputEventId=0, HandleInputStart=139132041273, AnimationStart=139132042398, PerformTraversalsStart=139148638273, DrawStart=139148803981, FrameDeadline=139143988559, FrameInterval=139127168731, FrameStartTime=16666666, SyncQueued=139148938773, SyncStart=139155974315, IssueDrawCommandsStart=139160528065, SwapBuffers=139453287065, FrameCompleted=139533349273, DequeueBufferDuration=5250, QueueBufferDuration=670375, GpuCompleted=139533349273, SwapBuffersCompleted=139462679357, DisplayPresentTime=0, CommandSubmissionCompleted=139453287065,
+06-26 16:54:19.796  3111  3668 D TrafficStats: tagSocket(143) with statsTag=0x6900, statsUid=-1
+06-26 16:54:19.805   559   585 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_RESIZEABLE_ACTIVITY_OVERRIDES
+06-26 16:54:19.805   559   585 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_MIN_ASPECT_RATIO_OVERRIDE
+06-26 16:54:19.823  2085  4600 I Bugle   : getRawTelephonyPhoneNumber redacted-pii[12-chars] [CONTEXT sub_id=1 ]
+06-26 16:54:19.828  1436  1528 D PackageUpdatedTask: Package updated: mOp=UPDATE packages=[com.quwoquan.quwoquan_app]
+06-26 16:54:19.834  3111  4629 I Finsky:background: [124] Wrote row to frosting DB: 407
+06-26 16:54:19.900  3111  4629 I Finsky:background: [124] Wrote row to frosting DB: 408
+06-26 16:54:19.916   559   585 I ActivityTaskManager: Add Task{5975d5f #23 type=standard A=10206:com.quwoquan.quwoquan_app} to hidden list because adding Task{f454a2f #24 type=standard A=10206:com.quwoquan.quwoquan_app}
+06-26 16:54:19.922   559   585 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity} with LAUNCH_SINGLE_TOP from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+06-26 16:54:19.925  1436  1703 D EGL_emulation: app_time_stats: avg=255.67ms min=29.92ms max=462.64ms count=4
+06-26 16:54:19.930   559   588 V WindowManager: Finish Transition (#12): created at 06-26 16:54:18.518 collect-started=0.661ms request-sent=0.8ms started=48.992ms ready=135.748ms sent=252.827ms finished=1411.041ms
+06-26 16:54:19.932   559  2052 E IPCThreadState: Binder transaction failure. id: 192233, BR_*: 29189, error: -22 (Invalid argument)
+06-26 16:54:19.935   559  2052 W ActivityManager: pid 559 system sent binder code 7 with flags 1 to frozen apps and got error -32
+06-26 16:54:19.939   559  2052 W WindowManager: Exception thrown during dispatchAppVisibility Window{1d010d7 u0 com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity EXITING}
+06-26 16:54:19.939   559  2052 W WindowManager: android.os.DeadObjectException
+06-26 16:54:19.939   559  2052 W WindowManager: 	at android.os.BinderProxy.transactNative(Native Method)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at android.os.BinderProxy.transact(BinderProxy.java:586)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at android.view.IWindow$Stub$Proxy.dispatchAppVisibility(IWindow.java:553)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at com.android.server.wm.WindowState.sendAppVisibilityToClients(WindowState.java:3253)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at com.android.server.wm.WindowContainer.sendAppVisibilityToClients(WindowContainer.java:1289)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at com.android.server.wm.WindowToken.setClientVisible(WindowToken.java:403)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at com.android.server.wm.ActivityRecord.setClientVisible(ActivityRecord.java:7166)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at com.android.server.wm.ActivityRecord.postApplyAnimation(ActivityRecord.java:5881)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at com.android.server.wm.ActivityRecord.commitVisibility(ActivityRecord.java:5823)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at com.android.server.wm.Transition.finishTransition(Transition.java:1286)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at com.android.server.wm.TransitionController.finishTransition(TransitionController.java:937)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.finishTransition(WindowOrganizerController.java:494)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at android.window.IWindowOrganizerController$Stub.onTransact(IWindowOrganizerController.java:289)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.onTransact(WindowOrganizerController.java:204)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at android.os.Binder.execTransactInternal(Binder.java:1500)
+06-26 16:54:19.939   559  2052 W WindowManager: 	at android.os.Binder.execTransact(Binder.java:1444)
+06-26 16:54:19.952   559  2052 W Process : Unable to open /proc/3859/status
+06-26 16:54:19.961  2008  2008 I Finsky  : [2] [ContentSync] finished, scheduled=false
+06-26 16:54:19.964   397   488 W VsyncModulator: setTransactionSchedule: Unexpected EarlyEnd
+06-26 16:54:19.970   830   881 V WindowManagerShell: Track 0 became idle
+06-26 16:54:19.970   830   881 V WindowManagerShell: All active transition animations finished
+06-26 16:54:19.970   830   881 V WindowManagerShell: Transition requested (#13): android.os.BinderProxy@3d04be9 TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=24 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity } baseActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} topActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} origActivity=null realActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} numActivities=1 lastActiveTime=139702 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{android.window.IWindowContainerToken$Stub$Proxy@607806e} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=ActivityInfo{d67630f com.quwoquan.quwoquan_app.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= true isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=1080 topActivityLetterboxHeight=2400 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 13 }
+06-26 16:54:19.971  3111  3111 I Finsky:background: [2] aknz - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 16:54:19.972  1436  1436 W SplitSelectStateCtor: Missing session instanceIds
+06-26 16:54:19.972  1436  1436 D StatsLog: LAUNCHER_SPLIT_SELECTION_EXIT_INTERRUPTED
+06-26 16:54:19.975   830   881 D WindowManagerShell: setLauncherKeepClearAreaHeight: visible=false, height=527
+06-26 16:54:19.976   397   397 I BpBinder: onLastStrongRef automatically unlinking death recipients:
+06-26 16:54:19.976   559  1979 I AppsFilter: interaction: PackageSetting{35db86f com.example.quwoquan_app/10204} -> PackageSetting{e7c5379 com.quwoquan.quwoquan_app/10206} BLOCKED
+06-26 16:54:19.985  2008  2008 I Finsky  : [2] akoj - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 16:54:20.008  1726  2341 W SearchServiceCore: Abort, client detached.
+06-26 16:54:20.008  1726  2341 W SearchServiceCore: Abort, client detached.
+06-26 16:54:20.008   559   591 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@e7ab1a32 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+06-26 16:54:20.014  1436  1436 I TopTaskTracker: onTaskMovedToFront: (moved taskInfo to front) taskId=24, baseIntent=Intent { flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity }
+06-26 16:54:20.019   559   952 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 16:54:20.019   559   952 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 16:54:20.024  3111  4629 I Finsky:background: [124] Wrote row to frosting DB: 409
+06-26 16:54:20.038   990   990 D CarrierSvcBindHelper: onHandleForceStop: [com.quwoquan.quwoquan_app]
+06-26 16:54:20.044  3111  3177 I Finsky:background: [54] IQ:PSL: skipping onPackageRemoved(replacing=true) for untracked package=com.quwoquan.quwoquan_app
+06-26 16:54:20.045  1436  1436 I TopTaskTracker: onTaskRemoved: taskId=23
+06-26 16:54:20.046  2085  4600 W BugleDataModel: SubscriptionsTracker: Failed to update self participants' subscription info for, subId: 1, updateCount: 0
+06-26 16:54:20.047  1436  1436 I TopTaskTracker: onTaskRemoved: taskId=23
+06-26 16:54:20.049   990   990 D CarrierSvcBindHelper: No carrier app for: 0
+06-26 16:54:20.049  1726  2341 W SearchServiceCore: Abort, client detached.
+06-26 16:54:20.054   559   585 D CoreBackPreview: Window{6fba122 u0 Splash Screen com.quwoquan.quwoquan_app}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@fd9649c, mPriority=0, mIsAnimationCallback=false}
+06-26 16:54:20.086  2085  4600 I BugleDataModel: SubscriptionsTracker bindToTrackingMap bound participants: [ParticipantId=1 subId=-1, ParticipantId=2 subId=1]
+06-26 16:54:20.088  3111  3668 I PlayCommon: [84] Successfully uploaded logs.
+06-26 16:54:20.128  1596  2080 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 16:54:20.139  1596  2080 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 16:54:20.147  1596  2080 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 16:54:20.153  1436  1703 D EGL_emulation: app_time_stats: avg=279.52ms min=117.83ms max=541.98ms count=5
+06-26 16:54:20.170  1436  1436 D StatsLog: LAUNCHER_ALLAPPS_COUNT
+06-26 16:54:20.191  2008  2008 I Finsky  : [2] DTU: Received onPackageAdded, replacing: true
+06-26 16:54:20.191   830  3857 V WindowManagerShell: onTransitionReady(transaction=2400886719017)
+06-26 16:54:20.192   830   881 V WindowManagerShell: onTransitionReady (#13) android.os.BinderProxy@3d04be9: {id=13 t=OPEN f=0x0 trk=1 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@22889a9} m=OPEN f=NONE leash=Surface(name=Task=24)/@0xdce2e2 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@6ea4b2e} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x7f9a673 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}]}
+06-26 16:54:20.192   830   881 V WindowManagerShell: Playing animation for (#13) android.os.BinderProxy@3d04be9@1
+06-26 16:54:20.192   830   881 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultMixedHandler@dcef271
+06-26 16:54:20.192   830   881 V WindowManagerShell:  try handler com.android.wm.shell.keyguard.KeyguardTransitionHandler@361d856
+06-26 16:54:20.192   830   881 V WindowManagerShell:  try handler com.android.wm.shell.pip.PipTransition@91780d7
+06-26 16:54:20.192   830   881 V WindowManagerShell:  try handler com.android.wm.shell.activityembedding.ActivityEmbeddingController@58d8dc4
+06-26 16:54:20.192   830   881 V WindowManagerShell:  try handler com.android.wm.shell.recents.RecentsTransitionHandler@80f44ad
+06-26 16:54:20.192   830   881 V ShellRecents: RecentsTransitionHandler.startAnimation: no controller found
+06-26 16:54:20.192   830   881 V WindowManagerShell:  try handler com.android.wm.shell.splitscreen.StageCoordinator@3b23e2
+06-26 16:54:20.192   830   881 V WindowManagerShell:  try handler com.android.wm.shell.transition.RemoteTransitionHandler@e95373
+06-26 16:54:20.192   830   881 V WindowManagerShell: Transition doesn't have explicit remote, search filters for match for {id=13 t=OPEN f=0x0 trk=1 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@22889a9} m=OPEN f=NONE leash=Surface(name=Task=24)/@0xdce2e2 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@6ea4b2e} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x7f9a673 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}]}
+06-26 16:54:20.192   830   881 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=undefined independent=true modes=[OPEN,TO_FRONT] flags=IN_TASK_WITH_EMBEDDED_ACTIVITY mustBeTask=false order=ANY topActivity=ComponentInfo{com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity} launchCookie=null},{atype=undefined independent=true modes=[CLOSE,TO_BACK] flags=IN_TASK_WITH_EMBEDDED_ACTIVITY mustBeTask=false order=ANY topActivity=null launchCookie=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@c8529c0, appThread = android.app.IApplicationThread$Stub$Proxy@1eb76f9, debugName = OverlaySwipeBack }}
+06-26 16:54:20.192   830   881 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=dream independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null},{atype=home independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@46b9c2e, appThread = android.app.IApplicationThread$Stub$Proxy@4fbb3cf, debugName = LauncherToDream }}
+06-26 16:54:20.192   830   881 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x100 checks=[{atype=home independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=TOP topActivity=ComponentInfo{com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity} launchCookie=null},{atype=standard independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@10ed15c, appThread = android.app.IApplicationThread$Stub$Proxy@415c65, debugName = QuickstepLaunchHome }}
+06-26 16:54:20.192   830   881 V WindowManagerShell:  Delegate animation for (#13) to null
+06-26 16:54:20.192   830   881 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultTransitionHandler@1194d3a
+06-26 16:54:20.192   830   881 V WindowManagerShell: start default transition animation, info = {id=13 t=OPEN f=0x0 trk=1 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@22889a9} m=OPEN f=NONE leash=Surface(name=Task=24)/@0xdce2e2 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@6ea4b2e} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x7f9a673 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}]}
+06-26 16:54:20.196  2008  4641 I Finsky  : [148] [ContentSync] finished, scheduled=false
+06-26 16:54:20.195   830   881 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@a4a985c animAttr=0x13 type=OPEN isEntrance=false
+06-26 16:54:20.201   559   588 V WindowManager: Sent Transition (#13) createdAt=06-26 16:54:19.806 via request=TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=24 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity } baseActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} topActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} origActivity=null realActivity=ComponentInfo{com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity} numActivities=1 lastActiveTime=139702 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{RemoteToken{76675da Task{f454a2f #24 type=standard A=10206:com.quwoquan.quwoquan_app}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=ActivityInfo{f24ca0b com.quwoquan.quwoquan_app.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= true isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=1080 topActivityLetterboxHeight=2400 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 13 }
+06-26 16:54:20.201   559   588 V WindowManager:     startWCT=WindowContainerTransaction { changes = {} hops = [] errorCallbackToken=null taskFragmentOrganizer=null }
+06-26 16:54:20.201   559   588 V WindowManager:     info={id=13 t=OPEN f=0x0 trk=1 r=[0@Point(0, 0)] c=[
+06-26 16:54:20.201   559   588 V WindowManager:         {WCT{RemoteToken{76675da Task{f454a2f #24 type=standard A=10206:com.quwoquan.quwoquan_app}}} m=OPEN f=NONE leash=Surface(name=Task=24)/@0x49b60fc sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},
+06-26 16:54:20.201   559   588 V WindowManager:         {WCT{RemoteToken{66284f1 Task{47dd48a #1 type=home}}} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0xf697d49 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}
+06-26 16:54:20.201   559   588 V WindowManager:     ]}
+06-26 16:54:20.211   830   881 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@9430c7 animAttr=0x12 type=OPEN isEntrance=true
+06-26 16:54:20.220  2085  4600 I Bugle   : getRawTelephonyPhoneNumber redacted-pii[12-chars] [CONTEXT sub_id=1 ]
+06-26 16:54:20.221  2085  4600 I Bugle   : SubscriptionUtils.getCanonicalForSelf: self=redacted-pii[12-chars], country=US [CONTEXT sub_id=1 ]
+06-26 16:54:20.232   830   881 V WindowManagerShell:  animated by com.android.wm.shell.transition.DefaultTransitionHandler@1194d3a
+06-26 16:54:20.240  2008  2008 I Finsky  : [2] akoj - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 16:54:20.244   355   355 I Zygote  : Entering forkRepeatedly native zygote loop
+06-26 16:54:20.246  2008  2008 I Finsky  : [2] akoj - Deduping intent android.intent.action.PACKAGE_ADDED
+06-26 16:54:20.256   559   637 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 16:54:20.260   559   639 V SafetySourceDataValidat: Package: com.android.vending has expected signature
+06-26 16:54:20.264  1249  4636 I AppBackupStateCleanupIO: Backup state cleanup on uninstall is disabled. [CONTEXT service_id=229 ]
+06-26 16:54:20.270   355   355 D Zygote  : Forked child process 4656
+06-26 16:54:20.271  2008  2008 I Finsky  : [2] akoj - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 16:54:20.272   559   599 W ActivityManager: Slow operation: 257ms so far, now at startProcess: returned from zygote!
+06-26 16:54:20.276  2008  2008 I Finsky  : [2] akoj - Deduping intent android.intent.action.PACKAGE_ADDED
+06-26 16:54:20.276  2008  2008 I Finsky  : [2] Memory trim requested to level 40
+06-26 16:54:20.276  2008  2008 I Finsky  : [2] Flushing in-memory image cache
+06-26 16:54:20.277  2008  2008 I Finsky  : [2] Memory trim requested to level 40
+06-26 16:54:20.277  2008  2008 I Finsky  : [2] Flushing in-memory image cache
+06-26 16:54:20.277  2008  2154 I Finsky  : [43] RECEIVER_PACKAGE_MONITOR#logWorkEndAndFinishGoAsync: SUCCESS
+06-26 16:54:20.281  3111  3111 I Finsky:background: [2] aknz - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 16:54:20.282   559   599 W ActivityManager: Slow operation: 267ms so far, now at startProcess: done updating battery stats
+06-26 16:54:20.282   559   599 W ActivityManager: Slow operation: 267ms so far, now at startProcess: building log message
+06-26 16:54:20.282   559   599 I ActivityManager: Start proc 4656:com.quwoquan.quwoquan_app/u0a206 for next-top-activity {com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity}
+06-26 16:54:20.282   559   599 W ActivityManager: Slow operation: 267ms so far, now at startProcess: starting to update pids map
+06-26 16:54:20.282   559   599 W ActivityManager: Slow operation: 267ms so far, now at startProcess: done updating pids map
+06-26 16:54:20.287  3111  3111 I Finsky:background: [2] aknz - Deduping intent android.intent.action.PACKAGE_ADDED
+06-26 16:54:20.288  3111  3111 I Finsky:background: [2] aknz - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-26 16:54:20.294  3111  3111 I Finsky:background: [2] aknz - Deduping intent android.intent.action.PACKAGE_ADDED
+06-26 16:54:20.297  3111  3168 I Finsky:background: [49] RECEIVER_PACKAGE_MONITOR_BACKGROUND#logWorkEndAndFinishGoAsync: SUCCESS
+06-26 16:54:20.296  1249  4642 I FraudProtectUtils: Not in testing population, skipping local test bank apps. [CONTEXT service_id=469 ]
+06-26 16:54:20.297  1249  4642 I FraudProtectUtils: (REDACTED) Latest bank app list size: %d, %s isBankApp: false
+06-26 16:54:20.304  1249  4642 I PackageInstallIntentOp: (REDACTED) Package %s is not a bank app. Skipping updates.
+06-26 16:54:20.308   841   841 D BoundBrokerSvc: onRebind: Intent { act=com.google.android.gms.auth.aang.events.services.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.PersistentApiService }
+06-26 16:54:20.335   841  4644 I ProximityAuth: [RecentAppsMediator] Package added: (user=UserHandle{0}) com.quwoquan.quwoquan_app
+06-26 16:54:20.348  4656  4656 I an.quwoquan_app: Late-enabling -Xcheck:jni
+06-26 16:54:20.369   841  4666 I Fitness : (REDACTED) FitCleanupIntentOperation received Intent %s
+06-26 16:54:20.470  3111  4629 I Finsky:background: [124] Wrote row to frosting DB: 410
+06-26 16:54:20.505  4656  4656 I an.quwoquan_app: Using CollectorTypeCMC GC.
+06-26 16:54:20.535  3111  4629 I Finsky:background: [124] Wrote row to frosting DB: 411
+06-26 16:54:20.548  1596  2080 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 16:54:20.551   830   881 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#13) android.os.BinderProxy@3d04be9@1
+06-26 16:54:20.562   397   397 E BpTransactionCompletedListener: Failed to transact (-32)
+06-26 16:54:20.563   397   397 E BpTransactionCompletedListener: Failed to transact (-32)
+06-26 16:54:20.564   559   949 W ActivityTaskManager: takeTaskSnapshot: taskId=8 not found or not visible
+06-26 16:54:20.564   830   881 V WindowManagerShell: Track 1 became idle
+06-26 16:54:20.575   559   588 V WindowManager: Finish Transition (#13): created at 06-26 16:54:19.806 collect-started=0.055ms request-sent=109.834ms started=164.611ms ready=379.629ms sent=381.64ms finished=755.673ms
+06-26 16:54:20.579   830   881 V WindowManagerShell: All active transition animations finished
+06-26 16:54:20.582  3111  4629 I Finsky:background: [124] Wrote row to frosting DB: 412
+06-26 16:54:20.603   559   949 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 16:54:20.609  1436  1436 D VRI[NexusLauncherActivity]: visibilityChanged oldVisibility=true newVisibility=false
+06-26 16:54:20.610  1436  1436 D NexusLauncherModelDelegate: notifySmartspaceEvent: SmartspaceTargetEvent{mSmartspaceTarget=null, mSmartspaceActionId='null', mEventType=7}
+06-26 16:54:20.618   559   949 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 16:54:20.624   559   952 W UserManagerService: Requested status bar icon for non-badged user 0
+06-26 16:54:20.672  3111  3123 W ding:background: Missing inline cache for java.lang.Object qlx.apply(java.lang.Object)
+06-26 16:54:20.672  3111  3123 W ding:background: Missing inline cache for java.lang.Object qlx.apply(java.lang.Object)
+06-26 16:54:20.673  3111  3123 W ding:background: Missing inline cache for java.lang.Object qlx.apply(java.lang.Object)
+06-26 16:54:20.673  3111  3123 W ding:background: Missing inline cache for java.lang.Object qlx.apply(java.lang.Object)
+06-26 16:54:20.673  3111  3123 W ding:background: Missing inline cache for java.lang.Object qlx.apply(java.lang.Object)
+06-26 16:54:20.673  3111  3123 W ding:background: Missing inline cache for java.lang.Object qlx.apply(java.lang.Object)
+06-26 16:54:20.684  1249  4636 I Auth    : (REDACTED) [SupervisedAccountIntentOperation] onHandleIntent: %s
+06-26 16:54:20.688   559   952 W ActivityTaskManager: takeTaskSnapshot: taskId=19 not found or not visible
+06-26 16:54:20.688  1249  4658 W AppInstallOperation: FDL Migration::InstallIntentOperation by FDL Module [CONTEXT service_id=77 ]
+06-26 16:54:20.689  1249  4655 I FraudProtectUtils: Not in testing population, skipping local test bank apps. [CONTEXT service_id=469 ]
+06-26 16:54:20.689  1249  4655 I FraudProtectUtils: (REDACTED) Latest bank app list size: %d, %s isBankApp: false
+06-26 16:54:20.689  1249  4655 I PackageInstallIntentOp: (REDACTED) Package %s is not a bank app. Skipping updates.
+06-26 16:54:20.690   559   948 E RoleControllerServiceImpl: Default/fallback role holder package doesn't qualify for the role, package: com.google.android.devicelockcontroller, role: android.app.role.SYSTEM_FINANCED_DEVICE_CONTROLLER
+06-26 16:54:20.710   402   439 I adbd    : jdwp connection from 4656
+06-26 16:54:20.718  1249  4658 I NearbyDiscovery: (REDACTED) processGrantSlicePermission: %s
+06-26 16:54:20.738  3111  3111 I Finsky:background: [2] Memory trim requested to level 40
+06-26 16:54:20.741  2008  2008 I Finsky  : [2] Memory trim requested to level 40
+06-26 16:54:20.741  2008  2008 I Finsky  : [2] Flushing in-memory image cache
+06-26 16:54:20.743  4002  4002 I Finsky:quick_launch: [2] Memory trim requested to level 40
+06-26 16:54:20.749  2008  2016 W android.vending: Missing inline cache for java.lang.Object sii.pQ(java.lang.Object)
+06-26 16:54:20.754  2008  2016 W android.vending: Missing inline cache for java.lang.Object sii.pQ(java.lang.Object)
+06-26 16:54:20.771  1596  2080 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 16:54:20.770  4656  4656 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+06-26 16:54:20.775  1596  2080 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 16:54:20.775  1249  4654 W SQLiteLog: (28) double-quoted string literal: "com.quwoquan.quwoquan_app"
+06-26 16:54:20.804  1436  1436 D SearchTargetUtil: queryLength=0 size=0
+06-26 16:54:20.857  1596  2080 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 16:54:20.859  1596  2080 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 16:54:20.859  1596  2080 I AiAiTextClassifier: [VisualCortexAdapter]: provideRegistration: Registered Prominent Screen Entities for updates.
+06-26 16:54:20.879  1249  2294 I Icing   : IndexChimeraService.getServiceInterface callingPackage=com.google.android.gms componentName=AppsCorpus serviceId=36
+06-26 16:54:20.917  3111  3126 W System  : A resource failed to call SQLiteConnectionPool.close.
+06-26 16:54:20.917  3111  3126 W SQLiteConnectionPool: A SQLiteConnection object for database '/data/user/0/com.android.vending/databases/resource_data.db' was leaked!  Please fix your application to end transactions in progress properly and to close the database when it is no longer needed.
+06-26 16:54:20.917  3111  3126 W System  : A resource failed to call SQLiteConnection.close.
+06-26 16:54:20.917  3111  3126 W System  : A resource failed to call SQLiteConnectionPool.close.
+06-26 16:54:20.917  3111  3126 W SQLiteConnectionPool: A SQLiteConnection object for database '/data/user/0/com.android.vending/databases/installer_data_v2.db' was leaked!  Please fix your application to end transactions in progress properly and to close the database when it is no longer needed.
+06-26 16:54:20.917  3111  3126 W System  : A resource failed to call SQLiteConnection.close.
+06-26 16:54:20.918  2085  4600 I Bugle   : getRawTelephonyPhoneNumber redacted-pii[12-chars] [CONTEXT sub_id=1 ]
+06-26 16:54:20.919  2085  4600 I Bugle   : SubscriptionUtils.getCanonicalForSelf: self=redacted-pii[12-chars], country=US [CONTEXT sub_id=1 ]
+06-26 16:54:20.928   158   158 I lowmemorykiller: Kill 'com.google.android.rkpdapp' (2959), uid 10197, oom_score_adj 975 to free 58720kB rss, 44144kB swap; reason: low watermark is breached
+06-26 16:54:20.940  4656  4656 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+06-26 16:54:20.940  4656  4656 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+06-26 16:54:20.942   158   163 E lowmemorykiller: process_mrelease 2959 failed: No such process
+06-26 16:54:20.959  4656  4656 W ziparchive: Unable to open '/data/app/~~BZWMOrYA6cwH71qKTVYpUA==/com.quwoquan.quwoquan_app-IFmTyImovAKPDiUDlns4wg==/base.dm': No such file or directory
+06-26 16:54:20.959  4656  4656 W ziparchive: Unable to open '/data/app/~~BZWMOrYA6cwH71qKTVYpUA==/com.quwoquan.quwoquan_app-IFmTyImovAKPDiUDlns4wg==/base.dm': No such file or directory
+06-26 16:54:20.960  2085  4600 I BugleDataModel: ParticipantFullRefresh: Number of participants refreshed: 0
+06-26 16:54:20.971   355   355 I Zygote  : Process 2959 exited due to signal 9 (Killed)
+06-26 16:54:20.971   559  1979 I ActivityManager: Process com.google.android.rkpdapp (pid 2959) has died: cch+75 CEM
+06-26 16:54:20.972   158   158 I lowmemorykiller: Kill 'com.google.android.gms.unstable' (2541), uid 10144, oom_score_adj 975 to free 73712kB rss, 80944kB swap; reason: low watermark is breached
+06-26 16:54:20.979  1249  2316 I Icing   : IndexChimeraService.getServiceInterface callingPackage=com.google.android.gms componentName=null serviceId=30
+06-26 16:54:20.982  1249  2255 I Icing   : Usage reports ok 0, Failed Usage reports 0, indexed 0, rejected 0
+06-26 16:54:20.983   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10197/pid_2959
+06-26 16:54:20.987  2085  4600 I BugleDataModel: ActionExecutorImpl: ACTION_RESPONSE_QUEUED_SelfParticipantsRefreshAction
+06-26 16:54:20.990   559  1105 I ActivityManager: Process com.google.android.gms.unstable (pid 2541) has died: cch+75 CEM
+06-26 16:54:20.990   158   158 I lowmemorykiller: Kill 'com.android.chrome' (4138), uid 10146, oom_score_adj 965 to free 56512kB rss, 44800kB swap; reason: low watermark is breached
+06-26 16:54:20.991   355   355 I Zygote  : Process 2541 exited due to signal 9 (Killed)
+06-26 16:54:20.991   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10144/pid_2541
+06-26 16:54:20.998   559   589 D DisplayManagerService: Drop pending events for gone uid 10197
+06-26 16:54:21.002  1249  1249 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.safetynet.service.START dat=chimera-action:/... cmp=com.google.android.gms/.chimera.GmsBoundBrokerService }
+06-26 16:54:21.002   841   841 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.scheduler.ACTION_PROXY_SCHEDULE dat=chimera-action:/... cmp=com.google.android.gms/.chimera.PersistentDirectBootAwareApiService }
+06-26 16:54:21.006   559   713 D ConnectivityService: releasing NetworkRequest [ REQUEST id=104, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED Uid: 10144 RequestorUid: 10144 RequestorPkg: com.google.android.gms UnderlyingNetworks: Null] ] (release request)
+06-26 16:54:21.008  2085  4693 I BugleDataModel: ActionExecutorImpl: Stopping ActionService
+06-26 16:54:21.012  2085  2163 W Bugle   : TextClassifierLibManagerImpl: Reclaiming memory at level: 40
+06-26 16:54:21.012   559   713 D ConnectivityService: releasing NetworkRequest [ REQUEST id=106, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED Uid: 10144 RequestorUid: 10144 RequestorPkg: com.google.android.gms UnderlyingNetworks: Null] ] (release request)
+06-26 16:54:21.019   355   355 I Zygote  : Process 4138 exited due to signal 9 (Killed)
+06-26 16:54:21.019   158   158 I lowmemorykiller: Kill 'com.google.android.partnersetup' (4079), uid 10136, oom_score_adj 965 to free 58336kB rss, 44272kB swap; reason: low watermark is breached
+06-26 16:54:21.020   559  2052 I ActivityManager: Process com.android.chrome (pid 4138) has died: cch+65 CEM
+06-26 16:54:21.021  1249  2255 I Icing   : Usage reports ok 0, Failed Usage reports 0, indexed 0, rejected 0
+06-26 16:54:21.023  2085  4694 I Bugle   : getRawTelephonyPhoneNumber redacted-pii[12-chars] [CONTEXT sub_id=1 ]
+06-26 16:54:21.023   559   589 D DisplayManagerService: Drop pending events for gone uid 10146
+06-26 16:54:21.024  2085  4694 I Bugle   : SubscriptionUtils.getCanonicalForSelf: self=redacted-pii[12-chars], country=US [CONTEXT sub_id=1 ]
+06-26 16:54:21.030  2085  4694 I BugleSelfIdentity: Nothing changed in MyIdentity as phone number does not change [CONTEXT sub_id=1 ]
+06-26 16:54:21.030   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10146/pid_4138
+06-26 16:54:21.031  1249  2255 I Icing   : Indexing com.google.android.gms-apps from com.google.android.gms
+06-26 16:54:21.035   559   950 I ActivityManager: Process com.google.android.partnersetup (pid 4079) has died: cch+65 CEM
+06-26 16:54:21.036   355   355 I Zygote  : Process 4079 exited due to signal 9 (Killed)
+06-26 16:54:21.036   158   158 I lowmemorykiller: Kill 'com.android.traceur' (3263), uid 10127, oom_score_adj 955 to free 55248kB rss, 40800kB swap; reason: low watermark is breached
+06-26 16:54:21.038  1249  2255 I Icing   : Indexing done com.google.android.gms-apps
+06-26 16:54:21.039   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10136/pid_4079
+06-26 16:54:21.039  1249  2255 I Icing   : Indexing com.google.android.gms-apps from com.google.android.gms
+06-26 16:54:21.040  1249  2255 I Icing   : Indexing done com.google.android.gms-apps
+06-26 16:54:21.042   559   589 D DisplayManagerService: Drop pending events for gone uid 10136
+06-26 16:54:21.068   559  1925 I ActivityManager: Process com.android.traceur (pid 3263) has died: cch+55 CEM
+06-26 16:54:21.068   158   158 I lowmemorykiller: Kill 'com.google.android.configupdater' (4362), uid 10128, oom_score_adj 955 to free 57264kB rss, 40928kB swap; reason: low watermark is breached
+06-26 16:54:21.069   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10127/pid_3263
+06-26 16:54:21.074   559   589 D DisplayManagerService: Drop pending events for gone uid 10127
+06-26 16:54:21.074   355   355 I Zygote  : Process 3263 exited due to signal 9 (Killed)
+06-26 16:54:21.076   559  2045 I ActivityManager: Process com.google.android.configupdater (pid 4362) has died: cch+55 CEM
+06-26 16:54:21.077   158   158 I lowmemorykiller: Kill 'com.google.android.cellbroadcastreceiver' (3295), uid 10186, oom_score_adj 945 to free 56784kB rss, 41312kB swap; reason: low watermark is breached
+06-26 16:54:21.077   355   355 I Zygote  : Process 4362 exited due to signal 9 (Killed)
+06-26 16:54:21.080   559   589 D DisplayManagerService: Drop pending events for gone uid 10128
+06-26 16:54:21.082   158   164 W lowmemorykiller: Failed to open /proc/4362/task; errno=2: process pid(4362) might have died
+06-26 16:54:21.082   158   164 E lowmemorykiller: process_mrelease 4362 failed: No such process
+06-26 16:54:21.082   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10128/pid_4362
+06-26 16:54:21.082   158   163 E lowmemorykiller: process_mrelease 3295 failed: No such process
+06-26 16:54:21.092   559  2052 I ActivityManager: Process com.google.android.cellbroadcastreceiver (pid 3295) has died: cch+45 CEM
+06-26 16:54:21.092   355   355 I Zygote  : Process 3295 exited due to signal 9 (Killed)
+06-26 16:54:21.092   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10186/pid_3295
+06-26 16:54:21.094   559   589 D DisplayManagerService: Drop pending events for gone uid 10186
+06-26 16:54:21.122  4653  4653 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:54:21.123  4653  4653 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:54:21.137   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:54:21.138  4653  4695 I Gralloc4: mapper 4.x is not supported
+06-26 16:54:21.606  4656  4656 D nativeloader: Configuring clns-7 for other apk /data/app/~~BZWMOrYA6cwH71qKTVYpUA==/com.quwoquan.quwoquan_app-IFmTyImovAKPDiUDlns4wg==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~BZWMOrYA6cwH71qKTVYpUA==/com.quwoquan.quwoquan_app-IFmTyImovAKPDiUDlns4wg==/lib/arm64:/data/app/~~BZWMOrYA6cwH71qKTVYpUA==/com.quwoquan.quwoquan_app-IFmTyImovAKPDiUDlns4wg==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.quwoquan.quwoquan_app
+06-26 16:54:21.636  4656  4656 V GraphicsEnvironment: Currently set values for:
+06-26 16:54:21.637  4656  4656 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+06-26 16:54:21.637  4656  4656 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+06-26 16:54:21.637  4656  4656 V GraphicsEnvironment: Global.Settings values are invalid: number of packages: 0, number of values: 0
+06-26 16:54:21.637  4656  4656 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+06-26 16:54:21.712   559  2052 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ENABLE_FAKE_FOCUS
+06-26 16:54:21.944  4656  4708 D FlutterJNI: Beginning load of flutter...
+06-26 16:54:21.946  4656  4709 I ResourceExtractor: Resource version mismatch res_timestamp-1-1782464058499
+06-26 16:54:21.996  4656  4708 D nativeloader: Load /data/app/~~BZWMOrYA6cwH71qKTVYpUA==/com.quwoquan.quwoquan_app-IFmTyImovAKPDiUDlns4wg==/base.apk!/lib/arm64-v8a/libflutter.so using ns clns-7 from class loader (caller=/data/app/~~BZWMOrYA6cwH71qKTVYpUA==/com.quwoquan.quwoquan_app-IFmTyImovAKPDiUDlns4wg==/base.apk!classes22.dex): ok
+06-26 16:54:21.996  4656  4708 D FlutterJNI: flutter (null) was loaded normally!
+06-26 16:54:22.006  4656  4710 D skia    : [SkFontMgr Android Parser] '/product/etc/fonts_customization.xml' could not be opened
+06-26 16:54:22.054  4707  4707 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:54:22.055  4707  4707 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:54:22.065   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:54:22.065  4707  4711 I Gralloc4: mapper 4.x is not supported
+06-26 16:54:22.396   158   158 I lowmemorykiller: Kill 'com.google.android.apps.safetyhub' (3274), uid 10139, oom_score_adj 945 to free 55920kB rss, 44896kB swap; reason: low watermark is breached
+06-26 16:54:22.418   158   164 E lowmemorykiller: process_mrelease 3274 failed: No such process
+06-26 16:54:22.423   559  1924 I ActivityManager: Process com.google.android.apps.safetyhub (pid 3274) has died: cch+45 CEM
+06-26 16:54:22.424   158   158 I lowmemorykiller: Kill 'com.google.android.marvin.talkback' (3374), uid 10166, oom_score_adj 935 to free 54704kB rss, 40848kB swap; reason: low watermark is breached
+06-26 16:54:22.426   355   355 I Zygote  : Process 3274 exited due to signal 9 (Killed)
+06-26 16:54:22.426   559   589 D DisplayManagerService: Drop pending events for gone uid 10139
+06-26 16:54:22.431   158   163 E lowmemorykiller: process_mrelease 3374 failed: No such process
+06-26 16:54:22.431   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10139/pid_3274
+06-26 16:54:22.439   559  1925 I ActivityManager: Process com.google.android.marvin.talkback (pid 3374) has died: cch+35 CEM
+06-26 16:54:22.441   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10166/pid_3374
+06-26 16:54:22.442   559   589 D DisplayManagerService: Drop pending events for gone uid 10166
+06-26 16:54:22.442   355   355 I Zygote  : Process 3374 exited due to signal 9 (Killed)
+06-26 16:54:22.541   158   158 I lowmemorykiller: Kill 'com.google.android.healthconnect.controller' (2903), uid 10192, oom_score_adj 935 to free 53504kB rss, 40736kB swap; reason: low watermark is breached
+06-26 16:54:22.555   559   933 I ActivityManager: Process com.google.android.healthconnect.controller (pid 2903) has died: cch+35 CEM
+06-26 16:54:22.559   559   589 D DisplayManagerService: Drop pending events for gone uid 10192
+06-26 16:54:22.560   355   355 I Zygote  : Process 2903 exited due to signal 9 (Killed)
+06-26 16:54:22.570   158   164 W lowmemorykiller: Failed to open /proc/2903/task; errno=2: process pid(2903) might have died
+06-26 16:54:22.570   158   164 E lowmemorykiller: process_mrelease 2903 failed: No such process
+06-26 16:54:22.570   559   600 I libprocessgroup: Removed cgroup /sys/fs/cgroup/uid_10192/pid_2903
+06-26 16:54:22.854  4656  4709 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/kernel_blob.bin
+06-26 16:54:22.855  4656  4709 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/vm_snapshot_data
+06-26 16:54:22.902  4656  4709 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/isolate_snapshot_data
+06-26 16:54:22.908   559  2053 D FileUtils: Rounded bytes from 2095906816 to 4000000000
+06-26 16:54:22.931  4656  4656 W an.quwoquan_app: type=1400 audit(0.0:76): avc:  denied  { read } for  name="max_map_count" dev="proc" ino=28407 scontext=u:r:untrusted_app:s0:c206,c256,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.quwoquan.quwoquan_app
+06-26 16:54:22.942  4656  4656 I flutter : [IMPORTANT:flutter/shell/common/shell.cc(528)] [Action Required]: Impeller opt-out deprecated.
+06-26 16:54:22.942  4656  4656 I flutter :     The application opted out of Impeller by either using the
+06-26 16:54:22.942  4656  4656 I flutter :     `--no-enable-impeller` flag or the
+06-26 16:54:22.942  4656  4656 I flutter :     `io.flutter.embedding.android.EnableImpeller` `AndroidManifest.xml` entry.
+06-26 16:54:22.942  4656  4656 I flutter :     These options are going to go away in an upcoming Flutter release. Remove
+06-26 16:54:22.942  4656  4656 I flutter :     the explicit opt-out. If you need to opt-out, please report a bug describing
+06-26 16:54:22.942  4656  4656 I flutter :     the issue.
+06-26 16:54:22.942  4656  4656 I flutter :
+06-26 16:54:22.942  4656  4656 I flutter :     https://github.com/flutter/flutter/issues/new?template=02_bug.yml
+06-26 16:54:22.942  4656  4656 I flutter :
+06-26 16:54:22.944  4656  4656 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+06-26 16:54:22.944  4656  4656 I EGL_emulation: Opening libGLESv2_emulation.so
+06-26 16:54:23.018  4656  4721 I flutter : The Dart VM service is listening on http://127.0.0.1:46319/6PEtpJtnOzE=/
+06-26 16:54:23.043  4714  4714 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:54:23.044  4714  4714 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:54:23.056   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:54:23.056  4714  4726 I Gralloc4: mapper 4.x is not supported
+06-26 16:54:23.321   559   933 W Telecom : TelecomServiceImpl$1: registerPhoneAccount - attempt to set a group from a non-system caller.: TSI.rPA(cqq)@AJA
+06-26 16:54:23.321   559   933 I Telecom : TelecomServiceImpl$1: registerPhoneAccount: account=[[ ] PhoneAccount: ComponentInfo{com.quwoquan.quwoquan_app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0} Capabilities: SelfManaged  Audio Routes: BESW Schemes: tel  Extras: null GroupId: *** SC Restrictions: [NONE]]: TSI.rPA(cqq)@AJA
+06-26 16:54:23.321   559   933 I Telecom : PhoneAccountRegistrar: Modify account: [ComponentInfo{com.quwoquan.quwoquan_app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0}(lbl: Callkit Incoming In-App Call -> 趣我圈)]: TSI.rPA(cqq)@AJA
+06-26 16:54:23.321   559   933 I Telecom : AppLabelProxy: package com.quwoquan.quwoquan_app: name is 趣我圈: TSI.rPA(cqq)@AJA
+06-26 16:54:23.325   559   933 I Telecom : CallsManager: handlePhoneAccountChanged: phoneAccount=[[X] PhoneAccount: ComponentInfo{com.quwoquan.quwoquan_app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0} Capabilities: SelfManaged  Audio Routes: BESW Schemes: tel  Extras: null GroupId: *** SC Restrictions: [NONE]]: TSI.rPA(cqq)@AJA
+06-26 16:54:23.326  4656  4656 D InAppCallManager: PhoneAccount registered.
+06-26 16:54:23.340  4656  4656 D FlutterGeolocator: Attaching Geolocator to activity
+06-26 16:54:23.347  4656  4656 D nativeloader: Load /data/app/~~BZWMOrYA6cwH71qKTVYpUA==/com.quwoquan.quwoquan_app-IFmTyImovAKPDiUDlns4wg==/base.apk!/lib/arm64-v8a/libdartjni.so using ns clns-7 from class loader (caller=/data/app/~~BZWMOrYA6cwH71qKTVYpUA==/com.quwoquan.quwoquan_app-IFmTyImovAKPDiUDlns4wg==/base.apk!classes12.dex): ok
+06-26 16:54:23.410  4656  4656 W an.quwoquan_app: Accessing hidden method Landroid/view/accessibility/AccessibilityNodeInfo;->getSourceNodeId()J (unsupported,test-api, reflection, allowed)
+06-26 16:54:23.410  4656  4656 W an.quwoquan_app: Accessing hidden method Landroid/view/accessibility/AccessibilityRecord;->getSourceNodeId()J (unsupported, reflection, allowed)
+06-26 16:54:23.410  4656  4656 W an.quwoquan_app: Accessing hidden field Landroid/view/accessibility/AccessibilityNodeInfo;->mChildNodeIds:Landroid/util/LongArray; (unsupported, reflection, allowed)
+06-26 16:54:23.410  4656  4656 W an.quwoquan_app: Accessing hidden method Landroid/util/LongArray;->get(I)J (unsupported, reflection, allowed)
+06-26 16:54:23.426  4656  4656 D FlutterRenderer: Width is zero. 0,0
+06-26 16:54:23.436  4656  4656 W HWUI    : Unknown dataspace 0
+06-26 16:54:23.560  4732  4732 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:54:23.560  4732  4732 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:54:23.571   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:54:23.571  4732  4733 I Gralloc4: mapper 4.x is not supported
+06-26 16:54:23.929   559  1668 E TaskPersister: File error accessing recents directory (directory doesn't exist?).
+06-26 16:54:24.095  4736  4736 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:54:24.095  4736  4736 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:54:24.098   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:54:24.098  4736  4737 I Gralloc4: mapper 4.x is not supported
+06-26 16:54:24.287  4656  4656 D FlutterGeolocator: Creating service.
+06-26 16:54:24.288  4656  4656 D FlutterGeolocator: Binding to location service.
+06-26 16:54:24.289   559   933 D OomAdjuster: Not killing cached processes
+06-26 16:54:24.290  4656  4656 I Choreographer: Skipped 48 frames!  The application may be doing too much work on its main thread.
+06-26 16:54:24.294  4656  4656 I WindowExtensionsImpl: Initializing Window Extensions, vendor API level=6, activity embedding enabled=true
+06-26 16:54:24.305  4656  4678 I an.quwoquan_app: Compiler allocated 5250KB to compile void android.view.ViewRootImpl.performTraversals()
+06-26 16:54:24.320  4656  4656 D FlutterRenderer: Width is zero. 0,0
+06-26 16:54:24.321   559   933 D CoreBackPreview: Window{9ef0257 u0 com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@9fd9db0, mPriority=0, mIsAnimationCallback=false}
+06-26 16:54:24.357  4656  4656 D FlutterJNI: Sending viewport metrics to the engine.
+06-26 16:54:24.358  4656  4702 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+06-26 16:54:24.358  4656  4702 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+06-26 16:54:24.402   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:54:24.403  4656  4715 I Gralloc4: mapper 4.x is not supported
+06-26 16:54:24.447   559  2053 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_IGNORE_REQUESTED_ORIENTATION
+06-26 16:54:24.448   559  2053 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_IGNORING_ORIENTATION_REQUEST_WHEN_LOOP_DETECTED
+06-26 16:54:24.575  4656  4656 D FlutterWebRTCPlugin: audioDeviceChangeListener [Speakerphone(name=Speakerphone)] Speakerphone(name=Speakerphone)
+06-26 16:54:24.714  4656  4656 D FlutterGeolocator: Geolocator foreground service connected
+06-26 16:54:24.718  4656  4656 D FlutterGeolocator: Initializing Geolocator services
+06-26 16:54:24.718  4656  4656 D FlutterGeolocator: Flutter engine connected. Connected engine count 1
+06-26 16:54:24.722   841  1136 I FontLog : (REDACTED) Received query %s, URI %s
+06-26 16:54:24.732   841  1136 I FontLog : (REDACTED) Query [%s] resolved to %s
+06-26 16:54:24.762  4656  4656 D FlutterJNI: Sending viewport metrics to the engine.
+06-26 16:54:24.775   841  1136 I FontLog : (REDACTED) Fetch %s end status %s
+06-26 16:54:24.826   841  1136 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+06-26 16:54:24.862  4744  4744 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:54:24.862   841  1136 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+06-26 16:54:24.862  4744  4744 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:54:25.481   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:54:25.481  4744  4745 I Gralloc4: mapper 4.x is not supported
+06-26 16:54:25.840   559  1924 W BatteryExternalStatsWorker: error reading Bluetooth stats: 11
+06-26 16:54:25.913   559   588 W ziparchive: Unable to open '/data/app/~~BZWMOrYA6cwH71qKTVYpUA==/com.quwoquan.quwoquan_app-IFmTyImovAKPDiUDlns4wg==/base.dm': No such file or directory
+06-26 16:54:25.951   559   589 W Looper  : Slow dispatch took 100ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@845309d m=0
+06-26 16:54:25.959   559   677 I ImeTracker: com.quwoquan.quwoquan_app:107db7c4: onRequestHide at ORIGIN_SERVER reason HIDE_UNSPECIFIED_WINDOW fromUser false
+06-26 16:54:25.963  1436  1436 D BaseDepthController: setSurface:
+06-26 16:54:25.963  1436  1436 D BaseDepthController: 	mWaitingOnSurfaceValidity: false
+06-26 16:54:25.963  1436  1436 D BaseDepthController: 	mSurface: null
+06-26 16:54:25.964   559   677 I ImeTracker: com.quwoquan.quwoquan_app:107db7c4: onCancelled at PHASE_SERVER_SHOULD_HIDE
+06-26 16:54:25.967  1436  1436 D BaseDepthController: mSurface is null and mCurrentBlur is: 0
+06-26 16:54:25.975   559   588 I ActivityTaskManager: Displayed com.quwoquan.quwoquan_app/.MainActivity for user 0: +6s153ms
+06-26 16:54:25.975   559   588 W Looper  : Slow dispatch took 115ms android.fg h=android.os.Handler c=com.android.server.wm.ActivityMetricsLogger$$ExternalSyntheticLambda0@fc93999 m=0
+06-26 16:54:25.982   559  2053 D TelephonyManager: requestModemActivityInfo: Sending result to app: ModemActivityInfo{ mTimestamp=145765 mSleepTimeMs=0 mIdleTimeMs=145738 mActivityStatsTechSpecificInfo=[{mRat=UNKNOWN,mFrequencyRange=UNKNOWN,mTxTimeMs[]=[0, 0, 0, 0, 0],mRxTimeMs=0}]}
+06-26 16:54:25.987  1436  1436 D StateManager: goToState - fromState: Normal, toState: Normal, partial trace:
+06-26 16:54:25.987  1436  1436 D StateManager: 	at com.android.launcher3.statemanager.StateManager.moveToRestState(go/retraceme 2855a437b73635ce9cad76b9289087e631bbb67fc90008a0da13d343a00e5041:4)
+06-26 16:54:25.987  1436  1436 D StateManager: 	at com.android.launcher3.statemanager.StateManager.moveToRestState(go/retraceme 2855a437b73635ce9cad76b9289087e631bbb67fc90008a0da13d343a00e5041:1)
+06-26 16:54:25.987  1436  1436 D StateManager: 	at com.android.launcher3.statemanager.StatefulActivity.onStop(go/retraceme 2855a437b73635ce9cad76b9289087e631bbb67fc90008a0da13d343a00e5041:34)
+06-26 16:54:25.994  1436  1436 D StatsLog: LAUNCHER_ONSTOP
+06-26 16:54:26.004  1436  1776 D OneSearchSuggestProvider: Shut down the binder channel
+06-26 16:54:26.020  1436  1436 D StatsLog: LAUNCHER_GOOGLE_SEARCH_RESTORE_LIST_SIZE_AFTER_ACTIVITY_RESTART
+06-26 16:54:26.022  1457  1457 I GoogleInputMethodService: GoogleInputMethodService.onFinishInput():3157
+06-26 16:54:26.060  1436  1659 I IPCThreadState: oneway function results for code 2 on binder at 0xb4007564462a9cb0 will be dropped but finished with status UNKNOWN_TRANSACTION
+06-26 16:54:26.064  1457  1457 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2248 repeatCheckTimes = 0, locked = false
+06-26 16:54:26.067  1457  1457 I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1986 onStartInput(EditorInfo{EditorInfo{packageName=com.quwoquan.quwoquan_app, inputType=0, inputTypeString=NULL, enableLearning=false, autoCorrection=false, autoComplete=false, imeOptions=0, privateImeOptions=null, actionName=UNSPECIFIED, actionLabel=null, initialSelStart=-1, initialSelEnd=-1, initialCapsMode=0, label=null, fieldId=0, fieldName=null, extras=null, hintText=null, hintLocales=[]}}, false)
+06-26 16:54:26.070  1457  1457 I GoogleInputMethodService: GoogleInputMethodService.updateDeviceLockedStatus():2248 repeatCheckTimes = 1, locked = false
+06-26 16:54:26.082  1457  1457 I AndroidIME: InputBundleManager.loadActiveInputBundleId():450 loadActiveInputBundleId: und-Latn-x-password, password
+06-26 16:54:26.086   559  2053 W PackageConfigPersister: App-specific configuration not found for packageName: com.quwoquan.quwoquan_app and userId: 0
+06-26 16:54:26.477   830   940 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=android.view.ViewRootImpl$$ExternalSyntheticLambda11@dc49d71
+06-26 16:54:26.478   559  2053 D CoreBackPreview: Window{6fba122 u0 Splash Screen com.quwoquan.quwoquan_app EXITING}: Setting back callback null
+06-26 16:54:26.519   559  1924 W InputManager-JNI: Input channel object '6fba122 Splash Screen com.quwoquan.quwoquan_app (client)' was disposed without first being removed with the input manager!
+06-26 16:54:26.744  4753  4753 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:54:26.744  4753  4753 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:54:26.848  4656  4755 D ProfileInstaller: Installing profile for com.quwoquan.quwoquan_app
+06-26 16:54:26.858  4656  4715 D EGL_emulation: app_time_stats: avg=193.18ms min=8.31ms max=473.88ms count=6
+06-26 16:54:26.943   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:54:26.944  4753  4754 I Gralloc4: mapper 4.x is not supported
+06-26 16:54:26.944   830  1010 D EGL_emulation: app_time_stats: avg=26852.02ms min=26852.02ms max=26852.02ms count=1
+06-26 16:54:27.992  4656  4715 D EGL_emulation: app_time_stats: avg=107.62ms min=4.96ms max=372.47ms count=10
+06-26 16:54:28.147  4760  4760 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+06-26 16:54:28.147  4760  4760 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+06-26 16:54:28.409   830  1010 D EGL_emulation: app_time_stats: avg=355.97ms min=38.24ms max=1263.93ms count=4
+06-26 16:54:28.474   160   160 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-26 16:54:28.474  4760  4761 I Gralloc4: mapper 4.x is not supported
+06-26 16:54:28.551  1436  1703 D EGL_emulation: app_time_stats: avg=1069.76ms min=4.05ms max=7840.69ms count=8

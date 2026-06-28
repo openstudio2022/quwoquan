@@ -253,7 +253,9 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       ],
     );
     if (choice == _MicrophoneChoice.openSettings) {
-      await openAppSettings();
+      await AppPermissionCoordinator.instance.openSettings(
+        AppPermissionKind.microphone,
+      );
       return _MicrophoneDecision.abort;
     }
     if (choice == _MicrophoneChoice.continueMuted) {

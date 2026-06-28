@@ -3933,6 +3933,57 @@ def _finalize_existing_managed_author_outputs(ctx: PipelineContext, state: Mappi
     return finalized
 
 
+def _finalize_managed_homepage_outputs(
+    ctx: PipelineContext,
+    prompts: list[str],
+    outcomes: list[dict[str, Any]],
+) -> int:
+    """把 build_homepage checkpoint 的 Cursor runId 写入实体 4.draft/draft_meta.json。"""
+    from build.homepage import _entity_draft_dir
+
+    finalized = 0
+    for index, outcome in enumerate(outcomes):
+        if str(outcome.get("status") or "") != "finished":
+            continue
+        prompt = prompts[index] if index < len(prompts) else ""
+        entity = _managed_prompt_entity(prompt)
+        if not entity:
+            continue
+        etype = _coverage_entity_type(ctx.spec)
+        target = next(
+            (
+                row
+                for row in ((ctx.spec.get("scope") or {}).get("coverageTargets") or [])
+                if str(row.get("name") or "").strip() == entity
+            ),
+            None,
+        )
+        if not target:
+            continue
+        domain, et = require_domain_etype(target.get("entityType"), context=entity)
+        draft_dir = _entity_draft_dir(ctx.task_id, ctx.batch_id, domain, et, entity)
+        draft_dir.mkdir(parents=True, exist_ok=True)
+        meta_path = draft_dir / "draft_meta.json"
+        meta = read_json(meta_path) if meta_path.is_file() else {}
+        run_id = str(outcome.get("runId") or "").strip()
+        if not run_id:
+            continue
+        meta.update(
+            {
+                "generator": "agent",
+                "model": ctx.model,
+                "agentRunId": run_id,
+                "agentId": outcome.get("agentId"),
+                "sessionTrace": "build_homepage",
+                "updatedAt": store.now_iso(),
+                "finalizedFromAgentRunHistory": True,
+            }
+        )
+        write_json(meta_path, meta)
+        finalized += 1
+    return finalized
+
+
 def _finalize_existing_object_queue_author_outputs(ctx: PipelineContext, refs: list[str]) -> int:
     """补齐外部 fanout/object_queue author-runner 已成功草稿的 provenance。
 
@@ -5741,7 +5792,6 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
     """
     from _common.base_draft import load_base_draft_text
     from _common.content_object import write_brief_object
-    from _common.creator_assignment import creator_assignment_from_profile, creator_assignment_required
     from _common.image_safety import assess_image_publish_prefilter
     from _common.content_plan import (
         ARTICLE_MIN_BASE_DRAFT_CHARS,
@@ -5807,24 +5857,28 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
         if str(target.get("name") or "").strip()
     ]
     task_region = str(((active_spec.get("scope") or {}).get("region") or "")).strip()
-    require_creator_assignment = creator_assignment_required(active_spec)
+    # 单一真相源：single-mode managed run 与 fanout 走同一 creator 解析链
+    # （resolve_registry_creator_assignment）。无论 spec 是否强制 require，都为 article/image
+    # 内容对象冻结已注册虚拟作者（确定性 seed），让发布 manifest 全程带 authorId/creatorAssignment，
+    # 关闭 single-mode 文章作者归属缺口（R24/R25）。registry 不可用（dev/mock）时优雅返回 {}。
     registry = None
-    if require_creator_assignment:
+    try:
         from template.registry import TemplateRegistry
 
         registry = TemplateRegistry.load()
+    except Exception:  # noqa: BLE001
+        registry = None
 
     def _creator_assignment_for(*, carrier: str, target: str, intent: str = "") -> dict[str, Any]:
-        if not require_creator_assignment:
+        if registry is None or not getattr(registry, "creators", None):
             return {}
-        from template.creator import match_creator
+        from _common.creator_assignment import resolve_registry_creator_assignment
 
         archetype = "landscape_photographer" if carrier == "image" else "travel_blogger"
         tags = ["Topic/旅行", f"Topic/地理/行政区/中国/{task_region}"] if task_region else ["Topic/旅行"]
         if carrier == "image":
             tags.append("Topic/旅行/玩法/摄影旅拍")
-        profile = match_creator(
-            registry,
+        return resolve_registry_creator_assignment(
             {
                 "carrier": carrier,
                 "vertical": "travel",
@@ -5832,12 +5886,12 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
             },
             carrier=carrier,
             tag_refs=tags,
-            region=task_region,
+            region=task_region or None,
             vertical="travel",
             seed=f"{ctx.task_id}|{ctx.batch_id}|{target}|{intent}|{carrier}",
             preferred_archetype=archetype,
+            registry=registry,
         )
-        return creator_assignment_from_profile(profile)
     used_asset_refs: set[str] = set()
     used_asset_shas: set[str] = set()
     used_collection_ids: set[str] = set()
@@ -8031,9 +8085,12 @@ def _managed_preflight(task_id: str, batch_id: str, spec: dict, args: argparse.N
     try:
         from _common.python_runtime import environment_preflight
 
+        managed_runtime = str(getattr(args, "runtime", "local") or "local")
         env_report = environment_preflight(
             require_cursor_key=agent_provider == "cursor_sdk",
             check_network=True,
+            # local bridge 只需 CURSOR_API_KEY + 网络；Cloud Agent plan_required 不阻断本机创作。
+            check_cursor_cloud_api=managed_runtime == "cloud",
         )
     except Exception as exc:  # noqa: BLE001
         env_report = {
@@ -9310,7 +9367,8 @@ def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
                     "不要把底稿逐段同义改写成新文；与主题相关且没有广告/隐私/平台痕迹的句群必须先贴回正文，再做必要小修。"
                     "成稿应保留至少 60% 的相关底稿原句群/三连字符覆盖；不要为了显得更像编辑稿而摘要化、概括化或大面积换词。"
                     "底稿里的路线、时段、感受、餐饮、排队、交通和现场动作行，除非明显错误/广告/隐私，否则优先保留原表达。"
-                    "不要用百科、官网或其它支持来源重新写一篇新文章；这些来源只能校正事实或补一句上下文。"
+                    "单底稿零参考：全文只能来自这一份底稿，禁止用百科、官网、其它来源或其它文章补全、校正或搬迁段落；"
+                    "Review Gate 会扫描与其它来源单元的长串逐字重合并驳回。"
                     "Review Gate 会检查 baseDraftFidelity 55%~99.5%，低于 55% 会被判定为脱离底稿。"
                     "如果删除广告/保险/平台活动/无关城市段落，必须把与标题、writingIntent 和景区体验直接相关的底稿段落尽量贴回正文。"
                     "draft_meta.selfCritique 必须包含 baseDraftFidelityStrategy，说明保留、删除和轻改的依据。"
@@ -9719,6 +9777,8 @@ def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
         outcomes.sort(key=lambda item: int(item.get("jobIndex", 0)))
         if stage == "produce_author":
             _finalize_managed_author_outputs(ctx, prompts, outcomes)
+        elif stage == "build_homepage":
+            _finalize_managed_homepage_outputs(ctx, prompts, outcomes)
         finished_count = sum(str(out.get("status")) == "finished" for out in outcomes)
         started_count = sum(bool(out.get("started")) for out in outcomes)
         infrastructure_failures = sum(not bool(out.get("started")) for out in outcomes)
@@ -9799,6 +9859,8 @@ def _run_managed_checkpoint(ctx: PipelineContext, stage: str) -> bool:
     outcomes.sort(key=lambda item: int(item.get("jobIndex", 0)))
     if stage == "produce_author":
         _finalize_managed_author_outputs(ctx, prompts, outcomes)
+    elif stage == "build_homepage":
+        _finalize_managed_homepage_outputs(ctx, prompts, outcomes)
     started_count = sum(bool(out.get("started")) for out in outcomes)
     finished_count = sum(str(out.get("status")) == "finished" for out in outcomes)
     infrastructure_failures = sum(not bool(out.get("started")) for out in outcomes)

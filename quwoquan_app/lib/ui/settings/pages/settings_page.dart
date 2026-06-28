@@ -45,12 +45,13 @@ class SettingsPage extends ConsumerWidget {
             children: <Widget>[
               SettingsInsetGroupedSection(
                 isDark: isDark,
+                density: SettingsInsetSectionDensity.compact,
                 header: UITextConstants.settingsAccountSection,
                 child: Column(
                   children: <Widget>[
-                    _SettingsActionRow(
+                    SettingsInsetNavigationRow(
                       isDark: isDark,
-                      icon: CupertinoIcons.person_crop_circle,
+                      leadingIcon: CupertinoIcons.person_crop_circle,
                       label: UITextConstants.profileEditLabel,
                       onTap: () {
                         _trackSettingsClick(
@@ -61,10 +62,14 @@ class SettingsPage extends ConsumerWidget {
                         context.push(AppRoutePaths.profileEdit);
                       },
                     ),
-                    SettingsInsetFormSectionDivider(isDark: isDark),
-                    _SettingsActionRow(
+                    SettingsInsetFormSectionDivider(
                       isDark: isDark,
-                      icon: CupertinoIcons.person_2,
+                      leadingInset: SettingsSemanticConstants
+                          .insetFormIconDividerLeadingInset,
+                    ),
+                    SettingsInsetNavigationRow(
+                      isDark: isDark,
+                      leadingIcon: CupertinoIcons.person_2,
                       label: UITextConstants.profilePersonasLabel,
                       onTap: () => context.push(AppRoutePaths.profilePersonas),
                     ),
@@ -74,10 +79,11 @@ class SettingsPage extends ConsumerWidget {
               _sectionGap(),
               SettingsInsetGroupedSection(
                 isDark: isDark,
+                density: SettingsInsetSectionDensity.compact,
                 header: UITextConstants.settingsPrivacySection,
-                child: _SettingsActionRow(
+                child: SettingsInsetNavigationRow(
                   isDark: isDark,
-                  icon: CupertinoIcons.lock_shield,
+                  leadingIcon: CupertinoIcons.lock_shield,
                   label: UITextConstants.settingsPermissionManagement,
                   onTap: () {
                     _trackSettingsClick(
@@ -92,10 +98,11 @@ class SettingsPage extends ConsumerWidget {
               _sectionGap(),
               SettingsInsetGroupedSection(
                 isDark: isDark,
+                density: SettingsInsetSectionDensity.compact,
                 header: UITextConstants.settingsAppearanceSection,
-                child: _SettingsActionRow(
+                child: SettingsInsetNavigationRow(
                   isDark: isDark,
-                  icon: CupertinoIcons.moon,
+                  leadingIcon: CupertinoIcons.moon,
                   label: UITextConstants.settingsDarkMode,
                   trailingText: _darkModeSummary(snapshot, appearanceState),
                   onTap: () => context.push(AppRoutePaths.settingsDarkMode),
@@ -104,10 +111,11 @@ class SettingsPage extends ConsumerWidget {
               _sectionGap(),
               SettingsInsetGroupedSection(
                 isDark: isDark,
+                density: SettingsInsetSectionDensity.compact,
                 header: UITextConstants.settingsAboutSection,
-                child: _SettingsActionRow(
+                child: SettingsInsetNavigationRow(
                   isDark: isDark,
-                  icon: CupertinoIcons.info,
+                  leadingIcon: CupertinoIcons.info,
                   label: UITextConstants.settingsAboutQuwoquan,
                   onTap: () {
                     _trackSettingsClick(
@@ -122,10 +130,11 @@ class SettingsPage extends ConsumerWidget {
               _sectionGap(),
               SettingsInsetGroupedSection(
                 isDark: isDark,
+                density: SettingsInsetSectionDensity.compact,
                 child: Column(
                   children: <Widget>[
                     if (authSession.isAuthenticated) ...<Widget>[
-                      _SettingsCenteredActionRow(
+                      SettingsInsetCenteredActionRow(
                         isDark: isDark,
                         label: UITextConstants.switchAccount,
                         onTap: () => _handleLogout(
@@ -136,14 +145,14 @@ class SettingsPage extends ConsumerWidget {
                         ),
                       ),
                       SettingsInsetFormSectionDivider(isDark: isDark),
-                      _SettingsCenteredActionRow(
+                      SettingsInsetCenteredActionRow(
                         isDark: isDark,
                         label: UITextConstants.logout,
                         isDestructive: true,
                         onTap: () => _confirmLogout(context, ref),
                       ),
                     ] else
-                      _SettingsCenteredActionRow(
+                      SettingsInsetCenteredActionRow(
                         isDark: isDark,
                         label: UITextConstants.profileLoginNow,
                         onTap: () => openLoginPage(
@@ -207,27 +216,26 @@ class SettingsPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
   ) async {
-    final choice = await showCupertinoModalPopup<_LogoutChoice>(
+    final choice = await showCupertinoDialog<_LogoutChoice>(
       context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text(UITextConstants.logoutSheetTitle),
-        message: const Text(UITextConstants.logoutSheetMessage),
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text(UITextConstants.logoutDialogTitle),
+        content: const Text(UITextConstants.logoutDialogMessage),
         actions: <Widget>[
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(ctx).pop(_LogoutChoice.soft),
-            child: const Text(UITextConstants.logoutSoftAction),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text(UITextConstants.logoutDialogCancel),
           ),
-          CupertinoActionSheetAction(
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(_LogoutChoice.soft),
+            child: const Text(UITextConstants.logoutDialogSoftAction),
+          ),
+          CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(ctx).pop(_LogoutChoice.hard),
-            child: const Text(UITextConstants.logoutHardAction),
+            child: const Text(UITextConstants.logoutDialogHardAction),
           ),
         ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text(UITextConstants.logoutCancel),
-        ),
       ),
     );
     if (choice == null || !context.mounted) {
@@ -290,132 +298,3 @@ class SettingsPage extends ConsumerWidget {
 }
 
 enum _LogoutChoice { soft, hard }
-
-class _SettingsActionRow extends StatelessWidget {
-  const _SettingsActionRow({
-    required this.isDark,
-    required this.icon,
-    required this.label,
-    this.trailingText,
-    this.onTap,
-  });
-
-  final bool isDark;
-  final IconData icon;
-  final String label;
-  final String? trailingText;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final labelColor = SettingsSemanticConstants.labelColor(isDark);
-    final secondaryColor = SettingsSemanticConstants.secondaryColor(isDark);
-    final trailing = trailingText;
-
-    return SizedBox(
-      width: double.infinity,
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: AppSpacing.minInteractiveSize,
-            ),
-            child: Row(
-              children: <Widget>[
-                Icon(icon, size: AppSpacing.iconMedium, color: secondaryColor),
-                SizedBox(width: AppSpacing.containerSm),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosSubheadline,
-                      fontWeight: AppTypography.regular,
-                      color: labelColor,
-                    ),
-                  ),
-                ),
-                if (trailing != null && trailing.trim().isNotEmpty) ...<Widget>[
-                  SizedBox(width: AppSpacing.intraGroupSm),
-                  Flexible(
-                    child: Text(
-                      trailing,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosSubheadline,
-                        color: secondaryColor,
-                      ),
-                    ),
-                  ),
-                ],
-                if (onTap != null) ...<Widget>[
-                  SizedBox(width: AppSpacing.intraGroupSm),
-                  Icon(
-                    CupertinoIcons.chevron_forward,
-                    size: AppSpacing.iconSmall,
-                    color: secondaryColor,
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsCenteredActionRow extends StatelessWidget {
-  const _SettingsCenteredActionRow({
-    required this.isDark,
-    required this.label,
-    required this.onTap,
-    this.isDestructive = false,
-  });
-
-  final bool isDark;
-  final String label;
-  final VoidCallback onTap;
-  final bool isDestructive;
-
-  @override
-  Widget build(BuildContext context) {
-    final labelColor = isDestructive
-        ? AppColors.iosDestructive(context)
-        : SettingsSemanticConstants.labelColor(isDark);
-    return SizedBox(
-      width: double.infinity,
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: AppSpacing.minInteractiveSize,
-            ),
-            child: Center(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: AppTypography.iosSubheadline,
-                  fontWeight: AppTypography.regular,
-                  color: labelColor,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

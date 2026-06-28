@@ -1,0 +1,9 @@
+# Baseline: lib/ paths allowed to call openAppSettings / Geolocator.openAppSettings directly.
+# New occurrences outside this list fail verify_permission_coordinator_adoption.py.
+# Shrink-only ratchet — migrate callers to AppPermissionCoordinator before removing rows.
+
+allowed:
+  - path: core/services/app_permission_coordinator.dart
+  - path: core/services/location_permission_checker.dart
+  - path: ui/content/entry/services/publish_settings_services.dart
+  - path: core/services/fake_location_permission_checker.dart

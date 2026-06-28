@@ -5,6 +5,7 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
   static const String _defaultFeaturedFilterId = 'all';
   static const String _defaultCreateTabId = 'gallery';
   static const String _defaultMessageTabId = 'messages';
+  static const String _plazaContextId = 'connection';
   static const String _profileContextId = 'profile';
 
   final ScrollController _scrollController = ScrollController();
@@ -190,6 +191,13 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
             label: UITextConstants.webPcMessagesTabGroups,
           ),
         ];
+      case MainTabDestination.plaza:
+        return const <_WebContextTabSpec>[
+          _WebContextTabSpec(
+            id: _plazaContextId,
+            label: AppConceptConstants.plaza,
+          ),
+        ];
       case MainTabDestination.profile:
         return const <_WebContextTabSpec>[
           _WebContextTabSpec(
@@ -210,6 +218,8 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
         return _createTabId;
       case MainTabDestination.chat:
         return _messageTabId;
+      case MainTabDestination.plaza:
+        return _plazaContextId;
       case MainTabDestination.profile:
         return _profileContextId;
     }
@@ -225,6 +235,8 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
         return UITextConstants.webPcSearchHintCreate;
       case MainTabDestination.chat:
         return UITextConstants.webPcSearchHintMessages;
+      case MainTabDestination.plaza:
+        return UITextConstants.webPcSearchHintHome;
       case MainTabDestination.profile:
         return UITextConstants.webPcSearchHintProfile;
     }
@@ -245,6 +257,8 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
         case MainTabDestination.chat:
           _messageTabId = id;
           break;
+        case MainTabDestination.plaza:
+          break;
         case MainTabDestination.profile:
           break;
       }
@@ -261,6 +275,8 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
         return _WebCreateWorkspace(activeTabId: _createTabId);
       case MainTabDestination.chat:
         return const _WebDesktopFrame(child: ChatPage());
+      case MainTabDestination.plaza:
+        return const _WebDesktopFrame(child: ConnectionHubPage());
       case MainTabDestination.profile:
         return const _WebDesktopFrame(child: MyProfilePage());
     }

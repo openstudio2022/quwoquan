@@ -1,0 +1,96 @@
+{
+  "outputDir": "artifacts/startup_first_frame/probe-release-run1/20260626T165448",
+  "passed": false,
+  "results": [
+    {
+      "platform": "android",
+      "device": "emulator-5554",
+      "passed": false,
+      "visibleByMs": 3000,
+      "firstVisibleMs": null,
+      "activityDisplayedMs": 3281,
+      "firstFrameWithinBudget": false,
+      "nativeWelcomeDetected": false,
+      "nativeWelcomeHits": [],
+      "blueScreenDetected": false,
+      "plainBackgroundDetected": false,
+      "flutterUiDisplayedMaxMs": 3000,
+      "flutterUiDisplayedWithinBudget": true,
+      "timings": {
+        "android_activity_displayed_ms": 3281
+      },
+      "screenshots": [
+        {
+          "path": "artifacts/startup_first_frame/probe-release-run1/20260626T165448/android-0200ms.png",
+          "offsetMs": 205,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-release-run1/20260626T165448/android-0600ms.png",
+          "offsetMs": 2358,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-release-run1/20260626T165448/android-1000ms.png",
+          "offsetMs": 3189,
+          "foregroundRatio": 0.23084,
+          "stddevAvg": 31.258,
+          "medianRgb": [
+            15,
+            132,
+            248
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-release-run1/20260626T165448/android-1500ms.png",
+          "offsetMs": 5871,
+          "foregroundRatio": 0.0159,
+          "stddevAvg": 21.868,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-release-run1/20260626T165448/android-2000ms.png",
+          "offsetMs": 6556,
+          "foregroundRatio": 0.0159,
+          "stddevAvg": 21.868,
+          "medianRgb": [
+            255,
+            255,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        }
+      ]
+    }
+  ]
+}

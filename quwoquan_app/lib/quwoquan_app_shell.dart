@@ -8,10 +8,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
-import 'package:quwoquan_app/app/navigation/app_router.dart';
+import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
+import 'package:quwoquan_app/app/startup_init_scheduler.dart';
+import 'package:quwoquan_app/app/startup_screen_util_scope.dart';
+import 'package:quwoquan_app/app/startup_welcome_appearance.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
@@ -20,6 +23,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_app_exception_p
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exception_payload.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exception_summary.g.dart';
 import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
+import 'package:quwoquan_app/core/services/app_permission_lifecycle_binding.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
     show
@@ -153,15 +157,20 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   bool _routerEnabled = false;
   bool _startupShellReady = false;
   int _startupWelcomeReplayIndex = 0;
+  late final StartupInitScheduler _startupInitScheduler;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
+    _startupInitScheduler = StartupInitScheduler(
+      ref: ref,
+      logException: logQuwoquanAppException,
+      startupPrerequisites: widget.startupPrerequisites,
+      startupPrerequisiteBudget: _startupPrerequisiteBudget,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppStartupRuntime.instance.markFirstFramePainted();
-      _initializeApp();
     });
   }
 
@@ -258,88 +267,6 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         );
   }
 
-  void _initializeApp() {
-    _bestEffortStartupStep(
-      source: 'startup_sync_window',
-      action: () {
-        _syncWindowDerivedState();
-      },
-    );
-    _bestEffortStartupStep(
-      source: 'startup_theme',
-      action: () {
-        ref
-            .read(themeProvider.notifier)
-            .updateSystemBrightness(
-              WidgetsBinding.instance.platformDispatcher.platformBrightness,
-            );
-      },
-    );
-    // 串并行关系：
-    // 1. 首帧只渲染轻量欢迎页，不读取业务数据、不等待云端接口。
-    // 2. 首帧后并行启动 auth 恢复、外观设置、日志上传与云端连接。
-    // 3. 欢迎动效完整播放后直接进入 App Shell；页面自行承接加载/失败/缓存状态。
-    _bestEffortStartupStep(
-      source: 'startup_auth_session',
-      action: () {
-        ref.read(authSessionControllerProvider);
-      },
-    );
-    _bestEffortStartupStep(
-      source: 'startup_log_uploader',
-      action: () {
-        ref.read(appLogUploaderProvider);
-      },
-    );
-    _bestEffortStartupStep(
-      source: 'startup_realtime_foreground',
-      action: () {
-        ref.read(realtimeConnectionManagerProvider.notifier).onAppForeground();
-      },
-    );
-    _bestEffortStartupStep(
-      source: 'startup_appearance_ensure_loaded',
-      action: () {
-        _recordBestEffortStartupFuture(
-          source: 'startup_appearance_ensure_loaded',
-          future: ref
-              .read(appearanceSettingsControllerProvider.notifier)
-              .ensureLoaded(),
-        );
-      },
-    );
-    _bestEffortStartupStep(
-      source: 'startup_post_first_frame_warmup',
-      action: () {
-        AppStartupRuntime.instance.schedulePostFirstFrameWarmup(
-          (provider) => ref.read(provider),
-        );
-      },
-    );
-    _completeStartupPrerequisitesThenReady();
-  }
-
-  void _completeStartupPrerequisitesThenReady() {
-    final prerequisites = widget.startupPrerequisites;
-    if (prerequisites == null) {
-      _setStartupShellReady(true);
-      return;
-    }
-    unawaited(() async {
-      try {
-        await prerequisites.timeout(_startupPrerequisiteBudget);
-      } catch (e, stack) {
-        logQuwoquanAppException(
-          source: 'startup_prerequisites',
-          exceptionText: e.toString(),
-          stackText: stack.toString(),
-        );
-      } finally {
-        _setStartupShellReady(true);
-      }
-    }());
-  }
-
   void _setStartupShellReady(bool ready) {
     if (_startupShellReady == ready) {
       return;
@@ -348,7 +275,12 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       _startupShellReady = ready;
       return;
     }
-    setState(() => _startupShellReady = ready);
+    scheduleMicrotask(() {
+      if (!mounted || _startupShellReady == ready) {
+        return;
+      }
+      setState(() => _startupShellReady = ready);
+    });
   }
 
   void _syncWindowDerivedState() {
@@ -366,110 +298,58 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     );
   }
 
-  void _bestEffortStartupStep({
-    required String source,
-    required VoidCallback action,
-  }) {
-    try {
-      action();
-    } catch (e, stack) {
-      logQuwoquanAppException(
-        source: source,
-        exceptionText: e.toString(),
-        stackText: stack.toString(),
-      );
-    }
-  }
-
-  void _recordBestEffortStartupFuture({
-    required String source,
-    required Future<void> future,
-  }) {
-    unawaited(
-      future.catchError((Object e, StackTrace stack) {
-        logQuwoquanAppException(
-          source: source,
-          exceptionText: e.toString(),
-          stackText: stack.toString(),
-        );
-      }),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final snapshot = ref.watch(appearanceSnapshotProvider);
     final platform = ref.watch(platformTargetProvider);
 
     if (platform == AppPlatform.web) {
-      return _buildWebStartupApp(snapshot);
+      if (!_routerEnabled) {
+        return _buildStartupWelcomeApp(startupWelcomeAppearanceSnapshot());
+      }
+      final snapshot = ref.watch(appearanceSnapshotProvider);
+      return _buildMainShellApp(snapshot);
     }
 
     if (!_routerEnabled) {
-      return _buildStartupWelcomeApp(snapshot);
+      return _buildStartupWelcomeApp(startupWelcomeAppearanceSnapshot());
     }
 
+    final snapshot = ref.watch(appearanceSnapshotProvider);
     final router = _watchRouterOrNull();
     if (router == null) {
       return _buildStartupFallbackApp(snapshot);
     }
 
-    return MaterialApp.router(
-      title: '趣我圈',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: snapshot.themeMode,
-      routerConfig: router,
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-      locale: const Locale('zh', 'CN'),
-      builder: (context, child) => wrapWithQuwoquanAppAppearance(
-        context: context,
-        snapshot: snapshot,
-        child: child ?? const SizedBox.shrink(),
-      ),
-    );
+    return _buildMainShellApp(snapshot);
   }
 
-  Widget _buildWebStartupApp(AppearanceSnapshot snapshot) {
+  Widget _buildMainShellApp(AppearanceSnapshot snapshot) {
     final router = _watchRouterOrNull();
     if (router == null) {
       return _buildStartupFallbackApp(snapshot);
     }
-    return MaterialApp.router(
-      title: '趣我圈',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: snapshot.themeMode,
-      routerConfig: router,
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-      locale: const Locale('zh', 'CN'),
-      builder: (context, child) => wrapWithQuwoquanAppAppearance(
-        context: context,
-        snapshot: snapshot,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            child ?? const SizedBox.shrink(),
-            if (!_routerEnabled)
-              WelcomeScreen(
-                deferSequenceStart: true,
-                onFinish: _completeStartupWelcome,
-              ),
-          ],
+    return StartupScreenUtilScope(
+      child: MaterialApp.router(
+        title: '趣我圈',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: snapshot.themeMode,
+        routerConfig: router,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+        locale: const Locale('zh', 'CN'),
+        builder: (context, child) => AppPermissionLifecycleBinding(
+          child: wrapWithQuwoquanAppAppearance(
+            context: context,
+            snapshot: snapshot,
+            child: child ?? const SizedBox.shrink(),
+          ),
         ),
       ),
     );
@@ -490,14 +370,17 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       ],
       supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
       locale: const Locale('zh', 'CN'),
-      builder: (context, child) => wrapWithQuwoquanAppAppearance(
-        context: context,
-        snapshot: snapshot,
-        child: child ?? const SizedBox.shrink(),
+      builder: (context, child) => AppPermissionLifecycleBinding(
+        child: wrapWithQuwoquanAppAppearance(
+          context: context,
+          snapshot: snapshot,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
       home: WelcomeScreen(
         key: ValueKey('startup-welcome-$_startupWelcomeReplayIndex'),
         deferSequenceStart: true,
+        onWelcomeVisible: _onWelcomeVisible,
         startupLoading: _startupWelcomeReplayIndex > 0
             ? const WelcomeStartupLoadingState(
                 title: '',
@@ -509,6 +392,24 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         onFinish: _completeStartupWelcome,
       ),
     );
+  }
+
+  void _onWelcomeVisible() {
+    _startupInitScheduler.onFirstFrame(
+      syncWindow: _syncWindowDerivedState,
+      syncTheme: () {
+        ref
+            .read(themeProvider.notifier)
+            .updateSystemBrightness(
+              WidgetsBinding.instance.platformDispatcher.platformBrightness,
+            );
+      },
+    );
+    _startupInitScheduler.onWelcomeVisible(onShellReady: _setStartupShellReady);
+  }
+
+  void _onWelcomeCompletedInit() {
+    _startupInitScheduler.onWelcomeCompleted();
   }
 
   void _handleStartupWelcomeSequenceComplete() {
@@ -544,6 +445,14 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     if (_routerEnabled) {
       return;
     }
+    _onWelcomeCompletedInit();
+    unawaited(_enableRouterAfterWelcome(degraded: degraded));
+  }
+
+  Future<void> _enableRouterAfterWelcome({required bool degraded}) async {
+    if (!mounted || _routerEnabled) {
+      return;
+    }
     ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
     AppStartupRuntime.instance.recordStartupPhase(
       (provider) => ref.read(provider),
@@ -560,23 +469,38 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         'result': degraded ? 'degraded' : 'entered',
       },
     );
-    if (mounted) {
-      setState(() => _routerEnabled = true);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-        AppStartupRuntime.instance.recordStartupPhase(
-          (provider) => ref.read(provider),
-          phase: 'main_shell_first_paint',
-        );
-      });
+    setState(() => _routerEnabled = true);
+    try {
+      await ensureAppRouterLibraryLoaded();
+      await AppStartupRuntime.instance.hydrateNativeProcessSegments();
+    } catch (e, stack) {
+      logQuwoquanAppException(
+        source: 'startup_router_library',
+        exceptionText: e.toString(),
+        stackText: stack.toString(),
+      );
     }
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      AppStartupRuntime.instance.recordStartupPhase(
+        (provider) => ref.read(provider),
+        phase: 'main_shell_first_paint',
+      );
+    });
   }
 
   GoRouter? _watchRouterOrNull() {
+    if (!isAppRouterLibraryLoaded) {
+      return null;
+    }
     try {
-      return ref.watch(appRouterProvider);
+      return ref.watch(deferredAppRouterProvider);
     } catch (e, stack) {
       logQuwoquanAppException(
         source: 'startup_router_build',
@@ -602,10 +526,12 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       ],
       supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
       locale: const Locale('zh', 'CN'),
-      builder: (context, child) => wrapWithQuwoquanAppAppearance(
-        context: context,
-        snapshot: snapshot,
-        child: child ?? const SizedBox.shrink(),
+      builder: (context, child) => AppPermissionLifecycleBinding(
+        child: wrapWithQuwoquanAppAppearance(
+          context: context,
+          snapshot: snapshot,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
       home: AppScaffold(
         body: AppPageErrorState(
@@ -644,7 +570,10 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     }
     if (!ref.read(authSessionControllerProvider).isAuthenticated) {
       ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
-      final router = ref.read(appRouterProvider);
+      if (!isAppRouterLibraryLoaded) {
+        return;
+      }
+      final router = ref.read(deferredAppRouterProvider);
       final currentLocation = router.routerDelegate.currentConfiguration.uri
           .toString();
       router.go(

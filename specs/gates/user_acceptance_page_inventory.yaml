@@ -461,3 +461,19 @@ route_only:
   owner: rtc
   source_tests:
   - quwoquan_app/test/ui/rtc/widgets/call_participant_picker_page_widget_test.dart
+- route_id: plaza
+  owner: connection
+  source_tests:
+  - quwoquan_app/test/ui/plaza/widgets/connection_hub_page_widget_test.dart
+- route_id: plazaNearby
+  owner: connection
+  source_tests:
+  - quwoquan_app/test/ui/plaza/widgets/connection_hub_page_widget_test.dart
+- route_id: plazaCompanion
+  owner: connection
+  source_tests:
+  - quwoquan_app/test/ui/plaza/widgets/connection_hub_page_widget_test.dart
+- route_id: plazaMeetup
+  owner: connection
+  source_tests:
+  - quwoquan_app/test/ui/plaza/widgets/connection_hub_page_widget_test.dart

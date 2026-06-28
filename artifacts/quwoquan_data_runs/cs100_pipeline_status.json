@@ -1,0 +1,35 @@
+{
+  "updatedAt": "2026-06-26T16:52:00.000000+00:00",
+  "batchId": "fresh_cs100verify_20260626",
+  "taskId": "旅行/地域/四川省/景区/四川景点fresh scale100",
+  "phase": "produce_author",
+  "workflowStatus": "waiting_agent",
+  "agentJobsFinishedApprox": 21,
+  "agentJobsTotal": 49,
+  "agentJobsRemainingThisWave": 31,
+  "waveProgress": "1/31",
+  "completedStages": [
+    "build_homepage",
+    "build_prepare",
+    "build_validate",
+    "content_plan",
+    "download_fetch",
+    "download_plan",
+    "produce_compose",
+    "produce_plan"
+  ],
+  "prepareComplete": true,
+  "s10Decision": "go",
+  "cs100Decision": "no_go",
+  "cs1000Started": false,
+  "supervisors": {
+    "mode": "cursor_shell_background",
+    "startCommand": "bash agent_ops/runners/start_cs100_supervisors.sh",
+    "status": "running"
+  },
+  "recoveryNotes": [
+    "2026-06-27: fixed cs100_fresh_to_gate pgrep (cli.py task run.*batch)",
+    "2026-06-27: resume loop clears stale controllerYield; pid-file lock (macOS no flock)",
+    "2026-06-27: gate no longer calls env ready (plan_required non-blocking for local bridge)"
+  ]
+}

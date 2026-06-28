@@ -368,18 +368,17 @@ def _seed_verified_post_for_audit(task_id: str, batch_id: str, *, ref: str, titl
             ],
         },
     )
+    # 单底稿零参考宪法 v2：source_refs.json 仅保留 baseSourceRef + sources（只留 sha256），
+    # 禁止 citedSourceRefs / sourcePaths（第二来源/全量索引）与内联 sourceMarkdown 原文镜像。
     write_json(
         obj / "1.download" / "source_refs.json",
         {
             "schemaVersion": "quwoquan_data.source_refs",
             "baseSourceRef": source_ref,
-            "citedSourceRefs": [source_ref],
-            "sourcePaths": [source_ref],
             "sources": [
                 {
                     "sourceRef": source_ref,
                     "sourceUnitRef": f"entities/地点/景区/{name}/1.download/sources/01.overview_baike",
-                    "sourceMarkdown": source_md,
                     "sourceMarkdownSha256": sha256_text(source_md),
                 }
             ],

@@ -1,0 +1,21 @@
+# Alpha mock 种子：同频/广场社交连接原型（附近同趣 / 结伴 / 线下局）
+# 消费方：MockConnectionRepository（原型阶段行内 canonical 与本文档对齐；方向确认后改为 ContractFixtureRuntimeLoader 加载）
+version: 1
+owner: connection
+destinations:
+  - id: fixture_homepage_travel_route_daocheng
+    name: 稻城亚丁
+  - id: fixture_homepage_travel_route_chuanxi
+    name: 川西小环线
+  - id: homepage_sight_emeishan
+    name: 峨眉山
+companion_trips:
+  - id: trip_daocheng_weekend
+    destinationRef: fixture_homepage_travel_route_daocheng
+    summary: 5 人下周也去稻城亚丁
+nearby_peers:
+  - id: peer_nearby_chuan
+    destinationHint: 毕棚沟
+meetups:
+  - id: meetup_cd_photo_walk
+    title: 成都·夜市扫街局

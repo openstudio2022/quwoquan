@@ -96,6 +96,47 @@ void main() {
       expect(contactStates, contains('mutual'));
       expect(contactStates, isNot(contains('not_following')));
       expect(contacts.every((item) => item.source.isNotEmpty), isTrue);
+      expect(
+        contacts.every(
+          (item) => item.avatarUrl.toLowerCase().startsWith('media/avatar/'),
+        ),
+        isTrue,
+      );
+
+      final messageHome = await chatRepository.listMessageHome(limit: 20);
+      expect(messageHome.length, greaterThanOrEqualTo(5));
+      expect(
+        messageHome.every(
+          (row) => row.avatarUrl.toLowerCase().startsWith('media/avatar/'),
+        ),
+        isTrue,
+      );
+      expect(
+        messageHome.any((row) => row.mentionUnreadCount > 0),
+        isTrue,
+      );
+
+      final contactHomeAll = await chatRepository.listContactHome(
+        filter: 'all',
+        limit: 50,
+      );
+      expect(contactHomeAll.where((row) => row.kind == 'user'), isNotEmpty);
+      expect(contactHomeAll.where((row) => row.kind == 'circle'), isNotEmpty);
+      expect(
+        contactHomeAll.every(
+          (row) =>
+              row.avatarUrl.isEmpty ||
+              row.avatarUrl.toLowerCase().startsWith('media/avatar/'),
+        ),
+        isTrue,
+      );
+
+      final contactHomeCircles = await chatRepository.listContactHome(
+        filter: 'circle',
+        limit: 20,
+      );
+      expect(contactHomeCircles, isNotEmpty);
+      expect(contactHomeCircles.every((row) => row.kind == 'circle'), isTrue);
       final groupMembers = await chatRepository.listMembers(
         conversationId: 'fixture_conv_group',
         limit: 20,
@@ -418,6 +459,18 @@ class _ContractSeedHttpServer {
         _writeJson(request, {'items': _fixtures.chatContactsSeed['contacts']});
         return;
       }
+      if (path == '/v1/chat/message-home') {
+        _writeJson(request, {
+          'items': _messageHomeRows(request.uri.queryParameters),
+        });
+        return;
+      }
+      if (path == '/v1/chat/contact-home') {
+        _writeJson(request, {
+          'items': _contactHomeRows(request.uri.queryParameters),
+        });
+        return;
+      }
       if (path.startsWith('/v1/chat/conversations/') &&
           path.endsWith('/messages')) {
         final convId = path.split('/')[4];
@@ -565,6 +618,101 @@ class _ContractSeedHttpServer {
             .cast<Map<String, dynamic>>())
         .where((item) => wanted.contains(item['id'] ?? item['postId']))
         .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _messageHomeRows(Map<String, String> query) {
+    final filter = query['filter'] ?? 'all';
+    if (filter == 'notification') {
+      return const <Map<String, dynamic>>[];
+    }
+    final conversations =
+        (_fixtures.chatSeed['conversations'] as List<dynamic>)
+            .cast<Map<String, dynamic>>();
+    final rows = conversations
+        .where((item) {
+          switch (filter) {
+            case 'unread':
+              return (item['unreadCount'] as num? ?? 0) > 0;
+            case 'group':
+              return item['type'] == 'group';
+            case 'direct':
+              return item['type'] == 'direct' || item['type'] == 'encrypted';
+            default:
+              return true;
+          }
+        })
+        .map(
+          (item) => <String, dynamic>{
+            'id': item['id'] ?? item['_id'],
+            'kind': 'conversation',
+            'conversationId': item['id'] ?? item['_id'],
+            'conversationType': item['type'],
+            'title': item['title'],
+            'summary': item['lastMessagePreview'],
+            'avatarUrl': item['avatarUrl'],
+            'groupAvatarVersion': item['groupAvatarVersion'] ?? 1,
+            'lastActiveAt': item['lastMessageTime'],
+            'unreadCount': item['unreadCount'] ?? 0,
+            'mentionUnreadCount': item['mentionUnreadCount'] ??
+                (item['id'] == 'fixture_conv_group' ||
+                        item['_id'] == 'fixture_conv_group'
+                    ? 1
+                    : 0),
+            'muted': item['muted'] ?? false,
+            'pinned': item['pinned'] ?? false,
+            'read': (item['unreadCount'] as num? ?? 0) == 0,
+          },
+        )
+        .toList(growable: false);
+    final limit = int.tryParse(query['limit'] ?? '');
+    if (limit != null && rows.length > limit) {
+      return rows.take(limit).toList(growable: false);
+    }
+    return rows;
+  }
+
+  List<Map<String, dynamic>> _contactHomeRows(Map<String, String> query) {
+    final filter = query['filter'] ?? 'all';
+    final rows = <Map<String, dynamic>>[];
+    if (filter == 'all' || filter == 'mutual') {
+      for (final contact
+          in (_fixtures.chatContactsSeed['contacts'] as List<dynamic>)
+              .cast<Map<String, dynamic>>()) {
+        if (filter == 'mutual' && contact['relationState'] != 'mutual') {
+          continue;
+        }
+        rows.add(<String, dynamic>{
+          'id': contact['userId'] ?? contact['contactId'],
+          'kind': 'user',
+          'objectId': contact['userId'] ?? contact['contactId'],
+          'userId': contact['userId'] ?? contact['contactId'],
+          'title': contact['displayName'],
+          'subtitle': contact['bio'] ?? contact['metFrom'],
+          'avatarUrl': contact['avatarUrl'],
+          'relationState': contact['relationState'],
+        });
+      }
+    }
+    if (filter == 'all' || filter == 'circle') {
+      for (final circle
+          in (_fixtures.circleSeed['circles'] as List<dynamic>)
+              .cast<Map<String, dynamic>>()) {
+        rows.add(<String, dynamic>{
+          'id': circle['circleId'] ?? circle['id'] ?? circle['_id'],
+          'kind': 'circle',
+          'objectId': circle['circleId'] ?? circle['id'] ?? circle['_id'],
+          'circleId': circle['circleId'] ?? circle['id'] ?? circle['_id'],
+          'title': circle['displayName'] ?? circle['name'],
+          'subtitle': circle['description'],
+          'avatarUrl': circle['avatarUrl'] ?? circle['coverUrl'],
+        });
+      }
+    }
+    final limit = int.tryParse(query['limit'] ?? '');
+    if (limit != null && rows.length > limit) {
+      return rows.take(limit).toList(growable: false);
+    }
+    return rows;
   }
 
   Map<String, dynamic> _circle(String id) {

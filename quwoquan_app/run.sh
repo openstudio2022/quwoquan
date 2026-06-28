@@ -50,6 +50,7 @@ DEVICE_ID="$(parse_flutter_device_id "$@")"
 bash "$ROOT_DIR/agent_ops/deploy/alpha/start_alpha_mock_stack.sh" up
 
 ANDROID_LOCAL_GATEWAY_BASE_URL=""
+ANDROID_LOCAL_LEGAL_BASE_URL=""
 ANDROID_LOCAL_MEDIA_AVATAR_BASE_URL=""
 ANDROID_LOCAL_MEDIA_IMAGE_BASE_URL=""
 ANDROID_LOCAL_MEDIA_VIDEO_BASE_URL=""
@@ -86,6 +87,7 @@ if device_kind.startswith("android"):
     print("export QWQ_ANDROID_LOCAL_ENV_CA_PATH=" + shlex.quote(str(ca_path)))
     print("export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1")
     print("export ANDROID_LOCAL_GATEWAY_BASE_URL=" + shlex.quote(overrides["gatewayBaseUrl"]))
+    print("export ANDROID_LOCAL_LEGAL_BASE_URL=" + shlex.quote(overrides["legalBaseUrl"]))
     print(
         "export ANDROID_LOCAL_MEDIA_AVATAR_BASE_URL="
         + shlex.quote(overrides["mediaAvatarBaseUrl"])
@@ -116,6 +118,9 @@ DEFINE_CMD=(
 )
 if [[ -n "$ANDROID_LOCAL_GATEWAY_BASE_URL" ]]; then
   DEFINE_CMD+=(--gateway-base-url "$ANDROID_LOCAL_GATEWAY_BASE_URL")
+fi
+if [[ -n "$ANDROID_LOCAL_LEGAL_BASE_URL" ]]; then
+  DEFINE_CMD+=(--legal-base-url "$ANDROID_LOCAL_LEGAL_BASE_URL")
 fi
 if [[ -n "$ANDROID_LOCAL_MEDIA_AVATAR_BASE_URL" ]]; then
   DEFINE_CMD+=(--media-avatar-base-url "$ANDROID_LOCAL_MEDIA_AVATAR_BASE_URL")

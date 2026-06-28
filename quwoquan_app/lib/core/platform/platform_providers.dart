@@ -29,19 +29,19 @@ final fileStorageGatewayProvider = Provider<FileStorageGateway>(
 /// native provider get the unsupported (empty-context) implementation.
 final assistantLocalContextBridgeProvider =
     Provider<AssistantLocalContextBridge>((ref) {
-  // Reuse the secureStorage/native availability as a proxy for "has a native
-  // host"; web/ohos-initial fall back to the unsupported bridge.
-  final platform = ref.watch(platformTargetProvider);
-  switch (platform) {
-    case AppPlatform.android:
-    case AppPlatform.ios:
-      return MethodChannelAssistantLocalContextBridge();
-    case AppPlatform.web:
-    case AppPlatform.ohos:
-    case AppPlatform.desktop:
-      return const UnsupportedAssistantLocalContextBridge();
-  }
-});
+      // Reuse the secureStorage/native availability as a proxy for "has a native
+      // host"; web/ohos-initial fall back to the unsupported bridge.
+      final platform = ref.watch(platformTargetProvider);
+      switch (platform) {
+        case AppPlatform.android:
+        case AppPlatform.ios:
+          return MethodChannelAssistantLocalContextBridge();
+        case AppPlatform.web:
+        case AppPlatform.ohos:
+        case AppPlatform.desktop:
+          return const UnsupportedAssistantLocalContextBridge();
+      }
+    });
 
 /// Native auth bridge for provider-backed social/system credential entrypoints.
 ///
@@ -65,5 +65,23 @@ final nativeAuthBridgeProvider = Provider<NativeAuthBridge>((ref) {
     case AppPlatform.ohos:
     case AppPlatform.desktop:
       return const UnsupportedNativeAuthBridge();
+  }
+});
+
+/// Native share bridge for targeted external-share entrypoints.
+///
+/// Android currently owns a best-effort WeChat package/intent implementation;
+/// unsupported platforms return structured unavailable so callers can degrade
+/// through the system share sheet.
+final nativeShareBridgeProvider = Provider<NativeShareBridge>((ref) {
+  final platform = ref.watch(platformTargetProvider);
+  switch (platform) {
+    case AppPlatform.android:
+      return MethodChannelNativeShareBridge();
+    case AppPlatform.ios:
+    case AppPlatform.web:
+    case AppPlatform.ohos:
+    case AppPlatform.desktop:
+      return const UnsupportedNativeShareBridge();
   }
 });

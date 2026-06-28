@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
@@ -24,10 +23,13 @@ import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
+import 'package:quwoquan_app/core/services/microphone_permission_guard.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/message_home_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_offline_queue.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_player_manager.dart';
@@ -202,75 +204,12 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
     if (mounted) setState(() {});
   }
 
-  Future<void> _showVoiceSendFailure(Object error) async {
-    if (!mounted) {
-      return;
-    }
-    final resolved = runtimeErrorSemantic(
+  Future<bool> _requestMicPermissionForChat() async {
+    final outcome = await MicrophonePermissionGuard.ensure(
       context,
-      error: error,
-      category: UiErrorCategory.submit,
-      scope: UiErrorScope.global,
+      surface: AppPermissionSurface.jit,
     );
-    await AppActionErrorFeedback.show(
-      context,
-      semantic: UiErrorSemantic(
-        category: resolved.category,
-        scope: resolved.scope,
-        title: UITextConstants.chatVoiceSendFailedTitle,
-        message: resolved.message,
-        secondaryMessage: resolved.secondaryMessage,
-        primaryAction:
-            resolved.primaryAction ??
-            const UiErrorAction(
-              type: UiErrorActionType.dismiss,
-              label: UITextConstants.confirm,
-            ),
-        secondaryAction: resolved.secondaryAction,
-        dismissible: true,
-        sourceCode: resolved.sourceCode,
-        failureKind: resolved.failureKind,
-        recoveryAction: resolved.recoveryAction,
-      ),
-    );
-  }
-
-  Future<void> _showVoicePermissionFailure({required bool openSettings}) async {
-    if (!mounted) {
-      return;
-    }
-    await AppActionErrorFeedback.show(
-      context,
-      semantic: UiErrorSemantic(
-        category: UiErrorCategory.permissionRequired,
-        scope: UiErrorScope.global,
-        title: UITextConstants.chatVoicePermissionDenied,
-        message: openSettings
-            ? UITextConstants.chatVoicePermissionOpenSettings
-            : UITextConstants.chatVoicePermissionDenied,
-        primaryAction: UiErrorAction(
-          type: openSettings
-              ? UiErrorActionType.openSettings
-              : UiErrorActionType.dismiss,
-          label: openSettings
-              ? UITextConstants.openSettings
-              : UITextConstants.confirm,
-        ),
-        secondaryAction: openSettings
-            ? const UiErrorAction(
-                type: UiErrorActionType.dismiss,
-                label: UITextConstants.cancel,
-              )
-            : null,
-        dismissible: true,
-        presentation: UiErrorPresentation.actionDialog,
-      ),
-      onAction: (action) async {
-        if (action.type == UiErrorActionType.openSettings) {
-          await openAppSettings();
-        }
-      },
-    );
+    return outcome == MicrophonePermissionOutcome.granted;
   }
 
   Future<void> _showAttachmentFailure({
@@ -296,6 +235,14 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
         tone: UiErrorTone.caution,
       ),
     );
+  }
+
+  Future<bool> _startVoiceRecordForChat() async {
+    final started = await _voiceRecorder.start();
+    if (!started && mounted) {
+      AppToast.show(context, UITextConstants.chatVoiceRecordUnavailable);
+    }
+    return started;
   }
 
   Future<void> _loadConversationTitle() async {
@@ -348,7 +295,17 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
 
   bool get _isGroupChat => _conversationDto?.type == 'group';
 
-  int get _memberCount => _conversationDto?.memberCount ?? 0;
+  int get _memberCount {
+    if (!_isGroupChat) {
+      return _conversationDto?.memberCount ?? 0;
+    }
+    final roster =
+        ref.read(conversationMembersProvider(widget.conversationId)).members;
+    if (roster.isNotEmpty) {
+      return roster.length;
+    }
+    return _conversationDto?.memberCount ?? 0;
+  }
 
   bool get _isBlockedConversation => _conversationDto?.status == 'blocked';
 
@@ -656,31 +613,6 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
     }
   }
 
-  Future<bool> _requestMicPermissionForChat() async {
-    final micStatus = await Permission.microphone.status;
-    if (micStatus.isGranted) {
-      return true;
-    }
-    final requested = await Permission.microphone.request();
-    if (requested.isGranted) {
-      return true;
-    }
-    if (requested.isPermanentlyDenied && mounted) {
-      await _showVoicePermissionFailure(openSettings: true);
-    } else if (mounted) {
-      await _showVoicePermissionFailure(openSettings: false);
-    }
-    return false;
-  }
-
-  Future<bool> _startVoiceRecordForChat() async {
-    final started = await _voiceRecorder.start();
-    if (!started && mounted) {
-      AppToast.show(context, UITextConstants.chatVoiceRecordUnavailable);
-    }
-    return started;
-  }
-
   Future<void> _stopVoiceRecordForChat(Duration duration) async {
     final result = await _voiceRecorder.stop();
     if (!mounted) return;
@@ -702,7 +634,6 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
       await ref
           .read(voiceOfflineQueueProvider(widget.conversationId).notifier)
           .enqueue(result);
-      await _showVoiceSendFailure(sendState.error!);
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -959,8 +890,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
     final label = switch (state.status) {
       VoiceSendStatus.uploading => UITextConstants.chatVoiceUploading,
       VoiceSendStatus.sending => UITextConstants.chatVoiceSending,
-      VoiceSendStatus.failed =>
-        state.error ?? UITextConstants.chatVoiceSendFailed,
+      VoiceSendStatus.failed => UITextConstants.chatVoicePendingRetry,
       _ => UITextConstants.chatVoiceSending,
     };
     return Padding(
@@ -1002,11 +932,20 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
                 CupertinoButton(
                   padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
                   minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-                  onPressed: () => ref
-                      .read(voiceSendProvider(widget.conversationId).notifier)
-                      .reset(),
+                  onPressed: () async {
+                    await ref
+                        .read(
+                          voiceOfflineQueueProvider(
+                            widget.conversationId,
+                          ).notifier,
+                        )
+                        .drain();
+                    ref
+                        .read(voiceSendProvider(widget.conversationId).notifier)
+                        .reset();
+                  },
                   child: Text(
-                    UITextConstants.gotIt,
+                    UITextConstants.retry,
                     style: TextStyle(fontSize: AppTypography.sm, color: fg),
                   ),
                 ),
@@ -1149,6 +1088,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage>
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
+    if (_isGroupChat) {
+      ref.watch(conversationMembersProvider(widget.conversationId));
+    }
     final currentUserId = ref.watch(currentUserIdProvider);
     final bgColor = AppColorsFunctional.getColor(
       isDark,

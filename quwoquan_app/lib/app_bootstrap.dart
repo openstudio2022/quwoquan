@@ -8,7 +8,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/cloud/runtime/local_dev_https_trust.dart';
@@ -88,17 +87,14 @@ Future<void> runQuwoquanApp({
       );
 
       WidgetsBinding.instance.addObserver(_AppExceptionLifecycleObserver());
-      final startupPrerequisites =
-          _installLocalDevHttpsTrustBeforeMediaClients();
+      final startupPrerequisites = kReleaseMode
+          ? null
+          : _installLocalDevHttpsTrustBeforeMediaClients();
+      AppStartupRuntime.instance.markRunAppCalled();
       runApp(
-        ScreenUtilInit(
-          designSize: const Size(375, 812),
-          minTextAdapt: true,
-          splitScreenMode: true,
-          child: ProviderScope(
-            overrides: providerScopeOverrides,
-            child: QuWoQuanAppRoot(startupPrerequisites: startupPrerequisites),
-          ),
+        ProviderScope(
+          overrides: providerScopeOverrides,
+          child: QuWoQuanAppRoot(startupPrerequisites: startupPrerequisites),
         ),
       );
     },

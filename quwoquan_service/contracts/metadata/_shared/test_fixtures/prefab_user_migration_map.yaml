@@ -1,0 +1,79 @@
+schemaVersion: prefab_user_migration_map/1
+description: |
+  域级 pilot 显式映射：未映射条目继续走 legacy。T3 切流完成后可逐步扩展至 100%。
+  canonical batch = travel_batch_100_v1（与 creator_travel_batch100.seed.json 同源）。
+
+content_pilot_20:
+  description: content 域 20 帖 authorId pilot（creator 轨，travel_batch_100_v1）
+  mappings:
+    - legacyAuthorId: fixture_user_photo
+      creatorProfileId: qwq_creator_travel_casual_tourist_001
+      authorId: agent_author_travel_travel_batch_100_v1_001
+    - legacyAuthorId: fixture_user_travel
+      creatorProfileId: qwq_creator_travel_casual_tourist_002
+      authorId: agent_author_travel_travel_batch_100_v1_002
+    - legacyAuthorId: fixture_user_travel_01
+      creatorProfileId: qwq_creator_travel_casual_tourist_003
+      authorId: agent_author_travel_travel_batch_100_v1_003
+    - legacyAuthorId: fixture_user_travel_02
+      creatorProfileId: qwq_creator_travel_casual_tourist_004
+      authorId: agent_author_travel_travel_batch_100_v1_004
+    - legacyAuthorId: fixture_user_travel_03
+      creatorProfileId: qwq_creator_travel_casual_tourist_005
+      authorId: agent_author_travel_travel_batch_100_v1_005
+    - legacyAuthorId: fixture_user_travel_04
+      creatorProfileId: qwq_creator_travel_casual_tourist_006
+      authorId: agent_author_travel_travel_batch_100_v1_006
+    - legacyAuthorId: fixture_user_travel_05
+      creatorProfileId: qwq_creator_travel_casual_tourist_007
+      authorId: agent_author_travel_travel_batch_100_v1_007
+    - legacyAuthorId: fixture_user_travel_06
+      creatorProfileId: qwq_creator_travel_casual_tourist_008
+      authorId: agent_author_travel_travel_batch_100_v1_008
+    - legacyAuthorId: fixture_user_travel_07
+      creatorProfileId: qwq_creator_travel_casual_tourist_009
+      authorId: agent_author_travel_travel_batch_100_v1_009
+    - legacyAuthorId: fixture_user_travel_08
+      creatorProfileId: qwq_creator_travel_casual_tourist_010
+      authorId: agent_author_travel_travel_batch_100_v1_010
+    - legacyAuthorId: fixture_user_photography_01
+      creatorProfileId: qwq_creator_travel_casual_tourist_011
+      authorId: agent_author_travel_travel_batch_100_v1_011
+    - legacyAuthorId: fixture_user_photography_02
+      creatorProfileId: qwq_creator_travel_casual_tourist_012
+      authorId: agent_author_travel_travel_batch_100_v1_012
+    - legacyAuthorId: fixture_user_photography_03
+      creatorProfileId: qwq_creator_travel_casual_tourist_013
+      authorId: agent_author_travel_travel_batch_100_v1_013
+    - legacyAuthorId: fixture_user_photography_04
+      creatorProfileId: qwq_creator_travel_casual_tourist_014
+      authorId: agent_author_travel_travel_batch_100_v1_014
+    - legacyAuthorId: fixture_user_photography_05
+      creatorProfileId: qwq_creator_travel_casual_tourist_015
+      authorId: agent_author_travel_travel_batch_100_v1_015
+    - legacyAuthorId: fixture_user_photography_06
+      creatorProfileId: qwq_creator_travel_local_walker_016
+      authorId: agent_author_travel_travel_batch_100_v1_016
+    - legacyAuthorId: fixture_user_photography_07
+      creatorProfileId: qwq_creator_travel_local_walker_017
+      authorId: agent_author_travel_travel_batch_100_v1_017
+    - legacyAuthorId: fixture_user_photography_08
+      creatorProfileId: qwq_creator_travel_local_walker_018
+      authorId: agent_author_travel_travel_batch_100_v1_018
+    - legacyAuthorId: fixture_user_lifestyle_01
+      creatorProfileId: qwq_creator_travel_local_walker_019
+      authorId: agent_author_travel_travel_batch_100_v1_019
+    - legacyAuthorId: fixture_user_lifestyle_02
+      creatorProfileId: qwq_creator_travel_local_walker_020
+      authorId: agent_author_travel_travel_batch_100_v1_020
+
+user_pilot:
+  scenarioId: creator_travel_travel_batch_100_v1_core
+  sampleSize: 20
+
+currentUserVariant:
+  userId: qwq_creator_current_user_variant
+  subAccountId: agent_sub_account_travel_current_user_variant
+  legacyAliases:
+    - fixture_user_current
+    - user_001

@@ -22,8 +22,8 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/app/shell/main_app_shell.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五栏 `IndexedStack`+状态栏；小趣退出底栏；移动端未登录点击消息/我的进入登录门禁，PC Web 不弹独立登录覆盖层；`isDarkProvider` / `AppColorsFunctional`；2026-05-17 收口底部安全区与底栏背景一体化，避免 home indicator 机型下缘留白过厚；regular 档底栏高度同步降到紧凑基线；2026-06-18 非首页页签改为首次访问后再初始化，避免欢迎页切主壳时一次性构建五栏造成首屏抖动 |
-| `lib/app/shell/bottom_navigation.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五栏底栏；C 位创作触发 `/create-entry`；底栏背景 / `forceDark` 与壳一致；2026-05-17 底栏内容改为占满含底部安全区总高、顶部留白与底部安全区对称，并在有圆角/indicator 机型增加左右保护量；2026-05-19 图标/label/阴影接入 chrome 语义 token，视觉基线不变 |
+| `lib/app/shell/main_app_shell.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 六栏 `IndexedStack`+状态栏（含同频/广场）；小趣退出底栏；移动端未登录点击消息/我的进入登录门禁，同频/广场游客可浏览；PC Web 不弹独立登录覆盖层；`isDarkProvider` / `AppColorsFunctional`；2026-06-18 非首页页签改为首次访问后再初始化 |
+| `lib/app/shell/bottom_navigation.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 六栏底栏（发现/精品/创作/消息/同频/我）；C 位创作触发动作面板；同频入口 `AppConceptConstants.plaza`；底栏背景 / `forceDark` 与壳一致 |
 | `lib/app/shell/web_app_install_banner.dart` | local_contract | ✓ | — | — | — | — | ✓ | ✓ | ✓ | Web 顶部 App 安装提示；由 `PlatformCapabilities.promotesAppInstall` 控制，手机/Pad 提供下载与分享安装页，PC 提供 iOS/Android(鸿蒙)安装包入口；P7 走 `AppSpacing.wideBreakpoint`/`webContentMaxWidth`，P8 走 `UITextConstants`/`AppColors`/`AppTypography` |
 | `lib/app/shell/web_main_app_shell.dart` | local_contract | ✓ | — | ✓ | ✓ | — | ✓ | ✓ | ✓ | PC Web 独立宽屏壳；顶部短欢迎区复用移动端 `WelcomeFlowerMark` 花瓣动效并居中展示品牌簇，不放登录/下载提示，内容页在欢迎区下方并随滚动推入/拉回，工具栏吸顶后再出现 `趣我圈` 花瓣图标/名称且左侧 tab 槽位稳定；Web 启动欢迎已改为 `QuWoQuanAppRoot` 上的 intro overlay（`WelcomeScreen.deferSequenceStart`），shell 仅承载内容首屏 hero，不再作为独立欢迎/登录主流程；右侧五个一级操作仅显示同尺寸图标并保留语义 label；**2026-06-06 商用收口**：首页/精品内容区改为复用移动端 `HomeMultiFormFeed`（多列瀑布 + 四态 + `referralSource: organicFeed`/`feedRequestId` 同源埋点），post 点击经统一 `openHomeFeedPost` → `MediaViewerExtra(dtoPosts)` 进沉浸 viewer（P3 端云一体复用 `discoveryFeed`/`PostBaseDto`，不另起 Web 数据/埋点链）；精品移除「精品队列」改干净多列墙；添加页复用分组模型分「内容创作/社交关系」两组（含发起群聊/加同好/创建圈子）并去掉「小趣创作助手」；消息右栏「消息助手」→「消息中心」且去掉「小趣」助手 tab；「我的」右栏去掉「多端同步」；字号/列宽/最大宽度走 Web PC 专用语义 token；P7 走 `PlatformCapabilities.wideScreenLayout`/`AppSpacing.wideBreakpoint`，P8 走既有 `AppColors`/`AppTypography`/`AppSpacing` token |
 | `lib/app/shell/web_main_app_shell_auth.dart` | T0 | — | — | — | — | — | — | — | — | `web_main_app_shell.dart` 的 `part` helper；仅承载 PC Web 登录守卫与规格类，不是独立页面，验收归入父壳 |
@@ -159,10 +159,21 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/settings/pages/settings_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `AppScaffold`；P5 我的主页设置中枢：编辑资料、分身管理、权限管理、深色模式、关于趣我圈、切换账号、退出登录；2026-06-24 重构为与资料编辑页一致的 Inset grouped IA，body 继续外包 `WebPageMaxWidthFrame`；2026-06-25 深色模式改为详情页，账号动作居中无图标 |
+| `lib/ui/settings/pages/settings_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `AppScaffold`；P5 我的主页设置中枢：编辑资料、分身管理、权限管理、深色模式、关于趣我圈、切换账号、退出登录；2026-06-24 重构为与资料编辑页一致的 Inset grouped IA，body 继续外包 `WebPageMaxWidthFrame`；2026-06-25 深色模式改为详情页，账号动作居中无图标；2026-06-27 主列表统一 `SettingsInsetNavigationRow`/compact density，图标行 divider 按正文缩进，退出确认改为 `CupertinoAlertDialog` |
 | `lib/ui/settings/pages/settings_permissions_page.dart` | local_contract | ✓ | — | — | ✓ | ✓ | ✓ | ✓ | ✓ | 权限管理预留页；联系人权限、圈子权限、实体权限三层只读预留，不直接消费云契约；Inset form 壳 |
-| `lib/ui/settings/pages/settings_dark_mode_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 深色模式详情页；复用 `AppearanceSettingsWireDto` / `AppearanceSettingsController`，系统开关 + 浅色/深色手动单选；Inset form 壳 |
+| `lib/ui/settings/pages/settings_dark_mode_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 深色模式详情页；复用 `AppearanceSettingsWireDto` / `AppearanceSettingsController`，系统开关 + 浅色/深色手动单选；Inset form 壳；2026-06-27 行 UI 改为复用 `SettingsInsetSwitchRow` / `SettingsInsetChoiceRow` |
 | `lib/ui/settings/pages/settings_about_page.dart` | local_contract | ✓ | — | — | ✓ | ✓ | ✓ | ✓ | ✓ | 关于趣我圈页；展示产品名与 `PackageInfo.version`，并提供用户协议/隐私政策入口；法律正文经 `/legal/*` 静态 URL 获取，不承载云业务契约；Inset form 壳 |
+
+---
+
+## plaza（同频/广场 · 社交连接原型）
+
+| 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
+|------|------|----|----|----|----|----|----|----|----|------|
+| `lib/ui/plaza/pages/connection_hub_page.dart` | local_contract | ✓ | ○ | ○ | ✓ | — | ✓ | ✓ | ✓ | **同频连接中心**（MainAppShell IndexedStack body）；四 tab 同趣/同行/附近/局；`ConnectionRepository` 三层 + `connectionRepositoryProvider`；四态（骨架/空/错/定位权限）；游客可浏览无登录门；曝光 `VisitTarget.page(plaza_*)`；**P2/P3 ○ 挂债**：后端 service.yaml / fixture loader 待方向确认后升级 |
+| `lib/ui/plaza/pages/nearby_affinity_page.dart` | local_contract | ✓ | ○ | ○ | ✓ | — | ✓ | ✓ | ✓ | 附近同趣全屏页；模糊位置 + 双向同意展示态；破冰复用 `GreetingRequest`；route `/plaza/nearby` route_only 登记 |
+| `lib/ui/plaza/pages/companion_trip_page.dart` | local_contract | ✓ | ○ | ○ | ✓ | — | ✓ | ✓ | ✓ | 结伴/行程页；Mock 含稻城亚丁等四川实体 id；发起结伴/加入同行 CTA → `start_group_chat`；route `/plaza/companion` |
+| `lib/ui/plaza/pages/offline_meetup_page.dart` | local_contract | ✓ | ○ | ○ | ✓ | — | ✓ | ✓ | ✓ | 线下局页；报名 CTA → 建群；route `/plaza/meetup` |
 
 ---
 
@@ -194,7 +205,7 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/components/settings_form/settings_inset_form_page.dart` | T6 | ✓ | — | — | — | ✓ | ✓ | ✓ | ✓ | `SettingsInsetFormPageScaffold`；P5 复用本体 |
+| `lib/components/settings_form/settings_inset_form_page.dart` | T6 | ✓ | — | — | — | ✓ | ✓ | ✓ | ✓ | `SettingsInsetFormPageScaffold`；P5 复用本体；2026-06-27 新增 `SettingsInsetNavigationRow` / `SettingsInsetSwitchRow` / `SettingsInsetChoiceRow` / `SettingsInsetTrailingText` / `SettingsInsetChevron` 与可缩进 divider，统一设置族表单行模板 |
 | `lib/components/media/image/editor/image_editor_page.dart` | T5 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 本地编辑为主；2026-05-19 编辑器黑场顶栏 safeTop/按钮尺寸接入 appChrome；2026-06-25 底部缩略条改为左对齐起始，切换当前图仅 reveal 到可见区，不再视觉居中停靠；多图拖拽继续复用共享重排组件并在悬停阶段即时让位 |
 | `lib/components/media/camera/camera_capture_page.dart` | T5 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 2026-05-19 登记为相机/选择器专用 chrome；2026-06-23 高保拍照相机：全黑沉浸式，顶部返回/拍照模式/闪光灯，取景九宫格+点击对焦，底部滤镜/74pt 快门/翻转；滤镜入口复用图片编辑器三光圈语义图标；六滤镜来自 `filter_presets.json` 的 `camera_photo` 集合并共享 `image_editor_filter_matrix.dart`；闪光灯单击 on/off 开关、前置置灰、拍后预览、使用照片先进入 `ImageEditorPage` 再按 picker/create 追加；新增 fake preview/capture/editor 注入、深色权限/错误页、layout local_contract 与 user_acceptance 证据。2026-06-23 同壳新增高保视频摄像模式（`initialMode=video`）：共享深色 chrome/取景/九宫格/滤镜条/错误态/底部 Dock 几何，独立顶部“摄像模式”/灯光、品牌蓝录像按钮、最短 1s/最长 60s 录制状态机、录制中锁定翻转与滤镜、麦克风拒绝可继续无声录制、录后视频预览确认再进 `VideoEditorPage`；共享壳抽至 `camera_capture_shell.dart`，图片/视频路由结果与埋点前缀独立，证据见 video_camera_hifi_layout / capture_camera_photo_video_independence / video_creation_publish_roundtrip |
 | `lib/components/media/picker/create_media_picker_page.dart` | T5 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 2026-05-19 登记为媒体选择器专用 chrome；2026-06-23 商用化：图片/视频子流互斥（图片模式隐藏视频分类与一键成片、底部「编辑图片/完成(n)」、视频完全过滤），相册目录/宫格高保（全页强制深色 chrome、去分类 tab、手机统一三列且平板/PC 递增、选中编号缩至双位数友好、首格拍照去圆圈保持呼吸感）；相册弹层强制深色且最高到顶部工具栏下，编辑回填保序；图片模式每次进入忽略外部 initialSelection 重新选择，已选宫格再次点击进入编辑器；同日首格拍照改为 camera→preview→editor→picker 追加并在进入前拦截上限，`cameraBuilder` 仅作旅程测试注入；注入 `MediaPickerService` + widget local_contract，行尾箭头改 `CupertinoIcons.chevron_forward`；2026-06-25 已选缩略条不足一屏时固定左对齐，拖拽悬停阶段即时空出目标槽位并与创作页/编辑器共用同一重排反馈 |

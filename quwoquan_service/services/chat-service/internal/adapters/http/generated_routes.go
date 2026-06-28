@@ -33,6 +33,8 @@ var generatedRouteTable = []routeEntry{
 	{"GET", "/v1/chat/inbox", "ListInbox"},
 	{"GET", "/v1/chat/contacts", "ListContacts"},
 	{"GET", "/v1/chat/group-candidates", "ListGroupCandidates"},
+	{"GET", "/v1/chat/selectable-group-conversations", "ListSelectableGroupConversations"},
+	{"GET", "/v1/chat/selectable-group-conversations/{conversationId}/contact-members", "ListSelectableGroupContactMembers"},
 	{"GET", "/v1/chat/contacts/search", "SearchContacts"},
 }
 
@@ -85,6 +87,10 @@ func dispatchGeneratedOperation(h *ChatHandler, operation string, w http.Respons
 		h.handleListContacts(w, r)
 	case "ListGroupCandidates":
 		h.handleListGroupCandidates(w, r)
+	case "ListSelectableGroupConversations":
+		h.handleListSelectableGroupConversations(w, r)
+	case "ListSelectableGroupContactMembers":
+		h.handleListSelectableGroupContactMembers(w, r)
 	case "SearchContacts":
 		h.handleSearchContacts(w, r)
 	default:

@@ -32,6 +32,8 @@ class ChatApiMetadata {
     'ListMembers': '/v1/chat/conversations/{conversationId}/members',
     'ListMessageHome': '/v1/chat/message-home',
     'ListMessages': '/v1/chat/conversations/{conversationId}/messages',
+    'ListSelectableGroupContactMembers': '/v1/chat/selectable-group-conversations/{conversationId}/contact-members',
+    'ListSelectableGroupConversations': '/v1/chat/selectable-group-conversations',
     'MarkAsRead': '/v1/chat/conversations/{conversationId}/messages/{messageId}/read',
     'RecallMessage': '/v1/chat/conversations/{conversationId}/messages/{messageId}/recall',
     'RemoveAssistant': '/v1/chat/conversations/{conversationId}/assistant',
@@ -68,6 +70,8 @@ class ChatApiMetadata {
     'ListMembers': 'GET',
     'ListMessageHome': 'GET',
     'ListMessages': 'GET',
+    'ListSelectableGroupContactMembers': 'GET',
+    'ListSelectableGroupConversations': 'GET',
     'MarkAsRead': 'POST',
     'RecallMessage': 'POST',
     'RemoveAssistant': 'DELETE',
@@ -105,6 +109,8 @@ class ChatApiMetadata {
     'ListMembers': 'public',
     'ListMessageHome': 'required',
     'ListMessages': 'public',
+    'ListSelectableGroupContactMembers': 'required',
+    'ListSelectableGroupConversations': 'required',
     'MarkAsRead': 'required',
     'RecallMessage': 'public',
     'RemoveAssistant': 'required',
@@ -148,6 +154,8 @@ class ChatApiMetadata {
   static const String listMembersOperation = 'ListMembers';
   static const String listMessageHomeOperation = 'ListMessageHome';
   static const String listMessagesOperation = 'ListMessages';
+  static const String listSelectableGroupContactMembersOperation = 'ListSelectableGroupContactMembers';
+  static const String listSelectableGroupConversationsOperation = 'ListSelectableGroupConversations';
   static const String markAsReadOperation = 'MarkAsRead';
   static const String recallMessageOperation = 'RecallMessage';
   static const String removeAssistantOperation = 'RemoveAssistant';
@@ -223,6 +231,13 @@ class ChatApiMetadata {
       'conversationId': conversationId,
     });
   }
+  static const String listSelectableGroupContactMembersPathTemplate = '/v1/chat/selectable-group-conversations/{conversationId}/contact-members';
+  static String listSelectableGroupContactMembersPath({required String conversationId}) {
+    return _fillPath(listSelectableGroupContactMembersPathTemplate, <String, String>{
+      'conversationId': conversationId,
+    });
+  }
+  static const String listSelectableGroupConversationsPath = '/v1/chat/selectable-group-conversations';
   static const String markAsReadPathTemplate = '/v1/chat/conversations/{conversationId}/messages/{messageId}/read';
   static String markAsReadPath({required String conversationId, required String messageId}) {
     return _fillPath(markAsReadPathTemplate, <String, String>{

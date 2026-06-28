@@ -386,6 +386,16 @@ def _fetch_download_entity(
             )
             continue
         written_source_dirs.add(unit_dir)
+        if "wikipedia.org" in str(source.get("url") or "") or "wikivoyage.org" in str(source.get("url") or ""):
+            try:
+                from download.fetch import enrich_source_unit_meta_wikitext
+
+                enrich_source_unit_meta_wikitext(unit_dir, str(source.get("url") or ""))
+            except Exception as exc:  # noqa: BLE001
+                print(
+                    f"[download] wikitext enrich skipped {entity_id}/{source['source_id']}: {exc}",
+                    flush=True,
+                )
         quality_rows.append(
             {
                 "sourceId": source["source_id"],

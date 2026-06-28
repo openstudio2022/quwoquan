@@ -8,7 +8,7 @@ from _common.io import read_json
 from _common.paths import batch_root, release_root
 from _common.release_integrity import release_integrity_issues
 
-_ROOT_ALLOWED = {"release_manifest.json", "entities", "posts"}
+_ROOT_ALLOWED = {"release_manifest.json", "evidence_index.json", "entities", "posts"}
 _OBJECT_ALLOWED = {"article.md", "page.md", "_entity.json", "manifest.json", "assets", "5.review"}
 _REVIEW_ALLOWED = {
     "review.json",

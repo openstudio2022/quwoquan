@@ -77,6 +77,9 @@ class RealtimeMessageHandler {
       case 'MemberJoined':
         if (conversationId.isEmpty) return;
         _insertSystemMessage(conversationId, payload, '加入了讨论');
+        unawaited(
+          _read(conversationMembersProvider(conversationId).notifier).load(),
+        );
         _refreshConversationCache(conversationId);
         return;
 
@@ -114,6 +117,9 @@ class RealtimeMessageHandler {
       case 'MemberLeft':
         if (conversationId.isEmpty) return;
         _insertSystemMessage(conversationId, payload, '离开了讨论');
+        unawaited(
+          _read(conversationMembersProvider(conversationId).notifier).load(),
+        );
         _refreshConversationCache(conversationId);
         return;
 

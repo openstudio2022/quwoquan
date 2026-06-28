@@ -25,6 +25,7 @@ import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
@@ -208,6 +209,9 @@ Widget _scopedApp({
   String userId = 'nature_photographer',
   ThemeMode themeMode = ThemeMode.light,
   double textScaleFactor = 1.0,
+  String? initialAvatarUrl,
+  String? initialDisplayName,
+  String? initialBackgroundUrl,
   RelationshipCapabilityRepository? capabilityRepository,
   UserProfileRepository userProfileRepository =
       const MockUserProfileRepository(),
@@ -238,7 +242,13 @@ Widget _scopedApp({
       themeMode: themeMode,
       theme: ThemeData.light(),
       darkTheme: ThemeData.dark(),
-      home: ProfileShell(mode: mode, userId: userId),
+      home: ProfileShell(
+        mode: mode,
+        userId: userId,
+        initialAvatarUrl: initialAvatarUrl,
+        initialDisplayName: initialDisplayName,
+        initialBackgroundUrl: initialBackgroundUrl,
+      ),
     ),
   );
 }
@@ -375,6 +385,16 @@ void main() {
         find.byKey(const ValueKey<String>('profile-header-avatar-image')),
         findsOneWidget,
       );
+      expect(
+        tester
+            .widget<AppAvatarImage>(
+              find.byKey(const ValueKey<String>('profile-header-avatar-image')),
+            )
+            .imageUrl,
+        endsWith(
+          'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+        ),
+      );
 
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
       await _pumpFrames(tester, count: 12);
@@ -383,6 +403,45 @@ void main() {
           const ValueKey<String>('profile-shell-compact-avatar-image'),
         ),
         findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<AppCachedNetworkImage>(
+              find.byKey(
+                const ValueKey<String>('profile-shell-compact-avatar-image'),
+              ),
+            )
+            .imageUrl,
+        endsWith(
+          'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+        ),
+      );
+    });
+
+    testWidgets('空 initialAvatarUrl 不遮蔽 profile 返回的头像源', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          userId: 'fixture_user_current',
+          initialAvatarUrl: '',
+          userProfileRepository: const _AvatarObjectKeyProfileRepository(),
+        ),
+      );
+      await _pumpFrames(tester, count: 20);
+
+      expect(
+        tester
+            .widget<AppAvatarImage>(
+              find.byKey(const ValueKey<String>('profile-header-avatar-image')),
+            )
+            .imageUrl,
+        endsWith(
+          'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+        ),
       );
     });
 

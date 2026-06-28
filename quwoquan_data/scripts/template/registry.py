@@ -118,6 +118,12 @@ class TemplateRegistry:
                 creators[creator_id] = data
                 creator_paths[creator_id] = path
 
+        from _common.creator_pool.registry_bridge import load_travel_batch_creators
+
+        batch_creators, batch_paths = load_travel_batch_creators()
+        creators.update(batch_creators)
+        creator_paths.update(batch_paths)
+
         return cls(
             catalogs=catalogs,
             routes=routes,

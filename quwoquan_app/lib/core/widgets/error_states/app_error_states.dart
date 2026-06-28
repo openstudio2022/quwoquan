@@ -329,7 +329,7 @@ class _ErrorEmptyPageBody extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: AppTypography.iosFootnote,
-              color: AppColors.iosTertiaryLabel(context),
+              color: AppColors.iosSecondaryLabel(context),
               height: AppSpacing.textLineHeightFootnote,
             ),
           ),
@@ -414,7 +414,7 @@ class _ErrorSoftCardBody extends StatelessWidget {
                       semantic.secondaryMessage!.trim(),
                       style: TextStyle(
                         fontSize: AppTypography.iosCaption1,
-                        color: AppColors.iosTertiaryLabel(context),
+                        color: AppColors.iosSecondaryLabel(context),
                         height: AppSpacing.textLineHeightCaption,
                       ),
                     ),

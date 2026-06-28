@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "quwoquan.tag.dimension",
+  "dimensionId": "creator_type",
+  "displayName": "创作者类型",
+  "parentTagRef": "Topic/旅行"
+}

@@ -94,7 +94,7 @@ func TestSubAccount_StrictIsolationHidesFromContactDiscovery(t *testing.T) {
 
 	// 用户 B 发起通讯录发现，包含 A 的手机号哈希
 	createTestProfile(t, "discover_owner", "discover_user")
-	rec := doRequest(t, http.MethodPost, "/v1/user/contact-discovery",
+	rec := doRequest(t, http.MethodPost, "/v1/owner/contact-discovery",
 		`{"hashedPhones":["hash_strict_phone"]}`,
 		authHeaders("discover_owner"))
 	if rec.Code != http.StatusAccepted {

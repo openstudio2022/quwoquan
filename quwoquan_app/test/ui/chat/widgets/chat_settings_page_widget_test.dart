@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
@@ -73,6 +74,50 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       expect(find.byType(ChatSettingsPage), findsOneWidget);
+      expect(find.text(UITextConstants.groupCapabilityAlbum), findsOneWidget);
+      expect(find.text(UITextConstants.groupCapabilityFile), findsOneWidget);
+      expect(find.text(UITextConstants.groupCapabilityActivity), findsNothing);
+      expect(find.text(UITextConstants.groupCapabilityMembers), findsNothing);
+      expect(find.text('我'), findsWidgets);
+      expect(find.text('李明'), findsOneWidget);
+      expect(
+        find.text('${UITextConstants.chatInfoTitle}(15)'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('退出群聊使用 SettingsInsetCenteredActionRow', (tester) async {
+      _suppressImageErrors();
+      await tester.binding.setSurfaceSize(const Size(390, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_scopedApp());
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.scrollUntilVisible(
+        find.text(UITextConstants.exitGroupChat),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ChatSettingsPage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pump();
+
+      expect(find.byType(SettingsInsetCenteredActionRow), findsOneWidget);
+      expect(find.text(UITextConstants.exitGroupChat), findsOneWidget);
+    });
+
+    testWidgets('成员数不超过折叠容量时不显示更多成员', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(_scopedApp());
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text(UITextConstants.moreMembers), findsNothing);
     });
 
     testWidgets('包含 Scaffold 结构', (tester) async {

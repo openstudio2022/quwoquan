@@ -111,6 +111,7 @@ func seedCircleContractFixture(t *testing.T, seedRef string) contractSeedEvidenc
 
 	resetCircleFixtureNamespace(t)
 	inserted := 0
+	seenMembers := make(map[string]struct{})
 	for _, fc := range seedSet.Circles {
 		circle := circleFromFixture(fc)
 		if _, err := mongoDB.Collection("circles").InsertOne(ctx, circle); err != nil {
@@ -121,6 +122,10 @@ func seedCircleContractFixture(t *testing.T, seedRef string) contractSeedEvidenc
 	for _, members := range seedSet.Members {
 		for _, fm := range members {
 			member := circleMemberFromFixture(fm)
+			if _, exists := seenMembers[member.ID]; exists {
+				continue
+			}
+			seenMembers[member.ID] = struct{}{}
 			if _, err := mongoDB.Collection("circle_members").InsertOne(ctx, member); err != nil {
 				t.Fatalf("seed circle member %s: %v", member.ID, err)
 			}

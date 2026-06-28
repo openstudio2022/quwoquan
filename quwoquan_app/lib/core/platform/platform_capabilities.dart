@@ -26,6 +26,8 @@ class PlatformCapabilities {
     required this.promotesAppInstall,
     required this.oneTapLogin,
     required this.wechatNativeLogin,
+    required this.wechatTargetedShare,
+    required this.systemShareSheet,
     required this.appleNativeLogin,
     required this.systemCredentialLogin,
     required this.passkeyLogin,
@@ -88,6 +90,17 @@ class PlatformCapabilities {
   /// WeChat native OpenSDK login.
   final bool wechatNativeLogin;
 
+  /// WeChat native OpenSDK targeted share.
+  ///
+  /// This is intentionally separate from [wechatNativeLogin]: login can be
+  /// available before the share SDK / app id / universal-link contract is
+  /// landed. Business UI should keep the WeChat entry semantics, then degrade
+  /// through [systemShareSheet] when this is false.
+  final bool wechatTargetedShare;
+
+  /// System share sheet / platform share sheet availability.
+  final bool systemShareSheet;
+
   /// Apple native sign-in / AuthenticationServices entry.
   final bool appleNativeLogin;
 
@@ -119,6 +132,8 @@ class PlatformCapabilities {
     bool? promotesAppInstall,
     bool? oneTapLogin,
     bool? wechatNativeLogin,
+    bool? wechatTargetedShare,
+    bool? systemShareSheet,
     bool? appleNativeLogin,
     bool? systemCredentialLogin,
     bool? passkeyLogin,
@@ -140,6 +155,8 @@ class PlatformCapabilities {
       promotesAppInstall: promotesAppInstall ?? this.promotesAppInstall,
       oneTapLogin: oneTapLogin ?? this.oneTapLogin,
       wechatNativeLogin: wechatNativeLogin ?? this.wechatNativeLogin,
+      wechatTargetedShare: wechatTargetedShare ?? this.wechatTargetedShare,
+      systemShareSheet: systemShareSheet ?? this.systemShareSheet,
       appleNativeLogin: appleNativeLogin ?? this.appleNativeLogin,
       systemCredentialLogin:
           systemCredentialLogin ?? this.systemCredentialLogin,
@@ -175,6 +192,8 @@ class CapabilityProfile {
     promotesAppInstall: false,
     oneTapLogin: true,
     wechatNativeLogin: true,
+    wechatTargetedShare: false,
+    systemShareSheet: true,
     appleNativeLogin: true,
     systemCredentialLogin: true,
     passkeyLogin: true,
@@ -196,6 +215,8 @@ class CapabilityProfile {
     promotesAppInstall: true,
     oneTapLogin: false,
     wechatNativeLogin: false,
+    wechatTargetedShare: false,
+    systemShareSheet: true,
     appleNativeLogin: false,
     systemCredentialLogin: false,
     passkeyLogin: false,
@@ -219,6 +240,8 @@ class CapabilityProfile {
     promotesAppInstall: false,
     oneTapLogin: false,
     wechatNativeLogin: false,
+    wechatTargetedShare: false,
+    systemShareSheet: false,
     appleNativeLogin: false,
     systemCredentialLogin: false,
     passkeyLogin: false,
@@ -240,6 +263,8 @@ class CapabilityProfile {
     promotesAppInstall: false,
     oneTapLogin: false,
     wechatNativeLogin: false,
+    wechatTargetedShare: false,
+    systemShareSheet: true,
     appleNativeLogin: false,
     systemCredentialLogin: false,
     passkeyLogin: false,
@@ -251,7 +276,10 @@ class CapabilityProfile {
 PlatformCapabilities platformCapabilitiesFor(AppPlatform platform) {
   switch (platform) {
     case AppPlatform.android:
-      return CapabilityProfile.mobile.copyWith(appleNativeLogin: false);
+      return CapabilityProfile.mobile.copyWith(
+        appleNativeLogin: false,
+        wechatTargetedShare: true,
+      );
     case AppPlatform.ios:
       // 微信原生登录仅 Android 开启；iOS 走 Apple 登录（与来电能力位基线测试契约一致）。
       return CapabilityProfile.mobile.copyWith(wechatNativeLogin: false);

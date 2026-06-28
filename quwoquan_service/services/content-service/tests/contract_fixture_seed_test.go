@@ -67,8 +67,11 @@ type contentFixtureReaction struct {
 	Liked  bool   `json:"liked"`
 }
 
-func seedContentContractFixture(t *testing.T, seedRef string) contractSeedEvidence {
+func seedContentContractFixture(t *testing.T, seedRefs ...string) contractSeedEvidence {
 	t.Helper()
+	if len(seedRefs) == 0 {
+		t.Fatal("seedContentContractFixture requires at least one seed ref")
+	}
 	ctx := context.Background()
 	pack, err := contractfixture.LoadMetadataJSON[contentFixturePack](
 		"content/test_fixtures/scenarios/content_scenarios.json",
@@ -76,12 +79,34 @@ func seedContentContractFixture(t *testing.T, seedRef string) contractSeedEviden
 	if err != nil {
 		t.Fatalf("load content fixture: %v", err)
 	}
-	seedSet, ok := pack.SeedSets[seedRef]
-	if !ok {
-		t.Fatalf("content seed ref not found: %s", seedRef)
-	}
 
 	resetContentFixtureNamespace(t)
+	inserted := 0
+	mergedRefs := make([]string, 0, len(seedRefs))
+	for _, seedRef := range seedRefs {
+		seedSet, ok := pack.SeedSets[seedRef]
+		if !ok {
+			t.Fatalf("content seed ref not found: %s", seedRef)
+		}
+		mergedRefs = append(mergedRefs, seedRef)
+		inserted += seedContentFixtureSeedSet(t, ctx, seedSet)
+	}
+	return contractSeedEvidence{
+		SeedRefs:      mergedRefs,
+		ResetScope:    "fixture_* posts in content_test",
+		TargetStore:   "mongodb:content_test.posts",
+		InsertedCount: inserted,
+		VerifiedEndpoints: []string{
+			"/v1/content/feed",
+			"/v1/content/posts/fixture_photo_001",
+			"/v1/content/posts/fixture_photo_001/comments",
+			"/v1/content/posts/fixture_photo_001/reaction",
+		},
+	}
+}
+
+func seedContentFixtureSeedSet(t *testing.T, ctx context.Context, seedSet contentFixtureSeedSet) int {
+	t.Helper()
 	inserted := 0
 	for _, fp := range seedSet.Posts {
 		post := contentPostFromFixture(fp)
@@ -114,18 +139,7 @@ func seedContentContractFixture(t *testing.T, seedRef string) contractSeedEviden
 		}
 		inserted++
 	}
-	return contractSeedEvidence{
-		SeedRefs:      []string{seedRef},
-		ResetScope:    "fixture_* posts in content_test",
-		TargetStore:   "mongodb:content_test.posts",
-		InsertedCount: inserted,
-		VerifiedEndpoints: []string{
-			"/v1/content/feed",
-			"/v1/content/posts/fixture_photo_001",
-			"/v1/content/posts/fixture_photo_001/comments",
-			"/v1/content/posts/fixture_photo_001/reaction",
-		},
-	}
+	return inserted
 }
 
 func resetContentFixtureNamespace(t *testing.T) {

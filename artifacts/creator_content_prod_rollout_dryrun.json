@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "quwoquan_data.creator_content_prod_rollout_dryrun/1",
+  "batchId": "travel_batch_100_v1",
+  "vertical": "travel",
+  "dryRun": true,
+  "decision": "go",
+  "boundPostCount": 3,
+  "distinctAuthors": 3,
+  "routedBy": "match_creator",
+  "rolloutStages": [
+    {
+      "stage": "shadow",
+      "trafficPercent": 0,
+      "description": "影子发布：内容入库但不进真实分发，仅观测。"
+    },
+    {
+      "stage": "canary",
+      "trafficPercent": 1,
+      "description": "金丝雀：1% 流量曝光，观测互动/异常。"
+    },
+    {
+      "stage": "ramp",
+      "trafficPercent": 25,
+      "description": "放量：25% 流量，校验推荐归因与留存。"
+    },
+    {
+      "stage": "ga",
+      "trafficPercent": 100,
+      "description": "全量：100% 流量。"
+    }
+  ],
+  "prodPurity": {
+    "singleProdPackage": true,
+    "prodGrayPackageExists": false,
+    "prodDataSource": "remote",
+    "prodCarriesTestFixtures": false,
+    "contentReachesProdVia": "remote_published_posts"
+  },
+  "boundAuthors": [
+    "agent_author_travel_travel_batch_100_v1_003",
+    "agent_author_travel_travel_batch_100_v1_067",
+    "agent_author_travel_travel_batch_100_v1_079"
+  ],
+  "issues": [],
+  "generatedAt": "2026-06-28T06:59:16.811051+00:00"
+}

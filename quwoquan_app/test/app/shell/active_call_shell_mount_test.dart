@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/app/navigation/app_router.dart';
 import 'package:quwoquan_app/cloud/rtc/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/active_call_bar.dart';
@@ -56,22 +55,18 @@ void main() {
   // goRouterProvider 占位，必须能直接通过 appRouterProvider 解析。
   // ──────────────────────────────────────────────────────────────────
   group('B1 全局挂载 — 协调器装配', () {
-    test('incomingCallCoordinatorProvider 经 appRouterProvider 装配，不依赖占位', () {
-      // 用最小 GoRouter override appRouterProvider，避免拉起真实路由/CallKit
-      // 平台依赖；只验证协调器装配指向 appRouterProvider（旧 goRouterProvider
-      // 占位已删除），解析不抛 UnimplementedError。
+    test('incomingCallCoordinatorProvider 经 incomingCallRouterReaderProvider 装配', () {
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) => const SizedBox.shrink(),
+          ),
+        ],
+      );
       final container = ProviderContainer(
         overrides: [
-          appRouterProvider.overrideWithValue(
-            GoRouter(
-              routes: [
-                GoRoute(
-                  path: '/',
-                  builder: (context, state) => const SizedBox.shrink(),
-                ),
-              ],
-            ),
-          ),
+          incomingCallRouterReaderProvider.overrideWithValue(() => router),
         ],
       );
       addTearDown(container.dispose);

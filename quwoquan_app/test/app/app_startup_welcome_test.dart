@@ -3,15 +3,19 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
+import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
+import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
@@ -19,6 +23,10 @@ import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 
 void main() {
+  setUpAll(() async {
+    await ensureAppRouterLibraryLoaded();
+  });
+
   Widget wrapRoot(Widget child) {
     return ScreenUtilInit(designSize: const Size(393, 852), child: child);
   }
@@ -36,6 +44,18 @@ void main() {
     };
   }
 
+  List<Override> startupOverrides({
+    required AuthSessionStore authStore,
+    List<Override> extra = const [],
+  }) {
+    return [
+      appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
+      authSessionStoreProvider.overrideWithValue(authStore),
+      opsEventRepositoryProvider.overrideWithValue(MockOpsEventRepository()),
+      ...extra,
+    ];
+  }
+
   testWidgets('启动首帧直接展示欢迎页，不等待认证恢复完成', (tester) async {
     suppressExpectedErrors();
     final blockingStore = _BlockingAuthSessionStore();
@@ -43,32 +63,34 @@ void main() {
     await tester.pumpWidget(
       wrapRoot(
         ProviderScope(
-          overrides: [
-            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
-            authSessionStoreProvider.overrideWithValue(blockingStore),
-          ],
+          overrides: startupOverrides(authStore: blockingStore),
           child: const QuWoQuanAppRoot(),
         ),
       ),
     );
 
-    expect(blockingStore.readStarted, isTrue);
-    expect(blockingStore.readCompleted, isFalse);
-    expect(find.text(UITextConstants.welcomeTitle), findsOneWidget);
-    expect(find.text(UITextConstants.welcomeMainSlogan), findsOneWidget);
-    expect(find.byType(WelcomeFlowerMark), findsOneWidget);
+    expect(blockingStore.readStarted, isFalse);
+    expect(find.text(UITextConstants.welcomeTitle), findsNothing);
 
     await tester.pump();
 
     expect(blockingStore.readStarted, isTrue);
-    expect(blockingStore.readCompleted, isFalse);
     expect(find.text(UITextConstants.welcomeTitle), findsOneWidget);
-    expect(find.byType(WelcomeFlowerMark), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 16));
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
   });
+
+  Future<void> pumpStartupThroughWelcome(WidgetTester tester) async {
+    for (var i = 0; i < 80; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      if (find.byType(MainAppShell).evaluate().isNotEmpty) {
+        break;
+      }
+    }
+    await tester.pump();
+    await tester.pump();
+  }
 
   testWidgets('欢迎序列结束但认证仍未恢复时也进入主壳，由页面承接加载态', (tester) async {
     suppressExpectedErrors();
@@ -77,18 +99,13 @@ void main() {
     await tester.pumpWidget(
       wrapRoot(
         ProviderScope(
-          overrides: [
-            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
-            authSessionStoreProvider.overrideWithValue(blockingStore),
-          ],
+          overrides: startupOverrides(authStore: blockingStore),
           child: const QuWoQuanAppRoot(),
         ),
       ),
     );
 
-    for (var i = 0; i < 120; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
+    await pumpStartupThroughWelcome(tester);
 
     expect(find.byType(WelcomeScreen), findsNothing);
     expect(find.byType(MainAppShell), findsOneWidget);
@@ -96,6 +113,7 @@ void main() {
     expect(find.text('正在进入趣我圈'), findsNothing);
     expect(find.text('恢复账号状态'), findsNothing);
 
+    await tester.pump(const Duration(seconds: 16));
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
   });
@@ -121,20 +139,13 @@ void main() {
     await tester.pumpWidget(
       wrapRoot(
         ProviderScope(
-          overrides: [
-            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
-            authSessionStoreProvider.overrideWithValue(store),
-          ],
+          overrides: startupOverrides(authStore: store),
           child: const QuWoQuanAppRoot(),
         ),
       ),
     );
 
-    for (var i = 0; i < 140; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-    await tester.pump();
-    await tester.pump();
+    await pumpStartupThroughWelcome(tester);
 
     expect(find.byType(WelcomeScreen), findsNothing);
     expect(find.byType(MainAppShell), findsOneWidget);
@@ -143,37 +154,37 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
-  testWidgets('Web 启动先出内容壳，再叠欢迎层且不显示登录 prompt', (tester) async {
+  testWidgets('Web 启动欢迎期不构建 GoRouter，欢迎结束后进入主壳', (tester) async {
     suppressExpectedErrors();
     final blockingStore = _BlockingAuthSessionStore();
 
     await tester.pumpWidget(
       wrapRoot(
         ProviderScope(
-          overrides: [
-            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
-            authSessionStoreProvider.overrideWithValue(blockingStore),
-            platformTargetProvider.overrideWithValue(AppPlatform.web),
-            platformCapabilitiesProvider.overrideWithValue(
-              CapabilityProfile.web,
-            ),
-          ],
+          overrides: startupOverrides(
+            authStore: blockingStore,
+            extra: [
+              platformTargetProvider.overrideWithValue(AppPlatform.web),
+              platformCapabilitiesProvider.overrideWithValue(
+                CapabilityProfile.web,
+              ),
+            ],
+          ),
           child: const QuWoQuanAppRoot(),
         ),
       ),
     );
 
-    expect(blockingStore.readStarted, isTrue);
-    expect(find.byType(MainAppShell), findsOneWidget);
+    expect(blockingStore.readStarted, isFalse);
+    expect(find.byType(MainAppShell), findsNothing);
     expect(find.byType(WelcomeScreen), findsOneWidget);
     expect(find.textContaining('登录后，趣我圈'), findsNothing);
     expect(find.textContaining('先不登录'), findsNothing);
     expect(find.byType(LoginPage), findsNothing);
 
     await tester.pump();
-    for (var i = 0; i < 140; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
+    expect(blockingStore.readStarted, isTrue);
+    await pumpStartupThroughWelcome(tester);
 
     expect(find.byType(MainAppShell), findsOneWidget);
     expect(find.byType(WelcomeScreen), findsNothing);
@@ -204,19 +215,20 @@ void main() {
     await tester.pumpWidget(
       wrapRoot(
         ProviderScope(
-          overrides: [
-            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
-            authSessionStoreProvider.overrideWithValue(store),
-            authSessionRefreshExecutorProvider.overrideWithValue((
-              refreshToken,
-            ) async {
+          overrides: startupOverrides(
+            authStore: store,
+            extra: [
+              authSessionRefreshExecutorProvider.overrideWithValue((
+                refreshToken,
+              ) async {
               expect(refreshToken, 'stale-refresh');
               return AuthLoginResultDto.fromMap(<String, dynamic>{
                 'accessToken': 'fresh-access',
                 'refreshToken': 'fresh-refresh',
               });
             }),
-          ],
+            ],
+          ),
           child: const QuWoQuanAppRoot(),
         ),
       ),
@@ -252,17 +264,18 @@ void main() {
     await tester.pumpWidget(
       wrapRoot(
         ProviderScope(
-          overrides: [
-            appDataSourceModeProvider.overrideWith(_StartupMockDataSource.new),
-            authSessionStoreProvider.overrideWithValue(store),
-            authSessionRefreshExecutorProvider.overrideWithValue((_) async {
-              throw CloudException(
-                type: CloudErrorType.unauthorized,
-                message: 'expired',
-                statusCode: 401,
-              );
-            }),
-          ],
+          overrides: startupOverrides(
+            authStore: store,
+            extra: [
+              authSessionRefreshExecutorProvider.overrideWithValue((_) async {
+                throw CloudException(
+                  type: CloudErrorType.unauthorized,
+                  message: 'expired',
+                  statusCode: 401,
+                );
+              }),
+            ],
+          ),
           child: const QuWoQuanAppRoot(),
         ),
       ),

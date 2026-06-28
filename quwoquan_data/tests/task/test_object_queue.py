@@ -239,6 +239,61 @@ def test_governed_article_author_complete_rejects_creator_identity_change():
     assert "expected locked creator assignment builtin_travel_blogger_chuanxi" in completed["lastError"]
 
 
+def test_governed_article_author_complete_backfills_missing_locked_creator():
+    """Agent 写了真实正文但漏写锁定创作者时，系统确定性回填后通过（治理元数据系统所有）。"""
+    batch = "test_batch_author_creator_backfill"
+    ref = "refArticleBackfill"
+    content_dir = "posts/article/攻略/refArticleBackfill/1"
+    assignment = _valid_assignment(batch, ref, allowed_write_roots=[content_dir])
+    meta = {
+        "requireGovernance": True,
+        "assignment": assignment,
+        "contentObjectDir": content_dir,
+        "contentType": "article",
+        **_creator_meta(),
+    }
+    oq.enqueue_ref_job(TASK, batch, ref, "author", meta=meta)
+    draft_dir = batch_root(TASK, batch) / content_dir / "4.draft"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "draft.article.md").write_text("# 标题\n\n这是一篇真实草稿，正文足够具体。\n", encoding="utf-8")
+    # 真实 agent 草稿，但 draft_meta 漏写了全部锁定创作者字段。
+    write_json(draft_dir / "draft_meta.json", {"generator": "agent"})
+    job = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    completed = oq.complete_job(TASK, batch, job["jobId"], job["lease"])
+    assert completed["state"] == oq.STATE_SUCCEEDED
+    stamped = read_json(draft_dir / "draft_meta.json")
+    assert stamped["authorId"] == "builtin_travel_blogger_chuanxi"
+    assert stamped["creatorProfileId"] == "qwq_creator_travel_blogger_chuanxi_001"
+    assert stamped["creatorArchetype"] == "travel_blogger"
+    assert stamped["creatorProfileVersion"] == "1.0.0"
+
+
+def test_governed_article_author_complete_backfill_does_not_rescue_placeholder():
+    """占位正文即便回填创作者也必须失败：治理回填只救真正完成创作的草稿。"""
+    batch = "test_batch_author_creator_backfill_placeholder"
+    ref = "refArticleBackfillPlaceholder"
+    content_dir = "posts/article/攻略/refArticleBackfillPlaceholder/1"
+    assignment = _valid_assignment(batch, ref, allowed_write_roots=[content_dir])
+    meta = {
+        "requireGovernance": True,
+        "assignment": assignment,
+        "contentObjectDir": content_dir,
+        "contentType": "article",
+        **_creator_meta(),
+    }
+    oq.enqueue_ref_job(TASK, batch, ref, "author", meta=meta)
+    draft_dir = batch_root(TASK, batch) / content_dir / "4.draft"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "draft.article.md").write_text(
+        "<!-- QWQ_AWAITING_AGENT_DRAFT -->\n# 待会话模型创作\n", encoding="utf-8"
+    )
+    write_json(draft_dir / "draft_meta.json", {"generator": "agent"})
+    job = oq.acquire_lease(TASK, batch, worker="w1", stage="author")
+    completed = oq.complete_job(TASK, batch, job["jobId"], job["lease"])
+    assert completed["state"] == oq.STATE_FAILED
+    assert "placeholder" in completed["lastError"]
+
+
 def test_concurrent_acquire_leases_single_job_once():
     batch = "test_batch_concurrent_lease"
     oq.enqueue_ref_job(TASK, batch, "only_one", "author")

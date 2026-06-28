@@ -394,34 +394,19 @@ def _resolve_registry_creator(
     「全部 active creator 按载体亲和+评分择优」，满足无模板原创目标，同时保证
     author 作业带完整 creatorAssignment，避免 enqueue_ref_job 硬校验崩溃。
     seed=ref 保证同一内容对象稳定命中同一作者。
-    """
-    try:
-        from template.creator import match_creator
-        from template.registry import TemplateRegistry
 
-        from _common.creator_assignment import creator_assignment_from_profile
-    except Exception:  # noqa: BLE001
-        return {}
-    try:
-        registry = TemplateRegistry.load()
-    except Exception:  # noqa: BLE001
-        return {}
-    if not getattr(registry, "creators", None):
-        return {}
-    try:
-        creator = match_creator(
-            registry,
-            {},
-            carrier=_carrier_for_creator(pack),
-            region=region,
-            vertical=vertical,
-            seed=ref,
-        )
-    except Exception:  # noqa: BLE001
-        return {}
-    if not creator:
-        return {}
-    return creator_assignment_from_profile(creator)
+    单一真相源：委托 `_common.creator_assignment.resolve_registry_creator_assignment`，
+    与 single-mode managed run 走同一 creator 解析链（R24/R25）。
+    """
+    from _common.creator_assignment import resolve_registry_creator_assignment
+
+    return resolve_registry_creator_assignment(
+        {},
+        carrier=_carrier_for_creator(pack),
+        region=region,
+        vertical=vertical,
+        seed=ref,
+    )
 
 
 def sync_content_author_jobs(

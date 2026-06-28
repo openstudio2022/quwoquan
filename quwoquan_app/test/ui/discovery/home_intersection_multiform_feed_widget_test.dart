@@ -313,7 +313,7 @@ void _noopUserTap(
 }) {}
 
 void main() {
-  testWidgets('单列 post 内展示作者身份、媒体、交集与底部更多', (tester) async {
+  testWidgets('单列 post 内展示作者身份、媒体、交集与底部互动', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -384,7 +384,11 @@ void main() {
       find.byKey(const ValueKey('home-relation-card-actions')),
       findsOneWidget,
     );
-    expect(find.text('更多'), findsOneWidget);
+    expect(find.text('更多'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('home-feed-more-0')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('推荐卡片把头像、图片、视频统一投影为 secure local media candidates', (
@@ -578,7 +582,8 @@ void main() {
     );
     expect(followButton, findsOneWidget);
     final followWidth = tester.getSize(followButton).width;
-    expect(followWidth, AppSpacing.followButtonWidth);
+    expect(followWidth, AppSpacing.followButtonWidthCompact);
+    expect(tester.getSize(followButton).height, AppSpacing.buttonHeightXs);
 
     await tester.tap(find.text(UITextConstants.follow));
     await tester.pump();
@@ -588,7 +593,9 @@ void main() {
       const ValueKey<String>('home-post-author-follow-button'),
     );
     expect(followingButton, findsOneWidget);
-    expect(tester.getSize(followingButton).width, followWidth);
+    final followingWidth = tester.getSize(followingButton).width;
+    expect(followingWidth, AppSpacing.followButtonWidthCompact);
+    expect(followingWidth, followWidth);
   });
 
   testWidgets('首页 canonical mock feed 往返后保留交集 span 强调与点击目标', (tester) async {

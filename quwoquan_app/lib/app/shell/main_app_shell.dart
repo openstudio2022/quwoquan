@@ -18,6 +18,7 @@ import 'package:quwoquan_app/ui/rtc/widgets/active_call_bar.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/pip_call_overlay.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
+import 'package:quwoquan_app/ui/plaza/pages/connection_hub_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_bottom_nav_tap_meta.g.dart';
@@ -291,6 +292,11 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                                   ),
                                   _buildTabBody(
                                     index:
+                                        MainTabDestination.plaza.bottomNavIndex,
+                                    child: const ConnectionHubPage(),
+                                  ),
+                                  _buildTabBody(
+                                    index:
                                         MainTabDestination.profile.bottomNavIndex,
                                     child: const MyProfilePage(),
                                   ),
@@ -418,6 +424,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
         break;
       case MainTabDestination.chat:
+        ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+        ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
+        context.go(nextTab.routePath);
+        break;
+      case MainTabDestination.plaza:
+        // 同频/广场：游客可浏览，无登录门；保持底栏可见。
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(nextTab.routePath);

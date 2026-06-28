@@ -14,6 +14,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_setting_dto.g.dar
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/prefab_user_resolver.dart';
 import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
 
 UserSettingDto _userSettingDtoFromWire(Map<String, dynamic> json) {
@@ -82,19 +83,23 @@ List<Map<String, dynamic>> _decodeMockPersonasWire() {
 
 Map<String, dynamic> _mockActivePersonaContextWire() {
   final profile = resolveMockUserProfileWire(kMockCurrentSubAccountId);
+  final creatorWire =
+      PrefabUserResolver.creatorProfileWireFor(kMockCurrentSubAccountId);
+  final avatarUrl = profile.avatarUrl.isNotEmpty
+      ? profile.avatarUrl
+      : (creatorWire?['avatarUrl']?.toString() ??
+          'cold_start/creators/travel_batch_100_v1/current_user_variant/avatar.jpg');
   return <String, dynamic>{
-    'ownerUserId': profile.ownerUserId.isNotEmpty
-        ? profile.ownerUserId
-        : kMockCurrentOwnerId,
-    'subAccountId': profile.subAccountId.isNotEmpty
-        ? profile.subAccountId
-        : kMockCurrentSubAccountId,
+    'ownerUserId': kMockCurrentOwnerId,
+    'subAccountId': kMockCurrentSubAccountId,
     'subjectType': profile.subjectType.isNotEmpty
         ? profile.subjectType
         : 'user',
-    'displayName': profile.displayName,
-    'avatarUrl': profile.avatarUrl,
-    'avatarVersion': profile.avatarVersion,
+    'displayName': profile.displayName.isNotEmpty
+        ? profile.displayName
+        : (creatorWire?['displayName']?.toString() ?? '趣我圈体验用户'),
+    'avatarUrl': avatarUrl,
+    'avatarVersion': profile.avatarVersion > 0 ? profile.avatarVersion : 1,
     'personaContextVersion':
         profile.updatedAt?.millisecondsSinceEpoch.toString() ?? 'mock-static',
     'personaSnapshotVersion': 1,

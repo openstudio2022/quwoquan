@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import io
+import json
+import subprocess
+import tempfile
+import threading
 import unittest
+import urllib.request
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
+from agent_ops.deploy import legal_static
 from agent_ops.deploy.lib.dev_up import (
     ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV,
     app_target_for_env,
@@ -42,6 +49,10 @@ class DevUpTest(unittest.TestCase):
             "https://localhost:17000",
         )
         self.assertEqual(
+            overrides["legalBaseUrl"],
+            "https://localhost:17000/legal",
+        )
+        self.assertEqual(
             overrides["mediaImageBaseUrl"],
             "https://localhost:17100",
         )
@@ -57,6 +68,10 @@ class DevUpTest(unittest.TestCase):
         self.assertEqual(
             overrides["gatewayBaseUrl"],
             "https://beta-api.localhost:18000",
+        )
+        self.assertEqual(
+            overrides["legalBaseUrl"],
+            "https://beta-api.localhost:18000/legal",
         )
         self.assertEqual(
             overrides["mediaImageBaseUrl"],
@@ -92,12 +107,25 @@ class DevUpTest(unittest.TestCase):
             "https://gamma-api.quwoquan-env.test:19000",
         )
         self.assertEqual(
+            overrides["legalBaseUrl"],
+            "https://gamma-api.quwoquan-env.test:19000/legal",
+        )
+        self.assertEqual(
             overrides["mediaImageBaseUrl"],
             "https://gamma-image.quwoquan-env.test:19100",
         )
 
     def test_prod_sim_maps_to_prod_runtime_env(self) -> None:
         self.assertEqual(runtime_env_for_dev_env("prod-sim"), "prod")
+
+    def test_prod_dev_up_uses_canonical_legal_base_url(self) -> None:
+        topology = load_environment_topology()
+        overrides = resolve_app_endpoint_overrides(
+            "prod",
+            "ios_or_macos",
+            topology=topology,
+        )
+        self.assertEqual(overrides["legalBaseUrl"], "https://quwoquan.com/legal")
 
     def test_pick_dev_up_env_requires_tty_when_missing(self) -> None:
         with (
@@ -129,11 +157,10 @@ class DevUpTest(unittest.TestCase):
             handler._resolve_alias("/media/avatar/conversation/conv_006/v1/mock.png"),
             "media/avatar/s/archived-avatar/group/fixture_conv_photo_group/v1/composite.png",
         )
-        self.assertEqual(
+        self.assertIsNone(
             handler._resolve_alias(
                 "/media/avatar/s/archived-avatar/conversation/conv_grid_7/v1/mock.png"
             ),
-            "media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png",
         )
         self.assertEqual(
             handler._resolve_alias(
@@ -241,6 +268,10 @@ class DevUpTest(unittest.TestCase):
             build_gradle,
         )
         self.assertIn(
+            '"APP_LEGAL_BASE_URL" to "https://localhost:17000/legal"',
+            build_gradle,
+        )
+        self.assertIn(
             '"MEDIA_IMAGE_CDN_BASE_URL" to "https://localhost:17100"',
             build_gradle,
         )
@@ -255,11 +286,70 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("agent_ops/deploy/lib/tls_reverse_proxy.py", alpha_script)
         self.assertIn("ensure_public_hosts_mapping", alpha_script)
         self.assertIn("security add-trusted-cert", alpha_script)
+        self.assertIn("macos_login_keychain_trust_is_current", alpha_script)
+        self.assertIn("QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST", alpha_script)
         self.assertIn("simctl keychain booted add-root-cert", alpha_script)
         self.assertIn("IP.2 = 10.0.2.2", alpha_script)
         self.assertNotIn("--resolve", alpha_script)
         self.assertNotIn("curl -k", alpha_script)
         self.assertNotIn("docker.io/library/caddy", alpha_script)
+
+    def test_start_app_instance_accepts_legal_base_url_override(self) -> None:
+        script = (
+            ROOT / "quwoquan_app/scripts/device/start_app_instance.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("--legal-base-url", script)
+        self.assertIn("APP_LEGAL_BASE_URL", script)
+
+    def test_app_env_defines_derive_legal_base_from_gateway_override(self) -> None:
+        script = ROOT / "quwoquan_app/scripts/env/print_app_env_dart_defines.py"
+        result = subprocess.run(
+            [
+                "python3",
+                str(script),
+                "--env",
+                "alpha",
+                "--format",
+                "json",
+                "--gateway-base-url",
+                "https://localhost:17000",
+            ],
+            cwd=str(ROOT),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        defines = json.loads(result.stdout)
+        self.assertEqual(
+            defines["APP_LEGAL_BASE_URL"],
+            "https://localhost:17000/legal",
+        )
+
+    def test_prod_app_env_defines_keep_canonical_legal_base(self) -> None:
+        script = ROOT / "quwoquan_app/scripts/env/print_app_env_dart_defines.py"
+        result = subprocess.run(
+            [
+                "python3",
+                str(script),
+                "--env",
+                "prod",
+                "--format",
+                "json",
+                "--gateway-base-url",
+                "https://118.31.239.122:19000",
+            ],
+            cwd=str(ROOT),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        defines = json.loads(result.stdout)
+        self.assertEqual(
+            defines["APP_LEGAL_BASE_URL"],
+            "https://quwoquan.com/legal",
+        )
 
     def test_plain_ios_flutter_run_prepares_alpha_https_stack(self) -> None:
         project = (
@@ -273,6 +363,7 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("QWQ_IOS_LOCAL_AUTO_PREPARE", prepare_script)
         self.assertIn("APP_RUNTIME_ENV=", prepare_script)
         self.assertIn("start_alpha_mock_stack.sh\" up", prepare_script)
+        self.assertIn("QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip", prepare_script)
 
     def test_android_local_network_security_forbids_cleartext(self) -> None:
         debug_config = (
@@ -312,10 +403,8 @@ class DevUpTest(unittest.TestCase):
             / "quwoquan_app/android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java"
         ).read_text(encoding="utf-8")
         self.assertIn("LocalDevHttpsTrust.installForCurrentRuntime()", app_bootstrap)
-        self.assertIn(
-            "await _installLocalDevHttpsTrustBeforeMediaClients();",
-            app_bootstrap,
-        )
+        self.assertIn("_installLocalDevHttpsTrustBeforeMediaClients()", app_bootstrap)
+        self.assertIn("startupPrerequisites: startupPrerequisites", app_bootstrap)
         self.assertNotIn("_installLocalDevHttpsTrustAfterFirstFrame", app_bootstrap)
         self.assertIn(
             "SecurityContext.defaultContext.setTrustedCertificatesBytes",
@@ -324,6 +413,17 @@ class DevUpTest(unittest.TestCase):
         self.assertNotIn("badCertificateCallback", local_https_trust)
         self.assertIn("localEnvDebugRootCertificate", main_activity)
         self.assertIn("local_env_debug_root", main_activity)
+
+    def test_alpha_stack_clears_repo_owned_stale_reserved_port_listeners(self) -> None:
+        alpha_stack = (
+            ROOT / "agent_ops/deploy/alpha/start_alpha_mock_stack.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("stop_alpha_reserved_listeners", alpha_stack)
+        self.assertIn("stop_repo_listener_on_port", alpha_stack)
+        self.assertIn('lsof -nP -tiTCP:"$port" -sTCP:LISTEN', alpha_stack)
+        self.assertIn("agent_ops/deploy/lib/mock_public_plane.py", alpha_stack)
+        self.assertIn("agent_ops/deploy/lib/tls_reverse_proxy.py", alpha_stack)
 
     def test_gamma_local_mirror_persists_caddy_state_on_host(self) -> None:
         gamma_script = (
@@ -402,6 +502,50 @@ class DevUpTest(unittest.TestCase):
         self.assertEqual(assignment["experimentId"], "discovery_feed_v3")
         experiment_stats = handler._build_experiment_stats("discovery_feed_v3")
         self.assertEqual(experiment_stats["assignedSubjects"], 1)
+
+    def test_alpha_mock_public_plane_serves_legal_static_package(self) -> None:
+        previous = {
+            "mode": MockPublicPlaneHandler.mode,
+            "runtime_env": MockPublicPlaneHandler.runtime_env,
+            "legal_static_root": MockPublicPlaneHandler.legal_static_root,
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            payload = legal_static.build_package("alpha", output_root=Path(tmp_dir))
+            MockPublicPlaneHandler.mode = "api"
+            MockPublicPlaneHandler.runtime_env = "alpha"
+            MockPublicPlaneHandler.legal_static_root = str(
+                Path(payload["packageDir"]) / "public"
+            )
+            server = ThreadingHTTPServer(("127.0.0.1", 0), MockPublicPlaneHandler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_address[1]}"
+            try:
+                with urllib.request.urlopen(
+                    f"{base_url}/legal/user-agreement",
+                    timeout=5,
+                ) as response:
+                    body = response.read().decode("utf-8")
+                    self.assertEqual(response.status, 200)
+                    self.assertIn("text/html", response.headers["Content-Type"])
+                    self.assertIn("用户协议", body)
+                    self.assertNotIn("mock route is not ready", body)
+                request = urllib.request.Request(
+                    f"{base_url}/legal/privacy-policy",
+                    method="HEAD",
+                )
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertIn("text/html", response.headers["Content-Type"])
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+                MockPublicPlaneHandler.mode = previous["mode"]
+                MockPublicPlaneHandler.runtime_env = previous["runtime_env"]
+                MockPublicPlaneHandler.legal_static_root = previous[
+                    "legal_static_root"
+                ]
 
     def test_beta_gateway_notification_fixture_family(self) -> None:
         handler = AssistantBetaGateway.__new__(AssistantBetaGateway)

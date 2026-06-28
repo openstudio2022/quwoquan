@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data.creator_persona_rubric/1",
+  "title": "CreatorPersonaRubric",
+  "description": "Minimum persona quality bar for commercial creator pools.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.creator_persona_rubric/1" },
+    "minBioLength": { "type": "integer", "minimum": 8 },
+    "minHeadlineLength": { "type": "integer", "minimum": 4 },
+    "maxBatchSimilarity": { "type": "number", "maximum": 0.85 },
+    "requireDisclosureVisible": { "type": "boolean" },
+    "minArchetypeCoverage": { "type": "integer", "minimum": 6 },
+    "commercialPassRate": { "type": "number", "minimum": 0.95 },
+    "trialPassRate": { "type": "number", "minimum": 0.8 }
+  },
+  "required": [
+    "schemaVersion",
+    "minBioLength",
+    "minHeadlineLength",
+    "maxBatchSimilarity",
+    "requireDisclosureVisible",
+    "minArchetypeCoverage",
+    "commercialPassRate",
+    "trialPassRate"
+  ],
+  "additionalProperties": false
+}

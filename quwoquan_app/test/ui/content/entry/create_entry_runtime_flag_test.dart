@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 
 void main() {
@@ -34,10 +35,16 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('发图片'), findsOneWidget);
-    expect(find.text('写长文'), findsOneWidget);
-    expect(find.text('续草稿'), findsOneWidget);
-    expect(find.text('发视频'), findsOneWidget);
+    expect(
+      find.text(UITextConstants.createActionPostPhotoShort),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
+    expect(find.text(UITextConstants.createActionResumeDraft), findsOneWidget);
+    expect(
+      find.text(UITextConstants.createActionPostVideoShort),
+      findsOneWidget,
+    );
     expect(find.text('发点滴'), findsNothing);
   });
 }

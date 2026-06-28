@@ -18,12 +18,16 @@ sit_acceptance:
     - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
     - 法律正文通过 legal-static 独立包发布，不依赖 App 包、service 包、内容发布包或数据工程内容包。
     - stable URL 与 manifest currentVersion 一致，版本 URL 不可变，prod 发布前先完成 gamma legal-static 探测。
+    - alpha / flutter run mock public plane 可直接访问 `/legal/user-agreement`、`/legal/privacy-policy`，不得返回 `api mock route is not ready`。
+    - 协议 URL 不可达或返回非成功状态时，App 展示原生错误态、提供重试和返回，不暴露 raw HTTP/WebView 错误页，且不阻断登录协议勾选与验证码登录流程。
     performance_points: []
     tests:
       planned:
       - command: stackctl package --env gamma --kind legal-static
       - command: stackctl verify --env gamma --kind legal-static
       - command: curl -I /legal/user-agreement && curl -I /legal/privacy-policy
+      - command: python3 -m unittest agent_ops.tests.test_dev_up
+      - command: cd quwoquan_app && flutter test test/ui/user/legal_document_page_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -47,7 +51,9 @@ sit_acceptance:
         cases:
         - local_contract.platform_ops_governance.security_privacy_audit.sit1.sit1_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - legal-static 正文仍只由 `deploy/legal` 发布；App 仅消费 URL 和版本，不内置 HTML 兜底。
+    - 运行时 URL 不可达属于页面级可恢复错误；发布前 URL 探测失败仍是 Go/No-Go 阻断。
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

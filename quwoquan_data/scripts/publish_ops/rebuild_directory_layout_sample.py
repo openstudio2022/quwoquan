@@ -280,10 +280,10 @@ def _build_post(task: str, batch: str, *, global_batch_seq: int, asset_registry)
     article_digest = compute_document_sha256(article_md)
     source_ref = relative_batch_ref(ent / "1.download" / "sources" / "01.overview_baike" / "source.md", task, batch)
     source_unit_ref = relative_batch_ref(ent / "1.download" / "sources" / "01.overview_baike", task, batch)
+    # 单底稿零参考宪法 v2：source_refs.json 只登记唯一底稿来源，
+    # 禁止 citedSourceRefs / sourcePaths 等第二来源或全量索引字段。
     write_json(post / "1.download" / "source_refs.json", {
         "baseSourceRef": source_ref,
-        "citedSourceRefs": [source_ref],
-        "sourcePaths": [source_ref],
         "sources": [
             {
                 "sourceRef": source_ref,

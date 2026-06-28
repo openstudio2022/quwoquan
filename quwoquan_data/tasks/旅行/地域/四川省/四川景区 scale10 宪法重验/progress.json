@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/四川省/四川景区 scale10 宪法重验",
+  "updatedAt": "2026-06-26T10:44:54.682809+00:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": [
+        "地点/景区/九寨沟",
+        "地点/景区/黄龙",
+        "地点/景区/峨眉山",
+        "地点/景区/乐山大佛",
+        "地点/景区/青城山",
+        "地点/景区/稻城亚丁",
+        "地点/景区/海螺沟",
+        "地点/景区/剑门关",
+        "地点/景区/阆中古城",
+        "地点/景区/蜀南竹海"
+      ]
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

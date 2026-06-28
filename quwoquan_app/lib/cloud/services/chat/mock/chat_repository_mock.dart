@@ -17,8 +17,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dar
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
-import 'package:quwoquan_app/cloud/services/app_content/app_content_prototype_codec.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
@@ -36,15 +36,11 @@ class MockChatRepository implements ChatRepository {
     );
     final mergedContacts = _mergeRowsByKeys(
       _listOfMap(contactSeed?['contacts']),
-      <Map<String, dynamic>>[
-        ...AppContentPrototypeBundle.instance.chatMockContacts.map(
-          (contact) => contact.toMap(),
-        ),
-        ...ChatMockData.contacts,
-      ],
+      ChatMockData.contacts,
       const <String>['userId', 'contactId', 'id'],
     );
     _contactRows = mergedContacts
+        .where(_contactRowHasContractAvatar)
         .map(ChatContactRowDto.fromMap)
         .toList(growable: false);
     _contactCircleIds =
@@ -112,6 +108,16 @@ class MockChatRepository implements ChatRepository {
       <String, ChatGroupSettingsDto>{};
 
   static final ChatGroupSettingsDto _defaultSettings = ChatGroupSettingsDto();
+
+  /// 联系人头像必须走 avatar 媒体平面；禁止 [media/image] 泄漏进 Mock 收件箱。
+  static bool _contactRowHasContractAvatar(Map<String, dynamic> row) {
+    final avatar =
+        (row['avatarUrl'] ?? row['avatar'])?.toString().trim() ?? '';
+    if (avatar.isEmpty) {
+      return false;
+    }
+    return avatar.toLowerCase().startsWith('media/avatar/');
+  }
 
   static List<Map<String, dynamic>>? _listOfMap(Object? value) {
     if (value is! List) {
@@ -747,7 +753,20 @@ class MockChatRepository implements ChatRepository {
     required String conversationId,
     required String messageId,
   }) async {
-    return const <ChatMessageReceiptDto>[];
+    final messages = await listMessages(
+      conversationId: conversationId,
+      limit: CloudApiDefaults.pageLimit,
+    );
+    final exists = messages.any((message) => message.id == messageId);
+    if (!exists) {
+      return const <ChatMessageReceiptDto>[];
+    }
+    return [
+      ChatMessageReceiptDto(
+        userId: ChatMockData.currentUserProfileId,
+        readAt: DateTime.now().toUtc(),
+      ),
+    ];
   }
 
   @override
@@ -820,10 +839,31 @@ class MockChatRepository implements ChatRepository {
   Future<void> inviteAssistant({
     required String conversationId,
     String? skillId,
-  }) async {}
+  }) async {
+    final members = _ensureMembersCache(conversationId);
+    if (members.any((member) => member.memberType == 'assistant')) {
+      return;
+    }
+    members.add(
+      ChatConversationMemberDto(
+        userId: 'fixture_assistant_primary',
+        displayName: '小助手',
+        avatarUrl: ChatMockData.avatarFor('fixture_assistant_primary'),
+        role: 'member',
+        memberType: 'assistant',
+        joinedAt: DateTime.now().toUtc(),
+      ),
+    );
+  }
 
   @override
-  Future<void> removeAssistant({required String conversationId}) async {}
+  Future<void> removeAssistant({required String conversationId}) async {
+    final members = _ensureMembersCache(conversationId)
+      ..removeWhere((member) => member.memberType == 'assistant');
+    if (members.isEmpty) {
+      return;
+    }
+  }
 
   @override
   Future<void> updateConversationSettings({
@@ -952,6 +992,130 @@ class MockChatRepository implements ChatRepository {
         )
         .take(limit)
         .toList(growable: false);
+  }
+
+  // ── 从群聊中选择联系人 ──────────────────────────────────────────────────────
+
+  /// viewer 的互关联系人 userId 集合（与 listGroupCandidates 同源）。
+  Set<String> _mutualContactIdSet() {
+    return _contactRows
+        .where((c) => c.relationState == 'mutual' && c.userId.isNotEmpty)
+        .map((c) => c.userId)
+        .toSet();
+  }
+
+  @override
+  Future<List<SelectableGroupConversationRowDto>>
+  listSelectableGroupConversations({
+    String? query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final mutualIds = _mutualContactIdSet();
+    if (mutualIds.isEmpty) {
+      return const <SelectableGroupConversationRowDto>[];
+    }
+    final normalizedQuery = (query ?? '').trim().toLowerCase();
+    final rows = <SelectableGroupConversationRowDto>[];
+    for (final conversation in _conversationCache) {
+      if (conversation.type != 'group' || conversation.id.isEmpty) {
+        continue;
+      }
+      if (conversation.status.isNotEmpty && conversation.status != 'active') {
+        continue;
+      }
+      if (normalizedQuery.isNotEmpty &&
+          !conversation.title.toLowerCase().contains(normalizedQuery)) {
+        continue;
+      }
+      final members = _ensureMembersCache(conversation.id);
+      final friendIds = members
+          .where(
+            (m) =>
+                m.userId.isNotEmpty &&
+                m.memberType == 'user' &&
+                m.userId != ChatMockData.currentUserProfileId &&
+                mutualIds.contains(m.userId),
+          )
+          .map((m) => m.userId)
+          .toSet();
+      if (friendIds.isEmpty) {
+        continue;
+      }
+      rows.add(
+        SelectableGroupConversationRowDto(
+          conversationId: conversation.id,
+          title: conversation.title.isNotEmpty
+              ? conversation.title
+              : conversation.id,
+          avatarUrl: conversation.avatarUrl,
+          friendMemberCount: friendIds.length,
+          memberCount: conversation.memberCount > 0
+              ? conversation.memberCount
+              : members.length,
+        ),
+      );
+      if (rows.length >= limit) {
+        break;
+      }
+    }
+    return rows;
+  }
+
+  @override
+  Future<List<ChatContactRowDto>> listSelectableGroupContactMembers({
+    required String conversationId,
+    String? query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final normalizedConversationId = conversationId.trim();
+    // 图五仅从图四（已校验存在的群）进入；未知会话在 Mock 下返回空列表，
+    // not-found 的结构化错误语义由云侧 api_integration 验证。
+    if (_findConversation(normalizedConversationId) == null) {
+      return const <ChatContactRowDto>[];
+    }
+    final mutualIds = _mutualContactIdSet();
+    final contactById = <String, ChatContactRowDto>{
+      for (final c in _contactRows.where((c) => c.userId.isNotEmpty))
+        c.userId: c,
+    };
+    final normalizedQuery = (query ?? '').trim().toLowerCase();
+    final members = _ensureMembersCache(normalizedConversationId);
+    final out = <ChatContactRowDto>[];
+    final seen = <String>{};
+    for (final m in members) {
+      final id = m.userId;
+      if (id.isEmpty || id == ChatMockData.currentUserProfileId) {
+        continue;
+      }
+      if (m.memberType != 'user') {
+        continue;
+      }
+      if (!mutualIds.contains(id) || seen.contains(id)) {
+        continue;
+      }
+      final contact = contactById[id];
+      final displayName = (contact?.displayName.isNotEmpty ?? false)
+          ? contact!.displayName
+          : (m.displayName.isNotEmpty ? m.displayName : id);
+      if (normalizedQuery.isNotEmpty &&
+          !displayName.toLowerCase().contains(normalizedQuery)) {
+        continue;
+      }
+      seen.add(id);
+      out.add(
+        (contact ??
+                ChatContactRowDto(
+                  userId: id,
+                  displayName: displayName,
+                  avatarUrl: m.avatarUrl,
+                ))
+            .copyWith(relationState: 'mutual', source: 'group'),
+      );
+      if (out.length >= limit) {
+        break;
+      }
+    }
+    return out;
   }
 
   @override

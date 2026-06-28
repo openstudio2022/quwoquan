@@ -209,10 +209,16 @@ def test_provenance_minimal_partitions_present():
 def test_materialize_writes_source_refs_snapshot_and_finalization_report():
     post_dir = _materialize_one()
     source_refs = read_json(post_dir / "1.download" / "source_refs.json")
+    # 单底稿零参考 v2：sources 长度恒为 1，仅唯一底稿来源单元，无内联原文镜像。
+    assert source_refs["schemaVersion"] == "quwoquan_data.source_refs/2"
     assert source_refs["baseSourceRef"].endswith("01.base/source.md")
-    assert len(source_refs["sources"]) == 2
+    assert len(source_refs["sources"]) == 1
     assert source_refs["sources"][0]["sourceUnitRef"].endswith("01.base")
-    assert source_refs["sources"][0]["sourceMarkdown"].startswith("# 九寨沟")
+    assert source_refs["sources"][0]["role"] == "base"
+    assert source_refs["sources"][0]["sourceFileSha256"]
+    assert "sourceMarkdown" not in source_refs["sources"][0]
+    assert "citedSourceRefs" not in source_refs
+    assert "sourcePaths" not in source_refs
     report = read_json(post_dir / "5.review" / "finalization_report.json")
     assert report["articleSource"] == "4.draft/draft.article.md"
     assert report["draftSha256"]
@@ -223,7 +229,8 @@ def test_materialize_writes_source_refs_snapshot_and_finalization_report():
     assert report["frontmatterOnlyChange"] is True
 
 
-def test_source_refs_snapshot_records_binary_asset_without_text_decode():
+def test_source_refs_snapshot_is_single_base_without_inline_mirror():
+    """单底稿零参考 v2：snapshot 只登记唯一底稿来源单元，不内联原文镜像。"""
     ensure_task_layout(TASK)
     ensure_batch_layout(TASK, "binary_source_asset", "produce")
     obj = batch_entity_object_dir(TASK, "binary_source_asset", "地点", "景区", "九寨沟")
@@ -242,25 +249,23 @@ def test_source_refs_snapshot_records_binary_asset_without_text_decode():
         task_id=TASK,
         batch_id="binary_source_asset",
     )
-    binary_path = obj / "1.download" / "sources" / "01.base" / "assets" / "photo.jpg"
-    binary_path.parent.mkdir(parents=True, exist_ok=True)
-    binary_path.write_bytes(b"\xff\xd8\xff\xe0binary-test-image")
     source_md = "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
-    binary_ref = "entities/地点/景区/九寨沟/1.download/sources/01.base/assets/photo.jpg"
 
     source_refs = build_source_refs_snapshot(
         TASK,
         "binary_source_asset",
         base_source_ref=source_md,
-        cited_source_refs=[],
-        source_paths=[source_md, binary_ref],
     )
 
-    binary_entries = [row for row in source_refs["sources"] if row["sourceRef"].endswith("assets/photo.jpg")]
-    assert len(binary_entries) == 1
-    assert binary_entries[0]["sourceContentKind"] == "binary_asset"
-    assert binary_entries[0]["sourceFileSha256"]
-    assert "sourceMarkdown" not in binary_entries[0]
+    assert source_refs["schemaVersion"] == "quwoquan_data.source_refs/2"
+    assert source_refs["baseSourceRef"] == source_md
+    assert len(source_refs["sources"]) == 1
+    base_entry = source_refs["sources"][0]
+    assert base_entry["sourceRef"] == source_md
+    assert base_entry["role"] == "base"
+    assert base_entry["sourceFileSha256"]
+    assert "sourceMarkdown" not in base_entry
+    assert "sourceCleanMarkdown" not in base_entry
 
 
 def test_materialize_relativizes_repo_runtime_cited_source_paths():

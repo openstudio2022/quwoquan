@@ -137,7 +137,7 @@ def test_gate_passes_clean_object():
             "sourceTaskId": TASK,
         },
     )
-    long_body = "\n\n".join([
+    paragraphs = [
         "峨眉山的核心体验不只在登顶本身，还在沿途寺院、林间坡道与观景停顿组成的节奏感里。",
         "如果把路线拆成山脚适应、半山停留、重点视角和返程收束四段，行程会更稳定，也更容易控制体力。",
         "清晨上山通常能换来更安静的石阶与更柔和的光线，适合把主要观景与拍摄时段放在前半天。",
@@ -154,7 +154,7 @@ def test_gate_passes_clean_object():
         "当路线穿过树荫、台阶、平台和建筑边界时，环境变化会非常明显，这些变化本身就是行程叙事的重要组成部分。",
         "如果是第一次为别人规划峨眉山路线，最稳妥的方法往往不是堆更多点位，而是明确每一段为什么值得停、停多久、何时转场。",
         "把观察、停顿和转场都纳入计划之后，路线会从单纯抵达目标，变成一条更完整、也更容易复盘的体验曲线。",
-    ])
+    ]
     asset_id = allocate_post_asset_id(
         entity_name="峨眉山",
         role="cover",
@@ -163,7 +163,14 @@ def test_gate_passes_clean_object():
         registry=registry,
     )
     (ent / "page.md").write_text(
-        f"# 峨眉山\n\n{long_body}\n\n## 出发前\n\n山路多变，建议预留上下行时间并关注天气变化。\n\n{{asset://{asset_id}|wrapRight|峨眉山云海|width=45%}}\n",
+        "# 峨眉山\n\n"
+        "## 概况\n\n"
+        + "\n\n".join(paragraphs[:5])
+        + "\n\n## 路线节奏\n\n"
+        + "\n\n".join(paragraphs[5:11])
+        + "\n\n## 出发前\n\n"
+        + "\n\n".join(paragraphs[11:])
+        + f"\n\n{{asset://{asset_id}|wrapRight|峨眉山云海|width=45%}}\n",
         encoding="utf-8",
     )
     write_json(
@@ -186,6 +193,7 @@ def test_gate_passes_clean_object():
                 {
                     "assetId": asset_id,
                     "fileName": f"{asset_id}.jpg",
+                    "role": "cover",
                     "sourceRef": "entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md",
                     "sourceAssetRef": "entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/assets/001_cover.jpg",
                     "termsUrl": "https://zh.wikipedia.org/wiki/Wikipedia:CC",
@@ -285,6 +293,7 @@ def test_gate_entity_homepage_writes_review_sidecars():
                 {
                     "assetId": asset_id,
                     "fileName": f"{asset_id}.jpg",
+                    "role": "cover",
                     "caption": "水利工程",
                     "sourceRef": homepage_source_ref,
                     "sourceAssetRef": "entities/地点/景区/都江堰/1.download/sources/02.baike_overview/assets/001_cover.jpg",
@@ -498,16 +507,14 @@ def test_gate_passes_post_evidence_chain_sidecars():
     write_json(
         post / "1.download" / "source_refs.json",
         {
-            "schemaVersion": "quwoquan_data.source_refs",
+            "schemaVersion": "quwoquan_data.source_refs/2",
             "baseSourceRef": "entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md",
-            "citedSourceRefs": ["entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md"],
-            "sourcePaths": ["entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md"],
             "sources": [
                 {
                     "sourceRef": "entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md",
                     "sourceUnitRef": "entities/地点/景区/都江堰/1.download/sources/01.overview_baike",
-                    "sourceMarkdown": source_md,
-                    "sourceMarkdownSha256": sha256_text(source_md),
+                    "role": "base",
+                    "sourceFileSha256": sha256_text(source_md),
                 }
             ],
         },

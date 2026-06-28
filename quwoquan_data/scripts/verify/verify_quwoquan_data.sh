@@ -10,6 +10,10 @@ fi
 
 # CLI-first ratchet：拦截新增直跑业务入口脚本（必须经 qwq-data 暴露给 skill）
 python3 quwoquan_data/scripts/verify/verify_cli_first.py
+python3 quwoquan_data/scripts/verify/verify_creator_pool_contract.py
+python3 quwoquan_data/scripts/verify/verify_creator_pool_seed_consistency.py
+python3 quwoquan_data/scripts/verify/verify_prefab_user_provenance.py
+"$PYTEST_RUNNER" -m pytest -q quwoquan_data/tests/local_contract/creator_pool/
 python3 quwoquan_data/scripts/cli.py verify data-role-gate
 python3 quwoquan_data/scripts/verify/verify_no_flat_roots.py
 # 单一门库 quality_gates：writingIntent 契约 + 图文闭环 + 写作主线一致性 + 模板骨架相似度 + 语域 + source reject 阻断
@@ -83,6 +87,8 @@ python3 quwoquan_data/tests/build/test_build_homepage.py
 # Phase 1：实体主页图片闭环全量扫描/修复（page.md ↔ manifest.assets ↔ assets/）
 python3 quwoquan_data/tests/homepage_assets/test_homepage_assets.py
 python3 quwoquan_data/scripts/cli.py homepage-assets --dirty-only --fail-on-issues --include-runtime --include-publish
+# 实体主页结构(原文关键章节覆盖) + 配图 caption 语义门（新批次 opt-in：batch_manifest.homepageStructureGate=true）
+python3 quwoquan_data/scripts/verify/verify_homepage_structure_and_assets.py --all-runtime-opt-in
 # 历史脏数据：工程污染主页 / 伪图片 / 悬空 asset 必须清零
 python3 quwoquan_data/tests/quality/test_dirty_data_cleanup.py
 python3 quwoquan_data/scripts/cli.py quality dirty-scan --fail-on-issues
@@ -166,5 +172,8 @@ python3 quwoquan_data/tests/orchestrate/test_fanout_dispatch.py
 python3 quwoquan_data/tests/orchestrate/test_mode_single_fanout_equivalence.py
 # Fan-out 外部 runner（mock SDK）：lease→complete 回写、startup vs run 失败分流、用量/预算门
 python3 quwoquan_data/tests/orchestrate/test_fanout_runner.py
+# 百科多层目录 + 章节配图 + 对象阶段树 + wikitext 锚点（新批次验收）
+python3 quwoquan_data/tests/local_contract/common/test_section_outline_and_placement__local_contract_test.py
+python3 quwoquan_data/tests/local_contract/common/test_object_stages_and_wikitext__local_contract_test.py
 
 echo "[verify-quwoquan-data] PASSED"

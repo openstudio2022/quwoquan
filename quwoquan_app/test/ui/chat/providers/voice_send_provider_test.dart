@@ -129,7 +129,7 @@ void main() {
 
       final state = container.read(voiceSendProvider('conv_001'));
       expect(state.status, VoiceSendStatus.failed);
-      expect(state.error, UITextConstants.chatVoiceUploadFailed);
+      expect(state.error, UITextConstants.chatVoicePendingRetry);
       expect(chatRepo.sendCount, 0);
       expect(
         analytics.events.map((event) => event.eventName),
@@ -167,7 +167,7 @@ void main() {
 
       final state = container.read(voiceSendProvider('conv_001'));
       expect(state.status, VoiceSendStatus.failed);
-      expect(state.error, UITextConstants.chatVoiceSendFailed);
+      expect(state.error, UITextConstants.chatVoicePendingRetry);
       expect(
         analytics.events.map((event) => event.eventName),
         contains('voice_send_failed'),

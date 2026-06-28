@@ -106,14 +106,82 @@ def _disclosure_issues(disclosure: Any, *, prefix: str) -> list[str]:
     return issues
 
 
+def _content_signal(payload: Mapping[str, Any], keys: tuple[str, ...]) -> Any:
+    nested = payload.get("content") if isinstance(payload.get("content"), Mapping) else {}
+    subject = payload.get("subject") if isinstance(payload.get("subject"), Mapping) else {}
+    for key in keys:
+        for source in (payload, nested, subject):
+            value = source.get(key)
+            if value not in (None, "", [], {}):
+                return value
+    return None
+
+
+def _as_str_list(value: Any) -> list[str]:
+    if value in (None, "", [], {}):
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(v) for v in value if str(v).strip()]
+    return [str(value)]
+
+
+def _semantic_consistency_issues(
+    registered: Mapping[str, Any],
+    *,
+    content_vertical: str | None,
+    content_region: str | None,
+    content_tag_refs: list[str],
+    prefix: str,
+) -> list[str]:
+    """内容 vertical/topic/region 与作者 verticalRefs/coverageScope/tag 的语义一致性门。
+
+    仅在内容携带相应信号时触发；nationwide 作者与命中范围/标签的作者不会被拦。
+    与 carrier 硬门互补：拦截"作者覆盖面与内容主题/地域不符"的错误绑定。
+    """
+    issues: list[str] = []
+    vertical_refs = [str(v) for v in (registered.get("verticalRefs") or [])]
+    if content_vertical and vertical_refs and content_vertical not in vertical_refs:
+        issues.append(
+            f"{prefix}.semanticFit: content vertical '{content_vertical}' ∉ creator verticalRefs {vertical_refs}"
+        )
+    if content_region or content_tag_refs:
+        scope = registered.get("coverageScope")
+        kind = str(scope.get("kind") or "") if isinstance(scope, Mapping) else ""
+        if kind in ("regional", "thematic"):
+            try:
+                from template.creator import coverage_range_fit, _tag_overlap
+
+                range_fit = coverage_range_fit(
+                    dict(registered), region=content_region, tag_refs=content_tag_refs
+                )
+                tag_overlap = _tag_overlap(dict(registered), content_tag_refs)
+            except Exception:  # noqa: BLE001
+                range_fit, tag_overlap = 1.0, 1.0
+            if range_fit < 0.5 and tag_overlap <= 0.0:
+                signal = content_region or ",".join(content_tag_refs)
+                issues.append(
+                    f"{prefix}.semanticFit: content topic/region '{signal}' ∉ creator "
+                    f"coverageScope({kind})/topic tags (rangeFit={range_fit:.2f})"
+                )
+    return issues
+
+
 def creator_assignment_issues(
     payload: Mapping[str, Any],
     *,
     carrier: str | None = None,
     prefix: str = "creatorAssignment",
     require_registered: bool = True,
+    content_vertical: str | None = None,
+    content_region: str | None = None,
+    content_tag_refs: list[str] | None = None,
 ) -> list[str]:
-    """Validate that a content object has a frozen, registry-backed creator."""
+    """Validate that a content object has a frozen, registry-backed creator.
+
+    When the content carries vertical/region/topic signals (explicit args or
+    payload fields), also enforce semantic persona↔content fit so a wrong-coverage
+    author is blocked before publish (not only the carrier hard gate).
+    """
     creator = creator_from_payload(payload)
     issues: list[str] = []
     for field in CREATOR_ASSIGNMENT_FIELDS:
@@ -157,6 +225,26 @@ def creator_assignment_issues(
             affinity = 0.0
         if affinity <= 0:
             issues.append(f"{prefix}.carrierAffinity is zero for carrier={carrier}")
+
+    eff_vertical = content_vertical or (
+        str(_content_signal(payload, ("vertical", "contentVertical")) or "") or None
+    )
+    eff_region = content_region or (
+        str(_content_signal(payload, ("region", "regionRef", "coverageRegion")) or "") or None
+    )
+    eff_tag_refs = content_tag_refs if content_tag_refs is not None else _as_str_list(
+        _content_signal(payload, ("tagRefs", "topicRefs", "primaryTagRefs"))
+    )
+    if eff_vertical or eff_region or eff_tag_refs:
+        issues.extend(
+            _semantic_consistency_issues(
+                registered,
+                content_vertical=eff_vertical,
+                content_region=eff_region,
+                content_tag_refs=eff_tag_refs,
+                prefix=prefix,
+            )
+        )
     return issues
 
 
@@ -177,3 +265,55 @@ def creator_assignment_from_profile(profile: Mapping[str, Any]) -> dict[str, Any
             "riskTier": profile.get("riskTier"),
         },
     }
+
+
+def resolve_registry_creator_assignment(
+    blueprint: Mapping[str, Any] | None = None,
+    *,
+    carrier: str,
+    region: str | None = None,
+    vertical: str | None = None,
+    tag_refs: list[str] | None = None,
+    preferred_archetype: str | None = None,
+    seed: str = "",
+    registry: Any = None,
+) -> dict[str, Any]:
+    """Single source of truth for resolving a registered platform creator.
+
+    Deterministically (by ``seed``) matches an active registered creator by content
+    carrier / region / vertical and projects it into content-object creator
+    assignment fields. Shared by single-mode managed runs and fan-out dispatch so
+    both paths attribute the same author for the same content object (R24/R25).
+
+    Returns ``{}`` gracefully when the template registry or a match is unavailable
+    (e.g. dev/mock without a creator registry), so callers never crash.
+    """
+    try:
+        from template.creator import match_creator
+    except Exception:  # noqa: BLE001
+        return {}
+    if registry is None:
+        try:
+            from template.registry import TemplateRegistry
+
+            registry = TemplateRegistry.load()
+        except Exception:  # noqa: BLE001
+            return {}
+    if not getattr(registry, "creators", None):
+        return {}
+    try:
+        creator = match_creator(
+            registry,
+            dict(blueprint or {}),
+            carrier=carrier,
+            tag_refs=tag_refs,
+            region=region,
+            vertical=vertical,
+            seed=seed,
+            preferred_archetype=preferred_archetype,
+        )
+    except Exception:  # noqa: BLE001
+        return {}
+    if not creator:
+        return {}
+    return creator_assignment_from_profile(creator)

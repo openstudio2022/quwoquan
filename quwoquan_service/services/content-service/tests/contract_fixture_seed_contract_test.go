@@ -10,7 +10,7 @@ import (
 
 func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	evidence := seedContentContractFixture(t, "content_discovery_core")
+	evidence := seedContentContractFixture(t, "content_discovery_core", "comment_thread_core")
 	if evidence.InsertedCount < 4 {
 		t.Fatalf("expected at least 4 seeded content records, got %d", evidence.InsertedCount)
 	}

@@ -53,14 +53,20 @@ def main() -> int:
     alpha_android = resolve_app_endpoint_overrides("alpha", "android_physical", topology=topology)
     if alpha_android["gatewayBaseUrl"] != "https://localhost:17000":
         issues.append("alpha android local device must map gateway to plain localhost HTTPS transport")
+    if alpha_android.get("legalBaseUrl") != "https://localhost:17000/legal":
+        issues.append("alpha android local device must map legal-static to gateway /legal")
     if alpha_android["mediaImageBaseUrl"] != "https://localhost:17100":
         issues.append("alpha android local device must map media to plain localhost HTTPS transport")
     beta_android = resolve_app_endpoint_overrides("beta", "android_emulator", topology=topology)
     if beta_android["gatewayBaseUrl"] != "https://beta-api.localhost:18000":
         issues.append("beta android local device must map gateway to distinct localhost HTTPS transport")
+    if beta_android.get("legalBaseUrl") != "https://beta-api.localhost:18000/legal":
+        issues.append("beta android local device must map legal-static to gateway /legal")
     gamma_web = resolve_app_endpoint_overrides("gamma", "web", topology=topology)
     if gamma_web["gatewayBaseUrl"] != "https://gamma-api.quwoquan-env.test:19000":
         issues.append("gamma web must map gateway to secure gamma env domain")
+    if gamma_web.get("legalBaseUrl") != "https://gamma-api.quwoquan-env.test:19000/legal":
+        issues.append("gamma web must map legal-static to gateway /legal")
 
     build_gradle = (ROOT / "quwoquan_app/android/app/build.gradle.kts").read_text(
         encoding="utf-8"
@@ -82,6 +88,8 @@ def main() -> int:
         issues.append("android debug build must patch FlutterTask dart-defines for plain flutter run")
     if '"CLOUD_GATEWAY_BASE_URL" to "https://localhost:17000"' not in build_gradle:
         issues.append("plain android flutter run must default alpha gateway to localhost HTTPS transport")
+    if '"APP_LEGAL_BASE_URL" to "https://localhost:17000/legal"' not in build_gradle:
+        issues.append("plain android flutter run must default alpha legal-static to gateway /legal")
     if '"MEDIA_IMAGE_CDN_BASE_URL" to "https://localhost:17100"' not in build_gradle:
         issues.append("plain android flutter run must default alpha media to localhost HTTPS transport")
     if "prepareAndroidLocalAlphaStack" not in build_gradle:
@@ -123,8 +131,11 @@ def main() -> int:
         issues.append("app bootstrap must install Dart local HTTPS trust before media/cache clients start")
     if "_installLocalDevHttpsTrustAfterFirstFrame" in app_bootstrap:
         issues.append("app bootstrap must not defer Dart local HTTPS trust until after the first frame")
-    if "await _installLocalDevHttpsTrustBeforeMediaClients();" not in app_bootstrap:
-        issues.append("app bootstrap must await local HTTPS trust before runApp/media clients")
+    if (
+        "_installLocalDevHttpsTrustBeforeMediaClients()" not in app_bootstrap
+        or "startupPrerequisites: startupPrerequisites" not in app_bootstrap
+    ):
+        issues.append("app bootstrap must pass local HTTPS trust as startup prerequisites before media clients")
     if (
         "SecurityContext.defaultContext.setTrustedCertificatesBytes"
         not in local_https_trust_sources
@@ -136,6 +147,8 @@ def main() -> int:
         issues.append("Android MainActivity must expose packaged local_env_debug_root to Dart HttpClient")
     if "export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1" not in alpha_run:
         issues.append("alpha run.sh must require Android local debug CA when preparing local device launch")
+    if "--legal-base-url" not in alpha_run:
+        issues.append("alpha run.sh must pass legal-static base URL with app env dart-defines")
     if "export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1" not in beta_manual:
         issues.append("beta manual launcher must require Android local debug CA for Android devices")
     alpha_stack = (ROOT / "agent_ops/deploy/alpha/start_alpha_mock_stack.sh").read_text(
@@ -143,12 +156,22 @@ def main() -> int:
     )
     if "agent_ops/deploy/lib/tls_reverse_proxy.py" not in alpha_stack:
         issues.append("alpha local stack must use repo-owned TLS reverse proxy")
+    if "agent_ops/deploy/legal_static.py\" package --env alpha" not in alpha_stack:
+        issues.append("alpha local stack must build legal-static before serving /legal")
+    if '"/legal/user-agreement"' not in alpha_stack:
+        issues.append("alpha local stack must health-check legal-static stable URL")
+    if "stop_alpha_reserved_listeners" not in alpha_stack or "lsof -nP -tiTCP" not in alpha_stack:
+        issues.append("alpha local stack must clear repo-owned stale listeners on reserved ports before startup")
     if "docker.io/library/caddy" in alpha_stack:
         issues.append("alpha local stack must not depend on external Caddy image for flutter run")
     if "ensure_public_hosts_mapping" not in alpha_stack:
         issues.append("alpha local stack must manage quwoquan-env.test loopback DNS before app launch")
     if "security add-trusted-cert" not in alpha_stack:
         issues.append("alpha local stack must trust the local root CA for host/iOS simulator HTTPS")
+    if "macos_login_keychain_trust_is_current" not in alpha_stack:
+        issues.append("alpha local stack must idempotently skip repeated macOS login keychain trust writes")
+    if "QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST" not in alpha_stack:
+        issues.append("alpha local stack must allow skipping macOS login keychain trust for iOS simulator builds")
     if "simctl keychain booted add-root-cert" not in alpha_stack:
         issues.append("alpha local stack must install the local root CA into booted iOS simulators")
     if "IP.2 = 10.0.2.2" not in alpha_stack:
@@ -171,6 +194,8 @@ def main() -> int:
         issues.append("iOS alpha prepare script must expose an explicit opt-out")
     if "start_alpha_mock_stack.sh\" up" not in ios_prepare_alpha:
         issues.append("iOS alpha prepare script must start the alpha HTTPS stack")
+    if "QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip" not in ios_prepare_alpha:
+        issues.append("iOS alpha prepare script must skip macOS login keychain trust to avoid repeated password prompts")
     if 'LOCAL_GAMMA_CADDY_DATA_ROOT="${LOCAL_GAMMA_CADDY_DATA_ROOT:-${LOCAL_GAMMA_STATE_ROOT}/caddy-data}"' not in gamma_script:
         issues.append("gamma local mirror must expose host-readable caddy data root")
     if 'LOCAL_GAMMA_CADDY_CONFIG_ROOT="${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-${LOCAL_GAMMA_STATE_ROOT}/caddy-config}"' not in gamma_script:

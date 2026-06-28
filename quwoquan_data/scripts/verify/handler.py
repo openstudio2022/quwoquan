@@ -82,6 +82,43 @@ def handle_verify(args: argparse.Namespace) -> None:
         if not report.get("passed"):
             raise SystemExit(1)
         return
+    if cmd == "creator-scale-readiness":
+        from governance.creator_pool.readiness import (
+            build_creator_readiness_report,
+            write_creator_readiness_report,
+        )
+
+        if not args.batch:
+            print("[verify creator-scale-readiness] --batch is required", file=sys.stderr)
+            raise SystemExit(2)
+        report = build_creator_readiness_report(
+            vertical=str(getattr(args, "vertical", "travel") or "travel"),
+            batch_id=str(args.batch),
+            target=int(getattr(args, "target", 10) or 10),
+            mode=str(getattr(args, "mode", "trial") or "trial"),
+            min_pass_rate=float(getattr(args, "min_pass_rate", 1.0) or 1.0),
+        )
+        if getattr(args, "report_out", None):
+            write_creator_readiness_report(Path(args.report_out), report)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if not report.get("passed"):
+            raise SystemExit(1)
+        return
+    if cmd == "prefab-user-readiness":
+        import subprocess
+
+        repo_root = Path(__file__).resolve().parents[3]
+        mode = str(getattr(args, "mode", "four_env") or "four_env")
+        script = (
+            repo_root / "quwoquan_data/scripts/verify/emit_creator_prefab_user_t2_stability_report.py"
+            if mode == "t2"
+            else repo_root / "quwoquan_data/scripts/verify/emit_creator_prefab_user_four_env_readiness.py"
+        )
+        cmd_args = ["python3", str(script)]
+        if getattr(args, "report_out", None):
+            cmd_args.extend(["--report-out", str(args.report_out)])
+        result = subprocess.run(cmd_args, cwd=repo_root, check=False)
+        raise SystemExit(result.returncode)
     if cmd == "site-scale-readiness":
         from verify.site_scale_readiness import build_site_scale_readiness_report, write_site_scale_readiness_report
 
@@ -335,6 +372,13 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     psr.add_argument("--release", help="可选 isolated release ID，用于证明 release verify 入口存在")
     psr.add_argument("--allow-missing-import", action="store_true", help="仅本地试跑时允许缺少 staging/gamma import 证据")
     psr.add_argument("--report-out", help="可选：写出 readiness JSON 报告")
+    pcsr = sub.add_parser("creator-scale-readiness", help="校验创作者池 Scale-10/100 放量证据")
+    pcsr.add_argument("--vertical", default="travel")
+    pcsr.add_argument("--batch", required=True)
+    pcsr.add_argument("--target", type=int, default=10)
+    pcsr.add_argument("--mode", choices=["trial", "commercial"], default="trial")
+    pcsr.add_argument("--min-pass-rate", type=float, default=1.0)
+    pcsr.add_argument("--report-out", help="写出 creator readiness JSON")
     pss = sub.add_parser("site-scale-readiness", help="校验网站维度内容供给是否具备日产 10 万级准出证据")
     pss.add_argument("--vertical", default="travel", help="垂类，默认 travel")
     pss.add_argument("--site-id", help="可选：只校验单个 siteId；不传则聚合同垂类该 batch 全部站点")
@@ -347,5 +391,9 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pss.add_argument("--min-image-count", type=int, default=0, help="可选：trial 按 content_plan handoff，commercial 按已 release/import postRefs 统计图片作品最低数")
     pss.add_argument("--min-video-count", type=int, default=0, help="可选：trial 按 content_plan handoff，commercial 按已 release/import postRefs 统计视频作品最低数")
     pss.add_argument("--report-out", help="可选：写出 readiness JSON 报告")
+
+    ppur = sub.add_parser("prefab-user-readiness", help="T4 四环境 prefab user readiness 报告")
+    ppur.add_argument("--mode", choices=["four_env", "t2"], default="four_env")
+    ppur.add_argument("--report-out", help="可选：覆盖默认 artifact 路径")
 
     p.set_defaults(handler=handle_verify)

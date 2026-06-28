@@ -8,8 +8,9 @@
 
 - 权限卡片：图标 + 主文案 + 副文案 + 主操作按钮
 - 永久拒绝 → 展示「去设置」；可再请求 → 引导重试或再次 request
-- l10n：locationAppPermissionRequired、mediaPickerPermissionDenied、openSettings 等
-- 地图/位置特定：加载态、权限态、云端错误态区分
+- **统一协调层**：`AppPermissionCoordinator` + `AppPermissionSurface`（`jit` / `page`）
+- **L0–L4 漏斗**与 `suppressSettingsPrompt` 防死循环（见 `specs/ux/error-and-permission-semantics.md` §2.8–§2.9）
+- l10n：`permissionSettingsGateTitle`、`permissionPrimerContinue`、`chatVoicePendingRetry` 等
 - gate 语义：权限被拒绝时说明“当前为什么不能继续”以及“继续所需动作”
 
 ## 与父节点关系

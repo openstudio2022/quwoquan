@@ -17236,6 +17236,71 @@
           "message": "契约设置诊断事件"
         }
       ]
+    },
+    "creator_travel_travel_batch_100_v1_core": {
+      "description": "Creator pool travel_batch_100_v1 curated pilot subset",
+      "profiles": [
+        {
+          "userId": "qwq_creator_travel_casual_tourist_001"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_002"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_003"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_004"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_005"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_006"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_007"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_008"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_009"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_010"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_011"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_012"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_013"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_014"
+        },
+        {
+          "userId": "qwq_creator_travel_casual_tourist_015"
+        },
+        {
+          "userId": "qwq_creator_travel_local_walker_016"
+        },
+        {
+          "userId": "qwq_creator_travel_local_walker_017"
+        },
+        {
+          "userId": "qwq_creator_travel_local_walker_018"
+        },
+        {
+          "userId": "qwq_creator_travel_local_walker_019"
+        },
+        {
+          "userId": "qwq_creator_travel_local_walker_020"
+        }
+      ]
     }
   },
   "scenarios": [
@@ -17288,6 +17353,85 @@
           "requiresSeedReset": true
         }
       }
+    },
+    {
+      "id": "creator_travel_travel_batch_100_v1_core",
+      "title": "Creator pool travel_batch_100_v1",
+      "type": "user_profile",
+      "domainId": "user",
+      "seedRefs": [
+        "creator_travel_travel_batch_100_v1_core"
+      ],
+      "uiExpectations": {
+        "userIds": [
+          "qwq_creator_travel_casual_tourist_001",
+          "qwq_creator_travel_casual_tourist_002",
+          "qwq_creator_travel_casual_tourist_003",
+          "qwq_creator_travel_casual_tourist_004",
+          "qwq_creator_travel_casual_tourist_005",
+          "qwq_creator_travel_casual_tourist_006",
+          "qwq_creator_travel_casual_tourist_007",
+          "qwq_creator_travel_casual_tourist_008",
+          "qwq_creator_travel_casual_tourist_009",
+          "qwq_creator_travel_casual_tourist_010",
+          "qwq_creator_travel_casual_tourist_011",
+          "qwq_creator_travel_casual_tourist_012",
+          "qwq_creator_travel_casual_tourist_013",
+          "qwq_creator_travel_casual_tourist_014",
+          "qwq_creator_travel_casual_tourist_015",
+          "qwq_creator_travel_local_walker_016",
+          "qwq_creator_travel_local_walker_017",
+          "qwq_creator_travel_local_walker_018",
+          "qwq_creator_travel_local_walker_019",
+          "qwq_creator_travel_local_walker_020"
+        ]
+      },
+      "remoteExpectations": {
+        "profileUserIds": [
+          "qwq_creator_travel_casual_tourist_001",
+          "qwq_creator_travel_casual_tourist_002",
+          "qwq_creator_travel_casual_tourist_003",
+          "qwq_creator_travel_casual_tourist_004",
+          "qwq_creator_travel_casual_tourist_005",
+          "qwq_creator_travel_casual_tourist_006",
+          "qwq_creator_travel_casual_tourist_007",
+          "qwq_creator_travel_casual_tourist_008",
+          "qwq_creator_travel_casual_tourist_009",
+          "qwq_creator_travel_casual_tourist_010",
+          "qwq_creator_travel_casual_tourist_011",
+          "qwq_creator_travel_casual_tourist_012",
+          "qwq_creator_travel_casual_tourist_013",
+          "qwq_creator_travel_casual_tourist_014",
+          "qwq_creator_travel_casual_tourist_015",
+          "qwq_creator_travel_local_walker_016",
+          "qwq_creator_travel_local_walker_017",
+          "qwq_creator_travel_local_walker_018",
+          "qwq_creator_travel_local_walker_019",
+          "qwq_creator_travel_local_walker_020"
+        ],
+        "subAccountIds": []
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      },
+      "tags": [
+        "creator_pool",
+        "travel",
+        "beta"
+      ]
     }
   ]
 }

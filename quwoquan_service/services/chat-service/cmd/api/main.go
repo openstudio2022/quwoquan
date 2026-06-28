@@ -121,6 +121,10 @@ func main() {
 	logger := slog.Default()
 	instanceID := getenvOrDefault("SERVICE_INSTANCE_ID", hostname())
 	userServiceBaseURL := strings.TrimSpace(os.Getenv("USER_SERVICE_BASE_URL"))
+	circleServiceBaseURL := strings.TrimSpace(os.Getenv("CIRCLE_SERVICE_BASE_URL"))
+	if circleServiceBaseURL == "" {
+		circleServiceBaseURL = strings.TrimSpace(os.Getenv("GATEWAY_BASE_URL"))
+	}
 
 	ioLogger := robs.NewIOAccessLogger(os.Stdout)
 	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
@@ -232,6 +236,7 @@ func main() {
 	profileResolver := httpadapter.NewUserProfileResolver(userServiceBaseURL, profileClient)
 	relationshipGate := httpadapter.NewUserRelationshipGate(userServiceBaseURL, profileClient)
 	socialContactResolver := httpadapter.NewUserSocialContactResolver(userServiceBaseURL, profileClient)
+	circleListResolver := httpadapter.NewCircleListResolverClient(circleServiceBaseURL, profileClient)
 
 	conversationSvc := application.NewConversationService(
 		chatStore,
@@ -254,6 +259,7 @@ func main() {
 		groupAvatarScheduler,
 		application.WithRelationshipGate(relationshipGate),
 		application.WithSocialContactResolver(socialContactResolver),
+		application.WithCircleListResolver(circleListResolver),
 	)
 	inboxSvc := application.NewInboxService(chatStore)
 	userAvatarConsumer := mq.NewUserAvatarUpdateConsumer(

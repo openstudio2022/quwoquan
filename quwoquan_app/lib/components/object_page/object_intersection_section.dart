@@ -12,13 +12,14 @@ import 'package:quwoquan_app/components/object_page/object_intersection_card.dar
 import 'package:quwoquan_app/components/object_page/object_intersection_card_skeleton.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/constants/plaza_text_constants.dart';
+import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 
 /// 对象页交集区块（V4 · 商用完整态 · 三主页统一）。
 ///
 /// 设计与产品（设计师 + 产品经理视角）：
-/// - 统一 async 三态：loading → 骨架（不留白/不闪布局）；data → 交集卡（无可展示则收起，G2）；error → 收起（不报错噪声，交集是增强位）。
+/// - 统一 async 三态：loading → 骨架；data → 交集卡或空态行动引导（常驻行动区）；error → 收起（不报错噪声，交集是增强位）。
 /// - 旅程无断点（§7.3）：命中 [intersectionHighlightIntentProvider] 且对象匹配时，透传 highlightKind 自动展开高亮，并消费意图（一次性）。
 /// - 三主页（用户/圈子/实体）共用本组件，杜绝各页各态。
 class ObjectIntersectionSection extends ConsumerWidget {
@@ -135,7 +136,39 @@ class ObjectIntersectionSection extends ConsumerWidget {
         _openReasonTarget(context, reason);
       },
     );
-    return card ?? const SizedBox.shrink();
+    return card ?? _buildEmptyActionZone(context);
+  }
+
+  /// 无交集事实时仍保留行动区占位，引导用户成为第一个留下交集的人（同频原型 · 常驻行动区）。
+  Widget _buildEmptyActionZone(BuildContext context) {
+    return Container(
+      key: const ValueKey<String>('object-intersection-empty-action-zone'),
+      width: double.infinity,
+      padding: EdgeInsets.all(AppSpacing.containerSm),
+      decoration: BoxDecoration(
+        color: AppColors.iosSecondaryFill(context),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            CupertinoIcons.sparkles,
+            size: AppSpacing.iconSmall,
+            color: AppColors.iosAccent(context),
+          ),
+          SizedBox(width: AppSpacing.intraGroupSm),
+          Expanded(
+            child: Text(
+              PlazaTextConstants.objectActionZoneEmptyHint,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: AppColors.iosSecondaryLabel(context),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _openReasonTarget(BuildContext context, IntersectionReason reason) {

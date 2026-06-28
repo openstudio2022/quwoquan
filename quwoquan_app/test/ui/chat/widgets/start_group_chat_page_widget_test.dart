@@ -9,6 +9,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
@@ -180,6 +181,38 @@ class _SeededGroupCandidatesChatRepository extends MockChatRepository {
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     return _rows.take(limit).toList(growable: false);
+  }
+}
+
+/// 确定性「从群聊中选择」数据源：图四群列表与图五群成员均由测试给定，
+/// 用于稳定校验返回路径、long title 无 overflow 等 UI 契约。
+class _SelectableGroupChatRepository extends MockChatRepository {
+  _SelectableGroupChatRepository({
+    required this.groups,
+    required this.membersByConversation,
+  });
+
+  final List<SelectableGroupConversationRowDto> groups;
+  final Map<String, List<ChatContactRowDto>> membersByConversation;
+
+  @override
+  Future<List<SelectableGroupConversationRowDto>>
+  listSelectableGroupConversations({
+    String? query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    return groups.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<List<ChatContactRowDto>> listSelectableGroupContactMembers({
+    required String conversationId,
+    String? query,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    return (membersByConversation[conversationId] ?? const <ChatContactRowDto>[])
+        .take(limit)
+        .toList(growable: false);
   }
 }
 
@@ -368,9 +401,22 @@ void main() {
       conversationId: 'conv_existing',
     );
 
+    // 已在群内的成员（李明 = user_002）经服务端过滤后不应出现在候选列表。
     expect(find.text('李明'), findsNothing);
+
+    // 联系人样式行更高（头像 52），候选较多时尾部成员需滚动进入视口后才被构建。
+    Future<void> scrollUntilFound(Finder target) async {
+      for (var i = 0; i < 30; i++) {
+        if (tester.any(target)) {
+          return;
+        }
+        await tester.drag(find.byType(ListView).first, const Offset(0, -320));
+        await tester.pumpAndSettle();
+      }
+    }
+
+    await scrollUntilFound(find.text('张华'));
     expect(find.text('张华'), findsOneWidget);
-    expect(find.text('李青'), findsOneWidget);
 
     await tester.ensureVisible(find.text('张华').last);
     await tester.pumpAndSettle();
@@ -385,6 +431,111 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('${UITextConstants.addMember}（1）'), findsOneWidget);
+
+    // 选中后再滚动校验尾部候选李青仍可进入视口。
+    await scrollUntilFound(find.text('李青'));
+    expect(find.text('李青'), findsOneWidget);
+  });
+
+  testWidgets('拼音搜索输入 li 命中姓李的联系人且隐藏字母索引', (tester) async {
+    _suppressImageErrors();
+
+    final container = _buildContainer(MockChatRepository());
+    await _pumpStartGroupChatPage(tester, container: container);
+
+    // 默认列表展示全部 mutual 候选。
+    expect(find.byIcon(CupertinoIcons.circle), findsWidgets);
+
+    await tester.enterText(find.byType(CupertinoTextField), 'li');
+    await tester.pumpAndSettle();
+
+    // 全拼匹配：李明→liming、李想→lixiang 等含 "li"；张华→zhanghua 不含。
+    expect(find.text('李明'), findsOneWidget);
+    expect(find.text('张华'), findsNothing);
+
+    // 搜索时右侧字母索引应隐藏。
+    expect(
+      find.byKey(const ValueKey<String>('start-group-letter-index')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('点击已选头像取消选择并提示用户', (tester) async {
+    _suppressImageErrors();
+
+    final container = _buildContainer(MockChatRepository());
+    await _pumpStartGroupChatPage(tester, container: container);
+
+    // 选中第一个候选。
+    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
+    await tester.pumpAndSettle();
+    expect(
+      find.text(UITextConstants.startGroupChatSelectedCount(1)),
+      findsOneWidget,
+    );
+
+    // 点击选中横向条里的头像 → 取消并 toast。
+    final selectedAvatar = find
+        .descendant(
+          of: find.byKey(const ValueKey<String>('start-group-selected-list')),
+          matching: find.byType(GestureDetector),
+        )
+        .first;
+    expect(selectedAvatar, findsOneWidget);
+    await tester.tap(selectedAvatar);
+    await tester.pumpAndSettle();
+
+    // 取消后已选区块整体隐藏（count 标签不再展示）。
+    expect(
+      find.text(UITextConstants.startGroupChatSelectedCount(1)),
+      findsNothing,
+    );
+    expect(find.textContaining('已移除'), findsOneWidget);
+
+    // 等待 toast 自动消失计时器结束，避免遗留 pending timer。
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('从群聊中选择联系人：群列表展示朋友数且可进入群成员多选', (tester) async {
+    _suppressImageErrors();
+
+    final container = _buildContainer(MockChatRepository());
+    await _pumpStartGroupChatPage(tester, container: container);
+
+    // 点击「从群聊中选择」入口进入图四。
+    await tester.tap(find.text(UITextConstants.startGroupChatPickFromGroup));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('start-group-group-picker-sheet')),
+      findsOneWidget,
+    );
+    // 图四标题与至少一个群行（含「个朋友」计数）。
+    expect(
+      find.text(UITextConstants.startGroupChatGroupPickerTitle),
+      findsOneWidget,
+    );
+    expect(find.textContaining('个朋友）'), findsWidgets);
+
+    // 进入第一个群（图五）。
+    final groupRow = find
+        .ancestor(
+          of: find.textContaining('个朋友）').first,
+          matching: find.byType(CupertinoButton),
+        )
+        .first;
+    await tester.ensureVisible(groupRow);
+    await tester.pumpAndSettle();
+    await tester.tap(groupRow);
+    await tester.pumpAndSettle();
+
+    // 图五群成员多选页打开，标题含「个朋友」。
+    expect(
+      find.byKey(const ValueKey<String>('start-group-member-select-sheet')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('个朋友）'), findsWidgets);
   });
 
   testWidgets('建群聊成功后同时刷新消息列表与群聊列表', (tester) async {
@@ -435,5 +586,120 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('图五选「选择(N)」直接关闭图四+图五回主页并并入已选成员', (tester) async {
+    _suppressImageErrors();
+
+    final repository = _SelectableGroupChatRepository(
+      groups: <SelectableGroupConversationRowDto>[
+        SelectableGroupConversationRowDto(
+          conversationId: 'conv_source',
+          title: '产品交流群',
+          avatarUrl: '',
+          friendMemberCount: 1,
+          memberCount: 8,
+        ),
+      ],
+      membersByConversation: <String, List<ChatContactRowDto>>{
+        'conv_source': <ChatContactRowDto>[
+          ChatContactRowDto(
+            userId: 'user_002',
+            displayName: '李明',
+            avatarUrl: '',
+            relationState: 'mutual',
+            source: 'group',
+          ),
+        ],
+      },
+    );
+    final container = _buildContainer(repository);
+    await _pumpStartGroupChatPage(tester, container: container);
+
+    // 进入图四群列表。
+    await tester.tap(find.text(UITextConstants.startGroupChatPickFromGroup));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('start-group-group-picker-sheet')),
+      findsOneWidget,
+    );
+
+    // 进入图五群成员多选页。
+    await tester.tap(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_source')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('start-group-member-select-sheet')),
+      findsOneWidget,
+    );
+
+    // 选中群成员（行整体可点，避免与底部「全选」圈图标混淆）。
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('start-group-candidate-row-user_002'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 点击「选择(1)」→ 直接关闭图五与图四，回到发起群聊主页。
+    await tester.tap(find.text('${UITextConstants.selectAction}（1）'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('start-group-member-select-sheet')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('start-group-group-picker-sheet')),
+      findsNothing,
+    );
+    expect(find.byType(StartGroupChatPage), findsOneWidget);
+    // 主页已选区块展示新并入成员。
+    expect(
+      find.text(UITextConstants.startGroupChatSelectedCount(1)),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('图四超长群名 + 朋友数不触发 RenderFlex overflow', (tester) async {
+    _suppressImageErrors();
+
+    const longTitle = '一个用于压力测试横向溢出的超长群聊名称连续不断没有空格也没有换行符号';
+    final repository = _SelectableGroupChatRepository(
+      groups: <SelectableGroupConversationRowDto>[
+        SelectableGroupConversationRowDto(
+          conversationId: 'conv_long',
+          title: longTitle,
+          avatarUrl: '',
+          friendMemberCount: 12,
+          memberCount: 30,
+        ),
+      ],
+      membersByConversation: <String, List<ChatContactRowDto>>{
+        'conv_long': <ChatContactRowDto>[
+          ChatContactRowDto(
+            userId: 'user_002',
+            displayName: '李明',
+            avatarUrl: '',
+            relationState: 'mutual',
+            source: 'group',
+          ),
+        ],
+      },
+    );
+    final container = _buildContainer(repository);
+    await _pumpStartGroupChatPage(tester, container: container);
+
+    await tester.tap(find.text(UITextConstants.startGroupChatPickFromGroup));
+    await tester.pumpAndSettle();
+
+    // 长群名行已渲染，且未抛出布局溢出异常。
+    expect(
+      find.byKey(const ValueKey<String>('start-group-picker-row-conv_long')),
+      findsOneWidget,
+    );
+    expect(find.text(longTitle), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

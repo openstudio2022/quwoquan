@@ -1,0 +1,138 @@
+{
+  "outputDir": "artifacts/startup_first_frame/probe-debug/20260626T165419",
+  "passed": false,
+  "results": [
+    {
+      "platform": "android",
+      "device": "emulator-5554",
+      "passed": false,
+      "visibleByMs": 3000,
+      "firstVisibleMs": null,
+      "activityDisplayedMs": 6153,
+      "firstFrameWithinBudget": false,
+      "nativeWelcomeDetected": false,
+      "nativeWelcomeHits": [],
+      "blueScreenDetected": false,
+      "plainBackgroundDetected": true,
+      "flutterUiDisplayedMaxMs": 3000,
+      "flutterUiDisplayedWithinBudget": true,
+      "timings": {
+        "android_activity_displayed_ms": 6153
+      },
+      "screenshots": [
+        {
+          "path": "artifacts/startup_first_frame/probe-debug/20260626T165419/android-0200ms.png",
+          "offsetMs": 204,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-debug/20260626T165419/android-0400ms.png",
+          "offsetMs": 1928,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-debug/20260626T165419/android-0600ms.png",
+          "offsetMs": 2942,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-debug/20260626T165419/android-0800ms.png",
+          "offsetMs": 3570,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-debug/20260626T165419/android-1000ms.png",
+          "offsetMs": 4091,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-debug/20260626T165419/android-1500ms.png",
+          "offsetMs": 4767,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            5,
+            6,
+            8
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-debug/20260626T165419/android-2000ms.png",
+          "offsetMs": 6403,
+          "foregroundRatio": 0.16753,
+          "stddevAvg": 21.308,
+          "medianRgb": [
+            13,
+            124,
+            236
+          ],
+          "plainBackground": false,
+          "blueBackground": false,
+          "brandedOrContentVisible": true
+        },
+        {
+          "path": "artifacts/startup_first_frame/probe-debug/20260626T165419/android-3000ms.png",
+          "offsetMs": 8137,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 4.107,
+          "medianRgb": [
+            246,
+            246,
+            246
+          ],
+          "plainBackground": true,
+          "blueBackground": false,
+          "brandedOrContentVisible": false
+        }
+      ]
+    }
+  ]
+}

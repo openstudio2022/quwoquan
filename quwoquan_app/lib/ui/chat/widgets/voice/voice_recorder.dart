@@ -47,7 +47,7 @@ class VoiceRecorder {
   Future<bool> start() async {
     if (_state == VoiceRecordState.recording) return false;
 
-    final hasPermission = await _recorder.hasPermission();
+    final hasPermission = await _recorder.hasPermission(request: false);
     if (!hasPermission) return false;
 
     final dir = await getTemporaryDirectory();

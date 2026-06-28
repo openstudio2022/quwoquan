@@ -1,0 +1,177 @@
+{
+  "status": "passed",
+  "domains": {
+    "content": {
+      "seedRefs": [
+        "content_discovery_core",
+        "home_feed_core",
+        "content_detail_core",
+        "comment_thread_core",
+        "search_core",
+        "publish_core",
+        "intersection_core",
+        "footprint_core",
+        "home_showcase_core"
+      ],
+      "resetScope": "fixture_content_*",
+      "targetStore": "content-service:test_store",
+      "insertedCount": 7,
+      "verifiedEndpoints": [
+        "/v1/content/feed",
+        "/v1/content/posts/fixture_photo_001",
+        "/v1/content/posts/fixture_photo_001/comments",
+        "/v1/content/posts/fixture_photo_001/comments?sort=recommended",
+        "/v1/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
+        "/v1/content/comments/fixture_comment_parent_001/reaction",
+        "/v1/content/comments/fixture_comment_parent_001/media:bind"
+      ]
+    },
+    "chat": {
+      "seedRefs": [
+        "chat_core",
+        "chat_settings_core",
+        "chat_contacts_core",
+        "chat_group_flow_core",
+        "chat_realtime_mock_core"
+      ],
+      "resetScope": "fixture_chat_*",
+      "targetStore": "chat-service:test_store",
+      "insertedCount": 12,
+      "verifiedEndpoints": [
+        "/v1/chat/inbox",
+        "/v1/chat/conversations/fixture_conv_direct/messages"
+      ]
+    },
+    "circle": {
+      "seedRefs": [
+        "circle_core",
+        "circle_home_feed_core",
+        "circle_profile_core",
+        "circle_group_chat_link_core"
+      ],
+      "resetScope": "fixture_circle_*",
+      "targetStore": "circle-service:test_store",
+      "insertedCount": 8,
+      "verifiedEndpoints": [
+        "/v1/circles",
+        "/v1/circles/fixture_circle_photo"
+      ]
+    },
+    "user": {
+      "seedRefs": [
+        "user_profile_core",
+        "persona_core",
+        "profile_feed_core",
+        "relationship_core",
+        "following_subject_core",
+        "settings_core"
+      ],
+      "resetScope": "fixture_user_*",
+      "targetStore": "user-service:test_store",
+      "insertedCount": 20,
+      "verifiedEndpoints": [
+        "/v1/user/profile",
+        "/v1/user/following-subjects"
+      ]
+    },
+    "creator_pool": {
+      "seedRefs": [
+        "creator_travel_batch100",
+        "creator_travel_travel_batch_100_v1_core"
+      ],
+      "resetScope": "fixture_creator_pool_*",
+      "targetStore": "user-service:test_store",
+      "insertedCount": 20,
+      "verifiedEndpoints": [
+        "/v1/user/profile",
+        "/v1/user/{subAccountId}"
+      ]
+    }
+  },
+  "manifestOnlyDomains": {
+    "assistant": {
+      "seedRefs": [
+        "assistant_p0_core",
+        "skill_management_core"
+      ],
+      "resetScope": "fixture_assistant_*",
+      "targetStore": "assistant-service:memory",
+      "verifiedEndpoints": [
+        "/v1/assistant/conversations",
+        "/v1/assistant/skill-subscriptions"
+      ],
+      "status": "manifest-verified"
+    },
+    "entity": {
+      "seedRefs": [
+        "entity_homepage_core",
+        "entity_claim_core",
+        "entity_picker_core"
+      ],
+      "resetScope": "fixture_entity_*",
+      "targetStore": "entity-service:test_store",
+      "verifiedEndpoints": [
+        "/v1/homepages/search",
+        "/v1/homepages/{homepageId}/object-page-bundle",
+        "/v1/homepages/{homepageId}/introduction"
+      ],
+      "status": "manifest-verified"
+    },
+    "integration": {
+      "seedRefs": [
+        "location_poi_core"
+      ],
+      "resetScope": "fixture_integration_*",
+      "targetStore": "integration-service:test_store",
+      "verifiedEndpoints": [
+        "/v1/integration/locations/pois"
+      ],
+      "status": "manifest-verified"
+    },
+    "notification": {
+      "seedRefs": [
+        "notification_core"
+      ],
+      "resetScope": "fixture_notification_*",
+      "targetStore": "notification-service:test_store",
+      "verifiedEndpoints": [
+        "/v1/app-messages"
+      ],
+      "status": "manifest-verified"
+    },
+    "rtc": {
+      "seedRefs": [
+        "rtc_core"
+      ],
+      "resetScope": "fixture_rtc_*",
+      "targetStore": "rtc-service:test_store",
+      "verifiedEndpoints": [
+        "/v1/rtc/calls"
+      ],
+      "status": "manifest-verified"
+    }
+  },
+  "appBetaRuns": [
+    {
+      "dataSource": "remote",
+      "gatewayBaseUrl": "http://127.0.0.1:18080",
+      "httpEvidence": [
+        "content feed 200 via content-service handler",
+        "chat inbox 200 via chat-service handler",
+        "circle list 200 via circle-service handler"
+      ]
+    }
+  ],
+  "runner": {
+    "mode": "local-beta-handler-harness",
+    "note": "The runner executes real Go handlers backed by Mongo test stores seeded from contract fixtures; no Dart mock repositories are used.",
+    "goTests": {
+      "content": "TestContractFixtureSeed_ContentAlphaReadsViaHandler",
+      "chat": "TestContractFixtureSeed_ChatAlphaReadsViaHandler",
+      "circle": "TestContractFixtureSeed_CircleAlphaReadsViaHandler",
+      "user": "TestContractFixtureSeed_CreatorPoolBetaReadsViaHandler",
+      "creator_pool": "TestContractFixtureSeed_CreatorPoolBetaReadsViaHandler"
+    },
+    "manifest": "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json"
+  }
+}

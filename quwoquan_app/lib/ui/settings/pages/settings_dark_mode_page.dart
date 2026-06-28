@@ -39,9 +39,12 @@ class SettingsDarkModePage extends ConsumerWidget {
             children: <Widget>[
               SettingsInsetGroupedSection(
                 isDark: isDark,
-                child: _FollowSystemRow(
+                density: SettingsInsetSectionDensity.compact,
+                child: SettingsInsetSwitchRow(
                   isDark: isDark,
-                  isSelected: snapshot.themeMode == AppearanceThemeMode.system,
+                  label: UITextConstants.settingsDarkModeSystem,
+                  subtitle: UITextConstants.settingsDarkModeSystemDescription,
+                  value: snapshot.themeMode == AppearanceThemeMode.system,
                   onChanged: (value) => _updateThemeMode(
                     ref,
                     snapshot,
@@ -56,10 +59,11 @@ class SettingsDarkModePage extends ConsumerWidget {
               ),
               SettingsInsetGroupedSection(
                 isDark: isDark,
+                density: SettingsInsetSectionDensity.compact,
                 header: UITextConstants.settingsDarkModeManualSection,
                 child: Column(
                   children: <Widget>[
-                    _ManualThemeModeRow(
+                    SettingsInsetChoiceRow(
                       key: const ValueKey<AppearanceThemeMode>(
                         AppearanceThemeMode.light,
                       ),
@@ -74,7 +78,7 @@ class SettingsDarkModePage extends ConsumerWidget {
                       ),
                     ),
                     SettingsInsetFormSectionDivider(isDark: isDark),
-                    _ManualThemeModeRow(
+                    SettingsInsetChoiceRow(
                       key: const ValueKey<AppearanceThemeMode>(
                         AppearanceThemeMode.dark,
                       ),
@@ -113,139 +117,5 @@ class SettingsDarkModePage extends ConsumerWidget {
           fontSizePreset: snapshot.fontSizePreset,
           applyScope: AppearanceApplyScope.allAccounts,
         );
-  }
-}
-
-class _FollowSystemRow extends StatelessWidget {
-  const _FollowSystemRow({
-    required this.isDark,
-    required this.isSelected,
-    required this.onChanged,
-  });
-
-  final bool isDark;
-  final bool isSelected;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final labelColor = SettingsSemanticConstants.labelColor(isDark);
-    final secondaryColor = SettingsSemanticConstants.secondaryColor(isDark);
-    return SizedBox(
-      width: double.infinity,
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: () => onChanged(!isSelected),
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: AppSpacing.minInteractiveSize,
-            ),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        UITextConstants.settingsDarkModeSystem,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosSubheadline,
-                          fontWeight: AppTypography.regular,
-                          color: labelColor,
-                        ),
-                      ),
-                      SizedBox(height: AppSpacing.xs),
-                      Text(
-                        UITextConstants.settingsDarkModeSystemDescription,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: AppTypography.iosFootnote,
-                          fontWeight: AppTypography.regular,
-                          color: secondaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: AppSpacing.containerMd),
-                CupertinoSwitch(
-                  value: isSelected,
-                  onChanged: onChanged,
-                  activeTrackColor:
-                      SettingsSemanticConstants.switchActiveTrackColor,
-                  inactiveTrackColor:
-                      SettingsSemanticConstants.switchInactiveTrackColor(
-                        isDark,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ManualThemeModeRow extends StatelessWidget {
-  const _ManualThemeModeRow({
-    super.key,
-    required this.isDark,
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final bool isDark;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final labelColor = SettingsSemanticConstants.labelColor(isDark);
-    return SizedBox(
-      width: double.infinity,
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: AppSpacing.minInteractiveSize,
-            ),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosSubheadline,
-                      fontWeight: AppTypography.regular,
-                      color: labelColor,
-                    ),
-                  ),
-                ),
-                if (isSelected)
-                  Icon(
-                    CupertinoIcons.check_mark,
-                    size: AppSpacing.iconSmall,
-                    color: AppColors.primaryColor,
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

@@ -2,6 +2,7 @@
 # 若 Android 构建报 GeneratedPluginRegistrant 相关错误，说明 Flutter 重新生成了
 # Android 插件注册表。这里统一做项目补丁：
 # - dev-only 插件 integration_test / patrol 改为可选反射注册，避免进入 release 编译链。
+# - startup-deferred 高 risk 插件从 eager 注册剥离，改由 StartupDeferredPluginRegistry 按需注册。
 # 在项目根目录执行：./scripts/patch_android_plugin_registrant.sh
 
 set -e
@@ -12,6 +13,7 @@ if [ ! -f "$REGISTRANT" ]; then
   exit 1
 fi
 python3 - <<'PY'
+import re
 from pathlib import Path
 
 path = Path("android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java")
@@ -37,6 +39,29 @@ optional_dev_plugins = {
     "integration_test": "dev.flutter.plugins.integration_test.IntegrationTestPlugin",
     "patrol": "pl.leancode.patrol.PatrolPlugin",
 }
+
+startup_deferred_plugin_classes = (
+    "com.hiennv.flutter_callkit_incoming.FlutterCallkitIncomingPlugin",
+    "com.cloudwebrtc.webrtc.FlutterWebRTCPlugin",
+    "io.livekit.plugin.LiveKitPlugin",
+    "io.flutter.plugins.camerax.CameraAndroidCameraxPlugin",
+    "io.flutter.plugins.imagepicker.ImagePickerPlugin",
+    "com.fluttercandies.photo_manager.PhotoManagerPlugin",
+    "xyz.justsoft.video_thumbnail.VideoThumbnailPlugin",
+)
+
+
+def strip_try_catch_plugin_block(source: str, class_name: str) -> str:
+    needle = f"flutterEngine.getPlugins().add(new {class_name}());"
+    if needle not in source:
+        return source
+    block_start = source.index(needle)
+    try_start = source.rfind("    try {", 0, block_start)
+    if try_start < 0:
+        raise SystemExit(f"Failed to locate try block for deferred plugin: {class_name}")
+    catch_end = source.index("    }\n", block_start) + len("    }\n")
+    return source[:try_start] + source[catch_end:]
+
 
 for plugin_name, class_name in optional_dev_plugins.items():
     direct_block = (
@@ -84,6 +109,21 @@ if "private static void registerOptionalDevPlugin" not in text:
 for forbidden in optional_dev_plugins.values():
     if f"new {forbidden}()" in text:
         raise SystemExit(f"Failed to patch dev-only plugin reference: {forbidden}")
+
+for class_name in startup_deferred_plugin_classes:
+    while f"new {class_name}()" in text:
+        text = strip_try_catch_plugin_block(text, class_name)
+
+for class_name in startup_deferred_plugin_classes:
+    if f"new {class_name}()" in text:
+        raise SystemExit(f"Failed to strip startup-deferred plugin: {class_name}")
+
+orphan_catch = re.compile(
+    r"^\s*Log\.e\(TAG, \"Error registering plugin [^\"]+\", [^)]+\), e\);\n"
+    r"^\s*\}\n",
+    re.MULTILINE,
+)
+text = orphan_catch.sub("", text)
 
 path.write_text(text, encoding="utf-8")
 PY

@@ -11,11 +11,13 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from _common.article_package import compute_document_sha256, sha256_file, sha256_text
-from _common.io import read_json
 from _common.paths import DATA_ROOT, RUNTIME_ROOT, batch_root, relative_batch_ref
 
-SOURCE_REFS_SCHEMA = "quwoquan_data.source_refs"
+SOURCE_REFS_SCHEMA = "quwoquan_data.source_refs/2"
+SOURCE_REFS_SCHEMA_LEGACY = "quwoquan_data.source_refs"
 FINALIZATION_REPORT_SCHEMA = "quwoquan_data.finalization_report"
+# 单底稿零参考宪法：source_refs.json 仅登记唯一底稿来源单元，禁止内联原文镜像。
+SOURCE_REFS_MAX_BYTES = 10 * 1024
 
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n?", re.S)
 _TEXT_SOURCE_SUFFIXES = {".md", ".markdown", ".txt"}
@@ -100,93 +102,35 @@ def _relative_ref_or_none(task_id: str, batch_id: str, path: Path | None) -> str
     return _normalized_ref(task_id, batch_id, str(path), path.resolve())
 
 
-def _object_ref_from_source_ref(source_ref: str, source_unit_ref: str) -> str | None:
-    for value in (source_ref, source_unit_ref):
-        marker = "/1.download/sources/"
-        if marker in value:
-            return value.split(marker, 1)[0]
-    return None
-
-
-def _source_roles(
-    source_ref: str,
-    *,
-    base_source_ref: str,
-    cited_source_refs: set[str],
-    source_paths: set[str],
-) -> list[str]:
-    roles: list[str] = []
-    if source_ref == base_source_ref:
-        roles.append("base")
-    if source_ref in cited_source_refs:
-        roles.append("cited")
-    if source_ref in source_paths:
-        roles.append("evidence")
-    return roles or ["evidence"]
-
-
-def _read_json_or_none(path: Path | None) -> Any | None:
-    if path is None or not path.is_file():
-        return None
-    return read_json(path)
-
-
 def _is_text_source_file(path: Path) -> bool:
     return path.suffix.lower() in _TEXT_SOURCE_SUFFIXES
 
 
-def _build_source_entry(
+def _build_base_source_entry(
     task_id: str,
     batch_id: str,
     *,
     raw_ref: str,
     normalized_ref: str,
-    roles: list[str],
 ) -> dict[str, Any]:
+    """单底稿来源条目（slim）：只留回查入口 + sha256，禁止内联原文镜像。"""
     resolved = _resolve_source_path(task_id, batch_id, raw_ref)
     if resolved is None:
         raise FileNotFoundError(f"source ref missing: {raw_ref}")
     unit_dir = resolved.parent
     meta_path = unit_dir / "meta.json"
-    quality_path = unit_dir / "source.quality.json"
     clean_path = unit_dir / "source.clean.md"
     source_unit_ref = _normalized_ref(task_id, batch_id, str(unit_dir), unit_dir.resolve())
-    meta = _read_json_or_none(meta_path)
-    quality = _read_json_or_none(quality_path)
     entry: dict[str, Any] = {
         "sourceRef": normalized_ref,
         "sourceUnitRef": source_unit_ref,
-        "objectRef": _object_ref_from_source_ref(normalized_ref, source_unit_ref),
-        "metaRef": _relative_ref_or_none(task_id, batch_id, meta_path),
-        "qualityRef": _relative_ref_or_none(task_id, batch_id, quality_path),
-        "cleanSourceRef": _relative_ref_or_none(task_id, batch_id, clean_path),
-        "roles": roles,
+        "role": "base",
         "sourceFileSha256": sha256_file(resolved),
+        "metaRef": _relative_ref_or_none(task_id, batch_id, meta_path),
     }
-    if _is_text_source_file(resolved):
-        source_markdown = resolved.read_text(encoding="utf-8")
-        entry["sourceMarkdownSha256"] = sha256_text(source_markdown)
-        entry["sourceMarkdown"] = source_markdown
-    else:
-        entry["sourceFileRef"] = normalized_ref
-        entry["sourceContentKind"] = "binary_asset"
     if clean_path.is_file() and _is_text_source_file(clean_path):
-        clean_markdown = clean_path.read_text(encoding="utf-8")
-        entry["sourceCleanMarkdownSha256"] = sha256_text(clean_markdown)
-        entry["sourceCleanMarkdown"] = clean_markdown
-    if isinstance(meta, dict):
-        entry["sourceMeta"] = meta
-        entry["sourceKind"] = str(meta.get("sourceKind") or meta.get("platform") or unit_dir.name)
-        entry["platform"] = str(meta.get("platform") or "")
-        entry["title"] = str(meta.get("title") or "")
-        entry["url"] = str(meta.get("url") or "")
-    else:
-        entry["sourceKind"] = unit_dir.name
-        entry["platform"] = ""
-        entry["title"] = ""
-        entry["url"] = ""
-    if isinstance(quality, dict):
-        entry["sourceQuality"] = quality
+        entry["cleanSourceRef"] = _relative_ref_or_none(task_id, batch_id, clean_path)
+        entry["sourceCleanMarkdownSha256"] = sha256_text(clean_path.read_text(encoding="utf-8"))
     return entry
 
 
@@ -195,72 +139,30 @@ def build_source_refs_snapshot(
     batch_id: str,
     *,
     base_source_ref: str,
-    cited_source_refs: Iterable[str],
-    source_paths: Iterable[str],
 ) -> dict[str, Any]:
-    """构造 post 对象 `1.download/source_refs.json`。
+    """构造 post 对象 `1.download/source_refs.json`（单底稿零参考宪法 v2）。
 
-    兼顾两类诉求：
-    - 索引：base/cited/sourcePaths 的相对路径与对应 source unit 回查入口。
-    - 镜像：保留原始 `source.md`（以及可选 `source.clean.md`）与 digest，便于 draft/final 对比追责。
+    宪法约束：
+    - 每个内容对象只有一个底稿来源单元（`sources` 长度恒为 1，`role == base`）。
+    - 不再携带 `citedSourceRefs` / `sourcePaths` 等第二来源或全量索引。
+    - 不内联 `sourceMarkdown` 原文镜像，只留 sha256，正文回查 source unit 文件。
     """
-    ordered_raw_refs: list[str] = []
-    normalized_to_raw: dict[str, str] = {}
-    normalized_to_resolved: dict[str, Path | None] = {}
-
-    def normalize_from_raw(raw: str) -> str:
-        resolved = _resolve_source_path(task_id, batch_id, raw)
-        return _normalized_ref(task_id, batch_id, raw, resolved)
-
-    def add_ref(raw: str) -> None:
-        resolved = _resolve_source_path(task_id, batch_id, raw)
-        normalized = _normalized_ref(task_id, batch_id, raw, resolved)
-        if not normalized or normalized in normalized_to_raw:
-            return
-        ordered_raw_refs.append(normalized)
-        normalized_to_raw[normalized] = str(raw or "")
-        normalized_to_resolved[normalized] = resolved
-
-    add_ref(base_source_ref)
-    for raw in cited_source_refs:
-        add_ref(str(raw))
-    for raw in source_paths:
-        add_ref(str(raw))
-
-    normalized_base = normalize_from_raw(base_source_ref)
-    normalized_cited = _stable_unique(
-        normalize_from_raw(str(raw))
-        for raw in cited_source_refs
-    )
-    normalized_source_paths = _stable_unique(
-        normalize_from_raw(str(raw))
-        for raw in source_paths
-    )
-    cited_set = set(normalized_cited)
-    source_path_set = set(normalized_source_paths)
-
-    sources: list[dict[str, Any]] = []
-    for normalized_ref in ordered_raw_refs:
-        sources.append(
-            _build_source_entry(
-                task_id,
-                batch_id,
-                raw_ref=normalized_to_raw[normalized_ref],
-                normalized_ref=normalized_ref,
-                roles=_source_roles(
-                    normalized_ref,
-                    base_source_ref=normalized_base,
-                    cited_source_refs=cited_set,
-                    source_paths=source_path_set,
-                ),
-            )
+    resolved = _resolve_source_path(task_id, batch_id, base_source_ref)
+    normalized_base = _normalized_ref(task_id, batch_id, base_source_ref, resolved)
+    if not normalized_base:
+        raise FileNotFoundError(
+            f"source_refs requires a single baseSourceRef, got: {base_source_ref!r}"
         )
+    entry = _build_base_source_entry(
+        task_id,
+        batch_id,
+        raw_ref=base_source_ref,
+        normalized_ref=normalized_base,
+    )
     return {
         "schemaVersion": SOURCE_REFS_SCHEMA,
-        "baseSourceRef": normalized_base or None,
-        "citedSourceRefs": normalized_cited,
-        "sourcePaths": normalized_source_paths,
-        "sources": sources,
+        "baseSourceRef": normalized_base,
+        "sources": [entry],
     }
 
 
@@ -316,6 +218,8 @@ def build_finalization_report(
 __all__ = [
     "FINALIZATION_REPORT_SCHEMA",
     "SOURCE_REFS_SCHEMA",
+    "SOURCE_REFS_SCHEMA_LEGACY",
+    "SOURCE_REFS_MAX_BYTES",
     "build_finalization_report",
     "build_source_refs_snapshot",
 ]

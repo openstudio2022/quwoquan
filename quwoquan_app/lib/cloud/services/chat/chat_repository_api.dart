@@ -14,6 +14,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dar
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/group_home_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
@@ -234,6 +235,30 @@ abstract class ChatContactRepository {
   });
 }
 
+/// Chat「从群聊中选择联系人」二级流程（图四群列表 / 图五群成员多选）。
+///
+/// 与 contracts/metadata/messages/conversation/service.yaml 的
+/// `ListSelectableGroupConversations` / `ListSelectableGroupContactMembers`
+/// 一一对应。互关好友判定与计数在云侧完成，端侧不再逐群多次拉成员求交集。
+///
+/// R02：单接口 ≤10 方法。
+abstract class ChatGroupSelectionRepository {
+  /// 图四：当前用户所在、且含互关联系人的群会话列表，附 `friendMemberCount`。
+  /// 云侧已过滤 `friendMemberCount == 0` 的群。
+  Future<List<SelectableGroupConversationRowDto>>
+  listSelectableGroupConversations({
+    String? query,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+
+  /// 图五：指定群成员中与当前用户互关的联系人（排除当前用户与非 user 成员）。
+  Future<List<ChatContactRowDto>> listSelectableGroupContactMembers({
+    required String conversationId,
+    String? query,
+    int limit = CloudApiDefaults.pageLimit,
+  });
+}
+
 /// Chat 群管理（设置 / 转让 / 管理员 / 解散）。
 ///
 /// R02：单接口 ≤10 方法。
@@ -266,4 +291,5 @@ abstract class ChatRepository
         ChatMessageRepository,
         ChatMemberRepository,
         ChatContactRepository,
+        ChatGroupSelectionRepository,
         ChatGroupAdminRepository {}

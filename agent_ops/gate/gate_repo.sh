@@ -94,6 +94,7 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_unified_error_semantics_ratchet.py || exit 1
     python3 quwoquan_app/scripts/settings/verify_settings_canonical.py || exit 1
     python3 quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py || exit 1
+    python3 quwoquan_app/scripts/chat/verify_chat_mock_remote_parity.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_error_code_semantic.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_domain_error_code_registry.py || exit 1
@@ -157,6 +158,7 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_metadata_response_body_vs_codegen_app.py || exit 1
     python3 quwoquan_app/scripts/auth/verify_auth_policy_contract.py || exit 1
     python3 quwoquan_app/scripts/auth/verify_login_entry_loop_contract.py || exit 1
+    python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_metadata_service_entities_vs_fields.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_assistant_context_contract.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_assistant_security_contract.py || exit 1
@@ -169,9 +171,12 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_dart_io_budget.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_platform_check_isolation.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_permission_coordinator_adoption.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_permission_primer_copy.py || exit 1
     python3 quwoquan_app/scripts/cli.py fonts verify || exit 1
     python3 quwoquan_app/scripts/cli.py web verify-offline || exit 1
     python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py || exit 1
+    python3 quwoquan_data/scripts/verify/verify_prefab_user_provenance.py || exit 1
     python3 quwoquan_app/scripts/env/verify_business_env_data_inventory.py || exit 1
     python3 quwoquan_app/scripts/content/verify_markdown_article_no_article_document.py || exit 1
     python3 quwoquan_app/scripts/content/verify_article_contract_purity.py || exit 1

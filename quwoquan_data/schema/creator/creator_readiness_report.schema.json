@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data.creator_readiness_report",
+  "type": "object",
+  "required": ["schemaVersion", "vertical", "batchId", "target", "mode", "decision", "passed", "checks"],
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.creator_readiness_report/1" },
+    "vertical": { "type": "string" },
+    "batchId": { "type": "string" },
+    "target": { "type": "integer" },
+    "mode": { "enum": ["trial", "commercial"] },
+    "decision": { "enum": ["go", "no_go"] },
+    "passed": { "type": "boolean" },
+    "checks": {
+      "type": "object",
+      "properties": {
+        "creatorsValidatedRatio": { "type": "number" },
+        "workflowAllReachedValidate": { "type": "boolean" },
+        "reviewGatePassRate": { "type": "number" },
+        "provenanceCoverage": { "type": "number" },
+        "tagResolveRate": { "type": "number" },
+        "duplicatePersonaP95": { "type": "number" },
+        "diversityMinBucketFill": { "type": "number" },
+        "diversityEntropy": { "type": "number" },
+        "topicCoverageCount": { "type": "integer" },
+        "seedHandoffOk": { "type": "boolean" },
+        "contentBindSmokePass": { "type": "integer" },
+        "scale10PrerequisiteOk": { "type": "boolean" },
+        "syntheticSourceRatio": { "type": "number" },
+        "userPoolMergeOk": { "type": "boolean" }
+      }
+    },
+    "commercialChecks": {
+      "type": "object",
+      "properties": {
+        "quality": { "type": "object" },
+        "stability": { "type": "object" },
+        "diversity": { "type": "object" },
+        "representativeness": { "type": "object" }
+      }
+    },
+    "issues": { "type": "array", "items": { "type": "string" } },
+    "generatedAt": { "type": "string" }
+  }
+}

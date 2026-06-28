@@ -18,6 +18,7 @@ verify/verify_content_quality.py
 verify/verify_content_semantics.py
 verify/verify_no_flat_roots.py
 verify/verify_cli_first.py
+verify/verify_creator_pool_contract.py
 # 扫描门：禁止正式链路复用测试专用正文骨架(agent_draft_kit)；__main__ 仅便于单独排障。
 verify/verify_no_runtime_draft_kit.py
 # golden set 门标定与度量（好稿/坏稿拦截率/误杀率）；__main__ 仅便于单独排障。
@@ -30,3 +31,13 @@ verify/verify_asset_id_zero_collision.py
 verify/verify_batch_stability_compare.py
 # 目录新布局代表样例重建器（与 bootstrap_* 同类一次性数据工具）。
 publish_ops/rebuild_directory_layout_sample.py
+# Creator pool / prefab user 治理与验收门：均经 verify_quwoquan_data.sh 直接调度，
+# __main__ 仅便于单独排障；属 gate/governance 类（非内容生产业务入口）。
+verify/verify_creator_pool_seed_consistency.py
+verify/verify_prefab_user_provenance.py
+verify/emit_creator_prefab_user_four_env_readiness.py
+verify/emit_creator_prefab_user_t2_stability_report.py
+governance/creator_pool/retire_legacy_prefab_users.py
+# 实体主页结构 + 配图语义验收门：经 verify_quwoquan_data.sh 调度（新批次 opt-in），
+# __main__ 仅便于单独排障。
+verify/verify_homepage_structure_and_assets.py

@@ -5,9 +5,9 @@ import importlib.util
 from pathlib import Path
 
 _SOURCE = (Path(__file__).resolve().parent / "../../common/test_batch_asset_stability.py").resolve()
-_SPEC = importlib.util.spec_from_file_location("legacy_test_module", _SOURCE)
+_SPEC = importlib.util.spec_from_file_location("source_test_module", _SOURCE)
 if _SPEC is None or _SPEC.loader is None:  # pragma: no cover - generation/runtime guard
-    raise RuntimeError(f"unable to load legacy test source: {_SOURCE}")
+    raise RuntimeError(f"unable to load source test module: {_SOURCE}")
 _MODULE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MODULE)
 

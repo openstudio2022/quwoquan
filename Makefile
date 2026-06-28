@@ -10,7 +10,9 @@
 .PHONY: verify-app-auth-policy
 .PHONY: verify-app-domain-error-code-registry
 .PHONY: verify-app-behavior-error-stack-convergence
-.PHONY: verify-app-login-entry-loop-contract
+.PHONY: verify-app-permission-coordinator-adoption
+.PHONY: verify-app-permission-primer-copy
+.PHONY: verify-app-startup-ttid
 .PHONY: verify-app-lib-no-test-import
 .PHONY: verify-app-page-horizontal-quality
 .PHONY: verify-app-remote-config-contract
@@ -118,6 +120,17 @@ verify-app-auth-policy:
 verify-app-login-entry-loop-contract:
 	@python3 quwoquan_app/scripts/auth/verify_login_entry_loop_contract.py
 
+verify-app-permission-coordinator-adoption:
+	@python3 quwoquan_app/scripts/runtime/verify_permission_coordinator_adoption.py
+
+verify-app-permission-primer-copy:
+	@python3 quwoquan_app/scripts/runtime/verify_permission_primer_copy.py
+
+verify-app-startup-ttid:
+	@python3 -m py_compile quwoquan_app/scripts/device/verify_startup_first_frame.py
+	@python3 -m py_compile quwoquan_app/scripts/device/verify_startup_ttid_baseline.py
+	@python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py
+
 verify-app-lib-test-only-symbols:
 	@python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py
 
@@ -134,6 +147,9 @@ verify-app-ui-app-data-source-mode-ratchet:
 
 verify-app-seed-manifest:
 	@python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py
+
+verify-app-prefab-user-provenance:
+	@python3 quwoquan_data/scripts/verify/verify_prefab_user_provenance.py
 
 fetch-app-bundled-fonts:
 	@python3 quwoquan_app/scripts/cli.py fonts fetch

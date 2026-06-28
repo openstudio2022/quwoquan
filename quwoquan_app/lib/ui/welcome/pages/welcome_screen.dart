@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -49,12 +50,14 @@ class WelcomeScreen extends StatefulWidget {
     required this.onFinish,
     this.deferSequenceStart = false,
     this.onSequenceComplete,
+    this.onWelcomeVisible,
     this.startupLoading,
   });
 
   final VoidCallback onFinish;
   final bool deferSequenceStart;
   final VoidCallback? onSequenceComplete;
+  final VoidCallback? onWelcomeVisible;
   final WelcomeStartupLoadingState? startupLoading;
 
   @override
@@ -63,7 +66,9 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen>
     with TickerProviderStateMixin {
-  static const Duration _minimumSequenceDuration = Duration(milliseconds: 1500);
+  static Duration get _minimumSequenceDuration => kReleaseMode
+      ? const Duration(milliseconds: 1500)
+      : const Duration(milliseconds: 200);
   static const Duration _petalDuration = Duration(milliseconds: 700);
   static const Duration _petalStagger = Duration(milliseconds: 70);
   static const Duration _postBloomPause = Duration(milliseconds: 180);
@@ -75,21 +80,51 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   static const double _initialTextProgress = 1.0;
   static const int _petalCount = 8;
 
-  late List<AnimationController> _petalControllers;
-  late AnimationController _textController;
+  static final List<double> _staticPetalProgresses = List<double>.filled(
+    _petalCount,
+    _initialPetalProgress,
+  );
+
+  List<AnimationController>? _petalControllers;
+  AnimationController? _textController;
   final Set<Timer> _sequenceTimers = <Timer>{};
   bool _finishHandled = false;
   bool _sequenceCompletionDispatched = false;
   bool _sequenceStarted = false;
+  bool _animationsReady = false;
+  bool _brandedContentReady = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppStartupRuntime.instance.markWelcomeShown();
+      if (!mounted) {
+        return;
+      }
+      setState(() => _brandedContentReady = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _installAnimationControllers();
+        scheduleMicrotask(() {
+          if (!mounted) {
+            return;
+          }
+          widget.onWelcomeVisible?.call();
+        });
+        unawaited(_beginAnimatedSequence());
+      });
     });
+  }
+
+  void _installAnimationControllers() {
+    if (_animationsReady) {
+      return;
+    }
     _petalControllers = List.generate(
-      8,
+      _petalCount,
       (i) => AnimationController(
         vsync: this,
         duration: _petalDuration,
@@ -101,8 +136,39 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       duration: _textDuration,
       value: _initialTextProgress,
     );
+    _animationsReady = true;
+  }
 
-    _startSequenceAfterFirstStableFrame();
+  Future<void> _beginAnimatedSequence() async {
+    if (_sequenceStarted) {
+      return;
+    }
+    if (widget.deferSequenceStart) {
+      if (kReleaseMode) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) {
+          return;
+        }
+        await _waitForFirstFrameRasterizedOrTimeout();
+        if (!mounted) {
+          return;
+        }
+        await _waitForManagedDelay(_visibleFrameGuard);
+        if (!mounted) {
+          return;
+        }
+      } else {
+        await _waitForManagedDelay(const Duration(milliseconds: 16));
+        if (!mounted) {
+          return;
+        }
+      }
+    }
+    if (!mounted || !_animationsReady) {
+      return;
+    }
+    _sequenceStarted = true;
+    _runSequence();
   }
 
   @override
@@ -111,18 +177,30 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       timer.cancel();
     }
     _sequenceTimers.clear();
-    for (final c in _petalControllers) {
-      c.dispose();
+    final petalControllers = _petalControllers;
+    if (petalControllers != null) {
+      for (final c in petalControllers) {
+        c.dispose();
+      }
     }
-    _textController.dispose();
+    _textController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final appearance = WelcomeAppearance.of(context);
-    // P1：CupertinoPageScaffold + 透明 Material（AppScaffold）+ 显式 DefaultTextStyle，
-    // 避免 MaterialApp.home 场景下调试模式对 Text 的误强调/黄下划线。
+    if (!_brandedContentReady) {
+      return ColoredBox(
+        color: appearance.background,
+        child: Center(
+          child: WelcomeFlowerMark(
+            appearance: appearance,
+            petalProgresses: _staticPetalProgresses,
+          ),
+        ),
+      );
+    }
     return AppScaffold(
       backgroundColor: appearance.background,
       resizeToAvoidBottomInset: false,
@@ -160,25 +238,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     return visualComplete > _minimumSequenceDuration
         ? visualComplete
         : _minimumSequenceDuration;
-  }
-
-  void _startSequenceAfterFirstStableFrame() {
-    if (_sequenceStarted) {
-      return;
-    }
-    _sequenceStarted = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      if (widget.deferSequenceStart) {
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) return;
-        await _waitForFirstFrameRasterizedOrTimeout();
-        if (!mounted) return;
-        await _waitForManagedDelay(_visibleFrameGuard);
-        if (!mounted) return;
-      }
-      _runSequence();
-    });
   }
 
   Future<void> _waitForFirstFrameRasterizedOrTimeout() async {
@@ -220,12 +279,21 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   void _runSequence() {
-    if (!mounted) return;
+    if (!mounted || !_animationsReady) {
+      return;
+    }
+    final petalControllers = _petalControllers;
+    if (petalControllers == null) {
+      return;
+    }
+    if (mounted) {
+      setState(() {});
+    }
     for (var i = 0; i < _petalCount; i++) {
       final startDelay = _petalStagger * i;
       _schedule(startDelay, () {
-        if (mounted && _petalControllers[i].value < 1) {
-          _petalControllers[i].forward();
+        if (mounted && petalControllers[i].value < 1) {
+          petalControllers[i].forward();
         }
       });
     }
@@ -298,16 +366,23 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   Widget _buildGraphicArea(WelcomeAppearance appearance) {
+    if (!_animationsReady) {
+      return WelcomeFlowerMark(
+        appearance: appearance,
+        petalProgresses: _staticPetalProgresses,
+      );
+    }
+    final petalControllers = _petalControllers!;
     return SizedBox(
       width: AppSpacing.welcomeGraphicDiameter,
       height: AppSpacing.welcomeGraphicDiameter,
       child: AnimatedBuilder(
-        animation: Listenable.merge(_petalControllers),
+        animation: Listenable.merge(petalControllers),
         builder: (context, child) {
           return WelcomeFlowerMark(
             appearance: appearance,
             petalProgresses: [
-              for (final controller in _petalControllers) controller.value,
+              for (final controller in petalControllers) controller.value,
             ],
           );
         },
@@ -316,10 +391,53 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   Widget _buildTypography(WelcomeAppearance appearance) {
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ShaderMask(
+          shaderCallback: (bounds) => LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            stops: const [0.0, 0.48, 1.0],
+            colors: [
+              AppColors.welcomeTitleGradientEnd,
+              AppColors.welcomeTitleGradientMid,
+              AppColors.welcomeForeground,
+            ],
+          ).createShader(bounds),
+          child: Text(
+            UITextConstants.welcomeTitle,
+            style: TextStyle(
+              fontSize: AppTypography.welcomeHeroTitle,
+              fontWeight: AppTypography.black,
+              color: AppColors.white,
+              letterSpacing: -0.5,
+              decoration: TextDecoration.none,
+            ),
+          ),
+        ),
+        SizedBox(height: AppSpacing.md),
+        Text(
+          UITextConstants.welcomeMainSlogan,
+          style: TextStyle(
+            fontSize: AppTypography.xl,
+            fontWeight: AppTypography.medium,
+            color: appearance.foregroundMuted,
+            letterSpacing: 1.0,
+            decoration: TextDecoration.none,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+    if (!_animationsReady) {
+      return content;
+    }
+    final textController = _textController!;
     return AnimatedBuilder(
-      animation: _textController,
+      animation: textController,
       builder: (context, child) {
-        final t = Curves.easeOut.transform(_textController.value);
+        final t = Curves.easeOut.transform(textController.value);
         return Opacity(
           opacity: t,
           child: Transform.translate(
@@ -328,47 +446,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           ),
         );
       },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 柔化版品牌渐变：恢复紫 → cyan → 白，让标题重新承接花瓣外圈色彩；
-          // stops 控制紫色停留时间，避免过花，保持高端、冷静的品牌字质感。
-          ShaderMask(
-            shaderCallback: (bounds) => LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              stops: const [0.0, 0.48, 1.0],
-              colors: [
-                AppColors.welcomeTitleGradientEnd,
-                AppColors.welcomeTitleGradientMid,
-                AppColors.welcomeForeground,
-              ],
-            ).createShader(bounds),
-            child: Text(
-              UITextConstants.welcomeTitle,
-              style: TextStyle(
-                fontSize: AppTypography.welcomeHeroTitle,
-                fontWeight: AppTypography.black,
-                color: AppColors.white,
-                letterSpacing: -0.5,
-                decoration: TextDecoration.none,
-              ),
-            ),
-          ),
-          SizedBox(height: AppSpacing.md),
-          Text(
-            UITextConstants.welcomeMainSlogan,
-            style: TextStyle(
-              fontSize: AppTypography.xl,
-              fontWeight: AppTypography.medium,
-              color: appearance.foregroundMuted,
-              letterSpacing: 1.0,
-              decoration: TextDecoration.none,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+      child: content,
     );
   }
 
@@ -383,11 +461,67 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   ///
   /// 动效：`_textController` 后 75% 出现，让上方 slogan 先到位。
   Widget _buildAssistantWhisper(WelcomeAppearance appearance) {
-    final delayed = CurvedAnimation(
-      parent: _textController,
-      curve: const Interval(0.25, 1.0, curve: Curves.easeOut),
-    );
     final textColor = appearance.foregroundMuted.withValues(alpha: 0.78);
+    final whisper = Text.rich(
+      TextSpan(
+        style: TextStyle(
+          fontSize: AppTypography.xs,
+          fontWeight: AppTypography.regular,
+          color: textColor,
+          letterSpacing: 0.3,
+          height: AppTypography.lineHeightCompact,
+          decoration: TextDecoration.none,
+        ),
+        children: [
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: EdgeInsets.only(right: AppSpacing.xs),
+              child: Icon(
+                CupertinoIcons.sparkles,
+                size: AppSpacing.fourteen,
+                color: AppColors.assistantMarkColorOnDark,
+              ),
+            ),
+          ),
+          TextSpan(
+            text: '${UITextConstants.assistantWhisperSignature}  ',
+            style: TextStyle(
+              fontWeight: AppTypography.semiBold,
+              color: AppColors.welcomeForeground.withValues(
+                alpha: 0.85,
+              ),
+            ),
+          ),
+          TextSpan(text: UITextConstants.assistantWhisperLine),
+        ],
+      ),
+      textAlign: TextAlign.center,
+    );
+    final animatedWhisper = !_animationsReady
+        ? whisper
+        : Builder(
+            builder: (context) {
+              final delayed = CurvedAnimation(
+                parent: _textController!,
+                curve: const Interval(0.25, 1.0, curve: Curves.easeOut),
+              );
+              return AnimatedBuilder(
+                animation: delayed,
+                builder: (context, child) {
+                  final t = delayed.value;
+                  return Opacity(
+                    opacity: t,
+                    child: Transform.translate(
+                      offset: Offset(0, 6 * (1 - t)),
+                      child: child,
+                    ),
+                  );
+                },
+                child: whisper,
+              );
+            },
+          );
     return Positioned(
       left: 0,
       right: 0,
@@ -400,55 +534,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             right: AppSpacing.lg,
             bottom: AppSpacing.xl + MediaQuery.of(context).padding.bottom,
           ),
-          child: AnimatedBuilder(
-            animation: delayed,
-            builder: (context, child) {
-              final t = delayed.value;
-              return Opacity(
-                opacity: t,
-                child: Transform.translate(
-                  offset: Offset(0, 6 * (1 - t)),
-                  child: child,
-                ),
-              );
-            },
-            child: Text.rich(
-              TextSpan(
-                style: TextStyle(
-                  fontSize: AppTypography.xs,
-                  fontWeight: AppTypography.regular,
-                  color: textColor,
-                  letterSpacing: 0.3,
-                  height: AppTypography.lineHeightCompact,
-                  decoration: TextDecoration.none,
-                ),
-                children: [
-                  WidgetSpan(
-                    alignment: PlaceholderAlignment.middle,
-                    child: Padding(
-                      padding: EdgeInsets.only(right: AppSpacing.xs),
-                      child: Icon(
-                        CupertinoIcons.sparkles,
-                        size: AppSpacing.fourteen,
-                        color: AppColors.assistantMarkColorOnDark,
-                      ),
-                    ),
-                  ),
-                  TextSpan(
-                    text: '${UITextConstants.assistantWhisperSignature}  ',
-                    style: TextStyle(
-                      fontWeight: AppTypography.semiBold,
-                      color: AppColors.welcomeForeground.withValues(
-                        alpha: 0.85,
-                      ),
-                    ),
-                  ),
-                  TextSpan(text: UITextConstants.assistantWhisperLine),
-                ],
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
+          child: animatedWhisper,
         ),
       ),
     );

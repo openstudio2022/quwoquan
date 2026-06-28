@@ -83,7 +83,10 @@ def test_prompt_makes_base_draft_light_edit_contract_explicit():
     assert "先把下方底稿当作初稿骨架处理" in prompt
     assert "baseDraftFidelity" in prompt
     assert "baseDraftFidelityStrategy" in prompt
-    assert "不要用百科/官网/其它来源重新写一篇新文章" in prompt
+    # 单底稿零参考宪法 v2：prompt 必须显式禁止用其它来源补全/校正/重写，
+    # 稳定子串「用百科/官网/其它来源」跨新旧措辞保留，并补「单底稿零参考」契约标记。
+    assert "用百科/官网/其它来源" in prompt
+    assert "单底稿零参考" in prompt
 
 
 def test_prompt_for_factual_reference_uses_base_draft_light_edit_contract():

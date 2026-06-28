@@ -1,0 +1,597 @@
+{
+  "schemaVersion": "quwoquan_data.scale_readiness",
+  "taskId": "旅行/地域/四川省/四川景区 scale10 宪法重验",
+  "batchId": "fanout_s10verify_20260626",
+  "mode": "trial",
+  "dailyTarget": 10,
+  "passed": true,
+  "decision": "go",
+  "expectedObjects": {
+    "homepage": 9,
+    "article": 36,
+    "image": 9,
+    "routeArticle": 0,
+    "total": 54
+  },
+  "qualityTarget": {
+    "targetGoal": 10,
+    "minPassRate": 1.0,
+    "qualityPassedObjectCount": 36,
+    "targetSatisfactionRate": 3.6,
+    "sourceReadyGoal": 12,
+    "sourceReadyMultiplier": 1.2
+  },
+  "funnel": {
+    "targeted": 10,
+    "sourceReady": 57,
+    "homepagePassed": 9,
+    "contentPlanned": 41,
+    "authored": 34,
+    "reviewPassed": 27,
+    "published": 36,
+    "byObjectType": {
+      "article": {
+        "planned": 34,
+        "authored": 34,
+        "published": 20
+      },
+      "image": {
+        "planned": 7,
+        "published": 7
+      },
+      "video": {
+        "planned": 0,
+        "published": 0
+      },
+      "homepage": {
+        "published": 9
+      }
+    }
+  },
+  "sourceAdmission": {
+    "schemaVersion": "quwoquan_data.source_ready_admission/1",
+    "targetEntityCount": 10,
+    "sourceReadyEntityCount": 8,
+    "sourceReadyObjectCapacity": 57,
+    "requiredPerEntity": {
+      "homepage": 1,
+      "article": 4,
+      "image": 1
+    },
+    "perEntity": [
+      {
+        "entity": "九寨沟",
+        "sourceReady": true,
+        "counts": {
+          "homepage": 2,
+          "article": 12,
+          "image": 2,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 7
+      },
+      {
+        "entity": "黄龙",
+        "sourceReady": true,
+        "counts": {
+          "homepage": 1,
+          "article": 6,
+          "image": 2,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 11
+      },
+      {
+        "entity": "峨眉山",
+        "sourceReady": true,
+        "counts": {
+          "homepage": 1,
+          "article": 13,
+          "image": 2,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 5
+      },
+      {
+        "entity": "乐山大佛",
+        "sourceReady": true,
+        "counts": {
+          "homepage": 1,
+          "article": 9,
+          "image": 2,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 6
+      },
+      {
+        "entity": "青城山",
+        "sourceReady": true,
+        "counts": {
+          "homepage": 1,
+          "article": 4,
+          "image": 2,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 12
+      },
+      {
+        "entity": "稻城亚丁",
+        "sourceReady": true,
+        "counts": {
+          "homepage": 1,
+          "article": 5,
+          "image": 2,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 12
+      },
+      {
+        "entity": "海螺沟",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 1,
+          "article": 2,
+          "image": 2,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 4,
+        "focusBlockedSourceUnits": 16
+      },
+      {
+        "entity": "剑门关",
+        "sourceReady": true,
+        "counts": {
+          "homepage": 1,
+          "article": 5,
+          "image": 2,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 13
+      },
+      {
+        "entity": "阆中古城",
+        "sourceReady": false,
+        "counts": {
+          "homepage": 0,
+          "article": 11,
+          "image": 2,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 5,
+        "focusBlockedSourceUnits": 5
+      },
+      {
+        "entity": "蜀南竹海",
+        "sourceReady": true,
+        "counts": {
+          "homepage": 2,
+          "article": 9,
+          "image": 2,
+          "video": 0
+        },
+        "needed": {
+          "homepage": 1,
+          "article": 4,
+          "image": 1
+        },
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 5
+      }
+    ]
+  },
+  "abandonment": {
+    "entityCount": 1,
+    "contentObjectCount": 16
+  },
+  "partialDelivery": {
+    "mode": "trial",
+    "allowPartialContent": true,
+    "abandonedContentByType": {
+      "article": 16
+    },
+    "abandonedContentRatio": 0.2963,
+    "maxTrialAbandonedContentRatio": 0.05,
+    "delivered": {
+      "posts": 27,
+      "articles": 20,
+      "images": 7,
+      "videos": 0
+    },
+    "fulfillment": {
+      "article": 0.5556,
+      "image": 0.7778
+    }
+  },
+  "replacementClosure": {
+    "baseTargetCount": 10,
+    "requiredActiveTargets": 10,
+    "activeTargetCount": 9,
+    "replacementCount": 0,
+    "closed": false,
+    "objects": []
+  },
+  "runtimeIntegrity": {
+    "passed": true,
+    "stats": {
+      "postCount": 27,
+      "articleCount": 20,
+      "imageCount": 7,
+      "videoCount": 0,
+      "assetCount": 60
+    }
+  },
+  "contentQualityCoverage": {
+    "articlePosts": 20,
+    "articleMentionCoveredPosts": 20,
+    "articleMentionCoverage": 1.0,
+    "totalSemanticMentions": 81,
+    "worksVerdictPresent": 0,
+    "nonWorkMaterialized": [],
+    "nonWorkMaterializedCount": 0
+  },
+  "creatorLoad": {
+    "schemaVersion": "quwoquan_data.creator_load_report/1",
+    "required": false,
+    "creatorCount": 3,
+    "plannedObjectCount": 0,
+    "publishedObjectCount": 0,
+    "maxPlannedPerCreator": 0,
+    "maxCreatorShare": 0.0,
+    "maxDailyPostsPerCreator": 1,
+    "missingAssignmentRefs": [
+      "九寨沟_planning_consultation",
+      "九寨沟_decision_experience",
+      "九寨沟_route_transport",
+      "九寨沟_seasonal_timing",
+      "九寨沟_image",
+      "黄龙_planning_consultation",
+      "黄龙_decision_experience",
+      "黄龙_route_transport",
+      "黄龙_seasonal_timing",
+      "峨眉山_planning_consultation",
+      "峨眉山_decision_experience",
+      "峨眉山_route_transport",
+      "峨眉山_seasonal_timing",
+      "峨眉山_image",
+      "乐山大佛_planning_consultation",
+      "乐山大佛_decision_experience",
+      "乐山大佛_route_transport",
+      "乐山大佛_seasonal_timing",
+      "乐山大佛_image",
+      "青城山_planning_consultation",
+      "青城山_decision_experience",
+      "青城山_route_transport",
+      "青城山_seasonal_timing",
+      "青城山_image",
+      "稻城亚丁_planning_consultation",
+      "稻城亚丁_decision_experience",
+      "稻城亚丁_route_transport",
+      "稻城亚丁_seasonal_timing",
+      "海螺沟_planning_consultation",
+      "海螺沟_decision_experience",
+      "海螺沟_image",
+      "剑门关_planning_consultation",
+      "剑门关_decision_experience",
+      "剑门关_route_transport",
+      "剑门关_seasonal_timing",
+      "剑门关_image",
+      "蜀南竹海_planning_consultation",
+      "蜀南竹海_decision_experience",
+      "蜀南竹海_route_transport",
+      "蜀南竹海_seasonal_timing",
+      "蜀南竹海_image"
+    ],
+    "assignmentIssueCount": 287,
+    "assignmentIssues": [
+      "item[九寨沟_planning_consultation].creatorAssignment.authorId required",
+      "item[九寨沟_planning_consultation].creatorAssignment.creatorProfileId required",
+      "item[九寨沟_planning_consultation].creatorAssignment.creatorArchetype required",
+      "item[九寨沟_planning_consultation].creatorAssignment.creatorProfileVersion required",
+      "item[九寨沟_planning_consultation].creatorAssignment.creatorDisclosure required",
+      "item[九寨沟_planning_consultation].creatorAssignment.experienceClaimMode required",
+      "item[九寨沟_planning_consultation].creatorAssignment.authorQualitySignals required",
+      "item[九寨沟_decision_experience].creatorAssignment.authorId required",
+      "item[九寨沟_decision_experience].creatorAssignment.creatorProfileId required",
+      "item[九寨沟_decision_experience].creatorAssignment.creatorArchetype required",
+      "item[九寨沟_decision_experience].creatorAssignment.creatorProfileVersion required",
+      "item[九寨沟_decision_experience].creatorAssignment.creatorDisclosure required",
+      "item[九寨沟_decision_experience].creatorAssignment.experienceClaimMode required",
+      "item[九寨沟_decision_experience].creatorAssignment.authorQualitySignals required",
+      "item[九寨沟_route_transport].creatorAssignment.authorId required",
+      "item[九寨沟_route_transport].creatorAssignment.creatorProfileId required",
+      "item[九寨沟_route_transport].creatorAssignment.creatorArchetype required",
+      "item[九寨沟_route_transport].creatorAssignment.creatorProfileVersion required",
+      "item[九寨沟_route_transport].creatorAssignment.creatorDisclosure required",
+      "item[九寨沟_route_transport].creatorAssignment.experienceClaimMode required",
+      "item[九寨沟_route_transport].creatorAssignment.authorQualitySignals required",
+      "item[九寨沟_seasonal_timing].creatorAssignment.authorId required",
+      "item[九寨沟_seasonal_timing].creatorAssignment.creatorProfileId required",
+      "item[九寨沟_seasonal_timing].creatorAssignment.creatorArchetype required",
+      "item[九寨沟_seasonal_timing].creatorAssignment.creatorProfileVersion required",
+      "item[九寨沟_seasonal_timing].creatorAssignment.creatorDisclosure required",
+      "item[九寨沟_seasonal_timing].creatorAssignment.experienceClaimMode required",
+      "item[九寨沟_seasonal_timing].creatorAssignment.authorQualitySignals required",
+      "item[九寨沟_image].creatorAssignment.authorId required",
+      "item[九寨沟_image].creatorAssignment.creatorProfileId required",
+      "item[九寨沟_image].creatorAssignment.creatorArchetype required",
+      "item[九寨沟_image].creatorAssignment.creatorProfileVersion required",
+      "item[九寨沟_image].creatorAssignment.creatorDisclosure required",
+      "item[九寨沟_image].creatorAssignment.experienceClaimMode required",
+      "item[九寨沟_image].creatorAssignment.authorQualitySignals required",
+      "item[黄龙_planning_consultation].creatorAssignment.authorId required",
+      "item[黄龙_planning_consultation].creatorAssignment.creatorProfileId required",
+      "item[黄龙_planning_consultation].creatorAssignment.creatorArchetype required",
+      "item[黄龙_planning_consultation].creatorAssignment.creatorProfileVersion required",
+      "item[黄龙_planning_consultation].creatorAssignment.creatorDisclosure required",
+      "item[黄龙_planning_consultation].creatorAssignment.experienceClaimMode required",
+      "item[黄龙_planning_consultation].creatorAssignment.authorQualitySignals required",
+      "item[黄龙_decision_experience].creatorAssignment.authorId required",
+      "item[黄龙_decision_experience].creatorAssignment.creatorProfileId required",
+      "item[黄龙_decision_experience].creatorAssignment.creatorArchetype required",
+      "item[黄龙_decision_experience].creatorAssignment.creatorProfileVersion required",
+      "item[黄龙_decision_experience].creatorAssignment.creatorDisclosure required",
+      "item[黄龙_decision_experience].creatorAssignment.experienceClaimMode required",
+      "item[黄龙_decision_experience].creatorAssignment.authorQualitySignals required",
+      "item[黄龙_route_transport].creatorAssignment.authorId required"
+    ],
+    "overloadedCreatorProfileIds": [],
+    "byCreator": [
+      {
+        "creatorProfileId": "qwq_creator_geo_editor_001",
+        "planned": 0,
+        "published": 0,
+        "tokenLedgerEntries": 18,
+        "objectTypes": {}
+      },
+      {
+        "creatorProfileId": "qwq_creator_landscape_photographer_001",
+        "planned": 0,
+        "published": 0,
+        "tokenLedgerEntries": 7,
+        "objectTypes": {}
+      },
+      {
+        "creatorProfileId": "qwq_creator_pro_guide_001",
+        "planned": 0,
+        "published": 0,
+        "tokenLedgerEntries": 2,
+        "objectTypes": {}
+      }
+    ]
+  },
+  "sourceSufficiency": {
+    "homepage": {
+      "passed": 9,
+      "targetCount": 9,
+      "rate": 1.0
+    },
+    "article": {
+      "passed": 9,
+      "targetCount": 9,
+      "rate": 1.0
+    },
+    "image": {
+      "passed": 9,
+      "targetCount": 9,
+      "rate": 1.0
+    }
+  },
+  "workflowState": {
+    "status": "succeeded",
+    "waitingCheckpoint": null,
+    "nextAction": null,
+    "retryCounts": {},
+    "infrastructureRetryCounts": {},
+    "failedObjects": []
+  },
+  "executionReadiness": {
+    "queueBackend": "",
+    "maxConcurrency": 10,
+    "tokenLedgerCount": 1,
+    "tokenLedgerPaths": [
+      "/Users/zhaoyuxi/qwq_scale_verify/runtime/batches/四川景区scale10宪法重验-4ef87320__fanout_s10verify_20260626/_shared/token_ledger.json"
+    ],
+    "releaseId": "旅行__地域__四川省__四川景区 scale10 宪法重验__fanout_s10verify_20260626",
+    "releaseManifestExists": true,
+    "shipEvidencePaths": [
+      "/Users/zhaoyuxi/qwq_scale_verify/runtime/batches/四川景区scale10宪法重验-4ef87320__fanout_s10verify_20260626/_shared/ship_report.json"
+    ],
+    "importEvidencePaths": [],
+    "requiredThroughputPerHour": 0.4167,
+    "requiredThroughputPerMinute": 0.0069,
+    "measuredThroughput": {
+      "measurementMode": "wall_clock_current_batch",
+      "elapsedSeconds": 10915.238,
+      "postCount": 27,
+      "objectsPerHour": 8.905,
+      "maxWorkers": 3,
+      "agentActive": {
+        "measurementMode": "agent_run_history",
+        "authorRunCount": 2,
+        "authorActiveSeconds": 3346.906,
+        "plannedAuthorJobs": 35,
+        "finishedAuthorJobs": 34,
+        "infrastructureFailures": 1,
+        "finishedAuthorJobsPerHour": 36.5711,
+        "effectiveWorkerCount": 1,
+        "perWorkerObjectsPerHour": 36.5711
+      }
+    },
+    "throughputProjection": {
+      "available": false,
+      "measurementMode": "projected_from_trial_per_worker_rate",
+      "perWorkerObjectsPerHour": 36.5711,
+      "realizedWorkerCount": 1,
+      "committedConcurrency": 0,
+      "queueBackend": "",
+      "projectedObjectsPerHour": 0.0,
+      "projectedDailyCapacity": 0.0,
+      "requiredObjectsPerHour": 0.4167,
+      "finishedAuthorJobs": 34,
+      "authorActiveSeconds": 3346.906,
+      "assumptions": [
+        "linear scaling of measured per-worker author throughput across committed reliabletask workers",
+        "source supply and review keep pace with committed concurrency"
+      ]
+    },
+    "firstPassRate": 0.4815
+  },
+  "envReady": {
+    "ready": true,
+    "reportPath": "/Users/zhaoyuxi/qwq_scale_verify/runtime/batches/四川景区scale10宪法重验-4ef87320__fanout_s10verify_20260626/_shared/env_ready_report.json",
+    "cursorStartup": {
+      "checked": false,
+      "ready": true,
+      "started": false,
+      "runtime": "local",
+      "model": "composer-2",
+      "issues": [],
+      "skipReason": "disabled"
+    },
+    "issues": []
+  },
+  "downloadDiagnostics": {
+    "entitiesWithFetchReports": 10,
+    "plannedImages": 111,
+    "downloadedImages": 20,
+    "blockedImages": 0,
+    "rejectedByCategory": {
+      "fetch_or_non_image": 9,
+      "pixel_too_small": 0,
+      "safety_or_watermark": 0,
+      "rights": 0,
+      "duplicate": 0,
+      "other": 0
+    },
+    "sourcePlanCategories": {
+      "authoritative_reference": 4,
+      "encyclopedia": 10,
+      "official": 5,
+      "open_license": 10,
+      "travelogue": 10,
+      "review": 8
+    },
+    "topEntityIssues": [
+      {
+        "entity": "峨眉山",
+        "rejected": 6,
+        "categories": {
+          "fetch_or_non_image": 6
+        }
+      },
+      {
+        "entity": "剑门关",
+        "rejected": 3,
+        "categories": {
+          "fetch_or_non_image": 3
+        }
+      }
+    ]
+  },
+  "abandonmentDiagnostics": {
+    "totalIssueTexts": 17,
+    "categories": {
+      "imageOpenLicenseShortage": 0,
+      "imageRightsOrLicense": 0,
+      "imageFetchOrQuality": 0,
+      "entityFocusGap": 2,
+      "articleSourceShortage": 0,
+      "homepageSourceShortage": 0,
+      "workflowInterrupted": 0,
+      "other": 15
+    },
+    "dominantReasons": [
+      {
+        "category": "other",
+        "count": 15,
+        "samples": [
+          "homepage input unavailable after build_prepare repair budget",
+          "review_gate_failed_honest_abandon",
+          "review_gate_failed_honest_abandon",
+          "review_gate_failed_honest_abandon",
+          "review_gate_failed_honest_abandon"
+        ]
+      },
+      {
+        "category": "entityFocusGap",
+        "count": 2,
+        "samples": [
+          "source_unavailable: usable article base sources 2 < 4; raw=16; qualified=2; rejects={ entity_focus_off_topic=13, text_too_short=1 }; missing writingIntent=route_transport",
+          "source_unavailable: usable article base sources 2 < 4; raw=16; qualified=2; rejects={ entity_focus_off_topic=13, text_too_short=1 }; missing writingIntent=seasonal_timing"
+        ]
+      }
+    ]
+  },
+  "imageAssetStrategy": {
+    "strategy": "open_license_publish",
+    "allowAiImages": false,
+    "licensedImageProvider": "",
+    "syntheticAssetProvider": "",
+    "requiresPublishableImages": true,
+    "releaseAllowed": true,
+    "expectedImageWorks": 9,
+    "openLicenseShortageCount": 0,
+    "structuralOpenLicenseShortage": false,
+    "structuralShortageThreshold": 5
+  },
+  "blockers": [],
+  "warnings": [
+    "abandoned entities excluded from published entity/tag refs; abandoned=1 replacement=0 activeTargets=9 closed=False",
+    "trial partial delivery accepted abandonedContent=16 ratio=29.63%; abandoned refs must remain excluded from release/import",
+    "partial article delivery accepted: actual=20 abandoned=16 expected=36",
+    "partial image delivery accepted: actual=7 abandoned=0 expected=9",
+    "trial firstPassRate 48.15% < 70%; quality target already satisfied with honest partial delivery"
+  ]
+}

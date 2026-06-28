@@ -215,14 +215,165 @@ enum SettingsInsetSectionDensity {
 
 /// 分组内水平分割线（hairline）。
 class SettingsInsetFormSectionDivider extends StatelessWidget {
-  const SettingsInsetFormSectionDivider({super.key, required this.isDark});
+  const SettingsInsetFormSectionDivider({
+    super.key,
+    required this.isDark,
+    this.leadingInset = AppSpacing.zero,
+    this.trailingInset = AppSpacing.zero,
+  });
+
+  final bool isDark;
+  final double leadingInset;
+  final double trailingInset;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = SettingsSemanticConstants.insetFormSectionDividerColor(isDark);
+    return Container(
+      margin: EdgeInsets.only(left: leadingInset, right: trailingInset),
+      height: AppSpacing.hairline,
+      color: c,
+    );
+  }
+}
+
+class SettingsInsetTrailingText extends StatelessWidget {
+  const SettingsInsetTrailingText({
+    super.key,
+    required this.isDark,
+    required this.value,
+  });
+
+  final bool isDark;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      value,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.right,
+      style: TextStyle(
+        fontSize: AppTypography.iosSubheadline,
+        fontWeight: AppTypography.regular,
+        color: SettingsSemanticConstants.secondaryColor(isDark),
+      ),
+    );
+  }
+}
+
+class SettingsInsetChevron extends StatelessWidget {
+  const SettingsInsetChevron({super.key, required this.isDark});
 
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final c = SettingsSemanticConstants.insetFormSectionDividerColor(isDark);
-    return Container(height: AppSpacing.hairline, color: c);
+    return Icon(
+      CupertinoIcons.chevron_forward,
+      size: SettingsSemanticConstants.insetFormRowChevronSize,
+      color: SettingsSemanticConstants.secondaryColor(isDark),
+    );
+  }
+}
+
+class SettingsInsetNavigationRow extends StatelessWidget {
+  const SettingsInsetNavigationRow({
+    super.key,
+    required this.isDark,
+    required this.label,
+    this.leadingIcon,
+    this.trailingText,
+    this.trailing,
+    this.onTap,
+    this.isDestructive = false,
+    this.showChevron = true,
+  });
+
+  final bool isDark;
+  final String label;
+  final IconData? leadingIcon;
+  final String? trailingText;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final bool isDestructive;
+  final bool showChevron;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelColor = isDestructive
+        ? AppColors.iosDestructive(context)
+        : SettingsSemanticConstants.labelColor(isDark);
+    final secondaryColor = SettingsSemanticConstants.secondaryColor(isDark);
+    final icon = leadingIcon;
+    final value = trailingText?.trim();
+    final hasChevron = showChevron && onTap != null;
+
+    return SizedBox(
+      width: double.infinity,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            vertical: SettingsSemanticConstants.insetFormRowVerticalPadding,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: SettingsSemanticConstants.insetFormRowMinHeight,
+            ),
+            child: Row(
+              children: <Widget>[
+                if (icon != null) ...<Widget>[
+                  Icon(
+                    icon,
+                    size: SettingsSemanticConstants.insetFormRowIconSize,
+                    color: secondaryColor,
+                  ),
+                  SizedBox(width: AppSpacing.containerSm),
+                ],
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosSubheadline,
+                      fontWeight: AppTypography.regular,
+                      color: labelColor,
+                    ),
+                  ),
+                ),
+                if (value != null && value.isNotEmpty) ...<Widget>[
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  Flexible(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: SettingsInsetTrailingText(
+                        isDark: isDark,
+                        value: value,
+                      ),
+                    ),
+                  ),
+                ],
+                if (trailing != null) ...<Widget>[
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  trailing!,
+                ],
+                if (hasChevron) ...<Widget>[
+                  SizedBox(
+                    width:
+                        SettingsSemanticConstants.insetFormTrailingChevronGap,
+                  ),
+                  SettingsInsetChevron(isDark: isDark),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -250,10 +401,12 @@ class SettingsInsetFormRow extends StatelessWidget {
         padding: EdgeInsets.zero,
         onPressed: onTap,
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
+          padding: EdgeInsets.symmetric(
+            vertical: SettingsSemanticConstants.insetFormRowVerticalPadding,
+          ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: AppSpacing.minInteractiveSize,
+            constraints: BoxConstraints(
+              minHeight: SettingsSemanticConstants.insetFormRowMinHeight,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -274,6 +427,179 @@ class SettingsInsetFormRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 设置页同源：分组内居中操作行（切换账号、退出登录、退出群聊等）。
+class SettingsInsetCenteredActionRow extends StatelessWidget {
+  const SettingsInsetCenteredActionRow({
+    super.key,
+    required this.isDark,
+    required this.label,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  final bool isDark;
+  final String label;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelColor = isDestructive
+        ? AppColors.iosDestructive(context)
+        : SettingsSemanticConstants.labelColor(isDark);
+    return SizedBox(
+      width: double.infinity,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            vertical: SettingsSemanticConstants.insetFormRowVerticalPadding,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: SettingsSemanticConstants.insetFormRowMinHeight,
+            ),
+            child: Center(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.regular,
+                  color: labelColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SettingsInsetSwitchRow extends StatelessWidget {
+  const SettingsInsetSwitchRow({
+    super.key,
+    required this.isDark,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.subtitle,
+  });
+
+  final bool isDark;
+  final String label;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelColor = SettingsSemanticConstants.labelColor(isDark);
+    final secondaryColor = SettingsSemanticConstants.secondaryColor(isDark);
+    final sub = subtitle?.trim();
+    return SizedBox(
+      width: double.infinity,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: () => onChanged(!value),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            vertical: SettingsSemanticConstants.insetFormRowVerticalPadding,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: SettingsSemanticConstants.insetFormRowMinHeight,
+            ),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosSubheadline,
+                          fontWeight: AppTypography.regular,
+                          color: labelColor,
+                        ),
+                      ),
+                      if (sub != null && sub.isNotEmpty) ...<Widget>[
+                        SizedBox(height: AppSpacing.xs),
+                        Text(
+                          sub,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            fontWeight: AppTypography.regular,
+                            height: AppSpacing.textLineHeightFootnote,
+                            color: secondaryColor,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                SizedBox(width: AppSpacing.containerMd),
+                CupertinoSwitch(
+                  value: value,
+                  onChanged: onChanged,
+                  activeTrackColor:
+                      SettingsSemanticConstants.switchActiveTrackColor,
+                  inactiveTrackColor:
+                      SettingsSemanticConstants.switchInactiveTrackColor(
+                        isDark,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SettingsInsetChoiceRow extends StatelessWidget {
+  const SettingsInsetChoiceRow({
+    super.key,
+    required this.isDark,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final bool isDark;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsInsetNavigationRow(
+      isDark: isDark,
+      label: label,
+      onTap: onTap,
+      showChevron: false,
+      trailing: isSelected
+          ? Icon(
+              CupertinoIcons.check_mark,
+              size: AppSpacing.iconSmall,
+              color: AppColors.primaryColor,
+            )
+          : null,
     );
   }
 }

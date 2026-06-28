@@ -29,7 +29,8 @@
         "publish_core",
         "intersection_core",
         "footprint_core",
-        "home_showcase_core"
+        "home_showcase_core",
+        "creator_authored_core"
       ],
       "resetScope": "fixture_content_*",
       "targetStore": "content-service:test_store",
@@ -92,6 +93,20 @@
       "verifiedEndpoints": [
         "/v1/user/profile",
         "/v1/user/following-subjects"
+      ]
+    },
+    {
+      "domain": "creator_pool",
+      "fixturePath": "_shared/test_fixtures/creator_pool/creator_pool_scenarios.json",
+      "refs": [
+        "creator_travel_batch100",
+        "creator_travel_travel_batch_100_v1_core"
+      ],
+      "resetScope": "fixture_creator_pool_*",
+      "targetStore": "user-service:test_store",
+      "verifiedEndpoints": [
+        "/v1/user/profile",
+        "/v1/user/{subAccountId}"
       ]
     },
     {

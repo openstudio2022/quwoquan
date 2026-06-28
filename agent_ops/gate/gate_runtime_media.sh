@@ -52,6 +52,7 @@ echo "[runtime-media] go test user-service avatar sync contract"
 echo "[runtime-media] image delivery policy static gates"
 python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_network_image_surface.py"
 python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_avatar_rendering_policy.py"
+python3 "${ROOT_DIR}/quwoquan_app/scripts/chat/verify_chat_mock_remote_parity.py"
 python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_media_url_policy.py"
 python3 "${ROOT_DIR}/quwoquan_service/scripts/media/verify_media_variant_registry_metadata.py"
 

@@ -97,8 +97,28 @@ class SettingsSemanticConstants {
   /// 分组内行分割线（对齐 iOS separator 观感）。
   static Color insetFormSectionDividerColor(bool isDark) {
     final c = AppColorsFunctional.getColor(isDark, ColorType.borderPrimary);
-    return c.withValues(alpha: isDark ? 0.32 : 0.22);
+    return c.withValues(alpha: isDark ? 0.38 : 0.30);
   }
+
+  /// 设置表单单行最小高度。用于所有 Inset grouped 列表行，避免各页各自撑高。
+  static double get insetFormRowMinHeight =>
+      AppSpacing.buttonHeight + AppSpacing.sm;
+
+  /// 设置表单行垂直内边距。视觉高度主要由 [insetFormRowMinHeight] 控制。
+  static double get insetFormRowVerticalPadding => AppSpacing.xs;
+
+  /// 设置表单行图标尺寸。
+  static double get insetFormRowIconSize => AppSpacing.iconMedium;
+
+  /// 设置表单行尾箭头尺寸。
+  static double get insetFormRowChevronSize => AppSpacing.iconSmall;
+
+  /// 图标列表的分割线缩进：与左侧正文起点对齐。
+  static double get insetFormIconDividerLeadingInset =>
+      insetFormRowIconSize + AppSpacing.containerSm;
+
+  /// 行尾值与箭头之间的间距。
+  static double get insetFormTrailingChevronGap => AppSpacing.xs;
 
   /// 分组内边距：紧凑（多行列表项）。
   static double get insetFormSectionPaddingVerticalCompact =>

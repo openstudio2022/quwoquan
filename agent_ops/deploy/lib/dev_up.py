@@ -346,9 +346,16 @@ def resolve_app_endpoint_overrides(
             )
             for key, value in public_bases.items()
         }
+    gateway_base_url = str(public_bases["api"]).rstrip("/")
+    legal_base_url = (
+        "https://quwoquan.com/legal"
+        if env_name == "prod"
+        else f"{gateway_base_url}/legal"
+    )
     return {
         "target": target_name,
-        "gatewayBaseUrl": str(public_bases["api"]).rstrip("/"),
+        "gatewayBaseUrl": gateway_base_url,
+        "legalBaseUrl": legal_base_url,
         "mediaAvatarBaseUrl": str(public_bases["mediaAvatar"]).rstrip("/"),
         "mediaImageBaseUrl": str(public_bases["mediaImage"]).rstrip("/"),
         "mediaVideoBaseUrl": str(public_bases["mediaVideo"]).rstrip("/"),
@@ -380,6 +387,8 @@ def build_start_app_command(
         device_id,
         "--gateway-base-url",
         overrides["gatewayBaseUrl"],
+        "--legal-base-url",
+        overrides["legalBaseUrl"],
         "--media-avatar-base-url",
         overrides["mediaAvatarBaseUrl"],
         "--media-image-base-url",

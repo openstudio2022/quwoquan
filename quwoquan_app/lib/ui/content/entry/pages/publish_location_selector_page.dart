@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/publish_settings_services.dart';
@@ -199,10 +200,14 @@ class _PublishLocationSelectorPageState
   Future<void> _handleErrorAction(UiErrorAction action) async {
     switch (action.type) {
       case UiErrorActionType.openSettings:
-        await widget.locationService.openAppSettings();
-        if (mounted) {
-          await _loadNearby();
-        }
+        await AppPermissionCoordinator.instance.openSettings(
+          AppPermissionKind.location,
+          onReturn: (granted) {
+            if (mounted && granted) {
+              unawaited(_loadNearby());
+            }
+          },
+        );
         return;
       case UiErrorActionType.retry:
       case UiErrorActionType.resubmit:
