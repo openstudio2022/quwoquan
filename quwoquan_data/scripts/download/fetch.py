@@ -934,3 +934,110 @@ def fetch_image(
         "bytes": len(body),
         "sha256": payload.get("sha256") or hashlib.sha256(body).hexdigest(),
     }
+
+
+def _wikipedia_wikitext_api_url(url: str) -> str:
+    host, title = _wikipedia_title_from_url(url)
+    if not host or not title:
+        return ""
+    q = urllib.parse.urlencode(
+        {
+            "action": "parse",
+            "page": title,
+            "prop": "wikitext",
+            "format": "json",
+        }
+    )
+    return f"https://{host}/w/api.php?{q}"
+
+
+def fetch_wikipedia_wikitext(url: str) -> str:
+    """抓取维基页面 wikitext（段落级图片锚点 + 真 caption 真相源）。"""
+    api_url = _wikipedia_wikitext_api_url(url)
+    if not api_url:
+        return ""
+    try:
+        raw = _curl_get_text(api_url)
+    except Exception:  # noqa: BLE001
+        try:
+            status, body, _ = _http_get_bytes(
+                api_url,
+                timeout=DOWNLOAD_TEXT_TIMEOUT_SECONDS,
+                max_redirects=4,
+                max_retries=2,
+            )
+            raw = body.decode("utf-8", errors="ignore") if status == 200 else ""
+        except Exception:  # noqa: BLE001
+            return ""
+    data = _mediawiki_json_loads(raw)
+    parse_block = data.get("parse") if isinstance(data, Mapping) else {}
+    if isinstance(parse_block, Mapping):
+        return str(parse_block.get("wikitext") or parse_block.get("*") or "").strip()
+    return ""
+
+
+def enrich_source_unit_meta_wikitext(unit_dir: Path, page_url: str) -> None:
+    """联网解析 wikitext，把 sectionOutline/imagePlacements 写入 meta 并回填 asset caption。"""
+    from _common.io import read_json, write_json
+    from _common.source_unit import SOURCE_UNIT_ASSET_INDEX, SOURCE_UNIT_MANIFEST
+    from _common.wiki_wikitext import enrich_meta_from_wikitext
+
+    wikitext = fetch_wikipedia_wikitext(page_url)
+    if not wikitext:
+        return
+    meta_path = unit_dir / SOURCE_UNIT_MANIFEST
+    if not meta_path.is_file():
+        return
+    meta = read_json(meta_path)
+    if not isinstance(meta, dict):
+        return
+    enriched = enrich_meta_from_wikitext(meta, wikitext)
+    write_json(meta_path, enriched)
+
+    placements = enriched.get("imagePlacements") or []
+    if not isinstance(placements, list) or not placements:
+        return
+    caption_by_file: dict[str, str] = {}
+    for row in placements:
+        if not isinstance(row, dict):
+            continue
+        fn = str(row.get("fileName") or "").strip()
+        cap = str(row.get("caption") or "").strip()
+        if fn and cap:
+            caption_by_file[fn.lower()] = cap
+
+    index_path = unit_dir / SOURCE_UNIT_ASSET_INDEX
+    if not index_path.is_file() or not caption_by_file:
+        return
+    index_payload = read_json(index_path)
+    assets = index_payload.get("assets") if isinstance(index_payload, dict) else []
+    if not isinstance(assets, list):
+        return
+    changed = False
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        current = str(asset.get("caption") or "").strip()
+        if current and not re.match(r"^\d{2,}[-_]", current):
+            continue
+        matched_cap = ""
+        for key in (
+            str(asset.get("fileName") or ""),
+            Path(str(asset.get("url") or "")).name,
+            Path(str(asset.get("sourceUrl") or "")).name,
+        ):
+            stem = Path(key.replace(" ", "_")).stem.lower()
+            for file_key, cap in caption_by_file.items():
+                file_stem = Path(file_key).stem.lower()
+                if stem == file_stem or file_stem in stem or stem in file_stem:
+                    matched_cap = cap
+                    break
+            if matched_cap:
+                break
+        if matched_cap:
+            asset["caption"] = matched_cap
+            if not str(asset.get("relevance") or "").strip() or asset.get("relevance") == current:
+                asset["relevance"] = matched_cap
+            changed = True
+    if changed:
+        write_json(index_path, index_payload)

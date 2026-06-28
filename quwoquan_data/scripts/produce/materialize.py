@@ -576,23 +576,26 @@ def _materialized_source_refs_snapshot(
     batch_id: str,
     *,
     base_source_ref: str,
-    cited_source_refs: list[str],
-    source_paths: list[str],
     is_image: bool,
 ) -> dict[str, Any]:
-    """构造成品 `1.download/source_refs.json`。
+    """构造成品 `1.download/source_refs.json`（单底稿零参考 v2）。
 
-    文章/主页严格要求来源可回查（缺失即抛错，与既有行为一致）。图片作品的
-    引证可能含二进制资产或外链集合，缺单条引证不应阻断成品物化——降级为最小
-    索引快照（保留 cited/sourcePaths，sources 留空并记原因），保证 1.download 闭环。
+    文章/主页/图片作品都只登记唯一底稿来源单元（`sources` 长度恒为 1），不再镜像全文、
+    不再携带 cited/sourcePaths 多源索引。底稿来源单元缺失（图片外链集合无 source.md，
+    或多实体线路类无单一底稿）时降级为最小快照（sources 留空并记原因），保证 1.download 闭环。
     """
+    if not str(base_source_ref or "").strip():
+        return {
+            "schemaVersion": SOURCE_REFS_SCHEMA,
+            "baseSourceRef": None,
+            "sources": [],
+            "note": "no single base source unit (multi-entity route or external image collection)",
+        }
     try:
         return build_source_refs_snapshot(
             task_id,
             batch_id,
             base_source_ref=base_source_ref,
-            cited_source_refs=cited_source_refs,
-            source_paths=source_paths,
         )
     except FileNotFoundError as exc:
         if not is_image:
@@ -600,8 +603,6 @@ def _materialized_source_refs_snapshot(
         return {
             "schemaVersion": SOURCE_REFS_SCHEMA,
             "baseSourceRef": None,
-            "citedSourceRefs": list(cited_source_refs),
-            "sourcePaths": list(source_paths),
             "sources": [],
             "note": f"image evidence ref unresolved, indexed without mirror: {exc}",
         }
@@ -671,6 +672,9 @@ def materialize_posts(
         publish_title = str(coords.get("title") or compose_payload.get("publishTitle") or title)
         seq = int(coords.get("seq") or 1)
         post_dir = content_object.content_object_dir(task_id, batch_id, ref)
+        from _common.paths import STAGE_REVIEW, ensure_object_stages
+
+        ensure_object_stages(post_dir, through_stage=STAGE_REVIEW)
         post_dir.mkdir(parents=True, exist_ok=True)
         assets_dir = post_dir / "assets"
         # 成品 assets 全量重建（仅清成品，过程阶段证据保留）。
@@ -919,14 +923,26 @@ def materialize_posts(
         # 否则图片作品永远缺 1.download，阶段树不完整、无法回查来源。
         download_dir = post_dir / "1.download"
         download_dir.mkdir(parents=True, exist_ok=True)
+        # 单底稿零参考：成品来源索引只认唯一底稿来源单元。
+        # 文章用 writing_pack.baseSourceRef；图片作品的底稿来源单元 = 资产所属同一 source unit。
+        if is_image:
+            image_base_ref = next(
+                (
+                    str(asset.get("sourceRef") or "")
+                    for asset in manifest["assets"]
+                    if str(asset.get("sourceRef") or "")
+                ),
+                "",
+            )
+            source_refs_base = image_base_ref
+        else:
+            source_refs_base = str(writing_pack.get("baseSourceRef") or "")
         write_json(
             download_dir / "source_refs.json",
             _materialized_source_refs_snapshot(
                 task_id,
                 batch_id,
-                base_source_ref="" if is_image else str(writing_pack.get("baseSourceRef") or ""),
-                cited_source_refs=manifest["citedSourceRefs"],
-                source_paths=provenance_compose["sourcePaths"],
+                base_source_ref=source_refs_base,
                 is_image=is_image,
             ),
         )

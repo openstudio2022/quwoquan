@@ -23,11 +23,16 @@ def _page_asset_refs(page: Path) -> set[str]:
 
 
 def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], label: str) -> list[str]:
-    """Check page.md asset:// refs against manifest.assets and files on disk."""
-    refs = _page_asset_refs(entity_dir / "page.md")
+    """Check manifest.assets closure; page.md MAY inline asset:// figures (must close to manifest).
+
+    图文混排策略：正文可按章节/段落内联 `:::figure` 块引用 asset://（与文章一致），
+    但每个引用都必须闭环到 manifest.assets；纯文字 page.md（无 asset://）同样合法。
+    """
+    page_path = entity_dir / "page.md"
+    refs = _page_asset_refs(page_path)
     assets = manifest_payload.get("assets") or []
-    if not refs and not assets:
-        return [f"{label}: 实体主页须配 ≥1 真实图片（page.md 用 asset:// 引用并在 manifest 登记）"]
+    if not assets:
+        return [f"{label}: 实体主页须配 ≥1 真实图片（manifest.assets 登记）"]
     if not isinstance(assets, list):
         return [f"{label}: manifest.assets 须为数组"]
     id_to_file: dict[str, str] = {}
@@ -58,17 +63,33 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
             issues.append(f"{label}: asset {asset_id or file_name} sourceAssetRef does not belong to sourceRef")
         if not (str(raw.get("authorizationProof") or "").strip() or str(raw.get("termsUrl") or "").strip()):
             issues.append(f"{label}: asset {asset_id or file_name or '<unknown>'} missing image rights proof")
-    known_ids = set(id_to_file)
-    for ref in sorted(refs):
-        if ref not in known_ids and ref not in file_names:
-            issues.append(f"{label}: page.md asset ref not in manifest: {ref}")
     assets_dir = entity_dir / "assets"
+    text_refs = manifest_payload.get("textSourceRefs") or []
+    image_refs = manifest_payload.get("imageSourceRefs") or []
+    if isinstance(text_refs, list) and isinstance(image_refs, list):
+        if len({str(r) for r in text_refs if str(r).strip()}) > 1:
+            issues.append(f"{label}: textSourceRefs must contain exactly one source unit")
+        if len({str(r) for r in image_refs if str(r).strip()}) > 1:
+            issues.append(f"{label}: imageSourceRefs must contain exactly one source unit")
+        text_set = {str(r) for r in text_refs if str(r).strip()}
+        image_set = {str(r) for r in image_refs if str(r).strip()}
+        if text_set and image_set and text_set != image_set:
+            issues.append(f"{label}: textSourceRefs and imageSourceRefs must be the same single unit")
+    roles = {str(raw.get("role") or "") for raw in assets if isinstance(raw, dict)}
+    if assets and "cover" not in roles:
+        issues.append(f"{label}: manifest.assets must include role=cover")
     for asset_id, file_name in sorted(id_to_file.items()):
         if not file_name:
             issues.append(f"{label}: asset {asset_id} missing fileName in manifest")
             continue
         if not (assets_dir / file_name).is_file():
             issues.append(f"{label}: asset file missing on disk: assets/{file_name} (assetId={asset_id})")
+    # 图文混排闭环：page.md 内联的每个 asset:// 必须命中 manifest.assets（按 assetId 或 fileName stem）。
+    manifest_ids = set(id_to_file.keys())
+    manifest_stems = {Path(fn).stem for fn in file_names if fn}
+    for ref in sorted(refs):
+        if ref not in manifest_ids and ref not in manifest_stems:
+            issues.append(f"{label}: page.md 引用的 asset {ref} 不在 manifest.assets（图文未闭环）")
     return issues
 
 

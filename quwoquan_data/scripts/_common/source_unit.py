@@ -150,6 +150,9 @@ def write_source_unit(
     media/release 阶段；原图、尺寸、hash、授权链仍在本阶段闭合。
     """
     unit = source_unit_dir(object_dir, ordinal, source_id)
+    from _common.paths import STAGE_DOWNLOAD, ensure_object_stages
+
+    ensure_object_stages(object_dir, through_stage=STAGE_DOWNLOAD)
     unit.mkdir(parents=True, exist_ok=True)
     (unit / "source.md").write_text(source_md, encoding="utf-8")
     if clean_md:

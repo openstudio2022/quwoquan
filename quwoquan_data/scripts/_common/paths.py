@@ -511,6 +511,21 @@ OBJECT_STAGES = (
 )
 
 
+def ensure_object_stages(object_dir: Path, *, through_stage: str | None = None) -> None:
+    """确保对象过程阶段目录存在（1.download → 5.review）。
+
+    对象同构契约要求每步产物落在编号阶段子目录；resume/部分失败时常只创建了
+    1.download 而缺 2.quality/3.compose 等，导致目录树不完整。在 download/compose/
+    materialize 入口调用本函数，保证阶段树从第一步起完整可审计。
+    """
+    stages = OBJECT_STAGES
+    if through_stage and through_stage in OBJECT_STAGES:
+        end = OBJECT_STAGES.index(through_stage) + 1
+        stages = OBJECT_STAGES[:end]
+    for stage in stages:
+        (object_dir / stage).mkdir(parents=True, exist_ok=True)
+
+
 def batch_shared_dir(task_id: str, batch_id: str) -> Path:
     """批次级公共产物（跨对象共享，不属于任一对象）。"""
     return batch_root(task_id, batch_id) / "_shared"
@@ -686,3 +701,23 @@ def ensure_batch_layout(task_id: str, batch_id: str, command: str) -> Path:
     (cmd_root / "results").mkdir(parents=True, exist_ok=True)
     (cmd_root / "assistant_tasks").mkdir(parents=True, exist_ok=True)
     return cmd_root
+
+
+CREATOR_POOLS_ROOT = RUNTIME_ROOT / "creator_pools"
+
+
+def creator_pool_batch_root(vertical: str, batch_id: str) -> Path:
+    return CREATOR_POOLS_ROOT / vertical / batch_id
+
+
+def creator_pool_shared_dir(vertical: str, batch_id: str) -> Path:
+    return creator_pool_batch_root(vertical, batch_id) / "_shared"
+
+
+def creator_pool_object_dir(vertical: str, batch_id: str, creator_ref: str) -> Path:
+    return creator_pool_batch_root(vertical, batch_id) / "creators" / creator_ref
+
+
+def creator_pool_stage_dir(vertical: str, batch_id: str, creator_ref: str, stage: str) -> Path:
+    return creator_pool_object_dir(vertical, batch_id, creator_ref) / stage
+

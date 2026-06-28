@@ -6,6 +6,7 @@ is a No-Go for scale even when some early lane checks passed.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -520,6 +521,54 @@ def _content_quality_coverage(root: Path) -> dict[str, Any]:
     }
 
 
+_SOURCE_REFS_V2 = "quwoquan_data.source_refs/2"
+_SOURCE_REFS_MAX_BYTES = 10_240
+
+
+def _single_base_constitution_issues(root: Path) -> list[str]:
+    """单底稿零参考 + 单 source unit 宪法抽检（放量 trial/commercial 硬门）。
+
+    图文混排已放开：实体主页 page.md 允许内联 asset:// figure，引用闭环由
+    homepage_validation._asset_closure_issues 校验；此处只守单底稿/单 unit 宪法。
+    """
+    issues: list[str] = []
+    posts_root = root / "posts"
+    if posts_root.is_dir():
+        for path in sorted(posts_root.rglob("source_refs.json")):
+            try:
+                payload = read_json(path)
+            except (OSError, ValueError, TypeError):
+                issues.append(f"{path.relative_to(root)}: source_refs unreadable")
+                continue
+            if str(payload.get("schemaVersion") or "") != _SOURCE_REFS_V2:
+                issues.append(f"{path.relative_to(root)}: source_refs schema must be {_SOURCE_REFS_V2}")
+            if path.stat().st_size > _SOURCE_REFS_MAX_BYTES:
+                issues.append(f"{path.relative_to(root)}: source_refs exceeds {_SOURCE_REFS_MAX_BYTES} bytes")
+            for forbidden in ("citedSourceRefs", "referenceSourceRefs", "sourcePaths"):
+                if forbidden in payload:
+                    issues.append(f"{path.relative_to(root)}: forbidden field {forbidden}")
+            sources = payload.get("sources") or []
+            if not isinstance(sources, list) or len(sources) != 1:
+                issues.append(f"{path.relative_to(root)}: sources must be length 1")
+            elif sources and str((sources[0] or {}).get("role") or "") != "base":
+                issues.append(f"{path.relative_to(root)}: sole source role must be base")
+    entities_root = root / "entities"
+    if entities_root.is_dir():
+        # 图文混排：实体主页 page.md 允许内联 asset:// figure（封面/章节配图），
+        # 闭环校验交由 homepage_validation._asset_closure_issues；此处只守单底稿单 unit 宪法。
+        for manifest_path in sorted(entities_root.rglob("manifest.json")):
+            manifest = _load_json_if_exists(manifest_path)
+            if not manifest:
+                continue
+            text_refs = manifest.get("textSourceRefs") or []
+            image_refs = manifest.get("imageSourceRefs") or []
+            if isinstance(text_refs, list) and len({str(r) for r in text_refs if str(r).strip()}) > 1:
+                issues.append(f"{manifest_path.relative_to(root)}: textSourceRefs must be single unit")
+            if isinstance(image_refs, list) and len({str(r) for r in image_refs if str(r).strip()}) > 1:
+                issues.append(f"{manifest_path.relative_to(root)}: imageSourceRefs must be single unit")
+    return issues
+
+
 def build_scale_readiness_report(
     task_id: str,
     batch_id: str,
@@ -595,6 +644,11 @@ def build_scale_readiness_report(
     if not bool(env_report.get("ready")):
         blockers.append("env ready evidence missing or failed")
     cursor_startup = env_report.get("cursorStartup") if isinstance(env_report.get("cursorStartup"), Mapping) else {}
+    if not cursor_startup:
+        preflight = env_report.get("preflight") if isinstance(env_report.get("preflight"), Mapping) else {}
+        nested = preflight.get("cursorStartup") if isinstance(preflight.get("cursorStartup"), Mapping) else {}
+        if nested:
+            cursor_startup = nested
     if target_goal_value and not bool(cursor_startup.get("ready")):
         blockers.append("Cursor SDK startup probe missing or failed;百级不得进入 author-runner")
     status = str(state.get("status") or "")
@@ -725,6 +779,13 @@ def build_scale_readiness_report(
             f"{quality_coverage['nonWorkMaterializedCount']} materialized objects are not 'work' "
             f"(samples={quality_coverage['nonWorkMaterialized']}); 随记/弃稿禁止进入发布"
         )
+    constitution_issues = _single_base_constitution_issues(root)
+    if constitution_issues:
+        blockers.append(
+            "single-base zero-reference constitution violated: "
+            + "; ".join(constitution_issues[:8])
+            + (" ..." if len(constitution_issues) > 8 else "")
+        )
     # semanticMentions 回填覆盖：文章作品应有实体/标签 grounding（端云可点击源头）。
     if quality_coverage["articlePosts"] and quality_coverage["articleMentionCoverage"] < 0.5:
         warnings.append(
@@ -811,7 +872,18 @@ def build_scale_readiness_report(
         except (TypeError, ValueError):
             first_pass_rate = None
     if first_pass_rate is not None and first_pass_rate < MIN_FIRST_PASS_RATE:
-        blockers.append(f"firstPassRate {first_pass_rate:.2%} < {MIN_FIRST_PASS_RATE:.0%}")
+        trial_target_met = (
+            mode == "trial"
+            and target_goal_value
+            and target_rate >= min_pass_rate_value
+        )
+        if trial_target_met:
+            warnings.append(
+                f"trial firstPassRate {first_pass_rate:.2%} < {MIN_FIRST_PASS_RATE:.0%}; "
+                "quality target already satisfied with honest partial delivery"
+            )
+        else:
+            blockers.append(f"firstPassRate {first_pass_rate:.2%} < {MIN_FIRST_PASS_RATE:.0%}")
     elif first_pass_rate is None:
         blockers.append("firstPassRate evidence missing")
 

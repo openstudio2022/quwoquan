@@ -16,7 +16,24 @@ SCRIPTS_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common.python_runtime import maybe_reexec_for_agent_command
-from _common.paths import RUNTIME_ROOT, RELEASE_ROOT
+from _common.paths import RUNTIME_ROOT, RELEASE_ROOT, PUBLISH_ROOT
+
+
+def _preserve_tags_reset_release_root(release_root: Path) -> None:
+    """清空 release 但保留 tags/ 子树（用户契约：release 下 tags 不清除）。"""
+    tags_backup: Path | None = None
+    tags_dir = release_root / "tags"
+    if tags_dir.is_dir():
+        import tempfile
+
+        tags_backup = Path(tempfile.mkdtemp(prefix="qwq_release_tags_"))
+        shutil.copytree(tags_dir, tags_backup / "tags", dirs_exist_ok=True)
+    if release_root.exists():
+        shutil.rmtree(release_root)
+    release_root.mkdir(parents=True, exist_ok=True)
+    if tags_backup is not None:
+        shutil.copytree(tags_backup / "tags", tags_dir, dirs_exist_ok=True)
+        shutil.rmtree(tags_backup)
 
 
 def handle_reset(args: argparse.Namespace) -> None:
@@ -27,10 +44,27 @@ def handle_reset(args: argparse.Namespace) -> None:
     RUNTIME_ROOT.mkdir(parents=True, exist_ok=True)
     print(f"[reset] Created empty: {RUNTIME_ROOT}")
 
-    if args.include_release and RELEASE_ROOT.exists():
-        shutil.rmtree(RELEASE_ROOT)
-        print(f"[reset] Removed: {RELEASE_ROOT}")
-        RELEASE_ROOT.mkdir(parents=True, exist_ok=True)
+    if args.include_release:
+        _preserve_tags_reset_release_root(RELEASE_ROOT)
+        print(f"[reset] Cleared release (preserved tags): {RELEASE_ROOT}")
+        # publish/tags 是发布主线标签真相源，同样保留。
+        pub_tags = PUBLISH_ROOT / "tags"
+        pub_tags_backup: Path | None = None
+        if pub_tags.is_dir() and PUBLISH_ROOT.exists():
+            import tempfile
+
+            pub_tags_backup = Path(tempfile.mkdtemp(prefix="qwq_publish_tags_"))
+            shutil.copytree(pub_tags, pub_tags_backup / "tags", dirs_exist_ok=True)
+            for child in PUBLISH_ROOT.iterdir():
+                if child.name == "tags":
+                    continue
+                if child.is_dir():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
+            shutil.copytree(pub_tags_backup / "tags", pub_tags, dirs_exist_ok=True)
+            shutil.rmtree(pub_tags_backup)
+            print(f"[reset] Cleared publish (preserved tags): {PUBLISH_ROOT}")
 
 
 def main() -> None:
