@@ -73,7 +73,6 @@ def test_parallel_auto_research_writes_availability_report():
         entity_id: str,
         *,
         entity_aliases: list[str] | tuple[str, ...] = (),
-        authorized_images: list[dict],
         limit: int = 4,
     ):
         if entity_id != "可用景区":
@@ -192,7 +191,6 @@ def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_cate
         entity_id: str,
         *,
         entity_aliases: list[str] | tuple[str, ...] = (),
-        authorized_images: list[dict],
         limit: int = 4,
     ):
         assert entity_id == entity
@@ -397,7 +395,7 @@ def test_auto_research_reuses_prior_verified_article_base_sources_when_live_disc
         research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=6: []
         research_mod._trusted_external_links = lambda title, limit=4: []
         research_mod._qunar_travelogue_sources = (
-            lambda entity_id, entity_aliases=(), authorized_images=(), limit=4: []
+            lambda entity_id, entity_aliases=(), limit=4: []
         )
         research_mod._task_content_quotas = lambda task_id: {
             "entityArticlesPerTarget": 4,

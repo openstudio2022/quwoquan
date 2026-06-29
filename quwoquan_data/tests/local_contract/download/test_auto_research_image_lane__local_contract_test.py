@@ -63,7 +63,7 @@ def test_auto_research_image_lane_prefers_non_homepage_alias_matched_image():
             lambda host, title, entity_id, limit=6: [home_image] if host == "zh.wikipedia.org" else []
         )
         research_mod._trusted_external_links = lambda title, limit=4: []
-        research_mod._qunar_travelogue_sources = lambda entity_id, authorized_images, limit=4: []
+        research_mod._qunar_travelogue_sources = lambda entity_id, entity_aliases=(), limit=4: []
         report = write_auto_research_plans(
             task,
             batch,
@@ -150,7 +150,7 @@ def test_auto_research_reuses_prior_verified_image_collections_when_live_discove
         research_mod._openverse_images = lambda entity_id, entity_aliases=(), limit=12: []
         research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=6: []
         research_mod._trusted_external_links = lambda title, limit=4: []
-        research_mod._qunar_travelogue_sources = lambda entity_id, authorized_images, limit=4: []
+        research_mod._qunar_travelogue_sources = lambda entity_id, entity_aliases=(), limit=4: []
         report = write_auto_research_plans(
             task,
             batch,
@@ -237,7 +237,7 @@ def test_auto_research_reuses_verified_image_collections_across_tasks_when_live_
         research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=6: []
         research_mod._trusted_external_links = lambda title, limit=4: []
         research_mod._qunar_travelogue_sources = (
-            lambda entity_id, entity_aliases=(), authorized_images=(), limit=4: []
+            lambda entity_id, entity_aliases=(), limit=4: []
         )
         report = write_auto_research_plans(
             task,
@@ -345,7 +345,7 @@ def test_auto_research_rescues_image_lane_when_first_open_license_discovery_is_e
         research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=6: []
         research_mod._trusted_external_links = lambda title, limit=4: []
         research_mod._qunar_travelogue_sources = (
-            lambda entity_id, entity_aliases=(), authorized_images=(), limit=4: []
+            lambda entity_id, entity_aliases=(), limit=4: []
         )
         report = write_auto_research_plans(
             task,
@@ -469,7 +469,7 @@ def test_auto_research_uses_registry_image_aliases_for_visual_discovery():
         research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=6: []
         research_mod._trusted_external_links = lambda title, limit=4: []
         research_mod._qunar_travelogue_sources = (
-            lambda entity_id, entity_aliases=(), authorized_images=(), limit=4: []
+            lambda entity_id, entity_aliases=(), limit=4: []
         )
         report = write_auto_research_plans(
             task,
@@ -580,7 +580,7 @@ def test_auto_research_marks_image_lane_unavailable_when_unique_publishable_imag
         research_mod._openverse_images = lambda entity_id, entity_aliases=(), limit=12: []
         research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=6: []
         research_mod._trusted_external_links = lambda title, limit=4: []
-        research_mod._qunar_travelogue_sources = lambda entity_id, authorized_images, limit=4: []
+        research_mod._qunar_travelogue_sources = lambda entity_id, entity_aliases=(), limit=4: []
         report = write_auto_research_plans(
             task,
             batch,
@@ -688,7 +688,7 @@ def test_auto_research_filters_image_urls_hard_rejected_by_prior_fetch_gate():
         research_mod._openverse_images = lambda entity_id, entity_aliases=(), limit=12: []
         research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=6: []
         research_mod._trusted_external_links = lambda title, limit=4: []
-        research_mod._qunar_travelogue_sources = lambda entity_id, authorized_images, limit=4: []
+        research_mod._qunar_travelogue_sources = lambda entity_id, entity_aliases=(), limit=4: []
         report = write_auto_research_plans(
             task,
             batch,

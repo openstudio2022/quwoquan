@@ -85,7 +85,6 @@ def test_qunar_travelogue_sources_search_multiple_entity_aliases():
         sources = _qunar_travelogue_sources(
             "八达岭—慕田峪长城旅游区",
             entity_aliases=[],
-            authorized_images=[{"url": "https://img.example/badaling.jpg", "license": "CC BY 4.0"}],
             limit=4,
         )
     finally:
@@ -170,7 +169,6 @@ def test_qunar_travelogue_sources_match_registry_alias_route_names():
         sources = _qunar_travelogue_sources(
             "沈阳市沈阳植物园",
             entity_aliases=_known_entity_aliases("沈阳市沈阳植物园"),
-            authorized_images=[{"url": "https://img.example/shenyang.jpg", "license": "CC BY 4.0"}],
             limit=4,
         )
     finally:
@@ -215,7 +213,6 @@ def test_qunar_travelogue_sources_use_composite_scenic_aliases():
         sources = _qunar_travelogue_sources(
             "春秋淹城旅游区",
             entity_aliases=_known_entity_aliases("春秋淹城旅游区"),
-            authorized_images=[{"url": "https://img.example/yancheng.jpg", "license": "CC BY 4.0"}],
             limit=4,
         )
     finally:
@@ -260,7 +257,6 @@ def test_qunar_travelogue_sources_search_late_registry_aliases():
         sources = _qunar_travelogue_sources(
             "洪泽湖湿地景区",
             entity_aliases=_known_entity_aliases("洪泽湖湿地景区"),
-            authorized_images=[{"url": "https://img.example/hongze.jpg", "license": "CC BY 4.0"}],
             limit=4,
         )
     finally:

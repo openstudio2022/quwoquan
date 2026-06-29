@@ -525,7 +525,6 @@ def _write_auto_research_plans_impl(
             for source in _qunar_travelogue_sources(
                 entity_id,
                 entity_aliases=entity_aliases,
-                authorized_images=[],
                 limit=_article_base_candidate_limit(required_article_bases),
             ):
                 accepted = _accept_source(

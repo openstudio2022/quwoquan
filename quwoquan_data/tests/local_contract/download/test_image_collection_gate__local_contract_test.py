@@ -291,7 +291,7 @@ def test_article_candidate_warns_on_bad_optional_image_but_image_lane_blocks_it(
     assert not verdict["passed"]
     assert any("unsupported license" in issue for issue in verdict["issues"]), verdict
 
-def test_qunar_travelogue_sources_require_entity_route_and_authorized_image():
+def test_qunar_travelogue_sources_require_entity_route_and_stay_text_only():
     import download.research_plan as research_mod
 
     orig_curl_json = research_mod._curl_json
@@ -318,14 +318,6 @@ def test_qunar_travelogue_sources_require_entity_route_and_authorized_image():
         }
         sources = _qunar_travelogue_sources(
             "毕棚沟",
-            authorized_images=[
-                {
-                    "url": "https://img.example/good.jpg",
-                    "license": "CC BY-SA 4.0",
-                    "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                    "authorizationProof": "https://commons.wikimedia.org/wiki/File:Good.jpg",
-                }
-            ],
             limit=4,
         )
     finally:
@@ -334,6 +326,6 @@ def test_qunar_travelogue_sources_require_entity_route_and_authorized_image():
     assert sources[0]["sourceRole"] == "base"
     assert sources[0]["platform"] == "去哪儿攻略"
     # RC4：UGC 游记是 text-only 文章底稿，绝不携带跨源「授权图集」替代图——
-    # 即便传入 authorized_images，imageEvidenceMode 也必须为空（同源忠实，无假图）。
+    # imageEvidenceMode 恒为空（同源忠实，无假图；已删除 authorized_images 死参）。
     assert sources[0]["imageEvidenceMode"] == ""
 

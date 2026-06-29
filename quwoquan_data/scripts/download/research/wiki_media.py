@@ -378,10 +378,13 @@ def _qunar_travelogue_sources(
     entity_id: str,
     *,
     entity_aliases: list[str] | tuple[str, ...] = (),
-    authorized_images: list[dict[str, Any]],
     limit: int = 4,
 ) -> list[dict[str, Any]]:
-    """Discover fetchable Qunar travelogue pages for article text evidence."""
+    """Discover fetchable Qunar travelogue pages for article text evidence.
+
+    RC4：去哪儿 UGC 游记是 text-only 文章底稿，配图必须同源；不再接受外部「授权图集」
+    （已删除 authorized_images 死参），images 恒为空、imageEvidenceMode=""。
+    """
     sources: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     # Composite scenic areas often have official operation names while UGC uses

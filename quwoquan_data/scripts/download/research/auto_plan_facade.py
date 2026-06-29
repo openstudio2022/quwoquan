@@ -94,7 +94,6 @@ def _qunar_travelogue_sources(
     entity_id: str,
     *,
     entity_aliases: list[str] | tuple[str, ...] = (),
-    authorized_images: list[dict[str, Any]],
     limit: int = 4,
 ) -> list[dict[str, Any]]:
     return runtime_bridge.call(
@@ -102,7 +101,6 @@ def _qunar_travelogue_sources(
         _impl_qunar_travelogue_sources,
         entity_id,
         entity_aliases=entity_aliases,
-        authorized_images=authorized_images,
         limit=limit,
     )
 
