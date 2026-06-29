@@ -121,8 +121,16 @@ def test_object_image_candidates_carry_relative_refs():
 
 def test_route_assets_to_post_assets_traceable():
     _seed_source_units()
-    brief = {"imagePlan": [{"slot": "封面", "imageLayout": "fullWidth"}, {"slot": "节点", "gallery": "masonry"}]}
-    evidence_bundle = {"routeNodes": [{"entityName": n, "entityRef": f"地点/景区/{n}"} for n in ENTITIES]}
+    # RC4：文章 1:1 同源——证据链取自单一底稿来源（baseSourceRef）的 assets，不跨实体借图。
+    obj = batch_entity_object_dir(TASK, BATCH, "地点", "景区", "海螺沟")
+    cands = object_image_candidates(obj, TASK, BATCH)
+    assert cands, "seeded base source should expose image candidates"
+    brief = {
+        "carrier": "article",
+        "baseSourceRef": cands[0]["sourceRef"],
+        "imagePlan": [{"slot": "封面", "imageLayout": "fullWidth"}, {"slot": "节点", "gallery": "masonry"}],
+    }
+    evidence_bundle = {"routeNodes": [{"entityName": "海螺沟", "entityRef": "地点/景区/海螺沟"}]}
     assets = _build_route_assets(TASK, BATCH, "海螺沟环线", brief, evidence_bundle)
     assert assets, assets
     # 成品资产文件名 = assetId.ext，asset:// 可直查文件

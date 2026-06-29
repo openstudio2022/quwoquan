@@ -264,7 +264,9 @@ def test_article_candidate_warns_on_bad_optional_image_but_image_lane_blocks_it(
             match_confidence=0.94,
             source_role="base",
             images=[image],
-            image_evidence_mode="same_authorized_collection",
+            # RC4：文章配图必须同源；此处模拟「底稿自身」含一张许可不达标的图——
+            # 文章 lane 仅告警（可降级 text_only/跳过该图），image lane 则硬阻断。
+            image_evidence_mode="same_source",
         ),
         entity_id="九寨沟",
         lane="article",
@@ -331,5 +333,7 @@ def test_qunar_travelogue_sources_require_entity_route_and_authorized_image():
     assert len(sources) == 1
     assert sources[0]["sourceRole"] == "base"
     assert sources[0]["platform"] == "去哪儿攻略"
-    assert sources[0]["imageEvidenceMode"] == "same_authorized_collection"
+    # RC4：UGC 游记是 text-only 文章底稿，绝不携带跨源「授权图集」替代图——
+    # 即便传入 authorized_images，imageEvidenceMode 也必须为空（同源忠实，无假图）。
+    assert sources[0]["imageEvidenceMode"] == ""
 

@@ -259,19 +259,18 @@ def _build_route_assets(
         return assets
     base_source_ref = str(brief.get("baseSourceRef") or "").strip()
     raw_per_entity = per_entity
+    # 文章配图必须 100% 同源（来自该文章底稿自身的 assets）。RC4：删除
+    # `not base_source_ref` 逃逸——baseSourceRef 缺失时绝不回退到借用同实体/兄弟
+    # 来源的图，否则会重现九寨沟"跨源替代图"。无 baseSourceRef ⇒ 不配图（text_only）。
     per_entity = {
         name: [
             candidate
             for candidate in rows
             if str(candidate.get("researchLane") or "") != "image"
-            and (
-                not base_source_ref
-                or (
-                    str(candidate.get("sourceRef") or "") == base_source_ref
-                    and str(candidate.get("sourceAssetRef") or "").startswith(
-                        base_source_ref.rsplit("/", 1)[0] + "/assets/"
-                    )
-                )
+            and base_source_ref
+            and str(candidate.get("sourceRef") or "") == base_source_ref
+            and str(candidate.get("sourceAssetRef") or "").startswith(
+                base_source_ref.rsplit("/", 1)[0] + "/assets/"
             )
         ]
         for name, rows in raw_per_entity.items()

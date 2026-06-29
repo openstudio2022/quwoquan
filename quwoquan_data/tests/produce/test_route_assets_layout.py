@@ -88,22 +88,30 @@ def _seed_images() -> None:
 
 def _build():
     _seed_images()  # 幂等：standalone 与 pytest 两种收集路径都先播种
+    # RC4：文章 1:1 同源——cover/node/closing 全部取自该文章底稿单一来源（baseSourceRef）的
+    # assets，不再跨实体聚合借图（删除旧多地点 route 跨源拼图）。
+    entity = ENTITIES[0]
+    candidates = RW._entity_image_candidates(TASK, BATCH, entity, f"/entity/地点/景区/{entity}")
+    assert candidates, "seeded base source should expose image candidates"
     brief = {
+        "carrier": "article",
+        "baseSourceRef": candidates[0]["sourceRef"],
         "imagePlan": [
             {"slot": "行程概览", "imageLayout": "fullWidth"},
             {"slot": "节点图集", "gallery": "masonry"},
             {"slot": "费用说明", "imageLayout": "wrapRight"},
-        ]
+        ],
     }
-    evidence_bundle = {"routeNodes": [{"entityName": n, "entityRef": f"地点/景区/{n}"} for n in ENTITIES]}
+    evidence_bundle = {"routeNodes": [{"entityName": entity, "entityRef": f"地点/景区/{entity}"}]}
     return _build_route_assets(TASK, BATCH, "测试线路", brief, evidence_bundle)
 
 
 def test_roles_present():
+    # 单一底稿来源下，cover/node/closing 三类职责仍各取一张同源图（同源去重保证互异）。
     assets = _build()
     roles = [a.get("role") for a in assets]
     assert "cover" in roles, roles
-    assert roles.count("node") >= 3, roles
+    assert "node" in roles, roles
     assert "closing" in roles, roles
 
 
@@ -114,11 +122,11 @@ def test_node_images_bound_to_their_entity():
             assert asset["entityName"] in asset["alignmentEvidence"], asset
 
 
-def test_cross_entity_dedup_no_duplicate_source():
+def test_same_source_assets_perceptually_distinct():
+    # RC4：同一底稿来源内选出的 cover/node/closing 必须互异（感知去重），不得复用同一张图。
     assets = _build()
     sources = [a["sourcePath"] for a in assets]
     assert len(sources) == len(set(sources)), sources
-    # 共享图只应被选用一次（跨实体感知去重）
     from _common.image_safety import dedupe_images
 
     assert len(dedupe_images([Path(s) for s in sources])) == len(sources), "selected assets must be perceptually distinct"

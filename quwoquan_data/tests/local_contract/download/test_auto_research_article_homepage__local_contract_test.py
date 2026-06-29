@@ -88,7 +88,8 @@ def test_parallel_auto_research_writes_availability_report():
                 match_confidence=0.95,
                 source_role="base",
                 images=[good_image],
-                image_evidence_mode="same_authorized_collection",
+                # RC4：UGC 游记文章配图必须同源；不再用 same_authorized_collection 跨源图集。
+                image_evidence_mode="same_source",
             )
             for index in range(1, 3)
         ]
@@ -205,7 +206,8 @@ def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_cate
                 match_confidence=0.95,
                 source_role="base",
                 images=[good_image],
-                image_evidence_mode="same_authorized_collection",
+                # RC4：UGC 游记文章配图必须同源；不再用 same_authorized_collection 跨源图集。
+                image_evidence_mode="same_source",
             )
             for index in range(1, 5)
         ]

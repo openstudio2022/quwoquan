@@ -341,7 +341,9 @@ def test_article_base_accepts_ugc_and_platform_article_source_classes_equally():
                 match_confidence=0.94,
                 source_role="base",
                 images=[image],
-                image_evidence_mode="same_authorized_collection",
+                # RC4：文章配图必须同源（来自文章底稿自身图片）；本用例验证的是
+                # 源「类别」是否被平等接纳，不再借用 same_authorized_collection 跨源图集。
+                image_evidence_mode="same_source",
             ),
             entity_id="九寨沟",
             lane="article",

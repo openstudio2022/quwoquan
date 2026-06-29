@@ -616,6 +616,15 @@ def _candidate_gate(
             )
         if category in _SUPPORTING_ONLY_CATEGORIES:
             issues.append(f"{category} can only be supportingEvidence for article lane")
+    if lane == "article":
+        # RC4 红线：文章配图必须同源（来自文章底稿自身图片）。same_authorized_collection
+        # 表示用"另一授权图集"的图当文章配图＝跨源替代，是九寨沟问题的根因之一，显式拒绝。
+        # （图片作品 image lane 的图库一源一作品才允许 same_authorized_collection。）
+        if str(source.get("imageEvidenceMode") or "").strip() == "same_authorized_collection":
+            issues.append(
+                "article lane must not use same_authorized_collection image evidence "
+                "(article images must be same-source from the article's own base draft)"
+            )
     if lane == "homepage" and category in {
         "encyclopedia",
         "overview_baike",
