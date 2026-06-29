@@ -112,17 +112,28 @@ def test_homepage_candidate_gate_allows_registry_fetchable_baike_sources():
     assert _candidate_gate(snapshotted, entity_id="喀纳斯景区", lane="homepage")["passed"]
 
 def test_verified_homepage_reuse_filters_bad_or_thin_source_units():
+    # 源单元复用过滤：消歧页/过短页应滤除，正常官网主页保留。
+    # 真相源是 iter_source_units 读取的新版 sources/su_* 布局，故用 write_source_unit 写入，
+    # 不再手工拼旧版 1.download/sources/NN.name（已随源单元布局迁移废弃，会被 iter 漏读）。
+    from _common.source_unit import write_source_unit
+    from _common.paths import ensure_task_layout, ensure_batch_layout
+    from _common.batch_manifest import write_batch_manifest
+
     task = "旅行/地域/测试省/景区/homepage复用过滤"
     batch = "source_units"
     entity = "沙湖旅游景区"
     obj = resolve_entity_object_dir(task, batch, entity, etype_hint="地点/景区")
     shutil.rmtree(obj, ignore_errors=True)
-    sources_root = obj / "1.download" / "sources"
+    ensure_task_layout(task)
+    ensure_batch_layout(task, batch, "download")
+    write_batch_manifest(task, batch, command="download")
+    target_ref = f"/entity/地点/景区/{entity}"
 
-    bad = sources_root / "01.home_wikipedia"
-    bad.mkdir(parents=True, exist_ok=True)
-    (bad / "source.md").write_text(
-        "\n".join(
+    write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="home_wikipedia",
+        source_md="\n".join(
             [
                 "沙湖可以指：",
                 "沙湖：位于宁夏石嘴山市的湖泊。",
@@ -130,49 +141,54 @@ def test_verified_homepage_reuse_filters_bad_or_thin_source_units():
                 "沙湖：位于苏州市的湖泊。",
             ]
         ),
-        encoding="utf-8",
+        quality={"sourceId": "home_wikipedia", "quality": "B-fact", "score": 6, "url": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%96"},
+        platform="维基百科",
+        source_category="encyclopedia",
+        research_lane="homepage",
+        url="https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%96",
+        title="沙湖（消歧义）",
+        target_ref=target_ref,
+        task_id=task,
+        batch_id=batch,
     )
-    write_json(bad / "meta.json", {
-        "sourceId": "home_wikipedia",
-        "platform": "维基百科",
-        "category": "encyclopedia",
-        "researchLane": "homepage",
-        "url": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%96",
-    })
-    write_json(bad / "source.quality.json", {"quality": "B-fact", "score": 6, "url": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%96"})
 
-    thin = sources_root / "02.home_official_thin"
-    thin.mkdir(parents=True, exist_ok=True)
-    (thin / "source.md").write_text("沙湖旅游景区位于宁夏，是一个景区简介页面。", encoding="utf-8")
-    write_json(thin / "meta.json", {
-        "sourceId": "home_official_thin",
-        "platform": "景区官网",
-        "category": "official",
-        "researchLane": "homepage",
-        "url": "https://example.com/shahu",
-    })
-    write_json(thin / "source.quality.json", {"quality": "B-fact", "score": 6, "url": "https://example.com/shahu"})
+    write_source_unit(
+        obj,
+        ordinal=2,
+        source_id="home_official_thin",
+        source_md="沙湖旅游景区位于宁夏，是一个景区简介页面。",
+        quality={"sourceId": "home_official_thin", "quality": "B-fact", "score": 6, "url": "https://example.com/shahu"},
+        platform="景区官网",
+        source_category="official",
+        research_lane="homepage",
+        url="https://example.com/shahu",
+        title="沙湖旅游景区",
+        target_ref=target_ref,
+        task_id=task,
+        batch_id=batch,
+    )
 
-    good = sources_root / "03.home_official"
-    good.mkdir(parents=True, exist_ok=True)
-    (good / "source.md").write_text(
-        (
+    write_source_unit(
+        obj,
+        ordinal=3,
+        source_id="home_official",
+        source_md=(
             "沙湖旅游景区位于宁夏石嘴山市平罗县境内。"
             "沙湖旅游景区由湖泊、沙漠、湿地和芦苇景观组成。"
             "沙湖旅游景区是国家5A级旅游景区。"
             "沙湖旅游景区主要游览项目包括湖区观光、沙漠体验和湿地观鸟。"
             "沙湖旅游景区开放、票务和交通接驳规则以官方公告为准。"
         ),
-        encoding="utf-8",
+        quality={"sourceId": "home_official", "quality": "B-fact", "score": 6, "url": "https://example.com/shahu-home"},
+        platform="景区官网",
+        source_category="official",
+        research_lane="homepage",
+        url="https://example.com/shahu-home",
+        title="沙湖旅游景区",
+        target_ref=target_ref,
+        task_id=task,
+        batch_id=batch,
     )
-    write_json(good / "meta.json", {
-        "sourceId": "home_official",
-        "platform": "景区官网",
-        "category": "official",
-        "researchLane": "homepage",
-        "url": "https://example.com/shahu-home",
-    })
-    write_json(good / "source.quality.json", {"quality": "B-fact", "score": 6, "url": "https://example.com/shahu-home"})
 
     sources = _verified_homepage_sources_from_source_units(
         task,
